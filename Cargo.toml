@@ -197,6 +197,7 @@ move-vm-test-utils = { path = "external-crates/move/move-vm/test-utils" }
 move-vm-types = { path = "external-crates/move/move-vm/types" }
 move-command-line-common = { path = "external-crates/move/move-command-line-common" }
 move-transactional-test-runner = { path = "external-crates/move/testing-infra/transactional-test-runner" }
+move-ir-compiler = { path = "external-crates/move/move-ir-compiler" }
 move-ir-types = { path = "external-crates/move/move-ir/types" }
 move-prover = { path = "external-crates/move/move-prover" }
 move-prover-boogie-backend = { path = "external-crates/move/move-prover/boogie-backend" }

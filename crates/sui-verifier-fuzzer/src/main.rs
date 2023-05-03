@@ -15,7 +15,7 @@ use sui_verifier::{
 #[derive(Parser)]
 struct Args {
     #[clap(short, long, default_value = "raw-bytes")]
-    // raw-bytes, arbitrary-bytes, source
+    /// raw-bytes, arbitrary-bytes, ir, source
     input_format: String,
 
     #[clap(short, long, default_value = "sui-verifier")]
@@ -37,11 +37,27 @@ fn main() {
                 let m = match args.input_format.as_str() {
                     "arbitrary" => {
                         let mut unstructured = Unstructured::new(input);
-                        let Ok(m) = move_binary_format::file_format::CompiledModule::arbitrary(&mut unstructured) else { return };
+                        let Ok(m) = move_binary_format::file_format::CompiledModule::arbitrary(&mut unstructured) else { process::exit(1); };
+                        m
+                    }
+                    "ir" => {
+                        let compiled_state =
+                            move_transactional_test_runner::framework::CompiledState::new(
+                                sui_transactional_test_runner::test_adapter::NAMED_ADDRESSES
+                                    .clone(),
+                                Some(&*sui_transactional_test_runner::test_adapter::PRE_COMPILED),
+                                Some(move_compiler::shared::NumericalAddress::new(
+                                    move_core_types::account_address::AccountAddress::ZERO
+                                        .into_bytes(),
+                                    move_compiler::shared::NumberFormat::Hex,
+                                )),
+                            );
+                        let Ok(code) = std::str::from_utf8(input) else { process::exit(1); };
+                        let Ok(m) = move_ir_compiler::Compiler::new(compiled_state.dep_modules().collect()).into_compiled_module(code) else { process::exit(1); };
                         m
                     }
                     "raw-bytes" | _ => {
-                        let Ok(m) = move_binary_format::file_format::CompiledModule::deserialize(&input) else { return };
+                        let Ok(m) = move_binary_format::file_format::CompiledModule::deserialize(&input) else { process::exit(1); };
                         m
                     }
                 };
