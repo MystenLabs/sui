@@ -13,4 +13,6 @@ export const DEFAULT_NFT_IMAGE =
     'ipfs://QmZPWWy5Si54R3d26toaqRiqvCH7HkGdXkxwUgCm2oKKM2?filename=img-sq-01.png';
 
 // number of epochs before earning
-export const NUM_OF_EPOCH_BEFORE_EARNING = 2;
+// Staking Rewards Redeemable
+export const NUM_OF_EPOCH_BEFORE_STAKING_REWARDS_REDEEMABLE = 2;
+export const NUM_OF_EPOCH_BEFORE_STAKING_REWARDS_STARTS = 1;

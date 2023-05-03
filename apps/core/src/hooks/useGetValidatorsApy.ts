@@ -5,6 +5,7 @@ import { useRpcClient } from '../api/RpcClientContext';
 import { useQuery } from '@tanstack/react-query';
 
 import { roundFloat } from '../utils/roundFloat';
+import { useGetSystemState } from './useGetSystemState';
 
 // recentEpochRewards is list of the last 30 epoch rewards for a specific validator
 // APY_e = (1 + epoch_rewards / stake)^365-1
@@ -13,18 +14,41 @@ import { roundFloat } from '../utils/roundFloat';
 const DEFAULT_APY_DECIMALS = 2;
 
 export interface ApyByValidator {
-    [validatorAddress: string]: number;
+    [validatorAddress: string]: {
+        apy: number;
+        isApyApproxZero: boolean;
+    };
 }
+// For small APY or epoch before stakeSubsidyStartEpoch, show ~0% instead of 0%
+// If APY falls below 0.001, show ~0% instead of 0% since we round to 2 decimal places
+const MINIMUM_THRESHOLD = 0.001;
 
 export function useGetValidatorsApy() {
     const rpc = useRpcClient();
+    const { data: systemStateResponse, isFetched } = useGetSystemState();
     return useQuery(
         ['get-rolling-average-apys'],
-        () => rpc.getValidatorsApy(),
+        async () => {
+            const apy = await rpc.getValidatorsApy();
+            // check if stakeSubsidyStartEpoch is greater than current epoch, flag for UI to show ~0% instead of 0%
+            const currentEpoch = Number(systemStateResponse?.epoch);
+            const stakeSubsidyStartEpoch = Number(
+                systemStateResponse?.stakeSubsidyStartEpoch
+            );
+            return {
+                validatorApys: apy,
+                isStakeSubsidyStarted: currentEpoch > stakeSubsidyStartEpoch,
+            };
+        },
         {
-            select: (data) => {
-                return data.apys.reduce((acc, { apy, address }) => {
-                    acc[address] = roundFloat(apy * 100, DEFAULT_APY_DECIMALS);
+            enabled: isFetched,
+            select: ({ validatorApys, isStakeSubsidyStarted }) => {
+                return validatorApys?.apys.reduce((acc, { apy, address }) => {
+                    acc[address] = {
+                        apy: roundFloat(apy * 100, DEFAULT_APY_DECIMALS),
+                        isApyApproxZero:
+                            !isStakeSubsidyStarted || apy < MINIMUM_THRESHOLD,
+                    };
                     return acc;
                 }, {} as ApyByValidator);
             },

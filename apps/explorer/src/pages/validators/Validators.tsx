@@ -55,6 +55,9 @@ export function validatorsTableData(
                 );
                 const isAtRisk = !!atRiskValidator;
                 const lastReward = event?.pool_staking_reward ?? null;
+                const { apy, isApyApproxZero } = rollingAverageApys?.[
+                    validator.suiAddress
+                ] ?? { apy: null };
 
                 return {
                     name: {
@@ -63,7 +66,7 @@ export function validatorsTableData(
                     },
                     stake: totalStake,
                     // show the rolling average apy even if its zero, otherwise show -- for no data
-                    apy: rollingAverageApys?.[validator.suiAddress] ?? null,
+                    apy: formatPercentageDisplay(apy, '--', isApyApproxZero),
                     nextEpochGasPrice: validator.nextEpochGasPrice,
                     commission: Number(validator.commissionRate) / 100,
                     img: img,
@@ -147,7 +150,7 @@ export function validatorsTableData(
                     const apy = props.getValue();
                     return (
                         <Text variant="bodySmall/medium" color="steel-darker">
-                            {formatPercentageDisplay(apy)}
+                            {apy}
                         </Text>
                     );
                 },
@@ -254,9 +257,20 @@ function ValidatorPageResult() {
         if (!validatorsApy || Object.keys(validatorsApy)?.length === 0)
             return null;
 
+        // if all validators have isApyApproxZero, return ~0
+        if (
+            Object.values(validatorsApy)?.every(
+                ({ isApyApproxZero }) => isApyApproxZero
+            )
+        ) {
+            return '~0';
+        }
+
         // exclude validators with no apy
-        const apys = Object.values(validatorsApy)?.filter((a) => a > 0);
-        const averageAPY = apys?.reduce((acc, cur) => acc + cur, 0);
+        const apys = Object.values(validatorsApy)?.filter(
+            (a) => a.apy > 0 && !a.isApyApproxZero
+        );
+        const averageAPY = apys?.reduce((acc, cur) => acc + cur.apy, 0);
         // in case of no apy, return 0
         return apys.length > 0 ? roundFloat(averageAPY / apys.length) : 0;
     }, [validatorsApy]);

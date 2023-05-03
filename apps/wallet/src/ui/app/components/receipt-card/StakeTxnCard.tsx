@@ -11,7 +11,10 @@ import { SUI_TYPE_ARG } from '@mysten/sui.js';
 import { Card } from '../../shared/transaction-summary/Card';
 import { ValidatorLogo } from '_app/staking/validators/ValidatorLogo';
 import { TxnAmount } from '_components/receipt-card/TxnAmount';
-import { NUM_OF_EPOCH_BEFORE_EARNING } from '_src/shared/constants';
+import {
+    NUM_OF_EPOCH_BEFORE_STAKING_REWARDS_REDEEMABLE,
+    NUM_OF_EPOCH_BEFORE_STAKING_REWARDS_STARTS,
+} from '_src/shared/constants';
 import { CountDownTimer } from '_src/ui/app/shared/countdown-timer';
 import { Text } from '_src/ui/app/shared/text';
 import { IconTooltip } from '_src/ui/app/shared/tooltip';
@@ -30,15 +33,24 @@ export function StakeTxnCard({ event }: StakeTxnCardProps) {
 
     const { data: rollingAverageApys } = useGetValidatorsApy();
 
-    const apy = rollingAverageApys?.[validatorAddress] ?? null;
-
+    const { apy, isApyApproxZero } = rollingAverageApys?.[validatorAddress] ?? {
+        apy: null,
+    };
     // Reward will be available after 2 epochs
-    // TODO: Get epochStartTimestampMs/StartDate for staking epoch + NUM_OF_EPOCH_BEFORE_EARNING
-    const startEarningRewardsEpoch = stakedEpoch + NUM_OF_EPOCH_BEFORE_EARNING;
+    // TODO: Get epochStartTimestampMs/StartDate
+    // for staking epoch + NUM_OF_EPOCH_BEFORE_STAKING_REWARDS_REDEEMABLE
+    const startEarningRewardsEpoch =
+        Number(stakedEpoch) + NUM_OF_EPOCH_BEFORE_STAKING_REWARDS_STARTS;
 
-    const { data: timeToEarnStakeRewards } = useGetTimeBeforeEpochNumber(
+    const redeemableRewardsEpoch =
+        Number(stakedEpoch) + NUM_OF_EPOCH_BEFORE_STAKING_REWARDS_REDEEMABLE;
+
+    const { data: timeBeforeStakeRewardsStarts } = useGetTimeBeforeEpochNumber(
         startEarningRewardsEpoch
     );
+
+    const { data: timeBeforeStakeRewardsRedeemable } =
+        useGetTimeBeforeEpochNumber(redeemableRewardsEpoch);
 
     return (
         <Card>
@@ -62,8 +74,8 @@ export function StakeTxnCard({ event }: StakeTxnCardProps) {
                     />
                 )}
                 <div className="flex flex-col">
-                    <div className="flex justify-between w-full pt-3.5">
-                        <div className="flex gap-1 items-baseline text-steel">
+                    <div className="flex justify-between w-full py-3.5">
+                        <div className="flex gap-1 items-baseline justify-center text-steel">
                             <Text
                                 variant="body"
                                 weight="medium"
@@ -78,9 +90,15 @@ export function StakeTxnCard({ event }: StakeTxnCardProps) {
                             weight="medium"
                             color="steel-darker"
                         >
-                            {formatPercentageDisplay(apy)}
+                            {formatPercentageDisplay(
+                                apy,
+                                '--',
+                                isApyApproxZero
+                            )}
                         </Text>
                     </div>
+                </div>
+                <div className="flex flex-col">
                     <div className="flex justify-between w-full py-3.5">
                         <div className="flex gap-1 items-baseline text-steel">
                             <Text
@@ -88,14 +106,15 @@ export function StakeTxnCard({ event }: StakeTxnCardProps) {
                                 weight="medium"
                                 color="steel-darker"
                             >
-                                {timeToEarnStakeRewards > 0
+                                {timeBeforeStakeRewardsStarts > 0
                                     ? 'Staking Rewards Start'
                                     : 'Staking Rewards Started'}
                             </Text>
                         </div>
-                        {timeToEarnStakeRewards > 0 ? (
+
+                        {timeBeforeStakeRewardsStarts > 0 ? (
                             <CountDownTimer
-                                timestamp={timeToEarnStakeRewards}
+                                timestamp={timeBeforeStakeRewardsStarts}
                                 variant="body"
                                 color="steel-darker"
                                 weight="medium"
@@ -111,6 +130,37 @@ export function StakeTxnCard({ event }: StakeTxnCardProps) {
                                 Epoch #{startEarningRewardsEpoch}
                             </Text>
                         )}
+                    </div>
+                    <div className="flex justify-between w-full">
+                        <div className="flex gap-1 flex-1 items-baseline text-steel">
+                            <Text
+                                variant="pBody"
+                                weight="medium"
+                                color="steel-darker"
+                            >
+                                Staking Rewards Redeemable
+                            </Text>
+                        </div>
+                        <div className="flex-1 flex justify-end gap-1 items-center">
+                            {timeBeforeStakeRewardsRedeemable > 0 ? (
+                                <CountDownTimer
+                                    timestamp={timeBeforeStakeRewardsRedeemable}
+                                    variant="body"
+                                    color="steel-darker"
+                                    weight="medium"
+                                    label="in"
+                                    endLabel="--"
+                                />
+                            ) : (
+                                <Text
+                                    variant="body"
+                                    weight="medium"
+                                    color="steel-darker"
+                                >
+                                    Epoch #{redeemableRewardsEpoch}
+                                </Text>
+                            )}
+                        </div>
                     </div>
                 </div>
             </div>

@@ -77,8 +77,8 @@ function ValidatorDetails() {
             </div>
         );
     }
+    const { apy, isApyApproxZero } = rollingAverageApys?.[id] ?? { apy: null };
 
-    const apy = rollingAverageApys?.[id] || 0;
     const tallyingScore =
         validatorEvents?.find(
             ({ parsedJson }) => parsedJson?.validator_address === id
@@ -93,7 +93,7 @@ function ValidatorDetails() {
                     validatorData={validatorData}
                     epoch={data.epoch}
                     epochRewards={validatorRewards}
-                    apy={apy}
+                    apy={isApyApproxZero ? '~0' : apy}
                     tallyingScore={tallyingScore}
                 />
             </div>
