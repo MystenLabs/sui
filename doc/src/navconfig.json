@@ -148,6 +148,10 @@
 				]
 			},
 			{
+				"label": "Sui Bridging",
+				"fileName": "learn/sui-bridging"
+			},
+			{
 				"label": "Sui Exchange Integration Guide",
 				"fileName": "learn/exchange-integration-guide"
 			}
