@@ -13,6 +13,7 @@ Use to bridge tokens from any Wormhole supported chain into Sui and get dropped 
 ### Wormhole Connect asset support
 
 Initially, Wormhole Connect supports only lock-and-mint bridging for ETH, WETH, USDC, MATIC, WMATIC, BNB, WBNB, AVAX, WAVAX, FTM, WFTM, CELO, GLMR, WGLRM, AND SOL across Ethereum, Polygon, BSC, Avalanche, Celo, Moonbeam, Solana and Sui. This means that any native token bridged through Wormhole Connect and the underlying Wormhole Token Bridge are received as a Wormhole-minted token on the destination chain. In some cases, Wormhole-minted tokens are the canonical representation on the chain. See the [Wormhole token list](https://github.com/wormhole-foundation/wormhole-token-list) on GitHub. Some Wormhole-minted tokens support swapping on the destination chain's DEX(s) for whichever assets you need.
+
 The Wormhole powered Portal Bridge (https://www.portalbridge.com/sui) supports bridging any asset from any of the 22 supported Wormhole chains (listed here https://www.portalbridge.com/sui).
 
 ### Wormhole Connect automatic relay
