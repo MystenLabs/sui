@@ -22,6 +22,7 @@ import Alert from '_components/alert';
 import Loading from '_components/loading';
 import { useGetAllBalances, useGetCoinBalance } from '_hooks';
 import { AccountSelector } from '_src/ui/app/components/AccountSelector';
+import { useLedgerNotification } from '_src/ui/app/hooks/useLedgerNotification';
 import PageTitle from '_src/ui/app/shared/PageTitle';
 import FaucetRequestButton from '_src/ui/app/shared/faucet/FaucetRequestButton';
 
@@ -85,6 +86,8 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
         isFetched,
     } = useGetCoinBalance(activeCoinType, accountAddress);
     const networkOutage = useFeatureIsOn('wallet-network-outage');
+
+    useLedgerNotification();
 
     const { providers } = useOnrampProviders();
 
