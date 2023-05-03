@@ -76,5 +76,5 @@ async fn main() -> Result<(), anyhow::Error> {
 pub async fn create_wallet_context(timeout_secs: u64) -> Result<WalletContext, anyhow::Error> {
     let wallet_conf = sui_config_dir()?.join(SUI_CLIENT_CONFIG);
     info!("Initialize wallet from config path: {:?}", wallet_conf);
-    WalletContext::new(&wallet_conf, Some(Duration::from_secs(timeout_secs))).await
+    WalletContext::new(&wallet_conf, Some(Duration::from_secs(timeout_secs)), None).await
 }
