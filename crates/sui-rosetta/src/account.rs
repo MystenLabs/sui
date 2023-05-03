@@ -66,104 +66,105 @@ pub async fn balance_new(
 ) -> Result<AccountBalanceResponse, Error> {
     env.check_network_identifier(&request.network_identifier)?;
     let address = request.account_identifier.address;
+    let mut retry_attempts = 5;
     if let Some(SubAccount { account_type }) = request.account_identifier.sub_account {
-        let balances_first =
-            get_sub_account_balances(account_type.clone(), &ctx.client, address).await?;
-        let checkpoint1 = ctx
-            .client
-            .read_api()
-            .get_latest_checkpoint_sequence_number()
-            .await?;
-        // Get another checkpoint which is greater than current
-        let mut checkpoint2 = ctx
-            .client
-            .read_api()
-            .get_latest_checkpoint_sequence_number()
-            .await?;
-
-        while checkpoint2 <= checkpoint1 {
-            checkpoint2 = ctx
+        while retry_attempts > 0 {
+            let balances_first =
+                get_sub_account_balances(account_type.clone(), &ctx.client, address).await?;
+            let checkpoint1 = ctx
                 .client
                 .read_api()
                 .get_latest_checkpoint_sequence_number()
                 .await?;
-            thread::sleep(Duration::from_secs(1))
+            // Get another checkpoint which is greater than current
+            let mut checkpoint2 = ctx
+                .client
+                .read_api()
+                .get_latest_checkpoint_sequence_number()
+                .await?;
+
+            while checkpoint2 <= checkpoint1 {
+                checkpoint2 = ctx
+                    .client
+                    .read_api()
+                    .get_latest_checkpoint_sequence_number()
+                    .await?;
+                thread::sleep(Duration::from_secs(1))
+            }
+            let balances_second =
+                get_sub_account_balances(account_type.clone(), &ctx.client, address).await?;
+            if balances_first.eq(&balances_second) {
+                return Ok(AccountBalanceResponse {
+                    block_identifier: ctx.blocks().create_block_identifier(checkpoint2).await?,
+                    balances: balances_first,
+                });
+            } else {
+                // retry logic needs to be aaded
+                retry_attempts -= 1;
+            }
         }
-        let balances_second = get_sub_account_balances(account_type, &ctx.client, address).await?;
-        if balances_first.eq(&balances_second) {
-            Ok(AccountBalanceResponse {
-                block_identifier: ctx.blocks().create_block_identifier(checkpoint2).await?,
-                balances: balances_first,
-            })
-        } else {
-            // retry logic needs to be aaded
-            Ok(AccountBalanceResponse {
-                block_identifier: ctx.blocks().create_block_identifier(checkpoint2).await?,
-                balances: balances_first,
-            })
-        }
+        Err(Error::RetryExhausted(String::from("ads")))
     } else {
         // Get current live balance
-        let balances_first = ctx
-            .client
-            .coin_read_api()
-            .get_balance(address, Some(SUI_COIN_TYPE.to_string()))
-            .await?
-            .total_balance as i128;
+        while retry_attempts > 0 {
+            let balances_first = ctx
+                .client
+                .coin_read_api()
+                .get_balance(address, Some(SUI_COIN_TYPE.to_string()))
+                .await?
+                .total_balance as i128;
 
-        // Get current latest checkpoint
-        let checkpoint1 = ctx
-            .client
-            .read_api()
-            .get_latest_checkpoint_sequence_number()
-            .await?;
-
-        // Get another checkpoint which is greater than current
-        let mut checkpoint2 = ctx
-            .client
-            .read_api()
-            .get_latest_checkpoint_sequence_number()
-            .await?;
-
-        while checkpoint2 <= checkpoint1 {
-            checkpoint2 = ctx
+            // Get current latest checkpoint
+            let checkpoint1 = ctx
                 .client
                 .read_api()
                 .get_latest_checkpoint_sequence_number()
                 .await?;
-            thread::sleep(Duration::from_secs(1))
-        }
 
-        // Get live balance again
-        let balances_second = ctx
-            .client
-            .coin_read_api()
-            .get_balance(address, Some(SUI_COIN_TYPE.to_string()))
-            .await?
-            .total_balance as i128;
+            // Get another checkpoint which is greater than current
+            let mut checkpoint2 = ctx
+                .client
+                .read_api()
+                .get_latest_checkpoint_sequence_number()
+                .await?;
 
-        // if those two live balances are equal then that is the current balance for checkpoint2
-        if balances_first.eq(&balances_second) {
-            info!(
-                "same balance for account {} at checkpoint {}",
-                address, checkpoint2
-            );
-            Ok(AccountBalanceResponse {
-                block_identifier: ctx.blocks().create_block_identifier(checkpoint2).await?,
-                balances: vec![Amount::new(balances_first)],
-            })
-        } else {
-            // balances are different so we need to try again.
-            info!(
-                "different balance for account {} at checkpoint {}",
-                address, checkpoint2
-            );
-            // retry logic needs to be aaded
-            Ok(AccountBalanceResponse {
-                block_identifier: ctx.blocks().create_block_identifier(checkpoint2).await?,
-                balances: vec![Amount::new(balances_first)],
-            })
+            while checkpoint2 <= checkpoint1 {
+                checkpoint2 = ctx
+                    .client
+                    .read_api()
+                    .get_latest_checkpoint_sequence_number()
+                    .await?;
+                thread::sleep(Duration::from_secs(1))
+            }
+
+            // Get live balance again
+            let balances_second = ctx
+                .client
+                .coin_read_api()
+                .get_balance(address, Some(SUI_COIN_TYPE.to_string()))
+                .await?
+                .total_balance as i128;
+
+            // if those two live balances are equal then that is the current balance for checkpoint2
+            if balances_first.eq(&balances_second) {
+                info!(
+                    "same balance for account {} at checkpoint {}",
+                    address, checkpoint2
+                );
+                return Ok(AccountBalanceResponse {
+                    block_identifier: ctx.blocks().create_block_identifier(checkpoint2).await?,
+                    balances: vec![Amount::new(balances_first)],
+                });
+            } else {
+                // balances are different so we need to try again.
+                info!(
+                    "different balance for account {} at checkpoint {}",
+                    address, checkpoint2
+                );
+                retry_attempts -= 1;
+            }
         }
+        Err(Error::RetryExhausted(String::from("ads")))
     }
 }
 

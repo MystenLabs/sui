@@ -59,6 +59,9 @@ pub enum Error {
     #[error("Error executing transaction: {0}")]
     TransactionExecutionError(String),
 
+    #[error("Retries exhausted while getting balance. try again.")]
+    RetryExhausted(String),
+
     #[error("{0}")]
     TransactionDryRunError(String),
 

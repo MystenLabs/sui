@@ -89,9 +89,12 @@ impl BlockProvider for CheckpointBlockProvider {
     }
 
     async fn current_block(&self) -> Result<BlockResponse, Error> {
-        let checkpoint = self.client.read_api().get_latest_checkpoint_sequence_number().await?;
-        self.get_block_by_index(checkpoint)
-            .await
+        let checkpoint = self
+            .client
+            .read_api()
+            .get_latest_checkpoint_sequence_number()
+            .await?;
+        self.get_block_by_index(checkpoint).await
     }
 
     async fn genesis_block_identifier(&self) -> Result<BlockIdentifier, Error> {
