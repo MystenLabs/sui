@@ -110,36 +110,40 @@
 				"fileName": "learn/cryptography/index",
 				"title": "Sui Cryptography",
 				"items": [{
-						"label": "Sui Intent Signing",
-						"fileName": "learn/cryptography/sui-intent-signing"
-					},
-					{
-						"label": "Sui Offline Signing",
-						"fileName": "learn/cryptography/sui-offline-signing"
-					},
-					{
-						"label": "Sui Multisig",
-						"fileName": "learn/cryptography/sui-multisig"
-					},
-					{
-						"label": "Sui Keys and Addresses",
-						"fileName": "learn/cryptography/sui-wallet-specs"
-					},
-					{
-						"label": "Verifying Groth16 zk-SNARKs",
-						"fileName": "learn/cryptography/groth16"
+					"label": "Sui Keys and Addresses",
+					"fileName": "learn/cryptography/sui-wallet-specs"
 					},
 					{
 						"label": "Sui Crypto Agility and Signatures",
 						"fileName": "learn/cryptography/sui-signatures"
 					},
 					{
-						"label": "Verifiable Random Function (VRF)",
-						"fileName": "learn/cryptography/ecvrf"
+						"label": "Sui Multisig",
+						"fileName": "learn/cryptography/sui-multisig"
+					},
+					{
+						"label": "Sui Offline Signing",
+						"fileName": "learn/cryptography/sui-offline-signing"
+					},
+					{
+						"label": "Sui Intent Signing",
+						"fileName": "learn/cryptography/sui-intent-signing"
+					},
+					{
+						"label": "Signature schemes in Move contracts",
+						"fileName": "learn/cryptography/sui-move-signatures"
 					},
 					{
 						"label": "Hashing in Sui",
 						"fileName": "learn/cryptography/hashing"
+					},
+					{
+						"label": "Verifying Groth16 zk-SNARKs",
+						"fileName": "learn/cryptography/groth16"
+					},
+					{
+						"label": "Verifiable Random Function (VRF)",
+						"fileName": "learn/cryptography/ecvrf"
 					}
 				]
 			},
