@@ -140,7 +140,7 @@ export function TransactionBlockCard({
     ...cardProps
 }: TransactionBlockCardProps) {
     return (
-        <div className="w-full">
+        <div className="relative w-full">
             <Card
                 rounded="2xl"
                 border="gray45"

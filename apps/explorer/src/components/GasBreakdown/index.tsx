@@ -12,7 +12,7 @@ import { CopyToClipboard } from '~/ui/CopyToClipboard';
 import { DescriptionItem } from '~/ui/DescriptionList';
 import { Divider } from '~/ui/Divider';
 import { Heading } from '~/ui/Heading';
-import { ObjectLink } from '~/ui/InternalLink';
+import { AddressLink, ObjectLink } from '~/ui/InternalLink';
 import { Text } from '~/ui/Text';
 import {
     TransactionBlockCard,
@@ -122,6 +122,8 @@ export function GasBreakdown({ summary }: GasBreakdownProps) {
     const gasPrice = gasData.price || 1;
     const gasBudget = gasData.budget;
     const totalGas = gasData.totalGas;
+    const owner = gasData.owner;
+    const isSponsored = gasData.isSponsored;
 
     return (
         <TransactionBlockCard
@@ -136,6 +138,15 @@ export function GasBreakdown({ summary }: GasBreakdownProps) {
             }
         >
             <TransactionBlockCardSection>
+                {isSponsored && owner && (
+                    <div className="mb-4 flex items-center gap-2 rounded-xl bg-sui/10 px-3 py-2">
+                        <Text variant="pBody/medium" color="steel-darker">
+                            Paid by
+                        </Text>
+                        <AddressLink address={owner} />
+                    </div>
+                )}
+
                 <div className="flex flex-col gap-3">
                     <Divider />
 
