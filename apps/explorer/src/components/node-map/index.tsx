@@ -150,7 +150,7 @@ export default function NodeMap({ minHeight }: Props) {
                                 numberFormatter.format(countryCount)}
                         </NodeStat>
 
-                        <NodeStat title="Nodes on Devnet and Testnet">
+                        <NodeStat title="Nodes">
                             {isLoading && (
                                 <Placeholder width="60px" height="0.8em" />
                             )}
