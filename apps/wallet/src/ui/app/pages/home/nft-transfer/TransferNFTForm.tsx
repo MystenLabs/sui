@@ -18,8 +18,8 @@ import BottomMenuLayout, {
 import { Text } from '_app/shared/text';
 import { AddressInput } from '_components/address-input';
 import { useSigner } from '_hooks';
+import { NFT_FILTER, MAX_FETCH_LIMIT } from '_pages/home/nfts';
 import { getSignerOperationErrorMessage } from '_src/ui/app/helpers/errorMessages';
-import { NFT_FILTER, MAX_FETCH_LIMIT } from '_src/ui/app/pages/home/nfts';
 
 export function TransferNFTForm({ objectId }: { objectId: string }) {
     const activeAddress = useActiveAddress();
