@@ -16,8 +16,14 @@ import { PlaceholderTable } from '~/ui/PlaceholderTable';
 import { RadioGroup, RadioOption } from '~/ui/Radio';
 import { TableCard } from '~/ui/TableCard';
 
+export enum FILTER_VALUES {
+    INPUT = 'InputObject',
+    CHANGED = 'ChangedObject',
+}
+
 type TransactionBlocksForAddressProps = {
     address: string;
+    filter?: FILTER_VALUES;
     isObject?: boolean;
 };
 
@@ -25,11 +31,6 @@ enum PAGE_ACTIONS {
     NEXT,
     PREV,
     FIRST,
-}
-
-enum FILTER_VALUES {
-    INPUT = 'InputObject',
-    CHANGED = 'ChangedObject',
 }
 
 type TransactionBlocksForAddressActionType = {
@@ -74,9 +75,10 @@ const reducer = (
 
 function TransactionBlocksForAddress({
     address,
+    filter = FILTER_VALUES.CHANGED,
     isObject = false,
 }: TransactionBlocksForAddressProps) {
-    const [filterValue, setFilterValue] = useState(FILTER_VALUES.CHANGED);
+    const [filterValue, setFilterValue] = useState(filter);
     const [currentPageState, dispatch] = useReducer(reducer, {
         InputObject: 0,
         ChangedObject: 0,

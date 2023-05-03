@@ -21,8 +21,8 @@ export function useSuiCoinData() {
         ['sui-coin-data'],
         () => makeAppsBackendRequest<CoinData>('coins/sui', {}),
         {
-            // Cache this forever because we have limited API bandwidth at the moment
-            cacheTime: Infinity,
+            cacheTime: 24 * 60 * 60 * 1000,
+            staleTime: Infinity,
         }
     );
 }

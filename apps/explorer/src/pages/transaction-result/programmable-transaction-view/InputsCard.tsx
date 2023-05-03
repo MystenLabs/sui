@@ -3,27 +3,20 @@
 
 import { type SuiCallArg } from '@mysten/sui.js';
 
-import {
-    ExpandableList,
-    ExpandableListControl,
-    ExpandableListItems,
-} from '~/ui/ExpandableList';
+import { ProgrammableTxnBlockCard } from '~/components/transactions/ProgTxnBlockCard';
 import { AddressLink, ObjectLink } from '~/ui/InternalLink';
 import { Text } from '~/ui/Text';
-import {
-    TransactionBlockCard,
-    TransactionBlockCardSection,
-} from '~/ui/TransactionBlockCard';
+import { TransactionBlockCardSection } from '~/ui/TransactionBlockCard';
 
 const REGEX_NUMBER = /^\d+$/;
-const DEFAULT_ITEMS_TO_SHOW = 5;
+const DEFAULT_ITEMS_TO_SHOW = 10;
 
 interface InputsCardProps {
     inputs: SuiCallArg[];
 }
 
 export function InputsCard({ inputs }: InputsCardProps) {
-    const defaultOpen = inputs.length <= DEFAULT_ITEMS_TO_SHOW;
+    const defaultOpen = inputs.length < DEFAULT_ITEMS_TO_SHOW;
 
     if (!inputs?.length) {
         return null;
@@ -60,21 +53,20 @@ export function InputsCard({ inputs }: InputsCardProps) {
                     return (
                         <div
                             key={key}
-                            className="flex items-center justify-between gap-12"
+                            className="flex flex-wrap items-center justify-between gap-x-12"
                         >
                             <Text variant="pBody/medium" color="steel-dark">
                                 {key}
                             </Text>
 
-                            <Text
-                                truncate
-                                variant="pBody/medium"
-                                color="steel-darker"
-                            >
-                                <div className="truncate capitalize">
+                            <div className="break-all">
+                                <Text
+                                    variant="pBody/medium"
+                                    color="steel-darker"
+                                >
                                     {renderValue}
-                                </div>
-                            </Text>
+                                </Text>
+                            </div>
                         </div>
                     );
                 })}
@@ -83,22 +75,11 @@ export function InputsCard({ inputs }: InputsCardProps) {
     ));
 
     return (
-        <TransactionBlockCard collapsible title="Inputs">
-            <ExpandableList
-                items={expandableItems}
-                defaultItemsToShow={DEFAULT_ITEMS_TO_SHOW}
-                itemsLabel="Inputs"
-            >
-                <div className="flex max-h-[300px] flex-col gap-6 overflow-y-auto">
-                    <ExpandableListItems />
-                </div>
-
-                {expandableItems.length > DEFAULT_ITEMS_TO_SHOW && (
-                    <div className="mt-6">
-                        <ExpandableListControl />
-                    </div>
-                )}
-            </ExpandableList>
-        </TransactionBlockCard>
+        <ProgrammableTxnBlockCard
+            items={expandableItems}
+            itemsLabel="Inputs"
+            defaultItemsToShow={DEFAULT_ITEMS_TO_SHOW}
+            noExpandableList={defaultOpen}
+        />
     );
 }

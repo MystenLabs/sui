@@ -43,7 +43,7 @@ function ObjectDetail({
 }) {
     const [expanded, setExpanded] = useState(false);
 
-    const [packageId, moduleName, functionName] =
+    const [packageId, moduleName, typeName] =
         objectType?.split('<')[0]?.split('::') || [];
 
     return (
@@ -108,7 +108,7 @@ function ObjectDetail({
                     </div>
                     <div className="grid grid-cols-2 overflow-auto">
                         <Text variant="pBodySmall" color="steel-dark">
-                            Function
+                            Type
                         </Text>
 
                         <div className="flex justify-end">
@@ -119,7 +119,7 @@ function ObjectDetail({
                                 className="text-hero-dark no-underline justify-self-end overflow-auto"
                             >
                                 <Text variant="pBodySmall" truncate mono>
-                                    {functionName}
+                                    {typeName}
                                 </Text>
                             </ExplorerLink>
                         </div>
