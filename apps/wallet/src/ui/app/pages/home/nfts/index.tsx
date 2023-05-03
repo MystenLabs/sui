@@ -60,7 +60,7 @@ function NftsPage() {
         hasNextPage,
         isFetchingNextPage,
     ]);
-    //'get-owned-objects', address, filter, maxObjectRequests
+
     if (isInitialLoading) {
         return (
             <div className="mt-1 flex w-full justify-center">
