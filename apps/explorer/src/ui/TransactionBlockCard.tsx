@@ -66,7 +66,7 @@ function TransactionBlockCardHeader({
 
     if (collapsible) {
         return (
-            <Disclosure.Button as="div" className="w-full">
+            <Disclosure.Button as="div" className="w-full cursor-pointer">
                 {headerContent}
             </Disclosure.Button>
         );

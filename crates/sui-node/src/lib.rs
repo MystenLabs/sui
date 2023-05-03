@@ -326,6 +326,7 @@ impl SuiNode {
                         .prune_and_compact_before_upload
                         .unwrap_or(true),
                     config.indirect_objects_threshold,
+                    config.authority_store_pruning_config,
                 )?;
                 Some(handler.start())
             }

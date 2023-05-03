@@ -8,6 +8,7 @@ import { useState } from 'react';
 import MoonPay from './icons/MoonPay.svg';
 import Transak from './icons/Transak.svg';
 import { type OnrampProvider } from './types';
+import { growthbook } from '_src/ui/app/experimentation/feature-gating';
 
 const TRANSAK_API_KEY =
     process.env.NODE_ENV === 'production'
@@ -26,38 +27,15 @@ const BACKEND_HOST =
 
 const ONRAMP_PROVIDER: OnrampProvider[] = [
     {
-        key: 'transak',
-        icon: Transak,
-        name: 'Transak',
-        checkSupported: async () => {
-            return true;
-        },
-        getUrl: async (address) => {
-            const params = new URLSearchParams({
-                apiKey: TRANSAK_API_KEY,
-                environment:
-                    process.env.NODE_ENV === 'production'
-                        ? 'PRODUCTION'
-                        : 'STAGING',
-                // If you want to test ETH values, you can use something like this:
-                // cryptoCurrencyCode: 'ETH',
-                // walletAddress: '0x000000000000000000000000000000000000dead',
-                cryptoCurrencyCode: 'SUI',
-                walletAddress: address,
-                disableWalletAddressForm: 'true',
-                themeColor: '#6fbcf0',
-            });
-
-            return process.env.NODE_ENV === 'production'
-                ? `https://global.transak.com?${params}`
-                : `https://global-stg.transak.com?${params}`;
-        },
-    },
-    {
         key: 'moonpay',
         icon: MoonPay,
         name: 'MoonPay',
         checkSupported: async () => {
+            const isOn = await growthbook.getFeatureValue(
+                'wallet-onramp-moonpay',
+                false
+            );
+            if (!isOn) return false;
             try {
                 const res = await fetch(
                     `https://api.moonpay.com/v4/ip_address?apiKey=${MOONPAY_API_KEY}`
@@ -90,6 +68,38 @@ const ONRAMP_PROVIDER: OnrampProvider[] = [
             const data = (await res.json()) as { url: string };
 
             return data.url;
+        },
+    },
+    {
+        key: 'transak',
+        icon: Transak,
+        name: 'Transak',
+        checkSupported: async () => {
+            const isOn = await growthbook.getFeatureValue(
+                'wallet-onramp-transak',
+                false
+            );
+            return isOn;
+        },
+        getUrl: async (address) => {
+            const params = new URLSearchParams({
+                apiKey: TRANSAK_API_KEY,
+                environment:
+                    process.env.NODE_ENV === 'production'
+                        ? 'PRODUCTION'
+                        : 'STAGING',
+                // If you want to test ETH values, you can use something like this:
+                // cryptoCurrencyCode: 'ETH',
+                // walletAddress: '0x000000000000000000000000000000000000dead',
+                cryptoCurrencyCode: 'SUI',
+                walletAddress: address,
+                disableWalletAddressForm: 'true',
+                themeColor: '#6fbcf0',
+            });
+
+            return process.env.NODE_ENV === 'production'
+                ? `https://global.transak.com?${params}`
+                : `https://global-stg.transak.com?${params}`;
         },
     },
 ];

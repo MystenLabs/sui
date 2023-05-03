@@ -14,7 +14,9 @@ import { type DataType } from '../ObjectResultType';
 
 import styles from './ObjectView.module.css';
 
-import TransactionBlocksForAddress from '~/components/TransactionBlocksForAddress/TransactionBlocksForAddress';
+import TransactionBlocksForAddress, {
+    FILTER_VALUES,
+} from '~/components/TransactionBlocksForAddress/TransactionBlocksForAddress';
 import { AddressLink, ObjectLink } from '~/ui/InternalLink';
 import { LoadingSpinner } from '~/ui/LoadingSpinner';
 import { RadioGroup, RadioOption } from '~/ui/Radio';
@@ -151,6 +153,7 @@ function PkgView({ data }: { data: DataType }) {
                     <ErrorBoundary>
                         <TransactionBlocksForAddress
                             address={viewedData.id}
+                            filter={FILTER_VALUES.INPUT}
                             isObject
                         />
                     </ErrorBoundary>

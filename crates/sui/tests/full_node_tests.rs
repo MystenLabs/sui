@@ -1055,6 +1055,7 @@ async fn test_full_node_bootstrap_from_snapshot() -> Result<(), anyhow::Error> {
     telemetry_subscribers::init_for_testing();
     let mut test_cluster = TestClusterBuilder::new()
         .with_epoch_duration_ms(10_000)
+        // This will also do aggressive pruning and compaction of the snapshot
         .with_enable_db_checkpoints_fullnodes()
         .build()
         .await?;
