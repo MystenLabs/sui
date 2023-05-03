@@ -15,6 +15,11 @@ afl = "0.12.16"
 
 move-binary-format.workspace = true
 move-bytecode-verifier.workspace = true
+move-ir-compiler.workspace = true
+move-compiler.workspace = true
+move-core-types.workspace = true
+move-transactional-test-runner.workspace = true
 
 sui-protocol-config = { path = "../sui-protocol-config" }
 sui-verifier = { path = "../sui-verifier" }
+sui-transactional-test-runner = { path = "../sui-transactional-test-runner" }

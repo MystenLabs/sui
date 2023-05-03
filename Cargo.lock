@@ -10277,8 +10277,13 @@ dependencies = [
  "clap 3.2.23",
  "move-binary-format",
  "move-bytecode-verifier",
+ "move-compiler",
+ "move-core-types",
+ "move-ir-compiler",
+ "move-transactional-test-runner",
  "quinn-proto",
  "sui-protocol-config",
+ "sui-transactional-test-runner",
  "sui-verifier",
 ]
 
