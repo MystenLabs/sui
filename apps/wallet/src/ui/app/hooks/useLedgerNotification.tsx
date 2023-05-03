@@ -14,8 +14,9 @@ import { AppType } from '../redux/slices/app/AppType';
 import { ButtonOrLink } from '../shared/utils/ButtonOrLink';
 import useAppSelector from './useAppSelector';
 
-const HAS_SEEN_LEDGER_NOTIFICATION_KEY = 'has-seen-ledger-notification';
-const HAS_SEEN_LEDGER_NOTIFICATION_VALUE = 'true';
+const HAS_ACKNOWLEDGED_LEDGER_NOTIFICATION_KEY =
+    'has-acknowledged-ledger-notification';
+const HAS_ACKNOWLEDGED_LEDGER_NOTIFICATION_VALUE = 'true';
 
 const LEDGER_NOTIFICATION_TOAST_ID = 'ledger-notification-toast';
 
@@ -39,17 +40,13 @@ export function useLedgerNotification() {
     }, [isMenuOpen]);
 
     useEffect(() => {
-        const hasSeenLedgerNotificationVal = localStorage.getItem(
-            HAS_SEEN_LEDGER_NOTIFICATION_KEY
+        const hasAcknowledgedVal = localStorage.getItem(
+            HAS_ACKNOWLEDGED_LEDGER_NOTIFICATION_KEY
         );
-        const hasSeenLedgerNotification =
-            hasSeenLedgerNotificationVal === HAS_SEEN_LEDGER_NOTIFICATION_VALUE;
+        const hasAcknowledged =
+            hasAcknowledgedVal === HAS_ACKNOWLEDGED_LEDGER_NOTIFICATION_VALUE;
 
-        if (
-            isLedgerNotificationEnabled &&
-            !hasSeenLedgerNotification &&
-            !isMenuOpen
-        ) {
+        if (isLedgerNotificationEnabled && !hasAcknowledged && !isMenuOpen) {
             // If we don't have a timeout, the toast doesn't get rendered after initial render.
             // We'll do this for now since we don't have the time to figure out what exactly is going on
             setTimeout(() => {
@@ -61,8 +58,8 @@ export function useLedgerNotification() {
                                 onClick={async () => {
                                     trackEvent('LedgerNotification');
                                     localStorage.setItem(
-                                        HAS_SEEN_LEDGER_NOTIFICATION_KEY,
-                                        HAS_SEEN_LEDGER_NOTIFICATION_VALUE
+                                        HAS_ACKNOWLEDGED_LEDGER_NOTIFICATION_KEY,
+                                        HAS_ACKNOWLEDGED_LEDGER_NOTIFICATION_VALUE
                                     );
                                     toast.remove(LEDGER_NOTIFICATION_TOAST_ID);
 
@@ -85,8 +82,8 @@ export function useLedgerNotification() {
                             className="w-full flex appearance-none border-0 p-0 bg-transparent cursor-pointer text-success-dark"
                             onClick={() => {
                                 localStorage.setItem(
-                                    HAS_SEEN_LEDGER_NOTIFICATION_KEY,
-                                    HAS_SEEN_LEDGER_NOTIFICATION_VALUE
+                                    HAS_ACKNOWLEDGED_LEDGER_NOTIFICATION_KEY,
+                                    HAS_ACKNOWLEDGED_LEDGER_NOTIFICATION_VALUE
                                 );
                                 toast.dismiss(LEDGER_NOTIFICATION_TOAST_ID);
                             }}
@@ -98,7 +95,7 @@ export function useLedgerNotification() {
                     {
                         id: LEDGER_NOTIFICATION_TOAST_ID,
                         className:
-                            '!rounded-full !shadow-notification !border !border-solid !border-success-dark/20 !bg-success-light !text-success-dark',
+                            '!px-0 !py-1 !rounded-full !shadow-notification !border !border-solid !border-success-dark/20 !bg-success-light !text-success-dark',
                         duration: Infinity,
                     }
                 );
