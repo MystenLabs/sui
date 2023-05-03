@@ -14,7 +14,7 @@ export function OnTheNetwork() {
     const { data: networkMetrics } = useGetNetworkMetrics();
     const { data: transactionCount } = useGetTotalTransactionBlocks();
     return (
-        <Card bg="lightBlue" spacing="lg">
+        <Card bg="lightBlue" spacing="lg" height="full">
             <Heading color="steel-darker" variant="heading4/semibold">
                 On the Network
             </Heading>
