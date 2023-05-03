@@ -17,7 +17,7 @@ export function SuiTokenCard() {
         // priceChangePercentageOver24H,
         currentPrice,
         totalSupply,
-        fullyDilutedMarketCap,
+        marketCap,
     } = data || {};
 
     // const isPriceChangePositive = Number(priceChangePercentageOver24H) > 0;
@@ -71,7 +71,7 @@ export function SuiTokenCard() {
                         postfix="USD"
                         unavailable={isLoading}
                     >
-                        {formatAmount(fullyDilutedMarketCap)}
+                        {formatAmount(marketCap)}
                     </StatsWrapper>
                     <StatsWrapper
                         label="Total Supply"
