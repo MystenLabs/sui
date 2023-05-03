@@ -12,7 +12,7 @@ import React, {
 } from 'react';
 
 import { WorldMap } from './WorldMap';
-import { type ValidatorMapData } from './types';
+import { NodeLocation, type ValidatorMapData } from './types';
 
 import { useNetwork } from '~/context';
 import { useAppsBackend } from '~/hooks/useAppsBackend';
@@ -20,6 +20,9 @@ import { Card } from '~/ui/Card';
 import { Heading } from '~/ui/Heading';
 import { Placeholder } from '~/ui/Placeholder';
 import { Text } from '~/ui/Text';
+import { useQuery } from '@tanstack/react-query';
+
+const HOST = 'https://imgmod.sui.io';
 
 type ValidatorsMap = Record<string, ValidatorMapData>;
 
@@ -51,6 +54,39 @@ export default function ValidatorMap({ minHeight }: Props) {
     const [isLoading, setIsLoading] = useState(false);
     const [isError, setIsError] = useState(false);
     const appsBe = useAppsBackend();
+
+    const { data: nodeData } = useQuery(
+        ['node-map'],
+        async () => {
+            const res = await fetch(
+                `${HOST}/location?${new URLSearchParams({
+                    version: 'v2',
+                    window: '1d',
+                })}`,
+                {
+                    method: 'GET',
+                }
+            );
+
+            if (!res.ok) {
+                throw new Error('Failed to fetch node map data');
+            }
+
+            return res.json() as Promise<NodeLocation[]>;
+        }
+    );
+
+    const nodeCount = useMemo<number | null>(() => {
+        let count = 0;
+        if(!nodeData) {
+            return null
+        }
+        nodeData.forEach(node => {
+            count += node.count
+        })
+        
+        return count
+    }, [nodeData])
 
     useEffect(() => {
         setIsLoading(true);
@@ -164,6 +200,16 @@ export default function ValidatorMap({ minHeight }: Props) {
                                     totalCount &&
                                     numberFormatter.format(totalCount)) ||
                                     '--'
+                            }
+                        </NodeStat>
+                        <NodeStat title="Nodes">
+                            {isLoading && (
+                                <Placeholder width="60px" height="0.8em" />
+                            )}
+                            {
+                                nodeCount &&
+                                numberFormatter.format(nodeCount) || 
+                                '--'
                             }
                         </NodeStat>
                     </div>

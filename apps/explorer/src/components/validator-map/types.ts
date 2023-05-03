@@ -8,6 +8,14 @@ export interface Feature {
     properties: { name: string; countryCode: string };
 }
 
+export interface NodeLocation {
+    count: number;
+    city: string;
+    region: string;
+    country: string;
+    location: string;
+}
+
 interface ValidatorIpInfo {
     ip: string;
     hostname: string;
