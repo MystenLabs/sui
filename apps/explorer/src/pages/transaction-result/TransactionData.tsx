@@ -25,28 +25,20 @@ import {
     TransactionBlockCardSection,
 } from '~/ui/TransactionBlockCard';
 
-function GasAmount({
-    amount,
-    isHighlighted,
-}: {
-    amount?: bigint | number;
-    isHighlighted?: boolean;
-}) {
+function GasAmount({ amount }: { amount?: bigint | number }) {
     const [formattedAmount, symbol] = useFormatCoin(
         amount,
         SUI_TYPE_ARG,
         CoinFormat.FULL
     );
 
-    const textColor = isHighlighted ? 'success-dark' : 'steel-darker';
-
     return (
         <div className="flex flex-wrap gap-1">
             <div className="flex flex-wrap items-center gap-1">
-                <Text variant="pBody/medium" color={textColor}>
+                <Text variant="pBody/medium" color="steel-darker">
                     {formattedAmount}
                 </Text>
-                <Text variant="subtitleSmall/medium" color={textColor}>
+                <Text variant="subtitleSmall/medium" color="steel-darker">
                     {symbol}
                 </Text>
             </div>
@@ -243,11 +235,11 @@ export function TransactionData({ transaction }: Props) {
                                         />
                                     </DescriptionItem>
 
-                                    <div className="mt-2 flex flex-col gap-2 rounded-xl border border-success px-4 py-2 md:flex-row md:items-center md:gap-4">
+                                    <div className="mt-2 flex flex-col gap-2 rounded-xl border border-dashed border-steel px-4 py-2 md:flex-row md:items-center md:gap-4">
                                         <div className="w-full md:w-40">
                                             <Text
                                                 variant="pBody/semibold"
-                                                color="success-dark"
+                                                color="steel-darker"
                                             >
                                                 Storage Rebate
                                             </Text>
@@ -255,7 +247,6 @@ export function TransactionData({ transaction }: Props) {
 
                                         <div className="ml-0 min-w-0 flex-1 leading-none">
                                             <GasAmount
-                                                isHighlighted
                                                 amount={
                                                     -Number(
                                                         gasUsed?.storageRebate
