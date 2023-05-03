@@ -92,7 +92,11 @@ const BackupPage = ({ mode = 'created' }: BackupPageProps) => {
                 </CardLayout>
             ) : (
                 <CardLayout
-                    icon={isOnboardingFlow ? 'success' : undefined}
+                    icon={
+                        isOnboardingFlow || mode === 'imported'
+                            ? 'success'
+                            : undefined
+                    }
                     title={
                         mode === 'imported'
                             ? 'Wallet Imported Successfully!'
