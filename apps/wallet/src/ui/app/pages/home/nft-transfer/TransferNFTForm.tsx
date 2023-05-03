@@ -18,7 +18,6 @@ import BottomMenuLayout, {
 import { Text } from '_app/shared/text';
 import { AddressInput } from '_components/address-input';
 import { useSigner } from '_hooks';
-import { NFT_FILTER, MAX_FETCH_LIMIT } from '_pages/home/nfts';
 import { getSignerOperationErrorMessage } from '_src/ui/app/helpers/errorMessages';
 
 export function TransferNFTForm({ objectId }: { objectId: string }) {
@@ -49,12 +48,7 @@ export function TransferNFTForm({ objectId }: { objectId: string }) {
         },
         onSuccess: (response) => {
             queryClient.invalidateQueries(['object', objectId]);
-            queryClient.invalidateQueries([
-                'get-owned-objects',
-                activeAddress,
-                NFT_FILTER,
-                MAX_FETCH_LIMIT,
-            ]);
+            queryClient.invalidateQueries(['get-owned-objects']);
             return navigate(
                 `/receipt?${new URLSearchParams({
                     txdigest: getTransactionDigest(response),

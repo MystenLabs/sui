@@ -14,12 +14,7 @@ import LoadingSpinner from '_components/loading/LoadingIndicator';
 import { NFTDisplayCard } from '_components/nft-display';
 import PageTitle from '_src/ui/app/shared/PageTitle';
 
-//Sharing this with nft-transfer/TransferNFTForm
-//May need to move to a common file
-export const MAX_FETCH_LIMIT = 50;
-export const NFT_FILTER = {
-    MatchNone: [{ StructType: '0x2::coin::Coin' }],
-};
+const MAX_FETCH_LIMIT = 50;
 
 function NftsPage() {
     const accountAddress = useActiveAddress();
