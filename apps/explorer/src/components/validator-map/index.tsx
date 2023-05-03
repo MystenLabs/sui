@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { useQuery } from '@tanstack/react-query';
 import { ParentSize } from '@visx/responsive';
 import { TooltipWithBounds, useTooltip } from '@visx/tooltip';
 import React, {
@@ -12,7 +13,7 @@ import React, {
 } from 'react';
 
 import { WorldMap } from './WorldMap';
-import { NodeLocation, type ValidatorMapData } from './types';
+import { type NodeLocation, type ValidatorMapData } from './types';
 
 import { useNetwork } from '~/context';
 import { useAppsBackend } from '~/hooks/useAppsBackend';
@@ -20,7 +21,6 @@ import { Card } from '~/ui/Card';
 import { Heading } from '~/ui/Heading';
 import { Placeholder } from '~/ui/Placeholder';
 import { Text } from '~/ui/Text';
-import { useQuery } from '@tanstack/react-query';
 
 const HOST = 'https://imgmod.sui.io';
 
@@ -55,38 +55,35 @@ export default function ValidatorMap({ minHeight }: Props) {
     const [isError, setIsError] = useState(false);
     const appsBe = useAppsBackend();
 
-    const { data: nodeData } = useQuery(
-        ['node-map'],
-        async () => {
-            const res = await fetch(
-                `${HOST}/location?${new URLSearchParams({
-                    version: 'v2',
-                    window: '1d',
-                })}`,
-                {
-                    method: 'GET',
-                }
-            );
-
-            if (!res.ok) {
-                throw new Error('Failed to fetch node map data');
+    const { data: nodeData, isSuccess } = useQuery(['node-map'], async () => {
+        const res = await fetch(
+            `${HOST}/location?${new URLSearchParams({
+                version: 'v2',
+                window: '1d',
+            })}`,
+            {
+                method: 'GET',
             }
+        );
 
-            return res.json() as Promise<NodeLocation[]>;
+        if (!res.ok) {
+            throw new Error('Failed to fetch node map data');
         }
-    );
+
+        return res.json() as Promise<NodeLocation[]>;
+    });
 
     const nodeCount = useMemo<number | null>(() => {
         let count = 0;
-        if(!nodeData) {
-            return null
+        if (!nodeData) {
+            return null;
         }
-        nodeData.forEach(node => {
-            count += node.count
-        })
-        
-        return count
-    }, [nodeData])
+        nodeData.forEach((node) => {
+            count += node.count;
+        });
+
+        return count;
+    }, [nodeData]);
 
     useEffect(() => {
         setIsLoading(true);
@@ -111,12 +108,11 @@ export default function ValidatorMap({ minHeight }: Props) {
             return { totalCount: null, countryCount: null, validatorMap: {} };
         }
 
-        let totalCount = 0;
+        let totalCount = validatorData.length;
         const validatorMap: ValidatorsMap = {};
         const countryMap: Record<string, number> = {};
         validatorData.forEach((validator) => {
             if (validator) {
-                totalCount++;
                 validatorMap[validator.suiAddress] ??= {
                     ...validator,
                 };
@@ -206,11 +202,10 @@ export default function ValidatorMap({ minHeight }: Props) {
                             {isLoading && (
                                 <Placeholder width="60px" height="0.8em" />
                             )}
-                            {
+                            {(isSuccess &&
                                 nodeCount &&
-                                numberFormatter.format(nodeCount) || 
-                                '--'
-                            }
+                                numberFormatter.format(nodeCount)) ||
+                                '--'}
                         </NodeStat>
                     </div>
                 </div>
