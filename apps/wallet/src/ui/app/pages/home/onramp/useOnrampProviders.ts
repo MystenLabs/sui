@@ -30,8 +30,7 @@ const ONRAMP_PROVIDER: OnrampProvider[] = [
         icon: Transak,
         name: 'Transak',
         checkSupported: async () => {
-            // TODO: Remove this check when we're ready to launch Transak:
-            return process.env.NODE_ENV !== 'production';
+            return true;
         },
         getUrl: async (address) => {
             const params = new URLSearchParams({
