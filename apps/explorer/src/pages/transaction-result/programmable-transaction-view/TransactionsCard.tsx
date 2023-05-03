@@ -5,15 +5,8 @@ import { type SuiTransaction } from '@mysten/sui.js';
 
 import { Transaction } from './Transaction';
 
-import {
-    ExpandableList,
-    ExpandableListControl,
-    ExpandableListItems,
-} from '~/ui/ExpandableList';
-import {
-    TransactionBlockCard,
-    TransactionBlockCardSection,
-} from '~/ui/TransactionBlockCard';
+import { ProgrammableTxnBlockCard } from '~/components/transactions/ProgTxnBlockCard';
+import { TransactionBlockCardSection } from '~/ui/TransactionBlockCard';
 
 const DEFAULT_ITEMS_TO_SHOW = 5;
 
@@ -43,22 +36,10 @@ export function TransactionsCard({ transactions }: TransactionsCardProps) {
     });
 
     return (
-        <TransactionBlockCard collapsible title="Transactions">
-            <ExpandableList
-                items={expandableItems}
-                defaultItemsToShow={DEFAULT_ITEMS_TO_SHOW}
-                itemsLabel="Transactions"
-            >
-                <div className="flex max-h-[300px] flex-col gap-6 overflow-y-auto">
-                    <ExpandableListItems />
-                </div>
-
-                {expandableItems.length > DEFAULT_ITEMS_TO_SHOW && (
-                    <div className="mt-6">
-                        <ExpandableListControl />
-                    </div>
-                )}
-            </ExpandableList>
-        </TransactionBlockCard>
+        <ProgrammableTxnBlockCard
+            items={expandableItems}
+            itemsLabel="Transactions"
+            defaultItemsToShow={DEFAULT_ITEMS_TO_SHOW}
+        />
     );
 }

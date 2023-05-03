@@ -8,19 +8,26 @@ import {
     getTotalGasUsed,
     getTransactionSender,
     is,
+    SuiGasData,
 } from '@mysten/sui.js';
 
+type Optional<T> = {
+    [K in keyof T]?: T[K];
+};
+
 export type GasSummaryType =
-    | (GasCostSummary & {
-          totalGas?: string;
-          owner?: string;
-          isSponsored: boolean;
-      })
+    | (GasCostSummary &
+          Optional<SuiGasData> & {
+              totalGas?: string;
+              owner?: string;
+              isSponsored: boolean;
+              gasUsed: GasCostSummary;
+          })
     | null;
 
 export function getGasSummary(
     transaction: SuiTransactionBlockResponse | DryRunTransactionBlockResponse
-) {
+): GasSummaryType {
     const { effects } = transaction;
     if (!effects) return null;
     const totalGas = getTotalGasUsed(effects);
@@ -36,10 +43,16 @@ export function getGasSummary(
         ? effects.gasObject.owner.AddressOwner
         : '';
 
+    const gasData = is(transaction, SuiTransactionBlockResponse)
+        ? getGasData(transaction)
+        : {};
+
     return {
         ...effects.gasUsed,
+        ...gasData,
         owner,
         totalGas: totalGas?.toString(),
         isSponsored: !!owner && !!sender && owner !== sender,
+        gasUsed: transaction?.effects!.gasUsed,
     };
 }
