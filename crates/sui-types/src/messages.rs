@@ -10,6 +10,7 @@ use crate::crypto::{
     ToFromBytes,
 };
 use crate::digests::{CertificateDigest, SenderSignedDataDigest};
+use crate::executable_transaction::VerifiedExecutableTransaction;
 use crate::message_envelope::{Envelope, Message, TrustedEnvelope, VerifiedEnvelope};
 use crate::messages_checkpoint::CheckpointTimestamp;
 use crate::messages_consensus::ConsensusCommitPrologue;
@@ -31,8 +32,8 @@ use shared_crypto::intent::{Intent, IntentMessage, IntentScope};
 use std::fmt::Write;
 use std::fmt::{Debug, Display, Formatter};
 use std::{
-    collections::{BTreeMap, BTreeSet, HashSet},
-    hash::Hash,
+    collections::{hash_map::DefaultHasher, BTreeMap, BTreeSet, HashSet},
+    hash::{Hash, Hasher},
     iter,
 };
 use strum::IntoStaticStr;

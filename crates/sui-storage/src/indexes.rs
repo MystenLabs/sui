@@ -29,11 +29,10 @@ use sui_types::base_types::{
 use sui_types::base_types::{ObjectInfo, ObjectRef};
 use sui_types::digests::TransactionEventsDigest;
 use sui_types::dynamic_field::{self, DynamicFieldInfo};
+use sui_types::effects::{TransactionEffects, TransactionEffectsAPI, TransactionEvents};
 use sui_types::error::{SuiError, SuiResult, UserInputError};
-use sui_types::messages::{
-    TransactionDataAPI, TransactionEffects, TransactionEffectsAPI, TransactionEvents,
-    VerifiedExecutableTransaction,
-};
+use sui_types::executable_transaction::VerifiedExecutableTransaction;
+use sui_types::messages::TransactionDataAPI;
 use sui_types::object::Owner;
 use sui_types::parse_sui_struct_tag;
 use sui_types::temporary_store::TxCoins;

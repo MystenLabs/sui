@@ -721,16 +721,22 @@ impl LocalExec {
             drop(execution_lock);
         }
 
-        let res = authority_state
-            .try_execute_immediately(certificate, None, &epoch_store)
+        let (effects, errors) = authority_state
+            .try_execute_immediately(vec![certificate.clone()], vec![None], &epoch_store)
             .await
             .unwrap();
 
-        let exec_res = match res.1 {
+        let (effects, errors) = (
+            effects.into_iter().next().unwrap(),
+            errors.into_iter().next().unwrap(),
+        );
+
+        let exec_res = match errors {
             Some(q) => Err(q),
             None => Ok(()),
         };
-        let effects = SuiTransactionBlockEffects::try_from(res.0).map_err(LocalExecError::from)?;
+        let effects =
+            SuiTransactionBlockEffects::try_from(effects).map_err(LocalExecError::from)?;
 
         Ok(ExecutionSandboxState {
             transaction_info: pre_run_sandbox.transaction_info,

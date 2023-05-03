@@ -1611,27 +1611,29 @@ impl AuthorityState {
                 loaded_child_objects,
             )
             .await?;
-        let effects: SuiTransactionBlockEffects = effects.clone().try_into()?;
 
         self.metrics
             .post_processing_total_tx_indexed
             .inc_by(transactions.len() as u64);
 
-        for (effects, events) in izip!(effects, events) {
+        for (transaction, effects, events) in izip!(transactions, effects, events) {
             let tx_digest = effects.transaction_digest();
+            let effects: SuiTransactionBlockEffects = effects.clone().try_into()?;
 
-                self.subscription_handler
-                    .process_tx(
-                        certificate.data().transaction_data(),
-                        &effects,
-                        &SuiTransactionBlockEvents::try_from(
-                            events.clone(),
-                            *tx_digest,
-                            Some(timestamp_ms),
-                            epoch_store.module_cache(),
-                        )
-                    )?,
-                )
+            let events = SuiTransactionBlockEvents::try_from(
+                events.clone(),
+                *tx_digest,
+                Some(timestamp_ms),
+                epoch_store.module_cache(),
+            )
+            .tap_err(|e| warn!("Could not construct events for tx {tx_digest:?}: {}", e));
+
+            let Ok(events) = events else {
+                continue;
+            };
+
+            self.subscription_handler
+                .process_tx(transaction.data().transaction_data(), &effects, &events)
                 .await
                 .tap_ok(|_| {
                     self.metrics
