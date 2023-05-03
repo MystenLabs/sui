@@ -53,20 +53,14 @@ export function InputsCard({ inputs }: InputsCardProps) {
                     return (
                         <div
                             key={key}
-                            className="flex items-center justify-between gap-12"
+                            className="flex flex-wrap items-center justify-between gap-x-12"
                         >
                             <Text variant="pBody/medium" color="steel-dark">
                                 {key}
                             </Text>
 
-                            <Text
-                                truncate
-                                variant="pBody/medium"
-                                color="steel-darker"
-                            >
-                                <div className="truncate capitalize">
-                                    {renderValue}
-                                </div>
+                            <Text variant="pBody/medium" color="steel-darker">
+                                {renderValue}
                             </Text>
                         </div>
                     );
