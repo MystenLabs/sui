@@ -59,9 +59,14 @@ export function InputsCard({ inputs }: InputsCardProps) {
                                 {key}
                             </Text>
 
-                            <Text variant="pBody/medium" color="steel-darker">
-                                {renderValue}
-                            </Text>
+                            <div className="break-all">
+                                <Text
+                                    variant="pBody/medium"
+                                    color="steel-darker"
+                                >
+                                    {renderValue}
+                                </Text>
+                            </div>
                         </div>
                     );
                 })}
