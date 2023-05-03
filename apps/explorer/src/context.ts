@@ -12,7 +12,7 @@ import { queryClient } from './utils/queryClient';
 
 export const DEFAULT_NETWORK =
     import.meta.env.VITE_NETWORK ||
-    (import.meta.env.DEV ? Network.LOCAL : Network.TESTNET);
+    (import.meta.env.DEV ? Network.LOCAL : Network.MAINNET);
 
 export const NetworkContext = createContext<
     [Network | string, (network: Network | string) => void]
