@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 //! This module implements the [Rosetta Account API](https://www.rosetta-api.org/docs/AccountApi.html)
 
+use std::thread;
+
 use axum::extract::State;
 use axum::{Extension, Json};
 use axum_extra::extract::WithRejection;
@@ -18,6 +20,7 @@ use crate::types::{
     Amount, BlockIdentifier, Coin, SubAccount, SubAccountType, SubBalance,
 };
 use crate::{OnlineServerContext, SuiEnv};
+use std::time::Duration;
 
 /// Get an array of all AccountBalances for an AccountIdentifier and the BlockIdentifier
 /// at which the balance lookup was performed.
@@ -85,18 +88,22 @@ pub async fn balance_new(
             })
         }
     } else {
+        // Get current live balance
         let balances_first = ctx
             .client
             .coin_read_api()
             .get_balance(address, Some(SUI_COIN_TYPE.to_string()))
             .await?
             .total_balance as i128;
+
+        // Get current latest checkpoint
         let checkpoint1 = ctx
             .client
             .read_api()
             .get_latest_checkpoint_sequence_number()
             .await?;
 
+        // Get another checkpoint which is greater than current
         let mut checkpoint2 = ctx
             .client
             .read_api()
@@ -104,14 +111,15 @@ pub async fn balance_new(
             .await?;
 
         while checkpoint2 <= checkpoint1 {
-            // info!("")
             checkpoint2 = ctx
-            .client
-            .read_api()
-            .get_latest_checkpoint_sequence_number()
-            .await?;
+                .client
+                .read_api()
+                .get_latest_checkpoint_sequence_number()
+                .await?;
+            thread::sleep(Duration::from_secs(1))
         }
 
+        // Get live balance again
         let balances_second = ctx
             .client
             .coin_read_api()
@@ -119,6 +127,7 @@ pub async fn balance_new(
             .await?
             .total_balance as i128;
 
+        // if those two live balances are equal then that is the current balance for checkpoint2
         if balances_first.eq(&balances_second) {
             info!(
                 "same balance for account {} at checkpoint {}",
@@ -129,6 +138,7 @@ pub async fn balance_new(
                 balances: vec![Amount::new(balances_first)],
             })
         } else {
+            // balances are different so we need to try again.
             info!(
                 "different balance for account {} at checkpoint {}",
                 address, checkpoint2
