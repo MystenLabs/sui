@@ -7,7 +7,7 @@ import { useEffect } from 'react';
 import toast from 'react-hot-toast';
 
 import { trackEvent } from '../../../shared/plausible';
-import { useNextMenuUrl } from '../components/menu/hooks';
+import { useMenuIsOpen, useNextMenuUrl } from '../components/menu/hooks';
 import { ButtonOrLink } from '../shared/utils/ButtonOrLink';
 
 const HAS_SEEN_LEDGER_NOTIFICATION_KEY = 'has-seen-ledger-notification';
@@ -21,6 +21,13 @@ export function useLedgerNotification() {
     const isLedgerNotificationEnabled = useFeatureIsOn(
         'wallet-ledger-notification-enabled'
     );
+    const isMenuOpen = useMenuIsOpen();
+
+    useEffect(() => {
+        if (isMenuOpen) {
+            toast.remove(LEDGER_NOTIFICATION_TOAST_ID);
+        }
+    }, [isMenuOpen]);
 
     useEffect(() => {
         const hasSeenLedgerNotificationVal = localStorage.getItem(
@@ -29,7 +36,11 @@ export function useLedgerNotification() {
         const hasSeenLedgerNotification =
             hasSeenLedgerNotificationVal === HAS_SEEN_LEDGER_NOTIFICATION_VALUE;
 
-        if (isLedgerNotificationEnabled && !hasSeenLedgerNotification) {
+        if (
+            isLedgerNotificationEnabled &&
+            !hasSeenLedgerNotification &&
+            !isMenuOpen
+        ) {
             // If we don't have a timeout, the toast doesn't get rendered after initial render.
             // We'll do this for now since we don't have the time to figure out what exactly is going on
             setTimeout(() => {
@@ -37,7 +48,7 @@ export function useLedgerNotification() {
                     <div className="flex gap-2 items-center">
                         <div className="shrink-0">
                             <ButtonOrLink
-                                className="text-inherit no-underline"
+                                className="text-inherit hover:text-success no-underline"
                                 onClick={() => {
                                     trackEvent('LedgerNotification');
                                     localStorage.setItem(
@@ -76,5 +87,5 @@ export function useLedgerNotification() {
         return () => {
             toast.remove(LEDGER_NOTIFICATION_TOAST_ID);
         };
-    }, [accountUrl, isLedgerNotificationEnabled]);
+    }, [accountUrl, isLedgerNotificationEnabled, isMenuOpen]);
 }
