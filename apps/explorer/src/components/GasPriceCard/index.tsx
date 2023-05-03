@@ -132,7 +132,7 @@ export function GasPriceCard({
         selectedUnit
     );
     const [selectedGraphDuration, setSelectedGraphsDuration] =
-        useState<GraphDurationsType>('7 EPOCHS');
+        useState<GraphDurationsType>('30 EPOCHS');
     const graphEpochs = useMemo(
         () =>
             historicalData?.slice(
