@@ -15,7 +15,7 @@ interface TransactionsCardProps {
 }
 
 export function TransactionsCard({ transactions }: TransactionsCardProps) {
-    const defaultOpen = transactions.length <= DEFAULT_ITEMS_TO_SHOW;
+    const defaultOpen = transactions.length < DEFAULT_ITEMS_TO_SHOW;
 
     if (!transactions?.length) {
         return null;
@@ -40,6 +40,7 @@ export function TransactionsCard({ transactions }: TransactionsCardProps) {
             items={expandableItems}
             itemsLabel="Transactions"
             defaultItemsToShow={DEFAULT_ITEMS_TO_SHOW}
+            noExpandableList={defaultOpen}
         />
     );
 }
