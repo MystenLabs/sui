@@ -48,7 +48,6 @@ export function TransferNFTForm({ objectId }: { objectId: string }) {
             });
         },
         onSuccess: (response) => {
-            // 'get-owned-objects', address, filter, maxObjectRequests
             queryClient.invalidateQueries(['object', objectId]);
             queryClient.invalidateQueries([
                 'get-owned-objects',
