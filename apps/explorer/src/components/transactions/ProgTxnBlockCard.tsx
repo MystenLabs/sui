@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import clsx from 'clsx';
 import { type ReactNode } from 'react';
 
 import {
@@ -14,12 +15,14 @@ interface ProgrammableTxnBlockCardProps {
     items: ReactNode[];
     itemsLabel: string;
     defaultItemsToShow: number;
+    noExpandableList?: boolean;
 }
 
 export function ProgrammableTxnBlockCard({
     items,
     itemsLabel,
     defaultItemsToShow,
+    noExpandableList,
 }: ProgrammableTxnBlockCardProps) {
     if (!items?.length) {
         return null;
@@ -32,8 +35,13 @@ export function ProgrammableTxnBlockCard({
                 defaultItemsToShow={defaultItemsToShow}
                 itemsLabel={itemsLabel}
             >
-                <div className="flex max-h-[300px] flex-col gap-6 overflow-y-auto">
-                    <ExpandableListItems />
+                <div
+                    className={clsx(
+                        'flex flex-col gap-6 overflow-y-auto',
+                        !noExpandableList && 'max-h-[300px]'
+                    )}
+                >
+                    {noExpandableList ? <>{items}</> : <ExpandableListItems />}
                 </div>
 
                 {items.length > defaultItemsToShow && (

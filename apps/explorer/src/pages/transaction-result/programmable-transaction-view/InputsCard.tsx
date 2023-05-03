@@ -9,14 +9,14 @@ import { Text } from '~/ui/Text';
 import { TransactionBlockCardSection } from '~/ui/TransactionBlockCard';
 
 const REGEX_NUMBER = /^\d+$/;
-const DEFAULT_ITEMS_TO_SHOW = 5;
+const DEFAULT_ITEMS_TO_SHOW = 10;
 
 interface InputsCardProps {
     inputs: SuiCallArg[];
 }
 
 export function InputsCard({ inputs }: InputsCardProps) {
-    const defaultOpen = inputs.length <= DEFAULT_ITEMS_TO_SHOW;
+    const defaultOpen = inputs.length < DEFAULT_ITEMS_TO_SHOW;
 
     if (!inputs?.length) {
         return null;
@@ -79,6 +79,7 @@ export function InputsCard({ inputs }: InputsCardProps) {
             items={expandableItems}
             itemsLabel="Inputs"
             defaultItemsToShow={DEFAULT_ITEMS_TO_SHOW}
+            noExpandableList={defaultOpen}
         />
     );
 }
