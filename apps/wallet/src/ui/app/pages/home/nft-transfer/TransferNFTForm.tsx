@@ -19,6 +19,7 @@ import { Text } from '_app/shared/text';
 import { AddressInput } from '_components/address-input';
 import { useSigner } from '_hooks';
 import { getSignerOperationErrorMessage } from '_src/ui/app/helpers/errorMessages';
+import { NFT_FILTER, MAX_FETCH_LIMIT } from '_src/ui/app/pages/home/nfts';
 
 export function TransferNFTForm({ objectId }: { objectId: string }) {
     const activeAddress = useActiveAddress();
@@ -47,8 +48,14 @@ export function TransferNFTForm({ objectId }: { objectId: string }) {
             });
         },
         onSuccess: (response) => {
+            // 'get-owned-objects', address, filter, maxObjectRequests
             queryClient.invalidateQueries(['object', objectId]);
-            queryClient.invalidateQueries(['objects-owned']);
+            queryClient.invalidateQueries([
+                'get-owned-objects',
+                activeAddress,
+                NFT_FILTER,
+                MAX_FETCH_LIMIT,
+            ]);
             return navigate(
                 `/receipt?${new URLSearchParams({
                     txdigest: getTransactionDigest(response),

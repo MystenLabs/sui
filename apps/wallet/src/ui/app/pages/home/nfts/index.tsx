@@ -14,7 +14,12 @@ import LoadingSpinner from '_components/loading/LoadingIndicator';
 import { NFTDisplayCard } from '_components/nft-display';
 import PageTitle from '_src/ui/app/shared/PageTitle';
 
-const MAX_FETCH_LIMIT = 50;
+//Sharing this with nft-transfer/TransferNFTForm
+//May need to move to a common file
+export const MAX_FETCH_LIMIT = 50;
+export const NFT_FILTER = {
+    MatchNone: [{ StructType: '0x2::coin::Coin' }],
+};
 
 function NftsPage() {
     const accountAddress = useActiveAddress();
@@ -55,7 +60,7 @@ function NftsPage() {
         hasNextPage,
         isFetchingNextPage,
     ]);
-
+    //'get-owned-objects', address, filter, maxObjectRequests
     if (isInitialLoading) {
         return (
             <div className="mt-1 flex w-full justify-center">
