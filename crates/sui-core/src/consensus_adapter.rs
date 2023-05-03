@@ -12,11 +12,12 @@ use mysten_network::Multiaddr;
 use narwhal_types::{TransactionProto, TransactionsClient};
 use narwhal_worker::LocalNarwhalClient;
 use parking_lot::{Mutex, RwLockReadGuard};
-use prometheus::register_int_counter_with_registry;
 use prometheus::register_int_gauge_with_registry;
+use prometheus::HistogramVec;
 use prometheus::IntCounter;
 use prometheus::IntGauge;
 use prometheus::Registry;
+use prometheus::{register_histogram_vec_with_registry, register_int_counter_with_registry};
 use rand::rngs::StdRng;
 use rand::SeedableRng;
 use std::collections::{HashMap, VecDeque};
@@ -50,6 +51,11 @@ use tracing::{debug, info, warn};
 #[path = "unit_tests/consensus_tests.rs"]
 pub mod consensus_tests;
 
+const SEQUENCING_CERTIFICATE_LATENCY_SEC_BUCKETS: &[f64] = &[
+    0.1, 0.25, 0.5, 1., 2.5, 5., 7.5, 10., 12.5, 15., 20., 25., 30., 60., 90., 120., 180., 300.,
+    600.,
+];
+
 pub struct ConsensusAdapterMetrics {
     // Certificate sequencing metrics
     pub sequencing_certificate_attempt: IntCounter,
@@ -57,7 +63,7 @@ pub struct ConsensusAdapterMetrics {
     pub sequencing_certificate_failures: IntCounter,
     pub sequencing_certificate_inflight: IntGauge,
     pub sequencing_acknowledge_latency: mysten_metrics::histogram::HistogramVec,
-    pub sequencing_certificate_latency: mysten_metrics::histogram::HistogramVec,
+    pub sequencing_certificate_latency: HistogramVec,
     pub sequencing_certificate_authority_position: mysten_metrics::histogram::Histogram,
     pub sequencing_in_flight_semaphore_wait: IntGauge,
     pub sequencing_in_flight_submissions: IntGauge,
@@ -98,12 +104,13 @@ impl ConsensusAdapterMetrics {
                 &["retry"],
                 registry,
             ),
-            sequencing_certificate_latency: mysten_metrics::histogram::HistogramVec::new_in_registry(
+            sequencing_certificate_latency: register_histogram_vec_with_registry!(
                 "sequencing_certificate_latency",
                 "The latency for sequencing a certificate.",
                 &["position", "positions_moved", "reason", "first_submitter"],
+                SEQUENCING_CERTIFICATE_LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
-            ),
+            ).unwrap(),
             sequencing_certificate_authority_position: mysten_metrics::histogram::Histogram::new_in_registry(
                 "sequencing_certificate_authority_position",
                 "The position of the authority when submitted a certificate to consensus.",
@@ -945,7 +952,7 @@ impl<'a> Drop for InflightDropGuard<'a> {
                     .concise()
                     .to_string(),
             ])
-            .report(latency.as_millis() as u64);
+            .observe(latency.as_secs_f64());
     }
 }
 
