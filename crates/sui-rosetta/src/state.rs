@@ -59,6 +59,10 @@ pub trait BlockProvider {
     async fn genesis_block_identifier(&self) -> Result<BlockIdentifier, Error>;
     async fn oldest_block_identifier(&self) -> Result<BlockIdentifier, Error>;
     async fn current_block_identifier(&self) -> Result<BlockIdentifier, Error>;
+    async fn create_block_identifier(
+        &self,
+        checkpoint: CheckpointSequenceNumber,
+    ) -> Result<BlockIdentifier, Error>;
     async fn get_balance_at_block(
         &self,
         addr: SuiAddress,
@@ -102,6 +106,13 @@ impl BlockProvider for CheckpointBlockProvider {
             .await
     }
 
+    async fn create_block_identifier(
+        &self,
+        checkpoint: CheckpointSequenceNumber,
+    ) -> Result<BlockIdentifier, Error> {
+        self.create_block_identifier(checkpoint).await
+    }
+
     async fn get_balance_at_block(
         &self,
         addr: SuiAddress,
@@ -133,37 +144,37 @@ impl CheckpointBlockProvider {
             client,
         };
 
-        let update_interval = option_env!("CHECKPOINT_UPDATE_INTERVAL")
-            .map(|i| u64::from_str(i).ok())
-            .flatten()
-            .unwrap_or(2000);
-        let update_interval = Duration::from_millis(update_interval);
+        // let update_interval = option_env!("CHECKPOINT_UPDATE_INTERVAL")
+        //     .map(|i| u64::from_str(i).ok())
+        //     .flatten()
+        //     .unwrap_or(2000);
+        // let update_interval = Duration::from_millis(update_interval);
 
-        let f = blocks.clone();
-        spawn_monitored_task!(async move {
-            if f.index_store.is_empty() {
-                info!("Index Store is empty, indexing genesis block.");
-                let mut checkpoint = None;
-                while checkpoint.is_none() {
-                    checkpoint = f.client.read_api().get_checkpoint(0.into()).await.ok();
-                    if checkpoint.is_none() {
-                        info!("Genesis checkpoint not available, retry in 10 seconds.");
-                        tokio::time::sleep(Duration::from_secs(10)).await;
-                    }
-                }
-                let resp = f.create_block_response(checkpoint.unwrap()).await.unwrap();
-                f.update_balance(resp.block).await.unwrap();
-            } else {
-                let current_block = f.current_block_identifier().await.unwrap();
-                info!("Resuming from block {}", current_block.index);
-            };
-            loop {
-                if let Err(e) = f.index_checkpoints().await {
-                    error!("Error indexing checkpoint, cause: {e:?}")
-                }
-                tokio::time::sleep(update_interval).await;
-            }
-        });
+        // let f = blocks.clone();
+        // spawn_monitored_task!(async move {
+        //     if f.index_store.is_empty() {
+        //         info!("Index Store is empty, indexing genesis block.");
+        //         let mut checkpoint = None;
+        //         while checkpoint.is_none() {
+        //             checkpoint = f.client.read_api().get_checkpoint(0.into()).await.ok();
+        //             if checkpoint.is_none() {
+        //                 info!("Genesis checkpoint not available, retry in 10 seconds.");
+        //                 tokio::time::sleep(Duration::from_secs(10)).await;
+        //             }
+        //         }
+        //         let resp = f.create_block_response(checkpoint.unwrap()).await.unwrap();
+        //         f.update_balance(resp.block).await.unwrap();
+        //     } else {
+        //         let current_block = f.current_block_identifier().await.unwrap();
+        //         info!("Resuming from block {}", current_block.index);
+        //     };
+        //     loop {
+        //         if let Err(e) = f.index_checkpoints().await {
+        //             error!("Error indexing checkpoint, cause: {e:?}")
+        //         }
+        //         tokio::time::sleep(update_interval).await;
+        //     }
+        // });
 
         blocks
     }

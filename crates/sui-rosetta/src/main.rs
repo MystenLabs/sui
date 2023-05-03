@@ -44,7 +44,7 @@ pub enum RosettaServerCommand {
         addr: SocketAddr,
         #[clap(long)]
         full_node_url: String,
-        #[clap(long, default_value = "/data")]
+        #[clap(long, default_value = "./data")]
         data_path: PathBuf,
     },
     StartOnlineServer {
