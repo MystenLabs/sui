@@ -91,10 +91,8 @@ export default function ValidatorMap({ minHeight }: Props) {
             `validator-map`,
             {
                 network: network.toLowerCase(),
+                skipCache: true
             },
-            {
-                cache: 'no-cache',
-            }
         )
             .then((res) => {
                 setValidatorData(res as (ValidatorMapData | null)[]);
