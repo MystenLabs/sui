@@ -99,12 +99,7 @@ function useGasPriceFormat(gasPrice: bigint | null, unit: 'MIST' | 'SUI') {
         : null;
 }
 
-// TODO: Delete this prop once we roll out the SUI token card
-export function GasPriceCard({
-    useLargeSpacing,
-}: {
-    useLargeSpacing: boolean;
-}) {
+export function GasPriceCard() {
     const [selectedUnit, setSelectedUnit] = useState<UnitsType>(UNITS[0]);
     // use this to show current gas price for envs that historical data is not available
     const { data: backupCurrentEpochGasPrice, isLoading: isCurrentLoading } =
@@ -152,12 +147,7 @@ export function GasPriceCard({
         : '-';
     return (
         <Card spacing="lg" height="full">
-            <div
-                className={clsx(
-                    'flex h-full flex-col',
-                    useLargeSpacing ? 'gap-8' : 'gap-5'
-                )}
-            >
+            <div className="flex h-full flex-col gap-5">
                 <div className="flex gap-2.5">
                     <div className="flex flex-grow flex-nowrap items-center gap-1 text-steel">
                         <Heading
