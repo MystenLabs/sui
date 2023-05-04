@@ -9,12 +9,13 @@ import {
     SuiObjectChangeMutated,
     SuiObjectChangePublished,
 } from '@mysten/sui.js';
+import { getGroupByOwner, ObjectChangeByOwnerRecord } from './getGroupByOwner';
 
 export type ObjectChangeSummary = {
-    mutated: SuiObjectChangeMutated[];
-    created: SuiObjectChangeCreated[];
-    transferred: SuiObjectChangeTransferred[];
-    published: SuiObjectChangePublished[];
+    mutated: ObjectChangeByOwnerRecord<SuiObjectChangeMutated>;
+    created: ObjectChangeByOwnerRecord<SuiObjectChangeCreated>;
+    transferred: ObjectChangeByOwnerRecord<SuiObjectChangeTransferred>;
+    published: ObjectChangeByOwnerRecord<SuiObjectChangePublished>;
 };
 
 export const getObjectChangeSummary = (
@@ -44,9 +45,11 @@ export const getObjectChangeSummary = (
     ) as SuiObjectChangePublished[];
 
     return {
-        mutated,
-        created,
-        transferred,
-        published,
+        mutated: getGroupByOwner(mutated),
+        created: getGroupByOwner(created),
+        transferred: getGroupByOwner(transferred),
+        published: {
+            Immutable: published,
+        },
     };
 };

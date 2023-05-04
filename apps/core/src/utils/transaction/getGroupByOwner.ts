@@ -14,6 +14,11 @@ export enum LocationIdType {
     Unknown = 'Unknown',
 }
 
+export type ObjectChangeByOwnerRecord<T> = Record<
+    string,
+    (T & { locationIdType: string })[]
+>;
+
 type ObjectSummaryChange =
     | SuiObjectChangeMutated
     | SuiObjectChangeCreated
@@ -26,10 +31,7 @@ export function getGroupByOwner(objectSummaryChanges: ObjectSummaryChange[]) {
 
     return objectSummaryChanges.reduce(
         (
-            mapByOwner: Record<
-                string,
-                ObjectSummaryChange & { locationIdType: string }[]
-            >,
+            mapByOwner: ObjectChangeByOwnerRecord<ObjectSummaryChange>,
             change
         ) => {
             const owner = 'owner' in change ? change.owner : null;

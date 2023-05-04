@@ -2,11 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { Disclosure } from '@headlessui/react';
-import {
-    getGroupByOwner,
-    LocationIdType,
-    type ObjectChangeSummary,
-} from '@mysten/core';
+import { LocationIdType, type ObjectChangeSummary } from '@mysten/core';
 import { ChevronRight12 } from '@mysten/icons';
 import {
     type SuiObjectChangeCreated,
@@ -335,45 +331,41 @@ export function ObjectChanges({ objectSummary }: ObjectChangesProps) {
         return null;
     }
 
-    const createdChangesByOwner = getGroupByOwner(objectSummary?.created);
-    const updatedChangesByOwner = getGroupByOwner(objectSummary?.mutated);
-    const transferredChangesByOwner = getGroupByOwner(
-        objectSummary?.transferred
-    );
+    const { created, mutated, transferred, published } = objectSummary;
 
     return (
         <>
-            {objectSummary?.created?.length ? (
+            {created ? (
                 <ObjectChangeEntriesCards
                     type="created"
                     data={
-                        createdChangesByOwner as unknown as ObjectChangeEntryData<SuiObjectChangeCreated>
+                        created as unknown as ObjectChangeEntryData<SuiObjectChangeCreated>
                     }
                 />
             ) : null}
 
-            {objectSummary.mutated?.length ? (
+            {mutated ? (
                 <ObjectChangeEntriesCards
                     type="mutated"
                     data={
-                        updatedChangesByOwner as unknown as ObjectChangeEntryData<SuiObjectChangeMutated>
+                        mutated as unknown as ObjectChangeEntryData<SuiObjectChangeMutated>
                     }
                 />
             ) : null}
 
-            {objectSummary.transferred?.length ? (
+            {transferred ? (
                 <ObjectChangeEntriesCards
                     type="transferred"
                     data={
-                        transferredChangesByOwner as unknown as ObjectChangeEntryData<SuiObjectChangeTransferred>
+                        transferred as unknown as ObjectChangeEntryData<SuiObjectChangeTransferred>
                     }
                 />
             ) : null}
 
-            {objectSummary.published?.length ? (
+            {published ? (
                 <TransactionBlockCard title="Changes" size="sm" shadow>
                     <ObjectChangeEntries
-                        changeEntries={objectSummary.published}
+                        changeEntries={objectSummary.published.Immutable}
                         type="published"
                     />
                 </TransactionBlockCard>

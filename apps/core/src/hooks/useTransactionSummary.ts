@@ -10,10 +10,10 @@ import {
 } from '@mysten/sui.js';
 import { useMemo } from 'react';
 
-import { getBalanceChangeSummary } from '../utils/transaction/getBalanceChangeSummary';
-import { getObjectChangeSummary } from '../utils/transaction/getObjectChangeSummary';
-import { getLabel } from '../utils/transaction/getLabel';
-import { getGasSummary } from '../utils/transaction/getGasSummary';
+import { getBalanceChangeSummary } from '../utils/transaction';
+import { getObjectChangeSummary } from '../utils/transaction';
+import { getLabel } from '../utils/transaction';
+import { getGasSummary } from '../utils/transaction';
 
 const getSummary = (
     transaction: DryRunTransactionBlockResponse | SuiTransactionBlockResponse,
