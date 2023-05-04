@@ -18,42 +18,36 @@ export function Onramp() {
 
     const [preferredProvider, ...otherProviders] = providers ?? [];
 
-    const {
-        mutate,
-        data: onrampUrl,
-        error,
-    } = useMutation(['onramp', 'get-provider-url'], () => {
-        return preferredProvider.getUrl(address!);
-    });
+    const { mutate, error } = useMutation(
+        ['onramp', 'get-provider-url'],
+        () => {
+            return preferredProvider.getUrl(address!);
+        },
+        { onSuccess: (data) => window.open(data, '_blank') }
+    );
 
     useEffect(() => {
         // This shouldn't happen, but if you land on this page directly and no on-ramps are supported, just bail out
         if (providers && providers.length === 0) {
             navigate('/tokens');
         }
-    }, [providers, navigate, mutate]);
-
-    useEffect(() => {
-        if (preferredProvider) mutate();
-    }, [preferredProvider, mutate]);
-
-    const handleClick = async () => {
-        if (onrampUrl) window.open(onrampUrl, '_blank');
-    };
+    }, [providers, navigate]);
 
     if (!providers || !providers.length) return null;
 
     return (
         <Overlay
             showModal
-            title={!onrampUrl ? 'Buy' : undefined}
+            title="Buy"
             closeOverlay={() => {
                 navigate('/tokens');
             }}
         >
             <div className="w-full">
                 <button
-                    onClick={handleClick}
+                    onClick={() => {
+                        mutate();
+                    }}
                     className="w-full p-6 bg-sui/10 rounded-2xl flex items-center gap-2.5 border-0 cursor-pointer"
                 >
                     <preferredProvider.icon />
