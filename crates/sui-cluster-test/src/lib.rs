@@ -121,10 +121,6 @@ impl TestContext {
             .unwrap()
     }
 
-    fn get_wallet_mut(&mut self) -> &mut WalletContext {
-        self.client.get_wallet_mut()
-    }
-
     fn get_wallet_address(&self) -> SuiAddress {
         self.client.get_wallet_address()
     }
