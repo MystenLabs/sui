@@ -49,6 +49,7 @@ interface Props {
 export default function ValidatorMap({ minHeight }: Props) {
     const [network] = useNetwork();
     const [validatorData, setValidatorData] = useState<ValidatorMapData[]>([]);
+    const [validatorCount, setValidatorCount] = useState<number>();
     const [isLoading, setIsLoading] = useState(false);
     const [isError, setIsError] = useState(false);
     const appsBe = useAppsBackend();
@@ -92,10 +93,10 @@ export default function ValidatorMap({ minHeight }: Props) {
             skipCache: true,
         })
             .then((res) => {
+                const data = res as ValidatorMapData[];
+                setValidatorCount(data.length);
                 // Some validators will come back as null from the API
-                const validatorResponse = (res as ValidatorMapData[]).filter(
-                    (validator) => validator
-                );
+                const validatorResponse = data.filter((validator) => validator);
                 setValidatorData(validatorResponse);
                 setIsLoading(false);
             })
@@ -104,8 +105,7 @@ export default function ValidatorMap({ minHeight }: Props) {
             });
     }, [appsBe, network]);
 
-    const { totalCount, countryCount, validatorMap } = useMemo<{
-        totalCount: number | null;
+    const { countryCount, validatorMap } = useMemo<{
         countryCount: number | null;
         validatorMap: ValidatorsMap;
     }>(() => {
@@ -113,7 +113,6 @@ export default function ValidatorMap({ minHeight }: Props) {
             return { totalCount: null, countryCount: null, validatorMap: {} };
         }
 
-        let totalCount = validatorData.length;
         const validatorMap: ValidatorsMap = {};
         const countryMap: Record<string, number> = {};
         validatorData.forEach((validator) => {
@@ -131,7 +130,6 @@ export default function ValidatorMap({ minHeight }: Props) {
         });
 
         return {
-            totalCount,
             countryCount: Object.keys(countryMap).length,
             validatorMap,
         };
@@ -198,8 +196,8 @@ export default function ValidatorMap({ minHeight }: Props) {
                             {
                                 // Fetch received response with no errors and the value was not null
                                 (!isError &&
-                                    totalCount &&
-                                    numberFormatter.format(totalCount)) ||
+                                    validatorCount &&
+                                    numberFormatter.format(validatorCount)) ||
                                     '--'
                             }
                         </NodeStat>
