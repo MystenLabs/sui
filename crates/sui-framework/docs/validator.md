@@ -629,7 +629,7 @@ Validator Metadata is too long
 
 
 
-<pre><code><b>const</b> <a href="validator.md#0x3_validator_MAX_COMMISSION_RATE">MAX_COMMISSION_RATE</a>: u64 = 10000;
+<pre><code><b>const</b> <a href="validator.md#0x3_validator_MAX_COMMISSION_RATE">MAX_COMMISSION_RATE</a>: u64 = 2000;
 </code></pre>
 
 
