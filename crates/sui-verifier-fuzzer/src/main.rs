@@ -38,9 +38,9 @@ fn default_fuzzing_addresses() -> BTreeMap<String, move_compiler::shared::Numeri
         ("M", "0x42"),
         ("A", "0x42"),
         ("B", "0x42"),
-        ("K", "0x19"),
+        ("K", "0x42"),
         ("test", "0x42"),
-        ("Async", "0x20"),
+        ("Async", "0x42"),
     ];
     mapping
         .iter()
@@ -179,19 +179,24 @@ fn main() {
         let mut input = Vec::new();
         let _ = handle.read_to_end(&mut input);
         match args.target.as_str() {
-            "ir" => {
+            "move-binary-format" => {
+                // raw-bytes implied
                 let Ok(code) = std::str::from_utf8(&input) else { process::exit(1); };
-                let Ok(_) = move_ir_compiler::Compiler::new(compiled_state.dep_modules().collect()).into_compiled_module(code) else { process::exit(1); };
+                let m = move_ir_compiler::Compiler::new(compiled_state.dep_modules().collect()).into_compiled_module(code).unwrap_or_else(|e| { 
+                    dbg!("no compiled module: {:#?}", e);
+                    process::exit(1); 
+                });
+                dbg!("valid module {:#?}", m);
                 process::exit(0)
             }
-            "source" | _ => {
+            "move-compiler" | _ => {
+                // source implied
                 let Ok(source) = std::str::from_utf8(&input) else { process::exit(1) };
-                dbg!("source ok");
-                let r = parse_source(source).unwrap_or_else(|e| {
+                let m = parse_source(source).unwrap_or_else(|e| {
                     dbg!("no compile: {:#?}", e);
                     process::exit(1)
                 });
-                dbg!("success compile {:#?}", r);
+                dbg!("success compile {:#?}", m);
                 process::exit(0)
             }
         }
@@ -201,8 +206,13 @@ fn main() {
         // profiles in Cargo.toml.
         fuzz!(|input: &[u8]| {
             match args.target.as_str() {
-                "move-compiler" => {}
+                "move-compiler" => {
+                    let Ok(source) = std::str::from_utf8(&input) else { process::exit(1) };
+                    let Ok(_) = parse_source(source) else { process::exit(1) };
+                    process::exit(0);
+                }
                 "move-binary-format" => {
+                    // raw-bytes implied
                     let Ok(_) = move_binary_format::file_format::CompiledModule::deserialize_with_defaults(&input) else { process::exit(1); };
                     process::exit(0);
                 }
