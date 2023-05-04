@@ -13,11 +13,7 @@ import { Text } from '~/ui/Text';
 
 export function SuiTokenCard() {
     const { data, isLoading } = useSuiCoinData();
-    const {
-        currentPrice,
-        totalSupply,
-        marketCap,
-    } = data || {};
+    const { currentPrice, totalSupply, marketCap } = data || {};
 
     const formattedPrice = currentPrice
         ? currentPrice.toLocaleString('en', {
