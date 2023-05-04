@@ -28,15 +28,16 @@ function CoinIcon({ coinMetadata }: { coinMetadata?: CoinMetadata | null }) {
 
 export function Coin({ type }: { type: string }) {
     const { data: coinMetadata } = useCoinMetadata(type);
+    const { symbol, iconUrl } = coinMetadata || {};
 
     return (
         <span
             className={clsx(
                 'flex h-5 w-5 items-center justify-center rounded-xl text-white',
-                !coinMetadata &&
+                (!coinMetadata || symbol !== 'SUI') &&
                     'bg-gradient-to-r from-gradient-blue-start to-gradient-blue-end',
-                coinMetadata?.symbol === 'SUI' && 'bg-sui',
-                coinMetadata?.iconUrl && 'bg-gray-40'
+                symbol === 'SUI' && 'bg-sui',
+                iconUrl && 'bg-gray-40'
             )}
         >
             <CoinIcon coinMetadata={coinMetadata} />
