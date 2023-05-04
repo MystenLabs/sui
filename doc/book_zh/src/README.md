@@ -19,9 +19,12 @@ Instead, this site builds upon the [smart contract examples](https://docs.sui.io
 </details>
 
 本书中所有示例都基于*Sui Move*开发， 您可以通过以下命令安装*Sui Move*：
+**！！！请注意书中代码示例中所有的中文注释仅为翻译需要，实际开发中move语言暂不支持UTF-8编码注释。**
+
 ```
 $ cargo install --locked --git https://github.com/MystenLabs/sui.git --branch "main" sui
 ```
+
 值得注意的是，上面的命令设置的分支为`main` 主分支，如果在[`devnet`]((https://docs.sui.io/build/devnet))网络开发请参考[install Sui](https://docs.sui.io/build/install#install-sui-binaries)。
 
 <details>
