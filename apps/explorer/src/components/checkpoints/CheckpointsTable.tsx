@@ -48,8 +48,8 @@ export function CheckpointsTable({
         if (maxCursor) {
             if (initialCursor) {
                 return Number(initialCursor) - Number(maxCursor);
-                // Special case for ongoing epoch
             } else if (!isError && checkpoints.data) {
+                // Special case for ongoing epoch
                 return (
                     Number(checkpoints.data.pages[0].data[0].sequenceNumber) -
                     Number(maxCursor)
