@@ -87,9 +87,15 @@ export default function ValidatorMap({ minHeight }: Props) {
 
     useEffect(() => {
         setIsLoading(true);
-        appsBe(`validator-map`, {
-            network: network.toLowerCase(),
-        })
+        appsBe(
+            `validator-map`,
+            {
+                network: network.toLowerCase(),
+            },
+            {
+                cache: 'no-cache',
+            }
+        )
             .then((res) => {
                 setValidatorData(res as (ValidatorMapData | null)[]);
                 setIsLoading(false);
