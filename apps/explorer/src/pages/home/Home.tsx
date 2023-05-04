@@ -1,6 +1,5 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-import { useFeatureIsOn } from '@growthbook/growthbook-react';
 import clsx from 'clsx';
 import { lazy, Suspense } from 'react';
 
@@ -15,15 +14,18 @@ import { NetworkTPS } from '~/components/HomeMetrics/NetworkTPS';
 import { OnTheNetwork } from '~/components/HomeMetrics/OnTheNetwork';
 import { SuiTokenCard } from '~/components/SuiTokenCard';
 import { TopPackagesCard } from '~/components/top-packages/TopPackagesCard';
+import { useNetwork } from '~/context';
 import { Card } from '~/ui/Card';
 import { Tab, TabGroup, TabList, TabPanel, TabPanels } from '~/ui/Tabs';
+import { Network } from '~/utils/api/DefaultRpcClient';
 
 const ValidatorMap = lazy(() => import('../../components/validator-map'));
 
 const TRANSACTIONS_LIMIT = 25;
 
 function Home() {
-    const isSuiTokenCardEnabled = useFeatureIsOn('explorer-sui-token-card');
+    const [network] = useNetwork();
+    const isSuiTokenCardEnabled = network === Network.MAINNET;
 
     return (
         <div
