@@ -279,6 +279,7 @@ impl SuiNode {
                 epoch_store
                     .protocol_config()
                     .max_move_identifier_len_as_option(),
+                config.node_stream_producer,
             )))
         } else {
             None

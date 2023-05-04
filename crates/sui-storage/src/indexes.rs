@@ -6,21 +6,24 @@
 
 use std::cmp::{max, min};
 use std::collections::{HashMap, HashSet};
+use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
+use crate::mutex_table::MutexTable;
+use crate::sharded_lru::ShardedLruCache;
 use anyhow::anyhow;
 use itertools::Itertools;
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::{ModuleId, StructTag, TypeTag};
+use node_stream::consumer::NodeStreamConsumer;
+use node_stream::producer::NodeStreamProducer;
+use node_stream::types::NodeStreamTopic;
+use node_stream::types::{NodeStreamData, NodeStreamInnerData};
 use prometheus::{register_int_counter_with_registry, IntCounter, Registry};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::collections::BTreeMap;
-use tokio::sync::OwnedMutexGuard;
-
-use crate::mutex_table::MutexTable;
-use crate::sharded_lru::ShardedLruCache;
 use sui_json_rpc_types::{SuiObjectDataFilter, TransactionFilter};
 use sui_types::base_types::{
     ObjectDigest, ObjectID, SequenceNumber, SuiAddress, TransactionDigest, TxSequenceNumber,
@@ -28,13 +31,16 @@ use sui_types::base_types::{
 use sui_types::base_types::{ObjectInfo, ObjectRef};
 use sui_types::digests::TransactionEventsDigest;
 use sui_types::dynamic_field::{self, DynamicFieldInfo};
-use sui_types::effects::TransactionEvents;
+use sui_types::effects::{TransactionEffects, TransactionEvents};
 use sui_types::error::{SuiError, SuiResult, UserInputError};
+use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::object::Owner;
 use sui_types::parse_sui_struct_tag;
+use sui_types::storage::ObjectStore;
 use sui_types::temporary_store::TxCoins;
+use tokio::sync::OwnedMutexGuard;
 use tokio::task::spawn_blocking;
-use tracing::{debug, trace};
+use tracing::{debug, info, trace};
 use typed_store::rocks::{
     default_db_options, read_size_from_env, DBBatch, DBMap, DBOptions, MetricConf, ReadWriteOptions,
 };
@@ -205,6 +211,7 @@ pub struct IndexStore {
     caches: IndexStoreCaches,
     metrics: Arc<IndexStoreMetrics>,
     max_type_length: u64,
+    node_stream_producer: Option<Arc<Mutex<NodeStreamProducer>>>,
 }
 
 // These functions are used to initialize the DB tables
@@ -256,9 +263,18 @@ fn coin_index_table_default_config() -> DBOptions {
 }
 
 impl IndexStore {
-    pub fn new(path: PathBuf, registry: &Registry, max_type_length: Option<u64>) -> Self {
-        let tables =
-            IndexStoreTables::open_tables_read_write(path, MetricConf::default(), None, None);
+    pub fn new(
+        path: PathBuf,
+        registry: &Registry,
+        max_type_length: Option<u64>,
+        node_stream_host_addr: Option<SocketAddr>,
+    ) -> Self {
+        let tables = IndexStoreTables::open_tables_read_write(
+            path,
+            MetricConf::default(),
+            None,
+            None,
+        );
         let metrics = IndexStoreMetrics::new(registry);
         let caches = IndexStoreCaches {
             per_coin_type_balance: ShardedLruCache::new(1_000_000, 1000),
@@ -280,6 +296,8 @@ impl IndexStore {
             caches,
             metrics: Arc::new(metrics),
             max_type_length: max_type_length.unwrap_or(128),
+            node_stream_producer: node_stream_host_addr
+                .map(|w| Arc::new(NodeStreamProducer::new(w.to_string()).into())),
         }
     }
 
@@ -425,6 +443,48 @@ impl IndexStore {
         Ok(cache_updates)
     }
 
+    pub fn node_stream_supported(&self) -> bool {
+        self.node_stream_producer.is_some()
+    }
+
+    pub fn handle_node_stream(
+        &self,
+        node_timestamp_ms: u64,
+        epoch_id: u64,
+        checkpoint_id: u64,
+        sender: &SuiAddress,
+        tx_digest: &TransactionDigest,
+        cert: &VerifiedExecutableTransaction,
+        effects: &TransactionEffects,
+        loaded_child_objects: &BTreeMap<ObjectID, SequenceNumber>,
+        store: &dyn ObjectStore,
+    ) {
+        if !self.node_stream_supported() {
+            info!("Node stream not supported");
+            return;
+        }
+        NodeStreamData::from_post_exec(
+            node_timestamp_ms,
+            epoch_id,
+            checkpoint_id,
+            sender,
+            tx_digest,
+            cert,
+            effects,
+            loaded_child_objects,
+            store,
+        )
+        .into_iter()
+        .for_each(|data| {
+            self.node_stream_producer
+                .as_ref()
+                .unwrap()
+                .lock()
+                .expect("Unable to lock NodeStream producer")
+                .send(data)
+        });
+    }
+
     pub async fn index_tx(
         &self,
         sender: SuiAddress,
@@ -438,6 +498,11 @@ impl IndexStore {
         tx_coins: Option<TxCoins>,
         loaded_child_objects: BTreeMap<ObjectID, SequenceNumber>,
     ) -> SuiResult<u64> {
+        //let mut prod = NodeStreamProducer::new("localhost:9092".to_string(), "sui".to_string());
+
+        println!("index_tx: {}", digest);
+        //prod.send(NodeStreamInnerData::TransactionDigest(*digest));
+
         let sequence = self.next_sequence_number.fetch_add(1, Ordering::SeqCst);
         let mut batch = self.tables.transactions_from_addr.batch();
 
@@ -597,6 +662,17 @@ impl IndexStore {
         }
 
         batch.write()?;
+
+        // let mut consumer = NodeStreamConsumer::new_with_id(
+        //     "localhost:9092".to_string(),
+        //     "sui".to_string(),
+        //     NodeStreamTopic::TransactionDigest,
+        // );
+
+        // for data in consumer.poll() {
+        //     println!("Here");
+        //     println!("data: {:?}", data);
+        // }
 
         if !invalidate_caches {
             // We cannot update the cache before updating the db or else on failing to write to db

@@ -1,0 +1,17 @@
+[package]
+name = "node-stream"
+version.workspace = true
+authors = ["Mysten Labs <build@mystenlabs.com>"]
+license = "Apache-2.0"
+publish = false
+edition = "2021"
+
+[dependencies]
+kafka = "0.9"
+bcs = "0.1.5"
+serde = { version = "1.0.140", features = ["derive"] }
+clap = { version = "4.1.4", features = ["derive"] }
+colored = "2.0.0"
+tokio = { workspace = true, features = ["full"] }
+
+sui-types = { path = "../sui-types" }
