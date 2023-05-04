@@ -18,10 +18,59 @@ async fn main() -> Result<(), anyhow::Error> {
         .active_address()
         .map_err(|err| FaucetError::Wallet(err.to_string()))?;
     println!("SimpleFaucet::new with active address: {active_address}");
-    let client = wallet.get_client().await?;
 
+    // Example scripts
+    // merge_coins(
+    //     "0xfde0a5e733e446db0c5d2294673ee5f5a17c5aeacb7565ce82cbd5a145e15d44",
+    //     wallet,
+    // );
+
+    // split_coins_equally(wallet);
+
+    Ok(())
+}
+
+async fn split_coins_equally(
+    gas_coin: &str,
+    wallet: WalletContext,
+    count: u64,
+) -> Results<(), anyhow::Error> {
+    let active_address = wallet
+        .active_address()
+        .map_err(|err| FaucetError::Wallet(err.to_string()))?;
+    let client = wallet.get_client().await?;
+    let coin_object_id = ObjectID::from_str(gas_coin).unwrap();
+    let tx_data = client
+        .transaction_builder()
+        .split_coin_equal(active_address, coin_object_id, count, None, 1000000)
+        .await?;
+
+    let signature = wallet
+        .config
+        .keystore
+        .sign_secure(&active_address, &tx_data, Intent::sui_transaction())
+        .unwrap();
+    let tx = Transaction::from_data(tx_data, Intent::sui_transaction(), vec![signature])
+        .verify()
+        .unwrap();
+    client
+        .quorum_driver_api()
+        .execute_transaction_block(
+            tx.clone(),
+            SuiTransactionBlockResponseOptions::new().with_effects(),
+            Some(ExecuteTransactionRequestType::WaitForLocalExecution),
+        )
+        .await?;
+
+    Ok(())
+}
+
+async fn merge_coins(gas_coin: &str, wallet: WalletContext) -> Results<(), anyhow::Error> {
+    let active_address = wallet
+        .active_address()
+        .map_err(|err| FaucetError::Wallet(err.to_string()))?;
+    let client = wallet.get_client().await?;
     // Pick a gas coin here that isn't in use by the faucet otherwise there will be some contention.
-    let gas_coin = "0xfde0a5e733e446db0c5d2294673ee5f5a17c5aeacb7565ce82cbd5a145e15d44";
     let small_coins = wallet
         .gas_objects(active_address)
         .await
@@ -34,7 +83,6 @@ async fn main() -> Result<(), anyhow::Error> {
         .collect::<Vec<GasCoin>>();
 
     // Smash coins togethers 254 objects at a time
-    // TODO (jian): docs are actually wrong
     for chunk in small_coins.chunks(254) {
         let total_balance: u64 = chunk.iter().map(|coin| coin.0.balance.value()).sum();
 
@@ -69,7 +117,6 @@ async fn main() -> Result<(), anyhow::Error> {
             )
             .await?;
     }
-
     Ok(())
 }
 
