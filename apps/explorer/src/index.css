@@ -26,19 +26,6 @@
         @apply grid grid-cols-1 gap-4;
         grid-template-areas:
             'tps'
-            'epoch'
-            'network'
-            'checkpoint'
-            'gas-price'
-            'node-map'
-            'activity'
-            'validators'
-            'packages';
-    }
-
-    .home-page-grid-container-with-sui-token {
-        grid-template-areas:
-            'tps'
             'sui-token'
             'epoch'
             'network'
@@ -53,18 +40,6 @@
     @screen sm {
         .home-page-grid-container {
             @apply grid-cols-[200px,auto];
-            grid-template-areas:
-                'tps         tps'
-                'network     network'
-                'epoch       gas-price'
-                'checkpoint  gas-price'
-                'node-map    node-map'
-                'activity    activity'
-                'validators  validators'
-                'packages    packages';
-        }
-
-        .home-page-grid-container-with-sui-token {
             grid-template-areas:
                 'tps         sui-token'
                 'network     network'
@@ -81,17 +56,6 @@
         .home-page-grid-container {
             @apply grid-cols-[200px,390px,auto];
             grid-template-areas:
-                'tps        network    network'
-                'epoch      gas-price  gas-price'
-                'checkpoint gas-price  gas-price'
-                'node-map   node-map   node-map'
-                'activity   activity   activity'
-                'validators validators validators'
-                'packages   packages   packages';
-        }
-
-        .home-page-grid-container-with-sui-token {
-            grid-template-areas:
                 'tps        sui-token  network'
                 'epoch      gas-price  gas-price'
                 'checkpoint gas-price  gas-price'
@@ -105,15 +69,6 @@
     @screen xl {
         .home-page-grid-container {
             @apply grid-cols-[200px,454px,auto];
-            grid-template-areas:
-                'tps        gas-price network'
-                'epoch      gas-price node-map'
-                'checkpoint gas-price node-map'
-                'activity   activity  validators'
-                'activity   activity  packages';
-        }
-
-        .home-page-grid-container-with-sui-token {
             grid-template-areas:
                 'tps        sui-token network'
                 'epoch      gas-price node-map'
