@@ -10,8 +10,9 @@ import { isValidBIP32Path, mnemonicToSeed } from './mnemonics';
 import { HDKey } from '@scure/bip32';
 import { toB64 } from '@mysten/bcs';
 import { SignatureScheme } from './signature';
-import { bytesToHex } from '@noble/hashes/utils';
+import { bytesToHex, hexToBytes } from '@noble/hashes/utils';
 import { blake2b } from '@noble/hashes/blake2b';
+import { PRIVATE_KEY_SIZE, SuiKeyPair } from './keypair';
 
 export const DEFAULT_SECP256K1_DERIVATION_PATH = "m/54'/784'/0'/0/0";
 
@@ -101,10 +102,26 @@ export class Secp256k1Keypair implements Keypair {
   }
 
   /**
+   * Generate a keypair from sui secret key (like 0xabcd..7890).
+   *
+   * @param secret string
+   */
+  static fromSuiSecretKey(secret: string): Secp256k1Keypair {
+    return Secp256k1Keypair.fromSecretKey(hexToBytes(secret.replace('0x', '')));
+  }
+
+  /**
    * The public key for this keypair
    */
   getPublicKey(): PublicKey {
     return new Secp256k1PublicKey(this.keypair.publicKey);
+  }
+
+  /**
+   * The secret key for this keypair
+   */
+  getSecretKey(): Uint8Array {
+    return new Uint8Array(this.keypair.secretKey);
   }
 
   /**
@@ -146,6 +163,13 @@ export class Secp256k1Keypair implements Keypair {
     return {
       schema: 'Secp256k1',
       privateKey: toB64(this.keypair.secretKey),
+    };
+  }
+
+  exportToSui(): SuiKeyPair {
+    return {
+      suiPrivateKey: `0x${bytesToHex(this.keypair.secretKey)}`,
+      suiAddress: this.getPublicKey().toSuiAddress(),
     };
   }
 }
