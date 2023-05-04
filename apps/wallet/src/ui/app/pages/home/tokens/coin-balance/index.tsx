@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useFormatCoin } from '@mysten/core';
+import { useFormatCoin, useCoinMetadata } from '@mysten/core';
 import cl from 'classnames';
 import { memo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -19,6 +19,7 @@ export type CoinProps = {
 
 function CoinBalance({ type, balance, mode = 'row-item' }: CoinProps) {
     const [formatted, symbol] = useFormatCoin(balance, type);
+    const { data: metadata } = useCoinMetadata(type);
     const navigate = useNavigate();
 
     // TODO: use a different logic to differentiate between view types
@@ -43,7 +44,7 @@ function CoinBalance({ type, balance, mode = 'row-item' }: CoinProps) {
                     <CoinIcon coinType={type} />
                     <div className={cl(st.coinNameContainer, st[mode])}>
                         <span className={st.coinName}>
-                            {symbol.toLocaleLowerCase()}
+                            {metadata?.name || symbol.toLocaleLowerCase()}
                         </span>
                         <span className={st.coinSymbol}>{symbol}</span>
                     </div>

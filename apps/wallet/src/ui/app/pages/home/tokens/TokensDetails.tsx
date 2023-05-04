@@ -2,14 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useFeatureIsOn } from '@growthbook/growthbook-react';
+import { useCoinMetadata } from '@mysten/core';
 import {
     Info12,
     WalletActionBuy24,
     WalletActionSend24,
     Swap16,
 } from '@mysten/icons';
-import { SUI_TYPE_ARG, Coin } from '@mysten/sui.js';
-import { useMemo } from 'react';
+import { SUI_TYPE_ARG } from '@mysten/sui.js';
 
 import { useOnrampProviders } from '../onramp/useOnrampProviders';
 import { CoinActivitiesCard } from './CoinActivityCard';
@@ -89,11 +89,8 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
     const { providers } = useOnrampProviders();
 
     const tokenBalance = coinBalance?.totalBalance || BigInt(0);
-
-    const coinSymbol = useMemo(
-        () => Coin.getCoinSymbol(activeCoinType),
-        [activeCoinType]
-    );
+    const { data: coinMetadata } = useCoinMetadata(activeCoinType);
+    const coinSymbol = coinMetadata?.symbol;
     // Avoid perpetual loading state when fetching and retry keeps failing add isFetched check
     const isFirstTimeLoading = isLoading && !isFetched;
 
