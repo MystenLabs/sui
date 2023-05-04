@@ -140,11 +140,10 @@ impl ReadApi {
     ) -> Result<Vec<SuiTransactionBlockResponse>, Error> {
         let num_digests = digests.len();
         if num_digests > *QUERY_MAX_RESULT_LIMIT {
-            return Err(anyhow!(UserInputError::SizeLimitExceeded {
+            return Err(Error::UserInputError(UserInputError::SizeLimitExceeded {
                 limit: "multi get transaction input limit".to_string(),
-                value: QUERY_MAX_RESULT_LIMIT.to_string()
-            })
-            .into());
+                value: QUERY_MAX_RESULT_LIMIT.to_string(),
+            }));
         }
         self.metrics
             .get_tx_blocks_limit
@@ -488,9 +487,9 @@ impl ReadApiServer for ReadApi {
                     .inc_by(objects.len() as u64);
                 Ok(objects)
             } else {
-                Err(anyhow!(UserInputError::SizeLimitExceeded {
+                Err(Error::UserInputError(UserInputError::SizeLimitExceeded {
                     limit: "input limit".to_string(),
-                    value: QUERY_MAX_RESULT_LIMIT.to_string()
+                    value: QUERY_MAX_RESULT_LIMIT.to_string(),
                 })
                 .into())
             }
@@ -579,9 +578,9 @@ impl ReadApiServer for ReadApi {
                     Ok(success)
                 }
             } else {
-                Err(anyhow!(UserInputError::SizeLimitExceeded {
+                Err(Error::UserInputError(UserInputError::SizeLimitExceeded {
                     limit: "input limit".to_string(),
-                    value: QUERY_MAX_RESULT_LIMIT.to_string()
+                    value: QUERY_MAX_RESULT_LIMIT.to_string(),
                 })
                 .into())
             }
@@ -758,7 +757,7 @@ impl ReadApiServer for ReadApi {
                     .await
             })
             .await
-            .map_err(|e| anyhow!(e))??)
+            .map_err(Error::from)??)
         })
     }
 
