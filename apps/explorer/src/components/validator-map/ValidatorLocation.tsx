@@ -14,8 +14,9 @@ interface Props {
 
 // NOTE: This should be tweaked based on the average number of nodes in a location:
 const VALIDATOR_MULTIPLIER = 20;
-const MIN_VALIDATOR_SIZE = 0.5;
-const MAX_VALIDATOR_SIZE = 7;
+const MIN_VALIDATOR_SIZE = 2.5;
+const MAX_VALIDATOR_SIZE = 10;
+const MAX_VALIDATOR_OPACITY = 0.5;
 
 export function ValidatorLocation({
     validator,
@@ -47,6 +48,8 @@ export function ValidatorLocation({
 
     if (!position) return null;
 
+    const opacity =
+        MAX_VALIDATOR_OPACITY - parseInt(validator.votingPower) / 1000;
     return (
         <g>
             <circle
@@ -57,7 +60,7 @@ export function ValidatorLocation({
                 cy={position[1]}
                 r={r}
                 fill="#6FBCF0"
-                opacity={0.4}
+                opacity={opacity}
             />
         </g>
     );
