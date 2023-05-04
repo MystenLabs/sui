@@ -44,7 +44,8 @@ use sui_adapter::{adapter, execution_mode};
 use sui_config::certificate_deny_config::CertificateDenyConfig;
 use sui_config::genesis::Genesis;
 use sui_config::node::{
-    AuthorityStorePruningConfig, DBCheckpointConfig, ExpensiveSafetyCheckConfig,
+    AuthorityStorePruningConfig, ConsistencyCheckType, DBCheckpointConfig,
+    ExpensiveSafetyCheckConfig,
 };
 use sui_config::transaction_deny_config::TransactionDenyConfig;
 use sui_framework::{BuiltInFramework, SystemPackage};
@@ -1905,7 +1906,7 @@ impl AuthorityState {
             cur_epoch_store,
             checkpoint_executor,
             accumulator,
-            expensive_safety_check_config.enable_state_consistency_check(),
+            &expensive_safety_check_config.state_consistency_check(),
         );
         if let Some(checkpoint_path) = &self.db_checkpoint_config.checkpoint_path {
             if self
@@ -1949,7 +1950,7 @@ impl AuthorityState {
         cur_epoch_store: &AuthorityPerEpochStore,
         checkpoint_executor: &CheckpointExecutor,
         accumulator: Arc<StateAccumulator>,
-        enable_state_consistency_check: bool,
+        state_consistency_check: &ConsistencyCheckType,
     ) {
         info!(
             "Performing sui conservation consistency check for epoch {}",
@@ -1969,7 +1970,7 @@ impl AuthorityState {
         }
 
         // check for root state hash consistency with live object set
-        if enable_state_consistency_check {
+        if *state_consistency_check != ConsistencyCheckType::None {
             info!(
                 "Performing state consistency check for epoch {}",
                 cur_epoch_store.epoch()
@@ -1978,7 +1979,7 @@ impl AuthorityState {
                 checkpoint_executor,
                 accumulator,
                 cur_epoch_store.epoch(),
-                cfg!(debug_assertions), // panic in debug mode only
+                *state_consistency_check == ConsistencyCheckType::PanicOnFail,
             );
         }
     }

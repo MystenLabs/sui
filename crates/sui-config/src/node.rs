@@ -298,6 +298,20 @@ pub struct CheckpointExecutorConfig {
     pub local_execution_timeout_sec: u64,
 }
 
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
+#[serde(rename_all = "kebab-case")]
+pub enum ConsistencyCheckType {
+    None,
+    PanicOnFail,
+    LogOnFail,
+}
+
+impl Default for ConsistencyCheckType {
+    fn default() -> Self {
+        ConsistencyCheckType::None
+    }
+}
+
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct ExpensiveSafetyCheckConfig {
@@ -318,10 +332,10 @@ pub struct ExpensiveSafetyCheckConfig {
     #[serde(default)]
     force_disable_epoch_sui_conservation_check: bool,
 
-    /// If enabled, at epoch boundary, we will check that the accumulated
+    /// If non-None, at epoch boundary, we will check that the accumulated
     /// live object state matches the end of epoch root state digest.
     #[serde(default)]
-    enable_state_consistency_check: bool,
+    state_consistency_check: ConsistencyCheckType,
 
     /// Disable state consistency check even when we are running in debug mode.
     #[serde(default)]
@@ -336,11 +350,17 @@ pub struct ExpensiveSafetyCheckConfig {
 
 impl ExpensiveSafetyCheckConfig {
     pub fn new_enable_all() -> Self {
+        let consistency_check_type = if cfg!(debug_assertions) {
+            ConsistencyCheckType::PanicOnFail
+        } else {
+            ConsistencyCheckType::LogOnFail
+        };
+
         Self {
             enable_epoch_sui_conservation_check: true,
             enable_deep_per_tx_sui_conservation_check: true,
             force_disable_epoch_sui_conservation_check: false,
-            enable_state_consistency_check: true,
+            state_consistency_check: consistency_check_type,
             force_disable_state_consistency_check: false,
             enable_move_vm_paranoid_checks: true,
         }
@@ -363,9 +383,14 @@ impl ExpensiveSafetyCheckConfig {
         self.force_disable_state_consistency_check = true;
     }
 
-    pub fn enable_state_consistency_check(&self) -> bool {
-        (self.enable_state_consistency_check || cfg!(debug_assertions))
-            && !self.force_disable_state_consistency_check
+    pub fn state_consistency_check(&self) -> ConsistencyCheckType {
+        if self.force_disable_state_consistency_check {
+            ConsistencyCheckType::None
+        } else if cfg!(debug_assertions) {
+            ConsistencyCheckType::PanicOnFail
+        } else {
+            self.state_consistency_check.clone()
+        }
     }
 
     pub fn enable_move_vm_paranoid_checks(&self) -> bool {
