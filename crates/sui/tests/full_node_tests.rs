@@ -22,6 +22,7 @@ use sui_keys::keystore::AccountKeystore;
 use sui_macros::*;
 use sui_node::SuiNode;
 use sui_sdk::wallet_context::WalletContext;
+use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_tool::restore_from_db_checkpoint;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::{ObjectRef, SequenceNumber};
@@ -44,7 +45,6 @@ use sui_types::utils::{
 };
 use sui_types::{SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION};
 use test_utils::authority::test_and_configure_authority_configs;
-use test_utils::messages::make_transfer_object_transaction_with_wallet_context;
 use test_utils::network::{start_fullnode_from_config, TestClusterBuilder};
 use test_utils::transaction::{
     create_devnet_nft, delete_devnet_nft, increment_counter, publish_basics_package,
@@ -968,13 +968,10 @@ async fn test_get_objects_read() -> Result<(), anyhow::Error> {
         .await
         .unwrap()
         .unwrap();
-    let nft_transfer_tx = make_transfer_object_transaction_with_wallet_context(
-        object_ref_v1,
-        gas_ref,
-        context,
-        sender,
-        recipient,
-        rgp,
+    let nft_transfer_tx = context.sign_transaction(
+        &TestTransactionBuilder::new(sender, gas_ref, rgp)
+            .transfer(object_ref_v1, recipient)
+            .build(),
     );
     context
         .execute_transaction_block(nft_transfer_tx)

@@ -26,10 +26,10 @@ use sui_types::committee::Committee;
 use sui_types::crypto::{deterministic_random_account_key, AuthorityKeyPair};
 use sui_types::error::SuiResult;
 use sui_types::message_envelope::Message;
-use sui_types::messages::TEST_ONLY_GAS_UNIT_FOR_GENERIC;
 use sui_types::messages::TEST_ONLY_GAS_UNIT_FOR_PUBLISH;
 use sui_types::messages::TEST_ONLY_GAS_UNIT_FOR_SPLIT_COIN;
 use sui_types::messages::TEST_ONLY_GAS_UNIT_FOR_TRANSFER;
+use sui_types::messages::{CertifiedTransaction, TEST_ONLY_GAS_UNIT_FOR_GENERIC};
 
 use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI, TransactionEvents};
@@ -46,9 +46,6 @@ use sui_types::SUI_FRAMEWORK_OBJECT_ID;
 use tracing::{debug, info};
 
 use crate::authority::get_client;
-use crate::messages::{
-    make_tx_certs_and_signed_effects, make_tx_certs_and_signed_effects_with_committee,
-};
 
 pub fn make_publish_package(
     gas_object: ObjectRef,
@@ -630,10 +627,14 @@ pub async fn submit_single_owner_transaction(
     transaction: VerifiedTransaction,
     net_addresses: &[Multiaddr],
 ) -> (TransactionEffects, TransactionEvents, Vec<Object>) {
-    let certificate = make_tx_certs_and_signed_effects(vec![transaction])
-        .0
-        .pop()
-        .unwrap();
+    let (committee, key_pairs) = Committee::new_simple_test_committee();
+    let certificate = CertifiedTransaction::new_from_keypairs_for_testing(
+        transaction.into_message(),
+        &key_pairs,
+        &committee,
+    )
+    .verify(&committee)
+    .unwrap();
     let mut responses = Vec::new();
     for addr in net_addresses {
         let client = get_client(addr);
@@ -672,11 +673,13 @@ pub async fn submit_shared_object_transaction_with_committee(
     committee: &Committee,
     key_pairs: &[AuthorityKeyPair],
 ) -> SuiResult<(TransactionEffects, TransactionEvents, Vec<Object>)> {
-    let certificate =
-        make_tx_certs_and_signed_effects_with_committee(vec![transaction], committee, key_pairs)
-            .0
-            .pop()
-            .unwrap();
+    let certificate = CertifiedTransaction::new_from_keypairs_for_testing(
+        transaction.into_message(),
+        key_pairs,
+        committee,
+    )
+    .verify(committee)
+    .unwrap();
 
     let replies = loop {
         let futures: Vec<_> = net_addresses

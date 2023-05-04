@@ -8911,6 +8911,7 @@ dependencies = [
  "sui-simulator",
  "sui-source-validation",
  "sui-swarm",
+ "sui-test-transaction-builder",
  "sui-tool",
  "sui-types",
  "tap",
@@ -9038,6 +9039,7 @@ dependencies = [
  "sui-move-build",
  "sui-sdk",
  "sui-swarm",
+ "sui-test-transaction-builder",
  "sui-types",
  "telemetry-subscribers",
  "tempfile",
@@ -9907,6 +9909,7 @@ dependencies = [
  "sui-json-rpc",
  "sui-json-rpc-types",
  "sui-keys",
+ "sui-test-transaction-builder",
  "sui-transaction-builder",
  "sui-types",
  "tempfile",
@@ -10074,6 +10077,7 @@ dependencies = [
 name = "sui-test-transaction-builder"
 version = "1.1.0"
 dependencies = [
+ "bcs",
  "move-core-types",
  "shared-crypto",
  "sui-move-build",

@@ -6,16 +6,17 @@ use std::time::Duration;
 use sui_config::NetworkConfig;
 use sui_macros::*;
 use sui_node::SuiNodeHandle;
+use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber};
+use sui_types::crypto::deterministic_random_account_key;
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI, TransactionEvents};
 use sui_types::error::SuiResult;
 use sui_types::execution_status::{ExecutionFailureStatus, ExecutionStatus};
-use sui_types::messages::{CallArg, ObjectArg, TEST_ONLY_GAS_UNIT_FOR_GENERIC};
+use sui_types::messages::{CallArg, ObjectArg};
 use sui_types::multiaddr::Multiaddr;
 use sui_types::object::{generate_test_gas_objects, Object, Owner, OBJECT_START_VERSION};
 use sui_types::SUI_FRAMEWORK_ADDRESS;
 use test_utils::authority::{spawn_test_authorities, test_authority_configs_with_objects};
-use test_utils::messages::move_transaction;
 use test_utils::transaction::{
     publish_package, submit_shared_object_transaction, submit_single_owner_transaction,
 };
@@ -150,19 +151,20 @@ impl TestEnvironment {
         arguments: Vec<CallArg>,
     ) -> (TransactionEffects, TransactionEvents, Vec<Object>) {
         let rgp = self.configs.genesis.reference_gas_price();
-        submit_single_owner_transaction(
-            move_transaction(
-                self.gas_objects.pop().unwrap(),
-                "shared_objects_version",
-                function,
-                self.move_package,
-                arguments,
-                rgp * TEST_ONLY_GAS_UNIT_FOR_GENERIC,
-                rgp,
-            ),
-            &self.configs.net_addresses(),
+        let (sender, keypair) = deterministic_random_account_key();
+        let transaction = TestTransactionBuilder::new(
+            sender,
+            self.gas_objects.pop().unwrap().compute_object_reference(),
+            rgp,
         )
-        .await
+        .move_call(
+            self.move_package,
+            "shared_objects_version",
+            function,
+            arguments,
+        )
+        .build_and_sign(&keypair);
+        submit_single_owner_transaction(transaction, &self.configs.net_addresses()).await
     }
 
     async fn shared_move_call(
@@ -171,19 +173,20 @@ impl TestEnvironment {
         arguments: Vec<CallArg>,
     ) -> SuiResult<(TransactionEffects, TransactionEvents, Vec<Object>)> {
         let rgp = self.configs.genesis.reference_gas_price();
-        submit_shared_object_transaction(
-            move_transaction(
-                self.gas_objects.pop().unwrap(),
-                "shared_objects_version",
-                function,
-                self.move_package,
-                arguments,
-                rgp * TEST_ONLY_GAS_UNIT_FOR_GENERIC,
-                rgp,
-            ),
-            &self.configs.net_addresses(),
+        let (sender, keypair) = deterministic_random_account_key();
+        let transaction = TestTransactionBuilder::new(
+            sender,
+            self.gas_objects.pop().unwrap().compute_object_reference(),
+            rgp,
         )
-        .await
+        .move_call(
+            self.move_package,
+            "shared_objects_version",
+            function,
+            arguments,
+        )
+        .build_and_sign(&keypair);
+        submit_shared_object_transaction(transaction, &self.configs.net_addresses()).await
     }
 
     async fn create_counter(&mut self) -> (ObjectRef, Owner) {

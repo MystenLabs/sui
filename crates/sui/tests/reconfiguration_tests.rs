@@ -1127,12 +1127,11 @@ async fn test_reconfig_with_committee_change_stress() {
 #[sim_test]
 async fn safe_mode_reconfig_test() {
     use sui_types::sui_system_state::advance_epoch_result_injection;
-    use test_utils::messages::make_staking_transaction_with_wallet_context;
 
     // Inject failure at epoch change 1 -> 2.
     advance_epoch_result_injection::set_override(Some((2, 3)));
 
-    let mut test_cluster = TestClusterBuilder::new()
+    let test_cluster = TestClusterBuilder::new()
         .with_epoch_duration_ms(3000)
         .build()
         .await
@@ -1172,9 +1171,10 @@ async fn safe_mode_reconfig_test() {
         .into_sui_system_state_summary()
         .active_validators[0]
         .sui_address;
-    let txn =
-        make_staking_transaction_with_wallet_context(test_cluster.wallet_mut(), validator_address)
-            .await;
+    let txn = test_cluster
+        .wallet
+        .make_staking_transaction(validator_address)
+        .await;
     let response = test_cluster
         .execute_transaction(txn)
         .await
