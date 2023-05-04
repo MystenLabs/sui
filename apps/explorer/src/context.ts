@@ -1,13 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import * as Sentry from '@sentry/react';
-import { createContext, useLayoutEffect, useMemo } from 'react';
+import { createContext, useMemo } from 'react';
 // eslint-disable-next-line no-restricted-imports
 import { useSearchParams } from 'react-router-dom';
 
 import { Network } from './utils/api/DefaultRpcClient';
-import { growthbook } from './utils/growthbook';
 import { queryClient } from './utils/queryClient';
 
 export const DEFAULT_NETWORK =
@@ -43,17 +41,6 @@ export function useNetwork(): [string, (network: Network | string) => void] {
 
         setSearchParams({ network: network.toLowerCase() });
     };
-
-    useLayoutEffect(() => {
-        growthbook.setAttributes({
-            network,
-            environment: import.meta.env.VITE_VERCEL_ENV,
-        });
-
-        Sentry.setContext('network', {
-            network,
-        });
-    }, [network]);
 
     return [network, setNetwork];
 }
