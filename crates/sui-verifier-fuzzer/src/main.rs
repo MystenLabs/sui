@@ -58,7 +58,54 @@ fn main() {
                 process::exit(0)
             }
             "sui-verifier" => {
-                // TODO
+                let m = match args.input_format.as_str() {
+                    /*
+                    "arbitrary" => {
+                        let mut unstructured = Unstructured::new(input);
+                        let Ok(m) = move_binary_format::file_format::CompiledModule::arbitrary(&mut unstructured) else { process::exit(1); };
+                        m
+                    }
+                    "ir" => {
+                        let Ok(code) = std::str::from_utf8(input) else { process::exit(1); };
+                        let Ok(m) = move_ir_compiler::Compiler::new(compiled_state.dep_modules().collect()).into_compiled_module(code) else { process::exit(1); };
+                        m
+                    }
+                    "source" => {
+                        let Ok(source) = std::str::from_utf8(&input) else { process::exit(1) };
+                        let Ok(m) = parse_source(source) else { process::exit(1) };
+                        let move_compiler::compiled_unit::CompiledUnitEnum::Module(ref m) = m.0[0] else { process::exit(1); };
+                        m.named_module.module.clone()
+                    }
+                    */
+                    "raw-bytes" | _ => {
+                        let m = move_binary_format::file_format::CompiledModule::deserialize_with_defaults(&input).unwrap_or_else(|e| {
+                            dbg!("no deserialize module: {:#?}", e);
+                            process::exit(1);
+                       });
+                        dbg!("valid module {:#?}", m.clone());
+                        m
+                    }
+                };
+                let move_result = move_bytecode_verifier::verify_module_unmetered(&m);
+                if let Ok(()) = move_result {
+                        let sui_result = sui_bytecode_verifier::sui_verify_module_unmetered(
+                            &ProtocolConfig::get_for_version(ProtocolVersion::MAX),
+                            &m,
+                            &BTreeMap::new(),
+                        );
+                        if let Ok(()) = sui_result {
+                            process::exit(0);
+                        } else {
+                            dbg!("sui verifier failure");
+                            dbg!(sui_result.err().unwrap());
+                        }
+                    } else {
+                        if args.debug {
+                            dbg!("move verifier failure");
+                            dbg!(move_result.err().unwrap());
+                        }
+                    };
+                process::exit(0);
             }
             "move-compiler" | _ => {
                 // source implied
@@ -104,7 +151,7 @@ fn main() {
                             let Ok(source) = std::str::from_utf8(&input) else { process::exit(1) };
                             let Ok(m) = parse_source(source) else { process::exit(1) };
                             let move_compiler::compiled_unit::CompiledUnitEnum::Module(ref m) = m.0[0] else { process::exit(1); };
-                            m.named_module.module.clone()
+                            m.named_module.module.clone() // XXX why do I need to clone here?
                         }
                         "raw-bytes" | _ => {
                             let Ok(m) = move_binary_format::file_format::CompiledModule::deserialize_with_defaults(&input) else { process::exit(1); };
@@ -251,8 +298,6 @@ fn parse_source(
     res
 }
 
-
-
 fn default_fuzzing_addresses() -> BTreeMap<String, move_compiler::shared::NumericalAddress> {
     let mapping = [
         ("std", "0x1"),
@@ -356,5 +401,3 @@ fn default_fuzzing_addresses() -> BTreeMap<String, move_compiler::shared::Numeri
         })
         .collect()
 }
-
-
