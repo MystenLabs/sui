@@ -70,13 +70,19 @@ fn main() {
                         let Ok(m) = move_ir_compiler::Compiler::new(compiled_state.dep_modules().collect()).into_compiled_module(code) else { process::exit(1); };
                         m
                     }
+                    */
                     "source" => {
                         let Ok(source) = std::str::from_utf8(&input) else { process::exit(1) };
-                        let Ok(m) = parse_source(source) else { process::exit(1) };
+                        let m = parse_source(source).unwrap_or_else(|e| { 
+                            dbg!("no parse: {:#?}", e);
+                            process::exit(1);
+                        });
+                        if m.0.is_empty() {
+                            process::exit(1);
+                        }
                         let move_compiler::compiled_unit::CompiledUnitEnum::Module(ref m) = m.0[0] else { process::exit(1); };
                         m.named_module.module.clone()
                     }
-                    */
                     "raw-bytes" | _ => {
                         let m = move_binary_format::file_format::CompiledModule::deserialize_with_defaults(&input).unwrap_or_else(|e| {
                             dbg!("no deserialize module: {:#?}", e);
@@ -150,6 +156,9 @@ fn main() {
                         "source" => {
                             let Ok(source) = std::str::from_utf8(&input) else { process::exit(1) };
                             let Ok(m) = parse_source(source) else { process::exit(1) };
+                            if m.0.is_empty() {
+                                process::exit(1);
+                            }
                             let move_compiler::compiled_unit::CompiledUnitEnum::Module(ref m) = m.0[0] else { process::exit(1); };
                             m.named_module.module.clone() // XXX why do I need to clone here?
                         }
