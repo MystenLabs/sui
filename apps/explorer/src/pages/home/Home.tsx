@@ -26,11 +26,9 @@ function Home() {
             <div style={{ gridArea: 'tps' }}>
                 <NetworkTPS />
             </div>
-
             <div style={{ gridArea: 'sui-token' }}>
                 <SuiTokenCard />
             </div>
-
             <div style={{ gridArea: 'network' }} className="overflow-hidden">
                 <OnTheNetwork />
             </div>
