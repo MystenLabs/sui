@@ -19,7 +19,7 @@ import { TopPackagesCard } from '~/components/top-packages/TopPackagesCard';
 import { Card } from '~/ui/Card';
 import { Tab, TabGroup, TabList, TabPanel, TabPanels } from '~/ui/Tabs';
 
-const NodeMap = lazy(() => import('../../components/node-map'));
+const ValidatorMap = lazy(() => import('../../components/validator-map'));
 
 const TRANSACTIONS_LIMIT = 25;
 
@@ -63,7 +63,7 @@ function Home() {
             >
                 <ErrorBoundary>
                     <Suspense fallback={<Card height="full" />}>
-                        <NodeMap minHeight="100%" />
+                        <ValidatorMap minHeight="100%" />
                     </Suspense>
                 </ErrorBoundary>
             </div>
@@ -109,7 +109,7 @@ function Home() {
 
             <ErrorBoundary>
                 <Suspense fallback={<Card />}>
-                    <NodeMap minHeight={280} />
+                    <ValidatorMap minHeight={280} />
                 </Suspense>
             </ErrorBoundary>
 

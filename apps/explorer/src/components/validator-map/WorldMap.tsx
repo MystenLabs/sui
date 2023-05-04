@@ -6,9 +6,9 @@ import React, { memo } from 'react';
 import * as topojson from 'topojson-client';
 
 import { MapFeature } from './MapFeature';
-import { NodesLocation } from './NodesLocation';
+import { ValidatorLocation } from './ValidatorLocation';
 import world from './topology.json';
-import { type Feature, type NodeLocation } from './types';
+import { type Feature, type ValidatorMapData } from './types';
 
 // @ts-expect-error: The types of `world` here aren't aligned but they are correct
 const land = topojson.feature(world, world.objects.countries) as unknown as {
@@ -16,7 +16,7 @@ const land = topojson.feature(world, world.objects.countries) as unknown as {
     features: Feature[];
 };
 
-// We hide Antarctica because there will not be nodes there:
+// We hide Antarctica because there will not be validators there:
 const HIDDEN_REGIONS = ['Antarctica'];
 const filteredLand = land.features.filter(
     (feature) => !HIDDEN_REGIONS.includes(feature.properties.name)
@@ -25,7 +25,7 @@ const filteredLand = land.features.filter(
 interface Props {
     width: number;
     height: number;
-    nodes?: NodeLocation[];
+    validators?: ValidatorMapData[];
     onMouseOver(event: React.MouseEvent, countryCode?: string): void;
     onMouseOut(): void;
 }
@@ -35,7 +35,7 @@ function BaseWorldMap({
     onMouseOut,
     width,
     height,
-    nodes,
+    validators,
 }: Props) {
     const centerX = width / 2;
     const centerY = height / 2;
@@ -50,24 +50,31 @@ function BaseWorldMap({
                 {({ features, projection }) => (
                     <g>
                         <g>
-                            {features.map(({ feature, path }, index) => (
-                                <MapFeature
-                                    key={index}
-                                    onMouseOut={onMouseOut}
-                                    onMouseOver={onMouseOver}
-                                    feature={feature}
-                                    path={path}
-                                />
+                            {features.map(({ path }, index) => (
+                                <MapFeature key={index} path={path} />
                             ))}
                         </g>
 
-                        {nodes?.map((node, index) => (
-                            <NodesLocation
-                                key={index}
-                                node={node}
-                                projection={projection}
-                            />
-                        ))}
+                        {/* Validators need to be sorted by voting power to render smallest nodes on top */}
+                        {validators
+                            ?.sort((a, b) => {
+                                const aVal = parseInt(a.votingPower);
+                                const bVal = parseInt(b.votingPower);
+                                if (aVal > bVal) return -1;
+                                else if (aVal < bVal) {
+                                    return 1;
+                                }
+                                return 0;
+                            })
+                            .map((validator, index) => (
+                                <ValidatorLocation
+                                    onMouseOut={onMouseOut}
+                                    onMouseOver={onMouseOver}
+                                    key={index}
+                                    validator={validator}
+                                    projection={projection}
+                                />
+                            ))}
                     </g>
                 )}
             </Mercator>
