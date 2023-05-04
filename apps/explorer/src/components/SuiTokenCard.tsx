@@ -14,13 +14,11 @@ import { Text } from '~/ui/Text';
 export function SuiTokenCard() {
     const { data, isLoading } = useSuiCoinData();
     const {
-        priceChangePercentageOver24H,
         currentPrice,
         totalSupply,
         marketCap,
     } = data || {};
 
-    const isPriceChangePositive = Number(priceChangePercentageOver24H) > 0;
     const formattedPrice = currentPrice
         ? currentPrice.toLocaleString('en', {
               style: 'currency',
@@ -44,20 +42,6 @@ export function SuiTokenCard() {
                             >
                                 1 SUI = {formattedPrice}
                             </Heading>
-                            {priceChangePercentageOver24H ? (
-                                <Heading
-                                    as="div"
-                                    variant="heading6/medium"
-                                    color={
-                                        isPriceChangePositive
-                                            ? 'success'
-                                            : 'issue'
-                                    }
-                                >
-                                    {isPriceChangePositive ? '+' : null}
-                                    {priceChangePercentageOver24H.toFixed(2)}%
-                                </Heading>
-                            ) : null}
                         </div>
                         <Text variant="subtitleSmallExtra/medium" color="steel">
                             via CoinGecko
