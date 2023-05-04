@@ -437,8 +437,12 @@ impl KeyToolCommand {
                     let sig_r = Secp256k1RecoverableSignature::from_bytes(&n_bytes)?;
                     let pk = sig_r.recover_with_hash::<Sha256>(digest.as_ref())?;
 
-                    // If the recover pk is valid, output serialized signature. 
+                    // If the recovered pk is valid, output serialized signature.
                     if pk.verify(digest.as_ref(), &sig).is_ok() {
+                        println!(
+                            "Address For Corresponding KMS Key: {}",
+                            Into::<SuiAddress>::into(&pk),
+                        );
                         let mut serialized_sig = vec![SignatureScheme::Secp256k1.flag()];
                         serialized_sig.extend_from_slice(&sig_compact);
                         serialized_sig.extend_from_slice(pk.as_ref());
