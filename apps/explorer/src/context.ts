@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import * as Sentry from '@sentry/react';
-import { createContext, useEffect } from 'react';
+import { createContext, useLayoutEffect, useMemo } from 'react';
 // eslint-disable-next-line no-restricted-imports
 import { useSearchParams } from 'react-router-dom';
 
@@ -12,7 +12,7 @@ import { queryClient } from './utils/queryClient';
 
 export const DEFAULT_NETWORK =
     import.meta.env.VITE_NETWORK ||
-    (import.meta.env.DEV ? Network.LOCAL : Network.TESTNET);
+    (import.meta.env.DEV ? Network.LOCAL : Network.MAINNET);
 
 export const NetworkContext = createContext<
     [Network | string, (network: Network | string) => void]
@@ -20,22 +20,31 @@ export const NetworkContext = createContext<
 
 export function useNetwork(): [string, (network: Network | string) => void] {
     const [searchParams, setSearchParams] = useSearchParams();
-    const network = getNetworkName(searchParams);
+
+    const network = useMemo(() => {
+        const networkParam = searchParams.get('network');
+
+        if (
+            networkParam &&
+            (Object.values(Network) as string[]).includes(
+                networkParam.toUpperCase()
+            )
+        ) {
+            return networkParam.toUpperCase();
+        }
+
+        return networkParam ?? DEFAULT_NETWORK;
+    }, [searchParams]);
 
     const setNetwork = (network: Network | string) => {
+        // When resetting the network, we reset the query client at the same time:
+        queryClient.cancelQueries();
+        queryClient.clear();
+
         setSearchParams({ network: network.toLowerCase() });
     };
 
-    useEffect(() => {
-        console.log('clearing cache', network);
-        // When the network changes (either from users changing the network manually or
-        // navigating back and forth between pages), we need to clear out our query cache
-        queryClient.cancelQueries();
-        queryClient.clear();
-        return () => console.log('dismount');
-    }, [network]);
-
-    useEffect(() => {
+    useLayoutEffect(() => {
         growthbook.setAttributes({
             network,
             environment: import.meta.env.VITE_VERCEL_ENV,
@@ -47,17 +56,4 @@ export function useNetwork(): [string, (network: Network | string) => void] {
     }, [network]);
 
     return [network, setNetwork];
-}
-
-function getNetworkName(searchParams: URLSearchParams) {
-    const networkParam = searchParams.get('network');
-    const upperCasedNetwork = networkParam?.toUpperCase();
-
-    if (
-        upperCasedNetwork &&
-        (Object.values(Network) as string[]).includes(upperCasedNetwork)
-    ) {
-        return upperCasedNetwork;
-    }
-    return networkParam ?? DEFAULT_NETWORK;
 }
