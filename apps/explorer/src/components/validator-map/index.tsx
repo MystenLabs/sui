@@ -48,9 +48,7 @@ interface Props {
 // NOTE: This component is lazy imported, so it needs to be default exported:
 export default function ValidatorMap({ minHeight }: Props) {
     const [network] = useNetwork();
-    const [validatorData, setValidatorData] = useState<
-        (ValidatorMapData | null)[]
-    >([]);
+    const [validatorData, setValidatorData] = useState<ValidatorMapData[]>([]);
     const [isLoading, setIsLoading] = useState(false);
     const [isError, setIsError] = useState(false);
     const appsBe = useAppsBackend();
@@ -88,17 +86,16 @@ export default function ValidatorMap({ minHeight }: Props) {
 
     useEffect(() => {
         setIsLoading(true);
-        appsBe(
-            `validator-map`,
-            {
-                network: network.toLowerCase(),
-                // TODO: remove when caching solution is improved
-                skipCache: true
-            },
-        )
+        appsBe(`validator-map`, {
+            network: network.toLowerCase(),
+            // TODO: remove when caching solution is improved
+            skipCache: true,
+        })
             .then((res) => {
                 // Some validators will come back as null from the API
-                const validatorResponse = (res as ValidatorMapData[]).filter(validator => validator)
+                const validatorResponse = (res as ValidatorMapData[]).filter(
+                    (validator) => validator
+                );
                 setValidatorData(validatorResponse);
                 setIsLoading(false);
             })
