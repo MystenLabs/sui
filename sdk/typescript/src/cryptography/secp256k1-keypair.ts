@@ -12,7 +12,7 @@ import { toB64 } from '@mysten/bcs';
 import { SignatureScheme } from './signature';
 import { bytesToHex, hexToBytes } from '@noble/hashes/utils';
 import { blake2b } from '@noble/hashes/blake2b';
-import { PRIVATE_KEY_SIZE, SuiKeyPair } from './keypair';
+import { SuiKeyPair } from './keypair';
 
 export const DEFAULT_SECP256K1_DERIVATION_PATH = "m/54'/784'/0'/0/0";
 
