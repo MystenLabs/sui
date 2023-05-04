@@ -5,12 +5,16 @@ use bip32::DerivationPath;
 use clap::*;
 use fastcrypto::encoding::{decode_bytes_hex, Base64, Encoding, Hex};
 use fastcrypto::hash::HashFunction;
+use fastcrypto::hash::Sha256;
+use fastcrypto::secp256k1::recoverable::Secp256k1RecoverableSignature;
 use fastcrypto::secp256k1::recoverable::Secp256k1Sig;
-use fastcrypto::secp256k1::Secp256k1PublicKey;
+use fastcrypto::secp256k1::{Secp256k1PublicKey, Secp256k1Signature};
 use fastcrypto::traits::KeyPair;
+use fastcrypto::traits::RecoverableSignature;
 use fastcrypto::traits::ToFromBytes;
+use fastcrypto::traits::VerifyingKey;
 use rusoto_core::Region;
-use rusoto_kms::{GetPublicKeyRequest, Kms, KmsClient, SignRequest};
+use rusoto_kms::{Kms, KmsClient, SignRequest};
 use shared_crypto::intent::{Intent, IntentMessage};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -27,6 +31,7 @@ use sui_types::messages::TransactionData;
 use sui_types::multisig::{MultiSig, MultiSigPublicKey, ThresholdUnit, WeightUnit};
 use sui_types::signature::GenericSignature;
 use tracing::info;
+
 #[cfg(test)]
 #[path = "unit_tests/keytool_tests.rs"]
 mod keytool_tests;
@@ -396,32 +401,11 @@ impl KeyToolCommand {
 
                 // Set up the KMS client, expect to use env vars or whatever the AWS
                 // SDK prefers.
-                let region = Region::default();
-                let kms = KmsClient::new(region);
-
-                // Get Pub key from keyid. This is in DER Format from AWS
-                let req = GetPublicKeyRequest {
-                    grant_tokens: None,
-                    key_id: keyid.to_string(),
-                };
-                let pubkey_resp = kms
-                    .get_public_key(req)
-                    .await
-                    .map_err(|e| anyhow!("No Public key Found: {:?}", e))?;
-                let public_key: &[u8] = &pubkey_resp.public_key.unwrap_or_default();
-
-                // Parse the PEM-encoded public key and extract the raw bytes
-                // Compresses into 33 bytes
-                let secp_pk = Secp256k1PublicKey::from_uncompressed(public_key);
-                let pkey_compact = secp_pk.as_bytes();
-                // Generates Corresponding Sui Address from public key
-                println!(
-                    "Address For Corresponding KMS Key: {}",
-                    Into::<SuiAddress>::into(&secp_pk),
-                );
+                let region: Region = Region::default();
+                let kms: KmsClient = KmsClient::new(region);
 
                 // Construct the signing request
-                let request = SignRequest {
+                let request: SignRequest = SignRequest {
                     key_id: keyid.to_string(),
                     message: digest.to_vec().into(),
                     message_type: Some("RAW".to_string()),
@@ -429,24 +413,66 @@ impl KeyToolCommand {
                     ..Default::default()
                 };
                 // Sign the message, normalize the signature and then compacts it
+                // serialize_compact is loaded as bytes for Secp256k1Sinature
+                // to convert it into a RecoverableSignature
+
                 let response = kms.sign(request).await?;
-                let sig_bytes_der = response.signature.map(|b| b.to_vec()).unwrap_or_default();
+                let sig_bytes_der = response
+                    .signature
+                    .map(|b| b.to_vec())
+                    .expect("Requires Asymmetric Key Generated in KMS");
+
                 let mut sig = Secp256k1Sig::from_der(&sig_bytes_der)?;
                 sig.normalize_s();
-                let sig_bytes = Secp256k1Sig::serialize_compact(&sig);
+                let sig_compact: &[u8; 64] = &sig.serialize_compact();
+                let fcsecp256k1sig = Secp256k1Signature::from_bytes(sig_compact)?;
 
-                //println!("Sig Bytes {:?}", sig_bytes);
-                //println!("Public Key Compact bytes {:?}", pkey_compact);
+                //println!("Sig Bytes {:?}", sig_compact);
+                //println!("fcsecp {:?}", fcsecp256k1sig);
 
-                let mut flag = vec![SignatureScheme::Secp256k1.flag()];
-                flag.extend(sig_bytes);
-                flag.extend(pkey_compact);
+                let mut n_bytes: [u8; 65] = [0u8; 65];
+                n_bytes[..64].copy_from_slice(&sig_compact[..]);
+                let mut secppk: Option<Secp256k1PublicKey> = None;
 
-                let serialized_sig = Base64::encode(&flag);
-                println!(
-                    "Serialized signature (`flag || sig || pk` in Base64): {:?}",
-                    serialized_sig
-                );
+                // Need a Recoveale signature so that we can use it as Secp256k1RecoverableSignature
+                // and then run recover_with_hash to recover the public key.
+                // This is because there is no direct function to convert DER -> compact PK for
+                // for secp256k1 keys (without leveraging openssl)
+
+                for i in 0..4 {
+                    n_bytes[64] = i;
+                    let sig_r =
+                        <Secp256k1RecoverableSignature as ToFromBytes>::from_bytes(&n_bytes)?;
+
+                    let pk = sig_r.recover_with_hash::<Sha256>(&digest.as_ref())?;
+                    if pk.verify(&digest.as_ref(), &fcsecp256k1sig).is_ok() {
+                        secppk = Some(pk);
+
+                        break;
+                    }
+                }
+
+                if let Some(secppk) = secppk {
+                    let pkey_compact: &[u8] = &secppk.as_bytes();
+                    println!("PK {:?}", pkey_compact);
+                    // Generates Corresponding Sui Address from public key
+                    println!(
+                        "Address For Corresponding KMS Key: {}",
+                        Into::<SuiAddress>::into(&secppk),
+                    );
+
+                    let mut flag = vec![SignatureScheme::Secp256k1.flag()];
+                    flag.extend(sig_compact);
+                    flag.extend(pkey_compact);
+
+                    let serialized_sig = Base64::encode(&flag);
+                    println!(
+                        "Serialized signature (`flag || sig || pk` in Base64): {:?}",
+                        serialized_sig
+                    );
+                } else {
+                    println!("Public Key not recovered");
+                }
             }
             KeyToolCommand::MultiSigAddress {
                 threshold,
