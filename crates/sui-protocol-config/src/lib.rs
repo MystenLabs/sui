@@ -34,7 +34,8 @@ const MAX_PROTOCOL_VERSION: u64 = 10;
 //            Disallow extraneous module bytes,
 //            advance_to_highest_supported_protocol_version,
 // Version 10:increase bytecode verifier `max_verifier_meter_ticks_per_function` and
-//            `max_meter_ticks_per_module` limits each from 6_000_000 to 16_000_000
+//            `max_meter_ticks_per_module` limits each from 6_000_000 to 16_000_000. sui-system
+//            framework changes.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
