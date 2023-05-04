@@ -9,12 +9,13 @@ use std::{
 use mysten_metrics::{monitored_scope, spawn_monitored_task};
 use sui_types::{
     digests::TransactionEffectsDigest, executable_transaction::VerifiedExecutableTransaction,
+    messages::MultiTxBatch,
 };
 use tokio::{
     sync::{mpsc::UnboundedReceiver, oneshot, Semaphore},
     time::sleep,
 };
-use tracing::{error, error_span, info, trace, Instrument};
+use tracing::{debug, error, error_span, info, Instrument};
 
 use crate::authority::AuthorityState;
 
@@ -31,10 +32,12 @@ const EXECUTION_FAILURE_RETRY_INTERVAL: Duration = Duration::from_secs(1);
 /// processing the transaction in a loop.
 pub async fn execution_process(
     authority_state: Weak<AuthorityState>,
-    mut rx_ready_certificates: UnboundedReceiver<(
-        VerifiedExecutableTransaction,
-        Option<TransactionEffectsDigest>,
-    )>,
+    mut rx_ready_certificates: UnboundedReceiver<
+        Vec<(
+            VerifiedExecutableTransaction,
+            Option<TransactionEffectsDigest>,
+        )>,
+    >,
     mut rx_execution_shutdown: oneshot::Receiver<()>,
 ) {
     info!("Starting pending certificates execution process.");
@@ -46,13 +49,11 @@ pub async fn execution_process(
     loop {
         let _scope = monitored_scope("ExecutionDriver::loop");
 
-        let certificate;
-        let expected_effects_digest;
+        let certificates;
         tokio::select! {
             result = rx_ready_certificates.recv() => {
-                if let Some((cert, fx_digest)) = result {
-                    certificate = cert;
-                    expected_effects_digest = fx_digest;
+                if let Some(certs) = result {
+                    certificates = certs;
                 } else {
                     // Should only happen after the AuthorityState has shut down and tx_ready_certificate
                     // has been dropped by TransactionManager.
@@ -79,47 +80,77 @@ pub async fn execution_process(
         // TODO: Ideally execution_driver should own a copy of epoch store and recreate each epoch.
         let epoch_store = authority.load_epoch_store_one_call_per_task();
 
-        let digest = *certificate.digest();
-        trace!(?digest, "Pending certificate execution activated.");
-
         let limit = limit.clone();
         // hold semaphore permit until task completes. unwrap ok because we never close
         // the semaphore in this context.
         let permit = limit.acquire_owned().await.unwrap();
 
+        let (certificates, expected_effects_digests): (Vec<_>, Vec<_>) =
+            certificates.into_iter().unzip();
+
+        let digests: Vec<_> = certificates.iter().map(|t| t.digest()).collect();
+        let batch_id = certificates.batch_id();
+
+        debug!(?digests, ?batch_id, "Executing certificate batch");
+
         // Certificate execution can take significant time, so run it in a separate task.
         spawn_monitored_task!(async move {
             let _scope = monitored_scope("ExecutionDriver::task");
             let _guard = permit;
-            if let Ok(true) = authority.is_tx_already_executed(&digest) {
-                return;
-            }
             let mut attempts = 0;
-            loop {
-                attempts += 1;
-                let res = authority
-                    .try_execute_immediately(
-                        vec![certificate.clone()],
-                        vec![expected_effects_digest],
-                        &epoch_store,
-                    )
-                    .await;
-                if let Err(e) = res {
-                    if attempts == EXECUTION_MAX_ATTEMPTS {
-                        panic!("Failed to execute transaction {digest:?} after {attempts} attempts! error={e}");
+
+            let res = authority
+                .try_execute_immediately(
+                    certificates.clone(),
+                    expected_effects_digests.clone(),
+                    &epoch_store,
+                )
+                .await;
+
+            if let Err(e) = res {
+                error!("Failed to execute transaction batch, attempting one-by-one execution: {e}");
+
+                let mut certificates = certificates.into_iter();
+                let mut expected_effects_digests = expected_effects_digests.into_iter();
+                loop {
+                    attempts += 1;
+
+                    let (Some(certificate), Some(expected_effects_digest)) = (certificates.next(), expected_effects_digests.next()) else {
+                        break;
+                    };
+
+                    let digest = *certificate.digest();
+
+                    let res = authority
+                        .try_execute_immediately(
+                            vec![certificate],
+                            vec![expected_effects_digest],
+                            &epoch_store,
+                        )
+                        .await;
+                    if let Err(e) = res {
+                        if attempts == EXECUTION_MAX_ATTEMPTS {
+                            panic!("Failed to execute transaction {digest:?} after {attempts} attempts! error={e}");
+                        }
+                        // Assume only transient failure can happen. Permanent failure is probably
+                        // a bug. There is nothing that can be done to recover from permanent failures.
+                        error!("Failed to execute transaction {digest:?}! attempt {attempts}, {e}");
+                        sleep(EXECUTION_FAILURE_RETRY_INTERVAL).await;
+                    } else {
+                        authority
+                            .metrics
+                            .execution_driver_executed_transactions
+                            .inc();
+                        // reset attempts for next cert
+                        attempts = 0;
                     }
-                    // Assume only transient failure can happen. Permanent failure is probably
-                    // a bug. There is nothing that can be done to recover from permanent failures.
-                    error!("Failed to execute transaction {digest:?}! attempt {attempts}, {e}");
-                    sleep(EXECUTION_FAILURE_RETRY_INTERVAL).await;
-                } else {
-                    break;
                 }
+            } else {
+                authority
+                    .metrics
+                    .execution_driver_executed_transactions
+                    .inc_by(certificates.len() as u64);
             }
-            authority
-                .metrics
-                .execution_driver_executed_transactions
-                .inc();
-        }.instrument(error_span!("execution_driver", tx_digest = ?digest)));
+        }.instrument(error_span!("execution_driver", ?batch_id)));
     }
 }

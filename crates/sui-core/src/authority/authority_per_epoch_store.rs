@@ -618,17 +618,17 @@ impl AuthorityPerEpochStore {
         for tx in transactions {
             let tx_digest = tx.digest();
             if let Some(cert_sig) = tx.certificate_sig() {
-            batch.insert_batch(
-                &self.tables.transaction_cert_signatures,
-                [(tx_digest, cert_sig)],
-            )?;
-        }
+                batch.insert_batch(
+                    &self.tables.transaction_cert_signatures,
+                    [(tx_digest, cert_sig)],
+                )?;
+            }
             if let Some(effects_signature) = effects_iter.next() {
-            batch.insert_batch(
-                &self.tables.effects_signatures,
-                [(tx_digest, effects_signature)],
-            )?;
-        }
+                batch.insert_batch(
+                    &self.tables.effects_signatures,
+                    [(tx_digest, effects_signature)],
+                )?;
+            }
         }
         batch.write()?;
         Ok(())

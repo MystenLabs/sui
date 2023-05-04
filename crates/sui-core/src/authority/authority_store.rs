@@ -875,31 +875,31 @@ impl AuthorityStore {
         for (inner_temporary_store, transaction, effects) in
             izip!(inner_temporary_stores, transactions, effects)
         {
-        // Store the certificate indexed by transaction digest
-        let transaction_digest = transaction.digest();
-        write_batch.insert_batch(
-            &self.perpetual_tables.transactions,
+            // Store the certificate indexed by transaction digest
+            let transaction_digest = transaction.digest();
+            write_batch.insert_batch(
+                &self.perpetual_tables.transactions,
                 iter::once((
                     transaction_digest,
                     transaction.clone().into_unsigned().serializable_ref(),
                 )),
-        )?;
-
-        // Add batched writes for objects and locks.
-        let effects_digest = effects.digest();
-        self.update_objects_and_locks(&mut write_batch, inner_temporary_store)
-            .await?;
-
-        // Store the signed effects of the transaction
-        // We can't write this until after sequencing succeeds (which happens in
-        // batch_update_objects), as effects_exists is used as a check in many places
-        // for "did the tx finish".
-        write_batch
-            .insert_batch(&self.perpetual_tables.effects, [(effects_digest, effects)])?
-            .insert_batch(
-                &self.perpetual_tables.executed_effects,
-                [(transaction_digest, effects_digest)],
             )?;
+
+            // Add batched writes for objects and locks.
+            let effects_digest = effects.digest();
+            self.update_objects_and_locks(&mut write_batch, inner_temporary_store)
+                .await?;
+
+            // Store the signed effects of the transaction
+            // We can't write this until after sequencing succeeds (which happens in
+            // batch_update_objects), as effects_exists is used as a check in many places
+            // for "did the tx finish".
+            write_batch
+                .insert_batch(&self.perpetual_tables.effects, [(effects_digest, effects)])?
+                .insert_batch(
+                    &self.perpetual_tables.executed_effects,
+                    [(transaction_digest, effects_digest)],
+                )?;
         }
 
         // test crashing before writing the batch
@@ -912,7 +912,7 @@ impl AuthorityStore {
         fail_point_async!("crash");
 
         for (transaction, effects) in izip!(transactions, effects) {
-        self.executed_effects_notify_read
+            self.executed_effects_notify_read
                 .notify(transaction.digest(), effects);
         }
 
@@ -936,13 +936,13 @@ impl AuthorityStore {
             .iter()
             .flat_map(|inner_temporary_store| {
                 inner_temporary_store
-            .written
-            .iter()
-            .filter_map(|(_, (_, object, _))| {
-                let StoreObjectPair(_, indirect_object) =
-                    get_store_object_pair(object.clone(), self.indirect_objects_threshold);
-                indirect_object.map(|obj| obj.inner().digest())
-            })
+                    .written
+                    .iter()
+                    .filter_map(|(_, (_, object, _))| {
+                        let StoreObjectPair(_, indirect_object) =
+                            get_store_object_pair(object.clone(), self.indirect_objects_threshold);
+                        indirect_object.map(|obj| obj.inner().digest())
+                    })
             })
             .collect();
         self.objects_lock_table.acquire_read_locks(digests).await

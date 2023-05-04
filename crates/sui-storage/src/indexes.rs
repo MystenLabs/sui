@@ -1682,20 +1682,23 @@ mod tests {
         };
 
         let tx_coins = (object_map.clone(), written_objects.clone());
+        let mut batch = index_store.tables.transactions_from_addr.batch();
         index_store
             .index_tx(
+                &mut batch,
                 address,
                 vec![].into_iter(),
                 vec![].into_iter(),
                 vec![].into_iter(),
                 &TransactionEvents { data: vec![] },
-                object_index_changes,
+                &object_index_changes,
                 &TransactionDigest::random(),
                 1234,
                 Some(&tx_coins),
                 BTreeMap::new(),
             )
             .await?;
+        batch.write().unwrap();
 
         let balance_from_db = IndexStore::get_balance_from_db(
             index_store.metrics.clone(),
@@ -1734,20 +1737,23 @@ mod tests {
             new_dynamic_fields: vec![],
         };
         let tx_coins = (object_map, written_objects);
+        let mut batch = index_store.tables.transactions_from_addr.batch();
         index_store
             .index_tx(
+                &mut batch,
                 address,
                 vec![].into_iter(),
                 vec![].into_iter(),
                 vec![].into_iter(),
                 &TransactionEvents { data: vec![] },
-                object_index_changes,
+                &object_index_changes,
                 &TransactionDigest::random(),
                 1234,
                 Some(&tx_coins),
                 BTreeMap::new(),
             )
             .await?;
+        batch.write().unwrap();
         let balance_from_db = IndexStore::get_balance_from_db(
             index_store.metrics.clone(),
             index_store.tables.coin_index.clone(),
