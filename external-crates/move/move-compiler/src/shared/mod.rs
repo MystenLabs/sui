@@ -133,7 +133,7 @@ pub fn shortest_cycle<'a, T: Ord + Hash>(
 pub type NamedAddressMap = BTreeMap<Symbol, NumericalAddress>;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct NamedAddressMapIndex(usize);
+pub struct NamedAddressMapIndex(pub usize);
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct NamedAddressMaps(Vec<NamedAddressMap>);

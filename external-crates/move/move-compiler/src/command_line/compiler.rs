@@ -316,7 +316,7 @@ macro_rules! ast_stepped_compilers {
 
         $(
             impl<'a> SteppedCompiler<'a, {$pass}> {
-                fn $new(
+                pub fn $new(
                     compilation_env: CompilationEnv,
                     pre_compiled_lib: Option<&'a FullyCompiledProgram>,
                     ast: $mod::ast::Program,

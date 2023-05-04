@@ -19,6 +19,7 @@ move-ir-compiler.workspace = true
 move-compiler.workspace = true
 move-core-types.workspace = true
 move-transactional-test-runner.workspace = true
+move-command-line-common.workspace = true
 
 sui-protocol-config = { path = "../sui-protocol-config" }
 sui-verifier = { path = "../sui-verifier" }

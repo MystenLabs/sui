@@ -8,7 +8,7 @@ pub(crate) mod filter;
 pub mod keywords;
 pub mod lexer;
 pub(crate) mod merge_spec_modules;
-pub(crate) mod syntax;
+pub mod syntax;
 
 use crate::{
     attr_derivation,

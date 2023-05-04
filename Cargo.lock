@@ -10395,6 +10395,7 @@ dependencies = [
  "clap 3.2.23",
  "move-binary-format",
  "move-bytecode-verifier",
+ "move-command-line-common",
  "move-compiler",
  "move-core-types",
  "move-ir-compiler",
