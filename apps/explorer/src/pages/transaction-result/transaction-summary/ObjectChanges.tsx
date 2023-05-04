@@ -179,6 +179,7 @@ function ObjectChangeEntries({
     type,
 }: ObjectChangeEntriesProps) {
     const title = Labels[type];
+    console.log('changeEntries', changeEntries);
 
     let expandableItems = [];
 
@@ -362,7 +363,7 @@ export function ObjectChanges({ objectSummary }: ObjectChangesProps) {
                 />
             ) : null}
 
-            {published ? (
+            {published.Immutable?.length ? (
                 <TransactionBlockCard title="Changes" size="sm" shadow>
                     <ObjectChangeEntries
                         changeEntries={objectSummary.published.Immutable}

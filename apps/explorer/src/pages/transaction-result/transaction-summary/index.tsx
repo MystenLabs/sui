@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useTransactionSummary } from '@mysten/core';
+import { type ObjectChangeSummary, useTransactionSummary } from '@mysten/core';
 import {
     getTransactionKind,
     getTransactionKindName,
@@ -33,7 +33,13 @@ export function TransactionSummary({ transaction }: TransactionSummaryProps) {
                 transactionKindName === 'ProgrammableTransaction' && (
                     <BalanceChanges changes={balanceChanges} />
                 )}
-            {objectSummary && <ObjectChanges objectSummary={objectSummary} />}
+            {objectSummary && (
+                <ObjectChanges
+                    objectSummary={
+                        objectSummary as unknown as ObjectChangeSummary
+                    }
+                />
+            )}
         </div>
     );
 }
