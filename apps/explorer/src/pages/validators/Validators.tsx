@@ -29,7 +29,7 @@ import { Tooltip } from '~/ui/Tooltip';
 import { getValidatorMoveEvent } from '~/utils/getValidatorMoveEvent';
 import { VALIDATOR_LOW_STAKE_GRACE_PERIOD } from '~/utils/validatorConstants';
 
-const NodeMap = lazy(() => import('../../components/node-map'));
+const ValidatorMap = lazy(() => import('../../components/validator-map'));
 
 export function validatorsTableData(
     validators: SuiValidatorSummary[],
@@ -368,7 +368,7 @@ function ValidatorPageResult() {
 
                 <ErrorBoundary>
                     <Suspense fallback={null}>
-                        <NodeMap minHeight={230} />
+                        <ValidatorMap minHeight={230} />
                     </Suspense>
                 </ErrorBoundary>
             </div>

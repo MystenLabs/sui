@@ -24,12 +24,14 @@ pub struct WalletContext {
     pub config: PersistedConfig<SuiClientConfig>,
     request_timeout: Option<std::time::Duration>,
     client: Arc<RwLock<Option<SuiClient>>>,
+    max_concurrent_requests: Option<u64>,
 }
 
 impl WalletContext {
     pub async fn new(
         config_path: &Path,
         request_timeout: Option<std::time::Duration>,
+        max_concurrent_requests: Option<u64>,
     ) -> clap::Result<Self, anyhow::Error> {
         let config: SuiClientConfig = PersistedConfig::read(config_path).map_err(|err| {
             anyhow!(
@@ -43,6 +45,7 @@ impl WalletContext {
             config,
             request_timeout,
             client: Default::default(),
+            max_concurrent_requests,
         };
         Ok(context)
     }
@@ -61,7 +64,7 @@ impl WalletContext {
             let client = self
                 .config
                 .get_active_env()?
-                .create_rpc_client(self.request_timeout)
+                .create_rpc_client(self.request_timeout, self.max_concurrent_requests)
                 .await?;
             if let Err(e) = client.check_api_version() {
                 warn!("{e}");
