@@ -89,8 +89,6 @@ export default function ValidatorMap({ minHeight }: Props) {
         setIsLoading(true);
         appsBe(`validator-map`, {
             network: network.toLowerCase(),
-            // TODO: remove when caching solution is improved
-            skipCache: true,
         })
             .then((res) => {
                 const data = res as ValidatorMapData[];
