@@ -225,7 +225,7 @@ where
                     &self.validator_state,
                     &executable_tx,
                     &effects_cert,
-                    &objects,
+                    objects,
                     &self.metrics,
                 )
                 .await
@@ -270,7 +270,7 @@ where
         validator_state: &Arc<AuthorityState>,
         transaction: &VerifiedExecutableTransaction,
         effects_cert: &VerifiedCertifiedTransactionEffects,
-        objects: &Vec<Object>,
+        objects: Vec<Object>,
         metrics: &TransactionOrchestratorMetrics,
     ) -> SuiResult {
         let epoch_store = validator_state.load_epoch_store_one_call_per_task();
@@ -367,7 +367,7 @@ where
                         &validator_state,
                         &executable_tx,
                         &effects_cert,
-                        &objects,
+                        objects,
                         &metrics,
                     )
                     .await;

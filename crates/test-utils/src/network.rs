@@ -507,7 +507,7 @@ impl TestClusterBuilder {
             .save()?;
 
         let wallet_conf = swarm.dir().join(SUI_CLIENT_CONFIG);
-        let wallet = WalletContext::new(&wallet_conf, None).await?;
+        let wallet = WalletContext::new(&wallet_conf, None, None).await?;
 
         Ok(TestCluster {
             swarm,

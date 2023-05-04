@@ -29,7 +29,7 @@ export function DelegatedAPY({ stakedValidators }: DelegatedAPYProps) {
         let stakedAPYs = 0;
 
         stakedValidators.forEach((validatorAddress) => {
-            stakedAPYs += rollingAverageApys?.[validatorAddress].apy || 0;
+            stakedAPYs += rollingAverageApys?.[validatorAddress]?.apy || 0;
         });
 
         const averageAPY = stakedAPYs / stakedValidators.length;

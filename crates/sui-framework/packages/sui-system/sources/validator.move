@@ -82,7 +82,8 @@ module sui_system::validator {
     /// Validator trying to set gas price higher than threshold.
     const EGasPriceHigherThanThreshold: u64 = 102;
 
-    const MAX_COMMISSION_RATE: u64 = 10_000; // Max rate is 100%, which is 10K base points
+    // TODO: potentially move this value to onchain config.
+    const MAX_COMMISSION_RATE: u64 = 2_000; // Max rate is 20%, which is 2000 base points
 
     const MAX_VALIDATOR_METADATA_LENGTH: u64 = 256;
 
