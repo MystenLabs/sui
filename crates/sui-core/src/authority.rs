@@ -103,7 +103,7 @@ use sui_types::{
     object::{Object, ObjectFormatOptions, ObjectRead},
     SUI_SYSTEM_ADDRESS,
 };
-use sui_types::{is_system_package, TypeTag};
+use sui_types::{is_system_package, TypeTag, SUI_CLOCK_OBJECT_ID};
 use typed_store::Map;
 
 use crate::authority::authority_per_epoch_store::{AuthorityPerEpochStore, CertTxGuard};
@@ -684,7 +684,7 @@ impl AuthorityState {
         // this function, in order to prevent a byzantine validator from
         // giving us incorrect effects.
         effects: &VerifiedCertifiedTransactionEffects,
-        objects: &Vec<Object>,
+        objects: Vec<Object>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult {
         assert!(self.is_fullnode(epoch_store));
@@ -701,6 +701,11 @@ impl AuthorityState {
             }
         );
 
+        // Lock this down to 0x6 before we pin child versions in effects
+        let objects = objects
+            .into_iter()
+            .filter(|o| o.id() == SUI_CLOCK_OBJECT_ID)
+            .collect::<Vec<_>>();
         if !objects.is_empty() {
             debug!(
                 "inserting objects to object store before executing a tx: {:?}",
@@ -710,7 +715,7 @@ impl AuthorityState {
                     .collect::<Vec<_>>()
             );
             self.database
-                .fullnode_fast_path_insert_objects_to_object_store_maybe(objects)?;
+                .fullnode_fast_path_insert_objects_to_object_store_maybe(&objects)?;
             self.transaction_manager()
                 .objects_available(objects.iter().map(InputKey::from).collect(), epoch_store);
         }
