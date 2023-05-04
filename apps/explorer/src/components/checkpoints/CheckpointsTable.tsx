@@ -41,21 +41,25 @@ export function CheckpointsTable({
 
     const checkpoints = useGetCheckpoints(initialCursor, limit);
 
-    const count = useMemo(() => {
-        if (maxCursor && initialCursor) {
-            return Number(initialCursor) - Number(maxCursor);
-            // Special case for ongoing epoch
-        } else if (checkpoints.data && maxCursor) {
-            return (
-                Number(checkpoints.data.pages[0].data[0].sequenceNumber) -
-                Number(maxCursor)
-            );
-        }
-        return Number(countQuery.data ?? 0);
-    }, [countQuery.data, initialCursor, maxCursor, checkpoints]);
-
     const { data, isFetching, pagination, isLoading, isError } =
         useCursorPagination(checkpoints);
+
+    const count = useMemo(() => {
+        if (maxCursor) {
+            if (initialCursor) {
+                return Number(initialCursor) - Number(maxCursor);
+                // Special case for ongoing epoch
+            } else if (!isError && checkpoints.data) {
+                return (
+                    Number(checkpoints.data.pages[0].data[0].sequenceNumber) -
+                    Number(maxCursor)
+                );
+            }
+        } else {
+            return Number(countQuery.data ?? 0);
+        }
+    }, [countQuery.data, initialCursor, maxCursor, checkpoints, isError]);
+
     const cardData = data ? genTableDataFromCheckpointsData(data) : undefined;
 
     return (
