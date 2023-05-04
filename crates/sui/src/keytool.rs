@@ -425,16 +425,13 @@ impl KeyToolCommand {
                 let mut sig = Secp256k1Sig::from_der(&sig_bytes_der)?;
                 sig.normalize_s();
                 let sig_compact: &[u8; 64] = &sig.serialize_compact();
-                let fcsecp256k1sig = Secp256k1Signature::from_bytes(sig_compact)?;
-
-                //println!("Sig Bytes {:?}", sig_compact);
-                //println!("fcsecp {:?}", fcsecp256k1sig);
+                let fc_secp256k1sig = Secp256k1Signature::from_bytes(sig_compact)?;
 
                 let mut n_bytes: [u8; 65] = [0u8; 65];
                 n_bytes[..64].copy_from_slice(&sig_compact[..]);
                 let mut secppk: Option<Secp256k1PublicKey> = None;
 
-                // Need a Recoveale signature so that we can use it as Secp256k1RecoverableSignature
+                // Need a Recoverable Signature so that we can use it as Secp256k1RecoverableSignature
                 // and then run recover_with_hash to recover the public key.
                 // This is because there is no direct function to convert DER -> compact PK for
                 // for secp256k1 keys (without leveraging openssl)
@@ -444,16 +441,15 @@ impl KeyToolCommand {
                     let sig_r =
                         <Secp256k1RecoverableSignature as ToFromBytes>::from_bytes(&n_bytes)?;
 
-                    let pk = sig_r.recover_with_hash::<Sha256>(&digest.as_ref())?;
-                    if pk.verify(&digest.as_ref(), &fcsecp256k1sig).is_ok() {
+                    let pk = sig_r.recover_with_hash::<Sha256>(digest.as_ref())?;
+                    if pk.verify(digest.as_ref(), &fc_secp256k1sig).is_ok() {
                         secppk = Some(pk);
-
                         break;
                     }
                 }
 
                 if let Some(secppk) = secppk {
-                    let pkey_compact: &[u8] = &secppk.as_bytes();
+                    let pkey_compact: &[u8] = secppk.as_bytes();
                     println!("PK {:?}", pkey_compact);
                     // Generates Corresponding Sui Address from public key
                     println!(
