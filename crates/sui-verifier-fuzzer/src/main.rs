@@ -29,28 +29,116 @@ struct Args {
     dry_run: bool,
 }
 
-fn default_fuzzing_addresses() -> BTreeMap<String, move_compiler::shared::NumericalAddress> {
-    let mapping = [
-        ("std", "0x1"),
-        ("sui", "0x2"),
-        ("sui_system", "0x3"),
-        ("deepbook", "0xdee9"),
-        ("M", "0x42"),
-        ("A", "0x42"),
-        ("B", "0x42"),
-        ("K", "0x42"),
-        ("test", "0x42"),
-        ("Async", "0x42"),
-    ];
-    mapping
-        .iter()
-        .map(|(name, addr)| {
-            (
-                name.to_string(),
-                move_compiler::shared::NumericalAddress::parse_str(addr).unwrap(),
-            )
+fn main() {
+    let args = Args::parse();
+    let compiled_state = move_transactional_test_runner::framework::CompiledState::new(
+        sui_transactional_test_runner::test_adapter::NAMED_ADDRESSES.clone(),
+        Some(&*sui_transactional_test_runner::test_adapter::PRE_COMPILED),
+        Some(move_compiler::shared::NumericalAddress::new(
+            move_core_types::account_address::AccountAddress::ZERO.into_bytes(),
+            move_compiler::shared::NumberFormat::Hex,
+        )),
+    );
+
+    if args.dry_run {
+        let mut handle = std::io::stdin().lock();
+        let mut input = Vec::new();
+        let _ = handle.read_to_end(&mut input);
+        match args.target.as_str() {
+            "move-binary-format" => {
+                // raw-bytes implied
+                let Ok(code) = std::str::from_utf8(&input) else { process::exit(1); };
+                let m = move_ir_compiler::Compiler::new(compiled_state.dep_modules().collect())
+                    .into_compiled_module(code)
+                    .unwrap_or_else(|e| {
+                        dbg!("no compiled module: {:#?}", e);
+                        process::exit(1);
+                    });
+                dbg!("valid module {:#?}", m);
+                process::exit(0)
+            }
+            "sui-verifier" => {
+                // TODO
+            }
+            "move-compiler" | _ => {
+                // source implied
+                let Ok(source) = std::str::from_utf8(&input) else { process::exit(1) };
+                let m = parse_source(source).unwrap_or_else(|e| {
+                    dbg!("no compile: {:#?}", e);
+                    process::exit(1)
+                });
+                dbg!("success compile {:#?}", m);
+                process::exit(0)
+            }
+        }
+    } else {
+        // Use the fuzz! macro because it promotes panics to `abort` signals which
+        // AFL needs to detect a crash. Alternatively set `abort = "panic"` for
+        // profiles in Cargo.toml.
+        fuzz!(|input: &[u8]| {
+            match args.target.as_str() {
+                "move-compiler" => {
+                    // source implied
+                    let Ok(source) = std::str::from_utf8(&input) else { process::exit(1) };
+                    let Ok(_) = parse_source(source) else { process::exit(1) };
+                    process::exit(0);
+                }
+                "move-binary-format" => {
+                    // raw-bytes implied
+                    let Ok(_) = move_binary_format::file_format::CompiledModule::deserialize_with_defaults(&input) else { process::exit(1); };
+                    process::exit(0);
+                }
+                "sui-verifier" | _ => {
+                    let m = match args.input_format.as_str() {
+                        "arbitrary" => {
+                            let mut unstructured = Unstructured::new(input);
+                            let Ok(m) = move_binary_format::file_format::CompiledModule::arbitrary(&mut unstructured) else { process::exit(1); };
+                            m
+                        }
+                        "ir" => {
+                            let Ok(code) = std::str::from_utf8(input) else { process::exit(1); };
+                            let Ok(m) = move_ir_compiler::Compiler::new(compiled_state.dep_modules().collect()).into_compiled_module(code) else { process::exit(1); };
+                            m
+                        }
+                        "source" => {
+                            let Ok(source) = std::str::from_utf8(&input) else { process::exit(1) };
+                            let Ok(m) = parse_source(source) else { process::exit(1) };
+                            let move_compiler::compiled_unit::CompiledUnitEnum::Module(ref m) = m.0[0] else { process::exit(1); };
+                            m.named_module.module.clone()
+                        }
+                        "raw-bytes" | _ => {
+                            let Ok(m) = move_binary_format::file_format::CompiledModule::deserialize_with_defaults(&input) else { process::exit(1); };
+                            m
+                        }
+                    };
+                    if args.debug {
+                        // Print human-readable representation of input.
+                        dbg!(m.to_owned());
+                    };
+                    let move_result = move_bytecode_verifier::verify_module_unmetered(&m);
+                    if let Ok(()) = move_result {
+                        let sui_result = sui_bytecode_verifier::sui_verify_module_unmetered(
+                            &ProtocolConfig::get_for_version(ProtocolVersion::MAX),
+                            &m,
+                            &BTreeMap::new(),
+                        );
+                        if let Ok(()) = sui_result {
+                            process::exit(0);
+                        } else {
+                            dbg!("sui verifier failure");
+                            dbg!(sui_result.err().unwrap());
+                        }
+                    } else {
+                        if args.debug {
+                            dbg!("move verifier failure");
+                            dbg!(move_result.err().unwrap());
+                        }
+                    }
+                    process::exit(1); // Invalid, verification fails.
+                }
+            }
         })
-        .collect()
+    }
 }
 
 fn parse_source(
@@ -163,102 +251,110 @@ fn parse_source(
     res
 }
 
-fn main() {
-    let args = Args::parse();
-    let compiled_state = move_transactional_test_runner::framework::CompiledState::new(
-        sui_transactional_test_runner::test_adapter::NAMED_ADDRESSES.clone(),
-        Some(&*sui_transactional_test_runner::test_adapter::PRE_COMPILED),
-        Some(move_compiler::shared::NumericalAddress::new(
-            move_core_types::account_address::AccountAddress::ZERO.into_bytes(),
-            move_compiler::shared::NumberFormat::Hex,
-        )),
-    );
 
-    if args.dry_run {
-        let mut handle = std::io::stdin().lock();
-        let mut input = Vec::new();
-        let _ = handle.read_to_end(&mut input);
-        match args.target.as_str() {
-            "move-binary-format" => {
-                // raw-bytes implied
-                let Ok(code) = std::str::from_utf8(&input) else { process::exit(1); };
-                let m = move_ir_compiler::Compiler::new(compiled_state.dep_modules().collect()).into_compiled_module(code).unwrap_or_else(|e| { 
-                    dbg!("no compiled module: {:#?}", e);
-                    process::exit(1); 
-                });
-                dbg!("valid module {:#?}", m);
-                process::exit(0)
-            }
-            "move-compiler" | _ => {
-                // source implied
-                let Ok(source) = std::str::from_utf8(&input) else { process::exit(1) };
-                let m = parse_source(source).unwrap_or_else(|e| {
-                    dbg!("no compile: {:#?}", e);
-                    process::exit(1)
-                });
-                dbg!("success compile {:#?}", m);
-                process::exit(0)
-            }
-        }
-    } else {
-        // Use the fuzz! macro because it promotes panics to `abort` signals which
-        // AFL needs to detect a crash. Alternatively set `abort = "panic"` for
-        // profiles in Cargo.toml.
-        fuzz!(|input: &[u8]| {
-            match args.target.as_str() {
-                "move-compiler" => {
-                    let Ok(source) = std::str::from_utf8(&input) else { process::exit(1) };
-                    let Ok(_) = parse_source(source) else { process::exit(1) };
-                    process::exit(0);
-                }
-                "move-binary-format" => {
-                    // raw-bytes implied
-                    let Ok(_) = move_binary_format::file_format::CompiledModule::deserialize_with_defaults(&input) else { process::exit(1); };
-                    process::exit(0);
-                }
-                "sui-verifier" | _ => {
-                    let m = match args.input_format.as_str() {
-                        "arbitrary" => {
-                            let mut unstructured = Unstructured::new(input);
-                            let Ok(m) = move_binary_format::file_format::CompiledModule::arbitrary(&mut unstructured) else { process::exit(1); };
-                            m
-                        }
-                        "ir" => {
-                            let Ok(code) = std::str::from_utf8(input) else { process::exit(1); };
-                            let Ok(m) = move_ir_compiler::Compiler::new(compiled_state.dep_modules().collect()).into_compiled_module(code) else { process::exit(1); };
-                            m
-                        }
-                        "raw-bytes" | _ => {
-                            let Ok(m) = move_binary_format::file_format::CompiledModule::deserialize_with_defaults(&input) else { process::exit(1); };
-                            m
-                        }
-                    };
-                    if args.debug {
-                        // Print human-readable representation of input.
-                        dbg!(m.to_owned());
-                    };
-                    let move_result = move_bytecode_verifier::verify_module_unmetered(&m);
-                    if let Ok(()) = move_result {
-                        let sui_result = sui_bytecode_verifier::sui_verify_module_unmetered(
-                            &ProtocolConfig::get_for_version(ProtocolVersion::MAX),
-                            &m,
-                            &BTreeMap::new(),
-                        );
-                        if let Ok(()) = sui_result {
-                            process::exit(0);
-                        } else {
-                            dbg!("sui verifier failure");
-                            dbg!(sui_result.err().unwrap());
-                        }
-                    } else {
-                        if args.debug {
-                            dbg!("move verifier failure");
-                            dbg!(move_result.err().unwrap());
-                        }
-                    }
-                    process::exit(1); // Invalid, verification fails.
-                }
-            }
+
+fn default_fuzzing_addresses() -> BTreeMap<String, move_compiler::shared::NumericalAddress> {
+    let mapping = [
+        ("std", "0x1"),
+        ("sui", "0x2"),
+        ("sui_system", "0x3"),
+        ("deepbook", "0xdee9"),
+        ("M", "0x42"),
+        ("A", "0x42"),
+        ("B", "0x42"),
+        ("K", "0x42"),
+        ("test", "0x42"),
+        ("Async", "0x42"),
+        ("123", "0x42"),
+        ("a", "0x42"),
+        ("A", "0x42"),
+        ("A0", "0x42"),
+        ("A1", "0x42"),
+        ("A2", "0x42"),
+        ("A3", "0x42"),
+        ("A4", "0x42"),
+        ("AA", "0x42"),
+        ("abc", "0x42"),
+        ("adversarial", "0x42"),
+        ("Async", "0x42"),
+        ("b", "0x42"),
+        ("B", "0x42"),
+        ("bar", "0x42"),
+        ("base", "0x42"),
+        ("basics", "0x42"),
+        ("baz", "0x42"),
+        ("c", "0x42"),
+        ("capy", "0x42"),
+        ("CoinSwap", "0x42"),
+        ("CoreFramework", "0x42"),
+        ("deepbook", "0x42"),
+        ("defi", "0x42"),
+        ("depends", "0x42"),
+        ("DiemFramework", "0x42"),
+        ("e", "0x42"),
+        ("Evm", "0x42"),
+        ("examples", "0x42"),
+        ("ExperimentalFramework", "0x42"),
+        ("extensions", "0x42"),
+        ("foo", "0x42"),
+        ("games", "0x42"),
+        ("GoldCoin", "0x42"),
+        ("invalid", "0x42"),
+        ("K", "0x42"),
+        ("kiosk", "0x42"),
+        ("M", "0x42"),
+        ("main", "0x42"),
+        ("math", "0x42"),
+        ("me", "0x42"),
+        ("my", "0x42"),
+        ("NamedAddr", "0x42"),
+        ("nfts", "0x42"),
+        ("nonexistent", "0x42"),
+        ("p", "0x42"),
+        ("q", "0x42"),
+        ("qux", "0x42"),
+        ("r", "0x42"),
+        ("rc", "0x42"),
+        ("s", "0x42"),
+        ("Self", "0x42"),
+        ("serializer", "0x42"),
+        ("SilverCoin", "0x42"),
+        ("std", "0x42"),
+        ("sui", "0x42"),
+        ("Symbols", "0x42"),
+        ("t1", "0x42"),
+        ("t2", "0x42"),
+        ("t3", "0x42"),
+        ("t4", "0x42"),
+        ("test", "0x42"),
+        ("Test", "0x42"),
+        ("test1", "0x42"),
+        ("test2", "0x42"),
+        ("This", "0x42"),
+        ("tutorial", "0x42"),
+        ("typer", "0x42"),
+        ("utils", "0x42"),
+        ("V0", "0x42"),
+        ("V1", "0x42"),
+        ("v2", "0x42"),
+        ("V2", "0x42"),
+        ("V3", "0x42"),
+        ("V4", "0x42"),
+        ("V5", "0x42"),
+        ("V6", "0x42"),
+        ("V7", "0x42"),
+        ("V8", "0x42"),
+        ("vector", "0x42"),
+    ];
+    mapping
+        .iter()
+        .map(|(name, addr)| {
+            (
+                name.to_string(),
+                move_compiler::shared::NumericalAddress::parse_str(addr).unwrap(),
+            )
         })
-    }
+        .collect()
 }
+
+
