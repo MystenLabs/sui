@@ -25,7 +25,7 @@ const filteredLand = land.features.filter(
 interface Props {
     width: number;
     height: number;
-    validators?: (ValidatorMapData | null)[];
+    validators?: (ValidatorMapData)[];
     onMouseOver(event: React.MouseEvent, countryCode?: string): void;
     onMouseOut(): void;
 }
@@ -55,7 +55,17 @@ function BaseWorldMap({
                             ))}
                         </g>
 
-                        {validators?.map((validator, index) => (
+                        {/* Validators need to be sorted by voting power to render smallest nodes on top */}
+                        {validators?.sort((a, b) => {
+                            const aVal = parseInt(a.votingPower)
+                            const bVal =  parseInt(b.votingPower)
+                            if (aVal > bVal)
+                                return -1
+                            else if( aVal < bVal) {
+                                return 1
+                            }
+                            return 0
+                        }).map((validator, index) => (
                             <ValidatorLocation
                                 onMouseOut={onMouseOut}
                                 onMouseOver={onMouseOver}

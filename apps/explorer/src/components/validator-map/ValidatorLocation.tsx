@@ -6,7 +6,7 @@ import { useCallback } from 'react';
 import { type ValidatorMapData } from './types';
 
 interface Props {
-    validator: ValidatorMapData | null;
+    validator: ValidatorMapData;
     projection: (loc: [number, number]) => [number, number] | null;
     onMouseOver(event: React.MouseEvent, countryCode?: string): void;
     onMouseOut(): void;
@@ -29,10 +29,6 @@ export function ValidatorLocation({
         },
         [validator, onMouseOver]
     );
-
-    if (!validator) {
-        return null;
-    }
 
     const position = projection(
         validator.ipInfo.loc

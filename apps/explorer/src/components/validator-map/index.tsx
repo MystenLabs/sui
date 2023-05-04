@@ -73,6 +73,7 @@ export default function ValidatorMap({ minHeight }: Props) {
         return res.json() as Promise<NodeLocation[]>;
     });
 
+    // TODO: make sure this is the right way to get node count
     const nodeCount = useMemo<number | null>(() => {
         let count = 0;
         if (!nodeData) {
@@ -91,11 +92,14 @@ export default function ValidatorMap({ minHeight }: Props) {
             `validator-map`,
             {
                 network: network.toLowerCase(),
+                // TODO: remove when caching solution is improved
                 skipCache: true
             },
         )
             .then((res) => {
-                setValidatorData(res as (ValidatorMapData | null)[]);
+                // Some validators will come back as null from the API
+                const validatorResponse = (res as ValidatorMapData[]).filter(validator => validator)
+                setValidatorData(validatorResponse);
                 setIsLoading(false);
             })
             .catch((err) => {
