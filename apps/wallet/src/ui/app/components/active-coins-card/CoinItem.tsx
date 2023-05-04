@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useFormatCoin } from '@mysten/core';
+import { useFormatCoin, useCoinMetadata } from '@mysten/core';
 
 import { Text } from '_app/shared/text';
 import { CoinIcon } from '_components/coin-icon';
@@ -15,6 +15,7 @@ type CoinItemProps = {
 
 export function CoinItem({ coinType, balance, isActive, usd }: CoinItemProps) {
     const [formatted, symbol] = useFormatCoin(balance, coinType);
+    const { data: metadata } = useCoinMetadata(coinType);
 
     return (
         <div className="flex gap-2.5 w-full justify-center items-center">
@@ -22,7 +23,7 @@ export function CoinItem({ coinType, balance, isActive, usd }: CoinItemProps) {
             <div className="flex flex-1 gap-1.5 justify-between">
                 <div className="flex flex-col gap-1.5">
                     <Text variant="body" color="steel-darker" weight="semibold">
-                        {symbol} {isActive ? 'available' : ''}
+                        {metadata?.name || symbol} {isActive ? 'available' : ''}
                     </Text>
                     {!isActive ? (
                         <Text
