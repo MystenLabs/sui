@@ -16,7 +16,6 @@ use tokio::{task::JoinHandle, time::sleep};
 use tracing::info;
 
 use mysten_metrics::RegistryService;
-use shared_crypto::intent::Intent;
 use sui_config::builder::{ProtocolVersionsConfig, SupportedProtocolVersionsCallback};
 use sui_config::genesis_config::{AccountConfig, GenesisConfig};
 use sui_config::node::DBCheckpointConfig;
@@ -36,7 +35,7 @@ use sui_types::base_types::{AuthorityName, ObjectID, SuiAddress};
 use sui_types::committee::EpochId;
 use sui_types::crypto::KeypairTraits;
 use sui_types::crypto::SuiKeyPair;
-use sui_types::messages::{SenderSignedData, Transaction, TransactionData, VerifiedTransaction};
+use sui_types::messages::VerifiedTransaction;
 use sui_types::object::Object;
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
 use sui_types::sui_system_state::SuiSystemState;
@@ -108,27 +107,6 @@ impl TestCluster {
             .get(2)
             .cloned()
             .unwrap()
-    }
-
-    // Sign a transaction with a key currently managed by the WalletContext
-    pub fn sign_transaction(
-        &self,
-        signer_address: &SuiAddress,
-        data: &TransactionData,
-    ) -> VerifiedTransaction {
-        let sig = self
-            .wallet
-            .config
-            .keystore
-            .sign_secure(signer_address, data, Intent::sui_transaction())
-            .unwrap();
-        VerifiedTransaction::new_unchecked(Transaction::new(
-            SenderSignedData::new_from_sender_signature(
-                data.clone(),
-                Intent::sui_transaction(),
-                sig,
-            ),
-        ))
     }
 
     pub fn fullnode_config_builder(&self) -> FullnodeConfigBuilder {

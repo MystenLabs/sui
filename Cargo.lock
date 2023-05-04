@@ -8998,6 +8998,7 @@ dependencies = [
  "sui-protocol-config",
  "sui-sdk",
  "sui-simulator",
+ "sui-test-transaction-builder",
  "sui-types",
  "sysinfo",
  "telemetry-subscribers",
@@ -9151,6 +9152,7 @@ dependencies = [
  "sui-protocol-config",
  "sui-simulator",
  "sui-storage",
+ "sui-test-transaction-builder",
  "sui-types",
  "sui-verifier",
  "tap",
@@ -9184,6 +9186,7 @@ dependencies = [
  "sui-config",
  "sui-core",
  "sui-move-build",
+ "sui-test-transaction-builder",
  "sui-types",
  "test-utils",
  "tokio",
@@ -10068,6 +10071,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "sui-test-transaction-builder"
+version = "1.1.0"
+dependencies = [
+ "move-core-types",
+ "shared-crypto",
+ "sui-move-build",
+ "sui-types",
+ "workspace-hack",
+]
+
+[[package]]
 name = "sui-test-validator"
 version = "0.0.0"
 dependencies = [
@@ -10580,6 +10594,7 @@ dependencies = [
  "sui-sdk",
  "sui-simulator",
  "sui-swarm",
+ "sui-test-transaction-builder",
  "sui-types",
  "tempfile",
  "tokio",
