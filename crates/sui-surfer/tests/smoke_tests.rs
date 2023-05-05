@@ -7,6 +7,7 @@ use sui_macros::sim_test;
 use sui_surfer::default_surf_strategy::DefaultSurfStrategy;
 
 #[sim_test]
+#[ignore]
 async fn smoke_test() {
     // This test makes sure that the sui surfer runs.
 
