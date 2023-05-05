@@ -23,10 +23,7 @@ interface GasProps {
     amount?: bigint | number | string;
 }
 
-function GasAmount({
-    amount,
-    isHighlighted,
-}: GasProps & { isHighlighted?: boolean }) {
+function GasAmount({ amount }: GasProps) {
     const [formattedAmount, symbol] = useFormatCoin(
         amount,
         SUI_TYPE_ARG,
@@ -151,6 +148,7 @@ export function GasBreakdown({ summary }: GasBreakdownProps) {
                     <Divider />
 
                     <DescriptionItem
+                        align="start"
                         title={
                             <Text variant="pBody/semibold">Gas Payment</Text>
                         }
@@ -165,6 +163,7 @@ export function GasBreakdown({ summary }: GasBreakdownProps) {
                     </DescriptionItem>
 
                     <DescriptionItem
+                        align="start"
                         title={<Text variant="pBody/semibold">Gas Budget</Text>}
                     >
                         {gasBudget ? (
@@ -177,11 +176,13 @@ export function GasBreakdown({ summary }: GasBreakdownProps) {
                     <Divider />
 
                     <DescriptionItem
+                        align="start"
                         title={<Text variant="pBody/semibold">Gas Price</Text>}
                     >
                         <GasAmount amount={BigInt(gasPrice)} />
                     </DescriptionItem>
                     <DescriptionItem
+                        align="start"
                         title={
                             <Text variant="pBody/semibold">
                                 Computation Fee
@@ -192,6 +193,7 @@ export function GasBreakdown({ summary }: GasBreakdownProps) {
                     </DescriptionItem>
 
                     <DescriptionItem
+                        align="start"
                         title={
                             <Text variant="pBody/semibold">Storage Fee</Text>
                         }
@@ -208,7 +210,6 @@ export function GasBreakdown({ summary }: GasBreakdownProps) {
 
                         <div className="ml-0 min-w-0 flex-1 leading-none">
                             <GasAmount
-                                isHighlighted
                                 amount={-Number(gasUsed?.storageRebate)}
                             />
                         </div>

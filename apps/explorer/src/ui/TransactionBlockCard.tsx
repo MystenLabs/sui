@@ -34,8 +34,8 @@ function TransactionBlockCardHeader({
         <div
             className={clsx(
                 'flex w-full justify-between',
-                open && size === 'md' && 'mb-6',
-                open && size === 'sm' && 'mb-4.5'
+                open && size === 'md' && 'pb-6',
+                open && size === 'sm' && 'pb-4.5'
             )}
         >
             {typeof title === 'string' ? (
@@ -66,7 +66,7 @@ function TransactionBlockCardHeader({
 
     if (collapsible) {
         return (
-            <Disclosure.Button as="div" className="w-full cursor-pointer">
+            <Disclosure.Button as="div" className="cursor-pointer">
                 {headerContent}
             </Disclosure.Button>
         );
