@@ -219,7 +219,7 @@ If successful, the response resembles the following:
 
 ### Check the gas coin objects for the active address
 
-After yoo get coins from the faucet, use the following command to view the coin objects for the address:
+After you get coins from the faucet, use the following command to view the coin objects for the address:
 
 ```shell
 sui client gas
