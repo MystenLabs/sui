@@ -12,10 +12,13 @@ use chrono::{DateTime, Utc};
 use mysten_metrics::spawn_monitored_task;
 use rocksdb::Options;
 use std::collections::HashMap;
+use std::fs::OpenOptions;
+use std::io::{BufWriter, Write};
 use std::path::Path;
 use std::str::FromStr;
 use std::sync::Arc;
-use std::time::{Duration, UNIX_EPOCH};
+use std::time::{Duration, Instant, UNIX_EPOCH};
+use sui_json_rpc::api::QUERY_MAX_RESULT_LIMIT;
 use sui_json_rpc_types::SuiTransactionBlockResponseOptions;
 use sui_sdk::rpc_types::Checkpoint;
 use sui_sdk::SuiClient;
@@ -179,12 +182,33 @@ impl CheckpointBlockProvider {
             for seq in last_checkpoint + 1..=head {
                 let checkpoint = self.client.read_api().get_checkpoint(seq.into()).await?;
                 let timestamp = UNIX_EPOCH + Duration::from_millis(checkpoint.timestamp_ms);
+                let checkpoint_length = checkpoint.transactions.len();
+
                 info!(
                     "indexing checkpoint {seq} with {} txs, timestamp: {}",
-                    checkpoint.transactions.len(),
+                    checkpoint_length,
                     DateTime::<Utc>::from(timestamp).format("%Y-%m-%d %H:%M:%S")
                 );
+
+                let start_time = Instant::now();
+
                 let resp = self.create_block_response(checkpoint).await?;
+
+                let elapsed = start_time.elapsed().as_millis() as f64;
+                let file = OpenOptions::new()
+                    .append(true)
+                    .create(true)
+                    .open("create_block_response_execution_time.txt")
+                    .unwrap();
+                let mut file = BufWriter::new(file);
+                writeln!(
+                    file,
+                    "Checkpoint {seq} with {} txs, completed in {} ms",
+                    checkpoint_length,
+                    elapsed
+                )
+                .unwrap();
+
                 self.update_balance(resp.block).await?;
                 self.index_store.last_checkpoint.insert(&true, &seq)?;
             }
@@ -231,12 +255,12 @@ impl CheckpointBlockProvider {
         let index = checkpoint.sequence_number;
         let hash = checkpoint.digest;
         let mut transactions = vec![];
-        for digest in checkpoint.transactions.iter() {
-            let tx = self
+        for batch in checkpoint.transactions.chunks(*QUERY_MAX_RESULT_LIMIT) {
+            let transaction_responses = self
                 .client
                 .read_api()
-                .get_transaction_with_options(
-                    *digest,
+                .multi_get_transactions_with_options(
+                    batch.to_vec(),
                     SuiTransactionBlockResponseOptions::new()
                         .with_input()
                         .with_effects()
@@ -244,12 +268,14 @@ impl CheckpointBlockProvider {
                         .with_events(),
                 )
                 .await?;
-            transactions.push(Transaction {
-                transaction_identifier: TransactionIdentifier { hash: tx.digest },
-                operations: Operations::try_from(tx)?,
-                related_transactions: vec![],
-                metadata: None,
-            })
+            for tx in transaction_responses.into_iter() {
+                transactions.push(Transaction {
+                    transaction_identifier: TransactionIdentifier { hash: tx.digest },
+                    operations: Operations::try_from(tx)?,
+                    related_transactions: vec![],
+                    metadata: None,
+                })
+            }
         }
 
         // previous digest should only be None for genesis block.

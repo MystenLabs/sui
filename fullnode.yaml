@@ -1,0 +1,34 @@
+# Update this value to the location you want Sui to store its database
+db-path: "suidb"
+
+network-address: "/dns/localhost/tcp/8080/http"
+metrics-address: "0.0.0.0:9180"
+# this address is also used for web socket connections
+json-rpc-address: "0.0.0.0:9000"
+enable-event-processing: true
+
+genesis:
+  # Update this to the location of where the genesis file is stored
+  genesis-file-location: "genesis.blob"
+
+p2p-config:
+ seed-peers:
+    - address: /dns/nrt-tnt-ssfn-00.testnet.sui.io/udp/8084
+      peer-id: 23a1f7cd901b6277cbedaa986b3fc183f171d800cabba863d48f698f518967e1
+    - address: /dns/ewr-tnt-ssfn-00.testnet.sui.io/udp/8084
+      peer-id: df8a8d128051c249e224f95fcc463f518a0ebed8986bbdcc11ed751181fecd38
+    - address: /dns/lax-tnt-ssfn-00.testnet.sui.io/udp/8084
+      peer-id: f9a72a0a6c17eed09c27898eab389add704777c03e135846da2428f516a0c11d
+    - address: /dns/lhr-tnt-ssfn-00.testnet.sui.io/udp/8084
+      peer-id: 9393d6056bb9c9d8475a3cf3525c747257f17c6a698a7062cbbd1875bc6ef71e
+    - address: /dns/mel-tnt-ssfn-00.testnet.sui.io/udp/8084
+      peer-id: c88742f46e66a11cb8c84aca488065661401ef66f726cb9afeb8a5786d83456e
+
+authority-store-pruning-config:
+  num-latest-epoch-dbs-to-retain: 3000
+  epoch-db-pruning-period-secs: 3600
+  num-epochs-to-retain: 3000
+  max-checkpoints-in-batch: 10
+  max-transactions-in-batch: 1000
+  use-range-deletion: true
+  pruning-run-delay-seconds: 60

@@ -9809,6 +9809,7 @@ dependencies = [
  "strum",
  "strum_macros",
  "sui-config",
+ "sui-json-rpc",
  "sui-json-rpc-types",
  "sui-keys",
  "sui-move-build",
