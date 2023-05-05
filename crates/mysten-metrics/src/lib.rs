@@ -50,7 +50,7 @@ impl Metrics {
             )
             .unwrap(),
             scope_entrance: register_int_gauge_vec_with_registry!(
-                "scope_entrance",
+                "monitored_scope_entrance",
                 "Number of entrance in the scope.",
                 &["name"],
                 registry,
