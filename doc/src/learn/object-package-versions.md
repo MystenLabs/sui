@@ -34,7 +34,7 @@ Like address-owned objects, you reference immutable objects at an ID and version
 
 ### Shared objects
 
-Specifying a shared transaction input is slightly more complex. You reference it by its ID, the version it was shared at, and a flag indicating whether it is accessed mutably. You don't specify the precise version the transaction accesses because it is decided by consensus during transaction scheduling. When scheduling multiple transactions that touch the same shared object, validators agree the order of those transactions, and pick each transaction's input versions for the shared object accordingly (one transaction's output version becomes the next transaction's input version, and so on).
+Specifying a shared transaction input is slightly more complex. You reference it by its ID, the version it was shared at, and a flag indicating whether it is accessed mutably. You don't specify the precise version the transaction accesses because it is decided by consensus during transaction scheduling. When scheduling multiple transactions that touch the same shared object, validators agree on the order of those transactions, and pick each transaction's input versions for the shared object accordingly (one transaction's output version becomes the next transaction's input version, and so on).
 
 Shared transaction inputs that you reference immutably participate in scheduling, but don't modify the object or increment its version.
 

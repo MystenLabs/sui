@@ -24,11 +24,11 @@ pub struct GasData {
 - `price` defines how much users will pay for a single unit of execution. A unit of execution is an abstract concept internal to the implementation. A higher price uses more gas than a lower price. At a later point, `price` helps define the priority of executing the transaction. The value for `price` must be greater than or equal to the [Reference Gas Price](../learn/tokenomics/gas-pricing.md), which is the minimum amount the system accepts for a transaction.
 - `budget` is the maximum amount a user pays for a transaction. The value for `budget` is expressed in MIST, a fractional unit of SUI. Each MIST equals 10^-9 SUI - 1 SUI equals 1 Billion MIST. The sum of all coins in `payment` must be greater than or equal to the amount specified for `budget`.
 
-Note that the current release handles `payment` and `budget` dofferently than previous releases (prior to release .28).
+Note that the current release handles `payment` and `budget` differently than previous releases (prior to release .28).
 
 Computation has a max computation budget of `5_000_000` units and any `budget` value that is higher than that (`5_000_000 * gas_price`) counts exclusively towards storage. The max computation budget should be enough to account for very complex transactions.
 
-Merging of gas coins (known as “gas smashing”) is performed irrespective of the result of the transaction. Even on failures and out of gas errors (`InsufficientGas`), gas coin are merged and all but the first one is deleted.
+Merging of gas coins (known as “gas smashing”) is performed irrespective of the result of the transaction. Even on failures and out of gas errors (`InsufficientGas`), gas coins are merged and all but the first one is deleted.
 
 System values can (and will) change over time. Indexers, wallets and full nodes should be able to provide information on what those values are at any time.
 
@@ -61,7 +61,7 @@ The `computation_cost` is the execution charge, defined as computation and memor
 
 The remaining values provide an insight into the storage charges. Each time Sui writes to or reads from an object in the database, the object is conceptually _deleted_ and _restored_ to the DB. A transaction could also delete objects and create new objects.
 
-At the end of execution, all created object contribute to `storage_cost` with the following formula: `storage_cost = object_byte * storage_normalizer * storage_price` where, currently, `storage_normalizer = 100` and `storage_price = 76`. The `storage_cost` is saved and tracked by each object, and represents the value of the object in terms of its storage cost.
+At the end of execution, all created objects contribute to `storage_cost` with the following formula: `storage_cost = object_byte * storage_normalizer * storage_price` where, currently, `storage_normalizer = 100` and `storage_price = 76`. The `storage_cost` is saved and tracked by each object, and represents the value of the object in terms of its storage cost.
 
 All deleted objects storage values are added together and refunded to the user (`storage_rebate`), except for a small percentage of the rebate that is charged by the system and goes into the `non_refundable_storage_fee`. That percentage is currently 1.0%.
 

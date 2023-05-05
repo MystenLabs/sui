@@ -172,7 +172,7 @@ Note that `drop` is not called implicitly on eligible tables before they go out 
 
 `Bag` and `ObjectBag` cannot support `drop` because they could be holding a variety of types, some of which may have `drop` and some which may not.
 
-`ObjectTable` does not support `drop` because its values must be objects, which cannot be drop (because they must contain an `id: UID` field and `UID` does not have `drop`).
+`ObjectTable` does not support `drop` because its values must be objects, which cannot be dropped (because they must contain an `id: UID` field and `UID` does not have `drop`).
 
 ### :warning: Equality
 
