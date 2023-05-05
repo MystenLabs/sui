@@ -1791,6 +1791,7 @@ impl Transaction {
         Self::from_data(data, intent, signatures)
     }
 
+    // TODO: Rename this function and above to make it clearer.
     pub fn from_data(data: TransactionData, intent: Intent, signatures: Vec<Signature>) -> Self {
         Self::from_generic_sig_data(
             data,

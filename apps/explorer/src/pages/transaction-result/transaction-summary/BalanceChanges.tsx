@@ -38,7 +38,7 @@ function BalanceChangeEntry({ change }: { change: BalanceChangeSummary }) {
     return (
         <div className="flex flex-col gap-2 py-3 first:pt-0 only:pb-0 only:pt-0">
             <div className="flex flex-col gap-2">
-                <div className="flex justify-between">
+                <div className="flex flex-wrap justify-between">
                     <Text variant="pBody/medium" color="steel-dark">
                         Amount
                     </Text>
@@ -54,11 +54,11 @@ function BalanceChangeEntry({ change }: { change: BalanceChangeSummary }) {
                 </div>
 
                 {recipient && (
-                    <div className="flex justify-between">
+                    <div className="flex flex-wrap items-center justify-between">
                         <Text variant="pBody/medium" color="steel-dark">
                             Recipient
                         </Text>
-                        {recipient}
+                        <AddressLink address={recipient} />
                     </div>
                 )}
             </div>
@@ -90,7 +90,7 @@ function BalanceChangeCard({
             size="sm"
             footer={
                 owner ? (
-                    <div className="flex justify-between">
+                    <div className="flex flex-wrap justify-between">
                         <Text variant="pBody/medium" color="steel-dark">
                             Owner
                         </Text>
@@ -126,7 +126,7 @@ export function BalanceChanges({ changes }: BalanceChangesProps) {
 
     return (
         <>
-            {Object.entries(changesByOwner).map(([owner, changes], index) => (
+            {Object.entries(changesByOwner).map(([owner, changes]) => (
                 <BalanceChangeCard
                     key={owner}
                     changes={changes}

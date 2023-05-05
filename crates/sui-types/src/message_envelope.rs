@@ -4,13 +4,14 @@
 use crate::base_types::AuthorityName;
 use crate::committee::{Committee, EpochId};
 use crate::crypto::{
-    AuthorityQuorumSignInfo, AuthoritySignInfo, AuthoritySignInfoTrait, AuthoritySignature,
-    AuthorityStrongQuorumSignInfo, EmptySignInfo, Signer,
+    AuthorityKeyPair, AuthorityQuorumSignInfo, AuthoritySignInfo, AuthoritySignInfoTrait,
+    AuthoritySignature, AuthorityStrongQuorumSignInfo, EmptySignInfo, Signer,
 };
 use crate::error::SuiResult;
 use crate::executable_transaction::CertificateProof;
 use crate::messages::VersionedProtocolMessage;
 use crate::messages_checkpoint::CheckpointSequenceNumber;
+use fastcrypto::traits::KeyPair;
 use once_cell::sync::OnceCell;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use shared_crypto::intent::{Intent, IntentScope};
@@ -194,6 +195,26 @@ where
         };
 
         Ok(cert)
+    }
+
+    pub fn new_from_keypairs_for_testing(
+        data: T,
+        keypairs: &[AuthorityKeyPair],
+        committee: &Committee,
+    ) -> Self {
+        let signatures = keypairs
+            .iter()
+            .map(|keypair| {
+                AuthoritySignInfo::new(
+                    committee.epoch(),
+                    &data,
+                    Intent::sui_app(T::SCOPE),
+                    keypair.public().into(),
+                    keypair,
+                )
+            })
+            .collect();
+        Self::new(data, signatures, committee).unwrap()
     }
 
     pub fn epoch(&self) -> EpochId {

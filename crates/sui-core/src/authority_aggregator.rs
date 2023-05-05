@@ -8,6 +8,7 @@ use crate::authority_client::{
 };
 use crate::safe_client::{SafeClient, SafeClientMetrics, SafeClientMetricsBase};
 use fastcrypto::encoding::Encoding;
+use fastcrypto::traits::ToFromBytes;
 use futures::Future;
 use futures::{future::BoxFuture, stream::FuturesUnordered, StreamExt};
 use mysten_metrics::histogram::Histogram;
@@ -19,9 +20,7 @@ use sui_config::NetworkConfig;
 use sui_network::{
     default_mysten_network_config, DEFAULT_CONNECT_TIMEOUT_SEC, DEFAULT_REQUEST_TIMEOUT_SEC,
 };
-use sui_types::crypto::{
-    AuthorityPublicKeyBytes, AuthoritySignInfo, ConciseAuthorityPublicKeyBytesRef,
-};
+use sui_types::crypto::{AuthorityPublicKeyBytes, AuthoritySignInfo};
 use sui_types::error::UserInputError;
 use sui_types::fp_ensure;
 use sui_types::message_envelope::Message;
@@ -364,6 +363,10 @@ impl ProcessTransactionResult {
 pub struct AuthorityAggregator<A: Clone> {
     /// Our Sui committee.
     pub committee: Arc<Committee>,
+    /// For more human readable metrics reporting.
+    /// It's OK for this map to be empty or missing validators, it then defaults
+    /// to use concise validator public keys.
+    pub validator_display_names: Arc<HashMap<AuthorityName, String>>,
     /// How to talk to this committee.
     pub authority_clients: Arc<BTreeMap<AuthorityName, Arc<SafeClient<A>>>>,
     /// Metrics
@@ -381,12 +384,14 @@ impl<A: Clone> AuthorityAggregator<A> {
         committee_store: Arc<CommitteeStore>,
         authority_clients: BTreeMap<AuthorityName, A>,
         registry: &Registry,
+        validator_display_names: Arc<HashMap<AuthorityName, String>>,
     ) -> Self {
         Self::new_with_timeouts(
             committee,
             committee_store,
             authority_clients,
             registry,
+            validator_display_names,
             Default::default(),
         )
     }
@@ -396,11 +401,13 @@ impl<A: Clone> AuthorityAggregator<A> {
         committee_store: Arc<CommitteeStore>,
         authority_clients: BTreeMap<AuthorityName, A>,
         registry: &Registry,
+        validator_display_names: Arc<HashMap<AuthorityName, String>>,
         timeouts: TimeoutConfig,
     ) -> Self {
         let safe_client_metrics_base = SafeClientMetricsBase::new(registry);
         Self {
             committee: Arc::new(committee),
+            validator_display_names,
             authority_clients: create_safe_clients(
                 authority_clients,
                 &committee_store,
@@ -419,6 +426,7 @@ impl<A: Clone> AuthorityAggregator<A> {
         authority_clients: BTreeMap<AuthorityName, A>,
         safe_client_metrics_base: SafeClientMetricsBase,
         auth_agg_metrics: Arc<AuthAggMetrics>,
+        validator_display_names: Arc<HashMap<AuthorityName, String>>,
     ) -> Self {
         Self {
             committee: Arc::new(committee),
@@ -431,6 +439,7 @@ impl<A: Clone> AuthorityAggregator<A> {
             safe_client_metrics_base,
             timeouts: Default::default(),
             committee_store,
+            validator_display_names,
         }
     }
 
@@ -497,6 +506,7 @@ impl<A: Clone> AuthorityAggregator<A> {
             timeouts: self.timeouts.clone(),
             safe_client_metrics_base: self.safe_client_metrics_base.clone(),
             committee_store: self.committee_store.clone(),
+            validator_display_names: Arc::new(HashMap::new()),
         })
     }
 
@@ -563,11 +573,27 @@ impl AuthorityAggregator<NetworkAuthorityClient> {
         auth_agg_metrics: AuthAggMetrics,
     ) -> anyhow::Result<Self> {
         let sui_system_state = store.get_sui_system_state_object()?;
+        let committee = sui_system_state.get_current_epoch_committee();
+        let validator_display_names = sui_system_state
+            .into_sui_system_state_summary()
+            .active_validators
+            .into_iter()
+            .filter_map(|s| {
+                let authority_name =
+                    AuthorityPublicKeyBytes::from_bytes(s.protocol_pubkey_bytes.as_slice());
+                if authority_name.is_err() {
+                    return None;
+                }
+                let human_readble_name = s.name;
+                Some((authority_name.unwrap(), human_readble_name))
+            })
+            .collect();
         Self::new_from_committee(
-            sui_system_state.get_current_epoch_committee(),
+            committee,
             committee_store,
             safe_client_metrics_base,
             Arc::new(auth_agg_metrics),
+            Arc::new(validator_display_names),
         )
     }
 
@@ -576,6 +602,7 @@ impl AuthorityAggregator<NetworkAuthorityClient> {
         committee_store: &Arc<CommitteeStore>,
         safe_client_metrics_base: SafeClientMetricsBase,
         auth_agg_metrics: Arc<AuthAggMetrics>,
+        validator_display_names: Arc<HashMap<AuthorityName, String>>,
     ) -> anyhow::Result<Self> {
         let net_config = default_mysten_network_config();
         let authority_clients =
@@ -586,6 +613,7 @@ impl AuthorityAggregator<NetworkAuthorityClient> {
             authority_clients,
             safe_client_metrics_base,
             auth_agg_metrics,
+            validator_display_names,
         ))
     }
 }
@@ -1081,6 +1109,7 @@ where
         let transaction_ref = &transaction;
         let validity_threshold = committee.validity_threshold();
         let quorum_threshold = committee.quorum_threshold();
+        let validator_display_names = self.validator_display_names.clone();
         let result = AuthorityAggregator::quorum_map_then_reduce_with_timeout(
                 committee.clone(),
                 self.authority_clients.clone(),
@@ -1094,6 +1123,7 @@ where
                     )
                 },
                 |mut state, name, weight, response| {
+                    let display_name = validator_display_names.get(&name).unwrap_or(&name.concise().to_string()).clone();
                     Box::pin(async move {
                         match self.handle_process_transaction_response(
                             tx_digest, &mut state, response, name, weight,
@@ -1118,9 +1148,9 @@ where
                                 debug!(?tx_digest, name=?concise_name, weight, "Error processing transaction from validator: {:?}", err);
                                 self.metrics
                                     .process_tx_errors
-                                    .with_label_values(&[&concise_name.to_string(), err.as_ref()])
+                                    .with_label_values(&[&display_name, err.as_ref()])
                                     .inc();
-                                Self::record_rpc_error_maybe(self.metrics.clone(), concise_name, &err);
+                                Self::record_rpc_error_maybe(self.metrics.clone(), &display_name, &err);
                                 let (retryable, categorized) = err.is_retryable();
                                 if !categorized {
                                     // TODO: Should minimize possible uncategorized errors here
@@ -1177,13 +1207,13 @@ where
 
     fn record_rpc_error_maybe(
         metrics: Arc<AuthAggMetrics>,
-        name: ConciseAuthorityPublicKeyBytesRef,
+        display_name: &String,
         error: &SuiError,
     ) {
         if let SuiError::RpcError(_message, code) = error {
             metrics
                 .total_rpc_err
-                .with_label_values(&[&name.to_string(), code.as_str()])
+                .with_label_values(&[display_name, code.as_str()])
                 .inc();
         }
     }
@@ -1522,6 +1552,7 @@ where
         let authority_clients = self.authority_clients.clone();
         let metrics = self.metrics.clone();
         let metrics_clone = metrics.clone();
+        let validator_display_names = self.validator_display_names.clone();
         let (result, mut remaining_tasks) = AuthorityAggregator::quorum_map_then_reduce_with_timeout(
             committee.clone(),
             authority_clients.clone(),
@@ -1540,6 +1571,7 @@ where
             move |mut state, name, weight, response| {
                 let committee_clone = committee.clone();
                 let metrics = metrics.clone();
+                let display_name = validator_display_names.get(&name).unwrap_or(&name.concise().to_string()).clone();
                 Box::pin(async move {
                     // We aggregate the effects response, until we have more than 2f
                     // and return.
@@ -1564,9 +1596,9 @@ where
                             debug!(?tx_digest, name=?concise_name, "Error processing certificate from validator: {:?}", err);
                             metrics
                                 .process_cert_errors
-                                .with_label_values(&[&concise_name.to_string(), err.as_ref()])
+                                .with_label_values(&[&display_name, err.as_ref()])
                                 .inc();
-                            Self::record_rpc_error_maybe(metrics, concise_name, &err);
+                            Self::record_rpc_error_maybe(metrics, &display_name, &err);
                             let (retryable, categorized) = err.is_retryable();
                             if !categorized {
                                 // TODO: Should minimize possible uncategorized errors here
@@ -1867,6 +1899,7 @@ impl<'a> AuthorityAggregatorBuilder<'a> {
                 committee_store,
                 auth_clients.clone(),
                 registry,
+                Arc::new(HashMap::new()),
             ),
             auth_clients,
         ))

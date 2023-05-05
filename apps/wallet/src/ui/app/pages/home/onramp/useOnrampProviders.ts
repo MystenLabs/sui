@@ -8,6 +8,7 @@ import { useState } from 'react';
 import MoonPay from './icons/MoonPay.svg';
 import Transak from './icons/Transak.svg';
 import { type OnrampProvider } from './types';
+import { growthbook } from '_src/ui/app/experimentation/feature-gating';
 
 const TRANSAK_API_KEY =
     process.env.NODE_ENV === 'production'
@@ -30,7 +31,11 @@ const ONRAMP_PROVIDER: OnrampProvider[] = [
         icon: Transak,
         name: 'Transak',
         checkSupported: async () => {
-            return true;
+            const isOn = await growthbook.getFeatureValue(
+                'wallet-onramp-transak',
+                false
+            );
+            return isOn;
         },
         getUrl: async (address) => {
             const params = new URLSearchParams({
@@ -58,6 +63,11 @@ const ONRAMP_PROVIDER: OnrampProvider[] = [
         icon: MoonPay,
         name: 'MoonPay',
         checkSupported: async () => {
+            const isOn = await growthbook.getFeatureValue(
+                'wallet-onramp-moonpay',
+                false
+            );
+            if (!isOn) return false;
             try {
                 const res = await fetch(
                     `https://api.moonpay.com/v4/ip_address?apiKey=${MOONPAY_API_KEY}`

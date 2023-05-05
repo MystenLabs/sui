@@ -14,6 +14,7 @@ use move_vm_runtime::{
     native_extensions::NativeContextExtensions,
     native_functions::NativeFunctionTable,
 };
+use sui_types::metrics::BytecodeVerifierMetrics;
 use tracing::instrument;
 
 use sui_move_natives::{object_runtime::ObjectRuntime, NativesCostTable};
@@ -169,6 +170,7 @@ pub fn run_metered_move_bytecode_verifier(
     protocol_config: &ProtocolConfig,
     metered_verifier_config: &VerifierConfig,
     meter: &mut impl Meter,
+    metrics: &Arc<BytecodeVerifierMetrics>
 ) -> Result<(), SuiError> {
     let modules_stat = module_bytes
         .iter()
@@ -193,6 +195,7 @@ pub fn run_metered_move_bytecode_verifier(
         protocol_config,
         metered_verifier_config,
         meter,
+        metrics,
     )
 }
 
@@ -201,6 +204,7 @@ pub fn run_metered_move_bytecode_verifier_impl(
     protocol_config: &ProtocolConfig,
     verifier_config: &VerifierConfig,
     meter: &mut impl Meter,
+    metrics: &Arc<BytecodeVerifierMetrics>
 ) -> Result<(), SuiError> {
     // run the Move verifier
     for module in modules.iter() {
@@ -214,13 +218,18 @@ pub fn run_metered_move_bytecode_verifier_impl(
             ]
             .contains(&e.major_status())
             {
+                metrics.verifier_timeout_metrics.with_label_values(&[BytecodeVerifierMetrics::MOVE_VERIFIER_TAG, BytecodeVerifierMetrics::TIMEOUT_TAG]).inc();
                 return Err(SuiError::ModuleVerificationFailure {
                     error: "Verification timedout".to_string(),
                 });
             };
         } else {
-            sui_verify_module_metered(protocol_config, module, &BTreeMap::new(), meter)?
+            sui_verify_module_metered(protocol_config, module, &BTreeMap::new(), meter).map_err(|err|{
+                metrics.verifier_timeout_metrics.with_label_values(&[ BytecodeVerifierMetrics::SUI_VERIFIER_TAG, BytecodeVerifierMetrics::TIMEOUT_TAG]).inc();
+                err
+            })?
         }
+        metrics.verifier_timeout_metrics.with_label_values(&[BytecodeVerifierMetrics::OVERALL_TAG, BytecodeVerifierMetrics::SUCCESS_TAG]).inc();
     }
     Ok(())
 }

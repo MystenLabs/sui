@@ -39,16 +39,27 @@ export function CheckpointsTable({
         rpc.getLatestCheckpointSequenceNumber()
     );
 
-    const count = useMemo(() => {
-        if (maxCursor && initialCursor)
-            return Number(initialCursor) - Number(maxCursor);
-        return Number(countQuery.data ?? 0);
-    }, [countQuery.data, initialCursor, maxCursor]);
-
     const checkpoints = useGetCheckpoints(initialCursor, limit);
 
     const { data, isFetching, pagination, isLoading, isError } =
         useCursorPagination(checkpoints);
+
+    const count = useMemo(() => {
+        if (maxCursor) {
+            if (initialCursor) {
+                return Number(initialCursor) - Number(maxCursor);
+            } else if (!isError && checkpoints.data) {
+                // Special case for ongoing epoch
+                return (
+                    Number(checkpoints.data.pages[0].data[0].sequenceNumber) -
+                    Number(maxCursor)
+                );
+            }
+        } else {
+            return Number(countQuery.data ?? 0);
+        }
+    }, [countQuery.data, initialCursor, maxCursor, checkpoints, isError]);
+
     const cardData = data ? genTableDataFromCheckpointsData(data) : undefined;
 
     return (

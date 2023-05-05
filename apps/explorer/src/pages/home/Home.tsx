@@ -1,6 +1,5 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-import { useFeatureIsOn } from '@growthbook/growthbook-react';
 import clsx from 'clsx';
 import { lazy, Suspense } from 'react';
 
@@ -9,27 +8,26 @@ import { TopValidatorsCard } from '../../components/top-validators-card/TopValid
 
 import { Activity } from '~/components/Activity';
 import { GasPriceCard } from '~/components/GasPriceCard';
-import { HomeMetrics } from '~/components/HomeMetrics';
 import { Checkpoint } from '~/components/HomeMetrics/Checkpoint';
 import { CurrentEpoch } from '~/components/HomeMetrics/CurrentEpoch';
 import { NetworkTPS } from '~/components/HomeMetrics/NetworkTPS';
 import { OnTheNetwork } from '~/components/HomeMetrics/OnTheNetwork';
 import { SuiTokenCard } from '~/components/SuiTokenCard';
 import { TopPackagesCard } from '~/components/top-packages/TopPackagesCard';
+import { useNetwork } from '~/context';
 import { Card } from '~/ui/Card';
 import { Tab, TabGroup, TabList, TabPanel, TabPanels } from '~/ui/Tabs';
+import { Network } from '~/utils/api/DefaultRpcClient';
 
-const NodeMap = lazy(() => import('../../components/node-map'));
+const ValidatorMap = lazy(() => import('../../components/validator-map'));
 
 const TRANSACTIONS_LIMIT = 25;
 
 function Home() {
-    const isHomePageRedesignEnabled = useFeatureIsOn(
-        'explorer-home-page-redesign'
-    );
-    const isSuiTokenCardEnabled = useFeatureIsOn('explorer-sui-token-card');
+    const [network] = useNetwork();
+    const isSuiTokenCardEnabled = network === Network.MAINNET;
 
-    return isHomePageRedesignEnabled ? (
+    return (
         <div
             data-testid="home-page"
             className={clsx('home-page-grid-container', {
@@ -63,7 +61,7 @@ function Home() {
             >
                 <ErrorBoundary>
                     <Suspense fallback={<Card height="full" />}>
-                        <NodeMap minHeight="100%" />
+                        <ValidatorMap minHeight="100%" />
                     </Suspense>
                 </ErrorBoundary>
             </div>
@@ -96,46 +94,6 @@ function Home() {
 
             <div style={{ gridArea: 'packages' }}>
                 <TopPackagesCard />
-            </div>
-        </div>
-    ) : (
-        <div
-            data-testid="home-page"
-            className="grid grid-cols-1 gap-x-12 gap-y-10 md:grid-cols-2"
-        >
-            <ErrorBoundary>
-                <HomeMetrics />
-            </ErrorBoundary>
-
-            <ErrorBoundary>
-                <Suspense fallback={<Card />}>
-                    <NodeMap minHeight={280} />
-                </Suspense>
-            </ErrorBoundary>
-
-            <ErrorBoundary>
-                <Activity initialLimit={TRANSACTIONS_LIMIT} disablePagination />
-            </ErrorBoundary>
-
-            <div
-                className="flex flex-col gap-y-3"
-                data-testid="validators-table"
-            >
-                <TabGroup size="lg">
-                    <TabList>
-                        <Tab>Validators</Tab>
-                    </TabList>
-                    <TabPanels>
-                        <TabPanel>
-                            <ErrorBoundary>
-                                <TopValidatorsCard limit={10} showIcon />
-                            </ErrorBoundary>
-                        </TabPanel>
-                    </TabPanels>
-                </TabGroup>
-                <ErrorBoundary>
-                    <TopPackagesCard />
-                </ErrorBoundary>
             </div>
         </div>
     );

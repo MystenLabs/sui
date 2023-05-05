@@ -6,6 +6,8 @@ import { Sui, Unstaked } from '@mysten/icons';
 import { type CoinMetadata } from '@mysten/sui.js';
 import clsx from 'clsx';
 
+import { Image } from '~/ui/image/Image';
+
 function CoinIcon({ coinMetadata }: { coinMetadata?: CoinMetadata | null }) {
     if (coinMetadata?.symbol === 'SUI') {
         return <Sui className="h-2.5 w-2.5" />;
@@ -13,10 +15,10 @@ function CoinIcon({ coinMetadata }: { coinMetadata?: CoinMetadata | null }) {
 
     if (coinMetadata?.iconUrl) {
         return (
-            <img
-                src={coinMetadata?.iconUrl}
+            <Image
+                rounded="full"
                 alt={coinMetadata?.description}
-                className="flex h-full w-full items-center justify-center object-contain"
+                src={coinMetadata?.iconUrl}
             />
         );
     }
@@ -26,15 +28,16 @@ function CoinIcon({ coinMetadata }: { coinMetadata?: CoinMetadata | null }) {
 
 export function Coin({ type }: { type: string }) {
     const { data: coinMetadata } = useCoinMetadata(type);
+    const { symbol, iconUrl } = coinMetadata || {};
 
     return (
         <span
             className={clsx(
                 'flex h-5 w-5 items-center justify-center rounded-xl text-white',
-                !coinMetadata &&
+                (!coinMetadata || symbol !== 'SUI') &&
                     'bg-gradient-to-r from-gradient-blue-start to-gradient-blue-end',
-                coinMetadata?.symbol === 'SUI' && 'bg-sui',
-                coinMetadata?.iconUrl && 'bg-gray-40'
+                symbol === 'SUI' && 'bg-sui',
+                iconUrl && 'bg-gray-40'
             )}
         >
             <CoinIcon coinMetadata={coinMetadata} />

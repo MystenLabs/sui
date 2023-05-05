@@ -83,7 +83,7 @@ use sui_types::messages_grpc::{
     HandleTransactionResponse, ObjectInfoRequest, ObjectInfoRequestKind, ObjectInfoResponse,
     TransactionInfoRequest, TransactionInfoResponse, TransactionStatus,
 };
-use sui_types::metrics::LimitsMetrics;
+use sui_types::metrics::{BytecodeVerifierMetrics, LimitsMetrics};
 use sui_types::object::{MoveObject, Owner, PastObjectRead, OBJECT_START_VERSION};
 use sui_types::storage::{ObjectKey, ObjectStore, WriteKind};
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
@@ -103,7 +103,7 @@ use sui_types::{
     object::{Object, ObjectFormatOptions, ObjectRead},
     SUI_SYSTEM_ADDRESS,
 };
-use sui_types::{is_system_package, TypeTag};
+use sui_types::{is_system_package, TypeTag, SUI_CLOCK_OBJECT_ID};
 use typed_store::Map;
 
 use crate::authority::authority_per_epoch_store::{AuthorityPerEpochStore, CertTxGuard};
@@ -225,6 +225,9 @@ pub struct AuthorityMetrics {
     pub consensus_committed_certificates: IntCounterVec,
 
     pub limits_metrics: Arc<LimitsMetrics>,
+
+    /// bytecode verifier metrics for tracking timeouts
+    pub bytecode_verifier_metrics: Arc<BytecodeVerifierMetrics>,
 }
 
 // Override default Prom buckets for positive numbers in 0-50k range
@@ -472,6 +475,7 @@ impl AuthorityMetrics {
             )
                 .unwrap(),
             limits_metrics: Arc::new(LimitsMetrics::new(registry)),
+            bytecode_verifier_metrics: Arc::new(BytecodeVerifierMetrics::new(registry)),
         }
     }
 }
@@ -578,6 +582,7 @@ impl AuthorityState {
             epoch_store.as_ref(),
             &transaction.data().intent_message().value,
             &self.transaction_deny_config,
+            &self.metrics.bytecode_verifier_metrics,
         )
         .await?;
 
@@ -679,7 +684,7 @@ impl AuthorityState {
         // this function, in order to prevent a byzantine validator from
         // giving us incorrect effects.
         effects: &VerifiedCertifiedTransactionEffects,
-        objects: &Vec<Object>,
+        objects: Vec<Object>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult {
         assert!(self.is_fullnode(epoch_store));
@@ -696,6 +701,11 @@ impl AuthorityState {
             }
         );
 
+        // Lock this down to 0x6 before we pin child versions in effects
+        let objects = objects
+            .into_iter()
+            .filter(|o| o.id() == SUI_CLOCK_OBJECT_ID)
+            .collect::<Vec<_>>();
         if !objects.is_empty() {
             debug!(
                 "inserting objects to object store before executing a tx: {:?}",
@@ -705,7 +715,7 @@ impl AuthorityState {
                     .collect::<Vec<_>>()
             );
             self.database
-                .fullnode_fast_path_insert_objects_to_object_store_maybe(objects)?;
+                .fullnode_fast_path_insert_objects_to_object_store_maybe(&objects)?;
             self.transaction_manager()
                 .objects_available(objects.iter().map(InputKey::from).collect(), epoch_store);
         }
@@ -1131,6 +1141,7 @@ impl AuthorityState {
                     epoch_store.as_ref(),
                     &transaction,
                     gas_object,
+                    &self.metrics.bytecode_verifier_metrics,
                 )
                 .await?,
                 Some(gas_object_id),
@@ -1142,6 +1153,7 @@ impl AuthorityState {
                     epoch_store.as_ref(),
                     &transaction,
                     &self.transaction_deny_config,
+                    &self.metrics.bytecode_verifier_metrics,
                 )
                 .await?,
                 None,
@@ -1918,6 +1930,9 @@ impl AuthorityState {
             accumulator,
             expensive_safety_check_config.enable_state_consistency_check(),
         );
+        self.db()
+            .set_epoch_start_configuration(&epoch_start_configuration)
+            .await?;
         if let Some(checkpoint_path) = &self.db_checkpoint_config.checkpoint_path {
             if self
                 .db_checkpoint_config
@@ -3642,9 +3657,6 @@ impl AuthorityState {
             epoch_start_configuration.epoch_start_state().epoch(),
             new_committee.epoch
         );
-        self.db()
-            .set_epoch_start_configuration(&epoch_start_configuration)
-            .await?;
         fail_point!("before-open-new-epoch-store");
         let new_epoch_store = cur_epoch_store.new_at_next_epoch(
             self.name,

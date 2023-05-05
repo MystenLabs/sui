@@ -7,7 +7,6 @@ network-key-pair:
   path: /opt/sui/key-pairs/network.key
 db-path: /opt/sui/db/authorities_db
 network-address: /ip4/0.0.0.0/tcp/8080/http
-json-rpc-address: 0.0.0.0:9000
 metrics-address: 0.0.0.0:9184
 admin-interface-port: 1337
 consensus-config:
@@ -51,7 +50,7 @@ authority-store-pruning-config:
   num-latest-epoch-dbs-to-retain: 3
   epoch-db-pruning-period-secs: 3600
   num-epochs-to-retain: 1
-  max-checkpoints-in-batch: 10
+  max-checkpoints-in-batch: 5
   max-transactions-in-batch: 1000
   use-range-deletion: true
 end-of-epoch-broadcast-channel-capacity: 128

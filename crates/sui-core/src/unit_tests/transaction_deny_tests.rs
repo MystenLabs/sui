@@ -17,6 +17,7 @@ use sui_config::certificate_deny_config::CertificateDenyConfigBuilder;
 use sui_config::genesis_config::{AccountConfig, DEFAULT_GAS_AMOUNT};
 use sui_config::transaction_deny_config::{TransactionDenyConfig, TransactionDenyConfigBuilder};
 use sui_config::NetworkConfig;
+use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress};
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::error::{SuiError, SuiResult, UserInputError};
@@ -29,7 +30,6 @@ use sui_types::messages_grpc::HandleTransactionResponse;
 use sui_types::utils::{
     to_sender_signed_transaction, to_sender_signed_transaction_with_multi_signers,
 };
-use test_utils::messages::make_staking_transaction;
 use test_utils::transaction::make_publish_package;
 
 const ACCOUNT_NUM: usize = 5;
@@ -218,14 +218,10 @@ async fn test_shared_object_transaction_disabled() {
     .await;
     let accounts = get_accounts_and_coins(&network_config, &state);
     let gas_price = state.reference_gas_price_for_testing().unwrap();
-    let tx = make_staking_transaction(
-        accounts[0].2[0],
-        accounts[0].2[1],
-        SuiAddress::default(),
-        accounts[0].0,
-        &accounts[0].1,
-        gas_price,
-    );
+    let account = &accounts[0];
+    let tx = TestTransactionBuilder::new(account.0, account.2[0], gas_price)
+        .call_staking(account.2[1], SuiAddress::default())
+        .build_and_sign(&account.1);
     let result = state
         .handle_transaction(&state.epoch_store_for_testing(), tx)
         .await;

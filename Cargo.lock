@@ -8911,6 +8911,7 @@ dependencies = [
  "sui-simulator",
  "sui-source-validation",
  "sui-swarm",
+ "sui-test-transaction-builder",
  "sui-tool",
  "sui-types",
  "tap",
@@ -8998,6 +8999,7 @@ dependencies = [
  "sui-protocol-config",
  "sui-sdk",
  "sui-simulator",
+ "sui-test-transaction-builder",
  "sui-types",
  "sysinfo",
  "telemetry-subscribers",
@@ -9037,6 +9039,7 @@ dependencies = [
  "sui-move-build",
  "sui-sdk",
  "sui-swarm",
+ "sui-test-transaction-builder",
  "sui-types",
  "telemetry-subscribers",
  "tempfile",
@@ -9151,6 +9154,7 @@ dependencies = [
  "sui-protocol-config",
  "sui-simulator",
  "sui-storage",
+ "sui-test-transaction-builder",
  "sui-types",
  "sui-verifier",
  "tap",
@@ -9184,6 +9188,7 @@ dependencies = [
  "sui-config",
  "sui-core",
  "sui-move-build",
+ "sui-test-transaction-builder",
  "sui-types",
  "test-utils",
  "tokio",
@@ -9904,6 +9909,7 @@ dependencies = [
  "sui-json-rpc",
  "sui-json-rpc-types",
  "sui-keys",
+ "sui-test-transaction-builder",
  "sui-transaction-builder",
  "sui-types",
  "tempfile",
@@ -10064,6 +10070,18 @@ dependencies = [
  "sui-core",
  "tokio",
  "tracing",
+ "workspace-hack",
+]
+
+[[package]]
+name = "sui-test-transaction-builder"
+version = "1.1.0"
+dependencies = [
+ "bcs",
+ "move-core-types",
+ "shared-crypto",
+ "sui-move-build",
+ "sui-types",
  "workspace-hack",
 ]
 
@@ -10580,6 +10598,7 @@ dependencies = [
  "sui-sdk",
  "sui-simulator",
  "sui-swarm",
+ "sui-test-transaction-builder",
  "sui-types",
  "tempfile",
  "tokio",

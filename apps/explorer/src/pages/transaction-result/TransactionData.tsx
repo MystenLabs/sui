@@ -40,17 +40,7 @@ export function TransactionData({ transaction }: Props) {
 
     return (
         <div className="flex flex-wrap gap-6">
-            {isProgrammableTransaction && (
-                <section className="flex w-96 flex-1 flex-col gap-6">
-                    <InputsCard inputs={programmableTxn.inputs} />
-
-                    <TransactionsCard
-                        transactions={programmableTxn.transactions}
-                    />
-                </section>
-            )}
-
-            <section className="flex w-96 flex-1 flex-col gap-6">
+            <section className="flex w-96 min-w-[50%] flex-1 flex-col gap-6">
                 {transaction.checkpoint && (
                     <TransactionBlockCard>
                         <TransactionBlockCardSection>
@@ -74,9 +64,20 @@ export function TransactionData({ transaction }: Props) {
                 )}
 
                 {isProgrammableTransaction && (
-                    <section data-testid="gas-breakdown">
-                        <GasBreakdown summary={summary} />
-                    </section>
+                    <InputsCard inputs={programmableTxn.inputs} />
+                )}
+            </section>
+
+            <section className="flex w-96 flex-1 flex-col gap-6">
+                {isProgrammableTransaction && (
+                    <>
+                        <TransactionsCard
+                            transactions={programmableTxn.transactions}
+                        />
+                        <section data-testid="gas-breakdown">
+                            <GasBreakdown summary={summary} />
+                        </section>
+                    </>
                 )}
             </section>
         </div>

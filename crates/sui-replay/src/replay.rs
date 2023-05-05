@@ -404,7 +404,7 @@ impl LocalExec {
         // This is okay since the versions can never change
         let non_system_package_objs: Vec<_> = objs
             .into_iter()
-            .filter(|o| !self.system_package_ids().contains(o))
+            .filter(|o| !Self::system_package_ids(self.current_protocol_version).contains(o))
             .collect();
         let objs = self
             .multi_download_latest(&non_system_package_objs)
@@ -769,10 +769,10 @@ impl LocalExec {
                 .await
         }
     }
-    fn system_package_ids(&self) -> Vec<ObjectID> {
+    fn system_package_ids(protocol_version: u64) -> Vec<ObjectID> {
         let mut ids = BuiltInFramework::all_package_ids();
 
-        if self.current_protocol_version < 5 {
+        if protocol_version < 5 {
             ids.retain(|id| *id != DEEPBOOK_OBJECT_ID)
         }
         ids
@@ -1008,7 +1008,14 @@ impl LocalExec {
     pub async fn system_package_versions(
         &self,
     ) -> Result<BTreeMap<ObjectID, Vec<(SequenceNumber, TransactionDigest)>>, LocalExecError> {
-        let system_package_ids = self.system_package_ids();
+        let system_package_ids = Self::system_package_ids(
+            *self
+                .protocol_version_epoch_table
+                .keys()
+                .peekable()
+                .last()
+                .expect("Protocol version epoch table not populated"),
+        );
         let mut system_package_objs = self.multi_download_latest(&system_package_ids).await?;
 
         let mut mapping = BTreeMap::new();

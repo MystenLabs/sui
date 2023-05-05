@@ -66,7 +66,7 @@ function TransactionBlockCardHeader({
 
     if (collapsible) {
         return (
-            <Disclosure.Button className="w-full">
+            <Disclosure.Button as="div" className="w-full cursor-pointer">
                 {headerContent}
             </Disclosure.Button>
         );
@@ -93,10 +93,7 @@ export function TransactionBlockCardSection({
                     <>
                         {title && (
                             <Disclosure.Button>
-                                <div
-                                    role="button"
-                                    className="flex items-center gap-2"
-                                >
+                                <div className="flex items-center gap-2">
                                     {typeof title === 'string' ? (
                                         <Text
                                             color="steel-darker"
@@ -143,7 +140,7 @@ export function TransactionBlockCard({
     ...cardProps
 }: TransactionBlockCardProps) {
     return (
-        <div className="w-full">
+        <div className="relative w-full">
             <Card
                 rounded="2xl"
                 border="gray45"

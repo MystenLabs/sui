@@ -1154,7 +1154,7 @@ impl SuiClientCommands {
                 let env = SuiEnv { alias, rpc, ws };
 
                 // Check urls are valid and server is reachable
-                env.create_rpc_client(None).await?;
+                env.create_rpc_client(None, None).await?;
                 context.config.envs.push(env.clone());
                 context.config.save()?;
                 SuiClientCommandResult::NewEnv(env)

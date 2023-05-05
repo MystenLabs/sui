@@ -44,7 +44,6 @@ use sui_types::crypto::{
 };
 use sui_types::error::SuiObjectResponseError;
 use sui_types::{base_types::ObjectID, crypto::get_key_pair, gas_coin::GasCoin};
-use test_utils::messages::make_transactions_with_wallet_context;
 use test_utils::network::TestClusterBuilder;
 
 const TEST_DATA_DIR: &str = "src/unit_tests/data/";
@@ -1825,7 +1824,7 @@ async fn test_signature_flag() -> Result<(), anyhow::Error> {
 async fn test_execute_signed_tx() -> Result<(), anyhow::Error> {
     let mut test_cluster = TestClusterBuilder::new().build().await?;
     let context = &mut test_cluster.wallet;
-    let mut txns = make_transactions_with_wallet_context(context, 1).await;
+    let mut txns = context.batch_make_transfer_transactions(1).await;
     let txn = txns.swap_remove(0);
 
     let (tx_data, signatures) = txn.to_tx_bytes_and_signatures();
