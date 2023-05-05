@@ -3,7 +3,7 @@
 
 // Test limits on number of created IDs
 
-//# init --addresses Test=0x0 --max-gas 100000000000000
+//# init --addresses Test=0x0 --max-gas 100000000000000 --protocol-version 2
 
 //# publish
 
@@ -30,8 +30,6 @@ module Test::M1 {
         vector::destroy_empty(v);
     }
 }
-
-// tests below all run out of gas with realistic prices
 
 // create below create count limit should succeed
 //# run Test::M1::create_n_ids --args 1 --gas-budget 100000000000000

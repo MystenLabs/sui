@@ -28,13 +28,8 @@ pub struct SuiRunArgs {
     pub sender: Option<String>,
     #[clap(long = "gas-price")]
     pub gas_price: Option<u64>,
-    /// If set, this will override the protocol version
-    /// specified elsewhere (e.g., in init). Use with
-    /// caution!
-    #[clap(long = "protocol-version")]
-    pub protocol_version: Option<u64>,
-    #[clap(long = "uncharged")]
-    pub uncharged: bool,
+    #[clap(long = "summarize")]
+    pub summarize: bool,
 }
 
 #[derive(Debug, clap::Parser)]
@@ -55,8 +50,10 @@ pub struct SuiPublishArgs {
 pub struct SuiInitArgs {
     #[clap(long = "accounts", multiple_values(true), multiple_occurrences(false))]
     pub accounts: Option<Vec<String>>,
-    #[clap(long = "protocol_version")]
+    #[clap(long = "protocol-version")]
     pub protocol_version: Option<u64>,
+    #[clap(long = "max-gas")]
+    pub max_gas: Option<u64>,
 }
 
 #[derive(Debug, clap::Parser)]

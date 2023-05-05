@@ -513,8 +513,8 @@ impl<'a> CompiledState<'a> {
     }
 }
 
-pub async fn compile_any<'a, 'b: 'c, 'c, F, A, R>(
-    test_adapter: &'b mut A,
+pub async fn compile_any<'state, 'adapter: 'result, 'result, F, A, R>(
+    test_adapter: &'adapter mut A,
     command: &str,
     syntax: SyntaxChoice,
     _name: String,
@@ -531,9 +531,9 @@ pub async fn compile_any<'a, 'b: 'c, 'c, F, A, R>(
     Vec<(Option<Symbol>, CompiledModule)>,
 )>
 where
-    A: MoveTestAdapter<'a> + 'b,
-    F: FnOnce(&'b mut A, Vec<(Option<Symbol>, CompiledModule)>) -> R,
-    R: Future<Output = Result<(Option<String>, Vec<(Option<Symbol>, CompiledModule)>)>> + 'c,
+    A: MoveTestAdapter<'state> + 'adapter,
+    F: FnOnce(&'adapter mut A, Vec<(Option<Symbol>, CompiledModule)>) -> R,
+    R: Future<Output = Result<(Option<String>, Vec<(Option<Symbol>, CompiledModule)>)>> + 'result,
 {
     let data = match data {
         Some(f) => f,

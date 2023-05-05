@@ -420,7 +420,7 @@ impl ValidatorService {
         // CRITICAL! Validators should never sign an external system transaction.
         fp_ensure!(
             !certificate.is_system_tx(),
-            SuiError::InvalidSystemTransaction.into()
+            dbg!(SuiError::InvalidSystemTransaction.into())
         );
 
         // Check system overload

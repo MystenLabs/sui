@@ -72,14 +72,14 @@ impl From<EventEnvelope> for SuiEvent {
     }
 }
 
-impl Into<Event> for SuiEvent {
-    fn into(self) -> Event {
+impl From<SuiEvent> for Event {
+    fn from(val: SuiEvent) -> Self {
         Event {
-            package_id: self.package_id,
-            transaction_module: self.transaction_module,
-            sender: self.sender,
-            type_: self.type_,
-            contents: self.bcs,
+            package_id: val.package_id,
+            transaction_module: val.transaction_module,
+            sender: val.sender,
+            type_: val.type_,
+            contents: val.bcs,
         }
     }
 }

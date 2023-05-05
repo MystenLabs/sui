@@ -4,9 +4,10 @@
 //! This module contains the transactional test runner instantiation for the Sui adapter
 
 use crate::{args::*, programmable_transaction_test_parser::parser::ParsedCommand};
-use anyhow::bail;
+use anyhow::{anyhow, bail};
 use async_trait::async_trait;
 use bimap::btree::BiBTreeMap;
+use fastcrypto::traits::KeyPair;
 use move_binary_format::{file_format::CompiledScript, CompiledModule};
 use move_bytecode_utils::module_cache::GetModule;
 use move_command_line_common::{
@@ -38,10 +39,8 @@ use std::{
     sync::Arc,
 };
 use sui_core::authority::{
-    authority_test_utils::{
-        init_state_with_objects, send_and_confirm_transaction_with_execution_error,
-    },
-    AuthorityState,
+    authority_test_utils::send_and_confirm_transaction_with_execution_error,
+    test_authority_builder::TestAuthorityBuilder, AuthorityState,
 };
 use sui_framework::BuiltInFramework;
 use sui_framework::DEFAULT_FRAMEWORK_PATH;
@@ -113,7 +112,6 @@ pub struct SuiTestAdapter<'a> {
     object_enumeration: BiBTreeMap<ObjectID, FakeID>,
     next_fake: (u64, u64),
     gas_price: u64,
-    protocol_config: ProtocolConfig,
     pub(crate) staged_modules: BTreeMap<Symbol, StagedPackage>,
 }
 
@@ -244,17 +242,21 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                 SuiInitArgs {
                     accounts,
                     protocol_version,
+                    max_gas,
                 },
             )) => {
                 let map = verify_and_create_named_address_mapping(named_addresses).unwrap();
                 let accounts = accounts
                     .map(|v| v.into_iter().collect::<BTreeSet<_>>())
                     .unwrap_or_default();
-                let protocol_config = if let Some(protocol_version) = protocol_version {
+                let mut protocol_config = if let Some(protocol_version) = protocol_version {
                     ProtocolConfig::get_for_version(protocol_version.into(), Chain::Unknown)
                 } else {
                     ProtocolConfig::get_for_max_version()
                 };
+                if let Some(mx_tx_gas_override) = max_gas {
+                    protocol_config.set_max_tx_gas_for_testing(mx_tx_gas_override)
+                }
                 (map, accounts, protocol_config)
             }
             None => (
@@ -307,8 +309,27 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
         }
 
         let object_ids = objects.iter().map(|obj| obj.id()).collect::<Vec<_>>();
+        let validator = {
+            let dir = tempfile::TempDir::new().unwrap();
+            let network_config = sui_config::builder::ConfigBuilder::new(&dir).build();
+            let genesis = network_config.genesis;
+            let keypair = network_config.validator_configs[0]
+                .protocol_key_pair()
+                .copy();
+            let genesis = &genesis;
+            let authority_key = &keypair;
+            let state = TestAuthorityBuilder::new()
+                .with_genesis_and_keypair(genesis, authority_key)
+                .with_protocol_config(protocol_config)
+                .build()
+                .await;
+            for o in objects {
+                state.insert_genesis_object(o).await;
+            }
+            state
+        };
         let mut test_adapter = Self {
-            validator: init_state_with_objects(objects).await,
+            validator,
             compiled_state: CompiledState::new(
                 named_address_mapping,
                 pre_compiled_deps,
@@ -325,7 +346,6 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
             next_fake: (0, 0),
             // TODO: make this configurable
             gas_price: 1000,
-            protocol_config,
             staged_modules: BTreeMap::new(),
         };
         for well_known in WELL_KNOWN_OBJECTS.iter().copied() {
@@ -407,7 +427,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
             .created
             .iter()
             .find_map(|id| {
-                let object = self.validator.database.get_object(id).unwrap().unwrap();
+                let object = self.get_object(id).unwrap();
                 let package = object.data.try_as_package()?;
                 if package
                     .serialized_module_map()
@@ -435,12 +455,9 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                 _ => (),
             }
         }
-        let output = self.object_summary_output(&summary);
+        let output = self.object_summary_output(&summary, /* summarize */ false);
         let published_modules = self
-            .validator
-            .database
             .get_object(&created_package)
-            .unwrap()
             .unwrap()
             .data
             .try_as_package()
@@ -472,10 +489,8 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
         let SuiRunArgs {
             sender,
             gas_price,
-            protocol_version,
-            uncharged,
+            summarize,
         } = extra;
-        assert!(!uncharged, "TODO");
         let mut builder = ProgrammableTransactionBuilder::new();
         let arguments = args
             .into_iter()
@@ -497,19 +512,8 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
             TransactionData::new_programmable(sender, vec![gas], pt, gas_budget, gas_price)
         };
         let transaction = self.sign_txn(sender, data);
-        let default_protocol_version = self.protocol_config.version;
-        if let Some(protocol_version) = protocol_version {
-            // override protocol version, just for this call
-            self.protocol_config =
-                ProtocolConfig::get_for_version(protocol_version.into(), Chain::Unknown)
-        }
         let summary = self.execute_txn(transaction).await?;
-        let output = self.object_summary_output(&summary);
-        // restore old protocol version (if needed)
-        if protocol_version.is_some() {
-            self.protocol_config =
-                ProtocolConfig::get_for_version(default_protocol_version, Chain::Unknown)
-        }
+        let output = self.object_summary_output(&summary, summarize);
         let empty = SerializedReturnValues {
             mutable_reference_outputs: vec![],
             return_values: vec![],
@@ -565,9 +569,9 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                     ),
                     Some(res) => res,
                 };
-                match self.validator.database.get_object(&id) {
-                    Err(_) | Ok(None) => return Ok(Some(format!("No object at id {}", $fake_id))),
-                    Ok(Some(obj)) => obj,
+                match self.get_object(&id) {
+                    Err(_) => return Ok(Some(format!("No object at id {}", $fake_id))),
+                    Ok(obj) => obj,
                 }
             }};
         }
@@ -629,7 +633,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                     TransactionData::new_programmable(sender, vec![gas], pt, gas_budget, gas_price)
                 });
                 let summary = self.execute_txn(transaction).await?;
-                let output = self.object_summary_output(&summary);
+                let output = self.object_summary_output(&summary, /* summarize */ false);
                 Ok(output)
             }
             SuiSubcommand::ConsensusCommitPrologue(ConsensusCommitPrologueCommand {
@@ -638,7 +642,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                 let transaction =
                     VerifiedTransaction::new_consensus_commit_prologue(0, 0, timestamp_ms);
                 let summary = self.execute_txn(transaction).await?;
-                let output = self.object_summary_output(&summary);
+                let output = self.object_summary_output(&summary, /* summarize */ false);
                 Ok(output)
             }
             SuiSubcommand::ProgrammableTransaction(ProgrammableTransactionCommand {
@@ -692,7 +696,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                     )
                 });
                 let summary = self.execute_txn(transaction).await?;
-                let output = self.object_summary_output(&summary);
+                let output = self.object_summary_output(&summary, /* summarize */ false);
                 Ok(output)
             }
             SuiSubcommand::UpgradePackage(UpgradePackageCommand {
@@ -871,10 +875,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                             Some(id) => id,
                             None => bail!("INVALID TEST. Unknown object, object({})", fake_id),
                         };
-                        let obj = match self.validator.database.get_object(&id) {
-                            Ok(Some(obj)) => obj,
-                            _ => bail!("INVALID TEST. Could not load object argument {}", id),
-                        };
+                        let obj = self.get_object(&id)?;
                         let package = obj.data.try_as_package().map(|package| {
                             package
                                 .serialized_module_map()
@@ -1000,7 +1001,7 @@ impl<'a> SuiTestAdapter<'a> {
             .created
             .iter()
             .find_map(|id| {
-                let object = self.validator.database.get_object(id).unwrap().unwrap();
+                let object = self.get_object(id).unwrap();
                 let package = object.data.try_as_package()?;
                 Some(package.id())
             })
@@ -1020,7 +1021,7 @@ impl<'a> SuiTestAdapter<'a> {
                 _ => (),
             }
         }
-        let output = self.object_summary_output(&summary);
+        let output = self.object_summary_output(&summary, /* summarize */ false);
         Ok(output)
     }
 
@@ -1037,10 +1038,7 @@ impl<'a> SuiTestAdapter<'a> {
             None => &self.default_account,
         };
         let gas_payment = self
-            .validator
-            .database
             .get_object(&test_account.gas)
-            .unwrap()
             .unwrap()
             .compute_object_reference();
         let data = txn_data(test_account.address, gas_payment);
@@ -1152,17 +1150,17 @@ impl<'a> SuiTestAdapter<'a> {
         }
     }
 
+    fn get_object(&self, id: &ObjectID) -> anyhow::Result<Object> {
+        match self.validator.database.get_object(id) {
+            Ok(Some(obj)) => Ok(obj),
+            Ok(None) | Err(_) => Err(anyhow!("INVALID TEST! Unable to find object {id}")),
+        }
+    }
+
     // stable way of sorting objects by type. Does not however, produce a stable sorting
     // between objects of the same type
     fn get_object_sorting_key(&self, id: &ObjectID) -> String {
-        match &self
-            .validator
-            .database
-            .get_object(id)
-            .unwrap()
-            .unwrap()
-            .data
-        {
+        match &self.get_object(id).unwrap().data {
             object::Data::Move(obj) => self.stabilize_str(format!("{}", obj.type_())),
             object::Data::Package(pkg) => pkg
                 .serialized_module_map()
@@ -1205,34 +1203,35 @@ impl<'a> SuiTestAdapter<'a> {
             unwrapped_then_deleted,
             wrapped,
         }: &TxnSummary,
+        summarize: bool,
     ) -> Option<String> {
         let mut out = String::new();
         if !events.is_empty() {
-            write!(out, "events: {}", self.list_events(events)).unwrap();
+            write!(out, "events: {}", self.list_events(events, summarize)).unwrap();
         }
         if !created.is_empty() {
             if !out.is_empty() {
                 out.push('\n')
             }
-            write!(out, "created: {}", self.list_objs(created)).unwrap();
+            write!(out, "created: {}", self.list_objs(created, summarize)).unwrap();
         }
         if !mutated.is_empty() {
             if !out.is_empty() {
                 out.push('\n')
             }
-            write!(out, "mutated: {}", self.list_objs(mutated)).unwrap();
+            write!(out, "mutated: {}", self.list_objs(mutated, summarize)).unwrap();
         }
         if !unwrapped.is_empty() {
             if !out.is_empty() {
                 out.push('\n')
             }
-            write!(out, "unwrapped: {}", self.list_objs(unwrapped)).unwrap();
+            write!(out, "unwrapped: {}", self.list_objs(unwrapped, summarize)).unwrap();
         }
         if !deleted.is_empty() {
             if !out.is_empty() {
                 out.push('\n')
             }
-            write!(out, "deleted: {}", self.list_objs(deleted)).unwrap();
+            write!(out, "deleted: {}", self.list_objs(deleted, summarize)).unwrap();
         }
         if !unwrapped_then_deleted.is_empty() {
             if !out.is_empty() {
@@ -1241,7 +1240,7 @@ impl<'a> SuiTestAdapter<'a> {
             write!(
                 out,
                 "unwrapped_then_deleted: {}",
-                self.list_objs(unwrapped_then_deleted)
+                self.list_objs(unwrapped_then_deleted, summarize)
             )
             .unwrap();
         }
@@ -1249,7 +1248,7 @@ impl<'a> SuiTestAdapter<'a> {
             if !out.is_empty() {
                 out.push('\n')
             }
-            write!(out, "wrapped: {}", self.list_objs(wrapped)).unwrap();
+            write!(out, "wrapped: {}", self.list_objs(wrapped, summarize)).unwrap();
         }
         out.push('\n');
         write!(out, "gas summary: {}", gas_summary).unwrap();
@@ -1261,7 +1260,10 @@ impl<'a> SuiTestAdapter<'a> {
         }
     }
 
-    fn list_events(&self, events: &[Event]) -> String {
+    fn list_events(&self, events: &[Event], summarize: bool) -> String {
+        if summarize {
+            return format!("{}", events.len());
+        }
         events
             .iter()
             .map(|event| self.stabilize_str(format!("{:?}", event)))
@@ -1269,7 +1271,10 @@ impl<'a> SuiTestAdapter<'a> {
             .join(", ")
     }
 
-    fn list_objs(&self, objs: &[ObjectID]) -> String {
+    fn list_objs(&self, objs: &[ObjectID], summarize: bool) -> String {
+        if summarize {
+            return format!("{}", objs.len());
+        }
         objs.iter()
             .map(|id| match self.real_to_fake_object_id(id) {
                 None => "object(_)".to_string(),
