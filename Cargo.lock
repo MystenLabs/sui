@@ -9655,6 +9655,7 @@ dependencies = [
  "sui-json",
  "sui-json-rpc",
  "sui-json-rpc-types",
+ "sui-protocol-config",
  "sui-types",
  "tokio",
  "versions",

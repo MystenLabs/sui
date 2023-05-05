@@ -17,6 +17,7 @@ use serde_json::json;
 
 use sui_json::SuiJsonValue;
 use sui_json_rpc::error::Error;
+use sui_json_rpc_types::ProtocolConfigResponse;
 use sui_json_rpc_types::TransactionFilter;
 use sui_json_rpc_types::{
     Balance, Checkpoint, CheckpointId, CheckpointPage, Coin, CoinPage, EventPage, MoveCallParams,
@@ -30,6 +31,7 @@ use sui_json_rpc_types::{
 };
 use sui_json_rpc_types::{SuiTypeTag, ValidatorApy, ValidatorApys};
 use sui_open_rpc::ExamplePairing;
+use sui_protocol_config::ProtocolConfig;
 use sui_types::balance::Supply;
 use sui_types::base_types::random_object_ref;
 use sui_types::base_types::{
@@ -110,6 +112,7 @@ impl RpcExampleProvider {
             self.multi_get_objects_example(),
             self.multi_get_transaction_blocks(),
             self.suix_get_validators_apy(),
+            self.get_protocol_config(),
         ]
         .into_iter()
         .map(|example| (example.function_name, example.examples))
@@ -549,6 +552,31 @@ impl RpcExampleProvider {
             .into_iter()
             .map(|_| TransactionDigest::new(self.rng.gen()))
             .collect()
+    }
+
+    fn get_protocol_config(&mut self) -> Examples {
+        let version = Some(6);
+        Examples::new(
+            "sui_getProtocolConfig",
+            vec![ExamplePairing::new(
+                "Return the protocol config for the given protocol version. If none is specified, the node uses the version of the latest epoch it has processed",
+                vec![
+                    ("version", json!(version)),
+                ],
+                json!(Self::get_protocol_config_impl(version)),
+            )],
+        )
+    }
+
+    fn get_protocol_config_impl(version: Option<u64>) -> ProtocolConfigResponse {
+        ProtocolConfigResponse::from(
+            version
+                .map(|v| {
+                    ProtocolConfig::get_for_version_if_supported(v.into())
+                        .unwrap_or(ProtocolConfig::get_for_min_version())
+                })
+                .unwrap_or(ProtocolConfig::get_for_min_version()),
+        )
     }
 
     fn get_transfer_data_response(
