@@ -23,8 +23,8 @@ use sui_json_rpc_types::{
     DryRunTransactionBlockResponse, DynamicFieldPage, EventFilter, EventPage, ObjectsPage,
     ProtocolConfigResponse, SuiCoinMetadata, SuiCommittee, SuiEvent, SuiGetPastObjectRequest,
     SuiMoveNormalizedModule, SuiObjectDataOptions, SuiObjectResponse, SuiObjectResponseQuery,
-    SuiPastObjectResponse, SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponse,
-    SuiTransactionBlockResponseOptions, SuiTransactionBlockResponseQuery, TransactionBlocksPage,
+    SuiPastObjectResponse, SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
+    SuiTransactionBlockResponseQuery, TransactionBlocksPage,
 };
 use sui_json_rpc_types::{CheckpointPage, SuiLoadedChildObjectsResponse};
 use sui_types::balance::Supply;
@@ -495,25 +495,23 @@ impl QuorumDriverApi {
                 Some(request_type.clone()),
             )
             .await?;
+        tracing::info!(
+            "apis::execute_transaction_block tx: {:?}, request_type: {:?}, response: {:?}",
+            tx.digest(),
+            request_type,
+            response
+        );
 
         Ok(match request_type {
             ExecuteTransactionRequestType::WaitForEffectsCert => response,
             ExecuteTransactionRequestType::WaitForLocalExecution => {
                 if let Some(confirmed_local_execution) = response.confirmed_local_execution {
                     if !confirmed_local_execution {
-                        Self::wait_until_fullnode_sees_tx(
-                            &self.api,
-                            *response
-                                .effects
-                                .as_ref()
-                                .map(|e| e.transaction_digest())
-                                .ok_or_else(|| {
-                                    Error::DataError("Expect effects to be non-empty".to_string())
-                                })?,
-                        )
-                        .await?;
+                        tracing::info!("Waiting for fullnode to see tx: {:?}", tx.digest());
+                        Self::wait_until_fullnode_sees_tx(&self.api, *tx.digest()).await?;
                     }
                 }
+                tracing::info!("Local execution confirmed {:?}", tx.digest());
                 response.confirmed_local_execution = Some(true);
                 response
             }
