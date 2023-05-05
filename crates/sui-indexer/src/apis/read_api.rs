@@ -10,9 +10,9 @@ use jsonrpsee::RpcModule;
 use sui_json_rpc::api::{ReadApiClient, ReadApiServer};
 use sui_json_rpc::SuiRpcModule;
 use sui_json_rpc_types::{
-    Checkpoint, CheckpointId, CheckpointPage, SuiEvent, SuiGetPastObjectRequest,
-    SuiObjectDataOptions, SuiObjectResponse, SuiPastObjectResponse, SuiTransactionBlockResponse,
-    SuiTransactionBlockResponseOptions,
+    Checkpoint, CheckpointId, CheckpointPage, ProtocolConfigResponse, SuiEvent,
+    SuiGetPastObjectRequest, SuiObjectDataOptions, SuiObjectResponse, SuiPastObjectResponse,
+    SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
 };
 use sui_open_rpc::Module;
 use sui_types::base_types::{ObjectID, SequenceNumber};
@@ -352,6 +352,20 @@ where
         let dyn_fields_resp = self.fullnode.get_loaded_child_objects(digest).await;
         dynamic_fields_load_obj_guard.stop_and_record();
         dyn_fields_resp
+    }
+
+    async fn get_protocol_config(
+        &self,
+        version: Option<BigInt<u64>>,
+    ) -> RpcResult<ProtocolConfigResponse> {
+        let protocol_config_guard = self
+            .state
+            .indexer_metrics()
+            .get_protocol_config_latency
+            .start_timer();
+        let protocol_config_resp = self.fullnode.get_protocol_config(version).await;
+        protocol_config_guard.stop_and_record();
+        protocol_config_resp
     }
 }
 

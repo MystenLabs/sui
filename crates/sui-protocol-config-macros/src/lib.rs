@@ -211,7 +211,7 @@ pub fn getters_macro(input: TokenStream) -> TokenStream {
         }
 
         #[allow(non_camel_case_types)]
-        #[derive(Clone, Serialize, Debug, PartialEq, Deserialize)]
+        #[derive(Clone, Serialize, Debug, PartialEq, Deserialize, schemars::JsonSchema)]
         pub enum ProtocolConfigValue {
             #(#inner_types(#inner_types),)*
         }

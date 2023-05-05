@@ -875,6 +875,31 @@
       ]
     },
     {
+      "name": "sui_getProtocolConfig",
+      "tags": [
+        {
+          "name": "Read API"
+        }
+      ],
+      "description": "Return the protocol config table for the given version number. If the version number is not specified, return the latest protocol config table supported by the node.",
+      "params": [
+        {
+          "name": "version",
+          "description": "An optional protocol version specifier. If omitted, the latest protocol config table for the node will be returned.",
+          "schema": {
+            "$ref": "#/components/schemas/BigInt_for_uint64"
+          }
+        }
+      ],
+      "result": {
+        "name": "ProtocolConfigResponse",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/ProtocolConfig"
+        }
+      }
+    },
+    {
       "name": "sui_getTotalTransactionBlocks",
       "tags": [
         {
@@ -3714,6 +3739,9 @@
       "BigInt_for_uint128": {
         "type": "string"
       },
+      "BigInt_for_uint32": {
+        "type": "string"
+      },
       "BigInt_for_uint64": {
         "type": "string"
       },
@@ -5988,6 +6016,79 @@
             ]
           }
         }
+      },
+      "ProtocolConfig": {
+        "type": "object",
+        "required": [
+          "attributes",
+          "maxSupportedProtocolVersion",
+          "minSupportedProtocolVersion",
+          "protocolVersion"
+        ],
+        "properties": {
+          "attributes": {
+            "type": "object",
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/ProtocolConfigValue"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "maxSupportedProtocolVersion": {
+            "$ref": "#/components/schemas/ProtocolVersion"
+          },
+          "minSupportedProtocolVersion": {
+            "$ref": "#/components/schemas/ProtocolVersion"
+          },
+          "protocolVersion": {
+            "$ref": "#/components/schemas/ProtocolVersion"
+          }
+        }
+      },
+      "ProtocolConfigValue": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "u32"
+            ],
+            "properties": {
+              "u32": {
+                "$ref": "#/components/schemas/BigInt_for_uint32"
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": [
+              "u64"
+            ],
+            "properties": {
+              "u64": {
+                "$ref": "#/components/schemas/BigInt_for_uint64"
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": [
+              "f64"
+            ],
+            "properties": {
+              "f64": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          }
+        ]
       },
       "ProtocolVersion": {
         "$ref": "#/components/schemas/BigInt_for_uint64"
