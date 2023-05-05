@@ -28,23 +28,23 @@ pub enum DbToolCommand {
 #[clap(rename_all = "kebab-case")]
 pub struct Options {
     /// The type of store to dump
-    #[clap(long = "store", value_enum)]
+    #[clap(long = "store", short = 's', value_enum)]
     store_name: StoreName,
     /// The name of the table to dump
-    #[clap(long = "table-name")]
+    #[clap(long = "table-name", short = 't')]
     table_name: String,
     /// The size of page to dump. This is a u16
-    #[clap(long = "page-size")]
+    #[clap(long = "page-size", short = 'p')]
     page_size: u16,
     /// The page number to dump
-    #[clap(long = "page-num")]
+    #[clap(long = "page-num", short = 'n')]
     page_number: usize,
 
     // TODO: We should load this automatically from the system object in AuthorityPerpetualTables.
     // This is very difficult to do right now because you can't share code between
     // AuthorityPerpetualTables and AuthorityEpochTablesReadonly.
     /// The epoch to use when loading AuthorityEpochTables.
-    #[clap(long = "epoch")]
+    #[clap(long = "epoch", short = 'e')]
     epoch: Option<EpochId>,
 }
 
