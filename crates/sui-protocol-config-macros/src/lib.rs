@@ -27,7 +27,7 @@ use syn::{parse_macro_input, Data, DeriveInput, Fields, Type};
 ///     /// Returns the value of the field if exists at the given version, otherise None
 ///     pub fn lookup_attr(&self, value: String) -> Option<ProtocolConfigValue>;
 ///
-///     /// Returns a map of all confgis to values
+///     /// Returns a map of all configs to values
 ///     pub fn attr_map(&self) -> std::collections::BTreeMap<String, Option<ProtocolConfigValue>>;
 ///
 ///     /// Returns a feature by the string name or None if it doesn't exist
@@ -76,7 +76,7 @@ pub fn getters_macro(input: TokenStream) -> TokenStream {
                             panic!("Expected angle bracketed arguments.");
                         };
 
-                        let getter =quote! {
+                        let getter = quote! {
                             // Derive the getter
                             pub fn #field_name(&self) -> #inner_type {
                                 self.#field_name.expect(Self::CONSTANT_ERR_MSG)
