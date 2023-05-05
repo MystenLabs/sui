@@ -53,13 +53,13 @@ export function InputsCard({ inputs }: InputsCardProps) {
                     return (
                         <div
                             key={key}
-                            className="flex flex-wrap items-center justify-between gap-x-12"
+                            className="flex items-start justify-between"
                         >
                             <Text variant="pBody/medium" color="steel-dark">
                                 {key}
                             </Text>
 
-                            <div className="break-all">
+                            <div className="max-w-[66%] break-all">
                                 <Text
                                     variant="pBody/medium"
                                     color="steel-darker"
