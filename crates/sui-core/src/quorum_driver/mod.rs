@@ -33,7 +33,8 @@ use mysten_common::sync::notify_read::{NotifyRead, Registration};
 use mysten_metrics::{spawn_monitored_task, GaugeGuard};
 use std::fmt::Write;
 use sui_types::error::{SuiError, SuiResult};
-use sui_types::messages::{PlainTransactionInfoResponse, VerifiedCertificate, VerifiedTransaction};
+use sui_types::messages::{VerifiedCertificate, VerifiedTransaction};
+use sui_types::messages_grpc::PlainTransactionInfoResponse;
 
 use self::reconfig_observer::ReconfigObserver;
 
@@ -63,7 +64,7 @@ impl Debug for QuorumDriverTask {
     }
 }
 
-pub struct QuorumDriver<A> {
+pub struct QuorumDriver<A: Clone> {
     validators: ArcSwap<AuthorityAggregator<A>>,
     task_sender: Sender<QuorumDriverTask>,
     effects_subscribe_sender: tokio::sync::broadcast::Sender<QuorumDriverEffectsQueueResult>,
@@ -72,7 +73,7 @@ pub struct QuorumDriver<A> {
     max_retry_times: u8,
 }
 
-impl<A> QuorumDriver<A> {
+impl<A: Clone> QuorumDriver<A> {
     pub(crate) fn new(
         validators: ArcSwap<AuthorityAggregator<A>>,
         task_sender: Sender<QuorumDriverTask>,
@@ -95,7 +96,7 @@ impl<A> QuorumDriver<A> {
         &self.validators
     }
 
-    pub fn clone_committee(&self) -> Committee {
+    pub fn clone_committee(&self) -> Arc<Committee> {
         self.validators.load().committee.clone()
     }
 
@@ -289,7 +290,7 @@ where
                     // the original transaction + retryable stake. Will continue to retry the original transaction.
                     debug!(
                         ?errors,
-                        "Observed Tx {tx_digest:} is still in retryable state. Conflicting Txes: {conflicting_tx_digests:?}", 
+                        "Observed Tx {tx_digest:} is still in retryable state. Conflicting Txes: {conflicting_tx_digests:?}",
                     );
                     Err(None)
                 }
@@ -362,7 +363,7 @@ where
             Err(err) => {
                 debug!(
                     ?tx_digest,
-                    "Encountered error while attemptting conflicting transaction: {:?}", err
+                    "Encountered error while attempting conflicting transaction: {:?}", err
                 );
                 let err = Err(Some(QuorumDriverError::ObjectsDoubleUsed {
                     conflicting_txes: conflicting_tx_digests,
@@ -526,7 +527,7 @@ where
     }
 }
 
-pub struct QuorumDriverHandler<A> {
+pub struct QuorumDriverHandler<A: Clone> {
     quorum_driver: Arc<QuorumDriver<A>>,
     effects_subscriber: tokio::sync::broadcast::Receiver<QuorumDriverEffectsQueueResult>,
     quorum_driver_metrics: Arc<QuorumDriverMetrics>,
@@ -783,7 +784,7 @@ where
     }
 }
 
-pub struct QuorumDriverHandlerBuilder<A> {
+pub struct QuorumDriverHandlerBuilder<A: Clone> {
     validators: Arc<AuthorityAggregator<A>>,
     metrics: Arc<QuorumDriverMetrics>,
     notifier: Option<Arc<NotifyRead<TransactionDigest, QuorumDriverResult>>>,

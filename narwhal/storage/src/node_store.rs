@@ -70,14 +70,14 @@ impl NodeStorage {
                 Self::HEADERS_CF,
                 default_db_options()
                     .optimize_for_write_throughput()
-                    .optimize_for_large_values_no_scan()
+                    .optimize_for_large_values_no_scan(1 << 10)
                     .options,
             ),
             (
                 Self::CERTIFICATES_CF,
                 default_db_options()
                     .optimize_for_write_throughput()
-                    .optimize_for_large_values_no_scan()
+                    .optimize_for_large_values_no_scan(1 << 10)
                     .options,
             ),
             (Self::CERTIFICATE_DIGEST_BY_ROUND_CF, cf_options.clone()),
@@ -87,7 +87,7 @@ impl NodeStorage {
                 Self::BATCHES_CF,
                 default_db_options()
                     .optimize_for_write_throughput()
-                    .optimize_for_large_values_no_scan()
+                    .optimize_for_large_values_no_scan(1 << 10)
                     .options,
             ),
             (Self::LAST_COMMITTED_CF, cf_options.clone()),

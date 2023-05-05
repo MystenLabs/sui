@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::messages::CommandIndex;
 use crate::ObjectID;
 use move_binary_format::file_format::{CodeOffset, TypeParameterIndex};
 use move_core_types::language_storage::ModuleId;
@@ -328,3 +327,5 @@ impl ExecutionStatus {
         }
     }
 }
+
+pub type CommandIndex = usize;

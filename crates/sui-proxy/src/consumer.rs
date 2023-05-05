@@ -109,6 +109,7 @@ pub fn populate_labels(
     let timer = CONSUMER_OPERATION_DURATION
         .with_label_values(&["populate_labels"])
         .start_timer();
+    debug!("received metrics from {name} on {inventory_hostname}");
     // proto::LabelPair doesn't have pub fields so we can't use
     // struct literals to construct
     let mut network_label = proto::LabelPair::default();
@@ -119,11 +120,7 @@ pub fn populate_labels(
     host_label.set_name("host".into());
     host_label.set_value(name);
 
-    let mut relay_host_label = proto::LabelPair::default();
-    relay_host_label.set_name("relay_host".into());
-    relay_host_label.set_value(inventory_hostname);
-
-    let labels = vec![network_label, host_label, relay_host_label];
+    let labels = vec![network_label, host_label];
 
     let mut data = data;
     // add our extra labels to our incoming metric data
@@ -330,7 +327,6 @@ mod tests {
             &create_labels(vec![
                 ("network", "unittest-network"),
                 ("host", "validator-0"),
-                ("relay_host", "inventory-hostname"),
             ])
         );
     }

@@ -155,12 +155,12 @@ module sui_system::rewards_distribution_tests {
         governance_test_utils::advance_epoch(scenario);
         // V1: 200, V2: 300, V3: 300, V4: 400
 
-        set_commission_rate_and_advance_epoch(VALIDATOR_ADDR_2, 5000, scenario); // 50% commission
+        set_commission_rate_and_advance_epoch(VALIDATOR_ADDR_2, 2000, scenario); // 50% commission
         advance_epoch_with_reward_amounts(0, 120, scenario);
         // V1: 230, V2: 330, V3: 330, V4: 430
-        // 5 SUI, or 50 % of staker_2's rewards, goes to validator_2
-        assert_validator_non_self_stake_amounts(validator_addrs(), vector[115 * MIST_PER_SUI, 105 * MIST_PER_SUI, 0, 0], scenario);
-        assert_validator_self_stake_amounts(validator_addrs(), vector[115 * MIST_PER_SUI, 225 * MIST_PER_SUI, 330 * MIST_PER_SUI, 430 * MIST_PER_SUI], scenario);
+        // 2 SUI, or 20 % of staker_2's rewards, goes to validator_2
+        assert_validator_non_self_stake_amounts(validator_addrs(), vector[115 * MIST_PER_SUI, 108 * MIST_PER_SUI, 0, 0], scenario);
+        assert_validator_self_stake_amounts(validator_addrs(), vector[115 * MIST_PER_SUI, 222 * MIST_PER_SUI, 330 * MIST_PER_SUI, 430 * MIST_PER_SUI], scenario);
 
         set_commission_rate_and_advance_epoch(VALIDATOR_ADDR_1, 1000, scenario); // 10% commission
 
@@ -170,10 +170,10 @@ module sui_system::rewards_distribution_tests {
         // Staker 1 rewards in the recent distribution is 0.9 x 30 = 27 SUI
         // Validator 1 rewards in the recent distribution is 60 - 27 = 33 SUI
 
-        // Staker 2 amounts for 0.5 * 60 * (105 / 330) + 105 = 114.545 SUI
-        // Validator 2 amounts for 390 - 114.545 = 275.454 SUI
-        assert_validator_non_self_stake_amounts(validator_addrs(), vector[142 * MIST_PER_SUI, 114545454547, 0, 0], scenario);
-        assert_validator_self_stake_amounts(validator_addrs(), vector[148 * MIST_PER_SUI, 275454545453, 390 * MIST_PER_SUI, 490 * MIST_PER_SUI], scenario);
+        // Staker 2 amounts for 0.8 * 60 * (108 / 330) + 108 = 123.709 SUI
+        // Validator 2 amounts for 390 - 123.709 = 266.291 SUI
+        assert_validator_non_self_stake_amounts(validator_addrs(), vector[142 * MIST_PER_SUI, 123709090909, 0, 0], scenario);
+        assert_validator_self_stake_amounts(validator_addrs(), vector[148 * MIST_PER_SUI, 266290909091, 390 * MIST_PER_SUI, 490 * MIST_PER_SUI], scenario);
 
         test_scenario::end(scenario_val);
     }

@@ -5,6 +5,7 @@ use crate::sui_client_config::SuiClientConfig;
 use crate::SuiClient;
 use anyhow::anyhow;
 use colored::Colorize;
+use shared_crypto::intent::Intent;
 use std::collections::BTreeSet;
 use std::path::Path;
 use std::sync::Arc;
@@ -14,9 +15,14 @@ use sui_json_rpc_types::{
     SuiObjectResponseQuery, SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
 };
 use sui_keys::keystore::AccountKeystore;
+use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress};
+use sui_types::crypto::{get_key_pair, AccountKeyPair};
 use sui_types::gas_coin::GasCoin;
-use sui_types::messages::VerifiedTransaction;
+use sui_types::messages::TransactionDataAPI;
+use sui_types::messages::{
+    Transaction, TransactionData, VerifiedTransaction, TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
+};
 use tokio::sync::RwLock;
 use tracing::warn;
 
@@ -24,12 +30,14 @@ pub struct WalletContext {
     pub config: PersistedConfig<SuiClientConfig>,
     request_timeout: Option<std::time::Duration>,
     client: Arc<RwLock<Option<SuiClient>>>,
+    max_concurrent_requests: Option<u64>,
 }
 
 impl WalletContext {
     pub async fn new(
         config_path: &Path,
         request_timeout: Option<std::time::Duration>,
+        max_concurrent_requests: Option<u64>,
     ) -> clap::Result<Self, anyhow::Error> {
         let config: SuiClientConfig = PersistedConfig::read(config_path).map_err(|err| {
             anyhow!(
@@ -43,6 +51,7 @@ impl WalletContext {
             config,
             request_timeout,
             client: Default::default(),
+            max_concurrent_requests,
         };
         Ok(context)
     }
@@ -61,7 +70,7 @@ impl WalletContext {
             let client = self
                 .config
                 .get_active_env()?
-                .create_rpc_client(self.request_timeout)
+                .create_rpc_client(self.request_timeout, self.max_concurrent_requests)
                 .await?;
             if let Err(e) = client.check_api_version() {
                 warn!("{e}");
@@ -248,6 +257,21 @@ impl WalletContext {
         Ok(gas_price)
     }
 
+    /// Sign a transaction with a key currently managed by the WalletContext
+    pub fn sign_transaction(&self, data: &TransactionData) -> VerifiedTransaction {
+        let sig = self
+            .config
+            .keystore
+            .sign_secure(&data.sender(), data, Intent::sui_transaction())
+            .unwrap();
+        // TODO: To support sponsored transaction, we should also look at the gas owner.
+        VerifiedTransaction::new_unchecked(Transaction::from_data(
+            data.clone(),
+            Intent::sui_transaction(),
+            vec![sig],
+        ))
+    }
+
     pub async fn execute_transaction_block(
         &self,
         tx: VerifiedTransaction,
@@ -264,8 +288,62 @@ impl WalletContext {
                     .with_events()
                     .with_object_changes()
                     .with_balance_changes(),
-                Some(sui_types::messages::ExecuteTransactionRequestType::WaitForLocalExecution),
+                Some(sui_types::quorum_driver_types::ExecuteTransactionRequestType::WaitForLocalExecution),
             )
             .await?)
+    }
+
+    /// A helper function to make Transactions with controlled accounts in WalletContext.
+    /// Particularly, the wallet needs to own gas objects for transactions.
+    /// However, if this function is called multiple times without any "sync" actions
+    /// on gas object management, txns may fail and objects may be locked.
+    ///
+    /// The param is called `max_txn_num` because it does not always return the exact
+    /// same amount of Transactions, for example when there are not enough gas objects
+    /// controlled by the WalletContext. Caller should rely on the return value to
+    /// check the count.
+    pub async fn batch_make_transfer_transactions(
+        &self,
+        max_txn_num: usize,
+    ) -> Vec<VerifiedTransaction> {
+        let recipient = get_key_pair::<AccountKeyPair>().0;
+        let accounts_and_objs = self.get_all_accounts_and_gas_objects().await.unwrap();
+        let mut res = Vec::with_capacity(max_txn_num);
+
+        let gas_price = self.get_reference_gas_price().await.unwrap();
+        for (address, objs) in accounts_and_objs {
+            for obj in objs {
+                if res.len() >= max_txn_num {
+                    return res;
+                }
+                let data = TransactionData::new_transfer_sui(
+                    recipient,
+                    address,
+                    Some(2),
+                    obj,
+                    gas_price * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
+                    gas_price,
+                );
+                let tx = self.sign_transaction(&data);
+                res.push(tx);
+            }
+        }
+        res
+    }
+
+    pub async fn make_staking_transaction(
+        &self,
+        validator_address: SuiAddress,
+    ) -> VerifiedTransaction {
+        let accounts_and_objs = self.get_all_accounts_and_gas_objects().await.unwrap();
+        let sender = accounts_and_objs[0].0;
+        let gas_object = accounts_and_objs[0].1[0];
+        let stake_object = accounts_and_objs[0].1[1];
+        let gas_price = self.get_reference_gas_price().await.unwrap();
+        self.sign_transaction(
+            &TestTransactionBuilder::new(sender, gas_object, gas_price)
+                .call_staking(stake_object, validator_address)
+                .build(),
+        )
     }
 }

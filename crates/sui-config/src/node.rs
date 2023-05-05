@@ -15,6 +15,7 @@ use serde_with::serde_as;
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::time::Duration;
 use std::usize;
 use sui_keys::keypair_file::{read_authority_keypair_from_file, read_keypair_from_file};
 use sui_protocol_config::SupportedProtocolVersions;
@@ -234,15 +235,24 @@ pub struct ConsensusConfig {
     pub address: Multiaddr,
     pub db_path: PathBuf,
 
-    // Optional alternative address preferentially used by a primary to talk to its own worker.
-    // For example, this could be used to connect to co-located workers over a private LAN address.
+    /// Optional alternative address preferentially used by a primary to talk to its own worker.
+    /// For example, this could be used to connect to co-located workers over a private LAN address.
     pub internal_worker_address: Option<Multiaddr>,
 
-    // Maximum number of pending transactions to submit to consensus, including those
-    // in submission wait.
-    // Assuming 10_000 txn tps * 10 sec consensus latency = 100_000 inflight consensus txns,
-    // Default to 100_000.
+    /// Maximum number of pending transactions to submit to consensus, including those
+    /// in submission wait.
+    /// Assuming 10_000 txn tps * 10 sec consensus latency = 100_000 inflight consensus txns,
+    /// Default to 100_000.
     pub max_pending_transactions: Option<usize>,
+
+    /// When defined caps the calculated submission position to the max_submit_position. Even if the
+    /// is elected to submit from a higher position than this, it will "reset" to the max_submit_position.
+    pub max_submit_position: Option<usize>,
+
+    /// The submit delay step to consensus defined in milliseconds. When provided it will
+    /// override the current back off logic otherwise the default backoff logic will be applied based
+    /// on consensus latency estimates.
+    pub submit_delay_step_override_millis: Option<u64>,
 
     pub narwhal_config: ConsensusParameters,
 }
@@ -258,6 +268,11 @@ impl ConsensusConfig {
 
     pub fn max_pending_transactions(&self) -> usize {
         self.max_pending_transactions.unwrap_or(100_000)
+    }
+
+    pub fn submit_delay_step_override(&self) -> Option<Duration> {
+        self.submit_delay_step_override_millis
+            .map(Duration::from_millis)
     }
 
     pub fn narwhal_config(&self) -> &ConsensusParameters {
@@ -405,11 +420,14 @@ pub struct AuthorityStorePruningConfig {
 
 impl Default for AuthorityStorePruningConfig {
     fn default() -> Self {
+        // TODO: Remove this after aggressive pruning is enabled by default
+        let num_epochs_to_retain = if cfg!(msim) { 0 } else { 2 };
+        let pruning_run_delay_seconds = if cfg!(msim) { Some(5) } else { None };
         Self {
             num_latest_epoch_dbs_to_retain: usize::MAX,
             epoch_db_pruning_period_secs: u64::MAX,
-            num_epochs_to_retain: 2,
-            pruning_run_delay_seconds: None,
+            num_epochs_to_retain,
+            pruning_run_delay_seconds,
             max_checkpoints_in_batch: 10,
             max_transactions_in_batch: 1000,
             use_range_deletion: true,
@@ -419,22 +437,28 @@ impl Default for AuthorityStorePruningConfig {
 
 impl AuthorityStorePruningConfig {
     pub fn validator_config() -> Self {
+        // TODO: Remove this after aggressive pruning is enabled by default
+        let num_epochs_to_retain = if cfg!(msim) { 0 } else { 2 };
+        let pruning_run_delay_seconds = if cfg!(msim) { Some(2) } else { None };
         Self {
             num_latest_epoch_dbs_to_retain: 3,
             epoch_db_pruning_period_secs: 60 * 60,
-            num_epochs_to_retain: 2,
-            pruning_run_delay_seconds: None,
+            num_epochs_to_retain,
+            pruning_run_delay_seconds,
             max_checkpoints_in_batch: 10,
             max_transactions_in_batch: 1000,
             use_range_deletion: true,
         }
     }
     pub fn fullnode_config() -> Self {
+        // TODO: Remove this after aggressive pruning is enabled by default
+        let num_epochs_to_retain = if cfg!(msim) { 0 } else { 2 };
+        let pruning_run_delay_seconds = if cfg!(msim) { Some(2) } else { None };
         Self {
             num_latest_epoch_dbs_to_retain: 3,
             epoch_db_pruning_period_secs: 60 * 60,
-            num_epochs_to_retain: 2,
-            pruning_run_delay_seconds: None,
+            num_epochs_to_retain,
+            pruning_run_delay_seconds,
             max_checkpoints_in_batch: 10,
             max_transactions_in_batch: 1000,
             use_range_deletion: true,

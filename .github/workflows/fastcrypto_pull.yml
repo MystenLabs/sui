@@ -18,7 +18,7 @@ jobs:
       - uses: actions-rs/toolchain@v1
       - uses: bmwill/rust-cache@v1 # Fork of 'Swatinem/rust-cache' which allows caching additional paths
       - name: Install cargo-hakari, and cache the binary
-        uses: baptiste0928/cargo-install@v1
+        uses: baptiste0928/cargo-install@48c92f3d491efa23daace9891498a14c5aaa1afd
         with:
           crate: cargo-hakari
           locked: true

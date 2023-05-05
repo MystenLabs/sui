@@ -170,14 +170,15 @@ impl KeyToolCommand {
                     let file_name = format!("bls-{address}.key");
                     write_authority_keypair_to_file(&keypair, file_name)?;
                 } else {
-                    let (address, kp, scheme, _) =
+                    let (address, kp, scheme, phrase) =
                         generate_new_key(key_scheme, derivation_path, word_length)?;
                     let file = format!("{address}.key");
                     write_keypair_to_file(&kp, &file)?;
                     println!(
-                        "Keypair wrote to file path: {:?} with scheme: {:?}",
+                        "Created new keypair for address wrote to file path {:?} with scheme {:?}: [{address}]",
                         file, scheme
                     );
+                    println!("Secret Recovery Phrase : [{phrase}]");
                 }
             }
             KeyToolCommand::Show { file } => {

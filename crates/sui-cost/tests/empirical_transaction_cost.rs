@@ -12,7 +12,6 @@ use sui_types::coin::PAY_MODULE_NAME;
 use sui_types::coin::PAY_SPLIT_VEC_FUNC_NAME;
 use sui_types::crypto::{deterministic_random_account_key, AccountKeyPair};
 use sui_types::messages::VerifiedTransaction;
-use sui_types::messages::TEST_ONLY_GAS_UNIT_FOR_GENERIC;
 use sui_types::object::{generate_test_gas_objects, Object};
 use sui_types::SUI_FRAMEWORK_OBJECT_ID;
 use sui_types::{
@@ -20,11 +19,9 @@ use sui_types::{
     messages::{CallArg, ObjectArg},
 };
 use test_utils::authority::spawn_test_authorities;
-use test_utils::messages::move_transaction_with_type_tags;
 use test_utils::transaction::make_publish_package;
 use test_utils::{
     authority::test_authority_configs_with_objects,
-    messages::move_transaction,
     transaction::{
         publish_counter_package, submit_shared_object_transaction, submit_single_owner_transaction,
     },
@@ -35,6 +32,7 @@ use test_utils::{
 use serde::{Deserialize, Serialize};
 use strum_macros::Display;
 use strum_macros::EnumString;
+use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::execution_status::ExecutionStatus;
 
@@ -83,29 +81,23 @@ async fn test_good_snapshot() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
-async fn split_n_tx(
-    n: u64,
-    coin: &Object,
-    gas: &Object,
-    gas_budget: u64,
-    gas_price: u64,
-) -> VerifiedTransaction {
+async fn split_n_tx(n: u64, coin: &Object, gas: &Object, gas_price: u64) -> VerifiedTransaction {
     let split_amounts = vec![10u64; n as usize];
     let type_args = vec![coin.get_move_template_type().unwrap()];
 
-    move_transaction_with_type_tags(
-        gas.clone(),
-        PAY_MODULE_NAME.as_str(),
-        PAY_SPLIT_VEC_FUNC_NAME.as_str(),
-        SUI_FRAMEWORK_OBJECT_ID,
-        &type_args,
-        vec![
-            CallArg::Object(ObjectArg::ImmOrOwnedObject(coin.compute_object_reference())),
-            CallArg::Pure(bcs::to_bytes(&split_amounts).unwrap()),
-        ],
-        gas_budget,
-        gas_price,
-    )
+    let (sender, keypair) = deterministic_random_account_key();
+    TestTransactionBuilder::new(sender, gas.compute_object_reference(), gas_price)
+        .move_call(
+            SUI_FRAMEWORK_OBJECT_ID,
+            PAY_MODULE_NAME.as_str(),
+            PAY_SPLIT_VEC_FUNC_NAME.as_str(),
+            vec![
+                CallArg::Object(ObjectArg::ImmOrOwnedObject(coin.compute_object_reference())),
+                CallArg::Pure(bcs::to_bytes(&split_amounts).unwrap()),
+            ],
+        )
+        .with_type_args(type_args)
+        .build_and_sign(&keypair)
 }
 
 async fn create_txes(
@@ -182,21 +174,24 @@ async fn create_txes(
     let c1 = gas_objects.pop().unwrap();
     let type_args = vec![c1.get_move_template_type().unwrap()];
 
-    let merge_tx = move_transaction_with_type_tags(
-        gas_objects.pop().unwrap(),
+    let merge_tx = TestTransactionBuilder::new(
+        sender,
+        gas_objects.pop().unwrap().compute_object_reference(),
+        gas_price,
+    )
+    .move_call(
+        SUI_FRAMEWORK_OBJECT_ID,
         PAY_MODULE_NAME.as_str(),
         PAY_JOIN_FUNC_NAME.as_str(),
-        SUI_FRAMEWORK_OBJECT_ID,
-        &type_args,
         vec![
             CallArg::Object(ObjectArg::ImmOrOwnedObject(c1.compute_object_reference())),
             CallArg::Object(ObjectArg::ImmOrOwnedObject(
                 gas_objects.pop().unwrap().compute_object_reference(),
             )),
         ],
-        gas_price * TEST_ONLY_GAS_UNIT_FOR_GENERIC,
-        gas_price,
-    );
+    )
+    .with_type_args(type_args)
+    .build_and_sign(keypair);
     ret.insert(CommonTransactionCosts::MergeCoin, merge_tx);
 
     //
@@ -206,15 +201,7 @@ async fn create_txes(
     for n in 0..4 {
         let gas = gas_objects.pop().unwrap();
         let coin = gas_objects.pop().unwrap();
-        let split_tx = split_n_tx(
-            n,
-            &gas,
-            &coin,
-            gas_price * TEST_ONLY_GAS_UNIT_FOR_GENERIC,
-            gas_price,
-        )
-        .await
-        .clone();
+        let split_tx = split_n_tx(n, &gas, &coin, gas_price).await.clone();
         ret.insert(CommonTransactionCosts::SplitCoin(n as usize), split_tx);
     }
 
@@ -233,41 +220,41 @@ async fn create_txes(
 
     // Make a transaction to create a counter.
     tokio::task::yield_now().await;
-    let transaction = move_transaction(
-        gas_objects.pop().unwrap(),
-        "counter",
-        "create",
-        package_id,
-        /* arguments */ Vec::default(),
-        gas_price * TEST_ONLY_GAS_UNIT_FOR_GENERIC,
+    let transaction = TestTransactionBuilder::new(
+        sender,
+        gas_objects.pop().unwrap().compute_object_reference(),
         gas_price,
-    );
+    )
+    .call_counter_create(package_id)
+    .build_and_sign(keypair);
     let (effects, _, _) =
         submit_single_owner_transaction(transaction.clone(), &configs.net_addresses()).await;
     assert!(matches!(effects.status(), ExecutionStatus::Success { .. }));
     let ((counter_id, counter_initial_shared_version, _), _) = effects.created()[0];
-    let counter_object_arg = ObjectArg::SharedObject {
-        id: counter_id,
-        initial_shared_version: counter_initial_shared_version,
-        mutable: true,
-    };
 
     ret.insert(CommonTransactionCosts::SharedCounterCreate, transaction);
 
     // Ensure the value of the counter is `0`.
     tokio::task::yield_now().await;
-    let transaction = move_transaction(
-        gas_objects.pop().unwrap(),
+    let transaction = TestTransactionBuilder::new(
+        sender,
+        gas_objects.pop().unwrap().compute_object_reference(),
+        gas_price,
+    )
+    .move_call(
+        package_id,
         "counter",
         "assert_value",
-        package_id,
         vec![
-            CallArg::Object(counter_object_arg),
+            CallArg::Object(ObjectArg::SharedObject {
+                id: counter_id,
+                initial_shared_version: counter_initial_shared_version,
+                mutable: true,
+            }),
             CallArg::Pure(0u64.to_le_bytes().to_vec()),
         ],
-        gas_price * TEST_ONLY_GAS_UNIT_FOR_GENERIC,
-        gas_price,
-    );
+    )
+    .build_and_sign(keypair);
 
     ret.insert(
         CommonTransactionCosts::SharedCounterAssertValue,
@@ -276,15 +263,13 @@ async fn create_txes(
 
     // Make a transaction to increment the counter.
     tokio::task::yield_now().await;
-    let transaction = move_transaction(
-        gas_objects.pop().unwrap(),
-        "counter",
-        "increment",
-        package_id,
-        vec![CallArg::Object(counter_object_arg)],
-        gas_price * TEST_ONLY_GAS_UNIT_FOR_GENERIC,
+    let transaction = TestTransactionBuilder::new(
+        sender,
+        gas_objects.pop().unwrap().compute_object_reference(),
         gas_price,
-    );
+    )
+    .call_counter_increment(package_id, counter_id, counter_initial_shared_version)
+    .build_and_sign(keypair);
 
     ret.insert(CommonTransactionCosts::SharedCounterIncrement, transaction);
 

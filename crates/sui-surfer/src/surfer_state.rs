@@ -163,7 +163,7 @@ impl SurferState {
             rgp,
         )
         .unwrap();
-        let tx = self.cluster.sign_transaction(&self.address, &tx_data);
+        let tx = self.cluster.wallet.sign_transaction(&tx_data);
         let response = loop {
             match self.cluster.execute_transaction(tx.clone()).await {
                 Ok(effects) => break effects,
@@ -311,7 +311,7 @@ impl SurferState {
             TEST_ONLY_GAS_UNIT_FOR_PUBLISH * rgp,
             rgp,
         );
-        let tx = self.cluster.sign_transaction(&self.address, &tx_data);
+        let tx = self.cluster.wallet.sign_transaction(&tx_data);
         let response = loop {
             match self.cluster.execute_transaction(tx.clone()).await {
                 Ok(response) => {

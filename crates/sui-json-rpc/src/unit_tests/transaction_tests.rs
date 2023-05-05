@@ -10,7 +10,8 @@ use sui_json_rpc_types::{
 };
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_macros::sim_test;
-use sui_types::messages::{ExecuteTransactionRequestType, SenderSignedData};
+use sui_types::messages::SenderSignedData;
+use sui_types::quorum_driver_types::ExecuteTransactionRequestType;
 use sui_types::utils::to_sender_signed_transaction;
 use test_utils::network::TestClusterBuilder;
 

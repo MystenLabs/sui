@@ -48,7 +48,7 @@ export function TransferNFTForm({ objectId }: { objectId: string }) {
         },
         onSuccess: (response) => {
             queryClient.invalidateQueries(['object', objectId]);
-            queryClient.invalidateQueries(['objects-owned']);
+            queryClient.invalidateQueries(['get-owned-objects']);
             return navigate(
                 `/receipt?${new URLSearchParams({
                     txdigest: getTransactionDigest(response),

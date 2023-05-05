@@ -14,7 +14,7 @@ import type { ReactNode } from 'react';
 import st from './Overlay.module.scss';
 
 type OverlayProps = {
-    title: ReactNode;
+    title?: ReactNode;
     children: ReactNode;
     showModal: boolean;
     closeOverlay?: () => void;
@@ -47,12 +47,23 @@ function Overlay({
                     [st.fullScreenContainer]: isFullScreen,
                 })}
             >
-                <div className="bg-gray-40 h-12 w-full">
-                    <div className="text-steel-darker bg-gray-40 flex justify-center h-12 items-center text-heading4 font-semibold">
-                        {title}
+                {title && (
+                    <div className="bg-gray-40 h-12 w-full">
+                        <div className="text-steel-darker bg-gray-40 flex justify-center h-12 items-center text-heading4 font-semibold">
+                            {title}
+                        </div>
                     </div>
+                )}
+                <div
+                    className={st.content}
+                    style={{
+                        height: title
+                            ? 'calc(100% - 128px)'
+                            : 'calc(100% - 80px)',
+                    }}
+                >
+                    {children}
                 </div>
-                <div className={st.content}>{children}</div>
                 <button className={st.closeOverlay} onClick={closeModal}>
                     {closeIcon}
                 </button>

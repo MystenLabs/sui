@@ -21,10 +21,8 @@ use sui_types::committee::Committee;
 use sui_types::crypto::{AuthoritySignInfo, AuthorityStrongQuorumSignInfo};
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::messages::{
-    AuthorityCapabilities, CertifiedTransaction, ConsensusTransaction, ConsensusTransactionKey,
-    ConsensusTransactionKind, SenderSignedData, SharedInputObject, TransactionData,
-    TransactionDataAPI, TrustedExecutableTransaction, VerifiedCertificate,
-    VerifiedExecutableTransaction, VerifiedSignedTransaction,
+    CertifiedTransaction, SenderSignedData, SharedInputObject, TransactionData, TransactionDataAPI,
+    VerifiedCertificate, VerifiedSignedTransaction,
 };
 use sui_types::signature::GenericSignature;
 use tracing::{debug, error, info, trace, warn};
@@ -61,10 +59,16 @@ use sui_macros::fail_point;
 use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
 use sui_storage::mutex_table::{MutexGuard, MutexTable};
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
+use sui_types::executable_transaction::{
+    TrustedExecutableTransaction, VerifiedExecutableTransaction,
+};
 use sui_types::message_envelope::TrustedEnvelope;
 use sui_types::messages_checkpoint::{
     CheckpointContents, CheckpointSequenceNumber, CheckpointSignatureMessage, CheckpointSummary,
     CheckpointTimestamp,
+};
+use sui_types::messages_consensus::{
+    AuthorityCapabilities, ConsensusTransaction, ConsensusTransactionKey, ConsensusTransactionKind,
 };
 use sui_types::storage::{transaction_input_object_keys, ObjectKey, ParentSync};
 use sui_types::sui_system_state::epoch_start_sui_system_state::{
@@ -265,8 +269,6 @@ pub struct AuthorityEpochTables {
     /// Non-empty list of transactions here might result in empty list when we are forming checkpoint.
     /// Because we don't want to create checkpoints with empty content(see CheckpointBuilder::write_checkpoint),
     /// the sequence number of checkpoint does not match height here.
-    ///
-    /// The boolean value indicates whether this is the last checkpoint of the epoch.
     #[default_options_override_fn = "pending_checkpoints_table_default_config"]
     pending_checkpoints: DBMap<CheckpointCommitHeight, PendingCheckpoint>,
 
@@ -304,25 +306,25 @@ pub struct AuthorityEpochTables {
 fn signed_transactions_table_default_config() -> DBOptions {
     default_db_options()
         .optimize_for_write_throughput()
-        .optimize_for_large_values_no_scan()
+        .optimize_for_large_values_no_scan(1 << 10)
 }
 
 fn pending_execution_table_default_config() -> DBOptions {
     default_db_options()
         .optimize_for_write_throughput()
-        .optimize_for_large_values_no_scan()
+        .optimize_for_large_values_no_scan(1 << 10)
 }
 
 fn pending_consensus_transactions_table_default_config() -> DBOptions {
     default_db_options()
         .optimize_for_write_throughput()
-        .optimize_for_large_values_no_scan()
+        .optimize_for_large_values_no_scan(1 << 10)
 }
 
 fn pending_checkpoints_table_default_config() -> DBOptions {
     default_db_options()
         .optimize_for_write_throughput()
-        .optimize_for_large_values_no_scan()
+        .optimize_for_large_values_no_scan(1 << 10)
 }
 
 impl AuthorityEpochTables {

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useFeature } from '@growthbook/growthbook-react';
-import { useGetRollingAverageApys, useGetSystemState } from '@mysten/core';
+import { useGetValidatorsApy, useGetSystemState } from '@mysten/core';
 import { ArrowLeft16, StakeAdd16, StakeRemove16 } from '@mysten/icons';
 import { useMemo } from 'react';
 
@@ -44,9 +44,7 @@ export function DelegationDetailCard({
         isError,
     } = useGetDelegatedStake(accountAddress || '');
 
-    const { data: rollingAverageApys } = useGetRollingAverageApys(
-        system?.activeValidators.length || null
-    );
+    const { data: rollingAverageApys } = useGetValidatorsApy();
 
     const validatorData = useMemo(() => {
         if (!system) return null;
@@ -64,8 +62,9 @@ export function DelegationDetailCard({
     const totalStake = BigInt(delegationData?.principal || 0n);
 
     const suiEarned = BigInt(delegationData?.estimatedReward || 0n);
-
-    const apy = rollingAverageApys?.[validatorAddress] || 0;
+    const { apy, isApyApproxZero } = rollingAverageApys?.[validatorAddress] ?? {
+        apy: 0,
+    };
 
     const delegationId =
         delegationData?.status === 'Active' && delegationData?.stakedSuiId;
@@ -162,6 +161,7 @@ export function DelegationDetailCard({
                                                 color="gray-90"
                                                 leading="none"
                                             >
+                                                {isApyApproxZero ? '~' : ''}
                                                 {apy}
                                             </Heading>
 

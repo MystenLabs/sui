@@ -47,7 +47,7 @@ export function CurrentEpoch() {
                             </Heading>
                             <Heading
                                 color="success-dark"
-                                variant="heading4/semibold"
+                                variant="heading3/semibold"
                             >
                                 {formatAmountParts(epoch)}
                             </Heading>

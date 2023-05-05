@@ -7,7 +7,6 @@
 /// RFC 2119.
 ///
 module utils::immutable_external_resource {
-    use sui::digest::Sha3256Digest;
     use sui::url::{Url, inner_url};
 
     /// ImmutableExternalResource: An arbitrary, mutable URL plus an immutable digest of the resource.
@@ -23,16 +22,16 @@ module utils::immutable_external_resource {
     /// the result is false, clients SHOULD indicate that to users or ignore the resource.
     struct ImmutableExternalResource has store, copy, drop {
         url: Url,
-        digest: Sha3256Digest,
+        digest: vector<u8>,
     }
 
     /// Create a `ImmutableExternalResource`, and set the immutable hash.
-    public fun new(url: Url, digest: Sha3256Digest): ImmutableExternalResource {
+    public fun new(url: Url, digest: vector<u8>): ImmutableExternalResource {
         ImmutableExternalResource { url, digest }
     }
 
     /// Get the hash of the resource.
-    public fun digest(self: &ImmutableExternalResource): Sha3256Digest {
+    public fun digest(self: &ImmutableExternalResource): vector<u8> {
         self.digest
     }
 

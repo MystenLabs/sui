@@ -62,11 +62,10 @@ export function ConnectLedgerModal({
                             >
                                 Need more help?&nbsp;
                             </Text>
-                            {/* TODO: Replace this link with the correct URL once the tutorial is ready */}
                             <span>
                                 <Link
                                     underline="hover"
-                                    href="https://mystenlabs.com"
+                                    href="https://support.ledger.com/hc/articles/10136570195101"
                                     text="View tutorial."
                                     color="heroDark"
                                 />

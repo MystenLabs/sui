@@ -14,6 +14,7 @@ use move_vm_runtime::{
     native_extensions::NativeContextExtensions,
     native_functions::NativeFunctionTable,
 };
+use sui_types::metrics::BytecodeVerifierMetrics;
 use tracing::instrument;
 
 use sui_move_natives::{object_runtime::ObjectRuntime, NativesCostTable};
@@ -70,7 +71,7 @@ pub fn default_verifier_config(
         max_basic_blocks_in_script: None,
         max_per_fun_meter_units,
         max_per_mod_meter_units,
-        max_idenfitier_len: protocol_config.max_move_identifier_len_as_option() // Before protocol version 9, there was no limit
+        max_idenfitier_len: protocol_config.max_move_identifier_len_as_option(), // Before protocol version 9, there was no limit
     }
 }
 
@@ -91,10 +92,10 @@ pub fn new_move_vm(
             runtime_limits_config: VMRuntimeLimitsConfig {
                 vector_len_max: protocol_config.max_move_vector_len(),
             },
-            enable_invariant_violation_check_in_swap_loc:
-                !protocol_config.disable_invariant_violation_check_in_swap_loc(),
-            check_no_extraneous_bytes_during_deserialization:
-                protocol_config.no_extraneous_module_bytes(),
+            enable_invariant_violation_check_in_swap_loc: !protocol_config
+                .disable_invariant_violation_check_in_swap_loc(),
+            check_no_extraneous_bytes_during_deserialization: protocol_config
+                .no_extraneous_module_bytes(),
         },
     )
     .map_err(|_| SuiError::ExecutionInvariantViolation)
@@ -168,7 +169,8 @@ pub fn run_metered_move_bytecode_verifier(
     module_bytes: &[Vec<u8>],
     protocol_config: &ProtocolConfig,
     metered_verifier_config: &VerifierConfig,
-    meter: &mut impl Meter
+    meter: &mut impl Meter,
+    metrics: &Arc<BytecodeVerifierMetrics>
 ) -> Result<(), SuiError> {
     let modules_stat = module_bytes
         .iter()
@@ -188,14 +190,21 @@ pub fn run_metered_move_bytecode_verifier(
         return Ok(());
     };
 
-    run_metered_move_bytecode_verifier_impl(&modules, protocol_config, metered_verifier_config, meter)
+    run_metered_move_bytecode_verifier_impl(
+        &modules,
+        protocol_config,
+        metered_verifier_config,
+        meter,
+        metrics,
+    )
 }
 
 pub fn run_metered_move_bytecode_verifier_impl(
     modules: &[CompiledModule],
     protocol_config: &ProtocolConfig,
     verifier_config: &VerifierConfig,
-    meter: &mut impl Meter
+    meter: &mut impl Meter,
+    metrics: &Arc<BytecodeVerifierMetrics>
 ) -> Result<(), SuiError> {
     // run the Move verifier
     for module in modules.iter() {
@@ -209,12 +218,18 @@ pub fn run_metered_move_bytecode_verifier_impl(
             ]
             .contains(&e.major_status())
             {
+                metrics.verifier_timeout_metrics.with_label_values(&[BytecodeVerifierMetrics::MOVE_VERIFIER_TAG, BytecodeVerifierMetrics::TIMEOUT_TAG]).inc();
                 return Err(SuiError::ModuleVerificationFailure {
                     error: "Verification timedout".to_string(),
                 });
             };
-            sui_verify_module_metered(protocol_config, module, &BTreeMap::new(), meter)?
+        } else {
+            sui_verify_module_metered(protocol_config, module, &BTreeMap::new(), meter).map_err(|err|{
+                metrics.verifier_timeout_metrics.with_label_values(&[ BytecodeVerifierMetrics::SUI_VERIFIER_TAG, BytecodeVerifierMetrics::TIMEOUT_TAG]).inc();
+                err
+            })?
         }
+        metrics.verifier_timeout_metrics.with_label_values(&[BytecodeVerifierMetrics::OVERALL_TAG, BytecodeVerifierMetrics::SUCCESS_TAG]).inc();
     }
     Ok(())
 }

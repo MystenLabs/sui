@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useCoinDecimals } from '@mysten/core';
+import { useCoinMetadata } from '@mysten/core';
 import { ArrowRight16, ArrowLeft16 } from '@mysten/icons';
 import { getTransactionDigest } from '@mysten/sui.js';
 import * as Sentry from '@sentry/react';
@@ -35,7 +35,7 @@ function TransferCoinPage() {
         useState<boolean>(false);
     const [formData, setFormData] = useState<SubmitProps>();
     const navigate = useNavigate();
-    const [coinDecimals] = useCoinDecimals(coinType);
+    const { data: coinMetadata } = useCoinMetadata(coinType);
     const signer = useSigner();
     const address = useActiveAddress();
     const queryClient = useQueryClient();
@@ -45,10 +45,10 @@ function TransferCoinPage() {
 
         return createTokenTransferTransaction({
             coinType,
-            coinDecimals,
+            coinDecimals: coinMetadata?.decimals ?? 0,
             ...formData,
         });
-    }, [formData, signer, coinType, address, coinDecimals]);
+    }, [formData, signer, coinType, address, coinMetadata?.decimals]);
 
     const executeTransfer = useMutation({
         mutationFn: async () => {

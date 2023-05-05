@@ -41,6 +41,7 @@ sui-source-validation = { path = "../sui-source-validation" }
 sui-move = { path = "../sui-move", features = ["all"] }
 sui-move-build = { path = "../sui-move-build" }
 sui-protocol-config = { path = "../sui-protocol-config" }
+sui-test-transaction-builder = { path = "../sui-test-transaction-builder" }
 shared-crypto = { path = "../shared-crypto" }
 
 fastcrypto.workspace = true

@@ -1,63 +1,61 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { ReactComponent as SuiLogoIcon } from '../../assets/Sui Logo.svg';
-import { type FooterItems, footerLinks } from './footerLinks';
+import { ReactComponent as MystenLabsRed } from '../../assets/MystenLabs_Red.svg';
+import { LegalLinks, LegalText } from './Legal';
+import { footerLinks, socialLinks } from './footerLinks';
 
 import { Link } from '~/ui/Link';
 import { Text } from '~/ui/Text';
 
-function FooterLinks({ links }: { links: FooterItems }) {
+function FooterLinks() {
     return (
-        <>
-            {links.map(({ category, items }) => (
-                <div
-                    key={category}
-                    className="flex flex-col gap-y-3.5 text-left"
-                >
-                    <Text variant="captionSmall/bold" color="gray-60">
-                        {category}
-                    </Text>
-                    <ul className="flex flex-col gap-y-3.5">
-                        {items.map(({ title, href }) => (
-                            <li key={href}>
-                                <Link variant="text" href={href}>
-                                    <Text variant="body/medium" color="white">
-                                        {title}
-                                    </Text>
-                                </Link>
-                            </li>
-                        ))}
-                    </ul>
-                </div>
-            ))}
-        </>
+        <div className="flex flex-col items-center justify-center gap-6 md:flex-row md:justify-end">
+            <ul className="flex gap-6 md:flex-row">
+                {footerLinks.map(({ title, href }) => (
+                    <li key={href}>
+                        <Link variant="text" href={href}>
+                            <Text variant="body/medium" color="steel-darker">
+                                {title}
+                            </Text>
+                        </Link>
+                    </li>
+                ))}
+            </ul>
+
+            <ul className="flex justify-center gap-6">
+                {socialLinks.map(({ children, href }) => (
+                    <li key={href}>
+                        <Link variant="text" color="steel-darker" href={href}>
+                            <div className="mt-2">{children}</div>
+                        </Link>
+                    </li>
+                ))}
+            </ul>
+        </div>
     );
 }
 
 function Footer() {
     return (
-        <footer className="bg-gray-75 px-5 py-10 md:px-10 md:py-14">
-            <nav className="mx-auto grid grid-cols-1 gap-8 md:mx-0 md:grid-cols-4 md:gap-10 xl:w-1/2">
-                <div className="order-last mx-auto md:order-first md:mt-0">
-                    <div className="h-full space-y-2 md:flex md:flex-col md:justify-between">
-                        <SuiLogoIcon className="mx-auto md:mx-0" />
-                        <div className="mt-auto">
-                            <Text
-                                color="white"
-                                variant="pSubtitleSmall/semibold"
-                            >
-                                &copy;
-                                {`${new Date().getFullYear()} Sui. All
-                                rights reserved.`}
-                            </Text>
-                        </div>
+        <footer className="bg-gray-40 px-5 py-10 md:px-10 md:py-14">
+            <nav className="flex flex-col justify-center gap-4 divide-y divide-solid divide-gray-45 md:gap-7.5">
+                <div className="flex flex-col-reverse items-center gap-7.5 md:flex-row md:justify-between ">
+                    <div className="hidden self-center text-hero-dark md:flex md:self-start">
+                        <MystenLabsRed />
+                    </div>
+                    <div>
+                        <FooterLinks />
                     </div>
                 </div>
-                <div className="col-span-1 grid grid-cols-4 md:col-span-3">
-                    <FooterLinks links={footerLinks} />
+                <div className="flex flex-col-reverse justify-center gap-3 pt-3 md:flex-row md:justify-between">
+                    <LegalText />
+                    <LegalLinks />
                 </div>
             </nav>
+            <div className="mt-4 flex justify-center border-t border-solid border-gray-45 pt-5 text-hero-dark md:hidden md:self-start">
+                <MystenLabsRed />
+            </div>
         </footer>
     );
 }

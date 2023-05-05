@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import {
-    useCoinDecimals,
+    useCoinMetadata,
     useFormatCoin,
     useGetTimeBeforeEpochNumber,
 } from '@mysten/core';
@@ -16,7 +16,10 @@ import { createStakeTransaction } from './utils/transaction';
 import { Card } from '_app/shared/card';
 import { Text } from '_app/shared/text';
 import NumberInput from '_components/number-input';
-import { NUM_OF_EPOCH_BEFORE_EARNING } from '_src/shared/constants';
+import {
+    NUM_OF_EPOCH_BEFORE_STAKING_REWARDS_REDEEMABLE,
+    NUM_OF_EPOCH_BEFORE_STAKING_REWARDS_STARTS,
+} from '_src/shared/constants';
 import { CountDownTimer } from '_src/ui/app/shared/countdown-timer';
 
 const HIDE_MAX = true;
@@ -36,7 +39,8 @@ function StakeForm({
 }: StakeFromProps) {
     const { values, setFieldValue } = useFormikContext<FormValues>();
 
-    const [decimals] = useCoinDecimals(coinType);
+    const { data: metadata } = useCoinMetadata(coinType);
+    const decimals = metadata?.decimals ?? 0;
     const [maxToken, symbol, queryResult] = useFormatCoin(
         coinBalance,
         coinType
@@ -61,11 +65,17 @@ function StakeForm({
 
     // Reward will be available after 2 epochs
     const startEarningRewardsEpoch =
-        Number(epoch || 0) + NUM_OF_EPOCH_BEFORE_EARNING;
+        Number(epoch || 0) + NUM_OF_EPOCH_BEFORE_STAKING_REWARDS_STARTS;
 
-    const { data: timeToEarnStakeRewards } = useGetTimeBeforeEpochNumber(
+    const redeemableRewardsEpoch =
+        Number(epoch || 0) + NUM_OF_EPOCH_BEFORE_STAKING_REWARDS_REDEEMABLE;
+
+    const { data: timeBeforeStakeRewardsStarts } = useGetTimeBeforeEpochNumber(
         startEarningRewardsEpoch
     );
+
+    const { data: timeBeforeStakeRewardsRedeemable } =
+        useGetTimeBeforeEpochNumber(redeemableRewardsEpoch);
 
     return (
         <Form
@@ -129,9 +139,9 @@ function StakeForm({
                     <Text variant="body" weight="medium" color="steel-darker">
                         Staking Rewards Start
                     </Text>
-                    {timeToEarnStakeRewards > 0 ? (
+                    {timeBeforeStakeRewardsStarts > 0 ? (
                         <CountDownTimer
-                            timestamp={timeToEarnStakeRewards}
+                            timestamp={timeBeforeStakeRewardsStarts}
                             variant="body"
                             color="steel-darker"
                             weight="semibold"
@@ -149,6 +159,39 @@ function StakeForm({
                                 : '--'}
                         </Text>
                     )}
+                </div>
+                <div className="pb-3.75 flex justify-between item-center w-full">
+                    <div className="flex-1">
+                        <Text
+                            variant="pBody"
+                            weight="medium"
+                            color="steel-darker"
+                        >
+                            Staking Rewards Redeemable
+                        </Text>
+                    </div>
+                    <div className="flex-1 flex justify-end gap-1 items-center">
+                        {timeBeforeStakeRewardsRedeemable > 0 ? (
+                            <CountDownTimer
+                                timestamp={timeBeforeStakeRewardsRedeemable}
+                                variant="body"
+                                color="steel-darker"
+                                weight="semibold"
+                                label="in"
+                                endLabel="--"
+                            />
+                        ) : (
+                            <Text
+                                variant="body"
+                                weight="medium"
+                                color="steel-darker"
+                            >
+                                {epoch
+                                    ? `Epoch #${Number(redeemableRewardsEpoch)}`
+                                    : '--'}
+                            </Text>
+                        )}
+                    </div>
                 </div>
             </Card>
         </Form>

@@ -71,6 +71,7 @@ impl SuiEnv {
     pub async fn create_rpc_client(
         &self,
         request_timeout: Option<std::time::Duration>,
+        max_concurrent_requests: Option<u64>,
     ) -> Result<SuiClient, anyhow::Error> {
         let mut builder = SuiClientBuilder::default();
         if let Some(request_timeout) = request_timeout {
@@ -78,6 +79,10 @@ impl SuiEnv {
         }
         if let Some(ws_url) = &self.ws {
             builder = builder.ws_url(ws_url);
+        }
+
+        if let Some(max_concurrent_requests) = max_concurrent_requests {
+            builder = builder.max_concurrent_requests(max_concurrent_requests as usize);
         }
         Ok(builder.build(&self.rpc).await?)
     }

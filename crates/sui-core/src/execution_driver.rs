@@ -7,7 +7,8 @@ use std::{
 };
 
 use mysten_metrics::{monitored_scope, spawn_monitored_task};
-use sui_types::{digests::TransactionEffectsDigest, messages::VerifiedExecutableTransaction};
+use sui_types::digests::TransactionEffectsDigest;
+use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use tokio::{
     sync::{mpsc::UnboundedReceiver, oneshot, Semaphore},
     time::sleep,
@@ -42,6 +43,8 @@ pub async fn execution_process(
 
     // Loop whenever there is a signal that a new transactions is ready to process.
     loop {
+        let _scope = monitored_scope("ExecutionDriver::loop");
+
         let certificate;
         let expected_effects_digest;
         tokio::select! {
@@ -85,7 +88,7 @@ pub async fn execution_process(
 
         // Certificate execution can take significant time, so run it in a separate task.
         spawn_monitored_task!(async move {
-            let _scope = monitored_scope("ExecutionDriver");
+            let _scope = monitored_scope("ExecutionDriver::task");
             let _guard = permit;
             if let Ok(true) = authority.is_tx_already_executed(&digest) {
                 return;

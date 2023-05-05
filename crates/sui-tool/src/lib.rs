@@ -14,10 +14,14 @@ use sui_core::authority_client::{AuthorityAPI, NetworkAuthorityClient};
 use sui_network::default_mysten_network_config;
 use sui_types::multiaddr::Multiaddr;
 use sui_types::object::ObjectFormatOptions;
-use sui_types::{base_types::*, messages::*, object::Owner};
+use sui_types::{base_types::*, object::Owner};
 use tokio::time::Instant;
 
 use anyhow::anyhow;
+use sui_types::messages_grpc::{
+    ObjectInfoRequest, ObjectInfoRequestKind, ObjectInfoResponse, TransactionInfoRequest,
+    TransactionStatus,
+};
 
 pub mod commands;
 pub mod db_tool;

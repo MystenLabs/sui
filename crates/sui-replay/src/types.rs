@@ -6,19 +6,21 @@ use move_binary_format::CompiledModule;
 use move_core_types::account_address::AccountAddress;
 use move_core_types::language_storage::{ModuleId, StructTag};
 use std::fmt::Debug;
-use sui_json_rpc_types::{SuiEvent, SuiTransactionBlockEffectsV1};
+use sui_json_rpc_types::SuiEvent;
+use sui_json_rpc_types::SuiTransactionBlockEffects;
 use sui_protocol_config::ProtocolConfig;
 use sui_sdk::error::Error as SuiRpcError;
 use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress, VersionNumber};
 use sui_types::digests::{ObjectDigest, TransactionDigest};
 use sui_types::error::{SuiError, SuiObjectResponseError, SuiResult, UserInputError};
-use sui_types::messages::{InputObjectKind, TransactionKind};
+use sui_types::messages::{InputObjectKind, SenderSignedData, TransactionKind};
 use sui_types::object::Object;
 use thiserror::Error;
 use tokio::time::Duration;
+use tracing::error;
 
 // These are very testnet specific
-pub(crate) const GENESIX_TX_DIGEST: &str = "Cgww1sn7XViCPSdDcAPmVcARueWuexJ8af8zD842Ff43";
+pub(crate) const TESTNET_GENESIX_TX_DIGEST: &str = "Cgww1sn7XViCPSdDcAPmVcARueWuexJ8af8zD842Ff43";
 pub(crate) const SAFE_MODE_TX_1_DIGEST: &str = "AGBCaUGj4iGpGYyQvto9Bke1EwouY8LGMoTzzuPMx4nd";
 
 // TODO: make these configurable
@@ -30,9 +32,12 @@ pub(crate) const MAX_CONCURRENT_REQUESTS: usize = 1_000;
 pub(crate) const EPOCH_CHANGE_STRUCT_TAG: &str =
     "0x3::sui_system_state_inner::SystemEpochInfoEvent";
 
+pub(crate) const ONE_DAY_MS: u64 = 24 * 60 * 60 * 1000;
+
 #[derive(Clone, Debug)]
-pub(crate) struct TxInfo {
+pub struct OnChainTransactionInfo {
     pub tx_digest: TransactionDigest,
+    pub sender_signed_data: SenderSignedData,
     pub sender: SuiAddress,
     pub input_objects: Vec<InputObjectKind>,
     pub kind: TransactionKind,
@@ -43,8 +48,10 @@ pub(crate) struct TxInfo {
     pub gas_price: u64,
     pub executed_epoch: u64,
     pub dependencies: Vec<TransactionDigest>,
-    pub effects: SuiTransactionBlockEffectsV1,
+    pub effects: SuiTransactionBlockEffects,
     pub protocol_config: ProtocolConfig,
+    pub epoch_start_timestamp: u64,
+    pub reference_gas_price: u64,
 }
 
 #[allow(clippy::large_enum_variant)]
@@ -109,8 +116,8 @@ pub enum LocalExecError {
     EffectsForked {
         digest: TransactionDigest,
         diff: String,
-        on_chain: Box<SuiTransactionBlockEffectsV1>,
-        local: Box<SuiTransactionBlockEffectsV1>,
+        on_chain: Box<SuiTransactionBlockEffects>,
+        local: Box<SuiTransactionBlockEffects>,
     },
 
     #[error("Genesis replay not supported digest {:#?}", digest)]

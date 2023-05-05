@@ -6,10 +6,10 @@ use once_cell::sync::Lazy;
 use prometheus::proto::{Metric, MetricFamily};
 use prometheus::{register_counter_vec, register_histogram_vec};
 use prometheus::{CounterVec, HistogramVec};
+use std::net::TcpListener;
 use std::time::{SystemTime, UNIX_EPOCH};
 use std::{
     collections::VecDeque,
-    net::SocketAddr,
     sync::{Arc, Mutex},
 };
 use tower::ServiceBuilder;
@@ -45,7 +45,7 @@ static RELAY_DURATION: Lazy<HistogramVec> = Lazy::new(|| {
 // Creates a new http server that has as a sole purpose to expose
 // and endpoint that prometheus agent can use to poll for the metrics.
 // A RegistryService is returned that can be used to get access in prometheus Registries.
-pub fn start_prometheus_server(addr: SocketAddr) -> HistogramRelay {
+pub fn start_prometheus_server(addr: TcpListener) -> HistogramRelay {
     let relay = HistogramRelay::new();
     let app = Router::new()
         .route(METRICS_ROUTE, get(metrics))
@@ -61,7 +61,8 @@ pub fn start_prometheus_server(addr: SocketAddr) -> HistogramRelay {
         );
 
     tokio::spawn(async move {
-        axum::Server::bind(&addr)
+        axum::Server::from_tcp(addr)
+            .unwrap()
             .serve(app.into_make_service())
             .await
             .unwrap();

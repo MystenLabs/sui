@@ -10,7 +10,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 9;
+const MAX_PROTOCOL_VERSION: u64 = 10;
 
 // Record history of protocol version allocations here:
 //
@@ -33,6 +33,9 @@ const MAX_PROTOCOL_VERSION: u64 = 9;
 // Version 9: Limit the length of Move idenfitiers to 128.
 //            Disallow extraneous module bytes,
 //            advance_to_highest_supported_protocol_version,
+// Version 10:increase bytecode verifier `max_verifier_meter_ticks_per_function` and
+//            `max_meter_ticks_per_module` limits each from 6_000_000 to 16_000_000. sui-system
+//            framework changes.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -1127,6 +1130,12 @@ impl ProtocolConfig {
                 cfg.feature_flags.no_extraneous_module_bytes = true;
                 cfg.feature_flags
                     .advance_to_highest_supported_protocol_version = true;
+                cfg
+            }
+            10 => {
+                let mut cfg = Self::get_for_version_impl(version - 1);
+                cfg.max_verifier_meter_ticks_per_function = Some(16_000_000);
+                cfg.max_meter_ticks_per_module = Some(16_000_000);
                 cfg
             }
             // Use this template when making changes:

@@ -18,7 +18,7 @@ use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use serde_with::DisplayFromStr;
 use serde_with::{Bytes, DeserializeAs, SerializeAs};
-
+use std::fmt::Write;
 use sui_protocol_config::ProtocolVersion;
 
 use crate::{parse_sui_struct_tag, parse_sui_type_tag};
@@ -156,8 +156,36 @@ impl SerializeAs<StructTag> for SuiStructTag {
     where
         S: Serializer,
     {
-        let s = value.to_string();
-        s.serialize(serializer)
+        let f = to_sui_struct_tag_string(value).map_err(S::Error::custom)?;
+        f.serialize(serializer)
+    }
+}
+
+fn to_sui_struct_tag_string(value: &StructTag) -> Result<String, fmt::Error> {
+    let mut f = String::new();
+    write!(
+        f,
+        "0x{}::{}::{}",
+        value.address.to_canonical_string(),
+        value.module,
+        value.name
+    )?;
+    if let Some(first_ty) = value.type_params.first() {
+        write!(f, "<")?;
+        write!(f, "{}", to_sui_type_tag_string(first_ty)?)?;
+        for ty in value.type_params.iter().skip(1) {
+            write!(f, ", {}", to_sui_type_tag_string(ty)?)?;
+        }
+        write!(f, ">")?;
+    }
+    Ok(f)
+}
+
+fn to_sui_type_tag_string(value: &TypeTag) -> Result<String, fmt::Error> {
+    match value {
+        TypeTag::Vector(t) => Ok(format!("vector<{}>", to_sui_type_tag_string(t)?)),
+        TypeTag::Struct(s) => to_sui_struct_tag_string(s),
+        _ => Ok(value.to_string()),
     }
 }
 
@@ -178,7 +206,7 @@ impl SerializeAs<TypeTag> for SuiTypeTag {
     where
         S: Serializer,
     {
-        let s = value.to_string();
+        let s = to_sui_type_tag_string(value).map_err(S::Error::custom)?;
         s.serialize(serializer)
     }
 }
