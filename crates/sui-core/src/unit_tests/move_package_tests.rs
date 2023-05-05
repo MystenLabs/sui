@@ -5,7 +5,7 @@ use move_binary_format::file_format::CompiledModule;
 
 use move_bytecode_verifier::meter::{BoundMeter, Scope};
 use prometheus::Registry;
-use std::{collections::BTreeMap, path::PathBuf, sync::Arc};
+use std::{collections::BTreeMap, path::PathBuf, sync::Arc, time::Instant};
 use sui_adapter::adapter::{
     default_verifier_config, run_metered_move_bytecode_verifier,
     run_metered_move_bytecode_verifier_impl,
@@ -472,6 +472,7 @@ async fn test_metered_move_bytecode_verifier() {
     let registry = &Registry::new();
     let bytecode_verifier_metrics = Arc::new(BytecodeVerifierMetrics::new(registry));
     let mut meter = BoundMeter::new(&metered_verifier_config);
+    let timer_start = Instant::now();
     // Default case should pass
     let r = run_metered_move_bytecode_verifier_impl(
         &compiled_modules_bytes,
@@ -480,8 +481,52 @@ async fn test_metered_move_bytecode_verifier() {
         &mut meter,
         &bytecode_verifier_metrics,
     );
+    let elapsed = timer_start.elapsed().as_micros() as f64 / (1000.0 * 1000.0);
     assert!(r.is_ok());
+
     // Ensure metrics worked as expected
+
+    // The number of module success samples must equal the number of modules
+    assert!(
+        bytecode_verifier_metrics
+            .verifier_runtime_per_module_success_latency
+            .get_sample_count()
+            == compiled_modules_bytes.len() as u64
+    );
+    // Others must be zero
+    assert!(
+        bytecode_verifier_metrics
+            .verifier_runtime_per_module_timeout_latency
+            .get_sample_count()
+            == 0
+    );
+    assert!(
+        bytecode_verifier_metrics
+            .verifier_runtime_per_ptb_success_latency
+            .get_sample_count()
+            == 0
+    );
+    assert!(
+        bytecode_verifier_metrics
+            .verifier_runtime_per_ptb_timeout_latency
+            .get_sample_count()
+            == 0
+    );
+
+    // Each success timer must be non zero and less than our elapsed time
+    assert!(
+        bytecode_verifier_metrics
+            .verifier_runtime_per_module_success_latency
+            .get_sample_sum()
+            > 0.0
+    );
+    assert!(
+        bytecode_verifier_metrics
+            .verifier_runtime_per_module_success_latency
+            .get_sample_sum()
+            < elapsed
+    );
+
     // No failures expected in counter
     assert!(
         bytecode_verifier_metrics
@@ -523,6 +568,7 @@ async fn test_metered_move_bytecode_verifier() {
     metered_verifier_config.max_per_fun_meter_units = Some(10_000);
 
     let mut meter = BoundMeter::new(&metered_verifier_config);
+    let timer_start = Instant::now();
     let r = run_metered_move_bytecode_verifier_impl(
         &compiled_modules_bytes,
         &ProtocolConfig::get_for_max_version(),
@@ -530,12 +576,58 @@ async fn test_metered_move_bytecode_verifier() {
         &mut meter,
         &bytecode_verifier_metrics,
     );
+    let elapsed = timer_start.elapsed().as_micros() as f64 / (1000.0 * 1000.0);
 
     assert!(
         r.unwrap_err()
             == SuiError::ModuleVerificationFailure {
                 error: "Verification timedout".to_string()
             }
+    );
+
+    // Some new modules might have passed
+    assert!(
+        (bytecode_verifier_metrics
+            .verifier_runtime_per_module_success_latency
+            .get_sample_count()
+            >= compiled_modules_bytes.len() as u64)
+            && (bytecode_verifier_metrics
+                .verifier_runtime_per_module_success_latency
+                .get_sample_count()
+                < 2 * compiled_modules_bytes.len() as u64)
+    );
+    // Others must be zero
+    assert!(
+        bytecode_verifier_metrics
+            .verifier_runtime_per_module_timeout_latency
+            .get_sample_count()
+            > 0
+    );
+    assert!(
+        bytecode_verifier_metrics
+            .verifier_runtime_per_ptb_success_latency
+            .get_sample_count()
+            == 0
+    );
+    assert!(
+        bytecode_verifier_metrics
+            .verifier_runtime_per_ptb_timeout_latency
+            .get_sample_count()
+            == 0
+    );
+
+    // Each success timer must be non zero and less than our elapsed time
+    assert!(
+        bytecode_verifier_metrics
+            .verifier_runtime_per_module_timeout_latency
+            .get_sample_sum()
+            > 0.0
+    );
+    assert!(
+        bytecode_verifier_metrics
+            .verifier_runtime_per_module_timeout_latency
+            .get_sample_sum()
+            < elapsed
     );
 
     // One failure
