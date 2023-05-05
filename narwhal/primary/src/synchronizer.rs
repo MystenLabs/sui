@@ -188,17 +188,20 @@ impl Inner {
             .with_label_values(&[certificate_source])
             .inc();
 
-        // Append the certificate to the aggregator of the
-        // corresponding round.
-        if let Err(e) = self
-            .append_certificate_in_aggregator(certificate.clone())
-            .await
-        {
-            warn!(
-                "Failed to aggregate certificate {} for header: {}",
-                digest, e
-            );
-            return Err(DagError::ShuttingDown);
+        // Append the certificate to the aggregator of the corresponding round.
+        // Skip that if we know that we have already processed higher round certificates and the
+        // proposer will reject it anyways.
+        if self.highest_received_round.load(Ordering::SeqCst) > certificate.round() {
+            if let Err(e) = self
+                .append_certificate_in_aggregator(certificate.clone())
+                .await
+            {
+                warn!(
+                    "Failed to aggregate certificate {} for header: {}",
+                    digest, e
+                );
+                return Err(DagError::ShuttingDown);
+            }
         }
 
         // Send the accepted certificate to the consensus layer.
@@ -591,11 +594,12 @@ impl Synchronizer {
         } else {
             "other"
         };
-        let highest_received_round = self
+        let previous_highest_received_round = self
             .inner
             .highest_received_round
-            .fetch_max(certificate.round(), Ordering::AcqRel)
-            .max(certificate.round());
+            .fetch_max(certificate.round(), Ordering::AcqRel);
+        let highest_received_round = previous_highest_received_round.max(certificate.round());
+
         self.inner
             .metrics
             .highest_received_round
@@ -609,12 +613,17 @@ impl Synchronizer {
         // so to make a successful proposal, our proposer must use parents at least at round r-1.
         //
         // This allows the proposer not to fire proposals at rounds strictly below the certificate we witnessed.
-        let minimal_round_for_parents = certificate.round().saturating_sub(1);
-        self.inner
-            .tx_parents
-            .send((vec![], minimal_round_for_parents, certificate.epoch()))
-            .await
-            .map_err(|_| DagError::ShuttingDown)?;
+        //
+        // We only want to send it though when the current certificate round is higher than the earlier highest received
+        // one. Otherwise we know that we have already done that and there is no point.
+        if certificate.round() > previous_highest_received_round {
+            let minimal_round_for_parents = certificate.round().saturating_sub(1);
+            self.inner
+                .tx_parents
+                .send((vec![], minimal_round_for_parents, certificate.epoch()))
+                .await
+                .map_err(|_| DagError::ShuttingDown)?;
+        }
 
         // Instruct workers to download any missing batches referenced in this certificate.
         // Since this header got certified, we are sure that all the data it refers to (ie. its batches and its parents) are available.
