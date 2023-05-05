@@ -515,15 +515,24 @@ impl IndexStore {
             // we will update the cache (when we retry to index this transaction again we would have
             // updated the cache twice). However, this only means cache is eventually consistent with
             // the db (within a very short delay)
-            for cache_updates in cache_updates_vec {
-                self.update_per_coin_type_cache(cache_updates.per_coin_type_balance_changes)
-                    .await?;
-                self.update_all_balance_cache(cache_updates.all_balance_changes)
-                    .await?;
-            }
+            self.process_cache_updates(cache_updates_vec).await?;
         }
 
         Ok(sum)
+    }
+
+    async fn process_cache_updates(
+        &self,
+        cache_updates: Vec<IndexStoreCacheUpdates>,
+    ) -> SuiResult<()> {
+        for cache_updates in cache_updates {
+            self.update_per_coin_type_cache(cache_updates.per_coin_type_balance_changes)
+                .await?;
+            self.update_all_balance_cache(cache_updates.all_balance_changes)
+                .await?;
+        }
+
+        Ok(())
     }
 
     async fn index_tx(
@@ -1683,7 +1692,7 @@ mod tests {
 
         let tx_coins = (object_map.clone(), written_objects.clone());
         let mut batch = index_store.tables.transactions_from_addr.batch();
-        index_store
+        let (_, cache_updates) = index_store
             .index_tx(
                 &mut batch,
                 address,
@@ -1699,6 +1708,10 @@ mod tests {
             )
             .await?;
         batch.write().unwrap();
+        index_store
+            .process_cache_updates(vec![cache_updates])
+            .await
+            .unwrap();
 
         let balance_from_db = IndexStore::get_balance_from_db(
             index_store.metrics.clone(),
@@ -1738,7 +1751,7 @@ mod tests {
         };
         let tx_coins = (object_map, written_objects);
         let mut batch = index_store.tables.transactions_from_addr.batch();
-        index_store
+        let (_, cache_updates) = index_store
             .index_tx(
                 &mut batch,
                 address,
@@ -1754,6 +1767,11 @@ mod tests {
             )
             .await?;
         batch.write().unwrap();
+        index_store
+            .process_cache_updates(vec![cache_updates])
+            .await
+            .unwrap();
+
         let balance_from_db = IndexStore::get_balance_from_db(
             index_store.metrics.clone(),
             index_store.tables.coin_index.clone(),
