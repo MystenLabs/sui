@@ -6,6 +6,7 @@ use std::{
     time::Duration,
 };
 
+use futures::stream::StreamExt;
 use mysten_metrics::{monitored_scope, spawn_monitored_task};
 use sui_types::{
     digests::TransactionEffectsDigest, executable_transaction::VerifiedExecutableTransaction,
@@ -15,6 +16,7 @@ use tokio::{
     sync::{mpsc::UnboundedReceiver, oneshot, Semaphore},
     time::sleep,
 };
+use tokio_stream::wrappers::UnboundedReceiverStream;
 use tracing::{debug, error, error_span, info, Instrument};
 
 use crate::authority::AuthorityState;
@@ -32,7 +34,7 @@ const EXECUTION_FAILURE_RETRY_INTERVAL: Duration = Duration::from_secs(1);
 /// processing the transaction in a loop.
 pub async fn execution_process(
     authority_state: Weak<AuthorityState>,
-    mut rx_ready_certificates: UnboundedReceiver<
+    rx_ready_certificates: UnboundedReceiver<
         Vec<(
             VerifiedExecutableTransaction,
             Option<TransactionEffectsDigest>,
@@ -45,15 +47,19 @@ pub async fn execution_process(
     // Rate limit concurrent executions to # of cpus.
     let limit = Arc::new(Semaphore::new(num_cpus::get()));
 
+    let mut batch_size = 0;
+    let mut rx_ready_certificates =
+        UnboundedReceiverStream::new(rx_ready_certificates).ready_chunks(100);
+
     // Loop whenever there is a signal that a new transactions is ready to process.
     loop {
         let _scope = monitored_scope("ExecutionDriver::loop");
 
-        let certificates;
+        let certificates: Vec<_>;
         tokio::select! {
-            result = rx_ready_certificates.recv() => {
+            result = rx_ready_certificates.next() => {
                 if let Some(certs) = result {
-                    certificates = certs;
+                    certificates = certs.into_iter().flatten().collect();
                 } else {
                     // Should only happen after the AuthorityState has shut down and tx_ready_certificate
                     // has been dropped by TransactionManager.
@@ -91,7 +97,13 @@ pub async fn execution_process(
         let digests: Vec<_> = certificates.iter().map(|t| t.digest()).collect();
         let batch_id = certificates.batch_id();
 
-        debug!(?digests, ?batch_id, "Executing certificate batch");
+        batch_size = certificates.len();
+        debug!(
+            ?digests,
+            ?batch_id,
+            "Executing certificate batch of size {}",
+            batch_size,
+        );
 
         // Certificate execution can take significant time, so run it in a separate task.
         spawn_monitored_task!(async move {
