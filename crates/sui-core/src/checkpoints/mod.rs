@@ -1400,6 +1400,7 @@ mod tests {
 
     #[tokio::test]
     pub async fn checkpoint_builder_test() {
+        telemetry_subscribers::init_for_testing();
         let state = TestAuthorityBuilder::new().build().await;
 
         let dummy_tx = VerifiedTransaction::new_genesis_transaction(vec![]);
