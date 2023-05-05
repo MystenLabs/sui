@@ -31,6 +31,8 @@ export function ValidatorLocation({
         [validator, onMouseOver]
     );
 
+    if (!validator.ipInfo) return null;
+
     const position = projection(
         validator.ipInfo.loc
             .split(',')

@@ -119,10 +119,12 @@ export default function ValidatorMap({ minHeight }: Props) {
                     ...validator,
                 };
 
-                if (countryMap[validator.ipInfo.country]) {
-                    countryMap[validator.ipInfo.country]++;
-                } else {
-                    countryMap[validator.ipInfo.country] = 1;
+                if (validator.ipInfo) {
+                    if (countryMap[validator.ipInfo.country]) {
+                        countryMap[validator.ipInfo.country]++;
+                    } else {
+                        countryMap[validator.ipInfo.country] = 1;
+                    }
                 }
             }
         });
@@ -235,16 +237,18 @@ export default function ValidatorMap({ minHeight }: Props) {
                         // NOTE: Tooltip will un-style itself if we provide a style object:
                         style={{}}
                     >
-                        <div className="flex flex-col justify-start font-semibold">
-                            <div>{validatorMap[tooltipData].name}</div>
-                            <Text
-                                variant="pSubtitleSmall/normal"
-                                color="gray-60"
-                            >
-                                {validatorMap[tooltipData].ipInfo.city},{' '}
-                                {validatorMap[tooltipData].ipInfo.country}
-                            </Text>
-                        </div>
+                        {validatorMap[tooltipData].ipInfo && (
+                            <div className="flex flex-col justify-start font-semibold">
+                                <div>{validatorMap[tooltipData].name}</div>
+                                <Text
+                                    variant="pSubtitleSmall/normal"
+                                    color="gray-60"
+                                >
+                                    {validatorMap[tooltipData].ipInfo?.city},{' '}
+                                    {validatorMap[tooltipData].ipInfo?.country}
+                                </Text>
+                            </div>
+                        )}
                         <div className="my-1 h-px bg-gray-90" />
                         <div className="min-w-[120px]">
                             <div className="flex justify-between">
