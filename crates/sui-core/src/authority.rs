@@ -15,12 +15,13 @@ use fastcrypto::encoding::Encoding;
 use itertools::Itertools;
 use move_binary_format::CompiledModule;
 use move_core_types::language_storage::ModuleId;
+use mysten_metrics::{TX_TYPE_SHARED_OBJ_TX, TX_TYPE_SINGLE_WRITER_TX};
 use parking_lot::Mutex;
 use prometheus::{
-    register_histogram_with_registry, register_int_counter_vec_with_registry,
-    register_int_counter_with_registry, register_int_gauge_vec_with_registry,
-    register_int_gauge_with_registry, Histogram, IntCounter, IntCounterVec, IntGauge, IntGaugeVec,
-    Registry,
+    register_histogram_vec_with_registry, register_histogram_with_registry,
+    register_int_counter_vec_with_registry, register_int_counter_with_registry,
+    register_int_gauge_vec_with_registry, register_int_gauge_with_registry, Histogram, IntCounter,
+    IntCounterVec, IntGauge, IntGaugeVec, Registry,
 };
 use serde::de::DeserializeOwned;
 use serde::Serialize;
@@ -189,7 +190,10 @@ pub struct AuthorityMetrics {
     batch_size: Histogram,
 
     handle_transaction_latency: Histogram,
-    execute_certificate_latency: Histogram,
+
+    execute_certificate_latency_single_writer: Histogram,
+    execute_certificate_latency_shared_object: Histogram,
+
     execute_certificate_with_effects_latency: Histogram,
     internal_execution_latency: Histogram,
     prepare_certificate_latency: Histogram,
@@ -236,11 +240,26 @@ const POSITIVE_INT_BUCKETS: &[f64] = &[
 ];
 
 const LATENCY_SEC_BUCKETS: &[f64] = &[
-    0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1., 2.5, 5., 10., 20., 30., 60., 90.,
+    0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1., 2., 3., 4., 5., 6., 7., 8., 9., 10., 20.,
+    30., 60., 90.,
 ];
 
 impl AuthorityMetrics {
     pub fn new(registry: &prometheus::Registry) -> AuthorityMetrics {
+        let execute_certificate_latency = register_histogram_vec_with_registry!(
+            "authority_state_execute_certificate_latency",
+            "Latency of executing certificates, including waiting for inputs",
+            &["tx_type"],
+            LATENCY_SEC_BUCKETS.to_vec(),
+            registry,
+        )
+        .unwrap();
+
+        let execute_certificate_latency_single_writer =
+            execute_certificate_latency.with_label_values(&[TX_TYPE_SINGLE_WRITER_TX]);
+        let execute_certificate_latency_shared_object =
+            execute_certificate_latency.with_label_values(&[TX_TYPE_SHARED_OBJ_TX]);
+
         Self {
             tx_orders: register_int_counter_with_registry!(
                 "total_transaction_orders",
@@ -316,13 +335,8 @@ impl AuthorityMetrics {
                 registry,
             )
             .unwrap(),
-            execute_certificate_latency: register_histogram_with_registry!(
-                "authority_state_execute_certificate_latency",
-                "Latency of executing certificates, including waiting for inputs",
-                LATENCY_SEC_BUCKETS.to_vec(),
-                registry,
-            )
-            .unwrap(),
+            execute_certificate_latency_single_writer,
+            execute_certificate_latency_shared_object,
             execute_certificate_with_effects_latency: register_histogram_with_registry!(
                 "authority_state_execute_certificate_with_effects_latency",
                 "Latency of executing certificates with effects, including waiting for inputs",
@@ -758,7 +772,15 @@ impl AuthorityState {
         certificate: &VerifiedCertificate,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult<VerifiedSignedTransactionEffects> {
-        let _metrics_guard = self.metrics.execute_certificate_latency.start_timer();
+        let _metrics_guard = if certificate.contains_shared_object() {
+            self.metrics
+                .execute_certificate_latency_shared_object
+                .start_timer()
+        } else {
+            self.metrics
+                .execute_certificate_latency_single_writer
+                .start_timer()
+        };
         debug!("execute_certificate");
 
         self.metrics.total_cert_attempts.inc();
@@ -1352,7 +1374,7 @@ impl AuthorityState {
     ) -> SuiResult<u64> {
         let changes = self
             .process_object_index(effects, epoch_store)
-            .tap_err(|e| warn!("{e}"))?;
+            .tap_err(|e| warn!(tx_digest=?digest, "Failed to process object index, index_tx is skipped: {e}"))?;
 
         indexes
             .index_tx(

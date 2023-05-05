@@ -15,6 +15,7 @@ use crate::safe_client::SafeClientMetricsBase;
 use mysten_common::sync::notify_read::{NotifyRead, Registration};
 use mysten_metrics::histogram::{Histogram, HistogramVec};
 use mysten_metrics::spawn_monitored_task;
+use mysten_metrics::{TX_TYPE_SHARED_OBJ_TX, TX_TYPE_SINGLE_WRITER_TX};
 use prometheus::core::{AtomicI64, AtomicU64, GenericCounter, GenericGauge};
 use prometheus::{
     register_int_counter_vec_with_registry, register_int_counter_with_registry,
@@ -593,6 +594,3 @@ impl TransactionOrchestratorMetrics {
         Self::new(&registry)
     }
 }
-
-const TX_TYPE_SINGLE_WRITER_TX: &str = "single_writer";
-const TX_TYPE_SHARED_OBJ_TX: &str = "shared_object";
