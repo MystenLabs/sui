@@ -21,10 +21,10 @@ use sui_json_rpc::api::{
 use sui_json_rpc_types::{
     Balance, Checkpoint, CheckpointId, Coin, CoinPage, DelegatedStake,
     DryRunTransactionBlockResponse, DynamicFieldPage, EventFilter, EventPage, ObjectsPage,
-    SuiCoinMetadata, SuiCommittee, SuiEvent, SuiGetPastObjectRequest, SuiMoveNormalizedModule,
-    SuiObjectDataOptions, SuiObjectResponse, SuiObjectResponseQuery, SuiPastObjectResponse,
-    SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
-    SuiTransactionBlockResponseQuery, TransactionBlocksPage,
+    ProtocolConfigResponse, SuiCoinMetadata, SuiCommittee, SuiEvent, SuiGetPastObjectRequest,
+    SuiMoveNormalizedModule, SuiObjectDataOptions, SuiObjectResponse, SuiObjectResponseQuery,
+    SuiPastObjectResponse, SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponse,
+    SuiTransactionBlockResponseOptions, SuiTransactionBlockResponseQuery, TransactionBlocksPage,
 };
 use sui_json_rpc_types::{CheckpointPage, SuiLoadedChildObjectsResponse};
 use sui_types::balance::Supply;
@@ -262,6 +262,13 @@ impl ReadApi {
         digest: TransactionDigest,
     ) -> SuiRpcResult<SuiLoadedChildObjectsResponse> {
         Ok(self.api.http.get_loaded_child_objects(digest).await?)
+    }
+
+    pub async fn get_protocol_config(
+        &self,
+        version: Option<BigInt<u64>>,
+    ) -> SuiRpcResult<ProtocolConfigResponse> {
+        Ok(self.api.http.get_protocol_config(version).await?)
     }
 }
 

@@ -24,12 +24,14 @@ use shared_crypto::intent::{AppId, Intent, IntentMessage, IntentScope, IntentVer
 use sui_core::authority::AuthorityState;
 use sui_json_rpc_types::{
     BalanceChange, Checkpoint, CheckpointId, CheckpointPage, DisplayFieldsResponse, EventFilter,
-    ObjectChange, SuiEvent, SuiGetPastObjectRequest, SuiMoveStruct, SuiMoveValue,
-    SuiObjectDataOptions, SuiObjectResponse, SuiPastObjectResponse, SuiTransactionBlock,
-    SuiTransactionBlockEvents, SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
+    ObjectChange, ProtocolConfigResponse, SuiEvent, SuiGetPastObjectRequest, SuiMoveStruct,
+    SuiMoveValue, SuiObjectDataOptions, SuiObjectResponse, SuiPastObjectResponse,
+    SuiTransactionBlock, SuiTransactionBlockEvents, SuiTransactionBlockResponse,
+    SuiTransactionBlockResponseOptions,
 };
 use sui_json_rpc_types::{SuiLoadedChildObject, SuiLoadedChildObjectsResponse};
 use sui_open_rpc::Module;
+use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
 use sui_types::base_types::{ObjectID, SequenceNumber, TransactionDigest};
 use sui_types::collection_types::VecMap;
 use sui_types::crypto::default_hash;
@@ -898,6 +900,29 @@ impl ReadApiServer for ReadApi {
                     None => vec![],
                 },
             })
+        })
+    }
+
+    #[instrument(skip(self))]
+    async fn get_protocol_config(
+        &self,
+        version: Option<BigInt<u64>>,
+    ) -> RpcResult<ProtocolConfigResponse> {
+        with_tracing!("get_protocol_config", async move {
+            Ok(version
+                .map(|v| {
+                    ProtocolConfig::get_for_version_if_supported((*v).into()).ok_or(anyhow!(
+                    "Unsupported protocol version requested. Min supported: {}, max supported: {}",
+                    ProtocolVersion::MIN.as_u64(),
+                    ProtocolVersion::MAX.as_u64()
+                ))
+                })
+                .unwrap_or(Ok(self
+                    .state
+                    .load_epoch_store_one_call_per_task()
+                    .protocol_config()
+                    .clone()))
+                .map(ProtocolConfigResponse::from)?)
         })
     }
 }

@@ -875,6 +875,543 @@
       ]
     },
     {
+      "name": "sui_getProtocolConfig",
+      "tags": [
+        {
+          "name": "Read API"
+        }
+      ],
+      "description": "Return the protocol config table for the given version number. If the version number is not specified, If none is specified, the node uses the version of the latest epoch it has processed.",
+      "params": [
+        {
+          "name": "version",
+          "description": "An optional protocol version specifier. If omitted, the latest protocol config table for the node will be returned.",
+          "schema": {
+            "$ref": "#/components/schemas/BigInt_for_uint64"
+          }
+        }
+      ],
+      "result": {
+        "name": "ProtocolConfigResponse",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/ProtocolConfig"
+        }
+      },
+      "examples": [
+        {
+          "name": "Return the protocol config for the given protocol version. If none is specified, the node uses the version of the latest epoch it has processed",
+          "params": [
+            {
+              "name": "version",
+              "value": 6
+            }
+          ],
+          "result": {
+            "name": "Result",
+            "value": {
+              "minSupportedProtocolVersion": "1",
+              "maxSupportedProtocolVersion": "10",
+              "protocolVersion": "6",
+              "featureFlags": {
+                "advance_epoch_start_time_in_safe_mode": true,
+                "advance_to_highest_supported_protocol_version": false,
+                "ban_entry_init": false,
+                "commit_root_state_digest": false,
+                "consensus_order_end_of_epoch_last": true,
+                "disable_invariant_violation_check_in_swap_loc": false,
+                "disallow_adding_abilities_on_upgrade": false,
+                "disallow_change_struct_type_params_on_upgrade": false,
+                "loaded_child_objects_fixed": true,
+                "missing_type_is_compatibility_error": true,
+                "no_extraneous_module_bytes": false,
+                "package_digest_hash_module": false,
+                "package_upgrades": true,
+                "scoring_decision_with_validity_cutoff": true
+              },
+              "attributes": {
+                "address_from_bytes_cost_base": {
+                  "u64": "52"
+                },
+                "address_from_u256_cost_base": {
+                  "u64": "52"
+                },
+                "address_to_u256_cost_base": {
+                  "u64": "52"
+                },
+                "base_tx_cost_fixed": {
+                  "u64": "2000"
+                },
+                "base_tx_cost_per_byte": {
+                  "u64": "0"
+                },
+                "bls12381_bls12381_min_pk_verify_cost_base": {
+                  "u64": "52"
+                },
+                "bls12381_bls12381_min_pk_verify_msg_cost_per_block": {
+                  "u64": "2"
+                },
+                "bls12381_bls12381_min_pk_verify_msg_cost_per_byte": {
+                  "u64": "2"
+                },
+                "bls12381_bls12381_min_sig_verify_cost_base": {
+                  "u64": "52"
+                },
+                "bls12381_bls12381_min_sig_verify_msg_cost_per_block": {
+                  "u64": "2"
+                },
+                "bls12381_bls12381_min_sig_verify_msg_cost_per_byte": {
+                  "u64": "2"
+                },
+                "buffer_stake_for_protocol_upgrade_bps": {
+                  "u64": "5000"
+                },
+                "crypto_invalid_arguments_cost": {
+                  "u64": "100"
+                },
+                "dynamic_field_add_child_object_cost_base": {
+                  "u64": "100"
+                },
+                "dynamic_field_add_child_object_struct_tag_cost_per_byte": {
+                  "u64": "10"
+                },
+                "dynamic_field_add_child_object_type_cost_per_byte": {
+                  "u64": "10"
+                },
+                "dynamic_field_add_child_object_value_cost_per_byte": {
+                  "u64": "10"
+                },
+                "dynamic_field_borrow_child_object_child_ref_cost_per_byte": {
+                  "u64": "10"
+                },
+                "dynamic_field_borrow_child_object_cost_base": {
+                  "u64": "100"
+                },
+                "dynamic_field_borrow_child_object_type_cost_per_byte": {
+                  "u64": "10"
+                },
+                "dynamic_field_has_child_object_cost_base": {
+                  "u64": "100"
+                },
+                "dynamic_field_has_child_object_with_ty_cost_base": {
+                  "u64": "100"
+                },
+                "dynamic_field_has_child_object_with_ty_type_cost_per_byte": {
+                  "u64": "2"
+                },
+                "dynamic_field_has_child_object_with_ty_type_tag_cost_per_byte": {
+                  "u64": "2"
+                },
+                "dynamic_field_hash_type_and_key_cost_base": {
+                  "u64": "100"
+                },
+                "dynamic_field_hash_type_and_key_type_cost_per_byte": {
+                  "u64": "2"
+                },
+                "dynamic_field_hash_type_and_key_type_tag_cost_per_byte": {
+                  "u64": "2"
+                },
+                "dynamic_field_hash_type_and_key_value_cost_per_byte": {
+                  "u64": "2"
+                },
+                "dynamic_field_remove_child_object_child_cost_per_byte": {
+                  "u64": "2"
+                },
+                "dynamic_field_remove_child_object_cost_base": {
+                  "u64": "100"
+                },
+                "dynamic_field_remove_child_object_type_cost_per_byte": {
+                  "u64": "2"
+                },
+                "ecdsa_k1_decompress_pubkey_cost_base": {
+                  "u64": "52"
+                },
+                "ecdsa_k1_ecrecover_keccak256_cost_base": {
+                  "u64": "52"
+                },
+                "ecdsa_k1_ecrecover_keccak256_msg_cost_per_block": {
+                  "u64": "2"
+                },
+                "ecdsa_k1_ecrecover_keccak256_msg_cost_per_byte": {
+                  "u64": "2"
+                },
+                "ecdsa_k1_ecrecover_sha256_cost_base": {
+                  "u64": "52"
+                },
+                "ecdsa_k1_ecrecover_sha256_msg_cost_per_block": {
+                  "u64": "2"
+                },
+                "ecdsa_k1_ecrecover_sha256_msg_cost_per_byte": {
+                  "u64": "2"
+                },
+                "ecdsa_k1_secp256k1_verify_keccak256_cost_base": {
+                  "u64": "52"
+                },
+                "ecdsa_k1_secp256k1_verify_keccak256_msg_cost_per_block": {
+                  "u64": "2"
+                },
+                "ecdsa_k1_secp256k1_verify_keccak256_msg_cost_per_byte": {
+                  "u64": "2"
+                },
+                "ecdsa_k1_secp256k1_verify_sha256_cost_base": {
+                  "u64": "52"
+                },
+                "ecdsa_k1_secp256k1_verify_sha256_msg_cost_per_block": {
+                  "u64": "2"
+                },
+                "ecdsa_k1_secp256k1_verify_sha256_msg_cost_per_byte": {
+                  "u64": "2"
+                },
+                "ecdsa_r1_ecrecover_keccak256_cost_base": {
+                  "u64": "52"
+                },
+                "ecdsa_r1_ecrecover_keccak256_msg_cost_per_block": {
+                  "u64": "2"
+                },
+                "ecdsa_r1_ecrecover_keccak256_msg_cost_per_byte": {
+                  "u64": "2"
+                },
+                "ecdsa_r1_ecrecover_sha256_cost_base": {
+                  "u64": "52"
+                },
+                "ecdsa_r1_ecrecover_sha256_msg_cost_per_block": {
+                  "u64": "2"
+                },
+                "ecdsa_r1_ecrecover_sha256_msg_cost_per_byte": {
+                  "u64": "2"
+                },
+                "ecdsa_r1_secp256r1_verify_keccak256_cost_base": {
+                  "u64": "52"
+                },
+                "ecdsa_r1_secp256r1_verify_keccak256_msg_cost_per_block": {
+                  "u64": "2"
+                },
+                "ecdsa_r1_secp256r1_verify_keccak256_msg_cost_per_byte": {
+                  "u64": "2"
+                },
+                "ecdsa_r1_secp256r1_verify_sha256_cost_base": {
+                  "u64": "52"
+                },
+                "ecdsa_r1_secp256r1_verify_sha256_msg_cost_per_block": {
+                  "u64": "2"
+                },
+                "ecdsa_r1_secp256r1_verify_sha256_msg_cost_per_byte": {
+                  "u64": "2"
+                },
+                "ecvrf_ecvrf_verify_alpha_string_cost_per_block": {
+                  "u64": "2"
+                },
+                "ecvrf_ecvrf_verify_alpha_string_cost_per_byte": {
+                  "u64": "2"
+                },
+                "ecvrf_ecvrf_verify_cost_base": {
+                  "u64": "52"
+                },
+                "ed25519_ed25519_verify_cost_base": {
+                  "u64": "52"
+                },
+                "ed25519_ed25519_verify_msg_cost_per_block": {
+                  "u64": "2"
+                },
+                "ed25519_ed25519_verify_msg_cost_per_byte": {
+                  "u64": "2"
+                },
+                "event_emit_cost_base": {
+                  "u64": "52"
+                },
+                "event_emit_output_cost_per_byte": {
+                  "u64": "10"
+                },
+                "event_emit_tag_size_derivation_cost_per_byte": {
+                  "u64": "5"
+                },
+                "event_emit_value_size_derivation_cost_per_byte": {
+                  "u64": "2"
+                },
+                "gas_model_version": {
+                  "u64": "5"
+                },
+                "groth16_prepare_verifying_key_bls12381_cost_base": {
+                  "u64": "52"
+                },
+                "groth16_prepare_verifying_key_bn254_cost_base": {
+                  "u64": "52"
+                },
+                "groth16_verify_groth16_proof_internal_bls12381_cost_base": {
+                  "u64": "52"
+                },
+                "groth16_verify_groth16_proof_internal_bls12381_cost_per_public_input": {
+                  "u64": "2"
+                },
+                "groth16_verify_groth16_proof_internal_bn254_cost_base": {
+                  "u64": "52"
+                },
+                "groth16_verify_groth16_proof_internal_bn254_cost_per_public_input": {
+                  "u64": "2"
+                },
+                "groth16_verify_groth16_proof_internal_public_input_cost_per_byte": {
+                  "u64": "2"
+                },
+                "hash_blake2b256_cost_base": {
+                  "u64": "52"
+                },
+                "hash_blake2b256_data_cost_per_block": {
+                  "u64": "2"
+                },
+                "hash_blake2b256_data_cost_per_byte": {
+                  "u64": "2"
+                },
+                "hash_keccak256_cost_base": {
+                  "u64": "52"
+                },
+                "hash_keccak256_data_cost_per_block": {
+                  "u64": "2"
+                },
+                "hash_keccak256_data_cost_per_byte": {
+                  "u64": "2"
+                },
+                "hmac_hmac_sha3_256_cost_base": {
+                  "u64": "52"
+                },
+                "hmac_hmac_sha3_256_input_cost_per_block": {
+                  "u64": "2"
+                },
+                "hmac_hmac_sha3_256_input_cost_per_byte": {
+                  "u64": "2"
+                },
+                "max_arguments": {
+                  "u32": "512"
+                },
+                "max_back_edges_per_function": {
+                  "u64": "10000"
+                },
+                "max_back_edges_per_module": {
+                  "u64": "10000"
+                },
+                "max_basic_blocks": {
+                  "u64": "1024"
+                },
+                "max_checkpoint_size_bytes": {
+                  "u64": "31457280"
+                },
+                "max_dependency_depth": {
+                  "u64": "100"
+                },
+                "max_event_emit_size": {
+                  "u64": "256000"
+                },
+                "max_fields_in_struct": {
+                  "u64": "32"
+                },
+                "max_function_definitions": {
+                  "u64": "1000"
+                },
+                "max_function_parameters": {
+                  "u64": "128"
+                },
+                "max_gas_computation_bucket": {
+                  "u64": "5000000"
+                },
+                "max_gas_payment_objects": {
+                  "u32": "256"
+                },
+                "max_gas_price": {
+                  "u64": "100000"
+                },
+                "max_generic_instantiation_length": {
+                  "u64": "32"
+                },
+                "max_input_objects": {
+                  "u64": "2048"
+                },
+                "max_loop_depth": {
+                  "u64": "5"
+                },
+                "max_meter_ticks_per_module": {
+                  "u64": "6000000"
+                },
+                "max_modules_in_publish": {
+                  "u32": "128"
+                },
+                "max_move_identifier_len": null,
+                "max_move_object_size": {
+                  "u64": "256000"
+                },
+                "max_move_package_size": {
+                  "u64": "102400"
+                },
+                "max_move_vector_len": {
+                  "u64": "262144"
+                },
+                "max_num_deleted_move_object_ids": {
+                  "u64": "2048"
+                },
+                "max_num_deleted_move_object_ids_system_tx": {
+                  "u64": "32768"
+                },
+                "max_num_event_emit": {
+                  "u64": "256"
+                },
+                "max_num_new_move_object_ids": {
+                  "u64": "2048"
+                },
+                "max_num_new_move_object_ids_system_tx": {
+                  "u64": "32768"
+                },
+                "max_num_transferred_move_object_ids": {
+                  "u64": "2048"
+                },
+                "max_num_transferred_move_object_ids_system_tx": {
+                  "u64": "32768"
+                },
+                "max_programmable_tx_commands": {
+                  "u32": "1024"
+                },
+                "max_pure_argument_size": {
+                  "u32": "16384"
+                },
+                "max_push_size": {
+                  "u64": "10000"
+                },
+                "max_serialized_tx_effects_size_bytes": {
+                  "u64": "524288"
+                },
+                "max_serialized_tx_effects_size_bytes_system_tx": {
+                  "u64": "8388608"
+                },
+                "max_size_written_objects": {
+                  "u64": "5000000"
+                },
+                "max_size_written_objects_system_tx": {
+                  "u64": "50000000"
+                },
+                "max_struct_definitions": {
+                  "u64": "200"
+                },
+                "max_transactions_per_checkpoint": {
+                  "u64": "10000"
+                },
+                "max_tx_gas": {
+                  "u64": "50000000000"
+                },
+                "max_tx_size_bytes": {
+                  "u64": "131072"
+                },
+                "max_type_argument_depth": {
+                  "u32": "16"
+                },
+                "max_type_arguments": {
+                  "u32": "16"
+                },
+                "max_type_nodes": {
+                  "u64": "256"
+                },
+                "max_value_stack_size": {
+                  "u64": "1024"
+                },
+                "max_verifier_meter_ticks_per_function": {
+                  "u64": "6000000"
+                },
+                "move_binary_format_version": {
+                  "u32": "6"
+                },
+                "obj_access_cost_delete_per_byte": {
+                  "u64": "40"
+                },
+                "obj_access_cost_mutate_per_byte": {
+                  "u64": "40"
+                },
+                "obj_access_cost_read_per_byte": {
+                  "u64": "15"
+                },
+                "obj_access_cost_verify_per_byte": {
+                  "u64": "200"
+                },
+                "obj_data_cost_refundable": {
+                  "u64": "100"
+                },
+                "obj_metadata_cost_non_refundable": {
+                  "u64": "50"
+                },
+                "object_borrow_uid_cost_base": {
+                  "u64": "52"
+                },
+                "object_delete_impl_cost_base": {
+                  "u64": "52"
+                },
+                "object_record_new_uid_cost_base": {
+                  "u64": "52"
+                },
+                "object_runtime_max_num_cached_objects": {
+                  "u64": "1000"
+                },
+                "object_runtime_max_num_cached_objects_system_tx": {
+                  "u64": "16000"
+                },
+                "object_runtime_max_num_store_entries": {
+                  "u64": "1000"
+                },
+                "object_runtime_max_num_store_entries_system_tx": {
+                  "u64": "16000"
+                },
+                "package_publish_cost_fixed": {
+                  "u64": "1000"
+                },
+                "package_publish_cost_per_byte": {
+                  "u64": "80"
+                },
+                "reward_slashing_rate": {
+                  "u64": "10000"
+                },
+                "scoring_decision_cutoff_value": {
+                  "f64": "2.5"
+                },
+                "scoring_decision_mad_divisor": {
+                  "f64": "2.3"
+                },
+                "storage_fund_reinvest_rate": {
+                  "u64": "500"
+                },
+                "storage_gas_price": {
+                  "u64": "76"
+                },
+                "storage_rebate_rate": {
+                  "u64": "9900"
+                },
+                "transfer_freeze_object_cost_base": {
+                  "u64": "52"
+                },
+                "transfer_share_object_cost_base": {
+                  "u64": "52"
+                },
+                "transfer_transfer_internal_cost_base": {
+                  "u64": "52"
+                },
+                "tx_context_derive_id_cost_base": {
+                  "u64": "52"
+                },
+                "types_is_one_time_witness_cost_base": {
+                  "u64": "52"
+                },
+                "types_is_one_time_witness_type_cost_per_byte": {
+                  "u64": "2"
+                },
+                "types_is_one_time_witness_type_tag_cost_per_byte": {
+                  "u64": "2"
+                },
+                "validator_validate_metadata_cost_base": {
+                  "u64": "52"
+                },
+                "validator_validate_metadata_data_cost_per_byte": {
+                  "u64": "2"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
       "name": "sui_getTotalTransactionBlocks",
       "tags": [
         {
@@ -3714,6 +4251,9 @@
       "BigInt_for_uint128": {
         "type": "string"
       },
+      "BigInt_for_uint32": {
+        "type": "string"
+      },
       "BigInt_for_uint64": {
         "type": "string"
       },
@@ -5988,6 +6528,86 @@
             ]
           }
         }
+      },
+      "ProtocolConfig": {
+        "type": "object",
+        "required": [
+          "attributes",
+          "featureFlags",
+          "maxSupportedProtocolVersion",
+          "minSupportedProtocolVersion",
+          "protocolVersion"
+        ],
+        "properties": {
+          "attributes": {
+            "type": "object",
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/ProtocolConfigValue"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "featureFlags": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "boolean"
+            }
+          },
+          "maxSupportedProtocolVersion": {
+            "$ref": "#/components/schemas/ProtocolVersion"
+          },
+          "minSupportedProtocolVersion": {
+            "$ref": "#/components/schemas/ProtocolVersion"
+          },
+          "protocolVersion": {
+            "$ref": "#/components/schemas/ProtocolVersion"
+          }
+        }
+      },
+      "ProtocolConfigValue": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "u32"
+            ],
+            "properties": {
+              "u32": {
+                "$ref": "#/components/schemas/BigInt_for_uint32"
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": [
+              "u64"
+            ],
+            "properties": {
+              "u64": {
+                "$ref": "#/components/schemas/BigInt_for_uint64"
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": [
+              "f64"
+            ],
+            "properties": {
+              "f64": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          }
+        ]
       },
       "ProtocolVersion": {
         "$ref": "#/components/schemas/BigInt_for_uint64"

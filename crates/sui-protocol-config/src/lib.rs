@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
 use std::cell::RefCell;
 use std::sync::atomic::{AtomicBool, Ordering};
-use sui_protocol_config_macros::ProtocolConfigGetters;
+use sui_protocol_config_macros::{ProtocolConfigFeatureFlagsGetters, ProtocolConfigGetters};
 use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
@@ -128,7 +128,7 @@ impl SupportedProtocolVersions {
 pub struct Error(pub String);
 
 /// Records on/off feature flags that may vary at each protocol version.
-#[derive(Default, Clone, Serialize, Debug)]
+#[derive(Default, Clone, Serialize, Debug, ProtocolConfigFeatureFlagsGetters)]
 struct FeatureFlags {
     // Add feature flags here, e.g.:
     // new_protocol_feature: bool,
@@ -756,6 +756,18 @@ impl ProtocolConfig {
         })
     }
 
+    /// Get the value ProtocolConfig that are in effect during the given protocol version.
+    /// Or none if the version is not supported.
+    pub fn get_for_version_if_supported(version: ProtocolVersion) -> Option<Self> {
+        if version.0 >= ProtocolVersion::MIN.0 && version.0 <= ProtocolVersion::MAX_ALLOWED.0 {
+            let mut ret = Self::get_for_version_impl(version);
+            ret.version = version;
+            Some(ret)
+        } else {
+            None
+        }
+    }
+
     #[cfg(not(msim))]
     pub fn poison_get_for_min_version() {
         POISON_VERSION_METHODS.store(true, Ordering::Relaxed);
@@ -1055,8 +1067,8 @@ impl ProtocolConfig {
                 scoring_decision_mad_divisor: None,
                 scoring_decision_cutoff_value: None,
 
-              // Limits the length of a Move identifier
-              max_move_identifier_len: None,
+                // Limits the length of a Move identifier
+                max_move_identifier_len: None,
 
                 // When adding a new constant, set it to None in the earliest version, like this:
                 // new_constant: None,
@@ -1298,6 +1310,85 @@ mod test {
             );
         }
     }
+
+    #[test]
+    fn lookup_by_string_test() {
+        let prot: ProtocolConfig = ProtocolConfig::get_for_version(ProtocolVersion::new(1));
+        // Does not exist
+        assert!(prot.lookup_attr("some random string".to_string()).is_none());
+
+        assert!(
+            prot.lookup_attr("max_arguments".to_string())
+                == Some(ProtocolConfigValue::u32(prot.max_arguments())),
+        );
+
+        // We didnt have this in version 1
+        assert!(prot
+            .lookup_attr("max_move_identifier_len".to_string())
+            .is_none());
+
+        // But we did in version 9
+        let prot: ProtocolConfig = ProtocolConfig::get_for_version(ProtocolVersion::new(9));
+        assert!(
+            prot.lookup_attr("max_move_identifier_len".to_string())
+                == Some(ProtocolConfigValue::u64(prot.max_move_identifier_len()))
+        );
+
+        let prot: ProtocolConfig = ProtocolConfig::get_for_version(ProtocolVersion::new(1));
+        // We didnt have this in version 1
+        assert!(prot
+            .attr_map()
+            .get("max_move_identifier_len")
+            .unwrap()
+            .is_none());
+        // We had this in version 1
+        assert!(
+            prot.attr_map().get("max_arguments").unwrap()
+                == &Some(ProtocolConfigValue::u32(prot.max_arguments()))
+        );
+
+        // Check feature flags
+        let prot: ProtocolConfig = ProtocolConfig::get_for_version(ProtocolVersion::new(1));
+        // Does not exist
+        assert!(prot
+            .feature_flags
+            .lookup_attr("some random string".to_owned())
+            .is_none());
+        assert!(prot
+            .feature_flags
+            .attr_map()
+            .get("some random string")
+            .is_none());
+
+        // Was false in v1
+        assert!(
+            prot.feature_flags
+                .lookup_attr("package_upgrades".to_owned())
+                == Some(false)
+        );
+        assert!(
+            prot.feature_flags
+                .attr_map()
+                .get("package_upgrades")
+                .unwrap()
+                == &false
+        );
+        let prot: ProtocolConfig = ProtocolConfig::get_for_version(ProtocolVersion::new(4));
+        // Was true from v3 and up
+        assert!(
+            prot.feature_flags
+                .lookup_attr("package_upgrades".to_owned())
+                == Some(true)
+        );
+        assert!(
+            prot.feature_flags
+                .attr_map()
+                .get("package_upgrades")
+                .unwrap()
+                == &true
+        );
+    }
+
     #[test]
     fn limit_range_fn_test() {
         let low = 100u32;
