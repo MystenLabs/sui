@@ -43,12 +43,10 @@ const MIN_HASHMAP_CAPACITY: usize = 1000;
 /// storage, committed objects and certificates are notified back to TransactionManager.
 pub struct TransactionManager {
     authority_store: Arc<AuthorityStore>,
-    tx_ready_certificates: UnboundedSender<
-        Vec<(
-            VerifiedExecutableTransaction,
-            Option<TransactionEffectsDigest>,
-        )>,
-    >,
+    tx_ready_certificates: UnboundedSender<(
+        VerifiedExecutableTransaction,
+        Option<TransactionEffectsDigest>,
+    )>,
     metrics: Arc<AuthorityMetrics>,
     inner: RwLock<Inner>,
 }
@@ -214,12 +212,10 @@ impl TransactionManager {
     pub(crate) fn new(
         authority_store: Arc<AuthorityStore>,
         epoch_store: &AuthorityPerEpochStore,
-        tx_ready_certificates: UnboundedSender<
-            Vec<(
-                VerifiedExecutableTransaction,
-                Option<TransactionEffectsDigest>,
-            )>,
-        >,
+        tx_ready_certificates: UnboundedSender<(
+            VerifiedExecutableTransaction,
+            Option<TransactionEffectsDigest>,
+        )>,
         metrics: Arc<AuthorityMetrics>,
     ) -> TransactionManager {
         let transaction_manager = TransactionManager {
@@ -336,7 +332,6 @@ impl TransactionManager {
         let mut inner = self.inner.write();
         let _scope = monitored_scope("TransactionManager::enqueue::wlock");
 
-        let mut ready_certificates = Vec::new();
         for mut pending_cert in pending {
             // Tx lock is not held here, which makes it possible to send duplicated transactions to
             // the execution driver after crash-recovery, when the same transaction is recovered
@@ -435,7 +430,12 @@ impl TransactionManager {
 
             // Ready transactions can start to execute.
             if pending_cert.acquiring_locks.is_empty() {
-                ready_certificates.push(pending_cert);
+                self.metrics
+                    .transaction_manager_num_enqueued_certificates
+                    .with_label_values(&["ready"])
+                    .inc();
+                // Send to execution driver for execution.
+                self.certificate_ready(&mut inner, pending_cert);
                 continue;
             }
 
@@ -453,13 +453,6 @@ impl TransactionManager {
                 .with_label_values(&["pending"])
                 .inc();
         }
-
-        self.metrics
-            .transaction_manager_num_enqueued_certificates
-            .with_label_values(&["ready"])
-            .inc_by(ready_certificates.len() as u64);
-        // Send to execution driver for execution.
-        self.certificates_ready(&mut inner, ready_certificates);
 
         self.metrics
             .transaction_manager_num_missing_objects
@@ -521,10 +514,7 @@ impl TransactionManager {
     ) {
         let mut inner = self.inner.write();
         let _scope = monitored_scope("TransactionManager::objects_available::wlock");
-        let ready_certificates =
-            self.objects_available_locked(&mut inner, epoch_store, &input_keys);
-        self.certificates_ready(&mut inner, ready_certificates);
-
+        self.objects_available_locked(&mut inner, epoch_store, &input_keys);
         inner.maybe_shrink_capacity();
     }
 
@@ -533,7 +523,7 @@ impl TransactionManager {
         inner: &mut Inner,
         epoch_store: &AuthorityPerEpochStore,
         input_keys: &[InputKey],
-    ) -> Vec<PendingCertificate> {
+    ) {
         if inner.epoch != epoch_store.epoch() {
             warn!(
                 "Ignoring objects committed from wrong epoch. Expected={} Actual={} \
@@ -542,13 +532,12 @@ impl TransactionManager {
                 epoch_store.epoch(),
                 input_keys,
             );
-            return vec![];
+            return;
         }
 
-        let mut ready_certificates = Vec::new();
         for input_key in input_keys {
             for ready_cert in inner.try_acquire_lock(input_key) {
-                ready_certificates.push(ready_cert);
+                self.certificate_ready(inner, ready_cert);
             }
         }
 
@@ -561,8 +550,6 @@ impl TransactionManager {
         self.metrics
             .transaction_manager_num_executing_certificates
             .set(inner.executing_certificates.len() as i64);
-
-        ready_certificates
     }
 
     /// Notifies TransactionManager about a transaction that has been committed.
@@ -585,13 +572,11 @@ impl TransactionManager {
                 return;
             }
 
-            let mut ready_certificates = Vec::new();
-
             for (digest, output_object_keys) in izip!(digests, output_object_keys) {
                 let Some(acquired_locks) = inner.executing_certificates.remove(digest) else {
-                    trace!("{:?} not found in executing certificates, likely because it is a system transaction", digest);
-                    return;
-                };
+                trace!("{:?} not found in executing certificates, likely because it is a system transaction", digest);
+                return;
+            };
                 for (key, lock_mode) in acquired_locks {
                     if lock_mode == LockMode::Default {
                         // Holders of default locks are not tracked.
@@ -605,21 +590,15 @@ impl TransactionManager {
                         digest
                     );
                     for ready_cert in inner.try_acquire_lock(&key) {
-                        ready_certificates.push(ready_cert);
+                        self.certificate_ready(&mut inner, ready_cert);
                     }
                 }
                 self.metrics
                     .transaction_manager_num_executing_certificates
                     .set(inner.executing_certificates.len() as i64);
 
-                ready_certificates.extend(self.objects_available_locked(
-                    &mut inner,
-                    epoch_store,
-                    output_object_keys,
-                ));
+                self.objects_available_locked(&mut inner, epoch_store, output_object_keys);
             }
-            println!("ready_certificates: {:?}", ready_certificates);
-            self.certificates_ready(&mut inner, ready_certificates);
 
             inner.maybe_shrink_capacity();
         }
@@ -628,47 +607,29 @@ impl TransactionManager {
     }
 
     /// Sends the ready certificate for execution.
-    fn certificates_ready(
-        &self,
-        inner: &mut Inner,
-        mut ready_certificates: Vec<PendingCertificate>,
-    ) {
-        if ready_certificates.is_empty() {
-            return;
-        }
-        for ready_cert in ready_certificates.iter_mut() {
-            let cert = &ready_cert.certificate;
-            trace!(tx_digest = ?cert.digest(), "certificate ready");
-            // Record as an executing certificate.
-            assert_eq!(
-                ready_cert.acquired_locks.len(),
-                cert.data()
-                    .intent_message()
-                    .value
-                    .input_objects()
-                    .unwrap()
-                    .len()
-            );
-            // take acquired_locks out of ready_cert - it is not used after this point.
-            let mut acquired_locks = Default::default();
-            std::mem::swap(&mut acquired_locks, &mut ready_cert.acquired_locks);
-            assert!(inner
-                .executing_certificates
-                .insert(*cert.digest(), acquired_locks)
-                .is_none());
-        }
-        self.metrics
-            .transaction_manager_num_ready
-            .add(ready_certificates.len() as i64);
-        self.metrics
-            .execution_driver_dispatch_queue
-            .add(ready_certificates.len() as i64);
-        let _ = self.tx_ready_certificates.send(
-            ready_certificates
-                .into_iter()
-                .map(|c| (c.certificate, c.expected_effects_digest))
-                .collect(),
+    fn certificate_ready(&self, inner: &mut Inner, pending_certificate: PendingCertificate) {
+        let cert = pending_certificate.certificate;
+        let expected_effects_digest = pending_certificate.expected_effects_digest;
+        trace!(tx_digest = ?cert.digest(), "certificate ready");
+        // Record as an executing certificate.
+        assert_eq!(
+            pending_certificate.acquired_locks.len(),
+            cert.data()
+                .intent_message()
+                .value
+                .input_objects()
+                .unwrap()
+                .len()
         );
+        assert!(inner
+            .executing_certificates
+            .insert(*cert.digest(), pending_certificate.acquired_locks)
+            .is_none());
+        let _ = self
+            .tx_ready_certificates
+            .send((cert, expected_effects_digest));
+        self.metrics.transaction_manager_num_ready.inc();
+        self.metrics.execution_driver_dispatch_queue.inc();
     }
 
     /// Gets the missing input object keys for the given transaction.

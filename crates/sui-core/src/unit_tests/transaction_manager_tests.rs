@@ -3,7 +3,6 @@
 
 use std::{time::Duration, vec};
 
-use sui_macros::sim_test;
 use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::{
@@ -27,17 +26,14 @@ use crate::{
 };
 
 #[allow(clippy::disallowed_methods)] // allow unbounded_channel()
-#[allow(clippy::type_complexity)]
 fn make_transaction_manager(
     state: &AuthorityState,
 ) -> (
     TransactionManager,
-    UnboundedReceiver<
-        Vec<(
-            VerifiedExecutableTransaction,
-            Option<TransactionEffectsDigest>,
-        )>,
-    >,
+    UnboundedReceiver<(
+        VerifiedExecutableTransaction,
+        Option<TransactionEffectsDigest>,
+    )>,
 ) {
     // Create a new transaction manager instead of reusing the authority's, to examine
     // transaction_manager output from rx_ready_certificates.
@@ -71,7 +67,7 @@ fn get_input_keys(objects: &[Object]) -> Vec<InputKey> {
         .collect()
 }
 
-#[sim_test]
+#[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn transaction_manager_basics() {
     // Initialize an authority state.
     let (owner, _keypair) = deterministic_random_account_key();
@@ -111,7 +107,7 @@ async fn transaction_manager_basics() {
     // Notify TM about transaction commit
     transaction_manager.notify_commit(
         &[*transaction.digest()],
-        &[vec![]],
+        &[],
         &state.epoch_store_for_testing(),
     );
 
@@ -158,7 +154,7 @@ async fn transaction_manager_basics() {
     // Notify TM about transaction commit
     transaction_manager.notify_commit(
         &[*transaction.digest()],
-        &[vec![]],
+        &[],
         &state.epoch_store_for_testing(),
     );
 
@@ -258,11 +254,9 @@ async fn transaction_manager_read_lock() {
         &state.epoch_store_for_testing(),
     );
 
-    let mut txns = rx_ready_certificates.recv().await.unwrap().into_iter();
-
     // TM should output the 2 read-only transactions eventually.
-    let tx_0 = txns.next().unwrap().0;
-    let tx_1 = txns.next().unwrap().0;
+    let tx_0 = rx_ready_certificates.recv().await.unwrap().0;
+    let tx_1 = rx_ready_certificates.recv().await.unwrap().0;
     let mut want_digests = vec![transaction_read_0.digest(), transaction_read_1.digest()];
     want_digests.sort();
     let mut got_digests = vec![tx_0.digest(), tx_1.digest()];
@@ -276,35 +270,16 @@ async fn transaction_manager_read_lock() {
     assert_eq!(transaction_manager.inflight_queue_len(), 3);
 
     // Notify TM about read-only transaction commit
-    transaction_manager.notify_commit(
-        &[*tx_0.digest()],
-        &[vec![]],
-        &state.epoch_store_for_testing(),
-    );
-    transaction_manager.notify_commit(
-        &[*tx_1.digest()],
-        &[vec![]],
-        &state.epoch_store_for_testing(),
-    );
+    transaction_manager.notify_commit(&[*tx_0.digest()], &[], &state.epoch_store_for_testing());
+    transaction_manager.notify_commit(&[*tx_1.digest()], &[], &state.epoch_store_for_testing());
 
     // TM should output the default-lock transaction eventually.
-    let tx_2 = rx_ready_certificates
-        .recv()
-        .await
-        .unwrap()
-        .into_iter()
-        .next()
-        .unwrap()
-        .0;
+    let tx_2 = rx_ready_certificates.recv().await.unwrap().0;
     assert_eq!(tx_2.digest(), transaction_default.digest());
 
     assert_eq!(transaction_manager.inflight_queue_len(), 1);
 
     // Notify TM about default-lock transaction commit
-    transaction_manager.notify_commit(
-        &[*tx_2.digest()],
-        &[vec![]],
-        &state.epoch_store_for_testing(),
-    );
+    transaction_manager.notify_commit(&[*tx_2.digest()], &[], &state.epoch_store_for_testing());
     transaction_manager.check_empty_for_testing();
 }

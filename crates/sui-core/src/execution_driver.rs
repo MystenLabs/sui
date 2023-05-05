@@ -17,7 +17,7 @@ use tokio::{
     time::sleep,
 };
 use tokio_stream::wrappers::UnboundedReceiverStream;
-use tracing::{debug, error, error_span, info, Instrument};
+use tracing::{debug, error, error_span, info, trace, Instrument};
 
 use crate::authority::AuthorityState;
 
@@ -34,12 +34,10 @@ const EXECUTION_FAILURE_RETRY_INTERVAL: Duration = Duration::from_secs(1);
 /// processing the transaction in a loop.
 pub async fn execution_process(
     authority_state: Weak<AuthorityState>,
-    rx_ready_certificates: UnboundedReceiver<
-        Vec<(
-            VerifiedExecutableTransaction,
-            Option<TransactionEffectsDigest>,
-        )>,
-    >,
+    rx_ready_certificates: UnboundedReceiver<(
+        VerifiedExecutableTransaction,
+        Option<TransactionEffectsDigest>,
+    )>,
     mut rx_execution_shutdown: oneshot::Receiver<()>,
 ) {
     info!("Starting pending certificates execution process.");
@@ -59,7 +57,7 @@ pub async fn execution_process(
         tokio::select! {
             result = rx_ready_certificates.next() => {
                 if let Some(certs) = result {
-                    certificates = certs.into_iter().flatten().collect();
+                    certificates = certs.into_iter().collect();
                 } else {
                     // Should only happen after the AuthorityState has shut down and tx_ready_certificate
                     // has been dropped by TransactionManager.
