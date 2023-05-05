@@ -16,7 +16,8 @@ use serde::{de::DeserializeOwned, Serialize};
 pub struct Iter<'a, K, V> {
     cf_name: String,
     db_iter: RocksDBRawIter<'a>,
-    _phantom: PhantomData<(K, V)>,
+    // *const here is an equivalent to `impl !Send for Iter` (which is not a stable feature at the moment)
+    _phantom: PhantomData<*const (K, V)>,
     direction: Direction,
     is_initialized: bool,
     _timer: Option<HistogramTimer>,
