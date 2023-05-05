@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::TypedStoreError;
 use async_trait::async_trait;
+use rocksdb::ReadOptions;
 use serde::{de::DeserializeOwned, Serialize};
 use std::{borrow::Borrow, collections::BTreeMap, error::Error};
 
@@ -21,6 +22,8 @@ where
 
     /// Returns the value for the given key from the map, if it exists.
     fn get(&self, key: &K) -> Result<Option<V>, Self::Error>;
+
+    fn get_with_opts(&self, key: &K, readopts: ReadOptions) -> Result<Option<V>, Self::Error>;
 
     /// Returns the raw value (serialized bytes) for the given key from the map, if it exists.
     fn get_raw_bytes(&self, key: &K) -> Result<Option<Vec<u8>>, Self::Error>;
@@ -58,6 +61,9 @@ where
     fn iter(&'a self) -> Self::Iterator;
 
     /// Returns an iterator visiting each key-value pair in the map.
+    fn iter_with_opts(&'a self, readopts: ReadOptions) -> Self::Iterator;
+
+    /// Returns an iterator visiting each key-value pair in the map.
     fn iter_with_bounds(&'a self, lower_bound: Option<K>, upper_bound: Option<K>)
         -> Self::Iterator;
 
@@ -78,6 +84,32 @@ where
         keys.into_iter().map(|key| self.get(key.borrow())).collect()
     }
 
+    /// Returns a vector of values corresponding to the keys provided, non-atomically.
+    fn multi_get_with_opts<J>(
+        &self,
+        keys: impl IntoIterator<Item = J>,
+        _readopts: ReadOptions,
+    ) -> Result<Vec<Option<V>>, Self::Error>
+    where
+        J: Borrow<K>,
+    {
+        self.multi_get(keys)
+    }
+
+    /// Returns a vector of raw values corresponding to the keys provided, non-atomically.
+    fn multi_get_raw_bytes_with_opts<J>(
+        &self,
+        keys: impl IntoIterator<Item = J>,
+        _readopts: ReadOptions,
+    ) -> Result<Vec<Option<Vec<u8>>>, Self::Error>
+    where
+        J: Borrow<K>,
+    {
+        keys.into_iter()
+            .map(|key| self.get_raw_bytes(key.borrow()))
+            .collect()
+    }
+
     /// Returns a vector of raw values corresponding to the keys provided, non-atomically.
     fn multi_get_raw_bytes<J>(
         &self,
@@ -86,9 +118,7 @@ where
     where
         J: Borrow<K>,
     {
-        keys.into_iter()
-            .map(|key| self.get_raw_bytes(key.borrow()))
-            .collect()
+        self.multi_get_raw_bytes_with_opts(keys, ReadOptions::default())
     }
 
     /// Returns a vector of values corresponding to the keys provided, non-atomically.
