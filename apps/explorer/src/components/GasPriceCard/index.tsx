@@ -148,7 +148,7 @@ export function GasPriceCard({
         selectedUnit
     );
     const formattedHoveredDate = hoveredElement?.date
-        ? formatDate(hoveredElement?.date, ['month', 'day', 'year'])
+        ? formatDate(hoveredElement?.date, ['month', 'day'])
         : '-';
     return (
         <Card spacing="lg" height="full">
@@ -224,6 +224,7 @@ export function GasPriceCard({
                                         variant="subtitleSmallExtra/medium"
                                         color="steel-darker"
                                     >
+                                        Epoch {hoveredElement?.epoch},{' '}
                                         {formattedHoveredDate}
                                     </Text>
                                 </div>
