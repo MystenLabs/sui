@@ -44,32 +44,28 @@ export function Layout() {
                             <NetworkContext.Provider
                                 value={[network, setNetwork]}
                             >
-                                <div className="w-full">
-                                    <Header />
-                                    <main className="relative z-10 min-h-screen bg-offwhite">
-                                        <section className="mx-auto max-w-[1440px] px-5 py-10 lg:px-10 2xl:px-0">
-                                            {networkOutage && (
-                                                <div className="pb-2.5">
-                                                    <Banner
-                                                        variant="warning"
-                                                        border
-                                                        fullWidth
-                                                    >
-                                                        We&rsquo;re sorry that
-                                                        the explorer is running
-                                                        slower than usual.
-                                                        We&rsquo;re working to
-                                                        fix the issue and
-                                                        appreciate your
-                                                        patience.
-                                                    </Banner>
-                                                </div>
-                                            )}
-                                            <Outlet />
-                                        </section>
-                                    </main>
-                                    <Footer />
-                                </div>
+                                <Header />
+                                <main className="relative z-10 min-h-full bg-offwhite">
+                                    <section className="mx-auto max-w-[1440px] px-5 py-10 lg:px-10 2xl:px-0">
+                                        {networkOutage && (
+                                            <div className="pb-2.5">
+                                                <Banner
+                                                    variant="warning"
+                                                    border
+                                                    fullWidth
+                                                >
+                                                    We&rsquo;re sorry that the
+                                                    explorer is running slower
+                                                    than usual. We&rsquo;re
+                                                    working to fix the issue and
+                                                    appreciate your patience.
+                                                </Banner>
+                                            </div>
+                                        )}
+                                        <Outlet />
+                                    </section>
+                                </main>
+                                <Footer />
 
                                 <Toaster
                                     position="bottom-center"

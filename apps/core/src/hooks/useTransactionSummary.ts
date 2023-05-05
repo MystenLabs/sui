@@ -7,6 +7,7 @@ import {
     is,
     getExecutionStatusType,
     getTransactionDigest,
+    getTransactionSender,
 } from '@mysten/sui.js';
 import { useMemo } from 'react';
 
@@ -22,6 +23,12 @@ const getSummary = (
     const objectSummary = getObjectChangeSummary(transaction, currentAddress);
     const balanceChangeSummary = getBalanceChangeSummary(transaction);
 
+    const totalChangeCount =
+        Object.values(objectSummary ?? {}).reduce(
+            (acc, val) => acc + val.length,
+            0
+        ) + (balanceChangeSummary ?? []).length || 0;
+
     const gas = getGasSummary(transaction);
 
     if (is(transaction, DryRunTransactionBlockResponse)) {
@@ -33,11 +40,13 @@ const getSummary = (
     } else {
         return {
             gas,
+            sender: getTransactionSender(transaction),
             balanceChanges: balanceChangeSummary,
             digest: getTransactionDigest(transaction),
             label: getLabel(transaction, currentAddress),
             objectSummary,
             status: getExecutionStatusType(transaction),
+            totalChangeCount: totalChangeCount,
             timestamp: transaction.timestampMs,
         };
     }
