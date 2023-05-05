@@ -7,6 +7,12 @@ import { ProgressBar, type ProgressBarProps } from '../ProgressBar';
 
 export default {
     component: ProgressBar,
+    parameters: {
+        backgrounds: {
+            default: 'gray100',
+            values: [{ name: 'gray100', value: '#182435' }],
+        },
+    },
 } as Meta;
 
 export const Default: StoryObj<ProgressBarProps> = {
@@ -21,9 +27,15 @@ export const Default: StoryObj<ProgressBarProps> = {
 };
 
 export const Animated: StoryObj<ProgressBarProps> = {
-    ...Default,
-    args: {
-        progress: 75,
-        animate: true,
+    render: () => {
+        const progress = [5, 10, 25, 50, 75, 100];
+
+        return (
+            <div className="flex w-1/2 flex-col gap-4">
+                {progress.map((p, index) => (
+                    <ProgressBar key={p} progress={p} animate />
+                ))}
+            </div>
+        );
     },
 };
