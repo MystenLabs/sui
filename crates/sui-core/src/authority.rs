@@ -187,6 +187,7 @@ pub struct AuthorityMetrics {
     num_input_objs: Histogram,
     num_shared_objects: Histogram,
     batch_size: Histogram,
+    multi_tx_batch_size: Histogram,
 
     handle_transaction_latency: Histogram,
     execute_certificate_latency: Histogram,
@@ -305,6 +306,13 @@ impl AuthorityMetrics {
             batch_size: register_histogram_with_registry!(
                 "batch_size",
                 "Distribution of size of transaction batch",
+                POSITIVE_INT_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+            multi_tx_batch_size: register_histogram_with_registry!(
+                "multi_tx_batch_size",
+                "Distribution of size of multi-tx batches",
                 POSITIVE_INT_BUCKETS.to_vec(),
                 registry,
             )
@@ -1048,6 +1056,9 @@ impl AuthorityState {
         self.metrics
             .num_shared_objects
             .observe(shared_object_count as f64);
+        self.metrics
+            .multi_tx_batch_size
+            .observe(transactions.len() as f64);
         transactions.iter().for_each(|t| {
             self.metrics
                 .batch_size
