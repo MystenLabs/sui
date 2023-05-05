@@ -200,14 +200,20 @@ impl WalletContext {
         ))
     }
 
-    /// Given an address, return one gas object owned by this address.
-    /// The actual implementation just returns the first one returned by the read api.
-    pub async fn get_one_gas_object_owned_by_address(
+    pub async fn get_all_gas_objects_owned_by_address(
         &self,
         address: SuiAddress,
-    ) -> anyhow::Result<Option<ObjectRef>> {
+    ) -> anyhow::Result<Vec<ObjectRef>> {
+        self.get_gas_objects_owned_by_address(address, None).await
+    }
+
+    pub async fn get_gas_objects_owned_by_address(
+        &self,
+        address: SuiAddress,
+        limit: Option<usize>,
+    ) -> anyhow::Result<Vec<ObjectRef>> {
         let client = self.get_client().await?;
-        let mut response = client
+        let results: Vec<_> = client
             .read_api()
             .get_owned_objects(
                 address,
@@ -216,13 +222,35 @@ impl WalletContext {
                     Some(SuiObjectDataOptions::full_content()),
                 )),
                 None,
-                Some(1),
+                limit,
             )
-            .await?;
-        Ok(response
+            .await?
             .data
-            .pop()
-            .and_then(|r| r.data.map(|o| o.object_ref())))
+            .into_iter()
+            .filter_map(|r| r.data.map(|o| o.object_ref()))
+            .collect();
+        Ok(results)
+    }
+
+    /// Given an address, return one gas object owned by this address.
+    /// The actual implementation just returns the first one returned by the read api.
+    pub async fn get_one_gas_object_owned_by_address(
+        &self,
+        address: SuiAddress,
+    ) -> anyhow::Result<Option<ObjectRef>> {
+        Ok(self
+            .get_gas_objects_owned_by_address(address, Some(1))
+            .await?
+            .pop())
+    }
+
+    /// Returns one address and all gas objects owned by that address.
+    pub async fn get_one_account(&self) -> anyhow::Result<(SuiAddress, Vec<ObjectRef>)> {
+        let address = self.get_addresses().pop().unwrap();
+        Ok((
+            address,
+            self.get_all_gas_objects_owned_by_address(address).await?,
+        ))
     }
 
     /// Return a gas object owned by an arbitrary address managed by the wallet.
@@ -235,6 +263,7 @@ impl WalletContext {
         Ok(None)
     }
 
+    /// Returns all the account addresses managed by the wallet and their owned gas objects.
     pub async fn get_all_accounts_and_gas_objects(
         &self,
     ) -> anyhow::Result<Vec<(SuiAddress, Vec<ObjectRef>)>> {
@@ -329,6 +358,20 @@ impl WalletContext {
             }
         }
         res
+    }
+
+    pub async fn make_transfer_sui_transaction(
+        &self,
+        recipient: Option<SuiAddress>,
+        amount: Option<u64>,
+    ) -> VerifiedTransaction {
+        let (sender, gas_object) = self.get_one_gas_object().await.unwrap().unwrap();
+        let gas_price = self.get_reference_gas_price().await.unwrap();
+        self.sign_transaction(
+            &TestTransactionBuilder::new(sender, gas_object, gas_price)
+                .transfer_sui(amount, recipient.unwrap_or(sender))
+                .build(),
+        )
     }
 
     pub async fn make_staking_transaction(

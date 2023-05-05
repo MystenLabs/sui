@@ -11,6 +11,7 @@ use sui_types::sui_system_state::SUI_SYSTEM_MODULE_NAME;
 use sui_types::transaction::{
     CallArg, ObjectArg, Transaction, TransactionData, VerifiedTransaction,
     TEST_ONLY_GAS_UNIT_FOR_GENERIC, TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
+    TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
 };
 use sui_types::{
     TypeTag, SUI_SYSTEM_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_ID,
@@ -106,6 +107,11 @@ impl TestTransactionBuilder {
         self
     }
 
+    pub fn transfer_sui(mut self, amount: Option<u64>, recipient: SuiAddress) -> Self {
+        self.test_data = TestTransactionData::TransferSui(TransferSuiData { amount, recipient });
+        self
+    }
+
     pub fn publish(mut self, path: PathBuf) -> Self {
         assert!(matches!(self.test_data, TestTransactionData::Empty));
         self.test_data = TestTransactionData::Publish(PublishData { path });
@@ -137,7 +143,15 @@ impl TestTransactionBuilder {
                 data.object,
                 self.sender,
                 self.gas_object,
-                self.gas_price * TEST_ONLY_GAS_UNIT_FOR_GENERIC,
+                self.gas_price * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
+                self.gas_price,
+            ),
+            TestTransactionData::TransferSui(data) => TransactionData::new_transfer_sui(
+                data.recipient,
+                self.sender,
+                data.amount,
+                self.gas_object,
+                self.gas_price * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
                 self.gas_price,
             ),
             TestTransactionData::Publish(data) => {
@@ -173,6 +187,7 @@ impl TestTransactionBuilder {
 enum TestTransactionData {
     Move(MoveData),
     Transfer(TransferData),
+    TransferSui(TransferSuiData),
     Publish(PublishData),
     Empty,
 }
@@ -191,5 +206,10 @@ struct PublishData {
 
 struct TransferData {
     object: ObjectRef,
+    recipient: SuiAddress,
+}
+
+struct TransferSuiData {
+    amount: Option<u64>,
     recipient: SuiAddress,
 }
