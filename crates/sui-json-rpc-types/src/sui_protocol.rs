@@ -55,6 +55,7 @@ pub struct ProtocolConfigResponse {
     #[schemars(with = "AsProtocolVersion")]
     #[serde_as(as = "Readable<AsProtocolVersion, _>")]
     pub protocol_version: ProtocolVersion,
+    pub feature_flags: BTreeMap<String, bool>,
     pub attributes: BTreeMap<String, Option<SuiProtocolConfigValue>>,
 }
 
@@ -69,6 +70,7 @@ impl From<ProtocolConfig> for ProtocolConfigResponse {
                 .collect(),
             min_supported_protocol_version: ProtocolVersion::MIN,
             max_supported_protocol_version: ProtocolVersion::MAX,
+            feature_flags: config.feature_map(),
         }
     }
 }
