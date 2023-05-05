@@ -14,12 +14,14 @@ use narwhal_worker::LocalNarwhalClient;
 use parking_lot::{Mutex, RwLockReadGuard};
 use prometheus::Histogram;
 use prometheus::HistogramVec;
-use prometheus::IntCounter;
+use prometheus::IntCounterVec;
 use prometheus::IntGauge;
+use prometheus::IntGaugeVec;
 use prometheus::Registry;
 use prometheus::{
     register_histogram_vec_with_registry, register_histogram_with_registry,
-    register_int_counter_with_registry, register_int_gauge_with_registry,
+    register_int_counter_vec_with_registry, register_int_gauge_vec_with_registry,
+    register_int_gauge_with_registry,
 };
 use rand::rngs::StdRng;
 use rand::SeedableRng;
@@ -63,10 +65,10 @@ const SEQUENCING_CERTIFICATE_POSITION_BUCKETS: &[f64] = &[0., 1., 2., 3., 5., 10
 
 pub struct ConsensusAdapterMetrics {
     // Certificate sequencing metrics
-    pub sequencing_certificate_attempt: IntCounter,
-    pub sequencing_certificate_success: IntCounter,
-    pub sequencing_certificate_failures: IntCounter,
-    pub sequencing_certificate_inflight: IntGauge,
+    pub sequencing_certificate_attempt: IntCounterVec,
+    pub sequencing_certificate_success: IntCounterVec,
+    pub sequencing_certificate_failures: IntCounterVec,
+    pub sequencing_certificate_inflight: IntGaugeVec,
     pub sequencing_acknowledge_latency: mysten_metrics::histogram::HistogramVec,
     pub sequencing_certificate_latency: HistogramVec,
     pub sequencing_certificate_authority_position: Histogram,
@@ -81,40 +83,44 @@ pub struct ConsensusAdapterMetrics {
 impl ConsensusAdapterMetrics {
     pub fn new(registry: &Registry) -> Self {
         Self {
-            sequencing_certificate_attempt: register_int_counter_with_registry!(
+            sequencing_certificate_attempt: register_int_counter_vec_with_registry!(
                 "sequencing_certificate_attempt",
                 "Counts the number of certificates the validator attempts to sequence.",
+                &["tx_type"],
                 registry,
             )
                 .unwrap(),
-            sequencing_certificate_success: register_int_counter_with_registry!(
+            sequencing_certificate_success: register_int_counter_vec_with_registry!(
                 "sequencing_certificate_success",
                 "Counts the number of successfully sequenced certificates.",
+                &["tx_type"],
                 registry,
             )
                 .unwrap(),
-            sequencing_certificate_failures: register_int_counter_with_registry!(
+            sequencing_certificate_failures: register_int_counter_vec_with_registry!(
                 "sequencing_certificate_failures",
                 "Counts the number of sequenced certificates that failed other than by timeout.",
+                &["tx_type"],
                 registry,
             )
                 .unwrap(),
-            sequencing_certificate_inflight: register_int_gauge_with_registry!(
+            sequencing_certificate_inflight: register_int_gauge_vec_with_registry!(
                 "sequencing_certificate_inflight",
                 "The inflight requests to sequence certificates.",
+                &["tx_type"],
                 registry,
             )
                 .unwrap(),
             sequencing_acknowledge_latency: mysten_metrics::histogram::HistogramVec::new_in_registry(
                 "sequencing_acknowledge_latency",
                 "The latency for acknowledgement from sequencing engine. The overall sequencing latency is measured by the sequencing_certificate_latency metric",
-                &["retry"],
+                &["retry", "tx_type"],
                 registry,
             ),
             sequencing_certificate_latency: register_histogram_vec_with_registry!(
                 "sequencing_certificate_latency",
                 "The latency for sequencing a certificate.",
-                &["position"],
+                &["position", "tx_type"],
                 SEQUENCING_CERTIFICATE_LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             ).unwrap(),
@@ -608,6 +614,7 @@ impl ConsensusAdapter {
             epoch_store.record_epoch_pending_certs_process_time_metric();
         }
 
+        let tx_type = classify(&transaction);
         let transaction_key = SequencedConsensusTransactionKey::External(transaction.key());
         let processed_waiter = epoch_store
             .consensus_message_processed_notify(transaction_key)
@@ -615,7 +622,7 @@ impl ConsensusAdapter {
 
         let (await_submit, position, positions_moved, preceding_disconnected) =
             self.await_submit_delay(epoch_store.committee(), &transaction);
-        let mut guard = InflightDropGuard::acquire(&self);
+        let mut guard = InflightDropGuard::acquire(&self, tx_type.to_string());
 
         // We need to wait for some delay until we submit transaction to the consensus
         // However, if transaction is received by consensus while we wait, we don't need to wait
@@ -682,7 +689,10 @@ impl ConsensusAdapter {
                             transaction_key, e, retries,
                         );
                     }
-                    self.metrics.sequencing_certificate_failures.inc();
+                    self.metrics
+                        .sequencing_certificate_failures
+                        .with_label_values(&[tx_type])
+                        .inc();
                     retries += 1;
                     time::sleep(Duration::from_secs(10)).await;
                 }
@@ -700,7 +710,7 @@ impl ConsensusAdapter {
 
                 self.metrics
                     .sequencing_acknowledge_latency
-                    .with_label_values(&[&bucket])
+                    .with_label_values(&[&bucket, tx_type])
                     .report(ack_start.elapsed().as_millis() as u64);
             };
             match select(processed_waiter, submit_inner.boxed()).await {
@@ -745,7 +755,10 @@ impl ConsensusAdapter {
                 warn!("Error when sending end of publish message: {:?}", err);
             }
         }
-        self.metrics.sequencing_certificate_success.inc();
+        self.metrics
+            .sequencing_certificate_success
+            .with_label_values(&[tx_type])
+            .inc();
     }
 }
 
@@ -880,17 +893,23 @@ struct InflightDropGuard<'a> {
     position: Option<usize>,
     positions_moved: Option<usize>,
     preceding_disconnected: Option<usize>,
+    tx_type: String,
 }
 
 impl<'a> InflightDropGuard<'a> {
-    pub fn acquire(adapter: &'a ConsensusAdapter) -> Self {
+    pub fn acquire(adapter: &'a ConsensusAdapter, tx_type: String) -> Self {
         let inflight = adapter
             .num_inflight_transactions
             .fetch_add(1, Ordering::SeqCst);
-        adapter.metrics.sequencing_certificate_attempt.inc();
+        adapter
+            .metrics
+            .sequencing_certificate_attempt
+            .with_label_values(&[&tx_type])
+            .inc();
         adapter
             .metrics
             .sequencing_certificate_inflight
+            .with_label_values(&[&tx_type])
             .set(inflight as i64);
         Self {
             adapter,
@@ -898,6 +917,7 @@ impl<'a> InflightDropGuard<'a> {
             position: None,
             positions_moved: None,
             preceding_disconnected: None,
+            tx_type,
         }
     }
 }
@@ -912,6 +932,7 @@ impl<'a> Drop for InflightDropGuard<'a> {
         self.adapter
             .metrics
             .sequencing_certificate_inflight
+            .with_label_values(&[&self.tx_type])
             .set(inflight as i64);
 
         let position = if let Some(position) = self.position {
@@ -945,7 +966,7 @@ impl<'a> Drop for InflightDropGuard<'a> {
         self.adapter
             .metrics
             .sequencing_certificate_latency
-            .with_label_values(&[&position])
+            .with_label_values(&[&position, &self.tx_type])
             .observe(latency.as_secs_f64());
     }
 }
@@ -993,7 +1014,7 @@ impl LatencyObserver {
     }
 }
 
-use crate::consensus_handler::SequencedConsensusTransactionKey;
+use crate::consensus_handler::{classify, SequencedConsensusTransactionKey};
 
 #[async_trait::async_trait]
 impl SubmitToConsensus for Arc<ConsensusAdapter> {

@@ -40,10 +40,26 @@ CREATE INDEX epochs_end_index ON epochs (epoch_end_timestamp ASC NULLS LAST);
 -- update epoch_network_metrics on every epoch
 CREATE OR REPLACE FUNCTION refresh_view_func() RETURNS TRIGGER AS
 $body$
+DECLARE
+    attempts INT := 0;
 BEGIN
     IF (TG_OP = 'INSERT') THEN
-        REFRESH MATERIALIZED VIEW epoch_network_metrics;
-        REFRESH MATERIALIZED VIEW epoch_move_call_metrics;
+        LOOP
+            BEGIN
+                attempts := attempts + 1;
+                REFRESH MATERIALIZED VIEW epoch_network_metrics;
+                REFRESH MATERIALIZED VIEW epoch_move_call_metrics;
+                EXIT;
+            EXCEPTION
+                WHEN OTHERS THEN
+                    IF attempts >= 10 THEN
+                        RAISE WARNING '[REFRESH_VIEW_FUN] - UDF ERROR [OTHER] - SQLSTATE: %, SQLERRM: %', SQLSTATE, SQLERRM;
+                        RETURN NULL;
+                    END IF;
+                    RAISE WARNING '[REFRESH_VIEW_FUN] - Retry failed, attempting again in 1 second';
+                    PERFORM pg_sleep(1);
+            END;
+        END LOOP;
         RETURN NEW;
     ELSEIF (TG_OP = 'UPDATE') THEN
         RETURN NEW;
@@ -53,7 +69,6 @@ BEGIN
         RAISE WARNING '[REFRESH_VIEW_FUN] - Other action occurred: %, at %',TG_OP,NOW();
         RETURN NULL;
     END IF;
-
 EXCEPTION
     WHEN data_exception THEN
         RAISE WARNING '[REFRESH_VIEW_FUN] - UDF ERROR [DATA EXCEPTION] - SQLSTATE: %, SQLERRM: %',SQLSTATE,SQLERRM;

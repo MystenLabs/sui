@@ -415,7 +415,7 @@ impl<T> ConsensusHandler<T> {
     }
 }
 
-fn classify(transaction: &ConsensusTransaction) -> &'static str {
+pub(crate) fn classify(transaction: &ConsensusTransaction) -> &'static str {
     match &transaction.kind {
         ConsensusTransactionKind::UserTransaction(certificate) => {
             if certificate.contains_shared_object() {
