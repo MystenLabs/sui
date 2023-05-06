@@ -21,31 +21,6 @@ const getProgressBarVariant = (progress: number): Variants => ({
     },
 });
 
-const flashPointContainerVariant: Variants = {
-    initial: { opacity: 0, left: 0 },
-    animate: {
-        left: 0,
-        opacity: 1,
-    },
-};
-
-const getFlashPointVariant = (progress: number): Variants => ({
-    initial: {
-        left: 0,
-        opacity: 80,
-    },
-    animate: {
-        left: `${progress}%`,
-        opacity: 0,
-        transition: {
-            repeatDelay: 0.5,
-            duration: 3,
-            repeat: Infinity,
-            ease: [0, 0, 0.35, 1],
-        },
-    },
-});
-
 export interface ProgressBarProps {
     progress: number;
     animate?: boolean;
@@ -66,19 +41,26 @@ export function ProgressBar({ progress, animate }: ProgressBarProps) {
                 )}
                 initial="initial"
                 animate="animate"
-            >
-                {isAnimated && (
-                    <motion.div
-                        variants={flashPointContainerVariant}
-                        className="aboslute left-0 motion-reduce:hidden"
-                    >
-                        <motion.div
-                            variants={getFlashPointVariant(progress)}
-                            className="absolute top-1/2 z-10 h-1 w-1 -translate-y-1/2 bg-white shadow-glow"
-                        />
-                    </motion.div>
-                )}
-            </motion.div>
+            />
+            {isAnimated && (
+                <motion.div
+                    initial={{
+                        left: 0,
+                    }}
+                    animate={{
+                        left: `${progress}%`,
+                        opacity: [0, 1, 0],
+                        transition: {
+                            delay: 1.5,
+                            repeatDelay: 1,
+                            duration: 6,
+                            repeat: Infinity,
+                            ease: [0.16, 1, 0.3, 1],
+                        },
+                    }}
+                    className="absolute top-1/2 z-10 h-0 w-0 -translate-y-1/2 bg-white opacity-0 shadow-glow"
+                />
+            )}
         </div>
     );
 }
