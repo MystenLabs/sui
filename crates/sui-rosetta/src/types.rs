@@ -20,10 +20,10 @@ use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress, Tra
 use sui_types::crypto::PublicKey as SuiPublicKey;
 use sui_types::crypto::SignatureScheme;
 use sui_types::governance::{ADD_STAKE_FUN_NAME, WITHDRAW_STAKE_FUN_NAME};
-use sui_types::messages::{Argument, CallArg, Command, ObjectArg, TransactionData};
 use sui_types::messages_checkpoint::CheckpointDigest;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::sui_system_state::SUI_SYSTEM_MODULE_NAME;
+use sui_types::transaction::{Argument, CallArg, Command, ObjectArg, TransactionData};
 use sui_types::{
     SUI_SYSTEM_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
 };

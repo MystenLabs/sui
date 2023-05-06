@@ -17,8 +17,8 @@ use sui_sdk::rpc_types::SuiExecutionStatus;
 use sui_types::base_types::SuiAddress;
 use sui_types::crypto::{DefaultHash, SignatureScheme, ToFromBytes};
 use sui_types::error::SuiError;
-use sui_types::messages::{Transaction, TransactionData, TransactionDataAPI};
 use sui_types::signature::GenericSignature;
+use sui_types::transaction::{Transaction, TransactionData, TransactionDataAPI};
 
 use crate::errors::Error;
 use crate::types::{

@@ -23,13 +23,13 @@ use sui_types::base_types::{ObjectID, ObjectInfo, ObjectRef, ObjectType, SuiAddr
 use sui_types::error::UserInputError;
 use sui_types::gas_coin::GasCoin;
 use sui_types::governance::{ADD_STAKE_MUL_COIN_FUN_NAME, WITHDRAW_STAKE_FUN_NAME};
-use sui_types::messages::{
-    Argument, CallArg, Command, InputObjectKind, ObjectArg, TransactionData, TransactionKind,
-};
 use sui_types::move_package::MovePackage;
 use sui_types::object::{Object, Owner};
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::sui_system_state::SUI_SYSTEM_MODULE_NAME;
+use sui_types::transaction::{
+    Argument, CallArg, Command, InputObjectKind, ObjectArg, TransactionData, TransactionKind,
+};
 use sui_types::{
     coin, fp_ensure, SUI_FRAMEWORK_OBJECT_ID, SUI_SYSTEM_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_ID,
     SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,

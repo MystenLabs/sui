@@ -7,7 +7,7 @@ use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_sdk::{
     types::{
         base_types::{ObjectID, SuiAddress},
-        messages::Transaction,
+        transaction::Transaction,
     },
     SuiClientBuilder,
 };

@@ -23,8 +23,8 @@ use sui_types::sui_system_state::SuiSystemState;
 use sui_types::{
     crypto::AuthorityKeyPair,
     error::SuiError,
-    messages::{CertifiedTransaction, Transaction},
     messages_checkpoint::{CheckpointRequest, CheckpointResponse},
+    transaction::{CertifiedTransaction, Transaction},
 };
 
 #[derive(Clone, Copy, Default)]

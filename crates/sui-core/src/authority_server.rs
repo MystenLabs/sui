@@ -21,7 +21,7 @@ use sui_types::messages_grpc::{
 };
 use sui_types::multiaddr::Multiaddr;
 use sui_types::sui_system_state::SuiSystemState;
-use sui_types::{error::*, messages::*};
+use sui_types::{error::*, transaction::*};
 use sui_types::{
     fp_ensure,
     messages_checkpoint::{CheckpointRequest, CheckpointResponse},

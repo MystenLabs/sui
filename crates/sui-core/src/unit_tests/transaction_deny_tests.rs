@@ -22,11 +22,11 @@ use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress};
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::error::{SuiError, SuiResult, UserInputError};
 use sui_types::execution_status::{ExecutionFailureStatus, ExecutionStatus};
-use sui_types::messages::{
+use sui_types::messages_grpc::HandleTransactionResponse;
+use sui_types::transaction::{
     CallArg, CertifiedTransaction, TransactionData, VerifiedCertificate,
     TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
 };
-use sui_types::messages_grpc::HandleTransactionResponse;
 use sui_types::utils::{
     to_sender_signed_transaction, to_sender_signed_transaction_with_multi_signers,
 };

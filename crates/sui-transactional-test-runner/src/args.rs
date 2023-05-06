@@ -12,10 +12,10 @@ use move_core_types::value::{MoveStruct, MoveValue};
 use move_symbol_pool::Symbol;
 use move_transactional_test_runner::tasks::SyntaxChoice;
 use sui_types::base_types::SuiAddress;
-use sui_types::messages::{Argument, CallArg, ObjectArg};
 use sui_types::move_package::UpgradePolicy;
 use sui_types::object::Owner;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
+use sui_types::transaction::{Argument, CallArg, ObjectArg};
 
 use crate::test_adapter::{FakeID, SuiTestAdapter};
 

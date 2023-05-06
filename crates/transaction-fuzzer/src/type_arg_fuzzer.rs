@@ -7,8 +7,8 @@ use proptest::arbitrary::*;
 use proptest::prelude::*;
 
 use sui_types::base_types::ObjectID;
-use sui_types::messages::{ProgrammableTransaction, TransactionData, TransactionKind};
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
+use sui_types::transaction::{ProgrammableTransaction, TransactionData, TransactionKind};
 use sui_types::utils::to_sender_signed_transaction;
 use sui_types::{TypeTag, SUI_FRAMEWORK_OBJECT_ID};
 

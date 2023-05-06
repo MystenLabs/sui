@@ -22,12 +22,12 @@ use sui_json_rpc_types::{
 use sui_open_rpc::Module;
 use sui_types::base_types::SuiAddress;
 use sui_types::effects::TransactionEffectsAPI;
-use sui_types::messages::{Transaction, TransactionData, TransactionDataAPI, TransactionKind};
 use sui_types::quorum_driver_types::{
     ExecuteTransactionRequest, ExecuteTransactionRequestType, ExecuteTransactionResponse,
 };
 use sui_types::signature::GenericSignature;
 use sui_types::sui_serde::BigInt;
+use sui_types::transaction::{Transaction, TransactionData, TransactionDataAPI, TransactionKind};
 
 use crate::api::JsonRpcMetrics;
 use crate::api::WriteApiServer;

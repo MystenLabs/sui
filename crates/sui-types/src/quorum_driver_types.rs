@@ -12,9 +12,9 @@ use crate::effects::{
     VerifiedCertifiedTransactionEffects,
 };
 use crate::error::SuiError;
-use crate::messages::{Transaction, VerifiedTransaction};
 use crate::messages_checkpoint::CheckpointSequenceNumber;
 use crate::object::Object;
+use crate::transaction::{Transaction, VerifiedTransaction};
 use serde::{Deserialize, Serialize};
 use strum::AsRefStr;
 use thiserror::Error;

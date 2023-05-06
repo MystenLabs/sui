@@ -26,14 +26,13 @@ use sui_types::committee::Committee;
 use sui_types::crypto::{deterministic_random_account_key, AuthorityKeyPair};
 use sui_types::error::SuiResult;
 use sui_types::message_envelope::Message;
-use sui_types::messages::TEST_ONLY_GAS_UNIT_FOR_PUBLISH;
-use sui_types::messages::TEST_ONLY_GAS_UNIT_FOR_SPLIT_COIN;
-use sui_types::messages::TEST_ONLY_GAS_UNIT_FOR_TRANSFER;
-use sui_types::messages::{CertifiedTransaction, TEST_ONLY_GAS_UNIT_FOR_GENERIC};
+use sui_types::transaction::TEST_ONLY_GAS_UNIT_FOR_PUBLISH;
+use sui_types::transaction::TEST_ONLY_GAS_UNIT_FOR_SPLIT_COIN;
+use sui_types::transaction::TEST_ONLY_GAS_UNIT_FOR_TRANSFER;
+use sui_types::transaction::{CertifiedTransaction, TEST_ONLY_GAS_UNIT_FOR_GENERIC};
 
 use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI, TransactionEvents};
-use sui_types::messages::{CallArg, ObjectArg, Transaction, TransactionData, VerifiedTransaction};
 use sui_types::messages_grpc::{
     HandleCertificateResponseV2, ObjectInfoRequest, ObjectInfoResponse,
 };
@@ -41,6 +40,9 @@ use sui_types::move_package::UpgradePolicy;
 use sui_types::multiaddr::Multiaddr;
 use sui_types::object::{Object, Owner};
 use sui_types::quorum_driver_types::ExecuteTransactionRequestType;
+use sui_types::transaction::{
+    CallArg, ObjectArg, Transaction, TransactionData, VerifiedTransaction,
+};
 use sui_types::SUI_FRAMEWORK_ADDRESS;
 use sui_types::SUI_FRAMEWORK_OBJECT_ID;
 use tracing::{debug, info};

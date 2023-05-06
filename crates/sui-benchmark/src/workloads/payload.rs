@@ -3,7 +3,7 @@
 
 use crate::ExecutionEffects;
 use std::fmt::Display;
-use sui_types::messages::VerifiedTransaction;
+use sui_types::transaction::VerifiedTransaction;
 
 /// A Payload is a transaction wrapper of a particular type (transfer object, shared counter, etc).
 /// Calling `make_transaction()` on a payload produces the transaction it is wrapping. Once that

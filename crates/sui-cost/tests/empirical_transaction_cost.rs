@@ -11,12 +11,12 @@ use sui_types::coin::PAY_JOIN_FUNC_NAME;
 use sui_types::coin::PAY_MODULE_NAME;
 use sui_types::coin::PAY_SPLIT_VEC_FUNC_NAME;
 use sui_types::crypto::{deterministic_random_account_key, AccountKeyPair};
-use sui_types::messages::VerifiedTransaction;
 use sui_types::object::{generate_test_gas_objects, Object};
+use sui_types::transaction::VerifiedTransaction;
 use sui_types::SUI_FRAMEWORK_OBJECT_ID;
 use sui_types::{
     gas::GasCostSummary,
-    messages::{CallArg, ObjectArg},
+    transaction::{CallArg, ObjectArg},
 };
 use test_utils::authority::spawn_test_authorities;
 use test_utils::transaction::make_publish_package;

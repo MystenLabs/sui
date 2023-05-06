@@ -38,12 +38,12 @@ use sui_types::{
     event::Event,
     gas::{SuiGasStatus, SuiGasStatusAPI},
     id::{RESOLVED_SUI_ID, UID},
-    messages::{Argument, Command, ProgrammableMoveCall, ProgrammableTransaction},
     metrics::LimitsMetrics,
     move_package::{
         normalize_deserialized_modules, MovePackage, TypeOrigin, UpgradeCap, UpgradePolicy,
         UpgradeReceipt, UpgradeTicket,
     },
+    transaction::{Argument, Command, ProgrammableMoveCall, ProgrammableTransaction},
     Identifier, SUI_FRAMEWORK_ADDRESS,
 };
 use sui_verifier::{

@@ -4,8 +4,8 @@
 use sui_config::transaction_deny_config::TransactionDenyConfig;
 use sui_types::{
     error::{SuiError, SuiResult, UserInputError},
-    messages::{Command, InputObjectKind, TransactionData, TransactionDataAPI},
     storage::BackingPackageStore,
+    transaction::{Command, InputObjectKind, TransactionData, TransactionDataAPI},
 };
 
 #[cfg(test)]

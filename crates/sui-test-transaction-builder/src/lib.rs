@@ -7,11 +7,11 @@ use std::path::PathBuf;
 use sui_move_build::BuildConfig;
 use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress};
 use sui_types::crypto::{Signature, Signer};
-use sui_types::messages::{
+use sui_types::sui_system_state::SUI_SYSTEM_MODULE_NAME;
+use sui_types::transaction::{
     CallArg, ObjectArg, Transaction, TransactionData, VerifiedTransaction,
     TEST_ONLY_GAS_UNIT_FOR_GENERIC, TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
 };
-use sui_types::sui_system_state::SUI_SYSTEM_MODULE_NAME;
 use sui_types::{
     TypeTag, SUI_SYSTEM_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_ID,
     SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,

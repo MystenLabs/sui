@@ -13,7 +13,7 @@ use sui_types::committee::CommitteeWithNetworkMetadata;
 use sui_types::messages_checkpoint::{CheckpointRequest, CheckpointResponse};
 use sui_types::multiaddr::Multiaddr;
 use sui_types::sui_system_state::SuiSystemState;
-use sui_types::{error::SuiError, messages::*};
+use sui_types::{error::SuiError, transaction::*};
 
 use sui_network::tonic::transport::Channel;
 use sui_types::messages_grpc::{

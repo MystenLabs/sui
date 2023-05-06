@@ -7,11 +7,11 @@ use sui_protocol_config::ProtocolConfig;
 use sui_types::{
     base_types::{ObjectID, ObjectRef, SuiAddress},
     crypto::{get_key_pair, AccountKeyPair},
-    messages::{Argument, ObjectArg, ProgrammableTransaction, TEST_ONLY_GAS_UNIT_FOR_PUBLISH},
     move_package::UpgradePolicy,
     object::{Object, Owner},
     programmable_transaction_builder::ProgrammableTransactionBuilder,
     storage::{BackingPackageStore, ObjectStore},
+    transaction::{Argument, ObjectArg, ProgrammableTransaction, TEST_ONLY_GAS_UNIT_FOR_PUBLISH},
     MOVE_STDLIB_OBJECT_ID, SUI_FRAMEWORK_OBJECT_ID,
 };
 

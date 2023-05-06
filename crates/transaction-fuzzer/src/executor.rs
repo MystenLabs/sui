@@ -8,10 +8,10 @@ use std::{fmt::Debug, sync::Arc};
 use sui_core::authority::test_authority_builder::TestAuthorityBuilder;
 use sui_core::{authority::AuthorityState, test_utils::send_and_confirm_transaction};
 use sui_types::base_types::ObjectRef;
-use sui_types::messages::TransactionData;
 use sui_types::object::Owner;
+use sui_types::transaction::TransactionData;
 use sui_types::utils::to_sender_signed_transaction;
-use sui_types::{error::SuiError, messages::VerifiedTransaction, object::Object};
+use sui_types::{error::SuiError, object::Object, transaction::VerifiedTransaction};
 use tokio::runtime::Runtime;
 
 use crate::account_universe::{AccountCurrent, INITIAL_BALANCE};
