@@ -95,7 +95,7 @@ export default {
                 xs: '0px 1px 2px rgba(16, 24, 40, 0.05)',
                 DEFAULT:
                     '0px 5px 30px rgba(86, 104, 115, 0.2), 0px 0px 0px 1px rgba(160, 182, 195, 0.08)',
-                glow: '0 0 10px 10px rgba(255, 255, 255, 1)',
+                glow: '0 0px 6px 4px rgba(213,247,238,1)',
             },
             fontSize: {
                 // Text sizes:
