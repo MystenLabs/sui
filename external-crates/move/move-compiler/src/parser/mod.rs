@@ -14,14 +14,14 @@ use crate::{
     attr_derivation,
     diagnostics::{codes::Severity, Diagnostics, FilesSourceText},
     parser::{self, ast::PackageDefinition, syntax::parse_file_string},
-    shared::{CompilationEnv, IndexedPackagePath, NamedAddressMaps},
+    shared::{CompilationEnv, IndexedPackagePath, NamedAddressMap, NamedAddressMaps},
 };
 use anyhow::anyhow;
 use comments::*;
 use move_command_line_common::files::{find_move_filenames, FileHash};
 use move_symbol_pool::Symbol;
 use std::{
-    collections::{BTreeSet, HashMap},
+    collections::{BTreeMap, BTreeSet, HashMap},
     fs::File,
     io::Read,
 };
@@ -131,6 +131,54 @@ pub(crate) fn parse_program(
     Ok((files, res))
 }
 
+pub(crate) fn parse_program_from_string(
+    compilation_env: &mut CompilationEnv,
+    source: String,
+) -> anyhow::Result<Result<(parser::ast::Program, CommentMap), Diagnostics>> {
+    let mut source_definitions = Vec::new();
+    let mut source_comments = CommentMap::new();
+    let (defs, comments, mut diags, hash) = parse_string(compilation_env, source)?;
+
+    let named_address_map: NamedAddressMap = BTreeMap::new(); // TODO: fix
+    let mut named_address_maps = NamedAddressMaps::new();
+    let idx = named_address_maps.insert(
+        named_address_map
+            .into_iter()
+            .map(|(k, v)| (k.into(), v))
+            .collect::<NamedAddressMap>(),
+    );
+
+    source_definitions.extend(defs.into_iter().map(|def| PackageDefinition {
+        package: None,
+        named_address_map: idx,
+        def,
+    }));
+    for PackageDefinition {
+        named_address_map: idx,
+        def,
+        ..
+    } in source_definitions.iter_mut()
+    {
+        attr_derivation::derive_from_attributes(compilation_env, named_address_maps.get(*idx), def);
+    }
+    source_comments.insert(hash, comments);
+    let env_result = compilation_env.check_diags_at_or_above_severity(Severity::BlockingError);
+    if let Err(env_diags) = env_result {
+        diags.extend(env_diags)
+    }
+    let res = if diags.is_empty() {
+        let pprog = parser::ast::Program {
+            named_address_maps,
+            source_definitions,
+            lib_definitions: vec![],
+        };
+        Ok((pprog, source_comments))
+    } else {
+        Err(diags)
+    };
+    Ok(res)
+}
+
 fn ensure_targets_deps_dont_intersect(
     compilation_env: &CompilationEnv,
     targets: &[IndexedPackagePath],
@@ -204,4 +252,32 @@ fn parse_file(
     };
     files.insert(file_hash, (fname, source_buffer));
     Ok((defs, comments, diags, file_hash))
+}
+
+fn parse_string(
+    compilation_env: &mut CompilationEnv,
+    source_buffer: String,
+) -> anyhow::Result<(
+    Vec<parser::ast::Definition>,
+    MatchedFileCommentMap,
+    Diagnostics,
+    FileHash,
+)> {
+    let mut diags = Diagnostics::new();
+    let hash = FileHash::new(&source_buffer);
+    let buffer = match verify_string(hash, &source_buffer) {
+        Err(ds) => {
+            diags.extend(ds);
+            return Ok((vec![], MatchedFileCommentMap::new(), diags, hash));
+        }
+        Ok(()) => &source_buffer,
+    };
+    let (defs, comments) = match parse_file_string(compilation_env, hash, buffer) {
+        Ok(defs_and_comments) => defs_and_comments,
+        Err(ds) => {
+            diags.extend(ds);
+            (vec![], MatchedFileCommentMap::new())
+        }
+    };
+    Ok((defs, comments, diags, hash))
 }

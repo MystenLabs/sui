@@ -151,6 +151,18 @@ impl<'a> Compiler<'a> {
         Self::from_package_paths(targets, deps)
     }
 
+    pub fn new() -> Self {
+        Self {
+            maps: NamedAddressMaps::new(),
+            targets: vec![],
+            deps: vec![],
+            interface_files_dir_opt: None,
+            pre_compiled_lib: None,
+            compiled_module_named_address_mapping: BTreeMap::new(),
+            flags: Flags::empty(),
+        }
+    }
+
     pub fn set_flags(mut self, flags: Flags) -> Self {
         assert!(self.flags.is_empty());
         self.flags = flags;
@@ -222,6 +234,25 @@ impl<'a> Compiler<'a> {
                 .map(|compiler| (comments, compiler))
         });
         Ok((source_text, res))
+    }
+
+    pub fn run_on_string<const TARGET: Pass>(
+        self,
+        source: String,
+    ) -> anyhow::Result<Result<(CommentMap, SteppedCompiler<'a, TARGET>), Diagnostics>> {
+        let Self {
+            pre_compiled_lib,
+            flags,
+            ..
+        } = self;
+        let mut compilation_env = CompilationEnv::new(flags);
+        let pprog_and_comments_res = parse_program_from_string(&mut compilation_env, source)?;
+        let res: Result<_, Diagnostics> = pprog_and_comments_res.and_then(|(pprog, comments)| {
+            SteppedCompiler::new_at_parser(compilation_env, pre_compiled_lib, pprog)
+                .run::<TARGET>()
+                .map(|compiler| (comments, compiler))
+        });
+        Ok(res)
     }
 
     pub fn check(self) -> anyhow::Result<(FilesSourceText, Result<(), Diagnostics>)> {
