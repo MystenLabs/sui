@@ -208,7 +208,7 @@ pub fn run_metered_move_bytecode_verifier_impl(
 ) -> Result<(), SuiError> {
     // run the Move verifier
     for module in modules.iter() {
-        let per_module_mater_verifier_timer = metrics.verifier_runtime_per_module_success_latency.start_timer();
+        let per_module_meter_verifier_timer = metrics.verifier_runtime_per_module_success_latency.start_timer();
 
         if let Err(e) = verify_module_with_config_metered(verifier_config, module, meter) {
             // Check that the status indicates mtering timeout
@@ -221,7 +221,7 @@ pub fn run_metered_move_bytecode_verifier_impl(
             .contains(&e.major_status())
             {
                 // Discard success timer, but record timeout/failure timer
-                metrics.verifier_runtime_per_module_timeout_latency.observe(per_module_mater_verifier_timer.stop_and_discard());
+                metrics.verifier_runtime_per_module_timeout_latency.observe(per_module_meter_verifier_timer.stop_and_discard());
                 metrics.verifier_timeout_metrics.with_label_values(&[BytecodeVerifierMetrics::MOVE_VERIFIER_TAG, BytecodeVerifierMetrics::TIMEOUT_TAG]).inc();
                 return Err(SuiError::ModuleVerificationFailure {
                     error: "Verification timedout".to_string(),
@@ -229,12 +229,12 @@ pub fn run_metered_move_bytecode_verifier_impl(
             };
         } else if let Err(err) = sui_verify_module_metered(protocol_config, module, &BTreeMap::new(), meter) {
                 // Discard success timer, but record timeout/failure timer
-                metrics.verifier_runtime_per_module_timeout_latency.observe(per_module_mater_verifier_timer.stop_and_discard());
+                metrics.verifier_runtime_per_module_timeout_latency.observe(per_module_meter_verifier_timer.stop_and_discard());
                 metrics.verifier_timeout_metrics.with_label_values(&[ BytecodeVerifierMetrics::SUI_VERIFIER_TAG, BytecodeVerifierMetrics::TIMEOUT_TAG]).inc();
                 return Err(err.into());
         } else {
             // Save the success timer
-            per_module_mater_verifier_timer.stop_and_record();
+            per_module_meter_verifier_timer.stop_and_record();
             metrics.verifier_timeout_metrics.with_label_values(&[BytecodeVerifierMetrics::OVERALL_TAG, BytecodeVerifierMetrics::SUCCESS_TAG]).inc();
         }
     }
