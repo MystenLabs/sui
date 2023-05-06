@@ -567,6 +567,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
             command_lines_stop,
             stop_line,
             data,
+            source,
         } = task;
         macro_rules! get_obj {
             ($fake_id:ident) => {{
@@ -739,6 +740,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                     command_lines_stop,
                     stop_line,
                     data,
+                    source,
                     |adapter, modules| {
                         let output = adapter.upgrade_package(
                             before_upgrade,
@@ -782,6 +784,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                     command_lines_stop,
                     stop_line,
                     data,
+                    source,
                     |_adapter, modules| Ok((None, modules)),
                 )?;
                 assert!(!modules.is_empty());

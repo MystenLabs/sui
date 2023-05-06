@@ -21,7 +21,7 @@ use comments::*;
 use move_command_line_common::files::{find_move_filenames, FileHash};
 use move_symbol_pool::Symbol;
 use std::{
-    collections::{BTreeMap, BTreeSet, HashMap},
+    collections::{BTreeSet, HashMap},
     fs::File,
     io::Read,
 };
@@ -133,13 +133,13 @@ pub(crate) fn parse_program(
 
 pub(crate) fn parse_program_from_string(
     compilation_env: &mut CompilationEnv,
+    named_address_map: NamedAddressMap,
     source: String,
 ) -> anyhow::Result<Result<(parser::ast::Program, CommentMap), Diagnostics>> {
     let mut source_definitions = Vec::new();
     let mut source_comments = CommentMap::new();
     let (defs, comments, mut diags, hash) = parse_string(compilation_env, source)?;
 
-    let named_address_map: NamedAddressMap = BTreeMap::new(); // TODO: fix
     let mut named_address_maps = NamedAddressMaps::new();
     let idx = named_address_maps.insert(
         named_address_map

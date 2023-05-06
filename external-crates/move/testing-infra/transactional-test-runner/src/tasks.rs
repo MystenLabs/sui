@@ -26,6 +26,7 @@ pub struct TaskInput<Command> {
     pub command_lines_stop: usize,
     pub stop_line: usize,
     pub data: Option<NamedTempFile>,
+    pub source: String,
 }
 
 pub fn taskify<Command: Debug + Parser>(filename: &Path) -> Result<Vec<TaskInput<Command>>> {
@@ -166,6 +167,7 @@ pub fn taskify<Command: Debug + Parser>(filename: &Path) -> Result<Vec<TaskInput
             command_lines_stop,
             stop_line,
             data,
+            source: file_text_vec.join("\n"),
         })
     }
     Ok(tasks)
@@ -181,6 +183,7 @@ impl<T> TaskInput<T> {
             command_lines_stop,
             stop_line,
             data,
+            source,
         } = self;
         TaskInput {
             command: f(command),
@@ -190,6 +193,7 @@ impl<T> TaskInput<T> {
             command_lines_stop,
             stop_line,
             data,
+            source,
         }
     }
 }

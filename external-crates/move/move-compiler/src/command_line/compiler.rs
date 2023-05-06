@@ -239,6 +239,7 @@ impl<'a> Compiler<'a> {
     pub fn run_on_string<const TARGET: Pass>(
         self,
         source: String,
+        named_address_map: NamedAddressMap,
     ) -> anyhow::Result<Result<(CommentMap, SteppedCompiler<'a, TARGET>), Diagnostics>> {
         let Self {
             pre_compiled_lib,
@@ -246,7 +247,8 @@ impl<'a> Compiler<'a> {
             ..
         } = self;
         let mut compilation_env = CompilationEnv::new(flags);
-        let pprog_and_comments_res = parse_program_from_string(&mut compilation_env, source)?;
+        let pprog_and_comments_res =
+            parse_program_from_string(&mut compilation_env, named_address_map, source)?;
         let res: Result<_, Diagnostics> = pprog_and_comments_res.and_then(|(pprog, comments)| {
             SteppedCompiler::new_at_parser(compilation_env, pre_compiled_lib, pprog)
                 .run::<TARGET>()

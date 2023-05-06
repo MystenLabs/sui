@@ -40,7 +40,7 @@ use move_symbol_pool::Symbol;
 use move_vm_runtime::session::SerializedReturnValues;
 use rayon::iter::Either;
 use std::{
-    collections::{BTreeMap, BTreeSet, VecDeque},
+    collections::{BTreeMap, BTreeSet, HashMap, VecDeque},
     fmt::{Debug, Write as FmtWrite},
     io::Write,
     path::Path,
@@ -176,6 +176,7 @@ pub trait MoveTestAdapter<'a>: Sized {
             command_lines_stop,
             stop_line,
             data,
+            source,
         } = task;
         match command {
             TaskCommand::Init { .. } => {
@@ -221,6 +222,7 @@ pub trait MoveTestAdapter<'a>: Sized {
                     command_lines_stop,
                     stop_line,
                     data,
+                    source,
                     |adapter, modules| adapter.publish_modules(modules, gas_budget, extra_args),
                 )?;
                 store_modules(self, syntax, data, modules);
@@ -248,7 +250,7 @@ pub trait MoveTestAdapter<'a>: Sized {
                 let state = self.compiled_state();
                 let (script, warning_opt) = match syntax {
                     SyntaxChoice::Source => {
-                        let (mut units, warning_opt) = compile_source_units(state, data.path())?;
+                        let (mut units, warning_opt) = compile_source_units(state, source)?;
                         let len = units.len();
                         if len != 1 {
                             panic!("Invalid input. Expected 1 compiled unit but got {}", len)
@@ -332,6 +334,7 @@ pub trait MoveTestAdapter<'a>: Sized {
                 command_lines_stop,
                 stop_line,
                 data,
+                source,
             }),
         }
     }
@@ -512,6 +515,7 @@ pub fn compile_any<'a, A: MoveTestAdapter<'a>>(
     command_lines_stop: usize,
     _stop_line: usize,
     data: Option<NamedTempFile>,
+    source: String,
     handler: impl FnOnce(
         &mut A,
         Vec<(Option<Symbol>, CompiledModule)>,
@@ -532,7 +536,7 @@ pub fn compile_any<'a, A: MoveTestAdapter<'a>>(
     let state = test_adapter.compiled_state();
     let (modules, warnings_opt) = match syntax {
         SyntaxChoice::Source => {
-            let (units, warnings_opt) = compile_source_units(state, data.path())?;
+            let (units, warnings_opt) = compile_source_units(state, source)?;
             let modules = units
                 .into_iter()
                 .map(|unit| match unit {
@@ -582,23 +586,60 @@ pub fn store_modules<'a, A: MoveTestAdapter<'a>>(
     }
 }
 
+fn rendered_diags(files: &FilesSourceText, diags: Diagnostics) -> Option<String> {
+    if diags.is_empty() {
+        return None;
+    }
+
+    let error_buffer = if read_bool_env_var(move_command_line_common::testing::PRETTY) {
+        move_compiler::diagnostics::report_diagnostics_to_color_buffer(files, diags)
+    } else {
+        move_compiler::diagnostics::report_diagnostics_to_buffer(files, diags)
+    };
+    Some(String::from_utf8(error_buffer).unwrap())
+}
+
 pub fn compile_source_units(
+    state: &CompiledState,
+    source: String,
+) -> Result<(Vec<AnnotatedCompiledUnit>, Option<String>)> {
+    use move_compiler::PASS_COMPILATION;
+    let comments_and_compiler_res = move_compiler::Compiler::new()
+        .set_pre_compiled_lib_opt(state.pre_compiled_deps)
+        .set_flags(move_compiler::Flags::empty().set_sources_shadow_deps(true))
+        .run_on_string::<PASS_COMPILATION>(
+            source,
+            state
+                .named_address_mapping
+                .iter()
+                .map(|(k, v)| (Symbol::from(k.as_str()), *v))
+                .collect::<BTreeMap<Symbol, NumericalAddress>>(),
+        )?;
+    let units_or_diags = comments_and_compiler_res
+        .map(|(_comments, move_compiler)| move_compiler.into_compiled_units());
+
+    let mut files = HashMap::new();
+    match units_or_diags {
+        Err(diags) => {
+            if let Some(pcd) = state.pre_compiled_deps {
+                for (file_name, text) in &pcd.files {
+                    // TODO This is bad. Rethink this when errors are redone
+                    if !files.contains_key(file_name) {
+                        files.insert(*file_name, text.clone());
+                    }
+                }
+            }
+
+            Err(anyhow!(rendered_diags(&files, diags).unwrap()))
+        }
+        Ok((units, warnings)) => Ok((units, rendered_diags(&files, warnings))),
+    }
+}
+
+pub fn compile_file_units(
     state: &CompiledState,
     file_name: impl AsRef<Path>,
 ) -> Result<(Vec<AnnotatedCompiledUnit>, Option<String>)> {
-    fn rendered_diags(files: &FilesSourceText, diags: Diagnostics) -> Option<String> {
-        if diags.is_empty() {
-            return None;
-        }
-
-        let error_buffer = if read_bool_env_var(move_command_line_common::testing::PRETTY) {
-            move_compiler::diagnostics::report_diagnostics_to_color_buffer(files, diags)
-        } else {
-            move_compiler::diagnostics::report_diagnostics_to_buffer(files, diags)
-        };
-        Some(String::from_utf8(error_buffer).unwrap())
-    }
-
     use move_compiler::PASS_COMPILATION;
     let named_address_mapping = state.named_address_mapping.clone();
     let (mut files, comments_and_compiler_res) = move_compiler::Compiler::from_files(
