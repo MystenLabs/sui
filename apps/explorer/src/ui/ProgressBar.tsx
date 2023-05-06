@@ -48,7 +48,7 @@ export function ProgressBar({ progress, animate }: ProgressBarProps) {
                         left: 0,
                     }}
                     animate={{
-                        left: `${progress}%`,
+                        left: `${Math.floor(progress)}%`,
                         opacity: [0, 1, 0],
                         transition: {
                             delay: 1.5,
