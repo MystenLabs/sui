@@ -29,6 +29,7 @@ use sui_types::base_types::{ObjectRef, SequenceNumber};
 use sui_types::crypto::{get_key_pair, SuiKeyPair};
 use sui_types::event::{Event, EventID};
 use sui_types::message_envelope::Message;
+use sui_types::messages::TEST_ONLY_GAS_UNIT_FOR_SPLIT_COIN;
 use sui_types::messages::{
     CallArg, GasData, ObjectArg, TransactionData, TransactionKind,
     TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS, TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
@@ -502,8 +503,10 @@ async fn test_full_node_sync_flood() -> Result<(), anyhow::Error> {
                         count: None,
                         coin_id: object_to_split.0,
                         gas: Some(gas_object_id),
-                        gas_budget: 50000,
-                        serialize_output: false,
+                        gas_budget: TEST_ONLY_GAS_UNIT_FOR_SPLIT_COIN
+                            * context.get_reference_gas_price().await.unwrap(),
+                        serialize_unsigned_transaction: false,
+                        serialize_signed_transaction: false,
                     }
                     .execute(context)
                     .await
