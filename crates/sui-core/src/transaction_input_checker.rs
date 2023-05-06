@@ -415,9 +415,24 @@ pub fn check_non_system_packages_to_be_published(
         // Use the same meter for all packages
         let mut meter = BoundMeter::new(&metered_verifier_config);
         if let TransactionKind::ProgrammableTransaction(pt) = transaction.kind() {
-            pt.non_system_packages_to_be_published()
-            .try_for_each(|q| run_metered_move_bytecode_verifier(q, protocol_config, &metered_verifier_config, &mut meter, metrics))
-            .map_err(|e| UserInputError::PackageVerificationTimedout { err: e.to_string() })?;
+            // Measure time for verifying all packages in the PTB
+            let shared_meter_verifier_timer = metrics.verifier_runtime_per_ptb_success_latency.start_timer();
+            let verifier_status = pt.non_system_packages_to_be_published()
+                .try_for_each(|q| run_metered_move_bytecode_verifier(q, protocol_config, &metered_verifier_config, &mut meter, metrics))
+                .map_err(|e| UserInputError::PackageVerificationTimedout { err: e.to_string() });
+
+            match verifier_status {
+                Ok(_) => {
+                    // Success: stop and record the success timer
+                    shared_meter_verifier_timer.stop_and_record();
+                },
+                Err(err) => {
+                    // Failure: redirect the success timers output to the failure timer and
+                    // discard the success timer
+                    metrics.verifier_runtime_per_ptb_timeout_latency.observe(shared_meter_verifier_timer.stop_and_discard());
+                    return Err(err);
+                }
+            };
         }
     }
 
