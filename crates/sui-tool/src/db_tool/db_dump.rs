@@ -1,9 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::anyhow;
+use anyhow::{anyhow, Ok};
 use clap::{Parser, ValueEnum};
 use comfy_table::{Cell, ContentArrangement, Row, Table};
+use itertools::Itertools;
 use rocksdb::MultiThreaded;
 use std::collections::{BTreeMap, HashMap};
 use std::path::PathBuf;
@@ -17,6 +18,7 @@ use sui_core::authority::authority_store_types::{StoreData, StoreObject};
 use sui_core::epoch::committee_store::CommitteeStoreTables;
 use sui_storage::IndexStoreTables;
 use sui_types::base_types::{EpochId, ObjectID};
+use sui_types::dynamic_field::DynamicFieldInfo;
 use typed_store::rocks::{default_db_options, MetricConf};
 use typed_store::traits::{Map, TableSummary};
 
@@ -279,4 +281,28 @@ mod test {
             )
         );
     }
+}
+
+pub fn search_dynamic_field_index_table(
+    db_path: PathBuf,
+    parent_id: ObjectID,
+    cursor: Option<ObjectID>,
+) -> anyhow::Result<Vec<((ObjectID, ObjectID), DynamicFieldInfo)>> {
+    let index_read_only =
+        IndexStoreTables::get_read_only_handle(db_path, None, None, MetricConf::default());
+    let object = parent_id;
+
+    // Copied code from `IndexStoreTables::get_dynamic_field_object_id`
+    let iter_lower_bound = (object, ObjectID::ZERO);
+    let iter_upper_bound = (object, ObjectID::MAX);
+    let vals = index_read_only
+        .dynamic_field_index
+        .iter_with_bounds(Some(iter_lower_bound), Some(iter_upper_bound))
+        // The object id 0 is the smallest possible
+        .skip_to(&(object, cursor.unwrap_or(ObjectID::ZERO)))?
+        // skip an extra b/c the cursor is exclusive
+        .skip(usize::from(cursor.is_some()))
+        .take_while(move |((object_owner, _), _)| (object_owner == &object))
+        .collect_vec();
+    Ok(vals)
 }
