@@ -1,16 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use self::db_dump::{
-    dump_table, duplicate_objects_summary, list_tables, search_dynamic_field_index_table,
-    table_summary, StoreName,
-};
+use self::db_dump::{dump_table, duplicate_objects_summary, list_tables, table_summary, StoreName};
 use crate::db_tool::db_dump::{compact, print_table_metadata};
 use clap::Parser;
 use std::path::{Path, PathBuf};
 use sui_core::authority::authority_store_tables::AuthorityPerpetualTables;
 use sui_core::checkpoints::CheckpointStore;
-use sui_types::base_types::{EpochId, ObjectID};
+use sui_types::base_types::EpochId;
 use typed_store::rocks::MetricConf;
 
 pub mod db_dump;
@@ -20,7 +17,6 @@ pub mod db_dump;
 pub enum DbToolCommand {
     ListTables,
     Dump(Options),
-    Search(IndexSearchOptions),
     TableSummary(Options),
     DuplicatesSummary,
     ResetDB,
@@ -52,15 +48,6 @@ pub struct Options {
     epoch: Option<EpochId>,
 }
 
-#[derive(Parser)]
-#[clap(rename_all = "kebab-case")]
-pub struct IndexSearchOptions {
-    #[clap(long = "parent", short = 'p')]
-    parent: ObjectID,
-    #[clap(long = "cursor", short = 'c')]
-    cursor: Option<ObjectID>,
-}
-
 pub fn execute_db_tool_command(db_path: PathBuf, cmd: DbToolCommand) -> anyhow::Result<()> {
     match cmd {
         DbToolCommand::ListTables => print_db_all_tables(db_path),
@@ -72,7 +59,6 @@ pub fn execute_db_tool_command(db_path: PathBuf, cmd: DbToolCommand) -> anyhow::
             d.page_size,
             d.page_number,
         ),
-        DbToolCommand::Search(d) => print_search_results(db_path, d.parent, d.cursor),
         DbToolCommand::TableSummary(d) => {
             print_db_table_summary(d.store_name, d.epoch, db_path, &d.table_name)
         }
@@ -191,18 +177,5 @@ pub fn print_all_entries(
     for (k, v) in dump_table(store, epoch, path, table_name, page_size, page_number)? {
         println!("{:>100?}: {:?}", k, v);
     }
-    Ok(())
-}
-
-pub fn print_search_results(
-    path: PathBuf,
-    parent: ObjectID,
-    cursor: Option<ObjectID>,
-) -> anyhow::Result<()> {
-    let items = search_dynamic_field_index_table(path, parent, cursor)?;
-    println!("Total items = {}", items.len());
-    items.iter().for_each(|(k, v)| {
-        println!("{:>100?}: {:#?}", k, v);
-    });
     Ok(())
 }
