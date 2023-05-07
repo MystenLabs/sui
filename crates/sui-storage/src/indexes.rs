@@ -1087,7 +1087,7 @@ impl IndexStore {
         &self,
         object: ObjectID,
         cursor: Option<ObjectID>,
-    ) -> SuiResult<impl Iterator<Item = DynamicFieldInfo> + '_> {
+    ) -> SuiResult<impl Iterator<Item = (ObjectID, DynamicFieldInfo)> + '_> {
         debug!(?object, "get_dynamic_fields");
         let iter_lower_bound = (object, ObjectID::ZERO);
         let iter_upper_bound = (object, ObjectID::MAX);
@@ -1100,7 +1100,7 @@ impl IndexStore {
             // skip an extra b/c the cursor is exclusive
             .skip(usize::from(cursor.is_some()))
             .take_while(move |((object_owner, _), _)| (object_owner == &object))
-            .map(|(_, object_info)| object_info))
+            .map(|((_, c), object_info)| (c, object_info)))
     }
 
     pub fn get_dynamic_field_object_id(
