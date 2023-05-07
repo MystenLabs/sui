@@ -3417,7 +3417,10 @@ async fn create_and_retrieve_df_info(function: &IdentStr) -> (SuiAddress, Vec<Dy
         sender,
         authority_state
             .get_dynamic_fields(outer_v0.0, None, usize::MAX)
-            .unwrap(),
+            .unwrap()
+            .into_iter()
+            .map(|x| x.1)
+            .collect(),
     )
 }
 

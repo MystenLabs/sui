@@ -264,7 +264,7 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
                 .map_err(|e| anyhow!("{e}"))?;
             let has_next_page = data.len() > limit;
             data.truncate(limit);
-            let next_cursor = data.last().cloned().map_or(cursor, |c| Some(c.object_id));
+            let next_cursor = data.last().cloned().map_or(cursor, |c| Some(c.0));
             self.metrics
                 .get_dynamic_fields_result_size
                 .report(data.len() as u64);
@@ -272,7 +272,7 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
                 .get_dynamic_fields_result_size_total
                 .inc_by(data.len() as u64);
             Ok(DynamicFieldPage {
-                data,
+                data: data.into_iter().map(|(_, w)| w).collect(),
                 next_cursor,
                 has_next_page,
             })
