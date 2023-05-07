@@ -46,5 +46,4 @@ export const testnetConnection = new Connection({
 
 export const mainnetConnection = new Connection({
   fullnode: 'https://fullnode.mainnet.sui.io:443/',
-  faucet: '',
 });
