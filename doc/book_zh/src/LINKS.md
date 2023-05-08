@@ -1,6 +1,6 @@
 # 其他资源（Additional Resources）
 
-想要了解更多关于Sui Move的信息，请查看以下链接:
+想要了解更多关于 Sui Move 的信息，请查看以下链接：
 
 - [Sui Move examples in 'mystenLabs/sui' repo](https://github.com/MystenLabs/sui/tree/main/sui_programmability/examples)
 - [How Sui Move differs from Core Move](https://docs.sui.io/learn/sui-move-diffs)

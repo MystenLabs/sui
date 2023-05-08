@@ -1,6 +1,6 @@
 # 字符串（Strings）
 
-Move没有原生的字符串类型但是提供了方便的包装方法。
+Move 没有原生的字符串类型但是提供了方便的包装方法。
 
 <details>
 <summary>English Version</summary>

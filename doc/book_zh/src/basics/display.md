@@ -1,8 +1,8 @@
 # 对象显示（Object Display）
 
-拥有 `Publisher` 对象的创作者或构建者可以使用 `sui::display` 模块来定义其对象的显示属性。请查看 [Publisher 页面](./publisher.md)关于获取`Publisher`对象的方法。
+拥有 `Publisher` 对象的创作者或构建者可以使用 `sui::display` 模块来定义其对象的显示属性。请查看 [Publisher 页面](./publisher.md)关于获取 `Publisher` 对象的方法。
 
-`Display<T>` 是一个为类型`T`指定了一组命名的模板的对象（例如，对于类型 `0x2::capy::Capy`，显示对象将是 `Display<0x2::capy::Capy>`）。所有类型为`T`的对象都将通过匹配的`Display`定义在 Sui 全节点 RPC 中进行处理，并在查询对象时附加已处理的结果。
+`Display<T>` 是一个为类型 `T` 指定了一组命名的模板的对象（例如，对于类型 `0x2::capy::Capy`，显示对象将是 `Display<0x2::capy::Capy>`）。所有类型为 `T` 的对象都将通过匹配的 `Display` 定义在 Sui 全节点 RPC 中进行处理，并在查询对象时附加已处理的结果。
 
 
 <details>
@@ -18,7 +18,7 @@ A creator or a builder who owns a `Publisher` object can use the `sui::display` 
 
 Sui Object Display 是一个模板引擎，允许通过链上对类型显示进行配置以供生态系统在链下处理数据。它可以将模板中字符串替换为真实数据。
 
-任意字段都可以被设置，对象的所有属性都可以通过`{property}`语法访问同时作为模板字符串的一部分插入其中（请参见示例）。
+任意字段都可以被设置，对象的所有属性都可以通过 `{property}` 语法访问同时作为模板字符串的一部分插入其中（请参见示例）。
 
 <details>
 <summary>English Version</summary>
@@ -83,7 +83,7 @@ module sui::display {
 }
 ```
 
-一旦Display对象生成，可以通过以下方法更改：
+一旦 Display 对象生成，可以通过以下方法更改：
 ```move
 module sui::display {
     /// 同时更改多项内容
@@ -104,7 +104,7 @@ module sui::display {
 }
 ```
 
-要使针对Display对象的更改生效需要调用`update_version`来触发一个事件（event），使得网络中各个完整节点监听到这个事件并获取类型T的新模板：
+要使针对 Display 对象的更改生效需要调用 `update_version` 来触发一个事件（event），使得网络中各个完整节点监听到这个事件并获取类型 T 的新模板：
 
 ```move
 module sui::display {

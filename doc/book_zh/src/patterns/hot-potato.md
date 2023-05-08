@@ -1,6 +1,6 @@
 # 烫手山芋（Hot Potato）
 
-烫手山芋（Hot Potato）是一个没有任何ability修饰符的结构体，因此它只能在其模块中被打包和解包。如果函数A返回这样一个结构，而函数B消耗它，那么我们必须在函数A之后调用函数B。
+烫手山芋（Hot Potato）是一个没有任何能力修饰符的结构体，因此它只能在其模块中被打包和解包。如果函数 A 返回这样一个结构，而函数 B 消耗它，那么我们必须在函数 A 之后调用函数 B。
 
 <details>
 <summary>English Version</summary>

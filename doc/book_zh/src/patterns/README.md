@@ -1,6 +1,6 @@
 # 设计模式（Patterns）
 
-在这个部分我们将介绍在Move中广泛使用的编程、设计模式；其中一些模式只在Move中存在。
+在这个部分我们将介绍在 Move 中广泛使用的编程、设计模式；其中一些模式只在 Move 中存在。
 
 <details>
 <summary>English Version</summary>

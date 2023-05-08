@@ -1,6 +1,6 @@
 # Sui by Example（中文版）
 
-欢迎来到[docs.sui.io](https://docs.sui.io/)的配套书籍。我们在[Sui Move](https://docs.sui.io/learn/sui-move-diffs)中介绍了Sui Move是[Move](https://docs.sui.io/learn/why-move)语言的变体， 同时解释了如何使用Sui Move进行[智能合约开发](https://docs.sui.io/build/move)以及[面向对象编程](https://docs.sui.io/build/programming-with-objects).
+欢迎来到[docs.sui.io](https://docs.sui.io/)的配套书籍。我们在[Sui Move](https://docs.sui.io/learn/sui-move-diffs)中介绍了Sui Move是[Move](https://docs.sui.io/learn/why-move)语言的变体， 同时解释了如何使用 Sui Move 进行[智能合约开发](https://docs.sui.io/build/move)以及[面向对象编程](https://docs.sui.io/build/programming-with-objects)。
 
 <details>
 <summary>English Version</summary>
@@ -9,7 +9,7 @@ Welcome to the companion book to [docs.sui.io](https://docs.sui.io/). There we d
 
 </details>
 
-不同的是，在这本书中将基于[智能合约示例](https://docs.sui.io/explore/examples)来解释不通模块、概念的使用, 方便读者随时参考。毕竟在代码的世界中还有什么比代码本身更具表现力的呢！在这本书中你将看到Sui Move的大部分特性以及一些可以直接使用的高级设计模式以提升您的模块。
+不同的是，在这本书中将基于[智能合约示例](https://docs.sui.io/explore/examples)来解释不同模块、概念的使用, 方便读者随时参考。毕竟在代码的世界中还有什么比代码本身更具表现力的呢！在这本书中你将看到 Sui Move 的大部分特性以及一些可以直接使用的高级设计模式以提升您的模块。
 
 <details>
 <summary>English Version</summary>
@@ -18,14 +18,14 @@ Instead, this site builds upon the [smart contract examples](https://docs.sui.io
 
 </details>
 
-本书中所有示例都基于*Sui Move*开发， 您可以通过以下命令安装*Sui Move*：
-**！！！请注意书中代码示例中所有的中文注释仅为翻译需要，实际开发中move语言暂不支持UTF-8编码注释。**
+本书中所有示例都基于 *Sui Move* 开发， 您可以通过以下命令安装 *Sui Move*：
+**！！！请注意书中代码示例中所有的中文注释仅为翻译需要，实际开发中 move 语言暂不支持 UTF-8 编码注释。**
 
 ```
 $ cargo install --locked --git https://github.com/MystenLabs/sui.git --branch "main" sui
 ```
 
-值得注意的是，上面的命令设置的分支为`main` 主分支，如果在[`devnet`]((https://docs.sui.io/build/devnet))网络开发请参考[install Sui](https://docs.sui.io/build/install#install-sui-binaries)。
+值得注意的是，上面的命令设置的分支为 `main` 主分支，如果在 [`devnet`](https://docs.sui.io/build/devnet) 网络开发请参考 [install Sui](https://docs.sui.io/build/install#install-sui-binaries)。
 
 <details>
 <summary>English Version</summary>

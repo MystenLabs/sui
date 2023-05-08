@@ -1,9 +1,9 @@
 # Move.toml
 
-每个Move包都包括一个清单文件`Move.toml`--它位于[包的根目录](https://docs.sui.io/build/move/index#move-code-organization)。清单本身包含了许多部分，其中最主要的是：
+每个 Move 包都包括一个清单文件 `Move.toml`--它位于[包的根目录](https://docs.sui.io/build/move/index#move-code-organization)。清单本身包含了许多部分，其中最主要的是：
 - `[package]` - 包括包相关的元数据，例如名字， 作者等
 - `[dependencies]` - 声明项目的依赖
-- `[addresses]` - 地址别名（例如`@me`是`0x0`的别名）
+- `[addresses]` - 地址别名（例如 `@me` 是 `0x0` 的别名）
 
 <details>
 <summary>English Version</summary>

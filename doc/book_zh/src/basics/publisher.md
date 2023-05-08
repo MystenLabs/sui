@@ -22,7 +22,7 @@ We strongly advise to issue the `Publisher` object for most of the packages that
 
 </details>
 
-我们需要OTW（One-Time-Witness）来设置发布者（publisher）以确保`Publisher`对象只在相应的模块中初始化一次（在包中可以初始化/创建多次）, 同时创建`publisher`函数在发布模块的交易中调用。
+我们需要 OTW（One-Time-Witness）来设置发布者（publisher）以确保 `Publisher` 对象只在相应的模块中初始化一次（在包中可以初始化/创建多次）, 同时创建 `publisher` 函数在发布模块的交易中调用。
 
 <details>
 <summary>English Version</summary>

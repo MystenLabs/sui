@@ -1,6 +1,6 @@
 # 见证（Witness）
 
-见证（witness）模式被用于验证某一类型的所有权。为此，需要传递一个拥有drop的类型实例。Coin就使用了这种模式。
+见证（witness）模式被用于验证某一类型的所有权。为此，需要传递一个拥有 drop 的类型实例。Coin 就使用了这种模式。
 
 <details>
 <summary>English Version</summary>
