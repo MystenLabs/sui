@@ -247,9 +247,16 @@ export function createWalletKitCore({
           } catch {}
           // TODO: Rather than using this method, we should just standardize the wallet properties on the adapter itself:
           const accounts = await currentWallet.getAccounts();
+          const suiAccounts = accounts.filter(account => { 
+            if (account.chains[0]) {
+              return account.chains[0].split(':')[0] === 'sui';
+            } else {
+              return false;
+            }
+          });
           // TODO: Implement account selection:
 
-          setState({ accounts, currentAccount: accounts[0] ?? null });
+          setState({ accounts: suiAccounts, currentAccount: suiAccounts[0] ?? null });
         } catch (e) {
           console.log("Wallet connection error", e);
 
