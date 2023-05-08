@@ -17,6 +17,14 @@ pub mod sql_types {
 }
 
 diesel::table! {
+    active_addresses (account_address) {
+        account_address -> Varchar,
+        last_appearance_tx -> Varchar,
+        last_appearance_time -> Int8,
+    }
+}
+
+diesel::table! {
     addresses (account_address) {
         account_address -> Varchar,
         first_appearance_tx -> Varchar,
@@ -296,6 +304,7 @@ diesel::table! {
 }
 
 diesel::allow_tables_to_appear_in_same_query!(
+    active_addresses,
     addresses,
     at_risk_validators,
     checkpoints,

@@ -207,7 +207,11 @@ pub trait IndexerStore {
         object_deletion_latency: Histogram,
     ) -> Result<(), IndexerError>;
     async fn persist_events(&self, events: &[Event]) -> Result<(), IndexerError>;
-    async fn persist_addresses(&self, addresses: &[Address]) -> Result<(), IndexerError>;
+    async fn persist_addresses(
+        &self,
+        addresses: &[Address],
+        active_addresses: &[Address],
+    ) -> Result<(), IndexerError>;
     async fn persist_packages(&self, packages: &[Package]) -> Result<(), IndexerError>;
     // NOTE: these tables are for tx query performance optimization
     async fn persist_transaction_index_tables(
@@ -282,6 +286,7 @@ pub struct TemporaryCheckpointStore {
     pub events: Vec<Event>,
     pub object_changes: Vec<TransactionObjectChanges>,
     pub addresses: Vec<Address>,
+    pub active_addresses: Vec<Address>,
     pub packages: Vec<Package>,
     pub input_objects: Vec<InputObject>,
     pub move_calls: Vec<MoveCall>,

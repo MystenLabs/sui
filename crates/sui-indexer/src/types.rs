@@ -282,6 +282,14 @@ impl CheckpointTransactionBlockResponse {
             })
             .collect::<Vec<Address>>()
     }
+
+    pub fn get_active_address(&self) -> Address {
+        Address {
+            account_address: self.transaction.data.sender().to_string(),
+            first_appearance_tx: self.digest.to_string(),
+            first_appearance_time: self.timestamp_ms as i64,
+        }
+    }
 }
 
 pub struct TemporaryTransactionBlockResponseStore {

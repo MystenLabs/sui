@@ -58,11 +58,11 @@ use crate::models::system_state::DBValidatorSummary;
 use crate::models::transaction_index::{InputObject, MoveCall, Recipient};
 use crate::models::transactions::Transaction;
 use crate::schema::{
-    addresses, checkpoints, checkpoints::dsl as checkpoints_dsl, epochs, epochs::dsl as epochs_dsl,
-    events, input_objects, input_objects::dsl as input_objects_dsl, move_calls,
-    move_calls::dsl as move_calls_dsl, objects, objects::dsl as objects_dsl, objects_history,
-    packages, recipients, recipients::dsl as recipients_dsl, system_states, transactions,
-    transactions::dsl as transactions_dsl, validators,
+    active_addresses, addresses, checkpoints, checkpoints::dsl as checkpoints_dsl, epochs,
+    epochs::dsl as epochs_dsl, events, input_objects, input_objects::dsl as input_objects_dsl,
+    move_calls, move_calls::dsl as move_calls_dsl, objects, objects::dsl as objects_dsl,
+    objects_history, packages, recipients, recipients::dsl as recipients_dsl, system_states,
+    transactions, transactions::dsl as transactions_dsl, validators,
 };
 use crate::store::diesel_marco::{read_only_blocking, transactional_blocking};
 use crate::store::indexer_store::TemporaryCheckpointStore;
@@ -1364,16 +1364,29 @@ WHERE e1.epoch = e2.epoch
         Ok(())
     }
 
-    async fn persist_addresses(&self, addresses: &[Address]) -> Result<(), IndexerError> {
+    async fn persist_addresses(
+        &self,
+        addresses: &[Address],
+        active_addresses: &[Address],
+    ) -> Result<(), IndexerError> {
         transactional_blocking!(&self.blocking_cp, |conn| {
-            for addresses_chunk in addresses.chunks(PG_COMMIT_CHUNK_SIZE) {
+            for address_chunk in addresses.chunks(PG_COMMIT_CHUNK_SIZE) {
                 diesel::insert_into(addresses::table)
-                    .values(addresses_chunk)
+                    .values(address_chunk)
                     .on_conflict(addresses::account_address)
                     .do_nothing()
                     .execute(conn)
                     .map_err(IndexerError::from)
                     .context("Failed writing addresses to PostgresDB")?;
+            }
+            for active_address_chunk in active_addresses.chunks(PG_COMMIT_CHUNK_SIZE) {
+                diesel::insert_into(active_addresses::table)
+                    .values(active_address_chunk)
+                    .on_conflict(active_addresses::account_address)
+                    .do_update()
+                    .execute(conn)
+                    .map_err(IndexerError::from)
+                    .context("Failed writing active addresses to PostgresDB")?;
             }
             Ok::<(), IndexerError>(())
         })?;
