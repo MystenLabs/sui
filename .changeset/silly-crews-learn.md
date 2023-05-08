@@ -1,5 +1,5 @@
 ---
-"@mysten/sui.js": major
+"@mysten/sui.js": minor
 ---
 
-add the mainnetConnection
+Add "mainnet" connection to the list of available connections
