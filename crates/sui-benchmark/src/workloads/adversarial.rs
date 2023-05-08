@@ -242,7 +242,7 @@ impl AdversarialTestPayload {
                 let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
                 path.push("src/workloads/data/max_package");
                 TestTransactionBuilder::new(self.sender, account.gas, gas_price)
-                    .publish(path)
+                    .publish(path, false)
                     .build_and_sign(account.key())
             }
             _ => self.state.move_call_pt(
@@ -462,7 +462,7 @@ impl Workload<dyn Payload> for AdversarialWorkload {
         let protocol_config = protocol_config.unwrap();
         let gas_budget = protocol_config.max_tx_gas();
         let transaction = TestTransactionBuilder::new(gas.1, gas.0, reference_gas_price)
-            .publish(path)
+            .publish(path, false)
             .build_and_sign(gas.2.as_ref());
         let effects = proxy
             .execute_transaction_block(transaction.into())

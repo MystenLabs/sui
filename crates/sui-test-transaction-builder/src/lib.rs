@@ -74,6 +74,30 @@ impl TestTransactionBuilder {
         )
     }
 
+    pub fn call_nft_create(self, package_id: ObjectID) -> Self {
+        self.move_call(
+            package_id,
+            "devnet_nft",
+            "mint",
+            vec![
+                CallArg::Pure(bcs::to_bytes("example_nft_name").unwrap()),
+                CallArg::Pure(bcs::to_bytes("example_nft_description").unwrap()),
+                CallArg::Pure(
+                    bcs::to_bytes("https://sui.io/_nuxt/img/sui-logo.8d3c44e.svg").unwrap(),
+                ),
+            ],
+        )
+    }
+
+    pub fn call_nft_delete(self, package_id: ObjectID, nft_to_delete: ObjectRef) -> Self {
+        self.move_call(
+            package_id,
+            "devnet_nft",
+            "burn",
+            vec![CallArg::Object(ObjectArg::ImmOrOwnedObject(nft_to_delete))],
+        )
+    }
+
     pub fn call_staking(self, stake_coin: ObjectRef, validator: SuiAddress) -> Self {
         self.move_call(
             SUI_SYSTEM_OBJECT_ID,
@@ -106,16 +130,19 @@ impl TestTransactionBuilder {
         self
     }
 
-    pub fn publish(mut self, path: PathBuf) -> Self {
+    pub fn publish(mut self, path: PathBuf, with_unpublished_deps: bool) -> Self {
         assert!(matches!(self.test_data, TestTransactionData::Empty));
-        self.test_data = TestTransactionData::Publish(PublishData { path });
+        self.test_data = TestTransactionData::Publish(PublishData {
+            path,
+            with_unpublished_deps,
+        });
         self
     }
 
     pub fn publish_examples(self, subpath: &'static str) -> Self {
         let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         path.extend(["..", "..", "sui_programmability", "examples", subpath]);
-        self.publish(path)
+        self.publish(path, false)
     }
 
     pub fn build(self) -> TransactionData {
@@ -143,7 +170,7 @@ impl TestTransactionBuilder {
             TestTransactionData::Publish(data) => {
                 let compiled_package = BuildConfig::new_for_testing().build(data.path).unwrap();
                 let all_module_bytes =
-                    compiled_package.get_package_bytes(/* with_unpublished_deps */ false);
+                    compiled_package.get_package_bytes(data.with_unpublished_deps);
                 let dependencies = compiled_package.get_dependency_original_package_ids();
 
                 TransactionData::new_module(
@@ -187,6 +214,8 @@ struct MoveData {
 
 struct PublishData {
     path: PathBuf,
+    /// Whether to publish unpublished dependencies in the same transaction or not.
+    with_unpublished_deps: bool,
 }
 
 struct TransferData {

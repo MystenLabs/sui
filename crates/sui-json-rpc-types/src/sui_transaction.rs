@@ -13,7 +13,7 @@ use move_binary_format::binary_views::BinaryIndexedView;
 use move_binary_format::CompiledModule;
 use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::identifier::IdentStr;
-use move_core_types::language_storage::{ModuleId, TypeTag};
+use move_core_types::language_storage::{ModuleId, StructTag, TypeTag};
 use move_core_types::value::MoveTypeLayout;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -42,6 +42,7 @@ use sui_types::transaction::{
     ProgrammableTransaction, SenderSignedData, TransactionData, TransactionDataAPI,
     TransactionKind, VersionedProtocolMessage,
 };
+use sui_types::SUI_FRAMEWORK_ADDRESS;
 
 // similar to EpochId of sui-types but BigInt
 pub type SuiEpochId = BigInt<u64>;
@@ -235,6 +236,39 @@ impl PartialEq for SuiTransactionBlockResponse {
             && self.confirmed_local_execution == other.confirmed_local_execution
             && self.checkpoint == other.checkpoint
     }
+}
+
+pub fn get_new_package_obj_from_response(
+    response: &SuiTransactionBlockResponse,
+) -> Option<ObjectRef> {
+    response.object_changes.as_ref().and_then(|changes| {
+        changes
+            .iter()
+            .find(|change| matches!(change, ObjectChange::Published { .. }))
+            .map(|change| change.object_ref())
+    })
+}
+
+pub fn get_new_package_upgrade_cap_from_response(
+    response: &SuiTransactionBlockResponse,
+) -> Option<ObjectRef> {
+    response.object_changes.as_ref().and_then(|changes| {
+        changes
+            .iter()
+            .find(|change| {
+                matches!(change, ObjectChange::Created {
+                    owner: Owner::AddressOwner(_),
+                    object_type: StructTag {
+                        address: SUI_FRAMEWORK_ADDRESS,
+                        module,
+                        name,
+                        ..
+                    },
+                    ..
+                } if module.as_str() == "package" && name.as_str() == "UpgradeCap")
+            })
+            .map(|change| change.object_ref())
+    })
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]

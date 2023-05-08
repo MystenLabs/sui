@@ -48,8 +48,7 @@ use sui_types::{SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION};
 use test_utils::authority::test_and_configure_authority_configs;
 use test_utils::network::{start_fullnode_from_config, TestClusterBuilder};
 use test_utils::transaction::{
-    create_devnet_nft, delete_devnet_nft, increment_counter, publish_basics_package,
-    publish_basics_package_and_make_counter, publish_nfts_package, transfer_coin,
+    increment_counter, publish_basics_package_and_make_counter, transfer_coin,
 };
 use test_utils::transaction::{wait_for_all_txes, wait_for_tx};
 use tokio::sync::Mutex;
@@ -572,7 +571,7 @@ async fn test_full_node_sub_and_query_move_event_ok() -> Result<(), anyhow::Erro
     let ws_client = fullnode.ws_client;
 
     let context = &mut test_cluster.wallet;
-    let package_id = publish_nfts_package(context).await.0;
+    let package_id = context.publish_nfts_package().await.0;
 
     let struct_tag_str = format!("{package_id}::devnet_nft::MintNFTEvent");
     let struct_tag = parse_struct_tag(&struct_tag_str).unwrap();
@@ -586,7 +585,7 @@ async fn test_full_node_sub_and_query_move_event_ok() -> Result<(), anyhow::Erro
         .await
         .unwrap();
 
-    let (sender, object_id, digest) = create_devnet_nft(context, package_id).await?;
+    let (sender, object_id, digest) = context.create_devnet_nft(package_id).await;
     wait_for_tx(digest, node.state().clone()).await;
 
     // Wait for streaming
@@ -669,7 +668,7 @@ async fn test_full_node_event_read_api_ok() {
     let node = &test_cluster.fullnode_handle.sui_node;
     let jsonrpc_client = &test_cluster.fullnode_handle.rpc_client;
 
-    let (package_id, gas_id_1, _, _) = publish_nfts_package(context).await;
+    let (package_id, gas_id_1, _) = context.publish_nfts_package().await;
 
     let (transferred_object, _, _, digest, _, _) = transfer_coin(context).await.unwrap();
 
@@ -700,7 +699,7 @@ async fn test_full_node_event_read_api_ok() {
     // This is a poor substitute for the post processing taking some time
     sleep(Duration::from_millis(1000)).await;
 
-    let (_sender, _object_id, digest2) = create_devnet_nft(context, package_id).await.unwrap();
+    let (_sender, _object_id, digest2) = context.create_devnet_nft(package_id).await;
     wait_for_tx(digest2, node.state().clone()).await;
 
     // Add a delay to ensure event processing is done after transaction commits.
@@ -954,10 +953,10 @@ async fn test_get_objects_read() -> Result<(), anyhow::Error> {
     let rgp = test_cluster.get_reference_gas_price().await;
     let node = test_cluster.fullnode_handle.sui_node.clone();
     let context = &mut test_cluster.wallet;
-    let package_id = publish_nfts_package(context).await.0;
+    let package_id = context.publish_nfts_package().await.0;
 
     // Create the object
-    let (sender, object_id, _) = create_devnet_nft(context, package_id).await?;
+    let (sender, object_id, _) = context.create_devnet_nft(package_id).await;
     sleep(Duration::from_secs(3)).await;
 
     let recipient = context.config.keystore.addresses().get(1).cloned().unwrap();
@@ -991,7 +990,9 @@ async fn test_get_objects_read() -> Result<(), anyhow::Error> {
         .expect("Failed to transfer coins to recipient");
 
     // Delete the object
-    let response = delete_devnet_nft(context, &recipient, package_id, object_ref_v2).await;
+    let response = context
+        .delete_devnet_nft(recipient, package_id, object_ref_v2)
+        .await;
     assert_eq!(
         *response.effects.unwrap().status(),
         SuiExecutionStatus::Success
@@ -1109,7 +1110,9 @@ async fn test_pass_back_clock_object() -> Result<(), anyhow::Error> {
     let context = &mut test_cluster.wallet;
 
     let sender = context.config.keystore.addresses().get(0).cloned().unwrap();
-    let package_ref = publish_basics_package(context, sender).await;
+
+    // TODO: this is publishing the wrong package - we should be publishing the one in `sui-core/src/unit_tests/data` instead.
+    let package_ref = context.publish_basics_package().await;
 
     let gas_obj = context
         .get_one_gas_object_owned_by_address(sender)
@@ -1151,6 +1154,7 @@ async fn test_pass_back_clock_object() -> Result<(), anyhow::Error> {
         })
         .await
         .unwrap_or_else(|e| panic!("Failed to execute transaction {:?}: {:?}", digest, e));
+    println!("res: {:?}", _res);
 
     let (
         _tx,

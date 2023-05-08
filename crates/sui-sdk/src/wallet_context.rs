@@ -7,16 +7,17 @@ use anyhow::anyhow;
 use colored::Colorize;
 use shared_crypto::intent::Intent;
 use std::collections::BTreeSet;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use sui_config::{Config, PersistedConfig};
 use sui_json_rpc_types::{
-    SuiObjectData, SuiObjectDataFilter, SuiObjectDataOptions, SuiObjectResponse,
-    SuiObjectResponseQuery, SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
+    get_new_package_obj_from_response, SuiObjectData, SuiObjectDataFilter, SuiObjectDataOptions,
+    SuiObjectResponse, SuiObjectResponseQuery, SuiTransactionBlockEffectsAPI,
+    SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
 };
 use sui_keys::keystore::AccountKeystore;
 use sui_test_transaction_builder::TestTransactionBuilder;
-use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress};
+use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress, TransactionDigest};
 use sui_types::crypto::{get_key_pair, AccountKeyPair};
 use sui_types::gas_coin::GasCoin;
 use sui_types::transaction::{
@@ -345,5 +346,105 @@ impl WalletContext {
                 .call_staking(stake_object, validator_address)
                 .build(),
         )
+    }
+
+    pub async fn make_publish_transaction(
+        &self,
+        path: PathBuf,
+        with_unpublished_deps: bool,
+    ) -> VerifiedTransaction {
+        let accounts_and_objs = self.get_all_accounts_and_gas_objects().await.unwrap();
+        let sender = accounts_and_objs[0].0;
+        let gas_object = accounts_and_objs[0].1[0];
+        let gas_price = self.get_reference_gas_price().await.unwrap();
+        self.sign_transaction(
+            &TestTransactionBuilder::new(sender, gas_object, gas_price)
+                .publish(path, with_unpublished_deps)
+                .build(),
+        )
+    }
+
+    /// Executed a transaction to publish the `basics` package and returns the package object ref.
+    pub async fn publish_basics_package(&self) -> ObjectRef {
+        let accounts_and_objs = self.get_all_accounts_and_gas_objects().await.unwrap();
+        let sender = accounts_and_objs[0].0;
+        let gas_object = accounts_and_objs[0].1[0];
+        let gas_price = self.get_reference_gas_price().await.unwrap();
+        let txn = self.sign_transaction(
+            &TestTransactionBuilder::new(sender, gas_object, gas_price)
+                .publish_examples("basics")
+                .build(),
+        );
+        let resp = self.execute_transaction_block(txn).await.unwrap();
+        get_new_package_obj_from_response(&resp).unwrap()
+    }
+
+    /// Executes a transaction to publish the `nfts` package and returns the package id, id of the gas object used, and the digest of the transaction.
+    pub async fn publish_nfts_package(&self) -> (ObjectID, ObjectID, TransactionDigest) {
+        let accounts_and_objs = self.get_all_accounts_and_gas_objects().await.unwrap();
+        let sender = accounts_and_objs[0].0;
+        let gas_object = accounts_and_objs[0].1[0];
+        let gas_id = gas_object.0;
+        let gas_price = self.get_reference_gas_price().await.unwrap();
+        let txn = self.sign_transaction(
+            &TestTransactionBuilder::new(sender, gas_object, gas_price)
+                .publish_examples("nfts")
+                .build(),
+        );
+        let resp = self.execute_transaction_block(txn).await.unwrap();
+        let package_id = get_new_package_obj_from_response(&resp).unwrap().0;
+        (package_id, gas_id, resp.digest)
+    }
+
+    /// Pre-requisite: `publish_nfts_package` must be called before this function.
+    /// Executes a transaction to create an NFT and returns the sender address, the object id of the NFT, and the digest of the transaction.
+    pub async fn create_devnet_nft(
+        &self,
+        package_id: ObjectID,
+    ) -> (SuiAddress, ObjectID, TransactionDigest) {
+        let accounts_and_objs = self.get_all_accounts_and_gas_objects().await.unwrap();
+        let sender = accounts_and_objs[0].0;
+        let gas_object = accounts_and_objs[0].1[0];
+        let rgp = self.get_reference_gas_price().await.unwrap();
+
+        let txn = self.sign_transaction(
+            &TestTransactionBuilder::new(sender, gas_object, rgp)
+                .call_nft_create(package_id)
+                .build(),
+        );
+        let resp = self.execute_transaction_block(txn).await.unwrap();
+
+        let object_id = resp
+            .effects
+            .as_ref()
+            .unwrap()
+            .created()
+            .first()
+            .unwrap()
+            .reference
+            .object_id;
+
+        (sender, object_id, resp.digest)
+    }
+
+    /// Executes a transaction to delete the given NFT.
+    pub async fn delete_devnet_nft(
+        &mut self,
+        sender: SuiAddress,
+        package_id: ObjectID,
+        nft_to_delete: ObjectRef,
+    ) -> SuiTransactionBlockResponse {
+        let gas = self
+            .get_one_gas_object_owned_by_address(sender)
+            .await
+            .unwrap()
+            .unwrap_or_else(|| panic!("Expect {sender} to have at least one gas object"));
+        let rgp = self.get_reference_gas_price().await.unwrap();
+        let txn = self.sign_transaction(
+            &TestTransactionBuilder::new(sender, gas, rgp)
+                .call_nft_delete(package_id, nft_to_delete)
+                .build(),
+        );
+        self.execute_transaction_block(txn).await.unwrap()
     }
 }
