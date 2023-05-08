@@ -1163,7 +1163,7 @@ impl RpcExampleProvider {
                 id: event_id,
                 package_id,
                 transaction_module: identifier.clone(),
-                sender: SuiAddress::random_for_testing_only(),
+                sender: SuiAddress::from(ObjectID::new(self.rng.gen())),
                 type_: StructTag::from_str("0x3::test::Test<0x3::test::Test>").unwrap(),
                 parsed_json: serde_json::Value::String("some_value".to_string()),
                 bcs: vec![],
