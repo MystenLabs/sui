@@ -7,9 +7,9 @@ use sui_json_rpc_types::{
     SuiTransactionBlockKind, SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
 };
 use sui_types::digests::TransactionDigest;
-use sui_types::messages::{SenderSignedData, TransactionDataAPI};
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::object::Owner;
+use sui_types::transaction::{SenderSignedData, TransactionDataAPI};
 
 use crate::errors::IndexerError;
 use crate::models::addresses::Address;

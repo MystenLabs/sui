@@ -55,26 +55,26 @@ use sui_types::{
     base_types::{ObjectID, ObjectRef, SuiAddress, TransactionDigest, SUI_ADDRESS_LENGTH},
     crypto::{get_key_pair_from_rng, AccountKeyPair},
     event::Event,
-    messages::{TransactionData, TransactionDataAPI, VerifiedTransaction},
     object::{self, Object, ObjectFormatOptions},
     object::{MoveObject, Owner},
+    transaction::{TransactionData, TransactionDataAPI, VerifiedTransaction},
     MOVE_STDLIB_ADDRESS, SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION,
     SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_STATE_OBJECT_ID,
 };
 use sui_types::{clock::Clock, SUI_SYSTEM_ADDRESS};
-use sui_types::{epoch_data::EpochData, messages::Command};
+use sui_types::{epoch_data::EpochData, transaction::Command};
 use sui_types::{gas::SuiGasStatus, temporary_store::TemporaryStore};
 use sui_types::{
     gas::{GasCostSummary, SuiCostTable},
     object::GAS_VALUE_FOR_TESTING,
 };
 use sui_types::{id::UID, DEEPBOOK_ADDRESS};
-use sui_types::{in_memory_storage::InMemoryStorage, messages::ProgrammableTransaction};
-use sui_types::{
-    messages::{Argument, CallArg},
-    move_package::MovePackage,
-};
+use sui_types::{in_memory_storage::InMemoryStorage, transaction::ProgrammableTransaction};
 use sui_types::{metrics::LimitsMetrics, DEEPBOOK_OBJECT_ID};
+use sui_types::{
+    move_package::MovePackage,
+    transaction::{Argument, CallArg},
+};
 use sui_types::{
     programmable_transaction_builder::ProgrammableTransactionBuilder, SUI_FRAMEWORK_OBJECT_ID,
 };
@@ -635,7 +635,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                 let gas_budget = gas_budget.unwrap_or(DEFAULT_GAS_BUDGET);
                 let transaction = self.sign_txn(sender, |sender, gas| {
                     let rec_arg = builder.pure(recipient).unwrap();
-                    builder.command(sui_types::messages::Command::TransferObjects(
+                    builder.command(sui_types::transaction::Command::TransferObjects(
                         vec![obj_arg],
                         rec_arg,
                     ));

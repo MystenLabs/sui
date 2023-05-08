@@ -27,11 +27,6 @@ use sui_types::effects::{CertifiedTransactionEffects, TransactionEffectsAPI};
 use sui_types::error::SuiError;
 use sui_types::gas::GasCostSummary;
 use sui_types::message_envelope::Message;
-use sui_types::messages::{
-    CallArg, ObjectArg, TransactionData, TransactionDataAPI, TransactionExpiration,
-    VerifiedTransaction, TEST_ONLY_GAS_UNIT_FOR_GENERIC, TEST_ONLY_GAS_UNIT_FOR_STAKING,
-    TEST_ONLY_GAS_UNIT_FOR_TRANSFER, TEST_ONLY_GAS_UNIT_FOR_VALIDATOR,
-};
 use sui_types::object::{
     generate_test_gas_objects_with_owner, generate_test_gas_objects_with_owner_and_value, Object,
 };
@@ -39,6 +34,11 @@ use sui_types::sui_system_state::sui_system_state_inner_v1::VerifiedValidatorMet
 use sui_types::sui_system_state::{
     get_validator_from_table, sui_system_state_summary::get_validator_by_pool_id,
     SuiSystemStateTrait,
+};
+use sui_types::transaction::{
+    CallArg, ObjectArg, TransactionData, TransactionDataAPI, TransactionExpiration,
+    VerifiedTransaction, TEST_ONLY_GAS_UNIT_FOR_GENERIC, TEST_ONLY_GAS_UNIT_FOR_STAKING,
+    TEST_ONLY_GAS_UNIT_FOR_TRANSFER, TEST_ONLY_GAS_UNIT_FOR_VALIDATOR,
 };
 use sui_types::utils::to_sender_signed_transaction;
 use sui_types::{

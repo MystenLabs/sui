@@ -30,8 +30,8 @@ use sui_types::crypto::Signature;
 use sui_types::crypto::SignatureScheme;
 use sui_types::crypto::SuiKeyPair;
 use sui_types::crypto::SuiSignatureInner;
-use sui_types::messages::TransactionData;
-use sui_types::messages::TEST_ONLY_GAS_UNIT_FOR_TRANSFER;
+use sui_types::transaction::TransactionData;
+use sui_types::transaction::TEST_ONLY_GAS_UNIT_FOR_TRANSFER;
 use tempfile::TempDir;
 
 const TEST_MNEMONIC: &str = "result crisp session latin must fruit genuine question prevent start coconut brave speak student dismiss";

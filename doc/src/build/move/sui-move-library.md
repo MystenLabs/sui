@@ -16,7 +16,7 @@ Objects in Sui can have different ownership types:
 
 The [`Transfer`](https://github.com/MystenLabs/sui/tree/main/crates/sui-framework/packages/sui-framework/sources/transfer.move) module provides all the APIs needed to manipulate the ownership of objects.
 
-The most common case is to transfer an object to an address. For example, when you create a new object is created, you typically transfer it to an address for ownership. In Sui Move, to transfer an object `obj` to an address `recipient`, you import the module then make the transfer:
+The most common case is to transfer an object to an address. For example, when you create a new object, you typically transfer it to an address for ownership. In Sui Move, to transfer an object `obj` to an address `recipient`, you import the module then make the transfer:
 
 ```rust
 use sui::transfer;

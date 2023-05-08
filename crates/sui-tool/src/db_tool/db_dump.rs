@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::anyhow;
+use anyhow::{anyhow, Ok};
 use clap::{Parser, ValueEnum};
 use comfy_table::{Cell, ContentArrangement, Row, Table};
 use rocksdb::MultiThreaded;

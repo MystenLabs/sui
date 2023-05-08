@@ -27,9 +27,9 @@ use sui_types::base_types::{ObjectDigest, ObjectID, SequenceNumber, SuiAddress};
 use sui_types::crypto::AggregateAuthoritySignature;
 use sui_types::digests::TransactionDigest;
 use sui_types::gas_coin::GasCoin;
-use sui_types::messages::{TransactionData, TEST_ONLY_GAS_UNIT_FOR_TRANSFER};
 use sui_types::messages_checkpoint::CheckpointDigest;
 use sui_types::object::Object;
+use sui_types::transaction::{TransactionData, TEST_ONLY_GAS_UNIT_FOR_TRANSFER};
 
 fn indexer_benchmark(c: &mut Criterion) {
     let pg_host = env::var("POSTGRES_HOST").unwrap_or_else(|_| "localhost".into());

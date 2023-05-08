@@ -19,8 +19,8 @@ use sui_types::crypto::{KeypairTraits, Signature};
 use sui_types::utils::create_fake_transaction;
 
 use sui_macros::sim_test;
-use sui_types::messages::*;
 use sui_types::object::Object;
+use sui_types::transaction::*;
 
 use super::*;
 use crate::authority_client::AuthorityAPI;

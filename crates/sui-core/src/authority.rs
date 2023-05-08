@@ -100,8 +100,8 @@ use sui_types::{
     crypto::AuthoritySignature,
     error::{SuiError, SuiResult},
     fp_ensure,
-    messages::*,
     object::{Object, ObjectFormatOptions, ObjectRead},
+    transaction::*,
     SUI_SYSTEM_ADDRESS,
 };
 use sui_types::{is_system_package, TypeTag, SUI_CLOCK_OBJECT_ID};
@@ -2238,8 +2238,8 @@ impl AuthorityState {
         let df = self
             .get_dynamic_fields_iterator(table, None)
             .ok()?
-            .find(|df| key_bcs == df.bcs_name)?;
-        let field: Field<K, V> = self.get_move_object(&df.object_id).ok()?;
+            .find(|(_, df)| key_bcs == df.bcs_name)?;
+        let field: Field<K, V> = self.get_move_object(&df.1.object_id).ok()?;
         Some(field.value)
     }
 
@@ -2420,7 +2420,7 @@ impl AuthorityState {
         // If `Some`, the query will start from the next item after the specified cursor
         cursor: Option<ObjectID>,
         limit: usize,
-    ) -> SuiResult<Vec<DynamicFieldInfo>> {
+    ) -> SuiResult<Vec<(ObjectID, DynamicFieldInfo)>> {
         Ok(self
             .get_dynamic_fields_iterator(owner, cursor)?
             .take(limit)
@@ -2432,7 +2432,7 @@ impl AuthorityState {
         owner: ObjectID,
         // If `Some`, the query will start from the next item after the specified cursor
         cursor: Option<ObjectID>,
-    ) -> SuiResult<impl Iterator<Item = DynamicFieldInfo> + '_> {
+    ) -> SuiResult<impl Iterator<Item = (ObjectID, DynamicFieldInfo)> + '_> {
         if let Some(indexes) = &self.indexes {
             indexes.get_dynamic_fields_iterator(owner, cursor)
         } else {

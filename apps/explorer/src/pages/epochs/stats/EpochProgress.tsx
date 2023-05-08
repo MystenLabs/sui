@@ -85,11 +85,11 @@ export function EpochProgress({
                     ) : null}
                 </div>
                 {inProgress ? (
-                    <div className="space-y-1.5">
+                    <div className="space-y-2">
                         <Heading variant="heading6/medium" color="steel-darker">
                             {label}
                         </Heading>
-                        <ProgressBar progress={progress || 0} />
+                        <ProgressBar animate progress={progress || 0} />
                     </div>
                 ) : null}
             </div>

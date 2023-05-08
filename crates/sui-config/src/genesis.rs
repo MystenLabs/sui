@@ -38,7 +38,6 @@ use sui_types::gas_coin::{GasCoin, TOTAL_SUPPLY_MIST};
 use sui_types::governance::StakedSui;
 use sui_types::in_memory_storage::InMemoryStorage;
 use sui_types::message_envelope::Message;
-use sui_types::messages::{CallArg, Command, InputObjectKind, InputObjects, Transaction};
 use sui_types::messages_checkpoint::{
     CertifiedCheckpointSummary, CheckpointContents, CheckpointSummary, VerifiedCheckpoint,
 };
@@ -51,6 +50,7 @@ use sui_types::sui_system_state::{
     SuiSystemStateWrapper, SuiValidatorGenesis,
 };
 use sui_types::temporary_store::{InnerTemporaryStore, TemporaryStore};
+use sui_types::transaction::{CallArg, Command, InputObjectKind, InputObjects, Transaction};
 use sui_types::{
     base_types::TxContext,
     committee::{Committee, EpochId, ProtocolVersion},
@@ -1341,14 +1341,14 @@ fn create_genesis_transaction(
                     *initial_shared_version = SequenceNumber::MIN;
                 }
 
-                sui_types::messages::GenesisObject::RawObject {
+                sui_types::transaction::GenesisObject::RawObject {
                     data: object.data,
                     owner: object.owner,
                 }
             })
             .collect();
 
-        sui_types::messages::VerifiedTransaction::new_genesis_transaction(genesis_objects)
+        sui_types::transaction::VerifiedTransaction::new_genesis_transaction(genesis_objects)
             .into_inner()
     };
 

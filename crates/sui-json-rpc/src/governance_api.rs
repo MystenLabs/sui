@@ -356,7 +356,7 @@ async fn exchange_rates(
         system_state_summary.inactive_pools_size as usize,
     )? {
         let pool_id: ID =
-            bcs::from_bytes(&df.bcs_name).map_err(|e| SuiError::ObjectDeserializationError {
+            bcs::from_bytes(&df.1.bcs_name).map_err(|e| SuiError::ObjectDeserializationError {
                 error: e.to_string(),
             })?;
         let validator = get_validator_from_table(
@@ -380,7 +380,7 @@ async fn exchange_rates(
             .get_dynamic_fields(exchange_rates_id, None, exchange_rates_size as usize)?
             .into_iter()
             .map(|df| {
-                let epoch: EpochId = bcs::from_bytes(&df.bcs_name).map_err(|e| {
+                let epoch: EpochId = bcs::from_bytes(&df.1.bcs_name).map_err(|e| {
                     SuiError::ObjectDeserializationError {
                         error: e.to_string(),
                     }

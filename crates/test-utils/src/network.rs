@@ -35,11 +35,11 @@ use sui_types::base_types::{AuthorityName, ObjectID, SuiAddress};
 use sui_types::committee::EpochId;
 use sui_types::crypto::KeypairTraits;
 use sui_types::crypto::SuiKeyPair;
-use sui_types::messages::VerifiedTransaction;
 use sui_types::object::Object;
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
 use sui_types::sui_system_state::SuiSystemState;
 use sui_types::sui_system_state::SuiSystemStateTrait;
+use sui_types::transaction::VerifiedTransaction;
 
 const NUM_VALIDAOTR: usize = 4;
 

@@ -20,11 +20,11 @@ use sui_types::base_types::{AuthorityName, EpochId, ObjectID, SequenceNumber, Tr
 use sui_types::committee::Committee;
 use sui_types::crypto::{AuthoritySignInfo, AuthorityStrongQuorumSignInfo};
 use sui_types::error::{SuiError, SuiResult};
-use sui_types::messages::{
+use sui_types::signature::GenericSignature;
+use sui_types::transaction::{
     CertifiedTransaction, SenderSignedData, SharedInputObject, TransactionData, TransactionDataAPI,
     VerifiedCertificate, VerifiedSignedTransaction,
 };
-use sui_types::signature::GenericSignature;
 use tracing::{debug, error, info, trace, warn};
 use typed_store::rocks::{
     default_db_options, DBBatch, DBMap, DBOptions, MetricConf, TypedStoreError,

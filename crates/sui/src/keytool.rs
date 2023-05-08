@@ -18,9 +18,9 @@ use sui_keys::keystore::{AccountKeystore, Keystore};
 use sui_types::base_types::SuiAddress;
 use sui_types::crypto::{get_authority_key_pair, EncodeDecodeBase64, SignatureScheme, SuiKeyPair};
 use sui_types::crypto::{DefaultHash, PublicKey, Signature};
-use sui_types::messages::TransactionData;
 use sui_types::multisig::{MultiSig, MultiSigPublicKey, ThresholdUnit, WeightUnit};
 use sui_types::signature::GenericSignature;
+use sui_types::transaction::TransactionData;
 use tracing::info;
 #[cfg(test)]
 #[path = "unit_tests/keytool_tests.rs"]
@@ -124,22 +124,22 @@ pub enum KeyToolCommand {
         threshold: ThresholdUnit,
     },
 
-    /// Converts a Base64 encoded string to its hexademical representation.
+    /// Converts a Base64 encoded string to its hexadecimal representation.
     Base64ToHex {
         base64: String,
     },
 
-    /// Converts a hexademical string to its Base64 encoded representation.
+    /// Converts a hexadecimal string to its Base64 encoded representation.
     HexToBase64 {
         hex: String,
     },
 
-    /// Converts a hexademical string to its correspinding bytes.
+    /// Converts a hexadecimal string to its corresponding bytes.
     HexToBytes {
         hex: String,
     },
 
-    /// Converts an array of bytes to its hexademical string representation.
+    /// Converts an array of bytes to its hexadecimal string representation.
     BytesToHex {
         bytes: Vec<u8>,
     },

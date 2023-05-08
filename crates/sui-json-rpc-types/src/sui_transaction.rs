@@ -27,11 +27,6 @@ use sui_types::effects::{TransactionEffects, TransactionEffectsAPI, TransactionE
 use sui_types::error::{ExecutionError, SuiError};
 use sui_types::execution_status::ExecutionStatus;
 use sui_types::gas::GasCostSummary;
-use sui_types::messages::{
-    Argument, CallArg, Command, GenesisObject, InputObjectKind, ObjectArg, ProgrammableMoveCall,
-    ProgrammableTransaction, SenderSignedData, TransactionData, TransactionDataAPI,
-    TransactionKind, VersionedProtocolMessage,
-};
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::object::Owner;
 use sui_types::parse_sui_type_tag;
@@ -41,6 +36,11 @@ use sui_types::storage::{DeleteKind, WriteKind};
 use sui_types::sui_serde::Readable;
 use sui_types::sui_serde::{
     BigInt, SequenceNumber as AsSequenceNumber, SuiTypeTag as AsSuiTypeTag,
+};
+use sui_types::transaction::{
+    Argument, CallArg, Command, GenesisObject, InputObjectKind, ObjectArg, ProgrammableMoveCall,
+    ProgrammableTransaction, SenderSignedData, TransactionData, TransactionDataAPI,
+    TransactionKind, VersionedProtocolMessage,
 };
 
 // similar to EpochId of sui-types but BigInt

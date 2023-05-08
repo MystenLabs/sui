@@ -9,8 +9,8 @@ use crate::crypto::{
 };
 use crate::error::SuiResult;
 use crate::executable_transaction::CertificateProof;
-use crate::messages::VersionedProtocolMessage;
 use crate::messages_checkpoint::CheckpointSequenceNumber;
+use crate::transaction::VersionedProtocolMessage;
 use fastcrypto::traits::KeyPair;
 use once_cell::sync::OnceCell;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};

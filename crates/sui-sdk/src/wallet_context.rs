@@ -19,9 +19,9 @@ use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress};
 use sui_types::crypto::{get_key_pair, AccountKeyPair};
 use sui_types::gas_coin::GasCoin;
-use sui_types::messages::TransactionDataAPI;
-use sui_types::messages::{
-    Transaction, TransactionData, VerifiedTransaction, TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
+use sui_types::transaction::{
+    Transaction, TransactionData, TransactionDataAPI, VerifiedTransaction,
+    TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
 };
 use tokio::sync::RwLock;
 use tracing::warn;

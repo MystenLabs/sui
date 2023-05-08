@@ -5,7 +5,7 @@ use crate::messages_checkpoint::CheckpointSequenceNumber;
 use crate::{committee::EpochId, crypto::AuthorityStrongQuorumSignInfo};
 
 use crate::message_envelope::{Envelope, TrustedEnvelope, VerifiedEnvelope};
-use crate::messages::SenderSignedData;
+use crate::transaction::SenderSignedData;
 use serde::{Deserialize, Serialize};
 
 /// CertificateProof is a proof that a transaction certs existed at a given epoch and hence can be executed.

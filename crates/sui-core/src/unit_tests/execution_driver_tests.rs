@@ -22,8 +22,8 @@ use sui_types::committee::Committee;
 use sui_types::crypto::{get_key_pair, AccountKeyPair};
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
 use sui_types::error::SuiResult;
-use sui_types::messages::{VerifiedCertificate, VerifiedTransaction};
 use sui_types::object::{Object, Owner};
+use sui_types::transaction::{VerifiedCertificate, VerifiedTransaction};
 use tokio::sync::mpsc::UnboundedReceiver;
 use tokio::time::{sleep, timeout};
 

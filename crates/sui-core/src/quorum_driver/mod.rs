@@ -33,8 +33,8 @@ use mysten_common::sync::notify_read::{NotifyRead, Registration};
 use mysten_metrics::{spawn_monitored_task, GaugeGuard};
 use std::fmt::Write;
 use sui_types::error::{SuiError, SuiResult};
-use sui_types::messages::{VerifiedCertificate, VerifiedTransaction};
 use sui_types::messages_grpc::PlainTransactionInfoResponse;
+use sui_types::transaction::{VerifiedCertificate, VerifiedTransaction};
 
 use self::reconfig_observer::ReconfigObserver;
 

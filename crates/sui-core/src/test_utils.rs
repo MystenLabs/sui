@@ -29,9 +29,9 @@ use sui_types::crypto::{
 use sui_types::crypto::{AuthorityKeyPair, Signer};
 use sui_types::effects::{SignedTransactionEffects, TransactionEffects};
 use sui_types::error::SuiError;
-use sui_types::messages::ObjectArg;
-use sui_types::messages::TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS;
-use sui_types::messages::{
+use sui_types::transaction::ObjectArg;
+use sui_types::transaction::TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS;
+use sui_types::transaction::{
     CallArg, SignedTransaction, TransactionData, VerifiedTransaction,
     TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
 };
@@ -42,8 +42,8 @@ use sui_types::{
     committee::Committee,
     crypto::{AuthoritySignInfo, AuthoritySignature},
     message_envelope::Message,
-    messages::{CertifiedTransaction, Transaction},
     object::Object,
+    transaction::{CertifiedTransaction, Transaction},
 };
 use tokio::time::timeout;
 use tracing::{info, warn};

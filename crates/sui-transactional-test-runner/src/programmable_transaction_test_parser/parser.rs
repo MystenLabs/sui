@@ -10,7 +10,7 @@ use move_command_line_common::{
 use move_core_types::{account_address::AccountAddress, identifier::Identifier};
 use sui_types::{
     base_types::ObjectID,
-    messages::{Argument, Command, ProgrammableMoveCall},
+    transaction::{Argument, Command, ProgrammableMoveCall},
 };
 
 use crate::programmable_transaction_test_parser::token::{

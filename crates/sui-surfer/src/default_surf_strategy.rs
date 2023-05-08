@@ -7,7 +7,7 @@ use move_core_types::language_storage::StructTag;
 use rand::{seq::SliceRandom, Rng};
 use sui_types::{
     base_types::ObjectRef,
-    messages::{CallArg, ObjectArg},
+    transaction::{CallArg, ObjectArg},
 };
 use tokio::sync::watch;
 use tracing::debug;

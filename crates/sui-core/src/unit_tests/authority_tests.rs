@@ -49,8 +49,8 @@ use sui_types::{
     base_types::dbg_addr,
     crypto::{get_key_pair, Signature},
     crypto::{AccountKeyPair, AuthorityKeyPair, KeypairTraits},
-    messages::VerifiedTransaction,
     object::{Owner, GAS_VALUE_FOR_TESTING, OBJECT_START_VERSION},
+    transaction::VerifiedTransaction,
     MOVE_STDLIB_OBJECT_ID, SUI_FRAMEWORK_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_ID,
 };
 use sui_types::{SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION};
@@ -3417,7 +3417,10 @@ async fn create_and_retrieve_df_info(function: &IdentStr) -> (SuiAddress, Vec<Dy
         sender,
         authority_state
             .get_dynamic_fields(outer_v0.0, None, usize::MAX)
-            .unwrap(),
+            .unwrap()
+            .into_iter()
+            .map(|x| x.1)
+            .collect(),
     )
 }
 

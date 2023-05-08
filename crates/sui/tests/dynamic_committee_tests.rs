@@ -24,15 +24,15 @@ use sui_types::effects::{CertifiedTransactionEffects, TransactionEffects, Transa
 use sui_types::{
     base_types::{ObjectID, ObjectRef, SuiAddress},
     crypto::{get_key_pair, AccountKeyPair},
-    messages::{
-        Argument, Command, ObjectArg, ProgrammableTransaction, TransactionData, VerifiedTransaction,
-    },
     object::{Object, Owner},
     programmable_transaction_builder::ProgrammableTransactionBuilder,
     storage::ObjectStore,
     sui_system_state::{
         sui_system_state_summary::{SuiSystemStateSummary, SuiValidatorSummary},
         SuiSystemStateTrait,
+    },
+    transaction::{
+        Argument, Command, ObjectArg, ProgrammableTransaction, TransactionData, VerifiedTransaction,
     },
     utils::to_sender_signed_transaction,
     SUI_SYSTEM_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,

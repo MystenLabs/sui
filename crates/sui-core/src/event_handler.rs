@@ -11,7 +11,7 @@ use sui_json_rpc_types::{
 };
 use sui_json_rpc_types::{SuiEvent, SuiTransactionBlockEffectsAPI};
 use sui_types::error::SuiResult;
-use sui_types::messages::TransactionData;
+use sui_types::transaction::TransactionData;
 
 #[cfg(test)]
 #[path = "unit_tests/event_handler_tests.rs"]
