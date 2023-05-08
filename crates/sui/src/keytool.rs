@@ -416,6 +416,7 @@ impl KeyToolCommand {
                 // serialize_compact is loaded as bytes for Secp256k1Sinature
                 // to convert it into a RecoverableSignature
                 let response = kms.sign(request).await?;
+                println!("Response {:?}", response);
                 let sig_bytes_der = response
                     .signature
                     .map(|b| b.to_vec())
@@ -429,7 +430,7 @@ impl KeyToolCommand {
                 // Covert a 64-byte signature to 65-byte signature recoverable signature.
                 // by trying all 4 possible recovery ids as the last byte. The first 64
                 // bytes are copied over.
-                let mut n_bytes = Vec::with_capacity(65);
+                let mut n_bytes: [u8; 65] = [0u8; 65];
                 n_bytes[..64].copy_from_slice(&sig_compact[..]);
 
                 for i in 0..4 {
