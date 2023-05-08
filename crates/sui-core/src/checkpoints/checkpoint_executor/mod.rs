@@ -21,7 +21,7 @@
 use std::{
     collections::HashMap,
     sync::Arc,
-    time::{Duration, Instant, SystemTime},
+    time::{Duration, Instant},
 };
 
 use futures::stream::FuturesOrdered;
@@ -39,7 +39,7 @@ use sui_types::{
     transaction::VerifiedTransaction,
 };
 use sui_types::{error::SuiResult, transaction::TransactionDataAPI};
-use tap::{TapFallible, TapOptional};
+use tap::TapOptional;
 use tokio::{
     sync::broadcast::{self, error::RecvError},
     task::JoinHandle,
@@ -202,12 +202,7 @@ impl CheckpointExecutor {
                             sequence_number = ?checkpoint.sequence_number,
                             "received checkpoint summary from state sync"
                         );
-                        SystemTime::now().duration_since(checkpoint.timestamp())
-                            .map(|latency|
-                                self.metrics.checkpoint_contents_age_ms.report(latency.as_millis() as u64)
-                            )
-                            .tap_err(|err| warn!("unable to compute checkpoint age: {}", err))
-                            .ok();
+                        checkpoint.report_checkpoint_age_ms(&self.metrics.checkpoint_contents_age_ms);
                     },
                     // In this case, messages in the mailbox have been overwritten
                     // as a result of lagging too far behind.
@@ -275,15 +270,7 @@ impl CheckpointExecutor {
             .unwrap();
         self.metrics.last_executed_checkpoint.set(seq as i64);
 
-        SystemTime::now()
-            .duration_since(checkpoint.timestamp())
-            .map(|latency| {
-                self.metrics
-                    .last_executed_checkpoint_age_ms
-                    .report(latency.as_millis() as u64)
-            })
-            .tap_err(|err| warn!("unable to compute checkpoint age: {}", err))
-            .ok();
+        checkpoint.report_checkpoint_age_ms(&self.metrics.last_executed_checkpoint_age_ms);
     }
 
     async fn schedule_synced_checkpoints(

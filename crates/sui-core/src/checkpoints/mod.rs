@@ -555,7 +555,10 @@ impl CheckpointBuilder {
             let mut last = self.epoch_store.last_built_checkpoint_commit_height();
             for (height, pending) in self.epoch_store.get_pending_checkpoints(last) {
                 last = Some(height);
-                debug!("Making checkpoint at commit height {height}");
+                debug!(
+                    checkpoint_commit_height = height,
+                    "Making checkpoint at commit height"
+                );
                 if let Err(e) = self.make_checkpoint(height, pending).await {
                     error!("Error while making checkpoint, will retry in 1s: {:?}", e);
                     tokio::time::sleep(Duration::from_secs(1)).await;
@@ -608,8 +611,9 @@ impl CheckpointBuilder {
         let mut batch = self.tables.checkpoint_content.batch();
         for (summary, contents) in &new_checkpoint {
             debug!(
-                "Created checkpoint from commit height {height} with sequence {}",
-                summary.sequence_number
+                checkpoint_commit_height = height,
+                checkpoint_seq = summary.sequence_number,
+                "Created checkpoint",
             );
             self.output
                 .checkpoint_created(summary, contents, &self.epoch_store)
@@ -874,9 +878,10 @@ impl CheckpointBuilder {
                 end_of_epoch_data,
                 timestamp_ms,
             );
+            summary.report_checkpoint_age_ms(&self.metrics.last_created_checkpoint_age_ms);
             if last_checkpoint_of_epoch {
                 info!(
-                    ?sequence_number,
+                    checkpoint_seq = sequence_number,
                     "creating last checkpoint of epoch {}", epoch
                 );
                 if let Some(stats) = self.tables.get_epoch_stats(epoch, &summary) {
@@ -1090,15 +1095,15 @@ impl CheckpointAggregator {
             for ((seq, index), data) in iter {
                 if seq != current.summary.sequence_number {
                     debug!(
-                        "Not enough checkpoint signatures on height {}",
-                        current.summary.sequence_number
+                        checkpoint_seq =? current.summary.sequence_number,
+                        "Not enough checkpoint signatures",
                     );
                     // No more signatures (yet) for this checkpoint
                     return Ok(result);
                 }
                 debug!(
-                    "Processing signature for checkpoint {} (digest: {:?}) from {:?}",
-                    current.summary.sequence_number,
+                    checkpoint_seq = current.summary.sequence_number,
+                    "Processing signature for checkpoint (digest: {:?}) from {:?}",
                     current.summary.digest(),
                     data.summary.auth_sig().authority.concise()
                 );
@@ -1121,6 +1126,9 @@ impl CheckpointAggregator {
                     self.metrics
                         .last_certified_checkpoint
                         .set(current.summary.sequence_number as i64);
+                    current
+                        .summary
+                        .report_checkpoint_age_ms(&self.metrics.last_certified_checkpoint_age_ms);
                     result.push(summary.into_inner());
                     self.current = None;
                     continue 'outer;
@@ -1159,16 +1167,16 @@ impl CheckpointSignatureAggregator {
                 self.failures.insert_generic(author, signature)
             {
                 panic!("Checkpoint fork detected - f+1 validators submitted checkpoint digest at seq {} different from our digest {}. Validators with different digests: {:?}",
-                       self.summary.sequence_number,
-                       self.digest,
-                        data.keys()
+                    self.summary.sequence_number,
+                    self.digest,
+                    data.keys()
                 );
             }
             warn!(
-                "Validator {:?} has mismatching checkpoint digest {} at seq {}, we have digest {}",
+                checkpoint_seq = self.summary.sequence_number,
+                "Validator {:?} has mismatching checkpoint digest {}, we have digest {}",
                 author.concise(),
                 their_digest,
-                self.summary.sequence_number,
                 self.digest
             );
             return Err(());
@@ -1179,9 +1187,9 @@ impl CheckpointSignatureAggregator {
         match self.signatures.insert(envelope) {
             InsertResult::Failed { error } => {
                 warn!(
-                    "Failed to aggregate new signature from validator {:?} for checkpoint {}: {:?}",
+                    checkpoint_seq = self.summary.sequence_number,
+                    "Failed to aggregate new signature from validator {:?}: {:?}",
                     author.concise(),
-                    self.summary.sequence_number,
                     error
                 );
                 Err(())
@@ -1299,15 +1307,15 @@ impl CheckpointServiceNotify for CheckpointService {
         {
             if sequence <= last_certified {
                 debug!(
-                    "Ignore signature for checkpoint sequence {} from {} - already certified",
-                    info.summary.sequence_number, signer,
+                    checkpoint_seq = sequence,
+                    "Ignore checkpoint signature from {} - already certified", signer,
                 );
                 return Ok(());
             }
         }
         debug!(
-            "Received signature for checkpoint sequence {}, digest {} from {}",
-            sequence,
+            checkpoint_seq = sequence,
+            "Received checkpoint signature, digest {} from {}",
             info.summary.digest(),
             signer,
         );
@@ -1334,25 +1342,25 @@ impl CheckpointServiceNotify for CheckpointService {
                 panic!("Received checkpoint at index {} that contradicts previously stored checkpoint. Old digests: {:?}, new digests: {:?}", checkpoint.height(), pending.roots, checkpoint.roots);
             }
             debug!(
-                "Ignoring duplicate checkpoint notification at height {}",
-                checkpoint.height()
+                checkpoint_commit_height = checkpoint.height(),
+                "Ignoring duplicate checkpoint notification",
             );
             return Ok(());
         }
         debug!(
-            "Pending checkpoint at height {} has {} roots",
-            checkpoint.height(),
+            checkpoint_commit_height = checkpoint.height(),
+            "Pending checkpoint has {} roots",
             checkpoint.roots.len(),
         );
         trace!(
-            "Transaction roots for pending checkpoint at height {}: {:?}",
-            checkpoint.height(),
+            checkpoint_commit_height = checkpoint.height(),
+            "Transaction roots for pending checkpoint: {:?}",
             checkpoint.roots
         );
         epoch_store.insert_pending_checkpoint(&checkpoint.height(), &checkpoint)?;
         debug!(
-            "Notifying builder about checkpoint at {}",
-            checkpoint.height()
+            checkpoint_commit_height = checkpoint.height(),
+            "Notifying builder about checkpoint",
         );
         self.notify_builder.notify_one();
         Ok(())

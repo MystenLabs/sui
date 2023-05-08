@@ -28,12 +28,16 @@ use shared_crypto::intent::IntentScope;
 use std::fmt::{Debug, Display, Formatter};
 use std::slice::Iter;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use tap::TapFallible;
+use tracing::warn;
 
 pub use crate::digests::CheckpointContentsDigest;
 pub use crate::digests::CheckpointDigest;
 
 pub type CheckpointSequenceNumber = u64;
 pub type CheckpointTimestamp = u64;
+
+use mysten_metrics::histogram::Histogram;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct CheckpointRequest {
@@ -203,6 +207,19 @@ impl CheckpointSummary {
         self.end_of_epoch_data
             .as_ref()
             .map(|e| e.next_epoch_committee.as_slice())
+    }
+
+    pub fn report_checkpoint_age_ms(&self, metrics: &Histogram) {
+        SystemTime::now()
+            .duration_since(self.timestamp())
+            .map(|latency| metrics.report(latency.as_millis() as u64))
+            .tap_err(|err| {
+                warn!(
+                    checkpoint_seq = self.sequence_number,
+                    "unable to compute checkpoint age: {}", err
+                )
+            })
+            .ok();
     }
 }
 
