@@ -28,7 +28,10 @@ export function InputsCard({ inputs }: InputsCardProps) {
             title={`Input ${index}`}
             defaultOpen={defaultOpen}
         >
-            <div className="flex flex-col gap-3">
+            <div
+                data-testid="inputs-card-content"
+                className="flex flex-col gap-3"
+            >
                 {Object.entries(input).map(([key, value]) => {
                     let renderValue;
                     const stringValue = String(value);
