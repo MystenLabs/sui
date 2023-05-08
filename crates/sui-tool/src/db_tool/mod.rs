@@ -31,7 +31,7 @@ pub enum DbToolCommand {
 pub struct CrawlOptions {
     /// The type of store to dump
     #[clap(long = "out", short = 'o', value_enum)]
-    out_file: StoreName,
+    out_file: String,
 }
 
 #[derive(Parser)]
