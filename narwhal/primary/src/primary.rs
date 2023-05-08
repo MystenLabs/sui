@@ -36,7 +36,6 @@ use fastcrypto::{
     signature_service::SignatureService,
     traits::{KeyPair as _, ToFromBytes},
 };
-use futures::{stream::FuturesUnordered, StreamExt};
 use mysten_metrics::{monitored_scope, spawn_monitored_task};
 use mysten_network::{multiaddr::Protocol, Multiaddr};
 use network::{
@@ -712,67 +711,26 @@ impl PrimaryReceiverHandler {
             header.round()
         );
 
-        // Clone the round updates channel so we can get update notifications specific to
-        // this RPC handler.
-        let mut rx_narwhal_round_updates = self.rx_narwhal_round_updates.clone();
+        // If requester has provided us with parent certificates, process them all
+        // before proceeding.
+        self.metrics
+            .certificates_in_votes
+            .inc_by(request.body().parents.len() as u64);
+
+        // Ensure the header has all parents accepted. If some are missing, waits until they become
+        // available or this request times out / is cancelled.
+        // This check is necessary for correctness.
+        let parents = self.synchronizer.wait_for_parents(header).await?;
+
         // Maximum header age is chosen to strike a balance between allowing for slightly older
         // certificates to still have a chance to be included in the DAG while not wasting
         // resources on very old vote requests. This value affects performance but not correctness
         // of the algorithm.
         const HEADER_AGE_LIMIT: Round = 3;
 
-        // If requester has provided us with parent certificates, process them all
-        // before proceeding.
-        self.metrics
-            .certificates_in_votes
-            .inc_by(request.body().parents.len() as u64);
-        let mut wait_notifications: FuturesUnordered<_> = request
-            .body()
-            .parents
-            .clone()
-            .into_iter()
-            .map(|cert| self.synchronizer.wait_to_accept_certificate(cert))
-            .collect();
-        loop {
-            tokio::select! {
-                result = wait_notifications.next() => {
-                    match result {
-                        Some(result) => {
-                            result?;
-                            continue;
-                        },
-                        // Waits are done. Missing parents have been accepted.
-                        None => break,
-                    }
-                },
-                result = rx_narwhal_round_updates.changed() => {
-                    if result.is_err() {
-                        return Err(DagError::NetworkError("Node shutting down".to_owned()));
-                    }
-                    let narwhal_round = *rx_narwhal_round_updates.borrow();
-                    ensure!(
-                        narwhal_round.saturating_sub(HEADER_AGE_LIMIT) <= header.round(),
-                        DagError::TooOld(header.digest().into(), header.round(), narwhal_round)
-                    )
-                },
-            }
-        }
-
-        // Ensure we have the parents. If any are missing, the requester should provide them on retry.
-        // This check is necessary for correctness, because it is possible that the list of missing
-        // parents in the request is incomplete, or wait_notifications get notified on shut down
-        // without actually having the parents available.
-        let (parents, missing) = self.synchronizer.get_parents(header)?;
-        if !missing.is_empty() {
-            return Ok(RequestVoteResponse {
-                vote: None,
-                missing,
-            });
-        }
-
         // Now that we've got all the required certificates, ensure we're voting on a
         // current Header.
-        let narwhal_round = *rx_narwhal_round_updates.borrow();
+        let narwhal_round = *self.rx_narwhal_round_updates.borrow();
         ensure!(
             narwhal_round.saturating_sub(HEADER_AGE_LIMIT) <= header.round(),
             DagError::TooOld(header.digest().into(), header.round(), narwhal_round)

@@ -1160,6 +1160,7 @@ pub struct RequestVoteRequest {
 
     // Optional parent certificates provided by the requester, in case this primary doesn't yet
     // have them and requires them in order to offer a vote.
+    // TODO: remove the unused field below.
     pub parents: Vec<Certificate>,
 }
 
@@ -1169,6 +1170,7 @@ pub struct RequestVoteResponse {
     pub vote: Option<Vote>,
 
     // Indicates digests of missing certificates without which a vote cannot be provided.
+    // TODO: remove the unused field below.
     pub missing: Vec<CertificateDigest>,
 }
 

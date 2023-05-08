@@ -1,6 +1,7 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+
 use anemo::{rpc::Status, Network, Request, Response};
 use config::{AuthorityIdentifier, Committee, Epoch, WorkerCache};
 use consensus::consensus::ConsensusRound;
@@ -453,24 +454,6 @@ impl Synchronizer {
         let _scope = monitored_scope("Synchronizer::try_accept_fetched_certificate");
         self.process_certificate_internal(certificate, false, false)
             .await
-    }
-
-    /// Validates the certificate and accepts it into the DAG, if the certificate can be verified
-    /// and has all parents in the certificate store.
-    /// If the certificate has missing parents, wait until all parents are available to accept the
-    /// certificate.
-    /// Otherwise returns an error.
-    pub async fn wait_to_accept_certificate(&self, certificate: Certificate) -> DagResult<()> {
-        match self
-            .process_certificate_internal(certificate, true, true)
-            .await
-        {
-            Err(DagError::Suspended(notify)) => {
-                notify.wait().await;
-                Ok(())
-            }
-            result => result,
-        }
     }
 
     /// Accepts a certificate produced by this primary. This is not expected to fail unless
@@ -965,27 +948,27 @@ impl Synchronizer {
         }
     }
 
-    /// Returns the parent certificates of the given header, and a list of digests for any
-    /// that are missing.
-    pub fn get_parents(
-        &self,
-        header: &Header,
-    ) -> DagResult<(Vec<Certificate>, Vec<CertificateDigest>)> {
-        let mut missing = Vec::new();
+    /// Returns the parent certificates of the given header, waits for availability if needed.
+    pub async fn wait_for_parents(&self, header: &Header) -> DagResult<Vec<Certificate>> {
         let mut parents = Vec::new();
-        for digest in header.parents() {
-            let cert = if header.round() == 1 {
-                self.inner.genesis.get(digest).cloned()
-            } else {
-                self.inner.certificate_store.read(*digest)?
-            };
-            match cert {
-                Some(certificate) => parents.push(certificate),
-                None => missing.push(*digest),
-            };
+        if header.round() == 1 {
+            for digest in header.parents() {
+                match self.inner.genesis.get(digest) {
+                    Some(certificate) => parents.push(certificate.clone()),
+                    None => return Err(DagError::InvalidGenesisParent(*digest)),
+                };
+            }
+        } else {
+            let mut cert_notifications: FuturesOrdered<_> = header
+                .parents()
+                .iter()
+                .map(|digest| async { self.inner.certificate_store.notify_read(*digest).await })
+                .collect();
+            while let Some(result) = cert_notifications.next().await {
+                parents.push(result?);
+            }
         }
-
-        Ok((parents, missing))
+        Ok(parents)
     }
 
     /// Tries to get all missing parents of the certificate. If there is any, sends the

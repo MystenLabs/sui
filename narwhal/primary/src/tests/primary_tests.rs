@@ -291,159 +291,8 @@ async fn get_network_peers_from_admin_server() {
     assert!(expected_peer_ids.iter().all(|e| resp.contains(e)));
 }
 
-#[tokio::test]
-async fn test_request_vote_send_missing_parents() {
-    telemetry_subscribers::init_for_testing();
-    const NUM_PARENTS: usize = 10;
-    let fixture = CommitteeFixture::builder()
-        .randomize_ports(true)
-        .committee_size(NonZeroUsize::new(NUM_PARENTS).unwrap())
-        .build();
-    let target = fixture.authorities().next().unwrap();
-    let author = fixture.authorities().nth(2).unwrap();
-    let target_id = target.id();
-    let author_id = author.id();
-    let worker_cache = fixture.worker_cache();
-    let signature_service = SignatureService::new(target.keypair().copy());
-    let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
-    let network = test_utils::test_network(target.network_keypair(), target.address());
-    let client = NetworkClient::new_from_keypair(&target.network_keypair());
-
-    let (header_store, certificate_store, payload_store) = create_db_stores();
-    let (tx_certificate_fetcher, _rx_certificate_fetcher) = test_utils::test_channel!(1);
-    let (tx_new_certificates, _rx_new_certificates) = test_utils::test_channel!(100);
-    let (tx_parents, _rx_parents) = test_utils::test_channel!(100);
-    let (_tx_consensus_round_updates, rx_consensus_round_updates) =
-        watch::channel(ConsensusRound::new(1, 0));
-    let (tx_narwhal_round_updates, rx_narwhal_round_updates) = watch::channel(1u64);
-    let (_tx_synchronizer_network, rx_synchronizer_network) = oneshot::channel();
-
-    let synchronizer = Arc::new(Synchronizer::new(
-        target_id,
-        fixture.committee(),
-        worker_cache.clone(),
-        /* gc_depth */ 50,
-        client,
-        certificate_store.clone(),
-        payload_store.clone(),
-        tx_certificate_fetcher,
-        tx_new_certificates,
-        tx_parents,
-        rx_consensus_round_updates,
-        rx_synchronizer_network,
-        None,
-        metrics.clone(),
-    ));
-    let handler = PrimaryReceiverHandler {
-        authority_id: target_id,
-        committee: fixture.committee(),
-        worker_cache: worker_cache.clone(),
-        synchronizer: synchronizer.clone(),
-        signature_service,
-        header_store: header_store.clone(),
-        certificate_store: certificate_store.clone(),
-        payload_store: payload_store.clone(),
-        vote_digest_store: VoteDigestStore::new_for_tests(),
-        rx_narwhal_round_updates,
-        metrics: metrics.clone(),
-    };
-
-    // Make some mock certificates that are parents of our new header.
-    let committee: Committee = fixture.committee();
-    let genesis = Certificate::genesis(&committee)
-        .iter()
-        .map(|x| x.digest())
-        .collect::<BTreeSet<_>>();
-    let ids: Vec<_> = fixture
-        .authorities()
-        .map(|a| (a.id(), a.keypair().copy()))
-        .collect();
-    let (certificates, _next_parents) =
-        make_optimal_signed_certificates(1..=3, &genesis, &committee, ids.as_slice());
-    let all_certificates = certificates.into_iter().collect_vec();
-    let round_2_certs = all_certificates[NUM_PARENTS..(NUM_PARENTS * 2)].to_vec();
-    let round_2_parents = round_2_certs[..(NUM_PARENTS / 2)].to_vec();
-    let round_2_missing = round_2_certs[(NUM_PARENTS / 2)..].to_vec();
-
-    // Create a test header.
-    let test_header = Header::V1(
-        author
-            .header_builder(&fixture.committee())
-            .author(author_id)
-            .round(3)
-            .parents(round_2_certs.iter().map(|c| c.digest()).collect())
-            .with_payload_batch(test_utils::fixture_batch_with_transactions(10), 0, 0)
-            .build()
-            .unwrap(),
-    );
-
-    // Write some certificates from round 2 into the store, and leave out the rest to test
-    // headers with some parents but not all available. Round 1 certificates should be written
-    // into the storage as parents of round 2 certificates. But to test phase 2 they are left out.
-    for cert in round_2_parents {
-        for (digest, (worker_id, _)) in cert.header().payload() {
-            payload_store.write(digest, worker_id).unwrap();
-        }
-        certificate_store.write(cert.clone()).unwrap();
-    }
-
-    // TEST PHASE 1: Handler should report missing parent certificates to caller.
-    let mut request = anemo::Request::new(RequestVoteRequest {
-        header: test_header.clone(),
-        parents: Vec::new(),
-    });
-    assert!(request
-        .extensions_mut()
-        .insert(network.downgrade())
-        .is_none());
-    assert!(request
-        .extensions_mut()
-        .insert(anemo::PeerId(author.network_public_key().0.to_bytes()))
-        .is_none());
-    let result = handler.request_vote(request).await;
-
-    let expected_missing: HashSet<_> = round_2_missing.iter().map(|c| c.digest()).collect();
-    let received_missing: HashSet<_> = result.unwrap().into_body().missing.into_iter().collect();
-    assert_eq!(expected_missing, received_missing);
-
-    // TEST PHASE 2: Handler should abort if round advances too much while awaiting processing
-    // of certs.
-    let tx_narwhal_round_updates = Arc::new(tx_narwhal_round_updates);
-    {
-        let tx_narwhal_round_updates = tx_narwhal_round_updates.clone();
-        tokio::task::spawn(async move {
-            tokio::time::sleep(Duration::from_millis(100)).await;
-            let _ = tx_narwhal_round_updates.send(100);
-        });
-    }
-    let mut request = anemo::Request::new(RequestVoteRequest {
-        header: test_header.clone(),
-        parents: round_2_missing.clone(),
-    });
-    assert!(request
-        .extensions_mut()
-        .insert(network.downgrade())
-        .is_none());
-    assert!(request
-        .extensions_mut()
-        .insert(anemo::PeerId(author.network_public_key().0.to_bytes()))
-        .is_none());
-    // Because round 1 certificates are not in store, the missing parents will not be accepted yet.
-    let result = timeout(Duration::from_secs(5), handler.request_vote(request))
-        .await
-        .unwrap();
-    assert!(result.is_err(), "{:?}", result);
-    assert_eq!(
-        // Returned error should be unretriable.
-        anemo::types::response::StatusCode::BadRequest,
-        result.err().unwrap().status()
-    );
-
-    // TODO: inject error for handling parents.
-}
-
-#[tokio::test]
-async fn test_request_vote_accept_missing_parents() {
+#[tokio::test(flavor = "current_thread", start_paused = true)]
+async fn test_request_vote_missing_parents() {
     telemetry_subscribers::init_for_testing();
     const NUM_PARENTS: usize = 10;
     let fixture = CommitteeFixture::builder()
@@ -549,7 +398,7 @@ async fn test_request_vote_accept_missing_parents() {
         payload_store.write(digest, worker_id).unwrap();
     }
 
-    // TEST PHASE 1: Handler should report missing parent certificates to caller.
+    // TEST PHASE 1: Requesting vote with missing parent certificates should not return.
     let mut request = anemo::Request::new(RequestVoteRequest {
         header: test_header.clone(),
         parents: Vec::new(),
@@ -562,17 +411,21 @@ async fn test_request_vote_accept_missing_parents() {
         .extensions_mut()
         .insert(anemo::PeerId(author.network_public_key().0.to_bytes()))
         .is_none());
-    let result = handler.request_vote(request).await;
+    let result = timeout(Duration::from_secs(5), handler.request_vote(request)).await;
+    assert!(result.is_err());
 
-    let expected_missing: HashSet<_> = round_2_missing.iter().map(|c| c.digest()).collect();
-    let received_missing: HashSet<_> = result.unwrap().into_body().missing.into_iter().collect();
-    assert_eq!(expected_missing, received_missing);
-
-    // TEST PHASE 2: Handler should process missing parent certificates and succeed.
+    // TEST PHASE 2: Insert the previously missing parent certificates, and requesting vote should
+    // succeed.
+    for cert in round_2_missing {
+        for (digest, (worker_id, _)) in cert.header().payload() {
+            payload_store.write(digest, worker_id).unwrap();
+        }
+        certificate_store.write(cert.clone()).unwrap();
+    }
     let _ = tx_narwhal_round_updates.send(1);
     let mut request = anemo::Request::new(RequestVoteRequest {
         header: test_header,
-        parents: round_2_missing.clone(),
+        parents: Vec::new(),
     });
     assert!(request
         .extensions_mut()
