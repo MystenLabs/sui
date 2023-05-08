@@ -204,8 +204,7 @@ impl CheckpointBlockProvider {
                 writeln!(
                     file,
                     "Checkpoint {seq} with {} txs, completed in {} ms",
-                    checkpoint_length,
-                    elapsed
+                    checkpoint_length, elapsed
                 )
                 .unwrap();
 

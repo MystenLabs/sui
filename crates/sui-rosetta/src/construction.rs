@@ -220,9 +220,9 @@ pub async fn metadata(
     let (total_required_amount, objects, budget) = match &option.internal_operation {
         InternalOperation::PaySui { amounts, .. } => {
             let amount = amounts.iter().sum::<u64>();
-            (Some(amount), vec![], 5_000_000)
+            (Some(amount), vec![], 1_000_000)
         }
-        InternalOperation::Stake { amount, .. } => (*amount, vec![], 100_000_000),
+        InternalOperation::Stake { amount, .. } => (*amount, vec![], 1_000_000),
         InternalOperation::WithdrawStake { sender, stake_ids } => {
             let stake_ids = if stake_ids.is_empty() {
                 // unstake all
@@ -261,7 +261,7 @@ pub async fn metadata(
                 .collect::<Result<Vec<_>, _>>()
                 .map_err(SuiError::from)?;
 
-            (Some(0), stake_refs, 100_000_000)
+            (Some(0), stake_refs, 1_000_000)
         }
     };
 
@@ -291,6 +291,11 @@ pub async fn metadata(
 
     let total_coin_value = coins.iter().fold(0, |sum, coin| sum + coin.balance);
 
+    let dry_run_budget = total_required_amount.map_or_else(
+        || total_coin_value.min(budget * gas_price),
+        |amount| (total_coin_value - amount).min(budget * gas_price),
+    );
+
     let coins = coins
         .into_iter()
         .map(|c| c.object_ref())
@@ -305,7 +310,7 @@ pub async fn metadata(
             objects: objects.clone(),
             total_coin_value,
             gas_price,
-            budget: budget * gas_price,
+            budget: dry_run_budget,
         })?;
 
     let dry_run = context
