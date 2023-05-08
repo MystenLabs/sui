@@ -23,15 +23,16 @@ use sui_json_rpc_types::EventFilter;
 use sui_json_rpc_types::ProtocolConfigResponse;
 use sui_json_rpc_types::SuiTransactionBlockEvents;
 use sui_json_rpc_types::TransactionFilter;
-use sui_json_rpc_types::{
-    Balance, Checkpoint, CheckpointId, CheckpointPage, Coin, CoinPage, DynamicFieldPage, EventPage,
-    MoveCallParams, ObjectChange, OwnedObjectRef, RPCTransactionRequestParams, SuiCommittee,
-    SuiData, SuiEvent, SuiExecutionStatus, SuiObjectData, SuiObjectDataFilter,
-    SuiObjectDataOptions, SuiObjectRef, SuiObjectResponse, SuiObjectResponseQuery, SuiParsedData,
-    SuiPastObjectResponse, SuiTransactionBlock, SuiTransactionBlockData,
-    SuiTransactionBlockEffects, SuiTransactionBlockEffectsV1, SuiTransactionBlockResponse,
-    SuiTransactionBlockResponseOptions, SuiTransactionBlockResponseQuery, TransactionBlockBytes,
-    TransactionBlocksPage, TransferObjectParams,
+use sui_json_rpc_types::{   
+    Balance, Checkpoint, CheckpointId, CheckpointPage, MoveCallParams, MoveFunctionArgType,
+    ObjectChange, ObjectValueKind::ByMutableReference, ObjectValueKind::ByImmutableReference, ObjectValueKind::ByValue,
+    OwnedObjectRef, RPCTransactionRequestParams, SuiCommittee, SuiData, SuiEvent,
+    SuiExecutionStatus, SuiLoadedChildObject, SuiLoadedChildObjectsResponse, SuiMoveAbility, SuiMoveAbilitySet, SuiMoveNormalizedFunction, SuiMoveNormalizedType, SuiMoveVisibility, SuiObjectData, SuiObjectDataFilter, 
+    SuiObjectDataOptions, SuiObjectRef, SuiObjectResponse, SuiObjectResponseQuery, SuiParsedData, SuiPastObjectResponse,
+    SuiTransactionBlock, SuiTransactionBlockData, SuiTransactionBlockEffects,
+    SuiTransactionBlockEffectsV1, SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
+    SuiTransactionBlockResponseQuery, TransactionBlockBytes, TransactionBlocksPage,
+    TransferObjectParams, Coin, CoinPage, EventPage, DynamicFieldPage, ObjectsPage,
 };
 use sui_json_rpc_types::{SuiTypeTag, ValidatorApy, ValidatorApys};
 use sui_open_rpc::ExamplePairing;
@@ -62,6 +63,7 @@ use sui_types::transaction::TEST_ONLY_GAS_UNIT_FOR_TRANSFER;
 use sui_types::transaction::{CallArg, TransactionData};
 use sui_types::utils::to_sender_signed_transaction;
 use sui_types::{parse_sui_struct_tag, SUI_FRAMEWORK_OBJECT_ID};
+
 
 struct Examples {
     function_name: String,
@@ -117,6 +119,12 @@ impl RpcExampleProvider {
             self.sui_get_latest_checkpoint_sequence_number(),
             self.suix_get_coins(),
             self.suix_get_total_supply(),
+            self.suix_get_dynamic_fields(),
+            self.suix_get_dynamic_field_object(),
+            self.suix_get_owned_objects(),
+            self.sui_get_loaded_child_objects(),
+            self.sui_get_move_function_arg_types(),
+            self.sui_get_normalized_move_function(),
             self.multi_get_objects_example(),
             self.multi_get_transaction_blocks(),
             self.suix_get_validators_apy(),
@@ -807,7 +815,6 @@ impl RpcExampleProvider {
 
     fn sui_get_reference_gas_price(&mut self) -> Examples {
         let result = 1000;
-
         Examples::new(
             "suix_getReferenceGasPrice",
             vec![ExamplePairing::new(
@@ -827,7 +834,6 @@ impl RpcExampleProvider {
             total_balance: 3000000000,
             locked_balance: HashMap::new(),
         };
-
         Examples::new(
             "suix_getAllBalances",
             vec![ExamplePairing::new(
@@ -980,8 +986,90 @@ impl RpcExampleProvider {
             vec![ExamplePairing::new(
                 "Get total supply for the type of coin provided.",
                 vec![("coin_type", json!(coin))],
-                json!(result),
-            )],
+                json!(result)
+            )]
+        )
+    }
+
+    fn sui_get_loaded_child_objects(&mut self) -> Examples {
+
+        let mut sequence = SequenceNumber::from_u64(self.rng.gen_range(24506..6450624));
+        let seqs = (0..6)
+            .map(|x| 
+                {
+                    if x % 2 == 0{
+                        sequence = SequenceNumber::from_u64(self.rng.gen_range(24506..6450624));
+                    } else if x % 3 == 0{
+                        sequence = SequenceNumber::from_u64(self.rng.gen_range(24506..6450624));
+                    }
+                    SuiLoadedChildObject::new(ObjectID::new(self.rng.gen()), sequence)
+                }
+            )
+            .collect::<Vec<_>>();
+        let result = { SuiLoadedChildObjectsResponse { loaded_child_objects: seqs }};
+
+
+        Examples::new(
+            "sui_getLoadedChildObjects",
+            vec![ExamplePairing::new(
+                "Get loaded child objects associated with the transaction the request provides.",
+                vec![("digest", json!(ObjectDigest::new(self.rng.gen())))],
+                json!(result)
+            )]
+        )
+    }
+
+    fn sui_get_move_function_arg_types(&mut self) -> Examples {
+
+        let result = vec![
+            MoveFunctionArgType::Object(ByMutableReference),
+            MoveFunctionArgType::Pure,
+            MoveFunctionArgType::Pure,
+            MoveFunctionArgType::Object(ByValue),
+            MoveFunctionArgType::Object(ByImmutableReference),
+            MoveFunctionArgType::Object(ByValue),
+            MoveFunctionArgType::Object(ByMutableReference),
+        ];
+
+        Examples::new(
+            "sui_getMoveFunctionArgTypes",
+            vec![ExamplePairing::new(
+                "Return the argument types for the package and function the request provides.",
+                vec![
+                    ("package", json!(ObjectID::new(self.rng.gen()))),
+                    ("module", json!("suifrens".to_string())),
+                    ("function", json!("mint".to_string())),
+                ],
+                json!(result)
+            )]
+        )
+    }
+
+    fn sui_get_normalized_move_function(&mut self) -> Examples {
+
+        let ability_set = SuiMoveAbilitySet {
+            abilities: vec![SuiMoveAbility::Store, SuiMoveAbility::Key]
+        };
+
+        let result = SuiMoveNormalizedFunction {
+            is_entry: false, 
+            type_parameters: vec![ability_set],
+            parameters: vec![SuiMoveNormalizedType::U64],
+            visibility: SuiMoveVisibility::Public,
+            return_: vec![SuiMoveNormalizedType::U64]
+        };
+
+        Examples::new(
+            "sui_getNormalizedMoveFunction",
+            vec![ExamplePairing::new(
+                "Return the structured representation of the function the request provides.",
+                vec![
+                    ("package", json!(ObjectID::new(self.rng.gen()))),
+                    ("module_name", json!("moduleName".to_string())),
+                    ("function_name", json!("functionName".to_string())),
+                ],
+                json!(result)
+            )]
         )
     }
     fn suix_get_validators_apy(&mut self) -> Examples {
@@ -1040,7 +1128,7 @@ impl RpcExampleProvider {
 
         Examples::new("suix_getDynamicFields",             
         vec![ExamplePairing::new(
-            "Get all the dynamic fields of a particular object. Return a paginated list of `limit` results per page. The current limit is 50 per page.",
+            "Get dynamic fields for the object the request provides. Return a paginated list of `limit` dynamic field results per page, beginning with the dynamic field immediately after the provided object ID. The default limit is 50.",
             vec![
                 ("parent_object_id", json!(object_id)),
                 ("cursor", json!(ObjectID::new(self.rng.gen()))),
@@ -1093,7 +1181,7 @@ impl RpcExampleProvider {
         Examples::new(
             "suix_getDynamicFieldObject",
             vec![ExamplePairing::new(
-                "Gets a particular dynamic field data of the parent object.",
+                "Get the information for the dynamic field the request provides.",
                 vec![
                     ("parent_object_id", json!(parent_object_id)),
                     ("name", json!(field_name)),
@@ -1123,7 +1211,7 @@ impl RpcExampleProvider {
         Examples::new(
             "suix_getOwnedObjects",
             vec![ExamplePairing::new(
-                "Get objects owned by the address in the request.",
+                "Return all the objects the address in the request owns and that match the filter. By default, only the digest value is returned, but the request returns additional information by setting the relevant keys to true. A cursor value is also provided, so the list of results begin after that value.",
                 vec![
                     ("address", json!(owner)),
                     (
@@ -1209,3 +1297,4 @@ impl RpcExampleProvider {
         )
     }
 }
+
