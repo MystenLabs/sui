@@ -36,7 +36,7 @@ async fn main() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
-async fn split_coins_equally(
+async fn _split_coins_equally(
     gas_coin: &str,
     mut wallet: WalletContext,
     count: u64,
@@ -72,7 +72,7 @@ async fn split_coins_equally(
     Ok(())
 }
 
-async fn merge_coins(gas_coin: &str, mut wallet: WalletContext) -> Result<(), anyhow::Error> {
+async fn _merge_coins(gas_coin: &str, mut wallet: WalletContext) -> Result<(), anyhow::Error> {
     let active_address = wallet
         .active_address()
         .map_err(|err| FaucetError::Wallet(err.to_string()))?;
@@ -115,7 +115,7 @@ async fn merge_coins(gas_coin: &str, mut wallet: WalletContext) -> Result<(), an
         let tx = Transaction::from_data(tx_data, Intent::sui_transaction(), vec![signature])
             .verify()
             .unwrap();
-        let resp = client
+        client
             .quorum_driver_api()
             .execute_transaction_block(
                 tx.clone(),
