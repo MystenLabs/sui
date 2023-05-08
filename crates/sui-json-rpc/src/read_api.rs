@@ -608,7 +608,7 @@ impl ReadApiServer for ReadApi {
             // Fetch transaction to determine existence
             let state = self.state.clone();
             let transaction = spawn_monitored_task!(async move {
-                state.get_executed_transaction(digest).await.tap_err(
+                state.get_transaction_block(digest).await.tap_err(
                     |err| debug!(tx_digest=?digest, "Failed to get transaction: {:?}", err),
                 )
             })
