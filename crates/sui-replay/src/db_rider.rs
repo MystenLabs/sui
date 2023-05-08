@@ -45,6 +45,7 @@ impl _DBRider {
     }
 }
 
+use move_bytecode_verifier::meter::{BoundMeter, Scope};
 use std::fs::File;
 use std::io::{BufWriter, Write};
 use std::time::Instant;
@@ -57,7 +58,10 @@ use sui_types::storage::ObjectKey;
 use typed_store::Map;
 
 pub fn check_packages(path: PathBuf, out_file: String) {
-    println!("Will try to open db at {:?}, and write to {}", path, out_file);
+    println!(
+        "Will try to open db at {:?}, and write to {}",
+        path, out_file
+    );
 
     let mut perpetual_path = path;
 
@@ -109,12 +113,16 @@ pub fn check_packages(path: PathBuf, out_file: String) {
                 let elapsed = start.elapsed();
                 let size = package.size();
                 let num_modules = modules.len();
+                let fun_meter = meter.get_usage(Scope::Function);
+                let mod_meter = meter.get_usage(Scope::Module);
 
                 let text = format!(
-                    "{}, {}, {}, {} {:?} \n",
+                    "{}, {}, {}, {}, {}, {} {:?} \n",
                     package.id(),
                     size,
                     elapsed.as_micros(),
+                    fun_meter,
+                    mod_meter,
                     num_modules,
                     status
                 );
