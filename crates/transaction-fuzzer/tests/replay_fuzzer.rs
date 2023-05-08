@@ -7,6 +7,7 @@ const TESTNET_FULLNODE_URL: &str = "https://fullnode.testnet.sui.io:443";
 #[tokio::test]
 async fn test_replay_fuzzer() {
     let config = ReplayFuzzerConfig {
+        // TODO: auto pick a recent range in testnet due to pruning
         checkpoint_id_start: Some(2_000_000),
         checkpoint_id_end: Some(2_000_100),
         num_mutations_per_base: 4,
