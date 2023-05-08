@@ -169,23 +169,19 @@ impl AuthorityStorePruner {
             "Starting object pruning. Current epoch: {}. Latest pruned checkpoint: {}",
             current_epoch, checkpoint_number
         );
-        let iter = checkpoint_store
-            .certified_checkpoints
-            .iter()
-            .skip_to(&(checkpoint_number + 1))?
-            .map(|(k, ckpt)| (k, ckpt.into_inner()));
 
-        #[allow(clippy::explicit_counter_loop)]
-        for (_, checkpoint) in iter {
-            checkpoint_number = *checkpoint.sequence_number();
+        loop {
+            let Some(ckpt) = checkpoint_store.certified_checkpoints.get(&(checkpoint_number + 1))? else {break;};
+            let checkpoint = ckpt.into_inner();
             // Skipping because  checkpoint's epoch or checkpoint number is too new.
             // We have to respect the highest executed checkpoint watermark because there might be
             // parts of the system that still require access to old object versions (i.e. state accumulator)
             if (current_epoch < checkpoint.epoch() + config.num_epochs_to_retain)
-                || (checkpoint_number > highest_executed_checkpoint)
+                || (*checkpoint.sequence_number() > highest_executed_checkpoint)
             {
                 break;
             }
+            checkpoint_number = *checkpoint.sequence_number();
             checkpoints_in_batch += 1;
             if network_total_transactions == checkpoint.network_total_transactions {
                 continue;
