@@ -416,7 +416,6 @@ impl KeyToolCommand {
                 // serialize_compact is loaded as bytes for Secp256k1Sinature
                 // to convert it into a RecoverableSignature
                 let response = kms.sign(request).await?;
-                println!("Response {:?}", response);
                 let sig_bytes_der = response
                     .signature
                     .map(|b| b.to_vec())

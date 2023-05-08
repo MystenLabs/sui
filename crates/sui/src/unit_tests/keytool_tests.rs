@@ -8,11 +8,11 @@ use crate::keytool::read_keypair_from_file;
 
 use super::write_keypair_to_file;
 use super::KeyToolCommand;
+use anyhow::Ok;
 use fastcrypto::encoding::Base64;
 use fastcrypto::encoding::Encoding;
 use rand::rngs::StdRng;
 use rand::SeedableRng;
-use rusoto_kms::SignResponse;
 use shared_crypto::intent::Intent;
 use shared_crypto::intent::IntentScope;
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, InMemKeystore, Keystore};
@@ -35,7 +35,6 @@ use sui_types::messages::TransactionData;
 use sui_types::messages::TEST_ONLY_GAS_UNIT_FOR_TRANSFER;
 use tempfile::TempDir;
 use tokio::test;
-
 const TEST_MNEMONIC: &str = "result crisp session latin must fruit genuine question prevent start coconut brave speak student dismiss";
 
 #[test]
@@ -400,11 +399,4 @@ async fn test_sign_command() -> Result<(), anyhow::Error> {
     .execute(&mut keystore)
     .await?;
     Ok(())
-}
-
-async fn test_sign_kms_command() -> Result<(), anyhow::Error> {
-    let SignResponse = 
-        SignResponse { key_id: Some("arn:aws:kms:us-west-2:429403145910:key/51572ed9-072f-45e2-b02a-bab8b694006c"), 
-        signature: Some(b"0E\x02 x\xdd\x0b\xa3L\xf1\x072z\x1c\x16\x80j\xdf\xf1\xdd\x03\xfb\xdd}X\x05\xaf\x9b\x01\x07sbLfH\x19\x02!\0\xaa{\x85B\xddC\x83\x077X\x13:\xcb\x1e\0S\xde\xddk\xda\xaa\x86ja\x02\xa4w2AQ\n\x89"), 
-        signing_algorithm: "ECDSA_SHA_256"};
 }
