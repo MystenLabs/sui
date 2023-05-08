@@ -21,7 +21,7 @@ use tracing::error;
 
 // These are very testnet specific
 pub(crate) const TESTNET_GENESIX_TX_DIGEST: &str = "Cgww1sn7XViCPSdDcAPmVcARueWuexJ8af8zD842Ff43";
-pub(crate) const SAFE_MODE_TX_1_DIGEST: &str = "AGBCaUGj4iGpGYyQvto9Bke1EwouY8LGMoTzzuPMx4and";
+pub(crate) const SAFE_MODE_TX_1_DIGEST: &str = "AGBCaUGj4iGpGYyQvto9Bke1EwouY8LGMoTzzuPMx4nd";
 
 // TODO: make these configurable
 pub(crate) const RPC_TIMEOUT_ERR_SLEEP_RETRY_PERIOD: Duration = Duration::from_millis(10_000);
