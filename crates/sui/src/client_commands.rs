@@ -5,6 +5,7 @@ use core::fmt;
 use std::{
     fmt::{Debug, Display, Formatter, Write},
     path::PathBuf,
+    sync::Arc,
 };
 
 use anyhow::{anyhow, ensure};
@@ -15,16 +16,20 @@ use fastcrypto::{
     encoding::{Base64, Encoding},
     traits::ToFromBytes,
 };
+use move_bytecode_verifier::meter::BoundMeter;
 use move_core_types::language_storage::TypeTag;
 use move_package::BuildConfig as MoveBuildConfig;
 use prettytable::Table;
 use prettytable::{row, table};
+use prometheus::Registry;
 use serde::Serialize;
 use serde_json::{json, Value};
+use sui_adapter::adapter::{default_verifier_config, run_metered_move_bytecode_verifier_impl};
 use sui_move::build::resolve_lock_file_path;
+use sui_protocol_config::ProtocolConfig;
 use sui_source_validation::{BytecodeSourceVerifier, SourceMode};
-use sui_types::digests::TransactionDigest;
 use sui_types::error::SuiError;
+use sui_types::{digests::TransactionDigest, metrics::BytecodeVerifierMetrics};
 
 use shared_crypto::intent::Intent;
 use sui_json::SuiJsonValue;
@@ -193,6 +198,23 @@ pub enum SuiClientCommands {
         /// (SenderSignedData) using base64 encoding, and print out the string.
         #[clap(long, required = false)]
         serialize_signed_transaction: bool,
+    },
+
+    /// Run the bytecode verifer on the package
+    #[clap(name = "verify-bytecode")]
+    VerifyBytecode {
+        /// Path to directory containing a Move package
+        #[clap(
+            name = "package_path",
+            global = true,
+            parse(from_os_str),
+            default_value = "."
+        )]
+        package_path: PathBuf,
+
+        /// Package build options
+        #[clap(flatten)]
+        build_config: MoveBuildConfig,
     },
 
     /// Upgrade Move modules
@@ -727,6 +749,29 @@ impl SuiClientCommands {
                 )
             }
 
+            SuiClientCommands::VerifyBytecode {
+                package_path,
+                build_config,
+            } => {
+                let protocol_config = ProtocolConfig::get_for_max_version();
+                let registry = &Registry::new();
+                let bytecode_verifier_metrics = Arc::new(BytecodeVerifierMetrics::new(registry));
+
+                let package = compile_package_simple(build_config, package_path)?;
+                let modules: Vec<_> = package.get_modules().cloned().collect();
+                let metered_verifier_config =
+                    default_verifier_config(&protocol_config, true /* enable metering */);
+                let mut meter = BoundMeter::new(&metered_verifier_config);
+                run_metered_move_bytecode_verifier_impl(
+                    &modules,
+                    &protocol_config,
+                    &metered_verifier_config,
+                    &mut meter,
+                    &bytecode_verifier_metrics,
+                )?;
+                SuiClientCommandResult::VerifyBytecode
+            }
+
             SuiClientCommands::Object { id, bcs } => {
                 // Fetch the object ref
                 let client = context.get_client().await?;
@@ -1188,6 +1233,25 @@ impl SuiClientCommands {
     }
 }
 
+fn compile_package_simple(
+    build_config: MoveBuildConfig,
+    package_path: PathBuf,
+) -> Result<CompiledPackage, anyhow::Error> {
+    let config = BuildConfig {
+        config: resolve_lock_file_path(build_config, Some(package_path.clone()))?,
+        run_bytecode_verifier: false,
+        print_diags_to_stderr: false,
+    };
+    let resolution_graph = config.resolution_graph(&package_path)?;
+
+    Ok(build_from_resolution_graph(
+        package_path,
+        resolution_graph,
+        false,
+        false,
+    )?)
+}
+
 async fn compile_package(
     client: &SuiClient,
     build_config: MoveBuildConfig,
@@ -1455,6 +1519,9 @@ impl Display for SuiClientCommandResult {
             SuiClientCommandResult::VerifySource => {
                 writeln!(writer, "Source verification succeeded!")?;
             }
+            SuiClientCommandResult::VerifyBytecode => {
+                writeln!(writer, "Bytecode verification succeeded!")?;
+            }
         }
         write!(f, "{}", writer.trim_end_matches('\n'))
     }
@@ -1609,6 +1676,7 @@ impl SuiClientCommandResult {
 pub enum SuiClientCommandResult {
     Upgrade(SuiTransactionBlockResponse),
     Publish(SuiTransactionBlockResponse),
+    VerifyBytecode,
     VerifySource,
     Object(SuiObjectResponse),
     RawObject(SuiObjectResponse),
