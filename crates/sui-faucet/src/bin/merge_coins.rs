@@ -21,20 +21,26 @@ async fn main() -> Result<(), anyhow::Error> {
 
     // Example scripts
     // merge_coins(
-    //     "0xfde0a5e733e446db0c5d2294673ee5f5a17c5aeacb7565ce82cbd5a145e15d44",
+    //     "0x0215b800acc47d80a50741f0eecfa507fc2c21f5a9aa6140a219686ad20d7f4c",
     //     wallet,
-    // );
+    // )
+    // .await?;
 
-    // split_coins_equally(wallet);
+    // split_coins_equally(
+    //     "0xd42a75242975780037e170486540f28ab3c9be07dbb1f6f2a9430ad268e3b1d1",
+    //     wallet,
+    //     1000,
+    // )
+    // .await?;
 
     Ok(())
 }
 
 async fn split_coins_equally(
     gas_coin: &str,
-    wallet: WalletContext,
+    mut wallet: WalletContext,
     count: u64,
-) -> Results<(), anyhow::Error> {
+) -> Result<(), anyhow::Error> {
     let active_address = wallet
         .active_address()
         .map_err(|err| FaucetError::Wallet(err.to_string()))?;
@@ -42,7 +48,7 @@ async fn split_coins_equally(
     let coin_object_id = ObjectID::from_str(gas_coin).unwrap();
     let tx_data = client
         .transaction_builder()
-        .split_coin_equal(active_address, coin_object_id, count, None, 1000000)
+        .split_coin_equal(active_address, coin_object_id, count, None, 50000000000)
         .await?;
 
     let signature = wallet
@@ -53,7 +59,7 @@ async fn split_coins_equally(
     let tx = Transaction::from_data(tx_data, Intent::sui_transaction(), vec![signature])
         .verify()
         .unwrap();
-    client
+    let resp = client
         .quorum_driver_api()
         .execute_transaction_block(
             tx.clone(),
@@ -62,10 +68,11 @@ async fn split_coins_equally(
         )
         .await?;
 
+    println!("{:?}", resp);
     Ok(())
 }
 
-async fn merge_coins(gas_coin: &str, wallet: WalletContext) -> Results<(), anyhow::Error> {
+async fn merge_coins(gas_coin: &str, mut wallet: WalletContext) -> Result<(), anyhow::Error> {
     let active_address = wallet
         .active_address()
         .map_err(|err| FaucetError::Wallet(err.to_string()))?;
@@ -108,7 +115,7 @@ async fn merge_coins(gas_coin: &str, wallet: WalletContext) -> Results<(), anyho
         let tx = Transaction::from_data(tx_data, Intent::sui_transaction(), vec![signature])
             .verify()
             .unwrap();
-        client
+        let resp = client
             .quorum_driver_api()
             .execute_transaction_block(
                 tx.clone(),
