@@ -51,6 +51,7 @@ use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemS
 use sui_types::temporary_store::InnerTemporaryStore;
 use sui_types::transaction::CertifiedTransaction;
 use sui_types::transaction::Transaction;
+use sui_types::transaction::TransactionData;
 use sui_types::transaction::VerifiedTransaction;
 use sui_types::transaction::{InputObjectKind, InputObjects, TransactionKind};
 use sui_types::transaction::{SenderSignedData, TransactionDataAPI};
@@ -325,6 +326,10 @@ impl LocalExec {
         Ok(self)
     }
 
+    pub async fn reset_for_new_execution(self) -> Result<Self, LocalExecError> {
+        Self::new(self.client).await?.init_for_execution().await
+    }
+
     pub async fn new(client: SuiClient) -> Result<Self, LocalExecError> {
         // Use a throwaway metrics registry for local execution.
         let registry = prometheus::Registry::new();
@@ -512,6 +517,16 @@ impl LocalExec {
         }
     }
 
+    pub async fn get_checkpoint_txs(
+        &self,
+        checkpoint_id: u64,
+    ) -> Result<Vec<TransactionDigest>, LocalExecError> {
+        self.fetcher
+            .get_checkpoint_txs(checkpoint_id)
+            .await
+            .map_err(|e| LocalExecError::SuiRpcError { err: e.to_string() })
+    }
+
     pub async fn execute_all_in_checkpoints(
         &mut self,
         checkpoint_ids: &[u64],
@@ -522,12 +537,7 @@ impl LocalExec {
         // Get all the TXs at this checkpoint
         let mut txs = Vec::new();
         for checkpoint_id in checkpoint_ids {
-            txs.extend(
-                self.fetcher
-                    .get_checkpoint_txs(*checkpoint_id)
-                    .await
-                    .map_err(|e| LocalExecError::SuiRpcError { err: e.to_string() })?,
-            );
+            txs.extend(self.get_checkpoint_txs(*checkpoint_id).await?);
         }
         let num = txs.len();
         let mut succeeded = 0;
@@ -552,20 +562,13 @@ impl LocalExec {
         Ok((succeeded, num as u64))
     }
 
-    /// Must be called after `init_for_execution`
-    pub async fn execute_impl(
+    pub async fn execution_engine_execute_with_tx_info_impl(
         &mut self,
-        tx_digest: &TransactionDigest,
+        tx_info: &OnChainTransactionInfo,
+        override_transaction_kind: Option<TransactionKind>,
         expensive_safety_check_config: ExpensiveSafetyCheckConfig,
     ) -> Result<ExecutionSandboxState, LocalExecError> {
-        assert!(
-            !self.protocol_version_system_package_table.is_empty()
-                || !self.protocol_version_epoch_table.is_empty(),
-            "Required tables not populated. Must call `init_for_execution` first"
-        );
-
-        let tx_info = self.resolve_tx_components(tx_digest).await?;
-
+        let tx_digest = &tx_info.tx_digest;
         // A lot of the logic here isnt designed for genesis
         if *tx_digest == TransactionDigest::genesis() || tx_info.sender == SuiAddress::ZERO {
             // Genesis.
@@ -577,7 +580,7 @@ impl LocalExec {
             // Assume genesis transactions are always successful
             let effects = tx_info.effects.clone();
             return Ok(ExecutionSandboxState {
-                transaction_info: tx_info,
+                transaction_info: tx_info.clone(),
                 required_objects: vec![],
                 local_exec_temporary_store: None,
                 local_exec_effects: effects,
@@ -587,7 +590,7 @@ impl LocalExec {
 
         // Initialize the state necessary for execution
         // Get the input objects
-        let input_objects = self.initialize_execution_env_state(&tx_info).await?;
+        let input_objects = self.initialize_execution_env_state(tx_info).await?;
 
         // At this point we have all the objects needed for replay
 
@@ -616,7 +619,7 @@ impl LocalExec {
         let res = execute_transaction_to_effects_impl::<execution_mode::Normal, _>(
             tx_info.shared_object_refs.clone(),
             temporary_store,
-            tx_info.kind.clone(),
+            override_transaction_kind.unwrap_or(tx_info.kind.clone()),
             tx_info.sender,
             &tx_info.gas.clone(),
             *tx_digest,
@@ -635,7 +638,7 @@ impl LocalExec {
         let effects = SuiTransactionBlockEffects::try_from(res.1).map_err(LocalExecError::from)?;
 
         Ok(ExecutionSandboxState {
-            transaction_info: tx_info,
+            transaction_info: tx_info.clone(),
             required_objects: all_required_objects,
             local_exec_temporary_store: Some(res.0),
             local_exec_effects: effects,
@@ -644,39 +647,84 @@ impl LocalExec {
     }
 
     /// Must be called after `init_for_execution`
-    /// This executes from `sui_core::authority::AuthorityState::try_execute_immediately`
-    pub async fn certificate_execute(
+    pub async fn execution_engine_execute_impl(
         &mut self,
         tx_digest: &TransactionDigest,
         expensive_safety_check_config: ExpensiveSafetyCheckConfig,
     ) -> Result<ExecutionSandboxState, LocalExecError> {
-        let pre_run_sandbox = self
-            .execute_impl(tx_digest, expensive_safety_check_config)
-            .await?;
+        assert!(
+            !self.protocol_version_system_package_table.is_empty()
+                || !self.protocol_version_epoch_table.is_empty(),
+            "Required tables not populated. Must call `init_for_execution` before executing transactions"
+        );
 
-        let (authority_state, epoch_store) = prep_network(
-            &pre_run_sandbox.transaction_info,
-            &pre_run_sandbox.required_objects,
+        let tx_info = self.resolve_tx_components(tx_digest).await?;
+        self.execution_engine_execute_with_tx_info_impl(
+            &tx_info,
+            None,
+            expensive_safety_check_config,
         )
-        .await;
+        .await
+    }
 
-        let sender_signed_tx = Transaction::from_generic_sig_data(
+    /// Executes a transaction with the state specified in `pre_run_sandbox`
+    /// This is useful for executing a transaction with a specific state
+    /// However if the state in invalid, the behavior is undefined. Use wisely
+    /// If no transaction is provided, the transaction in the sandbox state is used
+    /// Currently if the transaction is provided, the signing will fail, so this feature is TBD
+    pub async fn certificate_execute_with_sandbox_state(
+        &mut self,
+        pre_run_sandbox: &ExecutionSandboxState,
+        override_transaction_data: Option<TransactionData>,
+    ) -> Result<ExecutionSandboxState, LocalExecError> {
+        assert!(
+            override_transaction_data.is_none(),
+            "Custom transaction data is not supported yet"
+        );
+
+        // These cannot be changed and are inherited from the sandbox state
+        let executed_epoch = pre_run_sandbox.transaction_info.executed_epoch;
+        let reference_gas_price = pre_run_sandbox.transaction_info.reference_gas_price;
+        let epoch_start_timestamp = pre_run_sandbox.transaction_info.epoch_start_timestamp;
+        let protocol_config = pre_run_sandbox.transaction_info.protocol_config.clone();
+        let required_objects = pre_run_sandbox.required_objects.clone();
+        let shared_object_refs = pre_run_sandbox.transaction_info.shared_object_refs.clone();
+
+        let transaction_intent = pre_run_sandbox
+            .transaction_info
+            .sender_signed_data
+            .intent_message()
+            .intent
+            .clone();
+        let transaction_signatures = pre_run_sandbox
+            .transaction_info
+            .sender_signed_data
+            .tx_signatures()
+            .to_vec();
+
+        // This must be provided
+        let transaction_data = override_transaction_data.unwrap_or(
             pre_run_sandbox
                 .transaction_info
                 .sender_signed_data
                 .transaction_data()
                 .clone(),
-            pre_run_sandbox
-                .transaction_info
-                .sender_signed_data
-                .intent_message()
-                .intent
-                .clone(),
-            pre_run_sandbox
-                .transaction_info
-                .sender_signed_data
-                .tx_signatures()
-                .to_vec(),
+        );
+
+        // Begin state prep
+        let (authority_state, epoch_store) = prep_network(
+            &required_objects,
+            reference_gas_price,
+            executed_epoch,
+            epoch_start_timestamp,
+            &protocol_config,
+        )
+        .await;
+
+        let sender_signed_tx = Transaction::from_generic_sig_data(
+            transaction_data,
+            transaction_intent,
+            transaction_signatures,
         );
         let sender_signed_tx = VerifiedTransaction::new_unchecked(
             VerifiedTransaction::new_unchecked(sender_signed_tx).into(),
@@ -689,7 +737,7 @@ impl LocalExec {
         let auth_vote = response.status.into_signed_for_testing();
 
         let mut committee = authority_state.clone_committee_for_testing();
-        committee.epoch = pre_run_sandbox.transaction_info.executed_epoch;
+        committee.epoch = executed_epoch;
         let certificate = CertifiedTransaction::new(
             sender_signed_tx.into_message(),
             vec![auth_vote.clone()],
@@ -701,12 +749,12 @@ impl LocalExec {
 
         let certificate = &VerifiedExecutableTransaction::new_from_certificate(certificate.clone());
 
+        let new_tx_digest = certificate.digest();
+
         epoch_store
             .set_shared_object_versions_for_testing(
-                tx_digest,
-                &pre_run_sandbox
-                    .transaction_info
-                    .shared_object_refs
+                new_tx_digest,
+                &shared_object_refs
                     .iter()
                     .map(|(id, version, _)| (*id, *version))
                     .collect::<Vec<_>>(),
@@ -717,7 +765,7 @@ impl LocalExec {
         {
             let db = authority_state.db();
             let mut execution_lock = db.execution_lock_for_reconfiguration().await;
-            *execution_lock = pre_run_sandbox.transaction_info.executed_epoch;
+            *execution_lock = executed_epoch;
             drop(execution_lock);
         }
 
@@ -733,12 +781,27 @@ impl LocalExec {
         let effects = SuiTransactionBlockEffects::try_from(res.0).map_err(LocalExecError::from)?;
 
         Ok(ExecutionSandboxState {
-            transaction_info: pre_run_sandbox.transaction_info,
-            required_objects: pre_run_sandbox.required_objects,
+            transaction_info: pre_run_sandbox.transaction_info.clone(),
+            required_objects,
             local_exec_temporary_store: None, // We dont capture it for cert exec run
             local_exec_effects: effects,
             local_exec_status: exec_res,
         })
+    }
+
+    /// Must be called after `init_for_execution`
+    /// This executes from `sui_core::authority::AuthorityState::try_execute_immediately`
+    pub async fn certificate_execute(
+        &mut self,
+        tx_digest: &TransactionDigest,
+        expensive_safety_check_config: ExpensiveSafetyCheckConfig,
+    ) -> Result<ExecutionSandboxState, LocalExecError> {
+        // Use the lighterweight execution engine to get the pre-run state
+        let pre_run_sandbox = self
+            .execution_engine_execute_impl(tx_digest, expensive_safety_check_config)
+            .await?;
+        self.certificate_execute_with_sandbox_state(&pre_run_sandbox, None)
+            .await
     }
 
     /// Must be called after `init_for_execution`
@@ -749,7 +812,7 @@ impl LocalExec {
         expensive_safety_check_config: ExpensiveSafetyCheckConfig,
     ) -> Result<ExecutionSandboxState, LocalExecError> {
         let sandbox_state = self
-            .execute_impl(tx_digest, expensive_safety_check_config)
+            .execution_engine_execute_impl(tx_digest, expensive_safety_check_config)
             .await?;
 
         Ok(sandbox_state)
@@ -1665,24 +1728,33 @@ fn extract_epoch_and_version(ev: SuiEvent) -> Result<(u64, u64), LocalExecError>
 }
 
 async fn prep_network(
-    tx_info: &OnChainTransactionInfo,
     objects: &[Object],
+    reference_gas_price: u64,
+    executed_epoch: u64,
+    epoch_start_timestamp: u64,
+    protocol_config: &ProtocolConfig,
 ) -> (Arc<AuthorityState>, Arc<AuthorityPerEpochStore>) {
-    let authority_state = authority_state(tx_info, objects, tx_info.reference_gas_price).await;
-    let epoch_store =
-        create_epoch_store(tx_info, &authority_state, tx_info.reference_gas_price).await;
+    let authority_state = authority_state(protocol_config, objects, reference_gas_price).await;
+    let epoch_store = create_epoch_store(
+        &authority_state,
+        reference_gas_price,
+        executed_epoch,
+        epoch_start_timestamp,
+        protocol_config.version.as_u64(),
+    )
+    .await;
 
     (authority_state, epoch_store)
 }
 
 async fn authority_state(
-    tx_info: &OnChainTransactionInfo,
+    protocol_config: &ProtocolConfig,
     objects: &[Object],
     reference_gas_price: u64,
 ) -> Arc<AuthorityState> {
     // Initiaize some network
     TestAuthorityBuilder::new()
-        .with_protocol_config(tx_info.protocol_config.clone())
+        .with_protocol_config(protocol_config.clone())
         .with_reference_gas_price(reference_gas_price)
         .with_starting_objects(objects)
         .build()
@@ -1690,16 +1762,18 @@ async fn authority_state(
 }
 
 async fn create_epoch_store(
-    tx_info: &OnChainTransactionInfo,
     authority_state: &Arc<AuthorityState>,
     reference_gas_price: u64,
+    executed_epoch: u64,
+    epoch_start_timestamp: u64,
+    protocol_version: u64,
 ) -> Arc<AuthorityPerEpochStore> {
     let sys_state = EpochStartSystemState::new_v1(
-        tx_info.executed_epoch,
-        tx_info.protocol_config.version.as_u64(),
+        executed_epoch,
+        protocol_version,
         reference_gas_price,
         false,
-        tx_info.epoch_start_timestamp,
+        epoch_start_timestamp,
         ONE_DAY_MS,
         vec![], // TODO: add validators
     );
@@ -1719,7 +1793,7 @@ async fn create_epoch_store(
     let mut committee = authority_state.committee_store().get_latest_committee();
 
     // Overwrite the epoch so it matches this TXs
-    committee.epoch = tx_info.executed_epoch;
+    committee.epoch = executed_epoch;
 
     let name = committee.names().next().unwrap();
     AuthorityPerEpochStore::new(

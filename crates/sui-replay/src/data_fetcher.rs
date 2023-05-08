@@ -4,6 +4,7 @@
 use crate::types::LocalExecError;
 use async_trait::async_trait;
 use futures::future::join_all;
+use rand::Rng;
 use sui_json_rpc::api::QUERY_MAX_RESULT_LIMIT;
 use sui_json_rpc_types::SuiGetPastObjectRequest;
 use sui_json_rpc_types::SuiObjectData;
@@ -44,6 +45,15 @@ pub(crate) trait DataFetcher {
         &self,
         tx_digest: &TransactionDigest,
     ) -> Result<Vec<(ObjectID, SequenceNumber)>, LocalExecError>;
+
+    async fn get_latest_checkpoint_sequence_number(&self) -> Result<u64, LocalExecError>;
+
+    async fn fetch_random_tx(
+        &self,
+        // TODO: add more params
+        checkpoint_id_start: Option<u64>,
+        checkpoint_id_end: Option<u64>,
+    ) -> Result<TransactionDigest, LocalExecError>;
 }
 
 pub struct RemoteFetcher {
@@ -153,6 +163,31 @@ impl DataFetcher for RemoteFetcher {
             .iter()
             .map(|obj| (obj.object_id(), obj.sequence_number()))
             .collect::<Vec<_>>())
+    }
+
+    async fn get_latest_checkpoint_sequence_number(&self) -> Result<u64, LocalExecError> {
+        self.rpc_client
+            .read_api()
+            .get_latest_checkpoint_sequence_number()
+            .await
+            .map_err(LocalExecError::from)
+    }
+
+    async fn fetch_random_tx(
+        &self,
+        // TODO: add more params
+        checkpoint_id_start: Option<u64>,
+        checkpoint_id_end: Option<u64>,
+    ) -> Result<TransactionDigest, LocalExecError> {
+        let checkpoint_id_end =
+            checkpoint_id_end.unwrap_or(self.get_latest_checkpoint_sequence_number().await?);
+        let checkpoint_id_start = checkpoint_id_start.unwrap_or(1);
+        let checkpoint_id = rand::thread_rng().gen_range(checkpoint_id_start..=checkpoint_id_end);
+
+        let txs = self.get_checkpoint_txs(checkpoint_id).await?;
+        let tx_idx = rand::thread_rng().gen_range(0..txs.len());
+
+        Ok(txs[tx_idx])
     }
 }
 

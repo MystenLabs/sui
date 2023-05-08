@@ -12,8 +12,9 @@ use sui_types::digests::TransactionDigest;
 use tracing::{error, info};
 mod data_fetcher;
 mod db_rider;
+pub mod fuzz;
 mod replay;
-mod types;
+pub mod types;
 
 #[derive(Parser, Clone)]
 #[clap(rename_all = "kebab-case")]
