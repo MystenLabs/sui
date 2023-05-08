@@ -2469,7 +2469,7 @@ impl AuthorityState {
         }
     }
 
-    pub async fn get_executed_transaction(
+    pub async fn get_transaction_block(
         &self,
         digest: TransactionDigest,
     ) -> Result<VerifiedTransaction, anyhow::Error> {

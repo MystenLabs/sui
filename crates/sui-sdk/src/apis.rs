@@ -4,7 +4,7 @@
 use std::collections::BTreeMap;
 use std::future;
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 use fastcrypto::encoding::Base64;
 use futures::stream;
@@ -13,7 +13,7 @@ use futures_core::Stream;
 use jsonrpsee::core::client::Subscription;
 
 use crate::error::{Error, SuiRpcResult};
-use crate::{RpcClient, WAIT_FOR_TX_TIMEOUT_SEC};
+use crate::RpcClient;
 use sui_json_rpc::api::GovernanceReadApiClient;
 use sui_json_rpc::api::{
     CoinReadApiClient, IndexerApiClient, MoveUtilsClient, ReadApiClient, WriteApiClient,
@@ -23,19 +23,20 @@ use sui_json_rpc_types::{
     DryRunTransactionBlockResponse, DynamicFieldPage, EventFilter, EventPage, ObjectsPage,
     ProtocolConfigResponse, SuiCoinMetadata, SuiCommittee, SuiEvent, SuiGetPastObjectRequest,
     SuiMoveNormalizedModule, SuiObjectDataOptions, SuiObjectResponse, SuiObjectResponseQuery,
-    SuiPastObjectResponse, SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponse,
-    SuiTransactionBlockResponseOptions, SuiTransactionBlockResponseQuery, TransactionBlocksPage,
+    SuiPastObjectResponse, SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
+    SuiTransactionBlockResponseQuery, TransactionBlocksPage,
 };
 use sui_json_rpc_types::{CheckpointPage, SuiLoadedChildObjectsResponse};
 use sui_types::balance::Supply;
 use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress, TransactionDigest};
-use sui_types::error::TRANSACTION_NOT_FOUND_MSG_PREFIX;
 use sui_types::event::EventID;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::quorum_driver_types::ExecuteTransactionRequestType;
 use sui_types::sui_serde::BigInt;
 use sui_types::sui_system_state::sui_system_state_summary::SuiSystemStateSummary;
 use sui_types::transaction::{TransactionData, VerifiedTransaction};
+
+const WAIT_FOR_LOCAL_EXECUTION_RETRY_COUNT: u8 = 3;
 
 #[derive(Debug)]
 pub struct ReadApi {
@@ -473,10 +474,9 @@ impl QuorumDriverApi {
     /// Execute a transaction with a FullNode client. `request_type`
     /// defaults to `ExecuteTransactionRequestType::WaitForLocalExecution`.
     /// When `ExecuteTransactionRequestType::WaitForLocalExecution` is used,
-    /// but returned `confirmed_local_execution` is false, the client polls
-    /// the fullnode until the fullnode recognizes this transaction, or
-    /// until times out (see WAIT_FOR_TX_TIMEOUT_SEC). If it times out, an
-    /// error is returned from this call.
+    /// but returned `confirmed_local_execution` is false, the client will
+    /// keep retry for WAIT_FOR_LOCAL_EXECUTION_RETRY_COUNT times. If it
+    /// still fails, it will return an error.
     pub async fn execute_transaction_block(
         &self,
         tx: VerifiedTransaction,
@@ -485,70 +485,39 @@ impl QuorumDriverApi {
     ) -> SuiRpcResult<SuiTransactionBlockResponse> {
         let (tx_bytes, signatures) = tx.to_tx_bytes_and_signatures();
         let request_type = request_type.unwrap_or_else(|| options.default_execution_request_type());
-        let mut response: SuiTransactionBlockResponse = self
-            .api
-            .http
-            .execute_transaction_block(
-                tx_bytes,
-                signatures,
-                Some(options),
-                Some(request_type.clone()),
-            )
-            .await?;
+        let mut retry_count = 0;
+        let start = Instant::now();
+        while retry_count < WAIT_FOR_LOCAL_EXECUTION_RETRY_COUNT {
+            let response: SuiTransactionBlockResponse = self
+                .api
+                .http
+                .execute_transaction_block(
+                    tx_bytes.clone(),
+                    signatures.clone(),
+                    Some(options.clone()),
+                    Some(request_type.clone()),
+                )
+                .await?;
 
-        Ok(match request_type {
-            ExecuteTransactionRequestType::WaitForEffectsCert => response,
-            ExecuteTransactionRequestType::WaitForLocalExecution => {
-                if let Some(confirmed_local_execution) = response.confirmed_local_execution {
-                    if !confirmed_local_execution {
-                        Self::wait_until_fullnode_sees_tx(
-                            &self.api,
-                            *response
-                                .effects
-                                .as_ref()
-                                .map(|e| e.transaction_digest())
-                                .ok_or_else(|| {
-                                    Error::DataError("Expect effects to be non-empty".to_string())
-                                })?,
-                        )
-                        .await?;
+            match request_type {
+                ExecuteTransactionRequestType::WaitForEffectsCert => {
+                    return Ok(response);
+                }
+                ExecuteTransactionRequestType::WaitForLocalExecution => {
+                    if let Some(true) = response.confirmed_local_execution {
+                        return Ok(response);
+                    } else {
+                        // If fullnode executed the cert in the network but did not confirm local
+                        // execution, it must have timed out and hence we could retry.
+                        retry_count += 1;
                     }
                 }
-                response.confirmed_local_execution = Some(true);
-                response
-            }
-        })
-    }
-
-    async fn wait_until_fullnode_sees_tx(
-        c: &RpcClient,
-        tx_digest: TransactionDigest,
-    ) -> SuiRpcResult<()> {
-        let start = Instant::now();
-        loop {
-            let resp = ReadApiClient::get_transaction_block(
-                &c.http,
-                tx_digest,
-                Some(SuiTransactionBlockResponseOptions::new()),
-            )
-            .await;
-            if let Err(err) = resp {
-                if err.to_string().contains(TRANSACTION_NOT_FOUND_MSG_PREFIX) {
-                    tokio::time::sleep(Duration::from_millis(300)).await;
-                } else {
-                    // immediately return on other types of errors
-                    return Err(Error::TransactionConfirmationError(tx_digest, err));
-                }
-            } else {
-                return Ok(());
-            }
-            if start.elapsed().as_secs() >= WAIT_FOR_TX_TIMEOUT_SEC {
-                return Err(Error::FailToConfirmTransactionStatus(
-                    tx_digest,
-                    WAIT_FOR_TX_TIMEOUT_SEC,
-                ));
             }
         }
+        Err(Error::FailToConfirmTransactionStatus(
+            *tx.digest(),
+            start.elapsed().as_secs(),
+        ))
     }
 }
 
