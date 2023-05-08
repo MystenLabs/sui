@@ -7,7 +7,6 @@ use std::str::FromStr;
 use axum::response::{IntoResponse, Response};
 use axum::Json;
 use fastcrypto::encoding::Hex;
-use fastcrypto::traits::ToFromBytes;
 use serde::de::Error as DeError;
 use serde::{Deserialize, Serializer};
 use serde::{Deserializer, Serialize};
@@ -329,15 +328,15 @@ impl From<SuiPublicKey> for PublicKey {
     fn from(pk: SuiPublicKey) -> Self {
         match pk {
             SuiPublicKey::Ed25519(k) => PublicKey {
-                hex_bytes: Hex::from_bytes(k.as_bytes()),
+                hex_bytes: Hex::from_bytes(&k.0),
                 curve_type: CurveType::Edwards25519,
             },
             SuiPublicKey::Secp256k1(k) => PublicKey {
-                hex_bytes: Hex::from_bytes(k.as_bytes()),
+                hex_bytes: Hex::from_bytes(&k.0),
                 curve_type: CurveType::Secp256k1,
             },
             SuiPublicKey::Secp256r1(k) => PublicKey {
-                hex_bytes: Hex::from_bytes(k.as_bytes()),
+                hex_bytes: Hex::from_bytes(&k.0),
                 curve_type: CurveType::Secp256r1,
             },
         }

@@ -8,13 +8,16 @@ use fastcrypto::bls12381::min_sig::{
     BLS12381PrivateKey, BLS12381PublicKey, BLS12381Signature,
 };
 use fastcrypto::ed25519::{
-    Ed25519KeyPair, Ed25519PrivateKey, Ed25519PublicKey, Ed25519Signature, Ed25519SignatureAsBytes,
+    Ed25519KeyPair, Ed25519PrivateKey, Ed25519PublicKey, Ed25519PublicKeyAsBytes, Ed25519Signature,
+    Ed25519SignatureAsBytes,
 };
 use fastcrypto::secp256k1::{
-    Secp256k1KeyPair, Secp256k1PublicKey, Secp256k1Signature, Secp256k1SignatureAsBytes,
+    Secp256k1KeyPair, Secp256k1PublicKey, Secp256k1PublicKeyAsBytes, Secp256k1Signature,
+    Secp256k1SignatureAsBytes,
 };
 use fastcrypto::secp256r1::{
-    Secp256r1KeyPair, Secp256r1PublicKey, Secp256r1Signature, Secp256r1SignatureAsBytes,
+    Secp256r1KeyPair, Secp256r1PublicKey, Secp256r1PublicKeyAsBytes, Secp256r1Signature,
+    Secp256r1SignatureAsBytes,
 };
 pub use fastcrypto::traits::KeyPair as KeypairTraits;
 pub use fastcrypto::traits::{
@@ -30,7 +33,7 @@ use serde::{Deserialize, Deserializer, Serialize};
 use serde_with::{serde_as, Bytes};
 use shared_crypto::intent::{Intent, IntentMessage, IntentScope};
 use std::collections::BTreeMap;
-use std::fmt::{self, Display, Formatter};
+use std::fmt::{Display, Formatter};
 use std::hash::{Hash, Hasher};
 use std::str::FromStr;
 use strum::EnumString;
@@ -133,22 +136,12 @@ pub enum SuiKeyPair {
     Secp256r1(Secp256r1KeyPair),
 }
 
-#[derive(Clone, PartialEq, Eq, From, JsonSchema)]
-pub enum PublicKey {
-    #[schemars(with = "Base64")]
-    Ed25519(Ed25519PublicKey),
-    #[schemars(with = "Base64")]
-    Secp256k1(Secp256k1PublicKey),
-    #[schemars(with = "Base64")]
-    Secp256r1(Secp256r1PublicKey),
-}
-
 impl SuiKeyPair {
     pub fn public(&self) -> PublicKey {
         match self {
-            SuiKeyPair::Ed25519(kp) => PublicKey::Ed25519(kp.public().clone()),
-            SuiKeyPair::Secp256k1(kp) => PublicKey::Secp256k1(kp.public().clone()),
-            SuiKeyPair::Secp256r1(kp) => PublicKey::Secp256r1(kp.public().clone()),
+            SuiKeyPair::Ed25519(kp) => PublicKey::Ed25519(kp.public().into()),
+            SuiKeyPair::Secp256k1(kp) => PublicKey::Secp256k1(kp.public().into()),
+            SuiKeyPair::Secp256r1(kp) => PublicKey::Secp256r1(kp.public().into()),
         }
     }
 }
@@ -176,17 +169,16 @@ impl EncodeDecodeBase64 for SuiKeyPair {
     /// Encode a SuiKeyPair as `flag || privkey` in Base64. Note that the pubkey is not encoded.
     fn encode_base64(&self) -> String {
         let mut bytes: Vec<u8> = Vec::new();
+        bytes.push(self.public().flag());
+
         match self {
             SuiKeyPair::Ed25519(kp) => {
-                bytes.push(self.public().flag());
                 bytes.extend_from_slice(kp.as_bytes());
             }
             SuiKeyPair::Secp256k1(kp) => {
-                bytes.push(self.public().flag());
                 bytes.extend_from_slice(kp.as_bytes());
             }
             SuiKeyPair::Secp256r1(kp) => {
-                bytes.push(self.public().flag());
                 bytes.extend_from_slice(kp.as_bytes());
             }
         }
@@ -241,12 +233,19 @@ impl<'de> Deserialize<'de> for SuiKeyPair {
     }
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, JsonSchema)]
+pub enum PublicKey {
+    Ed25519(Ed25519PublicKeyAsBytes),
+    Secp256k1(Secp256k1PublicKeyAsBytes),
+    Secp256r1(Secp256r1PublicKeyAsBytes),
+}
+
 impl AsRef<[u8]> for PublicKey {
     fn as_ref(&self) -> &[u8] {
         match self {
-            PublicKey::Ed25519(pk) => pk.as_ref(),
-            PublicKey::Secp256k1(pk) => pk.as_ref(),
-            PublicKey::Secp256r1(pk) => pk.as_ref(),
+            PublicKey::Ed25519(pk) => &pk.0,
+            PublicKey::Secp256k1(pk) => &pk.0,
+            PublicKey::Secp256r1(pk) => &pk.0,
         }
     }
 }
@@ -263,21 +262,21 @@ impl EncodeDecodeBase64 for PublicKey {
         let bytes = Base64::decode(value).map_err(|e| eyre!("{}", e.to_string()))?;
         match bytes.first() {
             Some(x) => {
-                if x == &<Ed25519PublicKey as SuiPublicKey>::SIGNATURE_SCHEME.flag() {
-                    let pk = Ed25519PublicKey::from_bytes(
+                if x == &SignatureScheme::ED25519.flag() {
+                    let pk: Ed25519PublicKey = Ed25519PublicKey::from_bytes(
                         bytes.get(1..).ok_or_else(|| eyre!("Invalid length"))?,
                     )?;
-                    Ok(PublicKey::Ed25519(pk))
-                } else if x == &<Secp256k1PublicKey as SuiPublicKey>::SIGNATURE_SCHEME.flag() {
+                    Ok(PublicKey::Ed25519((&pk).into()))
+                } else if x == &SignatureScheme::Secp256k1.flag() {
                     let pk = Secp256k1PublicKey::from_bytes(
                         bytes.get(1..).ok_or_else(|| eyre!("Invalid length"))?,
                     )?;
-                    Ok(PublicKey::Secp256k1(pk))
-                } else if x == &<Secp256r1PublicKey as SuiPublicKey>::SIGNATURE_SCHEME.flag() {
+                    Ok(PublicKey::Secp256k1((&pk).into()))
+                } else if x == &SignatureScheme::Secp256r1.flag() {
                     let pk = Secp256r1PublicKey::from_bytes(
                         bytes.get(1..).ok_or_else(|| eyre!("Invalid length"))?,
                     )?;
-                    Ok(PublicKey::Secp256r1(pk))
+                    Ok(PublicKey::Secp256r1((&pk).into()))
                 } else {
                     Err(eyre!("Invalid flag byte"))
                 }
@@ -309,19 +308,9 @@ impl<'de> Deserialize<'de> for PublicKey {
     }
 }
 
-impl fmt::Debug for PublicKey {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:?}", self.encode_base64())
-    }
-}
-
 impl PublicKey {
     pub fn flag(&self) -> u8 {
-        match self {
-            PublicKey::Ed25519(_) => Ed25519SuiSignature::SCHEME.flag(),
-            PublicKey::Secp256k1(_) => Secp256k1SuiSignature::SCHEME.flag(),
-            PublicKey::Secp256r1(_) => Secp256r1SuiSignature::SCHEME.flag(),
-        }
+        self.scheme().flag()
     }
 
     pub fn try_from_bytes(
@@ -329,15 +318,15 @@ impl PublicKey {
         key_bytes: &[u8],
     ) -> Result<PublicKey, eyre::Report> {
         match curve {
-            SignatureScheme::ED25519 => {
-                Ok(PublicKey::Ed25519(Ed25519PublicKey::from_bytes(key_bytes)?))
-            }
-            SignatureScheme::Secp256k1 => Ok(PublicKey::Secp256k1(Secp256k1PublicKey::from_bytes(
-                key_bytes,
-            )?)),
-            SignatureScheme::Secp256r1 => Ok(PublicKey::Secp256r1(Secp256r1PublicKey::from_bytes(
-                key_bytes,
-            )?)),
+            SignatureScheme::ED25519 => Ok(PublicKey::Ed25519(
+                (&Ed25519PublicKey::from_bytes(key_bytes)?).into(),
+            )),
+            SignatureScheme::Secp256k1 => Ok(PublicKey::Secp256k1(
+                (&Secp256k1PublicKey::from_bytes(key_bytes)?).into(),
+            )),
+            SignatureScheme::Secp256r1 => Ok(PublicKey::Secp256r1(
+                (&Secp256r1PublicKey::from_bytes(key_bytes)?).into(),
+            )),
             _ => Err(eyre!("Unsupported curve")),
         }
     }
@@ -728,16 +717,19 @@ impl Signature {
         let bytes = self.public_key_bytes();
         match self.scheme() {
             SignatureScheme::ED25519 => Ok(PublicKey::Ed25519(
-                Ed25519PublicKey::from_bytes(bytes)
-                    .map_err(|_| SuiError::KeyConversionError("Cannot parse pk".to_string()))?,
+                (&Ed25519PublicKey::from_bytes(bytes)
+                    .map_err(|_| SuiError::KeyConversionError("Cannot parse pk".to_string()))?)
+                    .into(),
             )),
             SignatureScheme::Secp256k1 => Ok(PublicKey::Secp256k1(
-                Secp256k1PublicKey::from_bytes(bytes)
-                    .map_err(|_| SuiError::KeyConversionError("Cannot parse pk".to_string()))?,
+                (&Secp256k1PublicKey::from_bytes(bytes)
+                    .map_err(|_| SuiError::KeyConversionError("Cannot parse pk".to_string()))?)
+                    .into(),
             )),
             SignatureScheme::Secp256r1 => Ok(PublicKey::Secp256r1(
-                Secp256r1PublicKey::from_bytes(bytes)
-                    .map_err(|_| SuiError::KeyConversionError("Cannot parse pk".to_string()))?,
+                (&Secp256r1PublicKey::from_bytes(bytes)
+                    .map_err(|_| SuiError::KeyConversionError("Cannot parse pk".to_string()))?)
+                    .into(),
             )),
             _ => Err(SuiError::UnsupportedFeatureError {
                 error: "Unsupported signature scheme in MultiSig".to_string(),
