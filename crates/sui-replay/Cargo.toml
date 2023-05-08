@@ -26,6 +26,7 @@ move-binary-format.workspace = true
 move-bytecode-utils.workspace = true
 move-core-types.workspace = true
 move-package.workspace = true
+move-bytecode-verifier.workspace = true
 tokio.workspace = true
 typed-store.workspace = true
 

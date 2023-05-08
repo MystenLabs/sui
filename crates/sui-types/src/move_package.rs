@@ -520,6 +520,30 @@ impl MovePackage {
         })
     }
 
+    pub fn deserialize_modules(
+        &self,
+        max_binary_format_version: u32,
+        check_no_bytes_remaining: bool,
+    ) -> SuiResult<Vec<CompiledModule>> {
+        // TODO use the session's cache
+        let v = self
+            .module_map
+            .values()
+            .map(|w| {
+                CompiledModule::deserialize_with_config(
+                    w,
+                    max_binary_format_version,
+                    check_no_bytes_remaining,
+                )
+                .map_err(|error| SuiError::ModuleDeserializationFailure {
+                    error: error.to_string(),
+                })
+                .unwrap()
+            })
+            .collect();
+        Ok(v)
+    }
+
     pub fn disassemble(&self) -> SuiResult<BTreeMap<String, Value>> {
         disassemble_modules(self.module_map.values())
     }

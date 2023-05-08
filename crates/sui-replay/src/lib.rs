@@ -11,7 +11,7 @@ use sui_config::node::ExpensiveSafetyCheckConfig;
 use sui_types::digests::TransactionDigest;
 use tracing::{error, info};
 mod data_fetcher;
-mod db_rider;
+pub mod db_rider;
 mod replay;
 mod types;
 

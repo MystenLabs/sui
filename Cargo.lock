@@ -9765,6 +9765,7 @@ dependencies = [
  "jsonrpsee",
  "move-binary-format",
  "move-bytecode-utils",
+ "move-bytecode-verifier",
  "move-core-types",
  "move-package",
  "prometheus",

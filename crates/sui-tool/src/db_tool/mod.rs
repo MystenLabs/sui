@@ -7,6 +7,7 @@ use clap::Parser;
 use std::path::{Path, PathBuf};
 use sui_core::authority::authority_store_tables::AuthorityPerpetualTables;
 use sui_core::checkpoints::CheckpointStore;
+use sui_replay::db_rider::check_packages;
 use sui_types::base_types::EpochId;
 use typed_store::rocks::MetricConf;
 
@@ -15,6 +16,7 @@ pub mod db_dump;
 #[derive(Parser)]
 #[clap(rename_all = "kebab-case")]
 pub enum DbToolCommand {
+    Crawl(CrawlOptions),
     ListTables,
     Dump(Options),
     TableSummary(Options),
@@ -22,6 +24,14 @@ pub enum DbToolCommand {
     ResetDB,
     ListDBMetadata(Options),
     Compact,
+}
+
+#[derive(Parser)]
+#[clap(rename_all = "kebab-case")]
+pub struct CrawlOptions {
+    /// The type of store to dump
+    #[clap(long = "out", short = 'o', value_enum)]
+    out_file: StoreName,
 }
 
 #[derive(Parser)]
@@ -68,6 +78,10 @@ pub fn execute_db_tool_command(db_path: PathBuf, cmd: DbToolCommand) -> anyhow::
             print_table_metadata(d.store_name, d.epoch, db_path, &d.table_name)
         }
         DbToolCommand::Compact => compact(db_path),
+        DbToolCommand::Crawl(o) => {
+            check_packages(db_path, o.out_file);
+            Ok(())
+        }
     }
 }
 
