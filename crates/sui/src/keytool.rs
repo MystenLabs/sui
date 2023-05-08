@@ -416,8 +416,7 @@ impl KeyToolCommand {
                 };
 
                 // Sign the message, normalize the signature and then compacts it
-                // serialize_compact is loaded as bytes for Secp256k1Sinature
-                // to convert it into a RecoverableSignature
+                // serialize_compact is loaded as bytes for Secp256k1Sinaturere
                 let response = kms.sign(request).await?;
                 let sig_bytes_der = response
                     .signature
