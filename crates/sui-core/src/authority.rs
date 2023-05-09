@@ -1178,25 +1178,26 @@ impl AuthorityState {
         &self,
         transaction: TransactionData,
         transaction_digest: TransactionDigest,
-    ) -> Result<
-        (
-            DryRunTransactionBlockResponse,
-            BTreeMap<ObjectID, (ObjectRef, Object, WriteKind)>,
-            TransactionEffects,
-            Option<ObjectID>,
-        ),
-        anyhow::Error,
-    > {
+    ) -> SuiResult<(
+        DryRunTransactionBlockResponse,
+        BTreeMap<ObjectID, (ObjectRef, Object, WriteKind)>,
+        TransactionEffects,
+        Option<ObjectID>,
+    )> {
         let epoch_store = self.load_epoch_store_one_call_per_task();
         if !self.is_fullnode(&epoch_store) {
-            return Err(anyhow!("dry-exec is only supported on fullnodes"));
+            return Err(SuiError::UnsupportedFeatureError {
+                error: "dry-exec is only supported on fullnodes".to_string(),
+            });
         }
         match transaction.kind() {
             TransactionKind::ProgrammableTransaction(_) => (),
             TransactionKind::ChangeEpoch(_)
             | TransactionKind::Genesis(_)
             | TransactionKind::ConsensusCommitPrologue(_) => {
-                return Err(anyhow!("dry-exec does not support system transactions"));
+                return Err(SuiError::UnsupportedFeatureError {
+                    error: "dry-exec does not support system transactions".to_string(),
+                });
             }
         }
 
@@ -1291,7 +1292,13 @@ impl AuthorityState {
 
         Ok((
             DryRunTransactionBlockResponse {
-                input: SuiTransactionBlockData::try_from(transaction.clone(), &module_cache)?,
+                input: SuiTransactionBlockData::try_from(transaction.clone(), &module_cache)
+                    .map_err(|e| SuiError::TransactionSerializationError {
+                        error: format!(
+                            "Failed to convert transaction to SuiTransactionBlockData: {}",
+                            e
+                        ),
+                    })?, // TODO: replace the underlying try_from to SuiError. This one goes deep
                 effects: effects.clone().try_into()?,
                 events: SuiTransactionBlockEvents::try_from(
                     inner_temp_store.events.clone(),
