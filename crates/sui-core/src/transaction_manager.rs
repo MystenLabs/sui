@@ -571,6 +571,7 @@ impl TransactionManager {
                 );
                 return;
             }
+            assert_eq!(digests.len(), output_object_keys.len());
 
             for (digest, output_object_keys) in izip!(digests, output_object_keys) {
                 let Some(acquired_locks) = inner.executing_certificates.remove(digest) else {
