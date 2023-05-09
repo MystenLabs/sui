@@ -21,7 +21,7 @@ use sui_types::event::Event;
 use sui_types::execution_status::{CommandArgumentError, ExecutionFailureStatus, ExecutionStatus};
 use sui_types::messages_grpc::ObjectInfoRequest;
 use sui_types::object::generate_test_gas_objects;
-use sui_types::{SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION};
+use sui_types::SUI_CLOCK_OBJECT_ID;
 
 /// Send a simple shared object transaction to Sui and ensures the client gets back a response.
 #[sim_test]
@@ -255,24 +255,13 @@ async fn access_clock_object_test() {
             .await
             .0;
 
-    let clock_object_arg = ObjectArg::SharedObject {
-        id: SUI_CLOCK_OBJECT_ID,
-        initial_shared_version: SUI_CLOCK_OBJECT_SHARED_VERSION,
-        mutable: false,
-    };
-
     let (sender, keypair) = deterministic_random_account_key();
     let transaction = TestTransactionBuilder::new(
         sender,
         gas_objects.pop().unwrap().compute_object_reference(),
         rgp,
     )
-    .move_call(
-        package_id,
-        "clock",
-        "get_time",
-        vec![CallArg::Object(clock_object_arg)],
-    )
+    .move_call(package_id, "clock", "get_time", vec![CallArg::CLOCK_IMM])
     .build_and_sign(&keypair);
     let digest = *transaction.digest();
     let start = SystemTime::now()

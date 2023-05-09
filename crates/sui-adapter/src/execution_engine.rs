@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::execution_mode::{self, ExecutionMode};
-use move_binary_format::access::ModuleAccess;
 use move_binary_format::CompiledModule;
 use move_bytecode_utils::module_cache::GetModule;
 use move_vm_runtime::move_vm::MoveVM;
@@ -23,6 +22,7 @@ use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use tracing::{info, instrument, trace, warn};
 
 use crate::programmable_transactions;
+use move_binary_format::access::ModuleAccess;
 use sui_macros::checked_arithmetic;
 use sui_protocol_config::{check_limit_by_meter, LimitThresholdCrossed, ProtocolConfig};
 use sui_types::clock::{CLOCK_MODULE_NAME, CONSENSUS_COMMIT_PROLOGUE_FUNCTION_NAME};
@@ -40,7 +40,8 @@ use sui_types::sui_system_state::{AdvanceEpochParams, ADVANCE_EPOCH_SAFE_MODE_FU
 use sui_types::temporary_store::InnerTemporaryStore;
 use sui_types::temporary_store::TemporaryStore;
 use sui_types::transaction::{
-    Argument, Command, GenesisTransaction, ObjectArg, ProgrammableTransaction, TransactionKind,
+    Argument, CallArg, ChangeEpoch, Command, GenesisTransaction, ProgrammableTransaction,
+    TransactionKind,
 };
 use sui_types::{
     base_types::{ObjectRef, SuiAddress, TransactionDigest, TxContext},
@@ -48,13 +49,9 @@ use sui_types::{
     object::Object,
     storage::BackingPackageStore,
     sui_system_state::{ADVANCE_EPOCH_FUNCTION_NAME, SUI_SYSTEM_MODULE_NAME},
-    transaction::{CallArg, ChangeEpoch},
-    SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_STATE_OBJECT_ID,
+    SUI_FRAMEWORK_ADDRESS,
 };
-use sui_types::{
-    is_system_package, SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION,
-    SUI_FRAMEWORK_OBJECT_ID, SUI_SYSTEM_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
-};
+use sui_types::{is_system_package, SUI_FRAMEWORK_OBJECT_ID, SUI_SYSTEM_OBJECT_ID};
 
 /// If a transaction digest shows up in this list, when executing such transaction,
 /// we will always return `ExecutionError::CertificateDenied` without executing it (but still do
@@ -570,13 +567,8 @@ pub fn construct_advance_epoch_pt(
 
     // Step 2: Advance the epoch.
     let mut arguments = vec![storage_rewards, computation_rewards];
-    let system_object_arg = CallArg::Object(ObjectArg::SharedObject {
-        id: SUI_SYSTEM_STATE_OBJECT_ID,
-        initial_shared_version: SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
-        mutable: true,
-    });
     let call_arg_arguments = vec![
-        system_object_arg,
+        CallArg::SUI_SYSTEM_MUT,
         CallArg::Pure(bcs::to_bytes(&params.epoch).unwrap()),
         CallArg::Pure(bcs::to_bytes(&params.next_protocol_version.as_u64()).unwrap()),
         CallArg::Pure(bcs::to_bytes(&params.storage_rebate).unwrap()),
@@ -627,14 +619,9 @@ pub fn construct_advance_epoch_safe_mode_pt(
 
     // Step 2: Advance the epoch.
     let mut arguments = vec![storage_rewards, computation_rewards];
-    let system_object_arg = CallArg::Object(ObjectArg::SharedObject {
-        id: SUI_SYSTEM_STATE_OBJECT_ID,
-        initial_shared_version: SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
-        mutable: true,
-    });
 
     let mut args = vec![
-        system_object_arg,
+        CallArg::SUI_SYSTEM_MUT,
         CallArg::Pure(bcs::to_bytes(&params.epoch).unwrap()),
         CallArg::Pure(bcs::to_bytes(&params.next_protocol_version.as_u64()).unwrap()),
         CallArg::Pure(bcs::to_bytes(&params.storage_rebate).unwrap()),
@@ -822,11 +809,7 @@ fn setup_consensus_commit<S: BackingPackageStore + ParentSync + ChildObjectResol
             CONSENSUS_COMMIT_PROLOGUE_FUNCTION_NAME.to_owned(),
             vec![],
             vec![
-                CallArg::Object(ObjectArg::SharedObject {
-                    id: SUI_CLOCK_OBJECT_ID,
-                    initial_shared_version: SUI_CLOCK_OBJECT_SHARED_VERSION,
-                    mutable: true,
-                }),
+                CallArg::CLOCK_MUT,
                 CallArg::Pure(bcs::to_bytes(&prologue.commit_timestamp_ms).unwrap()),
             ],
         );
