@@ -31,13 +31,11 @@ use sui_types::base_types::ObjectID;
 /// current one reaches the max size i.e. 128MB. Partitions allow a single hash bucket to be consumed
 /// in parallel. Partition files are optionally compressed with the zstd compression format. Partition
 /// filenames follows the format <bucket_number>_<partition_number>.obj. Object references for hash
-/// buckets are stored in ref files, the filename for which follows the format REFERENCE-<bucket_num>.
 /// There is one single ref file per hash bucket. Object references are written in an append-only manner
 /// as well. Finally, the MANIFEST file contains per file metadata of every file in the snapshot directory.
-///
-/// State Snapshot Directory Layout
-///  - snapshot/
-///     - epoch_0/
+/// current one reaches the max size i.e. 64MB. Partitions allow a single hash bucket to be consumed
+/// in parallel. Partition files are compressed with the zstd compression format which can be read as
+/// a decompressed stream (when reading snapshot from a remote cloud object store this doesn't require
 ///        - 1_1.obj
 ///        - 1_2.obj
 ///        - 1_3.obj
