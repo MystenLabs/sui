@@ -261,7 +261,17 @@ mod test {
         // to the latest protocol version.
         let max_ver = ProtocolVersion::MAX.as_u64();
         let min_ver = max_ver - 1;
-        test_protocol_upgrade_compatibility_impl(min_ver, "testnet").await;
+        let timeout = tokio::time::timeout(
+            Duration::from_secs(1000),
+            test_protocol_upgrade_compatibility_impl(min_ver, "testnet"),
+        )
+        .await;
+        match timeout {
+            Ok(_) => {}
+            Err(_) => {
+                panic!("testnet upgrade compatibility test timed out");
+            }
+        }
     }
 
     #[sim_test(config = "test_config()")]
