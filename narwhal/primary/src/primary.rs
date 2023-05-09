@@ -55,6 +55,7 @@ use std::{
     time::Duration,
 };
 use storage::{CertificateStore, HeaderStore, PayloadStore, ProposerStore, VoteDigestStore};
+use sui_protocol_config::ProtocolConfig;
 use tokio::{sync::watch, task::JoinHandle};
 use tokio::{
     sync::{mpsc, oneshot},
@@ -68,10 +69,11 @@ use types::{
     metered_channel::{channel_with_total, Receiver, Sender},
     now, Certificate, CertificateAPI, CertificateDigest, FetchCertificatesRequest,
     FetchCertificatesResponse, GetCertificatesRequest, GetCertificatesResponse, Header, HeaderAPI,
-    PayloadAvailabilityRequest, PayloadAvailabilityResponse, PreSubscribedBroadcastSender,
-    PrimaryToPrimary, PrimaryToPrimaryServer, RequestVoteRequest, RequestVoteResponse, Round,
-    SendCertificateRequest, SendCertificateResponse, Vote, VoteInfoAPI, WorkerOthersBatchMessage,
-    WorkerOurBatchMessage, WorkerToPrimary, WorkerToPrimaryServer,
+    MetadataAPI, PayloadAvailabilityRequest, PayloadAvailabilityResponse,
+    PreSubscribedBroadcastSender, PrimaryToPrimary, PrimaryToPrimaryServer, RequestVoteRequest,
+    RequestVoteResponse, Round, SendCertificateRequest, SendCertificateResponse, Vote, VoteInfoAPI,
+    WorkerOthersBatchMessage, WorkerOurBatchMessage, WorkerOurBatchMessageV2, WorkerToPrimary,
+    WorkerToPrimaryServer,
 };
 
 #[cfg(any(test))]
@@ -119,6 +121,7 @@ impl Primary {
         tx_shutdown: &mut PreSubscribedBroadcastSender,
         tx_committed_certificates: Sender<(Round, Vec<Certificate>)>,
         registry: &Registry,
+        protocol_config: ProtocolConfig,
     ) -> Vec<JoinHandle<()>> {
         // Write the parameters to the logs.
         parameters.tracing();
@@ -1202,6 +1205,33 @@ impl WorkerToPrimary for WorkerReceiverHandler {
                 digest: message.digest,
                 worker_id: message.worker_id,
                 timestamp: message.metadata.created_at,
+                ack_channel: Some(tx_ack),
+            })
+            .await
+            .map(|_| anemo::Response::new(()))
+            .map_err(|e| anemo::rpc::Status::internal(e.to_string()))?;
+
+        // If we are ok, then wait for the ack
+        rx_ack
+            .await
+            .map_err(|e| anemo::rpc::Status::internal(e.to_string()))?;
+
+        Ok(response)
+    }
+
+    async fn report_our_batch_v2(
+        &self,
+        request: anemo::Request<WorkerOurBatchMessageV2>,
+    ) -> Result<anemo::Response<()>, anemo::rpc::Status> {
+        let message = request.into_body();
+
+        let (tx_ack, rx_ack) = oneshot::channel();
+        let response = self
+            .tx_our_digests
+            .send(OurDigestMessage {
+                digest: message.digest,
+                worker_id: message.worker_id,
+                timestamp: *message.metadata.created_at(),
                 ack_channel: Some(tx_ack),
             })
             .await

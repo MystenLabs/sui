@@ -183,7 +183,7 @@ mod tests {
     use rand::Rng;
     use std::collections::BTreeSet;
     use storage::NodeStorage;
-    use test_utils::CommitteeFixture;
+    use test_utils::{latest_protocol_version, CommitteeFixture};
     use types::Certificate;
 
     #[tokio::test]
@@ -200,8 +200,13 @@ mod tests {
             .iter()
             .map(|x| x.digest())
             .collect::<BTreeSet<_>>();
-        let (certificates, _next_parents) =
-            test_utils::make_optimal_certificates(&committee, 1..=rounds, &genesis, &keys);
+        let (certificates, _next_parents) = test_utils::make_optimal_certificates(
+            &committee,
+            1..=rounds,
+            &genesis,
+            &keys,
+            &latest_protocol_version(),
+        );
 
         let store_path = test_utils::temp_dir();
         let store = NodeStorage::reopen(&store_path, None);
@@ -244,8 +249,14 @@ mod tests {
             .map(|x| x.digest())
             .collect::<BTreeSet<_>>();
         // TODO: evidence that this test fails when `failure_probability` parameter >= 1/3
-        let (certificates, _next_parents) =
-            test_utils::make_certificates(&committee, 1..=rounds, &genesis, &keys, 0.333);
+        let (certificates, _next_parents) = test_utils::make_certificates(
+            &committee,
+            1..=rounds,
+            &genesis,
+            &keys,
+            0.333,
+            &latest_protocol_version(),
+        );
         let arc_committee = Arc::new(ArcSwap::from_pointee(committee));
 
         let store_path = test_utils::temp_dir();

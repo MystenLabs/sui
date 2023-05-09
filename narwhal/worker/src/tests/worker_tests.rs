@@ -21,7 +21,9 @@ use storage::NodeStorage;
 use store::rocks;
 use store::rocks::MetricConf;
 use store::rocks::ReadWriteOptions;
-use test_utils::{batch, temp_dir, test_network, transaction, CommitteeFixture};
+use test_utils::{
+    batch, latest_protocol_version, temp_dir, test_network, transaction, CommitteeFixture,
+};
 use tokio::sync::watch;
 use types::{
     BatchAPI, MockWorkerToPrimary, MockWorkerToWorker, PreSubscribedBroadcastSender,
@@ -88,6 +90,7 @@ async fn reject_invalid_clients_transactions() {
         batch_store,
         metrics,
         &mut tx_shutdown,
+        latest_protocol_version(),
     );
 
     // Wait till other services have been able to start up
@@ -111,7 +114,7 @@ async fn reject_invalid_clients_transactions() {
 
     let worker_pk = worker_cache.worker(&public_key, &worker_id).unwrap().name;
 
-    let batch = batch();
+    let batch = batch(&latest_protocol_version());
     let batch_message = WorkerBatchMessage {
         batch: batch.clone(),
     };
@@ -183,13 +186,14 @@ async fn handle_remote_clients_transactions() {
         batch_store,
         metrics,
         &mut tx_shutdown,
+        latest_protocol_version(),
     );
 
     // Spawn a network listener to receive our batch's digest.
     let mut peer_networks = Vec::new();
 
     // Create batches
-    let batch = batch();
+    let batch = batch(&latest_protocol_version());
     let batch_digest = batch.digest();
 
     let (tx_await_batch, mut rx_await_batch) = test_utils::test_channel!(CHANNEL_CAPACITY);
@@ -301,13 +305,14 @@ async fn handle_local_clients_transactions() {
         batch_store,
         metrics,
         &mut tx_shutdown,
+        latest_protocol_version(),
     );
 
     // Spawn a network listener to receive our batch's digest.
     let mut peer_networks = Vec::new();
 
     // Create batches
-    let batch = batch();
+    let batch = batch(&latest_protocol_version());
     let batch_digest = batch.digest();
 
     let (tx_await_batch, mut rx_await_batch) = test_utils::test_channel!(CHANNEL_CAPACITY);
@@ -425,6 +430,7 @@ async fn get_network_peers_from_admin_server() {
         &mut tx_shutdown,
         tx_feedback,
         &Registry::new(),
+        latest_protocol_version(),
     );
 
     // Wait for tasks to start
@@ -452,6 +458,7 @@ async fn get_network_peers_from_admin_server() {
         store.batch_store.clone(),
         metrics_1.clone(),
         &mut tx_shutdown,
+        latest_protocol_version(),
     );
 
     let primary_1_peer_id = Hex::encode(authority_1.network_keypair().copy().public().0.as_bytes());
@@ -549,6 +556,7 @@ async fn get_network_peers_from_admin_server() {
         &mut tx_shutdown_2,
         tx_feedback_2,
         &Registry::new(),
+        latest_protocol_version(),
     );
 
     // Wait for tasks to start
@@ -577,6 +585,7 @@ async fn get_network_peers_from_admin_server() {
         store.batch_store,
         metrics_2.clone(),
         &mut tx_shutdown_worker,
+        latest_protocol_version(),
     );
 
     // Wait for tasks to start. Sleeping longer here to ensure all primaries and workers

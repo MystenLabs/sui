@@ -9,7 +9,7 @@ use fastcrypto::hash::Hash;
 use indexmap::IndexMap;
 use prometheus::Registry;
 use std::{collections::BTreeSet, sync::Arc};
-use test_utils::{make_optimal_certificates, CommitteeFixture};
+use test_utils::{latest_protocol_version, make_optimal_certificates, CommitteeFixture};
 use types::{Certificate, CertificateAPI, HeaderAPI, PreSubscribedBroadcastSender};
 
 #[tokio::test]
@@ -23,8 +23,13 @@ async fn inner_dag_insert_one() {
         .iter()
         .map(|x| x.digest())
         .collect::<BTreeSet<_>>();
-    let (mut certificates, _next_parents) =
-        make_optimal_certificates(&committee, 1..=4, &genesis, &ids);
+    let (mut certificates, _next_parents) = make_optimal_certificates(
+        &committee,
+        1..=4,
+        &genesis,
+        &ids,
+        &latest_protocol_version(),
+    );
     let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
 
     // set up a Dag
@@ -48,8 +53,13 @@ async fn test_dag_read_notify() {
         .iter()
         .map(|x| x.digest())
         .collect::<BTreeSet<_>>();
-    let (mut certificates, _next_parents) =
-        make_optimal_certificates(&committee, 1..=4, &genesis, &ids);
+    let (mut certificates, _next_parents) = make_optimal_certificates(
+        &committee,
+        1..=4,
+        &genesis,
+        &ids,
+        &latest_protocol_version(),
+    );
     let certs = certificates.clone().into_iter().map(|c| (c.digest(), c));
     // set up a Dag
     let (_tx_cert, rx_cert) = test_utils::test_channel!(1);
@@ -102,8 +112,13 @@ async fn test_dag_new_has_genesis_and_its_not_live() {
     }
 
     // But the genesis does not come out in read_causal, as is is compressed the moment we add more nodes
-    let (certificates, _next_parents) =
-        make_optimal_certificates(&committee, 1..=1, &genesis, &ids);
+    let (certificates, _next_parents) = make_optimal_certificates(
+        &committee,
+        1..=1,
+        &genesis,
+        &ids,
+        &latest_protocol_version(),
+    );
     let mut certs_to_insert = certificates.clone();
 
     // Feed the additional certificates to the Dag
@@ -150,8 +165,13 @@ async fn test_dag_compresses_empty_blocks() {
     let (_, dag) = Dag::new(&committee, rx_cert, metrics, tx_shutdown.subscribe());
 
     // insert one round of empty certificates
-    let (mut certificates, next_parents) =
-        make_optimal_certificates(&committee, 1..=1, &genesis.clone(), &ids);
+    let (mut certificates, next_parents) = make_optimal_certificates(
+        &committee,
+        1..=1,
+        &genesis.clone(),
+        &ids,
+        &latest_protocol_version(),
+    );
     // make those empty
     for cert in certificates.iter_mut() {
         cert.header_mut().update_payload(IndexMap::new());
@@ -169,8 +189,13 @@ async fn test_dag_compresses_empty_blocks() {
     }
 
     // Add one round of non-empty certificates
-    let (additional_certificates, _next_parents) =
-        make_optimal_certificates(&committee, 2..=2, &next_parents, &ids);
+    let (additional_certificates, _next_parents) = make_optimal_certificates(
+        &committee,
+        2..=2,
+        &next_parents,
+        &ids,
+        &latest_protocol_version(),
+    );
     // Feed the additional certificates to the Dag
     let mut additional_certs_to_insert = additional_certificates.clone();
     while let Some(certificate) = additional_certs_to_insert.pop_front() {
@@ -218,8 +243,13 @@ async fn test_dag_rounds_after_compression() {
     let (_, dag) = Dag::new(&committee, rx_cert, metrics, tx_shutdown.subscribe());
 
     // insert one round of empty certificates
-    let (mut certificates, next_parents) =
-        make_optimal_certificates(&committee, 1..=1, &genesis.clone(), &ids);
+    let (mut certificates, next_parents) = make_optimal_certificates(
+        &committee,
+        1..=1,
+        &genesis.clone(),
+        &ids,
+        &latest_protocol_version(),
+    );
     // make those empty
     for cert in certificates.iter_mut() {
         cert.header_mut().update_payload(IndexMap::new());
@@ -232,8 +262,13 @@ async fn test_dag_rounds_after_compression() {
     }
 
     // Add one round of non-empty certificates
-    let (additional_certificates, _next_parents) =
-        make_optimal_certificates(&committee, 2..=2, &next_parents, &ids);
+    let (additional_certificates, _next_parents) = make_optimal_certificates(
+        &committee,
+        2..=2,
+        &next_parents,
+        &ids,
+        &latest_protocol_version(),
+    );
     // Feed the additional certificates to the Dag
     let mut additional_certs_to_insert = additional_certificates.clone();
     while let Some(certificate) = additional_certs_to_insert.pop_front() {
@@ -258,8 +293,13 @@ async fn dag_mutation_failures() {
         .iter()
         .map(|x| x.digest())
         .collect::<BTreeSet<_>>();
-    let (certificates, _next_parents) =
-        make_optimal_certificates(&committee, 1..=4, &genesis, &ids);
+    let (certificates, _next_parents) = make_optimal_certificates(
+        &committee,
+        1..=4,
+        &genesis,
+        &ids,
+        &latest_protocol_version(),
+    );
 
     // set up a Dag
     let (_tx_cert, rx_cert) = test_utils::test_channel!(1);
@@ -328,8 +368,13 @@ async fn dag_insert_one_and_rounds_node_read() {
         .iter()
         .map(|x| x.digest())
         .collect::<BTreeSet<_>>();
-    let (certificates, _next_parents) =
-        make_optimal_certificates(&committee, 1..=4, &genesis, &ids);
+    let (certificates, _next_parents) = make_optimal_certificates(
+        &committee,
+        1..=4,
+        &genesis,
+        &ids,
+        &latest_protocol_version(),
+    );
     let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
 
     // set up a Dag
@@ -376,8 +421,13 @@ async fn dag_insert_and_remove_reads() {
         .iter()
         .map(|x| x.digest())
         .collect::<BTreeSet<_>>();
-    let (mut certificates, _next_parents) =
-        make_optimal_certificates(&committee, 1..=4, &genesis, &ids);
+    let (mut certificates, _next_parents) = make_optimal_certificates(
+        &committee,
+        1..=4,
+        &genesis,
+        &ids,
+        &latest_protocol_version(),
+    );
     let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
 
     // set up a Dag

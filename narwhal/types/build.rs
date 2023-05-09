@@ -147,6 +147,15 @@ fn build_anemo_services(out_dir: &Path) {
         )
         .method(
             anemo_build::manual::Method::builder()
+                .name("report_our_batch_v2")
+                .route_name("ReportOurBatchV2")
+                .request_type("crate::WorkerOurBatchMessageV2")
+                .response_type("()")
+                .codec_path(codec_path)
+                .build(),
+        )
+        .method(
+            anemo_build::manual::Method::builder()
                 .name("report_others_batch")
                 .route_name("ReportOthersBatch")
                 .request_type("crate::WorkerOthersBatchMessage")

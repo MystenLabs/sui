@@ -19,7 +19,7 @@ use storage::NodeStorage;
 use tokio::sync::oneshot;
 
 use consensus::consensus::ConsensusRound;
-use test_utils::{temp_dir, CommitteeFixture};
+use test_utils::{latest_protocol_version, temp_dir, CommitteeFixture};
 use tokio::{
     sync::{
         mpsc::{self, error::TryRecvError, Receiver, Sender},
@@ -236,7 +236,7 @@ async fn fetch_certificates_basic() {
             .into_iter()
             .map(|header| fixture.certificate(&header).digest())
             .collect();
-        (_, current_round) = fixture.headers_round(i, &parents);
+        (_, current_round) = fixture.headers_round(i, &parents, &latest_protocol_version());
         headers.extend(current_round.clone());
     }
 

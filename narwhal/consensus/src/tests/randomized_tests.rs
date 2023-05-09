@@ -23,6 +23,7 @@ use std::num::NonZeroUsize;
 use std::ops::RangeInclusive;
 use std::sync::Arc;
 use storage::ConsensusStore;
+use test_utils::latest_protocol_version;
 use test_utils::mock_certificate_with_rand;
 use test_utils::CommitteeFixture;
 #[allow(unused_imports)]
@@ -420,6 +421,7 @@ pub fn make_certificates_with_parameters(
                 round,
                 parents_digests.clone(),
                 &mut rand,
+                &latest_protocol_version(),
             );
 
             // group certificates by round for easy access

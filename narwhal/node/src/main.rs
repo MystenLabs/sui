@@ -29,6 +29,7 @@ use sui_keys::keypair_file::{
     read_authority_keypair_from_file, read_network_keypair_from_file,
     write_authority_keypair_to_file, write_keypair_to_file,
 };
+use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
 use sui_types::crypto::{get_key_pair_from_rng, AuthorityKeyPair, SuiKeyPair};
 use telemetry_subscribers::TelemetryGuards;
 use tokio::sync::mpsc::channel;
@@ -280,10 +281,13 @@ async fn run(
     let (primary, worker) = match matches.subcommand() {
         // Spawn the primary and consensus core.
         ("primary", Some(sub_matches)) => {
+            // TODO: Figure out the right way to handle protocol version.
+            // Use the latest version for now.
             let primary = PrimaryNode::new(
                 parameters.clone(),
                 !sub_matches.is_present("consensus-disabled"),
                 registry_service,
+                ProtocolConfig::get_for_version(ProtocolVersion::max()),
             );
 
             primary
@@ -309,7 +313,14 @@ async fn run(
                 .parse::<WorkerId>()
                 .context("The worker id must be a positive integer")?;
 
-            let worker = WorkerNode::new(id, parameters.clone(), registry_service);
+            // TODO: Figure out the right way to handle protocol version.
+            // Use the latest version for now.
+            let worker = WorkerNode::new(
+                id,
+                parameters.clone(),
+                registry_service,
+                ProtocolConfig::get_for_version(ProtocolVersion::max()),
+            );
 
             worker
                 .start(
