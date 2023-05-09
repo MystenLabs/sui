@@ -994,7 +994,6 @@ impl RpcExampleProvider {
     }
 
     fn sui_get_loaded_child_objects(&mut self) -> Examples {
-
         let mut sequence = SequenceNumber::from_u64(self.rng.gen_range(24506..6450624));
         let seqs = (0..6)
             .map(|x| {
@@ -1008,11 +1007,11 @@ impl RpcExampleProvider {
             })
             .collect::<Vec<_>>();
                 
-            let result = {
-                SuiLoadedChildObjectsResponse {
-                    loaded_child_objects: seqs,
-                }
-            };
+        let result = {
+            SuiLoadedChildObjectsResponse {
+                loaded_child_objects: seqs,
+            }
+        };
 
         Examples::new(
             "sui_getLoadedChildObjects",
@@ -1025,7 +1024,6 @@ impl RpcExampleProvider {
     }
 
     fn sui_get_move_function_arg_types(&mut self) -> Examples {
-
         let result = vec![
             MoveFunctionArgType::Object(ByMutableReference),
             MoveFunctionArgType::Pure,
@@ -1051,7 +1049,6 @@ impl RpcExampleProvider {
     }
 
     fn sui_get_normalized_move_function(&mut self) -> Examples {
-
         let ability_set = SuiMoveAbilitySet {
             abilities: vec![SuiMoveAbility::Store, SuiMoveAbility::Key],
         };
@@ -1197,52 +1194,46 @@ impl RpcExampleProvider {
     }
 
     fn suix_get_owned_objects(&mut self) -> Examples {
-
         let owner = SuiAddress::from(ObjectID::new(self.rng.gen()));
         let version: u64 = 13488;
         let options = Some(
             SuiObjectDataOptions::new()
-            .with_type()
-            .with_owner()
-            .with_previous_transaction()
+                .with_type()
+                .with_owner()
+                .with_previous_transaction()
         );
-        let filter = Some(SuiObjectDataFilter::MatchAll(
-            vec![SuiObjectDataFilter::StructType(
-                    StructTag::from_str("0x2::coin::Coin<0x2::sui::SUI>").unwrap()
-                ),
-                SuiObjectDataFilter::AddressOwner(
-                    owner
-                ),
-                SuiObjectDataFilter::Version(
-                    version
-                )
-            ]
-        ));
-        let query = json!(SuiObjectResponseQuery {
-            filter,
-            options
-        });
+        let filter = Some(SuiObjectDataFilter::MatchAll(vec![
+            SuiObjectDataFilter::StructType(
+                StructTag::from_str("0x2::coin::Coin<0x2::sui::SUI>").unwrap(),
+            ),
+            SuiObjectDataFilter::AddressOwner(owner),
+            SuiObjectDataFilter::Version(version),
+        ]));
+        let query = json!(SuiObjectResponseQuery { filter, options });
         let object_id = ObjectID::new(self.rng.gen());
-        
-        let items = (0..3)
-            .map(|_| SuiObjectResponse::new_with_data(SuiObjectData {
-                content: None,
-                owner: Some(Owner::AddressOwner(owner)),
-                previous_transaction: Some(TransactionDigest::new(self.rng.gen())),
-                storage_rebate: Some(100),
-                object_id: ObjectID::new(self.rng.gen()),
-                version: SequenceNumber::from_u64(version),
-                digest: ObjectDigest::new(self.rng.gen()),
-                type_: Some(ObjectType::Struct(MoveObjectType::gas_coin())),
-                bcs: None,
-                display: None,
-            })).collect::<Vec<_>>();
 
-        let next_cursor = items.last().unwrap().object_id(); 
+        let items = (0..3)
+            .map(|_| {
+                SuiObjectResponse::new_with_data(SuiObjectData {
+                    content: None,
+                    owner: Some(Owner::AddressOwner(owner)),
+                    previous_transaction: Some(TransactionDigest::new(self.rng.gen())),
+                    storage_rebate: Some(100),
+                    object_id: ObjectID::new(self.rng.gen())
+                    version: SequenceNumber::from_u64(version)
+                    digest: ObjectDigest::new(self.rng.gen()),
+                    type_: Some(ObjectType::Struct(MoveObjectType::gas_coin())),
+                    bcs: None,
+                    display: None,
+                })
+            })
+            .collect::<Vec<_>>();
+
+        let next_cursor = items.last().unwrap().object_id();
         let result = ObjectsPage {
             data: items,
             next_cursor: Some(next_cursor.unwrap()),
-            has_next_page: true
+            has_next_page: true,
         }; 
 
         Examples::new(
