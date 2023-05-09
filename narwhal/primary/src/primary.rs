@@ -36,7 +36,6 @@ use fastcrypto::{
     signature_service::SignatureService,
     traits::{KeyPair as _, ToFromBytes},
 };
-use futures::{stream::FuturesUnordered, StreamExt};
 use mysten_metrics::{monitored_scope, spawn_monitored_task};
 use mysten_network::{multiaddr::Protocol, Multiaddr};
 use network::{
@@ -44,8 +43,9 @@ use network::{
     epoch_filter::{AllowedEpoch, EPOCH_HEADER_KEY},
 };
 use network::{failpoints::FailpointsMakeCallbackHandler, metrics::MetricsMakeCallbackHandler};
+use parking_lot::Mutex;
 use prometheus::Registry;
-use std::collections::HashMap;
+use std::collections::{btree_map::Entry, BTreeMap, HashMap};
 use std::{
     cmp::Reverse,
     collections::{BTreeSet, BinaryHeap},
@@ -62,13 +62,12 @@ use tokio::{
 };
 use tower::ServiceBuilder;
 use tracing::{debug, error, info, instrument, warn};
-
 use types::{
     ensure,
     error::{DagError, DagResult},
     metered_channel::{channel_with_total, Receiver, Sender},
     now, Certificate, CertificateAPI, CertificateDigest, FetchCertificatesRequest,
-    FetchCertificatesResponse, GetCertificatesRequest, GetCertificatesResponse, HeaderAPI,
+    FetchCertificatesResponse, GetCertificatesRequest, GetCertificatesResponse, Header, HeaderAPI,
     PayloadAvailabilityRequest, PayloadAvailabilityResponse, PreSubscribedBroadcastSender,
     PrimaryToPrimary, PrimaryToPrimaryServer, RequestVoteRequest, RequestVoteResponse, Round,
     SendCertificateRequest, SendCertificateResponse, Vote, VoteInfoAPI, WorkerOthersBatchMessage,
@@ -222,6 +221,7 @@ impl Primary {
             payload_store: payload_store.clone(),
             vote_digest_store,
             rx_narwhal_round_updates,
+            parent_digests: Default::default(),
             metrics: node_metrics.clone(),
         })
         // Allow only one inflight RequestVote RPC at a time per peer.
@@ -648,6 +648,11 @@ struct PrimaryReceiverHandler {
     vote_digest_store: VoteDigestStore,
     /// Get a signal when the round changes.
     rx_narwhal_round_updates: watch::Receiver<Round>,
+    /// Known parent digests that are being fetched from header proposers.
+    /// Values are where the digests are first known from.
+    /// TODO: consider limiting maximum number of digests from one authority, allow timeout
+    /// and retries from other authorities.
+    parent_digests: Arc<Mutex<BTreeMap<(Round, CertificateDigest), AuthorityIdentifier>>>,
     metrics: Arc<PrimaryMetrics>,
 }
 
@@ -682,6 +687,15 @@ impl PrimaryReceiverHandler {
         let committee = self.committee.clone();
         header.validate(&committee, &self.worker_cache)?;
 
+        let num_parents = request.body().parents.len();
+        ensure!(
+            num_parents <= committee.size(),
+            DagError::TooManyParents(num_parents, committee.size())
+        );
+        self.metrics
+            .certificates_in_votes
+            .inc_by(num_parents as u64);
+
         // Vote request must come from the Header's author.
         let peer_id = request
             .peer_id()
@@ -712,71 +726,39 @@ impl PrimaryReceiverHandler {
             header.round()
         );
 
-        // Clone the round updates channel so we can get update notifications specific to
-        // this RPC handler.
-        let mut rx_narwhal_round_updates = self.rx_narwhal_round_updates.clone();
-        // Maximum header age is chosen to strike a balance between allowing for slightly older
-        // certificates to still have a chance to be included in the DAG while not wasting
-        // resources on very old vote requests. This value affects performance but not correctness
-        // of the algorithm.
-        const HEADER_AGE_LIMIT: Round = 3;
-
-        // If requester has provided us with parent certificates, process them all
-        // before proceeding.
-        self.metrics
-            .certificates_in_votes
-            .inc_by(request.body().parents.len() as u64);
-        let mut wait_notifications: FuturesUnordered<_> = request
-            .body()
-            .parents
-            .clone()
-            .into_iter()
-            .map(|cert| self.synchronizer.wait_to_accept_certificate(cert))
-            .collect();
-        loop {
-            tokio::select! {
-                result = wait_notifications.next() => {
-                    match result {
-                        Some(result) => {
-                            result?;
-                            continue;
-                        },
-                        // Waits are done. Missing parents have been accepted.
-                        None => break,
-                    }
-                },
-                result = rx_narwhal_round_updates.changed() => {
-                    if result.is_err() {
-                        return Err(DagError::NetworkError("Node shutting down".to_owned()));
-                    }
-                    let narwhal_round = *rx_narwhal_round_updates.borrow();
-                    ensure!(
-                        narwhal_round.saturating_sub(HEADER_AGE_LIMIT) <= header.round(),
-                        DagError::TooOld(header.digest().into(), header.round(), narwhal_round)
-                    )
-                },
+        // Request missing parent certificates from the header proposer, to reduce voting latency
+        // when some certificates are not broadcasted to many primaries.
+        // This is only a latency optimization, and not required for liveness.
+        let parents = request.body().parents.clone();
+        if parents.is_empty() {
+            // If any parent is still unknown, ask the header proposer to include them with another
+            // vote request.
+            let unknown_digests = self.get_unknown_parent_digests(header).await?;
+            if !unknown_digests.is_empty() {
+                debug!(
+                    "Received vote request for {:?} with unknown parents {:?}",
+                    header, unknown_digests
+                );
+                return Ok(RequestVoteResponse {
+                    vote: None,
+                    missing: unknown_digests,
+                });
             }
+        } else {
+            // If requester has provided parent certificates, try to accept them.
+            // It is ok to not check for additional unknown digests, because certificates can
+            // become available asynchronously from broadcast or certificate fetching.
+            self.try_accept_unknown_parents(header, parents).await?;
         }
 
-        // Ensure we have the parents. If any are missing, the requester should provide them on retry.
-        // This check is necessary for correctness, because it is possible that the list of missing
-        // parents in the request is incomplete, or wait_notifications get notified on shut down
-        // without actually having the parents available.
-        let (parents, missing) = self.synchronizer.get_parents(header)?;
-        if !missing.is_empty() {
-            return Ok(RequestVoteResponse {
-                vote: None,
-                missing,
-            });
-        }
-
-        // Now that we've got all the required certificates, ensure we're voting on a
-        // current Header.
-        let narwhal_round = *rx_narwhal_round_updates.borrow();
-        ensure!(
-            narwhal_round.saturating_sub(HEADER_AGE_LIMIT) <= header.round(),
-            DagError::TooOld(header.digest().into(), header.round(), narwhal_round)
-        );
+        // Ensure the header has all parents accepted. If some are missing, waits until they become
+        // available from broadcast or certificate fetching. If no certificate becomes available
+        // for a digest, this request will time out or get cancelled by the requestor eventually.
+        // This check is necessary for correctness.
+        let parents = self
+            .synchronizer
+            .notify_read_parent_certificates(header)
+            .await?;
 
         // Check the parent certificates. Ensure the parents:
         // - form a quorum
@@ -852,33 +834,46 @@ impl PrimaryReceiverHandler {
             .map_err(DagError::StoreError)?;
 
         if let Some(vote_info) = result {
-            if header.epoch() < vote_info.epoch()
-                || (header.epoch() == vote_info.epoch() && header.round() < vote_info.round())
-            {
-                // Already voted on a newer Header for this publicKey.
-                return Err(DagError::TooOld(
-                    header.digest().into(),
+            ensure!(
+                header.epoch() == vote_info.epoch(),
+                DagError::InvalidEpoch {
+                    expected: header.epoch(),
+                    received: vote_info.epoch()
+                }
+            );
+            ensure!(
+                header.round() >= vote_info.round(),
+                DagError::AlreadyVotedNewerHeader(
+                    header.digest(),
                     header.round(),
-                    narwhal_round,
-                ));
-            }
-            if header.epoch() == vote_info.epoch() && header.round() == vote_info.round() {
+                    vote_info.round(),
+                )
+            );
+            if header.round() == vote_info.round() {
                 // Make sure we don't vote twice for the same authority in the same epoch/round.
-                let temp_vote =
-                    Vote::new(header, &self.authority_id, &self.signature_service).await;
-                if temp_vote.digest() != vote_info.vote_digest() {
-                    info!(
-                        "Authority {} submitted duplicate header for votes at epoch {}, round {}",
+                let vote = Vote::new(header, &self.authority_id, &self.signature_service).await;
+                if vote.digest() != vote_info.vote_digest() {
+                    warn!(
+                        "Authority {} submitted different header {:?} for voting",
                         header.author(),
-                        header.epoch(),
-                        header.round()
+                        header,
                     );
                     self.metrics.votes_dropped_equivocation_protection.inc();
                     return Err(DagError::AlreadyVoted(
                         vote_info.vote_digest(),
+                        header.digest(),
                         header.round(),
                     ));
                 }
+                debug!(
+                    "Resending vote {vote:?} for {} at round {}",
+                    header,
+                    header.round()
+                );
+                return Ok(RequestVoteResponse {
+                    vote: Some(vote),
+                    missing: Vec::new(),
+                });
             }
         }
 
@@ -897,6 +892,81 @@ impl PrimaryReceiverHandler {
             vote: Some(vote),
             missing: Vec::new(),
         })
+    }
+
+    // Tries to accept certificates if they have been requested from the header author.
+    // The filtering is to avoid overload from unrequested certificates. It is ok that this
+    // filter may result in a certificate never arriving via header proposals, because
+    // liveness is guaranteed by certificate fetching.
+    async fn try_accept_unknown_parents(
+        &self,
+        header: &Header,
+        mut parents: Vec<Certificate>,
+    ) -> DagResult<()> {
+        {
+            let parent_digests = self.parent_digests.lock();
+            parents.retain(|cert| {
+                let Some(from) = parent_digests.get(&(cert.round(), cert.digest())) else {
+                    return false;
+                };
+                // Only process a certificate from the primary where it is first known.
+                *from == header.author()
+            });
+        }
+        for parent in parents {
+            self.synchronizer.try_accept_certificate(parent).await?;
+        }
+        Ok(())
+    }
+
+    /// Gets parent certificate digests not known before, in storage, among suspended certificates,
+    /// or being requested from other header proposers.
+    async fn get_unknown_parent_digests(
+        &self,
+        header: &Header,
+    ) -> DagResult<Vec<CertificateDigest>> {
+        // Get digests not known by the synchronizer, in storage or among suspended certificates.
+        let mut digests = self.synchronizer.get_unknown_parent_digests(header).await?;
+
+        // Maximum header age is chosen to strike a balance between allowing for slightly older
+        // certificates to still have a chance to be included in the DAG while not wasting
+        // resources on very old vote requests. This value affects performance but not correctness
+        // of the algorithm.
+        const HEADER_AGE_LIMIT: Round = 3;
+
+        // Lock to ensure consistency between limit_round and where parent_digests are gc'ed.
+        let mut parent_digests = self.parent_digests.lock();
+
+        // Check that the header is not too old.
+        let narwhal_round = *self.rx_narwhal_round_updates.borrow();
+        let limit_round = narwhal_round.saturating_sub(HEADER_AGE_LIMIT);
+        ensure!(
+            limit_round <= header.round(),
+            DagError::TooOld(header.digest().into(), header.round(), narwhal_round)
+        );
+
+        // Drop old entries from parent_digests.
+        while let Some(((round, _digest), _authority)) = parent_digests.first_key_value() {
+            // Minimum header round is limit_round, so minimum parent round is limit_round - 1.
+            if *round < limit_round.saturating_sub(1) {
+                parent_digests.pop_first();
+            } else {
+                break;
+            }
+        }
+
+        // Filter out digests that are already requested from other header proposers.
+        digests.retain(
+            |digest| match parent_digests.entry((header.round() - 1, *digest)) {
+                Entry::Occupied(_) => false,
+                Entry::Vacant(v) => {
+                    v.insert(header.author());
+                    true
+                }
+            },
+        );
+
+        Ok(digests)
     }
 }
 
@@ -936,7 +1006,8 @@ impl PrimaryToPrimary for PrimaryReceiverHandler {
                         | DagError::HeaderHasBadWorkerIds(_)
                         | DagError::HeaderHasInvalidParentRoundNumbers(_)
                         | DagError::HeaderHasDuplicateParentAuthorities(_)
-                        | DagError::AlreadyVoted(_, _)
+                        | DagError::AlreadyVoted(_, _, _)
+                        | DagError::AlreadyVotedNewerHeader(_, _, _)
                         | DagError::HeaderRequiresQuorum(_)
                         | DagError::TooOld(_, _, _) => {
                             anemo::types::response::StatusCode::BadRequest
