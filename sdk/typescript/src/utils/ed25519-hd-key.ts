@@ -8,9 +8,9 @@ import { sha512 } from '@noble/hashes/sha512';
 import { hmac } from '@noble/hashes/hmac';
 import nacl from 'tweetnacl';
 import { fromHEX } from '@mysten/bcs';
+import { type HardenedEd25519Path } from '../cryptography/ed25519-keypair';
 
 type Hex = string;
-type Path = string;
 
 type Keys = {
   key: Uint8Array;
@@ -19,8 +19,6 @@ type Keys = {
 
 const ED25519_CURVE = 'ed25519 seed';
 const HARDENED_OFFSET = 0x80000000;
-
-export const pathRegex = new RegExp("^m(\\/[0-9]+')+$");
 
 export const replaceDerive = (val: string): string => val.replace("'", '');
 
@@ -69,26 +67,11 @@ export const getPublicKey = (
   return withZeroByte ? newArr : signPk;
 };
 
-export const isValidPath = (path: string): boolean => {
-  if (!pathRegex.test(path)) {
-    return false;
-  }
-  return !path
-    .split('/')
-    .slice(1)
-    .map(replaceDerive)
-    .some(isNaN as any /* ts T_T*/);
-};
-
 export const derivePath = (
-  path: Path,
+  path: HardenedEd25519Path,
   seed: Hex,
   offset = HARDENED_OFFSET,
 ): Keys => {
-  if (!isValidPath(path)) {
-    throw new Error('Invalid derivation path');
-  }
-
   const { key, chainCode } = getMasterKeyFromSeed(seed);
   const segments = path
     .split('/')

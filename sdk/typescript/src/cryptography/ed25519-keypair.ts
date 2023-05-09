@@ -4,10 +4,12 @@
 import nacl from 'tweetnacl';
 import { ExportedKeypair, Keypair, PRIVATE_KEY_SIZE } from './keypair';
 import { Ed25519PublicKey } from './ed25519-publickey';
-import { isValidHardenedPath, mnemonicToSeedHex } from './mnemonics';
+import { mnemonicToSeedHex } from './mnemonics';
 import { derivePath } from '../utils/ed25519-hd-key';
 import { toB64 } from '@mysten/bcs';
 import { SignatureScheme } from './signature';
+
+export type HardenedEd25519Path = `m/44'/784'/${number}'/${number}'/${number}'`;
 
 export const DEFAULT_ED25519_DERIVATION_PATH = "m/44'/784'/0'/0'/0'";
 
@@ -120,15 +122,11 @@ export class Ed25519Keypair implements Keypair {
    * If path is none, it will default to m/44'/784'/0'/0'/0', otherwise the path must
    * be compliant to SLIP-0010 in form m/44'/784'/{account_index}'/{change_index}'/{address_index}'.
    */
-  static deriveKeypair(mnemonics: string, path?: string): Ed25519Keypair {
-    if (path == null) {
-      path = DEFAULT_ED25519_DERIVATION_PATH;
-    }
-    if (!isValidHardenedPath(path)) {
-      throw new Error('Invalid derivation path');
-    }
+  static deriveKeypair(
+    mnemonics: string,
+    path: HardenedEd25519Path = DEFAULT_ED25519_DERIVATION_PATH,
+  ): Ed25519Keypair {
     const { key } = derivePath(path, mnemonicToSeedHex(mnemonics));
-
     return Ed25519Keypair.fromSecretKey(key);
   }
 

@@ -1,7 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { Ed25519Keypair, fromB64 } from '@mysten/sui.js';
+import {
+    Ed25519Keypair,
+    fromB64,
+    type HardenedEd25519Path,
+} from '@mysten/sui.js';
 import mitt from 'mitt';
 import { throttle } from 'throttle-debounce';
 
@@ -506,8 +510,7 @@ export class Keyring {
         );
     }
 
-    private makeDerivationPath(index: number) {
-        // currently returns only Ed25519 path
+    private makeDerivationPath(index: number): HardenedEd25519Path {
         return `m/44'/784'/${index}'/0'/0'`;
     }
 

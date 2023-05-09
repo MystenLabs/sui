@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { Ed25519PublicKey } from '@mysten/sui.js';
+import { Ed25519PublicKey, type HardenedEd25519Path } from '@mysten/sui.js';
 import { useQuery, type UseQueryOptions } from '@tanstack/react-query';
 
 import { useSuiLedgerClient } from './SuiLedgerClientProvider';
@@ -73,5 +73,5 @@ async function deriveAccountsFromLedger(
 function getDerivationPathsForLedger(numDerivations: number) {
     return Array.from({
         length: numDerivations,
-    }).map((_, index) => `m/44'/784'/${index}'/0'/0'`);
+    }).map<HardenedEd25519Path>((_, index) => `m/44'/784'/${index}'/0'/0'`);
 }

@@ -52,9 +52,6 @@ const TEST_CASES = [
   ],
 ];
 
-const TEST_MNEMONIC =
-  'result crisp session latin must fruit genuine question prevent start coconut brave speak student dismiss';
-
 describe('secp256k1-keypair', () => {
   it('new keypair', () => {
     const keypair = new Secp256k1Keypair();
@@ -150,17 +147,5 @@ describe('secp256k1-keypair', () => {
       const exported = imported.export();
       expect(exported.privateKey).toEqual(toB64(raw.slice(1)));
     }
-  });
-
-  it('incorrect purpose node for secp256k1 derivation path', () => {
-    expect(() => {
-      Secp256k1Keypair.deriveKeypair(TEST_MNEMONIC, `m/44'/784'/0'/0'/0'`);
-    }).toThrow('Invalid derivation path');
-  });
-
-  it('incorrect hardened path for secp256k1 key derivation', () => {
-    expect(() => {
-      Secp256k1Keypair.deriveKeypair(TEST_MNEMONIC, `m/54'/784'/0'/0'/0'`);
-    }).toThrow('Invalid derivation path');
   });
 });

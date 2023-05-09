@@ -2,7 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { Check12, X12 } from '@mysten/icons';
-import { Ed25519PublicKey, type SuiAddress } from '@mysten/sui.js';
+import {
+    Ed25519PublicKey,
+    type SuiAddress,
+    type HardenedEd25519Path,
+} from '@mysten/sui.js';
 import { useState } from 'react';
 import toast from 'react-hot-toast';
 
@@ -17,7 +21,7 @@ import { Text } from '_src/ui/app/shared/text';
 
 export type VerifyLedgerConnectionLinkProps = {
     accountAddress: SuiAddress;
-    derivationPath: string;
+    derivationPath: HardenedEd25519Path;
 };
 
 enum VerificationStatus {

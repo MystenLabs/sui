@@ -86,12 +86,8 @@ describe('ed25519-keypair', () => {
     expect(isValid).toBeTruthy();
   });
 
-  it('incorrect coin type node for ed25519 derivation path', () => {
-    const keypair = Ed25519Keypair.deriveKeypair(
-      TEST_MNEMONIC,
-      `m/44'/784'/0'/0'/0'`,
-    );
-
+  it('valid mnemonic to derive ed25519 keypair', () => {
+    const keypair = Ed25519Keypair.deriveKeypair(TEST_MNEMONIC);
     const signData = new TextEncoder().encode('hello world');
     const signature = keypair.signData(signData);
     const isValid = nacl.sign.detached.verify(
@@ -100,18 +96,6 @@ describe('ed25519-keypair', () => {
       keypair.getPublicKey().toBytes(),
     );
     expect(isValid).toBeTruthy();
-  });
-
-  it('incorrect coin type node for ed25519 derivation path', () => {
-    expect(() => {
-      Ed25519Keypair.deriveKeypair(TEST_MNEMONIC, `m/44'/0'/0'/0'/0'`);
-    }).toThrow('Invalid derivation path');
-  });
-
-  it('incorrect purpose node for ed25519 derivation path', () => {
-    expect(() => {
-      Ed25519Keypair.deriveKeypair(TEST_MNEMONIC, `m/54'/784'/0'/0'/0'`);
-    }).toThrow('Invalid derivation path');
   });
 
   it('invalid mnemonics to derive ed25519 keypair', () => {

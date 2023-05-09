@@ -9,6 +9,7 @@ import {
     type SuiAddress,
     toSerializedSignature,
     type JsonRpcProvider,
+    type HardenedEd25519Path,
 } from '@mysten/sui.js';
 
 import type SuiLedgerClient from '@mysten/ledgerjs-hw-app-sui';
@@ -16,12 +17,12 @@ import type SuiLedgerClient from '@mysten/ledgerjs-hw-app-sui';
 export class LedgerSigner extends SignerWithProvider {
     #suiLedgerClient: SuiLedgerClient | null;
     readonly #connectToLedger: () => Promise<SuiLedgerClient>;
-    readonly #derivationPath: string;
+    readonly #derivationPath: HardenedEd25519Path;
     readonly #signatureScheme: SignatureScheme = 'ED25519';
 
     constructor(
         connectToLedger: () => Promise<SuiLedgerClient>,
-        derivationPath: string,
+        derivationPath: HardenedEd25519Path,
         provider: JsonRpcProvider
     ) {
         super(provider);

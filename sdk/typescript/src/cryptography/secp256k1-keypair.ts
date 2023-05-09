@@ -6,12 +6,14 @@ import { PublicKey } from './publickey';
 import { sha256 } from '@noble/hashes/sha256';
 import { Secp256k1PublicKey } from './secp256k1-publickey';
 import { secp256k1 } from '@noble/curves/secp256k1';
-import { isValidBIP32Path, mnemonicToSeed } from './mnemonics';
+import { mnemonicToSeed } from './mnemonics';
 import { HDKey } from '@scure/bip32';
 import { toB64 } from '@mysten/bcs';
 import { SignatureScheme } from './signature';
 import { bytesToHex } from '@noble/hashes/utils';
 import { blake2b } from '@noble/hashes/blake2b';
+
+export type Secp256k1Path = `m/54'/784'/${number}'/${number}/${number}`;
 
 export const DEFAULT_SECP256K1_DERIVATION_PATH = "m/54'/784'/0'/0/0";
 
@@ -125,13 +127,10 @@ export class Secp256k1Keypair implements Keypair {
    * If path is none, it will default to m/54'/784'/0'/0/0, otherwise the path must
    * be compliant to BIP-32 in form m/54'/784'/{account_index}'/{change_index}/{address_index}.
    */
-  static deriveKeypair(mnemonics: string, path?: string): Secp256k1Keypair {
-    if (path == null) {
-      path = DEFAULT_SECP256K1_DERIVATION_PATH;
-    }
-    if (!isValidBIP32Path(path)) {
-      throw new Error('Invalid derivation path');
-    }
+  static deriveKeypair(
+    mnemonics: string,
+    path: Secp256k1Path = DEFAULT_SECP256K1_DERIVATION_PATH,
+  ): Secp256k1Keypair {
     const key = HDKey.fromMasterSeed(mnemonicToSeed(mnemonics)).derive(path);
     if (key.publicKey == null || key.privateKey == null) {
       throw new Error('Invalid key');
