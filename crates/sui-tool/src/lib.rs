@@ -9,6 +9,7 @@ use itertools::Itertools;
 use std::collections::BTreeMap;
 use std::fmt::Write;
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 use std::{fs, io};
 use sui_config::{genesis::Genesis, NodeConfig};
 use sui_core::authority_client::{AuthorityAPI, NetworkAuthorityClient};
@@ -34,7 +35,8 @@ async fn make_clients(
     genesis: Option<PathBuf>,
     fullnode_rpc: Option<String>,
 ) -> Result<BTreeMap<AuthorityName, (Multiaddr, NetworkAuthorityClient)>> {
-    let net_config = default_mysten_network_config();
+    let mut net_config = default_mysten_network_config();
+    net_config.connect_timeout = Some(Duration::from_secs(5));
     let mut authority_clients = BTreeMap::new();
 
     if let Some(fullnode_rpc) = fullnode_rpc {
@@ -144,14 +146,24 @@ impl std::fmt::Display for GroupedObjectOutput {
             .iter()
             .flat_map(|(name, multiaddr, resp)| {
                 resp.iter().map(|(seq_num, r, timespent)| {
-                    (*name, multiaddr.clone(), seq_num, r, timespent)
+                    (
+                        *name,
+                        multiaddr.clone(),
+                        seq_num,
+                        r,
+                        timespent,
+                        r.as_ref().err(),
+                    )
                 })
             })
-            .sorted_by(|a, b| Ord::cmp(&b.2, &a.2))
-            .group_by(|(_, _, seq_num, _r, _ts)| **seq_num);
+            .sorted_by(|a, b| {
+                Ord::cmp(&b.2, &a.2)
+                    .then_with(|| Ord::cmp(&format!("{:?}", &b.5), &format!("{:?}", &a.5)))
+            })
+            .group_by(|(_, _, seq_num, _r, _ts, _)| **seq_num);
         for (seq_num, group) in &responses {
             writeln!(f, "seq num: {}", seq_num.opt_debug("latest-seq-num"))?;
-            let cur_version_resp = group.group_by(|(_, _, _, r, _)| match r {
+            let cur_version_resp = group.group_by(|(_, _, _, r, _, _)| match r {
                 Ok(result) => {
                     let parent_tx_digest = result.object.previous_transaction;
                     let obj_digest = result.object.compute_object_reference().2;
@@ -172,7 +184,7 @@ impl std::fmt::Display for GroupedObjectOutput {
                         writeln!(f, "parent tx: {parent_tx_digest}")?;
                         writeln!(f, "owner: {owner}")?;
                         writeln!(f, "lock: {lock}")?;
-                        for (i, (name, multiaddr, _, _, timespent)) in group.enumerate() {
+                        for (i, (name, multiaddr, _, _, timespent, _)) in group.enumerate() {
                             writeln!(
                                 f,
                                 "        {:<4} {:<20} {:<56} ({:.3}s)",
@@ -185,7 +197,7 @@ impl std::fmt::Display for GroupedObjectOutput {
                     }
                     None => {
                         writeln!(f, "ERROR")?;
-                        for (i, (name, multiaddr, _, resp, timespent)) in group.enumerate() {
+                        for (i, (name, multiaddr, _, resp, timespent, _)) in group.enumerate() {
                             writeln!(
                                 f,
                                 "        {:<4} {:<20} {:<56} ({:.3}s) {:?}",
@@ -354,6 +366,9 @@ pub async fn get_transaction_block(
     }))
     .await;
 
+    // Grab one validator that return Some(TransactionInfoResponse)
+    let validator_aware_of_tx = responses.iter().find(|r| r.2.is_ok());
+
     let responses = responses
         .iter()
         .map(|r| {
@@ -364,10 +379,13 @@ pub async fn get_transaction_block(
                         TransactionStatus::Executed(_, effects, _) => Some(effects.digest()),
                     })
                     .ok();
-            (key, r)
+            let err = r.2.as_ref().err();
+            (key, err, r)
         })
-        .sorted_by(|(k1, _), (k2, _)| Ord::cmp(k1, k2))
-        .group_by(|(_, r)| {
+        .sorted_by(|(k1, err1, _), (k2, err2, _)| {
+            Ord::cmp(k1, k2).then_with(|| Ord::cmp(err1, err2))
+        })
+        .group_by(|(_, _err, r)| {
             r.2.as_ref().map(|ok_result| match &ok_result.status {
                 TransactionStatus::Signed(_) => None,
                 TransactionStatus::Executed(_, effects, _) => Some((
@@ -397,12 +415,21 @@ pub async fn get_transaction_block(
                     "#{:<2} tx_digest: {:<68?} Signed but not executed",
                     i, tx_digest
                 )?;
+                if show_input_tx {
+                    // In this case, we expect at least one validator knows about this tx
+                    let validator_aware_of_tx = validator_aware_of_tx.unwrap();
+                    let client = &clients.get(&validator_aware_of_tx.0).unwrap().1;
+                    let tx_info = client.handle_transaction_info_request(TransactionInfoRequest {
+                        transaction_digest: tx_digest,
+                    }).await.unwrap_or_else(|e| panic!("Validator {:?} should have known about tx_digest: {:?}, got error: {:?}", validator_aware_of_tx.0, tx_digest, e));
+                    writeln!(&mut s, "{:#?}", tx_info)?;
+                }
             }
             other => {
                 writeln!(&mut s, "#{:<2} {:#?}", i, other)?;
             }
         }
-        for (j, (_, res)) in group.enumerate() {
+        for (j, (_, _, res)) in group.enumerate() {
             writeln!(
                 &mut s,
                 "        {:<4} {:<20} {:<56} ({:.3}s)",
