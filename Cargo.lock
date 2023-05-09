@@ -4452,6 +4452,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "integer-encoding"
+version = "3.0.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8bb03732005da905c88227371639bf1ad885cc712789c011c31c5fb3ab3ccf02"
+
+[[package]]
 name = "internment"
 version = "0.5.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6698,6 +6704,27 @@ checksum = "0fac9e2da13b5eb447a6ce3d392f23a29d8694bff781bf03a16cd9ac8697593b"
 dependencies = [
  "hermit-abi 0.2.6",
  "libc",
+]
+
+[[package]]
+name = "num_enum"
+version = "0.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7a015b430d3c108a207fd776d2e2196aaf8b1cf8cf93253e3a097ff3085076a1"
+dependencies = [
+ "num_enum_derive",
+]
+
+[[package]]
+name = "num_enum_derive"
+version = "0.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "96667db765a921f7b295ffee8b60472b686a51d4f21c2ee4ffdb94c7013b65a6"
+dependencies = [
+ "proc-macro-crate",
+ "proc-macro2 1.0.54",
+ "quote 1.0.26",
+ "syn 2.0.10",
 ]
 
 [[package]]
@@ -9576,7 +9603,6 @@ dependencies = [
  "tracing",
  "typed-store",
  "typed-store-derive",
- "url",
  "workspace-hack",
 ]
 
@@ -10350,6 +10376,36 @@ dependencies = [
 ]
 
 [[package]]
+name = "sui-snapshot"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "backoff",
+ "bcs",
+ "byteorder",
+ "bytes",
+ "fastcrypto",
+ "futures",
+ "integer-encoding",
+ "num_enum",
+ "object_store",
+ "prometheus",
+ "serde 1.0.152",
+ "sui-core",
+ "sui-protocol-config",
+ "sui-storage",
+ "sui-types",
+ "tempfile",
+ "tokio",
+ "tokio-stream",
+ "tracing",
+ "typed-store",
+ "typed-store-derive",
+ "workspace-hack",
+ "zstd",
+]
+
+[[package]]
 name = "sui-source-validation"
 version = "0.1.0"
 dependencies = [
@@ -10411,6 +10467,7 @@ dependencies = [
  "tracing",
  "typed-store",
  "typed-store-derive",
+ "url",
  "workspace-hack",
 ]
 
@@ -11279,9 +11336,9 @@ dependencies = [
 
 [[package]]
 name = "tokio-stream"
-version = "0.1.11"
+version = "0.1.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d660770404473ccd7bc9f8b28494a811bc18542b915c0855c51e8f419d5223ce"
+checksum = "397c988d37662c7dda6d2208364a706264bf3d6138b11d436cbac0ad38832842"
 dependencies = [
  "futures-core",
  "pin-project-lite",
@@ -12743,6 +12800,7 @@ dependencies = [
  "inquire",
  "insta",
  "instant",
+ "integer-encoding",
  "internment",
  "io-lifetimes",
  "ipnet",
@@ -12875,6 +12933,8 @@ dependencies = [
  "num-traits 0.1.43",
  "num-traits 0.2.15",
  "num_cpus",
+ "num_enum",
+ "num_enum_derive",
  "number_prefix",
  "object",
  "oid-registry",
@@ -13247,6 +13307,8 @@ dependencies = [
  "yasna",
  "zeroize",
  "zeroize_derive",
+ "zstd",
+ "zstd-safe",
  "zstd-sys",
 ]
 
@@ -13342,11 +13404,31 @@ dependencies = [
 ]
 
 [[package]]
-name = "zstd-sys"
-version = "2.0.4+zstd.1.5.2"
+name = "zstd"
+version = "0.12.3+zstd.1.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4fa202f2ef00074143e219d15b62ffc317d17cc33909feac471c044087cad7b0"
+checksum = "76eea132fb024e0e13fd9c2f5d5d595d8a967aa72382ac2f9d39fcc95afd0806"
+dependencies = [
+ "zstd-safe",
+]
+
+[[package]]
+name = "zstd-safe"
+version = "6.0.5+zstd.1.5.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d56d9e60b4b1758206c238a10165fbcae3ca37b01744e394c463463f6529d23b"
+dependencies = [
+ "libc",
+ "zstd-sys",
+]
+
+[[package]]
+name = "zstd-sys"
+version = "2.0.8+zstd.1.5.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5556e6ee25d32df2586c098bbfa278803692a20d0ab9565e049480d52707ec8c"
 dependencies = [
  "cc",
  "libc",
+ "pkg-config",
 ]
