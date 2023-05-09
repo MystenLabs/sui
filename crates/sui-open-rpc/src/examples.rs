@@ -1006,7 +1006,6 @@ impl RpcExampleProvider {
                 SuiLoadedChildObject::new(ObjectID::new(self.rng.gen()), sequence)
             })
             .collect::<Vec<_>>();
-                
         let result = {
             SuiLoadedChildObjectsResponse {
                 loaded_child_objects: seqs,
@@ -1074,6 +1073,7 @@ impl RpcExampleProvider {
             )],
         )
     }
+    
     fn suix_get_validators_apy(&mut self) -> Examples {
         let result = vec![
             ValidatorApy {
@@ -1200,7 +1200,7 @@ impl RpcExampleProvider {
             SuiObjectDataOptions::new()
                 .with_type()
                 .with_owner()
-                .with_previous_transaction()
+                .with_previous_transaction(),
         );
         let filter = Some(SuiObjectDataFilter::MatchAll(vec![
             SuiObjectDataFilter::StructType(
@@ -1234,7 +1234,7 @@ impl RpcExampleProvider {
             data: items,
             next_cursor: Some(next_cursor.unwrap()),
             has_next_page: true,
-        }; 
+        };
 
         Examples::new(
             "suix_getOwnedObjects",
