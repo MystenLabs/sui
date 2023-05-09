@@ -1,9 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 //! This module implements the [Rosetta Account API](https://www.rosetta-api.org/docs/AccountApi.html)
-
-use std::thread;
-
 use axum::extract::State;
 use axum::{Extension, Json};
 use axum_extra::extract::WithRejection;
