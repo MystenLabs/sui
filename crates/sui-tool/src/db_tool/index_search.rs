@@ -34,6 +34,8 @@ where
     }
 }
 
+/// Until we use a proc macro to auto derive this, we have to make sure to update the
+/// `search_index` function below when adding new tables.
 pub fn search_index(
     db_path: PathBuf,
     table_name: String,
@@ -154,7 +156,7 @@ macro_rules! get_db_entries {
         let termination = match $term {
             SearchRange::ExclusiveLastKey(last_key) => {
                 println!(
-                    "Retrieving al keys up to (but not including) key: {:?}",
+                    "Retrieving all keys up to (but not including) key: {:?}",
                     key
                 );
                 SearchRange::ExclusiveLastKey($key_converter(last_key.as_str())?)
