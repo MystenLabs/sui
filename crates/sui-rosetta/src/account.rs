@@ -14,7 +14,7 @@ use tracing::info;
 use crate::errors::Error;
 use crate::types::{
     AccountBalanceRequest, AccountBalanceResponse, AccountCoinsRequest, AccountCoinsResponse,
-    Amount, BlockIdentifier, Coin, SubAccount, SubAccountType, SubBalance,
+    Amount, Coin, SubAccount, SubAccountType, SubBalance,
 };
 use crate::{OnlineServerContext, SuiEnv};
 use std::time::Duration;

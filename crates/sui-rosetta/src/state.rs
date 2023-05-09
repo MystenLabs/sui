@@ -3,30 +3,15 @@
 
 use crate::operations::Operations;
 use crate::types::{
-    Block, BlockHash, BlockIdentifier, BlockResponse, OperationStatus, OperationType, Transaction,
-    TransactionIdentifier,
+    Block, BlockHash, BlockIdentifier, BlockResponse, Transaction, TransactionIdentifier,
 };
 use crate::Error;
 use async_trait::async_trait;
-use chrono::{DateTime, Utc};
-use mysten_metrics::spawn_monitored_task;
-use rocksdb::Options;
-use std::collections::HashMap;
-use std::path::Path;
-use std::str::FromStr;
 use std::sync::Arc;
-use std::time::{Duration, UNIX_EPOCH};
 use sui_json_rpc_types::SuiTransactionBlockResponseOptions;
 use sui_sdk::rpc_types::Checkpoint;
 use sui_sdk::SuiClient;
-use sui_types::base_types::{EpochId, SuiAddress};
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
-use tracing::{debug, error, info, warn};
-use typed_store::rocks::{default_db_options, DBMap, DBOptions, MetricConf};
-use typed_store::traits::TableSummary;
-use typed_store::traits::TypedStoreDebug;
-use typed_store::Map;
-use typed_store_derive::DBMapUtils;
 
 #[cfg(test)]
 #[path = "unit_tests/balance_changing_tx_tests.rs"]
@@ -67,7 +52,6 @@ pub trait BlockProvider {
 
 #[derive(Clone)]
 pub struct CheckpointBlockProvider {
-    index_store: Arc<CheckpointIndexStore>,
     client: SuiClient,
 }
 
@@ -119,12 +103,8 @@ impl BlockProvider for CheckpointBlockProvider {
 }
 
 impl CheckpointBlockProvider {
-    pub fn spawn(client: SuiClient, db_path: &Path) -> Self {
-        let blocks = Self {
-            index_store: Arc::new(CheckpointIndexStore::open(db_path, None)),
-            client,
-        };
-        blocks
+    pub fn new(client: SuiClient) -> Self {
+        Self { client }
     }
 
     async fn create_block_response(&self, checkpoint: Checkpoint) -> Result<BlockResponse, Error> {
@@ -195,53 +175,4 @@ impl CheckpointBlockProvider {
             hash: checkpoint.digest,
         })
     }
-}
-
-fn extract_balance_changes_from_ops(ops: Operations) -> HashMap<SuiAddress, i128> {
-    ops.into_iter()
-        .fold(HashMap::<SuiAddress, i128>::new(), |mut changes, op| {
-            if let Some(OperationStatus::Success) = op.status {
-                match op.type_ {
-                    OperationType::SuiBalanceChange
-                    | OperationType::Gas
-                    | OperationType::PaySui
-                    | OperationType::StakeReward
-                    | OperationType::StakePrinciple
-                    | OperationType::Stake => {
-                        if let (Some(addr), Some(amount)) = (op.account, op.amount) {
-                            *changes.entry(addr.address).or_default() += amount.value
-                        }
-                    }
-                    _ => {}
-                };
-            }
-            changes
-        })
-}
-
-#[derive(DBMapUtils)]
-pub struct CheckpointIndexStore {
-    #[default_options_override_fn = "default_config"]
-    balances: DBMap<(SuiAddress, EpochId), i128>,
-    #[default_options_override_fn = "default_config"]
-    last_checkpoint: DBMap<bool, CheckpointSequenceNumber>,
-}
-
-impl CheckpointIndexStore {
-    pub fn open(db_dir: &Path, db_options: Option<Options>) -> Self {
-        Self::open_tables_read_write(
-            db_dir.to_path_buf(),
-            MetricConf::default(),
-            db_options,
-            None,
-        )
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.last_checkpoint.is_empty() && self.balances.is_empty()
-    }
-}
-
-fn default_config() -> DBOptions {
-    default_db_options().optimize_for_point_lookup(64)
 }

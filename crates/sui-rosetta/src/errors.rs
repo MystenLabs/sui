@@ -100,10 +100,7 @@ trait CustomProperties {
 
 impl CustomProperties for Error {
     fn retriable(&self) -> bool {
-        match self.get_str("retriable") {
-            Some("true") => true,
-            _ => false,
-        }
+        matches!(self.get_str("retriable"), Some("true"))
     }
 }
 
