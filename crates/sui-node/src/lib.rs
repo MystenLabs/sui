@@ -804,6 +804,97 @@ impl SuiNode {
         )
     }
 
+    async fn perform_snapshot_recovery(
+        config: &NodeConfig,
+        prometheus_registry: &Registry,
+    ) -> Result<Option<EpochId>> {
+        if !config.state_snapshot_recovery_config.enable_snapshot_recovery {
+            info!("Snapshot recovery is disabled");
+            return Ok(None);
+        }
+        let checkpoint_store_read_only = CheckpointStore::get_read_only_handle(config.db_path().join("checkpoints"), None, None, MetricConf::default());
+        let highest_executed_checkpoint = if let Some(highest_executed) =
+            checkpoint_store_read_only.watermarks.get(&CheckpointWatermark::HighestExecuted)? {
+            highest_executed.0
+        } else {
+            0
+        };
+        mem::drop(checkpoint_store_read_only);
+        if highest_executed_checkpoint > 0 {
+            // We are only going to be invoking snapshot recovery for nodes starting with no
+            // previous state for now. Later, we can decide if snapshot recovery is a better viable
+            // option compared to state sync based on how far behind the node is from its peers
+            info!("Not doing snapshot recovery as highest executed checkpoint sequence is > 0");
+            return Ok(None);
+        }
+        let snapshot_recovery = StateSnapshotRecoveryLoop::new(
+            config.state_snapshot_recovery_config.clone(), highest_executed_checkpoint, &prometheus_registry);
+        if let Err(e) = snapshot_recovery {
+            error!("Failed to initialize snapshot recovery with error: {:?}", e);
+            return Ok(None);
+        }
+        // unwrap is safe because of above check
+        let snapshot_recovery = snapshot_recovery.unwrap();
+        let genesis = &config.genesis()?;
+        let tmp_path = TempDir::new()?.path().to_owned();
+        let committee_store = Arc::new(CommitteeStore::new(
+            tmp_path.join("epochs"),
+            &genesis.committee()?,
+            None,
+        ));
+        let authority_store = Arc::new(AuthorityStore::open(
+            &tmp_path.join("store"),
+            None,
+            &genesis,
+            &committee_store,
+            &config.authority_store_pruning_config,
+            checkpoint_receiver,
+        ).await?);
+        let mut cur_epoch = authority_store.get_recovery_epoch_at_restart()?;
+        let mut committee = committee_store
+            .get_committee(&cur_epoch)?
+            .expect("Committee of the current epoch must exist");
+        let mut epoch_store = AuthorityPerEpochStore::new(
+            config.protocol_public_key(),
+            committee,
+            &config.db_path().join("store"),
+            None,
+            EpochMetrics::new(&registry_service.default_registry()),
+            None,
+        );
+        let checkpoint_store = CheckpointStore::new(&tmp_path.join("checkpoints"));
+        checkpoint_store.insert_genesis_checkpoint(
+            genesis.checkpoint(),
+            genesis.checkpoint_contents().clone(),
+            &epoch_store,
+        );
+        let state_sync_store = RocksDbStore::new(
+            authority_store.clone(),
+            committee_store,
+            checkpoint_store
+        );
+        let (p2p_network, discovery_handle, state_sync_handle) =
+            Self::create_p2p_network(config, state_sync_store, &prometheus_registry)?;
+        if let Err(err) = snapshot_recovery.start(&authority_store.perpetual_tables, &checkpoint_store).await {
+            // Returning ok here will let us fall back to state sync based recovery
+            error!("Failed snapshot recovery with error: {:?}", err);
+            return Ok(None);
+        }
+
+        let new_epoch = authority_store.get_recovery_epoch_at_restart()?;
+
+        mem::drop(authority_store);
+        mem::drop(state_sync_handle);
+        mem::drop(discovery_handle);
+        mem::drop(p2p_network);
+
+        // Persist the temporary directory to disk, getting the path where it is.
+        let tmp_path = tmp_dir.into_path();
+        fs::rename(config.db_path(), config.db_path().with_extension("tmp"))?;
+        fs::rename(tmp_path, config.db_path())?;
+        Ok(Some(new_epoch))
+    }
+
     fn construct_narwhal_manager(
         config: &NodeConfig,
         consensus_config: &ConsensusConfig,
