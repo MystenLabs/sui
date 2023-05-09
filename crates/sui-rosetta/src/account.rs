@@ -25,7 +25,7 @@ use std::time::Duration;
 /// Get an array of all AccountBalances for an AccountIdentifier and the BlockIdentifier
 /// at which the balance lookup was performed.
 /// [Rosetta API Spec](https://www.rosetta-api.org/docs/AccountApi.html#accountbalance)
-pub async fn balance_new(
+pub async fn balance(
     State(ctx): State<OnlineServerContext>,
     Extension(env): Extension<SuiEnv>,
     WithRejection(Json(request), _): WithRejection<Json<AccountBalanceRequest>, Error>,
@@ -55,7 +55,7 @@ pub async fn balance_new(
                     .read_api()
                     .get_latest_checkpoint_sequence_number()
                     .await?;
-                thread::sleep(Duration::from_secs(1))
+                tokio::time::sleep(Duration::from_secs(1)).await;
             }
             let balances_second =
                 get_sub_account_balances(account_type.clone(), &ctx.client, address).await?;
@@ -100,7 +100,7 @@ pub async fn balance_new(
                     .read_api()
                     .get_latest_checkpoint_sequence_number()
                     .await?;
-                thread::sleep(Duration::from_secs(1))
+                tokio::time::sleep(Duration::from_secs(1)).await;
             }
 
             // Get live balance again

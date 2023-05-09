@@ -77,7 +77,7 @@ impl BlockProvider for CheckpointBlockProvider {
         let checkpoint = self.client.read_api().get_checkpoint(index.into()).await?;
         self.create_block_response(checkpoint).await
     }
-    
+
     async fn get_block_by_hash(&self, hash: BlockHash) -> Result<BlockResponse, Error> {
         let checkpoint = self.client.read_api().get_checkpoint(hash.into()).await?;
         self.create_block_response(checkpoint).await
@@ -107,8 +107,7 @@ impl BlockProvider for CheckpointBlockProvider {
             .get_latest_checkpoint_sequence_number()
             .await?;
 
-        self.create_block_identifier(checkpoint)
-            .await
+        self.create_block_identifier(checkpoint).await
     }
 
     async fn create_block_identifier(

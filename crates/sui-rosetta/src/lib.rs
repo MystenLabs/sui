@@ -50,7 +50,7 @@ impl RosettaOnlineServer {
     pub fn serve(self, addr: SocketAddr) -> JoinHandle<hyper::Result<()>> {
         // Online endpoints
         let app = Router::new()
-            .route("/account/balance", post(account::balance_new))
+            .route("/account/balance", post(account::balance))
             .route("/account/coins", post(account::coins))
             .route("/block", post(block::block))
             .route("/block/transaction", post(block::transaction))
