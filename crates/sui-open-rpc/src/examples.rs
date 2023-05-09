@@ -25,8 +25,8 @@ use sui_json_rpc_types::SuiTransactionBlockEvents;
 use sui_json_rpc_types::TransactionFilter;
 use sui_json_rpc_types::{
     Balance, Checkpoint, CheckpointId, CheckpointPage, Coin, CoinPage, DynamicFieldPage, EventPage,
-    MoveCallParams, MoveFunctionArgType, ObjectChange, ObjectsPage, ObjectValueKind::ByImmutableReference,
-    ObjectValueKind::ByMutableReference, ObjectValueKind::ByValue, OwnedObjectRef,
+    MoveCallParams, MoveFunctionArgType, ObjectChange, ObjectValueKind::ByImmutableReference,
+    ObjectValueKind::ByMutableReference, ObjectValueKind::ByValue, ObjectsPage, OwnedObjectRef,
     RPCTransactionRequestParams, SuiCommittee, SuiData, SuiEvent, SuiExecutionStatus,
     SuiLoadedChildObject, SuiLoadedChildObjectsResponse, SuiMoveAbility, SuiMoveAbilitySet,
     SuiMoveNormalizedFunction, SuiMoveNormalizedType, SuiMoveVisibility, SuiObjectData,
@@ -1219,8 +1219,8 @@ impl RpcExampleProvider {
                     owner: Some(Owner::AddressOwner(owner)),
                     previous_transaction: Some(TransactionDigest::new(self.rng.gen())),
                     storage_rebate: Some(100),
-                    object_id: ObjectID::new(self.rng.gen())
-                    version: SequenceNumber::from_u64(version)
+                    object_id: ObjectID::new(self.rng.gen()),
+                    version: SequenceNumber::from_u64(version),
                     digest: ObjectDigest::new(self.rng.gen()),
                     type_: Some(ObjectType::Struct(MoveObjectType::gas_coin())),
                     bcs: None,
