@@ -4,6 +4,8 @@
 use rand::thread_rng;
 use sui_replay::fuzz::{ReplayFuzzer, ReplayFuzzerConfig, ShuffleMutator};
 const TESTNET_FULLNODE_URL: &str = "https://fullnode.testnet.sui.io:443";
+
+#[ignore]
 #[tokio::test]
 async fn test_replay_fuzzer() {
     let config = ReplayFuzzerConfig {
