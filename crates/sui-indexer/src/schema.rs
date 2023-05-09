@@ -19,6 +19,8 @@ pub mod sql_types {
 diesel::table! {
     active_addresses (account_address) {
         account_address -> Varchar,
+        first_appearance_tx -> Varchar,
+        first_appearance_time -> Int8,
         last_appearance_tx -> Varchar,
         last_appearance_time -> Int8,
     }
@@ -29,6 +31,8 @@ diesel::table! {
         account_address -> Varchar,
         first_appearance_tx -> Varchar,
         first_appearance_time -> Int8,
+        last_appearance_tx -> Varchar,
+        last_appearance_time -> Int8,
     }
 }
 
