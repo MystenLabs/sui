@@ -13,6 +13,7 @@ use fastcrypto::traits::KeyPair;
 use prometheus::Registry;
 use std::path::PathBuf;
 use std::sync::Arc;
+use sui_config::certificate_deny_config::CertificateDenyConfig;
 use sui_config::genesis::Genesis;
 use sui_config::node::{
     AuthorityStorePruningConfig, DBCheckpointConfig, ExpensiveSafetyCheckConfig,
@@ -24,18 +25,23 @@ use sui_protocol_config::{ProtocolConfig, SupportedProtocolVersions};
 use sui_storage::IndexStore;
 use sui_types::base_types::{AuthorityName, ObjectID};
 use sui_types::crypto::AuthorityKeyPair;
-use sui_types::messages::{VerifiedExecutableTransaction, VerifiedTransaction};
+use sui_types::error::SuiResult;
+use sui_types::executable_transaction::VerifiedExecutableTransaction;
+use sui_types::object::Object;
 use sui_types::sui_system_state::SuiSystemStateTrait;
+use sui_types::transaction::VerifiedTransaction;
 
 #[derive(Default)]
 pub struct TestAuthorityBuilder<'a> {
     store_base_path: Option<PathBuf>,
     store: Option<Arc<AuthorityStore>>,
     transaction_deny_config: Option<TransactionDenyConfig>,
+    certificate_deny_config: Option<CertificateDenyConfig>,
     protocol_config: Option<ProtocolConfig>,
     reference_gas_price: Option<u64>,
     node_keypair: Option<&'a AuthorityKeyPair>,
     genesis: Option<&'a Genesis>,
+    starting_objects: Option<&'a [Object]>,
 }
 
 impl<'a> TestAuthorityBuilder<'a> {
@@ -48,6 +54,11 @@ impl<'a> TestAuthorityBuilder<'a> {
         self
     }
 
+    pub fn with_starting_objects(mut self, objects: &'a [Object]) -> Self {
+        assert!(self.starting_objects.replace(objects).is_none());
+        self
+    }
+
     pub fn with_store(mut self, store: Arc<AuthorityStore>) -> Self {
         assert!(self.store.replace(store).is_none());
         self
@@ -55,6 +66,11 @@ impl<'a> TestAuthorityBuilder<'a> {
 
     pub fn with_transaction_deny_config(mut self, config: TransactionDenyConfig) -> Self {
         assert!(self.transaction_deny_config.replace(config).is_none());
+        self
+    }
+
+    pub fn with_certificate_deny_config(mut self, config: CertificateDenyConfig) -> Self {
+        assert!(self.certificate_deny_config.replace(config).is_none());
         self
     }
 
@@ -95,6 +111,16 @@ impl<'a> TestAuthorityBuilder<'a> {
             &config.genesis,
             config.validator_configs()[0].protocol_key_pair(),
         )
+    }
+
+    pub async fn side_load_objects(
+        authority_state: Arc<AuthorityState>,
+        objects: &'a [Object],
+    ) -> SuiResult {
+        authority_state
+            .database
+            .insert_raw_object_unchecked_for_testing(objects)
+            .await
     }
 
     pub async fn build(self) -> Arc<AuthorityState> {
@@ -170,6 +196,7 @@ impl<'a> TestAuthorityBuilder<'a> {
                 .max_move_identifier_len_as_option(),
         )));
         let transaction_deny_config = self.transaction_deny_config.unwrap_or_default();
+        let certificate_deny_config = self.certificate_deny_config.unwrap_or_default();
         let state = AuthorityState::new(
             name,
             secret,
@@ -185,6 +212,7 @@ impl<'a> TestAuthorityBuilder<'a> {
             &DBCheckpointConfig::default(),
             ExpensiveSafetyCheckConfig::new_enable_all(),
             transaction_deny_config,
+            certificate_deny_config,
             usize::MAX,
         )
         .await;
@@ -204,6 +232,14 @@ impl<'a> TestAuthorityBuilder<'a> {
             )
             .await
             .unwrap();
+
+        if let Some(starting_objects) = self.starting_objects {
+            state
+                .database
+                .insert_raw_object_unchecked_for_testing(starting_objects)
+                .await
+                .unwrap();
+        };
         state
     }
 }

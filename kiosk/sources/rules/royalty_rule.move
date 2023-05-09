@@ -30,7 +30,6 @@
 module kiosk::royalty_rule {
     use sui::sui::SUI;
     use sui::coin::{Self, Coin};
-    use sui::tx_context::TxContext;
     use sui::transfer_policy::{
         Self as policy,
         TransferPolicy,
@@ -78,16 +77,14 @@ module kiosk::royalty_rule {
     public fun pay<T: key + store>(
         policy: &mut TransferPolicy<T>,
         request: &mut TransferRequest<T>,
-        payment: &mut Coin<SUI>,
-        ctx: &mut TxContext
+        payment: Coin<SUI>
     ) {
         let paid = policy::paid(request);
         let amount = fee_amount(policy, paid);
 
-        assert!(coin::value(payment) >= amount, EInsufficientAmount);
+        assert!(coin::value(&payment) == amount, EInsufficientAmount);
 
-        let fee = coin::split(payment, amount, ctx);
-        policy::add_to_balance(Rule {}, policy, fee);
+        policy::add_to_balance(Rule {}, policy, payment);
         policy::add_receipt(Rule {}, request)
     }
 

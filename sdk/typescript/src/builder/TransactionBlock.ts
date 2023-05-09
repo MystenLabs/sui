@@ -108,6 +108,14 @@ const MAX_GAS = 50_000_000_000;
 // An amount of gas (in gas units) that is added to transactions as an overhead to ensure transactions do not fail.
 const GAS_SAFE_OVERHEAD = 1000n;
 
+// The maximum objects that can be fetched at once using multiGetObjects.
+const MAX_OBJECTS_PER_FETCH = 50;
+
+const chunk = <T>(arr: T[], size: number): T[][] =>
+  Array.from({ length: Math.ceil(arr.length / size) }, (_, i) =>
+    arr.slice(i * size, i * size + size),
+  );
+
 interface BuildOptions {
   provider?: JsonRpcProvider;
   onlyTransactionKind?: boolean;
@@ -593,10 +601,18 @@ export class TransactionBlock {
 
     if (objectsToResolve.length) {
       const dedupedIds = [...new Set(objectsToResolve.map(({ id }) => id))];
-      const objects = await expectProvider(provider).multiGetObjects({
-        ids: dedupedIds,
-        options: { showOwner: true },
-      });
+      const objectChunks = chunk(dedupedIds, MAX_OBJECTS_PER_FETCH);
+      const objects = (
+        await Promise.all(
+          objectChunks.map((chunk) =>
+            expectProvider(provider).multiGetObjects({
+              ids: chunk,
+              options: { showOwner: true },
+            }),
+          ),
+        )
+      ).flat();
+
       let objectsById = new Map(
         dedupedIds.map((id, index) => {
           return [id, objects[index]];

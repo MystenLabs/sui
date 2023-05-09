@@ -47,7 +47,7 @@ export function CurrentEpoch() {
                             </Heading>
                             <Heading
                                 color="success-dark"
-                                variant="heading4/semibold"
+                                variant="heading3/semibold"
                             >
                                 {formatAmountParts(epoch)}
                             </Heading>
@@ -75,7 +75,7 @@ export function CurrentEpoch() {
                         <Heading variant="heading6/medium" color="steel-darker">
                             {label ?? '--'}
                         </Heading>
-                        <ProgressBar progress={progress || 0} />
+                        <ProgressBar animate progress={progress || 0} />
                     </div>
                     <div>
                         <Text

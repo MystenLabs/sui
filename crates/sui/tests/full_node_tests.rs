@@ -22,27 +22,29 @@ use sui_keys::keystore::AccountKeystore;
 use sui_macros::*;
 use sui_node::SuiNode;
 use sui_sdk::wallet_context::WalletContext;
+use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_tool::restore_from_db_checkpoint;
+use sui_types::base_types::ObjectID;
 use sui_types::base_types::{ObjectRef, SequenceNumber};
 use sui_types::crypto::{get_key_pair, SuiKeyPair};
 use sui_types::event::{Event, EventID};
 use sui_types::message_envelope::Message;
-use sui_types::messages::QuorumDriverResponse;
-use sui_types::messages::{
-    CallArg, ExecuteTransactionRequest, ExecuteTransactionRequestType, ExecuteTransactionResponse,
-    GasData, ObjectArg, TransactionData, TransactionKind, TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS,
-    TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
-};
+use sui_types::messages_grpc::TransactionInfoRequest;
 use sui_types::object::{Object, ObjectRead, Owner, PastObjectRead};
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
+use sui_types::quorum_driver_types::{
+    ExecuteTransactionRequest, ExecuteTransactionRequestType, ExecuteTransactionResponse,
+    QuorumDriverResponse,
+};
+use sui_types::transaction::{
+    CallArg, GasData, TransactionData, TransactionKind, TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS,
+    TEST_ONLY_GAS_UNIT_FOR_SPLIT_COIN, TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
+};
 use sui_types::utils::{
     to_sender_signed_transaction, to_sender_signed_transaction_with_multi_signers,
 };
-use sui_types::{base_types::ObjectID, messages::TransactionInfoRequest};
-use sui_types::{SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION};
+use sui_types::SUI_CLOCK_OBJECT_ID;
 use test_utils::authority::test_and_configure_authority_configs;
-use test_utils::messages::make_transactions_with_wallet_context;
-use test_utils::messages::make_transfer_object_transaction_with_wallet_context;
 use test_utils::network::{start_fullnode_from_config, TestClusterBuilder};
 use test_utils::transaction::{
     create_devnet_nft, delete_devnet_nft, increment_counter, publish_basics_package,
@@ -500,8 +502,10 @@ async fn test_full_node_sync_flood() -> Result<(), anyhow::Error> {
                         count: None,
                         coin_id: object_to_split.0,
                         gas: Some(gas_object_id),
-                        gas_budget: 50000,
-                        serialize_output: false,
+                        gas_budget: TEST_ONLY_GAS_UNIT_FOR_SPLIT_COIN
+                            * context.get_reference_gas_price().await.unwrap(),
+                        serialize_unsigned_transaction: false,
+                        serialize_signed_transaction: false,
                     }
                     .execute(context)
                     .await
@@ -725,7 +729,7 @@ async fn test_full_node_transaction_orchestrator_basic() -> Result<(), anyhow::E
         .expect("Fullnode should have transaction orchestrator toggled on.");
 
     let txn_count = 4;
-    let mut txns = make_transactions_with_wallet_context(context, txn_count).await;
+    let mut txns = context.batch_make_transfer_transactions(txn_count).await;
     assert!(
         txns.len() >= txn_count,
         "Expect at least {} txns. Do we generate enough gas objects during genesis?",
@@ -824,7 +828,7 @@ async fn test_execute_tx_with_serialized_signature() -> Result<(), anyhow::Error
     let jsonrpc_client = &test_cluster.fullnode_handle.rpc_client;
 
     let txn_count = 4;
-    let txns = make_transactions_with_wallet_context(context, txn_count).await;
+    let txns = context.batch_make_transfer_transactions(txn_count).await;
     for txn in txns {
         let tx_digest = txn.digest();
         let (tx_bytes, signatures) = txn.to_tx_bytes_and_signatures();
@@ -857,7 +861,7 @@ async fn test_full_node_transaction_orchestrator_rpc_ok() -> Result<(), anyhow::
     let jsonrpc_client = &test_cluster.fullnode_handle.rpc_client;
 
     let txn_count = 4;
-    let mut txns = make_transactions_with_wallet_context(context, txn_count).await;
+    let mut txns = context.batch_make_transfer_transactions(txn_count).await;
     assert!(
         txns.len() >= txn_count,
         "Expect at least {} txns. Do we generate enough gas objects during genesis?",
@@ -966,13 +970,10 @@ async fn test_get_objects_read() -> Result<(), anyhow::Error> {
         .await
         .unwrap()
         .unwrap();
-    let nft_transfer_tx = make_transfer_object_transaction_with_wallet_context(
-        object_ref_v1,
-        gas_ref,
-        context,
-        sender,
-        recipient,
-        rgp,
+    let nft_transfer_tx = context.sign_transaction(
+        &TestTransactionBuilder::new(sender, gas_ref, rgp)
+            .transfer(object_ref_v1, recipient)
+            .build(),
     );
     context
         .execute_transaction_block(nft_transfer_tx)
@@ -1052,6 +1053,7 @@ async fn test_full_node_bootstrap_from_snapshot() -> Result<(), anyhow::Error> {
     telemetry_subscribers::init_for_testing();
     let mut test_cluster = TestClusterBuilder::new()
         .with_epoch_duration_ms(10_000)
+        // This will also do aggressive pruning and compaction of the snapshot
         .with_enable_db_checkpoints_fullnodes()
         .build()
         .await?;
@@ -1128,11 +1130,7 @@ async fn test_pass_back_clock_object() -> Result<(), anyhow::Error> {
         ident_str!("use_clock").to_owned(),
         /* type_args */ vec![],
         gas_obj,
-        vec![CallArg::Object(ObjectArg::SharedObject {
-            id: SUI_CLOCK_OBJECT_ID,
-            initial_shared_version: SUI_CLOCK_OBJECT_SHARED_VERSION,
-            mutable: false,
-        })],
+        vec![CallArg::CLOCK_IMM],
         TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS * rgp,
         rgp,
     )

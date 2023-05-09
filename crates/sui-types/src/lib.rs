@@ -7,12 +7,9 @@
     rust_2021_compatibility
 )]
 
-use base_types::{SequenceNumber, SuiAddress, RESOLVED_ASCII_STR, RESOLVED_UTF8_STR};
-use messages::{CallArg, ObjectArg};
-use move_binary_format::{
-    binary_views::BinaryIndexedView,
-    file_format::{AbilitySet, SignatureToken},
-};
+use base_types::{SequenceNumber, SuiAddress};
+use move_binary_format::binary_views::BinaryIndexedView;
+use move_binary_format::file_format::{AbilitySet, SignatureToken};
 use move_bytecode_utils::resolve_struct;
 use move_core_types::{account_address::AccountAddress, language_storage::StructTag};
 pub use move_core_types::{identifier::Identifier, language_storage::TypeTag};
@@ -22,6 +19,7 @@ use base_types::ObjectID;
 
 pub use mysten_network::multiaddr;
 
+use crate::base_types::{RESOLVED_ASCII_STR, RESOLVED_UTF8_STR};
 use crate::{base_types::RESOLVED_STD_OPTION, id::RESOLVED_SUI_ID};
 
 #[macro_use]
@@ -30,7 +28,6 @@ pub mod error;
 pub mod accumulator;
 pub mod balance;
 pub mod base_types;
-pub mod certificate_proof;
 pub mod clock;
 pub mod coin;
 pub mod collection_types;
@@ -41,6 +38,7 @@ pub mod display;
 pub mod dynamic_field;
 pub mod effects;
 pub mod event;
+pub mod executable_transaction;
 pub mod execution_status;
 pub mod gas;
 pub mod gas_coin;
@@ -49,8 +47,9 @@ pub mod governance;
 pub mod id;
 pub mod in_memory_storage;
 pub mod message_envelope;
-pub mod messages;
 pub mod messages_checkpoint;
+pub mod messages_consensus;
+pub mod messages_grpc;
 pub mod metrics;
 pub mod move_package;
 pub mod multisig;
@@ -62,6 +61,7 @@ pub mod storage;
 pub mod sui_serde;
 pub mod sui_system_state;
 pub mod temporary_store;
+pub mod transaction;
 pub mod versioned;
 
 pub mod epoch_data;
@@ -93,12 +93,6 @@ pub const DEEPBOOK_OBJECT_ID: ObjectID = ObjectID::from_address(DEEPBOOK_ADDRESS
 /// 0x5: hardcoded object ID for the singleton sui system state object.
 pub const SUI_SYSTEM_STATE_OBJECT_ID: ObjectID = ObjectID::from_single_byte(5);
 pub const SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION: SequenceNumber = OBJECT_START_VERSION;
-
-pub const SUI_SYSTEM_OBJ_CALL_ARG: CallArg = CallArg::Object(ObjectArg::SharedObject {
-    id: SUI_SYSTEM_STATE_OBJECT_ID,
-    initial_shared_version: SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
-    mutable: true,
-});
 
 /// 0x6: hardcoded object ID for the singleton clock object.
 pub const SUI_CLOCK_OBJECT_ID: ObjectID = ObjectID::from_single_byte(6);

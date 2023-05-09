@@ -1,13 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-mod casual_order;
+mod causal_order;
 pub mod checkpoint_executor;
 mod checkpoint_output;
 mod metrics;
 
 use crate::authority::{AuthorityState, EffectsNotifyRead};
-use crate::checkpoints::casual_order::CasualOrder;
+use crate::checkpoints::causal_order::CausalOrder;
 use crate::checkpoints::checkpoint_output::{CertifiedCheckpointOutput, CheckpointOutput};
 pub use crate::checkpoints::checkpoint_output::{
     LogCheckpointOutput, SendCheckpointToStateSync, SubmitCheckpointToConsensus,
@@ -35,15 +35,16 @@ use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::gas::GasCostSummary;
 use sui_types::message_envelope::Message;
-use sui_types::messages::{ConsensusTransactionKey, TransactionDataAPI, TransactionKind};
 use sui_types::messages_checkpoint::SignedCheckpointSummary;
 use sui_types::messages_checkpoint::{
     CertifiedCheckpointSummary, CheckpointContents, CheckpointSequenceNumber,
     CheckpointSignatureMessage, CheckpointSummary, CheckpointTimestamp, EndOfEpochData,
     FullCheckpointContents, TrustedCheckpoint, VerifiedCheckpoint, VerifiedCheckpointContents,
 };
+use sui_types::messages_consensus::ConsensusTransactionKey;
 use sui_types::signature::GenericSignature;
 use sui_types::sui_system_state::{SuiSystemState, SuiSystemStateTrait};
+use sui_types::transaction::{TransactionDataAPI, TransactionKind};
 use tokio::{
     sync::{watch, Notify},
     time::timeout,
@@ -554,7 +555,10 @@ impl CheckpointBuilder {
             let mut last = self.epoch_store.last_built_checkpoint_commit_height();
             for (height, pending) in self.epoch_store.get_pending_checkpoints(last) {
                 last = Some(height);
-                debug!("Making checkpoint at commit height {height}");
+                debug!(
+                    checkpoint_commit_height = height,
+                    "Making checkpoint at commit height"
+                );
                 if let Err(e) = self.make_checkpoint(height, pending).await {
                     error!("Error while making checkpoint, will retry in 1s: {:?}", e);
                     tokio::time::sleep(Duration::from_secs(1)).await;
@@ -590,8 +594,8 @@ impl CheckpointBuilder {
         let _scope = monitored_scope("CheckpointBuilder");
         let unsorted = self.complete_checkpoint_effects(roots)?;
         let sorted = {
-            let _scope = monitored_scope("CheckpointBuilder::casual_sort");
-            CasualOrder::casual_sort(unsorted)
+            let _scope = monitored_scope("CheckpointBuilder::causal_sort");
+            CausalOrder::causal_sort(unsorted)
         };
         let new_checkpoint = self.create_checkpoints(sorted, pending.details).await?;
         self.write_checkpoints(height, new_checkpoint).await?;
@@ -607,8 +611,9 @@ impl CheckpointBuilder {
         let mut batch = self.tables.checkpoint_content.batch();
         for (summary, contents) in &new_checkpoint {
             debug!(
-                "Created checkpoint from commit height {height} with sequence {}",
-                summary.sequence_number
+                checkpoint_commit_height = height,
+                checkpoint_seq = summary.sequence_number,
+                "Created checkpoint",
             );
             self.output
                 .checkpoint_created(summary, contents, &self.epoch_store)
@@ -708,43 +713,49 @@ impl CheckpointBuilder {
                 }
             }
         }
+        let last_checkpoint_seq = last_checkpoint.as_ref().map(|(seq, _)| *seq);
 
         let all_digests: Vec<_> = all_effects
             .iter()
             .map(|effect| *effect.transaction_digest())
             .collect();
         let mut all_effects_and_transaction_sizes = Vec::with_capacity(all_effects.len());
-        for effects in all_effects {
-            let (transaction, transaction_size) = self
-                .state
-                .database
-                .get_transaction_and_serialized_size(effects.transaction_digest())?
-                .unwrap_or_else(|| panic!("Could not find executed transaction {effects:?}"));
-            // ConsensusCommitPrologue is guaranteed to be processed before we reach here
-            if !matches!(
-                transaction.inner().transaction_data().kind(),
-                TransactionKind::ConsensusCommitPrologue(_)
-            ) {
-                // todo - use NotifyRead::register_all might be faster
-                self.epoch_store
-                    .consensus_message_processed_notify(SequencedConsensusTransactionKey::External(
-                        ConsensusTransactionKey::Certificate(*effects.transaction_digest()),
-                    ))
-                    .await?;
+        {
+            let _guard = monitored_scope("CheckpointBuilder::wait_for_transactions_sequenced");
+            debug!(
+                ?last_checkpoint_seq,
+                "Waiting for {:?} certificates to appear in consensus",
+                all_effects_and_transaction_sizes.len()
+            );
+            for effects in all_effects {
+                let (transaction, transaction_size) = self
+                    .state
+                    .database
+                    .get_transaction_and_serialized_size(effects.transaction_digest())?
+                    .unwrap_or_else(|| panic!("Could not find executed transaction {effects:?}"));
+                // ConsensusCommitPrologue is guaranteed to be processed before we reach here
+                if !matches!(
+                    transaction.inner().transaction_data().kind(),
+                    TransactionKind::ConsensusCommitPrologue(_)
+                ) {
+                    // todo - use NotifyRead::register_all might be faster
+                    self.epoch_store
+                        .consensus_message_processed_notify(
+                            SequencedConsensusTransactionKey::External(
+                                ConsensusTransactionKey::Certificate(*effects.transaction_digest()),
+                            ),
+                        )
+                        .await?;
+                }
+                all_effects_and_transaction_sizes.push((effects, transaction_size));
             }
-            all_effects_and_transaction_sizes.push((effects, transaction_size));
         }
 
+        let signatures = self
+            .epoch_store
+            .user_signatures_for_checkpoint(&all_digests)?;
         debug!(
-            "Waiting for checkpoint user signatures for {:?} certificates to appear in consensus",
-            all_effects_and_transaction_sizes.len()
-        );
-        let signatures = {
-            let _guard = monitored_scope("CheckpointBuilder::wait_user_signatures");
-            self.epoch_store
-                .user_signatures_for_checkpoint(&all_digests)?
-        };
-        debug!(
+            ?last_checkpoint_seq,
             "Received {} checkpoint user signatures from consensus",
             signatures.len()
         );
@@ -754,10 +765,8 @@ impl CheckpointBuilder {
 
         let mut checkpoints = Vec::with_capacity(chunks_count);
         debug!(
-            "Creating {} checkpoints with {} transactions total after sequence {:?}",
-            chunks_count,
-            total,
-            last_checkpoint.as_ref().map(|(seq, _)| *seq)
+            ?last_checkpoint_seq,
+            "Creating {} checkpoints with {} transactions", chunks_count, total,
         );
 
         let epoch = self.epoch_store.epoch();
@@ -869,9 +878,10 @@ impl CheckpointBuilder {
                 end_of_epoch_data,
                 timestamp_ms,
             );
+            summary.report_checkpoint_age_ms(&self.metrics.last_created_checkpoint_age_ms);
             if last_checkpoint_of_epoch {
                 info!(
-                    ?sequence_number,
+                    checkpoint_seq = sequence_number,
                     "creating last checkpoint of epoch {}", epoch
                 );
                 if let Some(stats) = self.tables.get_epoch_stats(epoch, &summary) {
@@ -945,6 +955,8 @@ impl CheckpointBuilder {
             let mut pending = HashSet::new();
             for effect in roots {
                 let digest = effect.transaction_digest();
+                // Unnecessary to read effects of a depndency if the effect is already processed.
+                seen.insert(*digest);
                 if self
                     .epoch_store
                     .builder_included_transaction_in_checkpoint(digest)?
@@ -1083,15 +1095,15 @@ impl CheckpointAggregator {
             for ((seq, index), data) in iter {
                 if seq != current.summary.sequence_number {
                     debug!(
-                        "Not enough checkpoint signatures on height {}",
-                        current.summary.sequence_number
+                        checkpoint_seq =? current.summary.sequence_number,
+                        "Not enough checkpoint signatures",
                     );
                     // No more signatures (yet) for this checkpoint
                     return Ok(result);
                 }
                 debug!(
-                    "Processing signature for checkpoint {} (digest: {:?}) from {:?}",
-                    current.summary.sequence_number,
+                    checkpoint_seq = current.summary.sequence_number,
+                    "Processing signature for checkpoint (digest: {:?}) from {:?}",
                     current.summary.digest(),
                     data.summary.auth_sig().authority.concise()
                 );
@@ -1114,6 +1126,9 @@ impl CheckpointAggregator {
                     self.metrics
                         .last_certified_checkpoint
                         .set(current.summary.sequence_number as i64);
+                    current
+                        .summary
+                        .report_checkpoint_age_ms(&self.metrics.last_certified_checkpoint_age_ms);
                     result.push(summary.into_inner());
                     self.current = None;
                     continue 'outer;
@@ -1152,16 +1167,16 @@ impl CheckpointSignatureAggregator {
                 self.failures.insert_generic(author, signature)
             {
                 panic!("Checkpoint fork detected - f+1 validators submitted checkpoint digest at seq {} different from our digest {}. Validators with different digests: {:?}",
-                       self.summary.sequence_number,
-                       self.digest,
-                        data.keys()
+                    self.summary.sequence_number,
+                    self.digest,
+                    data.keys()
                 );
             }
             warn!(
-                "Validator {:?} has mismatching checkpoint digest {} at seq {}, we have digest {}",
+                checkpoint_seq = self.summary.sequence_number,
+                "Validator {:?} has mismatching checkpoint digest {}, we have digest {}",
                 author.concise(),
                 their_digest,
-                self.summary.sequence_number,
                 self.digest
             );
             return Err(());
@@ -1172,9 +1187,9 @@ impl CheckpointSignatureAggregator {
         match self.signatures.insert(envelope) {
             InsertResult::Failed { error } => {
                 warn!(
-                    "Failed to aggregate new signature from validator {:?} for checkpoint {}: {:?}",
+                    checkpoint_seq = self.summary.sequence_number,
+                    "Failed to aggregate new signature from validator {:?}: {:?}",
                     author.concise(),
-                    self.summary.sequence_number,
                     error
                 );
                 Err(())
@@ -1292,15 +1307,15 @@ impl CheckpointServiceNotify for CheckpointService {
         {
             if sequence <= last_certified {
                 debug!(
-                    "Ignore signature for checkpoint sequence {} from {} - already certified",
-                    info.summary.sequence_number, signer,
+                    checkpoint_seq = sequence,
+                    "Ignore checkpoint signature from {} - already certified", signer,
                 );
                 return Ok(());
             }
         }
         debug!(
-            "Received signature for checkpoint sequence {}, digest {} from {}",
-            sequence,
+            checkpoint_seq = sequence,
+            "Received checkpoint signature, digest {} from {}",
             info.summary.digest(),
             signer,
         );
@@ -1327,25 +1342,25 @@ impl CheckpointServiceNotify for CheckpointService {
                 panic!("Received checkpoint at index {} that contradicts previously stored checkpoint. Old digests: {:?}, new digests: {:?}", checkpoint.height(), pending.roots, checkpoint.roots);
             }
             debug!(
-                "Ignoring duplicate checkpoint notification at height {}",
-                checkpoint.height()
+                checkpoint_commit_height = checkpoint.height(),
+                "Ignoring duplicate checkpoint notification",
             );
             return Ok(());
         }
         debug!(
-            "Pending checkpoint at height {} has {} roots",
-            checkpoint.height(),
+            checkpoint_commit_height = checkpoint.height(),
+            "Pending checkpoint has {} roots",
             checkpoint.roots.len(),
         );
         trace!(
-            "Transaction roots for pending checkpoint at height {}: {:?}",
-            checkpoint.height(),
+            checkpoint_commit_height = checkpoint.height(),
+            "Transaction roots for pending checkpoint: {:?}",
             checkpoint.roots
         );
         epoch_store.insert_pending_checkpoint(&checkpoint.height(), &checkpoint)?;
         debug!(
-            "Notifying builder about checkpoint at {}",
-            checkpoint.height()
+            checkpoint_commit_height = checkpoint.height(),
+            "Notifying builder about checkpoint",
         );
         self.notify_builder.notify_one();
         Ok(())
@@ -1385,10 +1400,10 @@ mod tests {
     use sui_types::base_types::{ObjectID, SequenceNumber, TransactionEffectsDigest};
     use sui_types::crypto::Signature;
     use sui_types::effects::TransactionEffects;
-    use sui_types::messages::{GenesisObject, VerifiedTransaction};
     use sui_types::messages_checkpoint::SignedCheckpointSummary;
     use sui_types::move_package::MovePackage;
     use sui_types::object;
+    use sui_types::transaction::{GenesisObject, VerifiedTransaction};
     use tokio::sync::mpsc;
 
     #[tokio::test]

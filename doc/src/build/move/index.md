@@ -38,7 +38,7 @@ my_move_package
 
 See [Package Layout and Manifest Syntax](https://github.com/move-language/move/blob/main/language/documentation/book/src/packages.md#package-layout-and-manifest-syntax) for more information on package layout.
 
-It's now time to look at some Sui Move code. You can either keep reading for an introductory description of the main Sui Move language constructs or you can jump straight into the code by [writing a simple Sui Move package](write-package.md), and checking out additional code [examples](../../explore/examples.md).
+It's now time to look at some Sui Move code. You can either keep reading for an introductory description of the main Sui Move language constructs or you can jump straight into the code by [writing a simple Sui Move package](../move/write-package.md), and checking out additional code examples in [Sui by Example](https://examples.sui.io).
 
 ## First look at Move source code
 

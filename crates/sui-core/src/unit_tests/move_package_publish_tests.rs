@@ -10,8 +10,8 @@ use move_binary_format::CompiledModule;
 use sui_types::{
     base_types::ObjectID,
     error::UserInputError,
-    messages::{TransactionData, TEST_ONLY_GAS_UNIT_FOR_PUBLISH},
     object::{Data, ObjectRead, Owner},
+    transaction::{TransactionData, TEST_ONLY_GAS_UNIT_FOR_PUBLISH},
     utils::to_sender_signed_transaction,
 };
 

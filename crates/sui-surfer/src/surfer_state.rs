@@ -14,9 +14,9 @@ use sui_json_rpc_types::{SuiTransactionBlockEffects, SuiTransactionBlockEffectsA
 use sui_move_build::BuildConfig;
 use sui_protocol_config::ProtocolConfig;
 use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress};
-use sui_types::messages::{CallArg, ObjectArg, TransactionData, TEST_ONLY_GAS_UNIT_FOR_PUBLISH};
 use sui_types::object::{Object, Owner};
 use sui_types::storage::WriteKind;
+use sui_types::transaction::{CallArg, ObjectArg, TransactionData, TEST_ONLY_GAS_UNIT_FOR_PUBLISH};
 use sui_types::{Identifier, SUI_FRAMEWORK_ADDRESS};
 use test_utils::network::TestCluster;
 use tokio::sync::RwLock;
@@ -163,7 +163,7 @@ impl SurferState {
             rgp,
         )
         .unwrap();
-        let tx = self.cluster.sign_transaction(&self.address, &tx_data);
+        let tx = self.cluster.wallet.sign_transaction(&tx_data);
         let response = loop {
             match self.cluster.execute_transaction(tx.clone()).await {
                 Ok(effects) => break effects,
@@ -311,7 +311,7 @@ impl SurferState {
             TEST_ONLY_GAS_UNIT_FOR_PUBLISH * rgp,
             rgp,
         );
-        let tx = self.cluster.sign_transaction(&self.address, &tx_data);
+        let tx = self.cluster.wallet.sign_transaction(&tx_data);
         let response = loop {
             match self.cluster.execute_transaction(tx.clone()).await {
                 Ok(response) => {

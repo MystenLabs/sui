@@ -24,9 +24,6 @@ use sui_types::effects::{CertifiedTransactionEffects, TransactionEffects, Transa
 use sui_types::{
     base_types::{ObjectID, ObjectRef, SuiAddress},
     crypto::{get_key_pair, AccountKeyPair},
-    messages::{
-        Argument, Command, ObjectArg, ProgrammableTransaction, TransactionData, VerifiedTransaction,
-    },
     object::{Object, Owner},
     programmable_transaction_builder::ProgrammableTransactionBuilder,
     storage::ObjectStore,
@@ -34,8 +31,11 @@ use sui_types::{
         sui_system_state_summary::{SuiSystemStateSummary, SuiValidatorSummary},
         SuiSystemStateTrait,
     },
+    transaction::{
+        Argument, Command, ObjectArg, ProgrammableTransaction, TransactionData, VerifiedTransaction,
+    },
     utils::to_sender_signed_transaction,
-    SUI_SYSTEM_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
+    SUI_SYSTEM_OBJECT_ID,
 };
 use test_utils::authority::spawn_test_authorities;
 use test_utils::authority::test_authority_configs_with_objects;
@@ -380,13 +380,7 @@ mod add_stake {
         async fn run(&mut self, runner: &mut StressTestRunner) -> Result<TransactionEffects> {
             let pt = {
                 let mut builder = ProgrammableTransactionBuilder::new();
-                builder
-                    .obj(ObjectArg::SharedObject {
-                        id: SUI_SYSTEM_STATE_OBJECT_ID,
-                        initial_shared_version: SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
-                        mutable: true,
-                    })
-                    .unwrap();
+                builder.obj(ObjectArg::SUI_SYSTEM_MUT).unwrap();
                 builder.pure(self.staked_with).unwrap();
                 let coin = StressTestRunner::split_off(&mut builder, self.stake_amount);
                 move_call! {

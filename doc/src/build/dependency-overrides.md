@@ -9,7 +9,7 @@ A package might depend on another package _directly_ or _indirectly_ (also calle
 
 As long as all versions of all (directly or indirectly) dependent packages are the same, no further action on the side of the "user" package's developer is required. Unfortunately, this is not always the case. Consider the following example of the `user` package directly depending on two "library" packages: `vault` and `currency` (these are not real packages and their URLs do not exist). The (simplified) manifest file of the `user` package would then resemble the following:
 
-```move
+```toml
 [package]
 name = "user"
 version = "1.0.0"
@@ -21,7 +21,7 @@ currency = { git = "https://github.com/currency_org/currency.git" }
 
 Further consider that both `vault` and `currency` depend on another "library" package, `crypto`, but each of them depends on a different version (`crypto` becomes an indirect dependency of the `user` package). Their respective manifest files could then resemble the following:
 
-```move
+```toml
 [package]
 name = "vault"
 version = "1.0.0"
@@ -30,7 +30,7 @@ version = "1.0.0"
 crypto = { git = "https://github.com/crypto.org/crypto.git" , rev = "v1.0.0"}
 ```
 
-```move
+```toml
 [package]
 name = "currency"
 version = "2.0.0"
@@ -43,7 +43,7 @@ This situation represents the [_diamond dependency conflict_](https://jlbp.dev/w
 
 To resolve these types of problems, developers can _override_ indirect dependencies of the packages they develop. In other words, we provide a mechanism that the developer can use to specify a single version of a dependent package to be used during the build process. This can be done by introducing a _dependency override_ in the manifest file of the developed package. In the case of our running example, developer of the `user` package might decide that all dependent packages should use version `2.0.0` of the `crypto` package (note that it is the same as specified in the manifest file of the `currency` package but could be a version not used by any of the dependencies, for example `3.0.0`). At a technical level, in order to enforce a dependency override, a developer of a "user" package  has to put a dependency with a chosen version in their own manifest file, with the addition of the `override` flag set to `true`. The manifest file of the `user` package correcting the diamond dependency conflict in our running example would resemble the following:
 
-```move
+```toml
 [package]
 name = "user"
 version = "1.0.0"

@@ -86,6 +86,8 @@ export function ImportPrivateKey() {
                 onPasswordVerified={async (password) => {
                     await importMutation.mutateAsync(password);
                 }}
+                background
+                spacing
             />
         </div>
     ) : (

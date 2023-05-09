@@ -105,6 +105,7 @@ members = [
     "crates/sui-surfer",
     "crates/sui-swarm",
     "crates/sui-telemetry",
+    "crates/sui-test-transaction-builder",
     "crates/sui-test-validator",
     "crates/sui-tls",
     "crates/sui-tool",
@@ -138,7 +139,7 @@ members = [
 
 [workspace.package]
 # This version string will be inherited by sui-core, sui-faucet, sui-node, sui-tools, sui-sdk, and sui crates.
-version = "1.0.0"
+version = "1.2.0"
 
 [profile.release]
 # debug = 1 means line charts only, which is minimum needed for good stack traces
@@ -202,14 +203,14 @@ move-prover-boogie-backend = { path = "external-crates/move/move-prover/boogie-b
 move-stackless-bytecode = { path = "external-crates/move/move-prover/bytecode" }
 move-symbol-pool = { path = "external-crates/move/move-symbol-pool" }
 
-fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "27ee552d5c1feb02b6b64b4f77be3c84e82a0469" }
-fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "27ee552d5c1feb02b6b64b4f77be3c84e82a0469", package = "fastcrypto-zkp" }
+fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "c27e87fb539c88b6fe1eac7dd82561254bb1e07a" }
+fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "c27e87fb539c88b6fe1eac7dd82561254bb1e07a", package = "fastcrypto-zkp" }
 
 # anemo dependencies
-anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "05322deb1795a5d482630740bc938fa7f067c58f" }
-anemo-build = { git = "https://github.com/mystenlabs/anemo.git", rev = "05322deb1795a5d482630740bc938fa7f067c58f" }
-anemo-cli = { git = "https://github.com/mystenlabs/anemo.git", rev = "05322deb1795a5d482630740bc938fa7f067c58f"}
-anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "05322deb1795a5d482630740bc938fa7f067c58f"}
+anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "77f225832e361d068318073a6e06ec0310a16891" }
+anemo-build = { git = "https://github.com/mystenlabs/anemo.git", rev = "77f225832e361d068318073a6e06ec0310a16891" }
+anemo-cli = { git = "https://github.com/mystenlabs/anemo.git", rev = "77f225832e361d068318073a6e06ec0310a16891"}
+anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "77f225832e361d068318073a6e06ec0310a16891"}
 
 # Use the same workspace-hack across crates.
 workspace-hack = { path = "crates/workspace-hack" }

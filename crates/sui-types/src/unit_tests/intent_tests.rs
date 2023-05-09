@@ -9,8 +9,8 @@ use crate::{
         AccountKeyPair, AuthorityKeyPair, AuthoritySignature, Signature, SuiAuthoritySignature,
         SuiSignature,
     },
-    messages::{Transaction, TransactionData, TEST_ONLY_GAS_UNIT_FOR_TRANSFER},
     object::Object,
+    transaction::{Transaction, TransactionData, TEST_ONLY_GAS_UNIT_FOR_TRANSFER},
 };
 
 use crate::crypto::get_key_pair;

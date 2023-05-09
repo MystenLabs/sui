@@ -7,11 +7,11 @@ use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_sdk::{
     types::{
         base_types::{ObjectID, SuiAddress},
-        messages::Transaction,
+        transaction::Transaction,
     },
     SuiClientBuilder,
 };
-use sui_types::messages::ExecuteTransactionRequestType;
+use sui_types::quorum_driver_types::ExecuteTransactionRequestType;
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {

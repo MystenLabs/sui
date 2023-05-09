@@ -96,7 +96,7 @@ macro_rules! define_system_packages {
                 )),*
             ]
         });
-        &Lazy::force(&PACKAGES)
+        Lazy::force(&PACKAGES)
     }}
 }
 

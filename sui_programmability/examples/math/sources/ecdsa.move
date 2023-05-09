@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // A basic ECDSA utility contract to do the following:
-// 1) Hash a piece of data using keccak256, output an object with hashed data.
+// 1) Hash a piece of data using Keccak256, output an object with hashed data.
 // 2) Recover a Secp256k1 signature to its public key, output an object with the public key.
 // 3) Verify a Secp256k1 signature, produce an event for whether it is verified.
 module math::ecdsa_k1 {
@@ -22,26 +22,32 @@ module math::ecdsa_k1 {
         id: UID,
         value: vector<u8>
     }
-
+    
+    /// Hash the data using Keccak256, output an object with the hash to recipient.
     public entry fun keccak256(data: vector<u8>, recipient: address, ctx: &mut TxContext) {
         let hashed = Output {
             id: object::new(ctx),
-            value: ecdsa_k1::keccak256(&data),
+            value: sui::hash::keccak256(&data),
         };
         // Transfer an output data object holding the hashed data to the recipient.
         transfer::public_transfer(hashed, recipient)
     }
 
-    public entry fun ecrecover(signature: vector<u8>, hashed_msg: vector<u8>, recipient: address, ctx: &mut TxContext) {
+    /// Recover the public key using the signature and message, assuming the signature was produced over the 
+    /// Keccak256 hash of the message. Output an object with the recovered pubkey to recipient.
+    public entry fun ecrecover(signature: vector<u8>, msg: vector<u8>, recipient: address, ctx: &mut TxContext) {
         let pubkey = Output {
             id: object::new(ctx),
-            value: ecdsa_k1::ecrecover(&signature, &hashed_msg),
+            value: ecdsa_k1::secp256k1_ecrecover(&signature, &msg, 0),
         };
         // Transfer an output data object holding the pubkey to the recipient.
         transfer::public_transfer(pubkey, recipient)
     }
 
-    public entry fun ecrecover_to_eth_address(signature: vector<u8>, hashed_msg: vector<u8>, recipient: address, ctx: &mut TxContext) {
+    /// Recover the Ethereum address using the signature and message, assuming 
+    /// the signature was produced over the Keccak256 hash of the message. 
+    /// Output an object with the recovered address to recipient.
+    public entry fun ecrecover_to_eth_address(signature: vector<u8>, msg: vector<u8>, recipient: address, ctx: &mut TxContext) {
         // Normalize the last byte of the signature to be 0 or 1.
         let v = vector::borrow_mut(&mut signature, 64);
         if (*v == 27) {
@@ -52,7 +58,8 @@ module math::ecdsa_k1 {
             *v = (*v - 1) % 2;
         };
 
-        let pubkey = ecdsa_k1::ecrecover(&signature, &hashed_msg);
+        // Ethereum signature is produced with Keccak256 hash of the message, so the last param is 0. 
+        let pubkey = ecdsa_k1::secp256k1_ecrecover(&signature, &msg, 0);
         let uncompressed = ecdsa_k1::decompress_pubkey(&pubkey);
 
         // Take the last 64 bytes of the uncompressed pubkey.
@@ -65,7 +72,7 @@ module math::ecdsa_k1 {
         };
 
         // Take the last 20 bytes of the hash of the 64-bytes uncompressed pubkey.
-        let hashed = ecdsa_k1::keccak256(&uncompressed_64);
+        let hashed = sui::hash::keccak256(&uncompressed_64);
         let addr = vector::empty<u8>();
         let i = 12;
         while (i < 32) {
@@ -83,7 +90,9 @@ module math::ecdsa_k1 {
         transfer::public_transfer(addr_object, recipient)
     }
 
-    public entry fun secp256k1_verify(signature: vector<u8>, public_key: vector<u8>, hashed_msg: vector<u8>) {
-        event::emit(VerifiedEvent {is_verified: ecdsa_k1::secp256k1_verify(&signature, &public_key, &hashed_msg)});
+    /// Verified the secp256k1 signature using public key and message assuming Keccak was using when 
+    /// signing. Emit an is_verified event of the verification result.
+    public entry fun secp256k1_verify(signature: vector<u8>, public_key: vector<u8>, msg: vector<u8>) {
+        event::emit(VerifiedEvent {is_verified: ecdsa_k1::secp256k1_verify(&signature, &public_key, &msg, 0)});
     }
 }

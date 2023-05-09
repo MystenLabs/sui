@@ -23,8 +23,20 @@ export type DelegatedStake = Infer<typeof DelegatedStake>;
 export type CommitteeInfo = Infer<typeof CommitteeInfo>;
 export type StakeObject = Infer<typeof StakeObject>;
 
-// Staking
+// APY Response
+export const Apy = object({
+  apy: number(),
+  address: SuiAddress,
+});
 
+export const ValidatorsApy = object({
+  epoch: string(),
+  apys: array(Apy),
+});
+
+export type ValidatorsApy = Infer<typeof ValidatorsApy>;
+
+// Staking
 export const Balance = object({
   value: number(),
 });

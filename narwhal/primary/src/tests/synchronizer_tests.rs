@@ -1,8 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+
 use crate::{
-    common::create_db_stores, metrics::PrimaryMetrics, synchronizer::Synchronizer,
-    NUM_SHUTDOWN_RECEIVERS,
+    certificate_fetcher::CertificateFetcherCommand, common::create_db_stores,
+    metrics::PrimaryMetrics, synchronizer::Synchronizer, NUM_SHUTDOWN_RECEIVERS,
 };
 use config::Committee;
 use consensus::consensus::ConsensusRound;
@@ -720,7 +721,7 @@ async fn deliver_certificate_using_store() {
     assert!(parents_available);
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn deliver_certificate_not_found_parents() {
     let fixture = CommitteeFixture::builder().build();
     let primary = fixture.authorities().next().unwrap();
@@ -783,7 +784,14 @@ async fn deliver_certificate_not_found_parents() {
     // and we should fail
     assert!(!parents_available);
 
-    let certificate = rx_certificate_fetcher.recv().await.unwrap();
+    let CertificateFetcherCommand::Ancestors(certificate)  = rx_certificate_fetcher.recv().await.unwrap() else {
+        panic!("Expected CertificateFetcherCommand::Ancestors");
+    };
+
+    // Be inactive would result in a kick signal from synchronizer to fetcher eventually.
+    let CertificateFetcherCommand::Kick = rx_certificate_fetcher.recv().await.unwrap() else {
+        panic!("Expected CertificateFetcherCommand::Kick");
+    };
 
     assert_eq!(certificate, test_certificate);
 }

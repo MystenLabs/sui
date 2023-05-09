@@ -4,8 +4,8 @@
 use sui_config::transaction_deny_config::TransactionDenyConfig;
 use sui_types::{
     error::{SuiError, SuiResult, UserInputError},
-    messages::{Command, InputObjectKind, TransactionData, TransactionDataAPI},
     storage::BackingPackageStore,
+    transaction::{Command, InputObjectKind, TransactionData, TransactionDataAPI},
 };
 
 #[cfg(test)]
@@ -69,7 +69,7 @@ fn check_disabled_features(
 }
 
 fn check_signers(filter_config: &TransactionDenyConfig, tx_data: &TransactionData) -> SuiResult {
-    let deny_map = filter_config.get_address_deny_map();
+    let deny_map = filter_config.get_address_deny_set();
     if deny_map.is_empty() {
         return Ok(());
     }
@@ -89,7 +89,7 @@ fn check_input_objects(
     filter_config: &TransactionDenyConfig,
     input_objects: &[InputObjectKind],
 ) -> SuiResult {
-    let deny_map = filter_config.get_object_deny_map();
+    let deny_map = filter_config.get_object_deny_set();
     let shared_object_disabled = filter_config.shared_object_disabled();
     if deny_map.is_empty() && !shared_object_disabled {
         // No need to iterate through the input objects if no relevant policy is set.
@@ -114,7 +114,7 @@ fn check_package_dependencies(
     tx_data: &TransactionData,
     package_store: &impl BackingPackageStore,
 ) -> SuiResult {
-    let deny_map = filter_config.get_package_deny_map();
+    let deny_map = filter_config.get_package_deny_set();
     if deny_map.is_empty() {
         return Ok(());
     }

@@ -4,12 +4,12 @@
 use jsonrpsee::core::RpcResult;
 use jsonrpsee_proc_macros::rpc;
 
-use sui_json_rpc_types::SuiLoadedChildObjectsResponse;
 use sui_json_rpc_types::{
     Checkpoint, CheckpointId, CheckpointPage, SuiEvent, SuiGetPastObjectRequest,
     SuiObjectDataOptions, SuiObjectResponse, SuiPastObjectResponse, SuiTransactionBlockResponse,
     SuiTransactionBlockResponseOptions,
 };
+use sui_json_rpc_types::{ProtocolConfigResponse, SuiLoadedChildObjectsResponse};
 use sui_open_rpc_macros::open_rpc;
 use sui_types::base_types::{ObjectID, SequenceNumber, TransactionDigest};
 use sui_types::sui_serde::BigInt;
@@ -139,4 +139,13 @@ pub trait ReadApi {
     /// Return the sequence number of the latest checkpoint that has been executed
     #[method(name = "getLatestCheckpointSequenceNumber")]
     async fn get_latest_checkpoint_sequence_number(&self) -> RpcResult<BigInt<u64>>;
+
+    /// Return the protocol config table for the given version number.
+    /// If the version number is not specified, If none is specified, the node uses the version of the latest epoch it has processed.
+    #[method(name = "getProtocolConfig")]
+    async fn get_protocol_config(
+        &self,
+        /// An optional protocol version specifier. If omitted, the latest protocol config table for the node will be returned.
+        version: Option<BigInt<u64>>,
+    ) -> RpcResult<ProtocolConfigResponse>;
 }

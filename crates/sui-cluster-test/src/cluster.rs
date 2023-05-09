@@ -318,7 +318,7 @@ pub async fn new_wallet_context_from_cluster(
         wallet_config_path
     );
 
-    WalletContext::new(&wallet_config_path, None)
+    WalletContext::new(&wallet_config_path, None, None)
         .await
         .unwrap_or_else(|e| {
             panic!(

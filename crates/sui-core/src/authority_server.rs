@@ -13,9 +13,15 @@ use sui_network::{
     tonic,
 };
 use sui_types::effects::{TransactionEffectsAPI, TransactionEvents};
+use sui_types::messages_consensus::ConsensusTransaction;
+use sui_types::messages_grpc::{
+    HandleCertificateResponse, HandleCertificateResponseV2, HandleTransactionResponse,
+    ObjectInfoRequest, ObjectInfoResponse, SubmitCertificateResponse, SystemStateRequest,
+    TransactionInfoRequest, TransactionInfoResponse,
+};
 use sui_types::multiaddr::Multiaddr;
 use sui_types::sui_system_state::SuiSystemState;
-use sui_types::{error::*, messages::*};
+use sui_types::{error::*, transaction::*};
 use sui_types::{
     fp_ensure,
     messages_checkpoint::{CheckpointRequest, CheckpointResponse},
@@ -91,6 +97,8 @@ impl AuthorityServer {
             Box::new(Arc::new(ConnectionMonitorStatusForTests {})),
             100_000,
             100_000,
+            None,
+            None,
             ConsensusAdapterMetrics::new_test(),
         ));
 

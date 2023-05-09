@@ -6,7 +6,7 @@ Learn how to set up, configure, and use the Sui Client Command Line Interface (C
 
 ## Set up
 
-The SUI Client CLI installs when you install Sui. See the [Install Sui](install.md) topic for prerequisites and installation instructions.
+The Sui Client CLI installs when you install Sui. See the [Install Sui](install.md) topic for prerequisites and installation instructions.
 
 ## Using the Sui client
 
@@ -33,7 +33,7 @@ The Sui Client CLI supports the following commands:
 | `pay_sui` | Pay SUI coins to recipients following specified amounts, with input coins. Length of recipients must be the same as that of amounts. The input coins also include the coin for gas payment, so no extra gas coin is required. |
 | `publish` | Publish Move modules. |
 | `split-coin` | Split a coin object into multiple coins. |
-| `switch` | Switch active address and network (e.g., devnet, local RPC server). |
+| `switch` | Switch active address and network. |
 | `transfer` | Transfer object. |
 | `transfer-sui` | Transfer SUI, and pay gas with the same SUI coin object. If amount is specified, transfers only the amount. If not specified, transfers the object. |
 | `upgrade` | Upgrade a Move module. |
@@ -55,10 +55,7 @@ To start the interactive shell:
 sui console
 ```
 
-The console command looks for the client configuration file
-`client.yaml` in the `~/.sui/sui_config` directory. But you can
-override this setting by providing a path to the directory where this
-file is stored:
+The console command looks for the client configuration file `client.yaml` in the `~/.sui/sui_config` directory. If you have this file stored in a different directory, provide the updated path to the command to override this setting.
 
 ```shell
 sui console --client.config /workspace/config-files

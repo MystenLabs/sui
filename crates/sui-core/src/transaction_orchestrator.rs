@@ -15,6 +15,7 @@ use crate::safe_client::SafeClientMetricsBase;
 use mysten_common::sync::notify_read::{NotifyRead, Registration};
 use mysten_metrics::histogram::{Histogram, HistogramVec};
 use mysten_metrics::spawn_monitored_task;
+use mysten_metrics::{TX_TYPE_SHARED_OBJ_TX, TX_TYPE_SINGLE_WRITER_TX};
 use prometheus::core::{AtomicI64, AtomicU64, GenericCounter, GenericGauge};
 use prometheus::{
     register_int_counter_vec_with_registry, register_int_counter_with_registry,
@@ -27,13 +28,12 @@ use sui_storage::write_path_pending_tx_log::WritePathPendingTransactionLog;
 use sui_types::base_types::TransactionDigest;
 use sui_types::effects::{TransactionEffectsAPI, VerifiedCertifiedTransactionEffects};
 use sui_types::error::{SuiError, SuiResult};
-use sui_types::messages::{
-    ExecuteTransactionRequest, ExecuteTransactionRequestType, ExecuteTransactionResponse,
-    FinalizedEffects, VerifiedExecutableTransaction,
-};
+use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::object::Object;
 use sui_types::quorum_driver_types::{
-    QuorumDriverEffectsQueueResult, QuorumDriverError, QuorumDriverResponse, QuorumDriverResult,
+    ExecuteTransactionRequest, ExecuteTransactionRequestType, ExecuteTransactionResponse,
+    FinalizedEffects, QuorumDriverEffectsQueueResult, QuorumDriverError, QuorumDriverResponse,
+    QuorumDriverResult,
 };
 use sui_types::sui_system_state::SuiSystemState;
 use tokio::sync::broadcast::error::RecvError;
@@ -42,7 +42,7 @@ use tokio::task::JoinHandle;
 use tokio::time::timeout;
 use tracing::{debug, error, error_span, info, instrument, warn, Instrument};
 
-use sui_types::messages::VerifiedTransaction;
+use sui_types::transaction::VerifiedTransaction;
 
 // How long to wait for local execution (including parents) before a timeout
 // is returned to client.
@@ -50,7 +50,7 @@ const LOCAL_EXECUTION_TIMEOUT: Duration = Duration::from_secs(10);
 
 const WAIT_FOR_FINALITY_TIMEOUT: Duration = Duration::from_secs(30);
 
-pub struct TransactiondOrchestrator<A> {
+pub struct TransactiondOrchestrator<A: Clone> {
     quorum_driver_handler: Arc<QuorumDriverHandler<A>>,
     validator_state: Arc<AuthorityState>,
     _local_executor_handle: JoinHandle<()>,
@@ -226,7 +226,7 @@ where
                     &self.validator_state,
                     &executable_tx,
                     &effects_cert,
-                    &objects,
+                    objects,
                     &self.metrics,
                 )
                 .await
@@ -271,7 +271,7 @@ where
         validator_state: &Arc<AuthorityState>,
         transaction: &VerifiedExecutableTransaction,
         effects_cert: &VerifiedCertifiedTransactionEffects,
-        objects: &Vec<Object>,
+        objects: Vec<Object>,
         metrics: &TransactionOrchestratorMetrics,
     ) -> SuiResult {
         let epoch_store = validator_state.load_epoch_store_one_call_per_task();
@@ -368,7 +368,7 @@ where
                         &validator_state,
                         &executable_tx,
                         &effects_cert,
-                        &objects,
+                        objects,
                         &metrics,
                     )
                     .await;
@@ -594,6 +594,3 @@ impl TransactionOrchestratorMetrics {
         Self::new(&registry)
     }
 }
-
-const TX_TYPE_SINGLE_WRITER_TX: &str = "single_writer";
-const TX_TYPE_SHARED_OBJ_TX: &str = "shared_object";

@@ -38,6 +38,7 @@ const headingStyles = cva(
                 'steel-dark': 'text-steel-dark',
                 'steel-darker': 'text-steel-darker',
                 'success-dark': 'text-success-dark',
+                'hero-dark': 'text-hero-dark',
             },
             weight: {
                 medium: 'font-medium',

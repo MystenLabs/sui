@@ -26,7 +26,8 @@ use crate::load_test::LoadTestConfig;
 use sui_sdk::{SuiClient, SuiClientBuilder};
 use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress};
 use sui_types::crypto::{get_key_pair, AccountKeyPair, EncodeDecodeBase64, Signature, SuiKeyPair};
-use sui_types::messages::{ExecuteTransactionRequestType, Transaction, TransactionData};
+use sui_types::quorum_driver_types::ExecuteTransactionRequestType;
+use sui_types::transaction::{Transaction, TransactionData};
 
 use crate::payload::checkpoint_utils::get_latest_checkpoint_stats;
 use crate::payload::validation::chunk_entities;

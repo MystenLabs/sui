@@ -15,12 +15,13 @@ use fastcrypto::encoding::Encoding;
 use itertools::Itertools;
 use move_binary_format::CompiledModule;
 use move_core_types::language_storage::ModuleId;
+use mysten_metrics::{TX_TYPE_SHARED_OBJ_TX, TX_TYPE_SINGLE_WRITER_TX};
 use parking_lot::Mutex;
 use prometheus::{
-    register_histogram_with_registry, register_int_counter_vec_with_registry,
-    register_int_counter_with_registry, register_int_gauge_vec_with_registry,
-    register_int_gauge_with_registry, Histogram, IntCounter, IntCounterVec, IntGauge, IntGaugeVec,
-    Registry,
+    register_histogram_vec_with_registry, register_histogram_with_registry,
+    register_int_counter_vec_with_registry, register_int_counter_with_registry,
+    register_int_gauge_vec_with_registry, register_int_gauge_with_registry, Histogram, IntCounter,
+    IntCounterVec, IntGauge, IntGaugeVec, Registry,
 };
 use serde::de::DeserializeOwned;
 use serde::Serialize;
@@ -32,14 +33,16 @@ use tracing::{debug, error, info, instrument, trace, warn, Instrument};
 
 pub use authority_notify_read::EffectsNotifyRead;
 pub use authority_store::{AuthorityStore, ResolverWrapper, UpdateType};
-use mysten_metrics::spawn_monitored_task;
+use mysten_metrics::{monitored_scope, spawn_monitored_task};
 use narwhal_config::{
     Committee as ConsensusCommittee, WorkerCache as ConsensusWorkerCache,
     WorkerId as ConsensusWorkerId,
 };
+use once_cell::sync::OnceCell;
 use shared_crypto::intent::{Intent, IntentScope};
 use sui_adapter::execution_engine;
 use sui_adapter::{adapter, execution_mode};
+use sui_config::certificate_deny_config::CertificateDenyConfig;
 use sui_config::genesis::Genesis;
 use sui_config::node::{
     AuthorityStorePruningConfig, DBCheckpointConfig, ExpensiveSafetyCheckConfig,
@@ -62,8 +65,13 @@ use sui_types::crypto::{
 };
 use sui_types::digests::TransactionEventsDigest;
 use sui_types::dynamic_field::{DynamicFieldInfo, DynamicFieldName, DynamicFieldType, Field};
+use sui_types::effects::{
+    SignedTransactionEffects, TransactionEffects, TransactionEffectsAPI, TransactionEvents,
+    VerifiedCertifiedTransactionEffects, VerifiedSignedTransactionEffects,
+};
 use sui_types::error::{ExecutionError, UserInputError};
 use sui_types::event::{Event, EventID};
+use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::gas::{GasCostSummary, SuiGasStatus};
 use sui_types::message_envelope::Message;
 use sui_types::messages_checkpoint::{
@@ -71,7 +79,12 @@ use sui_types::messages_checkpoint::{
     CheckpointSequenceNumber, CheckpointSummary, CheckpointTimestamp, VerifiedCheckpoint,
 };
 use sui_types::messages_checkpoint::{CheckpointRequest, CheckpointResponse};
-use sui_types::metrics::LimitsMetrics;
+use sui_types::messages_consensus::AuthorityCapabilities;
+use sui_types::messages_grpc::{
+    HandleTransactionResponse, ObjectInfoRequest, ObjectInfoRequestKind, ObjectInfoResponse,
+    TransactionInfoRequest, TransactionInfoResponse, TransactionStatus,
+};
+use sui_types::metrics::{BytecodeVerifierMetrics, LimitsMetrics};
 use sui_types::object::{MoveObject, Owner, PastObjectRead, OBJECT_START_VERSION};
 use sui_types::storage::{ObjectKey, ObjectStore, WriteKind};
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
@@ -87,11 +100,11 @@ use sui_types::{
     crypto::AuthoritySignature,
     error::{SuiError, SuiResult},
     fp_ensure,
-    messages::*,
     object::{Object, ObjectFormatOptions, ObjectRead},
+    transaction::*,
     SUI_SYSTEM_ADDRESS,
 };
-use sui_types::{is_system_package, TypeTag};
+use sui_types::{is_system_package, TypeTag, SUI_CLOCK_OBJECT_ID};
 use typed_store::Map;
 
 use crate::authority::authority_per_epoch_store::{AuthorityPerEpochStore, CertTxGuard};
@@ -133,11 +146,6 @@ mod batch_verification_tests;
 
 #[cfg(feature = "test-utils")]
 pub mod authority_test_utils;
-use once_cell::sync::OnceCell;
-use sui_types::effects::{
-    SignedTransactionEffects, TransactionEffects, TransactionEffectsAPI, TransactionEvents,
-    VerifiedCertifiedTransactionEffects, VerifiedSignedTransactionEffects,
-};
 
 pub mod authority_per_epoch_store;
 pub mod authority_per_epoch_store_pruner;
@@ -182,7 +190,10 @@ pub struct AuthorityMetrics {
     batch_size: Histogram,
 
     handle_transaction_latency: Histogram,
-    execute_certificate_latency: Histogram,
+
+    execute_certificate_latency_single_writer: Histogram,
+    execute_certificate_latency_shared_object: Histogram,
+
     execute_certificate_with_effects_latency: Histogram,
     internal_execution_latency: Histogram,
     prepare_certificate_latency: Histogram,
@@ -218,6 +229,9 @@ pub struct AuthorityMetrics {
     pub consensus_committed_certificates: IntCounterVec,
 
     pub limits_metrics: Arc<LimitsMetrics>,
+
+    /// bytecode verifier metrics for tracking timeouts
+    pub bytecode_verifier_metrics: Arc<BytecodeVerifierMetrics>,
 }
 
 // Override default Prom buckets for positive numbers in 0-50k range
@@ -226,11 +240,26 @@ const POSITIVE_INT_BUCKETS: &[f64] = &[
 ];
 
 const LATENCY_SEC_BUCKETS: &[f64] = &[
-    0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1., 2.5, 5., 10., 20., 30., 60., 90.,
+    0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1., 2., 3., 4., 5., 6., 7., 8., 9., 10., 20.,
+    30., 60., 90.,
 ];
 
 impl AuthorityMetrics {
     pub fn new(registry: &prometheus::Registry) -> AuthorityMetrics {
+        let execute_certificate_latency = register_histogram_vec_with_registry!(
+            "authority_state_execute_certificate_latency",
+            "Latency of executing certificates, including waiting for inputs",
+            &["tx_type"],
+            LATENCY_SEC_BUCKETS.to_vec(),
+            registry,
+        )
+        .unwrap();
+
+        let execute_certificate_latency_single_writer =
+            execute_certificate_latency.with_label_values(&[TX_TYPE_SINGLE_WRITER_TX]);
+        let execute_certificate_latency_shared_object =
+            execute_certificate_latency.with_label_values(&[TX_TYPE_SHARED_OBJ_TX]);
+
         Self {
             tx_orders: register_int_counter_with_registry!(
                 "total_transaction_orders",
@@ -306,13 +335,8 @@ impl AuthorityMetrics {
                 registry,
             )
             .unwrap(),
-            execute_certificate_latency: register_histogram_with_registry!(
-                "authority_state_execute_certificate_latency",
-                "Latency of executing certificates, including waiting for inputs",
-                LATENCY_SEC_BUCKETS.to_vec(),
-                registry,
-            )
-            .unwrap(),
+            execute_certificate_latency_single_writer,
+            execute_certificate_latency_shared_object,
             execute_certificate_with_effects_latency: register_histogram_with_registry!(
                 "authority_state_execute_certificate_with_effects_latency",
                 "Latency of executing certificates with effects, including waiting for inputs",
@@ -465,6 +489,7 @@ impl AuthorityMetrics {
             )
                 .unwrap(),
             limits_metrics: Arc::new(LimitsMetrics::new(registry)),
+            bytecode_verifier_metrics: Arc::new(BytecodeVerifierMetrics::new(registry)),
         }
     }
 }
@@ -514,6 +539,8 @@ pub struct AuthorityState {
     expensive_safety_check_config: ExpensiveSafetyCheckConfig,
 
     transaction_deny_config: TransactionDenyConfig,
+
+    certificate_deny_config: CertificateDenyConfig,
 }
 
 /// The authority state encapsulates all state, drives execution, and ensures safety.
@@ -569,6 +596,7 @@ impl AuthorityState {
             epoch_store.as_ref(),
             &transaction.data().intent_message().value,
             &self.transaction_deny_config,
+            &self.metrics.bytecode_verifier_metrics,
         )
         .await?;
 
@@ -670,7 +698,7 @@ impl AuthorityState {
         // this function, in order to prevent a byzantine validator from
         // giving us incorrect effects.
         effects: &VerifiedCertifiedTransactionEffects,
-        objects: &Vec<Object>,
+        objects: Vec<Object>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult {
         assert!(self.is_fullnode(epoch_store));
@@ -687,6 +715,11 @@ impl AuthorityState {
             }
         );
 
+        // Lock this down to 0x6 before we pin child versions in effects
+        let objects = objects
+            .into_iter()
+            .filter(|o| o.id() == SUI_CLOCK_OBJECT_ID)
+            .collect::<Vec<_>>();
         if !objects.is_empty() {
             debug!(
                 "inserting objects to object store before executing a tx: {:?}",
@@ -696,7 +729,7 @@ impl AuthorityState {
                     .collect::<Vec<_>>()
             );
             self.database
-                .fullnode_fast_path_insert_objects_to_object_store_maybe(objects)?;
+                .fullnode_fast_path_insert_objects_to_object_store_maybe(&objects)?;
             self.transaction_manager()
                 .objects_available(objects.iter().map(InputKey::from).collect(), epoch_store);
         }
@@ -739,7 +772,15 @@ impl AuthorityState {
         certificate: &VerifiedCertificate,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult<VerifiedSignedTransactionEffects> {
-        let _metrics_guard = self.metrics.execute_certificate_latency.start_timer();
+        let _metrics_guard = if certificate.contains_shared_object() {
+            self.metrics
+                .execute_certificate_latency_shared_object
+                .start_timer()
+        } else {
+            self.metrics
+                .execute_certificate_latency_single_writer
+                .start_timer()
+        };
         debug!("execute_certificate");
 
         self.metrics.total_cert_attempts.inc();
@@ -773,6 +814,7 @@ impl AuthorityState {
         expected_effects_digest: Option<TransactionEffectsDigest>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult<(TransactionEffects, Option<ExecutionError>)> {
+        let _scope = monitored_scope("Execution::try_execute_immediately");
         let _metrics_guard = self.metrics.internal_execution_latency.start_timer();
         let tx_digest = *certificate.digest();
         debug!("execute_certificate_internal");
@@ -921,6 +963,9 @@ impl AuthorityState {
         _execution_guard: ExecutionLockReadGuard<'_>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult {
+        let _scope: Option<mysten_metrics::MonitoredScopeGuard> =
+            monitored_scope("Execution::commit_cert_and_notify");
+
         let input_object_count = inner_temporary_store.objects.len();
         let shared_object_count = effects.shared_objects().len();
         let digest = *certificate.digest();
@@ -1022,6 +1067,7 @@ impl AuthorityState {
         TransactionEffects,
         Option<ExecutionError>,
     )> {
+        let _scope = monitored_scope("Execution::prepare_certificate");
         let _metrics_guard = self.metrics.prepare_certificate_latency.start_timer();
 
         // check_certificate_input also checks shared object locks when loading the shared objects.
@@ -1063,6 +1109,7 @@ impl AuthorityState {
                 // cyclic dependency w/ sui-adapter
                 self.expensive_safety_check_config
                     .enable_deep_per_tx_sui_conservation_check(),
+                self.certificate_deny_config.certificate_deny_set(),
             );
 
         Ok((inner_temp_store, effects, execution_error_opt.err()))
@@ -1098,9 +1145,9 @@ impl AuthorityState {
         let mut gas_object_refs = transaction.gas().to_vec();
         let ((gas_status, input_objects), mock_gas) = if transaction.gas().is_empty() {
             let sender = transaction.sender();
-            // use a 100M sui coin
+            // use a 1B sui coin
             const MIST_TO_SUI: u64 = 1_000_000_000;
-            const DRY_RUN_SUI: u64 = 100_000_000;
+            const DRY_RUN_SUI: u64 = 1_000_000_000;
             let max_coin_value = MIST_TO_SUI * DRY_RUN_SUI;
             let gas_object_id = ObjectID::random();
             let gas_object = Object::new_move(
@@ -1116,6 +1163,7 @@ impl AuthorityState {
                     epoch_store.as_ref(),
                     &transaction,
                     gas_object,
+                    &self.metrics.bytecode_verifier_metrics,
                 )
                 .await?,
                 Some(gas_object_id),
@@ -1127,6 +1175,7 @@ impl AuthorityState {
                     epoch_store.as_ref(),
                     &transaction,
                     &self.transaction_deny_config,
+                    &self.metrics.bytecode_verifier_metrics,
                 )
                 .await?,
                 None,
@@ -1168,6 +1217,7 @@ impl AuthorityState {
                 epoch_store.protocol_config(),
                 self.metrics.limits_metrics.clone(),
                 false, // enable_expensive_checks
+                self.certificate_deny_config.certificate_deny_set(),
             );
         let tx_digest = *effects.transaction_digest();
 
@@ -1284,6 +1334,7 @@ impl AuthorityState {
                 protocol_config,
                 self.metrics.limits_metrics.clone(),
                 false, // enable_expensive_checks
+                self.certificate_deny_config.certificate_deny_set(),
             );
 
         let module_cache =
@@ -1323,7 +1374,7 @@ impl AuthorityState {
     ) -> SuiResult<u64> {
         let changes = self
             .process_object_index(effects, epoch_store)
-            .tap_err(|e| warn!("{e}"))?;
+            .tap_err(|e| warn!(tx_digest=?digest, "Failed to process object index, index_tx is skipped: {e}"))?;
 
         indexes
             .index_tx(
@@ -1756,6 +1807,7 @@ impl AuthorityState {
         db_checkpoint_config: &DBCheckpointConfig,
         expensive_safety_check_config: ExpensiveSafetyCheckConfig,
         transaction_deny_config: TransactionDenyConfig,
+        certificate_deny_config: CertificateDenyConfig,
         indirect_objects_threshold: usize,
     ) -> Arc<Self> {
         Self::check_protocol_version(supported_protocol_versions, epoch_store.protocol_version());
@@ -1798,6 +1850,7 @@ impl AuthorityState {
             db_checkpoint_config: db_checkpoint_config.clone(),
             expensive_safety_check_config,
             transaction_deny_config,
+            certificate_deny_config,
         });
 
         // Start a task to execute ready certificates.
@@ -1899,6 +1952,9 @@ impl AuthorityState {
             accumulator,
             expensive_safety_check_config.enable_state_consistency_check(),
         );
+        self.db()
+            .set_epoch_start_configuration(&epoch_start_configuration)
+            .await?;
         if let Some(checkpoint_path) = &self.db_checkpoint_config.checkpoint_path {
             if self
                 .db_checkpoint_config
@@ -2182,8 +2238,8 @@ impl AuthorityState {
         let df = self
             .get_dynamic_fields_iterator(table, None)
             .ok()?
-            .find(|df| key_bcs == df.bcs_name)?;
-        let field: Field<K, V> = self.get_move_object(&df.object_id).ok()?;
+            .find(|(_, df)| key_bcs == df.bcs_name)?;
+        let field: Field<K, V> = self.get_move_object(&df.1.object_id).ok()?;
         Some(field.value)
     }
 
@@ -2364,7 +2420,7 @@ impl AuthorityState {
         // If `Some`, the query will start from the next item after the specified cursor
         cursor: Option<ObjectID>,
         limit: usize,
-    ) -> SuiResult<Vec<DynamicFieldInfo>> {
+    ) -> SuiResult<Vec<(ObjectID, DynamicFieldInfo)>> {
         Ok(self
             .get_dynamic_fields_iterator(owner, cursor)?
             .take(limit)
@@ -2376,7 +2432,7 @@ impl AuthorityState {
         owner: ObjectID,
         // If `Some`, the query will start from the next item after the specified cursor
         cursor: Option<ObjectID>,
-    ) -> SuiResult<impl Iterator<Item = DynamicFieldInfo> + '_> {
+    ) -> SuiResult<impl Iterator<Item = (ObjectID, DynamicFieldInfo)> + '_> {
         if let Some(indexes) = &self.indexes {
             indexes.get_dynamic_fields_iterator(owner, cursor)
         } else {
@@ -2413,7 +2469,7 @@ impl AuthorityState {
         }
     }
 
-    pub async fn get_executed_transaction(
+    pub async fn get_transaction_block(
         &self,
         digest: TransactionDigest,
     ) -> Result<VerifiedTransaction, anyhow::Error> {
@@ -3623,9 +3679,6 @@ impl AuthorityState {
             epoch_start_configuration.epoch_start_state().epoch(),
             new_committee.epoch
         );
-        self.db()
-            .set_epoch_start_configuration(&epoch_start_configuration)
-            .await?;
         fail_point!("before-open-new-epoch-store");
         let new_epoch_store = cur_epoch_store.new_at_next_epoch(
             self.name,

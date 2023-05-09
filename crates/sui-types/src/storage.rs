@@ -9,12 +9,12 @@ use crate::digests::{
 use crate::effects::{TransactionEffects, TransactionEvents};
 use crate::error::SuiError;
 use crate::message_envelope::Message;
-use crate::messages::{SenderSignedData, TransactionDataAPI, VerifiedTransaction};
 use crate::messages_checkpoint::{
     CheckpointContents, CheckpointSequenceNumber, FullCheckpointContents, VerifiedCheckpoint,
     VerifiedCheckpointContents,
 };
 use crate::move_package::MovePackage;
+use crate::transaction::{SenderSignedData, TransactionDataAPI, VerifiedTransaction};
 use crate::{
     base_types::{ObjectID, ObjectRef, SequenceNumber},
     error::SuiResult,
@@ -722,7 +722,7 @@ impl From<&ObjectRef> for ObjectKey {
 /// Fetch the `ObjectKey`s (IDs and versions) for non-shared input objects.  Includes owned,
 /// and immutable objects as well as the gas objects, but not move packages or shared objects.
 pub fn transaction_input_object_keys(tx: &SenderSignedData) -> SuiResult<Vec<ObjectKey>> {
-    use crate::messages::InputObjectKind as I;
+    use crate::transaction::InputObjectKind as I;
     Ok(tx
         .intent_message()
         .value

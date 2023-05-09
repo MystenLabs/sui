@@ -4,7 +4,8 @@
 use move_binary_format::file_format::CompiledModule;
 
 use move_bytecode_verifier::meter::{BoundMeter, Scope};
-use std::{collections::BTreeMap, path::PathBuf};
+use prometheus::Registry;
+use std::{collections::BTreeMap, path::PathBuf, sync::Arc, time::Instant};
 use sui_adapter::adapter::{
     default_verifier_config, run_metered_move_bytecode_verifier,
     run_metered_move_bytecode_verifier_impl,
@@ -18,10 +19,11 @@ use sui_types::{
     digests::TransactionDigest,
     error::{ExecutionErrorKind, SuiError},
     execution_status::PackageUpgradeError,
-    messages::{Command, TransactionData, TransactionDataAPI, TransactionKind},
+    metrics::BytecodeVerifierMetrics,
     move_package::{MovePackage, TypeOrigin, UpgradeInfo},
     object::{Data, Object, OBJECT_START_VERSION},
     programmable_transaction_builder::ProgrammableTransactionBuilder,
+    transaction::{Command, TransactionData, TransactionDataAPI, TransactionKind},
 };
 
 macro_rules! type_origin_table {
@@ -467,16 +469,97 @@ async fn test_metered_move_bytecode_verifier() {
         &ProtocolConfig::get_for_max_version(),
         true, /* enable metering */
     );
-
+    let registry = &Registry::new();
+    let bytecode_verifier_metrics = Arc::new(BytecodeVerifierMetrics::new(registry));
     let mut meter = BoundMeter::new(&metered_verifier_config);
+    let timer_start = Instant::now();
     // Default case should pass
     let r = run_metered_move_bytecode_verifier_impl(
         &compiled_modules_bytes,
         &ProtocolConfig::get_for_max_version(),
         &metered_verifier_config,
         &mut meter,
+        &bytecode_verifier_metrics,
     );
+    let elapsed = timer_start.elapsed().as_micros() as f64 / (1000.0 * 1000.0);
     assert!(r.is_ok());
+
+    // Ensure metrics worked as expected
+
+    // The number of module success samples must equal the number of modules
+    assert!(
+        bytecode_verifier_metrics
+            .verifier_runtime_per_module_success_latency
+            .get_sample_count()
+            == compiled_modules_bytes.len() as u64
+    );
+    // Others must be zero
+    assert!(
+        bytecode_verifier_metrics
+            .verifier_runtime_per_module_timeout_latency
+            .get_sample_count()
+            == 0
+    );
+    assert!(
+        bytecode_verifier_metrics
+            .verifier_runtime_per_ptb_success_latency
+            .get_sample_count()
+            == 0
+    );
+    assert!(
+        bytecode_verifier_metrics
+            .verifier_runtime_per_ptb_timeout_latency
+            .get_sample_count()
+            == 0
+    );
+
+    // Each success timer must be non zero and less than our elapsed time
+    assert!(
+        bytecode_verifier_metrics
+            .verifier_runtime_per_module_success_latency
+            .get_sample_sum()
+            > 0.0
+    );
+    assert!(
+        bytecode_verifier_metrics
+            .verifier_runtime_per_module_success_latency
+            .get_sample_sum()
+            < elapsed
+    );
+
+    // No failures expected in counter
+    assert!(
+        bytecode_verifier_metrics
+            .verifier_timeout_metrics
+            .with_label_values(&[
+                BytecodeVerifierMetrics::MOVE_VERIFIER_TAG,
+                BytecodeVerifierMetrics::TIMEOUT_TAG,
+            ])
+            .get()
+            == 0
+    );
+    assert!(
+        bytecode_verifier_metrics
+            .verifier_timeout_metrics
+            .with_label_values(&[
+                BytecodeVerifierMetrics::SUI_VERIFIER_TAG,
+                BytecodeVerifierMetrics::TIMEOUT_TAG,
+            ])
+            .get()
+            == 0
+    );
+
+    // Counter must equal number of modules
+    assert!(
+        bytecode_verifier_metrics
+            .verifier_timeout_metrics
+            .with_label_values(&[
+                BytecodeVerifierMetrics::OVERALL_TAG,
+                BytecodeVerifierMetrics::SUCCESS_TAG,
+            ])
+            .get()
+            == compiled_modules_bytes.len() as u64
+    );
 
     // Use low limits. Should fail
     metered_verifier_config.max_back_edges_per_function = Some(100);
@@ -485,18 +568,101 @@ async fn test_metered_move_bytecode_verifier() {
     metered_verifier_config.max_per_fun_meter_units = Some(10_000);
 
     let mut meter = BoundMeter::new(&metered_verifier_config);
+    let timer_start = Instant::now();
     let r = run_metered_move_bytecode_verifier_impl(
         &compiled_modules_bytes,
         &ProtocolConfig::get_for_max_version(),
         &metered_verifier_config,
         &mut meter,
+        &bytecode_verifier_metrics,
     );
+    let elapsed = timer_start.elapsed().as_micros() as f64 / (1000.0 * 1000.0);
 
     assert!(
         r.unwrap_err()
             == SuiError::ModuleVerificationFailure {
                 error: "Verification timedout".to_string()
             }
+    );
+
+    // Some new modules might have passed
+    assert!(
+        (bytecode_verifier_metrics
+            .verifier_runtime_per_module_success_latency
+            .get_sample_count()
+            >= compiled_modules_bytes.len() as u64)
+            && (bytecode_verifier_metrics
+                .verifier_runtime_per_module_success_latency
+                .get_sample_count()
+                < 2 * compiled_modules_bytes.len() as u64)
+    );
+    // Others must be zero
+    assert!(
+        bytecode_verifier_metrics
+            .verifier_runtime_per_module_timeout_latency
+            .get_sample_count()
+            > 0
+    );
+    assert!(
+        bytecode_verifier_metrics
+            .verifier_runtime_per_ptb_success_latency
+            .get_sample_count()
+            == 0
+    );
+    assert!(
+        bytecode_verifier_metrics
+            .verifier_runtime_per_ptb_timeout_latency
+            .get_sample_count()
+            == 0
+    );
+
+    // Each success timer must be non zero and less than our elapsed time
+    assert!(
+        bytecode_verifier_metrics
+            .verifier_runtime_per_module_timeout_latency
+            .get_sample_sum()
+            > 0.0
+    );
+    assert!(
+        bytecode_verifier_metrics
+            .verifier_runtime_per_module_timeout_latency
+            .get_sample_sum()
+            < elapsed
+    );
+
+    // One failure
+    assert!(
+        bytecode_verifier_metrics
+            .verifier_timeout_metrics
+            .with_label_values(&[
+                BytecodeVerifierMetrics::MOVE_VERIFIER_TAG,
+                BytecodeVerifierMetrics::TIMEOUT_TAG,
+            ])
+            .get()
+            == 1
+    );
+    // Sui verifier did not fail
+    assert!(
+        bytecode_verifier_metrics
+            .verifier_timeout_metrics
+            .with_label_values(&[
+                BytecodeVerifierMetrics::SUI_VERIFIER_TAG,
+                BytecodeVerifierMetrics::TIMEOUT_TAG,
+            ])
+            .get()
+            == 0
+    );
+
+    // This should be slighltly higher as some modules passed
+    assert!(
+        bytecode_verifier_metrics
+            .verifier_timeout_metrics
+            .with_label_values(&[
+                BytecodeVerifierMetrics::OVERALL_TAG,
+                BytecodeVerifierMetrics::SUCCESS_TAG,
+            ])
+            .get()
+            > compiled_modules_bytes.len() as u64
     );
 
     // Check shared meter logic works across all publish in PT
@@ -552,6 +718,7 @@ async fn test_metered_move_bytecode_verifier() {
                     &protocol_config,
                     &metered_verifier_config,
                     &mut meter,
+                    &bytecode_verifier_metrics,
                 );
                 // Check that at least one of the meter values has increased
                 assert!(
@@ -562,5 +729,117 @@ async fn test_metered_move_bytecode_verifier() {
                 err
             })
             .expect("Metering should not fail. Meter limits might have changed");
+    }
+}
+
+#[tokio::test]
+async fn test_meter_system_packages() {
+    move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks));
+
+    let metered_verifier_config = default_verifier_config(
+        &ProtocolConfig::get_for_max_version(),
+        true, /* enable metering */
+    );
+    let registry = &Registry::new();
+    let bytecode_verifier_metrics = Arc::new(BytecodeVerifierMetrics::new(registry));
+    let mut meter = BoundMeter::new(&metered_verifier_config);
+    for system_package in BuiltInFramework::iter_system_packages() {
+        run_metered_move_bytecode_verifier_impl(
+            &system_package.modules(),
+            &ProtocolConfig::get_for_max_version(),
+            &metered_verifier_config,
+            &mut meter,
+            &bytecode_verifier_metrics,
+        )
+        .unwrap_or_else(|_| {
+            panic!(
+                "Verification of all system packages should succeed, but failed on {}",
+                system_package.id(),
+            )
+        });
+    }
+
+    // Ensure metrics worked as expected
+    // No failures expected in counter
+    assert!(
+        bytecode_verifier_metrics
+            .verifier_timeout_metrics
+            .with_label_values(&[
+                BytecodeVerifierMetrics::MOVE_VERIFIER_TAG,
+                BytecodeVerifierMetrics::TIMEOUT_TAG,
+            ])
+            .get()
+            == 0
+    );
+    assert!(
+        bytecode_verifier_metrics
+            .verifier_timeout_metrics
+            .with_label_values(&[
+                BytecodeVerifierMetrics::SUI_VERIFIER_TAG,
+                BytecodeVerifierMetrics::TIMEOUT_TAG,
+            ])
+            .get()
+            == 0
+    );
+
+    // Counter must equal number of modules
+    assert!(
+        bytecode_verifier_metrics
+            .verifier_timeout_metrics
+            .with_label_values(&[
+                BytecodeVerifierMetrics::OVERALL_TAG,
+                BytecodeVerifierMetrics::SUCCESS_TAG,
+            ])
+            .get()
+            == BuiltInFramework::iter_system_packages().fold(0, |sm, x| sm + x.modules().len())
+                as u64
+    );
+}
+
+#[tokio::test]
+async fn test_build_and_verify_programmability_examples() {
+    move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks));
+
+    let metered_verifier_config = default_verifier_config(
+        &ProtocolConfig::get_for_max_version(),
+        true, /* enable metering */
+    );
+    let registry = &Registry::new();
+    let bytecode_verifier_metrics = Arc::new(BytecodeVerifierMetrics::new(registry));
+    let mut examples = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    examples.extend(["..", "..", "sui_programmability", "examples"]);
+
+    for example in std::fs::read_dir(&examples).unwrap() {
+        let Ok(example) = example else { continue };
+        let path = example.path();
+
+        if !path.is_dir() {
+            continue;
+        }
+
+        let manifest = path.join("Move.toml");
+        if !manifest.exists() {
+            continue;
+        };
+
+        let modules = BuildConfig::new_for_testing()
+            .build(path)
+            .unwrap()
+            .into_modules();
+
+        let mut meter = BoundMeter::new(&metered_verifier_config);
+        run_metered_move_bytecode_verifier_impl(
+            &modules,
+            &ProtocolConfig::get_for_max_version(),
+            &metered_verifier_config,
+            &mut meter,
+            &bytecode_verifier_metrics,
+        )
+        .unwrap_or_else(|_| {
+            panic!(
+                "Verification of example: '{:?}' failed",
+                example.file_name(),
+            )
+        });
     }
 }

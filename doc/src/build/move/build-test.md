@@ -28,7 +28,7 @@ Now that you have designed your asset and its accessor functions, it's time to t
 ## Testing a package
 
 Sui includes support for the
-[Move testing framework](https://github.com/move-language/move/blob/main/language/documentation/book/src/unit-testing.md) that enables you to write unit tests that analyzes Move code much like test frameworks for other languages (e.g., the built-in [Rust testing framework](https://doc.rust-lang.org/rust-by-example/testing/unit_testing.html) or the [JUnit framework](https://junit.org/) for Java).
+[Move testing framework](https://github.com/move-language/move/blob/main/language/documentation/book/src/unit-testing.md) that enables you to write unit tests that analyze Move code much like test frameworks for other languages (e.g., the built-in [Rust testing framework](https://doc.rust-lang.org/rust-by-example/testing/unit_testing.html) or the [JUnit framework](https://junit.org/) for Java).
 
 An individual Move unit test is encapsulated in a public function that has no parameters, no return values, and has the `#[test]` annotation. The testing framework executes such functions when you call the `sui move test` command from the package root (`my_move_package` directory as per our running example):
 

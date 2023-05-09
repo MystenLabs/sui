@@ -34,7 +34,7 @@ Like address-owned objects, you reference immutable objects at an ID and version
 
 ### Shared objects
 
-Specifying a shared transaction input is slightly more complex. You reference it by its ID, the version it was shared at, and a flag indicating whether it is accessed mutably. You don't specify the precise version the transaction accesses because it is decided by consensus during transaction scheduling. When scheduling multiple transactions that touch the same shared object, validators agree the order of those transactions, and pick each transaction's input versions for the shared object accordingly (one transaction's output version becomes the next transaction's input version, and so on).
+Specifying a shared transaction input is slightly more complex. You reference it by its ID, the version it was shared at, and a flag indicating whether it is accessed mutably. You don't specify the precise version the transaction accesses because it is decided by consensus during transaction scheduling. When scheduling multiple transactions that touch the same shared object, validators agree on the order of those transactions, and pick each transaction's input versions for the shared object accordingly (one transaction's output version becomes the next transaction's input version, and so on).
 
 Shared transaction inputs that you reference immutably participate in scheduling, but don't modify the object or increment its version.
 
@@ -155,3 +155,20 @@ Framework packages (such as the Move standard library at `0x1` and the Sui Frame
 ```
 
 The prior example shows the on-chain representation of the first three versions of the Move standard library.
+
+### Package versions
+
+Sui smart contracts are organized into [upgradeable](../build/package-upgrades.md) packages and, as a result, multiple versions of any given package can exist on chain. Before someone can use an on-chain package, you must [publish](../build/move/debug-publish.md#publishing-a-package) its first, original version. When you upgrade a package, you create a new version of that package. Each upgrade of a package is based on the immediately preceding version of that package in the versions history. In other words, you can upgrade the _n_th version of a package from only the _n_th - 1 version. For example, you can upgrade a package from version 1 to 2, but afterwards you can upgrade that package only from version 2 to 3; you're not allowed to upgrade from version 1 to 3.
+
+There is a notion of versioning in package [manifest](../build/move/manifest.md) files, existing in both the [package section](../build/move/manifest.md#package-section) and in the [dependencies section](../build/move/manifest.md#dependencies-section). For example, consider the manifest code that follows:
+
+```toml
+[package]
+name = "some_pkg"
+version = "1.0.0"
+
+[dependencies]
+another_pkg = { git = "https://github.com/another_pkg/another_pkg.git" , version = "2.0.0"}
+```
+
+At this point, the version references in the manifest are used only for user-level documentation as the `publish` and `upgrade` commands do not leverage this information. If you publish a package with a certain package version in the manifest file and then modify and re-publish the same package with a different version (using `publish` command rather than `upgrade` command), the two are considered different packages, rather than on-chain versions of the same package. You should not use any of these packages as a [dependency override](../build/dependency-overrides.md) to stand in for the other one. While you can specify this type of override when building a package, it results in an error when publishing or upgrading on chain.

@@ -150,6 +150,7 @@ impl AuthorityStore {
     ) -> SuiResult<Arc<Self>> {
         let perpetual_tables = Arc::new(AuthorityPerpetualTables::open(path, db_options.clone()));
         let epoch_start_configuration = if perpetual_tables.database_is_empty()? {
+            info!("Creating new epoch start config from genesis");
             let epoch_start_configuration = EpochStartConfiguration::new(
                 genesis.sui_system_object().into_epoch_start_state(),
                 *genesis.checkpoint().digest(),
@@ -159,15 +160,18 @@ impl AuthorityStore {
                 .await?;
             epoch_start_configuration
         } else {
+            info!("Loading epoch start config from DB");
             perpetual_tables
                 .epoch_start_configuration
                 .get(&())?
                 .expect("Epoch start configuration must be set in non-empty DB")
         };
         let cur_epoch = perpetual_tables.get_recovery_epoch_at_restart()?;
+        info!("Epoch start config: {:?}", epoch_start_configuration);
+        info!("Cur epoch: {:?}", cur_epoch);
         let committee = committee_store
             .get_committee(&cur_epoch)?
-            .expect("Committee of the current epoch must exist");
+            .unwrap_or_else(|| panic!("Committee of the current epoch ({}) must exist", cur_epoch));
         let this = Self::open_inner(
             genesis,
             perpetual_tables,
@@ -736,6 +740,19 @@ impl AuthorityStore {
 
         write_batch.write()?;
 
+        Ok(())
+    }
+
+    /// NOTE: this function is only to be used for fuzzing and testing. Never use in prod
+    #[cfg(not(release))]
+    pub(crate) async fn insert_raw_object_unchecked_for_testing(
+        &self,
+        objects: &[Object],
+    ) -> SuiResult {
+        // Sideload directly
+        for o in objects {
+            self.insert_object_direct(o.compute_object_reference(), o)?;
+        }
         Ok(())
     }
 

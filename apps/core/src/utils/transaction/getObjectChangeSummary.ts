@@ -7,12 +7,14 @@ import {
     SuiObjectChangeTransferred,
     SuiObjectChangeCreated,
     SuiObjectChangeMutated,
+    SuiObjectChangePublished,
 } from '@mysten/sui.js';
 
 export type ObjectChangeSummary = {
     mutated: SuiObjectChangeMutated[];
     created: SuiObjectChangeCreated[];
     transferred: SuiObjectChangeTransferred[];
+    published: SuiObjectChangePublished[];
 };
 
 export const getObjectChangeSummary = (
@@ -28,16 +30,23 @@ export const getObjectChangeSummary = (
 
     const created = objectChanges.filter(
         (change) =>
-            change.type === 'created' && change.sender === currentAddress
+            change.type === 'created' &&
+            (typeof currentAddress === 'undefined' ||
+                change.sender === currentAddress)
     ) as SuiObjectChangeCreated[];
 
     const transferred = objectChanges.filter(
         (change) => change.type === 'transferred'
     ) as SuiObjectChangeTransferred[];
 
+    const published = objectChanges.filter(
+        (change) => change.type === 'published'
+    ) as SuiObjectChangePublished[];
+
     return {
         mutated,
         created,
         transferred,
+        published,
     };
 };

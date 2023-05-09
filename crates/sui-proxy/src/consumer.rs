@@ -11,7 +11,7 @@ use bytes::buf::Reader;
 use fastcrypto::ed25519::Ed25519PublicKey;
 use multiaddr::Multiaddr;
 use once_cell::sync::Lazy;
-use prometheus::proto;
+use prometheus::proto::{self, MetricFamily};
 use prometheus::{register_counter, register_counter_vec, register_histogram_vec};
 use prometheus::{Counter, CounterVec, HistogramVec};
 use prost::Message;
@@ -26,7 +26,6 @@ static CONSUMER_OPS_SUBMITTED: Lazy<Counter> = Lazy::new(|| {
     )
     .unwrap()
 });
-
 static CONSUMER_OPS: Lazy<CounterVec> = Lazy::new(|| {
     register_counter_vec!(
         "consumer_operations",
@@ -54,7 +53,8 @@ static CONSUMER_OPERATION_DURATION: Lazy<HistogramVec> = Lazy::new(|| {
         &["operation"],
         vec![
             0.0008, 0.0016, 0.0032, 0.0064, 0.0128, 0.0256, 0.0512, 0.1024, 0.2048, 0.4096, 0.8192,
-            1.0, 1.25, 1.5, 1.75, 2.0, 4.0, 8.0, 10.0, 12.5, 15.0
+            1.0, 1.25, 1.5, 1.75, 2.0, 2.25, 2.5, 2.75, 3.0, 3.25, 3.5, 3.75, 4.0, 4.25, 4.5, 4.75,
+            5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0, 13.0, 14.0, 15.0
         ],
     )
     .unwrap()
@@ -109,6 +109,7 @@ pub fn populate_labels(
     let timer = CONSUMER_OPERATION_DURATION
         .with_label_values(&["populate_labels"])
         .start_timer();
+    debug!("received metrics from {name} on {inventory_hostname}");
     // proto::LabelPair doesn't have pub fields so we can't use
     // struct literals to construct
     let mut network_label = proto::LabelPair::default();
@@ -119,11 +120,7 @@ pub fn populate_labels(
     host_label.set_name("host".into());
     host_label.set_value(name);
 
-    let mut relay_host_label = proto::LabelPair::default();
-    relay_host_label.set_name("relay_host".into());
-    relay_host_label.set_value(inventory_hostname);
-
-    let labels = vec![network_label, host_label, relay_host_label];
+    let labels = vec![network_label, host_label];
 
     let mut data = data;
     // add our extra labels to our incoming metric data
@@ -139,11 +136,11 @@ pub fn populate_labels(
 fn encode_compress(request: &WriteRequest) -> Result<Vec<u8>, (StatusCode, &'static str)> {
     let observe = || {
         let timer = CONSUMER_ENCODE_COMPRESS_DURATION
-        .with_label_values(&["encode_compress"])
-        .start_timer();
-    ||{
-        timer.observe_duration();
-    }
+            .with_label_values(&["encode_compress"])
+            .start_timer();
+        || {
+            timer.observe_duration();
+        }
     }();
     let mut buf = Vec::new();
     buf.reserve(request.encoded_len());
@@ -239,6 +236,37 @@ async fn check_response(
     }
 }
 
+async fn convert(
+    mfs: Vec<MetricFamily>,
+) -> Result<impl Iterator<Item = WriteRequest>, (StatusCode, &'static str)> {
+    let result = match tokio::task::spawn_blocking(|| {
+        let timer = CONSUMER_OPERATION_DURATION
+            .with_label_values(&["convert_to_remote_write_task"])
+            .start_timer();
+        let result = Mimir::from(mfs);
+        timer.observe_duration();
+        result.into_iter()
+    })
+    .await
+    {
+        Ok(v) => v,
+        Err(err) => {
+            error!("unable to convert to remote_write; {err}");
+            return Err((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "DROPPING METRICS; unable to convert to remote_write",
+            ));
+        }
+    };
+    Ok(result)
+}
+
+/// convert_to_remote_write is an expensive method due to the time it takes to submit to mimir.
+/// other operations here are optimized for async, within reason.  The post process uses a single
+/// connection to mimir and thus incurs the seriliaztion delay for each metric family sent. Possible
+/// future optimizations would be to use multiple tcp connections to mimir, within reason. Nevertheless
+/// we await on each post of each metric family so it shouldn't block any other async work in a
+/// significant way.
 pub async fn convert_to_remote_write(
     rc: ReqwestClient,
     node_metric: NodeMetric,
@@ -246,14 +274,24 @@ pub async fn convert_to_remote_write(
     let timer = CONSUMER_OPERATION_DURATION
         .with_label_values(&["convert_to_remote_write"])
         .start_timer();
+
+    let remote_write_protos = match convert(node_metric.data).await {
+        Ok(v) => v,
+        Err(err) => {
+            timer.stop_and_discard();
+            return err;
+        }
+    };
+
     // a counter so we don't iterate the node data 2x
     let mut mf_cnt = 0;
-    for request in Mimir::from(node_metric.data) {
+    for request in remote_write_protos {
         mf_cnt += 1;
         let compressed = match encode_compress(&request) {
             Ok(compressed) => compressed,
             Err(error) => return error,
         };
+
         let response = match rc
             .client
             .post(rc.settings.url.to_owned())
@@ -274,18 +312,19 @@ pub async fn convert_to_remote_write(
                     .with_label_values(&["check_response", "INTERNAL_SERVER_ERROR"])
                     .inc();
                 error!("DROPPING METRICS due to post error: {error}");
-                timer.observe_duration();
+                timer.stop_and_discard();
                 return (
                     StatusCode::INTERNAL_SERVER_ERROR,
                     "DROPPING METRICS due to post error",
                 );
             }
         };
+
         match check_response(request, response).await {
             Ok(_) => (),
-            Err(error) => {
-                timer.observe_duration();
-                return error;
+            Err(err) => {
+                timer.stop_and_discard();
+                return err;
             }
         }
     }
@@ -330,7 +369,6 @@ mod tests {
             &create_labels(vec![
                 ("network", "unittest-network"),
                 ("host", "validator-0"),
-                ("relay_host", "inventory-hostname"),
             ])
         );
     }

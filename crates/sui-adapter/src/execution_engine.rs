@@ -1,13 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::BTreeSet, sync::Arc};
-
 use crate::execution_mode::{self, ExecutionMode};
-use move_binary_format::access::ModuleAccess;
 use move_binary_format::CompiledModule;
 use move_bytecode_utils::module_cache::GetModule;
 use move_vm_runtime::move_vm::MoveVM;
+use once_cell::sync::Lazy;
+use std::{
+    collections::{BTreeSet, HashSet},
+    sync::Arc,
+};
 use sui_types::balance::{
     BALANCE_CREATE_REWARDS_FUNCTION_NAME, BALANCE_DESTROY_REBATES_FUNCTION_NAME,
     BALANCE_MODULE_NAME,
@@ -20,6 +22,7 @@ use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use tracing::{info, instrument, trace, warn};
 
 use crate::programmable_transactions;
+use move_binary_format::access::ModuleAccess;
 use sui_macros::checked_arithmetic;
 use sui_protocol_config::{check_limit_by_meter, LimitThresholdCrossed, ProtocolConfig};
 use sui_types::clock::{CLOCK_MODULE_NAME, CONSENSUS_COMMIT_PROLOGUE_FUNCTION_NAME};
@@ -29,29 +32,56 @@ use sui_types::epoch_data::EpochData;
 use sui_types::error::{ExecutionError, ExecutionErrorKind};
 use sui_types::execution_status::ExecutionStatus;
 use sui_types::gas::{GasCostSummary, SuiGasStatusAPI};
-use sui_types::messages::{
-    Argument, Command, ConsensusCommitPrologue, GenesisTransaction, ObjectArg,
-    ProgrammableTransaction, TransactionKind,
-};
+use sui_types::messages_consensus::ConsensusCommitPrologue;
 use sui_types::storage::{ChildObjectResolver, ObjectStore, ParentSync, WriteKind};
 #[cfg(msim)]
 use sui_types::sui_system_state::advance_epoch_result_injection::maybe_modify_result;
 use sui_types::sui_system_state::{AdvanceEpochParams, ADVANCE_EPOCH_SAFE_MODE_FUNCTION_NAME};
 use sui_types::temporary_store::InnerTemporaryStore;
 use sui_types::temporary_store::TemporaryStore;
+use sui_types::transaction::{
+    Argument, CallArg, ChangeEpoch, Command, GenesisTransaction, ProgrammableTransaction,
+    TransactionKind,
+};
 use sui_types::{
     base_types::{ObjectRef, SuiAddress, TransactionDigest, TxContext},
     gas::SuiGasStatus,
-    messages::{CallArg, ChangeEpoch},
     object::Object,
     storage::BackingPackageStore,
     sui_system_state::{ADVANCE_EPOCH_FUNCTION_NAME, SUI_SYSTEM_MODULE_NAME},
-    SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_STATE_OBJECT_ID,
+    SUI_FRAMEWORK_ADDRESS,
 };
-use sui_types::{
-    is_system_package, SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION,
-    SUI_FRAMEWORK_OBJECT_ID, SUI_SYSTEM_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
-};
+use sui_types::{is_system_package, SUI_FRAMEWORK_OBJECT_ID, SUI_SYSTEM_OBJECT_ID};
+
+/// If a transaction digest shows up in this list, when executing such transaction,
+/// we will always return `ExecutionError::CertificateDenied` without executing it (but still do
+/// gas smashing). Because this list is not gated by protocol version, there are a few important
+/// criteria for adding a digest to this list:
+/// 1. The certificate must be causing all validators to either panic or hang forever deterministically.
+/// 2. If we ever ship a fix to make it no longer panic or hang when executing such transaction,
+/// we must make sure the transaction is already in this list. Otherwise nodes running the newer version
+/// without these transactions in the list will generate forked result.
+/// Below is a scenario of when we need to use this list:
+/// 1. We detect that a specific transaction is causing all validators to either panic or hang forever deterministically.
+/// 2. We push a CertificateDenyConfig to deny such transaction to all validators asap.
+/// 3. To make sure that all fullnodes are able to sync to the latest version, we need to add the transaction digest
+/// to this list as well asap, and ship this binary to all fullnodes, so that they can sync past this transaction.
+/// 4. We then can start fixing the issue, and ship the fix to all nodes.
+/// 5. Unfortunately, we can't remove the transaction digest from this list, because if we do so, any future
+/// node that sync from genesis will fork on this transaction. We may be able to remove it once
+/// we have stable snapshots and the binary has a minimum supported protocol version past the epoch.
+pub fn get_denied_certificates() -> &'static HashSet<TransactionDigest> {
+    static DENIED_CERTIFICATES: Lazy<HashSet<TransactionDigest>> = Lazy::new(|| HashSet::from([]));
+    Lazy::force(&DENIED_CERTIFICATES)
+}
+
+fn is_certificate_denied(
+    transaction_digest: &TransactionDigest,
+    certificate_deny_set: &HashSet<TransactionDigest>,
+) -> bool {
+    certificate_deny_set.contains(transaction_digest)
+        || get_denied_certificates().contains(transaction_digest)
+}
 
 checked_arithmetic! {
 
@@ -72,7 +102,8 @@ pub fn execute_transaction_to_effects<
     epoch_data: &EpochData,
     protocol_config: &ProtocolConfig,
     metrics: Arc<LimitsMetrics>,
-    enable_expensive_checks: bool
+    enable_expensive_checks: bool,
+    certificate_deny_set: &HashSet<TransactionDigest>,
 ) -> (
     InnerTemporaryStore,
     TransactionEffects,
@@ -93,7 +124,8 @@ pub fn execute_transaction_to_effects<
         epoch_data.epoch_start_timestamp(),
         protocol_config,
         metrics,
-        enable_expensive_checks
+        enable_expensive_checks,
+        certificate_deny_set,
     )
 }
 
@@ -115,16 +147,23 @@ pub fn execute_transaction_to_effects_impl<
     epoch_timestamp_ms: u64,
     protocol_config: &ProtocolConfig,
     metrics: Arc<LimitsMetrics>,
-    enable_expensive_checks: bool
+    enable_expensive_checks: bool,
+    certificate_deny_set: &HashSet<TransactionDigest>,
 ) -> (
     InnerTemporaryStore,
     TransactionEffects,
     Result<Mode::ExecutionResults, ExecutionError>,
 ) {
-    let mut tx_ctx = TxContext::new_from_components(&transaction_signer, &transaction_digest, epoch_id, epoch_timestamp_ms);
+    let mut tx_ctx = TxContext::new_from_components(
+        &transaction_signer,
+        &transaction_digest,
+        epoch_id,
+        epoch_timestamp_ms,
+    );
 
     let is_epoch_change = matches!(transaction_kind, TransactionKind::ChangeEpoch(_));
 
+    let deny_cert = is_certificate_denied(&transaction_digest, certificate_deny_set);
     let (gas_cost_summary, execution_result) = execute_transaction::<Mode, _>(
         &mut temporary_store,
         transaction_kind,
@@ -134,15 +173,15 @@ pub fn execute_transaction_to_effects_impl<
         gas_status,
         protocol_config,
         metrics,
-        enable_expensive_checks
+        enable_expensive_checks,
+        deny_cert,
     );
 
     let status = if let Err(error) = &execution_result {
         // Elaborate errors in logs if they are unexpected or their status is terse.
         use ExecutionErrorKind as K;
         match error.kind() {
-            K::InvariantViolation |
-            K::VMInvariantViolation => {
+            K::InvariantViolation | K::VMInvariantViolation => {
                 #[skip_checked_arithmetic]
                 tracing::error!(
                     kind = ?error.kind(),
@@ -150,10 +189,9 @@ pub fn execute_transaction_to_effects_impl<
                     "INVARIANT VIOLATION! Source: {:?}",
                     error.source(),
                 );
-            },
+            }
 
-            K::SuiMoveVerificationError |
-            K::VMVerificationOrDeserializationError => {
+            K::SuiMoveVerificationError | K::VMVerificationOrDeserializationError => {
                 #[skip_checked_arithmetic]
                 tracing::debug!(
                     kind = ?error.kind(),
@@ -163,8 +201,7 @@ pub fn execute_transaction_to_effects_impl<
                 );
             }
 
-            K::PublishUpgradeMissingDependency |
-            K::PublishUpgradeDependencyDowngrade => {
+            K::PublishUpgradeMissingDependency | K::PublishUpgradeDependencyDowngrade => {
                 #[skip_checked_arithmetic]
                 tracing::debug!(
                     kind = ?error.kind(),
@@ -242,7 +279,8 @@ fn execute_transaction<
     mut gas_status: SuiGasStatus,
     protocol_config: &ProtocolConfig,
     metrics: Arc<LimitsMetrics>,
-    enable_expensive_checks: bool
+    enable_expensive_checks: bool,
+    deny_cert: bool,
 ) -> (
     GasCostSummary,
     Result<Mode::ExecutionResults, ExecutionError>,
@@ -266,16 +304,23 @@ fn execute_transaction<
     // we must still ensure an effect is committed and all objects versions incremented
     let result = charge_gas_for_object_read(temporary_store, &mut gas_status);
     let mut result = result.and_then(|()| {
-        let mut execution_result = execution_loop::<Mode, _>(
-            temporary_store,
-            transaction_kind,
-            gas_object_ref.0,
-            tx_ctx,
-            move_vm,
-            &mut gas_status,
-            protocol_config,
-            metrics.clone(),
-        );
+        let mut execution_result = if deny_cert {
+            Err(ExecutionError::new(
+                ExecutionErrorKind::CertificateDenied,
+                None,
+            ))
+        } else {
+            execution_loop::<Mode, _>(
+                temporary_store,
+                transaction_kind,
+                gas_object_ref.0,
+                tx_ctx,
+                move_vm,
+                &mut gas_status,
+                protocol_config,
+                metrics.clone(),
+            )
+        };
 
         let effects_estimated_size = temporary_store.estimate_effects_size_upperbound();
 
@@ -308,11 +353,11 @@ fn execute_transaction<
             }
         };
         if execution_result.is_ok() {
-
             // This limit is only present in Version 3 and up, so use this to gate it
-            if let (Some(normal_lim), Some(system_lim)) =
-                (protocol_config.max_size_written_objects_as_option(), protocol_config
-            .max_size_written_objects_system_tx_as_option()) {
+            if let (Some(normal_lim), Some(system_lim)) = (
+                protocol_config.max_size_written_objects_as_option(),
+                protocol_config.max_size_written_objects_system_tx_as_option(),
+            ) {
                 let written_objects_size = temporary_store.written_objects_size();
 
                 match check_limit_by_meter!(
@@ -340,9 +385,7 @@ fn execute_transaction<
                         ))
                     }
                 };
-
             }
-
         }
 
         execution_result
@@ -370,7 +413,8 @@ fn execute_transaction<
         temporary_store.conserve_unmetered_storage_rebate(gas_status.unmetered_storage_rebate());
         if !is_genesis_tx && !Mode::allow_arbitrary_values() {
             // ensure that this transaction did not create or destroy SUI, try to recover if the check fails
-            let conservation_result = temporary_store.check_sui_conserved(advance_epoch_gas_summary, enable_expensive_checks);
+            let conservation_result = temporary_store
+                .check_sui_conserved(advance_epoch_gas_summary, enable_expensive_checks);
             if let Err(conservation_err) = conservation_result {
                 // conservation violated. try to avoid panic by dumping all writes, charging for gas, re-checking
                 // conservation, and surfacing an aborted transaction with an invariant violation if all of that works
@@ -378,16 +422,23 @@ fn execute_transaction<
                 temporary_store.reset(gas, &mut gas_status);
                 temporary_store.charge_gas(gas_object_id, &mut gas_status, &mut result, gas);
                 // check conservation once more more
-                if let Err(recovery_err) = temporary_store.check_sui_conserved(advance_epoch_gas_summary, enable_expensive_checks) {
+                if let Err(recovery_err) = temporary_store
+                    .check_sui_conserved(advance_epoch_gas_summary, enable_expensive_checks)
+                {
                     // if we still fail, it's a problem with gas
                     // charging that happens even in the "aborted" case--no other option but panic.
                     // we will create or destroy SUI otherwise
-                    panic!("SUI conservation fail in tx block {}: {}\nGas status is {}\nTx was ", tx_ctx.digest(), recovery_err, gas_status.summary())
+                    panic!(
+                        "SUI conservation fail in tx block {}: {}\nGas status is {}\nTx was ",
+                        tx_ctx.digest(),
+                        recovery_err,
+                        gas_status.summary()
+                    )
                 }
-              }
+            }
         } // else, we're in the genesis transaction which mints the SUI supply, and hence does not satisfy SUI conservation, or
-        // we're in the non-production dev inspect mode which allows us to violate conservation
-        // === end SUI conservation checks ===
+          // we're in the non-production dev inspect mode which allows us to violate conservation
+          // === end SUI conservation checks ===
         (cost_summary, result)
     } else {
         // legacy code before gas v2, leave it alone
@@ -432,7 +483,7 @@ fn execution_loop<
 
             for genesis_object in objects {
                 match genesis_object {
-                    sui_types::messages::GenesisObject::RawObject { data, owner } => {
+                    sui_types::transaction::GenesisObject::RawObject { data, owner } => {
                         let object = Object {
                             data,
                             owner,
@@ -454,7 +505,8 @@ fn execution_loop<
                 gas_status,
                 protocol_config,
                 metrics,
-            ).expect("ConsensusCommitPrologue cannot fail");
+            )
+            .expect("ConsensusCommitPrologue cannot fail");
             Ok(Mode::empty_results())
         }
         TransactionKind::ProgrammableTransaction(pt) => {
@@ -515,13 +567,8 @@ pub fn construct_advance_epoch_pt(
 
     // Step 2: Advance the epoch.
     let mut arguments = vec![storage_rewards, computation_rewards];
-    let system_object_arg = CallArg::Object(ObjectArg::SharedObject {
-        id: SUI_SYSTEM_STATE_OBJECT_ID,
-        initial_shared_version: SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
-        mutable: true,
-    });
     let call_arg_arguments = vec![
-        system_object_arg,
+        CallArg::SUI_SYSTEM_MUT,
         CallArg::Pure(bcs::to_bytes(&params.epoch).unwrap()),
         CallArg::Pure(bcs::to_bytes(&params.next_protocol_version.as_u64()).unwrap()),
         CallArg::Pure(bcs::to_bytes(&params.storage_rebate).unwrap()),
@@ -541,10 +588,7 @@ pub fn construct_advance_epoch_pt(
 
     arguments.append(&mut call_arg_arguments.unwrap());
 
-    info!(
-        "Call arguments to advance_epoch transaction: {:?}",
-        params
-    );
+    info!("Call arguments to advance_epoch transaction: {:?}", params);
 
     let storage_rebates = builder.programmable_move_call(
         SUI_SYSTEM_OBJECT_ID,
@@ -575,14 +619,9 @@ pub fn construct_advance_epoch_safe_mode_pt(
 
     // Step 2: Advance the epoch.
     let mut arguments = vec![storage_rewards, computation_rewards];
-    let system_object_arg = CallArg::Object(ObjectArg::SharedObject {
-        id: SUI_SYSTEM_STATE_OBJECT_ID,
-        initial_shared_version: SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
-        mutable: true,
-    });
 
     let mut args = vec![
-        system_object_arg,
+        CallArg::SUI_SYSTEM_MUT,
         CallArg::Pure(bcs::to_bytes(&params.epoch).unwrap()),
         CallArg::Pure(bcs::to_bytes(&params.next_protocol_version.as_u64()).unwrap()),
         CallArg::Pure(bcs::to_bytes(&params.storage_rebate).unwrap()),
@@ -607,10 +646,7 @@ pub fn construct_advance_epoch_safe_mode_pt(
 
     arguments.append(&mut call_arg_arguments.unwrap());
 
-    info!(
-        "Call arguments to advance_epoch transaction: {:?}",
-        params
-    );
+    info!("Call arguments to advance_epoch transaction: {:?}", params);
 
     builder.programmable_move_call(
         SUI_SYSTEM_OBJECT_ID,
@@ -692,7 +728,14 @@ fn advance_epoch<S: ObjectStore + BackingPackageStore + ParentSync + ChildObject
         let max_format_version = protocol_config.move_binary_format_version();
         let deserialized_modules: Vec<_> = modules
             .iter()
-            .map(|m| CompiledModule::deserialize_with_config(m, max_format_version, protocol_config.no_extraneous_module_bytes()).unwrap())
+            .map(|m| {
+                CompiledModule::deserialize_with_config(
+                    m,
+                    max_format_version,
+                    protocol_config.no_extraneous_module_bytes(),
+                )
+                .unwrap()
+            })
             .collect();
 
         if version == OBJECT_START_VERSION {
@@ -718,7 +761,10 @@ fn advance_epoch<S: ObjectStore + BackingPackageStore + ParentSync + ChildObject
             .expect("System Package Publish must succeed");
         } else {
             let mut new_package = Object::new_system_package(
-                &deserialized_modules, version, dependencies, tx_ctx.digest(),
+                &deserialized_modules,
+                version,
+                dependencies,
+                tx_ctx.digest(),
             );
 
             info!(
@@ -763,11 +809,7 @@ fn setup_consensus_commit<S: BackingPackageStore + ParentSync + ChildObjectResol
             CONSENSUS_COMMIT_PROLOGUE_FUNCTION_NAME.to_owned(),
             vec![],
             vec![
-                CallArg::Object(ObjectArg::SharedObject {
-                    id: SUI_CLOCK_OBJECT_ID,
-                    initial_shared_version: SUI_CLOCK_OBJECT_SHARED_VERSION,
-                    mutable: true,
-                }),
+                CallArg::CLOCK_MUT,
                 CallArg::Pure(bcs::to_bytes(&prologue.commit_timestamp_ms).unwrap()),
             ],
         );

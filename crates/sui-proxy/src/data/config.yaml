@@ -10,5 +10,5 @@ json-rpc:
   interval: 30
   certificate-file: /opt/joeman/fullchain.pem
   private-key: /opt/joeman/privkey.pem
-metrics-address: 192.168.0.2:9184
-histogram-address: 192.168.0.2:9185
+metrics-address: localhost:9184
+histogram-address: localhost:9185

@@ -5,7 +5,8 @@ use crate::genesis::{TokenAllocation, TokenDistributionScheduleBuilder};
 use crate::genesis_config::AccountConfig;
 use crate::node::{
     default_enable_index_processing, default_end_of_epoch_broadcast_channel_capacity,
-    AuthorityKeyPairWithPath, DBCheckpointConfig, KeyPairWithPath, DEFAULT_VALIDATOR_GAS_PRICE,
+    AuthorityKeyPairWithPath, DBCheckpointConfig, ExpensiveSafetyCheckConfig, KeyPairWithPath,
+    DEFAULT_VALIDATOR_GAS_PRICE,
 };
 use crate::{
     genesis,
@@ -453,6 +454,8 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
                     db_path: consensus_db_path,
                     internal_worker_address,
                     max_pending_transactions: None,
+                    max_submit_position: None,
+                    submit_delay_step_override_millis: None,
                     narwhal_config: ConsensusParameters {
                         network_admin_server: match self.validator_ip_sel {
                             ValidatorIpSelection::Simulator => NetworkAdminServerParameters {
@@ -531,9 +534,10 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
                     supported_protocol_versions: Some(supported_protocol_versions),
                     db_checkpoint_config: self.db_checkpoint_config.clone(),
                     indirect_objects_threshold: usize::MAX,
-                    expensive_safety_check_config: Default::default(),
+                    expensive_safety_check_config: ExpensiveSafetyCheckConfig::new_enable_all(),
                     name_service_resolver_object_id: None,
                     transaction_deny_config: Default::default(),
+                    certificate_deny_config: Default::default(),
                 }
             })
             .collect();

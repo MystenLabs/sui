@@ -56,10 +56,12 @@ async fn main() -> Result<()> {
             create_server_cert_enforce_peer(config.json_rpc)
                 .expect("unable to create tls server config")
         };
+    let histogram_listener = std::net::TcpListener::bind(config.histogram_address).unwrap();
+    let metrics_listener = std::net::TcpListener::bind(config.metrics_address).unwrap();
     let acceptor = TlsAcceptor::new(tls_config);
     let client = make_reqwest_client(config.remote_write);
-    let histogram_relay = histogram_relay::start_prometheus_server(config.histogram_address);
-    let registry_service = metrics::start_prometheus_server(config.metrics_address);
+    let histogram_relay = histogram_relay::start_prometheus_server(histogram_listener);
+    let registry_service = metrics::start_prometheus_server(metrics_listener);
     let prometheus_registry = registry_service.default_registry();
     prometheus_registry
         .register(mysten_metrics::uptime_metric(VERSION))

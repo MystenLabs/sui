@@ -88,7 +88,12 @@ export function BalanceChanges({ changes }: BalanceChangesProps) {
         <Card heading="Balance Changes">
             <div className="divide-solid divide-x-0 divide-y divide-gray-40">
                 {changes.map((change) => {
-                    return <BalanceChangeEntry change={change} />;
+                    return (
+                        <BalanceChangeEntry
+                            change={change}
+                            key={change.coinType + change.amount}
+                        />
+                    );
                 })}
             </div>
         </Card>

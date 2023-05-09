@@ -22,6 +22,7 @@ import HomePage, {
     CoinsSelectorPage,
     AppsPage,
     NftTransferPage,
+    OnrampPage,
 } from '_pages/home';
 import InitializePage from '_pages/initialize';
 import BackupPage from '_pages/initialize/backup';
@@ -76,6 +77,7 @@ const App = () => {
                 <Route path="send/select" element={<CoinsSelectorPage />} />
                 <Route path="stake/*" element={<Staking />} />
                 <Route path="receipt" element={<ReceiptPage />} />
+                <Route path="onramp" element={<OnrampPage />} />
                 <Route
                     path="*"
                     element={<Navigate to="/tokens" replace={true} />}

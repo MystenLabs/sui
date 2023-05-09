@@ -52,7 +52,7 @@ use futures::{stream::FuturesOrdered, FutureExt, StreamExt};
 use std::{
     collections::HashMap,
     sync::{Arc, RwLock},
-    time::{Duration, SystemTime},
+    time::Duration,
 };
 use sui_config::p2p::StateSyncConfig;
 use sui_types::{
@@ -69,7 +69,7 @@ use tokio::{
     sync::{broadcast, mpsc, watch},
     task::{AbortHandle, JoinSet},
 };
-use tracing::{debug, info, trace, warn};
+use tracing::{debug, info, trace};
 
 mod generated {
     include!(concat!(env!("OUT_DIR"), "/sui.StateSync.rs"));
@@ -906,12 +906,10 @@ where
             }
         };
 
-        debug!(sequence_number = ?checkpoint.sequence_number(), "verified checkpoint summary");
-        SystemTime::now()
-            .duration_since(checkpoint.timestamp())
-            .map(|latency| metrics.report_checkpoint_summary_age(latency))
-            .tap_err(|err| warn!("unable to compute checkpoint age: {}", err))
-            .ok();
+        debug!(checkpoint_seq = ?checkpoint.sequence_number(), "verified checkpoint summary");
+        if let Some(checkpoint_summary_age_metric) = metrics.checkpoint_summary_age_metric() {
+            checkpoint.report_checkpoint_age_ms(checkpoint_summary_age_metric);
+        }
 
         current = checkpoint.clone();
         // Insert the newly verified checkpoint into our store, which will bump our highest

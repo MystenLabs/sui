@@ -40,6 +40,7 @@ use mysten_network::server::ServerBuilder;
 use narwhal_network::metrics::MetricsMakeCallbackHandler;
 use narwhal_network::metrics::{NetworkConnectionMetrics, NetworkMetrics};
 use sui_config::node::DBCheckpointConfig;
+use sui_config::node_config_metrics::NodeConfigMetrics;
 use sui_config::{ConsensusConfig, NodeConfig};
 use sui_core::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use sui_core::authority::epoch_start_configuration::EpochStartConfigTrait;
@@ -90,7 +91,7 @@ use sui_types::base_types::{AuthorityName, EpochId, TransactionDigest};
 use sui_types::committee::Committee;
 use sui_types::crypto::KeypairTraits;
 use sui_types::error::{SuiError, SuiResult};
-use sui_types::messages::{AuthorityCapabilities, ConsensusTransaction};
+use sui_types::messages_consensus::{AuthorityCapabilities, ConsensusTransaction};
 use sui_types::quorum_driver_types::QuorumDriverEffectsQueueResult;
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemState;
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
@@ -177,6 +178,8 @@ impl SuiNode {
         node_once_cell: Arc<AsyncOnceCell<Arc<SuiNode>>>,
         custom_rpc_runtime: Option<Handle>,
     ) -> Result<()> {
+        NodeConfigMetrics::new(&registry_service.default_registry()).record_metrics(config);
+
         let mut config = config.clone();
         if config.supported_protocol_versions.is_none() {
             info!(
@@ -323,6 +326,7 @@ impl SuiNode {
                         .prune_and_compact_before_upload
                         .unwrap_or(true),
                     config.indirect_objects_threshold,
+                    config.authority_store_pruning_config,
                 )?;
                 Some(handler.start())
             }
@@ -344,6 +348,7 @@ impl SuiNode {
             &db_checkpoint_config,
             config.expensive_safety_check_config.clone(),
             config.transaction_deny_config.clone(),
+            config.certificate_deny_config.clone(),
             config.indirect_objects_threshold,
         )
         .await;
@@ -351,12 +356,13 @@ impl SuiNode {
         if epoch_store.epoch() == 0 {
             let txn = &genesis.transaction();
             let span = error_span!("genesis_txn", tx_digest = ?txn.digest());
-            let transaction = sui_types::messages::VerifiedExecutableTransaction::new_unchecked(
-                sui_types::messages::ExecutableTransaction::new_from_data_and_sig(
-                    genesis.transaction().data().clone(),
-                    sui_types::certificate_proof::CertificateProof::Checkpoint(0, 0),
-                ),
-            );
+            let transaction =
+                sui_types::executable_transaction::VerifiedExecutableTransaction::new_unchecked(
+                    sui_types::executable_transaction::ExecutableTransaction::new_from_data_and_sig(
+                        genesis.transaction().data().clone(),
+                        sui_types::executable_transaction::CertificateProof::Checkpoint(0, 0),
+                    ),
+                );
             state
                 .try_execute_immediately(&transaction, None, &epoch_store)
                 .instrument(span)
@@ -835,6 +841,8 @@ impl SuiNode {
             Box::new(connection_monitor_status),
             consensus_config.max_pending_transactions(),
             consensus_config.max_pending_transactions() * 2 / committee.num_members(),
+            consensus_config.max_submit_position,
+            consensus_config.submit_delay_step_override(),
             ca_metrics,
         )
     }

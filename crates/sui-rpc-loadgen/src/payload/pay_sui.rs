@@ -7,7 +7,8 @@ use async_trait::async_trait;
 use futures::future::join_all;
 use sui_types::base_types::SuiAddress;
 use sui_types::crypto::{EncodeDecodeBase64, SuiKeyPair};
-use sui_types::messages::{ExecuteTransactionRequestType, TransactionData};
+use sui_types::quorum_driver_types::ExecuteTransactionRequestType;
+use sui_types::transaction::TransactionData;
 use tracing::debug;
 
 #[async_trait]
