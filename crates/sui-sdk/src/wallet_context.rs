@@ -353,9 +353,7 @@ impl WalletContext {
         path: PathBuf,
         with_unpublished_deps: bool,
     ) -> VerifiedTransaction {
-        let accounts_and_objs = self.get_all_accounts_and_gas_objects().await.unwrap();
-        let sender = accounts_and_objs[0].0;
-        let gas_object = accounts_and_objs[0].1[0];
+        let (sender, gas_object) = self.get_one_gas_object().await.unwrap().unwrap();
         let gas_price = self.get_reference_gas_price().await.unwrap();
         self.sign_transaction(
             &TestTransactionBuilder::new(sender, gas_object, gas_price)
@@ -366,9 +364,7 @@ impl WalletContext {
 
     /// Executed a transaction to publish the `basics` package and returns the package object ref.
     pub async fn publish_basics_package(&self) -> ObjectRef {
-        let accounts_and_objs = self.get_all_accounts_and_gas_objects().await.unwrap();
-        let sender = accounts_and_objs[0].0;
-        let gas_object = accounts_and_objs[0].1[0];
+        let (sender, gas_object) = self.get_one_gas_object().await.unwrap().unwrap();
         let gas_price = self.get_reference_gas_price().await.unwrap();
         let txn = self.sign_transaction(
             &TestTransactionBuilder::new(sender, gas_object, gas_price)
@@ -381,9 +377,7 @@ impl WalletContext {
 
     /// Executes a transaction to publish the `nfts` package and returns the package id, id of the gas object used, and the digest of the transaction.
     pub async fn publish_nfts_package(&self) -> (ObjectID, ObjectID, TransactionDigest) {
-        let accounts_and_objs = self.get_all_accounts_and_gas_objects().await.unwrap();
-        let sender = accounts_and_objs[0].0;
-        let gas_object = accounts_and_objs[0].1[0];
+        let (sender, gas_object) = self.get_one_gas_object().await.unwrap().unwrap();
         let gas_id = gas_object.0;
         let gas_price = self.get_reference_gas_price().await.unwrap();
         let txn = self.sign_transaction(
@@ -402,9 +396,7 @@ impl WalletContext {
         &self,
         package_id: ObjectID,
     ) -> (SuiAddress, ObjectID, TransactionDigest) {
-        let accounts_and_objs = self.get_all_accounts_and_gas_objects().await.unwrap();
-        let sender = accounts_and_objs[0].0;
-        let gas_object = accounts_and_objs[0].1[0];
+        let (sender, gas_object) = self.get_one_gas_object().await.unwrap().unwrap();
         let rgp = self.get_reference_gas_price().await.unwrap();
 
         let txn = self.sign_transaction(
