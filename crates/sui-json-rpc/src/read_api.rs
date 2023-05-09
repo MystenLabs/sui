@@ -843,7 +843,8 @@ impl ReadApiServer for ReadApi {
                 state.get_checkpoints(cursor.map(|s| *s), limit as u64 + 1, descending_order)
             })
             .await
-            .map_err(|e| anyhow!(e))??;
+            .map_err(Error::from)?
+            .map_err(Error::from)?;
 
             let has_next_page = data.len() > limit;
             data.truncate(limit);

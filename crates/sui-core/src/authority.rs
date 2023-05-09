@@ -2581,40 +2581,40 @@ impl AuthorityState {
         digest: TransactionDigest,
     ) -> SuiResult<VerifiedTransaction> {
         let transaction = self.database.get_transaction_block(&digest)?;
-        transaction.ok_or_else(|| SuiError::TransactionNotFound { digest })
+        transaction.ok_or(SuiError::TransactionNotFound { digest })
     }
 
     pub fn get_executed_effects(&self, digest: TransactionDigest) -> SuiResult<TransactionEffects> {
         let effects = self.database.get_executed_effects(&digest)?;
-        effects.ok_or_else(|| SuiError::TransactionNotFound { digest })
+        effects.ok_or(SuiError::TransactionNotFound { digest })
     }
 
     pub fn multi_get_executed_transactions(
         &self,
         digests: &[TransactionDigest],
     ) -> SuiResult<Vec<Option<VerifiedTransaction>>> {
-        Ok(self.database.multi_get_transaction_blocks(digests)?)
+        self.database.multi_get_transaction_blocks(digests)
     }
 
     pub fn multi_get_executed_effects(
         &self,
         digests: &[TransactionDigest],
     ) -> SuiResult<Vec<Option<TransactionEffects>>> {
-        Ok(self.database.multi_get_executed_effects(digests)?)
+        self.database.multi_get_executed_effects(digests)
     }
 
     pub fn multi_get_transaction_checkpoint(
         &self,
         digests: &[TransactionDigest],
     ) -> SuiResult<Vec<Option<(EpochId, CheckpointSequenceNumber)>>> {
-        Ok(self.database.multi_get_transaction_checkpoint(digests)?)
+        self.database.multi_get_transaction_checkpoint(digests)
     }
 
     pub fn multi_get_events(
         &self,
         digests: &[TransactionEventsDigest],
     ) -> SuiResult<Vec<Option<TransactionEvents>>> {
-        Ok(self.database.multi_get_events(digests)?)
+        self.database.multi_get_events(digests)
     }
 
     pub fn multi_get_checkpoint_by_sequence_number(
@@ -2688,7 +2688,7 @@ impl AuthorityState {
     pub fn get_latest_checkpoint_sequence_number(&self) -> SuiResult<CheckpointSequenceNumber> {
         self.get_checkpoint_store()
             .get_highest_executed_checkpoint_seq_number()?
-            .ok_or_else(|| SuiError::UserInputError {
+            .ok_or(SuiError::UserInputError {
                 error: UserInputError::LatestCheckpointSequenceNumberNotFound,
             })
     }
@@ -2783,7 +2783,7 @@ impl AuthorityState {
     ) -> SuiResult<CheckpointContents> {
         self.get_checkpoint_store()
             .get_checkpoint_contents(&digest)?
-            .ok_or_else(|| SuiError::UserInputError {
+            .ok_or(SuiError::UserInputError {
                 error: UserInputError::CheckpointContentsNotFound(digest),
             })
     }
@@ -2812,7 +2812,7 @@ impl AuthorityState {
         cursor: Option<CheckpointSequenceNumber>,
         limit: u64,
         descending_order: bool,
-    ) -> Result<Vec<Checkpoint>, anyhow::Error> {
+    ) -> SuiResult<Vec<Checkpoint>> {
         let max_checkpoint = self.get_latest_checkpoint_sequence_number()?;
         let checkpoint_numbers =
             calculate_checkpoint_numbers(cursor, limit, descending_order, max_checkpoint);
@@ -2862,7 +2862,7 @@ impl AuthorityState {
     }
 
     pub async fn get_timestamp_ms(&self, digest: &TransactionDigest) -> SuiResult<Option<u64>> {
-        Ok(self.get_indexes()?.get_timestamp_ms(digest)?)
+        self.get_indexes()?.get_timestamp_ms(digest)
     }
 
     pub fn query_events(
