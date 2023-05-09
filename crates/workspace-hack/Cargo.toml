@@ -32,7 +32,6 @@ anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "77f22583
 anes = { version = "0.1" }
 ansi_term = { version = "0.12", default-features = false }
 anyhow = { version = "1", features = ["backtrace"] }
-approx = { version = "0.5" }
 arbitrary = { version = "1", default-features = false, features = ["derive_arbitrary"] }
 arc-swap = { version = "1", default-features = false, features = ["serde"] }
 ark-bls12-381 = { version = "0.4" }
@@ -346,7 +345,6 @@ match_opt = { version = "0.1", default-features = false }
 matchers = { version = "0.1", default-features = false }
 matchit-ca01ad9e24f5d932 = { package = "matchit", version = "0.7" }
 matchit-d8f496e17d97b5cb = { package = "matchit", version = "0.5" }
-matrixmultiply = { version = "0.3" }
 md-5-274715c4dabd11b0 = { package = "md-5", version = "0.9" }
 md-5-93f6ce9d446188ac = { package = "md-5", version = "0.10" }
 memchr = { version = "2", features = ["use_std"] }
@@ -398,7 +396,6 @@ move-vm-types = { path = "../../external-crates/move/move-vm/types" }
 multiaddr = { version = "0.17" }
 multibase = { version = "0.9" }
 multihash = { version = "0.17", default-features = false, features = ["identity", "multihash-impl", "std"] }
-nalgebra = { version = "0.29", features = ["rand"] }
 named-lock = { version = "0.2", default-features = false }
 nested = { version = "0.1", default-features = false }
 newline-converter = { version = "0.2", default-features = false }
@@ -498,10 +495,8 @@ rand-ca01ad9e24f5d932 = { package = "rand", version = "0.7" }
 rand_chacha-468e82937335b1c9 = { package = "rand_chacha", version = "0.3", default-features = false, features = ["std"] }
 rand_core-3b31131e45eafb45 = { package = "rand_core", version = "0.6", default-features = false, features = ["std"] }
 rand_core-d8f496e17d97b5cb = { package = "rand_core", version = "0.5", default-features = false, features = ["std"] }
-rand_distr = { version = "0.4", default-features = false }
 rand_xorshift = { version = "0.3", default-features = false }
 rand_xoshiro = { version = "0.6", default-features = false }
-rawpointer = { version = "0.2", default-features = false }
 rayon = { version = "1", default-features = false }
 rayon-core = { version = "1", default-features = false }
 rcgen = { version = "0.9" }
@@ -538,7 +533,6 @@ rustls-pemfile = { version = "1", default-features = false }
 rusty-fork = { version = "0.3", default-features = false, features = ["timeout"] }
 rustyline = { version = "9" }
 ryu = { version = "1", default-features = false }
-safe_arch = { version = "0.6", features = ["bytemuck"] }
 same-file = { version = "1", default-features = false }
 scheduled-thread-pool = { version = "0.2", default-features = false }
 schemars = { version = "0.8", features = ["either"] }
@@ -577,7 +571,6 @@ shellexpand = { version = "3" }
 shlex = { version = "1" }
 signature-dff4ba8e3ae991db = { package = "signature", version = "1", features = ["digest-preview", "hazmat-preview", "rand-preview"] }
 signature-f595c2ba2a3f28df = { package = "signature", version = "2", default-features = false, features = ["digest", "rand_core", "std"] }
-simba = { version = "0.6", default-features = false, features = ["std"] }
 similar = { version = "2", features = ["inline"] }
 simplelog = { version = "0.9" }
 siphasher = { version = "0.3" }
@@ -594,7 +587,6 @@ spki-3b31131e45eafb45 = { package = "spki", version = "0.6", default-features = 
 spki-ca01ad9e24f5d932 = { package = "spki", version = "0.7", default-features = false, features = ["pem", "std"] }
 stable_deref_trait = { version = "1" }
 static_assertions = { version = "1", default-features = false }
-statrs = { version = "0.16", default-features = false }
 stringprep = { version = "0.1", default-features = false }
 strip-ansi-escapes = { version = "0.1", default-features = false }
 strsim-93f6ce9d446188ac = { package = "strsim", version = "0.10", default-features = false }
@@ -700,7 +692,6 @@ web-sys = { version = "0.3", default-features = false, features = ["AddEventList
 webpki = { version = "0.22", default-features = false, features = ["std"] }
 webpki-roots = { version = "0.22", default-features = false }
 whoami = { version = "1" }
-wide = { version = "0.7", default-features = false, features = ["std"] }
 wyz = { version = "0.2", default-features = false, features = ["alloc"] }
 x509-parser = { version = "0.14" }
 xml-rs = { version = "0.8", default-features = false }
@@ -731,7 +722,6 @@ anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "77f22583
 anes = { version = "0.1" }
 ansi_term = { version = "0.12", default-features = false }
 anyhow = { version = "1", features = ["backtrace"] }
-approx = { version = "0.5" }
 arbitrary = { version = "1", default-features = false, features = ["derive_arbitrary"] }
 arc-swap = { version = "1", default-features = false, features = ["serde"] }
 ark-bls12-381 = { version = "0.4" }
@@ -1094,7 +1084,6 @@ match_opt = { version = "0.1", default-features = false }
 matchers = { version = "0.1", default-features = false }
 matchit-ca01ad9e24f5d932 = { package = "matchit", version = "0.7" }
 matchit-d8f496e17d97b5cb = { package = "matchit", version = "0.5" }
-matrixmultiply = { version = "0.3" }
 md-5-274715c4dabd11b0 = { package = "md-5", version = "0.9" }
 md-5-93f6ce9d446188ac = { package = "md-5", version = "0.10" }
 memchr = { version = "2", features = ["use_std"] }
@@ -1150,8 +1139,6 @@ multibase = { version = "0.9" }
 multihash = { version = "0.17", default-features = false, features = ["identity", "multihash-impl", "std"] }
 multihash-derive = { version = "0.8", default-features = false, features = ["std"] }
 multimap = { version = "0.8", default-features = false }
-nalgebra = { version = "0.29", features = ["rand"] }
-nalgebra-macros = { version = "0.1", default-features = false }
 named-lock = { version = "0.2", default-features = false }
 nested = { version = "0.1", default-features = false }
 newline-converter = { version = "0.2", default-features = false }
@@ -1276,10 +1263,8 @@ rand-ca01ad9e24f5d932 = { package = "rand", version = "0.7" }
 rand_chacha-468e82937335b1c9 = { package = "rand_chacha", version = "0.3", default-features = false, features = ["std"] }
 rand_core-3b31131e45eafb45 = { package = "rand_core", version = "0.6", default-features = false, features = ["std"] }
 rand_core-d8f496e17d97b5cb = { package = "rand_core", version = "0.5", default-features = false, features = ["std"] }
-rand_distr = { version = "0.4", default-features = false }
 rand_xorshift = { version = "0.3", default-features = false }
 rand_xoshiro = { version = "0.6", default-features = false }
-rawpointer = { version = "0.2", default-features = false }
 rayon = { version = "1", default-features = false }
 rayon-core = { version = "1", default-features = false }
 rcgen = { version = "0.9" }
@@ -1322,7 +1307,6 @@ rusty-fork = { version = "0.3", default-features = false, features = ["timeout"]
 rustyline = { version = "9" }
 rustyline-derive = { version = "0.7", default-features = false }
 ryu = { version = "1", default-features = false }
-safe_arch = { version = "0.6", features = ["bytemuck"] }
 same-file = { version = "1", default-features = false }
 scheduled-thread-pool = { version = "0.2", default-features = false }
 schemars = { version = "0.8", features = ["either"] }
@@ -1368,7 +1352,6 @@ shellexpand = { version = "3" }
 shlex = { version = "1" }
 signature-dff4ba8e3ae991db = { package = "signature", version = "1", features = ["digest-preview", "hazmat-preview", "rand-preview"] }
 signature-f595c2ba2a3f28df = { package = "signature", version = "2", default-features = false, features = ["digest", "rand_core", "std"] }
-simba = { version = "0.6", default-features = false, features = ["std"] }
 similar = { version = "2", features = ["inline"] }
 simplelog = { version = "0.9" }
 siphasher = { version = "0.3" }
@@ -1385,7 +1368,6 @@ spki-3b31131e45eafb45 = { package = "spki", version = "0.6", default-features = 
 spki-ca01ad9e24f5d932 = { package = "spki", version = "0.7", default-features = false, features = ["pem", "std"] }
 stable_deref_trait = { version = "1" }
 static_assertions = { version = "1", default-features = false }
-statrs = { version = "0.16", default-features = false }
 stringprep = { version = "0.1", default-features = false }
 strip-ansi-escapes = { version = "0.1", default-features = false }
 strsim-93f6ce9d446188ac = { package = "strsim", version = "0.10", default-features = false }
@@ -1515,7 +1497,6 @@ webpki = { version = "0.22", default-features = false, features = ["std"] }
 webpki-roots = { version = "0.22", default-features = false }
 which = { version = "4", default-features = false }
 whoami = { version = "1" }
-wide = { version = "0.7", default-features = false, features = ["std"] }
 wyz = { version = "0.2", default-features = false, features = ["alloc"] }
 x509-parser = { version = "0.14" }
 xml-rs = { version = "0.8", default-features = false }

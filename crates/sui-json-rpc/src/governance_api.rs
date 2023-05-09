@@ -1,16 +1,16 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::cmp::max;
+use std::collections::BTreeMap;
+use std::sync::Arc;
+
 use anyhow::anyhow;
 use async_trait::async_trait;
 use cached::proc_macro::cached;
 use cached::SizedCache;
 use jsonrpsee::core::RpcResult;
 use jsonrpsee::RpcModule;
-use statrs::statistics::Statistics;
-use std::cmp::max;
-use std::collections::BTreeMap;
-use std::sync::Arc;
 use tracing::{info, instrument};
 
 use mysten_metrics::spawn_monitored_task;
@@ -282,7 +282,9 @@ impl GovernanceReadApiServer for GovernanceReadApi {
                 .rates
                 .into_iter()
                 .filter_map(|(epoch, rate)| {
-                    if epoch >= system_state_summary.stake_subsidy_start_epoch {
+                    if epoch >= system_state_summary.stake_subsidy_start_epoch
+                        && (1.0 / rate.rate()) < 1.2
+                    {
                         Some(rate)
                     } else {
                         None
@@ -298,13 +300,8 @@ impl GovernanceReadApiServer for GovernanceReadApi {
                 let er_e = &exchange_rates[1..];
                 // rate e+1
                 let er_e_1 = &exchange_rates[..exchange_rates.len() - 1];
-                let mut apys = er_e
-                    .iter()
-                    .zip(er_e_1)
-                    .map(calculate_apy)
-                    .collect::<Vec<_>>();
-                remove_outliers(&mut apys, 2.0);
-                apys.mean()
+                let dp_count = er_e.len();
+                er_e.iter().zip(er_e_1).map(calculate_apy).sum::<f64>() / dp_count as f64
             } else {
                 0.0
             };
@@ -319,13 +316,6 @@ impl GovernanceReadApiServer for GovernanceReadApi {
             epoch: system_state_summary.epoch,
         })
     }
-}
-
-fn remove_outliers(data: &mut Vec<f64>, num_stddevs: f64) {
-    let mean = data.mean();
-    let stddev = data.std_dev();
-    let threshold = num_stddevs * stddev;
-    data.retain(|&x| (x - mean).abs() < threshold);
 }
 
 // APY_e = (ER_e+1 / ER_e) ^ 365
