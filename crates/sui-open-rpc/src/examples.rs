@@ -997,9 +997,7 @@ impl RpcExampleProvider {
         let mut sequence = SequenceNumber::from_u64(self.rng.gen_range(24506..6450624));
         let seqs = (0..6)
             .map(|x| {
-                if x % 2 == 0 {
-                    sequence = SequenceNumber::from_u64(self.rng.gen_range(24506..6450624));
-                } else if x % 3 == 0 {
+                if x % 2 == 0 || x % 3 == 0 {
                     sequence = SequenceNumber::from_u64(self.rng.gen_range(24506..6450624));
                 }
 
