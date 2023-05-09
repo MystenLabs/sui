@@ -37,6 +37,10 @@ module deepbook::custodian {
         custodian: &Custodian<Asset>,
         user: ID
     ): (u64, u64) {
+        // if custodian account is not created yet, directly return (0, 0) rather than abort
+        if (!table::contains(&custodian.account_balances, user)) {
+            return (0, 0)
+        };
         let account_balances = table::borrow(&custodian.account_balances, user);
         let avail_balance = balance::value(&account_balances.available_balance);
         let locked_balance = balance::value(&account_balances.locked_balance);
@@ -157,9 +161,13 @@ module deepbook::custodian {
     #[test_only]
     friend deepbook::clob_test;
     #[test_only]
-    use sui::test_scenario::{Self, Scenario};
+    use sui::test_scenario::{Self, Scenario, take_shared, take_from_sender, ctx};
     #[test_only]
     use sui::transfer;
+    #[test_only]
+    use sui::coin::{mint_for_testing};
+    #[test_only]
+    use sui::test_utils::assert_eq;
     #[test_only]
     const ENull: u64 = 0;
 
@@ -201,5 +209,68 @@ module deepbook::custodian {
         user: ID
     ) {
         increase_user_available_balance<T>(custodian, user, coin::into_balance(coin));
+    }
+
+    #[test]
+    #[expected_failure(abort_code = EUserBalanceDoesNotExist)]
+    fun test_user_balance_does_not_exist(){
+        let owner: address = @0xAAAA;
+        let bob: address = @0xBBBB;
+        let test = test_scenario::begin(owner);
+        test_scenario::next_tx(&mut test, owner);
+        {
+            setup_test(&mut test);
+            transfer::public_transfer(mint_account_cap(ctx(&mut test)), bob);
+        };
+        test_scenario::next_tx(&mut test, bob);
+        {
+            let custodian = take_shared<Custodian<USD>>(&mut test);
+            let account_cap = take_from_sender<AccountCap>(&test);
+            let account_cap_user = object::id(&account_cap);
+            let _ = borrow_account_balance(&custodian, account_cap_user);
+            test_scenario::return_to_sender<AccountCap>(&test, account_cap);
+            test_scenario::return_shared(custodian);
+
+        };
+        test_scenario::end(test);
+    }
+
+    #[test]
+    fun test_account_balance() {
+        let owner: address = @0xAAAA;
+        let bob: address = @0xBBBB;
+        let test = test_scenario::begin(owner);
+        test_scenario::next_tx(&mut test, owner);
+        {
+            setup_test(&mut test);
+            transfer::public_transfer(mint_account_cap(ctx(&mut test)), bob);
+        };
+        test_scenario::next_tx(&mut test, bob);
+        {
+            let custodian = take_shared<Custodian<USD>>(&mut test);
+            let account_cap = take_from_sender<AccountCap>(&test);
+            let account_cap_user = object::id(&account_cap);
+            let (asset_available, asset_locked) = account_balance(&custodian, account_cap_user);
+            assert_eq(asset_available, 0);
+            assert_eq(asset_locked, 0);
+            test_scenario::return_to_sender<AccountCap>(&test, account_cap);
+            test_scenario::return_shared(custodian);
+
+        };
+        test_scenario::next_tx(&mut test, bob);
+        {
+            let custodian = take_shared<Custodian<USD>>(&mut test);
+            let account_cap = take_from_sender<AccountCap>(&test);
+            let account_cap_user = object::id(&account_cap);
+            deposit(&mut custodian, mint_for_testing<USD>(10000, ctx(&mut test)), account_cap_user);
+            let (asset_available, asset_locked) = account_balance(&custodian, account_cap_user);
+            assert_eq(asset_available, 10000);
+            assert_eq(asset_locked, 0);
+            asset_locked = account_locked_balance(&custodian, account_cap_user);
+            assert_eq(asset_locked, 0);
+            test_scenario::return_to_sender<AccountCap>(&test, account_cap);
+            test_scenario::return_shared(custodian);
+        };
+        test_scenario::end(test);
     }
 }
