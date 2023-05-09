@@ -444,14 +444,13 @@ pub async fn get_transaction_block(
     Ok(s)
 }
 
-// Keep the return types a vector in case we need support for lamport versions in the near future
+// Keep the return type a vector in case we need support for lamport versions in the near future
 async fn get_object_impl(
     client: &NetworkAuthorityClient,
     id: ObjectID,
-    start_version: Option<u64>,
+    version: Option<u64>,
 ) -> Vec<(Option<SequenceNumber>, Result<ObjectInfoResponse>, f64)> {
     let mut ret = Vec::new();
-    let version = start_version;
 
     let start = Instant::now();
     let resp = client
