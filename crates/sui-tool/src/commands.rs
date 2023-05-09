@@ -54,11 +54,14 @@ pub enum ToolCommand {
         )]
         validator: Option<AuthorityName>,
 
+        // At least one of genesis or fullnode_rpc must be provided
         #[clap(long = "genesis")]
-        genesis: PathBuf,
+        genesis: Option<PathBuf>,
 
-        #[clap(long = "history", help = "show full history of object")]
-        history: bool,
+        // At least one of genesis or fullnode_rpc must be provided
+        // RPC address to provide the up-to-date committee info
+        #[clap(long = "fullnode-rpc")]
+        fullnode_rpc: Option<String>,
 
         /// Concise mode groups responses by results.
         /// prints tabular output suitable for processing with unix tools. For
@@ -86,8 +89,14 @@ pub enum ToolCommand {
     /// Fetch the effects association with transaction `digest`
     #[clap(name = "fetch-transaction")]
     FetchTransaction {
+        // At least one of genesis or fullnode_rpc must be provided
         #[clap(long = "genesis")]
-        genesis: PathBuf,
+        genesis: Option<PathBuf>,
+
+        // At least one of genesis or fullnode_rpc must be provided
+        // RPC address to provide the up-to-date committee info
+        #[clap(long = "fullnode-rpc")]
+        fullnode_rpc: Option<String>,
 
         #[clap(long, help = "The transaction ID to fetch")]
         digest: TransactionDigest,
@@ -129,8 +138,15 @@ pub enum ToolCommand {
     /// If sequence number is not specified, get the latest authenticated checkpoint.
     #[clap(name = "fetch-checkpoint")]
     FetchCheckpoint {
+        // At least one of genesis or fullnode_rpc must be provided
         #[clap(long = "genesis")]
-        genesis: PathBuf,
+        genesis: Option<PathBuf>,
+
+        // At least one of genesis or fullnode_rpc must be provided
+        // RPC address to provide the up-to-date committee info
+        #[clap(long = "fullnode-rpc")]
+        fullnode_rpc: Option<String>,
+
         #[clap(long, help = "Fetch checkpoint at a specific sequence number")]
         sequence_number: Option<CheckpointSequenceNumber>,
     },
@@ -237,11 +253,11 @@ impl ToolCommand {
                 validator,
                 genesis,
                 version,
-                history,
+                fullnode_rpc,
                 verbosity,
                 concise_no_header,
             } => {
-                let output = get_object(id, version, validator, genesis, history).await?;
+                let output = get_object(id, version, validator, genesis, fullnode_rpc).await?;
 
                 match verbosity {
                     Verbosity::Grouped => {
@@ -262,10 +278,11 @@ impl ToolCommand {
                 genesis,
                 digest,
                 show_input_tx,
+                fullnode_rpc,
             } => {
                 print!(
                     "{}",
-                    get_transaction_block(digest, genesis, show_input_tx).await?
+                    get_transaction_block(digest, genesis, show_input_tx, fullnode_rpc).await?
                 );
             }
             ToolCommand::DbTool { db_path, cmd } => {
@@ -300,8 +317,9 @@ impl ToolCommand {
             ToolCommand::FetchCheckpoint {
                 genesis,
                 sequence_number,
+                fullnode_rpc,
             } => {
-                let clients = make_clients(genesis)?;
+                let clients = make_clients(genesis, fullnode_rpc).await?;
 
                 for (name, (_, client)) in clients {
                     let resp = client
