@@ -208,7 +208,8 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
             // Retrieve 1 extra item for next cursor
             let mut data = self
                 .state
-                .query_events(query, cursor.clone(), limit + 1, descending)?;
+                .query_events(query, cursor.clone(), limit + 1, descending)
+                .map_err(Error::from)?;
             let has_next_page = data.len() > limit;
             data.truncate(limit);
             let next_cursor = data.last().map_or(cursor, |e| Some(e.id.clone()));

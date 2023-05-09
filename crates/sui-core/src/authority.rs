@@ -2872,7 +2872,7 @@ impl AuthorityState {
         cursor: Option<EventID>,
         limit: usize,
         descending: bool,
-    ) -> Result<Vec<SuiEvent>, anyhow::Error> {
+    ) -> SuiResult<Vec<SuiEvent>> {
         let index_store = self.get_indexes()?;
 
         //Get the tx_num from tx_digest
@@ -2895,9 +2895,12 @@ impl AuthorityState {
                 if filters.is_empty() {
                     index_store.all_events(tx_num, event_num, limit, descending)?
                 } else {
-                    return Err(anyhow!(
-                        "This query type does not currently support filter combinations."
-                    ));
+                    return Err(SuiError::UserInputError {
+                        error: UserInputError::Unsupported(
+                            "This query type does not currently support filter combinations"
+                                .to_string(),
+                        ),
+                    });
                 }
             }
             EventFilter::Transaction(digest) => {
@@ -2924,9 +2927,11 @@ impl AuthorityState {
             } => index_store
                 .event_iterator(start_time, end_time, tx_num, event_num, limit, descending)?,
             _ => {
-                return Err(anyhow!(
-                    "This query type is not supported by the full node."
-                ))
+                return Err(SuiError::UserInputError {
+                    error: UserInputError::Unsupported(
+                        "This query type is not supported by the full node.".to_string(),
+                    ),
+                })
             }
         };
 

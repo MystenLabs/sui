@@ -987,12 +987,15 @@ fn get_display_object_by_type(
     object_type: &StructTag,
     // TODO: add query version support
 ) -> RpcResult<Option<DisplayVersionUpdatedEvent>> {
-    let mut events = fullnode_api.state.query_events(
-        EventFilter::MoveEventType(DisplayVersionUpdatedEvent::type_(object_type)),
-        None,
-        1,
-        true,
-    )?;
+    let mut events = fullnode_api
+        .state
+        .query_events(
+            EventFilter::MoveEventType(DisplayVersionUpdatedEvent::type_(object_type)),
+            None,
+            1,
+            true,
+        )
+        .map_err(Error::from)?;
 
     // If there's any recent version of Display, give it to the client.
     // TODO: add support for version query.

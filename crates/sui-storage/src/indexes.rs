@@ -10,7 +10,6 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 
-use anyhow::anyhow;
 use itertools::Itertools;
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::{ModuleId, StructTag, TypeTag};
@@ -626,7 +625,7 @@ impl IndexStore {
         let cursor = if let Some(cursor) = cursor {
             Some(
                 self.get_transaction_seq(&cursor)?
-                    .ok_or_else(|| SuiError::TransactionNotFound { digest: cursor })?,
+                    .ok_or(SuiError::TransactionNotFound { digest: cursor })?,
             )
         } else {
             None
