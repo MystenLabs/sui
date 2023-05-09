@@ -25,7 +25,7 @@ use sui_json_rpc_types::SuiTransactionBlockEvents;
 use sui_json_rpc_types::TransactionFilter;
 use sui_json_rpc_types::{
     Balance, Checkpoint, CheckpointId, CheckpointPage, Coin, CoinPage, DynamicFieldPage, EventPage,
-    MoveCallParams, MoveFunctionArgType, ObjectChange, ObjectValueKind::ByImmutableReference,
+    MoveCallParams, MoveFunctionArgType, ObjectChange, ObjectsPage, ObjectValueKind::ByImmutableReference,
     ObjectValueKind::ByMutableReference, ObjectValueKind::ByValue, OwnedObjectRef,
     RPCTransactionRequestParams, SuiCommittee, SuiData, SuiEvent, SuiExecutionStatus,
     SuiLoadedChildObject, SuiLoadedChildObjectsResponse, SuiMoveAbility, SuiMoveAbilitySet,
@@ -1197,44 +1197,63 @@ impl RpcExampleProvider {
     }
 
     fn suix_get_owned_objects(&mut self) -> Examples {
+
         let owner = SuiAddress::from(ObjectID::new(self.rng.gen()));
-        let result = (0..4)
-            .map(|_| SuiObjectData {
-                object_id: ObjectID::new(self.rng.gen()),
-                version: Default::default(),
-                digest: ObjectDigest::new(self.rng.gen()),
-                type_: Some(ObjectType::Struct(MoveObjectType::gas_coin())),
+        let version: u64 = 13488;
+        let options = Some(
+            SuiObjectDataOptions::new()
+            .with_type()
+            .with_owner()
+            .with_previous_transaction()
+        );
+        let filter = Some(SuiObjectDataFilter::MatchAll(
+            vec![SuiObjectDataFilter::StructType(
+                    StructTag::from_str("0x2::coin::Coin<0x2::sui::SUI>").unwrap()
+                ),
+                SuiObjectDataFilter::AddressOwner(
+                    owner
+                ),
+                SuiObjectDataFilter::Version(
+                    version
+                )
+            ]
+        ));
+        let query = json!(SuiObjectResponseQuery {
+            filter,
+            options
+        });
+        let object_id = ObjectID::new(self.rng.gen());
+        
+        let items = (0..3)
+            .map(|_| SuiObjectResponse::new_with_data(SuiObjectData {
+                content: None,
                 owner: Some(Owner::AddressOwner(owner)),
                 previous_transaction: Some(TransactionDigest::new(self.rng.gen())),
-                storage_rebate: None,
-                display: None,
-                content: None,
+                storage_rebate: Some(100),
+                object_id: ObjectID::new(self.rng.gen()),
+                version: SequenceNumber::from_u64(version),
+                digest: ObjectDigest::new(self.rng.gen()),
+                type_: Some(ObjectType::Struct(MoveObjectType::gas_coin())),
                 bcs: None,
-            })
-            .collect::<Vec<_>>();
+                display: None,
+            })).collect::<Vec<_>>();
+
+        let next_cursor = items.last().unwrap().object_id(); 
+        let result = ObjectsPage {
+            data: items,
+            next_cursor: Some(next_cursor.unwrap()),
+            has_next_page: true
+        }; 
 
         Examples::new(
             "suix_getOwnedObjects",
             vec![ExamplePairing::new(
-                "Return all the objects the address in the request owns and that match the filter. By default, only the digest value is returned, but the request returns additional information by setting the relevant keys to true. A cursor value is also provided, so the list of results begin after that value.",
+                "Return all the objects the address provided in the request owns and that match the filter. By default, only the digest value is returned, but the request returns additional information by setting the relevant keys to true. A cursor value is also provided, so the list of results begin after that value.",
                 vec![
                     ("address", json!(owner)),
-                    (
-                        "query",
-                        json!(SuiObjectResponseQuery {
-                            filter: Some(SuiObjectDataFilter::StructType(
-                                StructTag::from_str("0x2::coin::Coin<0x2::sui::SUI>").unwrap()
-                            )),
-                            options: Some(
-                                SuiObjectDataOptions::new()
-                                    .with_type()
-                                    .with_owner()
-                                    .with_previous_transaction()
-                            )
-                        }),
-                    ),
-                    ("cursor", json!(ObjectID::new(self.rng.gen()))),
-                    ("limit", json!(100)),
+                    ("query", json!(query)),
+                    ("cursor", json!(object_id)),
+                    ("limit", json!(3))
                 ],
                 json!(result),
             )],
