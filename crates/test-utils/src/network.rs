@@ -2,25 +2,20 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use futures::future::join_all;
+use jsonrpsee::http_client::{HttpClient, HttpClientBuilder};
+use jsonrpsee::ws_client::WsClient;
+use jsonrpsee::ws_client::WsClientBuilder;
+use mysten_metrics::RegistryService;
+use prometheus::Registry;
+use rand::{distributions::*, rngs::OsRng, seq::SliceRandom};
 use std::num::NonZeroUsize;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
-
-use jsonrpsee::http_client::{HttpClient, HttpClientBuilder};
-use jsonrpsee::ws_client::WsClient;
-use jsonrpsee::ws_client::WsClientBuilder;
-use prometheus::Registry;
-use rand::{distributions::*, rngs::OsRng, seq::SliceRandom};
-use tokio::time::{timeout, Instant};
-use tokio::{task::JoinHandle, time::sleep};
-use tracing::info;
-
-use mysten_metrics::RegistryService;
-
-use sui_config::node::DBCheckpointConfig;
+use sui_config::node::{DBCheckpointConfig, DEFAULT_VALIDATOR_GAS_PRICE};
 use sui_config::{sui_cluster_test_config_dir, Config, SUI_CLIENT_CONFIG, SUI_NETWORK_CONFIG};
 use sui_config::{NodeConfig, PersistedConfig, SUI_KEYSTORE_FILENAME};
+use sui_json_rpc_types::SuiTransactionBlockEffectsAPI;
 use sui_json_rpc_types::{SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions};
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_node::SuiNode;
@@ -31,20 +26,30 @@ use sui_sdk::sui_client_config::{SuiClientConfig, SuiEnv};
 use sui_sdk::wallet_context::WalletContext;
 use sui_sdk::{SuiClient, SuiClientBuilder};
 use sui_swarm::memory::{Swarm, SwarmBuilder};
-use sui_swarm_config::genesis_config::{AccountConfig, GenesisConfig};
+use sui_swarm_config::genesis_config::{
+    AccountConfig, GenesisConfig, ValidatorGenesisConfig, DEFAULT_GAS_AMOUNT,
+};
 use sui_swarm_config::network_config::NetworkConfig;
 use sui_swarm_config::network_config_builder::{
-    FullnodeConfigBuilder, ProtocolVersionsConfig, SupportedProtocolVersionsCallback,
+    ConfigBuilder, FullnodeConfigBuilder, ProtocolVersionsConfig, SupportedProtocolVersionsCallback,
 };
+use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::base_types::{AuthorityName, ObjectID, SuiAddress};
 use sui_types::committee::EpochId;
-use sui_types::crypto::KeypairTraits;
-use sui_types::crypto::SuiKeyPair;
+use sui_types::crypto::{
+    generate_proof_of_possession, get_key_pair_from_rng, AccountKeyPair, KeypairTraits, ToFromBytes,
+};
+use sui_types::crypto::{AuthorityKeyPair, SuiKeyPair};
+use sui_types::governance::MIN_VALIDATOR_JOINING_STAKE_MIST;
 use sui_types::object::Object;
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
 use sui_types::sui_system_state::SuiSystemState;
 use sui_types::sui_system_state::SuiSystemStateTrait;
-use sui_types::transaction::VerifiedTransaction;
+use sui_types::transaction::{CallArg, VerifiedTransaction};
+use sui_types::SUI_SYSTEM_PACKAGE_ID;
+use tokio::time::{timeout, Instant};
+use tokio::{task::JoinHandle, time::sleep};
+use tracing::info;
 
 const NUM_VALIDAOTR: usize = 4;
 
@@ -62,6 +67,8 @@ pub struct TestCluster {
     pub accounts: Vec<SuiAddress>,
     pub wallet: WalletContext,
     pub fullnode_handle: FullNodeHandle,
+    pub next_node_index: usize,
+    pub validator_candidates: Vec<(usize, ValidatorGenesisConfig)>,
 }
 
 impl TestCluster {
@@ -319,6 +326,97 @@ impl TestCluster {
             .await
     }
 
+    pub fn get_validator_account_addresses(&self) -> Vec<SuiAddress> {
+        self.swarm
+            .validators()
+            .map(|v| (&v.config.account_key_pair.keypair().public()).into())
+            .collect()
+    }
+
+    pub async fn send_validator_leaving_request(
+        &self,
+        address: SuiAddress,
+    ) -> SuiTransactionBlockResponse {
+        let keypair = self.get_validator_account_key(address);
+
+        let gas_object = self
+            .wallet
+            .get_one_gas_object_owned_by_address(address)
+            .await
+            .unwrap()
+            .unwrap();
+        let tx =
+            TestTransactionBuilder::new(address, gas_object, self.get_reference_gas_price().await)
+                .move_call(
+                    SUI_SYSTEM_PACKAGE_ID,
+                    "sui_system",
+                    "request_remove_validator",
+                    vec![CallArg::SUI_SYSTEM_MUT],
+                )
+                .build_and_sign(keypair);
+        let response = self.execute_transaction(tx).await.unwrap();
+        assert_eq!(response.status_ok(), Some(true));
+        response
+    }
+
+    pub async fn send_validator_joining_request(&mut self) -> SuiAddress {
+        let (idx, candidate) = self.validator_candidates.pop().unwrap();
+        let vandidator_info = candidate.to_validator_info(format!("validator{}", idx));
+        let sender: SuiAddress = vandidator_info.account_address;
+        let proof_of_possession = generate_proof_of_possession(&candidate.key_pair, sender);
+        let rgp = self.get_reference_gas_price().await;
+        let gas = self
+            .wallet
+            .get_one_gas_object_owned_by_address(sender)
+            .await
+            .unwrap()
+            .unwrap();
+        let candidate_tx_data = TestTransactionBuilder::new(sender, gas, rgp)
+            .move_call(
+                SUI_SYSTEM_PACKAGE_ID,
+                "sui_system",
+                "request_add_validator_candidate",
+                vec![
+                    CallArg::SUI_SYSTEM_MUT,
+                    CallArg::Pure(bcs::to_bytes(vandidator_info.protocol_key.as_bytes()).unwrap()),
+                    CallArg::Pure(bcs::to_bytes(vandidator_info.network_key.as_bytes()).unwrap()),
+                    CallArg::Pure(bcs::to_bytes(vandidator_info.worker_key.as_bytes()).unwrap()),
+                    CallArg::Pure(bcs::to_bytes(proof_of_possession.as_ref()).unwrap()),
+                    CallArg::Pure(bcs::to_bytes(vandidator_info.name.as_bytes()).unwrap()),
+                    CallArg::Pure(bcs::to_bytes(vandidator_info.description.as_bytes()).unwrap()),
+                    CallArg::Pure(bcs::to_bytes(vandidator_info.image_url.as_bytes()).unwrap()),
+                    CallArg::Pure(bcs::to_bytes(vandidator_info.project_url.as_bytes()).unwrap()),
+                    CallArg::Pure(bcs::to_bytes(&vandidator_info.network_address).unwrap()),
+                    CallArg::Pure(bcs::to_bytes(&vandidator_info.p2p_address).unwrap()),
+                    CallArg::Pure(bcs::to_bytes(&vandidator_info.narwhal_primary_address).unwrap()),
+                    CallArg::Pure(bcs::to_bytes(&vandidator_info.narwhal_worker_address).unwrap()),
+                    CallArg::Pure(bcs::to_bytes(&DEFAULT_VALIDATOR_GAS_PRICE).unwrap()), // gas_price
+                    CallArg::Pure(bcs::to_bytes(&0u64).unwrap()), // commission_rate
+                ],
+            )
+            .build();
+        let transaction = self.wallet.sign_transaction(&candidate_tx_data);
+        let effects = self
+            .execute_transaction(transaction)
+            .await
+            .unwrap()
+            .effects
+            .unwrap();
+        assert!(effects.status().is_ok(), "{:?}", effects.status());
+        sender
+    }
+
+    fn get_validator_account_key(&self, address: SuiAddress) -> &SuiKeyPair {
+        for validator in self.swarm.validators() {
+            let keypair = validator.config.account_key_pair.keypair();
+            let addr: SuiAddress = (&keypair.public()).into();
+            if addr == address {
+                return keypair;
+            }
+        }
+        unreachable!("Cannot find the validator with address {}", address);
+    }
+
     #[cfg(msim)]
     pub fn set_safe_mode_expected(&self, value: bool) {
         for n in self.all_node_handles() {
@@ -391,6 +489,7 @@ pub struct TestClusterBuilder {
     fullnode_supported_protocol_versions_config: Option<ProtocolVersionsConfig>,
     db_checkpoint_config_validators: DBCheckpointConfig,
     db_checkpoint_config_fullnodes: DBCheckpointConfig,
+    validator_candidates_account_keys: Vec<AccountKeyPair>,
 }
 
 impl TestClusterBuilder {
@@ -405,6 +504,7 @@ impl TestClusterBuilder {
             fullnode_supported_protocol_versions_config: None,
             db_checkpoint_config_validators: DBCheckpointConfig::default(),
             db_checkpoint_config_fullnodes: DBCheckpointConfig::default(),
+            validator_candidates_account_keys: vec![],
         }
     }
 
@@ -500,8 +600,23 @@ impl TestClusterBuilder {
     }
 
     pub fn with_accounts(mut self, accounts: Vec<AccountConfig>) -> Self {
-        self.get_or_init_genesis_config().accounts = accounts;
+        self.get_or_init_genesis_config().accounts.extend(accounts);
         self
+    }
+
+    pub fn with_validator_candidates_count(mut self, count: usize) -> Self {
+        self.validator_candidates_account_keys = (0..count)
+            .map(|_| get_key_pair_from_rng::<AccountKeyPair, _>(&mut OsRng).1)
+            .collect();
+        let validator_candidate_accounts = self
+            .validator_candidates_account_keys
+            .iter()
+            .map(|key| AccountConfig {
+                address: Some(key.public().into()),
+                gas_amounts: vec![DEFAULT_GAS_AMOUNT, MIN_VALIDATOR_JOINING_STAKE_MIST],
+            })
+            .collect();
+        self.with_accounts(validator_candidate_accounts)
     }
 
     pub async fn build(self) -> anyhow::Result<TestCluster> {
@@ -549,6 +664,25 @@ impl TestClusterBuilder {
 
         let fullnode_handle = start_fullnode_from_config(fullnode_config).await?;
 
+        let validator_count = swarm.validator_node_handles().len();
+        let validator_candidates: Vec<_> = self
+            .validator_candidates_account_keys
+            .into_iter()
+            .enumerate()
+            .map(|(i, account_key_pair)| {
+                let idx = validator_count + i;
+                let key_pair = get_key_pair_from_rng::<AuthorityKeyPair, _>(&mut OsRng).1;
+                let validator = ConfigBuilder::build_validator_with_account_key(
+                    idx,
+                    key_pair,
+                    account_key_pair,
+                    DEFAULT_VALIDATOR_GAS_PRICE,
+                    &mut OsRng,
+                );
+                (idx, validator)
+            })
+            .collect();
+
         wallet_conf.envs.push(SuiEnv {
             alias: "localnet".to_string(),
             rpc: fullnode_handle.rpc_url.clone(),
@@ -570,6 +704,8 @@ impl TestClusterBuilder {
             accounts,
             wallet,
             fullnode_handle,
+            next_node_index: validator_count + validator_candidates.len(),
+            validator_candidates,
         })
     }
 
@@ -631,7 +767,10 @@ impl TestClusterBuilder {
 
     /// Start a Swarm and set up WalletConfig
     async fn start_swarm(&mut self) -> Result<Swarm, anyhow::Error> {
-        let mut builder: SwarmBuilder = Swarm::builder()
+        self.get_or_init_genesis_config();
+        let genesis_config = self.genesis_config.take().unwrap();
+
+        let builder: SwarmBuilder = Swarm::builder()
             .committee_size(
                 NonZeroUsize::new(self.num_validators.unwrap_or(NUM_VALIDAOTR)).unwrap(),
             )
@@ -639,11 +778,8 @@ impl TestClusterBuilder {
             .with_db_checkpoint_config(self.db_checkpoint_config_validators.clone())
             .with_supported_protocol_versions_config(
                 self.validator_supported_protocol_versions_config.clone(),
-            );
-
-        if let Some(genesis_config) = self.genesis_config.take() {
-            builder = builder.with_genesis_config(genesis_config);
-        }
+            )
+            .with_genesis_config(genesis_config);
 
         let mut swarm = builder.build();
         swarm.launch().await?;
@@ -656,7 +792,12 @@ impl TestClusterBuilder {
 
         swarm.config().save(&network_path)?;
         let mut keystore = Keystore::from(FileBasedKeystore::new(&keystore_path)?);
-        for key in &swarm.config().account_keys {
+        for key in swarm
+            .config()
+            .account_keys
+            .iter()
+            .chain(&self.validator_candidates_account_keys)
+        {
             keystore.add_key(SuiKeyPair::Ed25519(key.copy()))?;
         }
 

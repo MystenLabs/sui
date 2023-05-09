@@ -18,7 +18,7 @@ use sui_json_rpc_types::{
 use sui_keys::keystore::AccountKeystore;
 use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest};
-use sui_types::crypto::{get_key_pair, AccountKeyPair};
+use sui_types::crypto::{get_account_key_pair, get_key_pair, AccountKeyPair};
 use sui_types::gas_coin::GasCoin;
 use sui_types::object::Owner;
 use sui_types::transaction::{
@@ -56,6 +56,12 @@ impl WalletContext {
             max_concurrent_requests,
         };
         Ok(context)
+    }
+
+    pub fn create_new_account(&mut self) -> SuiAddress {
+        let (address, keypair) = get_account_key_pair();
+        self.config.keystore.add_key(keypair.into()).unwrap();
+        address
     }
 
     pub fn get_addresses(&self) -> Vec<SuiAddress> {

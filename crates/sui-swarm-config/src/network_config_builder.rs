@@ -1,8 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::genesis_config::AccountConfig;
-use crate::genesis_config::{GenesisConfig, ValidatorGenesisConfig};
+use crate::genesis_config::{
+    AccountConfig, GenesisConfig, ValidatorGenesisConfig, DEFAULT_GAS_AMOUNT,
+};
 use crate::network_config::NetworkConfig;
 use fastcrypto::encoding::{Encoding, Hex};
 use narwhal_config::{
@@ -48,6 +49,14 @@ enum ValidatorIpSelection {
     Simulator,
 }
 
+fn get_validator_ip_selection() -> ValidatorIpSelection {
+    if cfg!(msim) {
+        ValidatorIpSelection::Simulator
+    } else {
+        ValidatorIpSelection::Localhost
+    }
+}
+
 pub type SupportedProtocolVersionsCallback = Arc<
     dyn Fn(
             usize,                 /* validator idx */
@@ -77,7 +86,6 @@ pub struct ConfigBuilder<R = OsRng> {
     reference_gas_price: Option<u64>,
     additional_objects: Vec<Object>,
     with_swarm: bool,
-    validator_ip_sel: ValidatorIpSelection,
     // the versions that are supported by each validator
     supported_protocol_versions_config: ProtocolVersionsConfig,
 
@@ -96,13 +104,6 @@ impl ConfigBuilder {
             reference_gas_price: None,
             additional_objects: vec![],
             with_swarm: false,
-            // Set a sensible default here so that most tests can run with or without the
-            // simulator.
-            validator_ip_sel: if cfg!(msim) {
-                ValidatorIpSelection::Simulator
-            } else {
-                ValidatorIpSelection::Localhost
-            },
             supported_protocol_versions_config: ProtocolVersionsConfig::Default,
             db_checkpoint_config: DBCheckpointConfig::default(),
             state_debug_dump_config: StateDebugDumpConfig::default(),
@@ -218,7 +219,6 @@ impl<R> ConfigBuilder<R> {
             reference_gas_price: self.reference_gas_price,
             additional_objects: self.additional_objects,
             with_swarm: self.with_swarm,
-            validator_ip_sel: self.validator_ip_sel,
             supported_protocol_versions_config: self.supported_protocol_versions_config,
             db_checkpoint_config: self.db_checkpoint_config,
             state_debug_dump_config: self.state_debug_dump_config,
@@ -239,25 +239,9 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
         let committee = self.committee.take().unwrap();
 
         let mut rng = self.rng.take().unwrap();
-
-        let validator_with_account_key = |idx: usize,
-                                          protocol_key_pair: AuthorityKeyPair,
-                                          account_key_pair: AccountKeyPair,
-                                          rng: &mut R|
-         -> ValidatorGenesisConfig {
-            let (worker_key_pair, network_key_pair): (NetworkKeyPair, NetworkKeyPair) =
-                (get_key_pair_from_rng(rng).1, get_key_pair_from_rng(rng).1);
-
-            ValidatorGenesisConfig::new(
-                idx,
-                protocol_key_pair,
-                worker_key_pair,
-                account_key_pair.into(),
-                network_key_pair,
-                self.reference_gas_price
-                    .unwrap_or(DEFAULT_VALIDATOR_GAS_PRICE),
-            )
-        };
+        let rgp = self
+            .reference_gas_price
+            .unwrap_or(DEFAULT_VALIDATOR_GAS_PRICE);
 
         let validators = match committee {
             CommitteeConfig::Size(size) => {
@@ -272,7 +256,13 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
                     .map(|(i, authority_key)| {
                         let account_key_pair =
                             get_key_pair_from_rng::<AccountKeyPair, _>(&mut rng).1;
-                        validator_with_account_key(i, authority_key, account_key_pair, &mut rng)
+                        Self::build_validator_with_account_key(
+                            i,
+                            authority_key,
+                            account_key_pair,
+                            rgp,
+                            &mut rng,
+                        )
                     })
                     .collect::<Vec<_>>()
             }
@@ -286,13 +276,40 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
                     .zip(protocol_keys.into_iter())
                     .enumerate()
                     .map(|(i, (account_key, protocol_key))| {
-                        validator_with_account_key(i, protocol_key, account_key, &mut rng)
+                        Self::build_validator_with_account_key(
+                            i,
+                            protocol_key,
+                            account_key,
+                            rgp,
+                            &mut rng,
+                        )
                     })
                     .collect::<Vec<_>>()
             }
         };
 
         self.build_with_validators(rng, validators)
+    }
+
+    pub fn build_validator_with_account_key(
+        // Used to select port in simtest
+        validator_idx: usize,
+        protocol_key_pair: AuthorityKeyPair,
+        account_key_pair: AccountKeyPair,
+        rgp: u64,
+        rng: &mut R,
+    ) -> ValidatorGenesisConfig {
+        let (worker_key_pair, network_key_pair): (NetworkKeyPair, NetworkKeyPair) =
+            (get_key_pair_from_rng(rng).1, get_key_pair_from_rng(rng).1);
+
+        ValidatorGenesisConfig::new(
+            validator_idx,
+            protocol_key_pair,
+            worker_key_pair,
+            account_key_pair.into(),
+            network_key_pair,
+            rgp,
+        )
     }
 
     fn build_with_validators(
@@ -303,7 +320,16 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
         self.get_or_init_genesis_config();
         let genesis_config = self.genesis_config.unwrap();
 
-        let (account_keys, allocations) = genesis_config.generate_accounts(&mut rng).unwrap();
+        let (account_keys, mut allocations) = genesis_config.generate_accounts(&mut rng).unwrap();
+        // Also make sure that each validator's account contains at least 1 gas object for validator
+        // operations.
+        for validator in &validators {
+            allocations.push(TokenAllocation {
+                recipient_address: (&validator.account_key_pair.public()).into(),
+                amount_mist: DEFAULT_GAS_AMOUNT,
+                staked_with_validator: None,
+            });
+        }
 
         let token_distribution_schedule = {
             let mut builder = TokenDistributionScheduleBuilder::new();
@@ -372,7 +398,7 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
                     max_submit_position: None,
                     submit_delay_step_override_millis: None,
                     narwhal_config: ConsensusParameters {
-                        network_admin_server: match self.validator_ip_sel {
+                        network_admin_server: match get_validator_ip_selection() {
                             ValidatorIpSelection::Simulator => NetworkAdminServerParameters {
                                 primary_network_admin_server_port: 8889,
                                 worker_network_admin_server_base_port: 8890,
@@ -424,7 +450,7 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
                     metrics_address: validator.metrics_address,
                     // TODO: admin server is hard coded to start on 127.0.0.1 - we should probably
                     // provide the entire socket address here to avoid confusion.
-                    admin_interface_port: match self.validator_ip_sel {
+                    admin_interface_port: match get_validator_ip_selection() {
                         ValidatorIpSelection::Simulator => 8888,
                         _ => utils::get_available_port("127.0.0.1"),
                     },
