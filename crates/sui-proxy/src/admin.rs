@@ -5,6 +5,7 @@ use crate::handlers::publish_metrics;
 use crate::histogram_relay::HistogramRelay;
 use crate::middleware::{expect_mysten_proxy_header, expect_valid_public_key};
 use crate::peers::SuiNodeProvider;
+use crate::var;
 use anyhow::Result;
 
 use axum::routing::post as axum_post;
@@ -97,7 +98,7 @@ pub fn make_reqwest_client(settings: RemoteWriteConfig) -> ReqwestClient {
         client: reqwest::Client::builder()
             .user_agent(APP_USER_AGENT)
             .pool_max_idle_per_host(settings.pool_max_idle_per_host)
-            .timeout(Duration::from_secs(15))
+            .timeout(Duration::from_secs(var!("MIMIR_CLIENT_TIMEOUT", 30)))
             .build()
             .expect("cannot create reqwest client"),
         settings,
