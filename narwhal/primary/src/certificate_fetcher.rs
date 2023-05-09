@@ -49,18 +49,20 @@ const VERIFY_CERTIFICATES_BATCH_SIZE: usize = 200;
 
 #[derive(Clone, Debug)]
 pub enum CertificateFetcherCommand {
-    /// Fetch ancestors of the certificate.
-    MissingAncestors(Certificate),
+    /// Fetch the certificate and its ancestors.
+    Ancestors(Certificate),
     /// Fetch once from a random primary.
     Kick,
 }
 
-/// The CertificateFetcher is responsible for fetching certificates that this node is missing
-/// from other primaries. It operates two loops:
-/// Loop 1: listens for certificates missing parents from the core, tracks the highest missing
-/// round per origin, and kicks start fetch tasks if needed.
-/// Loop 2: runs fetch task to request certificates from other primaries continuously, until all
-/// highest missing rounds have been met.
+/// The CertificateFetcher is responsible for fetching certificates that this primary is missing
+/// from peers. It operates a loop which listens for commands to fetch a specific certificate's
+/// ancestors, or just to start one fetch attempt.
+///
+/// In each fetch, the CertificateFetcher first scans locally available certificates. Then it sends
+/// this information to a random peer. The peer would reply with the missing certificates that can
+/// be accepted by this primary. After a fetch completes, another one will start immediately if
+/// there are more certificates missing ancestors.
 pub(crate) struct CertificateFetcher {
     /// Internal state of CertificateFetcher.
     state: Arc<CertificateFetcherState>,
@@ -141,7 +143,7 @@ impl CertificateFetcher {
             tokio::select! {
                 Some(command) = self.rx_certificate_fetcher.recv() => {
                     let certificate = match command {
-                        CertificateFetcherCommand::MissingAncestors(certificate) => certificate,
+                        CertificateFetcherCommand::Ancestors(certificate) => certificate,
                         CertificateFetcherCommand::Kick => {
                             // Kick start a fetch task if there is no other task running.
                             if self.fetch_certificates_task.is_empty() {

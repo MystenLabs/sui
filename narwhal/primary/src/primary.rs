@@ -650,6 +650,8 @@ struct PrimaryReceiverHandler {
     rx_narwhal_round_updates: watch::Receiver<Round>,
     /// Known parent digests that are being fetched from header proposers.
     /// Values are where the digests are first known from.
+    /// TODO: consider limiting maximum number of digests from one authority, allow timeout
+    /// and retries from other authorities.
     parent_digests: Arc<Mutex<BTreeMap<(Round, CertificateDigest), AuthorityIdentifier>>>,
     metrics: Arc<PrimaryMetrics>,
 }
@@ -859,6 +861,7 @@ impl PrimaryReceiverHandler {
                     self.metrics.votes_dropped_equivocation_protection.inc();
                     return Err(DagError::AlreadyVoted(
                         vote_info.vote_digest(),
+                        header.digest(),
                         header.round(),
                     ));
                 }
@@ -1003,7 +1006,8 @@ impl PrimaryToPrimary for PrimaryReceiverHandler {
                         | DagError::HeaderHasBadWorkerIds(_)
                         | DagError::HeaderHasInvalidParentRoundNumbers(_)
                         | DagError::HeaderHasDuplicateParentAuthorities(_)
-                        | DagError::AlreadyVoted(_, _)
+                        | DagError::AlreadyVoted(_, _, _)
+                        | DagError::AlreadyVotedNewerHeader(_, _, _)
                         | DagError::HeaderRequiresQuorum(_)
                         | DagError::TooOld(_, _, _) => {
                             anemo::types::response::StatusCode::BadRequest

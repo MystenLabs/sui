@@ -267,9 +267,7 @@ impl Inner {
         }
         if !result.is_empty() {
             self.tx_certificate_fetcher
-                .send(CertificateFetcherCommand::MissingAncestors(
-                    certificate.clone(),
-                ))
+                .send(CertificateFetcherCommand::Ancestors(certificate.clone()))
                 .await
                 .map_err(|_| DagError::ShuttingDown)?;
         }
@@ -372,7 +370,7 @@ impl Synchronizer {
         });
 
         // Start a task to update gc_round, gc in-memory data, and trigger certificate catchup
-        // if no gc / commit happened for 10s.
+        // if no gc / consensus commit happened for 30s.
         let weak_inner = Arc::downgrade(&inner);
         spawn_monitored_task!(async move {
             const FETCH_TRIGGER_TIMEOUT: Duration = Duration::from_secs(30);
@@ -391,6 +389,8 @@ impl Synchronizer {
                         debug!("Synchronizer is shutting down.");
                         return;
                     }
+                    inner.metrics.synchronizer_gc_timeout.inc();
+                    warn!("No consensus commit happened for {:?}, triggering certificate fetching.", FETCH_TRIGGER_TIMEOUT);
                     continue;
                 };
                 if result.is_err() {
@@ -665,9 +665,7 @@ impl Synchronizer {
         if highest_processed_round + NEW_CERTIFICATE_ROUND_LIMIT < certificate.round() {
             self.inner
                 .tx_certificate_fetcher
-                .send(CertificateFetcherCommand::MissingAncestors(
-                    certificate.clone(),
-                ))
+                .send(CertificateFetcherCommand::Ancestors(certificate.clone()))
                 .await
                 .map_err(|_| DagError::ShuttingDown)?;
             return Err(DagError::TooNew(
