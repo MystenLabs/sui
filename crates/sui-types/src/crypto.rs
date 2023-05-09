@@ -1678,6 +1678,16 @@ pub enum CompressedSignature {
     Secp256r1(Secp256r1SignatureAsBytes),
 }
 
+impl AsRef<[u8]> for CompressedSignature {
+    fn as_ref(&self) -> &[u8] {
+        match self {
+            CompressedSignature::Ed25519(sig) => &sig.0,
+            CompressedSignature::Secp256k1(sig) => &sig.0,
+            CompressedSignature::Secp256r1(sig) => &sig.0,
+        }
+    }
+}
+
 impl FromStr for Signature {
     type Err = eyre::Report;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
