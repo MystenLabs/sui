@@ -1370,7 +1370,12 @@ impl LocalExec {
                             .lock()
                             .expect("Cannot lock")
                             .get(i)
-                            .unwrap()
+                            .unwrap_or(
+                                &self
+                                    .download_latest_object(i)
+                                    .expect("Object download failed")
+                                    .expect("Object not found on chain"),
+                            )
                             .clone(),
                     )
                 }
