@@ -10,15 +10,14 @@ use crate::types::{
     BlockRequest, BlockResponse, BlockTransactionRequest, BlockTransactionResponse, Transaction,
     TransactionIdentifier,
 };
-use crate::{Error, OnlineServerContext, SuiEnv};
-use sui_json_rpc_types::SuiTransactionBlockResponseOptions;
+use crate::{Error, FullNodeApi, OnlineServerContext, SuiEnv};
 
 /// This module implements the [Rosetta Block API](https://www.rosetta-api.org/docs/BlockApi.html)
 
 /// Get a block by its Block Identifier.
 /// [Rosetta API Spec](https://www.rosetta-api.org/docs/BlockApi.html#block)
 pub async fn block(
-    State(state): State<OnlineServerContext>,
+    State(state): State<OnlineServerContext<impl FullNodeApi>>,
     Extension(env): Extension<SuiEnv>,
     WithRejection(Json(request), _): WithRejection<Json<BlockRequest>, Error>,
 ) -> Result<BlockResponse, Error> {
@@ -37,24 +36,13 @@ pub async fn block(
 /// Get a transaction in a block by its Transaction Identifier.
 /// [Rosetta API Spec](https://www.rosetta-api.org/docs/BlockApi.html#blocktransaction)
 pub async fn transaction(
-    State(context): State<OnlineServerContext>,
+    State(context): State<OnlineServerContext<impl FullNodeApi>>,
     Extension(env): Extension<SuiEnv>,
     WithRejection(Json(request), _): WithRejection<Json<BlockTransactionRequest>, Error>,
 ) -> Result<BlockTransactionResponse, Error> {
     env.check_network_identifier(&request.network_identifier)?;
     let digest = request.transaction_identifier.hash;
-    let response = context
-        .client
-        .read_api()
-        .get_transaction_with_options(
-            digest,
-            SuiTransactionBlockResponseOptions::new()
-                .with_input()
-                .with_events()
-                .with_effects()
-                .with_balance_changes(),
-        )
-        .await?;
+    let response = context.fullnode.get_transaction(digest).await?;
     let hash = response.digest;
 
     let operations = response.try_into()?;

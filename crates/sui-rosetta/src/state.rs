@@ -1,47 +1,48 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::operations::Operations;
-use crate::types::{
-    Block, BlockHash, BlockIdentifier, BlockResponse, OperationStatus, OperationType, Transaction,
-    TransactionIdentifier,
-};
-use crate::Error;
-use async_trait::async_trait;
-use chrono::{DateTime, Utc};
-use mysten_metrics::spawn_monitored_task;
-use rocksdb::Options;
 use std::collections::HashMap;
 use std::path::Path;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::{Duration, UNIX_EPOCH};
-use sui_json_rpc_types::SuiTransactionBlockResponseOptions;
+
+use async_trait::async_trait;
+use chrono::{DateTime, Utc};
+use rocksdb::Options;
+use tracing::{debug, error, info, warn};
+
+use mysten_metrics::spawn_monitored_task;
 use sui_sdk::rpc_types::Checkpoint;
-use sui_sdk::SuiClient;
 use sui_types::base_types::{EpochId, SuiAddress};
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
-use tracing::{debug, error, info, warn};
 use typed_store::rocks::{default_db_options, DBMap, DBOptions, MetricConf};
 use typed_store::traits::TableSummary;
 use typed_store::traits::TypedStoreDebug;
 use typed_store::Map;
 use typed_store_derive::DBMapUtils;
 
+use crate::operations::Operations;
+use crate::types::{
+    Block, BlockHash, BlockIdentifier, BlockResponse, OperationStatus, OperationType, Transaction,
+    TransactionIdentifier,
+};
+use crate::{Error, FullNodeApi};
+
 #[cfg(test)]
 #[path = "unit_tests/balance_changing_tx_tests.rs"]
 mod balance_changing_tx_tests;
 
 #[derive(Clone)]
-pub struct OnlineServerContext {
-    pub client: SuiClient,
+pub struct OnlineServerContext<R> {
+    pub fullnode: R,
     block_provider: Arc<dyn BlockProvider + Send + Sync>,
 }
 
-impl OnlineServerContext {
-    pub fn new(client: SuiClient, block_provider: Arc<dyn BlockProvider + Send + Sync>) -> Self {
+impl<FN: FullNodeApi> OnlineServerContext<FN> {
+    pub fn new(fullnode: FN, block_provider: Arc<dyn BlockProvider + Send + Sync>) -> Self {
         Self {
-            client,
+            fullnode,
             block_provider,
         }
     }
@@ -67,20 +68,20 @@ pub trait BlockProvider {
 }
 
 #[derive(Clone)]
-pub struct CheckpointBlockProvider {
+pub struct CheckpointBlockProvider<R> {
     index_store: Arc<CheckpointIndexStore>,
-    client: SuiClient,
+    client: R,
 }
 
 #[async_trait]
-impl BlockProvider for CheckpointBlockProvider {
+impl<R: FullNodeApi> BlockProvider for CheckpointBlockProvider<R> {
     async fn get_block_by_index(&self, index: u64) -> Result<BlockResponse, Error> {
-        let checkpoint = self.client.read_api().get_checkpoint(index.into()).await?;
+        let checkpoint = self.client.get_checkpoint(index.into()).await?;
         self.create_block_response(checkpoint).await
     }
 
     async fn get_block_by_hash(&self, hash: BlockHash) -> Result<BlockResponse, Error> {
-        let checkpoint = self.client.read_api().get_checkpoint(hash.into()).await?;
+        let checkpoint = self.client.get_checkpoint(hash.into()).await?;
         self.create_block_response(checkpoint).await
     }
 
@@ -126,8 +127,8 @@ impl BlockProvider for CheckpointBlockProvider {
     }
 }
 
-impl CheckpointBlockProvider {
-    pub fn spawn(client: SuiClient, db_path: &Path) -> Self {
+impl<R: FullNodeApi> CheckpointBlockProvider<R> {
+    pub fn spawn(client: R, db_path: &Path) -> Self {
         let blocks = Self {
             index_store: Arc::new(CheckpointIndexStore::open(db_path, None)),
             client,
@@ -145,7 +146,7 @@ impl CheckpointBlockProvider {
                 info!("Index Store is empty, indexing genesis block.");
                 let mut checkpoint = None;
                 while checkpoint.is_none() {
-                    checkpoint = f.client.read_api().get_checkpoint(0.into()).await.ok();
+                    checkpoint = f.client.get_checkpoint(0.into()).await.ok();
                     if checkpoint.is_none() {
                         info!("Genesis checkpoint not available, retry in 10 seconds.");
                         tokio::time::sleep(Duration::from_secs(10)).await;
@@ -170,14 +171,10 @@ impl CheckpointBlockProvider {
 
     async fn index_checkpoints(&self) -> Result<(), Error> {
         let last_checkpoint = self.last_indexed_checkpoint()?;
-        let head = self
-            .client
-            .read_api()
-            .get_latest_checkpoint_sequence_number()
-            .await?;
+        let head = self.client.get_latest_checkpoint_sequence_number().await?;
         if last_checkpoint < head {
             for seq in last_checkpoint + 1..=head {
-                let checkpoint = self.client.read_api().get_checkpoint(seq.into()).await?;
+                let checkpoint = self.client.get_checkpoint(seq.into()).await?;
                 let timestamp = UNIX_EPOCH + Duration::from_millis(checkpoint.timestamp_ms);
                 info!(
                     "indexing checkpoint {seq} with {} txs, timestamp: {}",
@@ -232,18 +229,7 @@ impl CheckpointBlockProvider {
         let hash = checkpoint.digest;
         let mut transactions = vec![];
         for digest in checkpoint.transactions.iter() {
-            let tx = self
-                .client
-                .read_api()
-                .get_transaction_with_options(
-                    *digest,
-                    SuiTransactionBlockResponseOptions::new()
-                        .with_input()
-                        .with_effects()
-                        .with_balance_changes()
-                        .with_events(),
-                )
-                .await?;
+            let tx = self.client.get_transaction(*digest).await?;
             transactions.push(Transaction {
                 transaction_identifier: TransactionIdentifier { hash: tx.digest },
                 operations: Operations::try_from(tx)?,
@@ -283,11 +269,7 @@ impl CheckpointBlockProvider {
         &self,
         seq_number: CheckpointSequenceNumber,
     ) -> Result<BlockIdentifier, Error> {
-        let checkpoint = self
-            .client
-            .read_api()
-            .get_checkpoint(seq_number.into())
-            .await?;
+        let checkpoint = self.client.get_checkpoint(seq_number.into()).await?;
         Ok(BlockIdentifier {
             index: checkpoint.sequence_number,
             hash: checkpoint.digest,

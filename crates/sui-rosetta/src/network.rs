@@ -15,7 +15,7 @@ use crate::types::{
     Allow, Case, NetworkIdentifier, NetworkListResponse, NetworkOptionsResponse, NetworkRequest,
     NetworkStatusResponse, OperationStatus, OperationType, Peer, SyncStatus, Version,
 };
-use crate::{OnlineServerContext, SuiEnv};
+use crate::{FullNodeApi, OnlineServerContext, SuiEnv};
 
 /// This module implements the [Rosetta Network API](https://www.rosetta-api.org/docs/NetworkApi.html)
 
@@ -35,17 +35,13 @@ pub async fn list(Extension(env): Extension<SuiEnv>) -> Result<NetworkListRespon
 ///
 /// [Rosetta API Spec](https://www.rosetta-api.org/docs/NetworkApi.html#networkstatus)
 pub async fn status(
-    State(context): State<OnlineServerContext>,
+    State(context): State<OnlineServerContext<impl FullNodeApi>>,
     Extension(env): Extension<SuiEnv>,
     WithRejection(Json(request), _): WithRejection<Json<NetworkRequest>, Error>,
 ) -> Result<NetworkStatusResponse, Error> {
     env.check_network_identifier(&request.network_identifier)?;
 
-    let system_state = context
-        .client
-        .governance_api()
-        .get_latest_sui_system_state()
-        .await?;
+    let system_state = context.fullnode.get_latest_sui_system_state().await?;
 
     let peers = system_state
         .active_validators
@@ -62,8 +58,7 @@ pub async fn status(
     let current_block = blocks.current_block().await?;
     let index = current_block.block.block_identifier.index;
     let target = context
-        .client
-        .read_api()
+        .fullnode
         .get_latest_checkpoint_sequence_number()
         .await?;
 

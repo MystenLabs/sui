@@ -6,17 +6,12 @@ use axum::{Extension, Json};
 use axum_extra::extract::WithRejection;
 use fastcrypto::encoding::{Encoding, Hex};
 use fastcrypto::hash::HashFunction;
-use futures::StreamExt;
 
 use shared_crypto::intent::{Intent, IntentMessage};
-use sui_json_rpc_types::{
-    StakeStatus, SuiObjectDataOptions, SuiTransactionBlockEffectsAPI,
-    SuiTransactionBlockResponseOptions,
-};
+use sui_json_rpc_types::{StakeStatus, SuiTransactionBlockEffectsAPI};
 use sui_sdk::rpc_types::SuiExecutionStatus;
 use sui_types::base_types::SuiAddress;
 use sui_types::crypto::{DefaultHash, SignatureScheme, ToFromBytes};
-use sui_types::error::SuiError;
 use sui_types::signature::GenericSignature;
 use sui_types::transaction::{Transaction, TransactionData, TransactionDataAPI};
 
@@ -30,7 +25,7 @@ use crate::types::{
     InternalOperation, MetadataOptions, SignatureType, SigningPayload, TransactionIdentifier,
     TransactionIdentifierResponse,
 };
-use crate::{OnlineServerContext, SuiEnv};
+use crate::{FullNodeApi, OnlineServerContext, SuiEnv};
 
 /// This module implements the [Rosetta Construction API](https://www.rosetta-api.org/docs/ConstructionApi.html)
 
@@ -124,7 +119,7 @@ pub async fn combine(
 ///
 /// [Rosetta API Spec](https://www.rosetta-api.org/docs/ConstructionApi.html#constructionsubmit)
 pub async fn submit(
-    State(context): State<OnlineServerContext>,
+    State(context): State<OnlineServerContext<impl FullNodeApi>>,
     Extension(env): Extension<SuiEnv>,
     WithRejection(Json(request), _): WithRejection<Json<ConstructionSubmitRequest>, Error>,
 ) -> Result<TransactionIdentifierResponse, Error> {
@@ -133,16 +128,8 @@ pub async fn submit(
     let signed_tx = signed_tx.verify()?;
 
     let response = context
-        .client
-        .quorum_driver_api()
-        .execute_transaction_block(
-            signed_tx,
-            SuiTransactionBlockResponseOptions::new()
-                .with_input()
-                .with_effects()
-                .with_balance_changes(),
-            None,
-        )
+        .fullnode
+        .execute_transaction_block(signed_tx)
         .await?;
 
     if let SuiExecutionStatus::Failure { error } = response
@@ -203,18 +190,14 @@ pub async fn hash(
 ///
 /// [Rosetta API Spec](https://www.rosetta-api.org/docs/ConstructionApi.html#constructionmetadata)
 pub async fn metadata(
-    State(context): State<OnlineServerContext>,
+    State(context): State<OnlineServerContext<impl FullNodeApi>>,
     Extension(env): Extension<SuiEnv>,
     WithRejection(Json(request), _): WithRejection<Json<ConstructionMetadataRequest>, Error>,
 ) -> Result<ConstructionMetadataResponse, Error> {
     env.check_network_identifier(&request.network_identifier)?;
     let option = request.options.ok_or(Error::MissingMetadata)?;
     let sender = option.internal_operation.sender();
-    let gas_price = context
-        .client
-        .governance_api()
-        .get_reference_gas_price()
-        .await?;
+    let gas_price = context.fullnode.get_reference_gas_price().await?;
 
     // Get amount, objects, for the operation
     let (total_required_amount, objects) = match &option.internal_operation {
@@ -227,8 +210,7 @@ pub async fn metadata(
             let stake_ids = if stake_ids.is_empty() {
                 // unstake all
                 context
-                    .client
-                    .governance_api()
+                    .fullnode
                     .get_stakes(*sender)
                     .await?
                     .into_iter()
@@ -250,16 +232,7 @@ pub async fn metadata(
                 return Err(Error::InvalidInput("No active stake to withdraw".into()));
             }
 
-            let responses = context
-                .client
-                .read_api()
-                .multi_get_object_with_options(stake_ids, SuiObjectDataOptions::default())
-                .await?;
-            let stake_refs = responses
-                .into_iter()
-                .map(|stake| stake.into_object().map(|o| o.object_ref()))
-                .collect::<Result<Vec<_>, _>>()
-                .map_err(SuiError::from)?;
+            let stake_refs = context.fullnode.get_object_refs(stake_ids).await?;
 
             (Some(0), stake_refs)
         }
@@ -280,11 +253,7 @@ pub async fn metadata(
             budget: 50_000_000_000,
         })?;
 
-    let dry_run = context
-        .client
-        .read_api()
-        .dry_run_transaction_block(data)
-        .await?;
+    let dry_run = context.fullnode.dry_run_transaction_block(data).await?;
     let effects = dry_run.effects;
 
     if let SuiExecutionStatus::Failure { error } = effects.status() {
@@ -298,9 +267,8 @@ pub async fn metadata(
     let coins = if let Some(amount) = total_required_amount {
         let total_amount = amount + budget;
         context
-            .client
-            .coin_read_api()
-            .select_coins(sender, None, total_amount.into(), vec![])
+            .fullnode
+            .select_coins(sender, total_amount.into())
             .await
             .ok()
     } else {
@@ -311,12 +279,7 @@ pub async fn metadata(
     let coins = if let Some(coins) = coins {
         coins
     } else {
-        context
-            .client
-            .coin_read_api()
-            .get_coins_stream(sender, None)
-            .collect::<Vec<_>>()
-            .await
+        context.fullnode.get_sui(sender).await?
     };
 
     let total_coin_value = coins.iter().fold(0, |sum, coin| sum + coin.balance);

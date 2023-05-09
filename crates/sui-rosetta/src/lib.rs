@@ -12,9 +12,9 @@ use tokio::task::JoinHandle;
 use tracing::info;
 
 use mysten_metrics::spawn_monitored_task;
-use sui_sdk::SuiClient;
 
 use crate::errors::Error;
+use crate::fullnode_api::FullNodeApi;
 use crate::state::{CheckpointBlockProvider, OnlineServerContext};
 use crate::types::{Currency, SuiEnv};
 
@@ -23,6 +23,7 @@ mod account;
 mod block;
 mod construction;
 mod errors;
+pub mod fullnode_api;
 mod network;
 pub mod operations;
 mod state;
@@ -33,17 +34,17 @@ pub static SUI: Lazy<Currency> = Lazy::new(|| Currency {
     decimals: 9,
 });
 
-pub struct RosettaOnlineServer {
+pub struct RosettaOnlineServer<FN: FullNodeApi> {
     env: SuiEnv,
-    context: OnlineServerContext,
+    context: OnlineServerContext<FN>,
 }
 
-impl RosettaOnlineServer {
-    pub fn new(env: SuiEnv, client: SuiClient, data_path: &Path) -> Self {
-        let blocks = Arc::new(CheckpointBlockProvider::spawn(client.clone(), data_path));
+impl<FN: FullNodeApi> RosettaOnlineServer<FN> {
+    pub fn new(env: SuiEnv, full_node: FN, data_path: &Path) -> Self {
+        let blocks = Arc::new(CheckpointBlockProvider::spawn(full_node.clone(), data_path));
         Self {
             env,
-            context: OnlineServerContext::new(client, blocks),
+            context: OnlineServerContext::new(full_node, blocks),
         }
     }
 

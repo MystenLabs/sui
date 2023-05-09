@@ -536,7 +536,6 @@ impl TryFrom<SuiTransactionBlockResponse> for Operations {
         let mut principal_amounts = 0;
         let mut reward_amounts = 0;
         // Extract balance change from unstake events
-
         if let Some(events) = response.events {
             for event in events.data {
                 if is_unstake_event(&event.type_) {

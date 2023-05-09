@@ -33,8 +33,11 @@ fastcrypto.workspace = true
 sui-types = { path = "../sui-types" }
 sui-sdk = { path = "../sui-sdk" }
 sui-node = { path = "../sui-node" }
+sui-core = { path = "../sui-core" }
 sui-config = { path = "../sui-config" }
 sui-keys = { path = "../sui-keys" }
+sui-json-rpc = { path = "../sui-json-rpc" }
+prometheus = "0.13.3"
 sui-json-rpc-types = { path = "../sui-json-rpc-types" }
 mysten-metrics = { path = "../mysten-metrics" }
 chrono = "0.4.23"

@@ -19,6 +19,7 @@ use sui_types::error::SuiError;
 use crate::types::{BlockHash, OperationType, PublicKey, SuiEnv};
 use strum_macros::Display;
 use strum_macros::EnumDiscriminants;
+use sui_types::base_types::SuiAddress;
 use thiserror::Error;
 use typed_store::rocks::TypedStoreError;
 
@@ -78,6 +79,8 @@ pub enum Error {
     DBError(#[from] TypedStoreError),
     #[error(transparent)]
     JsonExtractorRejection(#[from] JsonRejection),
+    #[error("Insufficient fund for address [{address}], requested amount: {amount}")]
+    InsufficientFund { address: SuiAddress, amount: u128 },
 }
 
 impl Serialize for ErrorType {

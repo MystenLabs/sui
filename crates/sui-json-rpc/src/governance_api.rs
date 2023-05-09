@@ -46,7 +46,7 @@ impl GovernanceReadApi {
         Self { state, metrics }
     }
 
-    async fn get_staked_sui(&self, owner: SuiAddress) -> Result<Vec<StakedSui>, Error> {
+    pub async fn get_staked_sui(&self, owner: SuiAddress) -> Result<Vec<StakedSui>, Error> {
         let state = self.state.clone();
         let result = spawn_monitored_task!(async move {
             state
@@ -112,7 +112,7 @@ impl GovernanceReadApi {
         self.get_delegated_stakes(stakes).await
     }
 
-    async fn get_stakes(&self, owner: SuiAddress) -> Result<Vec<DelegatedStake>, Error> {
+    pub async fn get_stakes(&self, owner: SuiAddress) -> Result<Vec<DelegatedStake>, Error> {
         let timer = self.metrics.get_stake_sui_latency.start_timer();
         let stakes = self.get_staked_sui(owner).await?;
         if stakes.is_empty() {
@@ -129,7 +129,7 @@ impl GovernanceReadApi {
         .await?
     }
 
-    async fn get_delegated_stakes(
+    pub async fn get_delegated_stakes(
         &self,
         stakes: Vec<(StakedSui, bool)>,
     ) -> Result<Vec<DelegatedStake>, Error> {

@@ -5,10 +5,8 @@
 use axum::extract::State;
 use axum::{Extension, Json};
 use axum_extra::extract::WithRejection;
-use futures::StreamExt;
 
 use sui_sdk::rpc_types::StakeStatus;
-use sui_sdk::{SuiClient, SUI_COIN_TYPE};
 use sui_types::base_types::SuiAddress;
 
 use crate::errors::Error;
@@ -16,20 +14,20 @@ use crate::types::{
     AccountBalanceRequest, AccountBalanceResponse, AccountCoinsRequest, AccountCoinsResponse,
     Amount, Coin, SubAccount, SubAccountType, SubBalance,
 };
-use crate::{OnlineServerContext, SuiEnv};
+use crate::{FullNodeApi, OnlineServerContext, SuiEnv};
 
 /// Get an array of all AccountBalances for an AccountIdentifier and the BlockIdentifier
 /// at which the balance lookup was performed.
 /// [Rosetta API Spec](https://www.rosetta-api.org/docs/AccountApi.html#accountbalance)
 pub async fn balance(
-    State(ctx): State<OnlineServerContext>,
+    State(ctx): State<OnlineServerContext<impl FullNodeApi>>,
     Extension(env): Extension<SuiEnv>,
     WithRejection(Json(request), _): WithRejection<Json<AccountBalanceRequest>, Error>,
 ) -> Result<AccountBalanceResponse, Error> {
     env.check_network_identifier(&request.network_identifier)?;
     let address = request.account_identifier.address;
     if let Some(SubAccount { account_type }) = request.account_identifier.sub_account {
-        let balances = get_sub_account_balances(account_type, &ctx.client, address).await?;
+        let balances = get_sub_account_balances(account_type, &ctx.fullnode, address).await?;
         Ok(AccountBalanceResponse {
             block_identifier: ctx.blocks().current_block_identifier().await?,
             balances,
@@ -57,12 +55,12 @@ pub async fn balance(
 
 async fn get_sub_account_balances(
     account_type: SubAccountType,
-    client: &SuiClient,
+    client: &impl FullNodeApi,
     address: SuiAddress,
 ) -> Result<Vec<Amount>, Error> {
     let amounts = match account_type {
         SubAccountType::Stake => {
-            let delegations = client.governance_api().get_stakes(address).await?;
+            let delegations = client.get_stakes(address).await?;
             delegations.into_iter().fold(vec![], |mut amounts, stakes| {
                 for stake in &stakes.stakes {
                     if let StakeStatus::Active { .. } = stake.status {
@@ -77,7 +75,7 @@ async fn get_sub_account_balances(
             })
         }
         SubAccountType::PendingStake => {
-            let delegations = client.governance_api().get_stakes(address).await?;
+            let delegations = client.get_stakes(address).await?;
             delegations.into_iter().fold(vec![], |mut amounts, stakes| {
                 for stake in &stakes.stakes {
                     if let StakeStatus::Pending = stake.status {
@@ -93,7 +91,7 @@ async fn get_sub_account_balances(
         }
 
         SubAccountType::EstimatedReward => {
-            let delegations = client.governance_api().get_stakes(address).await?;
+            let delegations = client.get_stakes(address).await?;
             delegations.into_iter().fold(vec![], |mut amounts, stakes| {
                 for stake in &stakes.stakes {
                     if let StakeStatus::Active { estimated_reward } = stake.status {
@@ -120,21 +118,18 @@ async fn get_sub_account_balances(
 /// Get an array of all unspent coins for an AccountIdentifier and the BlockIdentifier at which the lookup was performed. .
 /// [Rosetta API Spec](https://www.rosetta-api.org/docs/AccountApi.html#accountcoins)
 pub async fn coins(
-    State(context): State<OnlineServerContext>,
+    State(context): State<OnlineServerContext<impl FullNodeApi>>,
     Extension(env): Extension<SuiEnv>,
     WithRejection(Json(request), _): WithRejection<Json<AccountCoinsRequest>, Error>,
 ) -> Result<AccountCoinsResponse, Error> {
     env.check_network_identifier(&request.network_identifier)?;
     let coins = context
-        .client
-        .coin_read_api()
-        .get_coins_stream(
-            request.account_identifier.address,
-            Some(SUI_COIN_TYPE.to_string()),
-        )
+        .fullnode
+        .get_sui(request.account_identifier.address)
+        .await?
+        .into_iter()
         .map(Coin::from)
-        .collect()
-        .await;
+        .collect::<Vec<_>>();
 
     Ok(AccountCoinsResponse {
         block_identifier: context.blocks().current_block_identifier().await?,

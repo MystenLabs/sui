@@ -16,6 +16,7 @@ use tokio::task::JoinHandle;
 use sui_config::utils;
 use sui_keys::keystore::AccountKeystore;
 use sui_keys::keystore::Keystore;
+use sui_rosetta::fullnode_api::LocalFullNode;
 use sui_rosetta::operations::Operations;
 use sui_rosetta::types::{
     AccountBalanceRequest, AccountBalanceResponse, AccountIdentifier, ConstructionCombineRequest,
@@ -25,12 +26,11 @@ use sui_rosetta::types::{
     SignatureType, SubAccount, SubAccountType, SuiEnv, TransactionIdentifierResponse,
 };
 use sui_rosetta::{RosettaOfflineServer, RosettaOnlineServer};
-use sui_sdk::SuiClient;
 use sui_types::base_types::SuiAddress;
 use sui_types::crypto::SuiSignature;
 
 pub async fn start_rosetta_test_server(
-    client: SuiClient,
+    client: LocalFullNode,
     dir: &Path,
 ) -> (RosettaClient, Vec<JoinHandle<hyper::Result<()>>>) {
     let online_server =

@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use prometheus::Registry;
 use std::time::Duration;
 
 use serde_json::json;
@@ -9,6 +10,7 @@ use rosetta_client::start_rosetta_test_server;
 use sui_config::genesis_config::{DEFAULT_GAS_AMOUNT, DEFAULT_NUMBER_OF_OBJECT_PER_ACCOUNT};
 use sui_json_rpc_types::SuiTransactionBlockResponseOptions;
 use sui_keys::keystore::AccountKeystore;
+use sui_rosetta::fullnode_api::LocalFullNode;
 use sui_rosetta::operations::Operations;
 use sui_rosetta::types::{
     AccountBalanceRequest, AccountBalanceResponse, AccountIdentifier, NetworkIdentifier,
@@ -30,8 +32,11 @@ async fn test_get_staked_sui() {
     let client = test_cluster.wallet.get_client().await.unwrap();
     let keystore = &test_cluster.wallet.config.keystore;
 
-    let (rosetta_client, _handle) =
-        start_rosetta_test_server(client.clone(), test_cluster.swarm.dir()).await;
+    let (rosetta_client, _handle) = start_rosetta_test_server(
+        LocalFullNode::new(&test_cluster.fullnode_handle.sui_node, &Registry::new()),
+        test_cluster.swarm.dir(),
+    )
+    .await;
 
     tokio::time::sleep(Duration::from_secs(1)).await;
 
@@ -132,8 +137,11 @@ async fn test_stake() {
     let client = test_cluster.wallet.get_client().await.unwrap();
     let keystore = &test_cluster.wallet.config.keystore;
 
-    let (rosetta_client, _handle) =
-        start_rosetta_test_server(client.clone(), test_cluster.swarm.dir()).await;
+    let (rosetta_client, _handle) = start_rosetta_test_server(
+        LocalFullNode::new(&test_cluster.fullnode_handle.sui_node, &Registry::new()),
+        test_cluster.swarm.dir(),
+    )
+    .await;
 
     let validator = client
         .governance_api()
@@ -194,8 +202,11 @@ async fn test_stake_all() {
     let client = test_cluster.wallet.get_client().await.unwrap();
     let keystore = &test_cluster.wallet.config.keystore;
 
-    let (rosetta_client, _handle) =
-        start_rosetta_test_server(client.clone(), test_cluster.swarm.dir()).await;
+    let (rosetta_client, _handle) = start_rosetta_test_server(
+        LocalFullNode::new(&test_cluster.fullnode_handle.sui_node, &Registry::new()),
+        test_cluster.swarm.dir(),
+    )
+    .await;
 
     let validator = client
         .governance_api()
@@ -259,8 +270,11 @@ async fn test_withdraw_stake() {
     let client = test_cluster.wallet.get_client().await.unwrap();
     let keystore = &test_cluster.wallet.config.keystore;
 
-    let (rosetta_client, _handle) =
-        start_rosetta_test_server(client.clone(), test_cluster.swarm.dir()).await;
+    let (rosetta_client, _handle) = start_rosetta_test_server(
+        LocalFullNode::new(&test_cluster.fullnode_handle.sui_node, &Registry::new()),
+        test_cluster.swarm.dir(),
+    )
+    .await;
 
     // First add some stakes
     let validator = client
@@ -384,8 +398,11 @@ async fn test_pay_sui() {
     let client = test_cluster.wallet.get_client().await.unwrap();
     let keystore = &test_cluster.wallet.config.keystore;
 
-    let (rosetta_client, _handle) =
-        start_rosetta_test_server(client.clone(), test_cluster.swarm.dir()).await;
+    let (rosetta_client, _handle) = start_rosetta_test_server(
+        LocalFullNode::new(&test_cluster.fullnode_handle.sui_node, &Registry::new()),
+        test_cluster.swarm.dir(),
+    )
+    .await;
 
     let ops = serde_json::from_value(json!(
         [{
@@ -444,8 +461,11 @@ async fn test_pay_sui_multiple_times() {
     let client = test_cluster.wallet.get_client().await.unwrap();
     let keystore = &test_cluster.wallet.config.keystore;
 
-    let (rosetta_client, _handle) =
-        start_rosetta_test_server(client.clone(), test_cluster.swarm.dir()).await;
+    let (rosetta_client, _handle) = start_rosetta_test_server(
+        LocalFullNode::new(&test_cluster.fullnode_handle.sui_node, &Registry::new()),
+        test_cluster.swarm.dir(),
+    )
+    .await;
 
     for _ in 1..100 {
         let ops = serde_json::from_value(json!(
