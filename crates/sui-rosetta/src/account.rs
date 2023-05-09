@@ -25,40 +25,6 @@ use std::time::Duration;
 /// Get an array of all AccountBalances for an AccountIdentifier and the BlockIdentifier
 /// at which the balance lookup was performed.
 /// [Rosetta API Spec](https://www.rosetta-api.org/docs/AccountApi.html#accountbalance)
-pub async fn balance(
-    State(ctx): State<OnlineServerContext>,
-    Extension(env): Extension<SuiEnv>,
-    WithRejection(Json(request), _): WithRejection<Json<AccountBalanceRequest>, Error>,
-) -> Result<AccountBalanceResponse, Error> {
-    env.check_network_identifier(&request.network_identifier)?;
-    let address = request.account_identifier.address;
-    if let Some(SubAccount { account_type }) = request.account_identifier.sub_account {
-        let balances = get_sub_account_balances(account_type, &ctx.client, address).await?;
-        Ok(AccountBalanceResponse {
-            block_identifier: ctx.blocks().current_block_identifier().await?,
-            balances,
-        })
-    } else {
-        let block_identifier = if let Some(index) = request.block_identifier.index {
-            let response = ctx.blocks().get_block_by_index(index).await?;
-            response.block.block_identifier
-        } else if let Some(hash) = request.block_identifier.hash {
-            let response = ctx.blocks().get_block_by_hash(hash).await?;
-            response.block.block_identifier
-        } else {
-            ctx.blocks().current_block_identifier().await?
-        };
-
-        ctx.blocks()
-            .get_balance_at_block(address, block_identifier.index)
-            .await
-            .map(|balance| AccountBalanceResponse {
-                block_identifier,
-                balances: vec![Amount::new(balance)],
-            })
-    }
-}
-
 pub async fn balance_new(
     State(ctx): State<OnlineServerContext>,
     Extension(env): Extension<SuiEnv>,

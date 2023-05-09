@@ -220,7 +220,7 @@ pub async fn metadata(
     let (total_required_amount, objects, budget) = match &option.internal_operation {
         InternalOperation::PaySui { amounts, .. } => {
             let amount = amounts.iter().sum::<u64>();
-            (Some(amount), vec![], 100_000)
+            (Some(amount), vec![], 5_000_000)
         }
         InternalOperation::Stake { amount, .. } => (*amount, vec![], 100_000_000),
         InternalOperation::WithdrawStake { sender, stake_ids } => {

@@ -63,11 +63,6 @@ pub trait BlockProvider {
         &self,
         checkpoint: CheckpointSequenceNumber,
     ) -> Result<BlockIdentifier, Error>;
-    async fn get_balance_at_block(
-        &self,
-        addr: SuiAddress,
-        block_height: u64,
-    ) -> Result<i128, Error>;
 }
 
 #[derive(Clone)]
@@ -82,7 +77,7 @@ impl BlockProvider for CheckpointBlockProvider {
         let checkpoint = self.client.read_api().get_checkpoint(index.into()).await?;
         self.create_block_response(checkpoint).await
     }
-
+    
     async fn get_block_by_hash(&self, hash: BlockHash) -> Result<BlockResponse, Error> {
         let checkpoint = self.client.read_api().get_checkpoint(hash.into()).await?;
         self.create_block_response(checkpoint).await
@@ -122,29 +117,6 @@ impl BlockProvider for CheckpointBlockProvider {
     ) -> Result<BlockIdentifier, Error> {
         self.create_block_identifier(checkpoint).await
     }
-
-    async fn get_balance_at_block(
-        &self,
-        addr: SuiAddress,
-        block_height: u64,
-    ) -> Result<i128, Error> {
-        Ok(self
-            .index_store
-            .balances
-            .iter()
-            .skip_prior_to(&(addr, block_height))?
-            .next()
-            .and_then(
-                |((address, _), balance)| {
-                    if address == addr {
-                        Some(balance)
-                    } else {
-                        None
-                    }
-                },
-            )
-            .unwrap_or_default())
-    }
 }
 
 impl CheckpointBlockProvider {
@@ -153,99 +125,7 @@ impl CheckpointBlockProvider {
             index_store: Arc::new(CheckpointIndexStore::open(db_path, None)),
             client,
         };
-
-        // let update_interval = option_env!("CHECKPOINT_UPDATE_INTERVAL")
-        //     .map(|i| u64::from_str(i).ok())
-        //     .flatten()
-        //     .unwrap_or(2000);
-        // let update_interval = Duration::from_millis(update_interval);
-
-        // let f = blocks.clone();
-        // spawn_monitored_task!(async move {
-        //     if f.index_store.is_empty() {
-        //         info!("Index Store is empty, indexing genesis block.");
-        //         let mut checkpoint = None;
-        //         while checkpoint.is_none() {
-        //             checkpoint = f.client.read_api().get_checkpoint(0.into()).await.ok();
-        //             if checkpoint.is_none() {
-        //                 info!("Genesis checkpoint not available, retry in 10 seconds.");
-        //                 tokio::time::sleep(Duration::from_secs(10)).await;
-        //             }
-        //         }
-        //         let resp = f.create_block_response(checkpoint.unwrap()).await.unwrap();
-        //         f.update_balance(resp.block).await.unwrap();
-        //     } else {
-        //         let current_block = f.current_block_identifier().await.unwrap();
-        //         info!("Resuming from block {}", current_block.index);
-        //     };
-        //     loop {
-        //         if let Err(e) = f.index_checkpoints().await {
-        //             error!("Error indexing checkpoint, cause: {e:?}")
-        //         }
-        //         tokio::time::sleep(update_interval).await;
-        //     }
-        // });
-
         blocks
-    }
-
-    async fn index_checkpoints(&self) -> Result<(), Error> {
-        let last_checkpoint = self.last_indexed_checkpoint()?;
-        let head = self
-            .client
-            .read_api()
-            .get_latest_checkpoint_sequence_number()
-            .await?;
-        if last_checkpoint < head {
-            for seq in last_checkpoint + 1..=head {
-                let checkpoint = self.client.read_api().get_checkpoint(seq.into()).await?;
-                let timestamp = UNIX_EPOCH + Duration::from_millis(checkpoint.timestamp_ms);
-                info!(
-                    "indexing checkpoint {seq} with {} txs, timestamp: {}",
-                    checkpoint.transactions.len(),
-                    DateTime::<Utc>::from(timestamp).format("%Y-%m-%d %H:%M:%S")
-                );
-                let resp = self.create_block_response(checkpoint).await?;
-                self.update_balance(resp.block).await?;
-                self.index_store.last_checkpoint.insert(&true, &seq)?;
-            }
-        } else {
-            debug!("No new checkpoints.")
-        };
-        Ok(())
-    }
-
-    async fn update_balance(&self, block: Block) -> Result<(), anyhow::Error> {
-        let block_height = block.block_identifier.index;
-        let last_block_height = if block_height == 0 {
-            0
-        } else {
-            block_height - 1
-        };
-        let balances: HashMap<SuiAddress, i128> =
-            block
-                .transactions
-                .into_iter()
-                .fold(HashMap::new(), |mut changes, tx| {
-                    for (address, balance) in extract_balance_changes_from_ops(tx.operations) {
-                        *changes.entry(address).or_default() += balance;
-                    }
-                    changes
-                });
-
-        for (addr, value) in balances {
-            let current_balance = self.get_balance_at_block(addr, last_block_height).await?;
-            let new_balance = current_balance + value;
-            if new_balance < 0 {
-                // This can happen due to missing transactions data due to unstable validators, causing balance to
-                // fall below zero temporarily. The problem should go away when we start using checkpoints for event and indexing
-                warn!("Account gas value fall below 0 at block {block_height}, address: [{addr}], current balance = {current_balance}, balance change = {value}.");
-            }
-            self.index_store
-                .balances
-                .insert(&(addr, block_height), &new_balance)?;
-        }
-        Ok(())
     }
 
     async fn create_block_response(&self, checkpoint: Checkpoint) -> Result<BlockResponse, Error> {
@@ -315,14 +195,6 @@ impl CheckpointBlockProvider {
             index: checkpoint.sequence_number,
             hash: checkpoint.digest,
         })
-    }
-
-    fn last_indexed_checkpoint(&self) -> Result<CheckpointSequenceNumber, Error> {
-        Ok(self
-            .index_store
-            .last_checkpoint
-            .get(&true)?
-            .unwrap_or_default())
     }
 }
 
