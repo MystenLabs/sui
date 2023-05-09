@@ -12,10 +12,20 @@ use axum::{
     BoxError, TypedHeader,
 };
 use bytes::Buf;
-use prometheus::proto::MetricFamily;
+use once_cell::sync::Lazy;
+use prometheus::{proto::MetricFamily, register_counter_vec, CounterVec};
 use std::sync::Arc;
 use sui_tls::TlsConnectionInfo;
 use tracing::error;
+
+static MIDDLEWARE_OPS: Lazy<CounterVec> = Lazy::new(|| {
+    register_counter_vec!(
+        "middleware_operations",
+        "Operations counters and status for axum middleware.",
+        &["operation", "status"]
+    )
+    .unwrap()
+});
 
 /// we expect sui-node to send us an http header content-type encoding.
 pub async fn expect_mysten_proxy_header<B>(
@@ -27,6 +37,9 @@ pub async fn expect_mysten_proxy_header<B>(
         prometheus::PROTOBUF_FORMAT => Ok(next.run(request).await),
         ct => {
             error!("invalid content-type; {ct}");
+            MIDDLEWARE_OPS
+                .with_label_values(&["expect_mysten_proxy_header", "invalid-content-type"])
+                .inc();
             Err((StatusCode::BAD_REQUEST, "invalid content-type header"))
         }
     }
@@ -42,9 +55,11 @@ pub async fn expect_valid_public_key<B>(
 ) -> Result<Response, (StatusCode, &'static str)> {
     let Some(peer) = allower.get(tls_connect_info.public_key().unwrap()) else {
         error!("node with unknown pub key tried to connect");
+        MIDDLEWARE_OPS
+        .with_label_values(&["expect_valid_public_key", "unknown-validator-connection-attempt"])
+        .inc();
         return Err((StatusCode::FORBIDDEN, "unknown clients are not allowed"));
     };
-
     request.extensions_mut().insert(peer);
     Ok(next.run(request).await)
 }
@@ -67,17 +82,23 @@ where
         let body = Bytes::from_request(req, state).await.map_err(|e| {
             let msg = format!("error extracting bytes; {e}");
             error!(msg);
+            MIDDLEWARE_OPS
+                .with_label_values(&["LenDelimProtobuf_from_request", "unable-to-extract-bytes"])
+                .inc();
             (StatusCode::BAD_REQUEST, msg)
         })?;
-
         let mut decoder = ProtobufDecoder::new(body.reader());
         let decoded = decoder.parse::<MetricFamily>().map_err(|e| {
             let msg = format!("unable to decode len deliminated protobufs; {e}");
             error!(msg);
+            MIDDLEWARE_OPS
+                .with_label_values(&[
+                    "LenDelimProtobuf_from_request",
+                    "unable-to-decode-protobufs",
+                ])
+                .inc();
             (StatusCode::BAD_REQUEST, msg)
         })?;
-
-        // req.extensions_mut().insert(decoded);
         Ok(Self(decoded))
     }
 }

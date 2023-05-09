@@ -20,6 +20,9 @@ mod guards;
 pub mod histogram;
 pub use guards::*;
 
+pub const TX_TYPE_SINGLE_WRITER_TX: &str = "single_writer";
+pub const TX_TYPE_SHARED_OBJ_TX: &str = "shared_object";
+
 #[derive(Debug)]
 pub struct Metrics {
     pub tasks: IntGaugeVec,
@@ -47,7 +50,7 @@ impl Metrics {
             )
             .unwrap(),
             scope_entrance: register_int_gauge_vec_with_registry!(
-                "scope_entrance",
+                "monitored_scope_entrance",
                 "Number of entrance in the scope.",
                 &["name"],
                 registry,

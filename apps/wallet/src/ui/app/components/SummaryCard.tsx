@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { cx } from 'class-variance-authority';
+import clsx from 'classnames';
 
 import { Text } from '../shared/text';
 
@@ -13,6 +13,7 @@ export type SummaryCardProps = {
     footer?: ReactNode;
     minimalPadding?: boolean;
     showDivider?: boolean;
+    noBorder?: boolean;
 };
 
 export function SummaryCard({
@@ -21,9 +22,15 @@ export function SummaryCard({
     footer,
     minimalPadding,
     showDivider = false,
+    noBorder = false,
 }: SummaryCardProps) {
     return (
-        <div className="bg-white flex flex-col flex-nowrap border border-solid border-gray-45 rounded-2xl">
+        <div
+            className={clsx(
+                { 'border border-solid border-gray-45': !noBorder },
+                'bg-white flex flex-col flex-nowrap rounded-2xl'
+            )}
+        >
             {header ? (
                 <div className="flex flex-row flex-nowrap items-center justify-center uppercase bg-gray-40 px-3.75 py-2.5 rounded-t-2xl">
                     <Text
@@ -37,11 +44,11 @@ export function SummaryCard({
                 </div>
             ) : null}
             <div
-                className={cx(
+                className={clsx(
                     'flex-1 flex flex-col items-stretch flex-nowrap px-4',
                     minimalPadding ? 'py-2' : 'py-4',
                     showDivider
-                        ? 'divide-x-0 divide-y divide-gray-45 divide-solid'
+                        ? 'divide-x-0 divide-y divide-gray-40 divide-solid'
                         : ''
                 )}
             >

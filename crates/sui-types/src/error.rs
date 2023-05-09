@@ -5,7 +5,6 @@
 use crate::{
     base_types::*,
     committee::{Committee, EpochId, StakeUnit},
-    messages::CommandIndex,
     object::Owner,
 };
 
@@ -36,7 +35,7 @@ macro_rules! fp_ensure {
     };
 }
 use crate::digests::TransactionEventsDigest;
-use crate::execution_status::ExecutionFailureStatus;
+use crate::execution_status::{CommandIndex, ExecutionFailureStatus};
 pub(crate) use fp_ensure;
 
 #[macro_export]
@@ -183,6 +182,9 @@ pub enum UserInputError {
 
     #[error("Feature is not yet supported: {0}")]
     Unsupported(String),
+
+    #[error("Query transactions with move function input error: {0}")]
+    MoveFunctionInputError(String),
 }
 
 #[derive(

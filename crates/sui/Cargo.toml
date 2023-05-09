@@ -27,6 +27,9 @@ const-str = "0.5.3"
 rand = "0.8.5"
 tap = "1.0"
 inquire = "0.6.0"
+rusoto_core = { version = "0.48.0", default_features=false, features=["rustls"] }
+rusoto_kms = { version = "0.48.0", default_features=false, features=["rustls"] }
+aws-config = "0.55.1"
 
 sui-core = { path = "../sui-core" }
 sui-framework-snapshot = { path = "../sui-framework-snapshot" }
@@ -41,6 +44,7 @@ sui-source-validation = { path = "../sui-source-validation" }
 sui-move = { path = "../sui-move", features = ["all"] }
 sui-move-build = { path = "../sui-move-build" }
 sui-protocol-config = { path = "../sui-protocol-config" }
+sui-test-transaction-builder = { path = "../sui-test-transaction-builder" }
 shared-crypto = { path = "../shared-crypto" }
 
 fastcrypto.workspace = true
@@ -85,6 +89,7 @@ sui-macros = { path = "../sui-macros" }
 sui-simulator = { path = "../sui-simulator" }
 mysten-metrics = { path = "../mysten-metrics" }
 sui-tool = { path = "../sui-tool" }
+tokio = { version = "1", features = ["full"] }
 
 assert_cmd = "2.0.6"
 

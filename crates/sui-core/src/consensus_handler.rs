@@ -28,12 +28,13 @@ use std::hash::{Hash, Hasher};
 use std::num::NonZeroUsize;
 use std::sync::Arc;
 use sui_types::base_types::{AuthorityName, EpochId, TransactionDigest};
-use sui_types::messages::{
-    ConsensusTransaction, ConsensusTransactionKey, ConsensusTransactionKind,
-    VerifiedExecutableTransaction, VerifiedTransaction,
-};
 use sui_types::storage::ParentSync;
+use sui_types::transaction::VerifiedTransaction;
 
+use sui_types::executable_transaction::VerifiedExecutableTransaction;
+use sui_types::messages_consensus::{
+    ConsensusTransaction, ConsensusTransactionKey, ConsensusTransactionKind,
+};
 use tracing::{debug, error, info, instrument};
 
 pub struct ConsensusHandler<T> {
@@ -414,7 +415,7 @@ impl<T> ConsensusHandler<T> {
     }
 }
 
-fn classify(transaction: &ConsensusTransaction) -> &'static str {
+pub(crate) fn classify(transaction: &ConsensusTransaction) -> &'static str {
     match &transaction.kind {
         ConsensusTransactionKind::UserTransaction(certificate) => {
             if certificate.contains_shared_object() {
@@ -531,7 +532,7 @@ mod tests {
     use narwhal_types::Certificate;
     use sui_protocol_config::SupportedProtocolVersions;
     use sui_types::base_types::AuthorityName;
-    use sui_types::messages::{
+    use sui_types::messages_consensus::{
         AuthorityCapabilities, ConsensusTransaction, ConsensusTransactionKind,
     };
 

@@ -15,6 +15,7 @@ use oneshot::channel;
 use prometheus::Registry;
 use std::collections::BTreeMap;
 use std::collections::Bound::{Included, Unbounded};
+use std::fs;
 use std::num::NonZeroUsize;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -48,6 +49,8 @@ pub struct DBCheckpointHandler {
     prune_and_compact_before_upload: bool,
     /// Indirect object config for pruner
     indirect_objects_threshold: usize,
+    /// Pruning objects
+    pruning_config: AuthorityStorePruningConfig,
 }
 
 impl DBCheckpointHandler {
@@ -57,6 +60,7 @@ impl DBCheckpointHandler {
         interval_s: u64,
         prune_and_compact_before_upload: bool,
         indirect_objects_threshold: usize,
+        pruning_config: AuthorityStorePruningConfig,
     ) -> Result<Self> {
         let input_store_config = ObjectStoreConfig {
             object_store: Some(ObjectStoreType::File),
@@ -71,6 +75,7 @@ impl DBCheckpointHandler {
             gc_markers: vec![UPLOAD_COMPLETED_MARKER.to_string()],
             prune_and_compact_before_upload,
             indirect_objects_threshold,
+            pruning_config,
         })
     }
     pub fn new_for_test(
@@ -91,6 +96,7 @@ impl DBCheckpointHandler {
             gc_markers: vec![UPLOAD_COMPLETED_MARKER.to_string(), TEST_MARKER.to_string()],
             prune_and_compact_before_upload,
             indirect_objects_threshold: 0,
+            pruning_config: AuthorityStorePruningConfig::default(),
         })
     }
     pub fn start(self) -> Sender<()> {
@@ -119,10 +125,6 @@ impl DBCheckpointHandler {
             None,
             None,
         ));
-        let config = AuthorityStorePruningConfig {
-            num_epochs_to_retain: 0,
-            ..Default::default()
-        };
         let metrics = AuthorityStorePruningMetrics::new(&Registry::default());
         let lock_table = Arc::new(RwLockTable::new(1));
         info!(
@@ -133,7 +135,7 @@ impl DBCheckpointHandler {
             &perpetual_db,
             &checkpoint_store,
             &lock_table,
-            config,
+            self.pruning_config,
             metrics,
             self.indirect_objects_threshold,
         )
@@ -244,12 +246,8 @@ impl DBCheckpointHandler {
                 // upload completed marker
                 Ok(_) => {
                     info!("Deleting db checkpoint dir: {path} for epoch: {epoch}");
-                    delete_recursively(
-                        path,
-                        self.input_object_store.clone(),
-                        NonZeroUsize::new(20).unwrap(),
-                    )
-                    .await?;
+                    let local_fs_path = self.path_to_filesystem(path)?;
+                    fs::remove_dir_all(&local_fs_path)?;
                 }
                 Err(_) => {
                     debug!("Not ready for deletion yet: {path}");

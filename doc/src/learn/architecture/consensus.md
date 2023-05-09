@@ -2,7 +2,7 @@
 title: Narwhal and Bullshark, Sui's Mempool and Consensus Engines
 ---
 
-This is a brief introduction to [Narwhal](https://github.com/MystenLabs/narwhal), and [Bullshark](https://arxiv.org/abs/2209.05633), the high-throughput mempool and consensus engines offered by Mysten Labs. Sui uses Narwhal as the mempool and Bullshark as the consensus engine by default, to sequence transactions that require a total ordering, synchronize transactions between validators and periodically checkpoint the network's state.
+This is a brief introduction to [Narwhal](https://github.com/MystenLabs/narwhal) and [Bullshark](https://arxiv.org/abs/2209.05633), the high-throughput mempool and consensus engines offered by Mysten Labs. Sui uses Narwhal as the mempool and Bullshark as the consensus engine by default, to sequence transactions that require a total ordering, synchronize transactions between validators and periodically checkpoint the network's state.
 
 The names highlight that the components split the responsibilities of:
  * ensuring the availability of data submitted to consensus = [Narwhal](https://arxiv.org/abs/2105.11827)
@@ -73,7 +73,7 @@ flowchart TB
 
 ## Dependencies
 
-Narwhal is implemented using [Tokio](https://github.com/tokio-rs/tokio), [RocksDB](https://github.com/facebook/rocksdb/) and generic cryptography. The cryptography contains implementations of node signing using BLS12-377, BLS12-381, and Ed25519.
+Narwhal is implemented using [Tokio](https://github.com/tokio-rs/tokio), [RocksDB](https://github.com/facebook/rocksdb/) and generic cryptography implemented in [fastcrypto](https://github.com/MystenLabs/fastcrypto).
 
 ## Configuration
 

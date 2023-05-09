@@ -10,6 +10,7 @@ const API_ENV_TO_EXPLORER_ENV: Record<API_ENV, string | undefined> = {
     [API_ENV.local]: 'local',
     [API_ENV.devNet]: 'devnet',
     [API_ENV.testNet]: 'testnet',
+    [API_ENV.mainnet]: 'mainnet',
     [API_ENV.customRPC]: '',
 };
 
@@ -27,15 +28,24 @@ function getExplorerUrl(
     const explorerEnv =
         apiEnv === 'customRPC' ? customRPC : API_ENV_TO_EXPLORER_ENV[apiEnv];
 
-    return new URL(`${path}/?network=${explorerEnv}`, base).href;
+    const url = new URL(path, base);
+    const searchParams = new URLSearchParams(url.search);
+    if (explorerEnv) searchParams.set('network', explorerEnv);
+
+    return url.href;
 }
 
 export function getObjectUrl(
     objectID: ObjectId,
     apiEnv: API_ENV,
-    customRPC: string
+    customRPC: string,
+    moduleName?: string | null
 ) {
-    return getExplorerUrl(`/object/${objectID}`, apiEnv, customRPC);
+    return getExplorerUrl(
+        `/object/${objectID}${moduleName ? `?module=${moduleName}` : ''}`,
+        apiEnv,
+        customRPC
+    );
 }
 
 export function getTransactionUrl(

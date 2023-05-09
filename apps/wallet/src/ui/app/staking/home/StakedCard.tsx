@@ -7,7 +7,7 @@ import { cx, cva, type VariantProps } from 'class-variance-authority';
 import { Link } from 'react-router-dom';
 
 import { ValidatorLogo } from '../validators/ValidatorLogo';
-import { NUM_OF_EPOCH_BEFORE_EARNING } from '_src/shared/constants';
+import { NUM_OF_EPOCH_BEFORE_STAKING_REWARDS_REDEEMABLE } from '_src/shared/constants';
 import { CountDownTimer } from '_src/ui/app/shared/countdown-timer';
 import { Text } from '_src/ui/app/shared/text';
 import { IconTooltip } from '_src/ui/app/shared/tooltip';
@@ -133,7 +133,8 @@ export function StakeCard({
     // For cool down epoch, show Available to withdraw add rewards to principal
     // Reward earning epoch is 2 epochs after stake request epoch
     const earningRewardsEpoch =
-        Number(stakeRequestEpoch) + NUM_OF_EPOCH_BEFORE_EARNING;
+        Number(stakeRequestEpoch) +
+        NUM_OF_EPOCH_BEFORE_STAKING_REWARDS_REDEEMABLE;
     const isEarnedRewards = currentEpoch >= Number(earningRewardsEpoch);
     const delegationState = inactiveValidator
         ? StakeState.IN_ACTIVE

@@ -37,6 +37,7 @@ move-package.workspace = true
 telemetry-subscribers.workspace = true
 tokio = { workspace = true, features = ["full"] }
 typed-store.workspace = true
+fastcrypto.workspace = true
 
 narwhal-types = { path = "../../narwhal/types" }
 sui-config = { path = "../sui-config" }

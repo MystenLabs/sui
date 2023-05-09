@@ -46,7 +46,7 @@ The serialization of an `IntentMessage<T>` is the 3 bytes of the intent concaten
 
 ## User Signature
 
-To create a user signature, construct an intent message first, and create the signature over the BCS serialized value of the intent message (`intent || message`).
+To create a user signature, construct an intent message first, and create the signature over the 32-byte Blake2b hash of the BCS serialized value of the intent message of the transaction data (`intent || message`).
 
 Here is an example in Rust:
 
@@ -65,6 +65,11 @@ const intentMessage = messageWithIntent(
 );
 const signature = await this.signData(intentMessage);
 ```
+
+Under the hood, the `new_secure` method in Rust and the `signData` method in TypesScript does the following: 
+ 1. Serializes the intent message as the 3-byte intent concatenated with the BCS serialized bytes of the transaction data. 
+ 1. Applies Blake2b hash to get the 32-byte digest
+ 1. Passes the digest to the signing API for each corresponding scheme of the signer. The supported signature schemes are pure Ed25519, ECDSA Secp256k1 and ECDSA Secp256r1. See [Sui Signatures](sui-signatures.md#signature-requirements) for requirements of each scheme. 
 
 ## Authority Signature
 

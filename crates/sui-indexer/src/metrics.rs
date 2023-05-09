@@ -59,6 +59,7 @@ pub struct IndexerMetrics {
     pub query_events_latency: Histogram,
     pub get_dynamic_fields_latency: Histogram,
     pub get_dynamic_field_object_latency: Histogram,
+    pub get_protocol_config_latency: Histogram,
 }
 
 impl IndexerMetrics {
@@ -317,6 +318,13 @@ impl IndexerMetrics {
             get_loaded_child_objects_latency: register_histogram_with_registry!(
                 "get_loaded_child_objects_latency",
                 "Time spent in get_loaded_child_objects_latency on the fullnode behind.",
+                LATENCY_SEC_BUCKETS.to_vec(),
+                registry
+            )
+            .unwrap(),
+            get_protocol_config_latency: register_histogram_with_registry!(
+                "get_protocol_config_latency",
+                "Time spent in get_protocol_config_latency on the fullnode behind.",
                 LATENCY_SEC_BUCKETS.to_vec(),
                 registry
             )

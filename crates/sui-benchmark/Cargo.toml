@@ -36,6 +36,7 @@ sui-keys = { path = "../sui-keys" }
 sui-node = { path = "../sui-node" }
 sui-json-rpc-types = { path = "../sui-json-rpc-types" }
 sui-protocol-config = { path = "../sui-protocol-config" }
+sui-test-transaction-builder = { path = "../sui-test-transaction-builder" }
 telemetry-subscribers.workspace = true
 roaring = "0.10.1"
 regex = "1.7.1"

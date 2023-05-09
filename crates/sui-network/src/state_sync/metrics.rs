@@ -4,7 +4,6 @@
 use mysten_metrics::histogram::Histogram;
 use prometheus::{register_int_gauge_with_registry, IntGauge, Registry};
 use std::sync::Arc;
-use std::time::Duration;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use tap::Pipe;
 
@@ -46,12 +45,11 @@ impl Metrics {
         }
     }
 
-    pub fn report_checkpoint_summary_age(&self, age: Duration) {
+    pub fn checkpoint_summary_age_metric(&self) -> Option<&Histogram> {
         if let Some(inner) = &self.0 {
-            inner
-                .checkpoint_summary_age_ms
-                .report(age.as_millis() as u64);
+            return Some(&inner.checkpoint_summary_age_ms);
         }
+        None
     }
 }
 

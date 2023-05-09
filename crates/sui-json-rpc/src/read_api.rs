@@ -24,27 +24,27 @@ use shared_crypto::intent::{AppId, Intent, IntentMessage, IntentScope, IntentVer
 use sui_core::authority::AuthorityState;
 use sui_json_rpc_types::{
     BalanceChange, Checkpoint, CheckpointId, CheckpointPage, DisplayFieldsResponse, EventFilter,
-    ObjectChange, SuiEvent, SuiGetPastObjectRequest, SuiMoveStruct, SuiMoveValue,
-    SuiObjectDataOptions, SuiObjectResponse, SuiPastObjectResponse, SuiTransactionBlock,
-    SuiTransactionBlockEvents, SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
+    ObjectChange, ProtocolConfigResponse, SuiEvent, SuiGetPastObjectRequest, SuiMoveStruct,
+    SuiMoveValue, SuiObjectDataOptions, SuiObjectResponse, SuiPastObjectResponse,
+    SuiTransactionBlock, SuiTransactionBlockEvents, SuiTransactionBlockResponse,
+    SuiTransactionBlockResponseOptions,
 };
 use sui_json_rpc_types::{SuiLoadedChildObject, SuiLoadedChildObjectsResponse};
 use sui_open_rpc::Module;
+use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
 use sui_types::base_types::{ObjectID, SequenceNumber, TransactionDigest};
 use sui_types::collection_types::VecMap;
 use sui_types::crypto::default_hash;
 use sui_types::digests::TransactionEventsDigest;
 use sui_types::display::DisplayVersionUpdatedEvent;
+use sui_types::effects::{TransactionEffects, TransactionEffectsAPI, TransactionEvents};
 use sui_types::error::{SuiObjectResponseError, UserInputError};
-use sui_types::messages::TransactionDataAPI;
-use sui_types::messages::{
-    TransactionData, TransactionEffects, TransactionEffectsAPI, TransactionEvents,
-    VerifiedTransaction,
-};
 use sui_types::messages_checkpoint::{CheckpointSequenceNumber, CheckpointTimestamp};
 use sui_types::move_package::normalize_modules;
 use sui_types::object::{Data, Object, ObjectRead, PastObjectRead};
 use sui_types::sui_serde::BigInt;
+use sui_types::transaction::TransactionDataAPI;
+use sui_types::transaction::{TransactionData, VerifiedTransaction};
 
 use crate::api::JsonRpcMetrics;
 use crate::api::{validate_limit, ReadApiServer};
@@ -608,7 +608,7 @@ impl ReadApiServer for ReadApi {
             // Fetch transaction to determine existence
             let state = self.state.clone();
             let transaction = spawn_monitored_task!(async move {
-                state.get_executed_transaction(digest).await.tap_err(
+                state.get_transaction_block(digest).await.tap_err(
                     |err| debug!(tx_digest=?digest, "Failed to get transaction: {:?}", err),
                 )
             })
@@ -702,9 +702,16 @@ impl ReadApiServer for ReadApi {
                         input_objects,
                         None,
                     )
-                    .await
-                    .map_err(Error::SuiError)?;
-                    temp_response.balance_changes = Some(balance_changes);
+                    .await;
+
+                    if let Ok(balance_changes) = balance_changes {
+                        temp_response.balance_changes = Some(balance_changes);
+                    } else {
+                        temp_response.errors.push(format!(
+                            "Cannot retrieve balance changes: {}",
+                            balance_changes.unwrap_err()
+                        ));
+                    }
                 }
             }
 
@@ -720,9 +727,16 @@ impl ReadApiServer for ReadApi {
                         effects.all_changed_objects(),
                         effects.all_deleted(),
                     )
-                    .await
-                    .map_err(Error::SuiError)?;
-                    temp_response.object_changes = Some(object_changes);
+                    .await;
+
+                    if let Ok(object_changes) = object_changes {
+                        temp_response.object_changes = Some(object_changes);
+                    } else {
+                        temp_response.errors.push(format!(
+                            "Cannot retrieve object changes: {}",
+                            object_changes.unwrap_err()
+                        ));
+                    }
                 }
             }
             let epoch_store = self.state.load_epoch_store_one_call_per_task();
@@ -886,6 +900,29 @@ impl ReadApiServer for ReadApi {
                     None => vec![],
                 },
             })
+        })
+    }
+
+    #[instrument(skip(self))]
+    async fn get_protocol_config(
+        &self,
+        version: Option<BigInt<u64>>,
+    ) -> RpcResult<ProtocolConfigResponse> {
+        with_tracing!("get_protocol_config", async move {
+            Ok(version
+                .map(|v| {
+                    ProtocolConfig::get_for_version_if_supported((*v).into()).ok_or(anyhow!(
+                    "Unsupported protocol version requested. Min supported: {}, max supported: {}",
+                    ProtocolVersion::MIN.as_u64(),
+                    ProtocolVersion::MAX.as_u64()
+                ))
+                })
+                .unwrap_or(Ok(self
+                    .state
+                    .load_epoch_store_one_call_per_task()
+                    .protocol_config()
+                    .clone()))
+                .map(ProtocolConfigResponse::from)?)
         })
     }
 }

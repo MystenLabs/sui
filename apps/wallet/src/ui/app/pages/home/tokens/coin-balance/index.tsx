@@ -25,7 +25,7 @@ function CoinBalance({ type, balance, mode = 'row-item' }: CoinProps) {
     const coinDetail = useCallback(() => {
         if (mode !== 'row-item') return;
 
-        navigate(`/tokens/details?type=${encodeURIComponent(type)}`);
+        navigate(`/send?type=${encodeURIComponent(type)}`);
     }, [mode, navigate, type]);
 
     return (
@@ -41,7 +41,6 @@ function CoinBalance({ type, balance, mode = 'row-item' }: CoinProps) {
             {mode === 'row-item' ? (
                 <>
                     <CoinIcon coinType={type} />
-
                     <div className={cl(st.coinNameContainer, st[mode])}>
                         <span className={st.coinName}>
                             {symbol.toLocaleLowerCase()}

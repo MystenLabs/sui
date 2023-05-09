@@ -7,7 +7,6 @@ import { type Direction } from 'react-resizable-panels';
 
 import { ErrorBoundary } from '../../../components/error-boundary/ErrorBoundary';
 import PkgModulesWrapper from '../../../components/module/PkgModulesWrapper';
-import { TransactionsForAddress } from '../../../components/transactions/TransactionsForAddress';
 import { useGetTransaction } from '../../../hooks/useGetTransaction';
 import { getOwnerStr } from '../../../utils/objectUtils';
 import { trimStdLibPrefix } from '../../../utils/stringUtils';
@@ -15,6 +14,9 @@ import { type DataType } from '../ObjectResultType';
 
 import styles from './ObjectView.module.css';
 
+import TransactionBlocksForAddress, {
+    FILTER_VALUES,
+} from '~/components/TransactionBlocksForAddress/TransactionBlocksForAddress';
 import { AddressLink, ObjectLink } from '~/ui/InternalLink';
 import { LoadingSpinner } from '~/ui/LoadingSpinner';
 import { RadioGroup, RadioOption } from '~/ui/Radio';
@@ -149,9 +151,10 @@ function PkgView({ data }: { data: DataType }) {
 
                 <div className={styles.txsection}>
                     <ErrorBoundary>
-                        <TransactionsForAddress
+                        <TransactionBlocksForAddress
                             address={viewedData.id}
-                            type="object"
+                            filter={FILTER_VALUES.INPUT}
+                            isObject
                         />
                     </ErrorBoundary>
                 </div>

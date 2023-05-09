@@ -29,6 +29,7 @@ sui-types = { path = "../sui-types" }
 mysten-metrics = { path = "../mysten-metrics" }
 move-core-types.workspace = true
 sui-json-rpc-types = { path = "../sui-json-rpc-types" }
+sui-protocol-config = { path = "../sui-protocol-config" }
 typed-store.workspace = true
 typed-store-derive.workspace = true
 workspace-hack = { version = "0.1", path = "../workspace-hack" }

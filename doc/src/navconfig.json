@@ -110,22 +110,46 @@
 				"fileName": "learn/cryptography/index",
 				"title": "Sui Cryptography",
 				"items": [{
-						"label": "Sui Intent Signing",
-						"fileName": "learn/cryptography/sui-intent-signing"
+					"label": "Sui Keys and Addresses",
+					"fileName": "learn/cryptography/sui-wallet-specs"
 					},
 					{
-						"label": "Sui Offline Signing",
-						"fileName": "learn/cryptography/sui-offline-signing"
+						"label": "Sui Crypto Agility and Signatures",
+						"fileName": "learn/cryptography/sui-signatures"
 					},
 					{
 						"label": "Sui Multisig",
 						"fileName": "learn/cryptography/sui-multisig"
 					},
 					{
-						"label": "Sui Keys and Addresses",
-						"fileName": "learn/cryptography/sui-wallet-specs"
+						"label": "Sui Offline Signing",
+						"fileName": "learn/cryptography/sui-offline-signing"
+					},
+					{
+						"label": "Sui Intent Signing",
+						"fileName": "learn/cryptography/sui-intent-signing"
+					},
+					{
+						"label": "Signature schemes in Move contracts",
+						"fileName": "learn/cryptography/sui-move-signatures"
+					},
+					{
+						"label": "Hashing in Sui",
+						"fileName": "learn/cryptography/hashing"
+					},
+					{
+						"label": "Verifying Groth16 zk-SNARKs",
+						"fileName": "learn/cryptography/groth16"
+					},
+					{
+						"label": "Verifiable Random Function (VRF)",
+						"fileName": "learn/cryptography/ecvrf"
 					}
 				]
+			},
+			{
+				"label": "Sui Bridging",
+				"fileName": "learn/sui-bridging"
 			},
 			{
 				"label": "Sui Exchange Integration Guide",
@@ -196,6 +220,10 @@
 					{
 						"label": "Custom Upgrade Policies",
 						"fileName": "build/custom-upgrade-policy"
+					},
+					{
+						"label": "Dependency Overrides",
+						"fileName": "build/dependency-overrides"
 					},
 					{
 						"label": "Sui Move Library",
@@ -272,6 +300,10 @@
 						"fileName": "build/event_api"
 					}
 				]
+			},
+			{
+				"label": "Developer Cheat Sheet",
+				"fileName": "build/dev_cheat_sheet"
 			}
 		],
 			"reference": [{
@@ -288,14 +320,7 @@
 				"fileName": "reference/framework/index"
 			}
 		],
-		"explore": [{
-				"label": "Sui Explorer",
-				"fileName": "explore/sui-explorer"
-			},
-			{
-				"label": "Sui Wallet",
-				"fileName": "explore/wallet-browser"
-			},
+		"explore": [
 			{
 				"label": "Tutorials",
 				"fileName": "explore/tutorials"
@@ -305,7 +330,8 @@
 				"fileName": "explore/examples"
 			}
 		],
-		"contribute": [{
+		"contribute": [
+			{
 				"label": "Frequently Asked Questions",
 				"fileName": "contribute/faq"
 			},

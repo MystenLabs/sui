@@ -9,13 +9,15 @@ use std::{
 
 use mysten_metrics::monitored_scope;
 use parking_lot::RwLock;
+use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::{
     base_types::ObjectID,
     committee::EpochId,
     digests::TransactionEffectsDigest,
-    messages::{TransactionDataAPI, VerifiedCertificate, VerifiedExecutableTransaction},
+    transaction::{TransactionDataAPI, VerifiedCertificate},
 };
 use sui_types::{base_types::TransactionDigest, error::SuiResult};
+use tokio::sync::mpsc::UnboundedSender;
 use tracing::{error, trace, warn};
 
 use crate::authority::{
@@ -23,7 +25,6 @@ use crate::authority::{
     authority_store::{InputKey, LockMode},
 };
 use crate::authority::{AuthorityMetrics, AuthorityStore};
-use crate::execution_driver::ExecutionDispatcher;
 
 #[cfg(test)]
 #[path = "unit_tests/transaction_manager_tests.rs"]
@@ -41,7 +42,10 @@ const MIN_HASHMAP_CAPACITY: usize = 1000;
 /// storage, committed objects and certificates are notified back to TransactionManager.
 pub struct TransactionManager {
     authority_store: Arc<AuthorityStore>,
-    pub(crate) execution_dispatcher: Arc<ExecutionDispatcher>,
+    tx_ready_certificates: UnboundedSender<(
+        VerifiedExecutableTransaction,
+        Option<TransactionEffectsDigest>,
+    )>,
     metrics: Arc<AuthorityMetrics>,
     inner: RwLock<Inner>,
 }
@@ -207,14 +211,17 @@ impl TransactionManager {
     pub(crate) fn new(
         authority_store: Arc<AuthorityStore>,
         epoch_store: &AuthorityPerEpochStore,
-        execution_dispatcher: Arc<ExecutionDispatcher>,
+        tx_ready_certificates: UnboundedSender<(
+            VerifiedExecutableTransaction,
+            Option<TransactionEffectsDigest>,
+        )>,
         metrics: Arc<AuthorityMetrics>,
     ) -> TransactionManager {
         let transaction_manager = TransactionManager {
             authority_store,
             metrics,
             inner: RwLock::new(Inner::new(epoch_store.epoch())),
-            execution_dispatcher,
+            tx_ready_certificates,
         };
         transaction_manager
             .enqueue(epoch_store.all_pending_execution().unwrap(), epoch_store)
@@ -608,9 +615,11 @@ impl TransactionManager {
             .executing_certificates
             .insert(*cert.digest(), pending_certificate.acquired_locks)
             .is_none());
-        self.execution_dispatcher
-            .dispatch_certificate(cert, expected_effects_digest);
+        let _ = self
+            .tx_ready_certificates
+            .send((cert, expected_effects_digest));
         self.metrics.transaction_manager_num_ready.inc();
+        self.metrics.execution_driver_dispatch_queue.inc();
     }
 
     /// Gets the missing input object keys for the given transaction.

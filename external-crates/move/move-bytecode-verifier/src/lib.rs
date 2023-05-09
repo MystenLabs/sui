@@ -35,8 +35,9 @@ pub use script_signature::{
 pub use signature::SignatureChecker;
 pub use struct_defs::RecursiveStructDefChecker;
 pub use verifier::{
-    verify_module, verify_module_with_config, verify_module_with_config_for_test, verify_script,
-    verify_script_with_config, VerifierConfig,
+    verify_module_unmetered, verify_module_with_config_for_test, verify_module_with_config_metered,
+    verify_module_with_config_unmetered, verify_script_unmetered,
+    verify_script_with_config_metered, verify_script_with_config_unmetered, VerifierConfig,
 };
 
 mod acquires_list_verifier;

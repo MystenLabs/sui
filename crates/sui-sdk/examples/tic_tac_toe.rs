@@ -22,11 +22,11 @@ use sui_sdk::{
     types::{
         base_types::{ObjectID, SuiAddress},
         id::UID,
-        messages::Transaction,
+        transaction::Transaction,
     },
     SuiClient, SuiClientBuilder,
 };
-use sui_types::messages::ExecuteTransactionRequestType;
+use sui_types::quorum_driver_types::ExecuteTransactionRequestType;
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {

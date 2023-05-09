@@ -146,7 +146,7 @@ impl Inner {
         _lock: &MutexGuard<'_, State>,
         certificate: Certificate,
     ) -> DagResult<()> {
-        let _scope = monitored_scope("accept_certificate_internal");
+        let _scope = monitored_scope("Synchronizer::accept_certificate_internal");
 
         debug!("Processing certificate {:?}", certificate);
 
@@ -349,6 +349,7 @@ impl Synchronizer {
                     debug!("Synchronizer is shutting down.");
                     return;
                 }
+                let _scope = monitored_scope("Synchronizer::gc_iteration");
                 let gc_round = rx_consensus_round_updates.borrow().gc_round;
                 let Some(inner) = weak_inner.upgrade() else {
                     debug!("Synchronizer is shutting down.");
@@ -437,6 +438,7 @@ impl Synchronizer {
     /// If the certificate has missing parents and cannot be accepted immediately, the error would
     /// contain a value that can be awaited on, for signaling when the certificate is accepted.
     pub async fn try_accept_certificate(&self, certificate: Certificate) -> DagResult<()> {
+        let _scope = monitored_scope("Synchronizer::try_accept_certificate");
         self.process_certificate_internal(certificate, true, true)
             .await
     }
@@ -448,6 +450,7 @@ impl Synchronizer {
     /// potentially return early. This helps to verify consistency, and has little extra cost
     /// because fetched certificates usually are not suspended.
     pub async fn try_accept_fetched_certificate(&self, certificate: Certificate) -> DagResult<()> {
+        let _scope = monitored_scope("Synchronizer::try_accept_fetched_certificate");
         self.process_certificate_internal(certificate, false, false)
             .await
     }
@@ -557,6 +560,8 @@ impl Synchronizer {
         sanitize: bool,
         early_suspend: bool,
     ) -> DagResult<()> {
+        let _scope = monitored_scope("Synchronizer::process_certificate_internal");
+
         let digest = certificate.digest();
         if self.inner.certificate_store.contains(&digest)? {
             trace!("Certificate {digest:?} has already been processed. Skip processing.");
@@ -665,7 +670,7 @@ impl Synchronizer {
         certificate: Certificate,
         early_suspend: bool,
     ) -> DagResult<()> {
-        let _scope = monitored_scope("process_certificate_with_lock");
+        let _scope = monitored_scope("Synchronizer::process_certificate_with_lock");
 
         debug!("Processing certificate {:?}", certificate);
 

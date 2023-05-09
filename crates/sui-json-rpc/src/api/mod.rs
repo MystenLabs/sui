@@ -99,6 +99,9 @@ pub struct JsonRpcMetrics {
     pub get_stake_sui_result_size: Histogram,
     pub get_stake_sui_result_size_total: IntCounter,
 
+    pub get_stake_sui_latency: Histogram,
+    pub get_delegated_sui_latency: Histogram,
+
     pub orchestrator_latency_ms: Histogram,
     pub post_orchestrator_latency_ms: Histogram,
 }
@@ -245,6 +248,16 @@ impl JsonRpcMetrics {
                 registry
             )
             .unwrap(),
+            get_stake_sui_latency: Histogram::new_in_registry(
+                "get_stake_sui_latency",
+                "The latency of get stake sui, in ms",
+                registry,
+            ),
+            get_delegated_sui_latency: Histogram::new_in_registry(
+                "get_delegated_sui_latency",
+                "The latency of get delegated sui, in ms",
+                registry,
+            ),
             orchestrator_latency_ms: Histogram::new_in_registry(
                 "json_rpc_orchestrator_latency",
                 "The latency of submitting transaction via transaction orchestrator, in ms",

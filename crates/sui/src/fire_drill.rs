@@ -26,10 +26,10 @@ use sui_keys::keypair_file::read_keypair_from_file;
 use sui_sdk::{rpc_types::SuiTransactionBlockEffectsAPI, SuiClient, SuiClientBuilder};
 use sui_types::base_types::{ObjectRef, SuiAddress};
 use sui_types::crypto::{generate_proof_of_possession, get_key_pair, SuiKeyPair};
-use sui_types::messages::{
+use sui_types::multiaddr::{Multiaddr, Protocol};
+use sui_types::transaction::{
     CallArg, ObjectArg, Transaction, TransactionData, TEST_ONLY_GAS_UNIT_FOR_GENERIC,
 };
-use sui_types::multiaddr::{Multiaddr, Protocol};
 use sui_types::{committee::EpochId, crypto::get_authority_key_pair, SUI_SYSTEM_OBJECT_ID};
 use sui_types::{SUI_SYSTEM_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION};
 use tracing::info;
@@ -352,7 +352,7 @@ async fn execute_tx(
         .execute_transaction_block(
             tx,
             SuiTransactionBlockResponseOptions::full_content(),
-            Some(sui_types::messages::ExecuteTransactionRequestType::WaitForLocalExecution),
+            Some(sui_types::quorum_driver_types::ExecuteTransactionRequestType::WaitForLocalExecution),
         )
         .await
         .unwrap();

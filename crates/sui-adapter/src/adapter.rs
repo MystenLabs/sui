@@ -5,7 +5,8 @@ use std::{collections::BTreeMap, sync::Arc};
 
 use anyhow::Result;
 use move_binary_format::{access::ModuleAccess, file_format::CompiledModule};
-use move_bytecode_verifier::{verify_module_with_config, VerifierConfig};
+use move_bytecode_verifier::meter::Meter;
+use move_bytecode_verifier::{verify_module_with_config_metered, VerifierConfig};
 use move_core_types::{account_address::AccountAddress, vm_status::StatusCode};
 pub use move_vm_runtime::move_vm::MoveVM;
 use move_vm_runtime::{
@@ -13,6 +14,7 @@ use move_vm_runtime::{
     native_extensions::NativeContextExtensions,
     native_functions::NativeFunctionTable,
 };
+use sui_types::metrics::BytecodeVerifierMetrics;
 use tracing::instrument;
 
 use sui_move_natives::{object_runtime::ObjectRuntime, NativesCostTable};
@@ -25,7 +27,7 @@ use sui_types::{
     object::Owner,
     storage::ChildObjectResolver,
 };
-use sui_verifier::verifier::verify_module;
+use sui_verifier::verifier::sui_verify_module_metered;
 
 sui_macros::checked_arithmetic! {
 
@@ -69,7 +71,7 @@ pub fn default_verifier_config(
         max_basic_blocks_in_script: None,
         max_per_fun_meter_units,
         max_per_mod_meter_units,
-        max_idenfitier_len: protocol_config.max_move_identifier_len_as_option() // Before protocol version 9, there was no limit
+        max_idenfitier_len: protocol_config.max_move_identifier_len_as_option(), // Before protocol version 9, there was no limit
     }
 }
 
@@ -90,10 +92,10 @@ pub fn new_move_vm(
             runtime_limits_config: VMRuntimeLimitsConfig {
                 vector_len_max: protocol_config.max_move_vector_len(),
             },
-            enable_invariant_violation_check_in_swap_loc:
-                !protocol_config.disable_invariant_violation_check_in_swap_loc(),
-            check_no_extraneous_bytes_during_deserialization:
-                protocol_config.no_extraneous_module_bytes(),
+            enable_invariant_violation_check_in_swap_loc: !protocol_config
+                .disable_invariant_violation_check_in_swap_loc(),
+            check_no_extraneous_bytes_during_deserialization: protocol_config
+                .no_extraneous_module_bytes(),
         },
     )
     .map_err(|_| SuiError::ExecutionInvariantViolation)
@@ -166,6 +168,9 @@ pub fn missing_unwrapped_msg(id: &ObjectID) -> String {
 pub fn run_metered_move_bytecode_verifier(
     module_bytes: &[Vec<u8>],
     protocol_config: &ProtocolConfig,
+    metered_verifier_config: &VerifierConfig,
+    meter: &mut impl Meter,
+    metrics: &Arc<BytecodeVerifierMetrics>
 ) -> Result<(), SuiError> {
     let modules_stat = module_bytes
         .iter()
@@ -185,21 +190,27 @@ pub fn run_metered_move_bytecode_verifier(
         return Ok(());
     };
 
-    // We use a custom config with metering enabled
-    let metered_verifier_config =
-        default_verifier_config(protocol_config, true /* enable metering */);
-
-    run_metered_move_bytecode_verifier_impl(&modules, protocol_config, &metered_verifier_config)
+    run_metered_move_bytecode_verifier_impl(
+        &modules,
+        protocol_config,
+        metered_verifier_config,
+        meter,
+        metrics,
+    )
 }
 
 pub fn run_metered_move_bytecode_verifier_impl(
     modules: &[CompiledModule],
     protocol_config: &ProtocolConfig,
-    verifier_config: &VerifierConfig
+    verifier_config: &VerifierConfig,
+    meter: &mut impl Meter,
+    metrics: &Arc<BytecodeVerifierMetrics>
 ) -> Result<(), SuiError> {
     // run the Move verifier
     for module in modules.iter() {
-        if let Err(e) = verify_module_with_config(verifier_config, module) {
+        let per_module_meter_verifier_timer = metrics.verifier_runtime_per_module_success_latency.start_timer();
+
+        if let Err(e) = verify_module_with_config_metered(verifier_config, module, meter) {
             // Check that the status indicates mtering timeout
             // TODO: currently the Move verifier emits `CONSTRAINT_NOT_SATISFIED` for various failures including metering timeout
             // We need to change the VM error code to be more specific when timedout for metering
@@ -209,11 +220,22 @@ pub fn run_metered_move_bytecode_verifier_impl(
             ]
             .contains(&e.major_status())
             {
+                // Discard success timer, but record timeout/failure timer
+                metrics.verifier_runtime_per_module_timeout_latency.observe(per_module_meter_verifier_timer.stop_and_discard());
+                metrics.verifier_timeout_metrics.with_label_values(&[BytecodeVerifierMetrics::MOVE_VERIFIER_TAG, BytecodeVerifierMetrics::TIMEOUT_TAG]).inc();
                 return Err(SuiError::ModuleVerificationFailure {
                     error: "Verification timedout".to_string(),
                 });
             };
-            verify_module(protocol_config, verifier_config, module, &BTreeMap::new())?
+        } else if let Err(err) = sui_verify_module_metered(protocol_config, module, &BTreeMap::new(), meter) {
+                // Discard success timer, but record timeout/failure timer
+                metrics.verifier_runtime_per_module_timeout_latency.observe(per_module_meter_verifier_timer.stop_and_discard());
+                metrics.verifier_timeout_metrics.with_label_values(&[ BytecodeVerifierMetrics::SUI_VERIFIER_TAG, BytecodeVerifierMetrics::TIMEOUT_TAG]).inc();
+                return Err(err.into());
+        } else {
+            // Save the success timer
+            per_module_meter_verifier_timer.stop_and_record();
+            metrics.verifier_timeout_metrics.with_label_values(&[BytecodeVerifierMetrics::OVERALL_TAG, BytecodeVerifierMetrics::SUCCESS_TAG]).inc();
         }
     }
     Ok(())

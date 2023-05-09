@@ -26,7 +26,6 @@ static CONSUMER_OPS_SUBMITTED: Lazy<Counter> = Lazy::new(|| {
     )
     .unwrap()
 });
-
 static CONSUMER_OPS: Lazy<CounterVec> = Lazy::new(|| {
     register_counter_vec!(
         "consumer_operations",
@@ -54,7 +53,8 @@ static CONSUMER_OPERATION_DURATION: Lazy<HistogramVec> = Lazy::new(|| {
         &["operation"],
         vec![
             0.0008, 0.0016, 0.0032, 0.0064, 0.0128, 0.0256, 0.0512, 0.1024, 0.2048, 0.4096, 0.8192,
-            1.0, 1.25, 1.5, 1.75, 2.0, 4.0, 8.0, 10.0, 12.5, 15.0
+            1.0, 1.25, 1.5, 1.75, 2.0, 2.25, 2.5, 2.75, 3.0, 3.25, 3.5, 3.75, 4.0, 4.25, 4.5, 4.75,
+            5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0, 13.0, 14.0, 15.0
         ],
     )
     .unwrap()
@@ -109,6 +109,7 @@ pub fn populate_labels(
     let timer = CONSUMER_OPERATION_DURATION
         .with_label_values(&["populate_labels"])
         .start_timer();
+    debug!("received metrics from {name} on {inventory_hostname}");
     // proto::LabelPair doesn't have pub fields so we can't use
     // struct literals to construct
     let mut network_label = proto::LabelPair::default();
@@ -119,11 +120,7 @@ pub fn populate_labels(
     host_label.set_name("host".into());
     host_label.set_value(name);
 
-    let mut relay_host_label = proto::LabelPair::default();
-    relay_host_label.set_name("relay_host".into());
-    relay_host_label.set_value(inventory_hostname);
-
-    let labels = vec![network_label, host_label, relay_host_label];
+    let labels = vec![network_label, host_label];
 
     let mut data = data;
     // add our extra labels to our incoming metric data
@@ -330,7 +327,6 @@ mod tests {
             &create_labels(vec![
                 ("network", "unittest-network"),
                 ("host", "validator-0"),
-                ("relay_host", "inventory-hostname"),
             ])
         );
     }

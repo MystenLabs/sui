@@ -14,7 +14,8 @@ use std::{sync::Arc, time::Duration};
 use sui_config::node::AuthorityStorePruningConfig;
 use sui_storage::mutex_table::RwLockTable;
 use sui_types::base_types::SequenceNumber;
-use sui_types::messages::{TransactionEffects, TransactionEffectsAPI};
+use sui_types::effects::TransactionEffects;
+use sui_types::effects::TransactionEffectsAPI;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::{
     base_types::{ObjectID, VersionNumber},
@@ -168,23 +169,19 @@ impl AuthorityStorePruner {
             "Starting object pruning. Current epoch: {}. Latest pruned checkpoint: {}",
             current_epoch, checkpoint_number
         );
-        let iter = checkpoint_store
-            .certified_checkpoints
-            .iter()
-            .skip_to(&(checkpoint_number + 1))?
-            .map(|(k, ckpt)| (k, ckpt.into_inner()));
 
-        #[allow(clippy::explicit_counter_loop)]
-        for (_, checkpoint) in iter {
-            checkpoint_number = *checkpoint.sequence_number();
+        loop {
+            let Some(ckpt) = checkpoint_store.certified_checkpoints.get(&(checkpoint_number + 1))? else {break;};
+            let checkpoint = ckpt.into_inner();
             // Skipping because  checkpoint's epoch or checkpoint number is too new.
             // We have to respect the highest executed checkpoint watermark because there might be
             // parts of the system that still require access to old object versions (i.e. state accumulator)
             if (current_epoch < checkpoint.epoch() + config.num_epochs_to_retain)
-                || (checkpoint_number > highest_executed_checkpoint)
+                || (*checkpoint.sequence_number() > highest_executed_checkpoint)
             {
                 break;
             }
+            checkpoint_number = *checkpoint.sequence_number();
             checkpoints_in_batch += 1;
             if network_total_transactions == checkpoint.network_total_transactions {
                 continue;
@@ -251,7 +248,7 @@ impl AuthorityStorePruner {
         );
         let tick_duration = Duration::from_secs(config.pruning_run_delay_seconds.unwrap_or(
             if config.num_epochs_to_retain > 0 {
-                min(1000 * epoch_duration_ms / 2, 60 * 60)
+                min(epoch_duration_ms / (2 * 1000), 60 * 60)
             } else {
                 60
             },
@@ -324,7 +321,8 @@ mod tests {
     use prometheus::Registry;
     use sui_storage::mutex_table::RwLockTable;
     use sui_types::base_types::{ObjectDigest, VersionNumber};
-    use sui_types::messages::{TransactionEffects, TransactionEffectsAPI};
+    use sui_types::effects::TransactionEffects;
+    use sui_types::effects::TransactionEffectsAPI;
     use sui_types::{
         base_types::{ObjectID, SequenceNumber},
         object::Object,

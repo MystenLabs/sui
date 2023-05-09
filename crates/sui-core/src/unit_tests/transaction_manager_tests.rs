@@ -3,18 +3,16 @@
 
 use std::{time::Duration, vec};
 
-use crate::execution_driver::ExecutionDispatcher;
-use std::sync::Arc;
+use sui_test_transaction_builder::TestTransactionBuilder;
+use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::{
     base_types::ObjectID,
     crypto::deterministic_random_account_key,
     digests::TransactionEffectsDigest,
-    messages::{CallArg, ObjectArg, VerifiedExecutableTransaction, TEST_ONLY_GAS_UNIT_FOR_GENERIC},
     object::Object,
+    transaction::{CallArg, ObjectArg},
     SUI_FRAMEWORK_OBJECT_ID,
 };
-use test_utils::messages::move_transaction;
-use tokio::sync::Semaphore;
 use tokio::{
     sync::mpsc::{unbounded_channel, UnboundedReceiver},
     time::sleep,
@@ -40,17 +38,10 @@ fn make_transaction_manager(
     // Create a new transaction manager instead of reusing the authority's, to examine
     // transaction_manager output from rx_ready_certificates.
     let (tx_ready_certificates, rx_ready_certificates) = unbounded_channel();
-    // no permits so that we don't try to spawn execution tasks in txn manager test
-    let execution_limit = Arc::new(Semaphore::new(0));
-    let execution_dispatcher = Arc::new(ExecutionDispatcher::new(
-        tx_ready_certificates,
-        execution_limit,
-        state.metrics.clone(),
-    ));
     let transaction_manager = TransactionManager::new(
         state.database.clone(),
         &state.epoch_store_for_testing(),
-        execution_dispatcher,
+        tx_ready_certificates,
         state.metrics.clone(),
     );
 
@@ -61,15 +52,11 @@ fn make_transaction(gas_object: Object, input: Vec<CallArg>) -> VerifiedExecutab
     // Use fake module, function, package and gas prices since they are irrelevant for testing
     // transaction manager.
     let rgp = 100;
-    let transaction = move_transaction(
-        gas_object,
-        "counter",
-        "assert_value",
-        SUI_FRAMEWORK_OBJECT_ID,
-        input,
-        rgp,
-        rgp * TEST_ONLY_GAS_UNIT_FOR_GENERIC,
-    );
+    let (sender, keypair) = deterministic_random_account_key();
+    let transaction =
+        TestTransactionBuilder::new(sender, gas_object.compute_object_reference(), rgp)
+            .move_call(SUI_FRAMEWORK_OBJECT_ID, "counter", "assert_value", input)
+            .build_and_sign(&keypair);
     VerifiedExecutableTransaction::new_system(transaction, 0)
 }
 

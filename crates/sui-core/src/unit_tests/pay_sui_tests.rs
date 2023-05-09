@@ -9,12 +9,13 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress};
 use sui_types::crypto::AccountKeyPair;
+use sui_types::effects::{SignedTransactionEffects, TransactionEffectsAPI};
 use sui_types::error::UserInputError;
 use sui_types::execution_status::{ExecutionFailureStatus, ExecutionStatus};
 use sui_types::gas_coin::GasCoin;
-use sui_types::messages::{SignedTransactionEffects, TransactionData, TransactionEffectsAPI};
 use sui_types::object::Object;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
+use sui_types::transaction::TransactionData;
 use sui_types::utils::to_sender_signed_transaction;
 use sui_types::{base_types::dbg_addr, crypto::get_key_pair, error::SuiError};
 

@@ -290,6 +290,7 @@ impl<'a> FullnodeConfigBuilder<'a> {
             expensive_safety_check_config: validator_config.expensive_safety_check_config.clone(),
             name_service_resolver_object_id: None,
             transaction_deny_config: Default::default(),
+            certificate_deny_config: Default::default(),
         })
     }
 }

@@ -2,7 +2,7 @@
 title: Sui Wallet Specifications - Keys and Addresses
 ---
 
-Sui Wallet adheres to widely accepted wallet specifications in the cryptocurrency industry, including [BIP-32](https://github.com/bitcoin/bips/blob/master/bip-0032.mediawiki) (and its variation, [SLIP-0010](https://github.com/satoshilabs/slips/blob/master/slip-0010.md)) and its variation [SLIP-0010](https://github.com/satoshilabs/slips/blob/master/slip-0010.md), [BIP-44](https://github.com/bitcoin/bips/blob/master/bip-0044.mediawiki), and [BIP-39](https://github.com/bitcoin/bips/blob/master/bip-0039.mediawiki), to facilitate key management for users. At present, Sui supports Ed25519, ECDSA Secp256k1, ECDSA Secp256r1, and [multisig](https://github.com/MystenLabs/sui/blob/6780cf62150893285f5db11f40f793fc440ec08b/doc/src/learn/cryptography/sui-multisig.md) for signed transactions.
+Sui Wallet adheres to widely accepted wallet specifications in the cryptocurrency industry, including [BIP-32](https://github.com/bitcoin/bips/blob/master/bip-0032.mediawiki) (and its variation, [SLIP-0010](https://github.com/satoshilabs/slips/blob/master/slip-0010.md)) and its variation [SLIP-0010](https://github.com/satoshilabs/slips/blob/master/slip-0010.md), [BIP-44](https://github.com/bitcoin/bips/blob/master/bip-0044.mediawiki), and [BIP-39](https://github.com/bitcoin/bips/blob/master/bip-0039.mediawiki), to facilitate key management for users. At present, Sui supports pure Ed25519, ECDSA Secp256k1, ECDSA Secp256r1, and [MultiSig](sui-multisig.md) for signed transactions.
 
 
 ## Key Derivation Scheme
@@ -11,7 +11,7 @@ Sui follows SLIP-0010 for managing wallets that support the Ed25519 (EdDSA) sign
 
 For managing wallets that support the Ed25519 (EdDSA) signing scheme, Sui follows SLIP-0010, which enforces wallets to always derive child private keys from parent private keys using the hardened key path.
 
-Sui follows BIP-32 for managing wallets that support the ECDSA Secp256k1 abd ECDSA Seco256r1 signing scheme.
+Sui follows BIP-32 for managing wallets that support the ECDSA Secp256k1 and ECDSA Secp256r1 signing scheme.
 
 BIP-32 defines the hierarchical deterministic wallet structure to logically associate a set of keys. Grouping keys in this manner reduces the overhead of keeping track of a large number of private keys for a user. This method also lets custodians issue distinct managed addresses for each user account under one source of control. Using BIP-32 decouples the private key derivation from the public key derivation, enabling the watch-only wallet use case, where a chain of public keys and its addresses can be derived, while the private key can be kept offline for signing.
 
@@ -38,7 +38,7 @@ After Sui defines the deterministic way to derive the master key from a seed, BI
 
 ## Address Format
 
-For deriving a 32-byte Sui address, Sui hashes the signature scheme flag 1-byte concatenated with public key bytes using the [BLAKE2b](https://www.blake2.net/) (256 bits output) hashing function. Sui address currently supports pure Ed25519, Secp256k1, Secp256r1, and multisig with corresponding flag bytes of 0x00, 0x01, 0x02, and 0x03, respectively. 
+For deriving a 32-byte Sui address, Sui hashes the signature scheme flag 1-byte concatenated with public key bytes using the [BLAKE2b](https://www.blake2.net/) (256 bits output) hashing function. Sui address currently supports pure Ed25519, Secp256k1, Secp256r1, and MultiSig with corresponding flag bytes of 0x00, 0x01, 0x02, and 0x03, respectively. 
 
 ## Example 
 

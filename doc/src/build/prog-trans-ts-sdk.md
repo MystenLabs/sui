@@ -2,7 +2,14 @@
 title: Sui Programmable Transaction Blocks with the TS SDK
 ---
 
-In Sui, all user-initiated transactions are called Programmable Transaction blocks.
+One of Sui’s most powerful core developer primitives is Programmable Transaction Blocks. For conventional blockchains, a transaction is the fundamental unit of execution, and each transaction is typically simplistic and close to the VM execution. On Sui, the fundamental, atomic unit of execution is elevated to the level of a complex, composable sequence of transactions where:
+
+* Any public on-chain Move function across all smart contracts is accessible to the programmable transaction block.
+* Typed outputs from earlier on-chain Move calls can be chained as typed inputs to later on-chain Move calls. These types can be arbitrary Sui objects that carry a rich set of attributes and properties. Programmable transaction blocks can be highly heterogeneous. A single block can extract a **Player** object from a smart contract wallet, use it to make a move in a **Game**, then send a **Badge** object won by the move to a multi-game **TrophyCase**, all without publishing any new smart contract code. The natural compositionality of these blocks allow existing contracts to seamlessly interoperate with both old and new code (for example, the **Game** does not have to know/care that the user stores their **Player** in a Multisig wallet or their **Badge** in a **TrophyCase**).
+* Chained transactions in a Programmable Transaction block execute and fail atomically. This [example Defi transaction block](https://suiexplorer.com/txblock/94u4E3hLbpbURU7Ja3NRSwk4Xvm22iq9GsTC5MrtLrnN?network=testnet&ref=blog.sui.io) is a programmable transaction block with 12 operations - it performs five swaps across three distinct pools, mutating 20 existing objects and creating seven new ones in the process.
+* Each Programmable Transaction block supports up to 1,024 transactions, which enables unbounded expressivity and efficiency. You can use these blocks for homogeneous batching (such as for payments or NFT mints), and heterogeneous chains of single-sender operations as described in the two preceding examples. Both modes leverage Sui's high-speed execution, and allow developers to push already low transaction fees even lower by packing more productive work into a single block.
+
+With the power and convenience of Programmable Transaction blocks, developers on Sui are constructing increasingly sophisticated blocks customized for their applications. Sui’s programmability was highly expressive even before Programmable Transaction blocks. Now, a single execution can perform up to 1,024 heterogeneous operations. On most other blockchains, each of the 1,024 operations would be an individual transaction.
 
 ## Get Started
 

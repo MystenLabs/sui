@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::messages::CommandIndex;
 use crate::ObjectID;
 use move_binary_format::file_format::{CodeOffset, TypeParameterIndex};
 use move_core_types::language_storage::ModuleId;
@@ -169,6 +168,9 @@ pub enum ExecutionFailureStatus {
     Limit is {max_size} bytes"
     )]
     WrittenObjectsTooLarge { current_size: u64, max_size: u64 },
+
+    #[error("Certificate is on the deny list")]
+    CertificateDenied,
     // NOTE: if you want to add a new enum,
     // please add it at the end for Rust SDK backward compatibility.
 }
@@ -325,3 +327,5 @@ impl ExecutionStatus {
         }
     }
 }
+
+pub type CommandIndex = usize;

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use async_trait::async_trait;
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 use sui_core::{
     authority_aggregator::{AuthAggMetrics, AuthorityAggregator},
     authority_client::NetworkAuthorityClient,
@@ -23,7 +23,7 @@ pub struct FullNodeReconfigObserver {
     pub fullnode_client: SuiClient,
     committee_store: Arc<CommitteeStore>,
     safe_client_metrics_base: SafeClientMetricsBase,
-    auth_agg_metrics: AuthAggMetrics,
+    auth_agg_metrics: Arc<AuthAggMetrics>,
 }
 
 impl FullNodeReconfigObserver {
@@ -31,7 +31,7 @@ impl FullNodeReconfigObserver {
         fullnode_rpc_url: &str,
         committee_store: Arc<CommitteeStore>,
         safe_client_metrics_base: SafeClientMetricsBase,
-        auth_agg_metrics: AuthAggMetrics,
+        auth_agg_metrics: Arc<AuthAggMetrics>,
     ) -> Self {
         Self {
             fullnode_client: SuiClientBuilder::default()
@@ -78,6 +78,7 @@ impl ReconfigObserver<NetworkAuthorityClient> for FullNodeReconfigObserver {
                             &self.committee_store,
                             self.safe_client_metrics_base.clone(),
                             self.auth_agg_metrics.clone(),
+                            Arc::new(HashMap::new()),
                         ) {
                             Ok(auth_agg) => {
                                 quorum_driver.update_validators(Arc::new(auth_agg)).await

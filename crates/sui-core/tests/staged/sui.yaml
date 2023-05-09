@@ -354,6 +354,8 @@ ExecutionFailureStatus:
         STRUCT:
           - current_size: U64
           - max_size: U64
+    29:
+      CertificateDenied: UNIT
 ExecutionStatus:
   ENUM:
     0:

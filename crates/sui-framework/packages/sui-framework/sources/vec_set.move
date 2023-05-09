@@ -11,10 +11,11 @@ module sui::vec_set {
     /// This key does not exist in the map
     const EKeyDoesNotExist: u64 = 1;
 
-    /// A set data structure backed by a vector. The set is guaranteed not to contain duplicate keys.
-    /// All operations are O(N) in the size of the set--the intention of this data structure is only to provide
-    /// the convenience of programming against a set API.
-    /// Sets that need sorted iteration rather than insertion order iteration should be handwritten.
+    /// A set data structure backed by a vector. The set is guaranteed not to
+    /// contain duplicate keys. All operations are O(N) in the size of the set
+    /// - the intention of this data structure is only to provide the convenience
+    /// of programming against a set API. Sets that need sorted iteration rather
+    /// than insertion order iteration should be handwritten.
     struct VecSet<K: copy + drop> has copy, drop, store {
         contents: vector<K>,
     }
@@ -62,6 +63,13 @@ module sui::vec_set {
     public fun into_keys<K: copy + drop>(self: VecSet<K>): vector<K> {
         let VecSet { contents } = self;
         contents
+    }
+
+    /// Borrow the `contents` of the `VecSet` to access content by index
+    /// without unpacking. The contents are stored in insertion order,
+    /// *not* sorted.
+    public fun keys<K: copy + drop>(self: &VecSet<K>): &vector<K> {
+        &self.contents
     }
 
     // == Helper functions ==

@@ -13,9 +13,14 @@ use sui_types::committee::CommitteeWithNetworkMetadata;
 use sui_types::messages_checkpoint::{CheckpointRequest, CheckpointResponse};
 use sui_types::multiaddr::Multiaddr;
 use sui_types::sui_system_state::SuiSystemState;
-use sui_types::{error::SuiError, messages::*};
+use sui_types::{error::SuiError, transaction::*};
 
 use sui_network::tonic::transport::Channel;
+use sui_types::messages_grpc::{
+    HandleCertificateResponse, HandleCertificateResponseV2, HandleTransactionResponse,
+    ObjectInfoRequest, ObjectInfoResponse, SystemStateRequest, TransactionInfoRequest,
+    TransactionInfoResponse,
+};
 
 #[async_trait]
 pub trait AuthorityAPI {
@@ -30,6 +35,12 @@ pub trait AuthorityAPI {
         &self,
         certificate: CertifiedTransaction,
     ) -> Result<HandleCertificateResponse, SuiError>;
+
+    /// Execute a certificate.
+    async fn handle_certificate_v2(
+        &self,
+        certificate: CertifiedTransaction,
+    ) -> Result<HandleCertificateResponseV2, SuiError>;
 
     /// Handle Object information requests for this account.
     async fn handle_object_info_request(
@@ -110,6 +121,37 @@ impl AuthorityAPI for NetworkAuthorityClient {
             .await
             .map(tonic::Response::into_inner)
             .map_err(Into::into)
+    }
+
+    /// Execute a certificate.
+    async fn handle_certificate_v2(
+        &self,
+        certificate: CertifiedTransaction,
+    ) -> Result<HandleCertificateResponseV2, SuiError> {
+        let response = self
+            .client()
+            .handle_certificate_v2(certificate.clone())
+            .await
+            .map(tonic::Response::into_inner);
+
+        if response.is_ok() {
+            return response.map_err(Into::into);
+        }
+        // TODO: remove this once all validators upgrade
+        if response.as_ref().err().unwrap().code() == tonic::Code::Unimplemented {
+            let response = self
+                .client()
+                .handle_certificate(certificate)
+                .await
+                .map(tonic::Response::into_inner)
+                .map_err(SuiError::from)?;
+            return Ok(HandleCertificateResponseV2 {
+                signed_effects: response.signed_effects,
+                events: response.events,
+                fastpath_input_objects: vec![],
+            });
+        }
+        response.map_err(Into::into)
     }
 
     async fn handle_object_info_request(

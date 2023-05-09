@@ -3,14 +3,15 @@
 
 use sui_config::SUI_KEYSTORE_FILENAME;
 use sui_json_rpc_types::SuiTransactionBlockResponseQuery;
+use sui_json_rpc_types::TransactionFilter;
 use sui_json_rpc_types::{
     SuiObjectDataOptions, SuiObjectResponseQuery, SuiTransactionBlockResponse,
     SuiTransactionBlockResponseOptions, TransactionBlockBytes,
 };
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_macros::sim_test;
-use sui_types::messages::{ExecuteTransactionRequestType, SenderSignedData};
-use sui_types::query::TransactionFilter;
+use sui_types::quorum_driver_types::ExecuteTransactionRequestType;
+use sui_types::transaction::SenderSignedData;
 use sui_types::utils::to_sender_signed_transaction;
 use test_utils::network::TestClusterBuilder;
 

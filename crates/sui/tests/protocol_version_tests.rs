@@ -71,22 +71,20 @@ mod sim_only_tests {
     use sui_move_build::{BuildConfig, CompiledPackage};
     use sui_protocol_config::SupportedProtocolVersions;
     use sui_types::base_types::ObjectID;
+    use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
     use sui_types::id::ID;
-    use sui_types::messages::{Command, ProgrammableMoveCall, TransactionEffects};
     use sui_types::object::Owner;
     use sui_types::sui_system_state::{
         epoch_start_sui_system_state::EpochStartSystemStateTrait, get_validator_from_table,
         SuiSystemState, SuiSystemStateTrait, SUI_SYSTEM_STATE_SIM_TEST_DEEP_V2,
         SUI_SYSTEM_STATE_SIM_TEST_SHALLOW_V2, SUI_SYSTEM_STATE_SIM_TEST_V1,
     };
+    use sui_types::transaction::{Command, ProgrammableMoveCall};
     use sui_types::{
-        base_types::SequenceNumber,
-        digests::TransactionDigest,
-        messages::{TransactionEffectsAPI, TransactionKind},
-        object::Object,
-        programmable_transaction_builder::ProgrammableTransactionBuilder,
-        storage::ObjectStore,
-        MOVE_STDLIB_OBJECT_ID, SUI_FRAMEWORK_OBJECT_ID, SUI_SYSTEM_OBJECT_ID,
+        base_types::SequenceNumber, digests::TransactionDigest, object::Object,
+        programmable_transaction_builder::ProgrammableTransactionBuilder, storage::ObjectStore,
+        transaction::TransactionKind, MOVE_STDLIB_OBJECT_ID, SUI_FRAMEWORK_OBJECT_ID,
+        SUI_SYSTEM_OBJECT_ID,
     };
     use test_utils::network::{TestCluster, TestClusterBuilder};
     use tokio::time::{sleep, Duration};

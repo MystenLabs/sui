@@ -52,9 +52,11 @@ class NetworkEnv {
     async #isNetworkAvailable(apiEnv: API_ENV) {
         await growthbook.loadFeatures();
         return (
+            (apiEnv === API_ENV.mainnet &&
+                growthbook.isOn(FEATURES.USE_MAINNET_ENDPOINT)) ||
             (apiEnv === API_ENV.testNet &&
                 growthbook.isOn(FEATURES.USE_TEST_NET_ENDPOINT)) ||
-            apiEnv !== API_ENV.testNet
+            ![API_ENV.testNet, API_ENV.mainnet].includes(apiEnv)
         );
     }
 }

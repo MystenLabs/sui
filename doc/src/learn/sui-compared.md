@@ -12,7 +12,7 @@ Here are Sui's key features:
 
 ## Traditional blockchains
 
-Traditional blockchain validators collectively build a shared accumulator: a cryptographicly binding representation of the state of the blockchain, a chain to which they add increments over time, called blocks. In blockchains that offer deterministic finality, every time validators want to make an incremental addition to the blockchain, i.e., a block proposal, they sequence the proposal. This protocol lets them form an agreement over the current state of the chain, whether the proposed increment is valid, and what the state of the chain will be after the new addition. 
+Traditional blockchain validators collectively build a shared accumulator: a cryptographically binding representation of the state of the blockchain, a chain to which they add increments over time, called blocks. In blockchains that offer deterministic finality, every time validators want to make an incremental addition to the blockchain, i.e., a block proposal, they sequence the proposal. This protocol lets them form an agreement over the current state of the chain, whether the proposed increment is valid, and what the state of the chain will be after the new addition. 
 
 This method of maintaining common state over time has known practical success over the last 14 years or so, using a wealth of theory from the last 50 years of research in the field of Byzantine Fault Tolerant distributed systems. 
 
@@ -36,7 +36,7 @@ But the process of submitting a transaction is a bit more involved. That little 
  1. Sui validators send individual votes on this transaction to the sender.
  1. Each vote has a certain weight since each validator has weight based upon the rules of [Proof of Stake](https://en.wikipedia.org/wiki/Proof_of_work).
  1. Sender collects a Byzantine-resistant-majority of these votes into a *certificate* and broadcasts it to all Sui validators. 
- 1. The validators execute the transaction and sign the results. When the client receives a Byzantine-resistant-majority of the results *finality* is reached, ie., assurance the transaction will not be dropped (revoked).
+ 1. The validators execute the transaction and sign the results. When the client receives a Byzantine-resistant-majority of the results *finality* is reached, i.e., assurance the transaction will not be dropped (revoked).
  1. Optionally, the sender assembles the votes to a certificate detailing the effects of the transaction.
 
 While those steps demand more of the sender, performing them efficiently can still yield a cryptographic proof of finality with minimum latency. Aside from crafting the original transaction itself, the session management for a transaction does not require access to any private keys and can be delegated to a third party.

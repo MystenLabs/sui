@@ -30,6 +30,7 @@ sui-swarm = { path = "../sui-swarm" }
 sui-types = { path = "../sui-types", features = ["test-utils"] }
 sui-keys = { path = "../sui-keys" }
 sui-sdk = { path = "../sui-sdk" }
+sui-test-transaction-builder = { path = "../sui-test-transaction-builder" }
 mysten-metrics = { path = "../mysten-metrics"}
 shared-crypto = { path = "../shared-crypto" }
 

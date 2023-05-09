@@ -12,7 +12,7 @@ use move_core_types::ident_str;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_with::serde_as;
 use shared_crypto::intent::{Intent, IntentMessage, IntentScope};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 use std::convert::TryInto;
 use std::sync::Arc;
 use std::{fs, path::Path};
@@ -31,16 +31,13 @@ use sui_types::crypto::{
     AuthorityKeyPair, AuthorityPublicKeyBytes, AuthoritySignInfo, AuthoritySignature,
     SuiAuthoritySignature, ToFromBytes,
 };
+use sui_types::effects::{TransactionEffects, TransactionEvents};
 use sui_types::epoch_data::EpochData;
 use sui_types::gas::SuiGasStatus;
 use sui_types::gas_coin::{GasCoin, TOTAL_SUPPLY_MIST};
 use sui_types::governance::StakedSui;
 use sui_types::in_memory_storage::InMemoryStorage;
 use sui_types::message_envelope::Message;
-use sui_types::messages::{
-    CallArg, Command, InputObjectKind, InputObjects, Transaction, TransactionEffects,
-    TransactionEvents,
-};
 use sui_types::messages_checkpoint::{
     CertifiedCheckpointSummary, CheckpointContents, CheckpointSummary, VerifiedCheckpoint,
 };
@@ -53,6 +50,7 @@ use sui_types::sui_system_state::{
     SuiSystemStateWrapper, SuiValidatorGenesis,
 };
 use sui_types::temporary_store::{InnerTemporaryStore, TemporaryStore};
+use sui_types::transaction::{CallArg, Command, InputObjectKind, InputObjects, Transaction};
 use sui_types::{
     base_types::TxContext,
     committee::{Committee, EpochId, ProtocolVersion},
@@ -1343,14 +1341,14 @@ fn create_genesis_transaction(
                     *initial_shared_version = SequenceNumber::MIN;
                 }
 
-                sui_types::messages::GenesisObject::RawObject {
+                sui_types::transaction::GenesisObject::RawObject {
                     data: object.data,
                     owner: object.owner,
                 }
             })
             .collect();
 
-        sui_types::messages::VerifiedTransaction::new_genesis_transaction(genesis_objects)
+        sui_types::transaction::VerifiedTransaction::new_genesis_transaction(genesis_objects)
             .into_inner()
     };
 
@@ -1395,6 +1393,7 @@ fn create_genesis_transaction(
                 protocol_config,
                 metrics,
                 false, // enable_expensive_checks
+                &HashSet::new(),
             );
         assert!(inner_temp_store.objects.is_empty());
         assert!(inner_temp_store.mutable_inputs.is_empty());
@@ -1484,7 +1483,6 @@ fn process_package(
     #[cfg(debug_assertions)]
     {
         use move_core_types::account_address::AccountAddress;
-        use std::collections::HashSet;
         let to_be_published_addresses: HashSet<_> = modules
             .iter()
             .map(|module| *module.self_id().address())
@@ -1967,6 +1965,7 @@ mod test {
                 &protocol_config,
                 metrics,
                 false, // enable_expensive_checks
+                &HashSet::new(),
             );
 
         assert_eq!(effects, genesis.effects);

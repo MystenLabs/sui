@@ -1,22 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { CoinFormat, useFormatCoin, useGetTransferAmount } from '@mysten/core';
 import {
     getExecutionStatusError,
     getExecutionStatusType,
-    getGasData,
-    getTotalGasUsed,
     getTransactionDigest,
     getTransactionKind,
     getTransactionKindName,
-    getTransactionSender,
-    type ProgrammableTransaction,
-    SUI_TYPE_ARG,
     type SuiTransactionBlockResponse,
 } from '@mysten/sui.js';
 import clsx from 'clsx';
-import { useState } from 'react';
 
 // import {
 //     eventToDisplay,
@@ -24,107 +17,23 @@ import { useState } from 'react';
 // } from '../../components/events/eventDisplay';
 
 import { Signatures } from './Signatures';
-import TxLinks from './TxLinks';
 
 import styles from './TransactionResult.module.css';
 
-import { ProgrammableTransactionView } from '~/pages/transaction-result/programmable-transaction-view';
+import { useBreakpoint } from '~/hooks/useBreakpoint';
+import { TransactionData } from '~/pages/transaction-result/TransactionData';
+import { TransactionSummary } from '~/pages/transaction-result/transaction-summary';
 import { Banner } from '~/ui/Banner';
-import { DateCard } from '~/ui/DateCard';
-import { DescriptionItem, DescriptionList } from '~/ui/DescriptionList';
-import { CheckpointSequenceLink, ObjectLink } from '~/ui/InternalLink';
 import { PageHeader } from '~/ui/PageHeader';
-import { StatAmount } from '~/ui/StatAmount';
-import { TableHeader } from '~/ui/TableHeader';
+import { SplitPanes } from '~/ui/SplitPanes';
 import { Tab, TabGroup, TabList, TabPanel, TabPanels } from '~/ui/Tabs';
-import { Text } from '~/ui/Text';
-import { Tooltip } from '~/ui/Tooltip';
-import {
-    RecipientTransactionAddresses,
-    SenderTransactionAddress,
-    SponsorTransactionAddress,
-} from '~/ui/TransactionAddressSection';
-import { ReactComponent as ChevronDownIcon } from '~/ui/icons/chevron_down.svg';
-
-function generateMutatedCreated(tx: SuiTransactionBlockResponse) {
-    return [
-        ...(tx.effects!.mutated?.length
-            ? [
-                  {
-                      label: 'Updated',
-                      links: tx.effects!.mutated.map((item) => item.reference),
-                  },
-              ]
-            : []),
-        ...(tx.effects!.created?.length
-            ? [
-                  {
-                      label: 'Created',
-                      links: tx.effects!.created?.map((item) => item.reference),
-                  },
-              ]
-            : []),
-    ];
-}
-
-function GasAmount({
-    amount,
-    expandable,
-    expanded,
-}: {
-    amount?: bigint | number;
-    expandable?: boolean;
-    expanded?: boolean;
-}) {
-    const [formattedAmount, symbol] = useFormatCoin(
-        amount,
-        SUI_TYPE_ARG,
-        CoinFormat.FULL
-    );
-
-    return (
-        <div className="flex h-full items-center gap-1">
-            <div className="flex items-baseline gap-1 text-steel-darker">
-                <Text variant="body/medium">{formattedAmount}</Text>
-                <Text variant="subtitleSmall/medium">{symbol}</Text>
-            </div>
-
-            <Text variant="bodySmall/medium">
-                <div className="flex items-center text-steel">
-                    (
-                    <div className="flex items-baseline gap-0.5">
-                        <div>{amount?.toLocaleString()}</div>
-                        <Text variant="subtitleSmall/medium">MIST</Text>
-                    </div>
-                    )
-                </div>
-            </Text>
-
-            {expandable && (
-                <ChevronDownIcon
-                    height={12}
-                    width={12}
-                    className={clsx('text-steel', expanded && 'rotate-180')}
-                />
-            )}
-        </div>
-    );
-}
 
 export function TransactionView({
     transaction,
 }: {
     transaction: SuiTransactionBlockResponse;
 }) {
-    const sender = getTransactionSender(transaction)!;
-    const gasUsed = transaction?.effects!.gasUsed;
-
-    const [gasFeesExpanded, setGasFeesExpanded] = useState(false);
-
-    const { amount, coinType, balanceChanges } =
-        useGetTransferAmount(transaction);
-
-    const [formattedAmount, symbol] = useFormatCoin(amount, coinType);
+    const isMediumOrAbove = useBreakpoint('md');
 
     // const txKindData = formatByTransactionKind(txKindName, txnDetails, sender);
     // const txEventData = transaction.events?.map(eventToDisplay);
@@ -150,235 +59,35 @@ export function TransactionView({
     //     </div>
     // ));
 
-    const createdMutateData = generateMutatedCreated(transaction);
-
     // MUSTFIX(chris): re-enable event display
     // const hasEvents = txEventData && txEventData.length > 0;
     const hasEvents = false;
 
     const txError = getExecutionStatusError(transaction);
 
-    const gasData = getGasData(transaction)!;
-    const gasPrice = gasData.price || 1;
-    const gasPayment = gasData.payment;
-    const gasBudget = gasData.budget;
-    const gasOwner = gasData.owner;
-    const isSponsoredTransaction = gasOwner !== sender;
-
-    const timestamp = transaction.timestampMs;
     const transactionKindName = getTransactionKindName(
         getTransactionKind(transaction)!
     );
 
-    return (
-        <div className={clsx(styles.txdetailsbg)}>
-            <div className="mb-10">
-                <PageHeader
-                    type="Transaction"
-                    title={getTransactionDigest(transaction)}
-                    subtitle={
-                        transactionKindName !== 'ProgrammableTransaction'
-                            ? transactionKindName
-                            : undefined
-                    }
-                    status={getExecutionStatusType(transaction)}
-                />
-                {txError && (
-                    <div className="mt-2">
-                        <Banner variant="error">{txError}</Banner>
-                    </div>
-                )}
-            </div>
-            <TabGroup size="lg">
-                <TabList>
-                    <Tab>Details</Tab>
-                    {hasEvents && <Tab>Events</Tab>}
-                    <Tab>Signatures</Tab>
-                </TabList>
-                <TabPanels>
-                    <TabPanel>
-                        <div
-                            className={styles.txgridcomponent}
-                            // TODO: Change to test ID
-                            id={getTransactionDigest(transaction)}
-                        >
-                            <section
-                                className={clsx([
-                                    styles.txcomponent,
-                                    styles.txsender,
-                                    'md:ml-4',
-                                ])}
-                                data-testid="transaction-timestamp"
-                            >
-                                {coinType && formattedAmount ? (
-                                    <section className="mb-10">
-                                        <StatAmount
-                                            amount={formattedAmount}
-                                            symbol={symbol}
-                                            date={Number(timestamp)}
-                                        />
-                                    </section>
-                                ) : timestamp ? (
-                                    <div className="mb-3">
-                                        <DateCard date={Number(timestamp)} />
-                                    </div>
-                                ) : null}
-                                {isSponsoredTransaction && (
-                                    <div className="mt-10">
-                                        <SponsorTransactionAddress
-                                            sponsor={gasOwner}
-                                        />
-                                    </div>
-                                )}
-                                <div className="mt-10">
-                                    <SenderTransactionAddress sender={sender} />
-                                </div>
-                                {balanceChanges.length > 0 && (
-                                    <div className="mt-10">
-                                        <RecipientTransactionAddresses
-                                            recipients={balanceChanges}
-                                        />
-                                    </div>
-                                )}
-                            </section>
+    const isProgrammableTransaction =
+        transactionKindName === 'ProgrammableTransaction';
 
-                            <section
-                                className={clsx([
-                                    styles.txcomponent,
-                                    styles.txgridcolspan2,
-                                ])}
-                            >
-                                <div className={styles.txlinks}>
-                                    {createdMutateData.map((item, idx) => (
-                                        <TxLinks data={item} key={idx} />
-                                    ))}
-                                </div>
-                            </section>
-                        </div>
-
-                        {transactionKindName === 'ProgrammableTransaction' && (
-                            <ProgrammableTransactionView
-                                transaction={
-                                    transaction.transaction!.data
-                                        .transaction as ProgrammableTransaction
-                                }
-                            />
-                        )}
-
-                        {transaction.checkpoint && (
-                            <section className="py-12">
-                                <TableHeader>Checkpoint Detail</TableHeader>
-                                <div className="pt-4">
-                                    <DescriptionItem title="Checkpoint Seq. Number">
-                                        <CheckpointSequenceLink
-                                            noTruncate
-                                            sequence={String(
-                                                transaction.checkpoint
-                                            )}
-                                        />
-                                    </DescriptionItem>
-                                </div>
-                            </section>
-                        )}
-
-                        <div data-testid="gas-breakdown" className="mt-8">
-                            <TableHeader
-                                subText={
-                                    isSponsoredTransaction
-                                        ? '(Paid by Sponsor)'
-                                        : undefined
-                                }
-                            >
-                                Gas & Storage Fees
-                            </TableHeader>
-
-                            <DescriptionList>
-                                <DescriptionItem title="Gas Payment">
-                                    <ObjectLink
-                                        // TODO: support multiple gas coins
-                                        objectId={gasPayment[0].objectId}
-                                    />
-                                </DescriptionItem>
-
-                                <DescriptionItem title="Gas Budget">
-                                    <GasAmount amount={BigInt(gasBudget)} />
-                                </DescriptionItem>
-
-                                {gasFeesExpanded && (
-                                    <>
-                                        <DescriptionItem title="Gas Price">
-                                            <GasAmount
-                                                amount={BigInt(gasPrice)}
-                                            />
-                                        </DescriptionItem>
-                                        <DescriptionItem title="Computation Fee">
-                                            <GasAmount
-                                                amount={Number(
-                                                    gasUsed?.computationCost
-                                                )}
-                                            />
-                                        </DescriptionItem>
-
-                                        <DescriptionItem title="Storage Fee">
-                                            <GasAmount
-                                                amount={Number(
-                                                    gasUsed?.storageCost
-                                                )}
-                                            />
-                                        </DescriptionItem>
-
-                                        <DescriptionItem title="Storage Rebate">
-                                            <GasAmount
-                                                amount={Number(
-                                                    gasUsed?.storageRebate
-                                                )}
-                                            />
-                                        </DescriptionItem>
-
-                                        <div className="h-px bg-gray-45" />
-                                    </>
-                                )}
-
-                                <DescriptionItem
-                                    title={
-                                        <Text
-                                            variant="body/semibold"
-                                            color="steel-darker"
-                                        >
-                                            Total Gas Fee
-                                        </Text>
-                                    }
-                                >
-                                    <Tooltip
-                                        tip={
-                                            gasFeesExpanded
-                                                ? 'Hide Gas Fee breakdown'
-                                                : 'Show Gas Fee breakdown'
-                                        }
-                                    >
-                                        <button
-                                            className="cursor-pointer border-none bg-inherit p-0"
-                                            type="button"
-                                            onClick={() =>
-                                                setGasFeesExpanded(
-                                                    (expanded) => !expanded
-                                                )
-                                            }
-                                        >
-                                            <GasAmount
-                                                amount={getTotalGasUsed(
-                                                    transaction
-                                                )}
-                                                expanded={gasFeesExpanded}
-                                                expandable
-                                            />
-                                        </button>
-                                    </Tooltip>
-                                </DescriptionItem>
-                            </DescriptionList>
-                        </div>
-                    </TabPanel>
-                    {/* {hasEvents && (
+    const leftPane = {
+        panel: (
+            <div className="h-full overflow-y-scroll rounded-2xl border border-transparent bg-gray-40 p-6 md:h-screen md:p-10">
+                <TabGroup size="lg">
+                    <TabList>
+                        <Tab>Summary</Tab>
+                        {hasEvents && <Tab>Events</Tab>}
+                        {isProgrammableTransaction && <Tab>Signatures</Tab>}
+                    </TabList>
+                    <TabPanels>
+                        <TabPanel>
+                            <div className="mt-10">
+                                <TransactionSummary transaction={transaction} />
+                            </div>
+                        </TabPanel>
+                        {/* {hasEvents && (
                         <TabPanel>
                             <div className={styles.txevents}>
                                 <div className={styles.txeventsleft}>
@@ -390,11 +99,54 @@ export function TransactionView({
                             </div>
                         </TabPanel>
                     )} */}
-                    <TabPanel>
-                        <Signatures transaction={transaction} />
-                    </TabPanel>
-                </TabPanels>
-            </TabGroup>
+                        <TabPanel>
+                            <Signatures transaction={transaction} />
+                        </TabPanel>
+                    </TabPanels>
+                </TabGroup>
+            </div>
+        ),
+        minSize: 35,
+        collapsible: true,
+        collapsibleButton: true,
+        noHoverHidden: isMediumOrAbove,
+    };
+
+    const rightPane = {
+        panel: (
+            <div className="h-full w-full overflow-y-scroll md:overflow-y-hidden">
+                <TransactionData transaction={transaction} />
+            </div>
+        ),
+        minSize: 40,
+        defaultSize: isProgrammableTransaction ? 65 : 50,
+    };
+
+    return (
+        <div className={clsx(styles.txdetailsbg)}>
+            <div className="mb-10">
+                <PageHeader
+                    type="Transaction"
+                    title={getTransactionDigest(transaction)}
+                    subtitle={
+                        !isProgrammableTransaction
+                            ? transactionKindName
+                            : undefined
+                    }
+                    status={getExecutionStatusType(transaction)}
+                />
+                {txError && (
+                    <div className="mt-2">
+                        <Banner variant="error">{txError}</Banner>
+                    </div>
+                )}
+            </div>
+            <div className="h-verticalListLong md:h-full">
+                <SplitPanes
+                    splitPanels={[leftPane, rightPane]}
+                    direction={isMediumOrAbove ? 'horizontal' : 'vertical'}
+                />
+            </div>
         </div>
     );
 }

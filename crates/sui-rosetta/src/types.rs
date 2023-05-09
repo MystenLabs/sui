@@ -7,7 +7,6 @@ use std::str::FromStr;
 use axum::response::{IntoResponse, Response};
 use axum::Json;
 use fastcrypto::encoding::Hex;
-use fastcrypto::traits::ToFromBytes;
 use serde::de::Error as DeError;
 use serde::{Deserialize, Serializer};
 use serde::{Deserializer, Serialize};
@@ -20,10 +19,10 @@ use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress, Tra
 use sui_types::crypto::PublicKey as SuiPublicKey;
 use sui_types::crypto::SignatureScheme;
 use sui_types::governance::{ADD_STAKE_FUN_NAME, WITHDRAW_STAKE_FUN_NAME};
-use sui_types::messages::{Argument, CallArg, Command, ObjectArg, TransactionData};
 use sui_types::messages_checkpoint::CheckpointDigest;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::sui_system_state::SUI_SYSTEM_MODULE_NAME;
+use sui_types::transaction::{Argument, CallArg, Command, ObjectArg, TransactionData};
 use sui_types::{
     SUI_SYSTEM_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
 };
@@ -329,15 +328,15 @@ impl From<SuiPublicKey> for PublicKey {
     fn from(pk: SuiPublicKey) -> Self {
         match pk {
             SuiPublicKey::Ed25519(k) => PublicKey {
-                hex_bytes: Hex::from_bytes(k.as_bytes()),
+                hex_bytes: Hex::from_bytes(&k.0),
                 curve_type: CurveType::Edwards25519,
             },
             SuiPublicKey::Secp256k1(k) => PublicKey {
-                hex_bytes: Hex::from_bytes(k.as_bytes()),
+                hex_bytes: Hex::from_bytes(&k.0),
                 curve_type: CurveType::Secp256k1,
             },
             SuiPublicKey::Secp256r1(k) => PublicKey {
-                hex_bytes: Hex::from_bytes(k.as_bytes()),
+                hex_bytes: Hex::from_bytes(&k.0),
                 curve_type: CurveType::Secp256r1,
             },
         }

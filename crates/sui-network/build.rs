@@ -26,8 +26,8 @@ fn main() -> Result<()> {
             Method::builder()
                 .name("transaction")
                 .route_name("Transaction")
-                .input_type("sui_types::messages::Transaction")
-                .output_type("sui_types::messages::HandleTransactionResponse")
+                .input_type("sui_types::transaction::Transaction")
+                .output_type("sui_types::messages_grpc::HandleTransactionResponse")
                 .codec_path(codec_path)
                 .build(),
         )
@@ -35,8 +35,17 @@ fn main() -> Result<()> {
             Method::builder()
                 .name("handle_certificate")
                 .route_name("CertifiedTransaction")
-                .input_type("sui_types::messages::CertifiedTransaction")
-                .output_type("sui_types::messages::HandleCertificateResponse")
+                .input_type("sui_types::transaction::CertifiedTransaction")
+                .output_type("sui_types::messages_grpc::HandleCertificateResponse")
+                .codec_path(codec_path)
+                .build(),
+        )
+        .method(
+            Method::builder()
+                .name("handle_certificate_v2")
+                .route_name("CertifiedTransactionV2")
+                .input_type("sui_types::transaction::CertifiedTransaction")
+                .output_type("sui_types::messages_grpc::HandleCertificateResponseV2")
                 .codec_path(codec_path)
                 .build(),
         )
@@ -44,8 +53,8 @@ fn main() -> Result<()> {
             Method::builder()
                 .name("submit_certificate")
                 .route_name("SubmitCertificate")
-                .input_type("sui_types::messages::CertifiedTransaction")
-                .output_type("sui_types::messages::SubmitCertificateResponse")
+                .input_type("sui_types::transaction::CertifiedTransaction")
+                .output_type("sui_types::messages_grpc::SubmitCertificateResponse")
                 .codec_path(codec_path)
                 .build(),
         )
@@ -53,8 +62,8 @@ fn main() -> Result<()> {
             Method::builder()
                 .name("object_info")
                 .route_name("ObjectInfo")
-                .input_type("sui_types::messages::ObjectInfoRequest")
-                .output_type("sui_types::messages::ObjectInfoResponse")
+                .input_type("sui_types::messages_grpc::ObjectInfoRequest")
+                .output_type("sui_types::messages_grpc::ObjectInfoResponse")
                 .codec_path(codec_path)
                 .build(),
         )
@@ -62,8 +71,8 @@ fn main() -> Result<()> {
             Method::builder()
                 .name("transaction_info")
                 .route_name("TransactionInfo")
-                .input_type("sui_types::messages::TransactionInfoRequest")
-                .output_type("sui_types::messages::TransactionInfoResponse")
+                .input_type("sui_types::messages_grpc::TransactionInfoRequest")
+                .output_type("sui_types::messages_grpc::TransactionInfoResponse")
                 .codec_path(codec_path)
                 .build(),
         )
@@ -80,7 +89,7 @@ fn main() -> Result<()> {
             Method::builder()
                 .name("get_system_state_object")
                 .route_name("GetSystemStateObject")
-                .input_type("sui_types::messages::SystemStateRequest")
+                .input_type("sui_types::messages_grpc::SystemStateRequest")
                 .output_type("sui_types::sui_system_state::SuiSystemState")
                 .codec_path(codec_path)
                 .build(),

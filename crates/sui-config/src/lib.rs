@@ -10,9 +10,11 @@ use std::path::{Path, PathBuf};
 use tracing::trace;
 
 pub mod builder;
+pub mod certificate_deny_config;
 pub mod genesis;
 pub mod genesis_config;
 pub mod node;
+pub mod node_config_metrics;
 pub mod p2p;
 mod swarm;
 pub mod transaction_deny_config;

@@ -4,8 +4,8 @@
 use move_core_types::value::MoveTypeLayout;
 use sui_json_rpc_types::SuiCallArg;
 use sui_types::base_types::{ObjectDigest, ObjectID, SequenceNumber, SuiAddress};
-use sui_types::messages::{CallArg, TransactionData, TEST_ONLY_GAS_UNIT_FOR_TRANSFER};
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
+use sui_types::transaction::{CallArg, TransactionData, TEST_ONLY_GAS_UNIT_FOR_TRANSFER};
 
 use crate::operations::Operations;
 use crate::types::ConstructionMetadata;

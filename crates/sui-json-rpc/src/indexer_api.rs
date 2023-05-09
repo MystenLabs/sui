@@ -24,6 +24,7 @@ use sui_json_rpc_types::{
     DynamicFieldPage, EventFilter, EventPage, ObjectsPage, Page, SuiMoveValue,
     SuiObjectDataOptions, SuiObjectResponse, SuiObjectResponseQuery, SuiParsedMoveObject,
     SuiTransactionBlockResponse, SuiTransactionBlockResponseQuery, TransactionBlocksPage,
+    TransactionFilter,
 };
 use sui_open_rpc::Module;
 use sui_types::base_types::{ObjectID, SuiAddress, STD_UTF8_MODULE_NAME, STD_UTF8_STRUCT_NAME};
@@ -225,7 +226,24 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
 
     #[instrument(skip(self))]
     fn subscribe_event(&self, sink: SubscriptionSink, filter: EventFilter) -> SubscriptionResult {
-        spawn_subscription(sink, self.state.event_handler.subscribe(filter));
+        spawn_subscription(
+            sink,
+            self.state.subscription_handler.subscribe_events(filter),
+        );
+        Ok(())
+    }
+
+    fn subscribe_transaction(
+        &self,
+        sink: SubscriptionSink,
+        filter: TransactionFilter,
+    ) -> SubscriptionResult {
+        spawn_subscription(
+            sink,
+            self.state
+                .subscription_handler
+                .subscribe_transactions(filter),
+        );
         Ok(())
     }
 
@@ -246,7 +264,7 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
                 .map_err(|e| anyhow!("{e}"))?;
             let has_next_page = data.len() > limit;
             data.truncate(limit);
-            let next_cursor = data.last().cloned().map_or(cursor, |c| Some(c.object_id));
+            let next_cursor = data.last().cloned().map_or(cursor, |c| Some(c.0));
             self.metrics
                 .get_dynamic_fields_result_size
                 .report(data.len() as u64);
@@ -254,7 +272,7 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
                 .get_dynamic_fields_result_size_total
                 .inc_by(data.len() as u64);
             Ok(DynamicFieldPage {
-                data,
+                data: data.into_iter().map(|(_, w)| w).collect(),
                 next_cursor,
                 has_next_page,
             })

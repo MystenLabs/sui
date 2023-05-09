@@ -485,6 +485,16 @@ Commission rate set by the validator is higher than the threshold
 
 
 
+<a name="0x3_validator_EGasPriceHigherThanThreshold"></a>
+
+Validator trying to set gas price higher than threshold.
+
+
+<pre><code><b>const</b> <a href="validator.md#0x3_validator_EGasPriceHigherThanThreshold">EGasPriceHigherThanThreshold</a>: u64 = 102;
+</code></pre>
+
+
+
 <a name="0x3_validator_EInvalidCap"></a>
 
 Capability code is not valid
@@ -619,7 +629,17 @@ Validator Metadata is too long
 
 
 
-<pre><code><b>const</b> <a href="validator.md#0x3_validator_MAX_COMMISSION_RATE">MAX_COMMISSION_RATE</a>: u64 = 10000;
+<pre><code><b>const</b> <a href="validator.md#0x3_validator_MAX_COMMISSION_RATE">MAX_COMMISSION_RATE</a>: u64 = 2000;
+</code></pre>
+
+
+
+<a name="0x3_validator_MAX_VALIDATOR_GAS_PRICE"></a>
+
+Max gas price a validator can set is 100K MIST.
+
+
+<pre><code><b>const</b> <a href="validator.md#0x3_validator_MAX_VALIDATOR_GAS_PRICE">MAX_VALIDATOR_GAS_PRICE</a>: u64 = 100000;
 </code></pre>
 
 
@@ -741,6 +761,7 @@ Validator Metadata is too long
         <a href="validator.md#0x3_validator_EValidatorMetadataExceedingLengthLimit">EValidatorMetadataExceedingLengthLimit</a>
     );
     <b>assert</b>!(<a href="validator.md#0x3_validator_commission_rate">commission_rate</a> &lt;= <a href="validator.md#0x3_validator_MAX_COMMISSION_RATE">MAX_COMMISSION_RATE</a>, <a href="validator.md#0x3_validator_ECommissionRateTooHigh">ECommissionRateTooHigh</a>);
+    <b>assert</b>!(<a href="validator.md#0x3_validator_gas_price">gas_price</a> &lt; <a href="validator.md#0x3_validator_MAX_VALIDATOR_GAS_PRICE">MAX_VALIDATOR_GAS_PRICE</a>, <a href="validator.md#0x3_validator_EGasPriceHigherThanThreshold">EGasPriceHigherThanThreshold</a>);
 
     <b>let</b> metadata = <a href="validator.md#0x3_validator_new_metadata">new_metadata</a>(
         sui_address,
@@ -1010,6 +1031,7 @@ Need to present a <code>ValidatorOperationCap</code>.
     verified_cap: ValidatorOperationCap,
     new_price: u64,
 ) {
+    <b>assert</b>!(new_price &lt; <a href="validator.md#0x3_validator_MAX_VALIDATOR_GAS_PRICE">MAX_VALIDATOR_GAS_PRICE</a>, <a href="validator.md#0x3_validator_EGasPriceHigherThanThreshold">EGasPriceHigherThanThreshold</a>);
     <b>let</b> validator_address = *<a href="validator_cap.md#0x3_validator_cap_verified_operation_cap_address">validator_cap::verified_operation_cap_address</a>(&verified_cap);
     <b>assert</b>!(validator_address == self.metadata.sui_address, <a href="validator.md#0x3_validator_EInvalidCap">EInvalidCap</a>);
     self.next_epoch_gas_price = new_price;
@@ -1042,6 +1064,7 @@ Set new gas price for the candidate validator.
     new_price: u64
 ) {
     <b>assert</b>!(<a href="validator.md#0x3_validator_is_preactive">is_preactive</a>(self), <a href="validator.md#0x3_validator_ENotValidatorCandidate">ENotValidatorCandidate</a>);
+    <b>assert</b>!(new_price &lt; <a href="validator.md#0x3_validator_MAX_VALIDATOR_GAS_PRICE">MAX_VALIDATOR_GAS_PRICE</a>, <a href="validator.md#0x3_validator_EGasPriceHigherThanThreshold">EGasPriceHigherThanThreshold</a>);
     <b>let</b> validator_address = *<a href="validator_cap.md#0x3_validator_cap_verified_operation_cap_address">validator_cap::verified_operation_cap_address</a>(&verified_cap);
     <b>assert</b>!(validator_address == self.metadata.sui_address, <a href="validator.md#0x3_validator_EInvalidCap">EInvalidCap</a>);
     self.next_epoch_gas_price = new_price;

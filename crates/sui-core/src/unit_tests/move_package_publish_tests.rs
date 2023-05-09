@@ -10,8 +10,8 @@ use move_binary_format::CompiledModule;
 use sui_types::{
     base_types::ObjectID,
     error::UserInputError,
-    messages::{TransactionData, TransactionEffectsAPI, TEST_ONLY_GAS_UNIT_FOR_PUBLISH},
     object::{Data, ObjectRead, Owner},
+    transaction::{TransactionData, TEST_ONLY_GAS_UNIT_FOR_PUBLISH},
     utils::to_sender_signed_transaction,
 };
 
@@ -28,6 +28,7 @@ use std::fs::File;
 use std::io::Read;
 use std::{collections::HashSet, path::PathBuf};
 use sui_framework::BuiltInFramework;
+use sui_types::effects::TransactionEffectsAPI;
 use sui_types::execution_status::{ExecutionFailureStatus, ExecutionStatus};
 
 #[tokio::test]

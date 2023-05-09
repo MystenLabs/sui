@@ -7,11 +7,8 @@ use sui_faucet::FaucetError;
 use sui_json_rpc_types::SuiTransactionBlockResponseOptions;
 use sui_keys::keystore::AccountKeystore;
 use sui_sdk::wallet_context::WalletContext;
-use sui_types::{
-    base_types::ObjectID,
-    gas_coin::GasCoin,
-    messages::{ExecuteTransactionRequestType, Transaction},
-};
+use sui_types::quorum_driver_types::ExecuteTransactionRequestType;
+use sui_types::{base_types::ObjectID, gas_coin::GasCoin, transaction::Transaction};
 use tracing::info;
 
 #[tokio::main]
@@ -21,10 +18,66 @@ async fn main() -> Result<(), anyhow::Error> {
         .active_address()
         .map_err(|err| FaucetError::Wallet(err.to_string()))?;
     println!("SimpleFaucet::new with active address: {active_address}");
-    let client = wallet.get_client().await?;
 
+    // Example scripts
+    // merge_coins(
+    //     "0x0215b800acc47d80a50741f0eecfa507fc2c21f5a9aa6140a219686ad20d7f4c",
+    //     wallet,
+    // )
+    // .await?;
+
+    // split_coins_equally(
+    //     "0xd42a75242975780037e170486540f28ab3c9be07dbb1f6f2a9430ad268e3b1d1",
+    //     wallet,
+    //     1000,
+    // )
+    // .await?;
+
+    Ok(())
+}
+
+async fn _split_coins_equally(
+    gas_coin: &str,
+    mut wallet: WalletContext,
+    count: u64,
+) -> Result<(), anyhow::Error> {
+    let active_address = wallet
+        .active_address()
+        .map_err(|err| FaucetError::Wallet(err.to_string()))?;
+    let client = wallet.get_client().await?;
+    let coin_object_id = ObjectID::from_str(gas_coin).unwrap();
+    let tx_data = client
+        .transaction_builder()
+        .split_coin_equal(active_address, coin_object_id, count, None, 50000000000)
+        .await?;
+
+    let signature = wallet
+        .config
+        .keystore
+        .sign_secure(&active_address, &tx_data, Intent::sui_transaction())
+        .unwrap();
+    let tx = Transaction::from_data(tx_data, Intent::sui_transaction(), vec![signature])
+        .verify()
+        .unwrap();
+    let resp = client
+        .quorum_driver_api()
+        .execute_transaction_block(
+            tx.clone(),
+            SuiTransactionBlockResponseOptions::new().with_effects(),
+            Some(ExecuteTransactionRequestType::WaitForLocalExecution),
+        )
+        .await?;
+
+    println!("{:?}", resp);
+    Ok(())
+}
+
+async fn _merge_coins(gas_coin: &str, mut wallet: WalletContext) -> Result<(), anyhow::Error> {
+    let active_address = wallet
+        .active_address()
+        .map_err(|err| FaucetError::Wallet(err.to_string()))?;
+    let client = wallet.get_client().await?;
     // Pick a gas coin here that isn't in use by the faucet otherwise there will be some contention.
-    let gas_coin = "0xfde0a5e733e446db0c5d2294673ee5f5a17c5aeacb7565ce82cbd5a145e15d44";
     let small_coins = wallet
         .gas_objects(active_address)
         .await
@@ -37,7 +90,6 @@ async fn main() -> Result<(), anyhow::Error> {
         .collect::<Vec<GasCoin>>();
 
     // Smash coins togethers 254 objects at a time
-    // TODO (jian): docs are actually wrong
     for chunk in small_coins.chunks(254) {
         let total_balance: u64 = chunk.iter().map(|coin| coin.0.balance.value()).sum();
 
@@ -72,12 +124,11 @@ async fn main() -> Result<(), anyhow::Error> {
             )
             .await?;
     }
-
     Ok(())
 }
 
 pub async fn create_wallet_context(timeout_secs: u64) -> Result<WalletContext, anyhow::Error> {
     let wallet_conf = sui_config_dir()?.join(SUI_CLIENT_CONFIG);
     info!("Initialize wallet from config path: {:?}", wallet_conf);
-    WalletContext::new(&wallet_conf, Some(Duration::from_secs(timeout_secs))).await
+    WalletContext::new(&wallet_conf, Some(Duration::from_secs(timeout_secs)), None).await
 }

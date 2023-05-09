@@ -15,13 +15,14 @@ const headingStyles = cva([], {
          */
         size: {
             heading1: 'text-heading1',
-            heading2: 'md:text-heading2 text-heading3',
+            heading2: 'md:text-heading2 text-heading4',
             heading3: 'text-heading3',
             heading4: 'md:text-heading4 text-heading6',
             heading5: 'text-heading5',
             heading6: 'text-heading6',
         },
         color: {
+            issue: 'text-issue',
             'gray-100': 'text-gray-100',
             'gray-90': 'text-gray-90',
             'gray-75': 'text-gray-75',
@@ -34,6 +35,7 @@ const headingStyles = cva([], {
             steel: 'text-steel',
             'steel-dark': 'text-steel-dark',
             'steel-darker': 'text-steel-darker',
+            success: 'text-success',
             'success-dark': 'text-success-dark',
         },
         weight: {

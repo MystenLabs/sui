@@ -41,9 +41,10 @@ pub mod pg_integration_test {
     use sui_types::digests::{ObjectDigest, TransactionDigest};
     use sui_types::error::SuiObjectResponseError;
     use sui_types::gas_coin::GasCoin;
-    use sui_types::messages::{ExecuteTransactionRequestType, TEST_ONLY_GAS_UNIT_FOR_TRANSFER};
     use sui_types::object::ObjectFormatOptions;
     use sui_types::query::TransactionFilter;
+    use sui_types::quorum_driver_types::ExecuteTransactionRequestType;
+    use sui_types::transaction::TEST_ONLY_GAS_UNIT_FOR_TRANSFER;
     use sui_types::utils::to_sender_signed_transaction;
     use test_utils::network::{TestCluster, TestClusterBuilder};
     use test_utils::transaction::{create_devnet_nft, delete_devnet_nft, publish_nfts_package};

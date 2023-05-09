@@ -11,9 +11,10 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
 use sui_types::base_types::{TransactionDigest, TransactionEffectsDigest};
+use sui_types::effects::TransactionEffects;
+use sui_types::effects::TransactionEffectsAPI;
 use sui_types::error::SuiResult;
-use sui_types::messages::{TransactionEffects, TransactionEffectsAPI};
-use tracing::trace;
+use tracing::debug;
 
 #[async_trait]
 pub trait EffectsNotifyRead: Send + Sync + 'static {
@@ -72,7 +73,8 @@ impl EffectsNotifyRead for Arc<AuthorityStore> {
         }
         if needs_wait {
             // Only log the duration if we ended up waiting.
-            trace!(duration=?timer.elapsed(), ?last_finished, "Finished notify_read_effects");
+            // We need this to be debug log in order to debug long checkpoint building latencies.
+            debug!(duration=?timer.elapsed(), ?last_finished, "Finished notify_read_effects");
         }
         // Map from digests to ensures returned order is the same as order of digests
         Ok(digests

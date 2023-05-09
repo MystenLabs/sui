@@ -13,6 +13,8 @@ use crate::crypto::{
 pub use crate::digests::{ObjectDigest, TransactionDigest, TransactionEffectsDigest};
 use crate::dynamic_field::DynamicFieldInfo;
 use crate::dynamic_field::DynamicFieldType;
+use crate::effects::TransactionEffects;
+use crate::effects::TransactionEffectsAPI;
 use crate::epoch_data::EpochData;
 use crate::error::ExecutionErrorKind;
 use crate::error::SuiError;
@@ -22,10 +24,6 @@ use crate::gas_coin::GAS;
 use crate::governance::StakedSui;
 use crate::governance::STAKED_SUI_STRUCT_NAME;
 use crate::governance::STAKING_POOL_MODULE_NAME;
-use crate::messages::Transaction;
-use crate::messages::TransactionEffects;
-use crate::messages::TransactionEffectsAPI;
-use crate::messages::VerifiedTransaction;
 use crate::messages_checkpoint::CheckpointTimestamp;
 use crate::multisig::MultiSigPublicKey;
 use crate::object::{Object, Owner};
@@ -33,7 +31,10 @@ use crate::parse_sui_struct_tag;
 use crate::signature::GenericSignature;
 use crate::sui_serde::HexAccountAddress;
 use crate::sui_serde::Readable;
+use crate::transaction::Transaction;
+use crate::transaction::VerifiedTransaction;
 use crate::MOVE_STDLIB_ADDRESS;
+use crate::SUI_CLOCK_OBJECT_ID;
 use crate::SUI_FRAMEWORK_ADDRESS;
 use crate::SUI_SYSTEM_ADDRESS;
 use anyhow::anyhow;
@@ -1077,6 +1078,10 @@ impl ObjectID {
     /// over [fn to_hex_literal] if the string needs to be fully preserved.
     pub fn to_hex_uncompressed(&self) -> String {
         format!("{self}")
+    }
+
+    pub fn is_clock(&self) -> bool {
+        *self == SUI_CLOCK_OBJECT_ID
     }
 }
 

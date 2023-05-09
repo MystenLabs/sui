@@ -15,42 +15,44 @@ use fastcrypto::encoding::Encoding;
 use itertools::Itertools;
 use move_binary_format::CompiledModule;
 use move_core_types::language_storage::ModuleId;
+use mysten_metrics::{TX_TYPE_SHARED_OBJ_TX, TX_TYPE_SINGLE_WRITER_TX};
 use parking_lot::Mutex;
 use prometheus::{
-    register_histogram_with_registry, register_int_counter_vec_with_registry,
-    register_int_counter_with_registry, register_int_gauge_vec_with_registry,
-    register_int_gauge_with_registry, Histogram, IntCounter, IntCounterVec, IntGauge, IntGaugeVec,
-    Registry,
+    register_histogram_vec_with_registry, register_histogram_with_registry,
+    register_int_counter_vec_with_registry, register_int_counter_with_registry,
+    register_int_gauge_vec_with_registry, register_int_gauge_with_registry, Histogram, IntCounter,
+    IntCounterVec, IntGauge, IntGaugeVec, Registry,
 };
 use serde::de::DeserializeOwned;
 use serde::Serialize;
-use sui_config::transaction_deny_config::TransactionDenyConfig;
-use sui_types::metrics::LimitsMetrics;
-use sui_types::TypeTag;
 use tap::{TapFallible, TapOptional};
 use tokio::sync::mpsc::unbounded_channel;
-use tokio::sync::{oneshot, Semaphore};
+use tokio::sync::oneshot;
 use tokio_retry::strategy::{jitter, ExponentialBackoff};
 use tracing::{debug, error, info, instrument, trace, warn, Instrument};
 
 pub use authority_notify_read::EffectsNotifyRead;
 pub use authority_store::{AuthorityStore, ResolverWrapper, UpdateType};
-use mysten_metrics::spawn_monitored_task;
+use mysten_metrics::{monitored_scope, spawn_monitored_task};
 use narwhal_config::{
     Committee as ConsensusCommittee, WorkerCache as ConsensusWorkerCache,
     WorkerId as ConsensusWorkerId,
 };
+use once_cell::sync::OnceCell;
 use shared_crypto::intent::{Intent, IntentScope};
 use sui_adapter::execution_engine;
 use sui_adapter::{adapter, execution_mode};
+use sui_config::certificate_deny_config::CertificateDenyConfig;
 use sui_config::genesis::Genesis;
 use sui_config::node::{
     AuthorityStorePruningConfig, DBCheckpointConfig, ExpensiveSafetyCheckConfig,
 };
+use sui_config::transaction_deny_config::TransactionDenyConfig;
 use sui_framework::{BuiltInFramework, SystemPackage};
 use sui_json_rpc_types::{
     Checkpoint, DevInspectResults, DryRunTransactionBlockResponse, EventFilter, SuiEvent,
-    SuiMoveValue, SuiObjectDataFilter, SuiTransactionBlockData, SuiTransactionBlockEvents,
+    SuiMoveValue, SuiObjectDataFilter, SuiTransactionBlockData, SuiTransactionBlockEffects,
+    SuiTransactionBlockEvents, TransactionFilter,
 };
 use sui_macros::{fail_point, fail_point_async};
 use sui_protocol_config::{ProtocolConfig, SupportedProtocolVersions};
@@ -63,8 +65,13 @@ use sui_types::crypto::{
 };
 use sui_types::digests::TransactionEventsDigest;
 use sui_types::dynamic_field::{DynamicFieldInfo, DynamicFieldName, DynamicFieldType, Field};
+use sui_types::effects::{
+    SignedTransactionEffects, TransactionEffects, TransactionEffectsAPI, TransactionEvents,
+    VerifiedCertifiedTransactionEffects, VerifiedSignedTransactionEffects,
+};
 use sui_types::error::{ExecutionError, UserInputError};
 use sui_types::event::{Event, EventID};
+use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::gas::{GasCostSummary, SuiGasStatus};
 use sui_types::message_envelope::Message;
 use sui_types::messages_checkpoint::{
@@ -72,8 +79,13 @@ use sui_types::messages_checkpoint::{
     CheckpointSequenceNumber, CheckpointSummary, CheckpointTimestamp, VerifiedCheckpoint,
 };
 use sui_types::messages_checkpoint::{CheckpointRequest, CheckpointResponse};
+use sui_types::messages_consensus::AuthorityCapabilities;
+use sui_types::messages_grpc::{
+    HandleTransactionResponse, ObjectInfoRequest, ObjectInfoRequestKind, ObjectInfoResponse,
+    TransactionInfoRequest, TransactionInfoResponse, TransactionStatus,
+};
+use sui_types::metrics::{BytecodeVerifierMetrics, LimitsMetrics};
 use sui_types::object::{MoveObject, Owner, PastObjectRead, OBJECT_START_VERSION};
-use sui_types::query::TransactionFilter;
 use sui_types::storage::{ObjectKey, ObjectStore, WriteKind};
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
 use sui_types::sui_system_state::SuiSystemState;
@@ -88,10 +100,11 @@ use sui_types::{
     crypto::AuthoritySignature,
     error::{SuiError, SuiResult},
     fp_ensure,
-    messages::*,
     object::{Object, ObjectFormatOptions, ObjectRead},
+    transaction::*,
     SUI_SYSTEM_ADDRESS,
 };
+use sui_types::{is_system_package, TypeTag, SUI_CLOCK_OBJECT_ID};
 use typed_store::Map;
 
 use crate::authority::authority_per_epoch_store::{AuthorityPerEpochStore, CertTxGuard};
@@ -103,8 +116,8 @@ use crate::authority::epoch_start_configuration::EpochStartConfiguration;
 use crate::checkpoints::checkpoint_executor::CheckpointExecutor;
 use crate::checkpoints::CheckpointStore;
 use crate::epoch::committee_store::CommitteeStore;
-use crate::event_handler::EventHandler;
-use crate::execution_driver::{execution_process, ExecutionDispatcher};
+use crate::event_handler::SubscriptionHandler;
+use crate::execution_driver::execution_process;
 use crate::module_cache_metrics::ResolverMetrics;
 use crate::stake_aggregator::StakeAggregator;
 use crate::state_accumulator::StateAccumulator;
@@ -133,7 +146,7 @@ mod batch_verification_tests;
 
 #[cfg(feature = "test-utils")]
 pub mod authority_test_utils;
-use once_cell::sync::OnceCell;
+
 pub mod authority_per_epoch_store;
 pub mod authority_per_epoch_store_pruner;
 
@@ -177,7 +190,10 @@ pub struct AuthorityMetrics {
     batch_size: Histogram,
 
     handle_transaction_latency: Histogram,
-    execute_certificate_latency: Histogram,
+
+    execute_certificate_latency_single_writer: Histogram,
+    execute_certificate_latency_shared_object: Histogram,
+
     execute_certificate_with_effects_latency: Histogram,
     internal_execution_latency: Histogram,
     prepare_certificate_latency: Histogram,
@@ -213,6 +229,9 @@ pub struct AuthorityMetrics {
     pub consensus_committed_certificates: IntCounterVec,
 
     pub limits_metrics: Arc<LimitsMetrics>,
+
+    /// bytecode verifier metrics for tracking timeouts
+    pub bytecode_verifier_metrics: Arc<BytecodeVerifierMetrics>,
 }
 
 // Override default Prom buckets for positive numbers in 0-50k range
@@ -221,11 +240,26 @@ const POSITIVE_INT_BUCKETS: &[f64] = &[
 ];
 
 const LATENCY_SEC_BUCKETS: &[f64] = &[
-    0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1., 2.5, 5., 10., 20., 30., 60., 90.,
+    0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1., 2., 3., 4., 5., 6., 7., 8., 9., 10., 20.,
+    30., 60., 90.,
 ];
 
 impl AuthorityMetrics {
     pub fn new(registry: &prometheus::Registry) -> AuthorityMetrics {
+        let execute_certificate_latency = register_histogram_vec_with_registry!(
+            "authority_state_execute_certificate_latency",
+            "Latency of executing certificates, including waiting for inputs",
+            &["tx_type"],
+            LATENCY_SEC_BUCKETS.to_vec(),
+            registry,
+        )
+        .unwrap();
+
+        let execute_certificate_latency_single_writer =
+            execute_certificate_latency.with_label_values(&[TX_TYPE_SINGLE_WRITER_TX]);
+        let execute_certificate_latency_shared_object =
+            execute_certificate_latency.with_label_values(&[TX_TYPE_SHARED_OBJ_TX]);
+
         Self {
             tx_orders: register_int_counter_with_registry!(
                 "total_transaction_orders",
@@ -301,13 +335,8 @@ impl AuthorityMetrics {
                 registry,
             )
             .unwrap(),
-            execute_certificate_latency: register_histogram_with_registry!(
-                "authority_state_execute_certificate_latency",
-                "Latency of executing certificates, including waiting for inputs",
-                LATENCY_SEC_BUCKETS.to_vec(),
-                registry,
-            )
-            .unwrap(),
+            execute_certificate_latency_single_writer,
+            execute_certificate_latency_shared_object,
             execute_certificate_with_effects_latency: register_histogram_with_registry!(
                 "authority_state_execute_certificate_with_effects_latency",
                 "Latency of executing certificates with effects, including waiting for inputs",
@@ -460,6 +489,7 @@ impl AuthorityMetrics {
             )
                 .unwrap(),
             limits_metrics: Arc::new(LimitsMetrics::new(registry)),
+            bytecode_verifier_metrics: Arc::new(BytecodeVerifierMetrics::new(registry)),
         }
     }
 }
@@ -486,7 +516,7 @@ pub struct AuthorityState {
 
     pub indexes: Option<Arc<IndexStore>>,
 
-    pub event_handler: Arc<EventHandler>,
+    pub subscription_handler: Arc<SubscriptionHandler>,
     pub(crate) checkpoint_store: Arc<CheckpointStore>,
 
     committee_store: Arc<CommitteeStore>,
@@ -509,6 +539,8 @@ pub struct AuthorityState {
     expensive_safety_check_config: ExpensiveSafetyCheckConfig,
 
     transaction_deny_config: TransactionDenyConfig,
+
+    certificate_deny_config: CertificateDenyConfig,
 }
 
 /// The authority state encapsulates all state, drives execution, and ensures safety.
@@ -564,6 +596,7 @@ impl AuthorityState {
             epoch_store.as_ref(),
             &transaction.data().intent_message().value,
             &self.transaction_deny_config,
+            &self.metrics.bytecode_verifier_metrics,
         )
         .await?;
 
@@ -665,6 +698,7 @@ impl AuthorityState {
         // this function, in order to prevent a byzantine validator from
         // giving us incorrect effects.
         effects: &VerifiedCertifiedTransactionEffects,
+        objects: Vec<Object>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult {
         assert!(self.is_fullnode(epoch_store));
@@ -680,6 +714,25 @@ impl AuthorityState {
                 err: "effects/tx digest mismatch".to_string()
             }
         );
+
+        // Lock this down to 0x6 before we pin child versions in effects
+        let objects = objects
+            .into_iter()
+            .filter(|o| o.id() == SUI_CLOCK_OBJECT_ID)
+            .collect::<Vec<_>>();
+        if !objects.is_empty() {
+            debug!(
+                "inserting objects to object store before executing a tx: {:?}",
+                objects
+                    .iter()
+                    .map(|o| (o.id(), o.version()))
+                    .collect::<Vec<_>>()
+            );
+            self.database
+                .fullnode_fast_path_insert_objects_to_object_store_maybe(&objects)?;
+            self.transaction_manager()
+                .objects_available(objects.iter().map(InputKey::from).collect(), epoch_store);
+        }
 
         if transaction.contains_shared_object() {
             epoch_store
@@ -719,7 +772,15 @@ impl AuthorityState {
         certificate: &VerifiedCertificate,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult<VerifiedSignedTransactionEffects> {
-        let _metrics_guard = self.metrics.execute_certificate_latency.start_timer();
+        let _metrics_guard = if certificate.contains_shared_object() {
+            self.metrics
+                .execute_certificate_latency_shared_object
+                .start_timer()
+        } else {
+            self.metrics
+                .execute_certificate_latency_single_writer
+                .start_timer()
+        };
         debug!("execute_certificate");
 
         self.metrics.total_cert_attempts.inc();
@@ -753,6 +814,7 @@ impl AuthorityState {
         expected_effects_digest: Option<TransactionEffectsDigest>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult<(TransactionEffects, Option<ExecutionError>)> {
+        let _scope = monitored_scope("Execution::try_execute_immediately");
         let _metrics_guard = self.metrics.internal_execution_latency.start_timer();
         let tx_digest = *certificate.digest();
         debug!("execute_certificate_internal");
@@ -901,6 +963,9 @@ impl AuthorityState {
         _execution_guard: ExecutionLockReadGuard<'_>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult {
+        let _scope: Option<mysten_metrics::MonitoredScopeGuard> =
+            monitored_scope("Execution::commit_cert_and_notify");
+
         let input_object_count = inner_temporary_store.objects.len();
         let shared_object_count = effects.shared_objects().len();
         let digest = *certificate.digest();
@@ -1002,6 +1067,7 @@ impl AuthorityState {
         TransactionEffects,
         Option<ExecutionError>,
     )> {
+        let _scope = monitored_scope("Execution::prepare_certificate");
         let _metrics_guard = self.metrics.prepare_certificate_latency.start_timer();
 
         // check_certificate_input also checks shared object locks when loading the shared objects.
@@ -1043,6 +1109,7 @@ impl AuthorityState {
                 // cyclic dependency w/ sui-adapter
                 self.expensive_safety_check_config
                     .enable_deep_per_tx_sui_conservation_check(),
+                self.certificate_deny_config.certificate_deny_set(),
             );
 
         Ok((inner_temp_store, effects, execution_error_opt.err()))
@@ -1096,6 +1163,7 @@ impl AuthorityState {
                     epoch_store.as_ref(),
                     &transaction,
                     gas_object,
+                    &self.metrics.bytecode_verifier_metrics,
                 )
                 .await?,
                 Some(gas_object_id),
@@ -1107,6 +1175,7 @@ impl AuthorityState {
                     epoch_store.as_ref(),
                     &transaction,
                     &self.transaction_deny_config,
+                    &self.metrics.bytecode_verifier_metrics,
                 )
                 .await?,
                 None,
@@ -1148,6 +1217,7 @@ impl AuthorityState {
                 epoch_store.protocol_config(),
                 self.metrics.limits_metrics.clone(),
                 false, // enable_expensive_checks
+                self.certificate_deny_config.certificate_deny_set(),
             );
         let tx_digest = *effects.transaction_digest();
 
@@ -1264,6 +1334,7 @@ impl AuthorityState {
                 protocol_config,
                 self.metrics.limits_metrics.clone(),
                 false, // enable_expensive_checks
+                self.certificate_deny_config.certificate_deny_set(),
             );
 
         let module_cache =
@@ -1303,7 +1374,7 @@ impl AuthorityState {
     ) -> SuiResult<u64> {
         let changes = self
             .process_object_index(effects, epoch_store)
-            .tap_err(|e| warn!("{e}"))?;
+            .tap_err(|e| warn!(tx_digest=?digest, "Failed to process object index, index_tx is skipped: {e}"))?;
 
         indexes
             .index_tx(
@@ -1441,7 +1512,7 @@ impl AuthorityState {
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult<Option<DynamicFieldInfo>> {
         // Skip if not a move object
-        let Some(move_object) =  o.data.try_as_move().cloned() else {
+        let Some(move_object) = o.data.try_as_move().cloned() else {
             return Ok(None);
         };
         // We only index dynamic field objects
@@ -1537,12 +1608,13 @@ impl AuthorityState {
                 .await
                 .tap_ok(|_| self.metrics.post_processing_total_tx_indexed.inc())
                 .tap_err(|e| error!(?tx_digest, "Post processing - Couldn't index tx: {e}"));
-
+            let effects: SuiTransactionBlockEffects = effects.clone().try_into()?;
             // Emit events
             if res.is_ok() {
-                self.event_handler
-                    .process_events(
-                        &effects.clone().try_into()?,
+                self.subscription_handler
+                    .process_tx(
+                        certificate.data().transaction_data(),
+                        &effects,
                         &SuiTransactionBlockEvents::try_from(
                             events.clone(),
                             *tx_digest,
@@ -1668,6 +1740,34 @@ impl AuthorityState {
         })
     }
 
+    pub fn load_fastpath_input_objects(
+        &self,
+        effects: &TransactionEffects,
+    ) -> Result<Vec<Object>, SuiError> {
+        // Note: any future addition to the returned object list needs cautions
+        // to make sure not to mess up object pruning.
+
+        let clock_ref = effects
+            .shared_objects()
+            .iter()
+            .find(|(id, _, _)| id.is_clock());
+
+        if let Some((id, version, digest)) = clock_ref {
+            let clock_obj = self.database.get_object_by_key(id, *version)?;
+            debug_assert!(clock_obj.is_some());
+            debug_assert_eq!(
+                clock_obj.as_ref().unwrap().compute_object_reference().2,
+                *digest
+            );
+            Ok(clock_obj
+                .tap_none(|| error!("Clock object not found: {:?}", clock_ref))
+                .into_iter()
+                .collect())
+        } else {
+            Ok(vec![])
+        }
+    }
+
     fn check_protocol_version(
         supported_protocol_versions: SupportedProtocolVersions,
         current_version: ProtocolVersion,
@@ -1707,22 +1807,17 @@ impl AuthorityState {
         db_checkpoint_config: &DBCheckpointConfig,
         expensive_safety_check_config: ExpensiveSafetyCheckConfig,
         transaction_deny_config: TransactionDenyConfig,
+        certificate_deny_config: CertificateDenyConfig,
         indirect_objects_threshold: usize,
     ) -> Arc<Self> {
         Self::check_protocol_version(supported_protocol_versions, epoch_store.protocol_version());
 
         let metrics = Arc::new(AuthorityMetrics::new(prometheus_registry));
         let (tx_ready_certificates, rx_ready_certificates) = unbounded_channel();
-        let execution_limit = Arc::new(Semaphore::new(num_cpus::get() * 2));
-        let execution_dispatcher = Arc::new(ExecutionDispatcher::new(
-            tx_ready_certificates,
-            execution_limit.clone(),
-            metrics.clone(),
-        ));
         let transaction_manager = Arc::new(TransactionManager::new(
             store.clone(),
             &epoch_store,
-            execution_dispatcher.clone(),
+            tx_ready_certificates,
             metrics.clone(),
         ));
         let (tx_execution_shutdown, rx_execution_shutdown) = oneshot::channel();
@@ -1744,7 +1839,7 @@ impl AuthorityState {
             epoch_store: ArcSwap::new(epoch_store.clone()),
             database: store,
             indexes,
-            event_handler: Arc::new(EventHandler::default()),
+            subscription_handler: Arc::new(SubscriptionHandler::default()),
             checkpoint_store,
             committee_store,
             transaction_manager,
@@ -1755,16 +1850,15 @@ impl AuthorityState {
             db_checkpoint_config: db_checkpoint_config.clone(),
             expensive_safety_check_config,
             transaction_deny_config,
+            certificate_deny_config,
         });
 
         // Start a task to execute ready certificates.
         let authority_state = Arc::downgrade(&state);
-        execution_dispatcher.set_authority(authority_state.clone());
         spawn_monitored_task!(execution_process(
             authority_state,
             rx_ready_certificates,
-            rx_execution_shutdown,
-            execution_limit
+            rx_execution_shutdown
         ));
 
         // TODO: This doesn't belong to the constructor of AuthorityState.
@@ -1858,6 +1952,9 @@ impl AuthorityState {
             accumulator,
             expensive_safety_check_config.enable_state_consistency_check(),
         );
+        self.db()
+            .set_epoch_start_configuration(&epoch_start_configuration)
+            .await?;
         if let Some(checkpoint_path) = &self.db_checkpoint_config.checkpoint_path {
             if self
                 .db_checkpoint_config
@@ -1969,13 +2066,16 @@ impl AuthorityState {
         fs::create_dir(&store_checkpoint_path_tmp)
             .map_err(|e| SuiError::FileIOError(e.to_string()))?;
 
+        // NOTE: Do not change the order of invoking these checkpoint calls
+        // We want to snapshot checkpoint db first to not race with state sync
+        self.checkpoint_store
+            .checkpoint_db(&checkpoint_path_tmp.join("checkpoints"))?;
+
         self.database
             .perpetual_tables
             .checkpoint_db(&store_checkpoint_path_tmp.join("perpetual"))?;
         self.committee_store
             .checkpoint_db(&checkpoint_path_tmp.join("epochs"))?;
-        self.checkpoint_store
-            .checkpoint_db(&checkpoint_path_tmp.join("checkpoints"))?;
 
         if checkpoint_indexes {
             if let Some(indexes) = self.indexes.as_ref() {
@@ -2138,8 +2238,8 @@ impl AuthorityState {
         let df = self
             .get_dynamic_fields_iterator(table, None)
             .ok()?
-            .find(|df| key_bcs == df.bcs_name)?;
-        let field: Field<K, V> = self.get_move_object(&df.object_id).ok()?;
+            .find(|(_, df)| key_bcs == df.bcs_name)?;
+        let field: Field<K, V> = self.get_move_object(&df.1.object_id).ok()?;
         Some(field.value)
     }
 
@@ -2289,10 +2389,27 @@ impl AuthorityState {
                 ObjectType::Struct(s) => &type_ == s,
                 ObjectType::Package => false,
             })
-            .map(|info| info.object_id);
+            .map(|info| ObjectKey(info.object_id, info.version))
+            .collect::<Vec<_>>();
         let mut move_objects = vec![];
-        for id in object_ids {
-            move_objects.push(self.get_move_object(&id)?)
+
+        let objects = self.database.multi_get_object_by_key(&object_ids)?;
+
+        for (o, id) in objects.into_iter().zip(object_ids) {
+            let object = o.ok_or_else(|| {
+                SuiError::from(UserInputError::ObjectNotFound {
+                    object_id: id.0,
+                    version: Some(id.1),
+                })
+            })?;
+            let move_object = object.data.try_as_move().ok_or_else(|| {
+                SuiError::from(UserInputError::MovePackageAsObject { object_id: id.0 })
+            })?;
+            move_objects.push(bcs::from_bytes(move_object.contents()).map_err(|e| {
+                SuiError::ObjectDeserializationError {
+                    error: format!("{e}"),
+                }
+            })?);
         }
         Ok(move_objects)
     }
@@ -2303,7 +2420,7 @@ impl AuthorityState {
         // If `Some`, the query will start from the next item after the specified cursor
         cursor: Option<ObjectID>,
         limit: usize,
-    ) -> SuiResult<Vec<DynamicFieldInfo>> {
+    ) -> SuiResult<Vec<(ObjectID, DynamicFieldInfo)>> {
         Ok(self
             .get_dynamic_fields_iterator(owner, cursor)?
             .take(limit)
@@ -2315,7 +2432,7 @@ impl AuthorityState {
         owner: ObjectID,
         // If `Some`, the query will start from the next item after the specified cursor
         cursor: Option<ObjectID>,
-    ) -> SuiResult<impl Iterator<Item = DynamicFieldInfo> + '_> {
+    ) -> SuiResult<impl Iterator<Item = (ObjectID, DynamicFieldInfo)> + '_> {
         if let Some(indexes) = &self.indexes {
             indexes.get_dynamic_fields_iterator(owner, cursor)
         } else {
@@ -2352,7 +2469,7 @@ impl AuthorityState {
         }
     }
 
-    pub async fn get_executed_transaction(
+    pub async fn get_transaction_block(
         &self,
         digest: TransactionDigest,
     ) -> Result<VerifiedTransaction, anyhow::Error> {
@@ -2502,6 +2619,31 @@ impl AuthorityState {
                 Base58::encode(digest)
             )),
         }
+    }
+
+    pub fn find_publish_txn_digest(
+        &self,
+        package_id: ObjectID,
+    ) -> Result<TransactionDigest, anyhow::Error> {
+        if is_system_package(package_id) {
+            return self.find_genesis_txn_digest();
+        }
+        Ok(self
+            .get_object_read(&package_id)?
+            .into_object()?
+            .previous_transaction)
+    }
+
+    pub fn find_genesis_txn_digest(&self) -> Result<TransactionDigest, anyhow::Error> {
+        let summary = self
+            .get_verified_checkpoint_by_sequence_number(0)?
+            .into_message();
+        let content = self.get_checkpoint_contents(summary.content_digest)?;
+        let genesis_transaction = content.enumerate_transactions(&summary).next();
+        Ok(genesis_transaction
+            .ok_or(anyhow!("No transactions found in checkpoint content"))?
+            .1
+            .transaction)
     }
 
     pub fn get_verified_checkpoint_by_sequence_number(
@@ -2731,7 +2873,6 @@ impl AuthorityState {
     pub async fn insert_genesis_object(&self, object: Object) {
         self.database
             .insert_genesis_object(object)
-            .await
             .expect("Cannot insert genesis object")
     }
 
@@ -3538,9 +3679,6 @@ impl AuthorityState {
             epoch_start_configuration.epoch_start_state().epoch(),
             new_committee.epoch
         );
-        self.db()
-            .set_epoch_start_configuration(&epoch_start_configuration)
-            .await?;
         fail_point!("before-open-new-epoch-store");
         let new_epoch_store = cur_epoch_store.new_at_next_epoch(
             self.name,
@@ -3562,9 +3700,6 @@ impl AuthorityState {
             .unwrap()
             .send(())
             .unwrap();
-        self.transaction_manager
-            .execution_dispatcher
-            .shutdown_execution_for_test();
     }
 }
 

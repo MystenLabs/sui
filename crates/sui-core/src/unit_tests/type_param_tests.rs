@@ -10,10 +10,10 @@ use crate::authority::{
 
 use move_core_types::language_storage::TypeTag;
 
+use sui_types::effects::TransactionEffectsAPI;
 use sui_types::{
     base_types::ObjectID,
     crypto::{get_key_pair, AccountKeyPair},
-    messages::TransactionEffectsAPI,
 };
 
 #[tokio::test]

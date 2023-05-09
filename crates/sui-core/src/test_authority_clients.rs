@@ -12,19 +12,20 @@ use crate::{authority::AuthorityState, authority_client::AuthorityAPI};
 use async_trait::async_trait;
 use mysten_metrics::spawn_monitored_task;
 use sui_config::genesis::Genesis;
-use sui_types::messages::TransactionEvents;
+use sui_types::effects::{TransactionEffectsAPI, TransactionEvents};
+use sui_types::error::SuiResult;
+use sui_types::messages_grpc::{
+    HandleCertificateResponse, HandleCertificateResponseV2, HandleTransactionResponse,
+    ObjectInfoRequest, ObjectInfoResponse, SystemStateRequest, TransactionInfoRequest,
+    TransactionInfoResponse,
+};
 use sui_types::sui_system_state::SuiSystemState;
 use sui_types::{
     crypto::AuthorityKeyPair,
     error::SuiError,
-    messages::{
-        CertifiedTransaction, HandleTransactionResponse, ObjectInfoRequest, ObjectInfoResponse,
-        SystemStateRequest, Transaction, TransactionEffectsAPI, TransactionInfoRequest,
-        TransactionInfoResponse,
-    },
     messages_checkpoint::{CheckpointRequest, CheckpointResponse},
+    transaction::{CertifiedTransaction, Transaction},
 };
-use sui_types::{error::SuiResult, messages::HandleCertificateResponse};
 
 #[derive(Clone, Copy, Default)]
 pub struct LocalAuthorityClientFaultConfig {
@@ -71,6 +72,15 @@ impl AuthorityAPI for LocalAuthorityClient {
         &self,
         certificate: CertifiedTransaction,
     ) -> Result<HandleCertificateResponse, SuiError> {
+        self.handle_certificate_v2(certificate)
+            .await
+            .map(|r| r.into())
+    }
+
+    async fn handle_certificate_v2(
+        &self,
+        certificate: CertifiedTransaction,
+    ) -> Result<HandleCertificateResponseV2, SuiError> {
         let state = self.state.clone();
         let fault_config = self.fault_config;
         spawn_monitored_task!(Self::handle_certificate(state, certificate, fault_config))
@@ -135,7 +145,7 @@ impl LocalAuthorityClient {
         state: Arc<AuthorityState>,
         certificate: CertifiedTransaction,
         fault_config: LocalAuthorityClientFaultConfig,
-    ) -> Result<HandleCertificateResponse, SuiError> {
+    ) -> Result<HandleCertificateResponseV2, SuiError> {
         if fault_config.fail_before_handle_confirmation {
             return Err(SuiError::GenericAuthorityError {
                 error: "Mock error before handle_confirmation_transaction".to_owned(),
@@ -166,9 +176,11 @@ impl LocalAuthorityClient {
                 error: "Mock error after handle_confirmation_transaction".to_owned(),
             });
         }
-        Ok(HandleCertificateResponse {
+        let fastpath_input_objects = state.load_fastpath_input_objects(&signed_effects)?;
+        Ok(HandleCertificateResponseV2 {
             signed_effects,
             events,
+            fastpath_input_objects,
         })
     }
 }
@@ -209,6 +221,14 @@ impl AuthorityAPI for MockAuthorityApi {
         &self,
         _certificate: CertifiedTransaction,
     ) -> Result<HandleCertificateResponse, SuiError> {
+        unimplemented!()
+    }
+
+    /// Execute a certificate.
+    async fn handle_certificate_v2(
+        &self,
+        _certificate: CertifiedTransaction,
+    ) -> Result<HandleCertificateResponseV2, SuiError> {
         unimplemented!()
     }
 
@@ -274,6 +294,13 @@ impl AuthorityAPI for HandleTransactionTestAuthorityClient {
         &self,
         _certificate: CertifiedTransaction,
     ) -> Result<HandleCertificateResponse, SuiError> {
+        unimplemented!()
+    }
+
+    async fn handle_certificate_v2(
+        &self,
+        _certificate: CertifiedTransaction,
+    ) -> Result<HandleCertificateResponseV2, SuiError> {
         unimplemented!()
     }
 

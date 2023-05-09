@@ -20,19 +20,19 @@ use sui_core::{
 };
 use sui_node::SuiNodeHandle;
 
+use sui_types::effects::{CertifiedTransactionEffects, TransactionEffects, TransactionEffectsAPI};
 use sui_types::{
     base_types::{ObjectID, ObjectRef, SuiAddress},
     crypto::{get_key_pair, AccountKeyPair},
-    messages::{
-        Argument, CertifiedTransactionEffects, Command, ObjectArg, ProgrammableTransaction,
-        TransactionData, TransactionEffects, TransactionEffectsAPI, VerifiedTransaction,
-    },
     object::{Object, Owner},
     programmable_transaction_builder::ProgrammableTransactionBuilder,
     storage::ObjectStore,
     sui_system_state::{
         sui_system_state_summary::{SuiSystemStateSummary, SuiValidatorSummary},
         SuiSystemStateTrait,
+    },
+    transaction::{
+        Argument, Command, ObjectArg, ProgrammableTransaction, TransactionData, VerifiedTransaction,
     },
     utils::to_sender_signed_transaction,
     SUI_SYSTEM_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
@@ -348,6 +348,7 @@ impl StressTestRunner {
 
 mod add_stake {
     use super::*;
+    use sui_types::effects::TransactionEffects;
 
     pub struct RequestAddStakeGen;
 

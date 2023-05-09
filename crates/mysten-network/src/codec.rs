@@ -138,7 +138,7 @@ where
 // Anemo variant of BCS codec using Snappy for compression.
 pub mod anemo {
     use ::anemo::rpc::codec::{Codec, Decoder, Encoder};
-    use bytes::{Buf, BufMut};
+    use bytes::Buf;
     use std::{io::Read, marker::PhantomData};
 
     #[derive(Debug)]
@@ -148,13 +148,12 @@ pub mod anemo {
         type Item = T;
         type Error = bcs::Error;
 
-        fn encode(
-            &mut self,
-            item: Self::Item,
-            buf: &mut bytes::BytesMut,
-        ) -> Result<(), Self::Error> {
-            let mut snappy_encoder = snap::write::FrameEncoder::new(buf.writer());
-            bcs::serialize_into(&mut snappy_encoder, &item)
+        fn encode(&mut self, item: Self::Item) -> Result<bytes::Bytes, Self::Error> {
+            let mut buf = Vec::<u8>::new();
+            let mut snappy_encoder = snap::write::FrameEncoder::new(&mut buf);
+            bcs::serialize_into(&mut snappy_encoder, &item)?;
+            drop(snappy_encoder);
+            Ok(buf.into())
         }
     }
 
@@ -189,8 +188,6 @@ pub mod anemo {
         T: serde::Serialize + Send + 'static,
         U: serde::de::DeserializeOwned + Send + 'static,
     {
-        const FORMAT_NAME: &'static str = "bcs";
-
         type Encode = T;
         type Decode = U;
         type Encoder = BcsSnappyEncoder<T>;
@@ -202,6 +199,10 @@ pub mod anemo {
 
         fn decoder(&mut self) -> Self::Decoder {
             BcsSnappyDecoder(PhantomData)
+        }
+
+        fn format_name(&self) -> &'static str {
+            "bcs"
         }
     }
 }
