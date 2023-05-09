@@ -277,7 +277,7 @@ pub async fn metadata(
             total_coin_value: 1_000_000_000 * 1_000_000_000,
             gas_price,
             // 0.005 * gas_price SUI
-            budget: 100_000_000 * gas_price,
+            budget: 50_000_000 * gas_price,
         })?;
 
     let dry_run = context
