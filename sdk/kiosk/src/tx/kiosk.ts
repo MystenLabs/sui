@@ -16,8 +16,7 @@ export const KIOSK_MODULE = '0x2::kiosk';
 export const KIOSK_TYPE = `${KIOSK_MODULE}::Kiosk`;
 
 /**
- * Create a new shared Kiosk and return the `KioskOwnerCap`
- * and the transaction to continue building.
+ * Create a new shared Kiosk and returns the [kiosk, kioskOwnerCap] tuple.
  */
 export function createKiosk(
   tx: TransactionBlock,
@@ -29,6 +28,10 @@ export function createKiosk(
   return [kiosk, kioskOwnerCap];
 }
 
+/**
+ * Calls the `kiosk::new()` function and shares the kiosk.
+ * Returns the `kioskOwnerCap` object.
+ */
 export function createKioskAndShare(tx: TransactionBlock): TransactionArgument {
   let [kiosk, kioskOwnerCap] = tx.moveCall({
     target: `${KIOSK_MODULE}::new`,
@@ -196,7 +199,7 @@ export function withdrawFromKiosk(
   amount: string | bigint | null,
 ): TransactionArgument {
 
-  let amountArg = amount !== null ? tx.pure([amount], 'vector<u64>') : tx.pure([], 'vector<u64>');
+  let amountArg = amount !== null ? tx.pure(amount, 'Option<u64>') : tx.pure({ None: true }, 'Option<u64>');
 
   let [coin] = tx.moveCall({
     target: `${KIOSK_MODULE}::withdraw`,
@@ -212,8 +215,8 @@ export function withdrawFromKiosk(
  */
 export function borrow(
   tx: TransactionBlock,
-  kiosk: ObjectArgument,
   itemType: string,
+  kiosk: ObjectArgument,
   kioskCap: ObjectArgument,
   itemId: SuiAddress,
 ): TransactionArgument {
@@ -236,8 +239,8 @@ export function borrow(
  */
 export function borrowMut(
   tx: TransactionBlock,
-  kiosk: ObjectArgument,
   itemType: string,
+  kiosk: ObjectArgument,
   kioskCap: ObjectArgument,
   itemId: SuiAddress,
 ): TransactionArgument {
@@ -268,7 +271,7 @@ export function borrowValue(
   itemId: SuiAddress,
 ): [TransactionArgument, TransactionArgument] {
   let [item, promise] = tx.moveCall({
-    target: `${KIOSK_MODULE}::borrow_value`,
+    target: `${KIOSK_MODULE}::borrow_val`,
     typeArguments: [itemType],
     arguments: [
       objArg(tx, kiosk),
@@ -292,7 +295,7 @@ export function returnValue(
   promise: TransactionArgument,
 ): void {
   tx.moveCall({
-    target: `${KIOSK_MODULE}::return_value`,
+    target: `${KIOSK_MODULE}::return_val`,
     typeArguments: [itemType],
     arguments: [objArg(tx, kiosk), item, promise],
   });

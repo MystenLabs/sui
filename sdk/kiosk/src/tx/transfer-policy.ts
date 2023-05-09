@@ -42,7 +42,7 @@ export function withdrawFromPolicy(
     amount: string | bigint | null,
 ): TransactionArgument {
 
-    let amountArg = amount !== null ? tx.pure([amount], 'vector<u64>') : tx.pure([], 'vector<u64>');
+    let amountArg = amount !== null ? tx.pure(amount, 'Option<u64>') : tx.pure({ None: true }, 'Option<u64>');
 
     let [profits] = tx.moveCall({
         target: `${TRANSFER_POLICY_MODULE}::withdraw`,
@@ -66,13 +66,13 @@ export function confirmRequest(
     itemType: string,
     policy: ObjectArgument,
     request: TransactionArgument
-  ): void {
+): void {
     tx.moveCall({
-      target: `${TRANSFER_POLICY_MODULE}::confirm_request`,
-      typeArguments: [itemType],
-      arguments: [objArg(tx, policy), request],
+        target: `${TRANSFER_POLICY_MODULE}::confirm_request`,
+        typeArguments: [itemType],
+        arguments: [objArg(tx, policy), request],
     });
-  }
+}
 
 /**
  * Calls the `transfer_policy::remove_rule` function to remove a Rule from the transfer policy's ruleset.
