@@ -3,7 +3,7 @@
 
 use anyhow::anyhow;
 use serde::{de::DeserializeOwned, Serialize};
-use std::{collections::BTreeMap, path::PathBuf, str::FromStr};
+use std::{path::PathBuf, str::FromStr};
 use sui_types::digests::TransactionDigest;
 use typed_store::rocks::{DBMap, MetricConf};
 use typed_store::traits::Map;
@@ -19,7 +19,7 @@ use sui_types::{
 #[derive(Clone, Debug)]
 pub enum SearchRange<T: Serialize + Clone + Debug> {
     ExclusiveLastKey(T),
-    EndOffset(u64),
+    Count(u64),
 }
 
 impl<T: Serialize + Clone + Debug + FromStr> FromStr for SearchRange<T>
@@ -141,21 +141,21 @@ pub fn search_index(
             )
         }
 
-        _ => Err(anyhow!("Invalid or unsupported table name: {}", start)),
+        _ => Err(anyhow!("Invalid or unsupported table: {}", table_name)),
     }
 }
 
 #[macro_export]
 macro_rules! get_db_entries {
     ($db_map:expr, $key_converter:expr, $start:expr, $term:expr) => {{
-        $db_map.try_catch_up_with_primary().unwrap();
         let key = $key_converter($start)?;
         let termination = match $term {
             SearchRange::ExclusiveLastKey(last_key) => {
                 SearchRange::ExclusiveLastKey($key_converter(last_key.as_str())?)
             }
-            SearchRange::EndOffset(offset) => SearchRange::EndOffset(offset),
+            SearchRange::Count(count) => SearchRange::Count(count),
         };
+        $db_map.try_catch_up_with_primary().unwrap();
         get_entries_to_str(&$db_map, key, termination)
     }};
 }
@@ -195,16 +195,16 @@ where
                 entries.push((key.clone(), value.clone()));
             }
         }
-        SearchRange::EndOffset(mut end_offset) => {
+        SearchRange::Count(mut count) => {
             let mut iter = db_map.iter_with_bounds(Some(start), None);
 
-            while end_offset > 0 {
+            while count > 0 {
                 if let Some((key, value)) = iter.next() {
                     entries.push((key.clone(), value.clone()));
                 } else {
                     break;
                 }
-                end_offset -= 1;
+                count -= 1;
             }
         }
     }

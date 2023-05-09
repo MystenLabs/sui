@@ -34,7 +34,7 @@ pub struct IndexSearchKeyRangeOptions {
     table_name: String,
     #[clap(long = "start", short = 's')]
     start: String,
-    #[clap(long = "end-key", short = 'e')]
+    #[clap(long = "end", short = 'e')]
     end_key: String,
 }
 
@@ -45,8 +45,8 @@ pub struct IndexSearchCountOptions {
     table_name: String,
     #[clap(long = "start", short = 's')]
     start: String,
-    #[clap(long = "end-offset", short = 'e')]
-    end_offset: u64,
+    #[clap(long = "count", short = 'c')]
+    count: u64,
 }
 
 #[derive(Parser)]
@@ -110,18 +110,13 @@ pub fn execute_db_tool_command(db_path: PathBuf, cmd: DbToolCommand) -> anyhow::
                 db_path,
                 sc.table_name,
                 sc.start,
-                SearchRange::EndOffset(sc.end_offset),
+                SearchRange::Count(sc.count),
             )?;
             for (k, v) in res {
                 println!("{}: {}", k, v);
             }
             Ok(())
-        } // DbToolCommand::IndexSearch(opts) => {
-          //     let res = search_index(db_path, opts.table_name, opts.start, opts.end)?;
-          //     for (k, v) in res {
-          //         println!("{}: {}", k, v);
-          //     }
-          //     Ok(())
+        }
     }
 }
 
