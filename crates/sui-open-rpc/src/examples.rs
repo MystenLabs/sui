@@ -23,18 +23,19 @@ use sui_json_rpc_types::EventFilter;
 use sui_json_rpc_types::ProtocolConfigResponse;
 use sui_json_rpc_types::SuiTransactionBlockEvents;
 use sui_json_rpc_types::TransactionFilter;
-use sui_json_rpc_types::{   
-    Balance, Checkpoint, CheckpointId, CheckpointPage, MoveCallParams, MoveFunctionArgType,
-    ObjectChange, ObjectValueKind::ByMutableReference, ObjectValueKind::ByImmutableReference, ObjectValueKind::ByValue,
-    OwnedObjectRef, RPCTransactionRequestParams, SuiCommittee, SuiData, SuiEvent,
-    SuiExecutionStatus, SuiLoadedChildObject, SuiLoadedChildObjectsResponse, SuiMoveAbility, SuiMoveAbilitySet, 
-    SuiMoveNormalizedFunction, SuiMoveNormalizedType, SuiMoveVisibility, SuiObjectData, SuiObjectDataFilter, 
-    SuiObjectDataOptions, SuiObjectRef, SuiObjectResponse, SuiObjectResponseQuery, SuiParsedData, SuiPastObjectResponse,
-    SuiTransactionBlock, SuiTransactionBlockData, SuiTransactionBlockEffects,
-    SuiTransactionBlockEffectsV1, SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
+use sui_json_rpc_types::{
+    Balance, Checkpoint, CheckpointId, CheckpointPage, Coin, CoinPage, DynamicFieldPage, EventPage,
+    MoveCallParams, MoveFunctionArgType, ObjectChange, ObjectValueKind::ByImmutableReference,
+    ObjectValueKind::ByMutableReference, ObjectValueKind::ByValue, ObjectsPage, OwnedObjectRef,
+    RPCTransactionRequestParams, SuiCommittee, SuiData, SuiEvent, SuiExecutionStatus,
+    SuiLoadedChildObject, SuiLoadedChildObjectsResponse, SuiMoveAbility, SuiMoveAbilitySet,
+    SuiMoveNormalizedFunction, SuiMoveNormalizedType, SuiMoveVisibility, SuiObjectData,
+    SuiObjectDataFilter, SuiObjectDataOptions, SuiObjectRef, SuiObjectResponse,
+    SuiObjectResponseQuery, SuiParsedData, SuiPastObjectResponse, SuiTransactionBlock,
+    SuiTransactionBlockData, SuiTransactionBlockEffects, SuiTransactionBlockEffectsV1,
+    SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
     SuiTransactionBlockResponseQuery, TransactionBlockBytes, TransactionBlocksPage,
-    TransferObjectParams, Coin, CoinPage, EventPage, DynamicFieldPage, ObjectsPage,
-};
+    TransferObjectParams,
 use sui_json_rpc_types::{SuiTypeTag, ValidatorApy, ValidatorApys};
 use sui_open_rpc::ExamplePairing;
 use sui_protocol_config::ProtocolConfig;
@@ -64,7 +65,6 @@ use sui_types::transaction::TEST_ONLY_GAS_UNIT_FOR_TRANSFER;
 use sui_types::transaction::{CallArg, TransactionData};
 use sui_types::utils::to_sender_signed_transaction;
 use sui_types::{parse_sui_struct_tag, SUI_FRAMEWORK_OBJECT_ID};
-
 
 struct Examples {
     function_name: String,
@@ -987,8 +987,8 @@ impl RpcExampleProvider {
             vec![ExamplePairing::new(
                 "Get total supply for the type of coin provided.",
                 vec![("coin_type", json!(coin))],
-                json!(result)
-            )]
+                json!(result),
+            )],
         )
     }
 
@@ -996,18 +996,22 @@ impl RpcExampleProvider {
 
         let mut sequence = SequenceNumber::from_u64(self.rng.gen_range(24506..6450624));
         let seqs = (0..6)
-            .map(|x| 
-                {
-                    if x % 2 == 0{
-                        sequence = SequenceNumber::from_u64(self.rng.gen_range(24506..6450624));
-                    } else if x % 3 == 0{
-                        sequence = SequenceNumber::from_u64(self.rng.gen_range(24506..6450624));
-                    }
-                    SuiLoadedChildObject::new(ObjectID::new(self.rng.gen()), sequence)
-                }
-            )
-            .collect::<Vec<_>>();
-        let result = { SuiLoadedChildObjectsResponse { loaded_child_objects: seqs }};
+        .map(|x| {
+            if x % 2 == 0 {
+                sequence = SequenceNumber::from_u64(self.rng.gen_range(24506..6450624));
+            } else if x % 3 == 0 {
+                sequence = SequenceNumber::from_u64(self.rng.gen_range(24506..6450624));
+            }
+
+            SuiLoadedChildObject::new(ObjectID::new(self.rng.gen()), sequence)
+            })
+        .collect::<Vec<_>>();
+            
+        let result = {
+            SuiLoadedChildObjectsResponse {
+                loaded_child_objects: seqs,
+            }
+        };
 
 
         Examples::new(
@@ -1015,8 +1019,8 @@ impl RpcExampleProvider {
             vec![ExamplePairing::new(
                 "Get loaded child objects associated with the transaction the request provides.",
                 vec![("digest", json!(ObjectDigest::new(self.rng.gen())))],
-                json!(result)
-            )]
+                json!(result),
+            )],
         )
     }
 
@@ -1041,23 +1045,23 @@ impl RpcExampleProvider {
                     ("module", json!("suifrens".to_string())),
                     ("function", json!("mint".to_string())),
                 ],
-                json!(result)
-            )]
+                json!(result),
+            )],
         )
     }
 
     fn sui_get_normalized_move_function(&mut self) -> Examples {
 
         let ability_set = SuiMoveAbilitySet {
-            abilities: vec![SuiMoveAbility::Store, SuiMoveAbility::Key]
+            abilities: vec![SuiMoveAbility::Store, SuiMoveAbility::Key],
         };
 
         let result = SuiMoveNormalizedFunction {
-            is_entry: false, 
+            is_entry: false,
             type_parameters: vec![ability_set],
             parameters: vec![SuiMoveNormalizedType::U64],
             visibility: SuiMoveVisibility::Public,
-            return_: vec![SuiMoveNormalizedType::U64]
+            return_: vec![SuiMoveNormalizedType::U64],
         };
 
         Examples::new(
@@ -1069,8 +1073,8 @@ impl RpcExampleProvider {
                     ("module_name", json!("moduleName".to_string())),
                     ("function_name", json!("functionName".to_string())),
                 ],
-                json!(result)
-            )]
+                json!(result),
+            )],
         )
     }
     fn suix_get_validators_apy(&mut self) -> Examples {
@@ -1298,4 +1302,3 @@ impl RpcExampleProvider {
         )
     }
 }
-
