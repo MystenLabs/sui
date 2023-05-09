@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use clap::Parser;
+use fastcrypto::encoding::{Encoding, Hex};
 use mysten_common::sync::async_once_cell::AsyncOnceCell;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -63,9 +64,6 @@ fn main() {
         metrics::start_prometheus_server(config.metrics_address)
     };
     let prometheus_registry = registry_service.default_registry();
-    prometheus_registry
-        .register(mysten_metrics::uptime_metric(VERSION))
-        .unwrap();
 
     // Initialize logging
     let (_guard, filter_handle) = telemetry_subscribers::TelemetryConfig::new()
@@ -102,15 +100,15 @@ fn main() {
 
     // Run node in a separate runtime so that admin/monitoring functions continue to work
     // if it deadlocks.
-    let node_one_cell = Arc::new(AsyncOnceCell::<Arc<sui_node::SuiNode>>::new());
-    let node_one_cell_clone = node_one_cell.clone();
+    let node_once_cell = Arc::new(AsyncOnceCell::<Arc<sui_node::SuiNode>>::new());
+    let node_once_cell_clone = node_once_cell.clone();
     let rpc_runtime = runtimes.json_rpc.handle().clone();
 
     runtimes.sui_node.spawn(async move {
         if let Err(e) = sui_node::SuiNode::start_async(
             &config,
             registry_service,
-            node_one_cell_clone,
+            node_once_cell_clone,
             Some(rpc_runtime),
         )
         .await
@@ -124,14 +122,28 @@ fn main() {
         }
     });
 
-    let node_one_cell_clone = node_one_cell.clone();
+    let node_once_cell_clone = node_once_cell.clone();
     runtimes.metrics.spawn(async move {
-        let node = node_one_cell_clone.get().await;
+        let node = node_once_cell_clone.get().await;
+        let chain_identifier = match node.state().get_chain_identifier() {
+            // Unwrap safe: Checkpoint Digest is 32 bytes long
+            Some(chain_identifier) => Hex::encode(chain_identifier.into_inner().get(0..4).unwrap()),
+            None => "Unknown".to_string(),
+        };
+
+        info!("Sui chain identifier: {chain_identifier}");
+        prometheus_registry
+            .register(mysten_metrics::uptime_metric(
+                VERSION,
+                chain_identifier.as_str(),
+            ))
+            .unwrap();
+
         sui_node::admin::run_admin_server(node, admin_interface_port, filter_handle).await
     });
 
     runtimes.metrics.spawn(async move {
-        let node = node_one_cell.get().await;
+        let node = node_once_cell.get().await;
         let state = node.state();
         loop {
             send_telemetry_event(state.clone(), is_validator).await;
