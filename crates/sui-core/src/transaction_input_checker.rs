@@ -113,7 +113,7 @@ pub(crate) async fn check_dev_inspect_input(
     config: &ProtocolConfig,
     kind: &TransactionKind,
     gas_object: Object,
-) -> Result<(ObjectRef, InputObjects), anyhow::Error> {
+) -> SuiResult<(ObjectRef, InputObjects)> {
     let gas_object_ref = gas_object.compute_object_reference();
     kind.validity_check(config)?;
     match kind {
@@ -121,7 +121,7 @@ pub(crate) async fn check_dev_inspect_input(
         TransactionKind::ChangeEpoch(_)
         | TransactionKind::Genesis(_)
         | TransactionKind::ConsensusCommitPrologue(_) => {
-            anyhow::bail!("Transaction kind {} is not supported in dev-inspect", kind)
+            return Err(UserInputError::Unsupported(format!("Transaction kind {} is not supported in dev-inspect", kind)).into())
         }
     }
     let mut input_objects = kind.input_objects()?;

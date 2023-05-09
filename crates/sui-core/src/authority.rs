@@ -1321,10 +1321,12 @@ impl AuthorityState {
         sender: SuiAddress,
         transaction_kind: TransactionKind,
         gas_price: Option<u64>,
-    ) -> Result<DevInspectResults, anyhow::Error> {
+    ) -> SuiResult<DevInspectResults> {
         let epoch_store = self.load_epoch_store_one_call_per_task();
         if !self.is_fullnode(&epoch_store) {
-            return Err(anyhow!("dev-inspect is only supported on fullnodes"));
+            return Err(SuiError::UnsupportedFeatureError {
+                error: "dev-inspect is only supported on fullnodes".to_string(),
+            });
         }
 
         transaction_kind.check_version_supported(epoch_store.protocol_config())?;

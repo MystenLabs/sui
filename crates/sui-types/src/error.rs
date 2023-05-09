@@ -208,7 +208,7 @@ pub enum UserInputError {
     #[error("Transaction is denied: {}", error)]
     TransactionDenied { error: String },
 
-    #[error("Feature is not yet supported: {0}")]
+    #[error("Feature is not supported: {0}")]
     Unsupported(String),
 
     #[error("Query transactions with move function input error: {0}")]
