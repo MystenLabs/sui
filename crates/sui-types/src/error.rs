@@ -5,7 +5,7 @@
 use crate::{
     base_types::*,
     committee::{Committee, EpochId, StakeUnit},
-    digests::CheckpointDigest,
+    digests::CheckpointContentsDigest,
     messages_checkpoint::CheckpointSequenceNumber,
     object::Owner,
 };
@@ -218,7 +218,16 @@ pub enum UserInputError {
     VerifiedCheckpointNotFound(CheckpointSequenceNumber),
 
     #[error("Verified checkpoint not found for digest: {0}")]
-    VerifiedCheckpointDigestNotFound(CheckpointDigest),
+    VerifiedCheckpointDigestNotFound(String),
+
+    #[error("Latest checkpoint sequence number not found")]
+    LatestCheckpointSequenceNumberNotFound,
+
+    #[error("Checkpoint contents not found for digest: {0}")]
+    CheckpointContentsNotFound(CheckpointContentsDigest),
+
+    #[error("Genesis transaction not found")]
+    GenesisTransactionNotFound,
 }
 
 #[derive(

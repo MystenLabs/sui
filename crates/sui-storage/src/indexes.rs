@@ -626,7 +626,7 @@ impl IndexStore {
         let cursor = if let Some(cursor) = cursor {
             Some(
                 self.get_transaction_seq(&cursor)?
-                    .ok_or_else(|| anyhow!("Transaction [{cursor:?}] not found."))?,
+                    .ok_or_else(|| anyhow!("Transaction [{cursor:?}] not found."))?, // over here
             )
         } else {
             None
@@ -653,7 +653,7 @@ impl IndexStore {
             }
             // NOTE: filter via checkpoint sequence number is implemented in
             // `get_transactions` of authority.rs.
-            Some(_) => Err(anyhow!("Unsupported filter: {:?}", filter)),
+            Some(_) => Err(anyhow!("Unsupported filter: {:?}", filter)), // over here
             None => {
                 let iter = self.tables.transaction_order.iter();
 

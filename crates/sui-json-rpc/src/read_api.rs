@@ -590,7 +590,11 @@ impl ReadApiServer for ReadApi {
     #[instrument(skip(self))]
     async fn get_total_transaction_blocks(&self) -> RpcResult<BigInt<u64>> {
         with_tracing!("get_total_transaction_blocks", async move {
-            Ok(self.state.get_total_transaction_blocks()?.into())
+            Ok(self
+                .state
+                .get_total_transaction_blocks()
+                .map_err(Error::from)?
+                .into()) // converts into BigInt<u64>
         })
     }
 
@@ -612,7 +616,8 @@ impl ReadApiServer for ReadApi {
                 )
             })
             .await
-            .map_err(|e| anyhow!(e))??;
+            .map_err(Error::from)?
+            .map_err(Error::from)?;
             let input_objects = transaction
                 .data()
                 .inner()
@@ -636,7 +641,8 @@ impl ReadApiServer for ReadApi {
                         )
                     })
                     .await
-                    .map_err(|e| anyhow!(e))??,
+                    .map_err(Error::from)?
+                    .map_err(Error::from)?,
                 );
             }
 
@@ -767,7 +773,7 @@ impl ReadApiServer for ReadApi {
             let state = self.state.clone();
             spawn_monitored_task!(async move{
             let store = state.load_epoch_store_one_call_per_task();
-            let effect = state.get_executed_effects(transaction_digest)?;
+            let effect = state.get_executed_effects(transaction_digest).map_err(Error::from)?;
             let events = if let Some(event_digest) = effect.events_digest() {
             state
                 .get_transaction_events(event_digest)
