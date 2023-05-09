@@ -30,6 +30,7 @@ use std::collections::HashMap;
 use std::time::Duration;
 use std::{net::Ipv4Addr, sync::Arc, thread::sleep};
 use store::rocks::DBMap;
+use sui_protocol_config::ProtocolConfig;
 use tap::TapFallible;
 use tokio::task::JoinHandle;
 use tower::ServiceBuilder;
@@ -64,6 +65,8 @@ pub struct Worker {
     parameters: Parameters,
     /// The persistent storage.
     store: DBMap<BatchDigest, Batch>,
+    // The protocol configuration.
+    protocol_config: ProtocolConfig,
 }
 
 impl Worker {
@@ -79,6 +82,7 @@ impl Worker {
         store: DBMap<BatchDigest, Batch>,
         metrics: Metrics,
         tx_shutdown: &mut PreSubscribedBroadcastSender,
+        protocol_config: ProtocolConfig,
     ) -> Vec<JoinHandle<()>> {
         let worker_name = keypair.public().clone();
         let worker_peer_id = PeerId(worker_name.0.to_bytes());
@@ -93,6 +97,7 @@ impl Worker {
             worker_cache,
             parameters: parameters.clone(),
             store,
+            protocol_config,
         };
 
         let node_metrics = Arc::new(metrics.worker_metrics.unwrap());
@@ -483,6 +488,7 @@ impl Worker {
             node_metrics,
             client,
             self.store.clone(),
+            self.protocol_config.clone(),
         );
 
         // The `QuorumWaiter` waits for 2f authorities to acknowledge reception of the batch. It then forwards

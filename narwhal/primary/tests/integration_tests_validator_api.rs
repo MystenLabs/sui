@@ -20,8 +20,8 @@ use storage::{CertificateStore, HeaderStore};
 use storage::{NodeStorage, PayloadStore};
 use store::{rocks::DBMap, Map};
 use test_utils::{
-    fixture_batch_with_transactions, make_optimal_certificates, make_optimal_signed_certificates,
-    temp_dir, AuthorityFixture, CommitteeFixture,
+    fixture_batch_with_transactions, latest_protocol_version, make_optimal_certificates,
+    make_optimal_signed_certificates, temp_dir, AuthorityFixture, CommitteeFixture,
 };
 use tokio::sync::watch;
 use tonic::transport::Channel;
@@ -59,7 +59,7 @@ async fn test_get_collections() {
 
     // Generate headers
     for n in 0..5 {
-        let batch = fixture_batch_with_transactions(10);
+        let batch = fixture_batch_with_transactions(10, &latest_protocol_version());
 
         let header = Header::V1(
             author
@@ -133,6 +133,7 @@ async fn test_get_collections() {
         &mut tx_shutdown,
         tx_feedback,
         &Registry::new(),
+        latest_protocol_version(),
     );
 
     let registry = Registry::new();
@@ -152,6 +153,7 @@ async fn test_get_collections() {
         store.batch_store.clone(),
         metrics,
         &mut tx_shutdown_worker,
+        latest_protocol_version(),
     );
 
     // Wait for tasks to start
@@ -272,7 +274,7 @@ async fn test_remove_collections() {
 
     // Generate headers
     for n in 0..5 {
-        let batch = fixture_batch_with_transactions(10);
+        let batch = fixture_batch_with_transactions(10, &latest_protocol_version());
 
         let header = Header::V1(
             author
@@ -331,6 +333,7 @@ async fn test_remove_collections() {
         &mut tx_shutdown,
         tx_feedback,
         &Registry::new(),
+        latest_protocol_version(),
     );
 
     // Wait for tasks to start
@@ -381,6 +384,7 @@ async fn test_remove_collections() {
         store.batch_store.clone(),
         metrics,
         &mut tx_shutdown_worker,
+        latest_protocol_version(),
     );
 
     // Test remove no collections
@@ -523,8 +527,13 @@ async fn test_read_causal_signed_certificates() {
         .authorities()
         .map(|a| (a.id(), a.keypair().copy()))
         .collect::<Vec<_>>();
-    let (certificates, _next_parents) =
-        make_optimal_signed_certificates(1..=4, &genesis, &committee, &keys);
+    let (certificates, _next_parents) = make_optimal_signed_certificates(
+        1..=4,
+        &genesis,
+        &committee,
+        &keys,
+        &latest_protocol_version(),
+    );
 
     collection_digests.extend(
         certificates
@@ -583,6 +592,7 @@ async fn test_read_causal_signed_certificates() {
         &mut tx_shutdown,
         tx_feedback,
         &Registry::new(),
+        latest_protocol_version(),
     );
 
     let (tx_new_certificates_2, rx_new_certificates_2) =
@@ -631,6 +641,7 @@ async fn test_read_causal_signed_certificates() {
         &mut tx_shutdown_2,
         tx_feedback_2,
         &Registry::new(),
+        latest_protocol_version(),
     );
 
     // Wait for tasks to start
@@ -756,6 +767,7 @@ async fn test_read_causal_unsigned_certificates() {
             .authorities()
             .map(|authority| authority.id())
             .collect::<Vec<AuthorityIdentifier>>(),
+        &latest_protocol_version(),
     );
 
     collection_digests.extend(
@@ -809,6 +821,7 @@ async fn test_read_causal_unsigned_certificates() {
         &mut tx_shutdown,
         tx_feedback,
         &Registry::new(),
+        latest_protocol_version(),
     );
 
     let (tx_new_certificates_2, rx_new_certificates_2) =
@@ -851,6 +864,7 @@ async fn test_read_causal_unsigned_certificates() {
         &mut tx_shutdown_2,
         tx_feedback_2,
         &Registry::new(),
+        latest_protocol_version(),
     );
 
     // Wait for tasks to start
@@ -1030,6 +1044,7 @@ async fn test_get_collections_with_missing_certificates() {
         &mut tx_shutdown,
         tx_feedback_1,
         &Registry::new(),
+        latest_protocol_version(),
     );
 
     let registry_1 = Registry::new();
@@ -1049,6 +1064,7 @@ async fn test_get_collections_with_missing_certificates() {
         store_primary_1.batch_store,
         metrics_1,
         &mut tx_shutdown_worker_1,
+        latest_protocol_version(),
     );
 
     // Spawn the primary 2 - a peer to fetch missing certificates from
@@ -1093,6 +1109,7 @@ async fn test_get_collections_with_missing_certificates() {
         &mut tx_shutdown_2,
         tx_feedback_2,
         &Registry::new(),
+        latest_protocol_version(),
     );
 
     let registry_2 = Registry::new();
@@ -1112,6 +1129,7 @@ async fn test_get_collections_with_missing_certificates() {
         store_primary_2.batch_store,
         metrics_2,
         &mut tx_shutdown_worker_2,
+        latest_protocol_version(),
     );
 
     // Wait for tasks to start
@@ -1186,7 +1204,7 @@ async fn fixture_certificate(
     payload_store: PayloadStore,
     batch_store: DBMap<BatchDigest, Batch>,
 ) -> (Certificate, Batch) {
-    let batch = fixture_batch_with_transactions(10);
+    let batch = fixture_batch_with_transactions(10, &latest_protocol_version());
     let worker_id = 0;
 
     let batch_digest = batch.digest();

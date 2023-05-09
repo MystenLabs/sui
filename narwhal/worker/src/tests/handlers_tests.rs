@@ -5,7 +5,7 @@ use super::*;
 
 use crate::TrivialTransactionValidator;
 use fastcrypto::hash::Hash;
-use test_utils::CommitteeFixture;
+use test_utils::{latest_protocol_version, CommitteeFixture};
 use types::{MockWorkerToWorker, WorkerToWorkerServer};
 
 #[tokio::test]
@@ -23,7 +23,7 @@ async fn synchronize() {
 
     // Create network with mock behavior to respond to RequestBatch request.
     let target_primary = fixture.authorities().nth(1).unwrap();
-    let batch = test_utils::batch();
+    let batch = test_utils::batch(&latest_protocol_version());
     let digest = batch.digest();
     let message = WorkerSynchronizeMessage {
         digests: vec![digest],
@@ -111,7 +111,7 @@ async fn synchronize_when_batch_exists() {
     };
 
     // Store the batch.
-    let batch = test_utils::batch();
+    let batch = test_utils::batch(&latest_protocol_version());
     let batch_id = batch.digest();
     let missing = vec![batch_id];
     store.insert(&batch_id, &batch).unwrap();
@@ -142,7 +142,7 @@ async fn delete_batches() {
 
     // Create a new test store.
     let store = test_utils::create_batch_store();
-    let batch = test_utils::batch();
+    let batch = test_utils::batch(&latest_protocol_version());
     let digest = batch.digest();
     store.insert(&digest, &batch).unwrap();
 

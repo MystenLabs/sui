@@ -12,7 +12,8 @@ use tokio::{select, time::sleep};
 use tracing::debug;
 use types::{
     error::LocalClientError, FetchBatchesRequest, FetchBatchesResponse, PrimaryToWorker,
-    WorkerOthersBatchMessage, WorkerOurBatchMessage, WorkerSynchronizeMessage, WorkerToPrimary,
+    WorkerOthersBatchMessage, WorkerOurBatchMessage, WorkerOurBatchMessageV2,
+    WorkerSynchronizeMessage, WorkerToPrimary,
 };
 
 use crate::traits::{PrimaryToWorkerClient, WorkerToPrimaryClient};
@@ -180,6 +181,21 @@ impl WorkerToPrimaryClient for NetworkClient {
         let c = self.get_worker_to_primary_handler().await?;
         select! {
             resp = c.report_our_batch(Request::new(request)) => {
+                resp.map_err(|e| LocalClientError::Internal(format!("{e:?}")))?;
+                Ok(())
+            },
+            () = self.shutdown_notify.wait() => {
+                Err(LocalClientError::ShuttingDown)
+            },
+        }
+    }
+    async fn report_our_batch_v2(
+        &self,
+        request: WorkerOurBatchMessageV2,
+    ) -> Result<(), LocalClientError> {
+        let c = self.get_worker_to_primary_handler().await?;
+        select! {
+            resp = c.report_our_batch_v2(Request::new(request)) => {
                 resp.map_err(|e| LocalClientError::Internal(format!("{e:?}")))?;
                 Ok(())
             },

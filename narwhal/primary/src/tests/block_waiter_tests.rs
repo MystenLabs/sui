@@ -11,7 +11,8 @@ use fastcrypto::hash::Hash;
 use mockall::*;
 use std::sync::Arc;
 use test_utils::{
-    fixture_batch_with_transactions, fixture_payload, test_network, CommitteeFixture,
+    fixture_batch_with_transactions, fixture_payload, latest_protocol_version, test_network,
+    CommitteeFixture,
 };
 use types::{
     Batch, BatchAPI, BatchMessage, Certificate, CertificateDigest, Header, HeaderAPI,
@@ -32,7 +33,7 @@ async fn test_successfully_retrieve_block() {
     let header = Header::V1(
         author
             .header_builder(&committee)
-            .payload(fixture_payload(2))
+            .payload(fixture_payload(2, &latest_protocol_version()))
             .build()
             .unwrap(),
     );
@@ -58,7 +59,10 @@ async fn test_successfully_retrieve_block() {
             .withf(move |request| request.body().batch == batch_digest_clone)
             .returning(|_| {
                 Ok(anemo::Response::new(RequestBatchResponse {
-                    batch: Some(Batch::new(vec![vec![10u8, 5u8, 2u8], vec![8u8, 2u8, 3u8]])),
+                    batch: Some(Batch::new(
+                        vec![vec![10u8, 5u8, 2u8], vec![8u8, 2u8, 3u8]],
+                        &latest_protocol_version(),
+                    )),
                 }))
             });
     }
@@ -120,14 +124,14 @@ async fn test_successfully_retrieve_multiple_blocks() {
     // Batches to be used as "commons" between headers
     // Practically we want to test the case where different headers happen
     // to refer to batches with same id.
-    let common_batch_1 = fixture_batch_with_transactions(10);
-    let common_batch_2 = fixture_batch_with_transactions(10);
+    let common_batch_1 = fixture_batch_with_transactions(10, &latest_protocol_version());
+    let common_batch_2 = fixture_batch_with_transactions(10, &latest_protocol_version());
 
     for i in 0..10 {
         let mut builder = author.header_builder(&committee);
 
-        let batch_1 = fixture_batch_with_transactions(10);
-        let batch_2 = fixture_batch_with_transactions(10);
+        let batch_1 = fixture_batch_with_transactions(10, &latest_protocol_version());
+        let batch_2 = fixture_batch_with_transactions(10, &latest_protocol_version());
 
         builder = builder
             .with_payload_batch(batch_1.clone(), worker_id, 0)
