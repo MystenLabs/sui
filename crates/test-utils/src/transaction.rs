@@ -44,7 +44,7 @@ pub fn make_publish_package(
 ) -> VerifiedTransaction {
     let (sender, keypair) = deterministic_random_account_key();
     TestTransactionBuilder::new(sender, gas_object, gas_price)
-        .publish(path, false)
+        .publish(path)
         .build_and_sign(&keypair)
 }
 

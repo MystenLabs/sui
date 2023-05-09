@@ -348,16 +348,22 @@ impl WalletContext {
         )
     }
 
-    pub async fn make_publish_transaction(
-        &self,
-        path: PathBuf,
-        with_unpublished_deps: bool,
-    ) -> VerifiedTransaction {
+    pub async fn make_publish_transaction(&self, path: PathBuf) -> VerifiedTransaction {
         let (sender, gas_object) = self.get_one_gas_object().await.unwrap().unwrap();
         let gas_price = self.get_reference_gas_price().await.unwrap();
         self.sign_transaction(
             &TestTransactionBuilder::new(sender, gas_object, gas_price)
-                .publish(path, with_unpublished_deps)
+                .publish(path)
+                .build(),
+        )
+    }
+
+    pub async fn make_publish_transaction_with_deps(&self, path: PathBuf) -> VerifiedTransaction {
+        let (sender, gas_object) = self.get_one_gas_object().await.unwrap().unwrap();
+        let gas_price = self.get_reference_gas_price().await.unwrap();
+        self.sign_transaction(
+            &TestTransactionBuilder::new(sender, gas_object, gas_price)
+                .publish_with_deps(path)
                 .build(),
         )
     }

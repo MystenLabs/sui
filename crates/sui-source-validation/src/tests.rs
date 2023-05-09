@@ -580,7 +580,7 @@ fn sanitize_id(mut message: String, m: &HashMap<SuiAddress, &str>) -> String {
 
 /// Compile and publish package at absolute path `package` to chain.
 async fn publish_package(context: &WalletContext, package: PathBuf) -> (ObjectRef, ObjectRef) {
-    let txn = context.make_publish_transaction(package, false).await;
+    let txn = context.make_publish_transaction(package).await;
     let response = context.execute_transaction_block(txn).await.unwrap();
     let package = get_new_package_obj_from_response(&response).unwrap();
     let cap = get_new_package_upgrade_cap_from_response(&response).unwrap();
@@ -617,7 +617,7 @@ async fn upgrade_package(
 /// Compile and publish package at absolute path `package` to chain, along with its unpublished
 /// dependencies.
 async fn publish_package_and_deps(context: &WalletContext, package: PathBuf) -> ObjectRef {
-    let txn = context.make_publish_transaction(package, true).await;
+    let txn = context.make_publish_transaction_with_deps(package).await;
     let response = context.execute_transaction_block(txn).await.unwrap();
     get_new_package_obj_from_response(&response).unwrap()
 }

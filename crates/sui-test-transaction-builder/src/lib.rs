@@ -130,11 +130,20 @@ impl TestTransactionBuilder {
         self
     }
 
-    pub fn publish(mut self, path: PathBuf, with_unpublished_deps: bool) -> Self {
+    pub fn publish(mut self, path: PathBuf) -> Self {
         assert!(matches!(self.test_data, TestTransactionData::Empty));
         self.test_data = TestTransactionData::Publish(PublishData {
             path,
-            with_unpublished_deps,
+            with_unpublished_deps: false,
+        });
+        self
+    }
+
+    pub fn publish_with_deps(mut self, path: PathBuf) -> Self {
+        assert!(matches!(self.test_data, TestTransactionData::Empty));
+        self.test_data = TestTransactionData::Publish(PublishData {
+            path,
+            with_unpublished_deps: true,
         });
         self
     }
@@ -142,7 +151,7 @@ impl TestTransactionBuilder {
     pub fn publish_examples(self, subpath: &'static str) -> Self {
         let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         path.extend(["..", "..", "sui_programmability", "examples", subpath]);
-        self.publish(path, false)
+        self.publish(path)
     }
 
     pub fn build(self) -> TransactionData {
