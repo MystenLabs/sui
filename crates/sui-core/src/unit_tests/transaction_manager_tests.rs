@@ -11,7 +11,7 @@ use sui_types::{
     digests::TransactionEffectsDigest,
     object::Object,
     transaction::{CallArg, ObjectArg},
-    SUI_FRAMEWORK_OBJECT_ID,
+    SUI_FRAMEWORK_PACKAGE_ID,
 };
 use tokio::{
     sync::mpsc::{unbounded_channel, UnboundedReceiver},
@@ -55,7 +55,7 @@ fn make_transaction(gas_object: Object, input: Vec<CallArg>) -> VerifiedExecutab
     let (sender, keypair) = deterministic_random_account_key();
     let transaction =
         TestTransactionBuilder::new(sender, gas_object.compute_object_reference(), rgp)
-            .move_call(SUI_FRAMEWORK_OBJECT_ID, "counter", "assert_value", input)
+            .move_call(SUI_FRAMEWORK_PACKAGE_ID, "counter", "assert_value", input)
             .build_and_sign(&keypair);
     VerifiedExecutableTransaction::new_system(transaction, 0)
 }

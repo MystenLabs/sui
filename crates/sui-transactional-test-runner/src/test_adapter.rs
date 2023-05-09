@@ -50,7 +50,7 @@ use sui_protocol_config::ProtocolConfig;
 use sui_types::accumulator::Accumulator;
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::execution_status::ExecutionStatus;
-use sui_types::MOVE_STDLIB_OBJECT_ID;
+use sui_types::MOVE_STDLIB_PACKAGE_ID;
 use sui_types::{
     base_types::{ObjectID, ObjectRef, SuiAddress, TransactionDigest, SUI_ADDRESS_LENGTH},
     crypto::{get_key_pair_from_rng, AccountKeyPair},
@@ -70,15 +70,15 @@ use sui_types::{
 };
 use sui_types::{id::UID, DEEPBOOK_ADDRESS};
 use sui_types::{in_memory_storage::InMemoryStorage, transaction::ProgrammableTransaction};
-use sui_types::{metrics::LimitsMetrics, DEEPBOOK_OBJECT_ID};
+use sui_types::{metrics::LimitsMetrics, DEEPBOOK_PACKAGE_ID};
 use sui_types::{
     move_package::MovePackage,
     transaction::{Argument, CallArg},
 };
 use sui_types::{
-    programmable_transaction_builder::ProgrammableTransactionBuilder, SUI_FRAMEWORK_OBJECT_ID,
+    programmable_transaction_builder::ProgrammableTransactionBuilder, SUI_FRAMEWORK_PACKAGE_ID,
 };
-use sui_types::{utils::to_sender_signed_transaction, SUI_SYSTEM_OBJECT_ID};
+use sui_types::{utils::to_sender_signed_transaction, SUI_SYSTEM_PACKAGE_ID};
 use tempfile::NamedTempFile;
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
@@ -88,10 +88,10 @@ pub enum FakeID {
 }
 
 const WELL_KNOWN_OBJECTS: &[ObjectID] = &[
-    MOVE_STDLIB_OBJECT_ID,
-    DEEPBOOK_OBJECT_ID,
-    SUI_FRAMEWORK_OBJECT_ID,
-    SUI_SYSTEM_OBJECT_ID,
+    MOVE_STDLIB_PACKAGE_ID,
+    DEEPBOOK_PACKAGE_ID,
+    SUI_FRAMEWORK_PACKAGE_ID,
+    SUI_SYSTEM_PACKAGE_ID,
     SUI_SYSTEM_STATE_OBJECT_ID,
     SUI_CLOCK_OBJECT_ID,
 ];
@@ -410,7 +410,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
         let gas_price = self.gas_price;
         // we are assuming that all packages depend on Move Stdlib and Sui Framework, so these
         // don't have to be provided explicitly as parameters
-        dependencies.extend([MOVE_STDLIB_OBJECT_ID, SUI_FRAMEWORK_OBJECT_ID]);
+        dependencies.extend([MOVE_STDLIB_PACKAGE_ID, SUI_FRAMEWORK_PACKAGE_ID]);
         let data = |sender, gas| {
             let mut builder = ProgrammableTransactionBuilder::new();
             if upgradeable {
@@ -949,7 +949,7 @@ impl<'a> SuiTestAdapter<'a> {
         let digest_arg = builder.pure(digest).unwrap();
 
         let upgrade_ticket = builder.programmable_move_call(
-            SUI_FRAMEWORK_OBJECT_ID,
+            SUI_FRAMEWORK_PACKAGE_ID,
             ident_str!("package").to_owned(),
             ident_str!("authorize_upgrade").to_owned(),
             vec![],
@@ -961,7 +961,7 @@ impl<'a> SuiTestAdapter<'a> {
             builder.upgrade(package_id, upgrade_ticket, dependencies, modules_bytes);
 
         builder.programmable_move_call(
-            SUI_FRAMEWORK_OBJECT_ID,
+            SUI_FRAMEWORK_PACKAGE_ID,
             ident_str!("package").to_owned(),
             ident_str!("commit_upgrade").to_owned(),
             vec![],
@@ -1422,7 +1422,7 @@ impl<'a> SuiTestAdapter<'a> {
         // we are assuming that all packages depend on Move Stdlib and Sui Framework, so these
         // don't have to be provided explicitly as parameters
         if include_std {
-            dependencies.extend([MOVE_STDLIB_OBJECT_ID, SUI_FRAMEWORK_OBJECT_ID]);
+            dependencies.extend([MOVE_STDLIB_PACKAGE_ID, SUI_FRAMEWORK_PACKAGE_ID]);
         }
         Ok(dependencies)
     }

@@ -14,7 +14,7 @@ use sui_types::crypto::deterministic_random_account_key;
 use sui_types::multiaddr::Multiaddr;
 use sui_types::transaction::TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS;
 use sui_types::utils::to_sender_signed_transaction;
-use sui_types::SUI_FRAMEWORK_OBJECT_ID;
+use sui_types::SUI_FRAMEWORK_PACKAGE_ID;
 use sui_types::{
     base_types::ObjectID,
     object::Object,
@@ -64,7 +64,7 @@ pub async fn test_certificates(authority: &AuthorityState) -> Vec<CertifiedTrans
 
         let data = TransactionData::new_move_call(
             sender,
-            SUI_FRAMEWORK_OBJECT_ID,
+            SUI_FRAMEWORK_PACKAGE_ID,
             ident_str!(module).to_owned(),
             ident_str!(function).to_owned(),
             /* type_args */ vec![],

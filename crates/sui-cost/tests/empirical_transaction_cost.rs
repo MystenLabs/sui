@@ -13,7 +13,7 @@ use sui_types::coin::PAY_SPLIT_VEC_FUNC_NAME;
 use sui_types::crypto::{deterministic_random_account_key, AccountKeyPair};
 use sui_types::object::{generate_test_gas_objects, Object};
 use sui_types::transaction::VerifiedTransaction;
-use sui_types::SUI_FRAMEWORK_OBJECT_ID;
+use sui_types::SUI_FRAMEWORK_PACKAGE_ID;
 use sui_types::{
     gas::GasCostSummary,
     transaction::{CallArg, ObjectArg},
@@ -88,7 +88,7 @@ async fn split_n_tx(n: u64, coin: &Object, gas: &Object, gas_price: u64) -> Veri
     let (sender, keypair) = deterministic_random_account_key();
     TestTransactionBuilder::new(sender, gas.compute_object_reference(), gas_price)
         .move_call(
-            SUI_FRAMEWORK_OBJECT_ID,
+            SUI_FRAMEWORK_PACKAGE_ID,
             PAY_MODULE_NAME.as_str(),
             PAY_SPLIT_VEC_FUNC_NAME.as_str(),
             vec![
@@ -180,7 +180,7 @@ async fn create_txes(
         gas_price,
     )
     .move_call(
-        SUI_FRAMEWORK_OBJECT_ID,
+        SUI_FRAMEWORK_PACKAGE_ID,
         PAY_MODULE_NAME.as_str(),
         PAY_JOIN_FUNC_NAME.as_str(),
         vec![
