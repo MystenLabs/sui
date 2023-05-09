@@ -10368,6 +10368,7 @@ dependencies = [
  "move-symbol-pool",
  "rand 0.8.5",
  "sui",
+ "sui-json-rpc-types",
  "sui-move-build",
  "sui-sdk",
  "sui-types",
