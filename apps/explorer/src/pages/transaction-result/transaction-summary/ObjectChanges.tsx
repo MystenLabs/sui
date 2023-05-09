@@ -65,7 +65,12 @@ function Item({
     typeName?: string;
 }) {
     return (
-        <div className="flex items-center justify-between gap-10">
+        <div
+            className={clsx(
+                'flex justify-between gap-10',
+                label === ItemLabels.type ? 'items-start' : 'items-center'
+            )}
+        >
             <Text variant="pBody/medium" color="steel-dark">
                 {label}
             </Text>
@@ -80,9 +85,11 @@ function Item({
                 />
             )}
             {label === ItemLabels.type && (
-                <Text truncate variant="pBody/medium" color="steel-darker">
-                    {typeName}
-                </Text>
+                <div className="break-all text-right">
+                    <Text variant="pBody/medium" color="steel-darker">
+                        {typeName}
+                    </Text>
+                </div>
             )}
         </div>
     );
@@ -141,8 +148,11 @@ function ObjectDetail({
     objectType: string;
     objectId: string;
 }) {
-    const [packageId, moduleName, typeName] =
-        objectType?.split('<')[0]?.split('::') || [];
+    const separator = '::';
+    const objectTypeSplit = objectType?.split(separator) || [];
+    const packageId = objectTypeSplit[0];
+    const moduleName = objectTypeSplit[1];
+    const typeName = objectTypeSplit.slice(2).join(separator);
 
     const objectDetailLabels = [
         ItemLabels.package,
