@@ -1118,7 +1118,7 @@ impl RpcExampleProvider {
             })
             .collect::<Vec<_>>();
 
-        let next_cursor = dynamic_fields.last().unwrap().object_id;
+        let next_cursor = ObjectID::new(self.rng.gen());
 
         let page = DynamicFieldPage {
             data: dynamic_fields,
@@ -1128,7 +1128,7 @@ impl RpcExampleProvider {
 
         Examples::new("suix_getDynamicFields",             
         vec![ExamplePairing::new(
-            "Get dynamic fields for the object the request provides. Return a paginated list of `limit` dynamic field results per page, beginning with the dynamic field immediately after the provided object ID. The default limit is 50.",
+            "Get dynamic fields for the object the request provides in a paginated list of `limit` dynamic field results per page. The default limit is 50.",
             vec![
                 ("parent_object_id", json!(object_id)),
                 ("cursor", json!(ObjectID::new(self.rng.gen()))),
