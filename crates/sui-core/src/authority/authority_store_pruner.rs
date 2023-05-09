@@ -3,13 +3,15 @@
 
 use crate::authority::authority_store_types::{ObjectContentDigest, StoreData, StoreObject};
 use crate::checkpoints::CheckpointStore;
-use mysten_metrics::monitored_scope;
+use mysten_metrics::{monitored_scope, spawn_monitored_task};
 use prometheus::{
     register_int_counter_with_registry, register_int_gauge_with_registry, IntCounter, IntGauge,
     Registry,
 };
+use rocksdb::LiveFile;
 use std::cmp::{max, min};
 use std::collections::HashMap;
+use std::time::SystemTime;
 use std::{sync::Arc, time::Duration};
 use sui_config::node::AuthorityStorePruningConfig;
 use sui_storage::mutex_table::RwLockTable;
@@ -23,7 +25,7 @@ use sui_types::{
 };
 use tokio::sync::oneshot::{self, Sender};
 use tokio::time::Instant;
-use tracing::log::{debug, error};
+use tracing::log::{debug, error, info};
 use typed_store::{Map, TypedStoreError};
 
 use super::authority_store_tables::AuthorityPerpetualTables;
@@ -232,6 +234,44 @@ impl AuthorityStorePruner {
         Ok(())
     }
 
+    fn compact_next_sst_file(
+        perpetual_db: Arc<AuthorityPerpetualTables>,
+        delay_days: usize,
+    ) -> anyhow::Result<()> {
+        let db_path = perpetual_db.objects.rocksdb.path();
+        let mut sst_file_for_compaction: Option<LiveFile> = None;
+        let time_threshold =
+            SystemTime::now() - Duration::from_secs(delay_days as u64 * 24 * 60 * 60);
+        for sst_file in perpetual_db.objects.rocksdb.live_files()? {
+            let file_path = db_path.join(sst_file.name.clone().trim_matches('/'));
+            let last_modified = std::fs::metadata(file_path)?.modified()?;
+            if sst_file.column_family_name != "objects"
+                || sst_file.level < 2
+                || sst_file.start_key.is_none()
+                || sst_file.end_key.is_none()
+                || last_modified > time_threshold
+            {
+                continue;
+            }
+            if let Some(candidate) = &sst_file_for_compaction {
+                if candidate.size > sst_file.size {
+                    continue;
+                }
+            }
+            sst_file_for_compaction = Some(sst_file);
+        }
+        if let Some(sst_file) = sst_file_for_compaction {
+            info!(
+                "Manual compaction of sst file {:?}. Size: {:?}, level: {:?}",
+                sst_file.name, sst_file.size, sst_file.level
+            );
+            let start_key: ObjectKey = bcs::from_bytes(sst_file.start_key.as_ref().unwrap())?;
+            let end_key: ObjectKey = bcs::from_bytes(sst_file.end_key.as_ref().unwrap())?;
+            perpetual_db.objects.compact_range(&start_key, &end_key)?;
+        }
+        Ok(())
+    }
+
     fn setup_objects_pruning(
         config: AuthorityStorePruningConfig,
         epoch_duration_ms: u64,
@@ -258,6 +298,22 @@ impl AuthorityStorePruner {
         let mut prune_interval =
             tokio::time::interval_at(Instant::now() + pruning_initial_delay, tick_duration);
 
+        let perpetual_db_for_compaction = perpetual_db.clone();
+        if let Some(delay_days) = config.periodic_compaction_threshold_days {
+            spawn_monitored_task!(async move {
+                loop {
+                    let db = perpetual_db_for_compaction.clone();
+                    let result = tokio::task::spawn_blocking(move || {
+                        Self::compact_next_sst_file(db, delay_days)
+                    })
+                    .await;
+                    if let Err(err) = result {
+                        error!("Failed to compact sst file: {:?}", err);
+                    }
+                    tokio::time::sleep(Duration::from_secs(1)).await;
+                }
+            });
+        }
         tokio::task::spawn(async move {
             loop {
                 tokio::select! {
