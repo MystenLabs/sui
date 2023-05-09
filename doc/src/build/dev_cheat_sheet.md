@@ -17,7 +17,7 @@ Quick reference on best practices for Sui Network developers.
 - Use `vector`-backed collections (`vector`, `VecSet`, `VecMap`, `PriorityQueue`) with a **known** maximum size of ≤ 1000 items.
     - Use dynamic field-backed collections (`Table`, `Bag`, `ObjectBag`, `ObjectTable`, `LinkedTable`) for any collection that allows third-party addition, larger collections, and collections of unknown size.
     - Sui Move objects have a maximum size of 250KB—any attempt to create a larger object will lead to an aborted transaction. Ensure that your objects do not have an ever-growing `vector`-backed collection.
-- If your function `f` needs a payment in (e.g.) SUI from the caller, use `fun f(payment: Coin<SUI>)` not `fun f(payment: &mut Coin<SUI>, amount: u64)`. This is safer for callers—they know exactly how much they are paying, and do not need to trust `f` to extract the right amount.
+- If your function `f` needs a payment in (e.g.) SUI from the caller, use `fun f(payment: &mut Coin<SUI>, amount: u64)` not `fun f(payment: Coin<SUI>)`. This is safer for callers—they know exactly how much they are paying, and do not need to trust `f` to extract the right amount.
 - Don’t micro-optimize gas usage. Sui computation costs are rounded up to the closest *[bucket](https://docs.sui.io/learn/tokenomics/gas-in-sui#gas-units)*, so only very drastic changes will make a difference. In particular, if your transaction is already in the lowest cost bucket, it can’t get any cheaper.
 - Follow the [Move coding conventions](https://move-language.github.io/move/coding-conventions.html) for consistent style.
 
