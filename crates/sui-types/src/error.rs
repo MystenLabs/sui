@@ -5,6 +5,8 @@
 use crate::{
     base_types::*,
     committee::{Committee, EpochId, StakeUnit},
+    digests::CheckpointDigest,
+    messages_checkpoint::CheckpointSequenceNumber,
     object::Owner,
 };
 
@@ -211,6 +213,12 @@ pub enum UserInputError {
 
     #[error("Query transactions with move function input error: {0}")]
     MoveFunctionInputError(String),
+
+    #[error("Verified checkpoint not found for sequence number: {0}")]
+    VerifiedCheckpointNotFound(CheckpointSequenceNumber),
+
+    #[error("Verified checkpoint not found for digest: {0}")]
+    VerifiedCheckpointDigestNotFound(CheckpointDigest),
 }
 
 #[derive(
