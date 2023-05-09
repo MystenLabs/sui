@@ -41,6 +41,7 @@ pub fn search_index(
     termination: SearchRange<String>,
 ) -> Result<Vec<(String, String)>, anyhow::Error> {
     let start = start.as_str();
+    println!("Opening db at {:?} ...", db_path);
     let db_read_only_handle =
         IndexStoreTables::get_read_only_handle(db_path, None, None, MetricConf::default());
     match table_name.as_str() {
@@ -149,12 +150,21 @@ pub fn search_index(
 macro_rules! get_db_entries {
     ($db_map:expr, $key_converter:expr, $start:expr, $term:expr) => {{
         let key = $key_converter($start)?;
+        println!("Searching from key: {:?}", key);
         let termination = match $term {
             SearchRange::ExclusiveLastKey(last_key) => {
+                println!(
+                    "Retrieving al keys up to (but not including) key: {:?}",
+                    key
+                );
                 SearchRange::ExclusiveLastKey($key_converter(last_key.as_str())?)
             }
-            SearchRange::Count(count) => SearchRange::Count(count),
+            SearchRange::Count(count) => {
+                println!("Retrieving up to {} keys", count);
+                SearchRange::Count(count)
+            }
         };
+
         $db_map.try_catch_up_with_primary().unwrap();
         get_entries_to_str(&$db_map, key, termination)
     }};
