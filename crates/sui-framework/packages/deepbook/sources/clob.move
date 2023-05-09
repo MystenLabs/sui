@@ -61,7 +61,7 @@ module deepbook::clob {
     const FILL_OR_KILL: u8 = 2;
     // Mandates that the entire order be passive. Otherwise, cancel the order.
     const POST_OR_ABORT: u8 = 3;
-    const MIN_BID_ORDER_ID: u64 = 0;
+    const MIN_BID_ORDER_ID: u64 = 1;
     const MIN_ASK_ORDER_ID: u64 = 1 << 63;
     const MIN_PRICE: u64 = 0;
     const MAX_PRICE: u64 = ((1u128 << 64 - 1) as u64);
