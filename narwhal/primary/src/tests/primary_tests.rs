@@ -291,8 +291,8 @@ async fn get_network_peers_from_admin_server() {
     assert!(expected_peer_ids.iter().all(|e| resp.contains(e)));
 }
 
-#[tokio::test]
-async fn test_request_vote_send_missing_parents() {
+#[tokio::test(flavor = "current_thread", start_paused = true)]
+async fn test_request_vote_has_missing_parents() {
     telemetry_subscribers::init_for_testing();
     const NUM_PARENTS: usize = 10;
     let fixture = CommitteeFixture::builder()
@@ -345,6 +345,7 @@ async fn test_request_vote_send_missing_parents() {
         payload_store: payload_store.clone(),
         vote_digest_store: VoteDigestStore::new_for_tests(),
         rx_narwhal_round_updates,
+        parent_digests: Default::default(),
         metrics: metrics.clone(),
     };
 
@@ -406,19 +407,29 @@ async fn test_request_vote_send_missing_parents() {
     let received_missing: HashSet<_> = result.unwrap().into_body().missing.into_iter().collect();
     assert_eq!(expected_missing, received_missing);
 
-    // TEST PHASE 2: Handler should abort if round advances too much while awaiting processing
-    // of certs.
-    let tx_narwhal_round_updates = Arc::new(tx_narwhal_round_updates);
-    {
-        let tx_narwhal_round_updates = tx_narwhal_round_updates.clone();
-        tokio::task::spawn(async move {
-            tokio::time::sleep(Duration::from_millis(100)).await;
-            let _ = tx_narwhal_round_updates.send(100);
-        });
-    }
+    // TEST PHASE 2: Handler should not return additional unknown digests.
     let mut request = anemo::Request::new(RequestVoteRequest {
         header: test_header.clone(),
-        parents: round_2_missing.clone(),
+        parents: Vec::new(),
+    });
+    assert!(request
+        .extensions_mut()
+        .insert(network.downgrade())
+        .is_none());
+    assert!(request
+        .extensions_mut()
+        .insert(anemo::PeerId(author.network_public_key().0.to_bytes()))
+        .is_none());
+    // No additional missing parents will be requested.
+    let result = timeout(Duration::from_secs(5), handler.request_vote(request)).await;
+    assert!(result.is_err(), "{:?}", result);
+
+    // TEST PHASE 3: Handler should return error if header is too old.
+    // Increase round threshold.
+    let _ = tx_narwhal_round_updates.send(100);
+    let mut request = anemo::Request::new(RequestVoteRequest {
+        header: test_header.clone(),
+        parents: Vec::new(),
     });
     assert!(request
         .extensions_mut()
@@ -429,20 +440,16 @@ async fn test_request_vote_send_missing_parents() {
         .insert(anemo::PeerId(author.network_public_key().0.to_bytes()))
         .is_none());
     // Because round 1 certificates are not in store, the missing parents will not be accepted yet.
-    let result = timeout(Duration::from_secs(5), handler.request_vote(request))
-        .await
-        .unwrap();
+    let result = handler.request_vote(request).await;
     assert!(result.is_err(), "{:?}", result);
     assert_eq!(
         // Returned error should be unretriable.
         anemo::types::response::StatusCode::BadRequest,
         result.err().unwrap().status()
     );
-
-    // TODO: inject error for handling parents.
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn test_request_vote_accept_missing_parents() {
     telemetry_subscribers::init_for_testing();
     const NUM_PARENTS: usize = 10;
@@ -496,6 +503,7 @@ async fn test_request_vote_accept_missing_parents() {
         payload_store: payload_store.clone(),
         vote_digest_store: VoteDigestStore::new_for_tests(),
         rx_narwhal_round_updates,
+        parent_digests: Default::default(),
         metrics: metrics.clone(),
     };
 
@@ -583,7 +591,9 @@ async fn test_request_vote_accept_missing_parents() {
         .insert(anemo::PeerId(author.network_public_key().0.to_bytes()))
         .is_none());
 
-    let result = handler.request_vote(request).await;
+    let result = timeout(Duration::from_secs(5), handler.request_vote(request))
+        .await
+        .unwrap();
     assert!(result.is_ok(), "{:?}", result);
 }
 
@@ -639,6 +649,7 @@ async fn test_request_vote_missing_batches() {
         payload_store: payload_store.clone(),
         vote_digest_store: VoteDigestStore::new_for_tests(),
         rx_narwhal_round_updates,
+        parent_digests: Default::default(),
         metrics: metrics.clone(),
     };
 
@@ -773,6 +784,7 @@ async fn test_request_vote_already_voted() {
         payload_store: payload_store.clone(),
         vote_digest_store: VoteDigestStore::new_for_tests(),
         rx_narwhal_round_updates,
+        parent_digests: Default::default(),
         metrics: metrics.clone(),
     };
 
@@ -941,6 +953,7 @@ async fn test_fetch_certificates_handler() {
         payload_store: payload_store.clone(),
         vote_digest_store: VoteDigestStore::new_for_tests(),
         rx_narwhal_round_updates,
+        parent_digests: Default::default(),
         metrics: metrics.clone(),
     };
 
@@ -1111,6 +1124,7 @@ async fn test_process_payload_availability_success() {
         payload_store: payload_store.clone(),
         vote_digest_store: VoteDigestStore::new_for_tests(),
         rx_narwhal_round_updates,
+        parent_digests: Default::default(),
         metrics: metrics.clone(),
     };
 
@@ -1267,6 +1281,7 @@ async fn test_process_payload_availability_when_failures() {
         payload_store: payload_store.clone(),
         vote_digest_store: VoteDigestStore::new_for_tests(),
         rx_narwhal_round_updates,
+        parent_digests: Default::default(),
         metrics: metrics.clone(),
     };
 
@@ -1370,6 +1385,7 @@ async fn test_request_vote_created_at_in_future() {
         payload_store: payload_store.clone(),
         vote_digest_store: VoteDigestStore::new_for_tests(),
         rx_narwhal_round_updates,
+        parent_digests: Default::default(),
         metrics: metrics.clone(),
     };
 
