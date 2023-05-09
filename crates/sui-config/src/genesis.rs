@@ -571,13 +571,13 @@ impl GenesisCeremonyParameters {
     }
 
     fn default_stake_subsidy_period_length() -> u64 {
-        // 30 distributions or epochs
-        30
+        // 10 distributions or epochs
+        10
     }
 
     fn default_stake_subsidy_decrease_rate() -> u16 {
         // 10% in basis points
-        10000
+        1000
     }
 
     fn to_genesis_chain_parameters(&self) -> GenesisChainParameters {

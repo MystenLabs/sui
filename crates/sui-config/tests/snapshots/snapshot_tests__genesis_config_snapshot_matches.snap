@@ -10,8 +10,8 @@ parameters:
   epoch_duration_ms: 86400000
   stake_subsidy_start_epoch: 0
   stake_subsidy_initial_distribution_amount: 1000000000000000
-  stake_subsidy_period_length: 30
-  stake_subsidy_decrease_rate: 10000
+  stake_subsidy_period_length: 10
+  stake_subsidy_decrease_rate: 1000
 committee_size: 0
 grpc_load_shed: ~
 grpc_concurrency_limit: 20000000000
