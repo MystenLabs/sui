@@ -26,7 +26,7 @@ use sui_json_rpc_types::TransactionFilter;
 use sui_json_rpc_types::{
     Balance, Checkpoint, CheckpointId, CheckpointPage, Coin, CoinPage, DynamicFieldPage, EventPage,
     MoveCallParams, MoveFunctionArgType, ObjectChange, ObjectValueKind::ByImmutableReference,
-    ObjectValueKind::ByMutableReference, ObjectValueKind::ByValue, ObjectsPage, OwnedObjectRef,
+    ObjectValueKind::ByMutableReference, ObjectValueKind::ByValue, OwnedObjectRef,
     RPCTransactionRequestParams, SuiCommittee, SuiData, SuiEvent, SuiExecutionStatus,
     SuiLoadedChildObject, SuiLoadedChildObjectsResponse, SuiMoveAbility, SuiMoveAbilitySet,
     SuiMoveNormalizedFunction, SuiMoveNormalizedType, SuiMoveVisibility, SuiObjectData,
@@ -36,6 +36,7 @@ use sui_json_rpc_types::{
     SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
     SuiTransactionBlockResponseQuery, TransactionBlockBytes, TransactionBlocksPage,
     TransferObjectParams,
+};
 use sui_json_rpc_types::{SuiTypeTag, ValidatorApy, ValidatorApys};
 use sui_open_rpc::ExamplePairing;
 use sui_protocol_config::ProtocolConfig;
@@ -996,23 +997,22 @@ impl RpcExampleProvider {
 
         let mut sequence = SequenceNumber::from_u64(self.rng.gen_range(24506..6450624));
         let seqs = (0..6)
-        .map(|x| {
-            if x % 2 == 0 {
-                sequence = SequenceNumber::from_u64(self.rng.gen_range(24506..6450624));
-            } else if x % 3 == 0 {
-                sequence = SequenceNumber::from_u64(self.rng.gen_range(24506..6450624));
-            }
+            .map(|x| {
+                if x % 2 == 0 {
+                    sequence = SequenceNumber::from_u64(self.rng.gen_range(24506..6450624));
+                } else if x % 3 == 0 {
+                    sequence = SequenceNumber::from_u64(self.rng.gen_range(24506..6450624));
+                }
 
-            SuiLoadedChildObject::new(ObjectID::new(self.rng.gen()), sequence)
+                SuiLoadedChildObject::new(ObjectID::new(self.rng.gen()), sequence)
             })
-        .collect::<Vec<_>>();
-            
-        let result = {
-            SuiLoadedChildObjectsResponse {
-                loaded_child_objects: seqs,
-            }
-        };
-
+            .collect::<Vec<_>>();
+                
+            let result = {
+                SuiLoadedChildObjectsResponse {
+                    loaded_child_objects: seqs,
+                }
+            };
 
         Examples::new(
             "sui_getLoadedChildObjects",

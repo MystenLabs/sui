@@ -3932,7 +3932,7 @@
       "params": [
         {
           "name": "filter",
-          "description": "the filter criteria of the event stream, see the [Sui docs](https://docs.sui.io/build/event_api#event-filters) for detailed examples.",
+          "description": "the filter criteria of the event stream, see the [Sui docs](https://docs.sui.io/build/pubsub#event-filters) for detailed examples.",
           "required": true,
           "schema": {
             "$ref": "#/components/schemas/EventFilter"
