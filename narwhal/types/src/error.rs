@@ -88,6 +88,12 @@ pub enum DagError {
     #[error("Parents of header {0} are not a quorum")]
     HeaderRequiresQuorum(HeaderDigest),
 
+    #[error("Already voted a newer header: digest {0}, round {1} < {2}")]
+    AlreadyVotedNewerHeader(HeaderDigest, Round, Round),
+
+    #[error("Too many parents in RequestVoteRequest {0} > {1}")]
+    TooManyParents(usize, usize),
+
     #[error("Message {0} (round {1}) too old for GC round {2}")]
     TooOld(Digest<{ crypto::DIGEST_LENGTH }>, Round, Round),
 

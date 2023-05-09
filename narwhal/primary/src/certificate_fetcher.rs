@@ -47,6 +47,14 @@ const PARALLEL_FETCH_REQUEST_ADDITIONAL_TIMEOUT: Duration = Duration::from_secs(
 // time (verifying a batch of 200 certificates should take > 100ms).
 const VERIFY_CERTIFICATES_BATCH_SIZE: usize = 200;
 
+#[derive(Clone, Debug)]
+pub enum CertificateFetcherCommand {
+    /// Fetch ancestors of the certificate.
+    MissingAncestors(Certificate),
+    /// Fetch once from a random primary.
+    Kick,
+}
+
 /// The CertificateFetcher is responsible for fetching certificates that this node is missing
 /// from other primaries. It operates two loops:
 /// Loop 1: listens for certificates missing parents from the core, tracks the highest missing
@@ -65,7 +73,7 @@ pub(crate) struct CertificateFetcher {
     /// Receiver for shutdown.
     rx_shutdown: ConditionalBroadcastReceiver,
     /// Receives certificates with missing parents from the `Synchronizer`.
-    rx_certificate_fetcher: Receiver<Certificate>,
+    rx_certificate_fetcher: Receiver<CertificateFetcherCommand>,
     /// Map of validator to target rounds that local store must catch up to.
     /// The targets are updated with each certificate missing parents sent from the core.
     /// Each fetch task may satisfy some / all / none of the targets.
@@ -98,7 +106,7 @@ impl CertificateFetcher {
         certificate_store: CertificateStore,
         rx_consensus_round_updates: watch::Receiver<ConsensusRound>,
         rx_shutdown: ConditionalBroadcastReceiver,
-        rx_certificate_fetcher: Receiver<Certificate>,
+        rx_certificate_fetcher: Receiver<CertificateFetcherCommand>,
         synchronizer: Arc<Synchronizer>,
         metrics: Arc<PrimaryMetrics>,
     ) -> JoinHandle<()> {
@@ -131,7 +139,17 @@ impl CertificateFetcher {
     async fn run(&mut self) {
         loop {
             tokio::select! {
-                Some(certificate) = self.rx_certificate_fetcher.recv() => {
+                Some(command) = self.rx_certificate_fetcher.recv() => {
+                    let certificate = match command {
+                        CertificateFetcherCommand::MissingAncestors(certificate) => certificate,
+                        CertificateFetcherCommand::Kick => {
+                            // Kick start a fetch task if there is no other task running.
+                            if self.fetch_certificates_task.is_empty() {
+                                self.kickstart();
+                            }
+                            continue;
+                        }
+                    };
                     let header = &certificate.header();
                     if header.epoch() != self.committee.epoch() {
                         continue;
@@ -155,9 +173,7 @@ impl CertificateFetcher {
                     }
 
                     // The header should have been verified as part of the certificate.
-                    match self
-                    .certificate_store
-                    .last_round_number(header.author()) {
+                    match self.certificate_store.last_round_number(header.author()) {
                         Ok(r) => {
                             if header.round() <= r.unwrap_or(0) {
                                 // Ignore fetch request. Possibly the certificate was processed

@@ -1,3 +1,4 @@
+use crate::certificate_fetcher::CertificateFetcherCommand;
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::{
@@ -783,7 +784,9 @@ async fn deliver_certificate_not_found_parents() {
     // and we should fail
     assert!(!parents_available);
 
-    let certificate = rx_certificate_fetcher.recv().await.unwrap();
+    let CertificateFetcherCommand::MissingAncestors(certificate)  = rx_certificate_fetcher.recv().await.unwrap() else {
+        panic!("Expected CertificateFetcherCommand::MissingAncestors");
+    };
 
     assert_eq!(certificate, test_certificate);
 }
