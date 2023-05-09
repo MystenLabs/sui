@@ -2659,7 +2659,7 @@ impl AuthorityState {
         cursor: Option<TransactionDigest>,
         limit: Option<usize>,
         reverse: bool,
-    ) -> Result<Vec<TransactionDigest>, anyhow::Error> {
+    ) -> SuiResult<Vec<TransactionDigest>> {
         if let Some(TransactionFilter::Checkpoint(sequence_number)) = filter {
             let checkpoint_contents =
                 self.get_checkpoint_contents_by_sequence_number(sequence_number)?;

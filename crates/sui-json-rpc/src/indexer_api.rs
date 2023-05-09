@@ -36,6 +36,7 @@ use crate::api::{
     cap_page_limit, validate_limit, IndexerApiServer, JsonRpcMetrics, ReadApiServer,
     QUERY_MAX_RESULT_LIMIT,
 };
+use crate::error::Error;
 use crate::with_tracing;
 use crate::SuiRpcModule;
 
@@ -157,9 +158,10 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
             let opts = query.options.unwrap_or_default();
 
             // Retrieve 1 extra item for next cursor
-            let mut digests =
-                self.state
-                    .get_transactions(query.filter, cursor, Some(limit + 1), descending)?;
+            let mut digests = self
+                .state
+                .get_transactions(query.filter, cursor, Some(limit + 1), descending)
+                .map_err(Error::from)?;
 
             // extract next cursor
             let has_next_page = digests.len() > limit;

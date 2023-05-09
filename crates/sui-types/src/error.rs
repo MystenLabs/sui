@@ -228,6 +228,9 @@ pub enum UserInputError {
 
     #[error("Genesis transaction not found")]
     GenesisTransactionNotFound,
+
+    #[error("Transaction {0} not found")]
+    TransactionCursorNotFound(u64),
 }
 
 #[derive(

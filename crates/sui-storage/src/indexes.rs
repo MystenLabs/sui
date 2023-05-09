@@ -621,12 +621,12 @@ impl IndexStore {
         cursor: Option<TransactionDigest>,
         limit: Option<usize>,
         reverse: bool,
-    ) -> Result<Vec<TransactionDigest>, anyhow::Error> {
+    ) -> SuiResult<Vec<TransactionDigest>> {
         // Lookup TransactionDigest sequence number,
         let cursor = if let Some(cursor) = cursor {
             Some(
                 self.get_transaction_seq(&cursor)?
-                    .ok_or_else(|| anyhow!("Transaction [{cursor:?}] not found."))?, // over here
+                    .ok_or_else(|| SuiError::TransactionNotFound { digest: cursor })?,
             )
         } else {
             None
@@ -653,7 +653,9 @@ impl IndexStore {
             }
             // NOTE: filter via checkpoint sequence number is implemented in
             // `get_transactions` of authority.rs.
-            Some(_) => Err(anyhow!("Unsupported filter: {:?}", filter)), // over here
+            Some(_) => Err(SuiError::UserInputError {
+                error: UserInputError::Unsupported(format!("{:?}", filter)),
+            }),
             None => {
                 let iter = self.tables.transaction_order.iter();
 
