@@ -1145,9 +1145,9 @@ impl AuthorityState {
         let mut gas_object_refs = transaction.gas().to_vec();
         let ((gas_status, input_objects), mock_gas) = if transaction.gas().is_empty() {
             let sender = transaction.sender();
-            // use a 100M sui coin
+            // use a 1B sui coin
             const MIST_TO_SUI: u64 = 1_000_000_000;
-            const DRY_RUN_SUI: u64 = 100_000_000;
+            const DRY_RUN_SUI: u64 = 1_000_000_000;
             let max_coin_value = MIST_TO_SUI * DRY_RUN_SUI;
             let gas_object_id = ObjectID::random();
             let gas_object = Object::new_move(
