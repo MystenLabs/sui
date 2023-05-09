@@ -39,7 +39,7 @@ pub fn search_index(
     table_name: String,
     start: String,
     termination: SearchRange<String>,
-) -> Result<BTreeMap<String, String>, anyhow::Error> {
+) -> Result<Vec<(String, String)>, anyhow::Error> {
     let start = start.as_str();
     let db_read_only_handle =
         IndexStoreTables::get_read_only_handle(db_path, None, None, MetricConf::default());
@@ -148,6 +148,7 @@ pub fn search_index(
 #[macro_export]
 macro_rules! get_db_entries {
     ($db_map:expr, $key_converter:expr, $start:expr, $term:expr) => {{
+        $db_map.try_catch_up_with_primary().unwrap();
         let key = $key_converter($start)?;
         let termination = match $term {
             SearchRange::ExclusiveLastKey(last_key) => {
@@ -163,7 +164,7 @@ fn get_entries_to_str<K, V>(
     db_map: &DBMap<K, V>,
     start: K,
     termination: SearchRange<K>,
-) -> Result<BTreeMap<String, String>, anyhow::Error>
+) -> Result<Vec<(String, String)>, anyhow::Error>
 where
     K: Serialize + serde::de::DeserializeOwned + Clone + Debug,
     V: serde::Serialize + DeserializeOwned + Clone + Debug,
