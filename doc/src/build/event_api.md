@@ -478,43 +478,52 @@ When you subscribe to the events described in the preceding sections, you can ap
 
 ## Event filters
 
-You can use `EventFilter` to filter the events included in your subscription to the event stream. `EventFilter` supports filtering on one attribute or a combination of attributes.
+All emitted events are of type `MoveEvent`, explicitly generated from Move Modules. You can use `EventFilter` to filter the events included in your subscription to the event stream.
+
+`EventFilter` supports filtering on one attribute or a combination of attributes.
 
 ### List of attributes that support filters
 
-| Filter | Description | Applicable to Event Type | JSON-RPC Parameter Example |
-| ------ | ----------- | ------------------------ | -------------------------- |
-| Package | Move package ID | MoveEvent<br/>Publish<br/>TransferObject<br/>DeleteObject<br/>NewObject | `{"Package":"<PACKAGE-ID>"}` |
-| Module | Move module name | MoveEvent<br/>TransferObject<br/>DeleteObject<br/>NewObject | `{"Module":"nft"}` |
-| MoveEventType  | Move event type defined in the move code | MoveEvent | `{"MoveEventType":"<PACKAGE-ID>::nft::MintNFTEvent"}`|
-| MoveEventField | Filter using the data fields in the move event object | MoveEvent | `{"MoveEventField":{ "path":"/name", "value":"NFT"}}` |
-| SenderAddress | Address that started the transaction | MoveEvent<br/>Publish<br/>TransferObject<br/>DeleteObject<br/>NewObject | `{"SenderAddress": "0x008e9c621f4fdb210b873aab59a1e5bf32ddb1d33ee85eb069b348c234465106"}` |
-| EventType | Type of event described in the [Events](#type-of-events) section | MoveEvent<br/>Publish<br/>TransferObject<br/>DeleteObject<br/>NewObject<br/>EpochChange<br/>Checkpoint | `{"EventType":"Publish"}` |
-| ObjectId | Object ID | TransferObject<br/>DeleteObject<br/>NewObject |    `{"ObjectId":"0x727b37454ab13d5c1dbb22e8741bff72b145d1e660f71b275c01f24e7860e5e5"}` |
+| Filter         | Description                                           | JSON-RPC Parameter Example                                                          |
+|----------------|-------------------------------------------------------|-------------------------------------------------------------------------------------|
+| Package        | Move package ID                                       | `{"Package":"<PACKAGE-ID>"}`                                                        |
+| MoveModule     | Move module name                                      | `{"MoveModule":{ "package":"<PACKAGE-ID>","module": "<MODULE-NAME>" }}`             |
+| MoveEventType  | Move event type defined in the move code              | `{"MoveEventType":"<PACKAGE-ID>::nft::MintNFTEvent"}`                               |
+| MoveEventField | Filter using the data fields in the move event object | `{"MoveEventField":{ "path":"/name", "value":"NFT"}}`                               |
+| Sender         | Address that started the transaction                  | `{"Sender": "0x123..."}`                                                            |
+| ObjectId       | Object ID                                             | `{"ObjectId":"0x727b37454ab13d5c1dbb22e8741bff72b145d1e660f71b275c01f24e7860e5e5"}` |
+| TimeRange      | Time Range in Unix Time Milliseconds                  | `{TimeRange: {start_time: <START-TIME>, end_time: <END-TIME> }}`                    |
+| Transaction    | Transaction Digest                                    | `{"Transaction": "<TRANSACTION-DIGEST>"}`                                           |
 
 ### Combining filters
 
 Sui provides a few operators for combining filters:
 
-| Operator | Description | JSON-RPC Parameter Example |
-|----------| ----------- | -------------------------- |
-| And | Combine two filters; behaves the same as boolean And operator | `{"And":[{"Package":"<PACKAGE-ID>"}, {"Module":"nft"}]}` |
-| Or | Combine two filters; behaves the same as boolean Or operator | `{"Or":[{"Package":"<PACKAGE-ID>"}, {"Package":"0x1"}]}` |
-| All | Combine a list of filters; returns true if all filters match the event | `{"All":[{"EventType":"MoveEvent"}, {"Package":"<PACKAGE-ID>"}, {"Module":"nft"}]}` |
-| Any | Combine a list of filters; returns true if any filter matches the event | `{"Any":[{"EventType":"MoveEvent"}, {"EventType":"TransferObject"}, {"EventType":"DeleteObject"}]}` |
+| Operator | Description | JSON-RPC Parameter Example                                                                          |
+|----------| ----------- |-----------------------------------------------------------------------------------------------------|
+| And | Combine two filters; behaves the same as boolean And operator | `{"And":[{"Package":"<PACKAGE-ID>"}, {"Sender":"0x123.."}]}`                                        |
+| Or | Combine two filters; behaves the same as boolean Or operator | `{"Or":[{"Package":"0x123.."}, {"Package":"0x456.."}]}`                                             |
+| All | Combine a list of filters; returns true if all filters match the event | `{"All":[{"Sender":"<PACKAGE-ID>"}, {"Package":"<PACKAGE-ID>"}, {"TimeRange": {"start_time": "<START-TIME>", "end_time": "<END-TIME>" }}]}]}`                 |
+| Any | Combine a list of filters; returns true if any filter matches the event | `{"Any":[{"Sender":"<PACKAGE-ID>"}, {"Package":"<PACKAGE-ID>"}, {"TimeRange": {"start_time": "<START-TIME>", "end_time": "<END-TIME>" }}]}]}` |
 
 ### Example using a combined filter
 
 The following example demonstrates how to subscribe to Move events (`MoveEvent`) that a `<PACKAGE-ID>::nft` package emits:
 
 ```shell
->> {"jsonrpc":"2.0", "id": 1, "method": "sui_subscribeEvent", "params": [{"All":[{"EventType":"MoveEvent"}, {"Package":"<PACKAGE-MODULE-ID>"}, {"Module":"nft"}]}]}
+>> {"jsonrpc":"2.0", "id": 1, "method": "suix_subscribeEvent", "params": [{
+          "Any":[
+                {"Sender":"0xb123..."}, 
+                {"Package":"0x456..."}
+            ]
+      }]
+    }
 << {"jsonrpc":"2.0","result":3121662727959200,"id":1}
 ```
 
 To unsubscribe from this stream, use:
 
 ```shell
->> {"jsonrpc":"2.0", "id": 1, "method": "sui_unsubscribeEvent", "params": [3121662727959200]}
+>> {"jsonrpc":"2.0", "id": 1, "method": "suix_unsubscribeEvent", "params": [3121662727959200]}
 << {"jsonrpc":"2.0","result":true,"id":1}
 ```
