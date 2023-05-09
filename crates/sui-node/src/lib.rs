@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::HashMap;
-use std::fmt;
+use std::{fmt, mem};
 use std::path::PathBuf;
 #[cfg(msim)]
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -47,7 +47,7 @@ use sui_core::authority::epoch_start_configuration::EpochStartConfigTrait;
 use sui_core::authority::epoch_start_configuration::EpochStartConfiguration;
 use sui_core::authority_aggregator::AuthorityAggregator;
 use sui_core::authority_server::ValidatorService;
-use sui_core::checkpoints::checkpoint_executor;
+use sui_core::checkpoints::{checkpoint_executor, CheckpointWatermark};
 use sui_core::checkpoints::{
     CheckpointMetrics, CheckpointService, CheckpointStore, SendCheckpointToStateSync,
     SubmitCheckpointToConsensus,
@@ -97,7 +97,7 @@ use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemS
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
 use sui_types::sui_system_state::SuiSystemStateTrait;
 use typed_store::rocks::default_db_options;
-use typed_store::DBMetrics;
+use typed_store::{DBMetrics, Map};
 
 use crate::metrics::GrpcMetrics;
 
@@ -205,6 +205,12 @@ impl SuiNode {
 
         let secret = Arc::pin(config.protocol_key_pair().copy());
         let genesis_committee = genesis.committee()?;
+
+        if let Some(new_epoch) = Self::perform_snapshot_recovery(config, &prometheus_registry).await? {
+            info!("Successfully performed snapshot recovery to epoch: {new_epoch}");
+        }
+
+
         let committee_store = Arc::new(CommitteeStore::new(
             config.db_path().join("epochs"),
             &genesis_committee,
@@ -809,39 +815,39 @@ impl SuiNode {
         prometheus_registry: &Registry,
     ) -> Result<Option<EpochId>> {
         if !config.state_snapshot_recovery_config.enable_snapshot_recovery {
+            // Let user explicitly opt out of state snapshot based recovery
             info!("Snapshot recovery is disabled");
             return Ok(None);
+        }    
+
+        // If user did not pass in a specific epoch to recover from, return the highest available epoch
+        // and the last checkpoint sequence of that epoch for which snapshot is available in remote snapshot store
+        let (epoch_num, end_of_epoch_checkpoint_seq_num): (u64, u64) = remote_snapshot_store.read(config.epoch_to_recover())?;
+        let current_epoch: u64 = read_curr_epoch_from_local_db()?;
+
+        if current_epoch >= epoch_num {
+            // TODO: Provide a way for user to wipe db i.e. store, etc but not checkpoints store
+            return Err("Cannot recover. Wipe db and restart");
         }
-        let checkpoint_store_read_only = CheckpointStore::get_read_only_handle(config.db_path().join("checkpoints"), None, None, MetricConf::default());
-        let highest_executed_checkpoint = if let Some(highest_executed) =
-            checkpoint_store_read_only.watermarks.get(&CheckpointWatermark::HighestExecuted)? {
-            highest_executed.0
-        } else {
-            0
-        };
-        mem::drop(checkpoint_store_read_only);
-        if highest_executed_checkpoint > 0 {
-            // We are only going to be invoking snapshot recovery for nodes starting with no
-            // previous state for now. Later, we can decide if snapshot recovery is a better viable
-            // option compared to state sync based on how far behind the node is from its peers
-            info!("Not doing snapshot recovery as highest executed checkpoint sequence is > 0");
-            return Ok(None);
-        }
-        let snapshot_recovery = StateSnapshotRecoveryLoop::new(
-            config.state_snapshot_recovery_config.clone(), highest_executed_checkpoint, &prometheus_registry);
-        if let Err(e) = snapshot_recovery {
-            error!("Failed to initialize snapshot recovery with error: {:?}", e);
-            return Ok(None);
-        }
-        // unwrap is safe because of above check
-        let snapshot_recovery = snapshot_recovery.unwrap();
-        let genesis = &config.genesis()?;
+        // TODO: We want to start the checkpoint summary download through state sync now. But
+        // we don't want to start from an empty checkpoints db and instead leverage what checkpoints
+        // already exist locally (so we don't have to download summaries from genesis). At this point,
+        // we need to hard link the checkpoints db to a temporary local path
         let tmp_path = TempDir::new()?.path().to_owned();
+        hard_link_dir(path_to_checkpoints_db, tmp_path.join("checkpoints"))?;
+        let checkpoint_store = CheckpointStore::new(&tmp_path.join("checkpoints"));
+        // TODO: Set the highest executed and highest verified watermarks in `checkpoint_store` to `end_of_epoch_checkpoint_seq_num`
+        // if they are behind. We don't want state sync to download checkpoint content or execute these checkpoints either but only
+        // interested in checkpoint summaries
+
+        let genesis = &config.genesis()?;
+        // Create empty committee store
         let committee_store = Arc::new(CommitteeStore::new(
             tmp_path.join("epochs"),
             &genesis.committee()?,
             None,
         ));
+        // Create empty authority store
         let authority_store = Arc::new(AuthorityStore::open(
             &tmp_path.join("store"),
             None,
@@ -850,6 +856,7 @@ impl SuiNode {
             &config.authority_store_pruning_config,
             checkpoint_receiver,
         ).await?);
+        // Create empty epochs store
         let mut cur_epoch = authority_store.get_recovery_epoch_at_restart()?;
         let mut committee = committee_store
             .get_committee(&cur_epoch)?
@@ -862,12 +869,6 @@ impl SuiNode {
             EpochMetrics::new(&registry_service.default_registry()),
             None,
         );
-        let checkpoint_store = CheckpointStore::new(&tmp_path.join("checkpoints"));
-        checkpoint_store.insert_genesis_checkpoint(
-            genesis.checkpoint(),
-            genesis.checkpoint_contents().clone(),
-            &epoch_store,
-        );
         let state_sync_store = RocksDbStore::new(
             authority_store.clone(),
             committee_store,
@@ -875,23 +876,53 @@ impl SuiNode {
         );
         let (p2p_network, discovery_handle, state_sync_handle) =
             Self::create_p2p_network(config, state_sync_store, &prometheus_registry)?;
-        if let Err(err) = snapshot_recovery.start(&authority_store.perpetual_tables, &checkpoint_store).await {
-            // Returning ok here will let us fall back to state sync based recovery
-            error!("Failed snapshot recovery with error: {:?}", err);
-            return Ok(None);
+
+         // Start the recovery loop which will keep checking the highest synced watermark until it is same as `end_of_epoch_checkpoint_seq_num`
+         // in a non blocking way
+         let (sender, summary_notifier) = oneshot::channel();
+         StateSnapshotRecoveryLoop::new(checkpoint_store, end_of_epoch_checkpoint_seq_num, sender).start()?;
+        
+        // Download live object set references from state snapshot store first
+        let live_object_set_references: impl Iterator<Item = ObjectRef> = state_snapshot.download_references(epoch_num)?;
+        
+        // Start building state accumulator from object references
+        let (sender, accumulator_notifier) = oneshot::channel();
+        StateAccumulator::build(live_object_set_references, sender).start()?;
+
+        // Start downloading object content in the background. It will update the data in perpetual db
+        // and committee
+        let (sender, download_notifier) = oneshot::channel();
+        StateSnapshotDownloader(epoch_num, authority_store.clone(), committee.clone(), sender).start()?;
+
+        loop {
+            // tokio::selct is likely not the right way to do this as this cancels other futures but we
+            // do want to abort download if root hash doesn't match
+            tokio::select! {
+                _ => summary_notifier => {
+                    // TODO: Save the root hash in checkpoint until accumular is done
+                    // Compare when both are done and fail or succeed
+                },
+                _ => accumulator_notifier => {
+                    // TODO: Save the root hash computed from references until summary download is done
+                    // Compare when both are done and fail or succeed
+                },
+                _ => download_notifier => {
+                    // Wait until download is done
+
+                }
+            }
         }
 
+        // Read the epoch from authority store again and ensure it is the epoch we restored from
         let new_epoch = authority_store.get_recovery_epoch_at_restart()?;
 
+        // TODO: Read the committee store and ensure there is committee information for the `new_epoch`
         mem::drop(authority_store);
         mem::drop(state_sync_handle);
         mem::drop(discovery_handle);
         mem::drop(p2p_network);
 
-        // Persist the temporary directory to disk, getting the path where it is.
-        let tmp_path = tmp_dir.into_path();
-        fs::rename(config.db_path(), config.db_path().with_extension("tmp"))?;
-        fs::rename(tmp_path, config.db_path())?;
+        // TODO: Wipe the db and replace it with hardlinked tmp db's
         Ok(Some(new_epoch))
     }
 
