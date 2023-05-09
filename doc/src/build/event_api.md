@@ -6,17 +6,7 @@ Sui [Full nodes](fullnode.md) support publish / subscribe using [JSON-RPC](json-
 
 The client provides an [event filter](#event-filters) to limit the scope of events. Sui returns a notification with the event data and subscription ID for each event that matches the filter.
 
-# Event types
-
-A Sui node emits the following types of events:
- * [Move event](#move-event)
- * [Publish event](#publish-event)
- * [Transfer object event](#transfer-object-event)
- * [Delete object event](#delete-object-event)
- * [New object event](#new-object-event)
- * [Epoch change event](#epoch-change-event)
-
-## Move event
+## Move events
 
 Move calls emit Move events. You can [define custom events](https://examples.sui.io/basics/events.html) in Move contracts.
 
