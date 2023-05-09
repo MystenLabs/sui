@@ -203,8 +203,8 @@ move-prover-boogie-backend = { path = "external-crates/move/move-prover/boogie-b
 move-stackless-bytecode = { path = "external-crates/move/move-prover/bytecode" }
 move-symbol-pool = { path = "external-crates/move/move-symbol-pool" }
 
-fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "27ee552d5c1feb02b6b64b4f77be3c84e82a0469" }
-fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "27ee552d5c1feb02b6b64b4f77be3c84e82a0469", package = "fastcrypto-zkp" }
+fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "c96c7422cf6a120d5bad921523bc6587c8160988" }
+fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "c96c7422cf6a120d5bad921523bc6587c8160988", package = "fastcrypto-zkp" }
 
 # anemo dependencies
 anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "77f225832e361d068318073a6e06ec0310a16891" }
