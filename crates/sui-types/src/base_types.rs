@@ -556,13 +556,13 @@ impl From<&PublicKey> for SuiAddress {
     }
 }
 
-impl From<MultiSigPublicKey> for SuiAddress {
+impl From<&MultiSigPublicKey> for SuiAddress {
     /// Derive a SuiAddress from [struct MultiSigPublicKey]. A MultiSig address
     /// is defined as the 32-byte Blake2b hash of serializing the flag, the
-    /// threshold, concatenation of each participating flag, public keys and
+    /// threshold, concatenation of all n flag, public keys and
     /// its weight. `flag_MultiSig || threshold || flag_1 || pk_1 || weight_1
     /// || ... || flag_n || pk_n || weight_n`.
-    fn from(multisig_pk: MultiSigPublicKey) -> Self {
+    fn from(multisig_pk: &MultiSigPublicKey) -> Self {
         let mut hasher = DefaultHash::default();
         hasher.update([SignatureScheme::MultiSig.flag()]);
         hasher.update(multisig_pk.threshold().to_le_bytes());
@@ -590,7 +590,7 @@ impl TryFrom<&GenericSignature> for SuiAddress {
                 })?;
                 SuiAddress::from(&pub_key)
             }
-            GenericSignature::MultiSig(ms) => ms.multisig_pk.clone().into(),
+            GenericSignature::MultiSig(ms) => ms.get_pk().into(),
         })
     }
 }
