@@ -15,6 +15,9 @@ export const KIOSK_MODULE = '0x2::kiosk';
 /** The Kiosk type. */
 export const KIOSK_TYPE = `${KIOSK_MODULE}::Kiosk`;
 
+/** The Kiosk Owner Cap Type */
+export const KIOSK_OWNER_CAP = `${KIOSK_MODULE}::KioskOwnerCap`;
+
 /**
  * Create a new shared Kiosk and returns the [kiosk, kioskOwnerCap] tuple.
  */
