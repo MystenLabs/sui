@@ -79,7 +79,7 @@ pub enum KeyToolCommand {
     },
     /// Creates a signature by leveraging AWS KMS. Pass in a key-id to leverage Amazon
     /// KMS to sign a message and the base64 pubkey.
-    /// Generate PubKey from pem using https://github.com/MystenLabs/base64pemkey
+    /// Generate PubKey from pem using MystenLabs/base64pemkey
     /// Any signature commits to a [struct IntentMessage] consisting of the Base64 encoded
     /// of the BCS serialized transaction bytes itself (the result of
     /// [transaction builder API](https://docs.sui.io/sui-jsonrpc) and its intent. If
