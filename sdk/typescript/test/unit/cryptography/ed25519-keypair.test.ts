@@ -98,7 +98,7 @@ describe('ed25519-keypair', () => {
     expect(isValid).toBeTruthy();
   });
 
-  it('invalid mnemonics to derive ed25519 keypair', () => {
+  it('invalid mnemonic to derive ed25519 keypair', () => {
     expect(() => {
       Ed25519Keypair.deriveKeypair('aaa');
     }).toThrow('Invalid mnemonic');
