@@ -1073,7 +1073,7 @@ impl RpcExampleProvider {
             )],
         )
     }
-    
+
     fn suix_get_validators_apy(&mut self) -> Examples {
         let result = vec![
             ValidatorApy {
