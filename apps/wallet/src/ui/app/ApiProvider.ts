@@ -5,7 +5,6 @@ import { SentryRpcClient } from '@mysten/core';
 import { Connection, JsonRpcProvider } from '@mysten/sui.js';
 
 import { BackgroundServiceSigner } from './background-client/BackgroundServiceSigner';
-import { queryClient } from './helpers/queryClient';
 import { growthbook } from '_app/experimentation/feature-gating';
 import {
     AccountType,
@@ -109,10 +108,6 @@ export default class ApiProvider {
         });
 
         this._signerByAddress.clear();
-
-        // We also clear the query client whenever set set a new API provider:
-        queryClient.resetQueries();
-        queryClient.clear();
     }
 
     public get instance() {

@@ -61,16 +61,16 @@ function AppWrapper() {
         <GrowthBookProvider growthbook={growthbook}>
             <HashRouter>
                 <SuiLedgerClientProvider>
-                    {/*
-                     * NOTE: We set a key here to force the entire react tree to be re-created when the network changes so that
-                     * the RPC client instance (api.instance.fullNode) is updated correctly. In the future, we should look into
-                     * making the API provider instance a reactive value and moving it out of the redux-thunk middleware
-                     */}
-                    <Fragment key={network}>
-                        <PersistQueryClientProvider
-                            client={queryClient}
-                            persistOptions={{ persister }}
-                        >
+                    <PersistQueryClientProvider
+                        client={queryClient}
+                        persistOptions={{ persister }}
+                    >
+                        {/*
+                         * NOTE: We set a key here to force the entire react tree to be re-created when the network changes so that
+                         * the RPC client instance (api.instance.fullNode) is updated correctly. In the future, we should look into
+                         * making the API provider instance a reactive value and moving it out of the redux-thunk middleware
+                         */}
+                        <Fragment key={network}>
                             <RpcClientContext.Provider
                                 value={api.instance.fullNode}
                             >
@@ -78,8 +78,8 @@ function AppWrapper() {
                                     <App />
                                 </ErrorBoundary>
                             </RpcClientContext.Provider>
-                        </PersistQueryClientProvider>
-                    </Fragment>
+                        </Fragment>
+                    </PersistQueryClientProvider>
                 </SuiLedgerClientProvider>
             </HashRouter>
         </GrowthBookProvider>
