@@ -88,8 +88,8 @@ pub async fn execute_replay_command(
             let effects = node_dump_state.computed_effects.digest();
             if effects != node_dump_state.expected_effects_digest {
                 error!(
-                    "Effects digest mismatch: expected: {:?}, got: {:?}",
-                    node_dump_state.expected_effects_digest, effects,
+                    "Effects digest mismatch for {}: expected: {:?}, got: {:?}",
+                    node_dump_state.tx_digest, node_dump_state.expected_effects_digest, effects,
                 );
                 anyhow::bail!("Effects mismatch");
             }
