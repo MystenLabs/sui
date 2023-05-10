@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::{BTreeMap, HashMap};
+use std::panic;
 use std::sync::Arc;
 
 use anyhow::anyhow;
@@ -757,7 +758,11 @@ impl ReadApiServer for ReadApi {
                     .await
             })
             .await
-            .map_err(Error::from)??)
+            .map_err(|join_error| match join_error.try_into_panic() {
+                Ok(p) => panic::resume_unwind(p),
+                Err(e) => Error::from(e),
+            })?
+            .map_err(Error::from)?)
         })
     }
 
