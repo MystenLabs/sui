@@ -51,7 +51,6 @@ jobs:
     runs-on: [ubuntu-latest]
     steps:
       - uses: actions/checkout@v3
-      - uses: actions-rs/toolchain@v1
       - uses: bmwill/rust-cache@v1 # Fork of 'Swatinem/rust-cache' which allows caching additional paths
       - name: Install cargo-hakari, and cache the binary
         uses: baptiste0928/cargo-install@48c92f3d491efa23daace9891498a14c5aaa1afd
@@ -80,7 +79,6 @@ jobs:
       fail-fast: false
     steps:
       - uses: actions/checkout@v3
-      - uses: actions-rs/toolchain@v1
       - uses: taiki-e/install-action@nextest
       - name: Set Swap Space
         uses: pierotofy/set-swap-space@master
@@ -122,7 +120,6 @@ jobs:
       fail-fast: false
     steps:
       - uses: actions/checkout@v3
-      - uses: actions-rs/toolchain@v1
       - uses: taiki-e/install-action@nextest
       - uses: arduino/setup-protoc@v1
         # this avoids rate-limiting
@@ -151,7 +148,6 @@ jobs:
       MSIM_WATCHDOG_TIMEOUT_MS: 60000
     steps:
       - uses: actions/checkout@v3
-      - uses: actions-rs/toolchain@v1
       - uses: taiki-e/install-action@nextest
       - name: Set Swap Space
         uses: pierotofy/set-swap-space@master
@@ -171,7 +167,6 @@ jobs:
     runs-on: [ubuntu-ghcloud]
     steps:
       - uses: actions/checkout@v3
-      - uses: actions-rs/toolchain@v1
 
       - name: Setup environment
         run: .github/scripts/rosetta/setup.sh
@@ -228,10 +223,7 @@ jobs:
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
       - uses: actions/checkout@v3
-      - uses: actions-rs/toolchain@v1
-        with:
-          components: clippy
-
+      - run: rustup component add clippy
       # TODO(bradh): debug and re-enable this; the caching is breaking the clippy build
       # Enable caching of the 'librocksdb-sys' crate by additionally caching the
       # 'librocksdb-sys' src directory which is managed by cargo
@@ -249,9 +241,7 @@ jobs:
     runs-on: [ubuntu-latest]
     steps:
       - uses: actions/checkout@v3
-      - uses: actions-rs/toolchain@v1
-        with:
-          components: rustfmt
+      - run: rustup component add rustfmt
       - name: rustfmt
         uses: actions-rs/cargo@v1
         with:
@@ -276,7 +266,6 @@ jobs:
 
     steps:
       - uses: actions/checkout@v3
-      - uses: actions-rs/toolchain@v1
 
       - name: Prover Setup
         run: |
@@ -319,7 +308,6 @@ jobs:
   #        - 5432:5432
   #  steps:
   #    - uses: actions/checkout@v3
-  #    - uses: actions-rs/toolchain@v1
   #    - name: integration-test-with-postgres
   #      #We only have 1 instance of postgres DB, can only run test in single thread
   #      run: |
