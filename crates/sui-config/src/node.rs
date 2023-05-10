@@ -739,6 +739,8 @@ impl AuthorityKeyPairWithPath {
     }
 }
 
+/// Configurations which determine how we dump state debug info.
+/// Debug info is dumped when a node forks.
 #[derive(Clone, Debug, Deserialize, Serialize, Default)]
 #[serde(rename_all = "kebab-case")]
 pub struct StateDebugDumpConfig {

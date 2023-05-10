@@ -870,82 +870,37 @@ impl AuthorityState {
             .check_owned_object_locks_exist(owned_object_refs)
     }
 
-    /// Make sure not to leak any private info here
-    pub(crate) async fn state_dump(
+    /// This function captures the required state to debug a forked transaction.
+    /// The dump is written to a file in dir `path`, with name prefixed by the transaction digest.
+    /// NOTE: Since this info escapes the validator context,
+    /// make sure not to leak any private info here
+    pub(crate) fn debug_dump_transaction_state(
         &self,
         tx_digest: &TransactionDigest,
         effects: &TransactionEffects,
         expected_effects_digest: TransactionEffectsDigest,
         inner_temporary_store: &InnerTemporaryStore,
         certificate: &VerifiedExecutableTransaction,
-        path: &Path,
+        debug_dump_config: &StateDebugDumpConfig,
     ) -> SuiResult<PathBuf> {
-        // Epoch info
+        let dump_dir = debug_dump_config
+            .dump_file_directory
+            .as_ref()
+            .cloned()
+            .unwrap_or(std::env::temp_dir());
         let epoch_store = self.load_epoch_store_one_call_per_task();
-        let executed_epoch = epoch_store.epoch();
-        let reference_gas_price = epoch_store.reference_gas_price();
-        let epoch_start_config = epoch_store.epoch_start_config();
-        let protocol_version = epoch_store.protocol_version().as_u64();
-        let epoch_start_timestamp_ms = epoch_start_config.epoch_data().epoch_start_timestamp();
 
-        // Record all system packages at this version
-        let mut relevant_system_packages = Vec::new();
-        for sys_package_id in BuiltInFramework::all_package_ids() {
-            if let Some(w) = self.get_object(&sys_package_id).await? {
-                relevant_system_packages.push(w)
-            }
-        }
-
-        // Record all the shared objects
-        let mut shared_objects = Vec::new();
-        for (id, ver, _) in effects.shared_objects() {
-            if let Some(w) = self.database.get_object_by_key(id, *ver)? {
-                shared_objects.push(w)
-            }
-        }
-
-        // Record all loaded child objects
-        let mut loaded_child_objects = Vec::new();
-        for (id, ver) in &inner_temporary_store.loaded_child_objects {
-            if let Some(w) = self.database.get_object_by_key(id, *ver)? {
-                loaded_child_objects.push(w)
-            }
-        }
-
-        // Record all modified objects
-        let mut modified_at_versions = Vec::new();
-        for (id, ver) in effects.modified_at_versions() {
-            if let Some(w) = self.database.get_object_by_key(id, *ver)? {
-                modified_at_versions.push(w)
-            }
-        }
-
-        // Objects and packages read at runtime
-        let mut runtime_reads = Vec::new();
-        for obj in inner_temporary_store.runtime_read_objects.values() {
-            runtime_reads.push(obj.clone());
-        }
-
-        // All other input objects should already be in `inner_temporary_store.objects`
-        let file_path = NodeStateDump {
-            tx_digest: *tx_digest,
-            executed_epoch,
-            reference_gas_price,
-            epoch_start_timestamp_ms,
-            protocol_version,
-            relevant_system_packages,
-            shared_objects,
-            loaded_child_objects,
-            modified_at_versions,
-            runtime_reads,
-            sender_signed_data: certificate.clone().into_message(),
-            input_objects: inner_temporary_store.objects.values().cloned().collect(),
-            computed_effects: effects.clone(),
+        NodeStateDump::new(
+            tx_digest,
+            effects,
             expected_effects_digest,
-        }
-        .write_to_file(path)
-        .map_err(|e| SuiError::FileIOError(e.to_string()))?;
-        Ok(file_path)
+            &self.database,
+            &epoch_store,
+            inner_temporary_store,
+            certificate,
+        )?
+        .write_to_file(&dump_dir)
+        .map_err(|e| SuiError::FileIOError(e.to_string()))
     }
 
     #[instrument(level = "trace", skip_all)]
@@ -1007,24 +962,15 @@ impl AuthorityState {
 
         if let Some(expected_effects_digest) = expected_effects_digest {
             if effects.digest() != expected_effects_digest {
-                // We dont want to mask the error here, so we log it and continue.
-                let dump_dir = self
-                    .debug_dump_config
-                    .dump_file_directory
-                    .as_ref()
-                    .cloned()
-                    .unwrap_or(std::env::temp_dir());
-                match self
-                    .state_dump(
-                        &digest,
-                        &effects,
-                        expected_effects_digest,
-                        &inner_temporary_store,
-                        certificate,
-                        &dump_dir,
-                    )
-                    .await
-                {
+                // We dont want to mask the original error, so we log it and continue.
+                match self.debug_dump_transaction_state(
+                    &digest,
+                    &effects,
+                    expected_effects_digest,
+                    &inner_temporary_store,
+                    certificate,
+                    &self.debug_dump_config,
+                ) {
                     Ok(out_path) => {
                         info!(
                             "Dumped node state for transaction {} to {}",
@@ -1033,10 +979,7 @@ impl AuthorityState {
                         );
                     }
                     Err(e) => {
-                        error!(
-                            "Error dumping state for {}: {e}",
-                            effects.transaction_digest()
-                        );
+                        error!("Error dumping state for transaction {}: {e}", digest);
                     }
                 }
                 error!(
@@ -4079,6 +4022,82 @@ pub struct NodeStateDump {
 }
 
 impl NodeStateDump {
+    pub fn new(
+        tx_digest: &TransactionDigest,
+        effects: &TransactionEffects,
+        expected_effects_digest: TransactionEffectsDigest,
+        authority_store: &Arc<AuthorityStore>,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+        inner_temporary_store: &InnerTemporaryStore,
+        certificate: &VerifiedExecutableTransaction,
+    ) -> SuiResult<Self> {
+        // Epoch info
+        let executed_epoch = epoch_store.epoch();
+        let reference_gas_price = epoch_store.reference_gas_price();
+        let epoch_start_config = epoch_store.epoch_start_config();
+        let protocol_version = epoch_store.protocol_version().as_u64();
+        let epoch_start_timestamp_ms = epoch_start_config.epoch_data().epoch_start_timestamp();
+
+        // Record all system packages at this version
+        let mut relevant_system_packages = Vec::new();
+        for sys_package_id in BuiltInFramework::all_package_ids() {
+            if let Some(w) = authority_store.get_object(&sys_package_id)? {
+                relevant_system_packages.push(w)
+            }
+        }
+
+        // Record all the shared objects
+        let mut shared_objects = Vec::new();
+        for (id, ver, _) in effects.shared_objects() {
+            if let Some(w) = authority_store.get_object_by_key(id, *ver)? {
+                shared_objects.push(w)
+            }
+        }
+
+        // Record all loaded child objects
+        // Child objects which are read but not mutated are not tracked anywhere else
+        let mut loaded_child_objects = Vec::new();
+        for (id, ver) in &inner_temporary_store.loaded_child_objects {
+            if let Some(w) = authority_store.get_object_by_key(id, *ver)? {
+                loaded_child_objects.push(w)
+            }
+        }
+
+        // Record all modified objects
+        let mut modified_at_versions = Vec::new();
+        for (id, ver) in effects.modified_at_versions() {
+            if let Some(w) = authority_store.get_object_by_key(id, *ver)? {
+                modified_at_versions.push(w)
+            }
+        }
+
+        // Objects and packages read at runtime
+        // Some packages may be fetched at runtime and wont show up in input objects
+        let mut runtime_reads = Vec::new();
+        for obj in inner_temporary_store.runtime_read_objects.values() {
+            runtime_reads.push(obj.clone());
+        }
+
+        // All other input objects should already be in `inner_temporary_store.objects`
+
+        Ok(Self {
+            tx_digest: *tx_digest,
+            executed_epoch,
+            reference_gas_price,
+            epoch_start_timestamp_ms,
+            protocol_version,
+            relevant_system_packages,
+            shared_objects,
+            loaded_child_objects,
+            modified_at_versions,
+            runtime_reads,
+            sender_signed_data: certificate.clone().into_message(),
+            input_objects: inner_temporary_store.objects.values().cloned().collect(),
+            computed_effects: effects.clone(),
+            expected_effects_digest,
+        })
+    }
+
     pub fn all_objects(&self) -> Vec<Object> {
         let mut objects = Vec::new();
         objects.extend(self.relevant_system_packages.clone());
