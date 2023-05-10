@@ -33,6 +33,7 @@ use sui_types::SUI_SYSTEM_ADDRESS;
 
 use crate::errors::IndexerError;
 use crate::metrics::IndexerMetrics;
+use crate::models::addresses::{dedup_from_addresses, dedup_from_and_to_addresses};
 use crate::models::checkpoints::Checkpoint;
 use crate::models::epoch::{DBEpochInfo, SystemEpochInfoEvent};
 use crate::models::objects::{DeletedObject, Object, ObjectStatus};
@@ -430,7 +431,8 @@ where
                     transactions,
                     events,
                     object_changes: _,
-                    addresses: _,
+                    addresses,
+                    active_addresses,
                     packages: _,
                     input_objects: _,
                     move_calls: _,
@@ -455,23 +457,27 @@ where
                     }
                 });
 
-                // let addresses_handler = self.clone();
-                // spawn_monitored_task!(async move {
-                //     let mut address_commit_res =
-                //         addresses_handler.state.persist_addresses(&addresses).await;
-                //     while let Err(e) = address_commit_res {
-                //         warn!(
-                //             "Indexer address commit failed with error: {:?}, retrying after {:?} milli-secs...",
-                //             e, DB_COMMIT_RETRY_INTERVAL_IN_MILLIS
-                //         );
-                //         tokio::time::sleep(std::time::Duration::from_millis(
-                //             DB_COMMIT_RETRY_INTERVAL_IN_MILLIS,
-                //         ))
-                //         .await;
-                //         address_commit_res =
-                //             addresses_handler.state.persist_addresses(&addresses).await;
-                //     }
-                // });
+                let addresses_handler = self.clone();
+                spawn_monitored_task!(async move {
+                    let mut address_commit_res = addresses_handler
+                        .state
+                        .persist_addresses(&addresses, &active_addresses)
+                        .await;
+                    while let Err(e) = address_commit_res {
+                        warn!(
+                            "Indexer address commit failed with error: {:?}, retrying after {:?} milli-secs...",
+                            e, DB_COMMIT_RETRY_INTERVAL_IN_MILLIS
+                        );
+                        tokio::time::sleep(std::time::Duration::from_millis(
+                            DB_COMMIT_RETRY_INTERVAL_IN_MILLIS,
+                        ))
+                        .await;
+                        address_commit_res = addresses_handler
+                            .state
+                            .persist_addresses(&addresses, &active_addresses)
+                            .await;
+                    }
+                });
 
                 // MUSTFIX(gegaowp): temp. turn off tx index table commit to reduce short-term storage consumption.
                 // this include recipients, input_objects and move_calls.
@@ -558,6 +564,7 @@ where
                     events: _,
                     object_changes: tx_object_changes,
                     addresses: _,
+                    active_addresses: _,
                     packages,
                     input_objects: _,
                     move_calls,
@@ -863,13 +870,21 @@ where
             .flat_map(|tx| tx.get_recipients(checkpoint.epoch, checkpoint.sequence_number))
             .collect();
 
-        // // Index addresses
-        // let addresses = transactions
-        //     .iter()
-        //     .flat_map(|tx| {
-        //         tx.get_addresses(checkpoint.epoch, checkpoint.sequence_number)
-        //     })
-        //     .collect();
+        // Index addresses
+        // NOTE: dedup is necessary because there are multiple transactions in a checkpoint,
+        // otherwise error of `ON CONFLICT DO UPDATE command cannot affect row a second time` will be thrown.
+        let from_and_to_address_data = transactions
+            .iter()
+            .flat_map(|tx| {
+                tx.get_from_and_to_addresses(checkpoint.epoch, checkpoint.sequence_number)
+            })
+            .collect();
+        let from_address_data = transactions
+            .iter()
+            .map(|tx| tx.get_from_address())
+            .collect();
+        let addresses = dedup_from_and_to_addresses(from_and_to_address_data);
+        let active_addresses = dedup_from_addresses(from_address_data);
 
         // NOTE: Index epoch when object checkpoint index has reached the same checkpoint,
         // because epoch info is based on the latest system state object by the current checkpoint.
@@ -1012,7 +1027,8 @@ where
                 transactions: db_transactions,
                 events,
                 object_changes: objects_changes,
-                addresses: vec![],
+                addresses,
+                active_addresses,
                 packages,
                 input_objects,
                 move_calls,

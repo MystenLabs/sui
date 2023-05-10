@@ -89,6 +89,7 @@ fn create_checkpoint(sequence_number: i64) -> TemporaryCheckpointStore {
             deleted_objects: vec![],
         }],
         addresses: vec![],
+        active_addresses: vec![],
         packages: vec![],
         input_objects: vec![],
         move_calls: vec![],
