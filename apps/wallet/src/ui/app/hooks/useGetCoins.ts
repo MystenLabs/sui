@@ -11,7 +11,7 @@ const MAX_COINS_PER_REQUEST = 100;
 export function useGetCoins(coinType: string, address?: SuiAddress | null) {
     const rpc = useRpcClient();
     return useQuery(
-        ['get-coins', address, coinType],
+        ['get-coins', address, coinType, rpc.connection.fullnode],
         async () => {
             let cursor: string | null = null;
             const allData: CoinStruct[] = [];

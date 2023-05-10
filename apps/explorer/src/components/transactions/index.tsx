@@ -33,7 +33,11 @@ export function Transactions({
     const pagination = usePaginationStack();
 
     const transactionQuery = useQuery(
-        ['transactions', { limit, cursor: pagination.cursor }],
+        [
+            'transactions',
+            { limit, cursor: pagination.cursor },
+            rpc.connection.fullnode,
+        ],
         async () =>
             rpc.queryTransactionBlocks({
                 order: 'descending',

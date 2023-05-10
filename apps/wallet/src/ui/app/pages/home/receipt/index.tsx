@@ -31,7 +31,7 @@ function ReceiptPage() {
     const rpc = useRpcClient();
 
     const { data, isLoading, isError } = useQuery(
-        ['transactions-by-id', transactionId],
+        ['transactions-by-id', transactionId, rpc.connection.fullnode],
         async () => {
             return rpc.getTransactionBlock({
                 digest: transactionId!,

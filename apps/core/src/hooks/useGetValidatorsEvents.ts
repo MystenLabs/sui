@@ -23,7 +23,7 @@ export function useGetValidatorsEvents({ limit, order }: GetValidatorsEvent) {
     // Since we are getting events based on the number of validators, we need to make sure that the limit
     // is not null and cache by the limit number of validators can change from network to network
     return useQuery(
-        ['validatorEvents', limit, order],
+        ['validatorEvents', limit, order, rpc.connection.fullnode],
         async () => {
             if (!limit) {
                 // Do some validation at the runtime level for some extra type-safety

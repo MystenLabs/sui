@@ -16,7 +16,7 @@ export function useGetTransactionBlocks(
     const rpc = useRpcClient();
 
     return useInfiniteQuery(
-        ['get-transaction-blocks', filter, limit],
+        ['get-transaction-blocks', filter, limit, rpc.connection.fullnode],
         async ({ pageParam }) =>
             await rpc.queryTransactionBlocks({
                 filter,

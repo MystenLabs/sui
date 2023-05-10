@@ -19,7 +19,7 @@ export function useQueryTransactionsByAddress(address: SuiAddress | null) {
     );
 
     return useQuery(
-        ['transactions-by-address', address],
+        ['transactions-by-address', address, rpc.connection.fullnode],
         async () => {
             // combine from and to transactions
             const [txnIds, fromTxnIds] = await Promise.all([

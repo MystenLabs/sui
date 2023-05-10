@@ -40,7 +40,7 @@ const GRAPH_DURATIONS_MAP: Record<GraphDurationsType, number> = {
 function useHistoricalGasPrices() {
     const rpc = useRpcClient();
     return useQuery<EpochGasInfo[]>(
-        ['get', 'last 30 epochs gas price'],
+        ['get', 'last 30 epochs gas price', rpc.connection.fullnode],
         async () => {
             // TODO: update this to get the gas price from the epoch itself rather than the previous one
             // once this is deployed https://github.com/MystenLabs/sui/pull/11388

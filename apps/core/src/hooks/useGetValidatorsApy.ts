@@ -27,7 +27,7 @@ export function useGetValidatorsApy() {
     const rpc = useRpcClient();
     const { data: systemStateResponse, isFetched } = useGetSystemState();
     return useQuery(
-        ['get-rolling-average-apys'],
+        ['get-rolling-average-apys', rpc.connection.fullnode],
         async () => {
             const apy = await rpc.getValidatorsApy();
             // check if stakeSubsidyStartEpoch is greater than current epoch, flag for UI to show ~0% instead of 0%

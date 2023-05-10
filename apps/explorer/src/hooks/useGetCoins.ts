@@ -12,7 +12,7 @@ const MAX_COINS_PER_REQUEST = 10;
 export function useGetCoins(coinType: string, address?: SuiAddress | null) {
     const rpc = useRpcClient();
     return useInfiniteQuery(
-        ['get-coins', address, coinType],
+        ['get-coins', address, coinType, rpc.connection.fullnode],
         async ({ pageParam }) =>
             await rpc.getCoins({
                 owner: address!,

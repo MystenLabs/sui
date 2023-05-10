@@ -41,7 +41,7 @@ export function formatBalance(
 export function useCoinMetadata(coinType?: string | null) {
     const rpc = useRpcClient();
     return useQuery(
-        ['coin-metadata', coinType],
+        ['coin-metadata', coinType, rpc.connection.fullnode],
         async () => {
             if (!coinType) {
                 throw new Error(

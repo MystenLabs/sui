@@ -21,7 +21,7 @@ export function TransactionsForAddress({ address, type }: Props) {
     const rpc = useRpcClient();
 
     const { data, isLoading, isError } = useQuery(
-        ['transactions-for-address', address, type],
+        ['transactions-for-address', address, type, rpc.connection.fullnode],
         async () => {
             const filters =
                 type === 'object'

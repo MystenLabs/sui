@@ -18,7 +18,7 @@ export function useGetObject(objectId?: string | null) {
     const rpc = useRpcClient();
     const normalizedObjId = objectId && normalizeSuiAddress(objectId);
     return useQuery(
-        ['object', normalizedObjId],
+        ['object', normalizedObjId, rpc.connection.fullnode],
         () =>
             rpc.getObject({
                 id: normalizedObjId!,

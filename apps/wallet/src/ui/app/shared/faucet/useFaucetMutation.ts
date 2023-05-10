@@ -15,7 +15,11 @@ type UseFaucetMutationOptions = Pick<UseMutationOptions, 'onError'>;
 export function useFaucetMutation(options?: UseFaucetMutationOptions) {
     const api = useRpcClient();
     const address = useActiveAddress();
-    const mutationKey = ['faucet-request-tokens', address];
+    const mutationKey = [
+        'faucet-request-tokens',
+        address,
+        api.connection.fullnode,
+    ];
     const mutation = useMutation({
         mutationKey,
         mutationFn: async () => {

@@ -14,7 +14,13 @@ export function useGetOwnedObjects(
 ) {
     const rpc = useRpcClient();
     return useInfiniteQuery(
-        ['get-owned-objects', address, filter, maxObjectRequests],
+        [
+            'get-owned-objects',
+            address,
+            filter,
+            maxObjectRequests,
+            rpc.connection.fullnode,
+        ],
         ({ pageParam }) =>
             rpc.getOwnedObjects({
                 owner: address!,

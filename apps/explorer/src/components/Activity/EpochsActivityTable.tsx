@@ -32,7 +32,7 @@ export function EpochsActivityTable({
     const rpc = useRpcClient();
 
     const { data: count } = useQuery(
-        ['epochs', 'current'],
+        ['epochs', 'current', rpc.connection.fullnode],
         async () => rpc.getCurrentEpoch(),
         {
             select: (epoch) => Number(epoch.epoch) + 1,

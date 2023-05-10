@@ -19,7 +19,7 @@ export function useGetCoinBalance(
     );
 
     return useQuery(
-        ['coin-balance', address, coinType],
+        ['coin-balance', address, coinType, rpc.connection.fullnode],
         () => rpc.getBalance({ owner: address!, coinType }),
         {
             enabled: !!address && !!coinType,

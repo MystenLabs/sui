@@ -11,7 +11,7 @@ export function useGetDelegatedStake(
 ): UseQueryResult<DelegatedStake[], Error> {
     const rpc = useRpcClient();
     return useQuery(
-        ['validator', address],
+        ['validator', address, rpc.connection.fullnode],
         () => rpc.getStakes({ owner: address }),
         { staleTime: 10 * 1000 }
     );

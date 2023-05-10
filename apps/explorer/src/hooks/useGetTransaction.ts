@@ -7,7 +7,7 @@ import { useQuery } from '@tanstack/react-query';
 export function useGetTransaction(transactionId: string) {
     const rpc = useRpcClient();
     return useQuery(
-        ['transactions-by-id', transactionId],
+        ['transactions-by-id', transactionId, rpc.connection.fullnode],
         async () =>
             rpc.getTransactionBlock({
                 digest: transactionId,

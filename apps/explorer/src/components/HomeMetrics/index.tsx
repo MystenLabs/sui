@@ -23,8 +23,9 @@ export function HomeMetrics() {
     // todo: remove this hook when we enable enhanced rpc client by default
     const enhancedRpc = useEnhancedRpcClient();
 
-    const { data: gasData } = useQuery(['home', 'reference-gas-price'], () =>
-        rpc.getReferenceGasPrice()
+    const { data: gasData } = useQuery(
+        ['home', 'reference-gas-price', rpc.connection.fullnode],
+        () => rpc.getReferenceGasPrice()
     );
 
     const { data: systemState } = useGetSystemState();

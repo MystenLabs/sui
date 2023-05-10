@@ -15,8 +15,8 @@ import React, {
 import { WorldMap } from './WorldMap';
 import { type NodeLocation, type ValidatorMapData } from './types';
 
-import { useNetwork } from '~/context';
 import { useAppsBackend } from '~/hooks/useAppsBackend';
+import { useNetwork } from '~/hooks/useNetwork';
 import { Card } from '~/ui/Card';
 import { Heading } from '~/ui/Heading';
 import { Placeholder } from '~/ui/Placeholder';

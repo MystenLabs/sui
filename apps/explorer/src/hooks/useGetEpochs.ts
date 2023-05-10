@@ -11,7 +11,7 @@ export function useGetEpochs(limit = DEFAULT_EPOCHS_LIMIT) {
     const rpc = useRpcClient();
 
     return useInfiniteQuery(
-        ['get-epochs-blocks', limit],
+        ['get-epochs-blocks', limit, rpc.connection.fullnode],
         ({ pageParam = null }) =>
             rpc.getEpochs({
                 descendingOrder: true,

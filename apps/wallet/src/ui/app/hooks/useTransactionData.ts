@@ -15,7 +15,7 @@ export function useTransactionData(
 ) {
     const rpc = useRpcClient();
     return useQuery(
-        ['transaction-data', transaction?.serialize()],
+        ['transaction-data', transaction?.serialize(), rpc.connection.fullnode],
         async () => {
             const clonedTransaction = new TransactionBlock(transaction!);
             if (sender) {

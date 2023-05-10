@@ -16,7 +16,7 @@ export function useGetAllBalances(address?: SuiAddress | null) {
     );
 
     return useQuery(
-        ['get-all-balance', address],
+        ['get-all-balance', address, rpc.connection.fullnode],
         async () =>
             (await rpc.getAllBalances({ owner: address! })).sort(
                 ({ coinType: a }, { coinType: b }) =>

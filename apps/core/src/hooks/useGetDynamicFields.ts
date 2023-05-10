@@ -13,7 +13,7 @@ export function useGetDynamicFields(
 ) {
     const rpc = useRpcClient();
     return useInfiniteQuery(
-        ['dynamic-fields', parentId],
+        ['dynamic-fields', parentId, rpc.connection.fullnode],
         ({ pageParam = null }) =>
             rpc.getDynamicFields({
                 parentId: normalizeSuiAddress(parentId),

@@ -6,9 +6,13 @@ import { useQuery } from '@tanstack/react-query';
 
 export function useGetNetworkMetrics() {
     const rpc = useRpcClient();
-    return useQuery(['home', 'metrics'], () => rpc.getNetworkMetrics(), {
-        cacheTime: 24 * 60 * 60 * 1000,
-        staleTime: Infinity,
-        retry: 5,
-    });
+    return useQuery(
+        ['home', 'metrics', rpc.connection.fullnode],
+        () => rpc.getNetworkMetrics(),
+        {
+            cacheTime: 24 * 60 * 60 * 1000,
+            staleTime: Infinity,
+            retry: 5,
+        }
+    );
 }

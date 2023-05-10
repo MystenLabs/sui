@@ -112,7 +112,7 @@ export function useSearch(query: string) {
     const rpc = useRpcClient();
 
     return useQuery(
-        ['search', query],
+        ['search', query, rpc.connection.fullnode],
         async () => {
             const results = (
                 await Promise.allSettled([

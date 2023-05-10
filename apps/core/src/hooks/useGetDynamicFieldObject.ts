@@ -15,7 +15,7 @@ export function useGetDynamicFieldObject(
 ) {
     const rpc = useRpcClient();
     return useQuery(
-        ['dynamic-fields-object', parentId, name],
+        ['dynamic-fields-object', parentId, name, rpc.connection.fullnode],
         () =>
             rpc.getDynamicFieldObject({
                 parentId,

@@ -24,7 +24,7 @@ export function TopPackagesCard() {
     const [selectedFilter, setSelectedFilter] = useState<DateFilter>('3D');
 
     const { data, isLoading } = useQuery(
-        ['top-packages', selectedFilter],
+        ['top-packages', selectedFilter, rpc.connection.fullnode],
         async () => rpc.getMoveCallMetrics()
     );
 
