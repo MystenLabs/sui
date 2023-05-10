@@ -514,20 +514,20 @@ impl DataFetcher for NodeStateDumpFetcher {
         Ok(resp)
     }
 
-    async fn get_checkpoint_txs(&self, id: u64) -> Result<Vec<TransactionDigest>, LocalExecError> {
+    async fn get_checkpoint_txs(&self, _id: u64) -> Result<Vec<TransactionDigest>, LocalExecError> {
         unimplemented!("get_checkpoint_txs for state dump is not implemented")
     }
 
     async fn get_transaction(
         &self,
-        tx_digest: &TransactionDigest,
+        _tx_digest: &TransactionDigest,
     ) -> Result<SuiTransactionBlockResponse, LocalExecError> {
         unimplemented!("get_transaction for state dump is not implemented")
     }
 
     async fn get_loaded_child_objects(
         &self,
-        tx_digest: &TransactionDigest,
+        _tx_digest: &TransactionDigest,
     ) -> Result<Vec<(ObjectID, SequenceNumber)>, LocalExecError> {
         Ok(self
             .node_state_dump
@@ -545,16 +545,16 @@ impl DataFetcher for NodeStateDumpFetcher {
     async fn fetch_random_tx(
         &self,
         // TODO: add more params
-        checkpoint_id_start: Option<u64>,
-        checkpoint_id_end: Option<u64>,
+        _checkpoint_id_start: Option<u64>,
+        _checkpoint_id_end: Option<u64>,
     ) -> Result<TransactionDigest, LocalExecError> {
         unimplemented!("fetch_random_tx for state dump is not implemented")
     }
 
     async fn get_epoch_start_timestamp_and_rgp(
         &self,
-        epoch_id: u64,
-        is_testnet: bool,
+        _epoch_id: u64,
+        _is_testnet: bool,
     ) -> Result<(u64, u64), LocalExecError> {
         Ok((
             self.node_state_dump.epoch_start_timestamp_ms,
@@ -564,7 +564,7 @@ impl DataFetcher for NodeStateDumpFetcher {
 
     async fn get_epoch_change_events(
         &self,
-        reverse: bool,
+        _reverse: bool,
     ) -> Result<Vec<SuiEvent>, LocalExecError> {
         unimplemented!("get_epoch_change_events for state dump is not implemented")
     }

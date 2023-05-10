@@ -841,18 +841,19 @@ impl LocalExec {
     pub async fn execute_state_dump(
         &mut self,
         expensive_safety_check_config: ExpensiveSafetyCheckConfig,
-    ) -> Result<ExecutionSandboxState, LocalExecError> {
+    ) -> Result<(ExecutionSandboxState, NodeStateDump), LocalExecError> {
         assert!(!self.is_remote_replay());
 
-        let tx_digest = match &self.fetcher {
-            Fetchers::NodeStateDump(d) => d.node_state_dump.tx_digest,
+        let d = match self.fetcher.clone() {
+            Fetchers::NodeStateDump(d) => d,
             _ => panic!("Invalid fetcher for state dump"),
         };
+        let tx_digest = d.node_state_dump.clone().tx_digest;
         let sandbox_state = self
             .execution_engine_execute_impl(&tx_digest, expensive_safety_check_config)
             .await?;
 
-        Ok(sandbox_state)
+        Ok((sandbox_state, d.node_state_dump))
     }
 
     pub async fn execute_transaction(
@@ -928,10 +929,7 @@ impl LocalExec {
     }
 
     pub fn is_remote_replay(&self) -> bool {
-        match self.fetcher {
-            Fetchers::Remote(_) => true,
-            _ => false,
-        }
+        matches!(self.fetcher, Fetchers::Remote(_))
     }
 
     /// Must be called after `populate_protocol_version_tables`
@@ -1356,7 +1354,7 @@ impl LocalExec {
             .transaction_data()
             .sender();
         let orig_tx = dp.node_state_dump.sender_signed_data.clone();
-        let effects = dp.node_state_dump.effects.clone();
+        let effects = dp.node_state_dump.computed_effects.clone();
         let effects = SuiTransactionBlockEffects::try_from(effects).unwrap();
 
         // Fetch full transaction content
@@ -1377,7 +1375,8 @@ impl LocalExec {
 
         let epoch_id = dp.node_state_dump.executed_epoch;
 
-        let protocol_config = ProtocolConfig::get_for_version(dp.node_state_dump.protocol_version.into());
+        let protocol_config =
+            ProtocolConfig::get_for_version(dp.node_state_dump.protocol_version.into());
         // Extract the epoch start timestamp
         let (epoch_start_timestamp, reference_gas_price) = self
             .get_epoch_start_timestamp_and_rgp(epoch_id, self.is_testnet)
@@ -1395,8 +1394,6 @@ impl LocalExec {
             executed_epoch: epoch_id,
             dependencies: effects.dependencies().to_vec(),
             effects,
-            // Find the protocol version for this epoch
-            // This assumes we already initialized the protocol version table `protocol_version_epoch_table`
             protocol_config,
             tx_digest: *tx_digest,
             epoch_start_timestamp,

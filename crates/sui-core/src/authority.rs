@@ -871,6 +871,7 @@ impl AuthorityState {
         &self,
         tx_digest: &TransactionDigest,
         effects: &TransactionEffects,
+        expected_effects_digest: TransactionEffectsDigest,
         inner_temporary_store: &InnerTemporaryStore,
         certificate: &VerifiedExecutableTransaction,
     ) -> SuiResult<()> {
@@ -934,7 +935,8 @@ impl AuthorityState {
             runtime_reads,
             sender_signed_data: certificate.clone().into_message(),
             input_objects: inner_temporary_store.objects.values().cloned().collect(),
-            effects: effects.clone(),
+            computed_effects: effects.clone(),
+            expected_effects_digest,
         }
         .write_to_file(".");
         Ok(())
@@ -997,25 +999,17 @@ impl AuthorityState {
             Ok(res) => res,
         };
 
-        // Here for testing only. Remove
-        match self
-            .state_dump(&digest, &effects, &inner_temporary_store, certificate)
-            .await
-        {
-            Ok(_) => {}
-            Err(e) => {
-                error!(
-                    "Error dumping state for {}: {e}",
-                    effects.transaction_digest()
-                );
-            }
-        }
-
         if let Some(expected_effects_digest) = expected_effects_digest {
             if effects.digest() != expected_effects_digest {
                 // We dont want to mask the error here, so we log it and continue.
                 match self
-                    .state_dump(&digest, &effects, &inner_temporary_store, certificate)
+                    .state_dump(
+                        &digest,
+                        &effects,
+                        expected_effects_digest,
+                        &inner_temporary_store,
+                        certificate,
+                    )
                     .await
                 {
                     Ok(_) => {}
@@ -4053,7 +4047,8 @@ pub struct NodeStateDump {
     pub reference_gas_price: u64,
     pub protocol_version: u64,
     pub epoch_start_timestamp_ms: u64,
-    pub effects: TransactionEffects,
+    pub computed_effects: TransactionEffects,
+    pub expected_effects_digest: TransactionEffectsDigest,
     pub relevant_system_packages: Vec<Object>,
     pub shared_objects: Vec<Object>,
     pub loaded_child_objects: Vec<Object>,

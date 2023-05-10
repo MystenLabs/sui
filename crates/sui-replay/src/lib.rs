@@ -3,6 +3,7 @@
 
 use async_recursion::async_recursion;
 use clap::Parser;
+use sui_types::message_envelope::Message;
 
 use crate::replay::LocalExec;
 use crate::replay::ProtocolVersionSummary;
@@ -76,13 +77,22 @@ pub async fn execute_replay_command(
     Ok(match cmd {
         ReplayToolCommand::ReplayDump { path, show_effects } => {
             let mut lx = LocalExec::new_for_state_dump(&path).await?;
-            let sandbox_state = lx.execute_state_dump(safety).await?;
+            let (sandbox_state, node_dump_state) = lx.execute_state_dump(safety).await?;
             let effects = sandbox_state.local_exec_effects.clone();
             if show_effects {
                 println!("{:#?}", effects)
             }
 
             sandbox_state.check_effects()?;
+
+            let effects = node_dump_state.computed_effects.digest();
+            if effects != node_dump_state.expected_effects_digest {
+                error!(
+                    "Effects digest mismatch: expected: {:?}, got: {:?}",
+                    node_dump_state.expected_effects_digest, effects,
+                );
+                anyhow::bail!("Effects mismatch");
+            }
 
             info!("Execution finished successfully. Local and on-chain effects match.");
             (1u64, 1u64)
