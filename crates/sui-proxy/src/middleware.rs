@@ -12,6 +12,7 @@ use axum::{
     BoxError, TypedHeader,
 };
 use bytes::Buf;
+use hyper::header::CONTENT_ENCODING;
 use once_cell::sync::Lazy;
 use prometheus::{proto::MetricFamily, register_counter_vec, CounterVec};
 use std::sync::Arc;
@@ -98,6 +99,12 @@ where
     type Rejection = (StatusCode, String);
 
     async fn from_request(req: Request<B>, state: &S) -> Result<Self, Self::Rejection> {
+        let should_be_snappy = req
+            .headers()
+            .get(CONTENT_ENCODING)
+            .map(|v| v.as_bytes() == b"snappy")
+            .unwrap_or(false);
+
         let body = Bytes::from_request(req, state).await.map_err(|e| {
             let msg = format!("error extracting bytes; {e}");
             error!(msg);
@@ -106,7 +113,26 @@ where
                 .inc();
             (e.status(), msg)
         })?;
-        let mut decoder = ProtobufDecoder::new(body.reader());
+
+        let intermediate = if should_be_snappy {
+            let mut s = snap::raw::Decoder::new();
+            let decompressed = s.decompress_vec(&body).map_err(|e| {
+                let msg = format!("unable to decode snappy encoded protobufs; {e}");
+                error!(msg);
+                MIDDLEWARE_OPS
+                    .with_label_values(&[
+                        "LenDelimProtobuf_decompress_vec",
+                        "unable-to-decode-snappy",
+                    ])
+                    .inc();
+                (StatusCode::BAD_REQUEST, msg)
+            })?;
+            Bytes::from(decompressed).reader()
+        } else {
+            body.reader()
+        };
+
+        let mut decoder = ProtobufDecoder::new(intermediate);
         let decoded = decoder.parse::<MetricFamily>().map_err(|e| {
             let msg = format!("unable to decode len deliminated protobufs; {e}");
             error!(msg);
