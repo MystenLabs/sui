@@ -64,6 +64,11 @@ export function ValidatorMeta({ validatorData }: ValidatorMetaProps) {
                             --
                         </Text>
                     </DescriptionItem>
+                    <DescriptionItem title="Pool Id">
+                        <Text variant="pBody/medium" color="steel-darker">
+                            {validatorData.stakingPoolId}
+                        </Text>
+                    </DescriptionItem>
                     <DescriptionItem title="Address">
                         <AddressLink
                             address={validatorData.suiAddress}

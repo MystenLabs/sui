@@ -12,7 +12,18 @@ import {
     type JsonRpcProvider,
     getTransactionDigest,
 } from '@mysten/sui.js';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, QueryClient } from '@tanstack/react-query';
+
+// Adding this to the query client options will make to cache systemState.
+const queryClient = new QueryClient({
+    defaultOptions: {
+        queries: {
+            staleTime: 5 * 60 * 1000,
+            refetchInterval: false,
+            refetchIntervalInBackground: false,
+        },
+    },
+});
 
 const isGenesisLibAddress = (value: string): boolean =>
     /^(0x|0X)0{0,39}[12]$/.test(value);
@@ -108,9 +119,42 @@ const getResultsForAddress = async (rpc: JsonRpcProvider, query: string) => {
     };
 };
 
+// Using address to query by pool id or sui address
+const getResultsForValidatorByPoolIdOrSuiAddress = async (
+    rpc: JsonRpcProvider,
+    query: string
+) => {
+    const normalized = normalizeSuiObjectId(query);
+    if (!isValidSuiObjectId(normalized)) return null;
+
+    // Rather than calling the rpc method directly, we can use the queryClient to cache system state.
+    const { activeValidators } = await queryClient.fetchQuery(
+        ['systemState'],
+        () => rpc.getLatestSuiSystemState()
+    );
+
+    if (!activeValidators) return null;
+    // find validator by pool id
+    const validator = activeValidators?.find(
+        ({ stakingPoolId }) => stakingPoolId === normalized
+    );
+
+    if (!validator) return null;
+
+    return {
+        label: 'validator',
+        results: [
+            {
+                id: validator.suiAddress || validator.stakingPoolId,
+                label: normalized,
+                type: 'validator',
+            },
+        ],
+    };
+};
+
 export function useSearch(query: string) {
     const rpc = useRpcClient();
-
     return useQuery(
         ['search', query],
         async () => {
@@ -120,6 +164,7 @@ export function useSearch(query: string) {
                     getResultsForCheckpoint(rpc, query),
                     getResultsForAddress(rpc, query),
                     getResultsForObject(rpc, query),
+                    getResultsForValidatorByPoolIdOrSuiAddress(rpc, query),
                 ])
             ).filter(
                 (r) => r.status === 'fulfilled' && r.value
