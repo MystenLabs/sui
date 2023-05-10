@@ -315,7 +315,8 @@ pub fn uptime_metric(
     chain_identifier: &str,
 ) -> Box<dyn prometheus::core::Collector> {
     let opts = prometheus::opts!("uptime", "uptime of the node service in seconds")
-        .variable_label("version");
+        .variable_label("version")
+        .variable_label("chain_identifier");
 
     let start_time = std::time::Instant::now();
     let uptime = move || start_time.elapsed().as_secs();
