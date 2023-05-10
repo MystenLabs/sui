@@ -1124,12 +1124,8 @@ impl RpcExampleProvider {
         let abilities = SuiMoveAbilitySet {
             abilities: vec![SuiMoveAbility::Store, SuiMoveAbility::Key],
         };
-        let fields = vec![]
-            .into_iter()
-            .collect::<Vec<_>>();
-        let type_parameters = vec![]
-            .into_iter()
-            .collect::<Vec<_>>();
+        let fields = vec![].into_iter().collect::<Vec<_>>();
+        let type_parameters = vec![].into_iter().collect::<Vec<_>>();
         let result = SuiMoveNormalizedStruct {
             abilities,
             fields,
