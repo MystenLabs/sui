@@ -68,7 +68,6 @@ test_scenario::next_tx(scenario, owner);
     let (red, green, blue) = color_object::get_color(&obj1);
     assert!(red == 255 && green == 255 && blue == 255, 0);
 
-    let _ = test_scenario::ctx(scenario);
     color_object::copy_into(&obj2, &mut obj1);
     test_scenario::return_to_sender(scenario, obj1);
     test_scenario::return_to_sender(scenario, obj2);
@@ -173,8 +172,7 @@ let scenario = &mut scenario_val;
 let recipient = @0x2;
 test_scenario::next_tx(scenario, owner);
 {
-    let object = test_scenario::take_from_sender<ColorObject>(scenario);
-    let _ = test_scenario::ctx(scenario);
+    let object = test_scenario::take_from_sender<ColorObject>(scenario);;
     transfer(object, recipient);
     color_object::transfer(object, recipient);
 };
