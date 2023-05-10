@@ -16,7 +16,7 @@ pub struct Registry {
     registry: Table<Domain, NameRecord>,
     /// The `reverse_registry` table maps `address` to `domain_name`.
     /// Updated in the `set_reverse_lookup` function.
-    reverse_registry: Table<SuiAddress, String>,
+    reverse_registry: Table<SuiAddress, Domain>,
 }
 
 /// Rust version of the Move sui::table::Table type.
