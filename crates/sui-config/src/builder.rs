@@ -37,6 +37,7 @@ use sui_types::crypto::{
 };
 use sui_types::multiaddr::Multiaddr;
 use sui_types::object::Object;
+
 pub enum CommitteeConfig {
     Size(NonZeroUsize),
     Validators(Vec<ValidatorConfigInfo>),

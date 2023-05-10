@@ -217,7 +217,7 @@ impl<'a> TestAuthorityBuilder<'a> {
             certificate_deny_config,
             usize::MAX,
             StateDebugDumpConfig {
-                dump_file_directory: tempdir().unwrap().into_path(),
+                dump_file_directory: Some(tempdir().unwrap().into_path()),
             },
         )
         .await;

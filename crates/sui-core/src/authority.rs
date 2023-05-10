@@ -1008,6 +1008,12 @@ impl AuthorityState {
         if let Some(expected_effects_digest) = expected_effects_digest {
             if effects.digest() != expected_effects_digest {
                 // We dont want to mask the error here, so we log it and continue.
+                let dump_dir = self
+                    .debug_dump_config
+                    .dump_file_directory
+                    .as_ref()
+                    .cloned()
+                    .unwrap_or(std::env::temp_dir());
                 match self
                     .state_dump(
                         &digest,
@@ -1015,7 +1021,7 @@ impl AuthorityState {
                         expected_effects_digest,
                         &inner_temporary_store,
                         certificate,
-                        &self.debug_dump_config.dump_file_directory,
+                        &dump_dir,
                     )
                     .await
                 {

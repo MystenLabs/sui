@@ -739,19 +739,11 @@ impl AuthorityKeyPairWithPath {
     }
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize, Default)]
 #[serde(rename_all = "kebab-case")]
 pub struct StateDebugDumpConfig {
-    #[serde(default)]
-    pub dump_file_directory: PathBuf,
-}
-
-impl Default for StateDebugDumpConfig {
-    fn default() -> Self {
-        Self {
-            dump_file_directory: std::env::temp_dir(),
-        }
-    }
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub dump_file_directory: Option<PathBuf>,
 }
 
 #[cfg(test)]
