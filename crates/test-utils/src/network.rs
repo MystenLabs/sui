@@ -380,7 +380,6 @@ pub struct TestClusterBuilder {
     additional_objects: Vec<Object>,
     num_validators: Option<usize>,
     fullnode_rpc_port: Option<u16>,
-    enable_fullnode_events: bool,
     validator_supported_protocol_versions_config: ProtocolVersionsConfig,
     // Default to validator_supported_protocol_versions_config, but can be overridden.
     fullnode_supported_protocol_versions_config: Option<ProtocolVersionsConfig>,
@@ -395,7 +394,6 @@ impl TestClusterBuilder {
             additional_objects: vec![],
             fullnode_rpc_port: None,
             num_validators: None,
-            enable_fullnode_events: false,
             validator_supported_protocol_versions_config: ProtocolVersionsConfig::Default,
             fullnode_supported_protocol_versions_config: None,
             db_checkpoint_config_validators: DBCheckpointConfig::default(),
@@ -421,11 +419,6 @@ impl TestClusterBuilder {
 
     pub fn with_num_validators(mut self, num: usize) -> Self {
         self.num_validators = Some(num);
-        self
-    }
-
-    pub fn enable_fullnode_events(mut self) -> Self {
-        self.enable_fullnode_events = true;
         self
     }
 
@@ -522,7 +515,7 @@ impl TestClusterBuilder {
                     .unwrap_or_else(|| self.validator_supported_protocol_versions_config.clone()),
             )
             .with_db_checkpoint_config(self.db_checkpoint_config_fullnodes)
-            .set_event_store(self.enable_fullnode_events)
+            .set_event_store(true)
             .set_rpc_port(self.fullnode_rpc_port)
             .build()
             .unwrap();

@@ -221,10 +221,7 @@ async fn test_full_node_move_function_index() -> Result<(), anyhow::Error> {
 #[sim_test]
 async fn test_full_node_indexes() -> Result<(), anyhow::Error> {
     telemetry_subscribers::init_for_testing();
-    let mut test_cluster = TestClusterBuilder::new()
-        .enable_fullnode_events()
-        .build()
-        .await?;
+    let mut test_cluster = TestClusterBuilder::new().build().await?;
     let node = &test_cluster.fullnode_handle.sui_node;
     let context = &mut test_cluster.wallet;
 
@@ -550,10 +547,7 @@ async fn test_full_node_sync_flood() -> Result<(), anyhow::Error> {
 
 #[sim_test]
 async fn test_full_node_sub_and_query_move_event_ok() -> Result<(), anyhow::Error> {
-    let mut test_cluster = TestClusterBuilder::new()
-        .enable_fullnode_events()
-        .build()
-        .await?;
+    let mut test_cluster = TestClusterBuilder::new().build().await?;
 
     // Start a new fullnode that is not on the write path
     let fullnode = start_fullnode_from_config(
@@ -658,7 +652,6 @@ async fn test_full_node_sub_and_query_move_event_ok() -> Result<(), anyhow::Erro
 async fn test_full_node_event_read_api_ok() {
     let mut test_cluster = TestClusterBuilder::new()
         .set_fullnode_rpc_port(50000)
-        .enable_fullnode_events()
         .build()
         .await
         .unwrap();

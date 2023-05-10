@@ -174,14 +174,11 @@ impl SuiCommand {
                         ))
                     })?;
 
-                let mut swarm = if no_full_node {
-                    Swarm::builder()
-                } else {
-                    Swarm::builder()
-                        .with_fullnode_rpc_addr(sui_config::node::default_json_rpc_address())
-                        .with_event_store()
-                }
-                .from_network_config(sui_config_dir()?, network_config);
+                let mut swarm = Swarm::new_from_network_config(
+                    sui_config_dir()?,
+                    network_config,
+                    !no_full_node,
+                );
 
                 swarm.launch().await?;
 

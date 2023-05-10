@@ -6,7 +6,6 @@ use anyhow::Result;
 use futures::future::try_join_all;
 use rand::rngs::OsRng;
 use std::collections::HashMap;
-use std::net::SocketAddr;
 use std::num::NonZeroUsize;
 use std::{
     mem, ops,
@@ -32,9 +31,10 @@ pub struct SwarmBuilder<R = OsRng> {
     genesis_config: Option<GenesisConfig>,
     additional_objects: Vec<Object>,
     fullnode_count: usize,
-    fullnode_rpc_addr: Option<SocketAddr>,
-    with_event_store: bool,
+    fullnode_rpc_port: Option<u16>,
     supported_protocol_versions_config: ProtocolVersionsConfig,
+    // Default to validator_supported_protocol_versions_config, but can be overridden.
+    fullnode_supported_protocol_versions_config: Option<ProtocolVersionsConfig>,
     db_checkpoint_config: DBCheckpointConfig,
 }
 
@@ -48,9 +48,9 @@ impl SwarmBuilder {
             genesis_config: None,
             additional_objects: vec![],
             fullnode_count: 0,
-            fullnode_rpc_addr: None,
-            with_event_store: false,
+            fullnode_rpc_port: None,
             supported_protocol_versions_config: ProtocolVersionsConfig::Default,
+            fullnode_supported_protocol_versions_config: None,
             db_checkpoint_config: DBCheckpointConfig::default(),
         }
     }
@@ -65,9 +65,9 @@ impl<R> SwarmBuilder<R> {
             genesis_config: self.genesis_config,
             additional_objects: self.additional_objects,
             fullnode_count: self.fullnode_count,
-            fullnode_rpc_addr: self.fullnode_rpc_addr,
-            with_event_store: false,
+            fullnode_rpc_port: self.fullnode_rpc_port,
             supported_protocol_versions_config: ProtocolVersionsConfig::Default,
+            fullnode_supported_protocol_versions_config: None,
             db_checkpoint_config: DBCheckpointConfig::default(),
         }
     }
@@ -116,8 +116,8 @@ impl<R> SwarmBuilder<R> {
         self
     }
 
-    pub fn with_fullnode_rpc_addr(mut self, fullnode_rpc_addr: SocketAddr) -> Self {
-        self.fullnode_rpc_addr = Some(fullnode_rpc_addr);
+    pub fn with_fullnode_rpc_port(mut self, fullnode_rpc_port: u16) -> Self {
+        self.fullnode_rpc_port = Some(fullnode_rpc_port);
         self
     }
 
@@ -150,6 +150,14 @@ impl<R> SwarmBuilder<R> {
 
     pub fn with_supported_protocol_versions_config(mut self, c: ProtocolVersionsConfig) -> Self {
         self.supported_protocol_versions_config = c;
+        self
+    }
+
+    pub fn with_fullnode_supported_protocol_versions(
+        mut self,
+        c: SupportedProtocolVersions,
+    ) -> Self {
+        self.fullnode_supported_protocol_versions_config = Some(ProtocolVersionsConfig::Global(c));
         self
     }
 
@@ -201,58 +209,23 @@ impl<R: rand::RngCore + rand::CryptoRng> SwarmBuilder<R> {
 
         if self.fullnode_count > 0 {
             (0..self.fullnode_count).for_each(|_| {
-                let spvc = self.supported_protocol_versions_config.clone();
-                //let spvc = spvc.clone();
-                let mut config = network_config
+                let mut builder = network_config
                     .fullnode_config_builder()
-                    .with_supported_protocol_versions_config(spvc)
+                    .with_supported_protocol_versions_config(
+                        self.fullnode_supported_protocol_versions_config
+                            .clone()
+                            .unwrap_or(self.supported_protocol_versions_config.clone()),
+                    )
                     .with_db_checkpoint_config(self.db_checkpoint_config.clone())
-                    .with_random_dir()
-                    .build()
-                    .unwrap();
-
-                if let Some(fullnode_rpc_addr) = self.fullnode_rpc_addr {
-                    config.json_rpc_address = fullnode_rpc_addr;
+                    .set_event_store(true)
+                    .with_random_dir();
+                if let Some(fullnode_rpc_port) = self.fullnode_rpc_port {
+                    builder = builder.with_rpc_port(fullnode_rpc_port);
                 }
+                let config = builder.build().unwrap();
                 fullnodes.insert(config.protocol_public_key(), Node::new(config));
             });
         }
-        Swarm {
-            dir,
-            network_config,
-            validators,
-            fullnodes,
-        }
-    }
-
-    pub fn with_event_store(mut self) -> Self {
-        self.with_event_store = true;
-        self
-    }
-
-    pub fn from_network_config(self, dir: PathBuf, network_config: NetworkConfig) -> Swarm {
-        let dir = SwarmDirectory::Persistent(dir);
-
-        let validators = network_config
-            .validator_configs()
-            .iter()
-            .map(|config| (config.protocol_public_key(), Node::new(config.to_owned())))
-            .collect();
-
-        let fullnodes = if let Some(fullnode_rpc_addr) = self.fullnode_rpc_addr {
-            let mut config = network_config
-                .fullnode_config_builder()
-                .with_supported_protocol_versions_config(self.supported_protocol_versions_config)
-                .set_event_store(self.with_event_store)
-                .with_random_dir()
-                .build()
-                .unwrap();
-            config.json_rpc_address = fullnode_rpc_addr;
-            HashMap::from([(config.protocol_public_key(), Node::new(config))])
-        } else {
-            Default::default()
-        };
-
         Swarm {
             dir,
             network_config,
@@ -281,6 +254,41 @@ impl Swarm {
     /// Return a new Builder
     pub fn builder() -> SwarmBuilder {
         SwarmBuilder::new()
+    }
+
+    pub fn new_from_network_config(
+        dir: PathBuf,
+        network_config: NetworkConfig,
+        with_fullnode: bool,
+    ) -> Self {
+        let dir = SwarmDirectory::Persistent(dir);
+
+        let validators = network_config
+            .validator_configs()
+            .iter()
+            .map(|config| (config.protocol_public_key(), Node::new(config.to_owned())))
+            .collect();
+
+        let fullnodes = if with_fullnode {
+            let fullnode_config = network_config
+                .fullnode_config_builder()
+                .with_event_store()
+                .build()
+                .unwrap();
+            HashMap::from([(
+                fullnode_config.protocol_public_key(),
+                Node::new(fullnode_config),
+            )])
+        } else {
+            HashMap::new()
+        };
+
+        Self {
+            dir,
+            network_config,
+            validators,
+            fullnodes,
+        }
     }
 
     fn nodes_iter_mut(&mut self) -> impl Iterator<Item = &mut Node> {

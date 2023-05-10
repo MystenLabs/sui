@@ -178,9 +178,7 @@ impl Cluster for LocalNewCluster {
                 .expect("Unable to parse indexer address")
         });
 
-        let mut cluster_builder = TestClusterBuilder::new()
-            .set_genesis_config(genesis_config)
-            .enable_fullnode_events();
+        let mut cluster_builder = TestClusterBuilder::new().set_genesis_config(genesis_config);
 
         if let Some(epoch_duration_ms) = options.epoch_duration_ms {
             cluster_builder = cluster_builder.with_epoch_duration_ms(epoch_duration_ms);
