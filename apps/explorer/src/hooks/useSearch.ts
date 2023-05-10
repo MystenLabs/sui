@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useRpcClient } from '@mysten/core';
+import { useRpcClient, useGetSystemState } from '@mysten/core';
 import {
     isValidTransactionDigest,
     isValidSuiAddress,
@@ -11,19 +11,9 @@ import {
     SuiObjectData,
     type JsonRpcProvider,
     getTransactionDigest,
+    type SuiSystemStateSummary,
 } from '@mysten/sui.js';
-import { useQuery, QueryClient } from '@tanstack/react-query';
-
-// Adding this to the query client options will make to cache systemState.
-const queryClient = new QueryClient({
-    defaultOptions: {
-        queries: {
-            staleTime: 5 * 60 * 1000,
-            refetchInterval: false,
-            refetchIntervalInBackground: false,
-        },
-    },
-});
+import { useQuery } from '@tanstack/react-query';
 
 const isGenesisLibAddress = (value: string): boolean =>
     /^(0x|0X)0{0,39}[12]$/.test(value);
@@ -119,24 +109,19 @@ const getResultsForAddress = async (rpc: JsonRpcProvider, query: string) => {
     };
 };
 
-// Using address to query by pool id or sui address
+// Query for validator by pool id or sui address.
 const getResultsForValidatorByPoolIdOrSuiAddress = async (
-    rpc: JsonRpcProvider,
+    systemStateSummery: SuiSystemStateSummary | null,
     query: string
 ) => {
+    console.log('useSearch', query);
     const normalized = normalizeSuiObjectId(query);
-    if (!isValidSuiObjectId(normalized)) return null;
+    if (!normalized || !systemStateSummery) return null;
 
-    // Rather than calling the rpc method directly, we can use the queryClient to cache system state.
-    const { activeValidators } = await queryClient.fetchQuery(
-        ['systemState'],
-        () => rpc.getLatestSuiSystemState()
-    );
-
-    if (!activeValidators) return null;
-    // find validator by pool id
-    const validator = activeValidators?.find(
-        ({ stakingPoolId }) => stakingPoolId === normalized
+    // find validator by pool id or sui address
+    const validator = systemStateSummery.activeValidators?.find(
+        ({ stakingPoolId, suiAddress }) =>
+            stakingPoolId === normalized || suiAddress === query
     );
 
     if (!validator) return null;
@@ -155,6 +140,8 @@ const getResultsForValidatorByPoolIdOrSuiAddress = async (
 
 export function useSearch(query: string) {
     const rpc = useRpcClient();
+    const { data: systemStateSummery } = useGetSystemState();
+
     return useQuery(
         ['search', query],
         async () => {
@@ -164,7 +151,10 @@ export function useSearch(query: string) {
                     getResultsForCheckpoint(rpc, query),
                     getResultsForAddress(rpc, query),
                     getResultsForObject(rpc, query),
-                    getResultsForValidatorByPoolIdOrSuiAddress(rpc, query),
+                    getResultsForValidatorByPoolIdOrSuiAddress(
+                        systemStateSummery || null,
+                        query
+                    ),
                 ])
             ).filter(
                 (r) => r.status === 'fulfilled' && r.value
