@@ -1,16 +1,16 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::{BTreeMap, HashSet};
-use std::sync::Arc;
-
 use move_binary_format::CompiledModule;
 use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::account_address::AccountAddress;
 use move_core_types::language_storage::{ModuleId, StructTag};
 use move_core_types::resolver::{LinkageResolver, ModuleResolver, ResourceResolver};
+use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
+use std::collections::{BTreeMap, HashSet};
+use std::sync::Arc;
 use sui_protocol_config::ProtocolConfig;
 use tracing::trace;
 
@@ -55,6 +55,7 @@ pub struct InnerTemporaryStore {
     pub events: TransactionEvents,
     pub max_binary_format_version: u32,
     pub no_extraneous_module_bytes: bool,
+    pub runtime_read_objects: BTreeMap<ObjectID, Object>,
 }
 
 impl InnerTemporaryStore {
@@ -160,6 +161,9 @@ pub struct TemporaryStore<S> {
     gas_charged: Option<(ObjectID, GasCostSummary)>,
     storage_rebate_rate: u64,
     protocol_config: ProtocolConfig,
+
+    // Every object that was read from store during exec
+    runtime_read_objects: RwLock<BTreeMap<ObjectID, Object>>,
 }
 
 impl<S> TemporaryStore<S> {
@@ -187,6 +191,7 @@ impl<S> TemporaryStore<S> {
             storage_rebate_rate: protocol_config.storage_rebate_rate(),
             protocol_config: protocol_config.clone(),
             loaded_child_objects: BTreeMap::new(),
+            runtime_read_objects: RwLock::new(BTreeMap::new()),
         }
     }
 
@@ -218,6 +223,7 @@ impl<S> TemporaryStore<S> {
             storage_rebate_rate: protocol_config.storage_rebate_rate(),
             protocol_config: protocol_config.clone(),
             loaded_child_objects: BTreeMap::new(),
+            runtime_read_objects: RwLock::new(BTreeMap::new()),
         }
     }
 
@@ -290,6 +296,7 @@ impl<S> TemporaryStore<S> {
             max_binary_format_version: self.protocol_config.move_binary_format_version(),
             loaded_child_objects: self.loaded_child_objects,
             no_extraneous_module_bytes: self.protocol_config.no_extraneous_module_bytes(),
+            runtime_read_objects: self.runtime_read_objects.read().clone(),
         }
     }
 
@@ -1494,7 +1501,14 @@ impl<S: ChildObjectResolver> Storage for TemporaryStore<S> {
 
 impl<S: BackingPackageStore> BackingPackageStore for TemporaryStore<S> {
     fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<Object>> {
-        self.store.get_package_object(package_id)
+        self.store.get_package_object(package_id).map(|obj| {
+            // Track object but leave unchanged
+            if let Some(v) = obj.clone() {
+                // Can this lock ever block execution?
+                self.runtime_read_objects.write().insert(*package_id, v);
+            }
+            obj
+        })
     }
 }
 

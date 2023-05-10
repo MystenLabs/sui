@@ -15,6 +15,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use sui_config::certificate_deny_config::CertificateDenyConfig;
 use sui_config::genesis::Genesis;
+use sui_config::node::StateDebugDumpConfig;
 use sui_config::node::{
     AuthorityStorePruningConfig, DBCheckpointConfig, ExpensiveSafetyCheckConfig,
 };
@@ -30,6 +31,7 @@ use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::object::Object;
 use sui_types::sui_system_state::SuiSystemStateTrait;
 use sui_types::transaction::VerifiedTransaction;
+use tempfile::tempdir;
 
 #[derive(Default)]
 pub struct TestAuthorityBuilder<'a> {
@@ -214,6 +216,9 @@ impl<'a> TestAuthorityBuilder<'a> {
             transaction_deny_config,
             certificate_deny_config,
             usize::MAX,
+            StateDebugDumpConfig {
+                dump_file_directory: Some(tempdir().unwrap().into_path()),
+            },
         )
         .await;
         // For any type of local testing that does not actually spawn a node, the checkpoint executor

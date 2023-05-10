@@ -131,7 +131,7 @@ pub enum LocalExecError {
     #[error("Protocol version not found for epoch {epoch}")]
     ProtocolVersionNotFound { epoch: u64 },
 
-    #[error("Protocol version not found for epoch {epoch}")]
+    #[error("Error querying system events for epoch {epoch}")]
     ErrorQueryingSystemEvents { epoch: u64 },
 
     #[error("Invalid epoch change transaction in events for epoch {epoch}")]
