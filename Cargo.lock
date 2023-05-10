@@ -11635,6 +11635,7 @@ dependencies = [
  "proptest",
  "proptest-derive",
  "rand 0.8.5",
+ "sui-adapter",
  "sui-core",
  "sui-move-build",
  "sui-protocol-config",

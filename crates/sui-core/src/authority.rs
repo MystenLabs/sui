@@ -42,6 +42,7 @@ use narwhal_config::{
 use once_cell::sync::OnceCell;
 use shared_crypto::intent::{Intent, IntentScope};
 use sui_adapter::execution_engine;
+use sui_adapter::type_layout_resolver::TypeLayoutResolver;
 use sui_adapter::{adapter, execution_mode};
 use sui_config::certificate_deny_config::CertificateDenyConfig;
 use sui_config::genesis::Genesis;
@@ -74,6 +75,7 @@ use sui_types::error::{ExecutionError, UserInputError};
 use sui_types::event::{Event, EventID};
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::gas::{GasCostSummary, SuiGasStatus};
+use sui_types::layout_resolver::LayoutResolver;
 use sui_types::message_envelope::Message;
 use sui_types::messages_checkpoint::{
     CheckpointCommitment, CheckpointContents, CheckpointContentsDigest, CheckpointDigest,
@@ -1753,9 +1755,15 @@ impl AuthorityState {
                 })
             })?;
 
-        let layout = match request.object_format_options {
-            Some(format) => object.get_layout(format, epoch_store.module_cache().as_ref())?,
-            None => None,
+        let layout = if let (Some(format), Some(move_obj)) =
+            (request.object_format_options, object.data.try_as_move())
+        {
+            let epoch_store = self.load_epoch_store_one_call_per_task();
+            let move_vm = epoch_store.move_vm();
+            let mut layout_resolver = TypeLayoutResolver::new(move_vm, self.database.as_ref());
+            Some(layout_resolver.get_layout(move_obj, format)?)
+        } else {
+            None
         };
 
         let lock = if !object.is_address_owned() {
@@ -2063,7 +2071,10 @@ impl AuthorityState {
             cur_epoch_store.epoch()
         );
 
-        if let Err(err) = self.database.expensive_check_sui_conservation() {
+        if let Err(err) = self
+            .database
+            .expensive_check_sui_conservation(cur_epoch_store.move_vm())
+        {
             if cfg!(debug_assertions) {
                 panic!("{}", err);
             } else {
@@ -2232,17 +2243,25 @@ impl AuthorityState {
                             .into())
                         }
                         Some(object) => {
-                            let layout = object.get_layout(
-                                ObjectFormatOptions::default(),
-                                // threading the epoch_store through this API does not
-                                // seem possible, so we just read it from the state (self) and fetch
-                                // the module cache out of it.
-                                // Notice that no matter what module cache we get things
-                                // should work
-                                self.load_epoch_store_one_call_per_task()
-                                    .module_cache()
-                                    .as_ref(),
-                            )?;
+                            let layout = {
+                                match object.data.try_as_move() {
+                                    None => None,
+                                    Some(move_obj) => {
+                                        let epoch_store = self.load_epoch_store_one_call_per_task();
+                                        let move_vm = epoch_store.move_vm();
+                                        let mut layout_resolver = TypeLayoutResolver::new(
+                                            move_vm,
+                                            self.database.as_ref(),
+                                        );
+                                        Some(
+                                            layout_resolver.get_layout(
+                                                move_obj,
+                                                ObjectFormatOptions::default(),
+                                            )?,
+                                        )
+                                    }
+                                }
+                            };
                             Ok(ObjectRead::Exists(obj_ref, object, layout))
                         }
                     }
@@ -2328,15 +2347,25 @@ impl AuthorityState {
                     return Ok(match self.database.get_object_by_key(object_id, version)? {
                         None => PastObjectRead::VersionNotFound(*object_id, version),
                         Some(object) => {
-                            let layout = object.get_layout(
-                                ObjectFormatOptions::default(),
-                                // threading the epoch_store through this API does not
-                                // seem possible, so we just read it from the state (self) and fetch
-                                // the module cache out of it.
-                                // Notice that no matter what module cache we get things
-                                // should work
-                                self.epoch_store.load().module_cache().as_ref(),
-                            )?;
+                            let layout = {
+                                match object.data.try_as_move() {
+                                    None => None,
+                                    Some(move_obj) => {
+                                        let epoch_store = self.load_epoch_store_one_call_per_task();
+                                        let move_vm = epoch_store.move_vm();
+                                        let mut layout_resolver = TypeLayoutResolver::new(
+                                            move_vm,
+                                            self.database.as_ref(),
+                                        );
+                                        Some(
+                                            layout_resolver.get_layout(
+                                                move_obj,
+                                                ObjectFormatOptions::default(),
+                                            )?,
+                                        )
+                                    }
+                                }
+                            };
                             let obj_ref = object.compute_object_reference();
                             PastObjectRead::VersionFound(obj_ref, object, layout)
                         }
@@ -2354,15 +2383,25 @@ impl AuthorityState {
                             .into())
                         }
                         Some(object) => {
-                            let layout = object.get_layout(
-                                ObjectFormatOptions::default(),
-                                // threading the epoch_store through this API does not
-                                // seem possible, so we just read it from the state (self) and fetch
-                                // the module cache out of it.
-                                // Notice that no matter what module cache we get things
-                                // should work
-                                self.epoch_store.load().module_cache().as_ref(),
-                            )?;
+                            let layout = {
+                                match object.data.try_as_move() {
+                                    None => None,
+                                    Some(move_obj) => {
+                                        let epoch_store = self.load_epoch_store_one_call_per_task();
+                                        let move_vm = epoch_store.move_vm();
+                                        let mut layout_resolver = TypeLayoutResolver::new(
+                                            move_vm,
+                                            self.database.as_ref(),
+                                        );
+                                        Some(
+                                            layout_resolver.get_layout(
+                                                move_obj,
+                                                ObjectFormatOptions::default(),
+                                            )?,
+                                        )
+                                    }
+                                }
+                            };
                             Ok(PastObjectRead::VersionFound(obj_ref, object, layout))
                         }
                     }

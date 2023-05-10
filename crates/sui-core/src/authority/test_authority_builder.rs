@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
+use crate::authority::authority_store_tables::AuthorityPerpetualTables;
 use crate::authority::epoch_start_configuration::EpochStartConfiguration;
 use crate::authority::{AuthorityState, AuthorityStore};
 use crate::checkpoints::CheckpointStore;
@@ -142,10 +143,11 @@ impl<'a> TestAuthorityBuilder<'a> {
         let authority_store = match self.store {
             Some(store) => store,
             None => {
+                let perpetual_tables =
+                    Arc::new(AuthorityPerpetualTables::open(&path.join("store"), None));
                 // unwrap ok - for testing only.
                 AuthorityStore::open_with_committee_for_testing(
-                    &path.join("store"),
-                    None,
+                    perpetual_tables,
                     &genesis_committee,
                     genesis,
                     0,

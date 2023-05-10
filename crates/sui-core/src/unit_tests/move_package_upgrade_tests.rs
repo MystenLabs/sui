@@ -113,6 +113,7 @@ struct UpgradeStateRunner {
 
 impl UpgradeStateRunner {
     pub async fn new(base_package_name: &str) -> Self {
+        telemetry_subscribers::init_for_testing();
         let _dont_remove = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
             config.set_package_upgrades_for_testing(true);
             config
@@ -1240,4 +1241,77 @@ async fn test_conflicting_versions_across_calls() {
 
     // verify that execution aborts in the second (counting from 0) command
     assert_eq!(call_error.1, Some(1));
+}
+
+#[tokio::test]
+async fn test_upgrade_cross_module_refs() {
+    let mut runner = UpgradeStateRunner::new("move_upgrade/object_cross_module_ref").await;
+    let package_v1 = runner.package.0;
+
+    // create instances of objects within module and cross module
+    let TransactionEffects::V1(effects) = runner
+        .run({
+            let mut builder = ProgrammableTransactionBuilder::new();
+            move_call! { builder, (package_v1)::base::make_objs() };
+            builder.finish()
+        })
+        .await;
+
+    assert!(effects.status.is_ok(), "{:#?}", effects.status);
+    assert_eq!(effects.created.len(), 2);
+
+    // Upgrade and cross module, cross version type usage
+    let (digest, modules) = build_upgrade_test_modules("object_cross_module_ref1");
+    let effects = runner
+        .upgrade(
+            UpgradePolicy::COMPATIBLE,
+            digest,
+            modules,
+            vec![SUI_FRAMEWORK_PACKAGE_ID, MOVE_STDLIB_PACKAGE_ID],
+        )
+        .await;
+
+    assert!(effects.status.is_ok(), "{:#?}", effects.status);
+    let package_v2 = runner.package.0;
+
+    // create instances of objects within module and cross module for v2
+    let TransactionEffects::V1(effects) = runner
+        .run({
+            let mut builder = ProgrammableTransactionBuilder::new();
+            move_call! { builder, (package_v2)::base::make_objs() };
+            move_call! { builder, (package_v2)::base::make_objs_v2() };
+            builder.finish()
+        })
+        .await;
+
+    assert!(effects.status.is_ok(), "{:#?}", effects.status);
+    assert_eq!(effects.created.len(), 5);
+
+    // Upgrade and cross module, cross version type usage
+    let (digest, modules) = build_upgrade_test_modules("object_cross_module_ref2");
+    let effects = runner
+        .upgrade(
+            UpgradePolicy::COMPATIBLE,
+            digest,
+            modules,
+            vec![SUI_FRAMEWORK_PACKAGE_ID, MOVE_STDLIB_PACKAGE_ID],
+        )
+        .await;
+
+    assert!(effects.status.is_ok(), "{:#?}", effects.status);
+    let package_v2 = runner.package.0;
+
+    // create instances of objects within module and cross module for v2
+    let TransactionEffects::V1(effects) = runner
+        .run({
+            let mut builder = ProgrammableTransactionBuilder::new();
+            move_call! { builder, (package_v2)::base::make_objs() };
+            move_call! { builder, (package_v2)::base::make_objs_v2() };
+            move_call! { builder, (package_v2)::base::make_objs_v3() };
+            builder.finish()
+        })
+        .await;
+
+    assert!(effects.status.is_ok(), "{:#?}", effects.status);
+    assert_eq!(effects.created.len(), 6);
 }

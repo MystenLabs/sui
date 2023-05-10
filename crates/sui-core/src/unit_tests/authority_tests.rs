@@ -54,6 +54,7 @@ use sui_types::{
     SUI_SYSTEM_STATE_OBJECT_ID,
 };
 
+use crate::authority::authority_store_tables::AuthorityPerpetualTables;
 use crate::authority::move_integration_tests::build_and_publish_test_package_with_upgrade_cap;
 use crate::authority::test_authority_builder::TestAuthorityBuilder;
 use crate::{
@@ -2788,9 +2789,10 @@ async fn test_authority_persist() {
     let path = dir.join(format!("DB_{:?}", ObjectID::random()));
     fs::create_dir(&path).unwrap();
 
+    let perpetual_tables = Arc::new(AuthorityPerpetualTables::open(&path, None));
     // Create an authority
     let store =
-        AuthorityStore::open_with_committee_for_testing(&path, None, &committee, &genesis, 0)
+        AuthorityStore::open_with_committee_for_testing(perpetual_tables, &committee, &genesis, 0)
             .await
             .unwrap();
     let authority = init_state(&genesis, authority_key, store).await;
@@ -2814,8 +2816,9 @@ async fn test_authority_persist() {
     let seed = [1u8; 32];
     let (genesis, authority_key) = init_state_parameters_from_rng(&mut StdRng::from_seed(seed));
     let committee = genesis.committee().unwrap();
+    let perpetual_tables = Arc::new(AuthorityPerpetualTables::open(&path, None));
     let store =
-        AuthorityStore::open_with_committee_for_testing(&path, None, &committee, &genesis, 0)
+        AuthorityStore::open_with_committee_for_testing(perpetual_tables, &committee, &genesis, 0)
             .await
             .unwrap();
     let authority2 = init_state(&genesis, authority_key, store).await;
