@@ -309,43 +309,37 @@ impl<T: ParentSync + Send + Sync> ExecutionState for ConsensusHandler<T> {
         self.transaction_scheduler
             .schedule(transactions_to_schedule)
             .await;
-        if self.epoch_store.in_memory_checkpoint_roots {
-            // The last block in this function notifies about new checkpoint if needed
-            let final_checkpoint_round = self
-                .epoch_store
-                .final_epoch_checkpoint()
-                .expect("final_epoch_checkpoint failed");
-            let final_checkpoint = match final_checkpoint_round.map(|r| r.cmp(&round)) {
-                Some(Ordering::Less) => {
-                    debug!(
-                        "Not forming checkpoint for round {} above final checkpoint round {:?}",
-                        round, final_checkpoint_round
-                    );
-                    return;
-                }
-                Some(Ordering::Equal) => true,
-                Some(Ordering::Greater) => false,
-                None => false,
-            };
-            let checkpoint = PendingCheckpoint {
-                roots: roots.into_iter().collect(),
-                details: PendingCheckpointInfo {
-                    timestamp_ms: timestamp,
-                    last_of_epoch: final_checkpoint,
-                    commit_height: round,
-                },
-            };
-            self.checkpoint_service
-                .notify_checkpoint(&self.epoch_store, checkpoint)
-                .expect("notify_checkpoint has failed");
-            if final_checkpoint {
-                info!(epoch=?self.epoch(), "Received 2f+1 EndOfPublish messages, notifying last checkpoint");
-                self.epoch_store.record_end_of_message_quorum_time_metric();
+        // The last block in this function notifies about new checkpoint if needed
+        let final_checkpoint_round = self
+            .epoch_store
+            .final_epoch_checkpoint()
+            .expect("final_epoch_checkpoint failed");
+        let final_checkpoint = match final_checkpoint_round.map(|r| r.cmp(&round)) {
+            Some(Ordering::Less) => {
+                debug!(
+                    "Not forming checkpoint for round {} above final checkpoint round {:?}",
+                    round, final_checkpoint_round
+                );
+                return;
             }
-        } else {
-            self.epoch_store
-                .handle_commit_boundary(round, timestamp, &self.checkpoint_service)
-                .expect("Unrecoverable error in consensus handler when processing commit boundary")
+            Some(Ordering::Equal) => true,
+            Some(Ordering::Greater) => false,
+            None => false,
+        };
+        let checkpoint = PendingCheckpoint {
+            roots: roots.into_iter().collect(),
+            details: PendingCheckpointInfo {
+                timestamp_ms: timestamp,
+                last_of_epoch: final_checkpoint,
+                commit_height: round,
+            },
+        };
+        self.checkpoint_service
+            .notify_checkpoint(&self.epoch_store, checkpoint)
+            .expect("notify_checkpoint has failed");
+        if final_checkpoint {
+            info!(epoch=?self.epoch(), "Received 2f+1 EndOfPublish messages, notifying last checkpoint");
+            self.epoch_store.record_end_of_message_quorum_time_metric();
         }
     }
 
