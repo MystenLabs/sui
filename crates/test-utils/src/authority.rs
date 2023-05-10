@@ -123,14 +123,17 @@ pub async fn start_node(config: &NodeConfig, registry_service: RegistryService) 
         })
         .build();
 
-    node.spawn(async move {
-        SuiNode::start(&config, registry_service, None)
-            .await
-            .unwrap()
-    })
-    .await
-    .unwrap()
-    .into()
+    let mut ret: SuiNodeHandle = node
+        .spawn(async move {
+            SuiNode::start(&config, registry_service, None)
+                .await
+                .unwrap()
+        })
+        .await
+        .unwrap()
+        .into();
+    ret.shutdown_on_drop();
+    ret
 }
 
 /// Spawn all authorities in the test committee into a separate tokio task.

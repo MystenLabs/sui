@@ -194,10 +194,30 @@ pub fn sim_test(args: TokenStream, item: TokenStream) -> TokenStream {
     let args = arg_parser.parse(args).unwrap().into_iter();
 
     let result = if cfg!(msim) {
+        let sig = &input.sig;
+        let body = &input.block;
         quote! {
             #[::sui_simulator::sim_test(crate = "sui_simulator", #(#args)*)]
             #[::sui_macros::init_static_initializers]
-            #input
+            #sig {
+                let ret = { #body };
+
+                #[allow(unreachable_code)]
+                {
+
+                // all node handles should have been dropped after the above block exits, but task
+                // shutdown is asynchronous, so we need a brief delay before checking for leaks.
+                tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
+
+                assert_eq!(
+                    sui_simulator::NodeLeakDetector::get_current_node_count(),
+                    0,
+                    "SuiNode leak detected"
+                );
+
+                ret
+                }
+            }
         }
     } else {
         let fn_name = &input.sig.ident;
