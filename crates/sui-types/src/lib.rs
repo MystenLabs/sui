@@ -46,6 +46,7 @@ pub mod gas_model;
 pub mod governance;
 pub mod id;
 pub mod in_memory_storage;
+pub mod layout_resolver;
 pub mod message_envelope;
 pub mod messages_checkpoint;
 pub mod messages_consensus;
