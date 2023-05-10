@@ -65,7 +65,7 @@ use sui_types::transaction::ObjectArg;
 use sui_types::transaction::TEST_ONLY_GAS_UNIT_FOR_TRANSFER;
 use sui_types::transaction::{CallArg, TransactionData};
 use sui_types::utils::to_sender_signed_transaction;
-use sui_types::{parse_sui_struct_tag, SUI_FRAMEWORK_OBJECT_ID};
+use sui_types::{parse_sui_struct_tag, SUI_FRAMEWORK_PACKAGE_ID};
 
 struct Examples {
     function_name: String,
@@ -152,7 +152,7 @@ impl RpcExampleProvider {
 
         let tx_params = vec![
             RPCTransactionRequestParams::MoveCallRequestParams(MoveCallParams {
-                package_object_id: SUI_FRAMEWORK_OBJECT_ID,
+                package_object_id: SUI_FRAMEWORK_PACKAGE_ID,
                 module: "pay".to_string(),
                 function: "split".to_string(),
                 type_arguments: vec![SuiTypeTag::new("0x2::sui::SUI".to_string())],
@@ -171,7 +171,7 @@ impl RpcExampleProvider {
             let mut builder = ProgrammableTransactionBuilder::new();
             builder
                 .move_call(
-                    SUI_FRAMEWORK_OBJECT_ID,
+                    SUI_FRAMEWORK_PACKAGE_ID,
                     Identifier::from_str("pay").unwrap(),
                     Identifier::from_str("split").unwrap(),
                     vec![],
@@ -1126,7 +1126,7 @@ impl RpcExampleProvider {
             has_next_page: true,
         };
 
-        Examples::new("suix_getDynamicFields",             
+        Examples::new("suix_getDynamicFields",
         vec![ExamplePairing::new(
             "Get dynamic fields for the object the request provides in a paginated list of `limit` dynamic field results per page. The default limit is 50.",
             vec![

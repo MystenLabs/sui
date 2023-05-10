@@ -41,7 +41,7 @@ use sui_types::transaction::{
     TEST_ONLY_GAS_UNIT_FOR_VALIDATOR,
 };
 use sui_types::utils::to_sender_signed_transaction;
-use sui_types::SUI_SYSTEM_OBJECT_ID;
+use sui_types::SUI_SYSTEM_PACKAGE_ID;
 use test_utils::authority::start_node;
 use test_utils::{authority::spawn_test_authorities, network::TestClusterBuilder};
 use tokio::time::{sleep, timeout};
@@ -591,7 +591,7 @@ async fn test_inactive_validator_pool_read() {
 
     let tx_data = TransactionData::new_move_call(
         address,
-        SUI_SYSTEM_OBJECT_ID,
+        SUI_SYSTEM_PACKAGE_ID,
         ident_str!("sui_system").to_owned(),
         ident_str!("request_remove_validator").to_owned(),
         vec![],
@@ -1158,7 +1158,7 @@ async fn execute_add_validator_candidate_tx(
         .unwrap();
     let candidate_tx_data = TransactionData::new_move_call(
         sender,
-        SUI_SYSTEM_OBJECT_ID,
+        SUI_SYSTEM_PACKAGE_ID,
         ident_str!("sui_system").to_owned(),
         ident_str!("request_add_validator_candidate").to_owned(),
         vec![],
@@ -1221,7 +1221,7 @@ async fn execute_join_committee_txes(
     // Step 2: Give the candidate enough stake.
     let stake_tx_data = TransactionData::new_move_call(
         sender,
-        SUI_SYSTEM_OBJECT_ID,
+        SUI_SYSTEM_PACKAGE_ID,
         ident_str!("sui_system").to_owned(),
         ident_str!("request_add_stake").to_owned(),
         vec![],
@@ -1246,7 +1246,7 @@ async fn execute_join_committee_txes(
     // Step 3: Convert the candidate to an active valdiator.
     let activation_tx_data = TransactionData::new_move_call(
         sender,
-        SUI_SYSTEM_OBJECT_ID,
+        SUI_SYSTEM_PACKAGE_ID,
         ident_str!("sui_system").to_owned(),
         ident_str!("request_add_validator").to_owned(),
         vec![],
@@ -1277,7 +1277,7 @@ async fn execute_leave_committee_tx(
         .unwrap();
     let tx_data = TransactionData::new_move_call(
         sui_address,
-        SUI_SYSTEM_OBJECT_ID,
+        SUI_SYSTEM_PACKAGE_ID,
         ident_str!("sui_system").to_owned(),
         ident_str!("request_remove_validator").to_owned(),
         vec![],

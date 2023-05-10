@@ -23,7 +23,7 @@ use sui_types::messages_checkpoint::CheckpointDigest;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::sui_system_state::SUI_SYSTEM_MODULE_NAME;
 use sui_types::transaction::{Argument, CallArg, Command, ObjectArg, TransactionData};
-use sui_types::SUI_SYSTEM_OBJECT_ID;
+use sui_types::SUI_SYSTEM_PACKAGE_ID;
 
 use crate::errors::{Error, ErrorType};
 use crate::operations::Operations;
@@ -896,7 +896,7 @@ impl InternalOperation {
                 let arguments = vec![system_state, coin, validator];
 
                 builder.command(Command::move_call(
-                    SUI_SYSTEM_OBJECT_ID,
+                    SUI_SYSTEM_PACKAGE_ID,
                     SUI_SYSTEM_MODULE_NAME.to_owned(),
                     ADD_STAKE_FUN_NAME.to_owned(),
                     vec![],
@@ -922,7 +922,7 @@ impl InternalOperation {
 
                     let arguments = vec![system_state, id];
                     builder.command(Command::move_call(
-                        SUI_SYSTEM_OBJECT_ID,
+                        SUI_SYSTEM_PACKAGE_ID,
                         SUI_SYSTEM_MODULE_NAME.to_owned(),
                         WITHDRAW_STAKE_FUN_NAME.to_owned(),
                         vec![],

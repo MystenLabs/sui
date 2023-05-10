@@ -12,7 +12,7 @@ use sui_types::transaction::{
     CallArg, ObjectArg, Transaction, TransactionData, VerifiedTransaction,
     TEST_ONLY_GAS_UNIT_FOR_GENERIC, TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
 };
-use sui_types::{TypeTag, SUI_SYSTEM_OBJECT_ID};
+use sui_types::{TypeTag, SUI_SYSTEM_PACKAGE_ID};
 
 pub struct TestTransactionBuilder {
     test_data: TestTransactionData,
@@ -97,7 +97,7 @@ impl TestTransactionBuilder {
 
     pub fn call_staking(self, stake_coin: ObjectRef, validator: SuiAddress) -> Self {
         self.move_call(
-            SUI_SYSTEM_OBJECT_ID,
+            SUI_SYSTEM_PACKAGE_ID,
             SUI_SYSTEM_MODULE_NAME.as_str(),
             "request_add_stake",
             vec![

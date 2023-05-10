@@ -55,7 +55,7 @@ use sui_types::transaction::TransactionData;
 use sui_types::transaction::VerifiedTransaction;
 use sui_types::transaction::{InputObjectKind, InputObjects, TransactionKind};
 use sui_types::transaction::{SenderSignedData, TransactionDataAPI};
-use sui_types::DEEPBOOK_OBJECT_ID;
+use sui_types::DEEPBOOK_PACKAGE_ID;
 use tracing::{error, warn};
 
 // TODO: add persistent cache. But perf is good enough already.
@@ -836,7 +836,7 @@ impl LocalExec {
         let mut ids = BuiltInFramework::all_package_ids();
 
         if protocol_version < 5 {
-            ids.retain(|id| *id != DEEPBOOK_OBJECT_ID)
+            ids.retain(|id| *id != DEEPBOOK_PACKAGE_ID)
         }
         ids
     }

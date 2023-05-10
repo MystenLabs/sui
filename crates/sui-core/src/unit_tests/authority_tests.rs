@@ -50,7 +50,7 @@ use sui_types::{
     crypto::{get_key_pair, Signature},
     crypto::{AccountKeyPair, AuthorityKeyPair, KeypairTraits},
     object::{Owner, GAS_VALUE_FOR_TESTING, OBJECT_START_VERSION},
-    MOVE_STDLIB_OBJECT_ID, SUI_CLOCK_OBJECT_ID, SUI_FRAMEWORK_OBJECT_ID,
+    MOVE_STDLIB_PACKAGE_ID, SUI_CLOCK_OBJECT_ID, SUI_FRAMEWORK_PACKAGE_ID,
     SUI_SYSTEM_STATE_OBJECT_ID,
 };
 
@@ -4329,7 +4329,7 @@ async fn make_test_transaction(
         .unwrap();
     let data = TransactionData::new_move_call(
         *sender,
-        SUI_FRAMEWORK_OBJECT_ID,
+        SUI_FRAMEWORK_PACKAGE_ID,
         ident_str!(module).to_owned(),
         ident_str!(function).to_owned(),
         /* type_args */ vec![],
@@ -5211,7 +5211,7 @@ async fn test_publish_missing_dependency() {
         .get_package_bytes(/* with_unpublished_deps */ false);
 
     let mut builder = ProgrammableTransactionBuilder::new();
-    builder.publish_immutable(modules, vec![SUI_FRAMEWORK_OBJECT_ID]);
+    builder.publish_immutable(modules, vec![SUI_FRAMEWORK_PACKAGE_ID]);
     let kind = TransactionKind::programmable(builder.finish());
 
     let txn_data = TransactionData::new_with_gas_coins(kind, sender, vec![gas_ref], 10000, 1);
@@ -5253,7 +5253,7 @@ async fn test_publish_missing_transitive_dependency() {
         .get_package_bytes(/* with_unpublished_deps */ false);
 
     let mut builder = ProgrammableTransactionBuilder::new();
-    builder.publish_immutable(modules, vec![MOVE_STDLIB_OBJECT_ID]);
+    builder.publish_immutable(modules, vec![MOVE_STDLIB_PACKAGE_ID]);
     let kind = TransactionKind::programmable(builder.finish());
 
     let txn_data = TransactionData::new_with_gas_coins(kind, sender, vec![gas_ref], 10000, 1);

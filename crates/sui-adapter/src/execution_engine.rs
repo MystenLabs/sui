@@ -51,7 +51,7 @@ use sui_types::{
     sui_system_state::{ADVANCE_EPOCH_FUNCTION_NAME, SUI_SYSTEM_MODULE_NAME},
     SUI_FRAMEWORK_ADDRESS,
 };
-use sui_types::{is_system_package, SUI_FRAMEWORK_OBJECT_ID, SUI_SYSTEM_OBJECT_ID};
+use sui_types::{is_system_package, SUI_FRAMEWORK_PACKAGE_ID, SUI_SYSTEM_PACKAGE_ID};
 
 /// If a transaction digest shows up in this list, when executing such transaction,
 /// we will always return `ExecutionError::CertificateDenied` without executing it (but still do
@@ -535,7 +535,7 @@ fn mint_epoch_rewards_in_pt(
         ))
         .unwrap();
     let storage_rewards = builder.programmable_move_call(
-        SUI_FRAMEWORK_OBJECT_ID,
+        SUI_FRAMEWORK_PACKAGE_ID,
         BALANCE_MODULE_NAME.to_owned(),
         BALANCE_CREATE_REWARDS_FUNCTION_NAME.to_owned(),
         vec![GAS::type_tag()],
@@ -549,7 +549,7 @@ fn mint_epoch_rewards_in_pt(
         ))
         .unwrap();
     let computation_rewards = builder.programmable_move_call(
-        SUI_FRAMEWORK_OBJECT_ID,
+        SUI_FRAMEWORK_PACKAGE_ID,
         BALANCE_MODULE_NAME.to_owned(),
         BALANCE_CREATE_REWARDS_FUNCTION_NAME.to_owned(),
         vec![GAS::type_tag()],
@@ -591,7 +591,7 @@ pub fn construct_advance_epoch_pt(
     info!("Call arguments to advance_epoch transaction: {:?}", params);
 
     let storage_rebates = builder.programmable_move_call(
-        SUI_SYSTEM_OBJECT_ID,
+        SUI_SYSTEM_PACKAGE_ID,
         SUI_SYSTEM_MODULE_NAME.to_owned(),
         ADVANCE_EPOCH_FUNCTION_NAME.to_owned(),
         vec![],
@@ -600,7 +600,7 @@ pub fn construct_advance_epoch_pt(
 
     // Step 3: Destroy the storage rebates.
     builder.programmable_move_call(
-        SUI_FRAMEWORK_OBJECT_ID,
+        SUI_FRAMEWORK_PACKAGE_ID,
         BALANCE_MODULE_NAME.to_owned(),
         BALANCE_DESTROY_REBATES_FUNCTION_NAME.to_owned(),
         vec![GAS::type_tag()],
@@ -649,7 +649,7 @@ pub fn construct_advance_epoch_safe_mode_pt(
     info!("Call arguments to advance_epoch transaction: {:?}", params);
 
     builder.programmable_move_call(
-        SUI_SYSTEM_OBJECT_ID,
+        SUI_SYSTEM_PACKAGE_ID,
         SUI_SYSTEM_MODULE_NAME.to_owned(),
         ADVANCE_EPOCH_SAFE_MODE_FUNCTION_NAME.to_owned(),
         vec![],
