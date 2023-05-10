@@ -50,7 +50,7 @@ module Test_DepV1::DepM1 {
 
 //# upgrade --package Test_DepV1 --upgrade-capability 4,1 --dependencies Test_DepDepV2 --sender A
 module Test_DepV2::DepM1 {
-    use Test_DepDepV1::DepDepM1;
+    use Test_DepDepV2::DepDepM1;
 
     public fun bar(ctx: &mut sui::tx_context::TxContext) { DepDepM1::foo(ctx)  }
 }
@@ -70,7 +70,7 @@ module Test_V1::M1 {
 
 //# upgrade --package Test_V1 --upgrade-capability 6,1 --dependencies Test_DepV2 Test_DepDepV2 --sender A
 module Test_V2::M1 {
-    use Test_DepV1::DepM1;
+    use Test_DepV2::DepM1;
 
     public entry fun baz(ctx: &mut sui::tx_context::TxContext) { DepM1::bar(ctx) }
 }
@@ -121,7 +121,7 @@ module Test_V4::M1 {
 
 //# upgrade --package Test_V3 --upgrade-capability 6,1 --dependencies Test_DepV2 --sender A
 module Test_V4::M1 {
-    use Test_DepV1::DepM1;
+    use Test_DepV2::DepM1;
     public entry fun baz(ctx: &mut sui::tx_context::TxContext) { DepM1::bar(ctx) }
 }
 
@@ -129,6 +129,6 @@ module Test_V4::M1 {
 
 //# upgrade --package Test_V3 --upgrade-capability 6,1 --dependencies Test_DepV2 Test_DepDepV1 --sender A
 module Test_V4::M1 {
-    use Test_DepV1::DepM1;
+    use Test_DepV2::DepM1;
     public entry fun baz(ctx: &mut sui::tx_context::TxContext) { DepM1::bar(ctx) }
 }
