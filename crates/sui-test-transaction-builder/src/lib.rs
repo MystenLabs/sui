@@ -10,8 +10,7 @@ use sui_types::crypto::{Signature, Signer};
 use sui_types::sui_system_state::SUI_SYSTEM_MODULE_NAME;
 use sui_types::transaction::{
     CallArg, ObjectArg, Transaction, TransactionData, VerifiedTransaction,
-    TEST_ONLY_GAS_UNIT_FOR_GENERIC, TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
-    TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
+    TEST_ONLY_GAS_UNIT_FOR_GENERIC, TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
 };
 use sui_types::{TypeTag, SUI_SYSTEM_OBJECT_ID};
 
@@ -194,7 +193,7 @@ impl TestTransactionBuilder {
                     self.gas_object,
                     all_module_bytes,
                     dependencies,
-                    self.gas_price * TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
+                    self.gas_price * TEST_ONLY_GAS_UNIT_FOR_GENERIC,
                     self.gas_price,
                 )
             }
