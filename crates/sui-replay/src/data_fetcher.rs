@@ -501,7 +501,10 @@ impl DataFetcher for NodeStateDumpFetcher {
         &self,
         tx_digest: &TransactionDigest,
     ) -> Result<SuiTransactionBlockResponse, LocalExecError> {
-        unimplemented!("get_transaction for state dump is not implemented")
+        Ok(
+            SuiTransactionBlockResponse::try_from(self.node_state_dump.runtime_reads.effects)
+                .unwrap(),
+        )
     }
 
     async fn get_loaded_child_objects(

@@ -934,6 +934,7 @@ impl AuthorityState {
             runtime_reads,
             sender_signed_data: certificate.clone().into_message(),
             input_objects: inner_temporary_store.objects.values().cloned().collect(),
+            effects: effects.clone(),
         }
         .write_to_file(".");
         Ok(())
@@ -4052,6 +4053,7 @@ pub struct NodeStateDump {
     pub reference_gas_price: u64,
     pub protocol_version: u64,
     pub epoch_start_timestamp_ms: u64,
+    pub effects: TransactionEffects,
     pub relevant_system_packages: Vec<Object>,
     pub shared_objects: Vec<Object>,
     pub loaded_child_objects: Vec<Object>,

@@ -354,6 +354,7 @@ impl LocalExec {
         let metrics = Arc::new(LimitsMetrics::new(&registry));
 
         let state = NodeStateDump::read_from_file(path);
+        let current_protocol_version = state.protocol_version;
         let fetcher = NodeStateDumpFetcher::from(state);
 
         let is_testnet =false/* should not matter */;
@@ -362,7 +363,7 @@ impl LocalExec {
             client: None,
             protocol_version_epoch_table: BTreeMap::new(),
             protocol_version_system_package_table: BTreeMap::new(),
-            current_protocol_version: state.protocol_version,
+            current_protocol_version,
             exec_store_events: Arc::new(Mutex::new(Vec::new())),
             metrics,
             storage: Storage::default(),
@@ -665,11 +666,13 @@ impl LocalExec {
         tx_digest: &TransactionDigest,
         expensive_safety_check_config: ExpensiveSafetyCheckConfig,
     ) -> Result<ExecutionSandboxState, LocalExecError> {
-        assert!(
+        if self.is_remote_replay() {
+            assert!(
             !self.protocol_version_system_package_table.is_empty()
                 || !self.protocol_version_epoch_table.is_empty(),
             "Required tables not populated. Must call `init_for_execution` before executing transactions"
         );
+        }
 
         let tx_info = self.resolve_tx_components(tx_digest).await?;
         self.execution_engine_execute_with_tx_info_impl(
@@ -903,18 +906,45 @@ impl LocalExec {
         Ok(Some(o))
     }
 
+    pub fn is_remote_replay(&self) -> bool {
+        match self.fetcher {
+            Fetchers::Remote(_) => true,
+            _ => false,
+        }
+    }
+
     /// Must be called after `populate_protocol_version_tables`
     pub fn system_package_versions_for_epoch(
         &self,
         epoch: u64,
     ) -> Result<Vec<(ObjectID, SequenceNumber)>, LocalExecError> {
-        Ok(self
-            .protocol_version_system_package_table
-            .get(&epoch)
-            .ok_or(LocalExecError::FrameworkObjectVersionTableNotPopulated { epoch })?
-            .clone()
-            .into_iter()
-            .collect())
+        match &self.fetcher {
+            Fetchers::Remote(_) => Ok(self
+                .protocol_version_system_package_table
+                .get(&epoch)
+                .ok_or(LocalExecError::FrameworkObjectVersionTableNotPopulated { epoch })?
+                .clone()
+                .into_iter()
+                .collect()),
+
+            Fetchers::NodeStateDump(d) => Ok(d
+                .node_state_dump
+                .relevant_system_packages
+                .iter()
+                .map(|w| w.compute_object_reference())
+                .map(|q| (q.0, q.1))
+                .collect()),
+        }
+
+        // if self.is_remote_replay() {
+        //     Ok(self
+        //         .protocol_version_system_package_table
+        //         .get(&epoch)
+        //         .ok_or(LocalExecError::FrameworkObjectVersionTableNotPopulated { epoch })?
+        //         .clone()
+        //         .into_iter()
+        //         .collect())
+        // }
     }
 
     /// Very testnet specific now
