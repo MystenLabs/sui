@@ -114,9 +114,12 @@ const getResultsForValidatorByPoolIdOrSuiAddress = async (
     systemStateSummery: SuiSystemStateSummary | null,
     query: string
 ) => {
-    console.log('useSearch', query);
     const normalized = normalizeSuiObjectId(query);
-    if (!normalized || !systemStateSummery) return null;
+    if (
+        (!isValidSuiAddress(normalized) && !isValidSuiObjectId(normalized)) ||
+        !systemStateSummery
+    )
+        return null;
 
     // find validator by pool id or sui address
     const validator = systemStateSummery.activeValidators?.find(
