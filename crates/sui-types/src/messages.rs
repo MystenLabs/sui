@@ -40,6 +40,8 @@ use sui_protocol_config::{ProtocolConfig, SupportedProtocolVersions};
 use tap::Pipe;
 use tracing::trace;
 
+// TODO: The following constants appear to be very large.
+// We should revisit them.
 pub const TEST_ONLY_GAS_UNIT_FOR_TRANSFER: u64 = 2_000_000;
 pub const TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS: u64 = 10_000_000;
 pub const TEST_ONLY_GAS_UNIT_FOR_PUBLISH: u64 = 25_000_000;
