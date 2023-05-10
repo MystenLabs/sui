@@ -9,9 +9,10 @@ use clap::Parser;
 use std::path::{Path, PathBuf};
 use sui_core::authority::authority_store_tables::AuthorityPerpetualTables;
 use sui_core::checkpoints::CheckpointStore;
-use sui_types::base_types::EpochId;
+use sui_types::base_types::{EpochId, ObjectID, SequenceNumber};
 use sui_types::digests::TransactionDigest;
 use sui_types::effects::TransactionEffectsAPI;
+use sui_types::storage::ObjectKey;
 use typed_store::rocks::MetricConf;
 pub mod db_dump;
 mod index_search;
@@ -27,6 +28,7 @@ pub enum DbToolCommand {
     DuplicatesSummary,
     ListDBMetadata(Options),
     PrintTransactionCheckpoint(PrintTransactionOptions),
+    RemoveObjectLock(RemoveObjectLockOptions),
     RemoveTransaction(RemoveTransactionOptions),
     ResetDB,
     RewindCheckpointExecution(RewindCheckpointExecutionOptions),
@@ -98,6 +100,19 @@ pub struct RemoveTransactionOptions {
 
 #[derive(Parser)]
 #[clap(rename_all = "kebab-case")]
+pub struct RemoveObjectLockOptions {
+    #[clap(long, help = "The object ID to remove")]
+    id: ObjectID,
+
+    #[clap(long, help = "The object version to remove")]
+    version: u64,
+
+    #[clap(long)]
+    confirm: bool,
+}
+
+#[derive(Parser)]
+#[clap(rename_all = "kebab-case")]
 pub struct RewindCheckpointExecutionOptions {
     #[clap(long = "epoch")]
     epoch: EpochId,
@@ -126,6 +141,7 @@ pub fn execute_db_tool_command(db_path: PathBuf, cmd: DbToolCommand) -> anyhow::
         }
         DbToolCommand::PrintTransactionCheckpoint(d) => print_transaction_checkpoint(&db_path, d),
         DbToolCommand::ResetDB => reset_db_to_genesis(&db_path),
+        DbToolCommand::RemoveObjectLock(d) => remove_object_lock(&db_path, d),
         DbToolCommand::RemoveTransaction(d) => remove_transaction(&db_path, d),
         DbToolCommand::RewindCheckpointExecution(d) => {
             rewind_checkpoint_execution(&db_path, d.epoch, d.checkpoint_sequence_number)
@@ -235,6 +251,26 @@ pub fn remove_transaction(path: &Path, opt: RemoveTransactionOptions) -> anyhow:
         println!("Proceeding to remove transaction {:?} in 5s ..", opt.digest);
         std::thread::sleep(std::time::Duration::from_secs(5));
         perpetual_db.remove_executed_effects_and_outputs(&opt.digest, &objects_to_remove)?;
+        println!("Done!");
+    }
+    Ok(())
+}
+
+pub fn remove_object_lock(path: &Path, opt: RemoveObjectLockOptions) -> anyhow::Result<()> {
+    let perpetual_db = AuthorityPerpetualTables::open(&path.join("store"), None);
+    let key = ObjectKey(opt.id, SequenceNumber::from_u64(opt.version));
+    if !opt.confirm && !perpetual_db.has_object_lock(&key) {
+        bail!("Owned object lock for {:?} is not found!", key);
+    };
+    println!("Removing owned object lock for {:?}", key);
+    if opt.confirm {
+        println!(
+            "Proceeding to remove owned object lock for {:?} in 5s ..",
+            key
+        );
+        std::thread::sleep(std::time::Duration::from_secs(5));
+        let created_ref = perpetual_db.remove_object_lock(&key)?;
+        println!("Done! Lock is now initialized for {:?}", created_ref);
     }
     Ok(())
 }

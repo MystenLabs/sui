@@ -302,11 +302,44 @@ impl AuthorityPerpetualTables {
         let mut wb = self.objects.batch();
         for object in objects {
             wb.delete_batch(&self.objects, [object])?;
+            self.remove_object_lock_batch(&mut wb, object)?;
         }
         wb.delete_batch(&self.executed_transactions_to_checkpoint, [digest])?;
         wb.delete_batch(&self.executed_effects, [digest])?;
         wb.write()?;
         Ok(())
+    }
+
+    pub fn has_object_lock(&self, object: &ObjectKey) -> bool {
+        self.owned_object_transaction_locks
+            .iter_with_bounds(
+                Some((object.0, object.1, ObjectDigest::MIN)),
+                Some((object.0, object.1, ObjectDigest::MAX)),
+            )
+            .next()
+            .is_some()
+    }
+
+    pub fn remove_object_lock(&self, object: &ObjectKey) -> SuiResult<ObjectRef> {
+        let mut wb = self.objects.batch();
+        let object_ref = self.remove_object_lock_batch(&mut wb, object)?;
+        wb.write()?;
+        Ok(object_ref)
+    }
+
+    fn remove_object_lock_batch(
+        &self,
+        wb: &mut DBBatch,
+        object: &ObjectKey,
+    ) -> SuiResult<ObjectRef> {
+        wb.delete_range(
+            &self.owned_object_transaction_locks,
+            &(object.0, object.1, ObjectDigest::MIN),
+            &(object.0, object.1, ObjectDigest::MAX),
+        )?;
+        let object_ref = self.get_object_or_tombstone(object.0)?.unwrap();
+        wb.insert_batch(&self.owned_object_transaction_locks, [(object_ref, None)])?;
+        Ok(object_ref)
     }
 
     pub fn database_is_empty(&self) -> SuiResult<bool> {
