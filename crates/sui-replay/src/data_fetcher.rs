@@ -7,6 +7,7 @@ use async_trait::async_trait;
 use futures::future::join_all;
 use move_core_types::parser::parse_struct_tag;
 use rand::Rng;
+use serde::Serialize;
 use std::collections::BTreeMap;
 use std::str::FromStr;
 use sui_core::authority::NodeStateDump;
@@ -18,6 +19,7 @@ use sui_json_rpc_types::SuiObjectData;
 use sui_json_rpc_types::SuiObjectDataOptions;
 use sui_json_rpc_types::SuiObjectResponse;
 use sui_json_rpc_types::SuiPastObjectResponse;
+use sui_json_rpc_types::SuiTransactionBlockEffects;
 use sui_json_rpc_types::SuiTransactionBlockResponse;
 use sui_json_rpc_types::SuiTransactionBlockResponseOptions;
 use sui_sdk::SuiClient;
@@ -74,9 +76,26 @@ pub(crate) trait DataFetcher {
         -> Result<Vec<SuiEvent>, LocalExecError>;
 }
 
+#[derive(Clone)]
 pub enum Fetchers {
     Remote(RemoteFetcher),
     NodeStateDump(NodeStateDumpFetcher),
+}
+
+impl Fetchers {
+    pub fn as_remote(&self) -> &RemoteFetcher {
+        match self {
+            Fetchers::Remote(q) => q,
+            Fetchers::NodeStateDump(_) => panic!("not a remote fetcher"),
+        }
+    }
+
+    pub fn as_node_state_dump(&self) -> &NodeStateDumpFetcher {
+        match self {
+            Fetchers::Remote(_) => panic!("not a node state dump fetcher"),
+            Fetchers::NodeStateDump(q) => q,
+        }
+    }
 }
 
 #[async_trait]
@@ -178,6 +197,7 @@ impl DataFetcher for Fetchers {
     }
 }
 
+#[derive(Clone)]
 pub struct RemoteFetcher {
     /// This is used to download items not in store
     pub rpc_client: SuiClient,
@@ -424,6 +444,7 @@ pub fn extract_epoch_and_version(ev: SuiEvent) -> Result<(u64, u64), LocalExecEr
     Err(LocalExecError::UnexpectedEventFormat { event: ev })
 }
 
+#[derive(Debug, Clone)]
 pub struct NodeStateDumpFetcher {
     pub node_state_dump: NodeStateDump,
     pub object_ref_pool: BTreeMap<(ObjectID, SequenceNumber), Object>,
@@ -501,10 +522,7 @@ impl DataFetcher for NodeStateDumpFetcher {
         &self,
         tx_digest: &TransactionDigest,
     ) -> Result<SuiTransactionBlockResponse, LocalExecError> {
-        Ok(
-            SuiTransactionBlockResponse::try_from(self.node_state_dump.runtime_reads.effects)
-                .unwrap(),
-        )
+        unimplemented!("get_transaction for state dump is not implemented")
     }
 
     async fn get_loaded_child_objects(

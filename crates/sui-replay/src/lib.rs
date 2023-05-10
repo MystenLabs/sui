@@ -27,6 +27,14 @@ pub enum ReplayToolCommand {
         show_effects: bool,
     },
 
+    #[clap(name = "rd")]
+    ReplayDump {
+        #[clap(long, short)]
+        path: String,
+        #[clap(long, short)]
+        show_effects: bool,
+    },
+
     #[clap(name = "ch")]
     ReplayCheckpoints {
         #[clap(long, short)]
@@ -66,6 +74,19 @@ pub async fn execute_replay_command(
         ExpensiveSafetyCheckConfig::default()
     };
     Ok(match cmd {
+        ReplayToolCommand::ReplayDump { path, show_effects } => {
+            let mut lx = LocalExec::new_for_state_dump(&path).await?;
+            let sandbox_state = lx.execute_state_dump(safety).await?;
+            let effects = sandbox_state.local_exec_effects.clone();
+            if show_effects {
+                println!("{:#?}", effects)
+            }
+
+            sandbox_state.check_effects()?;
+
+            info!("Execution finished successfully. Local and on-chain effects match.");
+            (1u64, 1u64)
+        }
         ReplayToolCommand::ReplayTransaction {
             tx_digest,
             show_effects,

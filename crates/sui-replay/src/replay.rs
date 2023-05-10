@@ -674,7 +674,11 @@ impl LocalExec {
         );
         }
 
-        let tx_info = self.resolve_tx_components(tx_digest).await?;
+        let tx_info = if self.is_remote_replay() {
+            self.resolve_tx_components(tx_digest).await?
+        } else {
+            self.resolve_tx_components_from_dump(tx_digest).await?
+        };
         self.execution_engine_execute_with_tx_info_impl(
             &tx_info,
             None,
@@ -829,6 +833,23 @@ impl LocalExec {
     ) -> Result<ExecutionSandboxState, LocalExecError> {
         let sandbox_state = self
             .execution_engine_execute_impl(tx_digest, expensive_safety_check_config)
+            .await?;
+
+        Ok(sandbox_state)
+    }
+
+    pub async fn execute_state_dump(
+        &mut self,
+        expensive_safety_check_config: ExpensiveSafetyCheckConfig,
+    ) -> Result<ExecutionSandboxState, LocalExecError> {
+        assert!(!self.is_remote_replay());
+
+        let tx_digest = match &self.fetcher {
+            Fetchers::NodeStateDump(d) => d.node_state_dump.tx_digest,
+            _ => panic!("Invalid fetcher for state dump"),
+        };
+        let sandbox_state = self
+            .execution_engine_execute_impl(&tx_digest, expensive_safety_check_config)
             .await?;
 
         Ok(sandbox_state)
@@ -1255,7 +1276,7 @@ impl LocalExec {
         is_testnet: bool,
     ) -> Result<(u64, u64), LocalExecError> {
         self.fetcher
-            .get_epoch_start_timestamp_and_rgp(epoch_id, self.is_testnet)
+            .get_epoch_start_timestamp_and_rgp(epoch_id, is_testnet)
             .await
     }
 
@@ -1263,6 +1284,7 @@ impl LocalExec {
         &self,
         tx_digest: &TransactionDigest,
     ) -> Result<OnChainTransactionInfo, LocalExecError> {
+        assert!(self.is_remote_replay());
         // Fetch full transaction content
         let tx_info = self.fetcher.get_transaction(tx_digest).await?;
         let sender = match tx_info.clone().transaction.unwrap().data {
@@ -1313,6 +1335,69 @@ impl LocalExec {
             // Find the protocol version for this epoch
             // This assumes we already initialized the protocol version table `protocol_version_epoch_table`
             protocol_config: self.get_protocol_config(epoch_id).await?,
+            tx_digest: *tx_digest,
+            epoch_start_timestamp,
+            sender_signed_data: orig_tx.clone(),
+            reference_gas_price,
+        })
+    }
+
+    async fn resolve_tx_components_from_dump(
+        &self,
+        tx_digest: &TransactionDigest,
+    ) -> Result<OnChainTransactionInfo, LocalExecError> {
+        assert!(!self.is_remote_replay());
+
+        let dp = self.fetcher.as_node_state_dump();
+
+        let sender = dp
+            .node_state_dump
+            .sender_signed_data
+            .transaction_data()
+            .sender();
+        let orig_tx = dp.node_state_dump.sender_signed_data.clone();
+        let effects = dp.node_state_dump.effects.clone();
+        let effects = SuiTransactionBlockEffects::try_from(effects).unwrap();
+
+        // Fetch full transaction content
+        //let tx_info = self.fetcher.get_transaction(tx_digest).await?;
+
+        let input_objs = orig_tx
+            .transaction_data()
+            .input_objects()
+            .map_err(|e| LocalExecError::UserInputError { err: e })?;
+        let tx_kind_orig = orig_tx.transaction_data().kind();
+
+        // Download the objects at the version right before the execution of this TX
+        let modified_at_versions: Vec<(ObjectID, SequenceNumber)> = effects.modified_at_versions();
+
+        let shared_obj_refs = effects.shared_objects();
+        let gas_data = orig_tx.transaction_data().gas_data();
+        let gas_object_refs: Vec<_> = gas_data.clone().payment.into_iter().collect();
+
+        let epoch_id = dp.node_state_dump.executed_epoch;
+
+        let protocol_config = ProtocolConfig::get_for_version(dp.node_state_dump.protocol_version.into());
+        // Extract the epoch start timestamp
+        let (epoch_start_timestamp, reference_gas_price) = self
+            .get_epoch_start_timestamp_and_rgp(epoch_id, self.is_testnet)
+            .await?;
+
+        Ok(OnChainTransactionInfo {
+            kind: tx_kind_orig.clone(),
+            sender,
+            modified_at_versions,
+            input_objects: input_objs,
+            shared_object_refs: shared_obj_refs.iter().map(|r| r.to_object_ref()).collect(),
+            gas: gas_object_refs,
+            gas_budget: gas_data.budget,
+            gas_price: gas_data.price,
+            executed_epoch: epoch_id,
+            dependencies: effects.dependencies().to_vec(),
+            effects,
+            // Find the protocol version for this epoch
+            // This assumes we already initialized the protocol version table `protocol_version_epoch_table`
+            protocol_config,
             tx_digest: *tx_digest,
             epoch_start_timestamp,
             sender_signed_data: orig_tx.clone(),
