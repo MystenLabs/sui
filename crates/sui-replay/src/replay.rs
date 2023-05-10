@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::data_fetcher::extract_epoch_and_version;
 use crate::data_fetcher::DataFetcher;
 use crate::data_fetcher::RemoteFetcher;
 use crate::types::*;
@@ -283,27 +284,6 @@ impl LocalExec {
     ) -> Result<Vec<(ObjectID, SequenceNumber)>, LocalExecError> {
         // Get the child objects loaded
         self.fetcher.get_loaded_child_objects(tx_digest).await
-    }
-
-    /// Gets all the epoch change events
-    pub async fn get_epoch_change_events(
-        &self,
-        reverse: bool,
-    ) -> Result<impl Iterator<Item = SuiEvent>, LocalExecError> {
-        let struct_tag_str = EPOCH_CHANGE_STRUCT_TAG.to_string();
-        let struct_tag = parse_struct_tag(&struct_tag_str)?;
-
-        // TODO: Should probably limit/page this but okay for now?
-        Ok(self
-            .client
-            .event_api()
-            .query_events(EventFilter::MoveEventType(struct_tag), None, None, reverse)
-            .await
-            .map_err(|e| LocalExecError::UnableToQuerySystemEvents {
-                rpc_err: e.to_string(),
-            })?
-            .data
-            .into_iter())
     }
 
     pub async fn new_from_fn_url(http_url: &str) -> Result<Self, LocalExecError> {
@@ -601,7 +581,7 @@ impl LocalExec {
 
         // Extract the epoch start timestamp
         let (epoch_start_timestamp, _) = self
-            .get_epoch_start_timestamp_and_rgp(tx_info.executed_epoch)
+            .get_epoch_start_timestamp_and_rgp(tx_info.executed_epoch, self.is_testnet)
             .await?;
 
         // Create the gas status
@@ -910,7 +890,7 @@ impl LocalExec {
         &self,
     ) -> Result<BTreeMap<u64, ProtocolVersionSummary>, LocalExecError> {
         let mut range_map = BTreeMap::new();
-        let epoch_change_events = self.get_epoch_change_events(false).await?;
+        let epoch_change_events = self.fetcher.get_epoch_change_events(false).await?;
 
         // Exception for Genesis: Protocol version 1 at epoch 0
         let mut tx_digest = TransactionDigest::from_str(TESTNET_GENESIX_TX_DIGEST).unwrap();
@@ -1163,6 +1143,7 @@ impl LocalExec {
 
     pub async fn checkpoints_for_epoch(&self, epoch_id: u64) -> Result<(u64, u64), LocalExecError> {
         let epoch_change_events = self
+            .fetcher
             .get_epoch_change_events(true)
             .await?
             .collect::<Vec<_>>();
@@ -1207,39 +1188,11 @@ impl LocalExec {
     pub async fn get_epoch_start_timestamp_and_rgp(
         &self,
         epoch_id: u64,
+        is_testnet: bool,
     ) -> Result<(u64, u64), LocalExecError> {
-        // Hack for testnet: for epoch in range [3, 742), we have no data, but no user TX was executed, so return dummy
-        if (self.is_testnet) && (2 < epoch_id) && (epoch_id < 742) {
-            return Ok((0, 1));
-        }
-
-        let event = self
-            .get_epoch_change_events(true)
-            .await?
-            .find(|ev| match extract_epoch_and_version(ev.clone()) {
-                Ok((epoch, _)) => epoch == epoch_id,
-                Err(_) => false,
-            })
-            .ok_or(LocalExecError::EventNotFound { epoch: epoch_id })?;
-
-        let reference_gas_price = if let serde_json::Value::Object(w) = event.parsed_json {
-            u64::from_str(&w["reference_gas_price"].to_string().replace('\"', "")).unwrap()
-        } else {
-            return Err(LocalExecError::UnexpectedEventFormat { event });
-        };
-
-        let epoch_change_tx = event.id.tx_digest;
-
-        // Fetch full transaction content
-        let tx_info = self.fetcher.get_transaction(&epoch_change_tx).await?;
-
-        let orig_tx: SenderSignedData = bcs::from_bytes(&tx_info.raw_transaction).unwrap();
-        let tx_kind_orig = orig_tx.transaction_data().kind();
-
-        if let TransactionKind::ChangeEpoch(change) = tx_kind_orig {
-            return Ok((change.epoch_start_timestamp_ms, reference_gas_price));
-        }
-        Err(LocalExecError::InvalidEpochChangeTx { epoch: epoch_id })
+        self.fetcher
+            .get_epoch_start_timestamp_and_rgp(epoch_id, self.is_testnet)
+            .await
     }
 
     async fn resolve_tx_components(
@@ -1277,8 +1230,9 @@ impl LocalExec {
         let epoch_id = effects.executed_epoch;
 
         // Extract the epoch start timestamp
-        let (epoch_start_timestamp, reference_gas_price) =
-            self.get_epoch_start_timestamp_and_rgp(epoch_id).await?;
+        let (epoch_start_timestamp, reference_gas_price) = self
+            .get_epoch_start_timestamp_and_rgp(epoch_id, self.is_testnet)
+            .await?;
 
         Ok(OnChainTransactionInfo {
             kind: tx_kind_orig.clone(),
@@ -1720,16 +1674,6 @@ pub fn get_vm(
         .expect("We defined natives to not fail here"),
     );
     Ok(move_vm)
-}
-
-fn extract_epoch_and_version(ev: SuiEvent) -> Result<(u64, u64), LocalExecError> {
-    if let serde_json::Value::Object(w) = ev.parsed_json {
-        let epoch = u64::from_str(&w["epoch"].to_string().replace('\"', "")).unwrap();
-        let version = u64::from_str(&w["protocol_version"].to_string().replace('\"', "")).unwrap();
-        return Ok((epoch, version));
-    }
-
-    Err(LocalExecError::UnexpectedEventFormat { event: ev })
 }
 
 async fn prep_network(
