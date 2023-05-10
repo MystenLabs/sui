@@ -10025,6 +10025,7 @@ dependencies = [
  "prometheus",
  "reqwest",
  "serde 1.0.152",
+ "snap",
  "sui-config",
  "sui-core",
  "sui-json-rpc",
