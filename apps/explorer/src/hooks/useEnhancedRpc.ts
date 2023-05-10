@@ -4,7 +4,8 @@ import { useRpcClient } from '@mysten/core';
 import { Connection, JsonRpcProvider } from '@mysten/sui.js';
 import { useMemo } from 'react';
 
-import { useNetwork } from '~/context';
+import { useNetwork } from './useNetwork';
+
 import { Network } from '~/utils/api/DefaultRpcClient';
 
 // TODO: Use enhanced RPC locally by default

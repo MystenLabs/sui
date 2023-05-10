@@ -5,8 +5,7 @@ import { useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 
 import { plausible } from '../utils/plausible';
-
-import { useNetwork } from '~/context';
+import { useNetwork } from './useNetwork';
 
 export function usePageView() {
     const [network] = useNetwork();

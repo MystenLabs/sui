@@ -14,7 +14,7 @@ import { NetworkTPS } from '~/components/HomeMetrics/NetworkTPS';
 import { OnTheNetwork } from '~/components/HomeMetrics/OnTheNetwork';
 import { SuiTokenCard } from '~/components/SuiTokenCard';
 import { TopPackagesCard } from '~/components/top-packages/TopPackagesCard';
-import { useNetwork } from '~/context';
+import { useNetwork } from '~/hooks/useNetwork';
 import { Card } from '~/ui/Card';
 import { Tab, TabGroup, TabList, TabPanel, TabPanels } from '~/ui/Tabs';
 import { Network } from '~/utils/api/DefaultRpcClient';
