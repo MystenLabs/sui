@@ -108,6 +108,8 @@ pub struct SuiTestAdapter<'a> {
     vm: Arc<MoveVM>,
     pub(crate) storage: Arc<InMemoryStorage>,
     pub(crate) compiled_state: CompiledState<'a>,
+    /// For upgrades: maps an upgraded package name to the original package name.
+    package_upgrade_mapping: BTreeMap<Symbol, Symbol>,
     accounts: BTreeMap<String, TestAccount>,
     default_account: TestAccount,
     default_syntax: SyntaxChoice,
@@ -332,6 +334,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                     NumberFormat::Hex,
                 )),
             ),
+            package_upgrade_mapping: BTreeMap::new(),
             accounts,
             default_account,
             default_syntax,
@@ -729,6 +732,27 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                 else {
                     panic!("Unbound package '{package}' for upgrade");
                 };
+
+                // Override address mappings for compilation when upgrading. Each dependency is set to its
+                // original address (if that dependency had been upgraded previously). This ensures upgraded
+                // dependencies are resolved during compilation--without this workaround, the compiler will
+                // find multiple definitions of the same module). We persist the original package name and
+                // addresses, which we restore before performing an upgrade transaction below.
+                let mut original_package_addrs = vec![];
+                for dep in dependencies.iter() {
+                    let named_address_mapping = &mut self.compiled_state.named_address_mapping;
+                    let dep = &Symbol::from(dep.as_str());
+                    let Some(orig_package) = self.package_upgrade_mapping.get(dep) else { continue };
+                    let Some(orig_package_address) = named_address_mapping.insert(orig_package.to_string(), zero) else { continue };
+                    original_package_addrs.push((*orig_package, orig_package_address));
+                    let dep_address = named_address_mapping
+                        .insert(dep.to_string(), orig_package_address)
+                        .unwrap_or_else(||
+                            panic!("Internal error: expected dependency {dep} in map when overriding address.")
+                        );
+                    original_package_addrs.push((*dep, dep_address));
+                }
+
                 let result = compile_any(
                     self,
                     "upgrade",
@@ -740,6 +764,29 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                     stop_line,
                     data,
                     |adapter, modules| {
+                        // Restore the original package addresses for dependencies before performing the upgrade.
+                        // This ensures package upgrades are properly linked at their correct addresses
+                        // (previously, addresses referred to the dependency's original package for compilation).
+                        for (name, addr) in original_package_addrs {
+                            adapter
+                                .compiled_state()
+                                .named_address_mapping
+                                .insert(name.to_string(), addr)
+                                .unwrap_or_else(|| panic!("Internal error: expected dependency {name} in map when restoring address."));
+                        }
+
+                        let upgraded_name = modules.first().unwrap().0.unwrap();
+                        let package = &Symbol::from(package.as_str());
+                        let original_name = adapter
+                            .package_upgrade_mapping
+                            .get(package)
+                            .unwrap_or(package);
+                        // Persist the upgraded package name with its original package name, so that we can
+                        // refer to the original package name when compiling (see above on overridden addresses).
+                        adapter
+                            .package_upgrade_mapping
+                            .insert(upgraded_name, *original_name);
+
                         let output = adapter.upgrade_package(
                             before_upgrade,
                             &modules,
