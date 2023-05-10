@@ -2,8 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { Sui, Unstaked } from '@mysten/icons';
-import { SUI_TYPE_ARG } from '@mysten/sui.js';
+import { SUI_TYPE_ARG, type CoinMetadata } from '@mysten/sui.js';
 import { cva, type VariantProps } from 'class-variance-authority';
+
+import { ImageIcon } from '_app/shared/image-icon';
 
 const imageStyle = cva(['rounded-full flex rounded-full'], {
     variants: {
@@ -20,24 +22,44 @@ const imageStyle = cva(['rounded-full flex rounded-full'], {
     },
 });
 
-export interface CoinIconProps extends VariantProps<typeof imageStyle> {
-    coinType: string;
+function SuiCoin() {
+    return (
+        <Sui className="flex items-center w-full h-full justify-center text-white text-body p-1.5 bg-sui rounded-full" />
+    );
 }
 
-// fetch the coin metadata
-// show the coin icon
-// fallback to the coin name if the icon is not available
-// TODO: (jibz) use getCoinMetadata to get the coin metadata and use sui icons
+type NonSuiCoinProps = {
+    coinType: string;
+    coinMeta?: Pick<CoinMetadata, 'iconUrl' | 'name'> | null;
+};
 
-export function CoinIcon({ coinType, ...styleProps }: CoinIconProps) {
+function NonSuiCoin({ coinType, coinMeta }: NonSuiCoinProps) {
+    return (
+        <div className="flex h-full w-full items-center justify-center text-white bg-steel rounded-full">
+            {coinMeta?.iconUrl ? (
+                <ImageIcon
+                    src={coinMeta.iconUrl}
+                    label={coinMeta.name || coinType}
+                    fallback={coinMeta.name || coinType}
+                />
+            ) : (
+                <Unstaked />
+            )}
+        </div>
+    );
+}
+
+export interface CoinIconProps
+    extends NonSuiCoinProps,
+        VariantProps<typeof imageStyle> {}
+
+export function CoinIcon({ coinType, coinMeta, ...styleProps }: CoinIconProps) {
     return (
         <div className={imageStyle(styleProps)}>
             {coinType === SUI_TYPE_ARG ? (
-                <Sui className="flex items-center w-full h-full justify-center text-white text-body p-1.5 bg-sui rounded-full" />
+                <SuiCoin />
             ) : (
-                <div className="flex h-full w-full items-center justify-center text-white bg-steel rounded-full">
-                    <Unstaked />
-                </div>
+                <NonSuiCoin coinMeta={coinMeta} coinType={coinType} />
             )}
         </div>
     );

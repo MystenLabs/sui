@@ -18,7 +18,10 @@ export type CoinProps = {
 };
 
 function CoinBalance({ type, balance, mode = 'row-item' }: CoinProps) {
-    const [formatted, symbol] = useFormatCoin(balance, type);
+    const [formatted, symbol, { data: coinMeta }] = useFormatCoin(
+        balance,
+        type
+    );
     const navigate = useNavigate();
 
     // TODO: use a different logic to differentiate between view types
@@ -40,10 +43,10 @@ function CoinBalance({ type, balance, mode = 'row-item' }: CoinProps) {
         >
             {mode === 'row-item' ? (
                 <>
-                    <CoinIcon coinType={type} />
+                    <CoinIcon coinType={type} coinMeta={coinMeta} />
                     <div className={cl(st.coinNameContainer, st[mode])}>
                         <span className={st.coinName}>
-                            {symbol.toLocaleLowerCase()}
+                            {coinMeta?.name || symbol.toLocaleLowerCase()}
                         </span>
                         <span className={st.coinSymbol}>{symbol}</span>
                     </div>
