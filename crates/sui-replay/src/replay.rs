@@ -3,6 +3,8 @@
 
 use crate::data_fetcher::extract_epoch_and_version;
 use crate::data_fetcher::DataFetcher;
+use crate::data_fetcher::Fetchers;
+use crate::data_fetcher::NodeStateDumpFetcher;
 use crate::data_fetcher::RemoteFetcher;
 use crate::types::*;
 use futures::executor::block_on;
@@ -15,6 +17,7 @@ use move_core_types::resolver::{ModuleResolver, ResourceResolver};
 use prometheus::Registry;
 use similar::{ChangeTag, TextDiff};
 use std::collections::{BTreeMap, HashSet};
+use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::sync::Mutex;
@@ -26,6 +29,7 @@ use sui_core::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use sui_core::authority::epoch_start_configuration::EpochStartConfiguration;
 use sui_core::authority::test_authority_builder::TestAuthorityBuilder;
 use sui_core::authority::AuthorityState;
+use sui_core::authority::NodeStateDump;
 use sui_core::authority::TemporaryStore;
 use sui_core::epoch::epoch_metrics::EpochMetrics;
 use sui_core::module_cache_metrics::ResolverMetrics;
@@ -204,7 +208,7 @@ impl Storage {
 }
 
 pub struct LocalExec {
-    pub client: SuiClient,
+    pub client: Option<SuiClient>,
     // For a given protocol version, what TX created it, and what is the valid range of epochs
     // at this protocol version.
     pub protocol_version_epoch_table: BTreeMap<u64, ProtocolVersionSummary>,
@@ -219,7 +223,7 @@ pub struct LocalExec {
     // Debug events
     pub metrics: Arc<LimitsMetrics>,
     // Used for fetching data from the network or remote store
-    pub fetcher: RemoteFetcher,
+    pub fetcher: Fetchers,
     /// For special casing some logic
     pub is_testnet: bool,
 
@@ -287,7 +291,7 @@ impl LocalExec {
     }
 
     pub async fn new_from_fn_url(http_url: &str) -> Result<Self, LocalExecError> {
-        Self::new(
+        Self::new_for_remote(
             SuiClientBuilder::default()
                 .request_timeout(RPC_TIMEOUT_ERR_SLEEP_RETRY_PERIOD)
                 .max_concurrent_requests(MAX_CONCURRENT_REQUESTS)
@@ -306,11 +310,14 @@ impl LocalExec {
         Ok(self)
     }
 
-    pub async fn reset_for_new_execution(self) -> Result<Self, LocalExecError> {
-        Self::new(self.client).await?.init_for_execution().await
+    pub async fn reset_for_new_execution_with_client(self) -> Result<Self, LocalExecError> {
+        Self::new_for_remote(self.client.expect("Remote client not initialized"))
+            .await?
+            .init_for_execution()
+            .await
     }
 
-    pub async fn new(client: SuiClient) -> Result<Self, LocalExecError> {
+    pub async fn new_for_remote(client: SuiClient) -> Result<Self, LocalExecError> {
         // Use a throwaway metrics registry for local execution.
         let registry = prometheus::Registry::new();
         let metrics = Arc::new(LimitsMetrics::new(&registry));
@@ -326,14 +333,40 @@ impl LocalExec {
             .any(|tx| tx == &TransactionDigest::from_str(TESTNET_GENESIX_TX_DIGEST).unwrap());
 
         Ok(Self {
-            client,
+            client: Some(client),
             protocol_version_epoch_table: BTreeMap::new(),
             protocol_version_system_package_table: BTreeMap::new(),
             current_protocol_version: 0,
             exec_store_events: Arc::new(Mutex::new(Vec::new())),
             metrics,
             storage: Storage::default(),
-            fetcher,
+            fetcher: Fetchers::Remote(fetcher),
+            is_testnet,
+            // TODO: make these configurable
+            num_retries_for_timeout: RPC_TIMEOUT_ERR_NUM_RETRIES,
+            sleep_period_for_timeout: RPC_TIMEOUT_ERR_SLEEP_RETRY_PERIOD,
+        })
+    }
+
+    pub async fn new_for_state_dump(path: &str) -> Result<Self, LocalExecError> {
+        // Use a throwaway metrics registry for local execution.
+        let registry = prometheus::Registry::new();
+        let metrics = Arc::new(LimitsMetrics::new(&registry));
+
+        let state = NodeStateDump::read_from_file(path);
+        let fetcher = NodeStateDumpFetcher::from(state);
+
+        let is_testnet =false/* should not matter */;
+
+        Ok(Self {
+            client: None,
+            protocol_version_epoch_table: BTreeMap::new(),
+            protocol_version_system_package_table: BTreeMap::new(),
+            current_protocol_version: state.protocol_version,
+            exec_store_events: Arc::new(Mutex::new(Vec::new())),
+            metrics,
+            storage: Storage::default(),
+            fetcher: Fetchers::NodeStateDump(fetcher),
             is_testnet,
             // TODO: make these configurable
             num_retries_for_timeout: RPC_TIMEOUT_ERR_NUM_RETRIES,
@@ -1146,6 +1179,7 @@ impl LocalExec {
             .fetcher
             .get_epoch_change_events(true)
             .await?
+            .into_iter()
             .collect::<Vec<_>>();
         let (start_checkpoint, start_epoch_idx) = if epoch_id == 0 {
             (0, 1)

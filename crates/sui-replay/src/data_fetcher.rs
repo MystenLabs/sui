@@ -69,33 +69,118 @@ pub(crate) trait DataFetcher {
         epoch_id: u64,
         is_testnet: bool,
     ) -> Result<(u64, u64), LocalExecError>;
+
+    async fn get_epoch_change_events(&self, reverse: bool)
+        -> Result<Vec<SuiEvent>, LocalExecError>;
+}
+
+pub enum Fetchers {
+    Remote(RemoteFetcher),
+    NodeStateDump(NodeStateDumpFetcher),
+}
+
+#[async_trait]
+impl DataFetcher for Fetchers {
+    #![allow(implied_bounds_entailment)]
+    async fn multi_get_versioned(
+        &self,
+        objects: &[(ObjectID, SequenceNumber)],
+    ) -> Result<Vec<Object>, LocalExecError> {
+        match self {
+            Fetchers::Remote(q) => q.multi_get_versioned(objects).await,
+            Fetchers::NodeStateDump(q) => q.multi_get_versioned(objects).await,
+        }
+    }
+
+    async fn multi_get_latest(&self, objects: &[ObjectID]) -> Result<Vec<Object>, LocalExecError> {
+        match self {
+            Fetchers::Remote(q) => q.multi_get_latest(objects).await,
+            Fetchers::NodeStateDump(q) => q.multi_get_latest(objects).await,
+        }
+    }
+
+    async fn get_checkpoint_txs(&self, id: u64) -> Result<Vec<TransactionDigest>, LocalExecError> {
+        match self {
+            Fetchers::Remote(q) => q.get_checkpoint_txs(id).await,
+            Fetchers::NodeStateDump(q) => q.get_checkpoint_txs(id).await,
+        }
+    }
+
+    async fn get_transaction(
+        &self,
+        tx_digest: &TransactionDigest,
+    ) -> Result<SuiTransactionBlockResponse, LocalExecError> {
+        match self {
+            Fetchers::Remote(q) => q.get_transaction(tx_digest).await,
+            Fetchers::NodeStateDump(q) => q.get_transaction(tx_digest).await,
+        }
+    }
+
+    async fn get_loaded_child_objects(
+        &self,
+        tx_digest: &TransactionDigest,
+    ) -> Result<Vec<(ObjectID, SequenceNumber)>, LocalExecError> {
+        match self {
+            Fetchers::Remote(q) => q.get_loaded_child_objects(tx_digest).await,
+            Fetchers::NodeStateDump(q) => q.get_loaded_child_objects(tx_digest).await,
+        }
+    }
+
+    async fn get_latest_checkpoint_sequence_number(&self) -> Result<u64, LocalExecError> {
+        match self {
+            Fetchers::Remote(q) => q.get_latest_checkpoint_sequence_number().await,
+            Fetchers::NodeStateDump(q) => q.get_latest_checkpoint_sequence_number().await,
+        }
+    }
+
+    async fn fetch_random_tx(
+        &self,
+        checkpoint_id_start: Option<u64>,
+        checkpoint_id_end: Option<u64>,
+    ) -> Result<TransactionDigest, LocalExecError> {
+        match self {
+            Fetchers::Remote(q) => {
+                q.fetch_random_tx(checkpoint_id_start, checkpoint_id_end)
+                    .await
+            }
+            Fetchers::NodeStateDump(q) => {
+                q.fetch_random_tx(checkpoint_id_start, checkpoint_id_end)
+                    .await
+            }
+        }
+    }
+
+    async fn get_epoch_start_timestamp_and_rgp(
+        &self,
+        epoch_id: u64,
+        is_testnet: bool,
+    ) -> Result<(u64, u64), LocalExecError> {
+        match self {
+            Fetchers::Remote(q) => {
+                q.get_epoch_start_timestamp_and_rgp(epoch_id, is_testnet)
+                    .await
+            }
+            Fetchers::NodeStateDump(q) => {
+                q.get_epoch_start_timestamp_and_rgp(epoch_id, is_testnet)
+                    .await
+            }
+        }
+    }
+
+    async fn get_epoch_change_events(
+        &self,
+        reverse: bool,
+    ) -> Result<Vec<SuiEvent>, LocalExecError> {
+        match self {
+            Fetchers::Remote(q) => q.get_epoch_change_events(reverse).await,
+            Fetchers::NodeStateDump(q) => q.get_epoch_change_events(reverse).await,
+        }
+    }
 }
 
 pub struct RemoteFetcher {
     /// This is used to download items not in store
     pub rpc_client: SuiClient,
-}
-
-impl RemoteFetcher {
-    pub async fn get_epoch_change_events(
-        &self,
-        reverse: bool,
-    ) -> Result<impl Iterator<Item = SuiEvent>, LocalExecError> {
-        let struct_tag_str = EPOCH_CHANGE_STRUCT_TAG.to_string();
-        let struct_tag = parse_struct_tag(&struct_tag_str)?;
-
-        // TODO: Should probably limit/page this but okay for now?
-        Ok(self
-            .rpc_client
-            .event_api()
-            .query_events(EventFilter::MoveEventType(struct_tag), None, None, reverse)
-            .await
-            .map_err(|e| LocalExecError::UnableToQuerySystemEvents {
-                rpc_err: e.to_string(),
-            })?
-            .data
-            .into_iter())
-    }
 }
 
 #[async_trait]
@@ -242,7 +327,8 @@ impl DataFetcher for RemoteFetcher {
         let event = self
             .get_epoch_change_events(true)
             .await?
-            .find(|ev| match extract_epoch_and_version(ev.clone()) {
+            .into_iter()
+            .find(|ev| match extract_epoch_and_version(ev.clone().clone()) {
                 Ok((epoch, _)) => epoch == epoch_id,
                 Err(_) => false,
             })
@@ -251,7 +337,9 @@ impl DataFetcher for RemoteFetcher {
         let reference_gas_price = if let serde_json::Value::Object(w) = event.parsed_json {
             u64::from_str(&w["reference_gas_price"].to_string().replace('\"', "")).unwrap()
         } else {
-            return Err(LocalExecError::UnexpectedEventFormat { event });
+            return Err(LocalExecError::UnexpectedEventFormat {
+                event: event.clone(),
+            });
         };
 
         let epoch_change_tx = event.id.tx_digest;
@@ -266,6 +354,27 @@ impl DataFetcher for RemoteFetcher {
             return Ok((change.epoch_start_timestamp_ms, reference_gas_price));
         }
         Err(LocalExecError::InvalidEpochChangeTx { epoch: epoch_id })
+    }
+
+    async fn get_epoch_change_events(
+        &self,
+        reverse: bool,
+    ) -> Result<Vec<SuiEvent>, LocalExecError> {
+        let struct_tag_str = EPOCH_CHANGE_STRUCT_TAG.to_string();
+        let struct_tag = parse_struct_tag(&struct_tag_str)?;
+
+        // TODO: Should probably limit/page this but okay for now?
+        Ok(self
+            .rpc_client
+            .event_api()
+            .query_events(EventFilter::MoveEventType(struct_tag), None, None, reverse)
+            .await
+            .map_err(|e| LocalExecError::UnableToQuerySystemEvents {
+                rpc_err: e.to_string(),
+            })?
+            .data
+            .into_iter()
+            .collect())
     }
 }
 
@@ -430,5 +539,12 @@ impl DataFetcher for NodeStateDumpFetcher {
             self.node_state_dump.epoch_start_timestamp_ms,
             self.node_state_dump.reference_gas_price,
         ))
+    }
+
+    async fn get_epoch_change_events(
+        &self,
+        reverse: bool,
+    ) -> Result<Vec<SuiEvent>, LocalExecError> {
+        unimplemented!("get_epoch_change_events for state dump is not implemented")
     }
 }

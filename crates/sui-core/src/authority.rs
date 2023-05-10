@@ -866,6 +866,7 @@ impl AuthorityState {
             .check_owned_object_locks_exist(owned_object_refs)
     }
 
+    /// Make sure not to leak any private info here
     pub(crate) async fn state_dump(
         &self,
         tx_digest: &TransactionDigest,
@@ -4084,5 +4085,12 @@ impl NodeStateDump {
         let mut file = File::create(path).unwrap();
         file.write_all(serde_json::to_string_pretty(self).unwrap().as_bytes())
             .unwrap();
+    }
+
+    #[cfg(not(release))]
+    pub fn read_from_file(path: &str) -> Self {
+        let mut path = PathBuf::from(path);
+        let file = File::open(path).unwrap();
+        serde_json::from_reader(file).unwrap()
     }
 }
