@@ -121,6 +121,9 @@ pub struct NodeConfig {
 
     #[serde(default)]
     pub certificate_deny_config: CertificateDenyConfig,
+
+    #[serde(default)]
+    pub state_debug_dump_config: StateDebugDumpConfig,
 }
 
 fn default_authority_store_pruning_config() -> AuthorityStorePruningConfig {
@@ -733,6 +736,21 @@ impl AuthorityKeyPairWithPath {
                 }
             })
             .as_ref()
+    }
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct StateDebugDumpConfig {
+    #[serde(default)]
+    pub dump_file_directory: PathBuf,
+}
+
+impl Default for StateDebugDumpConfig {
+    fn default() -> Self {
+        Self {
+            dump_file_directory: std::env::temp_dir(),
+        }
     }
 }
 

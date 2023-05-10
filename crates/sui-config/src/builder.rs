@@ -3,6 +3,7 @@
 
 use crate::genesis::{TokenAllocation, TokenDistributionScheduleBuilder};
 use crate::genesis_config::AccountConfig;
+use crate::node::StateDebugDumpConfig;
 use crate::node::{
     default_enable_index_processing, default_end_of_epoch_broadcast_channel_capacity,
     AuthorityKeyPairWithPath, DBCheckpointConfig, ExpensiveSafetyCheckConfig, KeyPairWithPath,
@@ -36,7 +37,6 @@ use sui_types::crypto::{
 };
 use sui_types::multiaddr::Multiaddr;
 use sui_types::object::Object;
-
 pub enum CommitteeConfig {
     Size(NonZeroUsize),
     Validators(Vec<ValidatorConfigInfo>),
@@ -82,6 +82,7 @@ pub struct ConfigBuilder<R = OsRng> {
     supported_protocol_versions_config: ProtocolVersionsConfig,
 
     db_checkpoint_config: DBCheckpointConfig,
+    state_debug_dump_config: StateDebugDumpConfig,
 }
 
 impl ConfigBuilder {
@@ -104,6 +105,7 @@ impl ConfigBuilder {
             },
             supported_protocol_versions_config: ProtocolVersionsConfig::Default,
             db_checkpoint_config: DBCheckpointConfig::default(),
+            state_debug_dump_config: StateDebugDumpConfig::default(),
         }
     }
 
@@ -201,6 +203,11 @@ impl<R> ConfigBuilder<R> {
         self
     }
 
+    pub fn with_debug_dump_config(mut self, state_debug_dump_config: StateDebugDumpConfig) -> Self {
+        self.state_debug_dump_config = state_debug_dump_config;
+        self
+    }
+
     pub fn rng<N: rand::RngCore + rand::CryptoRng>(self, rng: N) -> ConfigBuilder<N> {
         ConfigBuilder {
             rng: Some(rng),
@@ -214,6 +221,7 @@ impl<R> ConfigBuilder<R> {
             validator_ip_sel: self.validator_ip_sel,
             supported_protocol_versions_config: self.supported_protocol_versions_config,
             db_checkpoint_config: self.db_checkpoint_config,
+            state_debug_dump_config: self.state_debug_dump_config,
         }
     }
 
@@ -538,6 +546,7 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
                     name_service_resolver_object_id: None,
                     transaction_deny_config: Default::default(),
                     certificate_deny_config: Default::default(),
+                    state_debug_dump_config: self.state_debug_dump_config.clone(),
                 }
             })
             .collect();

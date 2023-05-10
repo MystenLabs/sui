@@ -12,7 +12,6 @@ use move_binary_format::CompiledModule;
 use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::account_address::AccountAddress;
 use move_core_types::language_storage::{ModuleId, StructTag};
-use move_core_types::parser::parse_struct_tag;
 use move_core_types::resolver::{ModuleResolver, ResourceResolver};
 use prometheus::Registry;
 use similar::{ChangeTag, TextDiff};
@@ -37,7 +36,6 @@ use sui_core::signature_verifier::SignatureVerifierMetrics;
 use sui_framework::BuiltInFramework;
 use sui_json_rpc_types::SuiTransactionBlockEffects;
 use sui_json_rpc_types::SuiTransactionBlockEffectsAPI;
-use sui_json_rpc_types::{EventFilter, SuiEvent};
 use sui_protocol_config::ProtocolConfig;
 use sui_sdk::{SuiClient, SuiClientBuilder};
 use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress, VersionNumber};
@@ -353,7 +351,7 @@ impl LocalExec {
         let registry = prometheus::Registry::new();
         let metrics = Arc::new(LimitsMetrics::new(&registry));
 
-        let state = NodeStateDump::read_from_file(path);
+        let state = NodeStateDump::read_from_file(&PathBuf::from(path))?;
         let current_protocol_version = state.protocol_version;
         let fetcher = NodeStateDumpFetcher::from(state);
 

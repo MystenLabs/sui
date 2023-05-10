@@ -25,6 +25,7 @@ use prometheus::{
 };
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
+use sui_config::node::StateDebugDumpConfig;
 use tap::{TapFallible, TapOptional};
 use tokio::sync::mpsc::unbounded_channel;
 use tokio::sync::oneshot;
@@ -541,6 +542,9 @@ pub struct AuthorityState {
     transaction_deny_config: TransactionDenyConfig,
 
     certificate_deny_config: CertificateDenyConfig,
+
+    /// Config for state dumping on forks
+    debug_dump_config: StateDebugDumpConfig,
 }
 
 /// The authority state encapsulates all state, drives execution, and ensures safety.
@@ -874,7 +878,8 @@ impl AuthorityState {
         expected_effects_digest: TransactionEffectsDigest,
         inner_temporary_store: &InnerTemporaryStore,
         certificate: &VerifiedExecutableTransaction,
-    ) -> SuiResult<()> {
+        path: &Path,
+    ) -> SuiResult<PathBuf> {
         // Epoch info
         let epoch_store = self.load_epoch_store_one_call_per_task();
         let executed_epoch = epoch_store.epoch();
@@ -922,7 +927,7 @@ impl AuthorityState {
         }
 
         // All other input objects should already be in `inner_temporary_store.objects`
-        NodeStateDump {
+        let file_path = NodeStateDump {
             tx_digest: *tx_digest,
             executed_epoch,
             reference_gas_price,
@@ -938,8 +943,9 @@ impl AuthorityState {
             computed_effects: effects.clone(),
             expected_effects_digest,
         }
-        .write_to_file(".");
-        Ok(())
+        .write_to_file(path)
+        .map_err(|e| SuiError::FileIOError(e.to_string()))?;
+        Ok(file_path)
     }
 
     #[instrument(level = "trace", skip_all)]
@@ -1009,10 +1015,17 @@ impl AuthorityState {
                         expected_effects_digest,
                         &inner_temporary_store,
                         certificate,
+                        &self.debug_dump_config.dump_file_directory,
                     )
                     .await
                 {
-                    Ok(_) => {}
+                    Ok(out_path) => {
+                        info!(
+                            "Dumped node state for transaction {} to {}",
+                            digest,
+                            out_path.as_path().display().to_string()
+                        );
+                    }
                     Err(e) => {
                         error!(
                             "Error dumping state for {}: {e}",
@@ -1904,6 +1917,7 @@ impl AuthorityState {
         transaction_deny_config: TransactionDenyConfig,
         certificate_deny_config: CertificateDenyConfig,
         indirect_objects_threshold: usize,
+        debug_dump_config: StateDebugDumpConfig,
     ) -> Arc<Self> {
         Self::check_protocol_version(supported_protocol_versions, epoch_store.protocol_version());
 
@@ -1946,6 +1960,7 @@ impl AuthorityState {
             expensive_safety_check_config,
             transaction_deny_config,
             certificate_deny_config,
+            debug_dump_config,
         });
 
         // Start a task to execute ready certificates.
@@ -3158,10 +3173,7 @@ impl AuthorityState {
         if self.indexes.is_none() || self.is_validator(epoch_store) {
             return None;
         }
-        let written_coin_objects: BTreeMap<
-            ObjectID,
-            ((ObjectID, SequenceNumber, ObjectDigest), Object, WriteKind),
-        > = inner_temporary_store
+        let written_coin_objects = inner_temporary_store
             .written
             .iter()
             .filter_map(|(k, v)| {
@@ -4039,6 +4051,9 @@ pub mod framework_injection {
     }
 }
 
+use std::fs::File;
+use std::io::Write;
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct NodeStateDump {
     pub tx_digest: TransactionDigest,
@@ -4056,8 +4071,6 @@ pub struct NodeStateDump {
     pub runtime_reads: Vec<Object>,
     pub input_objects: Vec<Object>,
 }
-use std::fs::File;
-use std::io::Write;
 
 impl NodeStateDump {
     pub fn all_objects(&self) -> Vec<Object> {
@@ -4071,23 +4084,22 @@ impl NodeStateDump {
         objects
     }
 
-    pub fn write_to_file(&self, path: &str) {
+    pub fn write_to_file(&self, path: &Path) -> Result<PathBuf, anyhow::Error> {
         let file_name = format!(
             "{}_{}_NODE_DUMP.json",
             self.tx_digest,
             AuthorityState::unixtime_now_ms()
         );
-        let mut path = PathBuf::from(path);
+        let mut path = path.to_path_buf();
         path.push(&file_name);
-        let mut file = File::create(path).unwrap();
-        file.write_all(serde_json::to_string_pretty(self).unwrap().as_bytes())
-            .unwrap();
+        let mut file = File::create(path.clone())?;
+        file.write_all(serde_json::to_string_pretty(self)?.as_bytes())?;
+        Ok(path)
     }
 
     #[cfg(not(release))]
-    pub fn read_from_file(path: &str) -> Self {
-        let mut path = PathBuf::from(path);
-        let file = File::open(path).unwrap();
-        serde_json::from_reader(file).unwrap()
+    pub fn read_from_file(path: &PathBuf) -> Result<Self, anyhow::Error> {
+        let file = File::open(path)?;
+        serde_json::from_reader(file).map_err(|e| anyhow::anyhow!(e))
     }
 }
