@@ -45,7 +45,7 @@ use sui_types::object::ObjectRead;
 
 use crate::errors::{Context, IndexerError};
 use crate::metrics::IndexerMetrics;
-use crate::models::addresses::Address;
+use crate::models::addresses::{ActiveAddress, Address};
 use crate::models::checkpoints::Checkpoint;
 use crate::models::epoch::DBEpochInfo;
 use crate::models::events::Event;
@@ -58,11 +58,11 @@ use crate::models::system_state::DBValidatorSummary;
 use crate::models::transaction_index::{InputObject, MoveCall, Recipient};
 use crate::models::transactions::Transaction;
 use crate::schema::{
-    addresses, checkpoints, checkpoints::dsl as checkpoints_dsl, epochs, epochs::dsl as epochs_dsl,
-    events, input_objects, input_objects::dsl as input_objects_dsl, move_calls,
-    move_calls::dsl as move_calls_dsl, objects, objects::dsl as objects_dsl, objects_history,
-    packages, recipients, recipients::dsl as recipients_dsl, system_states, transactions,
-    transactions::dsl as transactions_dsl, validators,
+    active_addresses, addresses, checkpoints, checkpoints::dsl as checkpoints_dsl, epochs,
+    epochs::dsl as epochs_dsl, events, input_objects, input_objects::dsl as input_objects_dsl,
+    move_calls, move_calls::dsl as move_calls_dsl, objects, objects::dsl as objects_dsl,
+    objects_history, packages, recipients, recipients::dsl as recipients_dsl, system_states,
+    transactions, transactions::dsl as transactions_dsl, validators,
 };
 use crate::store::diesel_marco::{read_only_blocking, transactional_blocking};
 use crate::store::indexer_store::TemporaryCheckpointStore;
@@ -1149,6 +1149,7 @@ impl IndexerStore for PgIndexerStore {
             events,
             object_changes: tx_object_changes,
             addresses,
+            active_addresses,
             packages,
             input_objects,
             move_calls,
@@ -1199,15 +1200,48 @@ impl IndexerStore for PgIndexerStore {
                 .collect();
             persist_transaction_object_changes(conn, mutated_objects, deleted_objects, None, None)?;
 
-            // Commit indexed addresses
-            for addresses_chunk in addresses.chunks(PG_COMMIT_CHUNK_SIZE) {
+            // TODO(gegaowp): refactor to consolidate commit blocks
+            // Commit indexed addresses & active addresses
+            for address_chunk in addresses.chunks(PG_COMMIT_CHUNK_SIZE) {
                 diesel::insert_into(addresses::table)
-                    .values(addresses_chunk)
+                    .values(address_chunk)
                     .on_conflict(addresses::account_address)
-                    .do_nothing()
+                    .do_update()
+                    .set((
+                        addresses::last_appearance_time
+                            .eq(excluded(addresses::last_appearance_time)),
+                        addresses::last_appearance_tx.eq(excluded(addresses::last_appearance_tx)),
+                    ))
                     .execute(conn)
                     .map_err(IndexerError::from)
-                    .context("Failed writing addresses to PostgresDB")?;
+                    .context(
+                        format!(
+                            "Failed writing addresses to PostgresDB with tx {}",
+                            address_chunk[0].last_appearance_tx
+                        )
+                        .as_str(),
+                    )?;
+            }
+            for active_address_chunk in active_addresses.chunks(PG_COMMIT_CHUNK_SIZE) {
+                diesel::insert_into(active_addresses::table)
+                    .values(active_address_chunk)
+                    .on_conflict(active_addresses::account_address)
+                    .do_update()
+                    .set((
+                        active_addresses::last_appearance_time
+                            .eq(excluded(active_addresses::last_appearance_time)),
+                        active_addresses::last_appearance_tx
+                            .eq(excluded(active_addresses::last_appearance_tx)),
+                    ))
+                    .execute(conn)
+                    .map_err(IndexerError::from)
+                    .context(
+                        format!(
+                            "Failed writing active addresses to PostgresDB with tx {}",
+                            active_address_chunk[0].last_appearance_tx
+                        )
+                        .as_str(),
+                    )?;
             }
 
             // Commit indexed packages
@@ -1364,16 +1398,52 @@ WHERE e1.epoch = e2.epoch
         Ok(())
     }
 
-    async fn persist_addresses(&self, addresses: &[Address]) -> Result<(), IndexerError> {
+    async fn persist_addresses(
+        &self,
+        addresses: &[Address],
+        active_addresses: &[ActiveAddress],
+    ) -> Result<(), IndexerError> {
         transactional_blocking!(&self.blocking_cp, |conn| {
-            for addresses_chunk in addresses.chunks(PG_COMMIT_CHUNK_SIZE) {
+            for address_chunk in addresses.chunks(PG_COMMIT_CHUNK_SIZE) {
                 diesel::insert_into(addresses::table)
-                    .values(addresses_chunk)
+                    .values(address_chunk)
                     .on_conflict(addresses::account_address)
-                    .do_nothing()
+                    .do_update()
+                    .set((
+                        addresses::last_appearance_time
+                            .eq(excluded(addresses::last_appearance_time)),
+                        addresses::last_appearance_tx.eq(excluded(addresses::last_appearance_tx)),
+                    ))
                     .execute(conn)
                     .map_err(IndexerError::from)
-                    .context("Failed writing addresses to PostgresDB")?;
+                    .context(
+                        format!(
+                            "Failed writing addresses to PostgresDB with tx {}",
+                            address_chunk[0].last_appearance_tx
+                        )
+                        .as_str(),
+                    )?;
+            }
+            for active_address_chunk in active_addresses.chunks(PG_COMMIT_CHUNK_SIZE) {
+                diesel::insert_into(active_addresses::table)
+                    .values(active_address_chunk)
+                    .on_conflict(active_addresses::account_address)
+                    .do_update()
+                    .set((
+                        active_addresses::last_appearance_time
+                            .eq(excluded(active_addresses::last_appearance_time)),
+                        active_addresses::last_appearance_tx
+                            .eq(excluded(active_addresses::last_appearance_tx)),
+                    ))
+                    .execute(conn)
+                    .map_err(IndexerError::from)
+                    .context(
+                        format!(
+                            "Failed writing active addresses to PostgresDB with tx {}",
+                            active_address_chunk[0].last_appearance_tx
+                        )
+                        .as_str(),
+                    )?;
             }
             Ok::<(), IndexerError>(())
         })?;

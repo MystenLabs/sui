@@ -12,7 +12,6 @@ use sui_types::object::Owner;
 use sui_types::transaction::{SenderSignedData, TransactionDataAPI};
 
 use crate::errors::IndexerError;
-use crate::models::addresses::Address;
 use crate::models::transaction_index::{InputObject, MoveCall, Recipient};
 
 pub struct FastPathTransactionBlockResponse {
@@ -183,6 +182,12 @@ impl TryFrom<SuiTransactionBlockResponse> for CheckpointTransactionBlockResponse
     }
 }
 
+pub struct AddressData {
+    pub account_address: String,
+    pub transaction_digest: String,
+    pub timestamp_ms: i64,
+}
+
 impl CheckpointTransactionBlockResponse {
     pub fn get_input_objects(&self, epoch: u64) -> Result<Vec<InputObject>, IndexerError> {
         let raw_tx = self.raw_transaction.clone();
@@ -266,7 +271,7 @@ impl CheckpointTransactionBlockResponse {
             .collect()
     }
 
-    pub fn get_addresses(&self, epoch: u64, checkpoint: u64) -> Vec<Address> {
+    pub fn get_from_and_to_addresses(&self, epoch: u64, checkpoint: u64) -> Vec<AddressData> {
         let mut addresses = self
             .get_recipients(epoch, checkpoint)
             .into_iter()
@@ -275,12 +280,20 @@ impl CheckpointTransactionBlockResponse {
         addresses.push(self.transaction.data.sender().to_string());
         addresses
             .into_iter()
-            .map(|r| Address {
+            .map(|r| AddressData {
                 account_address: r,
-                first_appearance_tx: self.digest.to_string(),
-                first_appearance_time: self.timestamp_ms as i64,
+                transaction_digest: self.digest.to_string(),
+                timestamp_ms: self.timestamp_ms as i64,
             })
-            .collect::<Vec<Address>>()
+            .collect::<Vec<AddressData>>()
+    }
+
+    pub fn get_from_address(&self) -> AddressData {
+        AddressData {
+            account_address: self.transaction.data.sender().to_string(),
+            transaction_digest: self.digest.to_string(),
+            timestamp_ms: self.timestamp_ms as i64,
+        }
     }
 }
 
