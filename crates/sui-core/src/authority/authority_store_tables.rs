@@ -256,6 +256,59 @@ impl AuthorityPerpetualTables {
         Ok(())
     }
 
+    pub fn get_transaction(
+        &self,
+        digest: &TransactionDigest,
+    ) -> SuiResult<Option<TrustedTransaction>> {
+        let Some(transaction) = self.transactions.get(digest)? else {
+            return Ok(None);
+        };
+        Ok(Some(transaction))
+    }
+
+    pub fn get_effects(&self, digest: &TransactionDigest) -> SuiResult<Option<TransactionEffects>> {
+        let Some(effect_digest) = self.executed_effects.get(digest)? else {
+            return Ok(None);
+        };
+        Ok(self.effects.get(&effect_digest)?)
+    }
+
+    pub fn get_checkpoint_sequence_number(
+        &self,
+        digest: &TransactionDigest,
+    ) -> SuiResult<Option<(EpochId, CheckpointSequenceNumber)>> {
+        Ok(self.executed_transactions_to_checkpoint.get(digest)?)
+    }
+
+    pub fn get_newer_object_keys(
+        &self,
+        object: &(ObjectID, SequenceNumber),
+    ) -> SuiResult<Vec<ObjectKey>> {
+        let mut objects = vec![];
+        for (key, _value) in self.objects.iter_with_bounds(
+            Some(ObjectKey(object.0, object.1.next())),
+            Some(ObjectKey(object.0, VersionNumber::MAX)),
+        ) {
+            objects.push(key);
+        }
+        Ok(objects)
+    }
+
+    pub fn remove_executed_effects_and_outputs(
+        &self,
+        digest: &TransactionDigest,
+        objects: &[ObjectKey],
+    ) -> SuiResult {
+        let mut wb = self.objects.batch();
+        for object in objects {
+            wb.delete_batch(&self.objects, [object])?;
+        }
+        wb.delete_batch(&self.executed_transactions_to_checkpoint, [digest])?;
+        wb.delete_batch(&self.executed_effects, [digest])?;
+        wb.write()?;
+        Ok(())
+    }
+
     pub fn database_is_empty(&self) -> SuiResult<bool> {
         Ok(self
             .objects

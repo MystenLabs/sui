@@ -10,6 +10,8 @@ use std::path::{Path, PathBuf};
 use sui_core::authority::authority_store_tables::AuthorityPerpetualTables;
 use sui_core::checkpoints::CheckpointStore;
 use sui_types::base_types::EpochId;
+use sui_types::digests::TransactionDigest;
+use sui_types::effects::TransactionEffectsAPI;
 use typed_store::rocks::MetricConf;
 pub mod db_dump;
 mod index_search;
@@ -24,6 +26,8 @@ pub enum DbToolCommand {
     TableSummary(Options),
     DuplicatesSummary,
     ListDBMetadata(Options),
+    PrintTransactionCheckpoint(PrintTransactionOptions),
+    RemoveTransaction(RemoveTransactionOptions),
     ResetDB,
     RewindCheckpointExecution(RewindCheckpointExecutionOptions),
     Compact,
@@ -77,6 +81,23 @@ pub struct Options {
 
 #[derive(Parser)]
 #[clap(rename_all = "kebab-case")]
+pub struct PrintTransactionOptions {
+    #[clap(long, help = "The transaction digest to remove")]
+    digest: TransactionDigest,
+}
+
+#[derive(Parser)]
+#[clap(rename_all = "kebab-case")]
+pub struct RemoveTransactionOptions {
+    #[clap(long, help = "The transaction digest to remove")]
+    digest: TransactionDigest,
+
+    #[clap(long)]
+    confirm: bool,
+}
+
+#[derive(Parser)]
+#[clap(rename_all = "kebab-case")]
 pub struct RewindCheckpointExecutionOptions {
     #[clap(long = "epoch")]
     epoch: EpochId,
@@ -103,7 +124,9 @@ pub fn execute_db_tool_command(db_path: PathBuf, cmd: DbToolCommand) -> anyhow::
         DbToolCommand::ListDBMetadata(d) => {
             print_table_metadata(d.store_name, d.epoch, db_path, &d.table_name)
         }
+        DbToolCommand::PrintTransactionCheckpoint(d) => print_transaction_checkpoint(&db_path, d),
         DbToolCommand::ResetDB => reset_db_to_genesis(&db_path),
+        DbToolCommand::RemoveTransaction(d) => remove_transaction(&db_path, d),
         DbToolCommand::RewindCheckpointExecution(d) => {
             rewind_checkpoint_execution(&db_path, d.epoch, d.checkpoint_sequence_number)
         }
@@ -147,6 +170,72 @@ pub fn print_db_duplicates_summary(db_path: PathBuf) -> anyhow::Result<()> {
         "Total objects = {}, duplicated objects = {}, total bytes = {}, duplicated bytes = {}",
         total_count, duplicate_count, total_bytes, duplicated_bytes
     );
+    Ok(())
+}
+
+pub fn print_transaction_checkpoint(
+    path: &Path,
+    opt: PrintTransactionOptions,
+) -> anyhow::Result<()> {
+    let perpetual_db = AuthorityPerpetualTables::open(&path.join("store"), None);
+    let Some((epoch, checkpoint_seq_num)) = perpetual_db.get_checkpoint_sequence_number(&opt.digest)? else {
+        bail!("Transaction {:?} not executed in a checkpoint!", opt.digest);
+    };
+    println!(
+        "Transaction {:?} executed in epoch {} checkpoint {}",
+        opt.digest, epoch, checkpoint_seq_num
+    );
+    Ok(())
+}
+
+// Force removes a transaction and its outputs, if no other dependent transaction has executed yet.
+// Usually this should be paired with rewind_checkpoint_execution() to re-execute the removed
+// transaction, to repair corrupted database.
+// Dry run with: cargo run --package sui-tool -- db-tool --db-path /opt/sui/db/authorities_db/live remove-transaction --digest xxxx
+// Add --confirm to actually remove the transaction.
+pub fn remove_transaction(path: &Path, opt: RemoveTransactionOptions) -> anyhow::Result<()> {
+    let perpetual_db = AuthorityPerpetualTables::open(&path.join("store"), None);
+    let Some(_transaction) = perpetual_db.get_transaction(&opt.digest)? else {
+        bail!("Transaction {:?} not found and cannot be re-executed!", opt.digest);
+    };
+    let Some(effects) = perpetual_db.get_effects(&opt.digest)? else {
+        bail!("Transaction {:?} not executed or effects have been pruned!", opt.digest);
+    };
+    let mut objects_to_remove = vec![];
+    for mutated_obj in effects.modified_at_versions() {
+        let new_objs = perpetual_db.get_newer_object_keys(mutated_obj)?;
+        if new_objs.len() > 1 {
+            bail!(
+                "Dependents of transaction {:?} have already executed! Mutated object: {:?}, new objects: {:?}",
+                opt.digest,
+                mutated_obj,
+                new_objs,
+            );
+        }
+        objects_to_remove.extend(new_objs);
+    }
+    for (created_obj, _owner) in effects.created() {
+        let new_objs = perpetual_db.get_newer_object_keys(&(created_obj.0, created_obj.1))?;
+        if new_objs.len() > 1 {
+            bail!(
+                "Dependents of transaction {:?} have already executed! Created object: {:?}, new objects: {:?}",
+                opt.digest,
+                created_obj,
+                new_objs,
+            );
+        }
+        objects_to_remove.extend(new_objs);
+    }
+    // TODO: verify there is no newer object for read-only input, before dynamic child mvcc is implemented.
+    println!(
+        "Transaction {:?} will be removed from the database. The following output objects will be removed too:\n{:#?}",
+        opt.digest, objects_to_remove
+    );
+    if opt.confirm {
+        println!("Proceeding to remove transaction {:?} in 5s ..", opt.digest);
+        std::thread::sleep(std::time::Duration::from_secs(5));
+        perpetual_db.remove_executed_effects_and_outputs(&opt.digest, &objects_to_remove)?;
+    }
     Ok(())
 }
 
