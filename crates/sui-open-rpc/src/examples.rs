@@ -29,13 +29,13 @@ use sui_json_rpc_types::{
     ObjectValueKind::ByMutableReference, ObjectValueKind::ByValue, ObjectsPage, OwnedObjectRef,
     RPCTransactionRequestParams, SuiCommittee, SuiData, SuiEvent, SuiExecutionStatus,
     SuiLoadedChildObject, SuiLoadedChildObjectsResponse, SuiMoveAbility, SuiMoveAbilitySet,
-    SuiMoveNormalizedFunction, SuiMoveNormalizedModule, SuiMoveNormalizedStruct, SuiMoveNormalizedType,
-    SuiMoveVisibility, SuiObjectData, SuiObjectDataFilter, SuiObjectDataOptions, SuiObjectRef, 
-    SuiObjectResponse, SuiObjectResponseQuery, SuiParsedData, SuiPastObjectResponse,
-    SuiTransactionBlock, SuiTransactionBlockData, SuiTransactionBlockEffects,
-    SuiTransactionBlockEffectsV1, SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
-    SuiTransactionBlockResponseQuery, TransactionBlockBytes, TransactionBlocksPage,
-    TransferObjectParams,
+    SuiMoveNormalizedFunction, SuiMoveNormalizedModule, SuiMoveNormalizedStruct,
+    SuiMoveNormalizedType, SuiMoveVisibility, SuiObjectData, SuiObjectDataFilter,
+    SuiObjectDataOptions, SuiObjectRef, SuiObjectResponse, SuiObjectResponseQuery, SuiParsedData,
+    SuiPastObjectResponse, SuiTransactionBlock, SuiTransactionBlockData,
+    SuiTransactionBlockEffects, SuiTransactionBlockEffectsV1, SuiTransactionBlockResponse,
+    SuiTransactionBlockResponseOptions, SuiTransactionBlockResponseQuery, TransactionBlockBytes,
+    TransactionBlocksPage, TransferObjectParams,
 };
 use sui_json_rpc_types::{SuiTypeTag, ValidatorApy, ValidatorApys};
 use sui_open_rpc::ExamplePairing;
@@ -1096,7 +1096,6 @@ impl RpcExampleProvider {
                 json!(result),
             )],
         )
-
     }
 
     fn sui_get_normalized_move_modules_by_package(&mut self) -> Examples {
@@ -1119,16 +1118,19 @@ impl RpcExampleProvider {
                 json!(result),
             )],
         )
-
     }
 
-    fn sui_get_normalized_move_struct(&mut self) -> Examples{
+    fn sui_get_normalized_move_struct(&mut self) -> Examples {
         let abilities = SuiMoveAbilitySet {
             abilities: vec![SuiMoveAbility::Store, SuiMoveAbility::Key],
         };
-        let fields = vec![].into_iter().collect::<Vec<_>>();
-        let type_parameters = vec![].into_iter().collect::<Vec<_>>();
-        let result = SuiMoveNormalizedStruct{
+        let fields = vec![]
+            .into_iter()
+            .collect::<Vec<_>>();
+        let type_parameters = vec![]
+            .into_iter()
+            .collect::<Vec<_>>();
+        let result = SuiMoveNormalizedStruct {
             abilities,
             fields,
             type_parameters,
