@@ -346,7 +346,7 @@ impl DataFetcher for RemoteFetcher {
             .get_epoch_change_events(true)
             .await?
             .into_iter()
-            .find(|ev| match extract_epoch_and_version(ev.clone().clone()) {
+            .find(|ev| match extract_epoch_and_version(ev.clone()) {
                 Ok((epoch, _)) => epoch == epoch_id,
                 Err(_) => false,
             })
