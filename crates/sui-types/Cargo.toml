@@ -34,6 +34,7 @@ enum_dispatch = "^0.3"
 eyre = "0.6.8"
 indexmap = "1.9.2"
 derivative = "2.2.0"
+parking_lot = "0.12.1"
 
 move-binary-format.workspace = true
 move-bytecode-utils.workspace = true

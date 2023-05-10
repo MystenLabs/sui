@@ -291,6 +291,7 @@ impl<'a> FullnodeConfigBuilder<'a> {
             name_service_resolver_object_id: None,
             transaction_deny_config: Default::default(),
             certificate_deny_config: Default::default(),
+            state_debug_dump_config: Default::default(),
         })
     }
 }
