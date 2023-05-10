@@ -2926,7 +2926,20 @@ impl AuthorityState {
                 end_time,
             } => index_store
                 .event_iterator(start_time, end_time, tx_num, event_num, limit, descending)?,
-            _ => {
+            EventFilter::MoveEventModule { package, module } => index_store
+                .events_by_move_event_module(
+                    &ModuleId::new(package.into(), module),
+                    tx_num,
+                    event_num,
+                    limit,
+                    descending,
+                )?,
+            // not using "_ =>" because we want to make sure we remember to add new variants here
+            EventFilter::Package(_)
+            | EventFilter::MoveEventField { .. }
+            | EventFilter::Any(_)
+            | EventFilter::And(_, _)
+            | EventFilter::Or(_, _) => {
                 return Err(SuiError::UserInputError {
                     error: UserInputError::Unsupported(
                         "This query type is not supported by the full node.".to_string(),
