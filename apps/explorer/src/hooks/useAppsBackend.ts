@@ -3,8 +3,7 @@
 
 import { useCallback } from 'react';
 
-import { useNetwork } from './useNetwork';
-
+import { useNetwork } from '~/context';
 import { Network } from '~/utils/api/DefaultRpcClient';
 
 export function useAppsBackend() {

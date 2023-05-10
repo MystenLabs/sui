@@ -3,14 +3,15 @@
 
 import { useFeatureIsOn } from '@growthbook/growthbook-react';
 import { useGetSystemState } from '@mysten/core';
+import { useContext } from 'react';
 
+import { NetworkContext } from '../../context';
 import { Network } from '../../utils/api/DefaultRpcClient';
 
-import { useNetwork } from '~/hooks/useNetwork';
 import { NetworkSelect, type NetworkOption } from '~/ui/header/NetworkSelect';
 
 export default function WrappedNetworkSelect() {
-    const [network, setNetwork] = useNetwork();
+    const [network, setNetwork] = useContext(NetworkContext);
     const mainnetEnabled = useFeatureIsOn('mainnet-selection');
     const { data } = useGetSystemState();
 
