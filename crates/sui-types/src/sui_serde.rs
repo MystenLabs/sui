@@ -161,7 +161,8 @@ impl SerializeAs<StructTag> for SuiStructTag {
     }
 }
 
-fn to_sui_struct_tag_string(value: &StructTag) -> Result<String, fmt::Error> {
+/// Serialize StructTag as a string, retaining the leading zeros in the address.
+pub fn to_sui_struct_tag_string(value: &StructTag) -> Result<String, fmt::Error> {
     let mut f = String::new();
     write!(
         f,

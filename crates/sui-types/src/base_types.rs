@@ -29,8 +29,8 @@ use crate::multisig::MultiSigPublicKey;
 use crate::object::{Object, Owner};
 use crate::parse_sui_struct_tag;
 use crate::signature::GenericSignature;
-use crate::sui_serde::HexAccountAddress;
 use crate::sui_serde::Readable;
+use crate::sui_serde::{to_sui_struct_tag_string, HexAccountAddress};
 use crate::transaction::Transaction;
 use crate::transaction::VerifiedTransaction;
 use crate::MOVE_STDLIB_ADDRESS;
@@ -53,6 +53,7 @@ use move_core_types::language_storage::StructTag;
 use move_core_types::language_storage::TypeTag;
 use rand::Rng;
 use schemars::JsonSchema;
+use serde::ser::Error;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use shared_crypto::intent::HashingIntentScope;
@@ -1181,7 +1182,11 @@ impl From<SuiAddress> for AccountAddress {
 impl fmt::Display for MoveObjectType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> std::fmt::Result {
         let s: StructTag = self.clone().into();
-        write!(f, "{}", s)
+        write!(
+            f,
+            "{}",
+            to_sui_struct_tag_string(&s).map_err(fmt::Error::custom)?
+        )
     }
 }
 
