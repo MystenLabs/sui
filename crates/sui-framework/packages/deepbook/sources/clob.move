@@ -115,7 +115,7 @@ module deepbook::clob {
     }
 
     /// Emitted only when a maker order is filled.
-    struct OrderFilled<phantom BaseAsset, phantom QuoteAsset> has copy, store, drop {
+    struct OrderFilledV2<phantom BaseAsset, phantom QuoteAsset> has copy, store, drop {
         /// object ID of the pool the order was placed on
         pool_id: ID,
         /// ID of the order within the pool
@@ -126,7 +126,9 @@ module deepbook::clob {
         total_quantity: u64,
         base_asset_quantity_filled: u64,
         base_asset_quantity_remaining: u64,
-        price: u64
+        price: u64,
+        taker_commission: u64,
+        maker_rebates: u64
     }
     // <<<<<<<<<<<<<<<<<<<<<<<< Events <<<<<<<<<<<<<<<<<<<<<<<<
 
@@ -480,16 +482,15 @@ module deepbook::clob {
                     balance::join(&mut pool.quote_asset_trading_fees, quote_balance_filled);
                     balance::join(&mut base_balance_filled, locked_base_balance);
 
-                    event::emit(OrderFilled<BaseAsset, QuoteAsset> {
-                        pool_id: *object::uid_as_inner(&pool.id),
-                        order_id: maker_order.order_id,
-                        is_bid: false,
-                        owner: maker_order.owner,
-                        total_quantity: maker_order.quantity,
-                        base_asset_quantity_filled: filled_base_quantity,
-                        base_asset_quantity_remaining: maker_base_quantity,
-                        price: maker_order.price
-                    })
+                    emit_order_filled<BaseAsset, QuoteAsset>(
+                        *object::uid_as_inner(&pool.id),
+                        maker_order,
+                        filled_base_quantity,
+                        // taker_commission = filled_quote_quantity - filled_quote_quantity_without_commission
+                        // This guarantees that the subtraction will not underflow
+                        filled_quote_quantity - filled_quote_quantity_without_commission,
+                        maker_rebate
+                    )
                 };
 
                 if (skip_order || maker_base_quantity == 0) {
@@ -607,16 +608,13 @@ module deepbook::clob {
                         ),
                     );
 
-                    event::emit(OrderFilled<BaseAsset, QuoteAsset> {
-                        pool_id,
-                        order_id: maker_order.order_id,
-                        is_bid: false,
-                        owner: maker_order.owner,
-                        total_quantity: maker_order.quantity,
-                        base_asset_quantity_filled: filled_base_quantity,
-                        base_asset_quantity_remaining: maker_base_quantity,
-                        price: maker_order.price
-                    })
+                    emit_order_filled<BaseAsset, QuoteAsset>(
+                        *object::uid_as_inner(&pool.id),
+                        maker_order,
+                        filled_base_quantity,
+                        taker_commission,
+                        maker_rebate
+                    );
                 };
 
                 if (skip_order || maker_base_quantity == 0) {
@@ -729,16 +727,13 @@ module deepbook::clob {
                         ),
                     );
 
-                    event::emit(OrderFilled<BaseAsset, QuoteAsset> {
-                        pool_id: *object::uid_as_inner(&pool.id),
-                        order_id: maker_order.order_id,
-                        is_bid: true,
-                        owner: maker_order.owner,
-                        total_quantity: maker_order.quantity,
-                        base_asset_quantity_filled: filled_base_quantity,
-                        base_asset_quantity_remaining: maker_base_quantity,
-                        price: maker_order.price
-                    })
+                    emit_order_filled<BaseAsset, QuoteAsset>(
+                        *object::uid_as_inner(&pool.id),
+                        maker_order,
+                        filled_base_quantity,
+                        taker_commission,
+                        maker_rebate
+                    );
                 };
 
                 if (skip_order || maker_base_quantity == 0) {
@@ -1031,6 +1026,29 @@ module deepbook::clob {
             owner: order.owner,
             base_asset_quantity_canceled: order.quantity,
             price: order.price
+        })
+    }
+
+    fun emit_order_filled<BaseAsset, QuoteAsset>(
+        pool_id: ID,
+        order: &Order,
+        base_asset_quantity_filled: u64,
+        taker_commission: u64,
+        maker_rebates: u64
+    ) {
+        event::emit(OrderFilledV2<BaseAsset, QuoteAsset> {
+            pool_id,
+            order_id: order.order_id,
+            is_bid: order.is_bid,
+            owner: order.owner,
+            total_quantity: order.quantity,
+            base_asset_quantity_filled,
+            // order.quantity = base_asset_quantity_filled + base_asset_quantity_remaining
+            // This guarantees that the subtraction will not underflow
+            base_asset_quantity_remaining: order.quantity - base_asset_quantity_filled,
+            price: order.price,
+            taker_commission,
+            maker_rebates
         })
     }
 
@@ -2161,6 +2179,21 @@ module deepbook::clob {
         owner: ID,
         base_asset_quantity_placed: u64,
         price: u64,
+    }
+
+    /// Deprecated since v1.0.0, use `OrderFilledV2` instead.
+    struct OrderFilled<phantom BaseAsset, phantom QuoteAsset> has copy, store, drop {
+        /// object ID of the pool the order was placed on
+        pool_id: ID,
+        /// ID of the order within the pool
+        order_id: u64,
+        is_bid: bool,
+        /// object ID of the `AccountCap` that placed the order
+        owner: ID,
+        total_quantity: u64,
+        base_asset_quantity_filled: u64,
+        base_asset_quantity_remaining: u64,
+        price: u64
     }
 
 }
