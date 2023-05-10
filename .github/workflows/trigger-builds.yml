@@ -8,7 +8,7 @@ on:
       - 'testnet'
       - 'releases/sui-*-release'
     tags:
-	  - 'sui-v**'
+	    - 'sui-v**'
       - 'devnet-*'
       - 'testnet-*'
       - 'mainnet-*'
