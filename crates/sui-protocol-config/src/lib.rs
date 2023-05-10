@@ -1295,11 +1295,10 @@ mod test {
     use insta::assert_yaml_snapshot;
 
     #[test]
-    fn snaphost_tests() {
+    fn snapshot_tests() {
         println!("\n============================================================================");
         println!("!                                                                          !");
         println!("! IMPORTANT: never update snapshots from this test. only add new versions! !");
-        println!("! (it is actually ok to update them up until mainnet launches)             !");
         println!("!                                                                          !");
         println!("============================================================================\n");
         for i in MIN_PROTOCOL_VERSION..=MAX_PROTOCOL_VERSION {
