@@ -125,7 +125,8 @@ pub enum SuiClientCommands {
         /// Function name in module
         #[clap(long)]
         function: String,
-        /// Function name in module
+        /// Type arguments to the generic function being called.
+        /// All must be specified, or the call will fail.
         #[clap(
             long,
             value_parser = parse_sui_type_tag,

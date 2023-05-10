@@ -93,7 +93,9 @@ pub enum ExecutionFailureStatus {
     MoveAbort(MoveLocation, u64),
     #[error(
         "Move Bytecode Verification Error. \
-        Please run the Bytecode Verifier for more information."
+        Please run the Bytecode Verifier for more information. \
+        If applicable, verify that all entry functions' type arguments have been \
+        specified."
     )]
     VMVerificationOrDeserializationError,
     #[error("MOVE VM INVARIANT VIOLATION.")]

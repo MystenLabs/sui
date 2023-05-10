@@ -4439,7 +4439,7 @@ pub async fn call_dev_inspect(
 }
 
 /// This function creates a transaction that calls a 0x02::object_basics::set_value function.
-/// Usually we need to publish this package first, but in this test files we often don't do that.
+/// Usually we need to publish this package first, but in these test files we often don't do that.
 /// Then the tx would fail with `VMVerificationOrDeserializationError` (Linker error, module not found),
 /// but gas is still charged. Depending on what we want to test, this may be fine.
 #[cfg(test)]
