@@ -39,6 +39,7 @@ const MAX_PROTOCOL_VERSION: u64 = 12;
 // Version 11: Introduce `std::type_name::get_with_original_ids` to the system frameworks.
 // Version 12: Changes to deepbook in framework to add API for querying marketplace.
 //             Change NW Batch to use versioned metadata field.
+//             Changes to sui-system package to add PTB-friendly unstake function.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
