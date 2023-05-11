@@ -3,6 +3,7 @@
 
 use crate::faucet::write_ahead_log;
 use crate::metrics::FaucetMetrics;
+use async_recursion::async_recursion;
 use async_trait::async_trait;
 use prometheus::Registry;
 use tap::tap::TapFallible;
@@ -319,6 +320,7 @@ impl SimpleFaucet {
         }
     }
 
+    #[async_recursion]
     async fn transfer_gases(
         &self,
         amounts: &[u64],
@@ -362,9 +364,7 @@ impl SimpleFaucet {
             GasCoinResponse::GasCoinWithInsufficientBalance(coin_id) => {
                 warn!(?uuid, ?coin_id, "Insufficient balance, removing from pool");
                 self.metrics.total_discarded_coins.inc();
-                Err(FaucetError::GasCoinWithInsufficientBalance(
-                    coin_id.to_hex_uncompressed(),
-                ))
+                self.transfer_gases(amounts, recipient, uuid).await
             }
 
             GasCoinResponse::InvalidGasCoin(coin_id) => {
