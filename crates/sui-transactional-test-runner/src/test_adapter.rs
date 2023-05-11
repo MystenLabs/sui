@@ -1082,10 +1082,15 @@ impl<'a> SuiTestAdapter<'a> {
         let mut gas_status = if transaction.inner().is_system_tx() {
             SuiGasStatus::new_unmetered(&self.protocol_config)
         } else {
+            let gas_rounding_step = self
+                .protocol_config
+                .gas_rounding_step_as_option()
+                .unwrap_or(1u64);
             SuiCostTable::new(&self.protocol_config).into_gas_status_for_testing(
                 gas_budget,
                 self.gas_price,
                 self.protocol_config.storage_gas_price(),
+                gas_rounding_step,
             )
         };
         // Unmetered is set in the transaction run without metering. NB that this will still keep
