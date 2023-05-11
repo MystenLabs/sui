@@ -40,7 +40,7 @@ export function TransactionData({ transaction }: Props) {
 
     return (
         <div className="flex flex-wrap gap-6">
-            <section className="flex w-96 min-w-[50%] flex-1 flex-col gap-6">
+            <section className="flex w-96 flex-1 flex-col gap-6 max-md:min-w-[50%]">
                 {transaction.checkpoint && (
                     <TransactionBlockCard>
                         <TransactionBlockCardSection>
@@ -70,7 +70,7 @@ export function TransactionData({ transaction }: Props) {
                 )}
             </section>
 
-            <section className="flex w-96 flex-1 flex-col gap-6">
+            <section className="flex w-96 flex-1 flex-col gap-6 md:min-w-[510px]">
                 {isProgrammableTransaction && (
                     <>
                         <div data-testid="transactions-card">
