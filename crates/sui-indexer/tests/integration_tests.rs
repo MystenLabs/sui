@@ -34,7 +34,7 @@ pub mod pg_integration_test {
         CheckpointId, EventFilter, SuiMoveObject, SuiObjectData, SuiObjectDataFilter,
         SuiObjectDataOptions, SuiObjectResponse, SuiObjectResponseQuery, SuiParsedMoveObject,
         SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
-        SuiTransactionBlockResponseQuery, TransactionBlockBytes,
+        SuiTransactionBlockResponseQuery, TransactionBlockBytes, TransactionFilter,
     };
     use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
     use sui_types::base_types::{ObjectID, SuiAddress};
@@ -42,7 +42,6 @@ pub mod pg_integration_test {
     use sui_types::error::SuiObjectResponseError;
     use sui_types::gas_coin::GasCoin;
     use sui_types::object::ObjectFormatOptions;
-    use sui_types::query::TransactionFilter;
     use sui_types::quorum_driver_types::ExecuteTransactionRequestType;
     use sui_types::transaction::TEST_ONLY_GAS_UNIT_FOR_TRANSFER;
     use sui_types::utils::to_sender_signed_transaction;
@@ -884,7 +883,7 @@ pub mod pg_integration_test {
             .get_checkpoint(CheckpointId::SequenceNumber(prev_epoch_last_checkpoint_id))
             .await
             .unwrap();
-        assert_eq!(checkpoint.epoch as u64, current_epoch.epoch - 1);
+        assert_eq!(checkpoint.epoch, current_epoch.epoch - 1);
         assert_eq!(checkpoint.sequence_number, prev_epoch_last_checkpoint_id);
         assert!(checkpoint.end_of_epoch_data.is_some());
 
@@ -965,7 +964,6 @@ pub mod pg_integration_test {
         let mut pg_pool_conn = get_pg_pool_connection(&pg_connection_pool).unwrap();
 
         let lot_of_data = (1..10000)
-            .into_iter()
             .map(|_| Object {
                 epoch: 0,
                 checkpoint: 0,
@@ -1027,7 +1025,6 @@ pub mod pg_integration_test {
         let mut pg_pool_conn = get_pg_pool_connection(&pg_connection_pool).unwrap();
 
         let bulk_data = (1..=10000)
-            .into_iter()
             .map(|_| Object {
                 epoch: 0,
                 checkpoint: 0,
@@ -1206,7 +1203,7 @@ pub mod pg_integration_test {
         // Check if checkpoint validator sig matches
         let fullnode_checkpoint = test_cluster
             .rpc_client()
-            .get_checkpoint((cp as u64).into())
+            .get_checkpoint(cp.into())
             .await
             .unwrap();
 
@@ -1283,7 +1280,7 @@ pub mod pg_integration_test {
         };
 
         let config = IndexerConfig {
-            db_url,
+            db_url: Some(db_url),
             rpc_client_url: test_cluster.rpc_url().to_string(),
             migrated_methods: IndexerConfig::all_implemented_methods(),
             reset_db: true,
