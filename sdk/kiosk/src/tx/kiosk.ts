@@ -144,6 +144,28 @@ export function list(
 }
 
 /**
+ * Call the `kiosk::delist<T>(Kiosk, KioskOwnerCap, ID)` function.
+ * Delist an item that was placed on sale.
+ */
+export function delist(
+  tx: TransactionBlock,
+  itemType: string,
+  kiosk: ObjectArgument,
+  kioskCap: ObjectArgument,
+  itemId: SuiAddress
+): void {
+  tx.moveCall({
+    target: `${KIOSK_MODULE}::delist`,
+    typeArguments: [itemType],
+    arguments: [
+      objArg(tx, kiosk),
+      objArg(tx, kioskCap),
+      tx.pure(itemId, 'address')
+    ],
+  });
+}
+
+/**
  * Call the `kiosk::place_and_list<T>(Kiosk, KioskOwnerCap, Item, u64)` function.
  * Place an item to the Kiosk and list it for sale.
  */
