@@ -23,8 +23,6 @@ export const growthbook = new GrowthBook({
  */
 export enum FEATURES {
     USE_LOCAL_TXN_SERIALIZER = 'use-local-txn-serializer',
-    USE_TEST_NET_ENDPOINT = 'testnet-selection',
-    USE_MAINNET_ENDPOINT = 'mainnet-selection',
     STAKING_ENABLED = 'wallet-staking-enabled',
     WALLET_DAPPS = 'wallet-dapps',
     WALLET_MULTI_ACCOUNTS = 'wallet-multi-accounts',
