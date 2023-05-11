@@ -496,6 +496,19 @@ pub enum Owner {
 }
 
 impl Owner {
+    // NOTE: only return address of AddressOwner, otherwise return error,
+    // ObjectOwner's address is converted from object id, thus we will skip it.
+    pub fn get_address_owner_address(&self) -> SuiResult<SuiAddress> {
+        match self {
+            Self::AddressOwner(address) => Ok(*address),
+            Self::Shared { .. } | Self::Immutable | Self::ObjectOwner(_) => {
+                Err(SuiError::UnexpectedOwnerType)
+            }
+        }
+    }
+
+    // NOTE: this function will return address of both AddressOwner and ObjectOwner,
+    // address of ObjectOwner is converted from object id, even though the type is SuiAddress.
     pub fn get_owner_address(&self) -> SuiResult<SuiAddress> {
         match self {
             Self::AddressOwner(address) | Self::ObjectOwner(address) => Ok(*address),
