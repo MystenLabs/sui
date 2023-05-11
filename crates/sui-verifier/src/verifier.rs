@@ -29,6 +29,28 @@ pub fn sui_verify_module_metered(
     one_time_witness_verifier::verify_module(module, fn_info_map)
 }
 
+/// Runs the Sui verifier and checks if the error counts as a Sui verifier timeout
+/// NOTE: this function only check if the verifier error is a timeout
+/// All other errors are ignored
+pub fn sui_verify_module_metered_check_timeout_only(
+    config: &ProtocolConfig,
+    module: &CompiledModule,
+    fn_info_map: &FnInfoMap,
+    meter: &mut impl Meter,
+) -> Result<(), ExecutionError> {
+    // Checks if the error counts as a Sui verifier timeout
+    if let Err(error) = sui_verify_module_metered(config, module, fn_info_map, meter) {
+        if matches!(
+            error.kind(),
+            sui_types::execution_status::ExecutionFailureStatus::SuiMoveVerificationTimedout
+        ) {
+            return Err(error);
+        }
+    }
+    // Any other scenario, including a non-timeout error counts as Ok
+    Ok(())
+}
+
 pub fn sui_verify_module_unmetered(
     config: &ProtocolConfig,
     module: &CompiledModule,

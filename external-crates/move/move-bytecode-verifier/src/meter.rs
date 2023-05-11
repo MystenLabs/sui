@@ -8,7 +8,11 @@ use std::ops::Mul;
 
 /// Scope of meterinng
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub enum Scope {
+pub enum VerifierMeterScope {
+    // Metering is for transaction level
+    Transaction,
+    // Metering is for package level
+    Package,
     // Metering is for module level
     Module,
     // Metering is for function level
@@ -23,19 +27,24 @@ pub const PER_SUCCESSOR_COST: u128 = 10;
 /// Trait for a metering verification.
 pub trait Meter {
     /// Indicates the begin of a new scope.
-    fn enter_scope(&mut self, name: &str, scope: Scope);
+    fn enter_scope(&mut self, name: &str, scope: VerifierMeterScope);
 
     /// Transfer the amount of metering from once scope to the next. If the current scope has
     /// metered N units, the target scope will be charged with N*factor.
-    fn transfer(&mut self, from: Scope, to: Scope, factor: f32) -> PartialVMResult<()>;
+    fn transfer(
+        &mut self,
+        from: VerifierMeterScope,
+        to: VerifierMeterScope,
+        factor: f32,
+    ) -> PartialVMResult<()>;
 
     /// Add the number of units to the meter, returns an error if a limit is hit.
-    fn add(&mut self, scope: Scope, units: u128) -> PartialVMResult<()>;
+    fn add(&mut self, scope: VerifierMeterScope, units: u128) -> PartialVMResult<()>;
 
     /// Adds the number of items.
     fn add_items(
         &mut self,
-        scope: Scope,
+        scope: VerifierMeterScope,
         units_per_item: u128,
         items: usize,
     ) -> PartialVMResult<()> {
@@ -48,7 +57,7 @@ pub trait Meter {
     /// Adds the number of items with growth factor
     fn add_items_with_growth(
         &mut self,
-        scope: Scope,
+        scope: VerifierMeterScope,
         mut units_per_item: u128,
         items: usize,
         growth_factor: f32,
@@ -64,7 +73,7 @@ pub trait Meter {
     }
 }
 
-pub struct BoundMeter {
+pub struct VerifierBoundMeter {
     mod_bounds: Bounds,
     fun_bounds: Bounds,
 }
@@ -75,19 +84,24 @@ struct Bounds {
     max: Option<u128>,
 }
 
-impl Meter for BoundMeter {
-    fn enter_scope(&mut self, name: &str, scope: Scope) {
+impl Meter for VerifierBoundMeter {
+    fn enter_scope(&mut self, name: &str, scope: VerifierMeterScope) {
         let bounds = self.get_bounds_mut(scope);
         bounds.name = name.into();
         bounds.units = 0;
     }
 
-    fn transfer(&mut self, from: Scope, to: Scope, factor: f32) -> PartialVMResult<()> {
+    fn transfer(
+        &mut self,
+        from: VerifierMeterScope,
+        to: VerifierMeterScope,
+        factor: f32,
+    ) -> PartialVMResult<()> {
         let units = (self.get_bounds_mut(from).units as f32 * factor) as u128;
         self.add(to, units)
     }
 
-    fn add(&mut self, scope: Scope, units: u128) -> PartialVMResult<()> {
+    fn add(&mut self, scope: VerifierMeterScope, units: u128) -> PartialVMResult<()> {
         self.get_bounds_mut(scope).add(units)
     }
 }
@@ -111,7 +125,7 @@ impl Bounds {
     }
 }
 
-impl BoundMeter {
+impl VerifierBoundMeter {
     pub fn new(config: &VerifierConfig) -> Self {
         Self {
             mod_bounds: Bounds {
@@ -127,38 +141,43 @@ impl BoundMeter {
         }
     }
 
-    fn get_bounds_mut(&mut self, scope: Scope) -> &mut Bounds {
-        if scope == Scope::Module {
+    fn get_bounds_mut(&mut self, scope: VerifierMeterScope) -> &mut Bounds {
+        if scope == VerifierMeterScope::Module {
             &mut self.mod_bounds
         } else {
             &mut self.fun_bounds
         }
     }
 
-    fn get_bounds(&self, scope: Scope) -> &Bounds {
-        if scope == Scope::Module {
+    fn get_bounds(&self, scope: VerifierMeterScope) -> &Bounds {
+        if scope == VerifierMeterScope::Module {
             &self.mod_bounds
         } else {
             &self.fun_bounds
         }
     }
 
-    pub fn get_usage(&self, scope: Scope) -> u128 {
+    pub fn get_usage(&self, scope: VerifierMeterScope) -> u128 {
         self.get_bounds(scope).units
     }
 
-    pub fn get_limit(&self, scope: Scope) -> Option<u128> {
+    pub fn get_limit(&self, scope: VerifierMeterScope) -> Option<u128> {
         self.get_bounds(scope).max
     }
 }
 
 pub struct DummyMeter;
 impl Meter for DummyMeter {
-    fn enter_scope(&mut self, _name: &str, _scope: Scope) {}
-    fn transfer(&mut self, _from: Scope, _to: Scope, _factor: f32) -> PartialVMResult<()> {
+    fn enter_scope(&mut self, _name: &str, _scope: VerifierMeterScope) {}
+    fn transfer(
+        &mut self,
+        _from: VerifierMeterScope,
+        _to: VerifierMeterScope,
+        _factor: f32,
+    ) -> PartialVMResult<()> {
         Ok(())
     }
-    fn add(&mut self, _scope: Scope, _units: u128) -> PartialVMResult<()> {
+    fn add(&mut self, _scope: VerifierMeterScope, _units: u128) -> PartialVMResult<()> {
         Ok(())
     }
 }

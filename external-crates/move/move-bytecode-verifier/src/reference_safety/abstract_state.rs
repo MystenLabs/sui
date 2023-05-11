@@ -5,7 +5,7 @@
 //! This module defines the abstract state for the type and memory safety analysis.
 use crate::{
     absint::{AbstractDomain, JoinResult},
-    meter::{Meter, Scope},
+    meter::{Meter, VerifierMeterScope},
 };
 use move_binary_format::{
     binary_views::FunctionView,
@@ -524,7 +524,7 @@ impl AbstractState {
         meter: &mut impl Meter,
     ) -> PartialVMResult<Vec<AbstractValue>> {
         meter.add_items(
-            Scope::Function,
+            VerifierMeterScope::Function,
             CALL_PER_ACQUIRES_COST,
             acquired_resources.len(),
         )?;
@@ -578,7 +578,7 @@ impl AbstractState {
 
         // Meter usage of reference edges
         meter.add_items_with_growth(
-            Scope::Function,
+            VerifierMeterScope::Function,
             REF_PARAM_EDGE_COST,
             all_references_to_borrow_from
                 .len()
@@ -721,10 +721,14 @@ impl AbstractDomain for AbstractState {
         let joined = Self::join_(self, state);
         assert!(joined.is_canonical());
         assert!(self.locals.len() == joined.locals.len());
-        meter.add(Scope::Function, JOIN_BASE_COST)?;
-        meter.add_items(Scope::Function, JOIN_PER_LOCAL_COST, self.locals.len())?;
+        meter.add(VerifierMeterScope::Function, JOIN_BASE_COST)?;
         meter.add_items(
-            Scope::Function,
+            VerifierMeterScope::Function,
+            JOIN_PER_LOCAL_COST,
+            self.locals.len(),
+        )?;
+        meter.add_items(
+            VerifierMeterScope::Function,
             JOIN_PER_GRAPH_ITEM_COST,
             self.borrow_graph.graph_size(),
         )?;

@@ -23,7 +23,7 @@ pub(crate) enum LocalState {
     /// The local has a value
     Available,
 }
-use crate::meter::{Meter, Scope};
+use crate::meter::{Meter, VerifierMeterScope};
 use LocalState::*;
 
 pub(crate) const STEP_BASE_COST: u128 = 15;
@@ -141,9 +141,9 @@ impl AbstractDomain for AbstractState {
         state: &AbstractState,
         meter: &mut impl Meter,
     ) -> PartialVMResult<JoinResult> {
-        meter.add(Scope::Function, JOIN_BASE_COST)?;
+        meter.add(VerifierMeterScope::Function, JOIN_BASE_COST)?;
         meter.add_items(
-            Scope::Function,
+            VerifierMeterScope::Function,
             JOIN_PER_LOCAL_COST,
             state.local_states.len(),
         )?;

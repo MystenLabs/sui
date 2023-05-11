@@ -6,6 +6,7 @@ pub mod verifier;
 pub mod entry_points_verifier;
 pub mod global_storage_access_verifier;
 pub mod id_leak_verifier;
+pub mod meter;
 pub mod one_time_witness_verifier;
 pub mod private_generics;
 pub mod struct_with_key_verifier;
@@ -18,4 +19,8 @@ pub const TEST_SCENARIO_MODULE_NAME: &str = "test_scenario";
 
 fn verification_failure(error: String) -> ExecutionError {
     ExecutionError::new_with_source(ExecutionErrorKind::SuiMoveVerificationError, error)
+}
+
+fn to_verification_timeout_error(error: String) -> ExecutionError {
+    ExecutionError::new_with_source(ExecutionErrorKind::SuiMoveVerificationTimedout, error)
 }

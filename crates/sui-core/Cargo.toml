@@ -77,6 +77,7 @@ sui-simulator = { path = "../sui-simulator" }
 sui-storage = { path = "../sui-storage" }
 sui-test-transaction-builder = { path = "../sui-test-transaction-builder" }
 sui-types = { path = "../sui-types" }
+sui-verifier = { path = "../sui-verifier" }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]

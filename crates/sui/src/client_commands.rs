@@ -16,7 +16,6 @@ use fastcrypto::{
     encoding::{Base64, Encoding},
     traits::ToFromBytes,
 };
-use move_bytecode_verifier::meter::BoundMeter;
 use move_core_types::language_storage::TypeTag;
 use move_package::BuildConfig as MoveBuildConfig;
 use prettytable::Table;
@@ -30,6 +29,7 @@ use sui_protocol_config::ProtocolConfig;
 use sui_source_validation::{BytecodeSourceVerifier, SourceMode};
 use sui_types::error::SuiError;
 use sui_types::{digests::TransactionDigest, metrics::BytecodeVerifierMetrics};
+use sui_verifier::meter::SuiVerifierMeter;
 
 use shared_crypto::intent::Intent;
 use sui_json::SuiJsonValue;
@@ -761,7 +761,7 @@ impl SuiClientCommands {
                 let modules: Vec<_> = package.get_modules().cloned().collect();
                 let metered_verifier_config =
                     default_verifier_config(&protocol_config, true /* enable metering */);
-                let mut meter = BoundMeter::new(&metered_verifier_config);
+                let mut meter = SuiVerifierMeter::new(&metered_verifier_config);
                 run_metered_move_bytecode_verifier_impl(
                     &modules,
                     &protocol_config,

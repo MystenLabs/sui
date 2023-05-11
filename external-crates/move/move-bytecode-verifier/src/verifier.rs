@@ -17,6 +17,7 @@ use move_binary_format::{
     errors::{Location, VMResult},
     file_format::{CompiledModule, CompiledScript},
 };
+use move_core_types::vm_status::StatusCode;
 use std::time::Instant;
 
 pub const DEFAULT_MAX_CONSTANT_VECTOR_LEN: u64 = 1024 * 1024;
@@ -112,6 +113,31 @@ pub fn verify_module_with_config_metered(
     CodeUnitVerifier::verify_module(config, module, meter)?;
 
     script_signature::verify_module(module, no_additional_script_signature_checks)
+}
+
+/// Runs the Move verifier and checks if the error counts as a Move verifier timeout
+/// NOTE: this function only check if the verifier error is a timeout
+/// All other errors are ignored
+pub fn verify_module_metered_check_timeout_only(
+    config: &VerifierConfig,
+    module: &CompiledModule,
+    meter: &mut impl Meter,
+) -> VMResult<()> {
+    if let Err(err) = verify_module_with_config_metered(config, module, meter) {
+        if check_verifier_timeout(&err.major_status()) {
+            return Err(err);
+        }
+    }
+    Ok(())
+}
+
+pub fn check_verifier_timeout(major_status_code: &StatusCode) -> bool {
+    [
+        StatusCode::PROGRAM_TOO_COMPLEX,
+        // Do we want to make this a substatus of `PROGRAM_TOO_COMPLEX`?
+        StatusCode::TOO_MANY_BACK_EDGES,
+    ]
+    .contains(&major_status_code)
 }
 
 pub fn verify_module_with_config_unmetered(

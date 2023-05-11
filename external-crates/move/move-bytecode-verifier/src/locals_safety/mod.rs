@@ -11,7 +11,7 @@ mod abstract_state;
 use crate::{
     absint::{AbstractInterpreter, TransferFunctions},
     locals_safety::abstract_state::{RET_PER_LOCAL_COST, STEP_BASE_COST},
-    meter::{Meter, Scope},
+    meter::{Meter, VerifierMeterScope},
 };
 use abstract_state::{AbstractState, LocalState};
 use move_binary_format::{
@@ -36,7 +36,7 @@ fn execute_inner(
     offset: CodeOffset,
     meter: &mut impl Meter,
 ) -> PartialVMResult<()> {
-    meter.add(Scope::Function, STEP_BASE_COST)?;
+    meter.add(VerifierMeterScope::Function, STEP_BASE_COST)?;
     match bytecode {
         Bytecode::StLoc(idx) => match state.local_state(*idx) {
             LocalState::MaybeAvailable | LocalState::Available
@@ -72,7 +72,11 @@ fn execute_inner(
 
         Bytecode::Ret => {
             let local_states = state.local_states();
-            meter.add_items(Scope::Function, RET_PER_LOCAL_COST, local_states.len())?;
+            meter.add_items(
+                VerifierMeterScope::Function,
+                RET_PER_LOCAL_COST,
+                local_states.len(),
+            )?;
             let all_local_abilities = state.all_local_abilities();
             assert!(local_states.len() == all_local_abilities.len());
             for (local_state, local_abilities) in local_states.iter().zip(all_local_abilities) {

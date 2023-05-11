@@ -3,8 +3,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::meter::{
-    Meter, Scope, ANALYZE_FUNCTION_BASE_COST, EXECUTE_BLOCK_BASE_COST, PER_BACKEDGE_COST,
-    PER_SUCCESSOR_COST,
+    Meter, VerifierMeterScope, ANALYZE_FUNCTION_BASE_COST, EXECUTE_BLOCK_BASE_COST,
+    PER_BACKEDGE_COST, PER_SUCCESSOR_COST,
 };
 use move_binary_format::{
     binary_views::FunctionView,
@@ -71,7 +71,7 @@ pub trait AbstractInterpreter: TransferFunctions {
         function_view: &FunctionView,
         meter: &mut impl Meter,
     ) -> PartialVMResult<()> {
-        meter.add(Scope::Function, ANALYZE_FUNCTION_BASE_COST)?;
+        meter.add(VerifierMeterScope::Function, ANALYZE_FUNCTION_BASE_COST)?;
         let mut inv_map = InvariantMap::new();
         let entry_block_id = function_view.cfg().entry_block_id();
         let mut next_block = Some(entry_block_id);
@@ -96,7 +96,7 @@ pub trait AbstractInterpreter: TransferFunctions {
             let mut next_block_candidate = function_view.cfg().next_block(block_id);
             // propagate postcondition of this block to successor blocks
             for successor_block_id in function_view.cfg().successors(block_id) {
-                meter.add(Scope::Function, PER_SUCCESSOR_COST)?;
+                meter.add(VerifierMeterScope::Function, PER_SUCCESSOR_COST)?;
                 match inv_map.get_mut(successor_block_id) {
                     Some(next_block_invariant) => {
                         let join_result = {
@@ -115,7 +115,7 @@ pub trait AbstractInterpreter: TransferFunctions {
                                     .cfg()
                                     .is_back_edge(block_id, *successor_block_id)
                                 {
-                                    meter.add(Scope::Function, PER_BACKEDGE_COST)?;
+                                    meter.add(VerifierMeterScope::Function, PER_BACKEDGE_COST)?;
                                     next_block_candidate = Some(*successor_block_id);
                                     break;
                                 }
@@ -146,7 +146,7 @@ pub trait AbstractInterpreter: TransferFunctions {
         function_view: &FunctionView,
         meter: &mut impl Meter,
     ) -> PartialVMResult<Self::State> {
-        meter.add(Scope::Function, EXECUTE_BLOCK_BASE_COST)?;
+        meter.add(VerifierMeterScope::Function, EXECUTE_BLOCK_BASE_COST)?;
         let mut state_acc = pre_state.clone();
         let block_end = function_view.cfg().block_end(block_id);
         for offset in function_view.cfg().instr_indexes(block_id) {

@@ -22,7 +22,8 @@ use move_binary_format::{
 };
 use move_bytecode_verifier::{
     absint::{AbstractDomain, AbstractInterpreter, JoinResult, TransferFunctions},
-    meter::{Meter, Scope},
+    meter::{Meter, VerifierMeterScope},
+    verifier::check_verifier_timeout,
 };
 use move_core_types::{
     account_address::AccountAddress, ident_str, identifier::IdentStr, vm_status::StatusCode,
@@ -36,7 +37,7 @@ use sui_types::{
     SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_ADDRESS,
 };
 
-use crate::{verification_failure, TEST_SCENARIO_MODULE_NAME};
+use crate::{to_verification_timeout_error, verification_failure, TEST_SCENARIO_MODULE_NAME};
 pub(crate) const JOIN_BASE_COST: u128 = 10;
 pub(crate) const JOIN_PER_LOCAL_COST: u128 = 5;
 pub(crate) const STEP_BASE_COST: u128 = 15;
@@ -115,7 +116,10 @@ fn verify_id_leak(module: &CompiledModule, meter: &mut impl Meter) -> Result<(),
         verifier
             .analyze_function(initial_state, &func_view, meter)
             .map_err(|err| {
-                if let Some(message) = err.source().as_ref() {
+                // Handle verifificaiton timeout specially
+                if check_verifier_timeout(&err.major_status()) {
+                    to_verification_timeout_error(err.to_string())
+                } else if let Some(message) = err.source().as_ref() {
                     let function_name = binary_view
                         .identifier_at(binary_view.function_handle_at(func_def.function).name);
                     let module_name = module.self_id();
@@ -161,8 +165,12 @@ impl AbstractDomain for AbstractState {
         state: &AbstractState,
         meter: &mut impl Meter,
     ) -> Result<JoinResult, PartialVMError> {
-        meter.add(Scope::Function, JOIN_BASE_COST)?;
-        meter.add_items(Scope::Function, JOIN_PER_LOCAL_COST, state.locals.len())?;
+        meter.add(VerifierMeterScope::Function, JOIN_BASE_COST)?;
+        meter.add_items(
+            VerifierMeterScope::Function,
+            JOIN_PER_LOCAL_COST,
+            state.locals.len(),
+        )?;
         let mut changed = false;
         for (local, value) in &state.locals {
             let old_value = *self.locals.get(local).unwrap_or(&AbstractValue::Other);
@@ -330,7 +338,7 @@ fn execute_inner(
     _: CodeOffset,
     meter: &mut impl Meter,
 ) -> Result<(), PartialVMError> {
-    meter.add(Scope::Function, STEP_BASE_COST)?;
+    meter.add(VerifierMeterScope::Function, STEP_BASE_COST)?;
     // TODO: Better diagnostics with location
     match bytecode {
         Bytecode::Pop => {

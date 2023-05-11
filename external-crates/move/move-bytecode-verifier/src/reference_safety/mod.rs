@@ -12,7 +12,7 @@ mod abstract_state;
 
 use crate::{
     absint::{AbstractInterpreter, TransferFunctions},
-    meter::{Meter, Scope},
+    meter::{Meter, VerifierMeterScope},
     reference_safety::abstract_state::{
         STEP_BASE_COST, STEP_PER_GRAPH_ITEM_COST, STEP_PER_LOCAL_COST,
     },
@@ -149,10 +149,14 @@ fn execute_inner(
     offset: CodeOffset,
     meter: &mut impl Meter,
 ) -> PartialVMResult<()> {
-    meter.add(Scope::Function, STEP_BASE_COST)?;
-    meter.add_items(Scope::Function, STEP_PER_LOCAL_COST, state.local_count())?;
+    meter.add(VerifierMeterScope::Function, STEP_BASE_COST)?;
     meter.add_items(
-        Scope::Function,
+        VerifierMeterScope::Function,
+        STEP_PER_LOCAL_COST,
+        state.local_count(),
+    )?;
+    meter.add_items(
+        VerifierMeterScope::Function,
         STEP_PER_GRAPH_ITEM_COST,
         state.graph_size(),
     )?;

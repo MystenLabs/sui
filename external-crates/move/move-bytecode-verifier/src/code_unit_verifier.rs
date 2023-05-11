@@ -8,7 +8,7 @@
 use crate::{
     acquires_list_verifier::AcquiresVerifier,
     control_flow, locals_safety,
-    meter::{Meter, Scope},
+    meter::{Meter, VerifierMeterScope},
     reference_safety,
     stack_usage_verifier::StackUsageVerifier,
     type_safety,
@@ -108,7 +108,7 @@ impl<'a> CodeUnitVerifier<'a> {
         }
 
         //verify
-        meter.enter_scope("script", Scope::Function);
+        meter.enter_scope("script", VerifierMeterScope::Function);
         let code_unit_verifier = CodeUnitVerifier {
             resolver,
             function_view,
@@ -129,7 +129,7 @@ impl<'a> CodeUnitVerifier<'a> {
             module
                 .identifier_at(module.function_handle_at(function_definition.function).name)
                 .as_str(),
-            Scope::Function,
+            VerifierMeterScope::Function,
         );
         // nothing to verify for native function
         let code = match &function_definition.code {
@@ -174,7 +174,11 @@ impl<'a> CodeUnitVerifier<'a> {
         code_unit_verifier.verify_common(verifier_config, meter)?;
         AcquiresVerifier::verify(module, index, function_definition, meter)?;
 
-        meter.transfer(Scope::Function, Scope::Module, 1.0)?;
+        meter.transfer(
+            VerifierMeterScope::Function,
+            VerifierMeterScope::Module,
+            1.0,
+        )?;
 
         Ok(num_back_edges)
     }

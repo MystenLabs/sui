@@ -5,7 +5,7 @@
 //! This module defines the transfer functions for verifying type safety of a procedure body.
 //! It does not utilize control flow, but does check each block independently
 
-use crate::meter::{Meter, Scope};
+use crate::meter::{Meter, VerifierMeterScope};
 use move_binary_format::{
     binary_views::{BinaryIndexedView, FunctionView},
     control_flow_graph::ControlFlowGraph,
@@ -90,7 +90,7 @@ impl<'a> TypeSafetyChecker<'a> {
 
     fn charge_ty(&mut self, meter: &mut impl Meter, ty: &SignatureToken) -> PartialVMResult<()> {
         meter.add_items(
-            Scope::Function,
+            VerifierMeterScope::Function,
             TYPE_NODE_COST,
             ty.preorder_traversal().count(),
         )
