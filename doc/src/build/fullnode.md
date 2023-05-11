@@ -158,7 +158,7 @@ Open a Terminal or Console to the `sui` directory you downloaded in the previous
   genesis:
     genesis-file-location: "/sui-fullnode/genesis.blob"
   ```
-1.  Optional: Save disk space with fullnode pruning. Edit your `fullnode.yaml` to include the following aggressive pruner settings:
+1.  Optional: To save disk space on your Full node, add the following settings to your `fullnode.yaml` file to enable aggressive pruning:
 ```
 authority-store-pruning-config:
   num-latest-epoch-dbs-to-retain: 3
