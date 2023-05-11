@@ -69,8 +69,11 @@ export async function fetchKiosk(
 
   const kioskData = data.reduce<KioskData>(
     (acc, val) => {
-      switch (val.name.type) {
-        case '0x2::kiosk::Item':
+      // e.g. 0x2::kiosk::Item -> kiosk::Item
+      const type = val.name.type.split('::').slice(-2).join('::');
+
+      switch (type) {
+        case 'kiosk::Item':
           acc.itemIds.push(val.objectId);
           acc.items.push({
             itemId: val.objectId,
@@ -78,7 +81,7 @@ export async function fetchKiosk(
             bcsName: val.bcsName,
           });
           break;
-        case '0x2::kiosk::Listing':
+        case 'kiosk::Listing':
           acc.listingIds.push(val.objectId);
           acc.listings.push({
             itemId: val.name.value.id,
