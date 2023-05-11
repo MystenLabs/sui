@@ -4,10 +4,13 @@
 use backoff::future::retry;
 use bytes::Bytes;
 use futures::StreamExt;
+use itertools::Itertools;
 use object_store::path::Path;
 use object_store::DynObjectStore;
 use std::num::NonZeroUsize;
+use std::path::PathBuf;
 use std::sync::Arc;
+use std::{fs, io};
 use tracing::warn;
 
 pub async fn put(
@@ -134,6 +137,20 @@ pub async fn delete_recursively(
         }
     }
     delete_files(&paths_to_delete, store.clone(), concurrency).await
+}
+
+pub fn hard_link_dir_all(src: PathBuf, dst: PathBuf) -> io::Result<()> {
+    fs::create_dir_all(&dst)?;
+    for entry in fs::read_dir(src)? {
+        let entry = entry?;
+        let ty = entry.file_type()?;
+        if ty.is_dir() {
+            hard_link_dir_all(entry.path(), dst.join(entry.file_name())?)?;
+        } else {
+            fs::hard_link(entry.path(), dst.join(entry.file_name())?)?;
+        }
+    }
+    Ok(())
 }
 
 #[cfg(test)]
