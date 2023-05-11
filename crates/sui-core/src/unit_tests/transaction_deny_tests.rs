@@ -30,7 +30,6 @@ use sui_types::transaction::{
 use sui_types::utils::{
     to_sender_signed_transaction, to_sender_signed_transaction_with_multi_signers,
 };
-use test_utils::transaction::make_publish_package;
 
 const ACCOUNT_NUM: usize = 5;
 const GAS_OBJECT_COUNT: usize = 15;
@@ -240,7 +239,10 @@ async fn test_package_publish_disabled() {
     let rgp = state.reference_gas_price_for_testing().unwrap();
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     path.push("src/unit_tests/data/object_basics");
-    let tx = make_publish_package(accounts[0].2[0], path, rgp);
+    let (sender, keypair, gas_object) = (accounts[0].0, &accounts[0].1, accounts[0].2[0]);
+    let tx = TestTransactionBuilder::new(sender, gas_object, rgp)
+        .publish(path)
+        .build_and_sign(keypair);
     let result = state
         .handle_transaction(&state.epoch_store_for_testing(), tx)
         .await;
