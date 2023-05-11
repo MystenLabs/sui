@@ -302,7 +302,9 @@ impl AuthorityPerpetualTables {
         let mut wb = self.objects.batch();
         for object in objects {
             wb.delete_batch(&self.objects, [object])?;
-            self.remove_object_lock_batch(&mut wb, object)?;
+            if self.has_object_lock(object) {
+                self.remove_object_lock_batch(&mut wb, object)?;
+            }
         }
         wb.delete_batch(&self.executed_transactions_to_checkpoint, [digest])?;
         wb.delete_batch(&self.executed_effects, [digest])?;
