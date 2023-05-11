@@ -209,11 +209,11 @@ pub fn print_transaction(path: &Path, opt: PrintTransactionOptions) -> anyhow::R
     Ok(())
 }
 
-// Force removes a transaction and its outputs, if no other dependent transaction has executed yet.
-// Usually this should be paired with rewind_checkpoint_execution() to re-execute the removed
-// transaction, to repair corrupted database.
-// Dry run with: cargo run --package sui-tool -- db-tool --db-path /opt/sui/db/authorities_db/live remove-transaction --digest xxxx
-// Add --confirm to actually remove the transaction.
+/// Force removes a transaction and its outputs, if no other dependent transaction has executed yet.
+/// Usually this should be paired with rewind_checkpoint_execution() to re-execute the removed
+/// transaction, to repair corrupted database.
+/// Dry run with: cargo run --package sui-tool -- db-tool --db-path /opt/sui/db/authorities_db/live remove-transaction --digest xxxx
+/// Add --confirm to actually remove the transaction.
 pub fn remove_transaction(path: &Path, opt: RemoveTransactionOptions) -> anyhow::Result<()> {
     let perpetual_db = AuthorityPerpetualTables::open(&path.join("store"), None);
     let Some(_transaction) = perpetual_db.get_transaction(&opt.digest)? else {
@@ -255,7 +255,7 @@ pub fn remove_transaction(path: &Path, opt: RemoveTransactionOptions) -> anyhow:
     if opt.confirm {
         println!("Proceeding to remove transaction {:?} in 5s ..", opt.digest);
         std::thread::sleep(std::time::Duration::from_secs(5));
-        perpetual_db.remove_executed_effects_and_outputs(&opt.digest, &objects_to_remove)?;
+        perpetual_db.remove_executed_effects_and_outputs_subtle(&opt.digest, &objects_to_remove)?;
         println!("Done!");
     }
     Ok(())
@@ -274,7 +274,7 @@ pub fn remove_object_lock(path: &Path, opt: RemoveObjectLockOptions) -> anyhow::
             key
         );
         std::thread::sleep(std::time::Duration::from_secs(5));
-        let created_ref = perpetual_db.remove_object_lock(&key)?;
+        let created_ref = perpetual_db.remove_object_lock_subtle(&key)?;
         println!("Done! Lock is now initialized for {:?}", created_ref);
     }
     Ok(())
@@ -329,9 +329,9 @@ pub fn reset_db_to_genesis(path: &Path) -> anyhow::Result<()> {
     Ok(())
 }
 
-// Force sets the highest executed checkpoint.
-// NOTE: Does not force re-execution of transactions yet.
-// Run with: cargo run --package sui-tool -- db-tool --db-path /opt/sui/db/authorities_db/live rewind-checkpoint-execution --epoch 3 --checkpoint-sequence-number 300000
+/// Force sets the highest executed checkpoint.
+/// NOTE: Does not force re-execution of transactions.
+/// Run with: cargo run --package sui-tool -- db-tool --db-path /opt/sui/db/authorities_db/live rewind-checkpoint-execution --epoch 3 --checkpoint-sequence-number 300000
 pub fn rewind_checkpoint_execution(
     path: &Path,
     epoch: EpochId,
@@ -352,7 +352,17 @@ pub fn rewind_checkpoint_execution(
             checkpoint.epoch()
         );
     }
-    checkpoint_db.set_highest_executed_checkpoint(&checkpoint)?;
+    let highest_executed_sequence_number = checkpoint_db
+        .get_highest_executed_checkpoint_seq_number()?
+        .unwrap_or_default();
+    if checkpoint_sequence_number > highest_executed_sequence_number {
+        bail!(
+            "Must rewind checkpoint execution to be not later than highest executed ({} > {})!",
+            checkpoint_sequence_number,
+            highest_executed_sequence_number
+        );
+    }
+    checkpoint_db.set_highest_executed_checkpoint_subtle(&checkpoint)?;
     Ok(())
 }
 

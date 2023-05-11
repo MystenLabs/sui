@@ -294,7 +294,12 @@ impl AuthorityPerpetualTables {
         Ok(objects)
     }
 
-    pub fn remove_executed_effects_and_outputs(
+    /// Removes executed effects and outputs for a transaction,
+    /// and tries to ensure the transaction is replayable.
+    ///
+    /// WARNING: This method is very subtle and can corrupt the database if used incorrectly.
+    /// It should only be used in one-off cases or tests after fully understanding the risk.
+    pub fn remove_executed_effects_and_outputs_subtle(
         &self,
         digest: &TransactionDigest,
         objects: &[ObjectKey],
@@ -322,7 +327,11 @@ impl AuthorityPerpetualTables {
             .is_some()
     }
 
-    pub fn remove_object_lock(&self, object: &ObjectKey) -> SuiResult<ObjectRef> {
+    /// Removes owned object locks and set the lock to the previous version of the object.
+    ///
+    /// WARNING: This method is very subtle and can corrupt the database if used incorrectly.
+    /// It should only be used in one-off cases or tests after fully understanding the risk.
+    pub fn remove_object_lock_subtle(&self, object: &ObjectKey) -> SuiResult<ObjectRef> {
         let mut wb = self.objects.batch();
         let object_ref = self.remove_object_lock_batch(&mut wb, object)?;
         wb.write()?;
