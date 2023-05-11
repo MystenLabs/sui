@@ -5,7 +5,6 @@ use std::cmp::max;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
-use anyhow::anyhow;
 use async_trait::async_trait;
 use cached::proc_macro::cached;
 use cached::SizedCache;
@@ -32,7 +31,7 @@ use sui_types::sui_system_state::SuiSystemStateTrait;
 use sui_types::sui_system_state::{get_validator_from_table, SuiSystemState};
 
 use crate::api::{GovernanceReadApiServer, JsonRpcMetrics};
-use crate::error::Error;
+use crate::error::{Error, SuiRpcInputError};
 use crate::{with_tracing, ObjectProvider, SuiRpcModule};
 
 #[derive(Clone)]
@@ -157,9 +156,11 @@ impl GovernanceReadApi {
         let mut delegated_stakes = vec![];
         for (pool_id, stakes) in pools {
             // Rate table and rate can be null when the pool is not active
-            let rate_table = rates
-                .get(&pool_id)
-                .ok_or_else(|| anyhow!("Cannot find rates for staking pool {pool_id}"))?;
+            let rate_table = rates.get(&pool_id).ok_or_else(|| {
+                SuiRpcInputError::GenericNotFound(
+                    "Cannot find rates for staking pool {pool_id}".to_string(),
+                )
+            })?;
             let current_rate = rate_table.rates.first().map(|(_, rate)| rate);
 
             let mut delegations = vec![];

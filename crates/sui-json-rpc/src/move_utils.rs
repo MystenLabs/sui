@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::api::MoveUtilsServer;
+use crate::error::{Error, SuiRpcInputError};
 use crate::read_api::{get_move_module, get_move_modules_by_package};
 use crate::{with_tracing, SuiRpcModule};
-use anyhow::anyhow;
 use async_trait::async_trait;
 use jsonrpsee::core::RpcResult;
 use jsonrpsee::RpcModule;
@@ -82,13 +82,14 @@ impl MoveUtilsServer for MoveUtils {
         with_tracing!(async move {
             let module = get_move_module(&self.state, package, module_name).await?;
             let structs = module.structs;
-            let identifier = Identifier::new(struct_name.as_str()).map_err(|e| anyhow!("{e}"))?;
+            let identifier = Identifier::new(struct_name.as_str()).map_err(|e| {
+                Error::SuiRpcInputError(SuiRpcInputError::GenericInvalid(format!("{e}")))
+            })?;
             Ok(match structs.get(&identifier) {
                 Some(struct_) => Ok(struct_.clone().into()),
-                None => Err(anyhow!(
-                    "No struct was found with struct name {}",
-                    struct_name
-                )),
+                None => Err(Error::SuiRpcInputError(SuiRpcInputError::GenericNotFound(
+                    format!("No struct was found with struct name {}", struct_name),
+                ))),
             }?)
         })
     }
@@ -103,13 +104,14 @@ impl MoveUtilsServer for MoveUtils {
         with_tracing!(async move {
             let module = get_move_module(&self.state, package, module_name).await?;
             let functions = module.functions;
-            let identifier = Identifier::new(function_name.as_str()).map_err(|e| anyhow!("{e}"))?;
+            let identifier = Identifier::new(function_name.as_str()).map_err(|e| {
+                Error::SuiRpcInputError(SuiRpcInputError::GenericInvalid(format!("{e}")))
+            })?;
             Ok(match functions.get(&identifier) {
                 Some(function) => Ok(function.clone().into()),
-                None => Err(anyhow!(
-                    "No function was found with function name {}",
-                    function_name
-                )),
+                None => Err(Error::SuiRpcInputError(SuiRpcInputError::GenericNotFound(
+                    format!("No function was found with function name {}", function_name),
+                ))),
             }?)
         })
     }
@@ -122,10 +124,7 @@ impl MoveUtilsServer for MoveUtils {
         function: String,
     ) -> RpcResult<Vec<MoveFunctionArgType>> {
         with_tracing!(async move {
-            let object_read = self
-                .state
-                .get_object_read(&package)
-                .map_err(|e| anyhow!("{e}"))?;
+            let object_read = self.state.get_object_read(&package).map_err(Error::from)?;
 
             let normalized = match object_read {
                 ObjectRead::Exists(_obj_ref, object, _layout) => match object.data {
@@ -137,14 +136,20 @@ impl MoveUtilsServer for MoveUtils {
                             /* max_binary_format_version */ VERSION_MAX,
                             /* no_extraneous_module_bytes */ false,
                         )
-                        .map_err(|e| anyhow!("{e}"))
+                        .map_err(Error::from)
                     }
-                    _ => Err(anyhow!("Object is not a package with ID {}", package)),
+                    _ => Err(Error::SuiRpcInputError(SuiRpcInputError::GenericInvalid(
+                        format!("Object is not a package with ID {}", package),
+                    ))),
                 },
-                _ => Err(anyhow!("Package object does not exist with ID {}", package)),
+                _ => Err(Error::SuiRpcInputError(SuiRpcInputError::GenericNotFound(
+                    format!("Package object does not exist with ID {}", package),
+                ))),
             }?;
 
-            let identifier = Identifier::new(function.as_str()).map_err(|e| anyhow!("{e}"))?;
+            let identifier = Identifier::new(function.as_str()).map_err(|e| {
+                Error::SuiRpcInputError(SuiRpcInputError::GenericInvalid(format!("{e}")))
+            })?;
             let parameters = normalized
                 .get(&module)
                 .and_then(|m| m.functions.get(&identifier).map(|f| f.parameters.clone()));
@@ -168,7 +173,9 @@ impl MoveUtilsServer for MoveUtils {
                         _ => MoveFunctionArgType::Pure,
                     })
                     .collect::<Vec<MoveFunctionArgType>>()),
-                None => Err(anyhow!("No parameters found for function {}", function)),
+                None => Err(Error::SuiRpcInputError(SuiRpcInputError::GenericNotFound(
+                    format!("No parameters found for function {}", function),
+                ))),
             }?)
         })
     }
