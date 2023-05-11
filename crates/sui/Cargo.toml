@@ -32,7 +32,8 @@ rusoto_kms = { version = "0.48.0", default_features=false, features=["rustls"] }
 aws-config = "0.55.1"
 prometheus = "0.13.3"
 
-sui-adapter = { path = "../sui-adapter" }
+sui-adapter = { path = "../../sui-execution/latest/sui-adapter", package = "sui-adapter-latest" }
+
 sui-core = { path = "../sui-core" }
 sui-framework-snapshot = { path = "../sui-framework-snapshot" }
 sui-config = { path = "../sui-config" }

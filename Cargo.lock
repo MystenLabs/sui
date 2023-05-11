@@ -9302,7 +9302,7 @@ dependencies = [
  "shared-crypto",
  "shell-words",
  "signature 1.6.4",
- "sui-adapter",
+ "sui-adapter-latest",
  "sui-config",
  "sui-core",
  "sui-framework",
@@ -9334,7 +9334,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "sui-adapter"
+name = "sui-adapter-latest"
 version = "0.1.0"
 dependencies = [
  "anyhow",
@@ -9351,10 +9351,10 @@ dependencies = [
  "once_cell",
  "serde 1.0.152",
  "sui-macros",
- "sui-move-natives",
+ "sui-move-natives-latest",
  "sui-protocol-config",
  "sui-types",
- "sui-verifier",
+ "sui-verifier-latest",
  "tracing",
  "workspace-hack",
 ]
@@ -9481,10 +9481,10 @@ dependencies = [
  "serde_with",
  "serde_yaml",
  "shared-crypto",
- "sui-adapter",
+ "sui-adapter-latest",
  "sui-framework",
  "sui-keys",
- "sui-move-natives",
+ "sui-move-natives-latest",
  "sui-protocol-config",
  "sui-simulator",
  "sui-storage",
@@ -9552,20 +9552,20 @@ dependencies = [
  "serde_yaml",
  "shared-crypto",
  "signature 1.6.4",
- "sui-adapter",
+ "sui-adapter-latest",
  "sui-config",
  "sui-framework",
  "sui-json-rpc-types",
  "sui-macros",
  "sui-move-build",
- "sui-move-natives",
+ "sui-move-natives-latest",
  "sui-network",
  "sui-protocol-config",
  "sui-simulator",
  "sui-storage",
  "sui-test-transaction-builder",
  "sui-types",
- "sui-verifier",
+ "sui-verifier-latest",
  "tap",
  "telemetry-subscribers",
  "tempfile",
@@ -9918,7 +9918,7 @@ dependencies = [
  "sui-cost-tables",
  "sui-macros",
  "sui-move-build",
- "sui-move-natives",
+ "sui-move-natives-latest",
  "sui-node",
  "sui-protocol-config",
  "sui-simulator",
@@ -9944,16 +9944,16 @@ dependencies = [
  "move-package",
  "move-symbol-pool",
  "serde-reflection",
- "sui-adapter",
+ "sui-adapter-latest",
  "sui-protocol-config",
  "sui-types",
- "sui-verifier",
+ "sui-verifier-latest",
  "tempfile",
  "workspace-hack",
 ]
 
 [[package]]
-name = "sui-move-natives"
+name = "sui-move-natives-latest"
 version = "0.1.0"
 dependencies = [
  "bcs",
@@ -10182,14 +10182,14 @@ dependencies = [
  "serde 1.0.152",
  "serde_json",
  "similar",
- "sui-adapter",
+ "sui-adapter-latest",
  "sui-config",
  "sui-core",
  "sui-framework",
  "sui-json-rpc",
  "sui-json-rpc-types",
  "sui-macros",
- "sui-move-natives",
+ "sui-move-natives-latest",
  "sui-protocol-config",
  "sui-sdk",
  "sui-storage",
@@ -10344,7 +10344,7 @@ dependencies = [
  "move-package",
  "msim",
  "narwhal-network",
- "sui-adapter",
+ "sui-adapter-latest",
  "sui-framework",
  "sui-move-build",
  "sui-types",
@@ -10628,10 +10628,10 @@ dependencies = [
  "once_cell",
  "prometheus",
  "rand 0.8.5",
- "sui-adapter",
+ "sui-adapter-latest",
  "sui-core",
  "sui-framework",
- "sui-move-natives",
+ "sui-move-natives-latest",
  "sui-protocol-config",
  "sui-types",
  "tempfile",
@@ -10710,7 +10710,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "sui-verifier"
+name = "sui-verifier-latest"
 version = "0.1.0"
 dependencies = [
  "move-binary-format",
@@ -11638,7 +11638,7 @@ dependencies = [
  "proptest",
  "proptest-derive",
  "rand 0.8.5",
- "sui-adapter",
+ "sui-adapter-latest",
  "sui-core",
  "sui-move-build",
  "sui-protocol-config",

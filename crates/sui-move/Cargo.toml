@@ -32,10 +32,11 @@ move-vm-test-utils.workspace = true
 telemetry-subscribers.workspace = true
 tokio = { workspace = true, features = ["full"] }
 
+sui-move-natives = { path = "../../sui-execution/latest/sui-move-natives", package = "sui-move-natives-latest" }
+
 sui-core = { path = "../sui-core", optional = true }
 sui-cost-tables = { path = "../sui-cost-tables" }
 sui-move-build = { path = "../sui-move-build" }
-sui-move-natives = { path = "../sui-move-natives" }
 sui-protocol-config = { path = "../sui-protocol-config" }
 sui-types = { path = "../sui-types" }
 

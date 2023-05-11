@@ -66,7 +66,6 @@ members = [
     "crates/prometheus-closure-metric",
     "crates/shared-crypto",
     "crates/sui",
-    "crates/sui-adapter",
     "crates/sui-adapter-transactional-tests",
     "crates/sui-benchmark",
     "crates/sui-cluster-test",
@@ -86,7 +85,6 @@ members = [
     "crates/sui-macros",
     "crates/sui-move",
     "crates/sui-move-build",
-    "crates/sui-move-natives",
     "crates/sui-network",
     "crates/sui-node",
     "crates/sui-open-rpc",
@@ -113,7 +111,6 @@ members = [
     "crates/sui-transactional-test-runner",
     "crates/sui-types",
     "crates/sui-upgrade-compatibility-transactional-tests",
-    "crates/sui-verifier",
     "crates/sui-verifier-transactional-tests",
     "crates/telemetry-subscribers",
     "crates/test-utils",
@@ -135,6 +132,9 @@ members = [
     "narwhal/test-utils",
     "narwhal/types",
     "narwhal/worker",
+    "sui-execution/latest/sui-adapter",
+    "sui-execution/latest/sui-move-natives",
+    "sui-execution/latest/sui-verifier",
 ]
 
 [workspace.package]
