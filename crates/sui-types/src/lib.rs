@@ -92,11 +92,13 @@ pub const DEEPBOOK_ADDRESS: AccountAddress = deepbook_addr();
 pub const DEEPBOOK_PACKAGE_ID: ObjectID = ObjectID::from_address(DEEPBOOK_ADDRESS);
 
 /// 0x5: hardcoded object ID for the singleton sui system state object.
-pub const SUI_SYSTEM_STATE_OBJECT_ID: ObjectID = ObjectID::from_single_byte(5);
+pub const SUI_SYSTEM_STATE_ADDRESS: AccountAddress = address_from_single_byte(5);
+pub const SUI_SYSTEM_STATE_OBJECT_ID: ObjectID = ObjectID::from_address(SUI_SYSTEM_STATE_ADDRESS);
 pub const SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION: SequenceNumber = OBJECT_START_VERSION;
 
 /// 0x6: hardcoded object ID for the singleton clock object.
-pub const SUI_CLOCK_OBJECT_ID: ObjectID = ObjectID::from_single_byte(6);
+pub const SUI_CLOCK_ADDRESS: AccountAddress = address_from_single_byte(6);
+pub const SUI_CLOCK_OBJECT_ID: ObjectID = ObjectID::from_address(SUI_CLOCK_ADDRESS);
 pub const SUI_CLOCK_OBJECT_SHARED_VERSION: SequenceNumber = OBJECT_START_VERSION;
 
 /// Return `true` if `id` is a special system package that can be upgraded at epoch boundaries
