@@ -127,7 +127,15 @@ impl<T: ParentSync + Send + Sync> ExecutionState for ConsensusHandler<T> {
     #[instrument(level = "trace", skip_all)]
     async fn handle_consensus_output(&self, consensus_output: ConsensusOutput) {
         let _scope = monitored_scope("HandleConsensusOutput");
+
+        // This code no longer supports old protocol versions.
+        assert!(self
+            .epoch_store
+            .protocol_config()
+            .consensus_order_end_of_epoch_last());
+
         let mut sequenced_transactions = Vec::new();
+        let mut end_of_publish_transactions = Vec::new();
 
         let mut bytes = 0usize;
         let round = consensus_output.sub_dag.leader_round();
@@ -243,23 +251,21 @@ impl<T: ParentSync + Send + Sync> ExecutionState for ConsensusHandler<T> {
             )
             .unwrap();
 
-            sequenced_transactions.push(SequencedConsensusTransaction {
+            let sequenced_transaction = SequencedConsensusTransaction {
                 certificate: output_cert.clone(),
                 certificate_author,
                 consensus_index: index_with_hash,
                 transaction,
-            });
+            };
+
+            if sequenced_transaction.transaction.is_end_of_publish() {
+                end_of_publish_transactions.push(sequenced_transaction);
+            } else {
+                sequenced_transactions.push(sequenced_transaction);
+            }
         }
 
         // (!) Should not add new transactions to sequenced_transactions beyond this point
-
-        if self
-            .epoch_store
-            .protocol_config()
-            .consensus_order_end_of_epoch_last()
-        {
-            reorder_end_of_publish(&mut sequenced_transactions);
-        }
 
         self.metrics
             .consensus_handler_processed_bytes
@@ -273,6 +279,7 @@ impl<T: ParentSync + Send + Sync> ExecutionState for ConsensusHandler<T> {
 
             sequenced_transactions
                 .into_iter()
+                .chain(end_of_publish_transactions.into_iter())
                 .filter_map(|sequenced_transaction| {
                     let key = sequenced_transaction.key();
                     let in_set = !processed_set.insert(key);
@@ -351,10 +358,6 @@ impl<T: ParentSync + Send + Sync> ExecutionState for ConsensusHandler<T> {
 
         index_with_hash.index.sub_dag_index
     }
-}
-
-fn reorder_end_of_publish(sequenced_transactions: &mut [SequencedConsensusTransaction]) {
-    sequenced_transactions.sort_by_key(SequencedConsensusTransaction::is_end_of_publish);
 }
 
 struct AsyncTransactionScheduler {
@@ -480,6 +483,15 @@ impl SequencedConsensusTransactionKind {
             SequencedConsensusTransactionKind::System(txn) => Some(*txn.digest()),
         }
     }
+
+    pub fn is_end_of_publish(&self) -> bool {
+        match self {
+            SequencedConsensusTransactionKind::External(ext) => {
+                matches!(ext.kind, ConsensusTransactionKind::EndOfPublish(..))
+            }
+            SequencedConsensusTransactionKind::System(_) => false,
+        }
+    }
 }
 
 impl SequencedConsensusTransaction {
@@ -571,44 +583,6 @@ mod tests {
         assert!(update_hash(&last_seen, index0, tx).is_none());
         assert!(update_hash(&last_seen, index1, tx).is_none());
         assert!(update_hash(&last_seen, index2, tx).is_some());
-    }
-
-    #[test]
-    fn test_reorder_end_of_publish() {
-        let mut v = vec![cap_txn(10), cap_txn(1)];
-        reorder_end_of_publish(&mut v);
-        assert_eq!(
-            extract(v),
-            vec!["cap(10)".to_string(), "cap(1)".to_string()]
-        );
-        let mut v = vec![cap_txn(1), cap_txn(10)];
-        reorder_end_of_publish(&mut v);
-        assert_eq!(
-            extract(v),
-            vec!["cap(1)".to_string(), "cap(10)".to_string()]
-        );
-        let mut v = vec![cap_txn(1), eop_txn(1), cap_txn(10), eop_txn(10)];
-        reorder_end_of_publish(&mut v);
-        assert_eq!(
-            extract(v),
-            vec![
-                "cap(1)".to_string(),
-                "cap(10)".to_string(),
-                "eop(1)".to_string(),
-                "eop(10)".to_string()
-            ]
-        );
-        let mut v = vec![cap_txn(1), eop_txn(10), cap_txn(10), eop_txn(1)];
-        reorder_end_of_publish(&mut v);
-        assert_eq!(
-            extract(v),
-            vec![
-                "cap(1)".to_string(),
-                "cap(10)".to_string(),
-                "eop(10)".to_string(),
-                "eop(1)".to_string()
-            ]
-        );
     }
 
     fn extract(v: Vec<SequencedConsensusTransaction>) -> Vec<String> {
