@@ -27,7 +27,7 @@ pub enum DbToolCommand {
     TableSummary(Options),
     DuplicatesSummary,
     ListDBMetadata(Options),
-    PrintTransactionCheckpoint(PrintTransactionOptions),
+    PrintTransaction(PrintTransactionOptions),
     RemoveObjectLock(RemoveObjectLockOptions),
     RemoveTransaction(RemoveTransactionOptions),
     ResetDB,
@@ -84,7 +84,7 @@ pub struct Options {
 #[derive(Parser)]
 #[clap(rename_all = "kebab-case")]
 pub struct PrintTransactionOptions {
-    #[clap(long, help = "The transaction digest to remove")]
+    #[clap(long, help = "The transaction digest to print")]
     digest: TransactionDigest,
 }
 
@@ -139,7 +139,7 @@ pub fn execute_db_tool_command(db_path: PathBuf, cmd: DbToolCommand) -> anyhow::
         DbToolCommand::ListDBMetadata(d) => {
             print_table_metadata(d.store_name, d.epoch, db_path, &d.table_name)
         }
-        DbToolCommand::PrintTransactionCheckpoint(d) => print_transaction_checkpoint(&db_path, d),
+        DbToolCommand::PrintTransaction(d) => print_transaction(&db_path, d),
         DbToolCommand::ResetDB => reset_db_to_genesis(&db_path),
         DbToolCommand::RemoveObjectLock(d) => remove_object_lock(&db_path, d),
         DbToolCommand::RemoveTransaction(d) => remove_transaction(&db_path, d),
@@ -189,18 +189,23 @@ pub fn print_db_duplicates_summary(db_path: PathBuf) -> anyhow::Result<()> {
     Ok(())
 }
 
-pub fn print_transaction_checkpoint(
-    path: &Path,
-    opt: PrintTransactionOptions,
-) -> anyhow::Result<()> {
+pub fn print_transaction(path: &Path, opt: PrintTransactionOptions) -> anyhow::Result<()> {
     let perpetual_db = AuthorityPerpetualTables::open(&path.join("store"), None);
-    let Some((epoch, checkpoint_seq_num)) = perpetual_db.get_checkpoint_sequence_number(&opt.digest)? else {
-        bail!("Transaction {:?} not executed in a checkpoint!", opt.digest);
+    if let Some((epoch, checkpoint_seq_num)) =
+        perpetual_db.get_checkpoint_sequence_number(&opt.digest)?
+    {
+        println!(
+            "Transaction {:?} executed in epoch {} checkpoint {}",
+            opt.digest, epoch, checkpoint_seq_num
+        );
     };
-    println!(
-        "Transaction {:?} executed in epoch {} checkpoint {}",
-        opt.digest, epoch, checkpoint_seq_num
-    );
+    if let Some(effects) = perpetual_db.get_effects(&opt.digest)? {
+        println!(
+            "Transaction {:?} dependencies: {:#?}",
+            opt.digest,
+            effects.dependencies(),
+        );
+    };
     Ok(())
 }
 
