@@ -220,48 +220,76 @@ impl<T: ParentSync + Send + Sync> ExecutionState for ConsensusHandler<T> {
         }
 
         let mut roots = BTreeSet::new();
-        for (seq, (serialized, transaction, output_cert)) in transactions.into_iter().enumerate() {
-            if let Some(digest) = transaction.executable_transaction_digest() {
-                roots.insert(digest);
-            }
 
-            let index = ExecutionIndices {
-                last_committed_round: round,
-                sub_dag_index: consensus_output.sub_dag.sub_dag_index,
-                transaction_index: seq as u64,
-            };
+        {
+            let mut processed_cache = self.processed_cache.lock();
+            // We need a set here as well, since the processed_cache is a LRU cache and can drop
+            // entries while we're iterating over the sequenced transactions.
+            let mut processed_set = HashSet::new();
 
-            let index_with_hash = match update_hash(&self.last_seen, index, &serialized) {
-                Some(i) => i,
-                None => {
-                    debug!(
-                "Ignore consensus transaction at index {:?} as it appear to be already processed",
-                index
-            );
+            for (seq, (serialized, transaction, output_cert)) in
+                transactions.into_iter().enumerate()
+            {
+                if let Some(digest) = transaction.executable_transaction_digest() {
+                    roots.insert(digest);
+                }
+
+                let index = ExecutionIndices {
+                    last_committed_round: round,
+                    sub_dag_index: consensus_output.sub_dag.sub_dag_index,
+                    transaction_index: seq as u64,
+                };
+
+                let index_with_hash = match update_hash(&self.last_seen, index, &serialized) {
+                    Some(i) => i,
+                    None => {
+                        debug!(
+                            "Ignore consensus transaction at index {:?} as it appear to be already processed",
+                            index
+                        );
+                        continue;
+                    }
+                };
+
+                let certificate_author = AuthorityName::from_bytes(
+                    self.committee
+                        .authority_safe(&output_cert.header().author())
+                        .protocol_key_bytes()
+                        .0
+                        .as_ref(),
+                )
+                .unwrap();
+
+                let sequenced_transaction = SequencedConsensusTransaction {
+                    certificate: output_cert.clone(),
+                    certificate_author,
+                    consensus_index: index_with_hash,
+                    transaction,
+                };
+
+                let key = sequenced_transaction.key();
+                let in_set = !processed_set.insert(key);
+                let in_cache = processed_cache
+                    .put(sequenced_transaction.key(), ())
+                    .is_some();
+
+                if in_set || in_cache {
+                    self.metrics.skipped_consensus_txns_cache_hit.inc();
                     continue;
                 }
-            };
 
-            let certificate_author = AuthorityName::from_bytes(
-                self.committee
-                    .authority_safe(&output_cert.header().author())
-                    .protocol_key_bytes()
-                    .0
-                    .as_ref(),
-            )
-            .unwrap();
+                let Ok(verified_transaction) = self.epoch_store.verify_consensus_transaction(
+                    sequenced_transaction,
+                    &self.metrics.skipped_consensus_txns,
+                ) else {
+                    continue;
+                };
 
-            let sequenced_transaction = SequencedConsensusTransaction {
-                certificate: output_cert.clone(),
-                certificate_author,
-                consensus_index: index_with_hash,
-                transaction,
-            };
-
-            if sequenced_transaction.transaction.is_end_of_publish() {
-                end_of_publish_transactions.push(sequenced_transaction);
-            } else {
-                sequenced_transactions.push(sequenced_transaction);
+                if verified_transaction.0.is_end_of_publish() {
+                    end_of_publish_transactions.push(verified_transaction);
+                } else {
+                    sequenced_transactions.push(verified_transaction);
+                }
             }
         }
 
@@ -271,42 +299,11 @@ impl<T: ParentSync + Send + Sync> ExecutionState for ConsensusHandler<T> {
             .consensus_handler_processed_bytes
             .inc_by(bytes as u64);
 
-        let verified_transactions = {
-            let mut processed_cache = self.processed_cache.lock();
-            // We need a set here as well, since the processed_cache is a LRU cache and can drop
-            // entries while we're iterating over the sequenced transactions.
-            let mut processed_set = HashSet::new();
-
-            sequenced_transactions
-                .into_iter()
-                .chain(end_of_publish_transactions.into_iter())
-                .filter_map(|sequenced_transaction| {
-                    let key = sequenced_transaction.key();
-                    let in_set = !processed_set.insert(key);
-                    let in_cache = processed_cache
-                        .put(sequenced_transaction.key(), ())
-                        .is_some();
-
-                    if in_set || in_cache {
-                        self.metrics.skipped_consensus_txns_cache_hit.inc();
-                        return None;
-                    }
-
-                    match self.epoch_store.verify_consensus_transaction(
-                        sequenced_transaction,
-                        &self.metrics.skipped_consensus_txns,
-                    ) {
-                        Ok(verified_transaction) => Some(verified_transaction),
-                        Err(()) => None,
-                    }
-                })
-                .collect()
-        };
-
         let transactions_to_schedule = self
             .epoch_store
             .process_consensus_transactions_and_commit_boundary(
-                verified_transactions,
+                &sequenced_transactions,
+                &end_of_publish_transactions,
                 &self.checkpoint_service,
                 &self.parent_sync_store,
             )
@@ -548,12 +545,6 @@ impl SequencedConsensusTransaction {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use narwhal_types::Certificate;
-    use sui_protocol_config::SupportedProtocolVersions;
-    use sui_types::base_types::AuthorityName;
-    use sui_types::messages_consensus::{
-        AuthorityCapabilities, ConsensusTransaction, ConsensusTransactionKind,
-    };
 
     #[test]
     pub fn test_update_hash() {
@@ -583,58 +574,5 @@ mod tests {
         assert!(update_hash(&last_seen, index0, tx).is_none());
         assert!(update_hash(&last_seen, index1, tx).is_none());
         assert!(update_hash(&last_seen, index2, tx).is_some());
-    }
-
-    fn extract(v: Vec<SequencedConsensusTransaction>) -> Vec<String> {
-        v.into_iter().map(extract_one).collect()
-    }
-
-    fn extract_one(t: SequencedConsensusTransaction) -> String {
-        match t.transaction {
-            SequencedConsensusTransactionKind::External(ext) => match ext.kind {
-                ConsensusTransactionKind::EndOfPublish(authority) => {
-                    format!("eop({})", authority.0[0])
-                }
-                ConsensusTransactionKind::CapabilityNotification(cap) => {
-                    format!("cap({})", cap.generation)
-                }
-                _ => unreachable!(),
-            },
-            SequencedConsensusTransactionKind::System(_) => unreachable!(),
-        }
-    }
-
-    fn eop_txn(a: u8) -> SequencedConsensusTransaction {
-        let mut authority = AuthorityName::default();
-        authority.0[0] = a;
-        txn(ConsensusTransactionKind::EndOfPublish(authority))
-    }
-
-    fn cap_txn(generation: u64) -> SequencedConsensusTransaction {
-        txn(ConsensusTransactionKind::CapabilityNotification(
-            AuthorityCapabilities {
-                authority: Default::default(),
-                generation,
-                supported_protocol_versions: SupportedProtocolVersions::SYSTEM_DEFAULT,
-                available_system_packages: vec![],
-            },
-        ))
-    }
-
-    fn txn(kind: ConsensusTransactionKind) -> SequencedConsensusTransaction {
-        let c = ConsensusTransaction {
-            kind,
-            tracking_id: Default::default(),
-        };
-        let transaction = SequencedConsensusTransactionKind::External(c);
-        let certificate = Arc::new(Certificate::default());
-        let certificate_author = Default::default();
-        let consensus_index = Default::default();
-        SequencedConsensusTransaction {
-            certificate,
-            certificate_author,
-            consensus_index,
-            transaction,
-        }
     }
 }
