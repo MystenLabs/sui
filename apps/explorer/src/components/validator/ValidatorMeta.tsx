@@ -64,7 +64,7 @@ export function ValidatorMeta({ validatorData }: ValidatorMetaProps) {
                             --
                         </Text>
                     </DescriptionItem>
-                    <DescriptionItem title="Pool Id">
+                    <DescriptionItem title="Pool ID">
                         <Text variant="pBody/medium" color="steel-darker">
                             {validatorData.stakingPoolId}
                         </Text>
