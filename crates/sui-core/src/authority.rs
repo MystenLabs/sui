@@ -630,7 +630,7 @@ impl AuthorityState {
         &self,
         epoch_store: &Arc<AuthorityPerEpochStore>,
         transaction: VerifiedTransaction,
-    ) -> Result<HandleTransactionResponse, SuiError> {
+    ) -> SuiResult<HandleTransactionResponse> {
         fp_ensure!(
             !transaction.is_system_tx(),
             SuiError::InvalidSystemTransaction
@@ -2339,7 +2339,7 @@ impl AuthorityState {
         &self,
         object_id: &ObjectID,
         version: SequenceNumber,
-    ) -> Result<PastObjectRead, SuiError> {
+    ) -> SuiResult<PastObjectRead> {
         // Firstly we see if the object ever exists by getting its latest data
         match self.database.get_object_or_tombstone(*object_id)? {
             None => Ok(PastObjectRead::ObjectNotExists(*object_id)),
@@ -2425,7 +2425,7 @@ impl AuthorityState {
         &self,
         object_id: &ObjectID,
         version: SequenceNumber,
-    ) -> Result<Owner, SuiError> {
+    ) -> SuiResult<Owner> {
         self.database
             .get_object_by_key(object_id, version)?
             .ok_or_else(|| {
@@ -2991,7 +2991,7 @@ impl AuthorityState {
         &self,
         tx_digest: &TransactionDigest,
         epoch_store: &Arc<AuthorityPerEpochStore>,
-    ) -> Result<Option<VerifiedCertificate>, SuiError> {
+    ) -> SuiResult<Option<VerifiedCertificate>> {
         let Some(cert_sig) = epoch_store.get_transaction_cert_sig(tx_digest)? else {
             return Ok(None);
         };
@@ -3012,7 +3012,7 @@ impl AuthorityState {
         &self,
         transaction_digest: &TransactionDigest,
         epoch_store: &Arc<AuthorityPerEpochStore>,
-    ) -> Result<Option<(SenderSignedData, TransactionStatus)>, SuiError> {
+    ) -> SuiResult<Option<(SenderSignedData, TransactionStatus)>> {
         // TODO: In the case of read path, we should not have to re-sign the effects.
         if let Some(effects) =
             self.get_signed_effects_and_maybe_resign(transaction_digest, epoch_store)?
@@ -3063,7 +3063,7 @@ impl AuthorityState {
         &self,
         effects: TransactionEffects,
         epoch_store: &Arc<AuthorityPerEpochStore>,
-    ) -> Result<VerifiedSignedTransactionEffects, SuiError> {
+    ) -> SuiResult<VerifiedSignedTransactionEffects> {
         let tx_digest = *effects.transaction_digest();
         let signed_effects = match epoch_store.get_effects_signature(&tx_digest)? {
             Some(sig) if sig.epoch == epoch_store.epoch() => {
@@ -3125,7 +3125,7 @@ impl AuthorityState {
         mutable_input_objects: &[ObjectRef],
         signed_transaction: VerifiedSignedTransaction,
         epoch_store: &Arc<AuthorityPerEpochStore>,
-    ) -> Result<(), SuiError> {
+    ) -> SuiResult {
         self.lock_and_write_transaction(mutable_input_objects, signed_transaction, epoch_store)
             .await
     }
@@ -3138,7 +3138,7 @@ impl AuthorityState {
         owned_input_objects: &[ObjectRef],
         transaction: VerifiedSignedTransaction,
         epoch_store: &Arc<AuthorityPerEpochStore>,
-    ) -> Result<(), SuiError> {
+    ) -> SuiResult {
         let tx_digest = *transaction.digest();
 
         // Acquire the lock on input objects
@@ -3260,7 +3260,7 @@ impl AuthorityState {
         &self,
         object_ref: &ObjectRef,
         epoch_store: &AuthorityPerEpochStore,
-    ) -> Result<Option<VerifiedSignedTransaction>, SuiError> {
+    ) -> SuiResult<Option<VerifiedSignedTransaction>> {
         let lock_info = self
             .database
             .get_lock(*object_ref, epoch_store.epoch())
@@ -3302,17 +3302,14 @@ impl AuthorityState {
         Ok(tx_option)
     }
 
-    pub async fn get_objects(
-        &self,
-        _objects: &[ObjectID],
-    ) -> Result<Vec<Option<Object>>, SuiError> {
+    pub async fn get_objects(&self, _objects: &[ObjectID]) -> SuiResult<Vec<Option<Object>>> {
         self.database.get_objects(_objects)
     }
 
     pub async fn get_object_or_tombstone(
         &self,
         object_id: ObjectID,
-    ) -> Result<Option<ObjectRef>, SuiError> {
+    ) -> SuiResult<Option<ObjectRef>> {
         self.database.get_object_or_tombstone(object_id)
     }
 
