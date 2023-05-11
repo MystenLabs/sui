@@ -30,6 +30,57 @@ pub struct ValidatorConfigInfo {
     pub consensus_internal_worker_address: Option<Multiaddr>,
 }
 
+impl ValidatorConfigInfo {
+    pub fn new(
+        index: usize,
+        key_pair: AuthorityKeyPair,
+        worker_key_pair: NetworkKeyPair,
+        account_key_pair: SuiKeyPair,
+        network_key_pair: NetworkKeyPair,
+        gas_price: u64,
+    ) -> Self {
+        if cfg!(msim) {
+            // we will probably never run this many validators in a sim
+            let low_octet = index + 1;
+            if low_octet > 255 {
+                todo!("smarter IP formatting required");
+            }
+
+            let ip = format!("10.10.0.{}", low_octet);
+            let make_tcp_addr = |port: u16| -> Multiaddr {
+                format!("/ip4/{}/tcp/{}/http", ip, port).parse().unwrap()
+            };
+
+            ValidatorConfigInfo {
+                genesis_info: ValidatorGenesisInfo::from_base_ip(
+                    key_pair,
+                    worker_key_pair,
+                    account_key_pair,
+                    network_key_pair,
+                    None,
+                    ip.clone(),
+                    index,
+                    gas_price,
+                ),
+                consensus_address: make_tcp_addr(4000 + index as u16),
+                consensus_internal_worker_address: None,
+            }
+        } else {
+            ValidatorConfigInfo {
+                genesis_info: ValidatorGenesisInfo::from_localhost_for_testing(
+                    key_pair,
+                    worker_key_pair,
+                    account_key_pair,
+                    network_key_pair,
+                    gas_price,
+                ),
+                consensus_address: utils::new_tcp_network_address(),
+                consensus_internal_worker_address: None,
+            }
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize)]
 pub struct GenesisConfig {
     pub validator_config_info: Option<Vec<ValidatorConfigInfo>>,

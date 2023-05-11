@@ -11,7 +11,7 @@ use crate::node::{
 };
 use crate::{
     genesis,
-    genesis_config::{GenesisConfig, ValidatorConfigInfo, ValidatorGenesisInfo},
+    genesis_config::{GenesisConfig, ValidatorConfigInfo},
     node::AuthorityStorePruningConfig,
     p2p::P2pConfig,
     utils, ConsensusConfig, NetworkConfig, NodeConfig, ValidatorInfo, AUTHORITIES_DB_NAME,
@@ -32,10 +32,8 @@ use sui_types::base_types::{AuthorityName, SuiAddress};
 use sui_types::committee::{Committee, ProtocolVersion};
 use sui_types::crypto::{
     generate_proof_of_possession, get_key_pair_from_rng, AccountKeyPair, AuthorityKeyPair,
-    AuthorityPublicKeyBytes, KeypairTraits, NetworkKeyPair, NetworkPublicKey, PublicKey,
-    SuiKeyPair,
+    AuthorityPublicKeyBytes, KeypairTraits, NetworkKeyPair, PublicKey, SuiKeyPair,
 };
-use sui_types::multiaddr::Multiaddr;
 use sui_types::object::Object;
 
 pub enum CommitteeConfig {
@@ -249,7 +247,7 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
             let (worker_key_pair, network_key_pair): (NetworkKeyPair, NetworkKeyPair) =
                 (get_key_pair_from_rng(rng).1, get_key_pair_from_rng(rng).1);
 
-            self.build_validator(
+            ValidatorConfigInfo::new(
                 idx,
                 protocol_key_pair,
                 worker_key_pair,
@@ -296,109 +294,11 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
         self.build_with_validators(rng, validators)
     }
 
-    fn build_validator(
-        &self,
-        index: usize,
-        key_pair: AuthorityKeyPair,
-        worker_key_pair: NetworkKeyPair,
-        account_key_pair: SuiKeyPair,
-        network_key_pair: NetworkKeyPair,
-        gas_price: u64,
-    ) -> ValidatorConfigInfo {
-        match self.validator_ip_sel {
-            ValidatorIpSelection::Localhost => ValidatorConfigInfo {
-                genesis_info: ValidatorGenesisInfo::from_localhost_for_testing(
-                    key_pair,
-                    worker_key_pair,
-                    account_key_pair,
-                    network_key_pair,
-                    gas_price,
-                ),
-                consensus_address: utils::new_tcp_network_address(),
-                consensus_internal_worker_address: None,
-            },
-
-            ValidatorIpSelection::Simulator => {
-                // we will probably never run this many validators in a sim
-                let low_octet = index + 1;
-                if low_octet > 255 {
-                    todo!("smarter IP formatting required");
-                }
-
-                let ip = format!("10.10.0.{}", low_octet);
-                let make_tcp_addr = |port: u16| -> Multiaddr {
-                    format!("/ip4/{}/tcp/{}/http", ip, port).parse().unwrap()
-                };
-
-                ValidatorConfigInfo {
-                    genesis_info: ValidatorGenesisInfo::from_base_ip(
-                        key_pair,
-                        worker_key_pair,
-                        account_key_pair,
-                        network_key_pair,
-                        None,
-                        ip.clone(),
-                        index,
-                        gas_price,
-                    ),
-                    consensus_address: make_tcp_addr(4000 + index as u16),
-                    consensus_internal_worker_address: None,
-                }
-            }
-        }
-    }
-
     fn build_with_validators(
         mut self,
         mut rng: R,
         validators: Vec<ValidatorConfigInfo>,
     ) -> NetworkConfig {
-        let validator_set = validators
-            .iter()
-            .enumerate()
-            .map(|(i, validator)| {
-                let name = format!("validator-{i}");
-                let protocol_key: AuthorityPublicKeyBytes =
-                    validator.genesis_info.key_pair.public().into();
-                let account_key: PublicKey = validator.genesis_info.account_key_pair.public();
-                let network_key: NetworkPublicKey =
-                    validator.genesis_info.network_key_pair.public().clone();
-                let worker_key: NetworkPublicKey =
-                    validator.genesis_info.worker_key_pair.public().clone();
-                let network_address = validator.genesis_info.network_address.clone();
-                let pop = generate_proof_of_possession(
-                    &validator.genesis_info.key_pair,
-                    (&validator.genesis_info.account_key_pair.public()).into(),
-                );
-
-                (
-                    ValidatorInfo {
-                        name,
-                        protocol_key,
-                        worker_key,
-                        network_key,
-                        account_address: SuiAddress::from(&account_key),
-                        gas_price: validator.genesis_info.gas_price,
-                        commission_rate: validator.genesis_info.commission_rate,
-                        network_address,
-                        p2p_address: validator.genesis_info.p2p_address.clone(),
-                        narwhal_primary_address: validator
-                            .genesis_info
-                            .narwhal_primary_address
-                            .clone(),
-                        narwhal_worker_address: validator
-                            .genesis_info
-                            .narwhal_worker_address
-                            .clone(),
-                        description: String::new(),
-                        image_url: String::new(),
-                        project_url: String::new(),
-                    },
-                    pop,
-                )
-            })
-            .collect::<Vec<_>>();
-
         self.get_or_init_genesis_config();
         let genesis_config = self.genesis_config.unwrap();
 
@@ -428,8 +328,14 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
                 .with_parameters(genesis_config.parameters)
                 .add_objects(self.additional_objects);
 
-            for (validator, proof_of_possession) in validator_set {
-                builder = builder.add_validator(validator, proof_of_possession);
+            for (i, validator) in validators.iter().enumerate() {
+                let name = format!("validator-{i}");
+                let validator_info = ValidatorInfo::new(name, &validator.genesis_info);
+                let pop = generate_proof_of_possession(
+                    &validator.genesis_info.key_pair,
+                    (&validator.genesis_info.account_key_pair.public()).into(),
+                );
+                builder = builder.add_validator(validator_info, pop);
             }
 
             builder = builder.with_token_distribution_schedule(token_distribution_schedule);
