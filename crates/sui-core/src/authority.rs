@@ -24,7 +24,8 @@ use prometheus::{
     IntCounterVec, IntGauge, IntGaugeVec, Registry,
 };
 use serde::de::DeserializeOwned;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
+use sui_config::node::StateDebugDumpConfig;
 use tap::{TapFallible, TapOptional};
 use tokio::sync::mpsc::unbounded_channel;
 use tokio::sync::oneshot;
@@ -541,6 +542,9 @@ pub struct AuthorityState {
     transaction_deny_config: TransactionDenyConfig,
 
     certificate_deny_config: CertificateDenyConfig,
+
+    /// Config for state dumping on forks
+    debug_dump_config: StateDebugDumpConfig,
 }
 
 /// The authority state encapsulates all state, drives execution, and ensures safety.
@@ -866,6 +870,39 @@ impl AuthorityState {
             .check_owned_object_locks_exist(owned_object_refs)
     }
 
+    /// This function captures the required state to debug a forked transaction.
+    /// The dump is written to a file in dir `path`, with name prefixed by the transaction digest.
+    /// NOTE: Since this info escapes the validator context,
+    /// make sure not to leak any private info here
+    pub(crate) fn debug_dump_transaction_state(
+        &self,
+        tx_digest: &TransactionDigest,
+        effects: &TransactionEffects,
+        expected_effects_digest: TransactionEffectsDigest,
+        inner_temporary_store: &InnerTemporaryStore,
+        certificate: &VerifiedExecutableTransaction,
+        debug_dump_config: &StateDebugDumpConfig,
+    ) -> SuiResult<PathBuf> {
+        let dump_dir = debug_dump_config
+            .dump_file_directory
+            .as_ref()
+            .cloned()
+            .unwrap_or(std::env::temp_dir());
+        let epoch_store = self.load_epoch_store_one_call_per_task();
+
+        NodeStateDump::new(
+            tx_digest,
+            effects,
+            expected_effects_digest,
+            &self.database,
+            &epoch_store,
+            inner_temporary_store,
+            certificate,
+        )?
+        .write_to_file(&dump_dir)
+        .map_err(|e| SuiError::FileIOError(e.to_string()))
+    }
+
     #[instrument(level = "trace", skip_all)]
     pub(crate) async fn process_certificate(
         &self,
@@ -925,6 +962,26 @@ impl AuthorityState {
 
         if let Some(expected_effects_digest) = expected_effects_digest {
             if effects.digest() != expected_effects_digest {
+                // We dont want to mask the original error, so we log it and continue.
+                match self.debug_dump_transaction_state(
+                    &digest,
+                    &effects,
+                    expected_effects_digest,
+                    &inner_temporary_store,
+                    certificate,
+                    &self.debug_dump_config,
+                ) {
+                    Ok(out_path) => {
+                        info!(
+                            "Dumped node state for transaction {} to {}",
+                            digest,
+                            out_path.as_path().display().to_string()
+                        );
+                    }
+                    Err(e) => {
+                        error!("Error dumping state for transaction {}: {e}", digest);
+                    }
+                }
                 error!(
                     tx_digest = ?digest,
                     ?expected_effects_digest,
@@ -1809,6 +1866,7 @@ impl AuthorityState {
         transaction_deny_config: TransactionDenyConfig,
         certificate_deny_config: CertificateDenyConfig,
         indirect_objects_threshold: usize,
+        debug_dump_config: StateDebugDumpConfig,
     ) -> Arc<Self> {
         Self::check_protocol_version(supported_protocol_versions, epoch_store.protocol_version());
 
@@ -1851,6 +1909,7 @@ impl AuthorityState {
             expensive_safety_check_config,
             transaction_deny_config,
             certificate_deny_config,
+            debug_dump_config,
         });
 
         // Start a task to execute ready certificates.
@@ -3938,5 +3997,134 @@ pub mod framework_injection {
                 dependencies: BuiltInFramework::all_package_ids(),
             })
             .collect()
+    }
+}
+
+use std::fs::File;
+use std::io::Write;
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct NodeStateDump {
+    pub tx_digest: TransactionDigest,
+    pub sender_signed_data: SenderSignedData,
+    pub executed_epoch: u64,
+    pub reference_gas_price: u64,
+    pub protocol_version: u64,
+    pub epoch_start_timestamp_ms: u64,
+    pub computed_effects: TransactionEffects,
+    pub expected_effects_digest: TransactionEffectsDigest,
+    pub relevant_system_packages: Vec<Object>,
+    pub shared_objects: Vec<Object>,
+    pub loaded_child_objects: Vec<Object>,
+    pub modified_at_versions: Vec<Object>,
+    pub runtime_reads: Vec<Object>,
+    pub input_objects: Vec<Object>,
+}
+
+impl NodeStateDump {
+    pub fn new(
+        tx_digest: &TransactionDigest,
+        effects: &TransactionEffects,
+        expected_effects_digest: TransactionEffectsDigest,
+        authority_store: &Arc<AuthorityStore>,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+        inner_temporary_store: &InnerTemporaryStore,
+        certificate: &VerifiedExecutableTransaction,
+    ) -> SuiResult<Self> {
+        // Epoch info
+        let executed_epoch = epoch_store.epoch();
+        let reference_gas_price = epoch_store.reference_gas_price();
+        let epoch_start_config = epoch_store.epoch_start_config();
+        let protocol_version = epoch_store.protocol_version().as_u64();
+        let epoch_start_timestamp_ms = epoch_start_config.epoch_data().epoch_start_timestamp();
+
+        // Record all system packages at this version
+        let mut relevant_system_packages = Vec::new();
+        for sys_package_id in BuiltInFramework::all_package_ids() {
+            if let Some(w) = authority_store.get_object(&sys_package_id)? {
+                relevant_system_packages.push(w)
+            }
+        }
+
+        // Record all the shared objects
+        let mut shared_objects = Vec::new();
+        for (id, ver, _) in effects.shared_objects() {
+            if let Some(w) = authority_store.get_object_by_key(id, *ver)? {
+                shared_objects.push(w)
+            }
+        }
+
+        // Record all loaded child objects
+        // Child objects which are read but not mutated are not tracked anywhere else
+        let mut loaded_child_objects = Vec::new();
+        for (id, ver) in &inner_temporary_store.loaded_child_objects {
+            if let Some(w) = authority_store.get_object_by_key(id, *ver)? {
+                loaded_child_objects.push(w)
+            }
+        }
+
+        // Record all modified objects
+        let mut modified_at_versions = Vec::new();
+        for (id, ver) in effects.modified_at_versions() {
+            if let Some(w) = authority_store.get_object_by_key(id, *ver)? {
+                modified_at_versions.push(w)
+            }
+        }
+
+        // Objects and packages read at runtime
+        // Some packages may be fetched at runtime and wont show up in input objects
+        let mut runtime_reads = Vec::new();
+        for obj in inner_temporary_store.runtime_read_objects.values() {
+            runtime_reads.push(obj.clone());
+        }
+
+        // All other input objects should already be in `inner_temporary_store.objects`
+
+        Ok(Self {
+            tx_digest: *tx_digest,
+            executed_epoch,
+            reference_gas_price,
+            epoch_start_timestamp_ms,
+            protocol_version,
+            relevant_system_packages,
+            shared_objects,
+            loaded_child_objects,
+            modified_at_versions,
+            runtime_reads,
+            sender_signed_data: certificate.clone().into_message(),
+            input_objects: inner_temporary_store.objects.values().cloned().collect(),
+            computed_effects: effects.clone(),
+            expected_effects_digest,
+        })
+    }
+
+    pub fn all_objects(&self) -> Vec<Object> {
+        let mut objects = Vec::new();
+        objects.extend(self.relevant_system_packages.clone());
+        objects.extend(self.shared_objects.clone());
+        objects.extend(self.loaded_child_objects.clone());
+        objects.extend(self.modified_at_versions.clone());
+        objects.extend(self.runtime_reads.clone());
+        objects.extend(self.input_objects.clone());
+        objects
+    }
+
+    pub fn write_to_file(&self, path: &Path) -> Result<PathBuf, anyhow::Error> {
+        let file_name = format!(
+            "{}_{}_NODE_DUMP.json",
+            self.tx_digest,
+            AuthorityState::unixtime_now_ms()
+        );
+        let mut path = path.to_path_buf();
+        path.push(&file_name);
+        let mut file = File::create(path.clone())?;
+        file.write_all(serde_json::to_string_pretty(self)?.as_bytes())?;
+        Ok(path)
+    }
+
+    #[cfg(not(release))]
+    pub fn read_from_file(path: &PathBuf) -> Result<Self, anyhow::Error> {
+        let file = File::open(path)?;
+        serde_json::from_reader(file).map_err(|e| anyhow::anyhow!(e))
     }
 }
