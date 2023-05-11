@@ -10,6 +10,7 @@ import {
 } from '@mysten/icons';
 import { SUI_TYPE_ARG, Coin } from '@mysten/sui.js';
 import { useMemo } from 'react';
+import { Link } from 'react-router-dom';
 
 import { useOnrampProviders } from '../onramp/useOnrampProviders';
 import { CoinActivitiesCard } from './CoinActivityCard';
@@ -18,6 +19,7 @@ import CoinBalance from './coin-balance';
 import { useActiveAddress } from '_app/hooks/useActiveAddress';
 import { LargeButton } from '_app/shared/LargeButton';
 import { Text } from '_app/shared/text';
+import { CoinItem } from '_components/active-coins-card/CoinItem';
 import Alert from '_components/alert';
 import Loading from '_components/loading';
 import { useGetAllBalances, useGetCoinBalance } from '_hooks';
@@ -25,6 +27,7 @@ import { AccountSelector } from '_src/ui/app/components/AccountSelector';
 import { useLedgerNotification } from '_src/ui/app/hooks/useLedgerNotification';
 import PageTitle from '_src/ui/app/shared/PageTitle';
 import FaucetRequestButton from '_src/ui/app/shared/faucet/FaucetRequestButton';
+import { IndentedTitle } from '_src/ui/app/shared/indented-title';
 
 type TokenDetailsProps = {
     coinType?: string;
@@ -49,18 +52,24 @@ function MyTokens() {
         <Loading loading={isFirstTimeLoading}>
             {balance?.length ? (
                 <div className="flex flex-1 justify-start flex-col w-full mt-6">
-                    <Text variant="caption" color="steel" weight="semibold">
-                        My Coins
-                    </Text>
-                    <div className="flex flex-col w-full justify-center divide-y divide-solid divide-steel/20 divide-x-0 px-1 mb-20">
-                        {balance.map(({ coinType, totalBalance }) => (
-                            <CoinBalance
-                                type={coinType}
-                                balance={BigInt(totalBalance)}
-                                key={coinType}
-                            />
-                        ))}
-                    </div>
+                    <IndentedTitle title="My Coins">
+                        <div className="flex flex-col w-full justify-center divide-y divide-solid divide-steel/20 divide-x-0 px-1 mb-10">
+                            {balance.map(({ coinType, totalBalance }) => (
+                                <Link
+                                    to={`/send?type=${encodeURIComponent(
+                                        coinType
+                                    )}`}
+                                    key={coinType}
+                                    className="py-3 no-underline items-center w-full"
+                                >
+                                    <CoinItem
+                                        coinType={coinType}
+                                        balance={BigInt(totalBalance)}
+                                    />
+                                </Link>
+                            ))}
+                        </div>
+                    </IndentedTitle>
                 </div>
             ) : null}
             {noSuiToken ? (
@@ -171,14 +180,11 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
 
                     {activeCoinType === SUI_TYPE_ARG && accountAddress ? (
                         <div className="mt-6 flex justify-start gap-2 flex-col w-full">
-                            <Text
-                                variant="caption"
-                                color="steel"
-                                weight="semibold"
-                            >
-                                SUI Stake
-                            </Text>
-                            <TokenIconLink accountAddress={accountAddress} />
+                            <IndentedTitle title="SUI Stake">
+                                <TokenIconLink
+                                    accountAddress={accountAddress}
+                                />
+                            </IndentedTitle>
                         </div>
                     ) : null}
 
