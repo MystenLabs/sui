@@ -1020,10 +1020,24 @@ where
             };
         }
         let total_transactions = db_transactions.iter().map(|t| t.transaction_count).sum();
+        let total_successful_transaction_blocks = db_transactions
+            .iter()
+            .filter(|t| t.execution_success)
+            .count();
+        let total_successful_transactions = db_transactions
+            .iter()
+            .filter(|t| t.execution_success)
+            .map(|t| t.transaction_count)
+            .sum();
 
         Ok((
             TemporaryCheckpointStore {
-                checkpoint: Checkpoint::from(checkpoint, total_transactions)?,
+                checkpoint: Checkpoint::from(
+                    checkpoint,
+                    total_transactions,
+                    total_successful_transactions,
+                    total_successful_transaction_blocks as i64,
+                )?,
                 transactions: db_transactions,
                 events,
                 object_changes: objects_changes,
