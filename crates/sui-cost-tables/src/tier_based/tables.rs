@@ -180,6 +180,14 @@ impl GasStatus {
         u64::from(gas) * self.gas_price
     }
 
+    pub fn get_status_info(&self) -> (u64, u64, u64) {
+        (
+            self.instructions_executed,
+            self.stack_height_high_water_mark,
+            self.stack_size_high_water_mark,
+        )
+    }
+
     pub fn push_stack(&mut self, pushes: u64) -> PartialVMResult<()> {
         match self.stack_height_current.checked_add(pushes) {
             // We should never hit this.

@@ -618,7 +618,7 @@ impl LocalExec {
 
         // Create the gas status
         let gas_status =
-            SuiGasStatus::new_with_budget(tx_info.gas_budget, tx_info.gas_price, protocol_config);
+            SuiGasStatus::new_with_budget(tx_info.gas_budget, tx_info.gas_price, protocol_config, None);
 
         // Temp store for data
         let temporary_store =
