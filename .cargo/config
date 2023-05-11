@@ -4,7 +4,7 @@
 # configuration file. This is a similar workaround to the ones presented here:
 # <https://github.com/EmbarkStudios/rust-ecosystem/issues/59>
 xclippy = [
-    "clippy", "--all-targets", "--",
+    "clippy", "--all-targets", "--all-features", "--",
     "-Wclippy::all",
     "-Wclippy::disallowed_methods",
 ]

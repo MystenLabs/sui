@@ -64,19 +64,23 @@ export function TransactionData({ transaction }: Props) {
                 )}
 
                 {isProgrammableTransaction && (
-                    <InputsCard inputs={programmableTxn.inputs} />
+                    <div data-testid="inputs-card">
+                        <InputsCard inputs={programmableTxn.inputs} />
+                    </div>
                 )}
             </section>
 
             <section className="flex w-96 flex-1 flex-col gap-6">
                 {isProgrammableTransaction && (
                     <>
-                        <TransactionsCard
-                            transactions={programmableTxn.transactions}
-                        />
-                        <section data-testid="gas-breakdown">
+                        <div data-testid="transactions-card">
+                            <TransactionsCard
+                                transactions={programmableTxn.transactions}
+                            />
+                        </div>
+                        <div data-testid="gas-breakdown">
                             <GasBreakdown summary={summary} />
-                        </section>
+                        </div>
                     </>
                 )}
             </section>

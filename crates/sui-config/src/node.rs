@@ -121,6 +121,9 @@ pub struct NodeConfig {
 
     #[serde(default)]
     pub certificate_deny_config: CertificateDenyConfig,
+
+    #[serde(default)]
+    pub state_debug_dump_config: StateDebugDumpConfig,
 }
 
 fn default_authority_store_pruning_config() -> AuthorityStorePruningConfig {
@@ -734,6 +737,15 @@ impl AuthorityKeyPairWithPath {
             })
             .as_ref()
     }
+}
+
+/// Configurations which determine how we dump state debug info.
+/// Debug info is dumped when a node forks.
+#[derive(Clone, Debug, Deserialize, Serialize, Default)]
+#[serde(rename_all = "kebab-case")]
+pub struct StateDebugDumpConfig {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub dump_file_directory: Option<PathBuf>,
 }
 
 #[cfg(test)]

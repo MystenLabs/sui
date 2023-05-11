@@ -50,7 +50,6 @@ jobs:
     runs-on: [ubuntu-ghcloud]
     steps:
     - uses: actions/checkout@7dd9e2a3dc350cf687eb1b2a4fadfee8c8e49675 # pin@v3
-    - uses: actions-rs/toolchain@16499b5e05bf2e26879000db0c1d13f7e13fa3af # pin@v1
     # Turn off the caching on self-hosted jobs
     # Enable caching of the 'librocksdb-sys' crate by additionally caching the
     # 'librocksdb-sys' src directory which is managed by cargo
@@ -165,7 +164,6 @@ jobs:
           - 5432:5432
     steps:
       - uses: actions/checkout@v3
-      - uses: actions-rs/toolchain@v1
 
       - name: Run indexer benchmark
         run: |

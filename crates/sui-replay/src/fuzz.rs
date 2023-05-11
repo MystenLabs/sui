@@ -90,7 +90,10 @@ impl ReplayFuzzer {
         mut self,
         base_transaction: Option<TransactionDigest>,
     ) -> Result<Self, anyhow::Error> {
-        let local_executor = self.local_exec.reset_for_new_execution().await?;
+        let local_executor = self
+            .local_exec
+            .reset_for_new_execution_with_client()
+            .await?;
         self.config
             .mutator
             .reset(self.config.num_mutations_per_base);

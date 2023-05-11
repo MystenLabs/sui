@@ -6,7 +6,7 @@ use sui_types::{error::ExecutionError, transaction::Argument};
 
 use crate::programmable_transactions::{
     context::ExecutionContext,
-    types::{RawValueType, StorageView, Value},
+    types::{RawValueType, StorageView, SuiResolver, Value},
 };
 
 pub type TransactionIndex = usize;
@@ -32,19 +32,23 @@ pub trait ExecutionMode {
 
     fn empty_results() -> Self::ExecutionResults;
 
-    fn add_argument_update<S: StorageView>(
-        context: &mut ExecutionContext<S>,
+    fn add_argument_update<'vm, 'state, 'a, S: StorageView>(
+        context: &mut ExecutionContext<'vm, 'state, 'a, S>,
         acc: &mut Self::ArgumentUpdates,
         arg: Argument,
         _new_value: &Value,
-    ) -> Result<(), ExecutionError>;
+    ) -> Result<(), ExecutionError>
+    where
+        &'state S: SuiResolver;
 
-    fn finish_command<S: StorageView>(
-        context: &mut ExecutionContext<S>,
+    fn finish_command<'vm, 'state, 'a, S: StorageView>(
+        context: &mut ExecutionContext<'vm, 'state, 'a, S>,
         acc: &mut Self::ExecutionResults,
         argument_updates: Self::ArgumentUpdates,
         command_result: &[Value],
-    ) -> Result<(), ExecutionError>;
+    ) -> Result<(), ExecutionError>
+    where
+        &'state S: SuiResolver;
 }
 
 #[derive(Copy, Clone)]
@@ -70,21 +74,27 @@ impl ExecutionMode for Normal {
 
     fn empty_results() -> Self::ExecutionResults {}
 
-    fn add_argument_update<S: StorageView>(
-        _context: &mut ExecutionContext<S>,
+    fn add_argument_update<'vm, 'state, 'a, S: StorageView>(
+        _context: &mut ExecutionContext<'vm, 'state, 'a, S>,
         _acc: &mut Self::ArgumentUpdates,
         _arg: Argument,
         _new_value: &Value,
-    ) -> Result<(), ExecutionError> {
+    ) -> Result<(), ExecutionError>
+    where
+        &'state S: SuiResolver,
+    {
         Ok(())
     }
 
-    fn finish_command<S: StorageView>(
-        _context: &mut ExecutionContext<S>,
+    fn finish_command<'vm, 'state, 'a, S: StorageView>(
+        _context: &mut ExecutionContext<'vm, 'state, 'a, S>,
         _acc: &mut Self::ExecutionResults,
         _argument_updates: Self::ArgumentUpdates,
         _command_result: &[Value],
-    ) -> Result<(), ExecutionError> {
+    ) -> Result<(), ExecutionError>
+    where
+        &'state S: SuiResolver,
+    {
         Ok(())
     }
 }
@@ -112,21 +122,27 @@ impl ExecutionMode for Genesis {
 
     fn empty_results() -> Self::ExecutionResults {}
 
-    fn add_argument_update<S: StorageView>(
-        _context: &mut ExecutionContext<S>,
+    fn add_argument_update<'vm, 'state, 'a, S: StorageView>(
+        _context: &mut ExecutionContext<'vm, 'state, 'a, S>,
         _acc: &mut Self::ArgumentUpdates,
         _arg: Argument,
         _new_value: &Value,
-    ) -> Result<(), ExecutionError> {
+    ) -> Result<(), ExecutionError>
+    where
+        &'state S: SuiResolver,
+    {
         Ok(())
     }
 
-    fn finish_command<S: StorageView>(
-        _context: &mut ExecutionContext<S>,
+    fn finish_command<'vm, 'state, 'a, S: StorageView>(
+        _context: &mut ExecutionContext<'vm, 'state, 'a, S>,
         _acc: &mut Self::ExecutionResults,
         _argument_updates: Self::ArgumentUpdates,
         _command_result: &[Value],
-    ) -> Result<(), ExecutionError> {
+    ) -> Result<(), ExecutionError>
+    where
+        &'state S: SuiResolver,
+    {
         Ok(())
     }
 }
@@ -157,21 +173,27 @@ impl ExecutionMode for System {
 
     fn empty_results() -> Self::ExecutionResults {}
 
-    fn add_argument_update<S: StorageView>(
-        _context: &mut ExecutionContext<S>,
+    fn add_argument_update<'vm, 'state, 'a, S: StorageView>(
+        _context: &mut ExecutionContext<'vm, 'state, 'a, S>,
         _acc: &mut Self::ArgumentUpdates,
         _arg: Argument,
         _new_value: &Value,
-    ) -> Result<(), ExecutionError> {
+    ) -> Result<(), ExecutionError>
+    where
+        &'state S: SuiResolver,
+    {
         Ok(())
     }
 
-    fn finish_command<S: StorageView>(
-        _context: &mut ExecutionContext<S>,
+    fn finish_command<'vm, 'state, 'a, S: StorageView>(
+        _context: &mut ExecutionContext<'vm, 'state, 'a, S>,
         _acc: &mut Self::ExecutionResults,
         _argument_updates: Self::ArgumentUpdates,
         _command_result: &[Value],
-    ) -> Result<(), ExecutionError> {
+    ) -> Result<(), ExecutionError>
+    where
+        &'state S: SuiResolver,
+    {
         Ok(())
     }
 }
@@ -210,23 +232,29 @@ impl ExecutionMode for DevInspect {
         vec![]
     }
 
-    fn add_argument_update<S: StorageView>(
-        context: &mut ExecutionContext<S>,
+    fn add_argument_update<'vm, 'state, 'a, S: StorageView>(
+        context: &mut ExecutionContext<'vm, 'state, 'a, S>,
         acc: &mut Self::ArgumentUpdates,
         arg: Argument,
         new_value: &Value,
-    ) -> Result<(), ExecutionError> {
+    ) -> Result<(), ExecutionError>
+    where
+        &'state S: SuiResolver,
+    {
         let (bytes, type_tag) = value_to_bytes_and_tag(context, new_value)?;
         acc.push((arg, bytes, type_tag));
         Ok(())
     }
 
-    fn finish_command<S: StorageView>(
-        context: &mut ExecutionContext<S>,
+    fn finish_command<'vm, 'state, 'a, S: StorageView>(
+        context: &mut ExecutionContext<'vm, 'state, 'a, S>,
         acc: &mut Self::ExecutionResults,
         argument_updates: Self::ArgumentUpdates,
         command_result: &[Value],
-    ) -> Result<(), ExecutionError> {
+    ) -> Result<(), ExecutionError>
+    where
+        &'state S: SuiResolver,
+    {
         let command_bytes = command_result
             .iter()
             .map(|value| value_to_bytes_and_tag(context, value))
@@ -236,10 +264,13 @@ impl ExecutionMode for DevInspect {
     }
 }
 
-fn value_to_bytes_and_tag<S: StorageView>(
-    context: &mut ExecutionContext<S>,
+fn value_to_bytes_and_tag<'vm, 'state, 'a, S: StorageView>(
+    context: &mut ExecutionContext<'vm, 'state, 'a, S>,
     value: &Value,
-) -> Result<(Vec<u8>, TypeTag), ExecutionError> {
+) -> Result<(Vec<u8>, TypeTag), ExecutionError>
+where
+    &'state S: SuiResolver,
+{
     let (type_tag, bytes) = match value {
         Value::Object(obj) => {
             let tag = context

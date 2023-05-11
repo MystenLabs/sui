@@ -821,7 +821,7 @@ Deprecated since v1.0.0, use <code><a href="clob.md#0xdee9_clob_OrderPlacedV2">O
 
 
 
-<pre><code><b>const</b> <a href="clob.md#0xdee9_clob_MIN_BID_ORDER_ID">MIN_BID_ORDER_ID</a>: u64 = 0;
+<pre><code><b>const</b> <a href="clob.md#0xdee9_clob_MIN_BID_ORDER_ID">MIN_BID_ORDER_ID</a>: u64 = 1;
 </code></pre>
 
 

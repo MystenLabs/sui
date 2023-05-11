@@ -9,7 +9,7 @@ use crate::{
 pub use enum_dispatch::enum_dispatch;
 use fastcrypto::{
     ed25519::Ed25519PublicKey,
-    encoding::Base64,
+    encoding::{Base64, Encoding},
     error::FastCryptoError,
     hash::HashFunction,
     secp256k1::Secp256k1PublicKey,
@@ -22,7 +22,10 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use shared_crypto::intent::IntentMessage;
-use std::hash::{Hash, Hasher};
+use std::{
+    hash::{Hash, Hasher},
+    str::FromStr,
+};
 
 use crate::{
     base_types::SuiAddress,
@@ -66,7 +69,7 @@ pub struct MultiSig {
     #[serde_as(as = "SuiBitmap")]
     bitmap: RoaringBitmap,
     /// The public key encoded with each public key with its signature scheme used along with the corresponding weight.
-    pub multisig_pk: MultiSigPublicKey,
+    multisig_pk: MultiSigPublicKey,
     /// A bytes representation of [struct MultiSig]. This helps with implementing [trait AsRef<[u8]>].
     #[serde(skip)]
     bytes: OnceCell<Vec<u8>>,
@@ -106,7 +109,7 @@ impl AuthenticatorTrait for MultiSig {
             });
         }
 
-        if <SuiAddress as From<MultiSigPublicKey>>::from(self.multisig_pk.clone()) != author {
+        if SuiAddress::from(&self.multisig_pk) != author {
             return Err(SuiError::InvalidSignature {
                 error: "Invalid address".to_string(),
             });
@@ -234,8 +237,19 @@ impl MultiSig {
         self.multisig_pk.validate()?;
         Ok(())
     }
-}
 
+    pub fn get_pk(&self) -> &MultiSigPublicKey {
+        &self.multisig_pk
+    }
+
+    pub fn get_sigs(&self) -> &[CompressedSignature] {
+        &self.sigs
+    }
+
+    pub fn get_bitmap(&self) -> &RoaringBitmap {
+        &self.bitmap
+    }
+}
 /// The struct that contains the public key used for authenticating a MultiSig.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct MultiSigPublicKey {
@@ -303,5 +317,33 @@ impl MultiSigPublicKey {
             return Err(FastCryptoError::InvalidInput);
         }
         Ok(())
+    }
+}
+
+impl ToFromBytes for MultiSig {
+    fn from_bytes(bytes: &[u8]) -> Result<MultiSig, FastCryptoError> {
+        // The first byte matches the flag of MultiSig.
+        if bytes.first().ok_or(FastCryptoError::InvalidInput)? != &SignatureScheme::MultiSig.flag()
+        {
+            return Err(FastCryptoError::InvalidInput);
+        }
+        let multisig: MultiSig =
+            bcs::from_bytes(&bytes[1..]).map_err(|_| FastCryptoError::InvalidSignature)?;
+        multisig.validate()?;
+        Ok(multisig)
+    }
+}
+
+impl FromStr for MultiSig {
+    type Err = SuiError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let bytes = Base64::decode(s).map_err(|_| SuiError::InvalidSignature {
+            error: "Invalid base64 string".to_string(),
+        })?;
+        let sig = MultiSig::from_bytes(&bytes).map_err(|_| SuiError::InvalidSignature {
+            error: "Invalid multisig bytes".to_string(),
+        })?;
+        Ok(sig)
     }
 }

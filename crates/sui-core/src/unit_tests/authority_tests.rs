@@ -50,11 +50,11 @@ use sui_types::{
     crypto::{get_key_pair, Signature},
     crypto::{AccountKeyPair, AuthorityKeyPair, KeypairTraits},
     object::{Owner, GAS_VALUE_FOR_TESTING, OBJECT_START_VERSION},
-    transaction::VerifiedTransaction,
-    MOVE_STDLIB_OBJECT_ID, SUI_FRAMEWORK_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_ID,
+    MOVE_STDLIB_PACKAGE_ID, SUI_CLOCK_OBJECT_ID, SUI_FRAMEWORK_PACKAGE_ID,
+    SUI_SYSTEM_STATE_OBJECT_ID,
 };
-use sui_types::{SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION};
 
+use crate::authority::authority_store_tables::AuthorityPerpetualTables;
 use crate::authority::move_integration_tests::build_and_publish_test_package_with_upgrade_cap;
 use crate::authority::test_authority_builder::TestAuthorityBuilder;
 use crate::{
@@ -2789,9 +2789,10 @@ async fn test_authority_persist() {
     let path = dir.join(format!("DB_{:?}", ObjectID::random()));
     fs::create_dir(&path).unwrap();
 
+    let perpetual_tables = Arc::new(AuthorityPerpetualTables::open(&path, None));
     // Create an authority
     let store =
-        AuthorityStore::open_with_committee_for_testing(&path, None, &committee, &genesis, 0)
+        AuthorityStore::open_with_committee_for_testing(perpetual_tables, &committee, &genesis, 0)
             .await
             .unwrap();
     let authority = init_state(&genesis, authority_key, store).await;
@@ -2815,8 +2816,9 @@ async fn test_authority_persist() {
     let seed = [1u8; 32];
     let (genesis, authority_key) = init_state_parameters_from_rng(&mut StdRng::from_seed(seed));
     let committee = genesis.committee().unwrap();
+    let perpetual_tables = Arc::new(AuthorityPerpetualTables::open(&path, None));
     let store =
-        AuthorityStore::open_with_committee_for_testing(&path, None, &committee, &genesis, 0)
+        AuthorityStore::open_with_committee_for_testing(perpetual_tables, &committee, &genesis, 0)
             .await
             .unwrap();
     let authority2 = init_state(&genesis, authority_key, store).await;
@@ -2926,11 +2928,7 @@ async fn test_invalid_mutable_clock_parameter() {
         ident_str!("use_clock").to_owned(),
         /* type_args */ vec![],
         gas_ref,
-        vec![CallArg::Object(ObjectArg::SharedObject {
-            id: SUI_CLOCK_OBJECT_ID,
-            initial_shared_version: SUI_CLOCK_OBJECT_SHARED_VERSION,
-            mutable: true,
-        })],
+        vec![CallArg::CLOCK_MUT],
         TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS * rgp,
         rgp,
     )
@@ -2969,11 +2967,7 @@ async fn test_valid_immutable_clock_parameter() {
         ident_str!("use_clock").to_owned(),
         /* type_args */ vec![],
         gas_ref,
-        vec![CallArg::Object(ObjectArg::SharedObject {
-            id: SUI_CLOCK_OBJECT_ID,
-            initial_shared_version: SUI_CLOCK_OBJECT_SHARED_VERSION,
-            mutable: false,
-        })],
+        vec![CallArg::CLOCK_IMM],
         TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS * rgp,
         rgp,
     )
@@ -4338,7 +4332,7 @@ async fn make_test_transaction(
         .unwrap();
     let data = TransactionData::new_move_call(
         *sender,
-        SUI_FRAMEWORK_OBJECT_ID,
+        SUI_FRAMEWORK_PACKAGE_ID,
         ident_str!(module).to_owned(),
         ident_str!(function).to_owned(),
         /* type_args */ vec![],
@@ -5220,7 +5214,7 @@ async fn test_publish_missing_dependency() {
         .get_package_bytes(/* with_unpublished_deps */ false);
 
     let mut builder = ProgrammableTransactionBuilder::new();
-    builder.publish_immutable(modules, vec![SUI_FRAMEWORK_OBJECT_ID]);
+    builder.publish_immutable(modules, vec![SUI_FRAMEWORK_PACKAGE_ID]);
     let kind = TransactionKind::programmable(builder.finish());
 
     let txn_data = TransactionData::new_with_gas_coins(kind, sender, vec![gas_ref], 10000, 1);
@@ -5262,7 +5256,7 @@ async fn test_publish_missing_transitive_dependency() {
         .get_package_bytes(/* with_unpublished_deps */ false);
 
     let mut builder = ProgrammableTransactionBuilder::new();
-    builder.publish_immutable(modules, vec![MOVE_STDLIB_OBJECT_ID]);
+    builder.publish_immutable(modules, vec![MOVE_STDLIB_PACKAGE_ID]);
     let kind = TransactionKind::programmable(builder.finish());
 
     let txn_data = TransactionData::new_with_gas_coins(kind, sender, vec![gas_ref], 10000, 1);

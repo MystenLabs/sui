@@ -7,16 +7,17 @@ use anyhow::anyhow;
 use colored::Colorize;
 use shared_crypto::intent::Intent;
 use std::collections::BTreeSet;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use sui_config::{Config, PersistedConfig};
 use sui_json_rpc_types::{
-    SuiObjectData, SuiObjectDataFilter, SuiObjectDataOptions, SuiObjectResponse,
-    SuiObjectResponseQuery, SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
+    get_new_package_obj_from_response, SuiObjectData, SuiObjectDataFilter, SuiObjectDataOptions,
+    SuiObjectResponse, SuiObjectResponseQuery, SuiTransactionBlockEffectsAPI,
+    SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
 };
 use sui_keys::keystore::AccountKeystore;
 use sui_test_transaction_builder::TestTransactionBuilder;
-use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress};
+use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress, TransactionDigest};
 use sui_types::crypto::{get_key_pair, AccountKeyPair};
 use sui_types::gas_coin::GasCoin;
 use sui_types::transaction::{
@@ -200,14 +201,20 @@ impl WalletContext {
         ))
     }
 
-    /// Given an address, return one gas object owned by this address.
-    /// The actual implementation just returns the first one returned by the read api.
-    pub async fn get_one_gas_object_owned_by_address(
+    pub async fn get_all_gas_objects_owned_by_address(
         &self,
         address: SuiAddress,
-    ) -> anyhow::Result<Option<ObjectRef>> {
+    ) -> anyhow::Result<Vec<ObjectRef>> {
+        self.get_gas_objects_owned_by_address(address, None).await
+    }
+
+    pub async fn get_gas_objects_owned_by_address(
+        &self,
+        address: SuiAddress,
+        limit: Option<usize>,
+    ) -> anyhow::Result<Vec<ObjectRef>> {
         let client = self.get_client().await?;
-        let mut response = client
+        let results: Vec<_> = client
             .read_api()
             .get_owned_objects(
                 address,
@@ -216,13 +223,35 @@ impl WalletContext {
                     Some(SuiObjectDataOptions::full_content()),
                 )),
                 None,
-                Some(1),
+                limit,
             )
-            .await?;
-        Ok(response
+            .await?
             .data
-            .pop()
-            .and_then(|r| r.data.map(|o| o.object_ref())))
+            .into_iter()
+            .filter_map(|r| r.data.map(|o| o.object_ref()))
+            .collect();
+        Ok(results)
+    }
+
+    /// Given an address, return one gas object owned by this address.
+    /// The actual implementation just returns the first one returned by the read api.
+    pub async fn get_one_gas_object_owned_by_address(
+        &self,
+        address: SuiAddress,
+    ) -> anyhow::Result<Option<ObjectRef>> {
+        Ok(self
+            .get_gas_objects_owned_by_address(address, Some(1))
+            .await?
+            .pop())
+    }
+
+    /// Returns one address and all gas objects owned by that address.
+    pub async fn get_one_account(&self) -> anyhow::Result<(SuiAddress, Vec<ObjectRef>)> {
+        let address = self.get_addresses().pop().unwrap();
+        Ok((
+            address,
+            self.get_all_gas_objects_owned_by_address(address).await?,
+        ))
     }
 
     /// Return a gas object owned by an arbitrary address managed by the wallet.
@@ -235,6 +264,7 @@ impl WalletContext {
         Ok(None)
     }
 
+    /// Returns all the account addresses managed by the wallet and their owned gas objects.
     pub async fn get_all_accounts_and_gas_objects(
         &self,
     ) -> anyhow::Result<Vec<(SuiAddress, Vec<ObjectRef>)>> {
@@ -331,6 +361,20 @@ impl WalletContext {
         res
     }
 
+    pub async fn make_transfer_sui_transaction(
+        &self,
+        recipient: Option<SuiAddress>,
+        amount: Option<u64>,
+    ) -> VerifiedTransaction {
+        let (sender, gas_object) = self.get_one_gas_object().await.unwrap().unwrap();
+        let gas_price = self.get_reference_gas_price().await.unwrap();
+        self.sign_transaction(
+            &TestTransactionBuilder::new(sender, gas_object, gas_price)
+                .transfer_sui(amount, recipient.unwrap_or(sender))
+                .build(),
+        )
+    }
+
     pub async fn make_staking_transaction(
         &self,
         validator_address: SuiAddress,
@@ -345,5 +389,103 @@ impl WalletContext {
                 .call_staking(stake_object, validator_address)
                 .build(),
         )
+    }
+
+    pub async fn make_publish_transaction(&self, path: PathBuf) -> VerifiedTransaction {
+        let (sender, gas_object) = self.get_one_gas_object().await.unwrap().unwrap();
+        let gas_price = self.get_reference_gas_price().await.unwrap();
+        self.sign_transaction(
+            &TestTransactionBuilder::new(sender, gas_object, gas_price)
+                .publish(path)
+                .build(),
+        )
+    }
+
+    pub async fn make_publish_transaction_with_deps(&self, path: PathBuf) -> VerifiedTransaction {
+        let (sender, gas_object) = self.get_one_gas_object().await.unwrap().unwrap();
+        let gas_price = self.get_reference_gas_price().await.unwrap();
+        self.sign_transaction(
+            &TestTransactionBuilder::new(sender, gas_object, gas_price)
+                .publish_with_deps(path)
+                .build(),
+        )
+    }
+
+    /// Executed a transaction to publish the `basics` package and returns the package object ref.
+    pub async fn publish_basics_package(&self) -> ObjectRef {
+        let (sender, gas_object) = self.get_one_gas_object().await.unwrap().unwrap();
+        let gas_price = self.get_reference_gas_price().await.unwrap();
+        let txn = self.sign_transaction(
+            &TestTransactionBuilder::new(sender, gas_object, gas_price)
+                .publish_examples("basics")
+                .build(),
+        );
+        let resp = self.execute_transaction_block(txn).await.unwrap();
+        get_new_package_obj_from_response(&resp).unwrap()
+    }
+
+    /// Executes a transaction to publish the `nfts` package and returns the package id, id of the gas object used, and the digest of the transaction.
+    pub async fn publish_nfts_package(&self) -> (ObjectID, ObjectID, TransactionDigest) {
+        let (sender, gas_object) = self.get_one_gas_object().await.unwrap().unwrap();
+        let gas_id = gas_object.0;
+        let gas_price = self.get_reference_gas_price().await.unwrap();
+        let txn = self.sign_transaction(
+            &TestTransactionBuilder::new(sender, gas_object, gas_price)
+                .publish_examples("nfts")
+                .build(),
+        );
+        let resp = self.execute_transaction_block(txn).await.unwrap();
+        let package_id = get_new_package_obj_from_response(&resp).unwrap().0;
+        (package_id, gas_id, resp.digest)
+    }
+
+    /// Pre-requisite: `publish_nfts_package` must be called before this function.
+    /// Executes a transaction to create an NFT and returns the sender address, the object id of the NFT, and the digest of the transaction.
+    pub async fn create_devnet_nft(
+        &self,
+        package_id: ObjectID,
+    ) -> (SuiAddress, ObjectID, TransactionDigest) {
+        let (sender, gas_object) = self.get_one_gas_object().await.unwrap().unwrap();
+        let rgp = self.get_reference_gas_price().await.unwrap();
+
+        let txn = self.sign_transaction(
+            &TestTransactionBuilder::new(sender, gas_object, rgp)
+                .call_nft_create(package_id)
+                .build(),
+        );
+        let resp = self.execute_transaction_block(txn).await.unwrap();
+
+        let object_id = resp
+            .effects
+            .as_ref()
+            .unwrap()
+            .created()
+            .first()
+            .unwrap()
+            .reference
+            .object_id;
+
+        (sender, object_id, resp.digest)
+    }
+
+    /// Executes a transaction to delete the given NFT.
+    pub async fn delete_devnet_nft(
+        &mut self,
+        sender: SuiAddress,
+        package_id: ObjectID,
+        nft_to_delete: ObjectRef,
+    ) -> SuiTransactionBlockResponse {
+        let gas = self
+            .get_one_gas_object_owned_by_address(sender)
+            .await
+            .unwrap()
+            .unwrap_or_else(|| panic!("Expect {sender} to have at least one gas object"));
+        let rgp = self.get_reference_gas_price().await.unwrap();
+        let txn = self.sign_transaction(
+            &TestTransactionBuilder::new(sender, gas, rgp)
+                .call_nft_delete(package_id, nft_to_delete)
+                .build(),
+        );
+        self.execute_transaction_block(txn).await.unwrap()
     }
 }

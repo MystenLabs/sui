@@ -23,6 +23,7 @@ use crate::error::{ExecutionError, ExecutionErrorKind, UserInputError, UserInput
 use crate::error::{SuiError, SuiResult};
 use crate::gas_coin::TOTAL_SUPPLY_MIST;
 use crate::is_system_package;
+use crate::layout_resolver::LayoutResolver;
 use crate::move_package::MovePackage;
 use crate::{
     base_types::{
@@ -69,6 +70,10 @@ impl ObjectFormatOptions {
         ObjectFormatOptions {
             include_types: true,
         }
+    }
+
+    pub fn include_types(&self) -> bool {
+        self.include_types
     }
 }
 
@@ -349,7 +354,10 @@ impl MoveObject {
     }
 
     /// Get the total amount of SUI embedded in `self`. Intended for testing purposes
-    pub fn get_total_sui(&self, resolver: &impl GetModule) -> Result<u64, SuiError> {
+    pub fn get_total_sui(
+        &self,
+        layout_resolver: &mut impl LayoutResolver,
+    ) -> Result<u64, SuiError> {
         if self.type_.is_gas_coin() {
             // Fast path without deserialization.
             return Ok(self.get_coin_value_unsafe());
@@ -358,7 +366,7 @@ impl MoveObject {
         if self.type_.is_coin() {
             return Ok(0);
         }
-        let layout = self.get_layout(ObjectFormatOptions::with_types(), resolver)?;
+        let layout = layout_resolver.get_layout(self, ObjectFormatOptions::with_types())?;
         let move_struct = self.to_move_struct(&layout)?;
         Ok(Self::get_total_sui_in_struct(&move_struct, 0))
     }
@@ -488,6 +496,19 @@ pub enum Owner {
 }
 
 impl Owner {
+    // NOTE: only return address of AddressOwner, otherwise return error,
+    // ObjectOwner's address is converted from object id, thus we will skip it.
+    pub fn get_address_owner_address(&self) -> SuiResult<SuiAddress> {
+        match self {
+            Self::AddressOwner(address) => Ok(*address),
+            Self::Shared { .. } | Self::Immutable | Self::ObjectOwner(_) => {
+                Err(SuiError::UnexpectedOwnerType)
+            }
+        }
+    }
+
+    // NOTE: this function will return address of both AddressOwner and ObjectOwner,
+    // address of ObjectOwner is converted from object id, even though the type is SuiAddress.
     pub fn get_owner_address(&self) -> SuiResult<SuiAddress> {
         match self {
             Self::AddressOwner(address) | Self::ObjectOwner(address) => Ok(*address),
@@ -811,10 +832,13 @@ impl Object {
 // Testing-related APIs.
 impl Object {
     /// Get the total amount of SUI embedded in `self`, including both Move objects and the storage rebate
-    pub fn get_total_sui(&self, resolver: &impl GetModule) -> Result<u64, SuiError> {
+    pub fn get_total_sui(
+        &self,
+        layout_resolver: &mut impl LayoutResolver,
+    ) -> Result<u64, SuiError> {
         Ok(self.storage_rebate
             + match &self.data {
-                Data::Move(m) => m.get_total_sui(resolver)?,
+                Data::Move(m) => m.get_total_sui(layout_resolver)?,
                 Data::Package(_) => 0,
             })
     }

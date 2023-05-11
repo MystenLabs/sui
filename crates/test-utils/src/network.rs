@@ -11,7 +11,7 @@ use jsonrpsee::ws_client::WsClient;
 use jsonrpsee::ws_client::WsClientBuilder;
 use prometheus::Registry;
 use rand::{distributions::*, rngs::OsRng, seq::SliceRandom};
-use tokio::time::timeout;
+use tokio::time::{timeout, Instant};
 use tokio::{task::JoinHandle, time::sleep};
 use tracing::info;
 
@@ -199,6 +199,64 @@ impl TestCluster {
         })
         .await
         .expect("Timed out waiting for cluster to target epoch")
+    }
+
+    /// Ask 2f+1 validators to close epoch actively, and wait for the entire network to reach the next
+    /// epoch. This requires waiting for both the fullnode and all validators to reach the next epoch.
+    pub async fn trigger_reconfiguration(&self) {
+        info!("Starting reconfiguration");
+        let start = Instant::now();
+
+        // Close epoch on 2f+1 validators.
+        let cur_committee = self
+            .fullnode_handle
+            .sui_node
+            .state()
+            .clone_committee_for_testing();
+        let mut cur_stake = 0;
+        for handle in self.swarm.validator_node_handles() {
+            handle
+                .with_async(|node| async {
+                    node.close_epoch_for_testing().await.unwrap();
+                    cur_stake += cur_committee.weight(&node.state().name);
+                })
+                .await;
+            if cur_stake >= cur_committee.quorum_threshold() {
+                break;
+            }
+        }
+        info!("close_epoch complete after {:?}", start.elapsed());
+
+        self.wait_for_epoch(Some(cur_committee.epoch + 1)).await;
+        self.wait_for_epoch_all_validators(cur_committee.epoch + 1)
+            .await;
+
+        info!("reconfiguration complete after {:?}", start.elapsed());
+    }
+
+    pub async fn wait_for_epoch_all_validators(&self, target_epoch: EpochId) {
+        let handles = self.swarm.validator_node_handles();
+        let tasks: Vec<_> = handles.iter()
+            .map(|handle| {
+                handle.with_async(|node| async {
+                    let mut retries = 0;
+                    loop {
+                        if node.state().epoch_store_for_testing().epoch() == target_epoch {
+                            break;
+                        }
+                        tokio::time::sleep(Duration::from_secs(1)).await;
+                        retries += 1;
+                        if retries % 5 == 0 {
+                            tracing::warn!(validator=?node.state().name.concise(), "Waiting for {:?} seconds for epoch change", retries);
+                        }
+                    }
+                })
+            })
+            .collect();
+
+        timeout(Duration::from_secs(40), join_all(tasks))
+            .await
+            .expect("timed out waiting for reconfiguration to complete");
     }
 
     /// Upgrade the network protocol version, by restarting every validator with a new
@@ -581,6 +639,7 @@ pub async fn start_fullnode_from_config(
     })
 }
 
+// TODO: Merge the following functions with the ones inside TestCluster.
 pub async fn wait_for_node_transition_to_epoch(node: &SuiNodeHandle, expected_epoch: EpochId) {
     node.with_async(|node| async move {
         let mut rx = node.subscribe_to_epoch_change();

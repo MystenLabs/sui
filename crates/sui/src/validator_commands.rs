@@ -20,7 +20,7 @@ use sui_types::{
         sui_system_state_inner_v1::{UnverifiedValidatorOperationCapV1, ValidatorV1},
         sui_system_state_summary::{SuiSystemStateSummary, SuiValidatorSummary},
     },
-    SUI_SYSTEM_OBJECT_ID,
+    SUI_SYSTEM_PACKAGE_ID,
 };
 use tap::tap::TapOptional;
 
@@ -50,12 +50,8 @@ use sui_sdk::SuiClient;
 use sui_types::crypto::{
     generate_proof_of_possession, get_authority_key_pair, AuthorityPublicKeyBytes,
 };
-use sui_types::transaction::Transaction;
-use sui_types::transaction::{CallArg, ObjectArg, TransactionData};
-use sui_types::{
-    crypto::{AuthorityKeyPair, NetworkKeyPair, SignatureScheme, SuiKeyPair},
-    SUI_SYSTEM_OBJ_CALL_ARG,
-};
+use sui_types::crypto::{AuthorityKeyPair, NetworkKeyPair, SignatureScheme, SuiKeyPair};
+use sui_types::transaction::{CallArg, ObjectArg, Transaction, TransactionData};
 
 const DEFAULT_GAS_BUDGET: u64 = 200_000_000; // 0.2 SUI
 
@@ -554,7 +550,7 @@ async fn call_0x5(
 ) -> anyhow::Result<SuiTransactionBlockResponse> {
     let sender = context.active_address()?;
     let sui_client = context.get_client().await?;
-    let mut args = vec![SUI_SYSTEM_OBJ_CALL_ARG];
+    let mut args = vec![CallArg::SUI_SYSTEM_MUT];
     args.extend(call_args);
     let rgp = sui_client
         .governance_api()
@@ -564,7 +560,7 @@ async fn call_0x5(
     let gas_obj_ref = get_gas_obj_ref(sender, &sui_client, gas_budget).await?;
     let tx_data = TransactionData::new_move_call(
         sender,
-        SUI_SYSTEM_OBJECT_ID,
+        SUI_SYSTEM_PACKAGE_ID,
         ident_str!("sui_system").to_owned(),
         ident_str!(function).to_owned(),
         vec![],

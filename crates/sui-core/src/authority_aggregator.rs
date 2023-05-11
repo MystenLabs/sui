@@ -357,6 +357,13 @@ impl ProcessTransactionResult {
             Self::Executed(..) => panic!("Wrong type"),
         }
     }
+
+    pub fn into_effects_for_testing(self) -> VerifiedCertifiedTransactionEffects {
+        match self {
+            Self::Certified(..) => panic!("Wrong type"),
+            Self::Executed(effects, ..) => effects,
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -584,8 +591,8 @@ impl AuthorityAggregator<NetworkAuthorityClient> {
                 if authority_name.is_err() {
                     return None;
                 }
-                let human_readble_name = s.name;
-                Some((authority_name.unwrap(), human_readble_name))
+                let human_readable_name = s.name;
+                Some((authority_name.unwrap(), human_readable_name))
             })
             .collect();
         Self::new_from_committee(

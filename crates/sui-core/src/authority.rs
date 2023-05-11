@@ -24,7 +24,8 @@ use prometheus::{
     IntCounterVec, IntGauge, IntGaugeVec, Registry,
 };
 use serde::de::DeserializeOwned;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
+use sui_config::node::StateDebugDumpConfig;
 use tap::{TapFallible, TapOptional};
 use tokio::sync::mpsc::unbounded_channel;
 use tokio::sync::oneshot;
@@ -41,6 +42,7 @@ use narwhal_config::{
 use once_cell::sync::OnceCell;
 use shared_crypto::intent::{Intent, IntentScope};
 use sui_adapter::execution_engine;
+use sui_adapter::type_layout_resolver::TypeLayoutResolver;
 use sui_adapter::{adapter, execution_mode};
 use sui_config::certificate_deny_config::CertificateDenyConfig;
 use sui_config::genesis::Genesis;
@@ -73,6 +75,7 @@ use sui_types::error::{ExecutionError, UserInputError};
 use sui_types::event::{Event, EventID};
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::gas::{GasCostSummary, SuiGasStatus};
+use sui_types::layout_resolver::LayoutResolver;
 use sui_types::message_envelope::Message;
 use sui_types::messages_checkpoint::{
     CheckpointCommitment, CheckpointContents, CheckpointContentsDigest, CheckpointDigest,
@@ -541,6 +544,9 @@ pub struct AuthorityState {
     transaction_deny_config: TransactionDenyConfig,
 
     certificate_deny_config: CertificateDenyConfig,
+
+    /// Config for state dumping on forks
+    debug_dump_config: StateDebugDumpConfig,
 }
 
 /// The authority state encapsulates all state, drives execution, and ensures safety.
@@ -866,6 +872,39 @@ impl AuthorityState {
             .check_owned_object_locks_exist(owned_object_refs)
     }
 
+    /// This function captures the required state to debug a forked transaction.
+    /// The dump is written to a file in dir `path`, with name prefixed by the transaction digest.
+    /// NOTE: Since this info escapes the validator context,
+    /// make sure not to leak any private info here
+    pub(crate) fn debug_dump_transaction_state(
+        &self,
+        tx_digest: &TransactionDigest,
+        effects: &TransactionEffects,
+        expected_effects_digest: TransactionEffectsDigest,
+        inner_temporary_store: &InnerTemporaryStore,
+        certificate: &VerifiedExecutableTransaction,
+        debug_dump_config: &StateDebugDumpConfig,
+    ) -> SuiResult<PathBuf> {
+        let dump_dir = debug_dump_config
+            .dump_file_directory
+            .as_ref()
+            .cloned()
+            .unwrap_or(std::env::temp_dir());
+        let epoch_store = self.load_epoch_store_one_call_per_task();
+
+        NodeStateDump::new(
+            tx_digest,
+            effects,
+            expected_effects_digest,
+            &self.database,
+            &epoch_store,
+            inner_temporary_store,
+            certificate,
+        )?
+        .write_to_file(&dump_dir)
+        .map_err(|e| SuiError::FileIOError(e.to_string()))
+    }
+
     #[instrument(level = "trace", skip_all)]
     pub(crate) async fn process_certificate(
         &self,
@@ -925,6 +964,26 @@ impl AuthorityState {
 
         if let Some(expected_effects_digest) = expected_effects_digest {
             if effects.digest() != expected_effects_digest {
+                // We dont want to mask the original error, so we log it and continue.
+                match self.debug_dump_transaction_state(
+                    &digest,
+                    &effects,
+                    expected_effects_digest,
+                    &inner_temporary_store,
+                    certificate,
+                    &self.debug_dump_config,
+                ) {
+                    Ok(out_path) => {
+                        info!(
+                            "Dumped node state for transaction {} to {}",
+                            digest,
+                            out_path.as_path().display().to_string()
+                        );
+                    }
+                    Err(e) => {
+                        error!("Error dumping state for transaction {}: {e}", digest);
+                    }
+                }
                 error!(
                     tx_digest = ?digest,
                     ?expected_effects_digest,
@@ -1145,9 +1204,9 @@ impl AuthorityState {
         let mut gas_object_refs = transaction.gas().to_vec();
         let ((gas_status, input_objects), mock_gas) = if transaction.gas().is_empty() {
             let sender = transaction.sender();
-            // use a 100M sui coin
+            // use a 1B sui coin
             const MIST_TO_SUI: u64 = 1_000_000_000;
-            const DRY_RUN_SUI: u64 = 100_000_000;
+            const DRY_RUN_SUI: u64 = 1_000_000_000;
             let max_coin_value = MIST_TO_SUI * DRY_RUN_SUI;
             let gas_object_id = ObjectID::random();
             let gas_object = Object::new_move(
@@ -1696,9 +1755,15 @@ impl AuthorityState {
                 })
             })?;
 
-        let layout = match request.object_format_options {
-            Some(format) => object.get_layout(format, epoch_store.module_cache().as_ref())?,
-            None => None,
+        let layout = if let (Some(format), Some(move_obj)) =
+            (request.object_format_options, object.data.try_as_move())
+        {
+            let epoch_store = self.load_epoch_store_one_call_per_task();
+            let move_vm = epoch_store.move_vm();
+            let mut layout_resolver = TypeLayoutResolver::new(move_vm, self.database.as_ref());
+            Some(layout_resolver.get_layout(move_obj, format)?)
+        } else {
+            None
         };
 
         let lock = if !object.is_address_owned() {
@@ -1809,6 +1874,7 @@ impl AuthorityState {
         transaction_deny_config: TransactionDenyConfig,
         certificate_deny_config: CertificateDenyConfig,
         indirect_objects_threshold: usize,
+        debug_dump_config: StateDebugDumpConfig,
     ) -> Arc<Self> {
         Self::check_protocol_version(supported_protocol_versions, epoch_store.protocol_version());
 
@@ -1851,6 +1917,7 @@ impl AuthorityState {
             expensive_safety_check_config,
             transaction_deny_config,
             certificate_deny_config,
+            debug_dump_config,
         });
 
         // Start a task to execute ready certificates.
@@ -2004,7 +2071,10 @@ impl AuthorityState {
             cur_epoch_store.epoch()
         );
 
-        if let Err(err) = self.database.expensive_check_sui_conservation() {
+        if let Err(err) = self
+            .database
+            .expensive_check_sui_conservation(cur_epoch_store.move_vm())
+        {
             if cfg!(debug_assertions) {
                 panic!("{}", err);
             } else {
@@ -2173,17 +2243,25 @@ impl AuthorityState {
                             .into())
                         }
                         Some(object) => {
-                            let layout = object.get_layout(
-                                ObjectFormatOptions::default(),
-                                // threading the epoch_store through this API does not
-                                // seem possible, so we just read it from the state (self) and fetch
-                                // the module cache out of it.
-                                // Notice that no matter what module cache we get things
-                                // should work
-                                self.load_epoch_store_one_call_per_task()
-                                    .module_cache()
-                                    .as_ref(),
-                            )?;
+                            let layout = {
+                                match object.data.try_as_move() {
+                                    None => None,
+                                    Some(move_obj) => {
+                                        let epoch_store = self.load_epoch_store_one_call_per_task();
+                                        let move_vm = epoch_store.move_vm();
+                                        let mut layout_resolver = TypeLayoutResolver::new(
+                                            move_vm,
+                                            self.database.as_ref(),
+                                        );
+                                        Some(
+                                            layout_resolver.get_layout(
+                                                move_obj,
+                                                ObjectFormatOptions::default(),
+                                            )?,
+                                        )
+                                    }
+                                }
+                            };
                             Ok(ObjectRead::Exists(obj_ref, object, layout))
                         }
                     }
@@ -2269,15 +2347,25 @@ impl AuthorityState {
                     return Ok(match self.database.get_object_by_key(object_id, version)? {
                         None => PastObjectRead::VersionNotFound(*object_id, version),
                         Some(object) => {
-                            let layout = object.get_layout(
-                                ObjectFormatOptions::default(),
-                                // threading the epoch_store through this API does not
-                                // seem possible, so we just read it from the state (self) and fetch
-                                // the module cache out of it.
-                                // Notice that no matter what module cache we get things
-                                // should work
-                                self.epoch_store.load().module_cache().as_ref(),
-                            )?;
+                            let layout = {
+                                match object.data.try_as_move() {
+                                    None => None,
+                                    Some(move_obj) => {
+                                        let epoch_store = self.load_epoch_store_one_call_per_task();
+                                        let move_vm = epoch_store.move_vm();
+                                        let mut layout_resolver = TypeLayoutResolver::new(
+                                            move_vm,
+                                            self.database.as_ref(),
+                                        );
+                                        Some(
+                                            layout_resolver.get_layout(
+                                                move_obj,
+                                                ObjectFormatOptions::default(),
+                                            )?,
+                                        )
+                                    }
+                                }
+                            };
                             let obj_ref = object.compute_object_reference();
                             PastObjectRead::VersionFound(obj_ref, object, layout)
                         }
@@ -2295,15 +2383,25 @@ impl AuthorityState {
                             .into())
                         }
                         Some(object) => {
-                            let layout = object.get_layout(
-                                ObjectFormatOptions::default(),
-                                // threading the epoch_store through this API does not
-                                // seem possible, so we just read it from the state (self) and fetch
-                                // the module cache out of it.
-                                // Notice that no matter what module cache we get things
-                                // should work
-                                self.epoch_store.load().module_cache().as_ref(),
-                            )?;
+                            let layout = {
+                                match object.data.try_as_move() {
+                                    None => None,
+                                    Some(move_obj) => {
+                                        let epoch_store = self.load_epoch_store_one_call_per_task();
+                                        let move_vm = epoch_store.move_vm();
+                                        let mut layout_resolver = TypeLayoutResolver::new(
+                                            move_vm,
+                                            self.database.as_ref(),
+                                        );
+                                        Some(
+                                            layout_resolver.get_layout(
+                                                move_obj,
+                                                ObjectFormatOptions::default(),
+                                            )?,
+                                        )
+                                    }
+                                }
+                            };
                             Ok(PastObjectRead::VersionFound(obj_ref, object, layout))
                         }
                     }
@@ -3938,5 +4036,134 @@ pub mod framework_injection {
                 dependencies: BuiltInFramework::all_package_ids(),
             })
             .collect()
+    }
+}
+
+use std::fs::File;
+use std::io::Write;
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct NodeStateDump {
+    pub tx_digest: TransactionDigest,
+    pub sender_signed_data: SenderSignedData,
+    pub executed_epoch: u64,
+    pub reference_gas_price: u64,
+    pub protocol_version: u64,
+    pub epoch_start_timestamp_ms: u64,
+    pub computed_effects: TransactionEffects,
+    pub expected_effects_digest: TransactionEffectsDigest,
+    pub relevant_system_packages: Vec<Object>,
+    pub shared_objects: Vec<Object>,
+    pub loaded_child_objects: Vec<Object>,
+    pub modified_at_versions: Vec<Object>,
+    pub runtime_reads: Vec<Object>,
+    pub input_objects: Vec<Object>,
+}
+
+impl NodeStateDump {
+    pub fn new(
+        tx_digest: &TransactionDigest,
+        effects: &TransactionEffects,
+        expected_effects_digest: TransactionEffectsDigest,
+        authority_store: &Arc<AuthorityStore>,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+        inner_temporary_store: &InnerTemporaryStore,
+        certificate: &VerifiedExecutableTransaction,
+    ) -> SuiResult<Self> {
+        // Epoch info
+        let executed_epoch = epoch_store.epoch();
+        let reference_gas_price = epoch_store.reference_gas_price();
+        let epoch_start_config = epoch_store.epoch_start_config();
+        let protocol_version = epoch_store.protocol_version().as_u64();
+        let epoch_start_timestamp_ms = epoch_start_config.epoch_data().epoch_start_timestamp();
+
+        // Record all system packages at this version
+        let mut relevant_system_packages = Vec::new();
+        for sys_package_id in BuiltInFramework::all_package_ids() {
+            if let Some(w) = authority_store.get_object(&sys_package_id)? {
+                relevant_system_packages.push(w)
+            }
+        }
+
+        // Record all the shared objects
+        let mut shared_objects = Vec::new();
+        for (id, ver, _) in effects.shared_objects() {
+            if let Some(w) = authority_store.get_object_by_key(id, *ver)? {
+                shared_objects.push(w)
+            }
+        }
+
+        // Record all loaded child objects
+        // Child objects which are read but not mutated are not tracked anywhere else
+        let mut loaded_child_objects = Vec::new();
+        for (id, ver) in &inner_temporary_store.loaded_child_objects {
+            if let Some(w) = authority_store.get_object_by_key(id, *ver)? {
+                loaded_child_objects.push(w)
+            }
+        }
+
+        // Record all modified objects
+        let mut modified_at_versions = Vec::new();
+        for (id, ver) in effects.modified_at_versions() {
+            if let Some(w) = authority_store.get_object_by_key(id, *ver)? {
+                modified_at_versions.push(w)
+            }
+        }
+
+        // Objects and packages read at runtime
+        // Some packages may be fetched at runtime and wont show up in input objects
+        let mut runtime_reads = Vec::new();
+        for obj in inner_temporary_store.runtime_read_objects.values() {
+            runtime_reads.push(obj.clone());
+        }
+
+        // All other input objects should already be in `inner_temporary_store.objects`
+
+        Ok(Self {
+            tx_digest: *tx_digest,
+            executed_epoch,
+            reference_gas_price,
+            epoch_start_timestamp_ms,
+            protocol_version,
+            relevant_system_packages,
+            shared_objects,
+            loaded_child_objects,
+            modified_at_versions,
+            runtime_reads,
+            sender_signed_data: certificate.clone().into_message(),
+            input_objects: inner_temporary_store.objects.values().cloned().collect(),
+            computed_effects: effects.clone(),
+            expected_effects_digest,
+        })
+    }
+
+    pub fn all_objects(&self) -> Vec<Object> {
+        let mut objects = Vec::new();
+        objects.extend(self.relevant_system_packages.clone());
+        objects.extend(self.shared_objects.clone());
+        objects.extend(self.loaded_child_objects.clone());
+        objects.extend(self.modified_at_versions.clone());
+        objects.extend(self.runtime_reads.clone());
+        objects.extend(self.input_objects.clone());
+        objects
+    }
+
+    pub fn write_to_file(&self, path: &Path) -> Result<PathBuf, anyhow::Error> {
+        let file_name = format!(
+            "{}_{}_NODE_DUMP.json",
+            self.tx_digest,
+            AuthorityState::unixtime_now_ms()
+        );
+        let mut path = path.to_path_buf();
+        path.push(&file_name);
+        let mut file = File::create(path.clone())?;
+        file.write_all(serde_json::to_string_pretty(self)?.as_bytes())?;
+        Ok(path)
+    }
+
+    #[cfg(not(release))]
+    pub fn read_from_file(path: &PathBuf) -> Result<Self, anyhow::Error> {
+        let file = File::open(path)?;
+        serde_json::from_reader(file).map_err(|e| anyhow::anyhow!(e))
     }
 }

@@ -30,8 +30,7 @@ async fn test_get_staked_sui() {
     let client = test_cluster.wallet.get_client().await.unwrap();
     let keystore = &test_cluster.wallet.config.keystore;
 
-    let (rosetta_client, _handle) =
-        start_rosetta_test_server(client.clone(), test_cluster.swarm.dir()).await;
+    let (rosetta_client, _handle) = start_rosetta_test_server(client.clone()).await;
 
     tokio::time::sleep(Duration::from_secs(1)).await;
 
@@ -125,17 +124,14 @@ async fn test_get_staked_sui() {
     println!("{}", serde_json::to_string_pretty(&response).unwrap());
 }
 
-// Fails with GasBudgetTooHigh, disabled for now
 #[tokio::test]
-#[ignore]
 async fn test_stake() {
     let test_cluster = TestClusterBuilder::new().build().await.unwrap();
     let sender = test_cluster.accounts[0];
     let client = test_cluster.wallet.get_client().await.unwrap();
     let keystore = &test_cluster.wallet.config.keystore;
 
-    let (rosetta_client, _handle) =
-        start_rosetta_test_server(client.clone(), test_cluster.swarm.dir()).await;
+    let (rosetta_client, _handle) = start_rosetta_test_server(client.clone()).await;
 
     let validator = client
         .governance_api()
@@ -189,17 +185,14 @@ async fn test_stake() {
     println!("{}", serde_json::to_string_pretty(&ops2).unwrap())
 }
 
-// Fails with GasBudgetTooHigh, disabled for now
 #[tokio::test]
-#[ignore]
 async fn test_stake_all() {
     let test_cluster = TestClusterBuilder::new().build().await.unwrap();
     let sender = test_cluster.accounts[0];
     let client = test_cluster.wallet.get_client().await.unwrap();
     let keystore = &test_cluster.wallet.config.keystore;
 
-    let (rosetta_client, _handle) =
-        start_rosetta_test_server(client.clone(), test_cluster.swarm.dir()).await;
+    let (rosetta_client, _handle) = start_rosetta_test_server(client.clone()).await;
 
     let validator = client
         .governance_api()
@@ -252,9 +245,7 @@ async fn test_stake_all() {
     println!("{}", serde_json::to_string_pretty(&ops2).unwrap())
 }
 
-// Fails with GasBudgetTooHigh, disabled for now
 #[tokio::test]
-#[ignore]
 async fn test_withdraw_stake() {
     let test_cluster = TestClusterBuilder::new()
         .with_epoch_duration_ms(10000)
@@ -265,8 +256,7 @@ async fn test_withdraw_stake() {
     let client = test_cluster.wallet.get_client().await.unwrap();
     let keystore = &test_cluster.wallet.config.keystore;
 
-    let (rosetta_client, _handle) =
-        start_rosetta_test_server(client.clone(), test_cluster.swarm.dir()).await;
+    let (rosetta_client, _handle) = start_rosetta_test_server(client.clone()).await;
 
     // First add some stakes
     let validator = client
@@ -390,8 +380,7 @@ async fn test_pay_sui() {
     let client = test_cluster.wallet.get_client().await.unwrap();
     let keystore = &test_cluster.wallet.config.keystore;
 
-    let (rosetta_client, _handle) =
-        start_rosetta_test_server(client.clone(), test_cluster.swarm.dir()).await;
+    let (rosetta_client, _handle) = start_rosetta_test_server(client.clone()).await;
 
     let ops = serde_json::from_value(json!(
         [{
@@ -450,8 +439,7 @@ async fn test_pay_sui_multiple_times() {
     let client = test_cluster.wallet.get_client().await.unwrap();
     let keystore = &test_cluster.wallet.config.keystore;
 
-    let (rosetta_client, _handle) =
-        start_rosetta_test_server(client.clone(), test_cluster.swarm.dir()).await;
+    let (rosetta_client, _handle) = start_rosetta_test_server(client.clone()).await;
 
     for _ in 1..100 {
         let ops = serde_json::from_value(json!(

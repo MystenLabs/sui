@@ -5,13 +5,14 @@ use axum::{
     async_trait,
     body::Bytes,
     extract::{Extension, FromRequest},
-    headers::ContentType,
+    headers::{ContentLength, ContentType},
     http::{Request, StatusCode},
     middleware::Next,
     response::Response,
     BoxError, TypedHeader,
 };
 use bytes::Buf;
+use hyper::header::CONTENT_ENCODING;
 use once_cell::sync::Lazy;
 use prometheus::{proto::MetricFamily, register_counter_vec, CounterVec};
 use std::sync::Arc;
@@ -26,6 +27,25 @@ static MIDDLEWARE_OPS: Lazy<CounterVec> = Lazy::new(|| {
     )
     .unwrap()
 });
+
+static MIDDLEWARE_HEADERS: Lazy<CounterVec> = Lazy::new(|| {
+    register_counter_vec!(
+        "middleware_headers",
+        "Operations counters and status for axum middleware.",
+        &["header", "value"]
+    )
+    .unwrap()
+});
+
+/// we expect sui-node to send us an http header content-length encoding.
+pub async fn expect_content_length<B>(
+    TypedHeader(content_length): TypedHeader<ContentLength>,
+    request: Request<B>,
+    next: Next<B>,
+) -> Result<Response, (StatusCode, &'static str)> {
+    MIDDLEWARE_HEADERS.with_label_values(&["content-length", &format!("{}", content_length.0)]);
+    Ok(next.run(request).await)
+}
 
 /// we expect sui-node to send us an http header content-type encoding.
 pub async fn expect_mysten_proxy_header<B>(
@@ -79,15 +99,40 @@ where
     type Rejection = (StatusCode, String);
 
     async fn from_request(req: Request<B>, state: &S) -> Result<Self, Self::Rejection> {
+        let should_be_snappy = req
+            .headers()
+            .get(CONTENT_ENCODING)
+            .map(|v| v.as_bytes() == b"snappy")
+            .unwrap_or(false);
+
         let body = Bytes::from_request(req, state).await.map_err(|e| {
             let msg = format!("error extracting bytes; {e}");
             error!(msg);
             MIDDLEWARE_OPS
                 .with_label_values(&["LenDelimProtobuf_from_request", "unable-to-extract-bytes"])
                 .inc();
-            (StatusCode::BAD_REQUEST, msg)
+            (e.status(), msg)
         })?;
-        let mut decoder = ProtobufDecoder::new(body.reader());
+
+        let intermediate = if should_be_snappy {
+            let mut s = snap::raw::Decoder::new();
+            let decompressed = s.decompress_vec(&body).map_err(|e| {
+                let msg = format!("unable to decode snappy encoded protobufs; {e}");
+                error!(msg);
+                MIDDLEWARE_OPS
+                    .with_label_values(&[
+                        "LenDelimProtobuf_decompress_vec",
+                        "unable-to-decode-snappy",
+                    ])
+                    .inc();
+                (StatusCode::BAD_REQUEST, msg)
+            })?;
+            Bytes::from(decompressed).reader()
+        } else {
+            body.reader()
+        };
+
+        let mut decoder = ProtobufDecoder::new(intermediate);
         let decoded = decoder.parse::<MetricFamily>().map_err(|e| {
             let msg = format!("unable to decode len deliminated protobufs; {e}");
             error!(msg);
