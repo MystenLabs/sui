@@ -30,7 +30,12 @@ pub mod pg_integration_test {
     use sui_json_rpc::api::ExtendedApiClient;
     use sui_json_rpc::api::IndexerApiClient;
     use sui_json_rpc::api::{ReadApiClient, TransactionBuilderClient, WriteApiClient};
-    use sui_json_rpc_types::{CheckpointId, EventFilter, SuiMoveObject, SuiObjectData, SuiObjectDataFilter, SuiObjectDataOptions, SuiObjectResponse, SuiObjectResponseQuery, SuiParsedMoveObject, SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions, SuiTransactionBlockResponseQuery, TransactionBlockBytes, TransactionFilter};
+    use sui_json_rpc_types::{
+        CheckpointId, EventFilter, SuiMoveObject, SuiObjectData, SuiObjectDataFilter,
+        SuiObjectDataOptions, SuiObjectResponse, SuiObjectResponseQuery, SuiParsedMoveObject,
+        SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
+        SuiTransactionBlockResponseQuery, TransactionBlockBytes, TransactionFilter,
+    };
     use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
     use sui_types::base_types::{ObjectID, SuiAddress};
     use sui_types::digests::{ObjectDigest, TransactionDigest};
