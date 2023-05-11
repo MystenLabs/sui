@@ -23,6 +23,7 @@ pub struct Transaction {
     pub timestamp_ms: Option<i64>,
     pub transaction_kind: String,
     pub transaction_count: i64,
+    pub execution_success: bool,
     pub created: Vec<Option<String>>,
     pub mutated: Vec<Option<String>>,
     pub deleted: Vec<Option<String>>,
@@ -126,6 +127,7 @@ impl TryFrom<TemporaryTransactionBlockResponseStore> for Transaction {
             checkpoint_sequence_number: checkpoint.map(|seq| seq as i64),
             transaction_kind: transaction.data.transaction().name().to_string(),
             transaction_count: transaction.data.transaction().transaction_count() as i64,
+            execution_success: effects.status().is_ok(),
             timestamp_ms: timestamp_ms.map(|ts| ts as i64),
             created: vec_string_to_vec_opt(created),
             mutated: vec_string_to_vec_opt(mutated),
@@ -150,22 +152,6 @@ impl TryFrom<TemporaryTransactionBlockResponseStore> for Transaction {
             transaction_effects_content: tx_effect_json,
             confirmed_local_execution,
         })
-    }
-}
-
-impl Transaction {
-    // MUSTFIX(gegaowp): trim data to reduce short-term storage consumption.
-    pub fn trim_data(&mut self) {
-        self.created.clear();
-        self.mutated.clear();
-        self.unwrapped.clear();
-        self.wrapped.clear();
-        self.move_calls.clear();
-        self.recipients.clear();
-        // trim BCS and JSON data from transaction
-        self.raw_transaction.clear();
-        self.transaction_content.clear();
-        self.transaction_effects_content.clear();
     }
 }
 
