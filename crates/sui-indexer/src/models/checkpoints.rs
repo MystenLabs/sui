@@ -29,6 +29,8 @@ pub struct Checkpoint {
     pub total_storage_rebate: i64,
     pub total_transaction_blocks: i64,
     pub total_transactions: i64,
+    pub total_successful_transaction_blocks: i64,
+    pub total_successful_transactions: i64,
     pub network_total_transactions: i64,
     pub timestamp_ms: i64,
     pub validator_signature: String,
@@ -38,6 +40,8 @@ impl Checkpoint {
     pub fn from(
         rpc_checkpoint: &RpcCheckpoint,
         total_transactions: i64,
+        total_successful_transactions: i64,
+        total_successful_transaction_blocks: i64,
     ) -> Result<Self, IndexerError> {
         let total_gas_cost = rpc_checkpoint
             .epoch_rolling_gas_cost_summary
@@ -66,9 +70,11 @@ impl Checkpoint {
             total_storage_rebate: rpc_checkpoint.epoch_rolling_gas_cost_summary.storage_rebate
                 as i64,
             total_transaction_blocks: rpc_checkpoint.transactions.len() as i64,
+            total_transactions,
+            total_successful_transaction_blocks,
+            total_successful_transactions,
             network_total_transactions: rpc_checkpoint.network_total_transactions as i64,
             timestamp_ms: rpc_checkpoint.timestamp_ms as i64,
-            total_transactions,
             validator_signature: rpc_checkpoint.validator_signature.encode_base64(),
         })
     }
