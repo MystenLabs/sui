@@ -10,7 +10,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 13;
+const MAX_PROTOCOL_VERSION: u64 = 14;
 
 // Record history of protocol version allocations here:
 //
@@ -42,6 +42,10 @@ const MAX_PROTOCOL_VERSION: u64 = 13;
 //             Changes to sui-system package to add PTB-friendly unstake function, and minor cleanup.
 // Version 13: System package change deprecating `0xdee9::clob` and `0xdee9::custodian`, replaced by
 //             `0xdee9::clob_v2` and `0xdee9::custodian_v2`.
+// Version 14: Introduce a config variable to allow charging of computation to be either
+//             bucket base or rounding up. The presence of `gas_rounding_step` (or `None`)
+//             decides whether rounding is applied or not.
+
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
 
@@ -306,6 +310,9 @@ pub struct ProtocolConfig {
 
     /// The max computation bucket for gas. This is the max that can be charged for computation.
     max_gas_computation_bucket: Option<u64>,
+
+    // Define the value used to round up computation gas charges
+    gas_rounding_step: Option<u64>,
 
     /// Maximum number of nested loops. Enforced by the Move bytecode verifier.
     max_loop_depth: Option<u64>,
@@ -1089,6 +1096,8 @@ impl ProtocolConfig {
                 max_move_identifier_len: None,
                 max_move_value_depth: None,
 
+                gas_rounding_step: None,
+
                 // When adding a new constant, set it to None in the earliest version, like this:
                 // new_constant: None,
             },
@@ -1187,6 +1196,12 @@ impl ProtocolConfig {
                 cfg
             }
             13 => Self::get_for_version_impl(version - 1, chain),
+            14 => {
+                let mut cfg = Self::get_for_version_impl(version - 1, chain);
+                cfg.gas_rounding_step = Some(1_000);
+                cfg.gas_model_version = Some(6);
+                cfg
+            }
             // Use this template when making changes:
             //
             //     // modify an existing constant.
