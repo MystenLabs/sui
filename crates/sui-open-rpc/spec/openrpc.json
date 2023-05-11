@@ -1260,7 +1260,7 @@
                 "objectId": "0x53e4567ccafa5f36ce84c80aa8bc9be64e0d5ae796884274aef3005ae6733809",
                 "version": "1",
                 "digest": "33K5ZXJ3RyubvYaHuEnQ1QXmmbhgtrFwp199dnEbL4n7",
-                "type": "0x2::coin::Coin<0x2::sui::SUI>",
+                "type": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>",
                 "owner": {
                   "AddressOwner": "0xc8ec1d5b84dd6289e193b9f88de4a994358c9f856135236c3e75a925e1c77ac3"
                 },
@@ -2094,7 +2094,7 @@
                   "objectId": "0xb61439368cd75ebe63d633af32ffb4a022d18b95b4eaa9fd3b22b43f6b2c8e92",
                   "version": "1",
                   "digest": "6D2MGzZN1DnALrbg6y9nQWwuipCa6fJERLXAwNGuGtKQ",
-                  "type": "0x2::coin::Coin<0x2::sui::SUI>",
+                  "type": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>",
                   "owner": {
                     "AddressOwner": "0x090bd6d16522a6fd4fa83ec70a5f197ad656da104dde1de9880be827a1a753e5"
                   },
@@ -2118,7 +2118,7 @@
                   "objectId": "0x6ea7bed8f6c3d80f2a595c2305e12dd6d07c3fbbd3ebef7dbcc7b02346cdf056",
                   "version": "1",
                   "digest": "HCvnds5SSF8Tn2kANyZDeAJuKa7bY6mf1ykzD8nQY42b",
-                  "type": "0x2::coin::Coin<0x2::sui::SUI>",
+                  "type": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>",
                   "owner": {
                     "AddressOwner": "0x74452cc61f316af5d5d7c02b94b02324268500a65bf5fdccb50582333b61721e"
                   },
@@ -2142,7 +2142,7 @@
                   "objectId": "0x75da5e934f672d3da3e003d989075efaecc79b5cd5df0df2a168259b7115a41c",
                   "version": "1",
                   "digest": "7AVTCGjWUFNAZYmcxtKQvAWbyzbFVn9cbr1fMvngbs9S",
-                  "type": "0x2::coin::Coin<0x2::sui::SUI>",
+                  "type": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>",
                   "owner": {
                     "AddressOwner": "0xcc0a372b6fd0026e0c63043492ce4d0c19a63e7f360c51d035a6470f09c8d237"
                   },
@@ -2166,7 +2166,7 @@
                   "objectId": "0x38554a9ff7b4f6b59f9426c321c8013afed093481dd4ef1267c67a8e9a0d074f",
                   "version": "1",
                   "digest": "DumsSGokTELtJXW54HKCRLjFKBeHkaySUZ86DDo8QwvR",
-                  "type": "0x2::coin::Coin<0x2::sui::SUI>",
+                  "type": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>",
                   "owner": {
                     "AddressOwner": "0x90fddb42cd928f74b986c6f539a734f3d7c9a75a9cb227ec315724962ee4193c"
                   },
@@ -2190,7 +2190,7 @@
                   "objectId": "0xe74d1b250d5df2cb5170782a8a438fbf681eded4d1e0a2cd7dfb27e784493fb1",
                   "version": "1",
                   "digest": "94nQ4Tz4nyqcVJmbLMUShkucx3eVfhLXGTCR4d1KP6gL",
-                  "type": "0x2::coin::Coin<0x2::sui::SUI>",
+                  "type": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>",
                   "owner": {
                     "AddressOwner": "0xdccde7893a3ac5c67cd2c4e27540b52ee828096b2aa5fe50a7effd8c23976147"
                   },
@@ -2705,7 +2705,7 @@
                 "objectId": "0x11af4b844ff94b3fbef6e36b518da3ad4c5856fa686464524a876b463d129760",
                 "version": "4",
                 "digest": "5VPAwDXy3BL72ehFc7gSJoz27ahMd6spUg5YwYc4ibcv",
-                "type": "0x2::coin::Coin<0x2::sui::SUI>",
+                "type": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>",
                 "owner": {
                   "AddressOwner": "0x3568c40e814d9d5396d23087a0fd641e91e0e00df6c012cded9ef9ba5e5bf042"
                 },
@@ -3239,7 +3239,7 @@
                 "objectId": "0xc8359b6b5e3bfeab524e5edaad3a204b4053745b2d45d1f00cd8d24e5b697607",
                 "version": "1",
                 "digest": "2VivvkBoFVwEg8oXq3tK9r3d3ybvMACtk9QwpFnkM6v2",
-                "type": "0x9::test::TestField",
+                "type": "0x0000000000000000000000000000000000000000000000000000000000000009::test::TestField",
                 "owner": {
                   "AddressOwner": "0xc055d5c23e2f6c69e6aacf5b4664b570cb20d4feace07fc863a2eef286c3e95e"
                 },
@@ -3491,7 +3491,7 @@
                     "objectId": "0x3d6255ff8223c12b0fd985c49d5777a0d65ad3d707164b2a378eee639ebc2690",
                     "version": "13488",
                     "digest": "A6v9pFTLH3PkDSvEGgVjW1JhL7CtcUQKwGmgXK8SQNsc",
-                    "type": "0x2::coin::Coin<0x2::sui::SUI>",
+                    "type": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>",
                     "owner": {
                       "AddressOwner": "0xa69bb635dcee0f33643b4729ae81730d55e5e26860fac6839ce2d7ed7e6f29d2"
                     },
@@ -3504,7 +3504,7 @@
                     "objectId": "0x1a6e30f43933bbf40f5f5b6ce1f44957337dcb28f32e0355326f8c7d932bd54d",
                     "version": "13488",
                     "digest": "Fn1HG7LyUcLDps6bhYQkPWXpeUXgisznxRJ2qvn7Q1JN",
-                    "type": "0x2::coin::Coin<0x2::sui::SUI>",
+                    "type": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>",
                     "owner": {
                       "AddressOwner": "0xa69bb635dcee0f33643b4729ae81730d55e5e26860fac6839ce2d7ed7e6f29d2"
                     },
@@ -3517,7 +3517,7 @@
                     "objectId": "0x28628a24386298faa98850887f64da841b87279efd098d59a66a3d9adc87cce8",
                     "version": "13488",
                     "digest": "39aXGAwHaY3CiqWwLiBZ7JRaGSvnpvPbHxMSJAwAUY5i",
-                    "type": "0x2::coin::Coin<0x2::sui::SUI>",
+                    "type": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>",
                     "owner": {
                       "AddressOwner": "0xa69bb635dcee0f33643b4729ae81730d55e5e26860fac6839ce2d7ed7e6f29d2"
                     },
