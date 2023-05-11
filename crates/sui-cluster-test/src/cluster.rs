@@ -7,7 +7,7 @@ use std::net::SocketAddr;
 use std::path::Path;
 use sui_config::genesis_config::GenesisConfig;
 use sui_config::Config;
-use sui_config::SUI_KEYSTORE_FILENAME;
+use sui_config::{sui_cluster_test_config_dir, SUI_KEYSTORE_FILENAME, SUI_NETWORK_CONFIG};
 use sui_indexer::test_utils::start_test_indexer;
 use sui_indexer::IndexerConfig;
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
@@ -39,8 +39,8 @@ impl ClusterFactory {
         options: &ClusterTestOpt,
     ) -> Result<Box<dyn Cluster + Sync + Send>, anyhow::Error> {
         Ok(match &options.env {
-            Env::NewLocal => Box::new(LocalNewCluster::start(options).await?),
-            _ => Box::new(RemoteRunningCluster::start(options).await?),
+            Env::NewLocal => Box::new(LocalNewCluster::start(options, None).await?),
+            _ => Box::new(RemoteRunningCluster::start(options, None).await?),
         })
     }
 }
@@ -48,7 +48,10 @@ impl ClusterFactory {
 /// Cluster Abstraction
 #[async_trait]
 pub trait Cluster {
-    async fn start(options: &ClusterTestOpt) -> Result<Self, anyhow::Error>
+    async fn start(
+        options: &ClusterTestOpt,
+        genesis_config: Option<GenesisConfig>,
+    ) -> Result<Self, anyhow::Error>
     where
         Self: Sized;
 
@@ -75,7 +78,10 @@ pub struct RemoteRunningCluster {
 
 #[async_trait]
 impl Cluster for RemoteRunningCluster {
-    async fn start(options: &ClusterTestOpt) -> Result<Self, anyhow::Error> {
+    async fn start(
+        options: &ClusterTestOpt,
+        _genesis_config: Option<GenesisConfig>,
+    ) -> Result<Self, anyhow::Error> {
         let (fullnode_url, faucet_url) = match options.env {
             Env::Devnet => (
                 String::from(DEVNET_FULLNODE_ADDR),
@@ -162,10 +168,26 @@ impl LocalNewCluster {
 
 #[async_trait]
 impl Cluster for LocalNewCluster {
-    async fn start(options: &ClusterTestOpt) -> Result<Self, anyhow::Error> {
-        // Let the faucet account hold 1000 gas objects on genesis
-        let genesis_config = GenesisConfig::custom_genesis(4, 1, 100);
-
+    async fn start(
+        options: &ClusterTestOpt,
+        genesis_config: Option<GenesisConfig>,
+        // network_config: Option<PathBuf>,
+    ) -> Result<Self, anyhow::Error> {
+        let (network_config_path, provided_config) = if genesis_config.is_some() {
+            (
+                Some(sui_cluster_test_config_dir()?.join(SUI_NETWORK_CONFIG)),
+                true,
+            )
+        } else {
+            (None, false)
+        };
+        // Let the faucet account hold 100 gas objects on genesis and we reuse existing config
+        // if it was provided.
+        let genesis_config = if let Some(config) = genesis_config {
+            config
+        } else {
+            GenesisConfig::custom_genesis(4, 1, 100)
+        };
         // TODO: options should contain port instead of address
         let fullnode_port = options.fullnode_address.as_ref().map(|addr| {
             addr.parse::<SocketAddr>()
@@ -189,11 +211,28 @@ impl Cluster for LocalNewCluster {
             cluster_builder = cluster_builder.set_fullnode_rpc_port(rpc_port);
         }
 
-        let mut test_cluster = cluster_builder.build().await?;
+        let mut test_cluster = cluster_builder
+            .build_with_network_config(network_config_path)
+            .await?;
 
-        // Use the wealthy account for faucet
-        let faucet_key = test_cluster.swarm.config_mut().account_keys.swap_remove(0);
-        let faucet_address = SuiAddress::from(faucet_key.public());
+        // If network config was provided use the previous address for faucet, else use the wealthy account for faucet
+        let (faucet_key, faucet_address) = if provided_config {
+            let keystore_path = sui_cluster_test_config_dir()?.join(SUI_KEYSTORE_FILENAME);
+            let keystore = Keystore::from(FileBasedKeystore::new(&keystore_path)?);
+            let faucet_address = keystore.addresses().first().cloned().unwrap();
+            let pub_faucet = keystore.get_key(&faucet_address)?;
+            let faucet_key = match pub_faucet {
+                SuiKeyPair::Ed25519(account_keypair) => Some(account_keypair),
+                _ => None,
+            }
+            .unwrap()
+            .copy();
+            (faucet_key, faucet_address)
+        } else {
+            let faucet_key = test_cluster.swarm.config_mut().account_keys.swap_remove(0);
+            let faucet_address = SuiAddress::from(faucet_key.public());
+            (faucet_key, faucet_address)
+        };
         info!(?faucet_address, "faucet_address");
 
         // This cluster has fullnode handle, safe to unwrap
@@ -258,7 +297,10 @@ impl Cluster for LocalNewCluster {
 // Make linter happy
 #[async_trait]
 impl Cluster for Box<dyn Cluster + Send + Sync> {
-    async fn start(_options: &ClusterTestOpt) -> Result<Self, anyhow::Error> {
+    async fn start(
+        _options: &ClusterTestOpt,
+        _genesis_config: Option<GenesisConfig>,
+    ) -> Result<Self, anyhow::Error> {
         unreachable!(
             "If we already have a boxed Cluster trait object we wouldn't have to call this function"
         );
