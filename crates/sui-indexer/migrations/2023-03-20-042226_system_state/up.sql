@@ -81,7 +81,7 @@ CREATE TABLE at_risk_validators
 CREATE OR REPLACE VIEW network_metrics AS
 SELECT (SELECT COALESCE(SUM(transaction_count)::float8 / 10, 0)
         FROM transactions
-        WHERE timestamp_ms >
+        WHERE execution_success = true AND timestamp_ms >
               (SELECT timestamp_ms FROM checkpoints ORDER BY sequence_number DESC LIMIT 1) - 10000) AS current_tps,
        (SELECT COALESCE(tps_30_days, 0) FROM epoch_network_metrics)                                 AS tps_30_days,
        (SELECT COUNT(1) FROM addresses)                                                             AS total_addresses,
