@@ -43,7 +43,7 @@ function CoinBalance({ type, balance, mode = 'row-item' }: CoinProps) {
         >
             {mode === 'row-item' ? (
                 <>
-                    <CoinIcon coinType={type} coinMeta={coinMeta} />
+                    <CoinIcon coinType={type} />
                     <div className={cl(st.coinNameContainer, st[mode])}>
                         <span className={st.coinName}>
                             {coinMeta?.name || symbol.toLocaleLowerCase()}

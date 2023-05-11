@@ -21,11 +21,7 @@ export function CoinItem({ coinType, balance, isActive, usd }: CoinItemProps) {
 
     return (
         <div className="flex gap-2.5 w-full justify-center items-center">
-            <CoinIcon
-                coinType={coinType}
-                coinMeta={coinMeta}
-                size={isActive ? 'sm' : 'md'}
-            />
+            <CoinIcon coinType={coinType} size={isActive ? 'sm' : 'md'} />
             <div className="flex flex-1 gap-1.5 justify-between">
                 <div className="flex flex-col gap-1.5">
                     <Text variant="body" color="steel-darker" weight="semibold">

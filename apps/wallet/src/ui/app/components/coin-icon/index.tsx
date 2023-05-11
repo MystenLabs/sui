@@ -1,8 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { useCoinMetadata } from '@mysten/core';
 import { Sui, Unstaked } from '@mysten/icons';
-import { SUI_TYPE_ARG, type CoinMetadata } from '@mysten/sui.js';
+import { SUI_TYPE_ARG } from '@mysten/sui.js';
 import { cva, type VariantProps } from 'class-variance-authority';
 
 import { ImageIcon } from '_app/shared/image-icon';
@@ -30,10 +31,10 @@ function SuiCoin() {
 
 type NonSuiCoinProps = {
     coinType: string;
-    coinMeta?: Pick<CoinMetadata, 'iconUrl' | 'name'> | null;
 };
 
-function NonSuiCoin({ coinType, coinMeta }: NonSuiCoinProps) {
+function NonSuiCoin({ coinType }: NonSuiCoinProps) {
+    const { data: coinMeta } = useCoinMetadata(coinType);
     return (
         <div className="flex h-full w-full items-center justify-center text-white bg-steel rounded-full">
             {coinMeta?.iconUrl ? (
@@ -41,6 +42,7 @@ function NonSuiCoin({ coinType, coinMeta }: NonSuiCoinProps) {
                     src={coinMeta.iconUrl}
                     label={coinMeta.name || coinType}
                     fallback={coinMeta.name || coinType}
+                    circle
                 />
             ) : (
                 <Unstaked />
@@ -49,17 +51,17 @@ function NonSuiCoin({ coinType, coinMeta }: NonSuiCoinProps) {
     );
 }
 
-export interface CoinIconProps
-    extends NonSuiCoinProps,
-        VariantProps<typeof imageStyle> {}
+export interface CoinIconProps extends VariantProps<typeof imageStyle> {
+    coinType: string;
+}
 
-export function CoinIcon({ coinType, coinMeta, ...styleProps }: CoinIconProps) {
+export function CoinIcon({ coinType, ...styleProps }: CoinIconProps) {
     return (
         <div className={imageStyle(styleProps)}>
             {coinType === SUI_TYPE_ARG ? (
                 <SuiCoin />
             ) : (
-                <NonSuiCoin coinMeta={coinMeta} coinType={coinType} />
+                <NonSuiCoin coinType={coinType} />
             )}
         </div>
     );
