@@ -1404,21 +1404,30 @@ impl AuthorityPerEpochStore {
         C: CheckpointServiceNotify,
     >(
         &self,
-        transactions: Vec<VerifiedSequencedConsensusTransaction>,
+        transactions: &[VerifiedSequencedConsensusTransaction],
+        end_of_publish_transactions: &[VerifiedSequencedConsensusTransaction],
         checkpoint_service: &Arc<C>,
         parent_sync_store: impl ParentSync,
     ) -> SuiResult<Vec<VerifiedExecutableTransaction>> {
         let mut batch = self.db_batch();
-        let (executable_txns, lock) = self
+        let (executable_txns, _lock) = self
             .process_consensus_transactions(
                 &mut batch,
                 transactions,
+                end_of_publish_transactions,
                 checkpoint_service,
                 parent_sync_store,
             )
             .await?;
         batch.write()?;
-        drop(lock);
+
+        for tx in transactions
+            .iter()
+            .chain(end_of_publish_transactions.iter())
+        {
+            let key = tx.0.transaction.key();
+            self.consensus_notify_read.notify(&key, &());
+        }
 
         Ok(executable_txns)
     }
@@ -1430,15 +1439,30 @@ impl AuthorityPerEpochStore {
         parent_sync_store: impl ParentSync,
     ) -> SuiResult<Vec<VerifiedExecutableTransaction>> {
         let mut batch = self.db_batch();
+
+        let (transactions, end_of_publish_transactions): (Vec<_>, Vec<_>) = transactions
+            .into_iter()
+            .partition(|txn| !txn.0.is_end_of_publish());
+
         let (certs, _lock) = self
             .process_consensus_transactions(
                 &mut batch,
-                transactions,
+                &transactions,
+                &end_of_publish_transactions,
                 checkpoint_service,
                 parent_sync_store,
             )
             .await?;
         batch.write()?;
+
+        for tx in transactions
+            .iter()
+            .chain(end_of_publish_transactions.iter())
+        {
+            let key = tx.0.transaction.key();
+            self.consensus_notify_read.notify(&key, &());
+        }
+
         Ok(certs)
     }
 
@@ -1449,7 +1473,8 @@ impl AuthorityPerEpochStore {
     pub(crate) async fn process_consensus_transactions<C: CheckpointServiceNotify>(
         &self,
         batch: &mut DBBatch,
-        mut transactions: Vec<VerifiedSequencedConsensusTransaction>,
+        transactions: &[VerifiedSequencedConsensusTransaction],
+        end_of_publish_transactions: &[VerifiedSequencedConsensusTransaction],
         checkpoint_service: &Arc<C>,
         parent_sync_store: impl ParentSync,
     ) -> SuiResult<(
@@ -1458,23 +1483,10 @@ impl AuthorityPerEpochStore {
     )> {
         let mut verified_certificates = Vec::new();
 
-        // sort all end of publish messages to the end of the list
-        transactions.sort_by(|a, b| {
-            let a_is_end_of_publish = a.0.is_end_of_publish();
-            let b_is_end_of_publish = b.0.is_end_of_publish();
-
-            a_is_end_of_publish.cmp(&b_is_end_of_publish)
-        });
-
-        // partition transactions into two groups: end of publish messages and all other messages
-        let (end_of_publish_txns, other_txns): (Vec<_>, Vec<_>) = transactions
-            .into_iter()
-            .partition(|tx| tx.0.is_end_of_publish());
-
-        // get the current next versions for each shared object in the other_txns
+        // get the current next versions for each shared object in transactions
         let mut shared_input_next_versions = {
             let unique_shared_input_objects = {
-                let mut shared_input_objects: Vec<_> = other_txns
+                let mut shared_input_objects: Vec<_> = transactions
                     .iter()
                     .filter_map(|tx| tx.0.as_shared_object_txn())
                     .flat_map(|tx| {
@@ -1497,7 +1509,7 @@ impl AuthorityPerEpochStore {
             .await?
         };
 
-        for tx in &other_txns {
+        for tx in transactions {
             if let Some(cert) = self
                 .process_consensus_transaction(
                     batch,
@@ -1516,12 +1528,7 @@ impl AuthorityPerEpochStore {
             shared_input_next_versions.into_iter(),
         )?;
 
-        let lock = self.process_end_of_publish_transactions(batch, &end_of_publish_txns)?;
-
-        for tx in other_txns.iter().chain(end_of_publish_txns.iter()) {
-            let key = tx.0.transaction.key();
-            self.consensus_notify_read.notify(&key, &());
-        }
+        let lock = self.process_end_of_publish_transactions(batch, end_of_publish_transactions)?;
 
         Ok((verified_certificates, lock))
     }
