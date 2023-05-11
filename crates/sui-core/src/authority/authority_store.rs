@@ -1856,11 +1856,18 @@ impl ObjectStore for AuthorityStore {
 }
 
 impl ChildObjectResolver for AuthorityStore {
-    fn read_child_object(&self, parent: &ObjectID, child: &ObjectID) -> SuiResult<Option<Object>> {
-        let child_object = match self.get_object(child)? {
-            None => return Ok(None),
-            Some(o) => o,
+    fn read_child_object(
+        &self,
+        parent: &ObjectID,
+        child: &ObjectID,
+        child_version_upper_bound: SequenceNumber,
+    ) -> SuiResult<Option<Object>> {
+        let Some(child_object) =
+            self.find_object_lt_or_eq_version(*child, child_version_upper_bound)
+        else {
+            return Ok(None)
         };
+
         let parent = *parent;
         if child_object.owner != Owner::ObjectOwner(parent.into()) {
             return Err(SuiError::InvalidChildObjectAccess {

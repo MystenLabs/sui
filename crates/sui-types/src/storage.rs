@@ -101,7 +101,12 @@ impl<T: Storage + ParentSync + ChildObjectResolver> StorageView for T {}
 /// An abstraction of the (possibly distributed) store for objects. This
 /// API only allows for the retrieval of objects, not any state changes
 pub trait ChildObjectResolver {
-    fn read_child_object(&self, parent: &ObjectID, child: &ObjectID) -> SuiResult<Option<Object>>;
+    fn read_child_object(
+        &self,
+        parent: &ObjectID,
+        child: &ObjectID,
+        child_version_upper_bound: SequenceNumber,
+    ) -> SuiResult<Option<Object>>;
 }
 
 /// An abstraction of the (possibly distributed) store for objects, and (soon) events and transactions
@@ -240,20 +245,40 @@ impl<S: ParentSync> ParentSync for &mut S {
 }
 
 impl<S: ChildObjectResolver> ChildObjectResolver for std::sync::Arc<S> {
-    fn read_child_object(&self, parent: &ObjectID, child: &ObjectID) -> SuiResult<Option<Object>> {
-        ChildObjectResolver::read_child_object(self.as_ref(), parent, child)
+    fn read_child_object(
+        &self,
+        parent: &ObjectID,
+        child: &ObjectID,
+        child_version_upper_bound: SequenceNumber,
+    ) -> SuiResult<Option<Object>> {
+        ChildObjectResolver::read_child_object(
+            self.as_ref(),
+            parent,
+            child,
+            child_version_upper_bound,
+        )
     }
 }
 
 impl<S: ChildObjectResolver> ChildObjectResolver for &S {
-    fn read_child_object(&self, parent: &ObjectID, child: &ObjectID) -> SuiResult<Option<Object>> {
-        ChildObjectResolver::read_child_object(*self, parent, child)
+    fn read_child_object(
+        &self,
+        parent: &ObjectID,
+        child: &ObjectID,
+        child_version_upper_bound: SequenceNumber,
+    ) -> SuiResult<Option<Object>> {
+        ChildObjectResolver::read_child_object(*self, parent, child, child_version_upper_bound)
     }
 }
 
 impl<S: ChildObjectResolver> ChildObjectResolver for &mut S {
-    fn read_child_object(&self, parent: &ObjectID, child: &ObjectID) -> SuiResult<Option<Object>> {
-        ChildObjectResolver::read_child_object(*self, parent, child)
+    fn read_child_object(
+        &self,
+        parent: &ObjectID,
+        child: &ObjectID,
+        child_version_upper_bound: SequenceNumber,
+    ) -> SuiResult<Option<Object>> {
+        ChildObjectResolver::read_child_object(*self, parent, child, child_version_upper_bound)
     }
 }
 

@@ -39,7 +39,7 @@ macro_rules! get_or_fetch_object {
         );
 
         assert!($ty_args.is_empty());
-        let (layout, tag) = match get_tag_and_layout($context, &child_ty)? {
+        let (tag, layout, annotated_layout) = match get_tag_and_layouts($context, &child_ty)? {
             Some(res) => res,
             None => {
                 return Ok(NativeResult::err(
@@ -48,12 +48,14 @@ macro_rules! get_or_fetch_object {
                 ))
             }
         };
+
         let object_runtime: &mut ObjectRuntime = $context.extensions_mut().get_mut();
         object_runtime.get_or_fetch_child_object(
             $parent,
             $child_id,
             &child_ty,
-            layout,
+            &layout,
+            &annotated_layout,
             MoveObjectType::from(tag),
         )?
     }};
@@ -496,14 +498,10 @@ pub fn has_child_object_with_ty(
     ))
 }
 
-fn get_tag_and_layout(
+fn get_tag_and_layouts(
     context: &NativeContext,
     ty: &Type,
-) -> PartialVMResult<Option<(MoveTypeLayout, StructTag)>> {
-    let layout = match context.type_to_type_layout(ty)? {
-        None => return Ok(None),
-        Some(layout) => layout,
-    };
+) -> PartialVMResult<Option<(StructTag, MoveTypeLayout, MoveTypeLayout)>> {
     let tag = match context.type_to_type_tag(ty)? {
         TypeTag::Struct(s) => s,
         _ => {
@@ -513,5 +511,11 @@ fn get_tag_and_layout(
             )
         }
     };
-    Ok(Some((layout, *tag)))
+    let Some(layout) = context.type_to_type_layout(ty)? else {
+        return Ok(None)
+    };
+    let Some(annotated_layout) = context.type_to_fully_annotated_layout(ty)? else {
+        return Ok(None)
+    };
+    Ok(Some((*tag, layout, annotated_layout)))
 }
