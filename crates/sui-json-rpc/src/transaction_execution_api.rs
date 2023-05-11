@@ -243,9 +243,9 @@ impl WriteApiServer for TransactionExecutionApi {
         tx_bytes: Base64,
     ) -> RpcResult<DryRunTransactionBlockResponse> {
         Ok(self
-           .dry_run_transaction_block(tx_bytes)
-           .instrument(error_span!("dry_run_transaction_block"))
-           .await?)
+            .dry_run_transaction_block(tx_bytes)
+            .instrument(error_span!("dry_run_transaction_block"))
+            .await?)
     }
 }
 
