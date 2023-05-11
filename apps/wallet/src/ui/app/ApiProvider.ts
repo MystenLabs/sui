@@ -68,7 +68,11 @@ function getDefaultAPI(env: API_ENV) {
 }
 
 export const DEFAULT_API_ENV = getDefaultApiEnv();
-const SENTRY_MONITORED_ENVS = [API_ENV.devNet, API_ENV.testNet];
+const SENTRY_MONITORED_ENVS = [
+    API_ENV.mainnet,
+    API_ENV.devNet,
+    API_ENV.testNet,
+];
 
 type NetworkTypes = keyof typeof API_ENV;
 

@@ -26,7 +26,6 @@ export enum FEATURES {
     STAKING_ENABLED = 'wallet-staking-enabled',
     WALLET_DAPPS = 'wallet-dapps',
     WALLET_MULTI_ACCOUNTS = 'wallet-multi-accounts',
-    WALLET_LEDGER_INTEGRATION = 'wallet-ledger-integration',
     WALLET_BALANCE_REFETCH_INTERVAL = 'wallet-balance-refetch-interval',
     WALLET_ACTIVITY_REFETCH_INTERVAL = 'wallet-activity-refetch-interval',
     WALLET_EFFECTS_ONLY_SHARED_TRANSACTION = 'wallet-effects-only-shared-transaction',

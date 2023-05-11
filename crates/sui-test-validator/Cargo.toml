@@ -17,5 +17,8 @@ http = { version = "0.2.8" }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 sui-faucet = { path = "../sui-faucet" }
+sui = { path = "../sui" }
 sui-cluster-test = { path = "../sui-cluster-test" }
+sui-keys = { path = "../sui-keys" }
+sui-config = { path = "../sui-config" }
 telemetry-subscribers.workspace = true

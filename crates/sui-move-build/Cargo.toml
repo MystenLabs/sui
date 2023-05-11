@@ -12,11 +12,12 @@ anyhow = { version = "1.0.64", features = ["backtrace"] }
 fastcrypto = { workspace = true }
 tempfile = "3.3.0"
 
+sui-adapter = { path = "../../sui-execution/latest/sui-adapter", package = "sui-adapter-latest" }
+sui-verifier = { path = "../../sui-execution/latest/sui-verifier", package = "sui-verifier-latest" }
+
 serde-reflection = "0.3.6"
 sui-types = { path = "../sui-types" }
-sui-verifier = { path = "../sui-verifier" }
 sui-protocol-config = { path = "../sui-protocol-config" }
-sui-adapter = { path = "../sui-adapter" }
 
 move-binary-format.workspace = true
 move-bytecode-utils.workspace = true

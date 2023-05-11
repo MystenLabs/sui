@@ -1,5 +1,5 @@
 [package]
-name = "sui-move-natives"
+name = "sui-move-natives-latest"
 version = "0.1.0"
 edition = "2021"
 authors = ["Mysten Labs <eng@mystenlabs.com>"]
@@ -13,15 +13,14 @@ bcs = "0.1.4"
 linked-hash-map = "0.5.6"
 smallvec = "1.9.0"
 
-fastcrypto.workspace = true
 fastcrypto-zkp.workspace = true
-
-sui-types = { path = "../sui-types" }
-
+fastcrypto.workspace = true
 move-binary-format.workspace = true
 move-core-types.workspace = true
 move-stdlib.workspace = true
 move-vm-runtime.workspace = true
 move-vm-types.workspace = true
-sui-protocol-config = { path = "../sui-protocol-config" }
-workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+sui-protocol-config = { path = "../../../crates/sui-protocol-config" }
+sui-types = { path = "../../../crates/sui-types" }
+workspace-hack = { version = "0.1", path = "../../../crates/workspace-hack" }

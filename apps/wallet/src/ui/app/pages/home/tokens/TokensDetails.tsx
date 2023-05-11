@@ -15,8 +15,8 @@ import { useOnrampProviders } from '../onramp/useOnrampProviders';
 import { CoinActivitiesCard } from './CoinActivityCard';
 import { TokenIconLink } from './TokenIconLink';
 import CoinBalance from './coin-balance';
-import IconLink from './icon-link';
 import { useActiveAddress } from '_app/hooks/useActiveAddress';
+import { LargeButton } from '_app/shared/LargeButton';
 import { Text } from '_app/shared/text';
 import Alert from '_components/alert';
 import Loading from '_components/loading';
@@ -137,25 +137,20 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
                         </Alert>
                     ) : null}
                     <div className="flex flex-nowrap gap-3 justify-center w-full mt-5">
-                        <IconLink
-                            icon={
-                                <WalletActionBuy24 className="shrink-0 h-6 w-6" />
-                            }
+                        <LargeButton
+                            center
                             to="/onramp"
-                            text="Buy"
                             disabled={
                                 (coinType && coinType !== SUI_TYPE_ARG) ||
                                 !providers?.length
                             }
-                        />
+                            top={<WalletActionBuy24 />}
+                        >
+                            Buy
+                        </LargeButton>
 
-                        <IconLink
-                            icon={
-                                <WalletActionSend24
-                                    fill="fillCurrent"
-                                    className="shrink-0 h-6 w-6 font-bold"
-                                />
-                            }
+                        <LargeButton
+                            center
                             to={`/send${
                                 coinBalance?.coinType
                                     ? `?${new URLSearchParams({
@@ -164,14 +159,14 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
                                     : ''
                             }`}
                             disabled={!tokenBalance}
-                            text="Send"
-                        />
-                        <IconLink
-                            icon={<Swap16 className="shrink-0 h-6 w-6" />}
-                            to="/"
-                            disabled={true}
-                            text="Swap"
-                        />
+                            top={<WalletActionSend24 />}
+                        >
+                            Send
+                        </LargeButton>
+
+                        <LargeButton center to="/" disabled top={<Swap16 />}>
+                            Swap
+                        </LargeButton>
                     </div>
 
                     {activeCoinType === SUI_TYPE_ARG && accountAddress ? (

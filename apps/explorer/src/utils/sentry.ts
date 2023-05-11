@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import * as Sentry from '@sentry/react';
-import { BrowserTracing } from '@sentry/tracing';
 import { useEffect } from 'react';
 import {
     createRoutesFromChildren,
@@ -23,7 +22,7 @@ Sentry.init({
         : 'https://5455656fe14848c0944fb4216dd5c483@o1314142.ingest.sentry.io/4504362510188544',
     environment: import.meta.env.VITE_VERCEL_ENV,
     integrations: [
-        new BrowserTracing({
+        new Sentry.BrowserTracing({
             routingInstrumentation: Sentry.reactRouterV6Instrumentation(
                 useEffect,
                 useLocation,
