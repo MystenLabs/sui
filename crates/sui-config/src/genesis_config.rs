@@ -79,11 +79,10 @@ impl ValidatorConfigInfo {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Default)]
 pub struct GenesisConfig {
     pub validator_config_info: Option<Vec<ValidatorConfigInfo>>,
     pub parameters: GenesisCeremonyParameters,
-    pub committee_size: usize,
     pub accounts: Vec<AccountConfig>,
 }
 
@@ -375,7 +374,6 @@ impl GenesisConfig {
         GenesisConfig {
             validator_config_info: Some(validator_config_info),
             parameters,
-            committee_size: ips.len(),
             accounts: vec![account_config],
         }
     }
@@ -396,16 +394,5 @@ impl GenesisConfig {
         (0..quantity)
             .map(|_| ObjectID::random_from_rng(&mut rng))
             .collect()
-    }
-}
-
-impl Default for GenesisConfig {
-    fn default() -> Self {
-        Self {
-            validator_config_info: None,
-            parameters: Default::default(),
-            committee_size: 0, // default value indicates the field is not set
-            accounts: vec![],
-        }
     }
 }
