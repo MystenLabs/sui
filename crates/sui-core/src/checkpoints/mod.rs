@@ -359,13 +359,33 @@ impl CheckpointStore {
         &self,
         checkpoint: &VerifiedCheckpoint,
     ) -> Result<(), TypedStoreError> {
-        match self.get_highest_executed_checkpoint_seq_number()? {
-            Some(seq_number) if seq_number > *checkpoint.sequence_number() => Ok(()),
-            _ => self.watermarks.insert(
-                &CheckpointWatermark::HighestExecuted,
-                &(*checkpoint.sequence_number(), *checkpoint.digest()),
-            ),
+        if let Some(seq_number) = self.get_highest_executed_checkpoint_seq_number()? {
+            if seq_number >= *checkpoint.sequence_number() {
+                return Ok(());
+            }
+            assert_eq!(seq_number + 1, *checkpoint.sequence_number(),
+            "Cannot update highest executed checkpoint to {} when current highest executed checkpoint is {}",
+            checkpoint.sequence_number(),
+            seq_number);
         }
+        self.watermarks.insert(
+            &CheckpointWatermark::HighestExecuted,
+            &(*checkpoint.sequence_number(), *checkpoint.digest()),
+        )
+    }
+
+    /// Sets highest executed checkpoint to any value.
+    ///
+    /// WARNING: This method is very subtle and can corrupt the database if used incorrectly.
+    /// It should only be used in one-off cases or tests after fully understanding the risk.
+    pub fn set_highest_executed_checkpoint_subtle(
+        &self,
+        checkpoint: &VerifiedCheckpoint,
+    ) -> Result<(), TypedStoreError> {
+        self.watermarks.insert(
+            &CheckpointWatermark::HighestExecuted,
+            &(*checkpoint.sequence_number(), *checkpoint.digest()),
+        )
     }
 
     pub fn insert_checkpoint_contents(

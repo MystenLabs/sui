@@ -1706,7 +1706,8 @@ where
     }
 
     /// Returns an iterator visiting each key-value pair in the map. By proving bounds of the
-    /// scan range, RocksDB scan avoid unnecessary scans
+    /// scan range, RocksDB scan avoid unnecessary scans.
+    /// Lower bound is inclusive, while upper bound is exclusive.
     fn iter_with_bounds(
         &'a self,
         lower_bound: Option<K>,
