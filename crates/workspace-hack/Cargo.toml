@@ -26,9 +26,9 @@ aho-corasick = { version = "0.7" }
 aliasable = { version = "0.1" }
 alloc-no-stdlib = { version = "2", default-features = false }
 alloc-stdlib = { version = "0.2", default-features = false }
-anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "77f225832e361d068318073a6e06ec0310a16891", default-features = false }
-anemo-cli = { git = "https://github.com/mystenlabs/anemo.git", rev = "77f225832e361d068318073a6e06ec0310a16891", default-features = false }
-anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "77f225832e361d068318073a6e06ec0310a16891", default-features = false }
+anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "baa7cfc3ae841f88c2ff773396c5a803c377d054", default-features = false }
+anemo-cli = { git = "https://github.com/mystenlabs/anemo.git", rev = "baa7cfc3ae841f88c2ff773396c5a803c377d054", default-features = false }
+anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "baa7cfc3ae841f88c2ff773396c5a803c377d054", default-features = false }
 anes = { version = "0.1" }
 ansi_term = { version = "0.12", default-features = false }
 anyhow = { version = "1", features = ["backtrace"] }
@@ -485,9 +485,9 @@ ptree = { version = "0.4" }
 quanta = { version = "0.9" }
 quick-error-dff4ba8e3ae991db = { package = "quick-error", version = "1", default-features = false }
 quick-error-f595c2ba2a3f28df = { package = "quick-error", version = "2", default-features = false }
-quinn = { version = "0.9", default-features = false, features = ["futures-io", "runtime-tokio", "tls-rustls"] }
-quinn-proto = { version = "0.9" }
-quinn-udp = { version = "0.3", default-features = false }
+quinn = { version = "0.10", default-features = false, features = ["futures-io", "runtime-tokio", "tls-rustls"] }
+quinn-proto = { version = "0.10" }
+quinn-udp = { version = "0.4", default-features = false }
 quote-dff4ba8e3ae991db = { package = "quote", version = "1" }
 r2d2 = { version = "0.8", default-features = false }
 radium = { version = "0.6", default-features = false }
@@ -529,9 +529,11 @@ rustc-demangle = { version = "0.1", default-features = false }
 rustc-hash = { version = "1" }
 rustc-hex = { version = "2", default-features = false, features = ["std"] }
 rusticata-macros = { version = "4", default-features = false }
-rustls = { version = "0.20", features = ["dangerous_configuration", "quic"] }
+rustls-56bd22fc3884b12 = { package = "rustls", version = "0.20", features = ["dangerous_configuration"] }
+rustls-647d43efb71741da = { package = "rustls", version = "0.21", features = ["dangerous_configuration", "quic"] }
 rustls-native-certs = { version = "0.6", default-features = false }
 rustls-pemfile = { version = "1", default-features = false }
+rustls-webpki = { version = "0.100" }
 rusty-fork = { version = "0.3", default-features = false, features = ["timeout"] }
 rustyline = { version = "9" }
 ryu = { version = "1", default-features = false }
@@ -582,7 +584,8 @@ slip10_ed25519 = { version = "0.1", default-features = false }
 slug = { version = "0.1", default-features = false }
 smallvec = { version = "1", default-features = false }
 snap = { version = "1", default-features = false }
-socket2 = { version = "0.4", default-features = false, features = ["all"] }
+socket2-9fbad63c4bcf4a8f = { package = "socket2", version = "0.4", default-features = false, features = ["all"] }
+socket2-d8f496e17d97b5cb = { package = "socket2", version = "0.5", default-features = false }
 soketto = { version = "0.7", features = ["http"] }
 spin = { version = "0.5", default-features = false }
 spki-3b31131e45eafb45 = { package = "spki", version = "0.6", default-features = false, features = ["pem", "std"] }
@@ -719,10 +722,10 @@ aho-corasick = { version = "0.7" }
 aliasable = { version = "0.1" }
 alloc-no-stdlib = { version = "2", default-features = false }
 alloc-stdlib = { version = "0.2", default-features = false }
-anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "77f225832e361d068318073a6e06ec0310a16891", default-features = false }
-anemo-build = { git = "https://github.com/mystenlabs/anemo.git", rev = "77f225832e361d068318073a6e06ec0310a16891", default-features = false }
-anemo-cli = { git = "https://github.com/mystenlabs/anemo.git", rev = "77f225832e361d068318073a6e06ec0310a16891", default-features = false }
-anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "77f225832e361d068318073a6e06ec0310a16891", default-features = false }
+anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "baa7cfc3ae841f88c2ff773396c5a803c377d054", default-features = false }
+anemo-build = { git = "https://github.com/mystenlabs/anemo.git", rev = "baa7cfc3ae841f88c2ff773396c5a803c377d054", default-features = false }
+anemo-cli = { git = "https://github.com/mystenlabs/anemo.git", rev = "baa7cfc3ae841f88c2ff773396c5a803c377d054", default-features = false }
+anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "baa7cfc3ae841f88c2ff773396c5a803c377d054", default-features = false }
 anes = { version = "0.1" }
 ansi_term = { version = "0.12", default-features = false }
 anyhow = { version = "1", features = ["backtrace"] }
@@ -1257,9 +1260,9 @@ ptree = { version = "0.4" }
 quanta = { version = "0.9" }
 quick-error-dff4ba8e3ae991db = { package = "quick-error", version = "1", default-features = false }
 quick-error-f595c2ba2a3f28df = { package = "quick-error", version = "2", default-features = false }
-quinn = { version = "0.9", default-features = false, features = ["futures-io", "runtime-tokio", "tls-rustls"] }
-quinn-proto = { version = "0.9" }
-quinn-udp = { version = "0.3", default-features = false }
+quinn = { version = "0.10", default-features = false, features = ["futures-io", "runtime-tokio", "tls-rustls"] }
+quinn-proto = { version = "0.10" }
+quinn-udp = { version = "0.4", default-features = false }
 quote-3b31131e45eafb45 = { package = "quote", version = "0.6" }
 quote-dff4ba8e3ae991db = { package = "quote", version = "1" }
 r2d2 = { version = "0.8", default-features = false }
@@ -1306,9 +1309,11 @@ rustc-hash = { version = "1" }
 rustc-hex = { version = "2", default-features = false, features = ["std"] }
 rustc_version = { version = "0.4", default-features = false }
 rusticata-macros = { version = "4", default-features = false }
-rustls = { version = "0.20", features = ["dangerous_configuration", "quic"] }
+rustls-56bd22fc3884b12 = { package = "rustls", version = "0.20", features = ["dangerous_configuration"] }
+rustls-647d43efb71741da = { package = "rustls", version = "0.21", features = ["dangerous_configuration", "quic"] }
 rustls-native-certs = { version = "0.6", default-features = false }
 rustls-pemfile = { version = "1", default-features = false }
+rustls-webpki = { version = "0.100" }
 rustversion = { version = "1", default-features = false }
 rusty-fork = { version = "0.3", default-features = false, features = ["timeout"] }
 rustyline = { version = "9" }
@@ -1368,7 +1373,8 @@ slip10_ed25519 = { version = "0.1", default-features = false }
 slug = { version = "0.1", default-features = false }
 smallvec = { version = "1", default-features = false }
 snap = { version = "1", default-features = false }
-socket2 = { version = "0.4", default-features = false, features = ["all"] }
+socket2-9fbad63c4bcf4a8f = { package = "socket2", version = "0.4", default-features = false, features = ["all"] }
+socket2-d8f496e17d97b5cb = { package = "socket2", version = "0.5", default-features = false }
 soketto = { version = "0.7", features = ["http"] }
 spin = { version = "0.5", default-features = false }
 spki-3b31131e45eafb45 = { package = "spki", version = "0.6", default-features = false, features = ["pem", "std"] }
@@ -1700,7 +1706,7 @@ widestring = { version = "0.5" }
 winapi = { version = "0.3", default-features = false, features = ["basetsd", "cfg", "combaseapi", "consoleapi", "errhandlingapi", "evntrace", "fileapi", "handleapi", "heapapi", "ifdef", "impl-debug", "impl-default", "in6addr", "inaddr", "ioapiset", "iphlpapi", "knownfolders", "libloaderapi", "lmaccess", "lmapibuf", "lmcons", "memoryapi", "minwinbase", "minwindef", "namedpipeapi", "netioapi", "ntdef", "ntlsa", "ntsecapi", "ntstatus", "objbase", "objidl", "oleauto", "pdh", "powerbase", "processenv", "processthreadsapi", "profileapi", "psapi", "rpcdce", "securitybaseapi", "shellapi", "shlobj", "std", "stringapiset", "synchapi", "sysinfoapi", "timezoneapi", "wbemcli", "winbase", "wincon", "windef", "winerror", "winioctl", "winnt", "winreg", "winsock2", "winuser", "ws2ipdef", "ws2tcpip", "wtypesbase"] }
 winapi-util = { version = "0.1", default-features = false }
 windows-sys-b32c9ddb6d93a9d2 = { package = "windows-sys", version = "0.42", features = ["Win32_Foundation", "Win32_Networking_WinSock", "Win32_Security_Authentication_Identity", "Win32_Security_Credentials", "Win32_Security_Cryptography", "Win32_Storage_FileSystem", "Win32_System_Console", "Win32_System_IO", "Win32_System_LibraryLoader", "Win32_System_Memory", "Win32_System_Pipes", "Win32_System_SystemServices", "Win32_System_Threading", "Win32_System_WindowsProgramming", "Win32_UI_Input_KeyboardAndMouse"] }
-windows-sys-c8eced492e86ede7 = { package = "windows-sys", version = "0.48", features = ["Win32_Foundation", "Win32_Security", "Win32_Storage_FileSystem", "Win32_System_Console", "Win32_System_Pipes", "Win32_System_SystemServices", "Win32_System_Threading", "Win32_System_WindowsProgramming"] }
+windows-sys-c8eced492e86ede7 = { package = "windows-sys", version = "0.48", features = ["Win32_Foundation", "Win32_Networking_WinSock", "Win32_Security", "Win32_Storage_FileSystem", "Win32_System_Console", "Win32_System_IO", "Win32_System_Pipes", "Win32_System_SystemServices", "Win32_System_Threading", "Win32_System_WindowsProgramming"] }
 windows-targets = { version = "0.48", default-features = false }
 windows_x86_64_msvc-b32c9ddb6d93a9d2 = { package = "windows_x86_64_msvc", version = "0.42", default-features = false }
 windows_x86_64_msvc-c8eced492e86ede7 = { package = "windows_x86_64_msvc", version = "0.48", default-features = false }
@@ -1729,7 +1735,7 @@ widestring = { version = "0.5" }
 winapi = { version = "0.3", default-features = false, features = ["basetsd", "cfg", "combaseapi", "consoleapi", "errhandlingapi", "evntrace", "fileapi", "handleapi", "heapapi", "ifdef", "impl-debug", "impl-default", "in6addr", "inaddr", "ioapiset", "iphlpapi", "knownfolders", "libloaderapi", "lmaccess", "lmapibuf", "lmcons", "memoryapi", "minwinbase", "minwindef", "namedpipeapi", "netioapi", "ntdef", "ntlsa", "ntsecapi", "ntstatus", "objbase", "objidl", "oleauto", "pdh", "powerbase", "processenv", "processthreadsapi", "profileapi", "psapi", "rpcdce", "securitybaseapi", "shellapi", "shlobj", "std", "stringapiset", "synchapi", "sysinfoapi", "timezoneapi", "wbemcli", "winbase", "wincon", "windef", "winerror", "winioctl", "winnt", "winreg", "winsock2", "winuser", "ws2ipdef", "ws2tcpip", "wtypesbase"] }
 winapi-util = { version = "0.1", default-features = false }
 windows-sys-b32c9ddb6d93a9d2 = { package = "windows-sys", version = "0.42", features = ["Win32_Foundation", "Win32_Networking_WinSock", "Win32_Security_Authentication_Identity", "Win32_Security_Credentials", "Win32_Security_Cryptography", "Win32_Storage_FileSystem", "Win32_System_Console", "Win32_System_IO", "Win32_System_LibraryLoader", "Win32_System_Memory", "Win32_System_Pipes", "Win32_System_SystemServices", "Win32_System_Threading", "Win32_System_WindowsProgramming", "Win32_UI_Input_KeyboardAndMouse"] }
-windows-sys-c8eced492e86ede7 = { package = "windows-sys", version = "0.48", features = ["Win32_Foundation", "Win32_Security", "Win32_Storage_FileSystem", "Win32_System_Console", "Win32_System_Pipes", "Win32_System_SystemServices", "Win32_System_Threading", "Win32_System_WindowsProgramming"] }
+windows-sys-c8eced492e86ede7 = { package = "windows-sys", version = "0.48", features = ["Win32_Foundation", "Win32_Networking_WinSock", "Win32_Security", "Win32_Storage_FileSystem", "Win32_System_Console", "Win32_System_IO", "Win32_System_Pipes", "Win32_System_SystemServices", "Win32_System_Threading", "Win32_System_WindowsProgramming"] }
 windows-targets = { version = "0.48", default-features = false }
 windows_x86_64_msvc-b32c9ddb6d93a9d2 = { package = "windows_x86_64_msvc", version = "0.42", default-features = false }
 windows_x86_64_msvc-c8eced492e86ede7 = { package = "windows_x86_64_msvc", version = "0.48", default-features = false }
