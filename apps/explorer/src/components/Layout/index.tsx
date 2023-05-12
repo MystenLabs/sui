@@ -37,9 +37,9 @@ export function Layout() {
                 <QueryClientProvider client={queryClient}>
                     <RpcClientContext.Provider value={jsonRpcProvider}>
                         <NetworkContext.Provider value={[network, setNetwork]}>
-                            <div className="w-full">
+                            <div className="w-full min-h-screen flex flex-col">
                                 <Header />
-                                <main className="relative z-10 min-h-screen bg-offwhite">
+                                <main className="relative z-10 bg-offwhite flex-1">
                                     <section className="mx-auto max-w-[1440px] px-5 py-10 lg:px-10 2xl:px-0">
                                         {networkOutage && (
                                             <div className="pb-2.5">

@@ -74,7 +74,7 @@ export function TransactionView({
 
     const leftPane = {
         panel: (
-            <div className="h-full overflow-y-scroll rounded-2xl border border-transparent bg-gray-40 p-6 md:h-screen md:p-10">
+            <div className="h-full overflow-y-scroll rounded-2xl border border-transparent bg-gray-40 p-6 md:p-10">
                 <TabGroup size="lg">
                     <TabList>
                         <Tab>Summary</Tab>
