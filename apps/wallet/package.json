@@ -141,6 +141,7 @@
         "formik": "^2.2.9",
         "framer-motion": "^10.11.6",
         "idb-keyval": "^6.2.0",
+        "jose": "^4.14.4",
         "mitt": "^3.0.0",
         "react": "^18.2.0",
         "react-dom": "^18.2.0",

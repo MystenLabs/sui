@@ -13,6 +13,7 @@ import { AppType } from '_redux/slices/app/AppType';
 import { FEATURES } from '_src/shared/experimentation/features';
 import { useAppSelector } from '_src/ui/app/hooks';
 import { useAccounts } from '_src/ui/app/hooks/useAccounts';
+import { useBackgroundClient } from '_src/ui/app/hooks/useBackgroundClient';
 import { useDeriveNextAccountMutation } from '_src/ui/app/hooks/useDeriveNextAccountMutation';
 import { Button } from '_src/ui/app/shared/ButtonUI';
 
@@ -30,6 +31,7 @@ export function AccountsSettings() {
         true,
         '/accounts/connect-ledger-modal'
     );
+    const backgroundClient = useBackgroundClient();
 
     return (
         <MenuLayout title="Accounts" back={backUrl}>
@@ -71,6 +73,12 @@ export function AccountsSettings() {
                         }
                     }}
                 />
+                {process.env.NODE_ENV === 'development' ? (
+                    <Button
+                        text="ZK Login"
+                        onClick={() => backgroundClient.zkLogin()}
+                    />
+                ) : null}
                 <Outlet />
             </div>
         </MenuLayout>

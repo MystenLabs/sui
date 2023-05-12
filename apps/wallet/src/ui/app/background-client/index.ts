@@ -364,6 +364,16 @@ export class BackgroundClient {
         );
     }
 
+    public zkLogin() {
+        return lastValueFrom(
+            this.sendMessage(
+                createMessage({
+                    type: 'zk-login',
+                })
+            ).pipe(take(1))
+        );
+    }
+
     private setupAppStatusUpdateInterval() {
         setInterval(() => {
             this.sendAppStatus();

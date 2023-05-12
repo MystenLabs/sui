@@ -1,7 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { bytesToHex, randomBytes } from '@noble/hashes/utils';
+import { decodeJwt } from 'jose';
 import { BehaviorSubject, filter, switchMap, takeUntil } from 'rxjs';
+import Browser from 'webextension-polyfill';
 
 import NetworkEnv from '../NetworkEnv';
 import { Connection } from './Connection';
@@ -141,8 +144,39 @@ export class UiConnection extends Connection {
             } else if (isSetNetworkPayload(payload)) {
                 await NetworkEnv.setActiveNetwork(payload.network);
                 this.send(createMessage({ type: 'done' }, id));
+            } else if (isBasePayload(payload) && payload.type === 'zk-login') {
+                const params = new URLSearchParams();
+                params.append(
+                    'client_id',
+                    '946731352276-pk5glcg8cqo38ndb39h7j093fpsphusu.apps.googleusercontent.com'
+                );
+                params.append('response_type', 'id_token');
+                params.append(
+                    'redirect_uri',
+                    Browser.identity.getRedirectURL()
+                );
+                params.append('scope', 'openid email');
+                params.append('nonce', bytesToHex(randomBytes(16)));
+                // This can be used for logins after the user has already connected a google account
+                // and we need to make sure that the user logged in with the correct account
+                params.append('login_hint', 'test@mystenlabs.com');
+                const url = `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
+                const responseURL = new URL(
+                    await Browser.identity.launchWebAuthFlow({
+                        url,
+                        interactive: true,
+                    })
+                );
+                const responseParams = new URLSearchParams(
+                    responseURL.hash.replace('#', '')
+                );
+                const decodedJWT = decodeJwt(
+                    responseParams.get('id_token') || ''
+                );
+                console.log(url, decodedJWT, responseParams);
             }
         } catch (e) {
+            console.log(e);
             this.send(
                 createMessage<ErrorPayload>(
                     {
