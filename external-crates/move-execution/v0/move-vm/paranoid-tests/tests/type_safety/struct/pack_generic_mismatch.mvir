@@ -1,0 +1,36 @@
+//# publish
+module 0x2.A {
+  struct C<T> has drop { x: T, y: u64 }
+
+  struct D has drop { x: u64 }
+
+  public make<T>(x: T): Self.C<T> {
+  label b0:
+    return C<T> { x: 0, y: move(x) };
+  }
+
+  public make_d(): Self.D {
+  label b0:
+    return D { x : 0 };
+  }
+}
+
+//# run --signers 0x1 --check-runtime-types
+import 0x2.A;
+main(account: signer) {
+    let c: A.C<u64>;
+label b0:
+    c = A.make<u64>(10u64);
+    return;
+}
+
+//# run --signers 0x1 --check-runtime-types
+import 0x2.A;
+main(account: signer) {
+    let c: A.C<A.D>;
+    let d: A.D;
+label b0:
+    d = A.make_d();
+    c = A.make<A.D>(move(d));
+    return;
+}

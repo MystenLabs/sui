@@ -1,0 +1,21 @@
+//# run --signers 0x1  --check-runtime-types
+main(account: signer) {
+    let u: u64;
+    let u_ref: &mut u64;
+label b0:
+    u = 10;
+    u_ref = &mut u;
+    *move(u_ref) = 20;
+    return;
+}
+
+//# run --signers 0x1  --check-runtime-types
+main(account: signer) {
+    let u: u64;
+    let u_ref: &mut u64;
+label b0:
+    u = 10;
+    u_ref = &u;
+    *move(u_ref) = 20;
+    return;
+}

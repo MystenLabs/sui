@@ -1,0 +1,19 @@
+//# publish
+module 0x2.A {
+  import 0x1.string;
+  public test() {
+    let b: vector<u8>;
+  label b0:
+    b = vec_pack_0<u8>();
+    _ = string.internal_check_utf8(&b);
+    return;
+  }
+}
+
+//# run --signers 0x1 --check-runtime-types
+import 0x2.A;
+main(account: signer) {
+label b0:
+    A.test();
+    return;
+}

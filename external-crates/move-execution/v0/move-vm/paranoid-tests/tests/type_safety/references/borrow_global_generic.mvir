@@ -1,0 +1,140 @@
+//# publish
+module 0x2.A {
+    struct G<T> has key, drop { x: T }
+
+    public make_g(): Self.G<u64> {
+    label b0:
+        return G<u64> {x: 1};
+    }
+
+    public store(account: &signer) {
+    label b0:
+        move_to<G<u64>>(move(account), G<u64> { x: 10 } );
+        return;
+    }
+
+    public borrow(addr: address): &Self.G<u64> {
+    label b0:
+        return borrow_global<G<u64>>(move(addr));
+    }
+
+    public borrow_mut(addr: address): &mut u64 {
+    label b0:
+        return borrow_global_mut<G<u64>>(move(addr));
+    }
+
+    public borrow_field(addr: address): &u64 {
+        let g_ref: &Self.G<u64>;
+    label b0:
+        g_ref = borrow_global<G<u64>>(move(addr));
+        return &(move(g_ref)).G<u64>::x;
+    }
+
+    public borrow_field_2(addr: address): &u64 {
+        let g_ref: &mut Self.G<u64>;
+    label b0:
+        g_ref = borrow_global_mut<G<u64>>(move(addr));
+        return &(freeze(move(g_ref))).G<u64>::x;
+    }
+
+    public borrow_field_mut(addr: address): &mut u64 {
+        let g_ref: &mut Self.G<u64>;
+    label b0:
+        g_ref = borrow_global_mut<G<u64>>(move(addr));
+        return &mut (move(g_ref)).G<u64>::x;
+    }
+}
+
+//# run --signers 0x1  --check-runtime-types
+import 0x2.A;
+import 0x1.signer;
+main(account: signer) {
+    let a: address;
+label b0:
+    a = signer.address_of(&account);
+    A.store(&account);
+    return;
+}
+
+//# run --signers 0x1  --check-runtime-types
+import 0x2.A;
+import 0x1.signer;
+main(account: signer) {
+    let a: address;
+    let g_ref: &A.G<u64>;
+    let g: A.G<u64>;
+label b0:
+    a = signer.address_of(&account);
+    g_ref = A.borrow(move(a));
+    g = *move(g_ref);
+    return;
+}
+
+//# run --signers 0x1  --check-runtime-types
+import 0x2.A;
+import 0x1.signer;
+main(account: signer) {
+    let a: address;
+    let g_ref: &A.G<u64>;
+    let g: A.G<u64>;
+label b0:
+    a = signer.address_of(&account);
+    g_ref = A.borrow(move(a));
+    g = A.make_g();
+    *move(g_ref) = move(g);
+    return;
+}
+
+//# run --signers 0x1  --check-runtime-types
+import 0x2.A;
+import 0x1.signer;
+main(account: signer) {
+    let a: address;
+    let g_ref: &u64;
+    let g: u64;
+label b0:
+    a = signer.address_of(&account);
+    g_ref = A.borrow_field(move(a));
+    g = *move(g_ref);
+    return;
+}
+
+//# run --signers 0x1  --check-runtime-types
+import 0x2.A;
+import 0x1.signer;
+main(account: signer) {
+    let a: address;
+    let g_ref: &u64;
+    let g: u64;
+label b0:
+    a = signer.address_of(&account);
+    g_ref = A.borrow_field_2(move(a));
+    g = *move(g_ref);
+    return;
+}
+
+//# run --signers 0x1  --check-runtime-types
+import 0x2.A;
+import 0x1.signer;
+main(account: signer) {
+    let a: address;
+    let g_ref: &u64;
+label b0:
+    a = signer.address_of(&account);
+    g_ref = A.borrow_field(move(a));
+    *move(g_ref) = 10;
+    return;
+}
+
+//# run --signers 0x1  --check-runtime-types
+import 0x2.A;
+import 0x1.signer;
+main(account: signer) {
+    let a: address;
+    let g_ref: &mut u64;
+label b0:
+    a = signer.address_of(&account);
+    g_ref = A.borrow_field_mut(move(a));
+    *move(g_ref) = 10;
+    return;
+}

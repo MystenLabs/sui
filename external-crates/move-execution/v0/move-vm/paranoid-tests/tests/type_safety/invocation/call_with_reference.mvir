@@ -1,0 +1,39 @@
+//# publish
+module 0x2.A {
+  struct A has key { x: u64 }
+  struct B has store { x: u64 }
+  struct C has store { x: u64 }
+
+  public make(): Self.C {
+  label b0:
+    return C { x: 0};
+  }
+
+  public store(x: &Self.B, s: &signer) {
+  label b0:
+    move_to<A>(move(s), A { x: 0 });
+    return;
+  }
+}
+
+//# run --signers 0x1 --check-runtime-types
+import 0x2.A;
+main(account: signer) {
+    let v: A.C;
+
+label b0:
+    v = A.make();
+    A.store(&v, &account);
+    return;
+}
+
+//# run --signers 0x1
+import 0x2.A;
+main(account: signer) {
+    let v: A.C;
+
+label b0:
+    v = A.make();
+    A.store(&v, &account);
+    return;
+}

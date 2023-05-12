@@ -1,0 +1,37 @@
+processed 7 tasks
+
+task 2 'run'. lines 33-41:
+Error: Script execution failed with VMError: {
+    major_status: UNKNOWN_INVARIANT_VIOLATION_ERROR,
+    sub_status: None,
+    location: 0x2::A,
+    indices: [],
+    offsets: [(FunctionDefinitionIndex(2), 3)],
+}
+
+task 3 'run'. lines 43-53:
+Error: Script execution failed with VMError: {
+    major_status: INTERNAL_TYPE_ERROR,
+    sub_status: None,
+    location: script,
+    indices: [],
+    offsets: [(FunctionDefinitionIndex(0), 4)],
+}
+
+task 4 'run'. lines 55-65:
+Error: Script execution failed with VMError: {
+    major_status: INTERNAL_TYPE_ERROR,
+    sub_status: None,
+    location: script,
+    indices: [],
+    offsets: [(FunctionDefinitionIndex(0), 4)],
+}
+
+task 6 'run'. lines 78-87:
+Error: Script execution failed with VMError: {
+    major_status: UNKNOWN_INVARIANT_VIOLATION_ERROR,
+    sub_status: None,
+    location: script,
+    indices: [],
+    offsets: [(FunctionDefinitionIndex(0), 6)],
+}

@@ -1,0 +1,34 @@
+//# publish
+module 0x2.A {
+  struct C<T> { x: T }
+
+  public make<T>(x: T): Self.C<T> {
+  label b0:
+    return C<T> { x: move(x) };
+  }
+}
+
+//# publish
+module 0x2.B {
+    import 0x2.A;
+    struct C { x: u64 }
+
+    public unpack() {
+        let v: A.C<u64>;
+        let x: u64;
+
+    label b0:
+        v = A.make<u64>(20u64);
+        C { x } = move(v);
+
+        return;
+    }
+}
+
+//# run --signers 0x1 --check-runtime-types
+import 0x2.B;
+main(account: signer) {
+label b0:
+    B.unpack();
+    return;
+}

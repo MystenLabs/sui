@@ -1,0 +1,64 @@
+//# publish
+module 0x2.A {
+  struct A has drop { v: u64 }
+
+  public make_a(): Self.A {
+  label b0:
+    return A { v: 10 };
+  }
+
+  public call(a: u64, b: bool, c: u8) {
+  label b0:
+    return;
+  }
+
+  public call_a(a: Self.A, b: bool, c: u8) {
+  label b0:
+    return;
+  }
+}
+
+//# run --signers 0x1 --check-runtime-types
+import 0x2.A;
+main(account: signer) {
+label b0:
+    A.call(10, true, 8u8);
+    return;
+}
+
+
+//# run --signers 0x1 --check-runtime-types
+import 0x2.A;
+main(account: signer) {
+label b0:
+    A.call(true, true, 8u8);
+    return;
+}
+
+//# run --signers 0x1 --check-runtime-types
+import 0x2.A;
+main(account: signer) {
+label b0:
+    A.call(10, true, true);
+    return;
+}
+
+//# run --signers 0x1 --check-runtime-types
+import 0x2.A;
+main(account: signer) {
+    let a: A.A;
+label b0:
+    a = A.make_a();
+    A.call_a(move(a), true, 8u8);
+    return;
+}
+
+//# run --signers 0x1 --check-runtime-types
+import 0x2.A;
+main(account: signer) {
+    let a: A.A;
+label b0:
+    a = A.make_a();
+    A.call_a(8, true, move(a));
+    return;
+}

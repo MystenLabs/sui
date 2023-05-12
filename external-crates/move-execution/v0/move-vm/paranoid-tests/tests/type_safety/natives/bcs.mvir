@@ -1,0 +1,41 @@
+//# publish
+module 0x2.A {
+  struct A has drop { x: u64 }
+  struct B has drop { x: u64 }
+
+  public make_a(): Self.A {
+  label b0:
+    return A { x : 0 };
+  }
+
+  public make_b(): Self.B {
+  label b0:
+    return B { x : 0 };
+  }
+}
+
+//# run --signers 0x1 --check-runtime-types
+import 0x1.bcs;
+import 0x2.A;
+main(account: signer) {
+    let a: A.A;
+
+label b0:
+    a = A.make_a();
+    _ = bcs.to_bytes<A.A>(&a);
+
+    return;
+}
+
+//# run --signers 0x1 --check-runtime-types
+import 0x1.bcs;
+import 0x2.A;
+main(account: signer) {
+    let a: A.B;
+
+label b0:
+    a = A.make_b();
+    _ = bcs.to_bytes<A.A>(&a);
+
+    return;
+}

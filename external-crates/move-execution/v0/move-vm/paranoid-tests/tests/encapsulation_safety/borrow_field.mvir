@@ -1,0 +1,37 @@
+//# publish
+module 0x2.A {
+  struct C { x: u64 }
+
+  public make(): Self.C {
+  label b0:
+    return C { x: 0};
+  }
+}
+
+//# publish
+module 0x2.B {
+    import 0x2.A;
+    struct C { x: u64 }
+
+    public mut_field() {
+        let v: A.C;
+        let v_ref: &A.C;
+        let x: &mut u64;
+
+    label b0:
+        v = A.make();
+        v_ref = &v;
+        x = &mut move(v_ref).C::x;
+        *move(x) = 10;
+
+        return;
+    }
+}
+
+//# run --signers 0x1 --check-runtime-types
+import 0x2.B;
+main(account: signer) {
+label b0:
+    B.mut_field();
+    return;
+}

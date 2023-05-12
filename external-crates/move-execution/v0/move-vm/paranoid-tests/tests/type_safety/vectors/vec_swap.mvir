@@ -1,0 +1,35 @@
+//# run --signers 0x1 --check-runtime-types
+main(account: signer) {
+    let v: vector<u64>;
+    let u: u64;
+
+label b0:
+    v = vec_pack_2<u64>(1, 2);
+    vec_swap<u64>(&mut v, 0, 1);
+
+    return;
+}
+
+//# run --signers 0x1 --check-runtime-types
+main(account: signer) {
+    let v: vector<u64>;
+    let u: u64;
+
+label b0:
+    v = vec_pack_2<u64>(1, 2);
+    vec_swap<u64>(&v, 0, 1);
+
+    return;
+}
+
+//# run --signers 0x1 --check-runtime-types
+main(account: signer) {
+    let v: vector<u64>;
+    let u: u64;
+
+label b0:
+    v = vec_pack_2<u64>(1, 2);
+    vec_swap<u64>(&v, true, 1);
+
+    return;
+}

@@ -1,0 +1,35 @@
+//# run --signers 0x1 --check-runtime-types
+main(account: signer) {
+    let v: vector<u64>;
+    let u: u64;
+
+label b0:
+    v = vec_pack_1<u64>(1);
+    u = vec_pop_back<u64>(&mut v);
+
+    return;
+}
+
+//# run --signers 0x1 --check-runtime-types
+main(account: signer) {
+    let v: vector<u64>;
+    let u: u64;
+
+label b0:
+    v = vec_pack_1<u64>(1);
+    u = vec_pop_back<u64>(&v);
+
+    return;
+}
+
+//# run --signers 0x1 --check-runtime-types
+main(account: signer) {
+    let v: vector<u64>;
+    let u: u32;
+
+label b0:
+    v = vec_pack_1<u64>(1);
+    u = vec_pop_back<u32>(&v);
+
+    return;
+}

@@ -1,0 +1,14 @@
+[workspace]
+resolver = "2"
+
+members = [
+    "move-bytecode-verifier",
+    "move-bytecode-verifier/bytecode-verifier-tests",
+    "move-bytecode-verifier/fuzz",
+    "move-bytecode-verifier/invalid-mutations",
+    "move-stdlib",
+    "move-vm/integration-tests",
+    "move-vm/paranoid-tests",
+    "move-vm/runtime",
+    "move-vm/test-utils",
+]

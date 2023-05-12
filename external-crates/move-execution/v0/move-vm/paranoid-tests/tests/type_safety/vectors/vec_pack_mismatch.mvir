@@ -1,0 +1,49 @@
+//# publish
+module 0x2.A {
+  struct Password has key { x: u64 }
+
+  public store(x: Self.Password, s: &signer) {
+  label b0:
+    move_to<Password>(move(s), move(x));
+    return;
+  }
+}
+
+//# publish
+module 0x2.Math {
+  import 0x2.A;
+
+  struct R { v: u64 }
+
+  public test(): A.Password {
+      let v1: vector<A.Password>;
+
+  label b0:
+      v1 = vec_pack_1<A.Password>(R { v: 0 });
+      return vec_unpack_1<A.Password>(move(v1));
+  }
+}
+
+//# run --signers 0x1 --check-runtime-types
+import 0x2.Math;
+import 0x2.A;
+main(account: signer) {
+    let v: A.Password;
+
+label b0:
+    v = Math.test();
+    A.store(move(v), &account);
+    return;
+}
+
+//# run --signers 0x1
+import 0x2.Math;
+import 0x2.A;
+main(account: signer) {
+    let v: A.Password;
+
+label b0:
+    v = Math.test();
+    A.store(move(v), &account);
+    return;
+}

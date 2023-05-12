@@ -1,0 +1,30 @@
+//# publish
+module 0x2.A {
+  struct C { x: u64 }
+
+  public make(): Self.C {
+  label b0:
+    return C { x: 0};
+  }
+}
+
+//# publish
+module 0x2.B {
+    import 0x2.A;
+
+    public drop() {
+        let v: A.C;
+
+    label b0:
+        v = A.make();
+        return;
+    }
+}
+
+//# run --signers 0x1 --check-runtime-types
+import 0x2.B;
+main(account: signer) {
+label b0:
+    B.drop();
+    return;
+}

@@ -1,0 +1,87 @@
+//# publish
+module 0x2.A {
+  struct A has drop { x: u16 }
+
+  public make_a(): Self.A {
+  label b0:
+    return A { x: 0u16 };
+  }
+
+  public test(a: &mut Self.A) {
+  label b0:
+    *&mut (move(a)).A::x = 10u16;
+    return;
+  }
+
+  public test_invalid(a: &mut Self.A) {
+  label b0:
+    *&mut (move(a)).A::x = 10u64;
+    return;
+  }
+}
+
+//# run --signers 0x1 --check-runtime-types
+import 0x2.A;
+main(account: signer) {
+    let a: A.A;
+label b0:
+    a = A.make_a();
+    A.test(&mut a);
+    return;
+}
+
+//# run --signers 0x1 --check-runtime-types
+import 0x2.A;
+main(account: signer) {
+    let a: A.A;
+label b0:
+    a = A.make_a();
+    A.test_invalid(&mut a);
+    return;
+}
+
+//# run --signers 0x1 --check-runtime-types
+main(account: signer) {
+    let a: vector<u16>;
+    let b: &mut u16;
+label b0:
+    a = vec_pack_0<u16>();
+    vec_push_back<u16>(&mut a, 1u16);
+    b = vec_mut_borrow<u16>(&mut a, 0);
+    *move(b) = 5u16;
+    return;
+}
+
+//# run --signers 0x1 --check-runtime-types
+main(account: signer) {
+    let a: vector<u16>;
+    let b: &mut u16;
+label b0:
+    a = vec_pack_0<u16>();
+    vec_push_back<u16>(&mut a, 1u16);
+    b = vec_mut_borrow<u16>(&mut a, 0);
+    *move(b) = 5u64;
+    return;
+}
+
+//# run --signers 0x1 --check-runtime-types
+main(account: signer) {
+    let a: u16;
+    let b: &mut u16;
+label b0:
+    a = 0u16;
+    b = &mut a;
+    *move(b) = 10u16;
+    return;
+}
+
+//# run --signers 0x1 --check-runtime-types
+main(account: signer) {
+    let a: u16;
+    let b: &mut u16;
+label b0:
+    a = 0u16;
+    b = &mut a;
+    *move(b) = 10u64;
+    return;
+}

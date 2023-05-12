@@ -1,0 +1,31 @@
+//# run --signers 0x1  --check-runtime-types
+main(account: signer) {
+    let u: u64;
+    let u_ref: &u64;
+label b0:
+    u = 10;
+    u_ref = freeze(&mut u);
+    _ = move(u_ref);
+    return;
+}
+
+
+//# run --signers 0x1  --check-runtime-types
+main(account: signer) {
+    let u: u64;
+    let u_ref: &u64;
+label b0:
+    u = 10;
+    u_ref = freeze(&u);
+    _ = move(u_ref);
+    return;
+}
+
+//# run --signers 0x1  --check-runtime-types
+main(account: signer) {
+    let u: u64;
+label b0:
+    u = 10;
+    _ = freeze(move(u));
+    return;
+}

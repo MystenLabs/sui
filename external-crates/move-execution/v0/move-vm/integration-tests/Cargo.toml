@@ -1,0 +1,39 @@
+[package]
+name = "move-vm-integration-tests-v0"
+version = "0.1.0"
+authors = ["Diem Association <opensource@diem.com>"]
+description = "Move VM Integration Tests"
+repository = "https://github.com/diem/diem"
+homepage = "https://diem.com"
+license = "Apache-2.0"
+publish = false
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+anyhow = "1.0.52"
+fail = { version = "0.4.0", features = ['failpoints'] }
+tempfile = "3.2.0"
+memory-stats = "1.0.0"
+
+move-core-types = {path = "../../../../move/move-core/types" }
+move-binary-format = { path = "../../../../move/move-binary-format" }
+move-bytecode-verifier = { path = "../../../../move/move-bytecode-verifier" }
+move-compiler = { path = "../../../../move/move-compiler" }
+move-vm-runtime = { path = "../runtime", package = "move-vm-runtime-v0" }
+move-vm-types = { path = "../../../../move/move-vm/types" }
+move-vm-test-utils = { path = "../test-utils", package = "move-vm-test-utils-v0" }
+move-stdlib = { path = "../../move-stdlib", package = "move-stdlib-v0" }
+move-table-extension = { path = "../../../../move/extensions/move-table-extension", optional = true }
+
+[features]
+default = []
+table-extension = [
+    "move-table-extension",
+    "move-vm-test-utils/table-extension"
+]
+
+[[bin]]
+name = "instantiation"
+path = "src/tests/instantiation_tests.rs"
