@@ -439,12 +439,17 @@ fn transactions_table_default_config() -> DBOptions {
 }
 
 fn effects_table_default_config() -> DBOptions {
-    default_db_options()
-        .optimize_for_write_throughput()
-        .optimize_for_large_values_no_scan(4 << 10)
-        .optimize_for_point_lookup(
-            read_size_from_env(ENV_VAR_EFFECTS_BLOCK_CACHE_SIZE).unwrap_or(1024),
-        )
+    let options = DBOptions {
+        options: rocksdb::Options::default(),
+        rw_options: ReadWriteOptions::default(),
+    };
+    options.fifo_compaction()
+    // default_db_options()
+    // .optimize_for_write_throughput()
+    // .optimize_for_point_lookup(
+    //     read_size_from_env(ENV_VAR_EFFECTS_BLOCK_CACHE_SIZE).unwrap_or(1024),
+    // )
+    // .fifo_compaction()
 }
 
 fn events_table_default_config() -> DBOptions {
