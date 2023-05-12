@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use self::db_dump::{dump_table, duplicate_objects_summary, list_tables, table_summary, StoreName};
+use self::index_search::{search_index, SearchRange};
 use crate::db_tool::db_dump::{compact, print_table_metadata};
 use clap::Parser;
 use std::path::{Path, PathBuf};
@@ -9,19 +10,43 @@ use sui_core::authority::authority_store_tables::AuthorityPerpetualTables;
 use sui_core::checkpoints::CheckpointStore;
 use sui_types::base_types::EpochId;
 use typed_store::rocks::MetricConf;
-
 pub mod db_dump;
+mod index_search;
 
 #[derive(Parser)]
 #[clap(rename_all = "kebab-case")]
 pub enum DbToolCommand {
     ListTables,
     Dump(Options),
+    IndexSearchKeyRange(IndexSearchKeyRangeOptions),
+    IndexSearchCount(IndexSearchCountOptions),
     TableSummary(Options),
     DuplicatesSummary,
     ResetDB,
     ListDBMetadata(Options),
     Compact,
+}
+
+#[derive(Parser)]
+#[clap(rename_all = "kebab-case")]
+pub struct IndexSearchKeyRangeOptions {
+    #[clap(long = "table-name", short = 't')]
+    table_name: String,
+    #[clap(long = "start", short = 's')]
+    start: String,
+    #[clap(long = "end", short = 'e')]
+    end_key: String,
+}
+
+#[derive(Parser)]
+#[clap(rename_all = "kebab-case")]
+pub struct IndexSearchCountOptions {
+    #[clap(long = "table-name", short = 't')]
+    table_name: String,
+    #[clap(long = "start", short = 's')]
+    start: String,
+    #[clap(long = "count", short = 'c')]
+    count: u64,
 }
 
 #[derive(Parser)]
@@ -68,6 +93,30 @@ pub fn execute_db_tool_command(db_path: PathBuf, cmd: DbToolCommand) -> anyhow::
             print_table_metadata(d.store_name, d.epoch, db_path, &d.table_name)
         }
         DbToolCommand::Compact => compact(db_path),
+        DbToolCommand::IndexSearchKeyRange(rg) => {
+            let res = search_index(
+                db_path,
+                rg.table_name,
+                rg.start,
+                SearchRange::ExclusiveLastKey(rg.end_key),
+            )?;
+            for (k, v) in res {
+                println!("{}: {}", k, v);
+            }
+            Ok(())
+        }
+        DbToolCommand::IndexSearchCount(sc) => {
+            let res = search_index(
+                db_path,
+                sc.table_name,
+                sc.start,
+                SearchRange::Count(sc.count),
+            )?;
+            for (k, v) in res {
+                println!("{}: {}", k, v);
+            }
+            Ok(())
+        }
     }
 }
 

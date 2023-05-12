@@ -10,9 +10,9 @@ use sui_types::crypto::{Signature, Signer};
 use sui_types::sui_system_state::SUI_SYSTEM_MODULE_NAME;
 use sui_types::transaction::{
     CallArg, ObjectArg, Transaction, TransactionData, VerifiedTransaction,
-    TEST_ONLY_GAS_UNIT_FOR_GENERIC, TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
+    TEST_ONLY_GAS_UNIT_FOR_GENERIC, TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
 };
-use sui_types::{TypeTag, SUI_SYSTEM_OBJECT_ID};
+use sui_types::{TypeTag, SUI_SYSTEM_PACKAGE_ID};
 
 pub struct TestTransactionBuilder {
     test_data: TestTransactionData,
@@ -71,9 +71,33 @@ impl TestTransactionBuilder {
         )
     }
 
+    pub fn call_nft_create(self, package_id: ObjectID) -> Self {
+        self.move_call(
+            package_id,
+            "devnet_nft",
+            "mint",
+            vec![
+                CallArg::Pure(bcs::to_bytes("example_nft_name").unwrap()),
+                CallArg::Pure(bcs::to_bytes("example_nft_description").unwrap()),
+                CallArg::Pure(
+                    bcs::to_bytes("https://sui.io/_nuxt/img/sui-logo.8d3c44e.svg").unwrap(),
+                ),
+            ],
+        )
+    }
+
+    pub fn call_nft_delete(self, package_id: ObjectID, nft_to_delete: ObjectRef) -> Self {
+        self.move_call(
+            package_id,
+            "devnet_nft",
+            "burn",
+            vec![CallArg::Object(ObjectArg::ImmOrOwnedObject(nft_to_delete))],
+        )
+    }
+
     pub fn call_staking(self, stake_coin: ObjectRef, validator: SuiAddress) -> Self {
         self.move_call(
-            SUI_SYSTEM_OBJECT_ID,
+            SUI_SYSTEM_PACKAGE_ID,
             SUI_SYSTEM_MODULE_NAME.as_str(),
             "request_add_stake",
             vec![
@@ -99,9 +123,26 @@ impl TestTransactionBuilder {
         self
     }
 
+    pub fn transfer_sui(mut self, amount: Option<u64>, recipient: SuiAddress) -> Self {
+        self.test_data = TestTransactionData::TransferSui(TransferSuiData { amount, recipient });
+        self
+    }
+
     pub fn publish(mut self, path: PathBuf) -> Self {
         assert!(matches!(self.test_data, TestTransactionData::Empty));
-        self.test_data = TestTransactionData::Publish(PublishData { path });
+        self.test_data = TestTransactionData::Publish(PublishData {
+            path,
+            with_unpublished_deps: false,
+        });
+        self
+    }
+
+    pub fn publish_with_deps(mut self, path: PathBuf) -> Self {
+        assert!(matches!(self.test_data, TestTransactionData::Empty));
+        self.test_data = TestTransactionData::Publish(PublishData {
+            path,
+            with_unpublished_deps: true,
+        });
         self
     }
 
@@ -130,13 +171,21 @@ impl TestTransactionBuilder {
                 data.object,
                 self.sender,
                 self.gas_object,
-                self.gas_price * TEST_ONLY_GAS_UNIT_FOR_GENERIC,
+                self.gas_price * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
+                self.gas_price,
+            ),
+            TestTransactionData::TransferSui(data) => TransactionData::new_transfer_sui(
+                data.recipient,
+                self.sender,
+                data.amount,
+                self.gas_object,
+                self.gas_price * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
                 self.gas_price,
             ),
             TestTransactionData::Publish(data) => {
                 let compiled_package = BuildConfig::new_for_testing().build(data.path).unwrap();
                 let all_module_bytes =
-                    compiled_package.get_package_bytes(/* with_unpublished_deps */ false);
+                    compiled_package.get_package_bytes(data.with_unpublished_deps);
                 let dependencies = compiled_package.get_dependency_original_package_ids();
 
                 TransactionData::new_module(
@@ -144,7 +193,7 @@ impl TestTransactionBuilder {
                     self.gas_object,
                     all_module_bytes,
                     dependencies,
-                    self.gas_price * TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
+                    self.gas_price * TEST_ONLY_GAS_UNIT_FOR_GENERIC,
                     self.gas_price,
                 )
             }
@@ -166,6 +215,7 @@ impl TestTransactionBuilder {
 enum TestTransactionData {
     Move(MoveData),
     Transfer(TransferData),
+    TransferSui(TransferSuiData),
     Publish(PublishData),
     Empty,
 }
@@ -180,9 +230,16 @@ struct MoveData {
 
 struct PublishData {
     path: PathBuf,
+    /// Whether to publish unpublished dependencies in the same transaction or not.
+    with_unpublished_deps: bool,
 }
 
 struct TransferData {
     object: ObjectRef,
+    recipient: SuiAddress,
+}
+
+struct TransferSuiData {
+    amount: Option<u64>,
     recipient: SuiAddress,
 }

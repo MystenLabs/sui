@@ -5,21 +5,11 @@ use prometheus::Registry;
 use sui_core::authority_client::NetworkAuthorityClient;
 use sui_core::transaction_orchestrator::TransactiondOrchestrator;
 use sui_macros::sim_test;
-use sui_types::crypto::{get_key_pair, AccountKeyPair};
-use sui_types::object::generate_test_gas_objects_with_owner;
 use sui_types::quorum_driver_types::{
     ExecuteTransactionRequest, ExecuteTransactionRequestType, ExecuteTransactionResponse,
     FinalizedEffects, QuorumDriverError,
 };
-use sui_types::transaction::{
-    TransactionData, VerifiedTransaction, TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
-};
-use sui_types::utils::to_sender_signed_transaction;
-use test_utils::authority::{
-    spawn_fullnode, spawn_test_authorities, test_authority_configs,
-    test_authority_configs_with_objects,
-};
-use test_utils::network::wait_for_nodes_transition_to_epoch;
+use sui_types::transaction::VerifiedTransaction;
 use test_utils::network::TestClusterBuilder;
 use test_utils::transaction::wait_for_tx;
 use tracing::info;
@@ -172,67 +162,51 @@ async fn test_fullnode_wal_log() -> Result<(), anyhow::Error> {
 #[sim_test]
 async fn test_transaction_orchestrator_reconfig() {
     telemetry_subscribers::init_for_testing();
-    let config = test_authority_configs();
-    let authorities = spawn_test_authorities(&config).await;
-    let fullnode = spawn_fullnode(&config, None).await;
-    let epoch = fullnode.with(|node| {
-        node.transaction_orchestrator()
-            .unwrap()
-            .quorum_driver()
-            .current_epoch()
-    });
+    let test_cluster = TestClusterBuilder::new().build().await.unwrap();
+    let epoch = test_cluster
+        .fullnode_handle
+        .sui_node
+        .transaction_orchestrator()
+        .unwrap()
+        .quorum_driver()
+        .current_epoch();
     assert_eq!(epoch, 0);
 
-    for handle in &authorities {
-        handle
-            .with_async(|node| async { node.close_epoch_for_testing().await.unwrap() })
-            .await;
-    }
+    test_cluster.trigger_reconfiguration().await;
 
-    // Wait for all nodes to reach the next epoch.
-    wait_for_nodes_transition_to_epoch(authorities.iter().chain(std::iter::once(&fullnode)), 1)
-        .await;
+    let epoch = test_cluster
+        .fullnode_handle
+        .sui_node
+        .transaction_orchestrator()
+        .unwrap()
+        .quorum_driver()
+        .current_epoch();
+    assert_eq!(epoch, 1);
 
-    // Give it some time for the update to happen
-    tokio::time::sleep(tokio::time::Duration::from_secs(3)).await;
-    fullnode.with(|node| {
-        let epoch = node
-            .transaction_orchestrator()
+    assert_eq!(
+        test_cluster
+            .fullnode_handle
+            .sui_node
+            .clone_authority_aggregator()
             .unwrap()
-            .quorum_driver()
-            .current_epoch();
-        assert_eq!(epoch, 1);
-        assert_eq!(
-            node.clone_authority_aggregator().unwrap().committee.epoch,
-            1
-        );
-    });
+            .committee
+            .epoch,
+        1
+    );
 }
 
 #[sim_test]
 async fn test_tx_across_epoch_boundaries() {
     telemetry_subscribers::init_for_testing();
     let total_tx_cnt = 1;
-    let (sender, keypair) = get_key_pair::<AccountKeyPair>();
-    let gas_objects = generate_test_gas_objects_with_owner(1, sender);
     let (result_tx, mut result_rx) = tokio::sync::mpsc::channel::<FinalizedEffects>(total_tx_cnt);
 
-    let (config, mut gas_objects) = test_authority_configs_with_objects(gas_objects);
-    let authorities = spawn_test_authorities(&config).await;
-    let fullnode = spawn_fullnode(&config, None).await;
-    let rgp = authorities[0]
-        .with(|node| node.state().reference_gas_price_for_testing())
-        .unwrap();
-    let gas_object = gas_objects.swap_remove(0);
-    let data = TransactionData::new_transfer_sui(
-        get_key_pair::<AccountKeyPair>().0,
-        sender,
-        None,
-        gas_object.compute_object_reference(),
-        rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
-        rgp,
-    );
-    let tx = to_sender_signed_transaction(data, &keypair);
+    let test_cluster = TestClusterBuilder::new().build().await.unwrap();
+    let tx = test_cluster
+        .wallet
+        .make_transfer_sui_transaction(None, None)
+        .await;
+    let authorities = test_cluster.swarm.validator_node_handles();
 
     // We first let 2 validators stop accepting user cert
     // to make sure QD does not get quorum until reconfig
@@ -244,33 +218,34 @@ async fn test_tx_across_epoch_boundaries() {
 
     // Spawn a task that fire the transaction through TransactionOrchestrator
     // across the epoch boundary.
-    fullnode
-        .with_async(|node| async {
-            let to = node.transaction_orchestrator().unwrap();
-            let tx_digest = *tx.digest();
-            info!(?tx_digest, "Submitting tx");
-            let tx = tx.into_inner();
-            tokio::task::spawn(async move {
-                match to
-                    .execute_transaction_block(ExecuteTransactionRequest {
-                        transaction: tx.clone(),
-                        request_type: ExecuteTransactionRequestType::WaitForEffectsCert,
-                    })
-                    .await
-                {
-                    Ok(ExecuteTransactionResponse::EffectsCert(res)) => {
-                        info!(?tx_digest, "tx result: ok");
-                        let (effects_cert, _, _) = *res;
-                        result_tx.send(effects_cert).await.unwrap();
-                    }
-                    Err(QuorumDriverError::TimeoutBeforeFinality) => {
-                        info!(?tx_digest, "tx result: timeout and will retry")
-                    }
-                    Err(other) => panic!("unexpected error: {:?}", other),
-                }
-            });
-        })
-        .await;
+    let to = test_cluster
+        .fullnode_handle
+        .sui_node
+        .transaction_orchestrator()
+        .unwrap();
+
+    let tx_digest = *tx.digest();
+    info!(?tx_digest, "Submitting tx");
+    let tx = tx.into_inner();
+    tokio::task::spawn(async move {
+        match to
+            .execute_transaction_block(ExecuteTransactionRequest {
+                transaction: tx.clone(),
+                request_type: ExecuteTransactionRequestType::WaitForEffectsCert,
+            })
+            .await
+        {
+            Ok(ExecuteTransactionResponse::EffectsCert(res)) => {
+                info!(?tx_digest, "tx result: ok");
+                let (effects_cert, _, _) = *res;
+                result_tx.send(effects_cert).await.unwrap();
+            }
+            Err(QuorumDriverError::TimeoutBeforeFinality) => {
+                info!(?tx_digest, "tx result: timeout and will retry")
+            }
+            Err(other) => panic!("unexpected error: {:?}", other),
+        }
+    });
 
     info!("Asking remaining validators to change epoch");
     // Ask the remaining 2 validators to close epoch
@@ -280,12 +255,8 @@ async fn test_tx_across_epoch_boundaries() {
             .await;
     }
 
-    // Wait for all nodes to reach the next epoch.
-    info!("Now waiting for all nodes including fullnode to finish epoch change");
-    wait_for_nodes_transition_to_epoch(authorities.iter(), 1).await;
-    info!("Validators finished epoch change");
-    wait_for_nodes_transition_to_epoch(std::iter::once(&fullnode), 1).await;
-    info!("All nodes including fullnode finished");
+    // Wait for the network to reach the next epoch.
+    test_cluster.wait_for_epoch(Some(1)).await;
 
     // The transaction must finalize in epoch 1
     let start = std::time::Instant::now();

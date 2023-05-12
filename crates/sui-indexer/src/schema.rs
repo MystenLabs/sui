@@ -17,10 +17,22 @@ pub mod sql_types {
 }
 
 diesel::table! {
+    active_addresses (account_address) {
+        account_address -> Varchar,
+        first_appearance_tx -> Varchar,
+        first_appearance_time -> Int8,
+        last_appearance_tx -> Varchar,
+        last_appearance_time -> Int8,
+    }
+}
+
+diesel::table! {
     addresses (account_address) {
         account_address -> Varchar,
         first_appearance_tx -> Varchar,
         first_appearance_time -> Int8,
+        last_appearance_tx -> Varchar,
+        last_appearance_time -> Int8,
     }
 }
 
@@ -47,6 +59,8 @@ diesel::table! {
         total_storage_rebate -> Int8,
         total_transaction_blocks -> Int8,
         total_transactions -> Int8,
+        total_successful_transaction_blocks -> Int8,
+        total_successful_transactions -> Int8,
         network_total_transactions -> Int8,
         timestamp_ms -> Int8,
         validator_signature -> Text,
@@ -227,6 +241,7 @@ diesel::table! {
         timestamp_ms -> Nullable<Int8>,
         transaction_kind -> Text,
         transaction_count -> Int8,
+        execution_success -> Bool,
         created -> Array<Nullable<Text>>,
         mutated -> Array<Nullable<Text>>,
         deleted -> Array<Nullable<Text>>,
@@ -296,6 +311,7 @@ diesel::table! {
 }
 
 diesel::allow_tables_to_appear_in_same_query!(
+    active_addresses,
     addresses,
     at_risk_validators,
     checkpoints,

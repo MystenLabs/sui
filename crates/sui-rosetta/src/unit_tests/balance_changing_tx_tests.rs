@@ -2,8 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::operations::Operations;
-use crate::state::extract_balance_changes_from_ops;
-use crate::types::ConstructionMetadata;
+use crate::types::{ConstructionMetadata, OperationStatus, OperationType};
 use anyhow::anyhow;
 use move_core_types::identifier::Identifier;
 use rand::seq::{IteratorRandom, SliceRandom};
@@ -749,6 +748,28 @@ async fn test_transaction(
         tx, effects
     );
     response
+}
+
+fn extract_balance_changes_from_ops(ops: Operations) -> HashMap<SuiAddress, i128> {
+    ops.into_iter()
+        .fold(HashMap::<SuiAddress, i128>::new(), |mut changes, op| {
+            if let Some(OperationStatus::Success) = op.status {
+                match op.type_ {
+                    OperationType::SuiBalanceChange
+                    | OperationType::Gas
+                    | OperationType::PaySui
+                    | OperationType::StakeReward
+                    | OperationType::StakePrinciple
+                    | OperationType::Stake => {
+                        if let (Some(addr), Some(amount)) = (op.account, op.amount) {
+                            *changes.entry(addr.address).or_default() += amount.value
+                        }
+                    }
+                    _ => {}
+                };
+            }
+            changes
+        })
 }
 
 async fn get_random_sui(

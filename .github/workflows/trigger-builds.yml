@@ -6,9 +6,8 @@ on:
     branches: 
       - 'devnet'
       - 'testnet'
+      - 'mainnet'
       - 'releases/sui-*-release'
-    tags:
-      - sui-v**
 
 concurrency: ${{ github.workflow }}-${{ github.ref }}
 

@@ -29,8 +29,8 @@ use crate::multisig::MultiSigPublicKey;
 use crate::object::{Object, Owner};
 use crate::parse_sui_struct_tag;
 use crate::signature::GenericSignature;
-use crate::sui_serde::HexAccountAddress;
 use crate::sui_serde::Readable;
+use crate::sui_serde::{to_sui_struct_tag_string, HexAccountAddress};
 use crate::transaction::Transaction;
 use crate::transaction::VerifiedTransaction;
 use crate::MOVE_STDLIB_ADDRESS;
@@ -53,6 +53,7 @@ use move_core_types::language_storage::StructTag;
 use move_core_types::language_storage::TypeTag;
 use rand::Rng;
 use schemars::JsonSchema;
+use serde::ser::Error;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use shared_crypto::intent::HashingIntentScope;
@@ -556,13 +557,13 @@ impl From<&PublicKey> for SuiAddress {
     }
 }
 
-impl From<MultiSigPublicKey> for SuiAddress {
+impl From<&MultiSigPublicKey> for SuiAddress {
     /// Derive a SuiAddress from [struct MultiSigPublicKey]. A MultiSig address
     /// is defined as the 32-byte Blake2b hash of serializing the flag, the
-    /// threshold, concatenation of each participating flag, public keys and
+    /// threshold, concatenation of all n flag, public keys and
     /// its weight. `flag_MultiSig || threshold || flag_1 || pk_1 || weight_1
     /// || ... || flag_n || pk_n || weight_n`.
-    fn from(multisig_pk: MultiSigPublicKey) -> Self {
+    fn from(multisig_pk: &MultiSigPublicKey) -> Self {
         let mut hasher = DefaultHash::default();
         hasher.update([SignatureScheme::MultiSig.flag()]);
         hasher.update(multisig_pk.threshold().to_le_bytes());
@@ -590,7 +591,7 @@ impl TryFrom<&GenericSignature> for SuiAddress {
                 })?;
                 SuiAddress::from(&pub_key)
             }
-            GenericSignature::MultiSig(ms) => ms.multisig_pk.clone().into(),
+            GenericSignature::MultiSig(ms) => ms.get_pk().into(),
         })
     }
 }
@@ -1181,7 +1182,11 @@ impl From<SuiAddress> for AccountAddress {
 impl fmt::Display for MoveObjectType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> std::fmt::Result {
         let s: StructTag = self.clone().into();
-        write!(f, "{}", s)
+        write!(
+            f,
+            "{}",
+            to_sui_struct_tag_string(&s).map_err(fmt::Error::custom)?
+        )
     }
 }
 

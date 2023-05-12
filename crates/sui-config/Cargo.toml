@@ -25,12 +25,14 @@ tempfile = "3.3.0"
 tracing = "0.1.36"
 prometheus = "0.13.3"
 
+# TODO use sui-execution versioned crate
+sui-adapter = { path = "../../sui-execution/latest/sui-adapter", package = "sui-adapter-latest" }
+sui-move-natives = { path = "../../sui-execution/latest/sui-move-natives", package = "sui-move-natives-latest" }
+
 narwhal-config = { path = "../../narwhal/config" }
 shared-crypto = { path = "../shared-crypto" }
-sui-adapter = { path = "../sui-adapter" }
 sui-framework = { path = "../sui-framework" }
 sui-keys = { path = "../sui-keys" }
-sui-move-natives = { path = "../sui-move-natives" }
 sui-protocol-config = { path = "../sui-protocol-config" }
 sui-storage = { path = "../sui-storage" }
 sui-types = { path = "../sui-types" }

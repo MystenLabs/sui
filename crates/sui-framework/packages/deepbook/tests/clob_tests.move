@@ -529,8 +529,8 @@ module deepbook::clob_test {
             let account_cap = test::take_from_address<AccountCap>(&test, alice);
             let account_cap_user = object::id(&account_cap);
             let orders = vector::empty<u64>();
-            vector::push_back(&mut orders, 0);
             vector::push_back(&mut orders, 1);
+            vector::push_back(&mut orders, 2);
             vector::push_back(&mut orders, MIN_ASK_ORDER_ID);
             clob::batch_cancel_order(&mut pool, orders, &account_cap);
             {
@@ -728,7 +728,7 @@ module deepbook::clob_test {
                 clob::check_tick_level(bids, 4 * FLOAT_SCALING, &open_orders);
             };
 
-            clob::cancel_order<SUI, USD>(&mut pool, 1, &account_cap);
+            clob::cancel_order<SUI, USD>(&mut pool, 2, &account_cap);
             {
                 let open_orders = vector::empty<Order>();
                 vector::push_back(
@@ -1581,7 +1581,7 @@ module deepbook::clob_test {
             let pool = test::take_shared<Pool<SUI, USD>>(&mut test);
             let account_cap = test::take_from_address<AccountCap>(&test, alice);
             let account_cap_user = object::id(&account_cap);
-            clob::cancel_order(&mut pool, 0, &account_cap);
+            clob::cancel_order(&mut pool, 1, &account_cap);
             {
                 let open_orders = vector::empty<Order>();
                 vector::push_back(
@@ -1623,7 +1623,7 @@ module deepbook::clob_test {
             let pool = test::take_shared<Pool<SUI, USD>>(&mut test);
             let account_cap = test::take_from_address<AccountCap>(&test, alice);
             let account_cap_user = object::id(&account_cap);
-            clob::cancel_order(&mut pool, 1, &account_cap);
+            clob::cancel_order(&mut pool, 2, &account_cap);
             {
                 let (_, _, bids, _) = get_pool_stat(&pool);
                 clob::check_empty_tick_level(bids, 5 * FLOAT_SCALING);

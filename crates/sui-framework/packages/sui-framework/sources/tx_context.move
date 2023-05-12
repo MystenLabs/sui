@@ -146,15 +146,4 @@ module sui::tx_context {
     public fun increment_epoch_timestamp(self: &mut TxContext, delta_ms: u64) {
         self.epoch_timestamp_ms = self.epoch_timestamp_ms + delta_ms
     }
-
-
-    // Cost calibration functions
-    #[test_only]
-    public fun calibrate_derive_id(tx_hash: vector<u8>, ids_created: u64) {
-        derive_id(tx_hash, ids_created);
-    }
-    #[test_only]
-    public fun calibrate_derive_id_nop(tx_hash: vector<u8>, ids_created: u64) {
-        let _ = tx_hash;
-        let _ = ids_created;
-    }}
+}

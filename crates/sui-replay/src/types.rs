@@ -19,10 +19,6 @@ use thiserror::Error;
 use tokio::time::Duration;
 use tracing::error;
 
-// These are very testnet specific
-pub(crate) const TESTNET_GENESIX_TX_DIGEST: &str = "Cgww1sn7XViCPSdDcAPmVcARueWuexJ8af8zD842Ff43";
-pub(crate) const SAFE_MODE_TX_1_DIGEST: &str = "AGBCaUGj4iGpGYyQvto9Bke1EwouY8LGMoTzzuPMx4nd";
-
 // TODO: make these configurable
 pub(crate) const RPC_TIMEOUT_ERR_SLEEP_RETRY_PERIOD: Duration = Duration::from_millis(10_000);
 pub(crate) const RPC_TIMEOUT_ERR_NUM_RETRIES: u32 = 3;
@@ -131,7 +127,7 @@ pub enum LocalExecError {
     #[error("Protocol version not found for epoch {epoch}")]
     ProtocolVersionNotFound { epoch: u64 },
 
-    #[error("Protocol version not found for epoch {epoch}")]
+    #[error("Error querying system events for epoch {epoch}")]
     ErrorQueryingSystemEvents { epoch: u64 },
 
     #[error("Invalid epoch change transaction in events for epoch {epoch}")]

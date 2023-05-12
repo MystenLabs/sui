@@ -1,0 +1,34 @@
+processed 7 tasks
+
+init:
+A: object(0,0)
+
+task 1 'publish'. lines 6-12:
+created: object(1,0), object(1,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 6216800,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2 'upgrade'. lines 15-21:
+created: object(2,0)
+mutated: object(0,0), object(1,1)
+gas summary: computation_cost: 1000000, storage_cost: 6216800,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+
+task 3 'upgrade'. lines 23-33:
+created: object(3,0)
+mutated: object(0,0), object(1,1)
+gas summary: computation_cost: 1000000, storage_cost: 6520800,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+
+task 4 'publish'. lines 36-42:
+created: object(4,0), object(4,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 6201600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 5 'upgrade'. lines 44-50:
+created: object(5,0)
+mutated: object(0,0), object(4,1)
+gas summary: computation_cost: 1000000, storage_cost: 6201600,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+
+task 6 'upgrade'. lines 52-59:
+created: object(6,0)
+mutated: object(0,0), object(4,1)
+gas summary: computation_cost: 1000000, storage_cost: 6247200,  storage_rebate: 2595780, non_refundable_storage_fee: 26220

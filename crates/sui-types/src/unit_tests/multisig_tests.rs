@@ -41,7 +41,7 @@ fn multisig_scenarios() {
         2,
     )
     .unwrap();
-    let addr = SuiAddress::from(multisig_pk.clone());
+    let addr = SuiAddress::from(&multisig_pk);
     let msg = IntentMessage::new(
         Intent::sui_transaction(),
         PersonalMessage {
@@ -88,7 +88,7 @@ fn multisig_scenarios() {
         3,
     )
     .unwrap();
-    let addr_2 = SuiAddress::from(multisig_pk_2.clone());
+    let addr_2 = SuiAddress::from(&multisig_pk_2);
 
     // sig1 and sig2 (3 of 6) verifies ok.
     let multi_sig_6 =
@@ -298,7 +298,7 @@ fn test_multisig_address() {
 
     let multisig_pk =
         MultiSigPublicKey::new(vec![pk1, pk2, pk3], vec![w1, w2, w3], threshold).unwrap();
-    let address: SuiAddress = multisig_pk.into();
+    let address: SuiAddress = (&multisig_pk).into();
     assert_eq!(
         SuiAddress::from_str("0xe35c69eb504de34afdbd9f307fb3ca152646c92d549fea00065d26fc422109ea")
             .unwrap(),
@@ -349,7 +349,7 @@ fn test_max_sig() {
         (WeightUnit::MAX as ThresholdUnit) * (MAX_SIGNER_IN_MULTISIG as ThresholdUnit),
     )
     .unwrap();
-    let address: SuiAddress = high_threshold_pk.clone().into();
+    let address: SuiAddress = (&high_threshold_pk).into();
 
     // But max threshold cannot be met, fails to verify.
     sigs.remove(0);
@@ -363,7 +363,7 @@ fn test_max_sig() {
         WeightUnit::MAX.into(),
     )
     .unwrap();
-    let address: SuiAddress = low_threshold_pk.clone().into();
+    let address: SuiAddress = (&low_threshold_pk).into();
     let sig = Signature::new_secure(&msg, &keys[0]);
     let multisig = MultiSig::combine(vec![sig; 1], low_threshold_pk).unwrap();
     assert!(multisig.verify_secure_generic(&msg, address).is_ok());

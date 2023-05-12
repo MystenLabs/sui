@@ -61,7 +61,7 @@ module Test_V2::M1 {
 
 //# upgrade --package Test_V2 --upgrade-capability 3,1 --dependencies Test_DepV2 --sender A
 module Test_V3::M1 {
-    use Test_DepV1::DepM1;
+    use Test_DepV2::DepM1;
 
     public entry fun bar(ctx: &mut sui::tx_context::TxContext) {
         DepM1::foo(ctx);
