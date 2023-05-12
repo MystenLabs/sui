@@ -11,7 +11,7 @@ use crate::node::{
 use crate::node::{StateDebugDumpConfig, DEFAULT_GRPC_CONCURRENCY_LIMIT};
 use crate::{
     genesis,
-    genesis_config::{GenesisConfig, ValidatorConfigInfo},
+    genesis_config::{GenesisConfig, ValidatorGenesisConfig},
     node::AuthorityStorePruningConfig,
     p2p::P2pConfig,
     utils, ConsensusConfig, NetworkConfig, NodeConfig, ValidatorInfo, AUTHORITIES_DB_NAME,
@@ -38,7 +38,7 @@ use sui_types::object::Object;
 
 pub enum CommitteeConfig {
     Size(NonZeroUsize),
-    Validators(Vec<ValidatorConfigInfo>),
+    Validators(Vec<ValidatorGenesisConfig>),
     AccountKeys(Vec<AccountKeyPair>),
 }
 
@@ -139,7 +139,7 @@ impl<R> ConfigBuilder<R> {
         self
     }
 
-    pub fn with_validators(mut self, validators: Vec<ValidatorConfigInfo>) -> Self {
+    pub fn with_validators(mut self, validators: Vec<ValidatorGenesisConfig>) -> Self {
         self.committee = Some(CommitteeConfig::Validators(validators));
         self
     }
@@ -243,11 +243,11 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
                                           protocol_key_pair: AuthorityKeyPair,
                                           account_key_pair: AccountKeyPair,
                                           rng: &mut R|
-         -> ValidatorConfigInfo {
+         -> ValidatorGenesisConfig {
             let (worker_key_pair, network_key_pair): (NetworkKeyPair, NetworkKeyPair) =
                 (get_key_pair_from_rng(rng).1, get_key_pair_from_rng(rng).1);
 
-            ValidatorConfigInfo::new(
+            ValidatorGenesisConfig::new(
                 idx,
                 protocol_key_pair,
                 worker_key_pair,
@@ -297,7 +297,7 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
     fn build_with_validators(
         mut self,
         mut rng: R,
-        validators: Vec<ValidatorConfigInfo>,
+        validators: Vec<ValidatorGenesisConfig>,
     ) -> NetworkConfig {
         self.get_or_init_genesis_config();
         let genesis_config = self.genesis_config.unwrap();
@@ -311,11 +311,11 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
             }
             // Add allocations for each validator
             for validator in &validators {
-                let account_key: PublicKey = validator.genesis_info.account_key_pair.public();
+                let account_key: PublicKey = validator.account_key_pair.public();
                 let address = SuiAddress::from(&account_key);
                 let stake = TokenAllocation {
                     recipient_address: address,
-                    amount_mist: validator.genesis_info.stake,
+                    amount_mist: validator.stake,
                     staked_with_validator: Some(address),
                 };
                 builder.add_allocation(stake);
@@ -330,10 +330,10 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
 
             for (i, validator) in validators.iter().enumerate() {
                 let name = format!("validator-{i}");
-                let validator_info = ValidatorInfo::new(name, &validator.genesis_info);
+                let validator_info = ValidatorInfo::new(name, validator);
                 let pop = generate_proof_of_possession(
-                    &validator.genesis_info.key_pair,
-                    (&validator.genesis_info.account_key_pair.public()).into(),
+                    &validator.key_pair,
+                    (&validator.account_key_pair.public()).into(),
                 );
                 builder = builder.add_validator(validator_info, pop);
             }
@@ -341,7 +341,7 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
             builder = builder.with_token_distribution_schedule(token_distribution_schedule);
 
             for validator in &validators {
-                builder = builder.add_validator_signature(&validator.genesis_info.key_pair);
+                builder = builder.add_validator_signature(&validator.key_pair);
             }
 
             builder.build()
@@ -351,15 +351,14 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
             .into_iter()
             .enumerate()
             .map(|(idx, validator)| {
-                let public_key: AuthorityPublicKeyBytes =
-                    validator.genesis_info.key_pair.public().into();
+                let public_key: AuthorityPublicKeyBytes = validator.key_pair.public().into();
                 let mut key_path = Hex::encode(public_key);
                 key_path.truncate(12);
                 let db_path = self
                     .config_directory
                     .join(AUTHORITIES_DB_NAME)
                     .join(key_path.clone());
-                let network_address = validator.genesis_info.network_address;
+                let network_address = validator.network_address;
                 let consensus_address = validator.consensus_address;
                 let consensus_db_path =
                     self.config_directory.join(CONSENSUS_DB_NAME).join(key_path);
@@ -387,23 +386,20 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
                             },
                         },
                         prometheus_metrics: PrometheusMetricsParameters {
-                            socket_addr: validator.genesis_info.narwhal_metrics_address,
+                            socket_addr: validator.narwhal_metrics_address,
                         },
                         ..Default::default()
                     },
                 };
 
                 let p2p_config = P2pConfig {
-                    listen_address: validator.genesis_info.p2p_listen_address.unwrap_or_else(
-                        || {
-                            validator
-                                .genesis_info
-                                .p2p_address
-                                .udp_multiaddr_to_listen_address()
-                                .unwrap()
-                        },
-                    ),
-                    external_address: Some(validator.genesis_info.p2p_address),
+                    listen_address: validator.p2p_listen_address.unwrap_or_else(|| {
+                        validator
+                            .p2p_address
+                            .udp_multiaddr_to_listen_address()
+                            .unwrap()
+                    }),
+                    external_address: Some(validator.p2p_address),
                     ..Default::default()
                 };
 
@@ -414,19 +410,17 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
                 };
 
                 NodeConfig {
-                    protocol_key_pair: AuthorityKeyPairWithPath::new(
-                        validator.genesis_info.key_pair,
-                    ),
+                    protocol_key_pair: AuthorityKeyPairWithPath::new(validator.key_pair),
                     network_key_pair: KeyPairWithPath::new(SuiKeyPair::Ed25519(
-                        validator.genesis_info.network_key_pair,
+                        validator.network_key_pair,
                     )),
-                    account_key_pair: KeyPairWithPath::new(validator.genesis_info.account_key_pair),
+                    account_key_pair: KeyPairWithPath::new(validator.account_key_pair),
                     worker_key_pair: KeyPairWithPath::new(SuiKeyPair::Ed25519(
-                        validator.genesis_info.worker_key_pair,
+                        validator.worker_key_pair,
                     )),
                     db_path,
                     network_address,
-                    metrics_address: validator.genesis_info.metrics_address,
+                    metrics_address: validator.metrics_address,
                     // TODO: admin server is hard coded to start on 127.0.0.1 - we should probably
                     // provide the entire socket address here to avoid confusion.
                     admin_interface_port: match self.validator_ip_sel {

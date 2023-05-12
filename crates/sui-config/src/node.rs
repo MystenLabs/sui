@@ -3,7 +3,7 @@
 
 use crate::certificate_deny_config::CertificateDenyConfig;
 use crate::genesis;
-use crate::genesis_config::ValidatorGenesisInfo;
+use crate::genesis_config::ValidatorGenesisConfig;
 use crate::p2p::P2pConfig;
 use crate::transaction_deny_config::TransactionDenyConfig;
 use crate::Config;
@@ -517,12 +517,12 @@ pub struct ValidatorInfo {
 }
 
 impl ValidatorInfo {
-    pub fn new(name: String, genesis_info: &ValidatorGenesisInfo) -> Self {
-        let protocol_key: AuthorityPublicKeyBytes = genesis_info.key_pair.public().into();
-        let account_key: PublicKey = genesis_info.account_key_pair.public();
-        let network_key: NetworkPublicKey = genesis_info.network_key_pair.public().clone();
-        let worker_key: NetworkPublicKey = genesis_info.worker_key_pair.public().clone();
-        let network_address = genesis_info.network_address.clone();
+    pub fn new(name: String, config: &ValidatorGenesisConfig) -> Self {
+        let protocol_key: AuthorityPublicKeyBytes = config.key_pair.public().into();
+        let account_key: PublicKey = config.account_key_pair.public();
+        let network_key: NetworkPublicKey = config.network_key_pair.public().clone();
+        let worker_key: NetworkPublicKey = config.worker_key_pair.public().clone();
+        let network_address = config.network_address.clone();
 
         Self {
             name,
@@ -530,12 +530,12 @@ impl ValidatorInfo {
             worker_key,
             network_key,
             account_address: SuiAddress::from(&account_key),
-            gas_price: genesis_info.gas_price,
-            commission_rate: genesis_info.commission_rate,
+            gas_price: config.gas_price,
+            commission_rate: config.commission_rate,
             network_address,
-            p2p_address: genesis_info.p2p_address.clone(),
-            narwhal_primary_address: genesis_info.narwhal_primary_address.clone(),
-            narwhal_worker_address: genesis_info.narwhal_worker_address.clone(),
+            p2p_address: config.p2p_address.clone(),
+            narwhal_primary_address: config.narwhal_primary_address.clone(),
+            narwhal_worker_address: config.narwhal_worker_address.clone(),
             description: String::new(),
             image_url: String::new(),
             project_url: String::new(),
