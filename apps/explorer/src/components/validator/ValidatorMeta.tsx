@@ -25,7 +25,7 @@ export function ValidatorMeta({ validatorData }: ValidatorMetaProps) {
 
     return (
         <>
-            <div className="flex basis-full gap-5 border-r border-transparent border-r-gray-45 md:mr-7.5 md:basis-1/4">
+            <div className="flex basis-full gap-5 border-r border-transparent border-r-gray-45 md:mr-7.5 md:basis-1/3">
                 <ImageIcon
                     src={logo}
                     label={validatorName}
@@ -54,17 +54,17 @@ export function ValidatorMeta({ validatorData }: ValidatorMetaProps) {
             </div>
             <div className="min-w-0 basis-full break-words md:basis-2/3">
                 <DescriptionList>
-                    <DescriptionItem title="Description">
+                    <DescriptionItem title="Description" align="start">
                         <Text variant="pBody/medium" color="gray-90">
                             {description || '--'}
                         </Text>
                     </DescriptionItem>
-                    <DescriptionItem title="Location">
+                    <DescriptionItem title="Location" align="start">
                         <Text variant="pBody/medium" color="gray-90">
                             --
                         </Text>
                     </DescriptionItem>
-                    <DescriptionItem title="Pool ID">
+                    <DescriptionItem title="Pool ID" align="start">
                         <Text variant="pBody/medium" color="steel-darker">
                             {validatorData.stakingPoolId}
                         </Text>
@@ -75,7 +75,7 @@ export function ValidatorMeta({ validatorData }: ValidatorMetaProps) {
                             noTruncate
                         />
                     </DescriptionItem>
-                    <DescriptionItem title="Public Key">
+                    <DescriptionItem title="Public Key" align="start">
                         <Text variant="pBody/medium" color="steel-darker">
                             {validatorPublicKey}
                         </Text>
