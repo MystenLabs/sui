@@ -186,7 +186,7 @@ impl Cluster for LocalNewCluster {
         let genesis_config = if let Some(config) = genesis_config {
             config
         } else {
-            GenesisConfig::custom_genesis(4, 1, 100)
+            GenesisConfig::custom_genesis(1, 100)
         };
         // TODO: options should contain port instead of address
         let fullnode_port = options.fullnode_address.as_ref().map(|addr| {
