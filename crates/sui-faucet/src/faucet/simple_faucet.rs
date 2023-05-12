@@ -872,7 +872,6 @@ mod tests {
             .unwrap()
             .value();
         assert_eq!(tiny_amount, tiny_value);
-        println!("gas list: {gases:?}");
 
         let gases: HashSet<ObjectID> = HashSet::from_iter(gases.into_iter().map(|gas| *gas.id()));
 
@@ -919,15 +918,118 @@ mod tests {
         let test_cluster = TestClusterBuilder::new().build().await.unwrap();
         let address = test_cluster.get_address_0();
         let mut context = test_cluster.wallet;
-        let mut gases = get_current_gases(address, &mut context).await;
+        let gases = get_current_gases(address, &mut context).await;
+        let config = FaucetConfig::default();
 
-        // let bad_gas = gases.swap_remove(0);
-        // let gases = HashSet::from_iter(gases.into_iter().map(|gas| *gas.id()));
-        println!("{:?}", gases);
+        let reasonable_value = (config.num_coins as u64 * config.amount) * 10;
+        let _res = SuiClientCommands::SplitCoin {
+            coin_id: *gases[0].id(),
+            amounts: Some(vec![reasonable_value]),
+            gas_budget: 50000000,
+            gas: None,
+            count: None,
+            serialize_unsigned_transaction: false,
+            serialize_signed_transaction: false,
+        }
+        .execute(&mut context)
+        .await;
+
+        // Transfer all valid gases away except for 1
+        for gas_idx in 0..(gases.len() - 1) {
+            let _res = SuiClientCommands::TransferSui {
+                to: SuiAddress::random_for_testing_only(),
+                sui_coin_object_id: *gases[gas_idx].id(),
+                gas_budget: 50000000,
+                amount: None,
+                serialize_unsigned_transaction: false,
+                serialize_signed_transaction: false,
+            }
+            .execute(&mut context)
+            .await;
+        }
+        let tmp = tempfile::tempdir().unwrap();
+        let prom_registry = Registry::new();
+        let config = FaucetConfig::default();
+        let faucet = SimpleFaucet::new(
+            context,
+            &prom_registry,
+            &tmp.path().join("faucet.wal"),
+            config,
+        )
+        .await
+        .unwrap();
+
+        // We traverse the the list twice, which must trigger the transferred gas to be kicked out
+        futures::future::join_all((0..2).map(|_| {
+            faucet.send(
+                Uuid::new_v4(),
+                SuiAddress::random_for_testing_only(),
+                &[30000000000],
+            )
+        }))
+        .await;
+
+        // Check that the gas wasn't discarded
+        let discarded = faucet.metrics.total_discarded_coins.get();
+        assert_eq!(discarded, 1);
     }
 
     #[tokio::test]
-    async fn test_faucet_no_loop_forever() {}
+    async fn test_faucet_no_loop_forever() {
+        let test_cluster = TestClusterBuilder::new().build().await.unwrap();
+        let address = test_cluster.get_address_0();
+        let mut context = test_cluster.wallet;
+        let gases = get_current_gases(address, &mut context).await;
+        let config = FaucetConfig::default();
+
+        let tiny_value = (config.num_coins as u64 * config.amount) + 1;
+        let _res = SuiClientCommands::SplitCoin {
+            coin_id: *gases[0].id(),
+            amounts: Some(vec![tiny_value]),
+            gas_budget: 50000000,
+            gas: None,
+            count: None,
+            serialize_unsigned_transaction: false,
+            serialize_signed_transaction: false,
+        }
+        .execute(&mut context)
+        .await;
+
+        // Transfer all valid gases away
+        for gas in gases {
+            let _res = SuiClientCommands::TransferSui {
+                to: SuiAddress::random_for_testing_only(),
+                sui_coin_object_id: *gas.id(),
+                gas_budget: 50000000,
+                amount: None,
+                serialize_unsigned_transaction: false,
+                serialize_signed_transaction: false,
+            }
+            .execute(&mut context)
+            .await;
+        }
+
+        let tmp = tempfile::tempdir().unwrap();
+        let prom_registry = Registry::new();
+        let faucet = SimpleFaucet::new(
+            context,
+            &prom_registry,
+            &tmp.path().join("faucet.wal"),
+            config,
+        )
+        .await
+        .unwrap();
+
+        // Assert that faucet will discard and also terminate
+        let res = faucet
+            .send(
+                Uuid::new_v4(),
+                SuiAddress::random_for_testing_only(),
+                &[30000000000],
+            )
+            .await;
+        println!("{:?}", res);
+    }
 
     async fn test_basic_interface(faucet: &impl Faucet) {
         let recipient = SuiAddress::random_for_testing_only();
