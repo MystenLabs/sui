@@ -94,6 +94,7 @@ impl SimpleFaucet {
                 recipient,
                 tx,
                 retry_count: _,
+                in_flight: _,
             }) = wal.reclaim(coin_id).map_err(FaucetError::internal)?
             {
                 let uuid = Uuid::from_bytes(uuid);
@@ -236,14 +237,19 @@ impl SimpleFaucet {
             // Safe unwrap as we are the only ones that ever add to the WAL.
             let (coin_id, entry) = item.unwrap();
             let uuid = Uuid::from_bytes(entry.uuid);
-            pending.push((uuid, entry.recipient, coin_id, entry.tx));
+            if !entry.in_flight {
+                pending.push((uuid, entry.recipient, coin_id, entry.tx));
+            }
         }
 
         for (_, _, coin_id, _) in &pending {
             wal.increment_retry_count(*coin_id)
                 .map_err(FaucetError::internal)?;
+            wal.set_in_flight(*coin_id, true)
+                .map_err(FaucetError::internal)?;
         }
 
+        info!("Retrying WAL of length: {:?}", pending.len());
         // Drops the lock early because sign_and_execute_txn requires the lock.
         drop(wal);
 
@@ -296,6 +302,13 @@ impl SimpleFaucet {
                     "Failed to execute PaySui transactions in faucet after {elapsed}. Coin will \
                      not be reused."
                 );
+
+                // We set the inflight status to false so that the async thread that
+                // retries this transactions will attempt to try again.
+                if self.wal.lock().await.set_in_flight(coin_id, false).is_err() {
+                    error!(?coin_id, "Failed to set coin in flight status in WAL");
+                };
+
                 Err(FaucetError::Transfer(
                     "could not complete transfer within timeout".into(),
                 ))
@@ -440,7 +453,7 @@ impl SimpleFaucet {
             .execute_transaction_block(
                 tx.clone(),
                 SuiTransactionBlockResponseOptions::new().with_effects(),
-                Some(ExecuteTransactionRequestType::WaitForLocalExecution),
+                Some(ExecuteTransactionRequestType::WaitForEffectsCert),
             )
             .await
             .tap_err(|e| {

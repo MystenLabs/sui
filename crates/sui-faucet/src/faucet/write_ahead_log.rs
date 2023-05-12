@@ -31,6 +31,7 @@ pub struct Entry {
     pub recipient: SuiAddress,
     pub tx: TransactionData,
     pub retry_count: u64,
+    pub in_flight: bool,
 }
 
 impl WriteAheadLog {
@@ -68,6 +69,7 @@ impl WriteAheadLog {
                 recipient,
                 tx,
                 retry_count: 0,
+                in_flight: true,
             },
         )
     }
@@ -99,6 +101,18 @@ impl WriteAheadLog {
     pub(crate) fn increment_retry_count(&mut self, coin: ObjectID) -> Result<(), TypedStoreError> {
         if let Some(mut entry) = self.log.get(&coin)? {
             entry.retry_count += 1;
+            self.log.insert(&coin, &entry)?;
+        }
+        Ok(())
+    }
+
+    pub(crate) fn set_in_flight(
+        &mut self,
+        coin: ObjectID,
+        bool: bool,
+    ) -> Result<(), TypedStoreError> {
+        if let Some(mut entry) = self.log.get(&coin)? {
+            entry.in_flight = bool;
             self.log.insert(&coin, &entry)?;
         }
         Ok(())
