@@ -101,11 +101,12 @@ impl Bounds {
         if let Some(max) = self.max {
             let new_units = self.units.saturating_add(units);
             if new_units > max {
-                return Err(PartialVMError::new(StatusCode::PROGRAM_TOO_COMPLEX)
-                    .with_message(format!(
+                return Err(
+                    PartialVMError::new(StatusCode::PROGRAM_TOO_COMPLEX).with_message(format!(
                         "program too complex (in `{}` with `{} current + {} new > {} max`)",
                         self.name, self.units, units, max
-                    )));
+                    )),
+                );
             }
             self.units = new_units;
         }
