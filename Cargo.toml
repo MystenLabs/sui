@@ -178,7 +178,7 @@ opt-level = 1
 # Dependencies that should be kept in sync through the whole workspace
 [workspace.dependencies]
 bcs = "0.1.4"
-tokio = "1.27.0"
+tokio = "1.28.1"
 axum = { version = "0.6.6", default-features = false, features = ["headers", "tokio", "http1", "http2", "json", "matched-path", "original-uri", "form", "query"] }
 
 # Move dependencies

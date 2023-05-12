@@ -5788,7 +5788,7 @@ dependencies = [
 [[package]]
 name = "msim"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/mysten-sim.git?rev=e9011f96b84615b63cd8b5835e606a2fc218a1bd#e9011f96b84615b63cd8b5835e606a2fc218a1bd"
+source = "git+https://github.com/MystenLabs/mysten-sim.git?rev=48ed7409b8b8cc413fae4d9d9638a849282f81c7#48ed7409b8b8cc413fae4d9d9638a849282f81c7"
 dependencies = [
  "ahash 0.7.6",
  "async-task",
@@ -5818,7 +5818,7 @@ dependencies = [
 [[package]]
 name = "msim-macros"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/mysten-sim.git?rev=e9011f96b84615b63cd8b5835e606a2fc218a1bd#e9011f96b84615b63cd8b5835e606a2fc218a1bd"
+source = "git+https://github.com/MystenLabs/mysten-sim.git?rev=48ed7409b8b8cc413fae4d9d9638a849282f81c7#48ed7409b8b8cc413fae4d9d9638a849282f81c7"
 dependencies = [
  "darling",
  "proc-macro2 1.0.54",
@@ -7928,8 +7928,8 @@ dependencies = [
 
 [[package]]
 name = "real_tokio"
-version = "1.27.0"
-source = "git+https://github.com/mystenmark/tokio-madsim-fork.git?rev=18a0ac61aea1c2da68b3b9483fc3bf4bc54a5eca#18a0ac61aea1c2da68b3b9483fc3bf4bc54a5eca"
+version = "1.28.1"
+source = "git+https://github.com/mystenmark/tokio-madsim-fork.git?rev=e4693500118d5e79ce098ee6dfc2c48f3ef19e45#e4693500118d5e79ce098ee6dfc2c48f3ef19e45"
 dependencies = [
  "autocfg",
  "bytes",
@@ -7940,8 +7940,8 @@ dependencies = [
  "pin-project-lite",
  "signal-hook-registry",
  "socket2",
- "tokio-macros 2.0.0 (git+https://github.com/mystenmark/tokio-madsim-fork.git?rev=18a0ac61aea1c2da68b3b9483fc3bf4bc54a5eca)",
- "windows-sys 0.45.0",
+ "tokio-macros 2.1.0 (git+https://github.com/mystenmark/tokio-madsim-fork.git?rev=e4693500118d5e79ce098ee6dfc2c48f3ef19e45)",
+ "windows-sys 0.48.0",
 ]
 
 [[package]]
@@ -11168,9 +11168,9 @@ checksum = "cda74da7e1a664f795bb1f8a87ec406fb89a02522cf6e50620d016add6dbbf5c"
 
 [[package]]
 name = "tokio"
-version = "1.27.0"
+version = "1.28.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d0de47a4eecbe11f498978a9b29d792f0d2692d1dd003650c24c76510e3bc001"
+checksum = "0aa32867d44e6f2ce3385e89dceb990188b8bb0fb25b0cf576647a6f98ac5105"
 dependencies = [
  "autocfg",
  "bytes",
@@ -11181,9 +11181,9 @@ dependencies = [
  "pin-project-lite",
  "signal-hook-registry",
  "socket2",
- "tokio-macros 2.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "tokio-macros 2.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "tracing",
- "windows-sys 0.45.0",
+ "windows-sys 0.48.0",
 ]
 
 [[package]]
@@ -11198,9 +11198,9 @@ dependencies = [
 
 [[package]]
 name = "tokio-macros"
-version = "2.0.0"
+version = "2.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "61a573bdc87985e9d6ddeed1b3d864e8a302c847e40d647746df2f1de209d1ce"
+checksum = "630bdcf245f78637c13ec01ffae6187cca34625e8c63150d424b59e55af2675e"
 dependencies = [
  "proc-macro2 1.0.54",
  "quote 1.0.26",
@@ -11209,8 +11209,8 @@ dependencies = [
 
 [[package]]
 name = "tokio-macros"
-version = "2.0.0"
-source = "git+https://github.com/mystenmark/tokio-madsim-fork.git?rev=18a0ac61aea1c2da68b3b9483fc3bf4bc54a5eca#18a0ac61aea1c2da68b3b9483fc3bf4bc54a5eca"
+version = "2.1.0"
+source = "git+https://github.com/mystenmark/tokio-madsim-fork.git?rev=e4693500118d5e79ce098ee6dfc2c48f3ef19e45#e4693500118d5e79ce098ee6dfc2c48f3ef19e45"
 dependencies = [
  "proc-macro2 1.0.54",
  "quote 1.0.26",
@@ -11307,7 +11307,7 @@ dependencies = [
 [[package]]
 name = "tokio-util"
 version = "0.7.7"
-source = "git+https://github.com/mystenmark/tokio-madsim-fork.git?rev=18a0ac61aea1c2da68b3b9483fc3bf4bc54a5eca#18a0ac61aea1c2da68b3b9483fc3bf4bc54a5eca"
+source = "git+https://github.com/mystenmark/tokio-madsim-fork.git?rev=e4693500118d5e79ce098ee6dfc2c48f3ef19e45#e4693500118d5e79ce098ee6dfc2c48f3ef19e45"
 dependencies = [
  "bytes",
  "futures-core",
@@ -13146,7 +13146,7 @@ dependencies = [
  "tinyvec_macros",
  "tokio",
  "tokio-io-timeout",
- "tokio-macros 2.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "tokio-macros 2.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "tokio-postgres",
  "tokio-postgres-rustls",
  "tokio-retry",
@@ -13233,9 +13233,7 @@ dependencies = [
  "winapi",
  "winapi-util",
  "windows-sys 0.42.0",
- "windows-sys 0.45.0",
  "windows-sys 0.48.0",
- "windows-targets 0.42.2",
  "windows-targets 0.48.0",
  "windows_x86_64_msvc 0.42.2",
  "windows_x86_64_msvc 0.48.0",
