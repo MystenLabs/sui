@@ -369,20 +369,24 @@ impl ProcessTransactionResult {
 #[derive(Clone)]
 pub struct AuthorityAggregator<A: Clone> {
     /// Our Sui committee.
+    /// Public for sui-benchmark.
     pub committee: Arc<Committee>,
     /// For more human readable metrics reporting.
     /// It's OK for this map to be empty or missing validators, it then defaults
     /// to use concise validator public keys.
-    pub validator_display_names: Arc<HashMap<AuthorityName, String>>,
+    validator_display_names: Arc<HashMap<AuthorityName, String>>,
     /// How to talk to this committee.
-    pub authority_clients: Arc<BTreeMap<AuthorityName, Arc<SafeClient<A>>>>,
+    /// Public for tests.
+    pub(crate) authority_clients: Arc<BTreeMap<AuthorityName, Arc<SafeClient<A>>>>,
     /// Metrics
+    /// Public for sui-benchmark.
     pub metrics: Arc<AuthAggMetrics>,
     /// Metric base for the purpose of creating new safe clients during reconfiguration.
+    /// Public for sui-benchmark.
     pub safe_client_metrics_base: SafeClientMetricsBase,
-    pub timeouts: TimeoutConfig,
+    timeouts: TimeoutConfig,
     /// Store here for clone during re-config.
-    pub committee_store: Arc<CommitteeStore>,
+    committee_store: Arc<CommitteeStore>,
 }
 
 impl<A: Clone> AuthorityAggregator<A> {
