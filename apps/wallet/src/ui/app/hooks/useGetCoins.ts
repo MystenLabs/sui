@@ -10,9 +10,9 @@ const MAX_COINS_PER_REQUEST = 100;
 // Fetch all coins for an address, this will keep calling the API until all coins are fetched
 export function useGetCoins(coinType: string, address?: SuiAddress | null) {
     const rpc = useRpcClient();
-    return useQuery(
-        ['get-coins', address, coinType],
-        async () => {
+    return useQuery({
+        queryKey: ['get-coins', address, coinType],
+        queryFn: async () => {
             let cursor: string | null = null;
             const allData: CoinStruct[] = [];
             // keep fetching until cursor is null or undefined
@@ -35,6 +35,6 @@ export function useGetCoins(coinType: string, address?: SuiAddress | null) {
 
             return allData;
         },
-        { enabled: !!address }
-    );
+        enabled: !!address,
+    });
 }

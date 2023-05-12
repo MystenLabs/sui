@@ -21,9 +21,11 @@ export default function CheckpointDetail() {
     const digestOrSequenceNumber = /^\d+$/.test(id!) ? parseInt(id!, 10) : id;
 
     const rpc = useRpcClient();
-    const { data, isError, isLoading } = useQuery(['checkpoints', id], () =>
-        rpc.getCheckpoint({ id: String(digestOrSequenceNumber!) })
-    );
+    const { data, isError, isLoading } = useQuery({
+        queryKey: ['checkpoints', digestOrSequenceNumber],
+        queryFn: () =>
+            rpc.getCheckpoint({ id: String(digestOrSequenceNumber!) }),
+    });
 
     if (isError)
         return (

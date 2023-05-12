@@ -39,18 +39,21 @@ const GRAPH_DURATIONS_MAP: Record<GraphDurationsType, number> = {
 
 function useHistoricalGasPrices() {
     const rpc = useRpcClient();
-    return useQuery<EpochGasInfo[]>(
-        ['get', 'last 30 epochs gas price'],
-        async () => {
+    return useQuery<EpochGasInfo[]>({
+        queryKey: ['get', 'last 30 epochs gas price'],
+        queryFn: async () => {
             // TODO: update this to get the gas price from the epoch itself rather than the previous one
             // once this is deployed https://github.com/MystenLabs/sui/pull/11388
             // every epoch contains the gas price for the next one
-            const epochs = (
-                await rpc.getEpochs({
-                    descendingOrder: true,
-                    limit: 31,
-                })
-            ).data.reverse();
+            const epochs = [
+                ...(
+                    await rpc.getEpochs({
+                        descendingOrder: true,
+                        limit: 31,
+                    })
+                ).data,
+            ].reverse();
+
             // remove the current epoch since it would have the gasPrice for the next one
             epochs.pop();
             return epochs.map((anEpoch) => ({
@@ -64,8 +67,8 @@ function useHistoricalGasPrices() {
                       )
                     : null,
             }));
-        }
-    );
+        },
+    });
 }
 
 function useGasPriceAverage(totalEpochs: number) {

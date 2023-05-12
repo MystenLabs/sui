@@ -22,14 +22,15 @@ export function useGetNormalizedMoveStruct(
 ) {
     const { packageId, module, struct, ...useQueryOptions } = options;
     const rpc = useRpcClient();
-    return useQuery(
-        ['normalized-struct', packageId, module, struct],
-        () =>
+    return useQuery({
+        queryKey: ['normalized-struct', packageId, module, struct],
+        queryFn: () =>
             rpc.getNormalizedMoveStruct({
                 package: normalizeSuiObjectId(packageId),
                 module,
                 struct,
             }),
-        { enabled: !!packageId && !!module && !!struct, ...useQueryOptions }
-    );
+        enabled: !!packageId && !!module && !!struct,
+        ...useQueryOptions,
+    });
 }
