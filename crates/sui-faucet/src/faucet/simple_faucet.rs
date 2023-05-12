@@ -914,6 +914,21 @@ mod tests {
         assert!(candidates.get(&tiny_coin_id).is_none());
     }
 
+    #[tokio::test]
+    async fn test_insufficient_balance_will_retry_success() {
+        let test_cluster = TestClusterBuilder::new().build().await.unwrap();
+        let address = test_cluster.get_address_0();
+        let mut context = test_cluster.wallet;
+        let mut gases = get_current_gases(address, &mut context).await;
+
+        // let bad_gas = gases.swap_remove(0);
+        // let gases = HashSet::from_iter(gases.into_iter().map(|gas| *gas.id()));
+        println!("{:?}", gases);
+    }
+
+    #[tokio::test]
+    async fn test_faucet_no_loop_forever() {}
+
     async fn test_basic_interface(faucet: &impl Faucet) {
         let recipient = SuiAddress::random_for_testing_only();
         let amounts = vec![1, 2, 3];
