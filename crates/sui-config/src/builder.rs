@@ -3,12 +3,12 @@
 
 use crate::genesis::{TokenAllocation, TokenDistributionScheduleBuilder};
 use crate::genesis_config::AccountConfig;
-use crate::node::StateDebugDumpConfig;
 use crate::node::{
     default_enable_index_processing, default_end_of_epoch_broadcast_channel_capacity,
     AuthorityKeyPairWithPath, DBCheckpointConfig, ExpensiveSafetyCheckConfig, KeyPairWithPath,
     DEFAULT_VALIDATOR_GAS_PRICE,
 };
+use crate::node::{StateDebugDumpConfig, DEFAULT_GRPC_CONCURRENCY_LIMIT};
 use crate::{
     genesis,
     genesis_config::{GenesisConfig, ValidatorConfigInfo},
@@ -438,8 +438,8 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
                     enable_event_processing: false,
                     enable_index_processing: default_enable_index_processing(),
                     genesis: crate::node::Genesis::new(genesis.clone()),
-                    grpc_load_shed: genesis_config.grpc_load_shed,
-                    grpc_concurrency_limit: genesis_config.grpc_concurrency_limit,
+                    grpc_load_shed: None,
+                    grpc_concurrency_limit: Some(DEFAULT_GRPC_CONCURRENCY_LIMIT),
                     p2p_config,
                     authority_store_pruning_config: AuthorityStorePruningConfig::validator_config(),
                     end_of_epoch_broadcast_channel_capacity:

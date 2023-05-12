@@ -16,9 +16,7 @@ use sui_types::crypto::{
 };
 
 use crate::genesis::{GenesisCeremonyParameters, TokenAllocation};
-use crate::node::{
-    DEFAULT_COMMISSION_RATE, DEFAULT_GRPC_CONCURRENCY_LIMIT, DEFAULT_VALIDATOR_GAS_PRICE,
-};
+use crate::node::{DEFAULT_COMMISSION_RATE, DEFAULT_VALIDATOR_GAS_PRICE};
 use crate::utils;
 use crate::Config;
 
@@ -86,8 +84,6 @@ pub struct GenesisConfig {
     pub validator_config_info: Option<Vec<ValidatorConfigInfo>>,
     pub parameters: GenesisCeremonyParameters,
     pub committee_size: usize,
-    pub grpc_load_shed: Option<bool>,
-    pub grpc_concurrency_limit: Option<usize>,
     pub accounts: Vec<AccountConfig>,
 }
 
@@ -380,8 +376,6 @@ impl GenesisConfig {
             validator_config_info: Some(validator_config_info),
             parameters,
             committee_size: ips.len(),
-            grpc_load_shed: None,
-            grpc_concurrency_limit: None,
             accounts: vec![account_config],
         }
     }
@@ -411,8 +405,6 @@ impl Default for GenesisConfig {
             validator_config_info: None,
             parameters: Default::default(),
             committee_size: 0, // default value indicates the field is not set
-            grpc_load_shed: None,
-            grpc_concurrency_limit: Some(DEFAULT_GRPC_CONCURRENCY_LIMIT),
             accounts: vec![],
         }
     }
