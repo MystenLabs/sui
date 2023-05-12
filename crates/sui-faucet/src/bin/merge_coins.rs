@@ -77,7 +77,6 @@ async fn _merge_coins(gas_coin: &str, mut wallet: WalletContext) -> Result<(), a
         .active_address()
         .map_err(|err| FaucetError::Wallet(err.to_string()))?;
     let client = wallet.get_client().await?;
-    // Pick a gas coin here that isn't in use by the faucet otherwise there will be some contention.
     let small_coins = wallet
         .gas_objects(active_address)
         .await

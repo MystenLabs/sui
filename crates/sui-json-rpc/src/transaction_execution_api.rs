@@ -28,6 +28,7 @@ use sui_types::quorum_driver_types::{
 use sui_types::signature::GenericSignature;
 use sui_types::sui_serde::BigInt;
 use sui_types::transaction::{Transaction, TransactionData, TransactionDataAPI, TransactionKind};
+use tracing::{error_span, Instrument};
 
 use crate::api::JsonRpcMetrics;
 use crate::api::WriteApiServer;
@@ -217,6 +218,7 @@ impl WriteApiServer for TransactionExecutionApi {
     ) -> RpcResult<SuiTransactionBlockResponse> {
         Ok(self
             .execute_transaction_block(tx_bytes, signatures, opts, request_type)
+            .instrument(error_span!("execute_transaction_block"))
             .await?)
     }
 
@@ -232,14 +234,19 @@ impl WriteApiServer for TransactionExecutionApi {
         Ok(self
             .state
             .dev_inspect_transaction_block(sender_address, tx_kind, gas_price.map(|i| *i))
-            .await?)
+            .instrument(error_span!("dev_inspect_transaction_block"))
+            .await
+            .map_err(Error::from)?)
     }
 
     async fn dry_run_transaction_block(
         &self,
         tx_bytes: Base64,
     ) -> RpcResult<DryRunTransactionBlockResponse> {
-        Ok(self.dry_run_transaction_block(tx_bytes).await?)
+        Ok(self
+            .dry_run_transaction_block(tx_bytes)
+            .instrument(error_span!("dry_run_transaction_block"))
+            .await?)
     }
 }
 

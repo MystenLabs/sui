@@ -17,9 +17,10 @@ move-binary-format.workspace = true
 tokio = { workspace = true, features = ["full"] }
 tracing = "0.1.36"
 
+sui-adapter = { path = "../../sui-execution/latest/sui-adapter", package = "sui-adapter-latest" }
+
 test-utils = { path = "../test-utils" }
 once_cell = "1.16"
-sui-adapter = { path = "../sui-adapter" }
 sui-core = { path = "../sui-core" }
 sui-protocol-config = { path = "../sui-protocol-config" }
 sui-types = { path = "../sui-types", features = ["fuzzing"] }

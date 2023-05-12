@@ -1082,11 +1082,13 @@ async fn test_reconfig_with_committee_change_stress() {
 async fn safe_mode_reconfig_test() {
     use sui_types::sui_system_state::advance_epoch_result_injection;
 
+    const EPOCH_DURATION: u64 = 10000;
+
     // Inject failure at epoch change 1 -> 2.
     advance_epoch_result_injection::set_override(Some((2, 3)));
 
     let test_cluster = TestClusterBuilder::new()
-        .with_epoch_duration_ms(3000)
+        .with_epoch_duration_ms(EPOCH_DURATION)
         .build()
         .await
         .unwrap();
@@ -1118,7 +1120,7 @@ async fn safe_mode_reconfig_test() {
     assert!(system_state.safe_mode());
     assert_eq!(system_state.epoch(), 2);
     // Check that time is properly set even in safe mode.
-    assert!(system_state.epoch_start_timestamp_ms() >= prev_epoch_start_timestamp + 5000);
+    assert!(system_state.epoch_start_timestamp_ms() >= prev_epoch_start_timestamp + EPOCH_DURATION);
 
     // Try a staking transaction.
     let validator_address = system_state

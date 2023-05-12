@@ -14,21 +14,29 @@ type CoinItemProps = {
 };
 
 export function CoinItem({ coinType, balance, isActive, usd }: CoinItemProps) {
-    const [formatted, symbol] = useFormatCoin(balance, coinType);
+    const [formatted, symbol, { data: coinMeta }] = useFormatCoin(
+        balance,
+        coinType
+    );
 
     return (
         <div className="flex gap-2.5 w-full justify-center items-center">
             <CoinIcon coinType={coinType} size={isActive ? 'sm' : 'md'} />
             <div className="flex flex-1 gap-1.5 justify-between">
                 <div className="flex flex-col gap-1.5">
-                    <Text variant="body" color="steel-darker" weight="semibold">
-                        {symbol} {isActive ? 'available' : ''}
+                    <Text
+                        variant="body"
+                        color="gray-90"
+                        weight="semibold"
+                        truncate
+                    >
+                        {coinMeta?.name || symbol} {isActive ? 'available' : ''}
                     </Text>
                     {!isActive ? (
                         <Text
                             variant="subtitle"
                             color="steel-dark"
-                            weight="semibold"
+                            weight="medium"
                         >
                             {symbol}
                         </Text>

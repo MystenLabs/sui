@@ -15,7 +15,7 @@ use std::{
 use sui_config::builder::{
     CommitteeConfig, ConfigBuilder, ProtocolVersionsConfig, SupportedProtocolVersionsCallback,
 };
-use sui_config::genesis_config::{AccountConfig, GenesisConfig, ValidatorConfigInfo};
+use sui_config::genesis_config::{AccountConfig, GenesisConfig, ValidatorGenesisConfig};
 use sui_config::node::DBCheckpointConfig;
 use sui_config::NetworkConfig;
 use sui_node::SuiNodeHandle;
@@ -90,7 +90,7 @@ impl<R> SwarmBuilder<R> {
         self
     }
 
-    pub fn with_validators(mut self, validators: Vec<ValidatorConfigInfo>) -> Self {
+    pub fn with_validators(mut self, validators: Vec<ValidatorGenesisConfig>) -> Self {
         self.committee = CommitteeConfig::Validators(validators);
         self
     }

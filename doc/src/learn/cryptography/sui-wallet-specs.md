@@ -2,7 +2,7 @@
 title: Sui Wallet Specifications - Keys and Addresses
 ---
 
-Sui Wallet adheres to widely accepted wallet specifications in the cryptocurrency industry, including [BIP-32](https://github.com/bitcoin/bips/blob/master/bip-0032.mediawiki) (and its variation, [SLIP-0010](https://github.com/satoshilabs/slips/blob/master/slip-0010.md)) and its variation [SLIP-0010](https://github.com/satoshilabs/slips/blob/master/slip-0010.md), [BIP-44](https://github.com/bitcoin/bips/blob/master/bip-0044.mediawiki), and [BIP-39](https://github.com/bitcoin/bips/blob/master/bip-0039.mediawiki), to facilitate key management for users. At present, Sui supports pure Ed25519, ECDSA Secp256k1, ECDSA Secp256r1, and [MultiSig](sui-multisig.md) for signed transactions.
+Sui Wallet adheres to widely accepted wallet specifications in the cryptocurrency industry, including [BIP-32](https://github.com/bitcoin/bips/blob/master/bip-0032.mediawiki) and its variation [SLIP-0010](https://github.com/satoshilabs/slips/blob/master/slip-0010.md), [BIP-44](https://github.com/bitcoin/bips/blob/master/bip-0044.mediawiki), and [BIP-39](https://github.com/bitcoin/bips/blob/master/bip-0039.mediawiki), to facilitate key management for users. At present, Sui supports pure Ed25519, ECDSA Secp256k1, ECDSA Secp256r1, and [MultiSig](sui-multisig.md) for signed transactions.
 
 
 ## Key Derivation Scheme

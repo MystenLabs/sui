@@ -26,6 +26,7 @@ pub use swarm::NetworkConfig;
 
 const SUI_DIR: &str = ".sui";
 pub const SUI_CONFIG_DIR: &str = "sui_config";
+pub const SUI_CLUSTER_TEST_CONFIG_DIR: &str = "sui_cluster_test_config";
 pub const SUI_NETWORK_CONFIG: &str = "network.yaml";
 pub const SUI_FULLNODE_CONFIG: &str = "fullnode.yaml";
 pub const SUI_CLIENT_CONFIG: &str = "client.yaml";
@@ -43,6 +44,25 @@ pub fn sui_config_dir() -> Result<PathBuf, anyhow::Error> {
         Some(config_env) => Ok(config_env.into()),
         None => match dirs::home_dir() {
             Some(v) => Ok(v.join(SUI_DIR).join(SUI_CONFIG_DIR)),
+            None => anyhow::bail!("Cannot obtain home directory path"),
+        },
+    }
+    .and_then(|dir| {
+        if !dir.exists() {
+            fs::create_dir_all(dir.clone())?;
+        }
+        Ok(dir)
+    })
+}
+
+pub fn sui_cluster_test_config_dir() -> Result<PathBuf, anyhow::Error> {
+    match std::env::var_os("SUI_CONFIG_DIR") {
+        Some(config_env) => Ok(config_env.into()),
+        None => match dirs::home_dir() {
+            Some(v) => Ok(v
+                .join(SUI_DIR)
+                .join(SUI_CONFIG_DIR)
+                .join(SUI_CLUSTER_TEST_CONFIG_DIR)),
             None => anyhow::bail!("Cannot obtain home directory path"),
         },
     }

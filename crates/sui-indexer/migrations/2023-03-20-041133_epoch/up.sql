@@ -1,6 +1,7 @@
 CREATE MATERIALIZED VIEW epoch_network_metrics as
 SELECT MAX(tps_30_days) as tps_30_days
-FROM (SELECT (((SUM(total_transactions) OVER w) - (FIRST_VALUE(total_transactions) OVER w))::float8 /
+FROM (SELECT (((SUM(total_successful_transactions + total_transaction_blocks - total_successful_transaction_blocks) OVER w) - 
+               (FIRST_VALUE(total_successful_transactions + total_transaction_blocks - total_successful_transaction_blocks) OVER w))::float8 /
               ((MAX(timestamp_ms) OVER w - MIN(timestamp_ms) OVER w)) *
               1000) AS tps_30_days
       FROM checkpoints

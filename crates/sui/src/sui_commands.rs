@@ -308,7 +308,7 @@ impl SuiCommand {
     }
 }
 
-async fn genesis(
+pub async fn genesis(
     from_config: Option<PathBuf>,
     write_config: Option<PathBuf>,
     working_dir: Option<PathBuf>,
@@ -413,27 +413,13 @@ async fn genesis(
         genesis_conf.parameters.epoch_duration_ms = epoch_duration_ms;
     }
     let mut network_config = if let Some(validators) = validator_info {
-        if genesis_conf.committee_size != 0 && genesis_conf.committee_size != validators.len() {
-            bail!(
-                "Committee size {} is different from the number of validators {}!",
-                genesis_conf.committee_size,
-                validators.len()
-            );
-        }
         builder
             .with_genesis_config(genesis_conf)
             .with_validators(validators)
             .build()
     } else {
         builder
-            .committee_size(
-                NonZeroUsize::new(if genesis_conf.committee_size != 0 {
-                    genesis_conf.committee_size
-                } else {
-                    DEFAULT_NUMBER_OF_AUTHORITIES
-                })
-                .unwrap(),
-            )
+            .committee_size(NonZeroUsize::new(DEFAULT_NUMBER_OF_AUTHORITIES).unwrap())
             .with_genesis_config(genesis_conf)
             .build()
     };

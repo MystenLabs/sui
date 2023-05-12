@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::fmt;
+use std::fmt::Write;
 use std::fmt::{Debug, Display, Formatter};
 use std::marker::PhantomData;
 use std::ops::Deref;
@@ -18,10 +19,13 @@ use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use serde_with::DisplayFromStr;
 use serde_with::{Bytes, DeserializeAs, SerializeAs};
-use std::fmt::Write;
+
 use sui_protocol_config::ProtocolVersion;
 
-use crate::{parse_sui_struct_tag, parse_sui_type_tag};
+use crate::{
+    parse_sui_struct_tag, parse_sui_type_tag, DEEPBOOK_ADDRESS, SUI_CLOCK_ADDRESS,
+    SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_ADDRESS, SUI_SYSTEM_STATE_ADDRESS,
+};
 
 #[inline]
 fn to_custom_error<'de, D, E>(e: E) -> D::Error
@@ -161,15 +165,26 @@ impl SerializeAs<StructTag> for SuiStructTag {
     }
 }
 
-fn to_sui_struct_tag_string(value: &StructTag) -> Result<String, fmt::Error> {
+const SUI_ADDRESSES: [AccountAddress; 7] = [
+    AccountAddress::ZERO,
+    AccountAddress::ONE,
+    SUI_FRAMEWORK_ADDRESS,
+    SUI_SYSTEM_ADDRESS,
+    DEEPBOOK_ADDRESS,
+    SUI_SYSTEM_STATE_ADDRESS,
+    SUI_CLOCK_ADDRESS,
+];
+/// Serialize StructTag as a string, retaining the leading zeros in the address.
+pub fn to_sui_struct_tag_string(value: &StructTag) -> Result<String, fmt::Error> {
     let mut f = String::new();
-    write!(
-        f,
-        "0x{}::{}::{}",
-        value.address.to_canonical_string(),
-        value.module,
-        value.name
-    )?;
+    // trim leading zeros if address is in SUI_ADDRESSES
+    let address = if SUI_ADDRESSES.contains(&value.address) {
+        value.address.short_str_lossless()
+    } else {
+        value.address.to_canonical_string()
+    };
+
+    write!(f, "0x{}::{}::{}", address, value.module, value.name)?;
     if let Some(first_ty) = value.type_params.first() {
         write!(f, "<")?;
         write!(f, "{}", to_sui_type_tag_string(first_ty)?)?;

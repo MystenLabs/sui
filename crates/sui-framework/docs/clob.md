@@ -8,11 +8,12 @@
 -  [Struct `PoolCreated`](#0xdee9_clob_PoolCreated)
 -  [Struct `OrderPlacedV2`](#0xdee9_clob_OrderPlacedV2)
 -  [Struct `OrderCanceled`](#0xdee9_clob_OrderCanceled)
--  [Struct `OrderFilled`](#0xdee9_clob_OrderFilled)
+-  [Struct `OrderFilledV2`](#0xdee9_clob_OrderFilledV2)
 -  [Struct `Order`](#0xdee9_clob_Order)
 -  [Struct `TickLevel`](#0xdee9_clob_TickLevel)
 -  [Resource `Pool`](#0xdee9_clob_Pool)
 -  [Struct `OrderPlaced`](#0xdee9_clob_OrderPlaced)
+-  [Struct `OrderFilled`](#0xdee9_clob_OrderFilled)
 -  [Constants](#@Constants_0)
 -  [Function `destroy_empty_level`](#0xdee9_clob_destroy_empty_level)
 -  [Function `create_account`](#0xdee9_clob_create_account)
@@ -32,6 +33,7 @@
 -  [Function `place_limit_order`](#0xdee9_clob_place_limit_order)
 -  [Function `order_is_bid`](#0xdee9_clob_order_is_bid)
 -  [Function `emit_order_canceled`](#0xdee9_clob_emit_order_canceled)
+-  [Function `emit_order_filled`](#0xdee9_clob_emit_order_filled)
 -  [Function `cancel_order`](#0xdee9_clob_cancel_order)
 -  [Function `remove_order`](#0xdee9_clob_remove_order)
 -  [Function `cancel_all_orders`](#0xdee9_clob_cancel_all_orders)
@@ -249,14 +251,14 @@ Emitted when a maker order is canceled.
 
 </details>
 
-<a name="0xdee9_clob_OrderFilled"></a>
+<a name="0xdee9_clob_OrderFilledV2"></a>
 
-## Struct `OrderFilled`
+## Struct `OrderFilledV2`
 
 Emitted only when a maker order is filled.
 
 
-<pre><code><b>struct</b> <a href="clob.md#0xdee9_clob_OrderFilled">OrderFilled</a>&lt;BaseAsset, QuoteAsset&gt; <b>has</b> <b>copy</b>, drop, store
+<pre><code><b>struct</b> <a href="clob.md#0xdee9_clob_OrderFilledV2">OrderFilledV2</a>&lt;BaseAsset, QuoteAsset&gt; <b>has</b> <b>copy</b>, drop, store
 </code></pre>
 
 
@@ -310,6 +312,18 @@ Emitted only when a maker order is filled.
 </dd>
 <dt>
 <code>price: u64</code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>taker_commission: u64</code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>maker_rebates: u64</code>
 </dt>
 <dd>
 
@@ -563,6 +577,76 @@ Deprecated since v1.0.0, use <code><a href="clob.md#0xdee9_clob_OrderPlacedV2">O
 </dd>
 <dt>
 <code>base_asset_quantity_placed: u64</code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>price: u64</code>
+</dt>
+<dd>
+
+</dd>
+</dl>
+
+
+</details>
+
+<a name="0xdee9_clob_OrderFilled"></a>
+
+## Struct `OrderFilled`
+
+Deprecated since v1.0.0, use <code><a href="clob.md#0xdee9_clob_OrderFilledV2">OrderFilledV2</a></code> instead.
+
+
+<pre><code><b>struct</b> <a href="clob.md#0xdee9_clob_OrderFilled">OrderFilled</a>&lt;BaseAsset, QuoteAsset&gt; <b>has</b> <b>copy</b>, drop, store
+</code></pre>
+
+
+
+<details>
+<summary>Fields</summary>
+
+
+<dl>
+<dt>
+<code>pool_id: <a href="../../../.././build/Sui/docs/object.md#0x2_object_ID">object::ID</a></code>
+</dt>
+<dd>
+ object ID of the pool the order was placed on
+</dd>
+<dt>
+<code>order_id: u64</code>
+</dt>
+<dd>
+ ID of the order within the pool
+</dd>
+<dt>
+<code>is_bid: bool</code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>owner: <a href="../../../.././build/Sui/docs/object.md#0x2_object_ID">object::ID</a></code>
+</dt>
+<dd>
+ object ID of the <code>AccountCap</code> that placed the order
+</dd>
+<dt>
+<code>total_quantity: u64</code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>base_asset_quantity_filled: u64</code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>base_asset_quantity_remaining: u64</code>
 </dt>
 <dd>
 
@@ -1396,16 +1480,15 @@ Deprecated since v1.0.0, use <code><a href="clob.md#0xdee9_clob_OrderPlacedV2">O
                 <a href="../../../.././build/Sui/docs/balance.md#0x2_balance_join">balance::join</a>(&<b>mut</b> pool.quote_asset_trading_fees, quote_balance_filled);
                 <a href="../../../.././build/Sui/docs/balance.md#0x2_balance_join">balance::join</a>(&<b>mut</b> base_balance_filled, locked_base_balance);
 
-                <a href="../../../.././build/Sui/docs/event.md#0x2_event_emit">event::emit</a>(<a href="clob.md#0xdee9_clob_OrderFilled">OrderFilled</a>&lt;BaseAsset, QuoteAsset&gt; {
-                    pool_id: *<a href="../../../.././build/Sui/docs/object.md#0x2_object_uid_as_inner">object::uid_as_inner</a>(&pool.id),
-                    order_id: maker_order.order_id,
-                    is_bid: <b>false</b>,
-                    owner: maker_order.owner,
-                    total_quantity: maker_order.quantity,
-                    base_asset_quantity_filled: filled_base_quantity,
-                    base_asset_quantity_remaining: maker_base_quantity,
-                    price: maker_order.price
-                })
+                <a href="clob.md#0xdee9_clob_emit_order_filled">emit_order_filled</a>&lt;BaseAsset, QuoteAsset&gt;(
+                    *<a href="../../../.././build/Sui/docs/object.md#0x2_object_uid_as_inner">object::uid_as_inner</a>(&pool.id),
+                    maker_order,
+                    filled_base_quantity,
+                    // taker_commission = filled_quote_quantity - filled_quote_quantity_without_commission
+                    // This guarantees that the subtraction will not underflow
+                    filled_quote_quantity - filled_quote_quantity_without_commission,
+                    maker_rebate
+                )
             };
 
             <b>if</b> (skip_order || maker_base_quantity == 0) {
@@ -1543,16 +1626,13 @@ Deprecated since v1.0.0, use <code><a href="clob.md#0xdee9_clob_OrderPlacedV2">O
                     ),
                 );
 
-                <a href="../../../.././build/Sui/docs/event.md#0x2_event_emit">event::emit</a>(<a href="clob.md#0xdee9_clob_OrderFilled">OrderFilled</a>&lt;BaseAsset, QuoteAsset&gt; {
-                    pool_id,
-                    order_id: maker_order.order_id,
-                    is_bid: <b>false</b>,
-                    owner: maker_order.owner,
-                    total_quantity: maker_order.quantity,
-                    base_asset_quantity_filled: filled_base_quantity,
-                    base_asset_quantity_remaining: maker_base_quantity,
-                    price: maker_order.price
-                })
+                <a href="clob.md#0xdee9_clob_emit_order_filled">emit_order_filled</a>&lt;BaseAsset, QuoteAsset&gt;(
+                    *<a href="../../../.././build/Sui/docs/object.md#0x2_object_uid_as_inner">object::uid_as_inner</a>(&pool.id),
+                    maker_order,
+                    filled_base_quantity,
+                    taker_commission,
+                    maker_rebate
+                );
             };
 
             <b>if</b> (skip_order || maker_base_quantity == 0) {
@@ -1685,16 +1765,13 @@ Deprecated since v1.0.0, use <code><a href="clob.md#0xdee9_clob_OrderPlacedV2">O
                     ),
                 );
 
-                <a href="../../../.././build/Sui/docs/event.md#0x2_event_emit">event::emit</a>(<a href="clob.md#0xdee9_clob_OrderFilled">OrderFilled</a>&lt;BaseAsset, QuoteAsset&gt; {
-                    pool_id: *<a href="../../../.././build/Sui/docs/object.md#0x2_object_uid_as_inner">object::uid_as_inner</a>(&pool.id),
-                    order_id: maker_order.order_id,
-                    is_bid: <b>true</b>,
-                    owner: maker_order.owner,
-                    total_quantity: maker_order.quantity,
-                    base_asset_quantity_filled: filled_base_quantity,
-                    base_asset_quantity_remaining: maker_base_quantity,
-                    price: maker_order.price
-                })
+                <a href="clob.md#0xdee9_clob_emit_order_filled">emit_order_filled</a>&lt;BaseAsset, QuoteAsset&gt;(
+                    *<a href="../../../.././build/Sui/docs/object.md#0x2_object_uid_as_inner">object::uid_as_inner</a>(&pool.id),
+                    maker_order,
+                    filled_base_quantity,
+                    taker_commission,
+                    maker_rebate
+                );
             };
 
             <b>if</b> (skip_order || maker_base_quantity == 0) {
@@ -2087,6 +2164,49 @@ So please check that boolean value first before using the order id.
         owner: order.owner,
         base_asset_quantity_canceled: order.quantity,
         price: order.price
+    })
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0xdee9_clob_emit_order_filled"></a>
+
+## Function `emit_order_filled`
+
+
+
+<pre><code><b>fun</b> <a href="clob.md#0xdee9_clob_emit_order_filled">emit_order_filled</a>&lt;BaseAsset, QuoteAsset&gt;(pool_id: <a href="../../../.././build/Sui/docs/object.md#0x2_object_ID">object::ID</a>, order: &<a href="clob.md#0xdee9_clob_Order">clob::Order</a>, base_asset_quantity_filled: u64, taker_commission: u64, maker_rebates: u64)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>fun</b> <a href="clob.md#0xdee9_clob_emit_order_filled">emit_order_filled</a>&lt;BaseAsset, QuoteAsset&gt;(
+    pool_id: ID,
+    order: &<a href="clob.md#0xdee9_clob_Order">Order</a>,
+    base_asset_quantity_filled: u64,
+    taker_commission: u64,
+    maker_rebates: u64
+) {
+    <a href="../../../.././build/Sui/docs/event.md#0x2_event_emit">event::emit</a>(<a href="clob.md#0xdee9_clob_OrderFilledV2">OrderFilledV2</a>&lt;BaseAsset, QuoteAsset&gt; {
+        pool_id,
+        order_id: order.order_id,
+        is_bid: order.is_bid,
+        owner: order.owner,
+        total_quantity: order.quantity,
+        base_asset_quantity_filled,
+        // order.quantity = base_asset_quantity_filled + base_asset_quantity_remaining
+        // This guarantees that the subtraction will not underflow
+        base_asset_quantity_remaining: order.quantity - base_asset_quantity_filled,
+        price: order.price,
+        taker_commission,
+        maker_rebates
     })
 }
 </code></pre>

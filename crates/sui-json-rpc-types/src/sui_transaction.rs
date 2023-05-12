@@ -24,7 +24,7 @@ use sui_types::base_types::{
 };
 use sui_types::digests::{ObjectDigest, TransactionEventsDigest};
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI, TransactionEvents};
-use sui_types::error::{ExecutionError, SuiError};
+use sui_types::error::{ExecutionError, SuiError, SuiResult};
 use sui_types::execution_status::ExecutionStatus;
 use sui_types::gas::GasCostSummary;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
@@ -706,7 +706,7 @@ impl SuiTransactionBlockEvents {
         tx_digest: TransactionDigest,
         timestamp_ms: Option<u64>,
         resolver: &impl GetModule,
-    ) -> Result<Self, SuiError> {
+    ) -> SuiResult<Self> {
         Ok(Self {
             data: events
                 .data
@@ -761,7 +761,7 @@ impl DevInspectResults {
         events: TransactionEvents,
         return_values: Result<Vec<ExecutionResult>, ExecutionError>,
         resolver: &impl GetModule,
-    ) -> Result<Self, anyhow::Error> {
+    ) -> SuiResult<Self> {
         let tx_digest = *effects.transaction_digest();
         let mut error = None;
         let mut results = None;

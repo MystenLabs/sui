@@ -62,7 +62,7 @@ export function InputsCard({ inputs }: InputsCardProps) {
                                 {key}
                             </Text>
 
-                            <div className="max-w-[66%] break-all">
+                            <div className="max-w-[66%] break-all text-right">
                                 <Text
                                     variant="pBody/medium"
                                     color="steel-darker"
