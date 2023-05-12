@@ -23,15 +23,17 @@ function getExplorerUrl(
     const base =
         apiEnv === API_ENV.local
             ? 'http://localhost:3000/'
-            : 'https://explorer.sui.io/';
+            : 'https://suiexplorer.com/';
 
     const explorerEnv =
         apiEnv === 'customRPC' ? customRPC : API_ENV_TO_EXPLORER_ENV[apiEnv];
 
     const url = new URL(path, base);
     const searchParams = new URLSearchParams(url.search);
-    if (explorerEnv) searchParams.set('network', explorerEnv);
-
+    if (explorerEnv) {
+        searchParams.set('network', explorerEnv);
+        url.search = searchParams.toString();
+    }
     return url.href;
 }
 
