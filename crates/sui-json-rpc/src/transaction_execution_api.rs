@@ -109,7 +109,8 @@ impl TransactionExecutionApi {
                 request_type,
             }
         ))
-        .await??;
+        .await?
+        .map_err(Error::from)?;
         drop(orch_timer);
 
         let _post_orch_timer = self.metrics.post_orchestrator_latency_ms.start_timer();
