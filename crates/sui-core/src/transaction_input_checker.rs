@@ -4,7 +4,6 @@
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::authority::AuthorityStore;
 use crate::transaction_signing_filter;
-use move_bytecode_verifier::meter::BoundMeter;
 use std::collections::{BTreeMap, HashSet};
 use std::sync::Arc;
 use sui_adapter::adapter::default_verifier_config;
@@ -28,6 +27,7 @@ use sui_types::{
     object::{Object, Owner},
 };
 use sui_types::{SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION};
+use sui_verifier::meter::SuiVerifierMeter;
 use tracing::instrument;
 
 checked_arithmetic! {
@@ -415,7 +415,7 @@ pub fn check_non_system_packages_to_be_published(
         let metered_verifier_config =
             default_verifier_config(protocol_config, true /* enable metering */);
         // Use the same meter for all packages
-        let mut meter = BoundMeter::new(&metered_verifier_config);
+        let mut meter = SuiVerifierMeter::new(&metered_verifier_config);
         if let TransactionKind::ProgrammableTransaction(pt) = transaction.kind() {
             // Measure time for verifying all packages in the PTB
             let shared_meter_verifier_timer = metrics.verifier_runtime_per_ptb_success_latency.start_timer();

@@ -9,6 +9,10 @@ use std::ops::Mul;
 /// Scope of meterinng
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Scope {
+    // Metering is for transaction level
+    Transaction,
+    // Metering is for package level
+    Package,
     // Metering is for module level
     Module,
     // Metering is for function level
