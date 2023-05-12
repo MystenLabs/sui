@@ -35,7 +35,12 @@ function ValidatorDetails() {
 
     const validatorData = useMemo(() => {
         if (!data) return null;
-        return data.activeValidators.find((av) => av.suiAddress === id) || null;
+        return (
+            data.activeValidators.find(
+                ({ suiAddress, stakingPoolId }) =>
+                    suiAddress === id || stakingPoolId === id
+            ) || null
+        );
     }, [id, data]);
 
     const atRiskRemainingEpochs = getAtRiskRemainingEpochs(data, id);

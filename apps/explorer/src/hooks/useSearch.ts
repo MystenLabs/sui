@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useRpcClient } from '@mysten/core';
+import { useRpcClient, useGetSystemState } from '@mysten/core';
 import {
     isValidTransactionDigest,
     isValidSuiAddress,
@@ -11,6 +11,7 @@ import {
     SuiObjectData,
     type JsonRpcProvider,
     getTransactionDigest,
+    type SuiSystemStateSummary,
 } from '@mysten/sui.js';
 import { useQuery } from '@tanstack/react-query';
 
@@ -108,8 +109,41 @@ const getResultsForAddress = async (rpc: JsonRpcProvider, query: string) => {
     };
 };
 
+// Query for validator by pool id or sui address.
+const getResultsForValidatorByPoolIdOrSuiAddress = async (
+    systemStateSummery: SuiSystemStateSummary | null,
+    query: string
+) => {
+    const normalized = normalizeSuiObjectId(query);
+    if (
+        (!isValidSuiAddress(normalized) && !isValidSuiObjectId(normalized)) ||
+        !systemStateSummery
+    )
+        return null;
+
+    // find validator by pool id or sui address
+    const validator = systemStateSummery.activeValidators?.find(
+        ({ stakingPoolId, suiAddress }) =>
+            stakingPoolId === normalized || suiAddress === query
+    );
+
+    if (!validator) return null;
+
+    return {
+        label: 'validator',
+        results: [
+            {
+                id: validator.suiAddress || validator.stakingPoolId,
+                label: normalized,
+                type: 'validator',
+            },
+        ],
+    };
+};
+
 export function useSearch(query: string) {
     const rpc = useRpcClient();
+    const { data: systemStateSummery } = useGetSystemState();
 
     return useQuery(
         ['search', query],
@@ -120,6 +154,10 @@ export function useSearch(query: string) {
                     getResultsForCheckpoint(rpc, query),
                     getResultsForAddress(rpc, query),
                     getResultsForObject(rpc, query),
+                    getResultsForValidatorByPoolIdOrSuiAddress(
+                        systemStateSummery || null,
+                        query
+                    ),
                 ])
             ).filter(
                 (r) => r.status === 'fulfilled' && r.value
