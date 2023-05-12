@@ -479,34 +479,6 @@ where
                     }
                 });
 
-                // MUSTFIX(gegaowp): temp. turn off tx index table commit to reduce short-term storage consumption.
-                // this include recipients, input_objects and move_calls.
-                // let transactions_handler = self.clone();
-                // spawn_monitored_task!(async move {
-                //     let mut transaction_index_tables_commit_res = transactions_handler
-                //         .state
-                //         .persist_transaction_index_tables(&input_objects, &move_calls, &recipients)
-                //         .await;
-                //     while let Err(e) = transaction_index_tables_commit_res {
-                //         warn!(
-                //             "Indexer transaction index tables commit failed with error: {:?}, retrying after {:?} milli-secs...",
-                //             e, DB_COMMIT_RETRY_INTERVAL_IN_MILLIS
-                //         );
-                //         tokio::time::sleep(std::time::Duration::from_millis(
-                //             DB_COMMIT_RETRY_INTERVAL_IN_MILLIS,
-                //         ))
-                //         .await;
-                //         transaction_index_tables_commit_res = transactions_handler
-                //             .state
-                //             .persist_transaction_index_tables(
-                //                 &input_objects,
-                //                 &move_calls,
-                //                 &recipients,
-                //             )
-                //             .await;
-                //     }
-                // });
-
                 let checkpoint_tx_db_guard =
                     self.metrics.checkpoint_db_commit_latency.start_timer();
                 let mut checkpoint_tx_commit_res = self
@@ -566,9 +538,9 @@ where
                     addresses: _,
                     active_addresses: _,
                     packages,
-                    input_objects: _,
+                    input_objects,
                     move_calls,
-                    recipients: _,
+                    recipients,
                 } = indexed_checkpoint;
                 let checkpoint_seq = checkpoint.sequence_number;
 
@@ -609,7 +581,11 @@ where
                         .await;
                         transaction_index_tables_commit_res = transactions_handler
                             .state
-                            .persist_transaction_index_tables(&[], &move_calls, &[])
+                            .persist_transaction_index_tables(
+                                &input_objects,
+                                &move_calls,
+                                &recipients,
+                            )
                             .await;
                     }
                 });
