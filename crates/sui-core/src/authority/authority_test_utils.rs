@@ -5,6 +5,7 @@
 use crate::checkpoints::CheckpointServiceNoop;
 use crate::consensus_handler::SequencedConsensusTransaction;
 use fastcrypto::hash::MultisetHash;
+use fastcrypto::traits::KeyPair;
 use move_core_types::account_address::AccountAddress;
 use move_symbol_pool::Symbol;
 use sui_move_build::{BuildConfig, CompiledPackage};
@@ -14,7 +15,7 @@ use sui_types::move_package::UpgradePolicy;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::utils::to_sender_signed_transaction;
 use sui_types::{
-    crypto::{AccountKeyPair, AuthorityKeyPair, KeypairTraits},
+    crypto::{AccountKeyPair, AuthorityKeyPair},
     transaction::VerifiedTransaction,
 };
 
@@ -159,7 +160,7 @@ pub async fn init_state_with_objects<I: IntoIterator<Item = Object>>(
     objects: I,
 ) -> Arc<AuthorityState> {
     let dir = tempfile::TempDir::new().unwrap();
-    let network_config = sui_config::builder::ConfigBuilder::new(&dir).build();
+    let network_config = sui_swarm_config::network_config_builder::ConfigBuilder::new(&dir).build();
     let genesis = network_config.genesis;
     let keypair = network_config.validator_configs[0]
         .protocol_key_pair()

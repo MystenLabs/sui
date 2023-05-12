@@ -21,10 +21,10 @@ use sui_config::node::{
     AuthorityStorePruningConfig, DBCheckpointConfig, ExpensiveSafetyCheckConfig,
 };
 use sui_config::transaction_deny_config::TransactionDenyConfig;
-use sui_config::NetworkConfig;
 use sui_macros::nondeterministic;
 use sui_protocol_config::{ProtocolConfig, SupportedProtocolVersions};
 use sui_storage::IndexStore;
+use sui_swarm_config::network_config::NetworkConfig;
 use sui_types::base_types::{AuthorityName, ObjectID};
 use sui_types::crypto::AuthorityKeyPair;
 use sui_types::error::SuiResult;
@@ -127,10 +127,11 @@ impl<'a> TestAuthorityBuilder<'a> {
     }
 
     pub async fn build(self) -> Arc<AuthorityState> {
-        let local_network_config = sui_config::builder::ConfigBuilder::new_with_temp_dir()
-            // TODO: change the default to 1000 instead after fixing tests.
-            .with_reference_gas_price(self.reference_gas_price.unwrap_or(1))
-            .build();
+        let local_network_config =
+            sui_swarm_config::network_config_builder::ConfigBuilder::new_with_temp_dir()
+                // TODO: change the default to 1000 instead after fixing tests.
+                .with_reference_gas_price(self.reference_gas_price.unwrap_or(1))
+                .build();
         let genesis = &self.genesis.unwrap_or(&local_network_config.genesis);
         let genesis_committee = genesis.committee().unwrap();
         let path = self.store_base_path.unwrap_or_else(|| {

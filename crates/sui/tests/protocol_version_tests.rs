@@ -11,7 +11,7 @@ use test_utils::authority::start_node;
 async fn test_validator_panics_on_unsupported_protocol_version() {
     let dir = tempfile::TempDir::new().unwrap();
     let latest_version = ProtocolVersion::MAX;
-    let network_config = sui_config::builder::ConfigBuilder::new(&dir)
+    let network_config = sui_swarm_config::network_config_builder::ConfigBuilder::new(&dir)
         .with_protocol_version(ProtocolVersion::new(latest_version.as_u64() + 1))
         .with_supported_protocol_versions(SupportedProtocolVersions::new_for_testing(
             latest_version.as_u64(),

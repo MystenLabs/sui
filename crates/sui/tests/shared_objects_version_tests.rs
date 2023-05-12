@@ -3,9 +3,9 @@
 
 use std::path::PathBuf;
 use std::time::Duration;
-use sui_config::NetworkConfig;
 use sui_macros::*;
 use sui_node::SuiNodeHandle;
+use sui_swarm_config::network_config::NetworkConfig;
 use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber};
 use sui_types::crypto::deterministic_random_account_key;

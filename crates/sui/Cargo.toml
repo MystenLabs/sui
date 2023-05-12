@@ -35,6 +35,8 @@ sui-adapter = { path = "../../sui-execution/latest/sui-adapter", package = "sui-
 sui-core = { path = "../sui-core" }
 sui-framework-snapshot = { path = "../sui-framework-snapshot" }
 sui-config = { path = "../sui-config" }
+sui-swarm-config = { path = "../sui-swarm-config" }
+sui-genesis-builder = { path = "../sui-genesis-builder" }
 sui-types = { path = "../sui-types" }
 sui-json = { path = "../sui-json" }
 sui-swarm = { path = "../sui-swarm" }

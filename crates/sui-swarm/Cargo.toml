@@ -18,6 +18,7 @@ tap = "1.0.1"
 prometheus = "0.13.3"
 
 sui-config = { path = "../sui-config" }
+sui-swarm-config = { path = "../sui-swarm-config" }
 sui-node = { path = "../sui-node" }
 sui-protocol-config = { path = "../sui-protocol-config" }
 sui-types = { path = "../sui-types" }
