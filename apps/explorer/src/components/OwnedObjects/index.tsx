@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useGetOwnedObjects } from '@mysten/core';
+import { useGetOwnedObjectsWithKiosks } from '@mysten/core';
 
 import OwnedObject from './OwnedObject';
 
@@ -10,10 +10,7 @@ import { LoadingSpinner } from '~/ui/LoadingSpinner';
 import { Pagination, useCursorPagination } from '~/ui/Pagination';
 
 export function OwnedObjects({ id }: { id: string }) {
-    const ownedObjects = useGetOwnedObjects(id, {
-        MatchNone: [{ StructType: '0x2::coin::Coin' }],
-    });
-
+    const ownedObjects = useGetOwnedObjectsWithKiosks({ address: id });
     const { data, isError, isFetching, pagination } =
         useCursorPagination(ownedObjects);
 
