@@ -411,9 +411,12 @@ impl AuthorityPerEpochStore {
         );
         let signature_verifier =
             SignatureVerifier::new(committee.clone(), signature_verifier_metrics);
-        assert!(epoch_start_configuration
-            .flags()
-            .contains(&EpochFlag::InMemoryCheckpointRoots));
+        let is_validator = committee.authority_index(&name).is_some();
+        if is_validator {
+            assert!(epoch_start_configuration
+                .flags()
+                .contains(&EpochFlag::InMemoryCheckpointRoots));
+        }
         let s = Arc::new(Self {
             committee,
             protocol_config,
