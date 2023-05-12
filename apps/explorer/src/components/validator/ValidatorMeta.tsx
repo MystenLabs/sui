@@ -6,6 +6,7 @@ import { type SuiValidatorSummary } from '@mysten/sui.js';
 
 import { StakeButton } from './StakeButton';
 
+import { CopyToClipboard } from '~/ui/CopyToClipboard';
 import { DescriptionList, DescriptionItem } from '~/ui/DescriptionList';
 import { Heading } from '~/ui/Heading';
 import { ImageIcon } from '~/ui/ImageIcon';
@@ -65,15 +66,29 @@ export function ValidatorMeta({ validatorData }: ValidatorMetaProps) {
                         </Text>
                     </DescriptionItem>
                     <DescriptionItem title="Pool ID" align="start">
-                        <Text variant="pBody/medium" color="steel-darker">
-                            {validatorData.stakingPoolId}
-                        </Text>
+                        <div className="flex gap-1">
+                            <Text variant="pBody/medium" color="steel-darker">
+                                {validatorData.stakingPoolId}
+                            </Text>
+                            <CopyToClipboard
+                                size="md"
+                                color="steel"
+                                copyText={validatorData.stakingPoolId}
+                            />
+                        </div>
                     </DescriptionItem>
                     <DescriptionItem title="Address">
-                        <AddressLink
-                            address={validatorData.suiAddress}
-                            noTruncate
-                        />
+                        <div className="flex gap-1">
+                            <AddressLink
+                                address={validatorData.suiAddress}
+                                noTruncate
+                            />
+                            <CopyToClipboard
+                                size="md"
+                                color="steel"
+                                copyText={validatorData.suiAddress}
+                            />
+                        </div>
                     </DescriptionItem>
                     <DescriptionItem title="Public Key" align="start">
                         <Text variant="pBody/medium" color="steel-darker">
