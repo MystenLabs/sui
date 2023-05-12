@@ -4,7 +4,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { ParentSize } from '@visx/responsive';
 import { TooltipWithBounds, useTooltip } from '@visx/tooltip';
-import React, { type ReactNode, useCallback, useMemo, useState } from 'react';
+import React, { type ReactNode, useCallback, useMemo } from 'react';
 
 import { WorldMap } from './WorldMap';
 import { type NodeLocation, type ValidatorMapData } from './types';
@@ -42,7 +42,7 @@ interface Props {
 // NOTE: This component is lazy imported, so it needs to be default exported:
 export default function ValidatorMap({ minHeight }: Props) {
     const [network] = useNetwork();
-    const [validatorCount, setValidatorCount] = useState<number>();
+
     const appsBe = useAppsBackend();
 
     const { data: nodeData, isSuccess } = useQuery(['node-map'], async () => {
@@ -80,21 +80,16 @@ export default function ValidatorMap({ minHeight }: Props) {
         data: validatorData,
         isLoading,
         isError,
-    } = useQuery(['validator-map'], async () =>
-        appsBe(
-            `validator-map`,
-            {
+    } = useQuery(
+        ['validator-map'],
+        async () =>
+            appsBe(`validator-map`, {
                 network: network.toLowerCase(),
-            },
-            {
-                cache: 'no-cache',
-            }
-        ).then((res) => {
-            const data = res as ValidatorMapData[];
-            setValidatorCount(data.length);
+            }).then((res) => res as ValidatorMapData[]),
+        {
             // Some validators will come back as null from the location API
-            return data.filter((validator) => validator);
-        })
+            select: (validators) => validators.filter((validator) => validator),
+        }
     );
 
     const { countryCount, validatorMap } = useMemo<{
@@ -190,8 +185,10 @@ export default function ValidatorMap({ minHeight }: Props) {
                             {
                                 // Fetch received response with no errors and the value was not null
                                 (!isError &&
-                                    validatorCount &&
-                                    numberFormatter.format(validatorCount)) ||
+                                    validatorData &&
+                                    numberFormatter.format(
+                                        validatorData.length
+                                    )) ||
                                     '--'
                             }
                         </NodeStat>
