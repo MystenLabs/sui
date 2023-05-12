@@ -282,7 +282,7 @@
                   "recipient": {
                     "AddressOwner": "0x7ba91ddc7e717cf708c937060f04048736ec33fb1746d999a5e58cd5c677ed80"
                   },
-                  "objectType": "0x0000000000000000000000000000000000000000000000000000000000000002::example::Object",
+                  "objectType": "0x2::example::Object",
                   "objectId": "0x4f82f1c8587b98d64c00bfb46c3843bd8bf6ccfa7c65a86138698cd1fdcac3dc",
                   "version": "2",
                   "digest": "B3xLC8EbyvTxy5pgiwTNUzHLa6kS7uwD6sZdErKB8F8f"
@@ -484,7 +484,7 @@
                   "recipient": {
                     "AddressOwner": "0x6a101e9a3af5c8070112f808648b36efbf8dee8a1a82de46d9504e96a1108a17"
                   },
-                  "objectType": "0x0000000000000000000000000000000000000000000000000000000000000002::example::Object",
+                  "objectType": "0x2::example::Object",
                   "objectId": "0x8ef76f56c399633a2eb310bca9124e5f2f38ce739eaacbb6600688804e078448",
                   "version": "2",
                   "digest": "7PsBHpUW6yfGNov2WrbVafLjgT9nYziQ3gVDbRq6zTbF"
@@ -1268,7 +1268,7 @@
                 "storageRebate": "100",
                 "content": {
                   "dataType": "moveObject",
-                  "type": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>",
+                  "type": "0x2::coin::Coin<0x2::sui::SUI>",
                   "hasPublicTransfer": true,
                   "fields": {
                     "balance": "100000000",
@@ -2010,7 +2010,7 @@
                   "recipient": {
                     "AddressOwner": "0x8196d048b7a6d04c8edc89579d86fd3fc90c52f9a14c6b812b94fe613c5bcebb"
                   },
-                  "objectType": "0x0000000000000000000000000000000000000000000000000000000000000002::example::Object",
+                  "objectType": "0x2::example::Object",
                   "objectId": "0x5eeb1d449e2516166d57d71fdeb154d0dc9ecdb7b30057d0a932684cac352cdc",
                   "version": "2",
                   "digest": "64UQ3a7m1mjWuzgyGoH8RnMyPGDN4XYTC9dS4qiSfdK4"
@@ -2102,7 +2102,7 @@
                   "storageRebate": "100",
                   "content": {
                     "dataType": "moveObject",
-                    "type": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>",
+                    "type": "0x2::coin::Coin<0x2::sui::SUI>",
                     "hasPublicTransfer": true,
                     "fields": {
                       "balance": "100000000",
@@ -2126,7 +2126,7 @@
                   "storageRebate": "100",
                   "content": {
                     "dataType": "moveObject",
-                    "type": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>",
+                    "type": "0x2::coin::Coin<0x2::sui::SUI>",
                     "hasPublicTransfer": true,
                     "fields": {
                       "balance": "100000000",
@@ -2150,7 +2150,7 @@
                   "storageRebate": "100",
                   "content": {
                     "dataType": "moveObject",
-                    "type": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>",
+                    "type": "0x2::coin::Coin<0x2::sui::SUI>",
                     "hasPublicTransfer": true,
                     "fields": {
                       "balance": "100000000",
@@ -2174,7 +2174,7 @@
                   "storageRebate": "100",
                   "content": {
                     "dataType": "moveObject",
-                    "type": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>",
+                    "type": "0x2::coin::Coin<0x2::sui::SUI>",
                     "hasPublicTransfer": true,
                     "fields": {
                       "balance": "100000000",
@@ -2198,7 +2198,7 @@
                   "storageRebate": "100",
                   "content": {
                     "dataType": "moveObject",
-                    "type": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>",
+                    "type": "0x2::coin::Coin<0x2::sui::SUI>",
                     "hasPublicTransfer": true,
                     "fields": {
                       "balance": "100000000",
@@ -2388,7 +2388,7 @@
                     "recipient": {
                       "AddressOwner": "0x0ad2c31e8c3681aa4f7d35488cf6bf1135d2fc8703690e085797c3e4f846a282"
                     },
-                    "objectType": "0x0000000000000000000000000000000000000000000000000000000000000002::example::Object",
+                    "objectType": "0x2::example::Object",
                     "objectId": "0x754946e181e00f4341a53b5e895ef8ec3c73d2378a0a11825e232fac1a70e20e",
                     "version": "2",
                     "digest": "zbXdxaWUbmKnKQfLLwiCVYe2nQyreC7JoKHrk8vY9aA"
@@ -2504,7 +2504,7 @@
                     "recipient": {
                       "AddressOwner": "0x2e84e81f871c47c3149e27b12500da884afdf5c30b19c017a0d10388c28ddd59"
                     },
-                    "objectType": "0x0000000000000000000000000000000000000000000000000000000000000002::example::Object",
+                    "objectType": "0x2::example::Object",
                     "objectId": "0x77a58e206acd19639c875a4fbecf3342b825c8384300ac7e3badc820a75b5742",
                     "version": "2",
                     "digest": "kLukTF3HAHvTW17s8ZHtVKZyWf4bSJb7SjZ5HuNeELk"
@@ -2620,7 +2620,7 @@
                     "recipient": {
                       "AddressOwner": "0xdcc85bada4a729d650f7762226432129780927838b06db0346808ffb0676099d"
                     },
-                    "objectType": "0x0000000000000000000000000000000000000000000000000000000000000002::example::Object",
+                    "objectType": "0x2::example::Object",
                     "objectId": "0xe0408b31759f57b69c52e09410a66f9a23c34be9913b6697a5e83e02e2a0fc74",
                     "version": "2",
                     "digest": "Azr7oPHAo6LZ9iPfHYjguY2BoVTZ9zwVArvUEJSwXKWW"
@@ -2713,7 +2713,7 @@
                 "storageRebate": "100",
                 "content": {
                   "dataType": "moveObject",
-                  "type": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>",
+                  "type": "0x2::coin::Coin<0x2::sui::SUI>",
                   "hasPublicTransfer": true,
                   "fields": {
                     "balance": "10000",
@@ -3239,7 +3239,7 @@
                 "objectId": "0xc8359b6b5e3bfeab524e5edaad3a204b4053745b2d45d1f00cd8d24e5b697607",
                 "version": "1",
                 "digest": "2VivvkBoFVwEg8oXq3tK9r3d3ybvMACtk9QwpFnkM6v2",
-                "type": "0x9::test::TestField",
+                "type": "0x0000000000000000000000000000000000000000000000000000000000000009::test::TestField",
                 "owner": {
                   "AddressOwner": "0xc055d5c23e2f6c69e6aacf5b4664b570cb20d4feace07fc863a2eef286c3e95e"
                 },
@@ -3452,7 +3452,7 @@
                 "filter": {
                   "MatchAll": [
                     {
-                      "StructType": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
+                      "StructType": "0x2::coin::Coin<0x2::sui::SUI>"
                     },
                     {
                       "AddressOwner": "0xa69bb635dcee0f33643b4729ae81730d55e5e26860fac6839ce2d7ed7e6f29d2"
@@ -3794,7 +3794,7 @@
                   "packageId": "0x28f9c59f430eaba84b8bee9b43a30f9cc83fa395759ca37c6e1ffc179184e98a",
                   "transactionModule": "test",
                   "sender": "0xc5db76052ab656e5f81853d0cf701cdbc8ebf27ab513fc6ef8c344406c78da3d",
-                  "type": "0x0000000000000000000000000000000000000000000000000000000000000003::test::Test<0x0000000000000000000000000000000000000000000000000000000000000003::test::Test>",
+                  "type": "0x3::test::Test<0x3::test::Test>",
                   "parsedJson": "some_value",
                   "bcs": ""
                 },
@@ -3806,7 +3806,7 @@
                   "packageId": "0x28f9c59f430eaba84b8bee9b43a30f9cc83fa395759ca37c6e1ffc179184e98a",
                   "transactionModule": "test",
                   "sender": "0x5ad3a5fcc295dc8803c15989a62d33ee859014cfd5e91c13a481370240e39246",
-                  "type": "0x0000000000000000000000000000000000000000000000000000000000000003::test::Test<0x0000000000000000000000000000000000000000000000000000000000000003::test::Test>",
+                  "type": "0x3::test::Test<0x3::test::Test>",
                   "parsedJson": "some_value",
                   "bcs": ""
                 },
@@ -3818,7 +3818,7 @@
                   "packageId": "0x28f9c59f430eaba84b8bee9b43a30f9cc83fa395759ca37c6e1ffc179184e98a",
                   "transactionModule": "test",
                   "sender": "0x4c329a203fb9f0a8158aaab9b2a90044b26e14cc7fee4100fdcabda6d15c63c4",
-                  "type": "0x0000000000000000000000000000000000000000000000000000000000000003::test::Test<0x0000000000000000000000000000000000000000000000000000000000000003::test::Test>",
+                  "type": "0x3::test::Test<0x3::test::Test>",
                   "parsedJson": "some_value",
                   "bcs": ""
                 },
@@ -3830,7 +3830,7 @@
                   "packageId": "0x28f9c59f430eaba84b8bee9b43a30f9cc83fa395759ca37c6e1ffc179184e98a",
                   "transactionModule": "test",
                   "sender": "0xb49c45ae23f2b936495cd38b1a4b04010295baa75ac72e548aeecf2ce8b4e885",
-                  "type": "0x0000000000000000000000000000000000000000000000000000000000000003::test::Test<0x0000000000000000000000000000000000000000000000000000000000000003::test::Test>",
+                  "type": "0x3::test::Test<0x3::test::Test>",
                   "parsedJson": "some_value",
                   "bcs": ""
                 }
