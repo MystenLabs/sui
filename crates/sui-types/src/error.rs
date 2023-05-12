@@ -5,6 +5,8 @@
 use crate::{
     base_types::*,
     committee::{Committee, EpochId, StakeUnit},
+    digests::CheckpointContentsDigest,
+    messages_checkpoint::CheckpointSequenceNumber,
     object::Owner,
 };
 
@@ -206,11 +208,29 @@ pub enum UserInputError {
     #[error("Transaction is denied: {}", error)]
     TransactionDenied { error: String },
 
-    #[error("Feature is not yet supported: {0}")]
+    #[error("Feature is not supported: {0}")]
     Unsupported(String),
 
     #[error("Query transactions with move function input error: {0}")]
     MoveFunctionInputError(String),
+
+    #[error("Verified checkpoint not found for sequence number: {0}")]
+    VerifiedCheckpointNotFound(CheckpointSequenceNumber),
+
+    #[error("Verified checkpoint not found for digest: {0}")]
+    VerifiedCheckpointDigestNotFound(String),
+
+    #[error("Latest checkpoint sequence number not found")]
+    LatestCheckpointSequenceNumberNotFound,
+
+    #[error("Checkpoint contents not found for digest: {0}")]
+    CheckpointContentsNotFound(CheckpointContentsDigest),
+
+    #[error("Genesis transaction not found")]
+    GenesisTransactionNotFound,
+
+    #[error("Transaction {0} not found")]
+    TransactionCursorNotFound(u64),
 }
 
 #[derive(

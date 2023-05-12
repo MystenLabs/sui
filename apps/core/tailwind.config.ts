@@ -96,6 +96,7 @@ export default {
                 DEFAULT:
                     '0px 5px 30px rgba(86, 104, 115, 0.2), 0px 0px 0px 1px rgba(160, 182, 195, 0.08)',
                 glow: '0 0px 6px 4px rgba(213,247,238,1)',
+                drop: '0px 0px 10px rgba(111, 188, 240, 0.2)',
             },
             fontSize: {
                 // Text sizes:

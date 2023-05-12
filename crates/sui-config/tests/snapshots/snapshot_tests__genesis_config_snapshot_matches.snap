@@ -12,9 +12,6 @@ parameters:
   stake_subsidy_initial_distribution_amount: 1000000000000000
   stake_subsidy_period_length: 10
   stake_subsidy_decrease_rate: 1000
-committee_size: 0
-grpc_load_shed: ~
-grpc_concurrency_limit: 20000000000
 accounts:
   - address: "0x73a6b3c33e2d63383de5c6786cbaca231ff789f4c853af6d54cb883d8780adc0"
     gas_amounts:

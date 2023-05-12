@@ -1,5 +1,5 @@
 [package]
-name = "sui-verifier"
+name = "sui-verifier-latest"
 version = "0.1.0"
 edition = "2021"
 authors = ["Mysten Labs <eng@mystenlabs.com>"]
@@ -13,6 +13,6 @@ move-bytecode-utils.workspace = true
 move-bytecode-verifier.workspace = true
 move-core-types.workspace = true
 
-sui-types = { path = "../sui-types" }
-workspace-hack = { version = "0.1", path = "../workspace-hack" }
-sui-protocol-config = { path = "../sui-protocol-config" }
+sui-types = { path = "../../../crates/sui-types" }
+workspace-hack = { version = "0.1", path = "../../../crates/workspace-hack" }
+sui-protocol-config = { path = "../../../crates/sui-protocol-config" }

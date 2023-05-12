@@ -10,7 +10,6 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 
-use anyhow::anyhow;
 use itertools::Itertools;
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::{ModuleId, StructTag, TypeTag};
@@ -193,6 +192,8 @@ pub struct IndexStoreTables {
     event_by_move_module: DBMap<(ModuleId, EventId), EventIndex>,
     #[default_options_override_fn = "index_table_default_config"]
     event_by_move_event: DBMap<(StructTag, EventId), EventIndex>,
+    #[default_options_override_fn = "index_table_default_config"]
+    event_by_event_module: DBMap<(ModuleId, EventId), EventIndex>,
     #[default_options_override_fn = "index_table_default_config"]
     event_by_sender: DBMap<(SuiAddress, EventId), EventIndex>,
     #[default_options_override_fn = "index_table_default_config"]
@@ -571,6 +572,19 @@ impl IndexStore {
             }),
         )?;
 
+        batch.insert_batch(
+            &self.tables.event_by_event_module,
+            events.data.iter().enumerate().map(|(i, e)| {
+                (
+                    (
+                        ModuleId::new(e.type_.address, e.type_.module.clone()),
+                        (sequence, i),
+                    ),
+                    (event_digest, *digest, timestamp_ms),
+                )
+            }),
+        )?;
+
         // Loaded child objects table
         let loaded_child_objects: Vec<_> = loaded_child_objects.into_iter().collect();
         batch.insert_batch(
@@ -621,12 +635,12 @@ impl IndexStore {
         cursor: Option<TransactionDigest>,
         limit: Option<usize>,
         reverse: bool,
-    ) -> Result<Vec<TransactionDigest>, anyhow::Error> {
+    ) -> SuiResult<Vec<TransactionDigest>> {
         // Lookup TransactionDigest sequence number,
         let cursor = if let Some(cursor) = cursor {
             Some(
                 self.get_transaction_seq(&cursor)?
-                    .ok_or_else(|| anyhow!("Transaction [{cursor:?}] not found."))?,
+                    .ok_or(SuiError::TransactionNotFound { digest: cursor })?,
             )
         } else {
             None
@@ -653,7 +667,9 @@ impl IndexStore {
             }
             // NOTE: filter via checkpoint sequence number is implemented in
             // `get_transactions` of authority.rs.
-            Some(_) => Err(anyhow!("Unsupported filter: {:?}", filter)),
+            Some(_) => Err(SuiError::UserInputError {
+                error: UserInputError::Unsupported(format!("{:?}", filter)),
+            }),
             None => {
                 let iter = self.tables.transaction_order.iter();
 
@@ -1023,6 +1039,24 @@ impl IndexStore {
         Self::get_event_from_index(
             &self.tables.event_by_move_event,
             struct_name,
+            tx_seq,
+            event_seq,
+            limit,
+            descending,
+        )
+    }
+
+    pub fn events_by_move_event_module(
+        &self,
+        module_id: &ModuleId,
+        tx_seq: TxSequenceNumber,
+        event_seq: usize,
+        limit: usize,
+        descending: bool,
+    ) -> SuiResult<Vec<(TransactionEventsDigest, TransactionDigest, usize, u64)>> {
+        Self::get_event_from_index(
+            &self.tables.event_by_event_module,
+            module_id,
             tx_seq,
             event_seq,
             limit,

@@ -32,7 +32,6 @@
         "@mysten/sui.js": "workspace:*",
         "@mysten/wallet-kit": "workspace:*",
         "@sentry/react": "^7.47.0",
-        "@sentry/tracing": "^7.47.0",
         "@tanstack/react-query": "^4.29.3",
         "@tanstack/react-query-devtools": "^4.29.3",
         "@tanstack/react-table": "^8.8.5",

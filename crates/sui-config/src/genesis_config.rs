@@ -16,27 +16,161 @@ use sui_types::crypto::{
 };
 
 use crate::genesis::{GenesisCeremonyParameters, TokenAllocation};
-use crate::node::{
-    DEFAULT_COMMISSION_RATE, DEFAULT_GRPC_CONCURRENCY_LIMIT, DEFAULT_VALIDATOR_GAS_PRICE,
-};
+use crate::node::{DEFAULT_COMMISSION_RATE, DEFAULT_VALIDATOR_GAS_PRICE};
 use crate::utils;
 use crate::Config;
 
 // All information needed to build a NodeConfig for a validator.
 #[derive(Serialize, Deserialize)]
-pub struct ValidatorConfigInfo {
-    pub genesis_info: ValidatorGenesisInfo,
+pub struct ValidatorGenesisConfig {
+    pub key_pair: AuthorityKeyPair,
+    pub worker_key_pair: NetworkKeyPair,
+    pub account_key_pair: SuiKeyPair,
+    pub network_key_pair: NetworkKeyPair,
+    pub network_address: Multiaddr,
+    pub p2p_address: Multiaddr,
+    pub p2p_listen_address: Option<SocketAddr>,
+    #[serde(default = "default_socket_address")]
+    pub metrics_address: SocketAddr,
+    #[serde(default = "default_multiaddr_address")]
+    pub narwhal_metrics_address: Multiaddr,
+    pub gas_price: u64,
+    pub commission_rate: u64,
+    pub narwhal_primary_address: Multiaddr,
+    pub narwhal_worker_address: Multiaddr,
     pub consensus_address: Multiaddr,
     pub consensus_internal_worker_address: Option<Multiaddr>,
+    #[serde(default = "default_stake")]
+    pub stake: u64,
 }
 
-#[derive(Serialize, Deserialize)]
+impl ValidatorGenesisConfig {
+    pub const DEFAULT_NETWORK_PORT: u16 = 1000;
+    pub const DEFAULT_P2P_PORT: u16 = 2000;
+    pub const DEFAULT_P2P_LISTEN_PORT: u16 = 3000;
+    pub const DEFAULT_METRICS_PORT: u16 = 4000;
+    pub const DEFAULT_NARWHAL_METRICS_PORT: u16 = 5000;
+    pub const DEFAULT_NARWHAL_PRIMARY_PORT: u16 = 6000;
+    pub const DEFAULT_NARWHAL_WORKER_PORT: u16 = 7000;
+
+    pub fn from_localhost_for_testing(
+        key_pair: AuthorityKeyPair,
+        worker_key_pair: NetworkKeyPair,
+        account_key_pair: SuiKeyPair,
+        network_key_pair: NetworkKeyPair,
+        gas_price: u64,
+    ) -> Self {
+        Self {
+            key_pair,
+            worker_key_pair,
+            account_key_pair,
+            network_key_pair,
+            network_address: utils::new_tcp_network_address(),
+            p2p_address: utils::new_udp_network_address(),
+            p2p_listen_address: None,
+            metrics_address: utils::available_local_socket_address(),
+            narwhal_metrics_address: utils::new_tcp_network_address(),
+            gas_price,
+            commission_rate: DEFAULT_COMMISSION_RATE,
+            narwhal_primary_address: utils::new_udp_network_address(),
+            narwhal_worker_address: utils::new_udp_network_address(),
+            consensus_address: utils::new_tcp_network_address(),
+            consensus_internal_worker_address: None,
+            stake: sui_types::governance::VALIDATOR_LOW_STAKE_THRESHOLD_MIST,
+        }
+    }
+
+    pub fn from_base_ip(
+        key_pair: AuthorityKeyPair,
+        worker_key_pair: NetworkKeyPair,
+        account_key_pair: SuiKeyPair,
+        network_key_pair: NetworkKeyPair,
+        p2p_listen_address: Option<IpAddr>,
+        ip: String,
+        // Port offset allows running many SuiNodes inside the same simulator node, which is
+        // helpful for tests that don't use Swarm.
+        port_offset: usize,
+        gas_price: u64,
+    ) -> Self {
+        assert!(port_offset < 1000);
+        let port_offset: u16 = port_offset.try_into().unwrap();
+        let make_tcp_addr =
+            |port: u16| -> Multiaddr { format!("/ip4/{ip}/tcp/{port}/http").parse().unwrap() };
+        let make_udp_addr =
+            |port: u16| -> Multiaddr { format!("/ip4/{ip}/udp/{port}").parse().unwrap() };
+        let make_tcp_zero_addr =
+            |port: u16| -> Multiaddr { format!("/ip4/0.0.0.0/tcp/{port}/http").parse().unwrap() };
+
+        Self {
+            key_pair,
+            worker_key_pair,
+            account_key_pair,
+            network_key_pair,
+            network_address: make_tcp_addr(Self::DEFAULT_NETWORK_PORT + port_offset),
+            p2p_address: make_udp_addr(Self::DEFAULT_P2P_PORT + port_offset),
+            p2p_listen_address: p2p_listen_address
+                .map(|x| SocketAddr::new(x, Self::DEFAULT_P2P_LISTEN_PORT + port_offset)),
+            metrics_address: format!("0.0.0.0:{}", Self::DEFAULT_METRICS_PORT + port_offset)
+                .parse()
+                .unwrap(),
+            narwhal_metrics_address: make_tcp_zero_addr(
+                Self::DEFAULT_NARWHAL_METRICS_PORT + port_offset,
+            ),
+            gas_price,
+            commission_rate: DEFAULT_COMMISSION_RATE,
+            narwhal_primary_address: make_udp_addr(
+                Self::DEFAULT_NARWHAL_PRIMARY_PORT + port_offset,
+            ),
+            narwhal_worker_address: make_udp_addr(Self::DEFAULT_NARWHAL_WORKER_PORT + port_offset),
+            consensus_address: make_tcp_addr(4000 + port_offset),
+            consensus_internal_worker_address: None,
+            stake: sui_types::governance::VALIDATOR_LOW_STAKE_THRESHOLD_MIST,
+        }
+    }
+
+    pub fn new(
+        index: usize,
+        key_pair: AuthorityKeyPair,
+        worker_key_pair: NetworkKeyPair,
+        account_key_pair: SuiKeyPair,
+        network_key_pair: NetworkKeyPair,
+        gas_price: u64,
+    ) -> Self {
+        if cfg!(msim) {
+            // we will probably never run this many validators in a sim
+            let low_octet = index + 1;
+            if low_octet > 255 {
+                todo!("smarter IP formatting required");
+            }
+
+            let ip = format!("10.10.0.{}", low_octet);
+
+            Self::from_base_ip(
+                key_pair,
+                worker_key_pair,
+                account_key_pair,
+                network_key_pair,
+                None,
+                ip,
+                index,
+                gas_price,
+            )
+        } else {
+            Self::from_localhost_for_testing(
+                key_pair,
+                worker_key_pair,
+                account_key_pair,
+                network_key_pair,
+                gas_price,
+            )
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Default)]
 pub struct GenesisConfig {
-    pub validator_config_info: Option<Vec<ValidatorConfigInfo>>,
+    pub validator_config_info: Option<Vec<ValidatorGenesisConfig>>,
     pub parameters: GenesisCeremonyParameters,
-    pub committee_size: usize,
-    pub grpc_load_shed: Option<bool>,
-    pub grpc_concurrency_limit: Option<usize>,
     pub accounts: Vec<AccountConfig>,
 }
 
@@ -78,27 +212,6 @@ impl GenesisConfig {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug)]
-pub struct ValidatorGenesisInfo {
-    pub key_pair: AuthorityKeyPair,
-    pub worker_key_pair: NetworkKeyPair,
-    pub account_key_pair: SuiKeyPair,
-    pub network_key_pair: NetworkKeyPair,
-    pub network_address: Multiaddr,
-    pub p2p_address: Multiaddr,
-    pub p2p_listen_address: Option<SocketAddr>,
-    #[serde(default = "default_socket_address")]
-    pub metrics_address: SocketAddr,
-    #[serde(default = "default_multiaddr_address")]
-    pub narwhal_metrics_address: Multiaddr,
-    pub gas_price: u64,
-    pub commission_rate: u64,
-    pub narwhal_primary_address: Multiaddr,
-    pub narwhal_worker_address: Multiaddr,
-    #[serde(default = "default_stake")]
-    pub stake: u64,
-}
-
 fn default_socket_address() -> SocketAddr {
     utils::available_local_socket_address()
 }
@@ -112,87 +225,6 @@ fn default_multiaddr_address() -> Multiaddr {
 
 fn default_stake() -> u64 {
     sui_types::governance::VALIDATOR_LOW_STAKE_THRESHOLD_MIST
-}
-
-impl ValidatorGenesisInfo {
-    pub const DEFAULT_NETWORK_PORT: u16 = 1000;
-    pub const DEFAULT_P2P_PORT: u16 = 2000;
-    pub const DEFAULT_P2P_LISTEN_PORT: u16 = 3000;
-    pub const DEFAULT_METRICS_PORT: u16 = 4000;
-    pub const DEFAULT_NARWHAL_METRICS_PORT: u16 = 5000;
-    pub const DEFAULT_NARWHAL_PRIMARY_PORT: u16 = 6000;
-    pub const DEFAULT_NARWHAL_WORKER_PORT: u16 = 7000;
-
-    pub fn from_localhost_for_testing(
-        key_pair: AuthorityKeyPair,
-        worker_key_pair: NetworkKeyPair,
-        account_key_pair: SuiKeyPair,
-        network_key_pair: NetworkKeyPair,
-        gas_price: u64,
-    ) -> Self {
-        Self {
-            key_pair,
-            worker_key_pair,
-            account_key_pair,
-            network_key_pair,
-            network_address: utils::new_tcp_network_address(),
-            p2p_address: utils::new_udp_network_address(),
-            p2p_listen_address: None,
-            metrics_address: utils::available_local_socket_address(),
-            narwhal_metrics_address: utils::new_tcp_network_address(),
-            gas_price,
-            commission_rate: DEFAULT_COMMISSION_RATE,
-            narwhal_primary_address: utils::new_udp_network_address(),
-            narwhal_worker_address: utils::new_udp_network_address(),
-            stake: sui_types::governance::VALIDATOR_LOW_STAKE_THRESHOLD_MIST,
-        }
-    }
-
-    pub fn from_base_ip(
-        key_pair: AuthorityKeyPair,
-        worker_key_pair: NetworkKeyPair,
-        account_key_pair: SuiKeyPair,
-        network_key_pair: NetworkKeyPair,
-        p2p_listen_address: Option<IpAddr>,
-        ip: String,
-        // Port offset allows running many SuiNodes inside the same simulator node, which is
-        // helpful for tests that don't use Swarm.
-        port_offset: usize,
-        gas_price: u64,
-    ) -> Self {
-        assert!(port_offset < 1000);
-        let port_offset: u16 = port_offset.try_into().unwrap();
-        let make_tcp_addr =
-            |port: u16| -> Multiaddr { format!("/ip4/{ip}/tcp/{port}/http").parse().unwrap() };
-        let make_udp_addr =
-            |port: u16| -> Multiaddr { format!("/ip4/{ip}/udp/{port}").parse().unwrap() };
-        let make_tcp_zero_addr =
-            |port: u16| -> Multiaddr { format!("/ip4/0.0.0.0/tcp/{port}/http").parse().unwrap() };
-
-        ValidatorGenesisInfo {
-            key_pair,
-            worker_key_pair,
-            account_key_pair,
-            network_key_pair,
-            network_address: make_tcp_addr(Self::DEFAULT_NETWORK_PORT + port_offset),
-            p2p_address: make_udp_addr(Self::DEFAULT_P2P_PORT + port_offset),
-            p2p_listen_address: p2p_listen_address
-                .map(|x| SocketAddr::new(x, Self::DEFAULT_P2P_LISTEN_PORT + port_offset)),
-            metrics_address: format!("0.0.0.0:{}", Self::DEFAULT_METRICS_PORT + port_offset)
-                .parse()
-                .unwrap(),
-            narwhal_metrics_address: make_tcp_zero_addr(
-                Self::DEFAULT_NARWHAL_METRICS_PORT + port_offset,
-            ),
-            gas_price,
-            commission_rate: DEFAULT_COMMISSION_RATE,
-            narwhal_primary_address: make_udp_addr(
-                Self::DEFAULT_NARWHAL_PRIMARY_PORT + port_offset,
-            ),
-            narwhal_worker_address: make_udp_addr(Self::DEFAULT_NARWHAL_WORKER_PORT + port_offset),
-            stake: sui_types::governance::VALIDATOR_LOW_STAKE_THRESHOLD_MIST,
-        }
-    }
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -216,30 +248,16 @@ impl GenesisConfig {
 
     pub fn for_local_testing() -> Self {
         Self::custom_genesis(
-            DEFAULT_NUMBER_OF_AUTHORITIES,
             DEFAULT_NUMBER_OF_ACCOUNT,
             DEFAULT_NUMBER_OF_OBJECT_PER_ACCOUNT,
         )
     }
 
     pub fn for_local_testing_with_addresses(addresses: Vec<SuiAddress>) -> Self {
-        Self::custom_genesis_with_addresses(
-            DEFAULT_NUMBER_OF_AUTHORITIES,
-            addresses,
-            DEFAULT_NUMBER_OF_OBJECT_PER_ACCOUNT,
-        )
+        Self::custom_genesis_with_addresses(addresses, DEFAULT_NUMBER_OF_OBJECT_PER_ACCOUNT)
     }
 
-    pub fn custom_genesis(
-        num_authorities: usize,
-        num_accounts: usize,
-        num_objects_per_account: usize,
-    ) -> Self {
-        assert!(
-            num_authorities > 0,
-            "num_authorities should be larger than 0"
-        );
-
+    pub fn custom_genesis(num_accounts: usize, num_objects_per_account: usize) -> Self {
         let mut accounts = Vec::new();
         for _ in 0..num_accounts {
             accounts.push(AccountConfig {
@@ -255,15 +273,9 @@ impl GenesisConfig {
     }
 
     pub fn custom_genesis_with_addresses(
-        num_authorities: usize,
         addresses: Vec<SuiAddress>,
         num_objects_per_account: usize,
     ) -> Self {
-        assert!(
-            num_authorities > 0,
-            "num_authorities should be larger than 0"
-        );
-
         let mut accounts = Vec::new();
         for address in addresses {
             accounts.push(AccountConfig {
@@ -288,20 +300,16 @@ impl GenesisConfig {
         let validator_config_info: Vec<_> = ips
             .iter()
             .map(|ip| {
-                ValidatorConfigInfo {
-                    consensus_address: "/ip4/127.0.0.1/tcp/8083/http".parse().unwrap(),
-                    consensus_internal_worker_address: None,
-                    genesis_info: ValidatorGenesisInfo::from_base_ip(
-                        AuthorityKeyPair::generate(&mut rng), // key_pair
-                        NetworkKeyPair::generate(&mut rng),   // worker_key_pair
-                        SuiKeyPair::Ed25519(NetworkKeyPair::generate(&mut rng)), // account_key_pair
-                        NetworkKeyPair::generate(&mut rng),   // network_key_pair
-                        Some(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0))), // p2p_listen_address
-                        ip.to_string(),
-                        Self::BENCHMARKS_PORT_OFFSET,
-                        DEFAULT_VALIDATOR_GAS_PRICE,
-                    ),
-                }
+                ValidatorGenesisConfig::from_base_ip(
+                    AuthorityKeyPair::generate(&mut rng), // key_pair
+                    NetworkKeyPair::generate(&mut rng),   // worker_key_pair
+                    SuiKeyPair::Ed25519(NetworkKeyPair::generate(&mut rng)), // account_key_pair
+                    NetworkKeyPair::generate(&mut rng),   // network_key_pair
+                    Some(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0))), // p2p_listen_address
+                    ip.to_string(),
+                    Self::BENCHMARKS_PORT_OFFSET,
+                    DEFAULT_VALIDATOR_GAS_PRICE,
+                )
             })
             .collect();
 
@@ -328,9 +336,6 @@ impl GenesisConfig {
         GenesisConfig {
             validator_config_info: Some(validator_config_info),
             parameters,
-            committee_size: ips.len(),
-            grpc_load_shed: None,
-            grpc_concurrency_limit: None,
             accounts: vec![account_config],
         }
     }
@@ -351,18 +356,5 @@ impl GenesisConfig {
         (0..quantity)
             .map(|_| ObjectID::random_from_rng(&mut rng))
             .collect()
-    }
-}
-
-impl Default for GenesisConfig {
-    fn default() -> Self {
-        Self {
-            validator_config_info: None,
-            parameters: Default::default(),
-            committee_size: 0, // default value indicates the field is not set
-            grpc_load_shed: None,
-            grpc_concurrency_limit: Some(DEFAULT_GRPC_CONCURRENCY_LIMIT),
-            accounts: vec![],
-        }
     }
 }

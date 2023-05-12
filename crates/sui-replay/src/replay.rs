@@ -17,7 +17,6 @@ use prometheus::Registry;
 use similar::{ChangeTag, TextDiff};
 use std::collections::{BTreeMap, HashSet};
 use std::path::PathBuf;
-use std::str::FromStr;
 use std::sync::Arc;
 use std::sync::Mutex;
 use sui_adapter::adapter;
@@ -52,21 +51,14 @@ use sui_types::storage::get_module_by_id;
 use sui_types::storage::{BackingPackageStore, ChildObjectResolver, ObjectStore, ParentSync};
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemState;
 use sui_types::temporary_store::InnerTemporaryStore;
-use sui_types::transaction::CertifiedTransaction;
-use sui_types::transaction::Transaction;
-use sui_types::transaction::TransactionData;
-use sui_types::transaction::VerifiedTransaction;
-use sui_types::transaction::{InputObjectKind, InputObjects, TransactionKind};
-use sui_types::transaction::{SenderSignedData, TransactionDataAPI};
+use sui_types::transaction::{
+    CertifiedTransaction, InputObjectKind, InputObjects, SenderSignedData, Transaction,
+    TransactionData, TransactionDataAPI, TransactionKind, VerifiedTransaction,
+};
 use sui_types::DEEPBOOK_PACKAGE_ID;
 use tracing::{error, warn};
 
 // TODO: add persistent cache. But perf is good enough already.
-// TODO: handle safe mode
-
-// The logic here is very testnet specific now
-// For testnet, we derive the protocol version map with some nuances due to early safe mode speedrun
-// For other networks it should be much more straightforward
 
 #[derive(Debug)]
 pub struct ExecutionSandboxState {
@@ -222,8 +214,6 @@ pub struct LocalExec {
     pub metrics: Arc<LimitsMetrics>,
     // Used for fetching data from the network or remote store
     pub fetcher: Fetchers,
-    /// For special casing some logic
-    pub is_testnet: bool,
 
     // Retry policies due to RPC errors
     pub num_retries_for_timeout: u32,
@@ -324,12 +314,6 @@ impl LocalExec {
             rpc_client: client.clone(),
         };
 
-        let is_testnet = fetcher
-            .get_checkpoint_txs(0)
-            .await?
-            .iter()
-            .any(|tx| tx == &TransactionDigest::from_str(TESTNET_GENESIX_TX_DIGEST).unwrap());
-
         Ok(Self {
             client: Some(client),
             protocol_version_epoch_table: BTreeMap::new(),
@@ -339,7 +323,6 @@ impl LocalExec {
             metrics,
             storage: Storage::default(),
             fetcher: Fetchers::Remote(fetcher),
-            is_testnet,
             // TODO: make these configurable
             num_retries_for_timeout: RPC_TIMEOUT_ERR_NUM_RETRIES,
             sleep_period_for_timeout: RPC_TIMEOUT_ERR_SLEEP_RETRY_PERIOD,
@@ -355,8 +338,6 @@ impl LocalExec {
         let current_protocol_version = state.protocol_version;
         let fetcher = NodeStateDumpFetcher::from(state);
 
-        let is_testnet =false/* should not matter */;
-
         Ok(Self {
             client: None,
             protocol_version_epoch_table: BTreeMap::new(),
@@ -366,7 +347,6 @@ impl LocalExec {
             metrics,
             storage: Storage::default(),
             fetcher: Fetchers::NodeStateDump(fetcher),
-            is_testnet,
             // TODO: make these configurable
             num_retries_for_timeout: RPC_TIMEOUT_ERR_NUM_RETRIES,
             sleep_period_for_timeout: RPC_TIMEOUT_ERR_SLEEP_RETRY_PERIOD,
@@ -613,7 +593,7 @@ impl LocalExec {
 
         // Extract the epoch start timestamp
         let (epoch_start_timestamp, _) = self
-            .get_epoch_start_timestamp_and_rgp(tx_info.executed_epoch, self.is_testnet)
+            .get_epoch_start_timestamp_and_rgp(tx_info.executed_epoch)
             .await?;
 
         // Create the gas status
@@ -952,20 +932,8 @@ impl LocalExec {
                 .map(|q| (q.0, q.1))
                 .collect()),
         }
-
-        // if self.is_remote_replay() {
-        //     Ok(self
-        //         .protocol_version_system_package_table
-        //         .get(&epoch)
-        //         .ok_or(LocalExecError::FrameworkObjectVersionTableNotPopulated { epoch })?
-        //         .clone()
-        //         .into_iter()
-        //         .collect())
-        // }
     }
 
-    /// Very testnet specific now
-    /// This function is testnet specific and will be extended for other networs later
     pub async fn protocol_ver_to_epoch_map(
         &self,
     ) -> Result<BTreeMap<u64, ProtocolVersionSummary>, LocalExecError> {
@@ -973,7 +941,12 @@ impl LocalExec {
         let epoch_change_events = self.fetcher.get_epoch_change_events(false).await?;
 
         // Exception for Genesis: Protocol version 1 at epoch 0
-        let mut tx_digest = TransactionDigest::from_str(TESTNET_GENESIX_TX_DIGEST).unwrap();
+        let mut tx_digest = *self
+            .fetcher
+            .get_checkpoint_txs(0)
+            .await?
+            .get(0)
+            .expect("Genesis TX must be in first checkpoint");
         // Somehow the genesis TX did not emit any event, but we know it was the start of version 1
         // So we need to manually add this range
         let (mut start_epoch, mut start_protocol_version, mut start_checkpoint) = (0, 1, 0u64);
@@ -981,33 +954,8 @@ impl LocalExec {
         let (mut curr_epoch, mut curr_protocol_version, mut curr_checkpoint) =
             (start_epoch, start_protocol_version, start_checkpoint);
 
-        if self.is_testnet {
-            // Exception for incident: Protocol version 2 started epoch 742
-            // But this was in safe mode so no events emitted
-            // So we need to manually add this range
-            (curr_epoch, curr_protocol_version) = (742, 2);
-            curr_checkpoint = self
-                .fetcher
-                .get_transaction(&TransactionDigest::from_str(SAFE_MODE_TX_1_DIGEST).unwrap())
-                .await?
-                .checkpoint
-                .expect("Checkpoint should be present");
-            range_map.insert(
-                start_protocol_version,
-                ProtocolVersionSummary {
-                    protocol_version: start_protocol_version,
-                    epoch_start: start_epoch,
-                    epoch_end: curr_epoch - 1,
-                    checkpoint_start: start_checkpoint,
-                    checkpoint_end: curr_checkpoint - 1,
-                    epoch_change_tx: tx_digest,
-                },
-            );
-        }
-
         (start_epoch, start_protocol_version, start_checkpoint) =
             (curr_epoch, curr_protocol_version, curr_checkpoint);
-        tx_digest = TransactionDigest::from_str(SAFE_MODE_TX_1_DIGEST).unwrap();
 
         // This is the final tx digest for the epoch change. We need this to track the final checkpoint
         let mut end_epoch_tx_digest = tx_digest;
@@ -1015,11 +963,6 @@ impl LocalExec {
         for event in epoch_change_events {
             (curr_epoch, curr_protocol_version) = extract_epoch_and_version(event.clone())?;
             end_epoch_tx_digest = event.id.tx_digest;
-
-            if self.is_testnet && (curr_protocol_version < 3) {
-                // Ignore protocol versions before 3 as we've handled before the loop
-                continue;
-            }
 
             if start_protocol_version == curr_protocol_version {
                 // Same range
@@ -1264,15 +1207,12 @@ impl LocalExec {
         Ok((start_checkpoint, next_epoch_checkpoint - 1))
     }
 
-    /// Very testnet specific
-    /// This function is testnet specific and will be extended for mainnet later
     pub async fn get_epoch_start_timestamp_and_rgp(
         &self,
         epoch_id: u64,
-        is_testnet: bool,
     ) -> Result<(u64, u64), LocalExecError> {
         self.fetcher
-            .get_epoch_start_timestamp_and_rgp(epoch_id, is_testnet)
+            .get_epoch_start_timestamp_and_rgp(epoch_id)
             .await
     }
 
@@ -1312,9 +1252,8 @@ impl LocalExec {
         let epoch_id = effects.executed_epoch;
 
         // Extract the epoch start timestamp
-        let (epoch_start_timestamp, reference_gas_price) = self
-            .get_epoch_start_timestamp_and_rgp(epoch_id, self.is_testnet)
-            .await?;
+        let (epoch_start_timestamp, reference_gas_price) =
+            self.get_epoch_start_timestamp_and_rgp(epoch_id).await?;
 
         Ok(OnChainTransactionInfo {
             kind: tx_kind_orig.clone(),
@@ -1376,9 +1315,8 @@ impl LocalExec {
         let protocol_config =
             ProtocolConfig::get_for_version(dp.node_state_dump.protocol_version.into());
         // Extract the epoch start timestamp
-        let (epoch_start_timestamp, reference_gas_price) = self
-            .get_epoch_start_timestamp_and_rgp(epoch_id, self.is_testnet)
-            .await?;
+        let (epoch_start_timestamp, reference_gas_price) =
+            self.get_epoch_start_timestamp_and_rgp(epoch_id).await?;
 
         Ok(OnChainTransactionInfo {
             kind: tx_kind_orig.clone(),

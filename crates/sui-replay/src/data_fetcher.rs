@@ -67,7 +67,6 @@ pub(crate) trait DataFetcher {
     async fn get_epoch_start_timestamp_and_rgp(
         &self,
         epoch_id: u64,
-        is_testnet: bool,
     ) -> Result<(u64, u64), LocalExecError>;
 
     async fn get_epoch_change_events(&self, reverse: bool)
@@ -170,17 +169,10 @@ impl DataFetcher for Fetchers {
     async fn get_epoch_start_timestamp_and_rgp(
         &self,
         epoch_id: u64,
-        is_testnet: bool,
     ) -> Result<(u64, u64), LocalExecError> {
         match self {
-            Fetchers::Remote(q) => {
-                q.get_epoch_start_timestamp_and_rgp(epoch_id, is_testnet)
-                    .await
-            }
-            Fetchers::NodeStateDump(q) => {
-                q.get_epoch_start_timestamp_and_rgp(epoch_id, is_testnet)
-                    .await
-            }
+            Fetchers::Remote(q) => q.get_epoch_start_timestamp_and_rgp(epoch_id).await,
+            Fetchers::NodeStateDump(q) => q.get_epoch_start_timestamp_and_rgp(epoch_id).await,
         }
     }
 
@@ -330,18 +322,10 @@ impl DataFetcher for RemoteFetcher {
         Ok(txs[tx_idx])
     }
 
-    /// Very testnet specific
-    /// This function is testnet specific and will be extended for mainnet later
     async fn get_epoch_start_timestamp_and_rgp(
         &self,
         epoch_id: u64,
-        is_testnet: bool,
     ) -> Result<(u64, u64), LocalExecError> {
-        // Hack for testnet: for epoch in range [3, 742), we have no data, but no user TX was executed, so return dummy
-        if (is_testnet) && (2 < epoch_id) && (epoch_id < 742) {
-            return Ok((0, 1));
-        }
-
         let event = self
             .get_epoch_change_events(true)
             .await?
@@ -552,7 +536,6 @@ impl DataFetcher for NodeStateDumpFetcher {
     async fn get_epoch_start_timestamp_and_rgp(
         &self,
         _epoch_id: u64,
-        _is_testnet: bool,
     ) -> Result<(u64, u64), LocalExecError> {
         Ok((
             self.node_state_dump.epoch_start_timestamp_ms,

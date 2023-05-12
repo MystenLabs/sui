@@ -6,6 +6,7 @@ import { type SuiValidatorSummary } from '@mysten/sui.js';
 
 import { StakeButton } from './StakeButton';
 
+import { CopyToClipboard } from '~/ui/CopyToClipboard';
 import { DescriptionList, DescriptionItem } from '~/ui/DescriptionList';
 import { Heading } from '~/ui/Heading';
 import { ImageIcon } from '~/ui/ImageIcon';
@@ -25,7 +26,7 @@ export function ValidatorMeta({ validatorData }: ValidatorMetaProps) {
 
     return (
         <>
-            <div className="flex basis-full gap-5 border-r border-transparent border-r-gray-45 md:mr-7.5 md:basis-1/4">
+            <div className="flex basis-full gap-5 border-r border-transparent border-r-gray-45 md:mr-7.5 md:basis-1/3">
                 <ImageIcon
                     src={logo}
                     label={validatorName}
@@ -54,23 +55,42 @@ export function ValidatorMeta({ validatorData }: ValidatorMetaProps) {
             </div>
             <div className="min-w-0 basis-full break-words md:basis-2/3">
                 <DescriptionList>
-                    <DescriptionItem title="Description">
+                    <DescriptionItem title="Description" align="start">
                         <Text variant="pBody/medium" color="gray-90">
                             {description || '--'}
                         </Text>
                     </DescriptionItem>
-                    <DescriptionItem title="Location">
+                    <DescriptionItem title="Location" align="start">
                         <Text variant="pBody/medium" color="gray-90">
                             --
                         </Text>
                     </DescriptionItem>
-                    <DescriptionItem title="Address">
-                        <AddressLink
-                            address={validatorData.suiAddress}
-                            noTruncate
-                        />
+                    <DescriptionItem title="Pool ID" align="start">
+                        <div className="flex items-start gap-1 break-all">
+                            <Text variant="pBody/medium" color="steel-darker">
+                                {validatorData.stakingPoolId}
+                            </Text>
+                            <CopyToClipboard
+                                size="md"
+                                color="steel"
+                                copyText={validatorData.stakingPoolId}
+                            />
+                        </div>
                     </DescriptionItem>
-                    <DescriptionItem title="Public Key">
+                    <DescriptionItem title="Address" align="start">
+                        <div className="flex items-start gap-1">
+                            <AddressLink
+                                address={validatorData.suiAddress}
+                                noTruncate
+                            />
+                            <CopyToClipboard
+                                size="md"
+                                color="steel"
+                                copyText={validatorData.suiAddress}
+                            />
+                        </div>
+                    </DescriptionItem>
+                    <DescriptionItem title="Public Key" align="start">
                         <Text variant="pBody/medium" color="steel-darker">
                             {validatorPublicKey}
                         </Text>

@@ -1464,7 +1464,7 @@ impl AuthorityStore {
     pub fn multi_get_transaction_blocks(
         &self,
         tx_digests: &[TransactionDigest],
-    ) -> Result<Vec<Option<VerifiedTransaction>>, SuiError> {
+    ) -> SuiResult<Vec<Option<VerifiedTransaction>>> {
         Ok(self
             .perpetual_tables
             .transactions
