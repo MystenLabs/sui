@@ -22,8 +22,6 @@ bcs = "0.1.4"
 clap = { version = "3.2.17", features = ["derive"] }
 bip32 = "0.4.0"
 prettytable-rs = "0.10.0"
-git-version = "0.3.5"
-const-str = "0.5.3"
 rand = "0.8.5"
 tap = "1.0"
 inquire = "0.6.0"

@@ -58,6 +58,7 @@ pub mod object;
 pub mod programmable_transaction_builder;
 pub mod quorum_driver_types;
 pub mod signature;
+pub mod software_version;
 pub mod storage;
 pub mod sui_serde;
 pub mod sui_system_state;
