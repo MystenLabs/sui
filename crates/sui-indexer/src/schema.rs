@@ -27,6 +27,17 @@ diesel::table! {
 }
 
 diesel::table! {
+    address_stats (checkpoint) {
+        checkpoint -> Int8,
+        epoch -> Int8,
+        timestamp_ms -> Int8,
+        cumulative_addresses -> Int8,
+        cumulative_active_addresses -> Int8,
+        daily_active_addresses -> Int8,
+    }
+}
+
+diesel::table! {
     addresses (account_address) {
         account_address -> Varchar,
         first_appearance_tx -> Varchar,
@@ -312,6 +323,7 @@ diesel::table! {
 
 diesel::allow_tables_to_appear_in_same_query!(
     active_addresses,
+    address_stats,
     addresses,
     at_risk_validators,
     checkpoints,
