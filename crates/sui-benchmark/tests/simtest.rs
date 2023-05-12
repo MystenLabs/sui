@@ -254,16 +254,16 @@ mod test {
     }
 
     #[sim_test(config = "test_config()")]
-    async fn test_testnet_upgrade_compatibility() {
+    async fn test_upgrade_compatibility() {
         // This test is intended to test the compatibility of the latest protocol version with
-        // the previous protocol version on testnet. It does this by starting a testnet with
+        // the previous protocol version. It does this by starting a network with
         // the previous protocol version that this binary supports, and then upgrading the network
         // to the latest protocol version.
         let max_ver = ProtocolVersion::MAX.as_u64();
         let min_ver = max_ver - 1;
         let timeout = tokio::time::timeout(
             Duration::from_secs(1000),
-            test_protocol_upgrade_compatibility_impl(min_ver, "testnet"),
+            test_protocol_upgrade_compatibility_impl(min_ver),
         )
         .await;
         match timeout {
@@ -274,24 +274,10 @@ mod test {
         }
     }
 
-    #[sim_test(config = "test_config()")]
-    async fn test_mainnet_upgrade_compatibility() {
-        // This test is intended to test the compatibility of the latest protocol version with
-        // the previous protocol version on mainnet. It does this by starting a network with
-        // the previous protocol version that this binary supports, and then upgrading the network
-        // to the latest protocol version.
-        let max_ver = ProtocolVersion::MAX.as_u64();
-        let min_ver = max_ver - 1;
-        test_protocol_upgrade_compatibility_impl(min_ver, "mainnet").await;
-    }
-
-    async fn test_protocol_upgrade_compatibility_impl(
-        starting_version: u64,
-        network: &'static str,
-    ) {
+    async fn test_protocol_upgrade_compatibility_impl(starting_version: u64) {
         let max_ver = ProtocolVersion::MAX.as_u64();
         let init_framework =
-            sui_framework_snapshot::load_bytecode_snapshot(network, starting_version).unwrap();
+            sui_framework_snapshot::load_bytecode_snapshot(starting_version).unwrap();
         let mut test_cluster = init_test_cluster_builder(7, 5000)
             .with_protocol_version(ProtocolVersion::new(starting_version))
             .with_supported_protocol_versions(SupportedProtocolVersions::new_for_testing(
@@ -331,8 +317,7 @@ mod test {
                     break;
                 }
                 let next_version = version + 1;
-                let new_framework =
-                    sui_framework_snapshot::load_bytecode_snapshot(network, next_version);
+                let new_framework = sui_framework_snapshot::load_bytecode_snapshot(next_version);
                 let new_framework_ref: Vec<_> = match &new_framework {
                     Ok(f) => f.iter().collect(),
                     Err(_) => {
