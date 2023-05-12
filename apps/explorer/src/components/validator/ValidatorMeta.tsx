@@ -77,7 +77,7 @@ export function ValidatorMeta({ validatorData }: ValidatorMetaProps) {
                             />
                         </div>
                     </DescriptionItem>
-                    <DescriptionItem title="Address">
+                    <DescriptionItem title="Address" align="start">
                         <div className="flex gap-1">
                             <AddressLink
                                 address={validatorData.suiAddress}
