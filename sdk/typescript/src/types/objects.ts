@@ -16,6 +16,7 @@ import {
   union,
   is,
   nullable,
+  tuple,
 } from 'superstruct';
 import {
   ObjectId,
@@ -474,3 +475,31 @@ export type SuiObjectResponseQuery = {
   filter?: SuiObjectDataFilter;
   options?: SuiObjectDataOptions;
 };
+
+export const ObjectRead = union([
+  object({
+    details: SuiObjectData,
+    status: literal('VersionFound'),
+  }),
+  object({
+    details: ObjectId,
+    status: literal('ObjectNotExists'),
+  }),
+  object({
+    details: SuiObjectRef,
+    status: literal('ObjectDeleted'),
+  }),
+  object({
+    details: tuple([ObjectId, number()]),
+    status: literal('VersionNotFound'),
+  }),
+  object({
+    details: object({
+      asked_version: number(),
+      latest_version: number(),
+      object_id: ObjectId,
+    }),
+    status: literal('VersionTooHigh'),
+  }),
+]);
+export type ObjectRead = Infer<typeof ObjectRead>;
