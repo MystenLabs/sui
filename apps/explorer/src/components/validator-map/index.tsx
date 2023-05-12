@@ -92,7 +92,7 @@ export default function ValidatorMap({ minHeight }: Props) {
         ).then((res) => {
             const data = res as ValidatorMapData[];
             setValidatorCount(data.length);
-            // Some validators will come back as null from the API
+            // Some validators will come back as null from the location API
             return data.filter((validator) => validator);
         })
     );
