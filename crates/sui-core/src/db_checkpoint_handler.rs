@@ -22,13 +22,14 @@ use std::sync::Arc;
 use std::time::Duration;
 use sui_config::node::AuthorityStorePruningConfig;
 use sui_storage::mutex_table::RwLockTable;
-use sui_storage::object_store::util::{copy_recursively, delete_recursively, put};
+use sui_storage::object_store::util::{
+    copy_recursively, delete_recursively, path_to_filesystem, put,
+};
 use sui_storage::object_store::{ObjectStoreConfig, ObjectStoreType};
 use tokio::sync::oneshot;
 use tokio::sync::oneshot::Sender;
 use tracing::{debug, error, info, warn};
 use typed_store::rocks::MetricConf;
-use url::Url;
 
 pub const SUCCESS_MARKER: &str = "_SUCCESS";
 pub const TEST_MARKER: &str = "_TEST";
@@ -241,7 +242,7 @@ impl DBCheckpointHandler {
         if let Some((epoch, db_path)) = next_db_checkpoint_to_copy {
             if self.prune_and_compact_before_upload {
                 // Convert `db_path` to the local filesystem path to where db checkpoint is stored
-                let local_db_path = self.path_to_filesystem(db_path)?;
+                let local_db_path = path_to_filesystem(self.input_root_path.clone(), db_path)?;
                 // Invoke pruning and compaction on the db checkpoint
                 self.prune_and_compact(local_db_path, *epoch).await?;
             }
@@ -302,7 +303,7 @@ impl DBCheckpointHandler {
                 // upload completed marker
                 Ok(_) => {
                     info!("Deleting db checkpoint dir: {path} for epoch: {epoch}");
-                    let local_fs_path = self.path_to_filesystem(path)?;
+                    let local_fs_path = path_to_filesystem(self.input_root_path.clone(), path)?;
                     fs::remove_dir_all(&local_fs_path)?;
                 }
                 Err(_) => {
@@ -329,20 +330,6 @@ impl DBCheckpointHandler {
         }
         Ok(checkpoints_by_epoch)
     }
-    fn path_to_filesystem(&self, location: &Path) -> Result<PathBuf> {
-        // Convert an `object_store::path::Path` to `std::path::PathBuf`
-        let path = std::fs::canonicalize(&self.input_root_path)?;
-        let mut url = Url::from_file_path(&path)
-            .map_err(|_| anyhow!("Failed to parse input path: {}", path.display()))?;
-        url.path_segments_mut()
-            .map_err(|_| anyhow!("Failed to get path segments: {}", path.display()))?
-            .pop_if_empty()
-            .extend(location.parts());
-        let new_path = url
-            .to_file_path()
-            .map_err(|_| anyhow!("Failed to convert url to path: {}", url.as_str()))?;
-        Ok(new_path)
-    }
 }
 
 #[cfg(test)]
@@ -351,6 +338,7 @@ mod tests {
         DBCheckpointHandler, SUCCESS_MARKER, TEST_MARKER, UPLOAD_COMPLETED_MARKER,
     };
     use std::fs;
+    use sui_storage::object_store::util::path_to_filesystem;
     use sui_storage::object_store::{ObjectStoreConfig, ObjectStoreType};
     use tempfile::TempDir;
 
@@ -395,9 +383,11 @@ mod tests {
         assert!(!local_checkpoints_by_epoch.is_empty());
         assert_eq!(*local_checkpoints_by_epoch.first_key_value().unwrap().0, 0);
         assert_eq!(
-            db_checkpoint_handler
-                .path_to_filesystem(local_checkpoints_by_epoch.first_key_value().unwrap().1)
-                .unwrap(),
+            path_to_filesystem(
+                db_checkpoint_handler.input_root_path.clone(),
+                local_checkpoints_by_epoch.first_key_value().unwrap().1
+            )
+            .unwrap(),
             std::fs::canonicalize(local_epoch0_checkpoint.clone()).unwrap()
         );
         db_checkpoint_handler

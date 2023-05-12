@@ -4,6 +4,7 @@
 use super::*;
 use crate::authority::authority_store::LockDetailsWrapper;
 use rocksdb::Options;
+use serde::{Deserialize, Serialize};
 use std::path::Path;
 use sui_types::accumulator::Accumulator;
 use sui_types::base_types::SequenceNumber;
@@ -18,8 +19,8 @@ use typed_store::rocks::{
 use typed_store::traits::{Map, TableSummary, TypedStoreDebug};
 
 use crate::authority::authority_store_types::{
-    try_construct_object, ObjectContentDigest, StoreData, StoreMoveObjectWrapper, StoreObject,
-    StoreObjectValue, StoreObjectWrapper,
+    get_store_object_pair, try_construct_object, ObjectContentDigest, StoreData,
+    StoreMoveObjectWrapper, StoreObject, StoreObjectPair, StoreObjectValue, StoreObjectWrapper,
 };
 use crate::authority::epoch_start_configuration::EpochStartConfiguration;
 use typed_store_derive::DBMapUtils;
@@ -396,6 +397,18 @@ impl AuthorityPerpetualTables {
             .map_err(SuiError::StorageError)?;
         Ok(())
     }
+
+    pub fn insert_object_test_only(&self, object: Object) -> SuiResult {
+        let object_reference = object.compute_object_reference();
+        let StoreObjectPair(wrapper, _indirect_object) = get_store_object_pair(object, usize::MAX);
+        let mut wb = self.objects.batch();
+        wb.insert_batch(
+            &self.objects,
+            std::iter::once((ObjectKey::from(object_reference), wrapper)),
+        )?;
+        wb.write()?;
+        Ok(())
+    }
 }
 
 impl ObjectStore for AuthorityPerpetualTables {
@@ -436,6 +449,7 @@ pub struct LiveSetIter<'a> {
     prev: Option<(ObjectKey, StoreObjectWrapper)>,
 }
 
+#[derive(Eq, PartialEq, Debug, Clone, Deserialize, Serialize, Hash)]
 pub enum LiveObject {
     Normal(Object),
     Wrapped(ObjectKey),
@@ -453,6 +467,13 @@ impl LiveObject {
         match self {
             LiveObject::Normal(obj) => obj.version(),
             LiveObject::Wrapped(key) => key.1,
+        }
+    }
+
+    pub fn object_reference(&self) -> ObjectRef {
+        match self {
+            LiveObject::Normal(obj) => obj.compute_object_reference(),
+            LiveObject::Wrapped(key) => (key.0, key.1, ObjectDigest::OBJECT_DIGEST_WRAPPED),
         }
     }
 }
