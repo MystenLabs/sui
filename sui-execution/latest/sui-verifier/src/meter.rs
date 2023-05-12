@@ -19,7 +19,7 @@ impl SuiVerifierMeterBounds {
         if let Some(max_ticks) = self.max_ticks {
             let new_ticks = self.ticks.saturating_add(ticks);
             if new_ticks > max_ticks {
-                return Err(PartialVMError::new(StatusCode::CONSTRAINT_NOT_SATISFIED)
+                return Err(PartialVMError::new(StatusCode::PROGRAM_TOO_COMPLEX)
                     .with_message(format!(
                         "program too complex. Ticks exceeded `{}` will exceed limits: `{} current + {} new > {} max`)",
                         self.name, self.ticks, ticks, max_ticks
