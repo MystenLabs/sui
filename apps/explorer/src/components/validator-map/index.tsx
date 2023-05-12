@@ -4,13 +4,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { ParentSize } from '@visx/responsive';
 import { TooltipWithBounds, useTooltip } from '@visx/tooltip';
-import React, {
-    type ReactNode,
-    useCallback,
-    useMemo,
-    useState,
-    useEffect,
-} from 'react';
+import React, { type ReactNode, useCallback, useMemo, useState } from 'react';
 
 import { WorldMap } from './WorldMap';
 import { type NodeLocation, type ValidatorMapData } from './types';
@@ -48,10 +42,7 @@ interface Props {
 // NOTE: This component is lazy imported, so it needs to be default exported:
 export default function ValidatorMap({ minHeight }: Props) {
     const [network] = useNetwork();
-    const [validatorData, setValidatorData] = useState<ValidatorMapData[]>([]);
     const [validatorCount, setValidatorCount] = useState<number>();
-    const [isLoading, setIsLoading] = useState(false);
-    const [isError, setIsError] = useState(false);
     const appsBe = useAppsBackend();
 
     const { data: nodeData, isSuccess } = useQuery(['node-map'], async () => {
@@ -85,23 +76,26 @@ export default function ValidatorMap({ minHeight }: Props) {
         return count;
     }, [nodeData]);
 
-    useEffect(() => {
-        setIsLoading(true);
-        appsBe(`validator-map`, {
-            network: network.toLowerCase(),
+    const {
+        data: validatorData,
+        isLoading,
+        isError,
+    } = useQuery(['validator-map'], async () =>
+        appsBe(
+            `validator-map`,
+            {
+                network: network.toLowerCase(),
+            },
+            {
+                cache: 'no-cache',
+            }
+        ).then((res) => {
+            const data = res as ValidatorMapData[];
+            setValidatorCount(data.length);
+            // Some validators will come back as null from the API
+            return data.filter((validator) => validator);
         })
-            .then((res) => {
-                const data = res as ValidatorMapData[];
-                setValidatorCount(data.length);
-                // Some validators will come back as null from the API
-                const validatorResponse = data.filter((validator) => validator);
-                setValidatorData(validatorResponse);
-                setIsLoading(false);
-            })
-            .catch((err) => {
-                setIsError(true);
-            });
-    }, [appsBe, network]);
+    );
 
     const { countryCount, validatorMap } = useMemo<{
         countryCount: number | null;
