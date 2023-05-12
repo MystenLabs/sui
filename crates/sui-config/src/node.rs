@@ -419,6 +419,11 @@ pub struct AuthorityStorePruningConfig {
     /// pruner deletion method. If set to `true`, range deletion is utilized (recommended).
     /// Use `false` for point deletes.
     pub use_range_deletion: bool,
+    /// enables periodic background compaction for old SST files whose last modified time is
+    /// older than `periodic_compaction_threshold_days` days.
+    /// That ensures that all sst files eventually go through the compaction process
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub periodic_compaction_threshold_days: Option<usize>,
 }
 
 impl Default for AuthorityStorePruningConfig {
@@ -434,6 +439,7 @@ impl Default for AuthorityStorePruningConfig {
             max_checkpoints_in_batch: 10,
             max_transactions_in_batch: 1000,
             use_range_deletion: true,
+            periodic_compaction_threshold_days: None,
         }
     }
 }
@@ -451,6 +457,7 @@ impl AuthorityStorePruningConfig {
             max_checkpoints_in_batch: 10,
             max_transactions_in_batch: 1000,
             use_range_deletion: true,
+            periodic_compaction_threshold_days: None,
         }
     }
     pub fn fullnode_config() -> Self {
@@ -465,6 +472,7 @@ impl AuthorityStorePruningConfig {
             max_checkpoints_in_batch: 10,
             max_transactions_in_batch: 1000,
             use_range_deletion: true,
+            periodic_compaction_threshold_days: None,
         }
     }
 }
