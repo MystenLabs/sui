@@ -101,9 +101,7 @@ impl Bounds {
         if let Some(max) = self.max {
             let new_units = self.units.saturating_add(units);
             if new_units > max {
-                // TODO: change to a new status PROGRAM_TOO_COMPLEX once this is rolled out. For
-                // now we use an existing code to avoid breaking changes on potential rollback.
-                return Err(PartialVMError::new(StatusCode::CONSTRAINT_NOT_SATISFIED)
+                return Err(PartialVMError::new(StatusCode::PROGRAM_TOO_COMPLEX)
                     .with_message(format!(
                         "program too complex (in `{}` with `{} current + {} new > {} max`)",
                         self.name, self.units, units, max
