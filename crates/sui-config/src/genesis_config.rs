@@ -262,30 +262,16 @@ impl GenesisConfig {
 
     pub fn for_local_testing() -> Self {
         Self::custom_genesis(
-            DEFAULT_NUMBER_OF_AUTHORITIES,
             DEFAULT_NUMBER_OF_ACCOUNT,
             DEFAULT_NUMBER_OF_OBJECT_PER_ACCOUNT,
         )
     }
 
     pub fn for_local_testing_with_addresses(addresses: Vec<SuiAddress>) -> Self {
-        Self::custom_genesis_with_addresses(
-            DEFAULT_NUMBER_OF_AUTHORITIES,
-            addresses,
-            DEFAULT_NUMBER_OF_OBJECT_PER_ACCOUNT,
-        )
+        Self::custom_genesis_with_addresses(addresses, DEFAULT_NUMBER_OF_OBJECT_PER_ACCOUNT)
     }
 
-    pub fn custom_genesis(
-        num_authorities: usize,
-        num_accounts: usize,
-        num_objects_per_account: usize,
-    ) -> Self {
-        assert!(
-            num_authorities > 0,
-            "num_authorities should be larger than 0"
-        );
-
+    pub fn custom_genesis(num_accounts: usize, num_objects_per_account: usize) -> Self {
         let mut accounts = Vec::new();
         for _ in 0..num_accounts {
             accounts.push(AccountConfig {
@@ -301,15 +287,9 @@ impl GenesisConfig {
     }
 
     pub fn custom_genesis_with_addresses(
-        num_authorities: usize,
         addresses: Vec<SuiAddress>,
         num_objects_per_account: usize,
     ) -> Self {
-        assert!(
-            num_authorities > 0,
-            "num_authorities should be larger than 0"
-        );
-
         let mut accounts = Vec::new();
         for address in addresses {
             accounts.push(AccountConfig {
