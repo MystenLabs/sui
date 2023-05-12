@@ -4,11 +4,15 @@
 use self::db_dump::{dump_table, duplicate_objects_summary, list_tables, table_summary, StoreName};
 use self::index_search::{search_index, SearchRange};
 use crate::db_tool::db_dump::{compact, print_table_metadata};
+use anyhow::bail;
 use clap::Parser;
 use std::path::{Path, PathBuf};
 use sui_core::authority::authority_store_tables::AuthorityPerpetualTables;
 use sui_core::checkpoints::CheckpointStore;
-use sui_types::base_types::EpochId;
+use sui_types::base_types::{EpochId, ObjectID, SequenceNumber};
+use sui_types::digests::TransactionDigest;
+use sui_types::effects::TransactionEffectsAPI;
+use sui_types::storage::ObjectKey;
 use typed_store::rocks::MetricConf;
 pub mod db_dump;
 mod index_search;
@@ -22,8 +26,12 @@ pub enum DbToolCommand {
     IndexSearchCount(IndexSearchCountOptions),
     TableSummary(Options),
     DuplicatesSummary,
-    ResetDB,
     ListDBMetadata(Options),
+    PrintTransaction(PrintTransactionOptions),
+    RemoveObjectLock(RemoveObjectLockOptions),
+    RemoveTransaction(RemoveTransactionOptions),
+    ResetDB,
+    RewindCheckpointExecution(RewindCheckpointExecutionOptions),
     Compact,
 }
 
@@ -73,6 +81,46 @@ pub struct Options {
     epoch: Option<EpochId>,
 }
 
+#[derive(Parser)]
+#[clap(rename_all = "kebab-case")]
+pub struct PrintTransactionOptions {
+    #[clap(long, help = "The transaction digest to print")]
+    digest: TransactionDigest,
+}
+
+#[derive(Parser)]
+#[clap(rename_all = "kebab-case")]
+pub struct RemoveTransactionOptions {
+    #[clap(long, help = "The transaction digest to remove")]
+    digest: TransactionDigest,
+
+    #[clap(long)]
+    confirm: bool,
+}
+
+#[derive(Parser)]
+#[clap(rename_all = "kebab-case")]
+pub struct RemoveObjectLockOptions {
+    #[clap(long, help = "The object ID to remove")]
+    id: ObjectID,
+
+    #[clap(long, help = "The object version to remove")]
+    version: u64,
+
+    #[clap(long)]
+    confirm: bool,
+}
+
+#[derive(Parser)]
+#[clap(rename_all = "kebab-case")]
+pub struct RewindCheckpointExecutionOptions {
+    #[clap(long = "epoch")]
+    epoch: EpochId,
+
+    #[clap(long = "checkpoint-sequence-number")]
+    checkpoint_sequence_number: u64,
+}
+
 pub fn execute_db_tool_command(db_path: PathBuf, cmd: DbToolCommand) -> anyhow::Result<()> {
     match cmd {
         DbToolCommand::ListTables => print_db_all_tables(db_path),
@@ -88,9 +136,15 @@ pub fn execute_db_tool_command(db_path: PathBuf, cmd: DbToolCommand) -> anyhow::
             print_db_table_summary(d.store_name, d.epoch, db_path, &d.table_name)
         }
         DbToolCommand::DuplicatesSummary => print_db_duplicates_summary(db_path),
-        DbToolCommand::ResetDB => reset_db_to_genesis(&db_path),
         DbToolCommand::ListDBMetadata(d) => {
             print_table_metadata(d.store_name, d.epoch, db_path, &d.table_name)
+        }
+        DbToolCommand::PrintTransaction(d) => print_transaction(&db_path, d),
+        DbToolCommand::ResetDB => reset_db_to_genesis(&db_path),
+        DbToolCommand::RemoveObjectLock(d) => remove_object_lock(&db_path, d),
+        DbToolCommand::RemoveTransaction(d) => remove_transaction(&db_path, d),
+        DbToolCommand::RewindCheckpointExecution(d) => {
+            rewind_checkpoint_execution(&db_path, d.epoch, d.checkpoint_sequence_number)
         }
         DbToolCommand::Compact => compact(db_path),
         DbToolCommand::IndexSearchKeyRange(rg) => {
@@ -132,6 +186,97 @@ pub fn print_db_duplicates_summary(db_path: PathBuf) -> anyhow::Result<()> {
         "Total objects = {}, duplicated objects = {}, total bytes = {}, duplicated bytes = {}",
         total_count, duplicate_count, total_bytes, duplicated_bytes
     );
+    Ok(())
+}
+
+pub fn print_transaction(path: &Path, opt: PrintTransactionOptions) -> anyhow::Result<()> {
+    let perpetual_db = AuthorityPerpetualTables::open(&path.join("store"), None);
+    if let Some((epoch, checkpoint_seq_num)) =
+        perpetual_db.get_checkpoint_sequence_number(&opt.digest)?
+    {
+        println!(
+            "Transaction {:?} executed in epoch {} checkpoint {}",
+            opt.digest, epoch, checkpoint_seq_num
+        );
+    };
+    if let Some(effects) = perpetual_db.get_effects(&opt.digest)? {
+        println!(
+            "Transaction {:?} dependencies: {:#?}",
+            opt.digest,
+            effects.dependencies(),
+        );
+    };
+    Ok(())
+}
+
+/// Force removes a transaction and its outputs, if no other dependent transaction has executed yet.
+/// Usually this should be paired with rewind_checkpoint_execution() to re-execute the removed
+/// transaction, to repair corrupted database.
+/// Dry run with: cargo run --package sui-tool -- db-tool --db-path /opt/sui/db/authorities_db/live remove-transaction --digest xxxx
+/// Add --confirm to actually remove the transaction.
+pub fn remove_transaction(path: &Path, opt: RemoveTransactionOptions) -> anyhow::Result<()> {
+    let perpetual_db = AuthorityPerpetualTables::open(&path.join("store"), None);
+    let Some(_transaction) = perpetual_db.get_transaction(&opt.digest)? else {
+        bail!("Transaction {:?} not found and cannot be re-executed!", opt.digest);
+    };
+    let Some(effects) = perpetual_db.get_effects(&opt.digest)? else {
+        bail!("Transaction {:?} not executed or effects have been pruned!", opt.digest);
+    };
+    let mut objects_to_remove = vec![];
+    for mutated_obj in effects.modified_at_versions() {
+        let new_objs = perpetual_db.get_newer_object_keys(mutated_obj)?;
+        if new_objs.len() > 1 {
+            bail!(
+                "Dependents of transaction {:?} have already executed! Mutated object: {:?}, new objects: {:?}",
+                opt.digest,
+                mutated_obj,
+                new_objs,
+            );
+        }
+        objects_to_remove.extend(new_objs);
+    }
+    for (created_obj, _owner) in effects.created() {
+        let new_objs = perpetual_db.get_newer_object_keys(&(created_obj.0, created_obj.1))?;
+        if new_objs.len() > 1 {
+            bail!(
+                "Dependents of transaction {:?} have already executed! Created object: {:?}, new objects: {:?}",
+                opt.digest,
+                created_obj,
+                new_objs,
+            );
+        }
+        objects_to_remove.extend(new_objs);
+    }
+    // TODO: verify there is no newer object for read-only input, before dynamic child mvcc is implemented.
+    println!(
+        "Transaction {:?} will be removed from the database. The following output objects will be removed too:\n{:#?}",
+        opt.digest, objects_to_remove
+    );
+    if opt.confirm {
+        println!("Proceeding to remove transaction {:?} in 5s ..", opt.digest);
+        std::thread::sleep(std::time::Duration::from_secs(5));
+        perpetual_db.remove_executed_effects_and_outputs_subtle(&opt.digest, &objects_to_remove)?;
+        println!("Done!");
+    }
+    Ok(())
+}
+
+pub fn remove_object_lock(path: &Path, opt: RemoveObjectLockOptions) -> anyhow::Result<()> {
+    let perpetual_db = AuthorityPerpetualTables::open(&path.join("store"), None);
+    let key = ObjectKey(opt.id, SequenceNumber::from_u64(opt.version));
+    if !opt.confirm && !perpetual_db.has_object_lock(&key) {
+        bail!("Owned object lock for {:?} is not found!", key);
+    };
+    println!("Removing owned object lock for {:?}", key);
+    if opt.confirm {
+        println!(
+            "Proceeding to remove owned object lock for {:?} in 5s ..",
+            key
+        );
+        std::thread::sleep(std::time::Duration::from_secs(5));
+        let created_ref = perpetual_db.remove_object_lock_subtle(&key)?;
+        println!("Done! Lock is now initialized for {:?}", created_ref);
+    }
     Ok(())
 }
 
@@ -181,6 +326,43 @@ pub fn reset_db_to_genesis(path: &Path) -> anyhow::Result<()> {
         None,
     );
     checkpoint_db.reset_db_for_execution_since_genesis()?;
+    Ok(())
+}
+
+/// Force sets the highest executed checkpoint.
+/// NOTE: Does not force re-execution of transactions.
+/// Run with: cargo run --package sui-tool -- db-tool --db-path /opt/sui/db/authorities_db/live rewind-checkpoint-execution --epoch 3 --checkpoint-sequence-number 300000
+pub fn rewind_checkpoint_execution(
+    path: &Path,
+    epoch: EpochId,
+    checkpoint_sequence_number: u64,
+) -> anyhow::Result<()> {
+    let checkpoint_db = CheckpointStore::open_tables_read_write(
+        path.join("checkpoints"),
+        MetricConf::default(),
+        None,
+        None,
+    );
+    let Some(checkpoint) = checkpoint_db.get_checkpoint_by_sequence_number(checkpoint_sequence_number)? else {
+        bail!("Checkpoint {checkpoint_sequence_number} not found!");
+    };
+    if epoch != checkpoint.epoch() {
+        bail!(
+            "Checkpoint {checkpoint_sequence_number} is in epoch {} not {epoch}!",
+            checkpoint.epoch()
+        );
+    }
+    let highest_executed_sequence_number = checkpoint_db
+        .get_highest_executed_checkpoint_seq_number()?
+        .unwrap_or_default();
+    if checkpoint_sequence_number > highest_executed_sequence_number {
+        bail!(
+            "Must rewind checkpoint execution to be not later than highest executed ({} > {})!",
+            checkpoint_sequence_number,
+            highest_executed_sequence_number
+        );
+    }
+    checkpoint_db.set_highest_executed_checkpoint_subtle(&checkpoint)?;
     Ok(())
 }
 
