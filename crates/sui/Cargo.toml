@@ -33,6 +33,7 @@ aws-config = "0.55.1"
 prometheus = "0.13.3"
 
 sui-adapter = { path = "../../sui-execution/latest/sui-adapter", package = "sui-adapter-latest" }
+sui-verifier = { path = "../../sui-execution/latest/sui-verifier", package = "sui-verifier-latest" }
 
 sui-core = { path = "../sui-core" }
 sui-framework-snapshot = { path = "../sui-framework-snapshot" }
@@ -48,7 +49,6 @@ sui-move = { path = "../sui-move", features = ["all"] }
 sui-move-build = { path = "../sui-move-build" }
 sui-protocol-config = { path = "../sui-protocol-config" }
 sui-test-transaction-builder = { path = "../sui-test-transaction-builder" }
-sui-verifier = { path = "../sui-verifier" }
 shared-crypto = { path = "../shared-crypto" }
 
 fastcrypto.workspace = true

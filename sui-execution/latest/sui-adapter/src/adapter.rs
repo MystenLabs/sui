@@ -6,7 +6,8 @@ use std::{collections::BTreeMap, sync::Arc};
 use anyhow::Result;
 use move_binary_format::{access::ModuleAccess, file_format::CompiledModule};
 use move_bytecode_verifier::meter::Meter;
-use move_bytecode_verifier::{verify_module_metered_check_timeout_only, VerifierConfig};
+use move_bytecode_verifier::verifier::check_verifier_timeout;
+use move_bytecode_verifier::{verify_module_with_config_metered, VerifierConfig};
 use move_core_types::account_address::AccountAddress;
 pub use move_vm_runtime::move_vm::MoveVM;
 use move_vm_runtime::{
@@ -206,27 +207,38 @@ pub fn run_metered_move_bytecode_verifier_impl(
     meter: &mut impl Meter,
     metrics: &Arc<BytecodeVerifierMetrics>
 ) -> Result<(), SuiError> {
+    // Run the Move verifier and only fail if the verification does not complete within the limit
+    // If the Move verifier succeeds, run the Sui verifier and only fail if the verification does not complete within the limit
+    // Otherwise return success
+
     // run the Move verifier
     for module in modules.iter() {
         let per_module_meter_verifier_timer = metrics.verifier_runtime_per_module_success_latency.start_timer();
-        // Check that the status indicates mtering timeout
-        if let Err(e) = verify_module_metered_check_timeout_only(verifier_config, module, meter) {
-            // Discard success timer, but record timeout/failure timer
-            metrics.verifier_runtime_per_module_timeout_latency.observe(per_module_meter_verifier_timer.stop_and_discard());
-            metrics.verifier_timeout_metrics.with_label_values(&[BytecodeVerifierMetrics::MOVE_VERIFIER_TAG, BytecodeVerifierMetrics::TIMEOUT_TAG]).inc();
-            return Err(SuiError::ModuleVerificationFailure {
-                error: format!("Verification timedout: {}", e.to_string()),
-            });
+        // Non timeout errors are ignored
+        // If verification fails for any other reason,
+        if let Err(e) = verify_module_with_config_metered(verifier_config, module, meter) {
+            // Check that the status indicates mtering timeout
+            if check_verifier_timeout(&e.major_status()){
+                // Discard success timer, but record timeout/failure timer
+                metrics.verifier_runtime_per_module_timeout_latency.observe(per_module_meter_verifier_timer.stop_and_discard());
+                metrics.verifier_timeout_metrics.with_label_values(&[BytecodeVerifierMetrics::MOVE_VERIFIER_TAG, BytecodeVerifierMetrics::TIMEOUT_TAG]).inc();
+                return Err(SuiError::ModuleVerificationFailure {
+                    error: format!("Verification timedout: {}", e),
+                });
+            }
+            // Otherwise, ignore the error and mark as success
         } else if let Err(err) = sui_verify_module_metered_check_timeout_only(protocol_config, module, &BTreeMap::new(), meter) {
             // Discard success timer, but record timeout/failure timer
             metrics.verifier_runtime_per_module_timeout_latency.observe(per_module_meter_verifier_timer.stop_and_discard());
             metrics.verifier_timeout_metrics.with_label_values(&[ BytecodeVerifierMetrics::SUI_VERIFIER_TAG, BytecodeVerifierMetrics::TIMEOUT_TAG]).inc();
             return Err(err.into());
-        } else {
-            // Save the success timer
-            per_module_meter_verifier_timer.stop_and_record();
-            metrics.verifier_timeout_metrics.with_label_values(&[BytecodeVerifierMetrics::OVERALL_TAG, BytecodeVerifierMetrics::SUCCESS_TAG]).inc();
         }
+        // Technically we can get here if the Move verifier failed for non-timeout reasons and hence did not execute the Sui verifier.
+        // We still count this as success. But the timer will only time Move verifier; this means the success timeout metrics are not 100% accurate
+        // We probably want to time the Move and Sui verifier success separately?
+        // Save the success timer
+        per_module_meter_verifier_timer.stop_and_record();
+        metrics.verifier_timeout_metrics.with_label_values(&[BytecodeVerifierMetrics::OVERALL_TAG, BytecodeVerifierMetrics::SUCCESS_TAG]).inc();
     }
     Ok(())
 }

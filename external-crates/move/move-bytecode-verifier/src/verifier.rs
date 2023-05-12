@@ -118,19 +118,6 @@ pub fn verify_module_with_config_metered(
 /// Runs the Move verifier and checks if the error counts as a Move verifier timeout
 /// NOTE: this function only check if the verifier error is a timeout
 /// All other errors are ignored
-pub fn verify_module_metered_check_timeout_only(
-    config: &VerifierConfig,
-    module: &CompiledModule,
-    meter: &mut impl Meter,
-) -> VMResult<()> {
-    if let Err(err) = verify_module_with_config_metered(config, module, meter) {
-        if check_verifier_timeout(&err.major_status()) {
-            return Err(err);
-        }
-    }
-    Ok(())
-}
-
 pub fn check_verifier_timeout(major_status_code: &StatusCode) -> bool {
     [
         StatusCode::PROGRAM_TOO_COMPLEX,

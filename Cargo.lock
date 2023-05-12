@@ -9323,7 +9323,7 @@ dependencies = [
  "sui-test-transaction-builder",
  "sui-tool",
  "sui-types",
- "sui-verifier",
+ "sui-verifier-latest",
  "tap",
  "telemetry-subscribers",
  "tempfile",
