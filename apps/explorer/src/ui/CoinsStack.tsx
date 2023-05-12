@@ -33,7 +33,7 @@ export function Coin({ type }: { type: string }) {
     return (
         <span
             className={clsx(
-                'flex h-5 w-5 items-center justify-center rounded-xl text-white',
+                'relative flex h-5 w-5 items-center justify-center rounded-xl text-white',
                 (!coinMetadata || symbol !== 'SUI') &&
                     'bg-gradient-to-r from-gradient-blue-start to-gradient-blue-end',
                 symbol === 'SUI' && 'bg-sui',
@@ -53,7 +53,7 @@ export function CoinsStack({ coinTypes }: CoinsStackProps) {
     return (
         <div className="flex">
             {coinTypes.map((coinType, index) => (
-                <div key={index} className="-ml-1">
+                <div key={index} className={clsx(index !== 0 && '-ml-1')}>
                     <Coin type={coinType} />
                 </div>
             ))}
