@@ -214,6 +214,7 @@ pub fn run_metered_move_bytecode_verifier_impl(
     // run the Move verifier
     for module in modules.iter() {
         let per_module_meter_verifier_timer = metrics.verifier_runtime_per_module_success_latency.start_timer();
+
         // Non timeout errors are ignored
         // If verification fails for any other reason,
         if let Err(e) = verify_module_with_config_metered(verifier_config, module, meter) {
