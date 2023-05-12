@@ -310,6 +310,7 @@ inout = { version = "0.1", default-features = false, features = ["std"] }
 inquire = { version = "0.6" }
 insta = { version = "1", features = ["json", "redactions", "yaml"] }
 instant = { version = "0.1", default-features = false }
+integer-encoding = { version = "3", default-features = false }
 internment = { version = "0.5", default-features = false, features = ["arc"] }
 io-lifetimes = { version = "1" }
 iri-string = { version = "0.4" }
@@ -419,6 +420,7 @@ num-rational = { version = "0.4", default-features = false, features = ["num-big
 num-traits-6f8ce4dd05d13bba = { package = "num-traits", version = "0.2", features = ["i128", "libm"] }
 num-traits-c65f7effa3be6d31 = { package = "num-traits", version = "0.1", default-features = false }
 num_cpus = { version = "1", default-features = false }
+num_enum = { version = "0.6" }
 number_prefix = { version = "0.4" }
 object = { version = "0.30", default-features = false, features = ["archive", "elf", "macho", "pe", "read_core", "unaligned"] }
 oid-registry = { version = "0.6", features = ["crypto", "x509"] }
@@ -700,7 +702,9 @@ yaml-rust = { version = "0.4", default-features = false }
 yansi = { version = "0.5", default-features = false }
 yasna = { version = "0.5", features = ["std", "time"] }
 zeroize = { version = "1", features = ["zeroize_derive"] }
-zstd-sys = { version = "2" }
+zstd = { version = "0.12" }
+zstd-safe = { version = "6", default-features = false, features = ["arrays", "legacy", "std", "zdict_builder"] }
+zstd-sys = { version = "2", features = ["std"] }
 
 [build-dependencies]
 Inflector = { version = "0.11", default-features = false }
@@ -1045,6 +1049,7 @@ inout = { version = "0.1", default-features = false, features = ["std"] }
 inquire = { version = "0.6" }
 insta = { version = "1", features = ["json", "redactions", "yaml"] }
 instant = { version = "0.1", default-features = false }
+integer-encoding = { version = "3", default-features = false }
 internment = { version = "0.5", default-features = false, features = ["arc"] }
 io-lifetimes = { version = "1" }
 iri-string = { version = "0.4" }
@@ -1164,6 +1169,8 @@ num-rational = { version = "0.4", default-features = false, features = ["num-big
 num-traits-6f8ce4dd05d13bba = { package = "num-traits", version = "0.2", features = ["i128", "libm"] }
 num-traits-c65f7effa3be6d31 = { package = "num-traits", version = "0.1", default-features = false }
 num_cpus = { version = "1", default-features = false }
+num_enum = { version = "0.6" }
+num_enum_derive = { version = "0.6", default-features = false, features = ["std"] }
 number_prefix = { version = "0.4" }
 object = { version = "0.30", default-features = false, features = ["archive", "elf", "macho", "pe", "read_core", "unaligned"] }
 oid-registry = { version = "0.6", features = ["crypto", "x509"] }
@@ -1506,7 +1513,9 @@ yansi = { version = "0.5", default-features = false }
 yasna = { version = "0.5", features = ["std", "time"] }
 zeroize = { version = "1", features = ["zeroize_derive"] }
 zeroize_derive = { version = "1", default-features = false }
-zstd-sys = { version = "2" }
+zstd = { version = "0.12" }
+zstd-safe = { version = "6", default-features = false, features = ["arrays", "legacy", "std", "zdict_builder"] }
+zstd-sys = { version = "2", features = ["std"] }
 
 [target.aarch64-apple-darwin.dependencies]
 ahash-c38e5c1d305a1b54 = { package = "ahash", version = "0.8" }
