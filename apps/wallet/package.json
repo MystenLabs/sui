@@ -85,7 +85,7 @@
         "html-webpack-plugin": "^5.5.0",
         "mini-css-extract-plugin": "^2.7.5",
         "onchange": "^7.1.0",
-        "plausible-tracker": "^0.3.0",
+        "plausible-tracker": "^0.3.8",
         "playwright": "^1.32.3",
         "postcss": "^8.4.19",
         "postcss-loader": "^7.2.4",
