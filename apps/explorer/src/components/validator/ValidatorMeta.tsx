@@ -66,7 +66,7 @@ export function ValidatorMeta({ validatorData }: ValidatorMetaProps) {
                         </Text>
                     </DescriptionItem>
                     <DescriptionItem title="Pool ID" align="start">
-                        <div className="flex gap-1">
+                        <div className="flex items-start gap-1 break-all">
                             <Text variant="pBody/medium" color="steel-darker">
                                 {validatorData.stakingPoolId}
                             </Text>
@@ -78,7 +78,7 @@ export function ValidatorMeta({ validatorData }: ValidatorMetaProps) {
                         </div>
                     </DescriptionItem>
                     <DescriptionItem title="Address" align="start">
-                        <div className="flex gap-1">
+                        <div className="flex items-start gap-1">
                             <AddressLink
                                 address={validatorData.suiAddress}
                                 noTruncate
