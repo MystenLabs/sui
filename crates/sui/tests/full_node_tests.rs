@@ -14,8 +14,8 @@ use prometheus::Registry;
 use serde_json::json;
 use sui::client_commands::{SuiClientCommandResult, SuiClientCommands};
 use sui_json_rpc_types::{
-    type_and_fields_from_move_struct, SuiEvent, SuiExecutionStatus, SuiTransactionBlockEffectsAPI,
-    SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
+    type_and_fields_from_move_struct, EventPage, SuiEvent, SuiExecutionStatus,
+    SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
 };
 use sui_json_rpc_types::{EventFilter, TransactionFilter};
 use sui_keys::keystore::AccountKeystore;
@@ -712,6 +712,42 @@ async fn test_full_node_event_read_api_ok() {
         .unwrap();
     assert_eq!(events.len(), 1);
     assert_eq!(events[0].id.tx_digest, digest2);
+}
+
+#[sim_test]
+async fn test_full_node_event_query_by_module_ok() {
+    let mut test_cluster = TestClusterBuilder::new()
+        .enable_fullnode_events()
+        .build()
+        .await
+        .unwrap();
+
+    let context = &mut test_cluster.wallet;
+    let node = &test_cluster.fullnode_handle.sui_node;
+    let jsonrpc_client = &test_cluster.fullnode_handle.rpc_client;
+
+    let (package_id, _, _) = context.publish_nfts_package().await;
+
+    // This is a poor substitute for the post processing taking some time
+    sleep(Duration::from_millis(1000)).await;
+
+    let (_sender, _object_id, digest2) = context.create_devnet_nft(package_id).await;
+    wait_for_tx(digest2, node.state().clone()).await;
+
+    // Add a delay to ensure event processing is done after transaction commits.
+    sleep(Duration::from_secs(5)).await;
+
+    // query by move event module
+    let params = rpc_params![EventFilter::MoveEventModule {
+        package: package_id,
+        module: ident_str!("devnet_nft").into()
+    }];
+    let page: EventPage = jsonrpc_client
+        .request("suix_queryEvents", params)
+        .await
+        .unwrap();
+    assert_eq!(page.data.len(), 1);
+    assert_eq!(page.data[0].id.tx_digest, digest2);
 }
 
 #[sim_test]

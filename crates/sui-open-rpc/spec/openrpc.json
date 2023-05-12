@@ -5672,6 +5672,37 @@
             "additionalProperties": false
           },
           {
+            "description": "Return events with the given move event module name",
+            "type": "object",
+            "required": [
+              "MoveEventModule"
+            ],
+            "properties": {
+              "MoveEventModule": {
+                "type": "object",
+                "required": [
+                  "module",
+                  "package"
+                ],
+                "properties": {
+                  "module": {
+                    "description": "the module name",
+                    "type": "string"
+                  },
+                  "package": {
+                    "description": "the Move package ID",
+                    "allOf": [
+                      {
+                        "$ref": "#/components/schemas/ObjectID"
+                      }
+                    ]
+                  }
+                }
+              }
+            },
+            "additionalProperties": false
+          },
+          {
             "type": "object",
             "required": [
               "MoveEventField"
