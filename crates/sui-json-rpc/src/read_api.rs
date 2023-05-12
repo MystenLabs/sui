@@ -590,7 +590,11 @@ impl ReadApiServer for ReadApi {
     #[instrument(skip(self))]
     async fn get_total_transaction_blocks(&self) -> RpcResult<BigInt<u64>> {
         with_tracing!("get_total_transaction_blocks", async move {
-            Ok(self.state.get_total_transaction_blocks()?.into())
+            Ok(self
+                .state
+                .get_total_transaction_blocks()
+                .map_err(Error::from)?
+                .into()) // converts into BigInt<u64>
         })
     }
 
@@ -612,7 +616,8 @@ impl ReadApiServer for ReadApi {
                 )
             })
             .await
-            .map_err(|e| anyhow!(e))??;
+            .map_err(Error::from)?
+            .map_err(Error::from)?;
             let input_objects = transaction
                 .data()
                 .inner()
@@ -636,7 +641,8 @@ impl ReadApiServer for ReadApi {
                         )
                     })
                     .await
-                    .map_err(|e| anyhow!(e))??,
+                    .map_err(Error::from)?
+                    .map_err(Error::from)?,
                 );
             }
 
@@ -767,7 +773,7 @@ impl ReadApiServer for ReadApi {
             let state = self.state.clone();
             spawn_monitored_task!(async move{
             let store = state.load_epoch_store_one_call_per_task();
-            let effect = state.get_executed_effects(transaction_digest)?;
+            let effect = state.get_executed_effects(transaction_digest).map_err(Error::from)?;
             let events = if let Some(event_digest) = effect.events_digest() {
             state
                 .get_transaction_events(event_digest)
@@ -837,7 +843,8 @@ impl ReadApiServer for ReadApi {
                 state.get_checkpoints(cursor.map(|s| *s), limit as u64 + 1, descending_order)
             })
             .await
-            .map_err(|e| anyhow!(e))??;
+            .map_err(Error::from)?
+            .map_err(Error::from)?;
 
             let has_next_page = data.len() > limit;
             data.truncate(limit);
@@ -981,12 +988,15 @@ fn get_display_object_by_type(
     object_type: &StructTag,
     // TODO: add query version support
 ) -> RpcResult<Option<DisplayVersionUpdatedEvent>> {
-    let mut events = fullnode_api.state.query_events(
-        EventFilter::MoveEventType(DisplayVersionUpdatedEvent::type_(object_type)),
-        None,
-        1,
-        true,
-    )?;
+    let mut events = fullnode_api
+        .state
+        .query_events(
+            EventFilter::MoveEventType(DisplayVersionUpdatedEvent::type_(object_type)),
+            None,
+            1,
+            true,
+        )
+        .map_err(Error::from)?;
 
     // If there's any recent version of Display, give it to the client.
     // TODO: add support for version query.

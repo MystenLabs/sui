@@ -235,7 +235,8 @@ impl WriteApiServer for TransactionExecutionApi {
             .state
             .dev_inspect_transaction_block(sender_address, tx_kind, gas_price.map(|i| *i))
             .instrument(error_span!("dev_inspect_transaction_block"))
-            .await?)
+            .await
+            .map_err(Error::from)?)
     }
 
     async fn dry_run_transaction_block(

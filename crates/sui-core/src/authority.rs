@@ -630,7 +630,7 @@ impl AuthorityState {
         &self,
         epoch_store: &Arc<AuthorityPerEpochStore>,
         transaction: VerifiedTransaction,
-    ) -> Result<HandleTransactionResponse, SuiError> {
+    ) -> SuiResult<HandleTransactionResponse> {
         fp_ensure!(
             !transaction.is_system_tx(),
             SuiError::InvalidSystemTransaction
@@ -1178,25 +1178,26 @@ impl AuthorityState {
         &self,
         transaction: TransactionData,
         transaction_digest: TransactionDigest,
-    ) -> Result<
-        (
-            DryRunTransactionBlockResponse,
-            BTreeMap<ObjectID, (ObjectRef, Object, WriteKind)>,
-            TransactionEffects,
-            Option<ObjectID>,
-        ),
-        anyhow::Error,
-    > {
+    ) -> SuiResult<(
+        DryRunTransactionBlockResponse,
+        BTreeMap<ObjectID, (ObjectRef, Object, WriteKind)>,
+        TransactionEffects,
+        Option<ObjectID>,
+    )> {
         let epoch_store = self.load_epoch_store_one_call_per_task();
         if !self.is_fullnode(&epoch_store) {
-            return Err(anyhow!("dry-exec is only supported on fullnodes"));
+            return Err(SuiError::UnsupportedFeatureError {
+                error: "dry-exec is only supported on fullnodes".to_string(),
+            });
         }
         match transaction.kind() {
             TransactionKind::ProgrammableTransaction(_) => (),
             TransactionKind::ChangeEpoch(_)
             | TransactionKind::Genesis(_)
             | TransactionKind::ConsensusCommitPrologue(_) => {
-                return Err(anyhow!("dry-exec does not support system transactions"));
+                return Err(SuiError::UnsupportedFeatureError {
+                    error: "dry-exec does not support system transactions".to_string(),
+                });
             }
         }
 
@@ -1291,7 +1292,13 @@ impl AuthorityState {
 
         Ok((
             DryRunTransactionBlockResponse {
-                input: SuiTransactionBlockData::try_from(transaction.clone(), &module_cache)?,
+                input: SuiTransactionBlockData::try_from(transaction.clone(), &module_cache)
+                    .map_err(|e| SuiError::TransactionSerializationError {
+                        error: format!(
+                            "Failed to convert transaction to SuiTransactionBlockData: {}",
+                            e
+                        ),
+                    })?, // TODO: replace the underlying try_from to SuiError. This one goes deep
                 effects: effects.clone().try_into()?,
                 events: SuiTransactionBlockEvents::try_from(
                     inner_temp_store.events.clone(),
@@ -1314,10 +1321,12 @@ impl AuthorityState {
         sender: SuiAddress,
         transaction_kind: TransactionKind,
         gas_price: Option<u64>,
-    ) -> Result<DevInspectResults, anyhow::Error> {
+    ) -> SuiResult<DevInspectResults> {
         let epoch_store = self.load_epoch_store_one_call_per_task();
         if !self.is_fullnode(&epoch_store) {
-            return Err(anyhow!("dev-inspect is only supported on fullnodes"));
+            return Err(SuiError::UnsupportedFeatureError {
+                error: "dev-inspect is only supported on fullnodes".to_string(),
+            });
         }
 
         transaction_kind.check_version_supported(epoch_store.protocol_config())?;
@@ -1470,7 +1479,7 @@ impl AuthorityState {
         &self,
         effects: &TransactionEffects,
         epoch_store: &Arc<AuthorityPerEpochStore>,
-    ) -> Result<ObjectIndexChanges, SuiError> {
+    ) -> SuiResult<ObjectIndexChanges> {
         let modified_at_version = effects
             .modified_at_versions()
             .iter()
@@ -1710,7 +1719,7 @@ impl AuthorityState {
     pub async fn handle_transaction_info_request(
         &self,
         request: TransactionInfoRequest,
-    ) -> Result<TransactionInfoResponse, SuiError> {
+    ) -> SuiResult<TransactionInfoResponse> {
         let epoch_store = self.load_epoch_store_one_call_per_task();
         let (transaction, status) = self
             .get_transaction_status(&request.transaction_digest, &epoch_store)?
@@ -1726,7 +1735,7 @@ impl AuthorityState {
     pub async fn handle_object_info_request(
         &self,
         request: ObjectInfoRequest,
-    ) -> Result<ObjectInfoResponse, SuiError> {
+    ) -> SuiResult<ObjectInfoResponse> {
         let epoch_store = self.load_epoch_store_one_call_per_task();
 
         let requested_object_seq = match request.request_kind {
@@ -1785,7 +1794,7 @@ impl AuthorityState {
     pub fn handle_checkpoint_request(
         &self,
         request: &CheckpointRequest,
-    ) -> Result<CheckpointResponse, SuiError> {
+    ) -> SuiResult<CheckpointResponse> {
         let summary = match request.sequence_number {
             Some(seq) => self
                 .checkpoint_store
@@ -1808,7 +1817,7 @@ impl AuthorityState {
     pub fn load_fastpath_input_objects(
         &self,
         effects: &TransactionEffects,
-    ) -> Result<Vec<Object>, SuiError> {
+    ) -> SuiResult<Vec<Object>> {
         // Note: any future addition to the returned object list needs cautions
         // to make sure not to mess up object pruning.
 
@@ -2176,7 +2185,7 @@ impl AuthorityState {
         Committee::clone(self.epoch_store_for_testing().committee())
     }
 
-    pub async fn get_object(&self, object_id: &ObjectID) -> Result<Option<Object>, SuiError> {
+    pub async fn get_object(&self, object_id: &ObjectID) -> SuiResult<Option<Object>> {
         self.database.get_object(object_id)
     }
 
@@ -2228,7 +2237,7 @@ impl AuthorityState {
         Ok(checkpoint)
     }
 
-    pub fn get_object_read(&self, object_id: &ObjectID) -> Result<ObjectRead, SuiError> {
+    pub fn get_object_read(&self, object_id: &ObjectID) -> SuiResult<ObjectRead> {
         match self.database.get_object_or_tombstone(*object_id)? {
             None => Ok(ObjectRead::NotExists(*object_id)),
             Some(obj_ref) => {
@@ -2330,7 +2339,7 @@ impl AuthorityState {
         &self,
         object_id: &ObjectID,
         version: SequenceNumber,
-    ) -> Result<PastObjectRead, SuiError> {
+    ) -> SuiResult<PastObjectRead> {
         // Firstly we see if the object ever exists by getting its latest data
         match self.database.get_object_or_tombstone(*object_id)? {
             None => Ok(PastObjectRead::ObjectNotExists(*object_id)),
@@ -2416,7 +2425,7 @@ impl AuthorityState {
         &self,
         object_id: &ObjectID,
         version: SequenceNumber,
-    ) -> Result<Owner, SuiError> {
+    ) -> SuiResult<Owner> {
         self.database
             .get_object_by_key(object_id, version)?
             .ok_or_else(|| {
@@ -2551,64 +2560,61 @@ impl AuthorityState {
         }
     }
 
-    pub fn get_total_transaction_blocks(&self) -> Result<u64, anyhow::Error> {
+    pub fn get_total_transaction_blocks(&self) -> SuiResult<u64> {
         Ok(self.get_indexes()?.next_sequence_number())
     }
 
     pub async fn get_executed_transaction_and_effects(
         &self,
         digest: TransactionDigest,
-    ) -> Result<(VerifiedTransaction, TransactionEffects), anyhow::Error> {
+    ) -> SuiResult<(VerifiedTransaction, TransactionEffects)> {
         let transaction = self.database.get_transaction_block(&digest)?;
         let effects = self.database.get_executed_effects(&digest)?;
         match (transaction, effects) {
             (Some(transaction), Some(effects)) => Ok((transaction, effects)),
-            _ => Err(anyhow!(SuiError::TransactionNotFound { digest })),
+            _ => Err(SuiError::TransactionNotFound { digest }),
         }
     }
 
     pub async fn get_transaction_block(
         &self,
         digest: TransactionDigest,
-    ) -> Result<VerifiedTransaction, anyhow::Error> {
+    ) -> SuiResult<VerifiedTransaction> {
         let transaction = self.database.get_transaction_block(&digest)?;
-        transaction.ok_or_else(|| anyhow!(SuiError::TransactionNotFound { digest }))
+        transaction.ok_or(SuiError::TransactionNotFound { digest })
     }
 
-    pub fn get_executed_effects(
-        &self,
-        digest: TransactionDigest,
-    ) -> Result<TransactionEffects, anyhow::Error> {
+    pub fn get_executed_effects(&self, digest: TransactionDigest) -> SuiResult<TransactionEffects> {
         let effects = self.database.get_executed_effects(&digest)?;
-        effects.ok_or_else(|| anyhow!(SuiError::TransactionNotFound { digest }))
+        effects.ok_or(SuiError::TransactionNotFound { digest })
     }
 
     pub fn multi_get_executed_transactions(
         &self,
         digests: &[TransactionDigest],
-    ) -> Result<Vec<Option<VerifiedTransaction>>, anyhow::Error> {
-        Ok(self.database.multi_get_transaction_blocks(digests)?)
+    ) -> SuiResult<Vec<Option<VerifiedTransaction>>> {
+        self.database.multi_get_transaction_blocks(digests)
     }
 
     pub fn multi_get_executed_effects(
         &self,
         digests: &[TransactionDigest],
-    ) -> Result<Vec<Option<TransactionEffects>>, anyhow::Error> {
-        Ok(self.database.multi_get_executed_effects(digests)?)
+    ) -> SuiResult<Vec<Option<TransactionEffects>>> {
+        self.database.multi_get_executed_effects(digests)
     }
 
     pub fn multi_get_transaction_checkpoint(
         &self,
         digests: &[TransactionDigest],
-    ) -> Result<Vec<Option<(EpochId, CheckpointSequenceNumber)>>, anyhow::Error> {
-        Ok(self.database.multi_get_transaction_checkpoint(digests)?)
+    ) -> SuiResult<Vec<Option<(EpochId, CheckpointSequenceNumber)>>> {
+        self.database.multi_get_transaction_checkpoint(digests)
     }
 
     pub fn multi_get_events(
         &self,
         digests: &[TransactionEventsDigest],
-    ) -> Result<Vec<Option<TransactionEvents>>, anyhow::Error> {
-        Ok(self.database.multi_get_events(digests)?)
+    ) -> SuiResult<Vec<Option<TransactionEvents>>> {
+        self.database.multi_get_events(digests)
     }
 
     pub fn multi_get_checkpoint_by_sequence_number(
@@ -2653,7 +2659,7 @@ impl AuthorityState {
         cursor: Option<TransactionDigest>,
         limit: Option<usize>,
         reverse: bool,
-    ) -> Result<Vec<TransactionDigest>, anyhow::Error> {
+    ) -> SuiResult<Vec<TransactionDigest>> {
         if let Some(TransactionFilter::Checkpoint(sequence_number)) = filter {
             let checkpoint_contents =
                 self.get_checkpoint_contents_by_sequence_number(sequence_number)?;
@@ -2679,50 +2685,45 @@ impl AuthorityState {
         self.checkpoint_store.clone()
     }
 
-    pub fn get_latest_checkpoint_sequence_number(
-        &self,
-    ) -> Result<CheckpointSequenceNumber, anyhow::Error> {
+    pub fn get_latest_checkpoint_sequence_number(&self) -> SuiResult<CheckpointSequenceNumber> {
         self.get_checkpoint_store()
             .get_highest_executed_checkpoint_seq_number()?
-            .ok_or_else(|| anyhow!("Latest checkpoint sequence number not found"))
+            .ok_or(SuiError::UserInputError {
+                error: UserInputError::LatestCheckpointSequenceNumberNotFound,
+            })
     }
 
     pub fn get_checkpoint_summary_by_sequence_number(
         &self,
         sequence_number: CheckpointSequenceNumber,
-    ) -> Result<CheckpointSummary, anyhow::Error> {
+    ) -> SuiResult<CheckpointSummary> {
         let verified_checkpoint = self
             .get_checkpoint_store()
             .get_checkpoint_by_sequence_number(sequence_number)?;
         match verified_checkpoint {
             Some(verified_checkpoint) => Ok(verified_checkpoint.into_inner().into_data()),
-            None => Err(anyhow!(
-                "Verified checkpoint not found for sequence number {}",
-                sequence_number
-            )),
+            None => Err(SuiError::UserInputError {
+                error: UserInputError::VerifiedCheckpointNotFound(sequence_number),
+            }),
         }
     }
 
     pub fn get_checkpoint_summary_by_digest(
         &self,
         digest: CheckpointDigest,
-    ) -> Result<CheckpointSummary, anyhow::Error> {
+    ) -> SuiResult<CheckpointSummary> {
         let verified_checkpoint = self
             .get_checkpoint_store()
             .get_checkpoint_by_digest(&digest)?;
         match verified_checkpoint {
             Some(verified_checkpoint) => Ok(verified_checkpoint.into_inner().into_data()),
-            None => Err(anyhow!(
-                "Verified checkpoint not found for digest: {}",
-                Base58::encode(digest)
-            )),
+            None => Err(SuiError::UserInputError {
+                error: UserInputError::VerifiedCheckpointDigestNotFound(Base58::encode(digest)),
+            }),
         }
     }
 
-    pub fn find_publish_txn_digest(
-        &self,
-        package_id: ObjectID,
-    ) -> Result<TransactionDigest, anyhow::Error> {
+    pub fn find_publish_txn_digest(&self, package_id: ObjectID) -> SuiResult<TransactionDigest> {
         if is_system_package(package_id) {
             return self.find_genesis_txn_digest();
         }
@@ -2732,14 +2733,16 @@ impl AuthorityState {
             .previous_transaction)
     }
 
-    pub fn find_genesis_txn_digest(&self) -> Result<TransactionDigest, anyhow::Error> {
+    pub fn find_genesis_txn_digest(&self) -> SuiResult<TransactionDigest> {
         let summary = self
             .get_verified_checkpoint_by_sequence_number(0)?
             .into_message();
         let content = self.get_checkpoint_contents(summary.content_digest)?;
         let genesis_transaction = content.enumerate_transactions(&summary).next();
         Ok(genesis_transaction
-            .ok_or(anyhow!("No transactions found in checkpoint content"))?
+            .ok_or(SuiError::UserInputError {
+                error: UserInputError::GenesisTransactionNotFound,
+            })?
             .1
             .transaction)
     }
@@ -2747,48 +2750,48 @@ impl AuthorityState {
     pub fn get_verified_checkpoint_by_sequence_number(
         &self,
         sequence_number: CheckpointSequenceNumber,
-    ) -> Result<VerifiedCheckpoint, anyhow::Error> {
+    ) -> SuiResult<VerifiedCheckpoint> {
         let verified_checkpoint = self
             .get_checkpoint_store()
             .get_checkpoint_by_sequence_number(sequence_number)?;
         match verified_checkpoint {
             Some(verified_checkpoint) => Ok(verified_checkpoint),
-            None => Err(anyhow!(
-                "Verified checkpoint not found for sequence number {}",
-                sequence_number
-            )),
+            None => Err(SuiError::UserInputError {
+                error: UserInputError::VerifiedCheckpointNotFound(sequence_number),
+            }),
         }
     }
 
     pub fn get_verified_checkpoint_summary_by_digest(
         &self,
         digest: CheckpointDigest,
-    ) -> Result<VerifiedCheckpoint, anyhow::Error> {
+    ) -> SuiResult<VerifiedCheckpoint> {
         let verified_checkpoint = self
             .get_checkpoint_store()
             .get_checkpoint_by_digest(&digest)?;
         match verified_checkpoint {
             Some(verified_checkpoint) => Ok(verified_checkpoint),
-            None => Err(anyhow!(
-                "Verified checkpoint not found for digest: {}",
-                Base58::encode(digest)
-            )),
+            None => Err(SuiError::UserInputError {
+                error: UserInputError::VerifiedCheckpointDigestNotFound(Base58::encode(digest)),
+            }),
         }
     }
 
     pub fn get_checkpoint_contents(
         &self,
         digest: CheckpointContentsDigest,
-    ) -> Result<CheckpointContents, anyhow::Error> {
+    ) -> SuiResult<CheckpointContents> {
         self.get_checkpoint_store()
             .get_checkpoint_contents(&digest)?
-            .ok_or_else(|| anyhow!("Checkpoint contents not found for digest: {:?}", digest))
+            .ok_or(SuiError::UserInputError {
+                error: UserInputError::CheckpointContentsNotFound(digest),
+            })
     }
 
     pub fn get_checkpoint_contents_by_sequence_number(
         &self,
         sequence_number: CheckpointSequenceNumber,
-    ) -> Result<CheckpointContents, anyhow::Error> {
+    ) -> SuiResult<CheckpointContents> {
         let verified_checkpoint = self
             .get_checkpoint_store()
             .get_checkpoint_by_sequence_number(sequence_number)?;
@@ -2797,10 +2800,9 @@ impl AuthorityState {
                 let content_digest = verified_checkpoint.into_inner().content_digest;
                 self.get_checkpoint_contents(content_digest)
             }
-            None => Err(anyhow!(
-                "Verified checkpoint not found for sequence number {}",
-                sequence_number
-            )),
+            None => Err(SuiError::UserInputError {
+                error: UserInputError::VerifiedCheckpointNotFound(sequence_number),
+            }),
         }
     }
 
@@ -2810,7 +2812,7 @@ impl AuthorityState {
         cursor: Option<CheckpointSequenceNumber>,
         limit: u64,
         descending_order: bool,
-    ) -> Result<Vec<Checkpoint>, anyhow::Error> {
+    ) -> SuiResult<Vec<Checkpoint>> {
         let max_checkpoint = self.get_latest_checkpoint_sequence_number()?;
         let checkpoint_numbers =
             calculate_checkpoint_numbers(cursor, limit, descending_order, max_checkpoint);
@@ -2859,11 +2861,8 @@ impl AuthorityState {
         Ok(checkpoints)
     }
 
-    pub async fn get_timestamp_ms(
-        &self,
-        digest: &TransactionDigest,
-    ) -> Result<Option<u64>, anyhow::Error> {
-        Ok(self.get_indexes()?.get_timestamp_ms(digest)?)
+    pub async fn get_timestamp_ms(&self, digest: &TransactionDigest) -> SuiResult<Option<u64>> {
+        self.get_indexes()?.get_timestamp_ms(digest)
     }
 
     pub fn query_events(
@@ -2873,7 +2872,7 @@ impl AuthorityState {
         cursor: Option<EventID>,
         limit: usize,
         descending: bool,
-    ) -> Result<Vec<SuiEvent>, anyhow::Error> {
+    ) -> SuiResult<Vec<SuiEvent>> {
         let index_store = self.get_indexes()?;
 
         //Get the tx_num from tx_digest
@@ -2896,9 +2895,12 @@ impl AuthorityState {
                 if filters.is_empty() {
                     index_store.all_events(tx_num, event_num, limit, descending)?
                 } else {
-                    return Err(anyhow!(
-                        "This query type does not currently support filter combinations."
-                    ));
+                    return Err(SuiError::UserInputError {
+                        error: UserInputError::Unsupported(
+                            "This query type does not currently support filter combinations"
+                                .to_string(),
+                        ),
+                    });
                 }
             }
             EventFilter::Transaction(digest) => {
@@ -2925,9 +2927,11 @@ impl AuthorityState {
             } => index_store
                 .event_iterator(start_time, end_time, tx_num, event_num, limit, descending)?,
             _ => {
-                return Err(anyhow!(
-                    "This query type is not supported by the full node."
-                ))
+                return Err(SuiError::UserInputError {
+                    error: UserInputError::Unsupported(
+                        "This query type is not supported by the full node.".to_string(),
+                    ),
+                })
             }
         };
 
@@ -2987,7 +2991,7 @@ impl AuthorityState {
         &self,
         tx_digest: &TransactionDigest,
         epoch_store: &Arc<AuthorityPerEpochStore>,
-    ) -> Result<Option<VerifiedCertificate>, SuiError> {
+    ) -> SuiResult<Option<VerifiedCertificate>> {
         let Some(cert_sig) = epoch_store.get_transaction_cert_sig(tx_digest)? else {
             return Ok(None);
         };
@@ -3008,7 +3012,7 @@ impl AuthorityState {
         &self,
         transaction_digest: &TransactionDigest,
         epoch_store: &Arc<AuthorityPerEpochStore>,
-    ) -> Result<Option<(SenderSignedData, TransactionStatus)>, SuiError> {
+    ) -> SuiResult<Option<(SenderSignedData, TransactionStatus)>> {
         // TODO: In the case of read path, we should not have to re-sign the effects.
         if let Some(effects) =
             self.get_signed_effects_and_maybe_resign(transaction_digest, epoch_store)?
@@ -3059,7 +3063,7 @@ impl AuthorityState {
         &self,
         effects: TransactionEffects,
         epoch_store: &Arc<AuthorityPerEpochStore>,
-    ) -> Result<VerifiedSignedTransactionEffects, SuiError> {
+    ) -> SuiResult<VerifiedSignedTransactionEffects> {
         let tx_digest = *effects.transaction_digest();
         let signed_effects = match epoch_store.get_effects_signature(&tx_digest)? {
             Some(sig) if sig.epoch == epoch_store.epoch() => {
@@ -3121,7 +3125,7 @@ impl AuthorityState {
         mutable_input_objects: &[ObjectRef],
         signed_transaction: VerifiedSignedTransaction,
         epoch_store: &Arc<AuthorityPerEpochStore>,
-    ) -> Result<(), SuiError> {
+    ) -> SuiResult {
         self.lock_and_write_transaction(mutable_input_objects, signed_transaction, epoch_store)
             .await
     }
@@ -3134,7 +3138,7 @@ impl AuthorityState {
         owned_input_objects: &[ObjectRef],
         transaction: VerifiedSignedTransaction,
         epoch_store: &Arc<AuthorityPerEpochStore>,
-    ) -> Result<(), SuiError> {
+    ) -> SuiResult {
         let tx_digest = *transaction.digest();
 
         // Acquire the lock on input objects
@@ -3256,7 +3260,7 @@ impl AuthorityState {
         &self,
         object_ref: &ObjectRef,
         epoch_store: &AuthorityPerEpochStore,
-    ) -> Result<Option<VerifiedSignedTransaction>, SuiError> {
+    ) -> SuiResult<Option<VerifiedSignedTransaction>> {
         let lock_info = self
             .database
             .get_lock(*object_ref, epoch_store.epoch())
@@ -3298,17 +3302,14 @@ impl AuthorityState {
         Ok(tx_option)
     }
 
-    pub async fn get_objects(
-        &self,
-        _objects: &[ObjectID],
-    ) -> Result<Vec<Option<Object>>, SuiError> {
+    pub async fn get_objects(&self, _objects: &[ObjectID]) -> SuiResult<Vec<Option<Object>>> {
         self.database.get_objects(_objects)
     }
 
     pub async fn get_object_or_tombstone(
         &self,
         object_id: ObjectID,
-    ) -> Result<Option<ObjectRef>, SuiError> {
+    ) -> SuiResult<Option<ObjectRef>> {
         self.database.get_object_or_tombstone(object_id)
     }
 
