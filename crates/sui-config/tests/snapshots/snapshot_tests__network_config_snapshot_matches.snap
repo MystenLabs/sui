@@ -81,7 +81,7 @@ validator_configs:
       enable-epoch-sui-conservation-check: true
       enable-deep-per-tx-sui-conservation-check: true
       force-disable-epoch-sui-conservation-check: false
-      enable-state-consistency-check: true
+      state-consistency-check: panic-on-fail
       force-disable-state-consistency-check: false
       enable-move-vm-paranoid-checks: true
     transaction-deny-config:
@@ -169,7 +169,7 @@ validator_configs:
       enable-epoch-sui-conservation-check: true
       enable-deep-per-tx-sui-conservation-check: true
       force-disable-epoch-sui-conservation-check: false
-      enable-state-consistency-check: true
+      state-consistency-check: panic-on-fail
       force-disable-state-consistency-check: false
       enable-move-vm-paranoid-checks: true
     transaction-deny-config:
@@ -257,7 +257,7 @@ validator_configs:
       enable-epoch-sui-conservation-check: true
       enable-deep-per-tx-sui-conservation-check: true
       force-disable-epoch-sui-conservation-check: false
-      enable-state-consistency-check: true
+      state-consistency-check: panic-on-fail
       force-disable-state-consistency-check: false
       enable-move-vm-paranoid-checks: true
     transaction-deny-config:
@@ -345,7 +345,7 @@ validator_configs:
       enable-epoch-sui-conservation-check: true
       enable-deep-per-tx-sui-conservation-check: true
       force-disable-epoch-sui-conservation-check: false
-      enable-state-consistency-check: true
+      state-consistency-check: panic-on-fail
       force-disable-state-consistency-check: false
       enable-move-vm-paranoid-checks: true
     transaction-deny-config:
@@ -433,7 +433,7 @@ validator_configs:
       enable-epoch-sui-conservation-check: true
       enable-deep-per-tx-sui-conservation-check: true
       force-disable-epoch-sui-conservation-check: false
-      enable-state-consistency-check: true
+      state-consistency-check: panic-on-fail
       force-disable-state-consistency-check: false
       enable-move-vm-paranoid-checks: true
     transaction-deny-config:
@@ -521,7 +521,7 @@ validator_configs:
       enable-epoch-sui-conservation-check: true
       enable-deep-per-tx-sui-conservation-check: true
       force-disable-epoch-sui-conservation-check: false
-      enable-state-consistency-check: true
+      state-consistency-check: panic-on-fail
       force-disable-state-consistency-check: false
       enable-move-vm-paranoid-checks: true
     transaction-deny-config:
@@ -609,7 +609,7 @@ validator_configs:
       enable-epoch-sui-conservation-check: true
       enable-deep-per-tx-sui-conservation-check: true
       force-disable-epoch-sui-conservation-check: false
-      enable-state-consistency-check: true
+      state-consistency-check: panic-on-fail
       force-disable-state-consistency-check: false
       enable-move-vm-paranoid-checks: true
     transaction-deny-config:
