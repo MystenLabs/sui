@@ -1328,7 +1328,7 @@ module deepbook::clob {
         pool: &Pool<BaseAsset, QuoteAsset>,
         order_id: u64,
         account_cap: &AccountCap
-    ): &Order {
+    ): Order {
         let user = object::id(account_cap);
         assert!(table::contains(&pool.usr_open_orders, user), EInvalidUser);
         let usr_open_order_ids = table::borrow(&pool.usr_open_orders, user);
@@ -1340,7 +1340,14 @@ module deepbook::clob {
         let tick_level = critbit::borrow_leaf_by_key(open_orders, order_price);
         let tick_open_orders = &tick_level.open_orders;
         let order = linked_table::borrow(tick_open_orders, order_id);
-        order
+        Order {
+            order_id: order.order_id,
+            price: order.price,
+            quantity: order.quantity,
+            is_bid: order.is_bid,
+            owner: order.owner,
+            expire_timestamp: order.expire_timestamp
+        }
     }
 
 
