@@ -2,6 +2,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::pin::Pin;
 use std::sync::Arc;
 
 use config::WorkerId;
@@ -180,7 +181,7 @@ impl BatchMaker {
         mut batch: Batch,
         size: usize,
         responses: Vec<TxResponse>,
-    ) -> Option<impl Future<Output = ()>> {
+    ) -> Option<Pin<Box<dyn Future<Output = ()> + Send>>> {
         #[cfg(feature = "benchmark")]
         {
             let digest = batch.digest();
@@ -277,7 +278,7 @@ impl BatchMaker {
             *batch.versioned_metadata_mut().created_at_mut() = now();
             let metadata = batch.versioned_metadata().clone();
 
-            Some(async move {
+            Some(Box::pin(async move {
                 // Now save it to disk
                 let digest = batch.digest();
 
@@ -314,14 +315,14 @@ impl BatchMaker {
                 for response in responses {
                     let _ = response.send(digest);
                 }
-            })
+            }))
         } else {
             // The batch has been sealed so we can officially set its creation time
             // for latency calculations.
             batch.metadata_mut().created_at = now();
             let metadata = batch.metadata().clone();
 
-            Some(async move {
+            Some(Box::pin(async move {
                 // Now save it to disk
                 let digest = batch.digest();
 
@@ -358,7 +359,7 @@ impl BatchMaker {
                 for response in responses {
                     let _ = response.send(digest);
                 }
-            })
+            }))
         }
     }
 }
