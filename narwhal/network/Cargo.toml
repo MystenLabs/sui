@@ -21,7 +21,7 @@ tokio = { workspace = true, features = ["rt", "net", "sync", "macros", "time"] }
 tracing = "0.1.36"
 types = { path = "../types", package = "narwhal-types" }
 crypto = { path = "../crypto", package = "narwhal-crypto" }
-mysten-common = { path = "../../crates/mysten-common" }
+mysten-common.workspace = true
 mysten-metrics = { path = "../../crates/mysten-metrics" }
 
 workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
