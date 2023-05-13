@@ -16,17 +16,17 @@ struct SuiVerifierMeterBounds {
 
 impl SuiVerifierMeterBounds {
     fn add(&mut self, ticks: u128) -> PartialVMResult<()> {
-        if let Some(max_ticks) = self.max_ticks {
-            let new_ticks = self.ticks.saturating_add(ticks);
-            if new_ticks > max_ticks {
-                return Err(PartialVMError::new(StatusCode::CONSTRAINT_NOT_SATISFIED)
+        let max_ticks = self.max_ticks.unwrap_or(u128::MAX);
+
+        let new_ticks = self.ticks.saturating_add(ticks);
+        if new_ticks >= max_ticks {
+            return Err(PartialVMError::new(StatusCode::CONSTRAINT_NOT_SATISFIED)
                     .with_message(format!(
                         "program too complex. Ticks exceeded `{}` will exceed limits: `{} current + {} new > {} max`)",
                         self.name, self.ticks, ticks, max_ticks
                     )));
-            }
-            self.ticks = new_ticks;
         }
+        self.ticks = new_ticks;
         Ok(())
     }
 }
