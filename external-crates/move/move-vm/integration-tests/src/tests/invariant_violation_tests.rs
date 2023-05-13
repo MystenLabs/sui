@@ -69,7 +69,7 @@ fn merge_borrow_states_infinite_loop() {
         parameters: SignatureIndex(0),
     };
 
-    move_bytecode_verifier::verify_script(&cs).expect("verify failed");
+    move_bytecode_verifier::verify_script_unmetered(&cs).expect("verify failed");
     let vm = MoveVM::new(vec![]).unwrap();
 
     let storage: InMemoryStorage = InMemoryStorage::new();

@@ -576,7 +576,7 @@ fn make_module(
     };
     // uncomment to see the module generated
     // println!("Module: {:#?}", module);
-    move_bytecode_verifier::verify_module(&module).expect("verification failed");
+    move_bytecode_verifier::verify_module_unmetered(&module).expect("verification failed");
 
     let mut mod_bytes = vec![];
     module
