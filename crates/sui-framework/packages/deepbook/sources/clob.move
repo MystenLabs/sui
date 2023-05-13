@@ -658,7 +658,7 @@ module deepbook::clob {
     ): (Balance<BaseAsset>, Balance<QuoteAsset>) {
         let pool_id = *object::uid_as_inner(&pool.id);
         let base_balance_left = base_balance;
-        // Base balance received by taker, taking into account of taker commission.
+        // Quote balance received by taker, taking into account of taker commission.
         let quote_balance_filled = balance::zero<QuoteAsset>();
         let all_open_orders = &mut pool.bids;
         if (critbit::is_empty(all_open_orders)) {
