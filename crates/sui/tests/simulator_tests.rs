@@ -15,10 +15,7 @@ use tokio::time::{sleep, Duration, Instant};
 use tracing::{debug, trace};
 
 use sui_macros::*;
-use test_utils::{
-    network::TestClusterBuilder,
-    transaction::{transfer_coin, wait_for_tx},
-};
+use test_utils::{network::TestClusterBuilder, transaction::wait_for_tx};
 
 async fn make_fut(i: usize) -> usize {
     let count_dist = Uniform::from(1..5);
@@ -130,7 +127,8 @@ async fn test_net_determinism() {
     let mut test_cluster = TestClusterBuilder::new().build().await.unwrap();
     let context = &mut test_cluster.wallet;
 
-    let (_transferred_object, _, _, digest, _, _) = transfer_coin(context).await.unwrap();
+    let txn = context.make_transfer_sui_transaction(None, None).await;
+    let digest = context.execute_transaction_block(txn).await.unwrap().digest;
 
     sleep(Duration::from_millis(1000)).await;
 

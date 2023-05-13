@@ -19,7 +19,6 @@ use sui_types::{
     transaction::{CallArg, ObjectArg},
 };
 use test_utils::authority::spawn_test_authorities;
-use test_utils::transaction::make_publish_package;
 use test_utils::{
     authority::test_authority_configs_with_objects,
     transaction::{
@@ -119,11 +118,13 @@ async fn create_txes(
     //
     let mut package_path = PathBuf::from(TEST_DATA_DIR);
     package_path.push("dummy_modules_publish");
-    let publish_tx = make_publish_package(
+    let publish_tx = TestTransactionBuilder::new(
+        sender,
         gas_objects.pop().unwrap().compute_object_reference(),
-        package_path,
         gas_price,
-    );
+    )
+    .publish(package_path)
+    .build_and_sign(keypair);
     ret.insert(CommonTransactionCosts::Publish, publish_tx);
 
     //
