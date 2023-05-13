@@ -24,7 +24,7 @@ use sui_node::SuiNode;
 use sui_sdk::wallet_context::WalletContext;
 use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_tool::restore_from_db_checkpoint;
-use sui_types::base_types::ObjectID;
+use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
 use sui_types::base_types::{ObjectRef, SequenceNumber};
 use sui_types::crypto::{get_key_pair, SuiKeyPair};
 use sui_types::event::{Event, EventID};
@@ -46,9 +46,6 @@ use sui_types::utils::{
 use sui_types::SUI_CLOCK_OBJECT_ID;
 use test_utils::authority::test_and_configure_authority_configs;
 use test_utils::network::{start_fullnode_from_config, TestClusterBuilder};
-use test_utils::transaction::{
-    increment_counter, publish_basics_package_and_make_counter, transfer_coin,
-};
 use test_utils::transaction::{wait_for_all_txes, wait_for_tx};
 use tokio::sync::Mutex;
 use tokio::time::timeout;
@@ -66,7 +63,7 @@ async fn test_full_node_follows_txes() -> Result<(), anyhow::Error> {
     // merged we should be able to root out the flakiness.
     sleep(Duration::from_millis(10)).await;
 
-    let (transferred_object, _, receiver, digest, _, _) = transfer_coin(context).await?;
+    let (transferred_object, _, receiver, digest, _) = transfer_coin(context).await?;
 
     wait_for_tx(digest, node.state().clone()).await;
 
@@ -94,9 +91,11 @@ async fn test_full_node_shared_objects() -> Result<(), anyhow::Error> {
     let context = &mut test_cluster.wallet;
 
     let sender = context.config.keystore.addresses().get(0).cloned().unwrap();
-    let (package_ref, counter_ref) = publish_basics_package_and_make_counter(context, sender).await;
+    let (package_ref, counter_ref) = context.publish_basics_package_and_make_counter().await;
 
-    let response = increment_counter(context, sender, None, package_ref.0, counter_ref.0).await;
+    let response = context
+        .increment_counter(sender, None, package_ref.0, counter_ref.0, counter_ref.1)
+        .await;
     let digest = response.digest;
     wait_for_tx(digest, node.state().clone()).await;
 
@@ -116,7 +115,7 @@ async fn test_sponsored_transaction() -> Result<(), anyhow::Error> {
 
     // This makes sender send one coin to sponsor.
     // The sent coin is used as sponsor gas in the following sponsored tx.
-    let (sent_coin, sender_, receiver, _, object_ref, _) = transfer_coin(context).await.unwrap();
+    let (sent_coin, sender_, receiver, _, object_ref) = transfer_coin(context).await.unwrap();
     assert_eq!(sender, sender_);
     assert_eq!(sponsor, receiver);
     let context: &WalletContext = &test_cluster.wallet;
@@ -165,8 +164,10 @@ async fn test_full_node_move_function_index() -> Result<(), anyhow::Error> {
     let sender = test_cluster.get_address_0();
     let context = &mut test_cluster.wallet;
 
-    let (package_ref, counter_ref) = publish_basics_package_and_make_counter(context, sender).await;
-    let response = increment_counter(context, sender, None, package_ref.0, counter_ref.0).await;
+    let (package_ref, counter_ref) = context.publish_basics_package_and_make_counter().await;
+    let response = context
+        .increment_counter(sender, None, package_ref.0, counter_ref.0, counter_ref.1)
+        .await;
     let digest = response.digest;
 
     wait_for_tx(digest, node.state().clone()).await;
@@ -228,7 +229,7 @@ async fn test_full_node_indexes() -> Result<(), anyhow::Error> {
     let node = &test_cluster.fullnode_handle.sui_node;
     let context = &mut test_cluster.wallet;
 
-    let (transferred_object, sender, receiver, digest, _, _) = transfer_coin(context).await?;
+    let (transferred_object, sender, receiver, digest, _) = transfer_coin(context).await?;
 
     wait_for_tx(digest, node.state().clone()).await;
 
@@ -464,13 +465,11 @@ async fn test_full_node_sync_flood() -> Result<(), anyhow::Error> {
     // Start a new fullnode that is not on the write path
     let node = test_cluster.start_fullnode().await.unwrap().sui_node;
 
-    let sender = test_cluster.get_address_0();
     let context = test_cluster.wallet;
 
     let mut futures = Vec::new();
 
-    let (package_ref, counter_ref) =
-        publish_basics_package_and_make_counter(&context, sender).await;
+    let (package_ref, counter_ref) = context.publish_basics_package_and_make_counter().await;
 
     let context = Arc::new(Mutex::new(context));
 
@@ -519,15 +518,16 @@ async fn test_full_node_sync_flood() -> Result<(), anyhow::Error> {
 
                 let context = &context.lock().await;
                 shared_tx_digest = Some(
-                    increment_counter(
-                        context,
-                        sender,
-                        Some(gas_object_id),
-                        package_ref.0,
-                        counter_ref.0,
-                    )
-                    .await
-                    .digest,
+                    context
+                        .increment_counter(
+                            sender,
+                            Some(gas_object_id),
+                            package_ref.0,
+                            counter_ref.0,
+                            counter_ref.1,
+                        )
+                        .await
+                        .digest,
                 );
             }
             tx.send((owned_tx_digest.unwrap(), shared_tx_digest.unwrap()))
@@ -669,7 +669,7 @@ async fn test_full_node_event_read_api_ok() {
 
     let (package_id, gas_id_1, _) = context.publish_nfts_package().await;
 
-    let (transferred_object, _, _, digest, _, _) = transfer_coin(context).await.unwrap();
+    let (transferred_object, _, _, digest, _) = transfer_coin(context).await.unwrap();
 
     wait_for_tx(digest, node.state().clone()).await;
 
@@ -1197,4 +1197,31 @@ async fn test_pass_back_clock_object() -> Result<(), anyhow::Error> {
     ) = rx.recv().await.unwrap().unwrap();
     assert!(objects.iter().any(|o| o.id() == SUI_CLOCK_OBJECT_ID));
     Ok(())
+}
+
+async fn transfer_coin(
+    context: &mut WalletContext,
+) -> Result<
+    (
+        ObjectID,
+        SuiAddress,
+        SuiAddress,
+        TransactionDigest,
+        ObjectRef,
+    ),
+    anyhow::Error,
+> {
+    let gas_price = context.get_reference_gas_price().await?;
+    let accounts_and_objs = context.get_all_accounts_and_gas_objects().await.unwrap();
+    let sender = accounts_and_objs[0].0;
+    let receiver = accounts_and_objs[1].0;
+    let gas_object = accounts_and_objs[0].1[0];
+    let object_to_send = accounts_and_objs[0].1[1];
+    let txn = context.sign_transaction(
+        &TestTransactionBuilder::new(sender, gas_object, gas_price)
+            .transfer(object_to_send, receiver)
+            .build(),
+    );
+    let resp = context.execute_transaction_block(txn).await?;
+    Ok((object_to_send.0, sender, receiver, resp.digest, gas_object))
 }
