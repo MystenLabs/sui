@@ -6,6 +6,7 @@ import {
     getGroupByOwner,
     LocationIdType,
     type ObjectChangeSummary,
+    useGetNFTMeta,
 } from '@mysten/core';
 import { ChevronRight12 } from '@mysten/icons';
 import {
@@ -15,7 +16,7 @@ import {
     type SuiObjectChangeTransferred,
 } from '@mysten/sui.js';
 import clsx from 'clsx';
-import { type ReactNode } from 'react';
+import { type ReactNode, useState } from 'react';
 
 import {
     ExpandableList,
@@ -23,11 +24,13 @@ import {
     ExpandableListItems,
 } from '~/ui/ExpandableList';
 import { AddressLink, ObjectLink } from '~/ui/InternalLink';
+import { ImageModal } from '~/ui/Modal/ImageModal';
 import { Text } from '~/ui/Text';
 import {
     TransactionBlockCard,
     TransactionBlockCardSection,
 } from '~/ui/TransactionBlockCard';
+import { Image } from '~/ui/image/Image';
 
 enum Labels {
     created = 'Created',
@@ -53,17 +56,14 @@ interface ObjectChangeEntryBaseProps {
     type: keyof typeof Labels;
 }
 
-function Item({
-    label,
-    packageId,
-    moduleName,
-    typeName,
-}: {
+interface ItemProps {
     label: ItemLabels;
     packageId?: string;
     moduleName?: string;
     typeName?: string;
-}) {
+}
+
+function Item({ label, packageId, moduleName, typeName }: ItemProps) {
     return (
         <div
             className={clsx(
@@ -92,6 +92,41 @@ function Item({
                 </div>
             )}
         </div>
+    );
+}
+
+interface NFTItemProps {
+    description: string;
+    imageUrl: string;
+    objectId: string;
+}
+
+function NFTItem({ description, imageUrl, objectId }: NFTItemProps) {
+    const [open, handleOpen] = useState(false);
+
+    return (
+        <>
+            <ImageModal
+                open={open}
+                onClose={() => handleOpen(false)}
+                title={description}
+                subtitle={description}
+                src={imageUrl}
+                alt={description}
+            />
+            <div className="relative w-32 cursor-pointer whitespace-nowrap">
+                <Image
+                    size="lg"
+                    rounded="2xl"
+                    src={imageUrl!}
+                    alt={description}
+                    onClick={() => handleOpen(true)}
+                />
+                <div className="absolute bottom-2 left-1/2 flex -translate-x-1/2 justify-center rounded-lg bg-white px-2 py-1">
+                    <ObjectLink objectId={objectId} />
+                </div>
+            </div>
+        </>
     );
 }
 
@@ -154,11 +189,25 @@ function ObjectDetail({
     const moduleName = objectTypeSplit[1];
     const typeName = objectTypeSplit.slice(2).join(separator);
 
+    const nftMetaData = useGetNFTMeta(objectId);
+
+    const isNFT = !!nftMetaData.data;
+
     const objectDetailLabels = [
         ItemLabels.package,
         ItemLabels.module,
         ItemLabels.type,
     ];
+
+    if (isNFT) {
+        return (
+            <NFTItem
+                objectId={objectId}
+                description={nftMetaData.data?.description!}
+                imageUrl={nftMetaData.data?.imageUrl!}
+            />
+        );
+    }
 
     return (
         <ObjectDetailPanel

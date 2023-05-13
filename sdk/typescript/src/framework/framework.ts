@@ -60,8 +60,9 @@ export type CoinMetadata = Infer<typeof CoinMetadataStruct>;
  * as defined in https://github.com/MystenLabs/sui/blob/ca9046fd8b1a9e8634a4b74b0e7dabdc7ea54475/sui_programmability/framework/sources/Coin.move#L4
  */
 export class Coin {
-  static isCoin(data: ObjectData): boolean {
-    return Coin.getType(data)?.match(COIN_TYPE_ARG_REGEX) != null;
+  static isCoin(data: ObjectData | string): boolean {
+    const dataMatch = typeof data === 'string' ? data : Coin.getType(data);
+    return dataMatch?.match(COIN_TYPE_ARG_REGEX) != null;
   }
 
   static getCoinType(type: string) {

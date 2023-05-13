@@ -28,3 +28,4 @@ export * from './hooks/useOnScreen';
 export * from './hooks/useGetOwnedObjects';
 export * from './hooks/useCopyToClipboard';
 export * from './hooks/useGetOriginByteKioskContents';
+export * from './hooks/useGetNFTMeta';

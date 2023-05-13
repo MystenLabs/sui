@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { useGetNFTMeta } from '@mysten/core';
 import { ArrowRight16 } from '@mysten/icons';
 import { hasPublicTransfer, formatAddress } from '@mysten/sui.js';
 import cl from 'classnames';
@@ -15,7 +16,7 @@ import { Collapse } from '_app/shared/collapse';
 import { ExplorerLinkType } from '_components/explorer-link/ExplorerLinkType';
 import Loading from '_components/loading';
 import { NFTDisplayCard } from '_components/nft-display';
-import { useGetNFTMeta, useNFTBasicData, useOwnedNFT } from '_hooks';
+import { useNFTBasicData, useOwnedNFT } from '_hooks';
 import { useExplorerLink } from '_src/ui/app/hooks/useExplorerLink';
 import PageTitle from '_src/ui/app/shared/PageTitle';
 
