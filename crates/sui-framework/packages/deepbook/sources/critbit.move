@@ -93,7 +93,7 @@ module deepbook::critbit {
     // Return the previous leaf (key, index) of the input leaf.
     // Market sell orders consume liquidities by iterating through the leaves in descending order starting from the max leaf of the asks Critbit Tree.
     // This function provides the iterator for this procedure.
-    public fun previous_leaf<V: store>(tree: &CritbitTree<V>, _key: u64): (u64, u64) {
+    public(friend) fun previous_leaf<V: store>(tree: &CritbitTree<V>, _key: u64): (u64, u64) {
         let (_, index) = find_leaf(tree, _key);
         assert!(index != PARTITION_INDEX, ELeafNotExist);
         let ptr = MAX_U64 - index;
