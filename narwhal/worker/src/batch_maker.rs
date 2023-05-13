@@ -275,7 +275,7 @@ impl BatchMaker {
         if self.protocol_config.narwhal_versioned_metadata() {
             // The batch has been sealed so we can officially set its creation time
             // for latency calculations.
-            *batch.versioned_metadata_mut().created_at_mut() = now();
+            batch.versioned_metadata_mut().set_created_at(now());
             let metadata = batch.versioned_metadata().clone();
 
             Some(Box::pin(async move {

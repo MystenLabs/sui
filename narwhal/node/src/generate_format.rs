@@ -13,7 +13,7 @@ use std::{fs::File, io::Write};
 use structopt::{clap::arg_enum, StructOpt};
 use types::{
     Batch, BatchDigest, Certificate, CertificateDigest, Header, HeaderDigest, HeaderV1Builder,
-    Metadata, VersionedMetadata, WorkerOthersBatchMessage, WorkerOurBatchMessage,
+    Metadata, MetadataV1, VersionedMetadata, WorkerOthersBatchMessage, WorkerOurBatchMessage,
     WorkerOurBatchMessageV2, WorkerSynchronizeMessage,
 };
 
@@ -119,10 +119,10 @@ fn get_registry() -> Result<Registry> {
     let our_batch_v2 = WorkerOurBatchMessageV2 {
         digest: BatchDigest([0u8; 32]),
         worker_id: 0,
-        metadata: VersionedMetadata {
+        metadata: VersionedMetadata::V1(MetadataV1 {
             created_at: 0,
             received_at: None,
-        },
+        }),
     };
     let others_batch = WorkerOthersBatchMessage {
         digest: BatchDigest([0u8; 32]),

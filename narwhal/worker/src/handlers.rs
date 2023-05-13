@@ -12,13 +12,14 @@ use network::{client::NetworkClient, WorkerToPrimaryClient};
 use rand::seq::SliceRandom;
 use std::{collections::HashSet, time::Duration};
 use store::{rocks::DBMap, Map};
+use sui_protocol_config::ProtocolConfig;
 use tokio::time::sleep;
 use tracing::{debug, trace, warn};
 use types::{
-    now, Batch, BatchAPI, BatchDigest, FetchBatchesRequest, FetchBatchesResponse, PrimaryToWorker,
-    RequestBatchRequest, RequestBatchResponse, RequestBatchesRequest, RequestBatchesResponse,
-    WorkerBatchMessage, WorkerDeleteBatchesMessage, WorkerOthersBatchMessage,
-    WorkerSynchronizeMessage, WorkerToWorker, WorkerToWorkerClient,
+    now, Batch, BatchAPI, BatchDigest, FetchBatchesRequest, FetchBatchesResponse, MetadataAPI,
+    PrimaryToWorker, RequestBatchRequest, RequestBatchResponse, RequestBatchesRequest,
+    RequestBatchesResponse, WorkerBatchMessage, WorkerDeleteBatchesMessage,
+    WorkerOthersBatchMessage, WorkerSynchronizeMessage, WorkerToWorker, WorkerToWorkerClient,
 };
 
 use mysten_metrics::monitored_future;
@@ -36,6 +37,7 @@ pub struct WorkerReceiverHandler<V> {
     pub client: NetworkClient,
     pub store: DBMap<BatchDigest, Batch>,
     pub validator: V,
+    pub protocol_config: ProtocolConfig,
 }
 
 #[async_trait]
@@ -53,8 +55,12 @@ impl<V: TransactionValidator> WorkerToWorker for WorkerReceiverHandler<V> {
             ));
         }
         let digest = message.batch.digest();
+
         let mut batch = message.batch.clone();
-        batch.metadata_mut().created_at = now();
+        if self.protocol_config.narwhal_versioned_metadata() {
+            // Set received_at timestamp for remote batch.
+            batch.versioned_metadata_mut().set_received_at(now());
+        }
         self.store.insert(&digest, &batch).map_err(|e| {
             anemo::rpc::Status::internal(format!("failed to write to batch store: {e:?}"))
         })?;
@@ -143,6 +149,8 @@ pub struct PrimaryReceiverHandler<V> {
     pub batch_fetcher: Option<BatchFetcher>,
     // Validate incoming batches
     pub validator: V,
+    // The protocol configuration.
+    pub protocol_config: ProtocolConfig,
 }
 
 #[async_trait]
@@ -292,7 +300,10 @@ impl<V: TransactionValidator> PrimaryToWorker for PrimaryReceiverHandler<V> {
                             }
                             let digest = batch.digest();
                             if missing.remove(&digest) {
-                                batch.metadata_mut().created_at = now();
+                                if self.protocol_config.narwhal_versioned_metadata() {
+                                    // Set received_at timestamp for remote batch.
+                                    batch.versioned_metadata_mut().set_received_at(now());
+                                }
                                 self.store.insert(&digest, &batch).map_err(|e| {
                                     anemo::rpc::Status::internal(format!(
                                         "failed to write to batch store: {e:?}"

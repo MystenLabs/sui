@@ -25,7 +25,7 @@ async fn make_batch() {
     // Mock the primary client to always succeed.
     let mut mock_server = MockWorkerToPrimary::new();
     mock_server
-        .expect_report_our_batch()
+        .expect_report_our_batch_v2()
         .returning(|_| Ok(anemo::Response::new(())));
     client.set_worker_to_primary_local_handler(Arc::new(mock_server));
 
@@ -81,7 +81,7 @@ async fn batch_timeout() {
     // Mock the primary client to always succeed.
     let mut mock_server = MockWorkerToPrimary::new();
     mock_server
-        .expect_report_our_batch()
+        .expect_report_our_batch_v2()
         .returning(|_| Ok(anemo::Response::new(())));
     client.set_worker_to_primary_local_handler(Arc::new(mock_server));
 

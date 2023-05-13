@@ -106,9 +106,9 @@ impl VersionedMetadata {
 #[enum_dispatch]
 pub trait MetadataAPI {
     fn created_at(&self) -> &TimestampMs;
-    fn created_at_mut(&mut self) -> &mut TimestampMs;
+    fn set_created_at(&mut self, ts: TimestampMs);
     fn received_at(&self) -> Option<TimestampMs>;
-    // fn received_at_mut(&mut self) -> Option<&mut TimestampMs>;
+    fn set_received_at(&mut self, ts: TimestampMs);
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Eq, Arbitrary, MallocSizeOf)]
@@ -127,17 +127,17 @@ impl MetadataAPI for MetadataV1 {
         &self.created_at
     }
 
-    fn created_at_mut(&mut self) -> &mut TimestampMs {
-        &mut self.created_at
+    fn set_created_at(&mut self, ts: TimestampMs) {
+        self.created_at = ts;
     }
 
     fn received_at(&self) -> Option<TimestampMs> {
         self.received_at
     }
 
-    // fn received_at_mut(&mut self) -> Option<&mut TimestampMs> {
-    //     self.received_at.as_mut()
-    // }
+    fn set_received_at(&mut self, ts: TimestampMs) {
+        self.received_at = Some(ts);
+    }
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Eq, Arbitrary)]

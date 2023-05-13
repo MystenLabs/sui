@@ -281,8 +281,6 @@ async fn run(
     let (primary, worker) = match matches.subcommand() {
         // Spawn the primary and consensus core.
         ("primary", Some(sub_matches)) => {
-            // TODO: Figure out the right way to handle protocol version.
-            // Use the latest version for now.
             let primary = PrimaryNode::new(
                 parameters.clone(),
                 !sub_matches.is_present("consensus-disabled"),
@@ -313,8 +311,6 @@ async fn run(
                 .parse::<WorkerId>()
                 .context("The worker id must be a positive integer")?;
 
-            // TODO: Figure out the right way to handle protocol version.
-            // Use the latest version for now.
             let worker = WorkerNode::new(
                 id,
                 parameters.clone(),

@@ -18,11 +18,12 @@ use types::FetchBatchesRequest;
 
 use fastcrypto::hash::Hash;
 use mysten_metrics::spawn_logged_monitored_task;
+use sui_protocol_config::ProtocolConfig;
 use tokio::task::JoinHandle;
 use tracing::{debug, error, info};
 use types::{
     metered_channel, Batch, BatchAPI, BatchDigest, Certificate, CertificateAPI, CommittedSubDag,
-    ConditionalBroadcastReceiver, ConsensusOutput, HeaderAPI, Timestamp,
+    ConditionalBroadcastReceiver, ConsensusOutput, HeaderAPI, MetadataAPI, Timestamp,
 };
 
 /// The `Subscriber` receives certificates sequenced by the consensus and waits until the
@@ -43,6 +44,7 @@ struct Inner {
     committee: Committee,
     client: NetworkClient,
     metrics: Arc<ExecutorMetrics>,
+    protocol_config: ProtocolConfig,
 }
 
 pub fn spawn_subscriber<State: ExecutionState + Send + Sync + 'static>(
@@ -55,6 +57,7 @@ pub fn spawn_subscriber<State: ExecutionState + Send + Sync + 'static>(
     metrics: Arc<ExecutorMetrics>,
     restored_consensus_output: Vec<CommittedSubDag>,
     state: State,
+    protocol_config: ProtocolConfig,
 ) -> Vec<JoinHandle<()>> {
     // This is ugly but has to be done this way for now
     // Currently network incorporate both server and client side of RPC interface
@@ -87,6 +90,7 @@ pub fn spawn_subscriber<State: ExecutionState + Send + Sync + 'static>(
                 metrics,
                 restored_consensus_output,
                 tx_notifier,
+                protocol_config.clone(),
             ),
             "SubscriberTask"
         ),
@@ -122,6 +126,7 @@ async fn create_and_run_subscriber(
     metrics: Arc<ExecutorMetrics>,
     restored_consensus_output: Vec<CommittedSubDag>,
     tx_notifier: metered_channel::Sender<ConsensusOutput>,
+    protocol_config: ProtocolConfig,
 ) {
     info!("Starting subscriber");
     let subscriber = Subscriber {
@@ -133,6 +138,7 @@ async fn create_and_run_subscriber(
             worker_cache,
             client,
             metrics,
+            protocol_config,
         }),
     };
     subscriber
@@ -363,16 +369,63 @@ impl Subscriber {
                 }
             };
             for (digest, batch) in batches {
-                let batch_fetch_duration = batch.metadata().created_at.elapsed().as_secs_f64();
-                inner
-                    .metrics
-                    .batch_execution_latency
-                    .observe(batch_fetch_duration);
-                debug!(
-                    "Batch {:?} took {} seconds since it has been created to when it has been fetched for execution",
-                    digest,
-                    batch_fetch_duration,
-                );
+                if inner.protocol_config.narwhal_versioned_metadata() {
+                    let metadata = batch.versioned_metadata();
+                    if metadata.received_at().is_some() {
+                        let remote_duration =
+                            metadata.received_at().unwrap().elapsed().as_secs_f64();
+                        debug!(
+                            "Batch was fetched for execution after being received from another worker {}s ago.",
+                            remote_duration
+                        );
+                        inner
+                            .metrics
+                            .batch_execution_latency_without_network_latency
+                            .with_label_values(&["other"])
+                            .observe(remote_duration);
+                    } else {
+                        let local_duration = batch
+                            .versioned_metadata()
+                            .created_at()
+                            .elapsed()
+                            .as_secs_f64();
+                        debug!(
+                            "Batch was fetched for execution after being created locally {}s ago.",
+                            local_duration
+                        );
+                        inner
+                            .metrics
+                            .batch_execution_latency_without_network_latency
+                            .with_label_values(&["own"])
+                            .observe(local_duration);
+                    };
+
+                    let batch_fetch_duration = batch
+                        .versioned_metadata()
+                        .created_at()
+                        .elapsed()
+                        .as_secs_f64();
+                    inner
+                        .metrics
+                        .batch_execution_latency
+                        .observe(batch_fetch_duration);
+                    debug!(
+                        "Batch {:?} took {} seconds since it has been created to when it has been fetched for execution",
+                        digest,
+                        batch_fetch_duration,
+                    );
+                } else {
+                    let batch_fetch_duration = batch.metadata().created_at.elapsed().as_secs_f64();
+                    inner
+                        .metrics
+                        .batch_execution_latency
+                        .observe(batch_fetch_duration);
+                    debug!(
+                        "Batch {:?} took {} seconds since it has been created to when it has been fetched for execution",
+                        digest,
+                        batch_fetch_duration,
+                    );
+                }
                 fetched_batches.insert(digest, batch);
             }
         }

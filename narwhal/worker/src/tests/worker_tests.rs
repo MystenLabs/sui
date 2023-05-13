@@ -199,7 +199,7 @@ async fn handle_remote_clients_transactions() {
     let (tx_await_batch, mut rx_await_batch) = test_utils::test_channel!(CHANNEL_CAPACITY);
     let mut mock_primary_server = MockWorkerToPrimary::new();
     mock_primary_server
-        .expect_report_our_batch()
+        .expect_report_our_batch_v2()
         .withf(move |request| {
             let message = request.body();
 
@@ -318,7 +318,7 @@ async fn handle_local_clients_transactions() {
     let (tx_await_batch, mut rx_await_batch) = test_utils::test_channel!(CHANNEL_CAPACITY);
     let mut mock_primary_server = MockWorkerToPrimary::new();
     mock_primary_server
-        .expect_report_our_batch()
+        .expect_report_our_batch_v2()
         .withf(move |request| {
             let message = request.body();
             message.digest == batch_digest && message.worker_id == worker_id
