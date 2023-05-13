@@ -8,13 +8,15 @@
 
 use crate::unit_tests::production_config;
 use move_binary_format::{errors::VMResult, CompiledModule};
-use move_bytecode_verifier::verifier;
+use move_bytecode_verifier::{meter::BoundMeter, verifier};
 
 #[allow(unused)]
 fn run_binary_test(name: &str, bytes: &str) -> VMResult<()> {
     let bytes = hex::decode(bytes).expect("invalid hex string");
     let m = CompiledModule::deserialize_with_defaults(&bytes).expect("invalid module");
-    verifier::verify_module_with_config_for_test(name, &production_config(), &m)
+    let config = production_config();
+    let mut meter = BoundMeter::new(&config);
+    verifier::verify_module_with_config_for_test(name, &config, &m, &mut meter)
 }
 
 #[cfg(feature = "address32")]
