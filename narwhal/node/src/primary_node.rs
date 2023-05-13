@@ -275,6 +275,7 @@ impl PrimaryNodeInner {
                 tx_committed_certificates.clone(),
                 tx_consensus_round_updates,
                 registry,
+                &protocol_config,
             )
             .await?;
 
@@ -329,6 +330,7 @@ impl PrimaryNodeInner {
         tx_committed_certificates: metered_channel::Sender<(Round, Vec<Certificate>)>,
         tx_consensus_round_updates: watch::Sender<ConsensusRound>,
         registry: &Registry,
+        protocol_config: &ProtocolConfig,
     ) -> SubscriberResult<Vec<JoinHandle<()>>>
     where
         PublicKey: VerifyingKey,
@@ -391,6 +393,7 @@ impl PrimaryNodeInner {
             rx_sequence,
             registry,
             restored_consensus_output,
+            protocol_config,
         )?;
 
         Ok(executor_handles

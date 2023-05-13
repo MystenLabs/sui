@@ -97,7 +97,7 @@ impl Worker {
             worker_cache,
             parameters: parameters.clone(),
             store,
-            protocol_config,
+            protocol_config: protocol_config.clone(),
         };
 
         let node_metrics = Arc::new(metrics.worker_metrics.unwrap());
@@ -114,6 +114,7 @@ impl Worker {
             client: client.clone(),
             store: worker.store.clone(),
             validator: validator.clone(),
+            protocol_config: protocol_config.clone(),
         });
         // Apply rate limits from configuration as needed.
         if let Some(limit) = parameters.anemo.report_batch_rate_limit {
@@ -145,6 +146,7 @@ impl Worker {
             network: None,
             batch_fetcher: None,
             validator: validator.clone(),
+            protocol_config: protocol_config.clone(),
         });
 
         // Receive incoming messages from other workers.
@@ -279,6 +281,7 @@ impl Worker {
             network.clone(),
             worker.store.clone(),
             node_metrics.clone(),
+            protocol_config.clone(),
         );
         client.set_primary_to_worker_local_handler(
             worker_peer_id,
@@ -293,6 +296,7 @@ impl Worker {
                 network: Some(network.clone()),
                 batch_fetcher: Some(batch_fetcher),
                 validator: validator.clone(),
+                protocol_config: protocol_config.clone(),
             }),
         );
 

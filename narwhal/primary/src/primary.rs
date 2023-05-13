@@ -121,7 +121,7 @@ impl Primary {
         tx_shutdown: &mut PreSubscribedBroadcastSender,
         tx_committed_certificates: Sender<(Round, Vec<Certificate>)>,
         registry: &Registry,
-        protocol_config: ProtocolConfig,
+        _protocol_config: ProtocolConfig,
     ) -> Vec<JoinHandle<()>> {
         // Write the parameters to the logs.
         parameters.tracing();

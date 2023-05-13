@@ -6122,6 +6122,7 @@ dependencies = [
  "prometheus",
  "rand 0.8.5",
  "serde 1.0.152",
+ "sui-protocol-config",
  "telemetry-subscribers",
  "tempfile",
  "thiserror",

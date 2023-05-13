@@ -68,6 +68,7 @@ async fn synchronize() {
         network: Some(send_network),
         batch_fetcher: None,
         validator: TrivialTransactionValidator,
+        protocol_config: latest_protocol_version(),
     };
 
     // Verify the batch is not in store
@@ -108,6 +109,7 @@ async fn synchronize_when_batch_exists() {
         network: Some(send_network),
         batch_fetcher: None,
         validator: TrivialTransactionValidator,
+        protocol_config: latest_protocol_version(),
     };
 
     // Store the batch.
@@ -158,6 +160,7 @@ async fn delete_batches() {
         network: None,
         batch_fetcher: None,
         validator: TrivialTransactionValidator,
+        protocol_config: latest_protocol_version(),
     };
     let message = WorkerDeleteBatchesMessage {
         digests: vec![digest],

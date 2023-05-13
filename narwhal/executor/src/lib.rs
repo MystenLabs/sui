@@ -8,6 +8,7 @@ mod metrics;
 
 pub use errors::{SubscriberError, SubscriberResult};
 pub use state::ExecutionIndices;
+use sui_protocol_config::ProtocolConfig;
 
 use crate::metrics::ExecutorMetrics;
 use crate::subscriber::spawn_subscriber;
@@ -58,6 +59,7 @@ impl Executor {
         rx_sequence: metered_channel::Receiver<CommittedSubDag>,
         registry: &Registry,
         restored_consensus_output: Vec<CommittedSubDag>,
+        protocol_config: &ProtocolConfig,
     ) -> SubscriberResult<Vec<JoinHandle<()>>>
     where
         State: ExecutionState + Send + Sync + 'static,
@@ -78,6 +80,7 @@ impl Executor {
             arc_metrics,
             restored_consensus_output,
             execution_state,
+            protocol_config.clone(),
         );
 
         // Return the handle.
