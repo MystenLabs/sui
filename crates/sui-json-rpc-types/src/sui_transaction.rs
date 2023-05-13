@@ -148,8 +148,8 @@ impl SuiTransactionBlockResponseOptions {
     /// default to return `WaitForEffectsCert` unless some options require
     /// local execution
     pub fn default_execution_request_type(&self) -> ExecuteTransactionRequestType {
-        // if people want effects or events, they typically want to wait for local execution
-        if self.require_effects() {
+        // balance changes and object changes require local execution
+        if self.show_balance_changes || self.show_object_changes {
             ExecuteTransactionRequestType::WaitForLocalExecution
         } else {
             ExecuteTransactionRequestType::WaitForEffectsCert
