@@ -935,10 +935,10 @@ mod tests {
         .await;
 
         // Transfer all valid gases away except for 1
-        for gas_idx in 0..(gases.len() - 1) {
+        for gas in gases.iter().take(gases.len() - 1) {
             let _res = SuiClientCommands::TransferSui {
                 to: SuiAddress::random_for_testing_only(),
-                sui_coin_object_id: *gases[gas_idx].id(),
+                sui_coin_object_id: *gas.id(),
                 gas_budget: 50000000,
                 amount: None,
                 serialize_unsigned_transaction: false,
