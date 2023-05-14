@@ -972,6 +972,10 @@ mod tests {
         // Check that the gas wasn't discarded
         let discarded = faucet.metrics.total_discarded_coins.get();
         assert_eq!(discarded, 1);
+
+        // Check that the WAL is empty so we don't retry bad requests
+        let wal = faucet.wal.lock().await;
+        assert!(wal.log.is_empty());
     }
 
     #[tokio::test]
