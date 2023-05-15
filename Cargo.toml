@@ -2,6 +2,16 @@
 resolver = "2"
 
 exclude = [
+    "external-crates/move-execution/v0",
+    "external-crates/move-execution/v0/move-bytecode-verifier",
+    "external-crates/move-execution/v0/move-bytecode-verifier/bytecode-verifier-tests",
+    "external-crates/move-execution/v0/move-bytecode-verifier/fuzz",
+    "external-crates/move-execution/v0/move-bytecode-verifier/invalid-mutations",
+    "external-crates/move-execution/v0/move-stdlib",
+    "external-crates/move-execution/v0/move-vm/integration-tests",
+    "external-crates/move-execution/v0/move-vm/paranoid-tests",
+    "external-crates/move-execution/v0/move-vm/runtime",
+    "external-crates/move-execution/v0/move-vm/test-utils",
     "external-crates/move/extensions/move-table-extension",
     "external-crates/move/move-binary-format",
     "external-crates/move/move-binary-format/serializer-tests",
