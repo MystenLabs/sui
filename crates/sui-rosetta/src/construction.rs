@@ -138,21 +138,10 @@ pub async fn submit(
         .quorum_driver_api()
         .execute_transaction_block(
             signed_tx,
-            SuiTransactionBlockResponseOptions::new()
-                .with_input()
-                .with_effects()
-                .with_balance_changes(),
+            SuiTransactionBlockResponseOptions::new(),
             Some(ExecuteTransactionRequestType::WaitForEffectsCert),
         )
         .await?;
-
-    if let SuiExecutionStatus::Failure { error } = response
-        .effects
-        .expect("Execute transaction should return effects")
-        .status()
-    {
-        return Err(Error::TransactionExecutionError(error.to_string()));
-    }
 
     Ok(TransactionIdentifierResponse {
         transaction_identifier: TransactionIdentifier {
