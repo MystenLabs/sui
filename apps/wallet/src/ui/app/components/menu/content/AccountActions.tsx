@@ -46,7 +46,7 @@ export function AccountActions({ account }: AccountActionsProps) {
             break;
         case AccountType.QREDO:
             actionContent = account.labels?.length
-                ? account.labels!.map(({ name, value }) => (
+                ? account.labels.map(({ name, value }) => (
                       <BadgeLabel label={value} key={name} />
                   ))
                 : null;
