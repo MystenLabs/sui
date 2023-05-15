@@ -5,6 +5,7 @@ use fastcrypto::error::FastCryptoError;
 use hyper::header::InvalidHeaderValue;
 use jsonrpsee::core::Error as RpcError;
 use jsonrpsee::types::error::CallError;
+use jsonrpsee::types::ErrorObject;
 use sui_types::error::{SuiError, SuiObjectResponseError, UserInputError};
 use sui_types::quorum_driver_types::QuorumDriverError;
 use thiserror::Error;
@@ -66,6 +67,17 @@ impl Error {
                     RpcError::Call(CallError::InvalidParams(sui_error.into()))
                 }
                 _ => RpcError::Call(CallError::Failed(sui_error.into())),
+            },
+            Error::QuorumDriverError(err) => match err {
+                QuorumDriverError::NonRecoverableTransactionError { errors } => {
+                    let error_object = ErrorObject::owned(
+                        -32000,
+                        "Transaction has non recoverable errors from at least 1/3 of validators",
+                        Some(errors),
+                    );
+                    RpcError::Call(CallError::Custom(error_object))
+                }
+                _ => RpcError::Call(CallError::Failed(err.into())),
             },
             _ => RpcError::Call(CallError::Failed(self.into())),
         }

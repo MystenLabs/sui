@@ -12,7 +12,7 @@ pub enum Error {
     #[error(transparent)]
     RpcError(#[from] jsonrpsee::core::Error),
     #[error(transparent)]
-    PcsSerialisationError(#[from] bcs::Error),
+    BcsSerialisationError(#[from] bcs::Error),
     #[error(transparent)]
     UserInputError(#[from] UserInputError),
     #[error("Subscription error : {0}")]
