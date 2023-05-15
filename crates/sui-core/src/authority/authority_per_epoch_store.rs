@@ -1552,7 +1552,12 @@ impl AuthorityPerEpochStore {
                 ..
             }) = transaction
             {
-                debug!("Received EndOfPublish from {:?}", authority.concise());
+                warn!(
+                    epoch = ?self.epoch(),
+                    "Received EndOfPublish from {:?}: {:?}",
+                    authority.concise(),
+                    transaction,
+                );
 
                 // It is ok to just release lock here as this function is the only place that transition into RejectAllCerts state
                 // And this function itself is always executed from consensus task
@@ -1573,7 +1578,7 @@ impl AuthorityPerEpochStore {
 
                 if collected_end_of_publish {
                     assert!(write_lock.is_none());
-                    debug!(
+                    warn!(
                         "Collected enough end_of_publish messages with last message from validator {:?}",
                         authority.concise()
                     );
