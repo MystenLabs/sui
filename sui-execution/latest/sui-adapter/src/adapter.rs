@@ -212,10 +212,8 @@ pub fn run_metered_move_bytecode_verifier_impl(
 
         if let Err(e) = verify_module_with_config_metered(verifier_config, module, meter) {
             // Check that the status indicates mtering timeout
-            // TODO: currently the Move verifier emits `CONSTRAINT_NOT_SATISFIED` for various failures including metering timeout
-            // We need to change the VM error code to be more specific when timedout for metering
             if [
-                StatusCode::CONSTRAINT_NOT_SATISFIED,
+                StatusCode::PROGRAM_TOO_COMPLEX,
                 StatusCode::TOO_MANY_BACK_EDGES,
             ]
             .contains(&e.major_status())
