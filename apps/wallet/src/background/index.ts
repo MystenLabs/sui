@@ -84,6 +84,10 @@ Keyring.on('lockedStatusUpdate', keyringStatusCallback);
 Keyring.on('accountsChanged', keyringStatusCallback);
 Keyring.on('activeAccountChanged', keyringStatusCallback);
 
+Keyring.on('accountsChanged', async (accounts) => {
+    await Permissions.ensurePermissionAccountsUpdated(accounts);
+});
+
 Browser.alarms.onAlarm.addListener((alarm) => {
     if (alarm.name === LOCK_ALARM_NAME) {
         Keyring.reviveDone.finally(() => Keyring.lock());
