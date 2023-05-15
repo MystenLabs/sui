@@ -17,6 +17,7 @@ use sui_sdk::rpc_types::SuiExecutionStatus;
 use sui_types::base_types::SuiAddress;
 use sui_types::crypto::{DefaultHash, SignatureScheme, ToFromBytes};
 use sui_types::error::SuiError;
+use sui_types::quorum_driver_types::ExecuteTransactionRequestType;
 use sui_types::signature::GenericSignature;
 use sui_types::transaction::{Transaction, TransactionData, TransactionDataAPI};
 
@@ -141,7 +142,7 @@ pub async fn submit(
                 .with_input()
                 .with_effects()
                 .with_balance_changes(),
-            None,
+            Some(ExecuteTransactionRequestType::WaitForEffectsCert),
         )
         .await?;
 

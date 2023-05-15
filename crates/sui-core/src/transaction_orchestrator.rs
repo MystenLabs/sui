@@ -116,6 +116,7 @@ where
             .start(),
         );
 
+        let disable_fastpath = std::env::var("DISABLE_FASTPATH").is_ok();
         let effects_receiver = quorum_driver_handler.subscribe_to_effects();
         let state_clone = validator_state.clone();
         let metrics = Arc::new(TransactionOrchestratorMetrics::new(prometheus_registry));
@@ -131,6 +132,7 @@ where
                     effects_receiver,
                     pending_tx_log_clone,
                     metrics_clone,
+                    disable_fastpath,
                 )
                 .await;
             })
@@ -342,6 +344,7 @@ where
         mut effects_receiver: Receiver<QuorumDriverEffectsQueueResult>,
         pending_transaction_log: Arc<WritePathPendingTransactionLog>,
         metrics: Arc<TransactionOrchestratorMetrics>,
+        disable_fastpath: bool,
     ) {
         loop {
             match effects_receiver.recv().await {
@@ -364,14 +367,16 @@ where
                             "Failed to finish transaction in pending transaction log: {err}"
                         );
                     }
-                    let _ = Self::execute_finalized_tx_locally_with_timeout(
-                        &validator_state,
-                        &executable_tx,
-                        &effects_cert,
-                        objects,
-                        &metrics,
-                    )
-                    .await;
+                    if !disable_fastpath {
+                        let _ = Self::execute_finalized_tx_locally_with_timeout(
+                            &validator_state,
+                            &executable_tx,
+                            &effects_cert,
+                            objects,
+                            &metrics,
+                        )
+                        .await;
+                    }
                 }
                 Ok(Err((tx_digest, _err))) => {
                     if let Err(err) = pending_transaction_log.finish_transaction(&tx_digest) {
