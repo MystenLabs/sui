@@ -41,9 +41,49 @@ pub async fn get_gas_status(
     // all other gas coins
     let more_gas_object_refs = gas[1..].to_vec();
 
+    // check_gas(
+    //     objects,
+    //     epoch_store,
+    //     gas_object_ref,
+    //     more_gas_object_refs,
+    //     transaction.gas_budget(),
+    //     transaction.gas_price(),
+    //     transaction.kind(),
+    // )
+    // .await
+
     check_gas(
         objects,
-        epoch_store,
+        epoch_store.protocol_config(),
+        epoch_store.reference_gas_price(),
+        gas_object_ref,
+        more_gas_object_refs,
+        transaction.gas_budget(),
+        transaction.gas_price(),
+        transaction.kind(),
+    )
+    .await
+}
+
+// Version of get_gas_status that doesn't take an epoch_store
+// For experimental purposes
+pub async fn get_gas_status_experimental(
+    objects: &[Object],
+    gas: &[ObjectRef],
+    protocol_config: &ProtocolConfig,
+    reference_gas_price: u64,
+    transaction: &TransactionData,
+) -> SuiResult<SuiGasStatus> {
+    // Get the first coin (possibly the only one) and make it "the gas coin", then
+    // keep track of all others that can contribute to gas (gas smashing).
+    let gas_object_ref = gas.get(0).unwrap();
+    // all other gas coins
+    let more_gas_object_refs = gas[1..].to_vec();
+
+    check_gas(
+        objects,
+        protocol_config,
+        reference_gas_price,
         gas_object_ref,
         more_gas_object_refs,
         transaction.gas_budget(),
@@ -166,19 +206,21 @@ pub async fn check_certificate_input(
 #[instrument(level = "trace", skip_all)]
 async fn check_gas(
     objects: &[Object],
-    epoch_store: &AuthorityPerEpochStore,
+    // epoch_store: &AuthorityPerEpochStore,
+    protocol_config: &ProtocolConfig,
+    reference_gas_price: u64,
     gas_payment: &ObjectRef,
     more_gas_object_refs: Vec<ObjectRef>,
     gas_budget: u64,
     gas_price: u64,
     tx_kind: &TransactionKind,
 ) -> SuiResult<SuiGasStatus> {
-    let protocol_config = epoch_store.protocol_config();
+    // let protocol_config = epoch_store.protocol_config();
     if tx_kind.is_system_tx() {
         Ok(SuiGasStatus::new_unmetered(protocol_config))
     } else {
         // gas price must be bigger or equal to reference gas price
-        let reference_gas_price = epoch_store.reference_gas_price();
+        // let reference_gas_price = epoch_store.reference_gas_price();
         if gas_price < reference_gas_price {
             return Err(UserInputError::GasPriceUnderRGP {
                 gas_price,

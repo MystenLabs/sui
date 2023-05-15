@@ -26,7 +26,8 @@ use prometheus::Registry;
 use sui_adapter::execution_engine;
 use sui_adapter::{adapter, execution_mode};
 use sui_core::authority::TemporaryStore;
-use sui_core::transaction_input_checker::get_gas_status;
+// use sui_core::transaction_input_checker::get_gas_status;
+use sui_core::transaction_input_checker::get_gas_status_experimental;
 // use sui_types::MOVE_STDLIB_ADDRESS;
 // use sui_types::SUI_FRAMEWORK_ADDRESS;
 use sui_types::message_envelope::Message;
@@ -508,15 +509,8 @@ impl SuiNode {
     
     let checkpoint_store = CheckpointStore::new(&config.db_path().join("checkpoints"));
     
-    // hideous hack, not sure if this is correct:
-    let epoch_start_configuration = store
-    .get_epoch_start_configuration()?
-    .expect("EpochStartConfiguration of the current epoch must exist");
-    let protocol_version = epoch_start_configuration
-    .epoch_start_state()
-    .protocol_version();
-    let protocol_config = ProtocolConfig::get_for_version(protocol_version);
-    // end of hideous hack
+    // need protocol_config and reference gas price for new_move_vm and get_gas_status
+    let (mut protocol_config, mut reference_gas_price) = Self::get_config_and_ref_gas_price(&store).expect("Couldn't get config and gas price");
 
     let native_functions =
     sui_framework::natives::all_natives(false);
@@ -526,24 +520,24 @@ impl SuiNode {
     );
 
     // adding the epoch store here, needed for `get_gas_status`
-    let cur_epoch = store.get_recovery_epoch_at_restart()?;
-    let committee = committee_store
-    .get_committee(&cur_epoch)?
-    .expect("Committee of the current epoch must exist");
-    let cache_metrics = Arc::new(ResolverMetrics::new(&prometheus_registry));
-    let signature_verifier_metrics = SignatureVerifierMetrics::new(&prometheus_registry);
-    let epoch_store = AuthorityPerEpochStore::new(
-        config.protocol_public_key(),
-        committee.clone(),
-        &config.db_path().join("store"),
-        Some(perpetual_options.options),
-        EpochMetrics::new(&registry_service.default_registry()),
-        epoch_start_configuration,
-        store.clone(),
-        cache_metrics,
-        signature_verifier_metrics,
-        &config.expensive_safety_check_config,
-    );
+    // let cur_epoch = store.get_recovery_epoch_at_restart()?;
+    // let committee = committee_store
+    // .get_committee(&cur_epoch)?
+    // .expect("Committee of the current epoch must exist");
+    // let cache_metrics = Arc::new(ResolverMetrics::new(&prometheus_registry));
+    // let signature_verifier_metrics = SignatureVerifierMetrics::new(&prometheus_registry);
+    // let epoch_store = AuthorityPerEpochStore::new(
+    //     config.protocol_public_key(),
+    //     committee.clone(),
+    //     &config.db_path().join("store"),
+    //     Some(perpetual_options.options),
+    //     EpochMetrics::new(&registry_service.default_registry()),
+    //     epoch_start_configuration,
+    //     store.clone(),
+    //     cache_metrics,
+    //     signature_verifier_metrics,
+    //     &config.expensive_safety_check_config,
+    // );
 
     let mut memory_store = MemoryBackedStore::new();
     for obj in genesis.objects() {
@@ -586,7 +580,7 @@ impl SuiNode {
                     input_object_data.push(obj.1.clone());
                     
                 }
-                let gas_status = get_gas_status(&input_object_data, tx_data.gas(), &epoch_store, &tx_data).await?;
+                let gas_status = get_gas_status_experimental(&input_object_data, tx_data.gas(), &protocol_config, reference_gas_price, &tx_data).await?;
                 
                 let input_objects = InputObjects::new(input_object_kinds.into_iter().zip(input_object_data.into_iter()).collect());
                 let shared_object_refs = input_objects.filter_shared_objects();
@@ -638,6 +632,7 @@ impl SuiNode {
                 if _summary.end_of_epoch_data.is_some() {
                     println!("END OF EPOCH");
                     epoch += 1;
+                    (protocol_config, reference_gas_price) = Self::get_config_and_ref_gas_price(&store).expect("Couldn't get config and gas price");
 
                 }
 
@@ -676,6 +671,17 @@ impl SuiNode {
 
         info!("SuiNode started!");
         Ok(())
+    }
+
+    fn get_config_and_ref_gas_price(store: &AuthorityStore) -> Result<(ProtocolConfig, u64)> {
+        let epoch_start_configuration = store
+        .get_epoch_start_configuration()?
+        .expect("EpochStartConfiguration of the current epoch must exist");
+        let epoch_start_state = epoch_start_configuration.epoch_start_state();
+        let protocol_version = epoch_start_state.protocol_version();
+        let protocol_config = ProtocolConfig::get_for_version(protocol_version);
+        let reference_gas_price = epoch_start_state.reference_gas_price();
+        Ok((protocol_config, reference_gas_price))
     }
 
     pub fn subscribe_to_epoch_change(&self) -> broadcast::Receiver<SuiSystemState> {
