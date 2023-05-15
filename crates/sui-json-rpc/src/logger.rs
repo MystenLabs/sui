@@ -3,7 +3,7 @@
 
 #[macro_export]
 macro_rules! with_tracing {
-    ($method_name:literal, $future:expr) => {{
+    ($future:expr) => {{
         use tracing::{info, error, Instrument, Span};
         use jsonrpsee::core::{RpcResult, Error as RpcError};
         use jsonrpsee::types::error::{CallError, INVALID_PARAMS_CODE, CALL_EXECUTION_FAILED_CODE};

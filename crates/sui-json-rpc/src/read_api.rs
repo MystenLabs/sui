@@ -401,7 +401,7 @@ impl ReadApiServer for ReadApi {
         object_id: ObjectID,
         options: Option<SuiObjectDataOptions>,
     ) -> RpcResult<SuiObjectResponse> {
-        with_tracing!("get_object", async move {
+        with_tracing!(async move {
             let state = self.state.clone();
             let object_read = spawn_monitored_task!(async move {
                 state.get_object_read(&object_id).map_err(|e| {
@@ -453,7 +453,7 @@ impl ReadApiServer for ReadApi {
         object_ids: Vec<ObjectID>,
         options: Option<SuiObjectDataOptions>,
     ) -> RpcResult<Vec<SuiObjectResponse>> {
-        with_tracing!("multi_get_objects", async move {
+        with_tracing!(async move {
             if object_ids.len() <= *QUERY_MAX_RESULT_LIMIT {
                 self.metrics
                     .get_objects_limit
@@ -503,7 +503,7 @@ impl ReadApiServer for ReadApi {
         version: SequenceNumber,
         options: Option<SuiObjectDataOptions>,
     ) -> RpcResult<SuiPastObjectResponse> {
-        with_tracing!("try_get_past_object", async move {
+        with_tracing!(async move {
             let state = self.state.clone();
             let past_read = spawn_monitored_task!(async move {
             state.get_past_object_read(&object_id, version)
@@ -552,7 +552,7 @@ impl ReadApiServer for ReadApi {
         past_objects: Vec<SuiGetPastObjectRequest>,
         options: Option<SuiObjectDataOptions>,
     ) -> RpcResult<Vec<SuiPastObjectResponse>> {
-        with_tracing!("try_multi_get_past_objects", async move {
+        with_tracing!(async move {
             if past_objects.len() <= *QUERY_MAX_RESULT_LIMIT {
                 let mut futures = vec![];
                 for past_object in past_objects {
@@ -589,7 +589,7 @@ impl ReadApiServer for ReadApi {
 
     #[instrument(skip(self))]
     async fn get_total_transaction_blocks(&self) -> RpcResult<BigInt<u64>> {
-        with_tracing!("get_total_transaction_blocks", async move {
+        with_tracing!(async move {
             Ok(self
                 .state
                 .get_total_transaction_blocks()
@@ -604,7 +604,7 @@ impl ReadApiServer for ReadApi {
         digest: TransactionDigest,
         opts: Option<SuiTransactionBlockResponseOptions>,
     ) -> RpcResult<SuiTransactionBlockResponse> {
-        with_tracing!("get_transaction_block", async move {
+        with_tracing!(async move {
             let opts = opts.unwrap_or_default();
             let mut temp_response = IntermediateTransactionResponse::new(digest);
 
@@ -755,7 +755,7 @@ impl ReadApiServer for ReadApi {
         digests: Vec<TransactionDigest>,
         opts: Option<SuiTransactionBlockResponseOptions>,
     ) -> RpcResult<Vec<SuiTransactionBlockResponse>> {
-        with_tracing!("multi_get_transaction_blocks", async move {
+        with_tracing!(async move {
             let cloned_self = self.clone();
             Ok(spawn_monitored_task!(async move {
                 cloned_self
@@ -769,7 +769,7 @@ impl ReadApiServer for ReadApi {
 
     #[instrument(skip(self))]
     async fn get_events(&self, transaction_digest: TransactionDigest) -> RpcResult<Vec<SuiEvent>> {
-        with_tracing!("get_events", async move {
+        with_tracing!(async move {
             let state = self.state.clone();
             spawn_monitored_task!(async move{
             let store = state.load_epoch_store_one_call_per_task();
@@ -806,7 +806,7 @@ impl ReadApiServer for ReadApi {
 
     #[instrument(skip(self))]
     async fn get_latest_checkpoint_sequence_number(&self) -> RpcResult<BigInt<u64>> {
-        with_tracing!("get_latest_checkpoint_sequence_number", async move {
+        with_tracing!(async move {
             Ok(self
                 .state
                 .get_latest_checkpoint_sequence_number()
@@ -819,9 +819,7 @@ impl ReadApiServer for ReadApi {
 
     #[instrument(skip(self))]
     async fn get_checkpoint(&self, id: CheckpointId) -> RpcResult<Checkpoint> {
-        with_tracing!("get_checkpoint", async move {
-            Ok(self.get_checkpoint_internal(id)?)
-        })
+        with_tracing!(async move { Ok(self.get_checkpoint_internal(id)?) })
     }
 
     #[instrument(skip(self))]
@@ -832,7 +830,7 @@ impl ReadApiServer for ReadApi {
         limit: Option<usize>,
         descending_order: bool,
     ) -> RpcResult<CheckpointPage> {
-        with_tracing!("get_checkpoints", async move {
+        with_tracing!(async move {
             let limit = validate_limit(limit, QUERY_MAX_RESULT_LIMIT_CHECKPOINTS)?;
 
             let state = self.state.clone();
@@ -877,7 +875,7 @@ impl ReadApiServer for ReadApi {
         limit: Option<BigInt<u64>>,
         descending_order: bool,
     ) -> RpcResult<CheckpointPage> {
-        with_tracing!("get_checkpoints_deprecated_limit", async move {
+        with_tracing!(async move {
             self.get_checkpoints(cursor, limit.map(|l| *l as usize), descending_order)
                 .await
         })
@@ -888,7 +886,7 @@ impl ReadApiServer for ReadApi {
         &self,
         digest: TransactionDigest,
     ) -> RpcResult<SuiLoadedChildObjectsResponse> {
-        with_tracing!("get_loaded_child_objects", async move {
+        with_tracing!(async move {
             Ok(SuiLoadedChildObjectsResponse {
                 loaded_child_objects: match self
                     .state
@@ -914,7 +912,7 @@ impl ReadApiServer for ReadApi {
         &self,
         version: Option<BigInt<u64>>,
     ) -> RpcResult<ProtocolConfigResponse> {
-        with_tracing!("get_protocol_config", async move {
+        with_tracing!(async move {
             Ok(version
                 .map(|v| {
                     ProtocolConfig::get_for_version_if_supported((*v).into()).ok_or(anyhow!(
