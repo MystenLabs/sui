@@ -61,7 +61,7 @@ function MoveCall({ data }: TransactionProps<MoveCallSuiTransaction>) {
                     label={`'${module}'`}
                 />
                 , function:{' '}
-                <span className="break-all text-sui-dark">{func}</span>
+                <span className="break-all text-hero-dark">{func}</span>
                 {args && (
                     <span className="break-all">
                         , arguments: [{flattenSuiArguments(args!)}]
