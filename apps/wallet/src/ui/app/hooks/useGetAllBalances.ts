@@ -15,18 +15,15 @@ export function useGetAllBalances(address?: SuiAddress | null) {
         20_000
     );
 
-    return useQuery(
-        ['get-all-balance', address],
-        async () =>
+    return useQuery({
+        queryKey: ['get-all-balance', address],
+        queryFn: async () =>
             (await rpc.getAllBalances({ owner: address! })).sort(
                 ({ coinType: a }, { coinType: b }) =>
                     Coin.getCoinSymbol(a).localeCompare(Coin.getCoinSymbol(b))
             ),
-        {
-            enabled: !!address,
-            refetchInterval,
-            // NOTE: We lower the stale time here so that balances are more often refetched on page load.
-            staleTime: 5_000,
-        }
-    );
+        enabled: !!address,
+        refetchInterval,
+        staleTime: 5_000,
+    });
 }

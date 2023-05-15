@@ -17,13 +17,13 @@ const defaultOptions = {
 export function useGetObject(objectId?: string | null) {
     const rpc = useRpcClient();
     const normalizedObjId = objectId && normalizeSuiAddress(objectId);
-    return useQuery(
-        ['object', normalizedObjId],
-        () =>
+    return useQuery({
+        queryKey: ['object', normalizedObjId],
+        queryFn: () =>
             rpc.getObject({
                 id: normalizedObjId!,
                 options: defaultOptions,
             }),
-        { enabled: !!normalizedObjId }
-    );
+        enabled: !!normalizedObjId,
+    });
 }

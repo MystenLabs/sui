@@ -145,9 +145,10 @@ export function useSearch(query: string) {
     const rpc = useRpcClient();
     const { data: systemStateSummery } = useGetSystemState();
 
-    return useQuery(
-        ['search', query],
-        async () => {
+    return useQuery({
+        // eslint-disable-next-line @tanstack/query/exhaustive-deps
+        queryKey: ['search', query],
+        queryFn: async () => {
             const results = (
                 await Promise.allSettled([
                     getResultsForTransaction(rpc, query),
@@ -165,9 +166,7 @@ export function useSearch(query: string) {
 
             return results.map(({ value }) => value);
         },
-        {
-            enabled: !!query,
-            cacheTime: 10000,
-        }
-    );
+        enabled: !!query,
+        cacheTime: 10000,
+    });
 }

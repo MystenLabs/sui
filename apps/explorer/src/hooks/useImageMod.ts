@@ -19,9 +19,9 @@ export function useImageMod({
     url?: string;
     enabled?: boolean;
 }) {
-    return useQuery(
-        ['image-mod', url],
-        async () => {
+    return useQuery({
+        queryKey: ['image-mod', url, enabled],
+        queryFn: async () => {
             if (!isURL || !enabled) return true;
             try {
                 const resp = await fetch(`https://imgmod.sui.io/img`, {
@@ -35,10 +35,8 @@ export function useImageMod({
                 return false;
             }
         },
-        {
-            placeholderData: false,
-            staleTime: 24 * 60 * 60 * 1000,
-            cacheTime: Infinity,
-        }
-    );
+        placeholderData: false,
+        staleTime: 24 * 60 * 60 * 1000,
+        cacheTime: Infinity,
+    });
 }

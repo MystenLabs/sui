@@ -18,13 +18,13 @@ export function Onramp() {
 
     const [preferredProvider, ...otherProviders] = providers ?? [];
 
-    const { mutate, error } = useMutation(
-        ['onramp', 'get-provider-url'],
-        () => {
+    const { mutate, error } = useMutation({
+        mutationKey: ['onramp', 'get-provider-url'],
+        mutationFn: () => {
             return preferredProvider.getUrl(address!);
         },
-        { onSuccess: (data) => window.open(data, '_blank') }
-    );
+        onSuccess: (data) => window.open(data, '_blank'),
+    });
 
     useEffect(() => {
         // This shouldn't happen, but if you land on this page directly and no on-ramps are supported, just bail out
