@@ -22,8 +22,15 @@
       "yaml@<2.2.2": ">=2.2.2"
     }
   },
+  "manypkg": {
+    "ignoredRules": [
+      "INTERNAL_MISMATCH",
+      "ROOT_HAS_DEV_DEPENDENCIES"
+    ]
+  },
   "devDependencies": {
     "@changesets/cli": "^2.26.1",
+    "@manypkg/cli": "^0.20.0",
     "turbo": "^1.9.1"
   }
 }
