@@ -866,6 +866,10 @@ impl ReconfigurationInitiator for Arc<ConsensusAdapter> {
             send_end_of_publish
         };
         if send_end_of_publish {
+            warn!(
+                "attempting to send end_of_publish for epoch {}",
+                epoch_store.epoch()
+            );
             if let Err(err) = self.submit(
                 ConsensusTransaction::new_end_of_publish(self.authority),
                 None,

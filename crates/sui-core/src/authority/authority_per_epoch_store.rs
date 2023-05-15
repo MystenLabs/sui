@@ -1554,9 +1554,8 @@ impl AuthorityPerEpochStore {
             {
                 warn!(
                     epoch = ?self.epoch(),
-                    "Received EndOfPublish from {:?}: {:?}",
+                    "Received EndOfPublish from {:?}",
                     authority.concise(),
-                    transaction,
                 );
 
                 // It is ok to just release lock here as this function is the only place that transition into RejectAllCerts state
