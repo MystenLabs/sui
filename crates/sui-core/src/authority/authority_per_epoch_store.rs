@@ -1087,7 +1087,7 @@ impl AuthorityPerEpochStore {
             false
         };
         let _lock = if collected_end_of_publish {
-            warn!(
+            debug!(
                 "Collected enough end_of_publish messages with last message from validator {:?}",
                 authority.concise()
             );
@@ -1567,7 +1567,7 @@ impl AuthorityPerEpochStore {
                 kind: ConsensusTransactionKind::EndOfPublish(authority),
                 ..
             }) => {
-                warn!(epoch = ?self.epoch(), "Received EndOfPublish from {:?}", authority.concise());
+                debug!("Received EndOfPublish from {:?}", authority.concise());
                 self.record_end_of_publish(*authority, transaction.key(), consensus_index)?;
                 Ok(None)
             }
