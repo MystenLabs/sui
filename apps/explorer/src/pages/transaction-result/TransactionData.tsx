@@ -70,7 +70,7 @@ export function TransactionData({ transaction }: Props) {
                 )}
             </section>
 
-            <section className="flex w-96 flex-1 flex-col gap-6 md:min-w-[510px]">
+            <section className="flex w-96 flex-1 flex-col gap-6 md:min-w-transactionColumn">
                 {isProgrammableTransaction && (
                     <>
                         <div data-testid="transactions-card">

@@ -160,6 +160,9 @@ export default {
             width: {
                 31.5: '7.5rem',
             },
+            minWidth: {
+                transactionColumn: '31.875rem',
+            },
             transitionTimingFunction: {
                 'ease-in-out-cubic': 'cubic-bezier(0.65, 0, 0.35, 1)',
                 'ease-out-cubic': 'cubic-bezier(0.33, 1, 0.68, 1)',
