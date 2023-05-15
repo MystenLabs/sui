@@ -11,9 +11,9 @@ const defaultOptions = {
 };
 export function useGetTotalTransactionBlocks(options = defaultOptions) {
     const rpc = useRpcClient();
-    return useQuery(
-        ['home', 'transaction-count'],
-        () => rpc.getTotalTransactionBlocks(),
-        { ...options }
-    );
+    return useQuery({
+        queryKey: ['home', 'transaction-count'],
+        queryFn: () => rpc.getTotalTransactionBlocks(),
+        ...options,
+    });
 }

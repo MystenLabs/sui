@@ -18,13 +18,9 @@ use tracing::info;
 
 use mysten_metrics::RegistryService;
 
-use sui_config::builder::{ProtocolVersionsConfig, SupportedProtocolVersionsCallback};
-use sui_config::genesis_config::{AccountConfig, GenesisConfig};
 use sui_config::node::DBCheckpointConfig;
-use sui_config::{
-    sui_cluster_test_config_dir, Config, NetworkConfig, SUI_CLIENT_CONFIG, SUI_NETWORK_CONFIG,
-};
-use sui_config::{FullnodeConfigBuilder, NodeConfig, PersistedConfig, SUI_KEYSTORE_FILENAME};
+use sui_config::{sui_cluster_test_config_dir, Config, SUI_CLIENT_CONFIG, SUI_NETWORK_CONFIG};
+use sui_config::{NodeConfig, PersistedConfig, SUI_KEYSTORE_FILENAME};
 use sui_json_rpc_types::{SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions};
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_node::SuiNode;
@@ -35,6 +31,11 @@ use sui_sdk::sui_client_config::{SuiClientConfig, SuiEnv};
 use sui_sdk::wallet_context::WalletContext;
 use sui_sdk::{SuiClient, SuiClientBuilder};
 use sui_swarm::memory::{Swarm, SwarmBuilder};
+use sui_swarm_config::genesis_config::{AccountConfig, GenesisConfig};
+use sui_swarm_config::network_config::NetworkConfig;
+use sui_swarm_config::network_config_builder::{
+    FullnodeConfigBuilder, ProtocolVersionsConfig, SupportedProtocolVersionsCallback,
+};
 use sui_types::base_types::{AuthorityName, ObjectID, SuiAddress};
 use sui_types::committee::EpochId;
 use sui_types::crypto::KeypairTraits;
@@ -114,7 +115,7 @@ impl TestCluster {
     }
 
     pub fn fullnode_config_builder(&self) -> FullnodeConfigBuilder {
-        self.swarm.config().fullnode_config_builder()
+        FullnodeConfigBuilder::new(self.swarm.config())
     }
 
     /// Convenience method to start a new fullnode in the test cluster.
@@ -534,9 +535,7 @@ impl TestClusterBuilder {
         let mut wallet_conf: SuiClientConfig =
             PersistedConfig::read(&working_dir.join(SUI_CLIENT_CONFIG))?;
 
-        let fullnode_config = swarm
-            .config()
-            .fullnode_config_builder()
+        let fullnode_config = FullnodeConfigBuilder::new(swarm.config())
             .with_supported_protocol_versions_config(
                 self.fullnode_supported_protocol_versions_config
                     .clone()

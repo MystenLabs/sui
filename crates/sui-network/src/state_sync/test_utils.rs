@@ -3,7 +3,7 @@
 
 use shared_crypto::intent::{Intent, IntentMessage, IntentScope};
 use std::collections::HashMap;
-use sui_config::NetworkConfig;
+use sui_swarm_config::network_config::NetworkConfig;
 use sui_types::{
     base_types::AuthorityName,
     committee::{Committee, EpochId, StakeUnit},

@@ -1,9 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::path::PathBuf;
-use std::sync::Arc;
-
 use crate::authority::authority_test_utils::{
     publish_package_on_single_authority, upgrade_package_on_single_authority,
 };
@@ -13,10 +10,12 @@ use crate::test_utils::make_transfer_sui_transaction;
 use fastcrypto::ed25519::Ed25519KeyPair;
 use fastcrypto::traits::KeyPair;
 use move_core_types::ident_str;
+use std::path::PathBuf;
+use std::sync::Arc;
 use sui_config::certificate_deny_config::CertificateDenyConfigBuilder;
-use sui_config::genesis_config::{AccountConfig, DEFAULT_GAS_AMOUNT};
 use sui_config::transaction_deny_config::{TransactionDenyConfig, TransactionDenyConfigBuilder};
-use sui_config::NetworkConfig;
+use sui_swarm_config::genesis_config::{AccountConfig, DEFAULT_GAS_AMOUNT};
+use sui_swarm_config::network_config::NetworkConfig;
 use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress};
 use sui_types::effects::TransactionEffectsAPI;
@@ -30,21 +29,21 @@ use sui_types::transaction::{
 use sui_types::utils::{
     to_sender_signed_transaction, to_sender_signed_transaction_with_multi_signers,
 };
-use test_utils::transaction::make_publish_package;
 
 const ACCOUNT_NUM: usize = 5;
 const GAS_OBJECT_COUNT: usize = 15;
 
 async fn setup_test(deny_config: TransactionDenyConfig) -> (NetworkConfig, Arc<AuthorityState>) {
-    let network_config = sui_config::builder::ConfigBuilder::new_with_temp_dir()
-        .with_accounts(vec![
-            AccountConfig {
-                address: None,
-                gas_amounts: vec![DEFAULT_GAS_AMOUNT; GAS_OBJECT_COUNT],
-            };
-            ACCOUNT_NUM
-        ])
-        .build();
+    let network_config =
+        sui_swarm_config::network_config_builder::ConfigBuilder::new_with_temp_dir()
+            .with_accounts(vec![
+                AccountConfig {
+                    address: None,
+                    gas_amounts: vec![DEFAULT_GAS_AMOUNT; GAS_OBJECT_COUNT],
+                };
+                ACCOUNT_NUM
+            ])
+            .build();
     let state = TestAuthorityBuilder::new()
         .with_transaction_deny_config(deny_config)
         .with_network_config(&network_config)
@@ -240,7 +239,10 @@ async fn test_package_publish_disabled() {
     let rgp = state.reference_gas_price_for_testing().unwrap();
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     path.push("src/unit_tests/data/object_basics");
-    let tx = make_publish_package(accounts[0].2[0], path, rgp);
+    let (sender, keypair, gas_object) = (accounts[0].0, &accounts[0].1, accounts[0].2[0]);
+    let tx = TestTransactionBuilder::new(sender, gas_object, rgp)
+        .publish(path)
+        .build_and_sign(keypair);
     let result = state
         .handle_transaction(&state.epoch_store_for_testing(), tx)
         .await;

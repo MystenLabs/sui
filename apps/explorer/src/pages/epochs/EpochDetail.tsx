@@ -40,13 +40,15 @@ export default function EpochDetail() {
     const { id } = useParams();
     const enhancedRpc = useEnhancedRpcClient();
     const { data: systemState } = useGetSystemState();
-    const { data, isLoading, isError } = useQuery(['epoch', id], async () =>
-        enhancedRpc.getEpochs({
-            // todo: endpoint returns no data for epoch 0
-            cursor: id === '0' ? undefined : (Number(id!) - 1).toString(),
-            limit: 1,
-        })
-    );
+    const { data, isLoading, isError } = useQuery({
+        queryKey: ['epoch', id],
+        queryFn: async () =>
+            enhancedRpc.getEpochs({
+                // todo: endpoint returns no data for epoch 0
+                cursor: id === '0' ? undefined : (Number(id!) - 1).toString(),
+                limit: 1,
+            }),
+    });
 
     const [epochData] = data?.data ?? [];
     const isCurrentEpoch = useMemo(

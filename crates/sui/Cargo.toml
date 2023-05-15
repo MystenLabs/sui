@@ -35,6 +35,8 @@ sui-adapter = { path = "../../sui-execution/latest/sui-adapter", package = "sui-
 sui-core = { path = "../sui-core" }
 sui-framework-snapshot = { path = "../sui-framework-snapshot" }
 sui-config = { path = "../sui-config" }
+sui-swarm-config = { path = "../sui-swarm-config" }
+sui-genesis-builder = { path = "../sui-genesis-builder" }
 sui-types = { path = "../sui-types" }
 sui-json = { path = "../sui-json" }
 sui-swarm = { path = "../sui-swarm" }
@@ -46,6 +48,7 @@ sui-move = { path = "../sui-move", features = ["all"] }
 sui-move-build = { path = "../sui-move-build" }
 sui-protocol-config = { path = "../sui-protocol-config" }
 sui-test-transaction-builder = { path = "../sui-test-transaction-builder" }
+sui-verifier = { path = "../../sui-execution/latest/sui-verifier", package = "sui-verifier-latest" }
 shared-crypto = { path = "../shared-crypto" }
 
 fastcrypto.workspace = true

@@ -14,9 +14,9 @@ export function useRestrictedGuard() {
     const navigate = useNavigate();
     const location = useLocation();
 
-    const { data } = useQuery(
-        ['restricted-guard'],
-        async () => {
+    const { data } = useQuery({
+        queryKey: ['restricted-guard'],
+        queryFn: async () => {
             // NOTE: We use fetch directly here instead of the RPC layer because we don't want this instrumented,
             // and we also need to work with the response object directly.
             const res = await fetch('https://wallet-rpc.testnet.sui.io/', {
@@ -41,12 +41,9 @@ export function useRestrictedGuard() {
 
             return { restricted: false };
         },
-        {
-            // Don't cache this query, we want the check every app start:
-            cacheTime: 0,
-            retry: 0,
-        }
-    );
+        cacheTime: 0,
+        retry: 0,
+    });
 
     useEffect(() => {
         if (!data) return;

@@ -39,7 +39,6 @@ tokio = { workspace = true, features = ["full", "tracing", "test-util"] }
 tokio-retry = "0.3"
 tokio-stream = { version = "0.1.8", features = ["sync", "net"] }
 tracing = "0.1.36"
-url = "2.3.1"
 
 fastcrypto.workspace = true
 move-binary-format.workspace = true
@@ -70,6 +69,8 @@ narwhal-worker = { path = "../../narwhal/worker" }
 shared-crypto = { path = "../shared-crypto" }
 sui-config = { path = "../sui-config" }
 sui-framework = { path = "../sui-framework" }
+sui-swarm-config = { path = "../sui-swarm-config" }
+sui-genesis-builder = { path = "../sui-genesis-builder" }
 sui-json-rpc-types = { path = "../sui-json-rpc-types" }
 sui-macros = { path = "../sui-macros" }
 sui-move-build = { path = "../sui-move-build" }

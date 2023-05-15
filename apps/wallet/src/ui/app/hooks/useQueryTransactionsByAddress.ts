@@ -18,9 +18,9 @@ export function useQueryTransactionsByAddress(address: SuiAddress | null) {
         20_000
     );
 
-    return useQuery(
-        ['transactions-by-address', address],
-        async () => {
+    return useQuery({
+        queryKey: ['transactions-by-address', address],
+        queryFn: async () => {
             // combine from and to transactions
             const [txnIds, fromTxnIds] = await Promise.all([
                 rpc.queryTransactionBlocks({
@@ -61,6 +61,8 @@ export function useQueryTransactionsByAddress(address: SuiAddress | null) {
 
             return uniqueList;
         },
-        { enabled: !!address, staleTime: 10 * 1000, refetchInterval }
-    );
+        enabled: !!address,
+        staleTime: 10 * 1000,
+        refetchInterval,
+    });
 }

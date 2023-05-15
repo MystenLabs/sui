@@ -3,11 +3,13 @@
 
 module.exports = {
     root: true,
+    plugins: ['@tanstack/query'],
     extends: [
         'eslint:recommended',
         'plugin:@typescript-eslint/recommended',
         'react-app',
         'prettier',
+        'plugin:@tanstack/eslint-plugin-query/recommended',
     ],
     rules: {
         'no-implicit-coercion': [

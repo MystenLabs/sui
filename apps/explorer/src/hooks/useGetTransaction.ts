@@ -6,9 +6,9 @@ import { useQuery } from '@tanstack/react-query';
 
 export function useGetTransaction(transactionId: string) {
     const rpc = useRpcClient();
-    return useQuery(
-        ['transactions-by-id', transactionId],
-        async () =>
+    return useQuery({
+        queryKey: ['transactions-by-id', transactionId],
+        queryFn: async () =>
             rpc.getTransactionBlock({
                 digest: transactionId,
                 options: {
@@ -19,6 +19,6 @@ export function useGetTransaction(transactionId: string) {
                     showObjectChanges: true,
                 },
             }),
-        { enabled: !!transactionId }
-    );
+        enabled: !!transactionId,
+    });
 }

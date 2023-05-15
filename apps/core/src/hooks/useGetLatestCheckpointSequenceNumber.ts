@@ -6,7 +6,8 @@ import { useQuery } from '@tanstack/react-query';
 
 export function useGetLatestCheckpointSequenceNumber() {
     const rpc = useRpcClient();
-    return useQuery(['checkpoints', 'count'], () =>
-        rpc.getLatestCheckpointSequenceNumber()
-    );
+    return useQuery({
+        queryKey: ['checkpoints', 'count'],
+        queryFn: () => rpc.getLatestCheckpointSequenceNumber(),
+    });
 }

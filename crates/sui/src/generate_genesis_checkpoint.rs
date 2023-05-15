@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use camino::Utf8PathBuf;
-use sui_config::genesis::Builder;
 use sui_config::utils;
-use sui_config::ValidatorInfo;
+use sui_genesis_builder::validator_info::ValidatorInfo;
+use sui_genesis_builder::Builder;
 use sui_types::base_types::SuiAddress;
 use sui_types::crypto::{
     generate_proof_of_possession, get_key_pair_from_rng, AccountKeyPair, AuthorityKeyPair,

@@ -31,13 +31,11 @@ export function EpochsActivityTable({
     const [limit, setLimit] = useState(initialLimit);
     const rpc = useRpcClient();
 
-    const { data: count } = useQuery(
-        ['epochs', 'current'],
-        async () => rpc.getCurrentEpoch(),
-        {
-            select: (epoch) => Number(epoch.epoch) + 1,
-        }
-    );
+    const { data: count } = useQuery({
+        queryKey: ['epochs', 'current'],
+        queryFn: async () => rpc.getCurrentEpoch(),
+        select: (epoch) => Number(epoch.epoch) + 1,
+    });
 
     const epochs = useGetEpochs(limit);
     const { data, isFetching, pagination, isLoading, isError } =

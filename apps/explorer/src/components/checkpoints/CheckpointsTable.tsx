@@ -35,9 +35,10 @@ export function CheckpointsTable({
     const [limit, setLimit] = useState(initialLimit);
     const rpc = useRpcClient();
 
-    const countQuery = useQuery(['checkpoints', 'count'], () =>
-        rpc.getLatestCheckpointSequenceNumber()
-    );
+    const countQuery = useQuery({
+        queryKey: ['checkpoints', 'count'],
+        queryFn: () => rpc.getLatestCheckpointSequenceNumber(),
+    });
 
     const checkpoints = useGetCheckpoints(initialCursor, limit);
 
