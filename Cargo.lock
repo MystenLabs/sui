@@ -9989,7 +9989,6 @@ dependencies = [
  "sui-types",
  "telemetry-subscribers",
  "tempfile",
- "test-utils",
  "tokio",
  "tracing",
 ]
@@ -10825,7 +10824,6 @@ dependencies = [
  "sui-macros",
  "sui-protocol-config",
  "tap",
- "test-utils",
  "thiserror",
  "tonic",
  "tracing",
