@@ -53,8 +53,8 @@ use sui_types::execution_status::ExecutionStatus;
 use sui_types::storage::ObjectStore;
 use sui_types::transaction::Command;
 use sui_types::transaction::ProgrammableTransaction;
-use sui_types::DEEPBOOK_OBJECT_ID;
-use sui_types::MOVE_STDLIB_OBJECT_ID;
+use sui_types::DEEPBOOK_PACKAGE_ID;
+use sui_types::MOVE_STDLIB_PACKAGE_ID;
 use sui_types::{
     base_types::{ObjectID, ObjectRef, SuiAddress, TransactionDigest, SUI_ADDRESS_LENGTH},
     crypto::{get_key_pair_from_rng, AccountKeyPair},
