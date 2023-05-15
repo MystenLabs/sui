@@ -10,8 +10,6 @@ use std::path::Path;
 #[cfg(not(msim))]
 use std::str::FromStr;
 use std::time::Duration;
-use sui_config::genesis_config::DEFAULT_GAS_AMOUNT;
-use sui_config::genesis_config::DEFAULT_NUMBER_OF_OBJECT_PER_ACCOUNT;
 use sui_config::SUI_KEYSTORE_FILENAME;
 use sui_json::{call_args, type_args};
 use sui_json_rpc_types::ObjectChange;
@@ -24,6 +22,7 @@ use sui_json_rpc_types::{
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_macros::sim_test;
 use sui_move_build::BuildConfig;
+use sui_swarm_config::genesis_config::{DEFAULT_GAS_AMOUNT, DEFAULT_NUMBER_OF_OBJECT_PER_ACCOUNT};
 use sui_types::balance::Supply;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::SequenceNumber;

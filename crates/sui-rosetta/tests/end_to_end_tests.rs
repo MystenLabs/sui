@@ -6,7 +6,6 @@ use std::time::Duration;
 use serde_json::json;
 
 use rosetta_client::start_rosetta_test_server;
-use sui_config::genesis_config::{DEFAULT_GAS_AMOUNT, DEFAULT_NUMBER_OF_OBJECT_PER_ACCOUNT};
 use sui_json_rpc_types::SuiTransactionBlockResponseOptions;
 use sui_keys::keystore::AccountKeystore;
 use sui_rosetta::operations::Operations;
@@ -15,6 +14,7 @@ use sui_rosetta::types::{
     SubAccount, SubAccountType, SuiEnv,
 };
 use sui_sdk::rpc_types::{SuiExecutionStatus, SuiTransactionBlockEffectsAPI};
+use sui_swarm_config::genesis_config::{DEFAULT_GAS_AMOUNT, DEFAULT_NUMBER_OF_OBJECT_PER_ACCOUNT};
 use sui_types::quorum_driver_types::ExecuteTransactionRequestType;
 use sui_types::utils::to_sender_signed_transaction;
 use test_utils::network::TestClusterBuilder;

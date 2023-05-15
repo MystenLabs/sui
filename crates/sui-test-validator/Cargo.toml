@@ -21,4 +21,6 @@ sui = { path = "../sui" }
 sui-cluster-test = { path = "../sui-cluster-test" }
 sui-keys = { path = "../sui-keys" }
 sui-config = { path = "../sui-config" }
+sui-swarm-config = { path = "../sui-swarm-config" }
+
 telemetry-subscribers.workspace = true

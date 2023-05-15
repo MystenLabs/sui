@@ -1,5 +1,5 @@
 [package]
-name = "sui-config"
+name = "sui-genesis-builder"
 version = "0.0.0"
 authors = ["Mysten Labs <build@mystenlabs.com>"]
 license = "Apache-2.0"
@@ -10,11 +10,13 @@ edition = "2021"
 anemo.workspace = true
 anyhow = { version = "1.0.64", features = ["backtrace"] }
 bcs = "0.1.4"
+camino = "1.1.1"
 csv = "1.2.1"
 dirs = "4.0.0"
 fastcrypto.workspace = true
 move-binary-format.workspace = true
 move-core-types.workspace = true
+move-vm-runtime.workspace = true
 once_cell = "1.16"
 rand = "0.8.5"
 serde = { version = "1.0.144", features = ["derive", "rc"] }
@@ -24,8 +26,14 @@ tempfile = "3.3.0"
 tracing = "0.1.36"
 prometheus = "0.13.3"
 
+# TODO use sui-execution versioned crate
+sui-adapter = { path = "../../sui-execution/latest/sui-adapter", package = "sui-adapter-latest" }
+sui-move-natives = { path = "../../sui-execution/latest/sui-move-natives", package = "sui-move-natives-latest" }
+
 narwhal-config = { path = "../../narwhal/config" }
 shared-crypto = { path = "../shared-crypto" }
+sui-config = { path = "../sui-config" }
+sui-framework = { path = "../sui-framework" }
 sui-keys = { path = "../sui-keys" }
 sui-protocol-config = { path = "../sui-protocol-config" }
 sui-storage = { path = "../sui-storage" }

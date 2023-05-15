@@ -12,14 +12,15 @@ use std::{
     mem, ops,
     path::{Path, PathBuf},
 };
-use sui_config::builder::{
-    CommitteeConfig, ConfigBuilder, ProtocolVersionsConfig, SupportedProtocolVersionsCallback,
-};
-use sui_config::genesis_config::{AccountConfig, GenesisConfig, ValidatorGenesisConfig};
 use sui_config::node::DBCheckpointConfig;
-use sui_config::NetworkConfig;
 use sui_node::SuiNodeHandle;
 use sui_protocol_config::{ProtocolVersion, SupportedProtocolVersions};
+use sui_swarm_config::genesis_config::{AccountConfig, GenesisConfig, ValidatorGenesisConfig};
+use sui_swarm_config::network_config::NetworkConfig;
+use sui_swarm_config::network_config_builder::FullnodeConfigBuilder;
+use sui_swarm_config::network_config_builder::{
+    CommitteeConfig, ConfigBuilder, ProtocolVersionsConfig, SupportedProtocolVersionsCallback,
+};
 use sui_types::base_types::AuthorityName;
 use sui_types::object::Object;
 use tempfile::TempDir;
@@ -203,8 +204,7 @@ impl<R: rand::RngCore + rand::CryptoRng> SwarmBuilder<R> {
             (0..self.fullnode_count).for_each(|_| {
                 let spvc = self.supported_protocol_versions_config.clone();
                 //let spvc = spvc.clone();
-                let mut config = network_config
-                    .fullnode_config_builder()
+                let mut config = FullnodeConfigBuilder::new(&network_config)
                     .with_supported_protocol_versions_config(spvc)
                     .with_db_checkpoint_config(self.db_checkpoint_config.clone())
                     .with_random_dir()
@@ -240,8 +240,7 @@ impl<R: rand::RngCore + rand::CryptoRng> SwarmBuilder<R> {
             .collect();
 
         let fullnodes = if let Some(fullnode_rpc_addr) = self.fullnode_rpc_addr {
-            let mut config = network_config
-                .fullnode_config_builder()
+            let mut config = FullnodeConfigBuilder::new(&network_config)
                 .with_supported_protocol_versions_config(self.supported_protocol_versions_config)
                 .set_event_store(self.with_event_store)
                 .with_random_dir()

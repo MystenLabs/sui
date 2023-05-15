@@ -20,10 +20,12 @@ use fastcrypto::traits::KeyPair;
 use insta::assert_yaml_snapshot;
 use rand::rngs::StdRng;
 use rand::SeedableRng;
+use std::num::NonZeroUsize;
 use sui_config::genesis::{GenesisCeremonyParameters, TokenDistributionScheduleBuilder};
 use sui_config::node::{DEFAULT_COMMISSION_RATE, DEFAULT_VALIDATOR_GAS_PRICE};
-use sui_config::ValidatorInfo;
-use sui_config::{genesis::Builder, genesis_config::GenesisConfig};
+use sui_genesis_builder::validator_info::ValidatorInfo;
+use sui_genesis_builder::Builder;
+use sui_swarm_config::genesis_config::GenesisConfig;
 use sui_types::base_types::SuiAddress;
 use sui_types::crypto::{
     generate_proof_of_possession, get_key_pair_from_rng, AccountKeyPair, AuthorityKeyPair,
@@ -106,12 +108,15 @@ fn populated_genesis_snapshot_matches() {
 fn network_config_snapshot_matches() {
     use std::net::{IpAddr, Ipv4Addr, SocketAddr};
     use std::path::PathBuf;
-    use sui_config::NetworkConfig;
+    use sui_swarm_config::network_config_builder::ConfigBuilder;
 
     let temp_dir = tempfile::tempdir().unwrap();
     let committee_size = 7;
     let rng = StdRng::from_seed([0; 32]);
-    let mut network_config = NetworkConfig::generate_with_rng(temp_dir.path(), committee_size, rng);
+    let mut network_config = ConfigBuilder::new(temp_dir)
+        .committee_size(NonZeroUsize::new(committee_size).unwrap())
+        .rng(rng)
+        .build();
     // TODO: Inject static temp path and port numbers, instead of clearing them.
     for mut validator_config in &mut network_config.validator_configs {
         validator_config.db_path = PathBuf::from("/tmp/foo/");
