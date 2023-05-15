@@ -44,7 +44,7 @@ module sui::object {
     /// other words for any two values `id1: UID` and `id2: UID`, `id1` != `id2`.
     /// This is a privileged type that can only be derived from a `TxContext`.
     /// `UID` doesn't have the `drop` ability, so deleting a `UID` requires a call to `delete`.
-    struct UID has store {
+    struct UID has store, drop {
         id: ID,
     }
 
