@@ -15,17 +15,20 @@ import {
     type LedgerAccount,
     type SerializedLedgerAccount,
 } from './LedgerAccount';
+import { type QredoAccount, type SerializedQredoAccount } from './QredoAccount';
 
 export enum AccountType {
     IMPORTED = 'IMPORTED',
     DERIVED = 'DERIVED',
     LEDGER = 'LEDGER',
+    QREDO = 'QREDO',
 }
 
 export type SerializedAccount =
     | SerializedImportedAccount
     | SerializedDerivedAccount
-    | SerializedLedgerAccount;
+    | SerializedLedgerAccount
+    | SerializedQredoAccount;
 
 export interface Account {
     readonly type: AccountType;
@@ -51,4 +54,7 @@ export function isDerivedAccount(account: Account): account is DerivedAccount {
 
 export function isLedgerAccount(account: Account): account is LedgerAccount {
     return account.type === AccountType.LEDGER;
+}
+export function isQredoAccount(account: Account): account is QredoAccount {
+    return account.type === AccountType.QREDO;
 }
