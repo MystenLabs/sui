@@ -1,41 +1,39 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::io::{stderr, stdout, Write};
-use std::num::NonZeroUsize;
-use std::path::{Path, PathBuf};
-use std::{fs, io};
-
-use anyhow::{anyhow, bail};
-use clap::*;
-use fastcrypto::traits::KeyPair;
-use move_package::BuildConfig;
-use sui_config::genesis_config::DEFAULT_NUMBER_OF_AUTHORITIES;
-use sui_move_build::SuiPackageHooks;
-use tracing::info;
-
-use sui_config::{
-    builder::ConfigBuilder, NetworkConfig, SUI_BENCHMARK_GENESIS_GAS_KEYSTORE_FILENAME,
-    SUI_KEYSTORE_FILENAME,
-};
-use sui_config::{genesis_config::GenesisConfig, SUI_GENESIS_FILENAME};
-use sui_config::{
-    sui_config_dir, Config, PersistedConfig, FULL_NODE_DB_PATH, SUI_CLIENT_CONFIG,
-    SUI_FULLNODE_CONFIG, SUI_NETWORK_CONFIG,
-};
-use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
-use sui_swarm::memory::Swarm;
-use sui_types::crypto::{SignatureScheme, SuiKeyPair};
-
 use crate::client_commands::SuiClientCommands;
 use crate::console::start_console;
 use crate::fire_drill::{run_fire_drill, FireDrill};
 use crate::genesis_ceremony::{run, Ceremony};
 use crate::keytool::KeyToolCommand;
 use crate::validator_commands::SuiValidatorCommand;
+use anyhow::{anyhow, bail};
+use clap::*;
+use fastcrypto::traits::KeyPair;
+use move_package::BuildConfig;
+use std::io::{stderr, stdout, Write};
+use std::num::NonZeroUsize;
+use std::path::{Path, PathBuf};
+use std::{fs, io};
+use sui_config::{
+    sui_config_dir, Config, PersistedConfig, FULL_NODE_DB_PATH, SUI_CLIENT_CONFIG,
+    SUI_FULLNODE_CONFIG, SUI_NETWORK_CONFIG,
+};
+use sui_config::{
+    SUI_BENCHMARK_GENESIS_GAS_KEYSTORE_FILENAME, SUI_GENESIS_FILENAME, SUI_KEYSTORE_FILENAME,
+};
+use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_move::{self, execute_move_command};
+use sui_move_build::SuiPackageHooks;
 use sui_sdk::sui_client_config::{SuiClientConfig, SuiEnv};
 use sui_sdk::wallet_context::WalletContext;
+use sui_swarm::memory::Swarm;
+use sui_swarm_config::genesis_config::{GenesisConfig, DEFAULT_NUMBER_OF_AUTHORITIES};
+use sui_swarm_config::network_config::NetworkConfig;
+use sui_swarm_config::network_config_builder::ConfigBuilder;
+use sui_swarm_config::network_config_builder::FullnodeConfigBuilder;
+use sui_types::crypto::{SignatureScheme, SuiKeyPair};
+use tracing::info;
 
 #[allow(clippy::large_enum_variant)]
 #[derive(Parser)]
@@ -441,8 +439,7 @@ pub async fn genesis(
 
     info!("Client keystore is stored in {:?}.", keystore_path);
 
-    let mut fullnode_config = network_config
-        .fullnode_config_builder()
+    let mut fullnode_config = FullnodeConfigBuilder::new(&network_config)
         .with_event_store()
         .with_dir(FULL_NODE_DB_PATH.into())
         .build()?;

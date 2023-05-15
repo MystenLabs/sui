@@ -16,10 +16,10 @@ use sui_cluster_test::{
     config::{ClusterTestOpt, Env},
     faucet::{FaucetClient, FaucetClientFactory},
 };
-use sui_config::genesis_config::GenesisConfig;
 use sui_config::{sui_cluster_test_config_dir, SUI_KEYSTORE_FILENAME, SUI_NETWORK_CONFIG};
 use sui_faucet::{FaucetRequest, FixedAmountRequest};
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore};
+use sui_swarm_config::genesis_config::GenesisConfig;
 use tower::ServiceBuilder;
 use tower_http::cors::{Any, CorsLayer};
 

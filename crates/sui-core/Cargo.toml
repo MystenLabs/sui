@@ -69,6 +69,8 @@ narwhal-worker = { path = "../../narwhal/worker" }
 shared-crypto = { path = "../shared-crypto" }
 sui-config = { path = "../sui-config" }
 sui-framework = { path = "../sui-framework" }
+sui-swarm-config = { path = "../sui-swarm-config" }
+sui-genesis-builder = { path = "../sui-genesis-builder" }
 sui-json-rpc-types = { path = "../sui-json-rpc-types" }
 sui-macros = { path = "../sui-macros" }
 sui-move-build = { path = "../sui-move-build" }

@@ -3,9 +3,9 @@
 
 use insta::assert_json_snapshot;
 use std::{collections::BTreeMap, path::PathBuf};
-use sui_config::NetworkConfig;
 use sui_core::test_utils::make_transfer_object_transaction;
 use sui_core::test_utils::make_transfer_sui_transaction;
+use sui_swarm_config::network_config::NetworkConfig;
 use sui_types::base_types::SuiAddress;
 use sui_types::coin::PAY_JOIN_FUNC_NAME;
 use sui_types::coin::PAY_MODULE_NAME;

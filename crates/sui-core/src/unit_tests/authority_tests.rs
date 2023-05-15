@@ -2,11 +2,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::HashSet;
-use std::fs;
-use std::{convert::TryInto, env};
-
 use bcs;
+use fastcrypto::traits::KeyPair;
 use futures::{stream::FuturesUnordered, StreamExt};
 use move_binary_format::access::ModuleAccess;
 use move_binary_format::{
@@ -25,6 +22,9 @@ use rand::{
     Rng, SeedableRng,
 };
 use serde_json::json;
+use std::collections::HashSet;
+use std::fs;
+use std::{convert::TryInto, env};
 
 use sui_json_rpc_types::{
     SuiArgument, SuiExecutionResult, SuiExecutionStatus, SuiTransactionBlockEffectsAPI, SuiTypeTag,
@@ -48,7 +48,7 @@ use sui_types::utils::{
 use sui_types::{
     base_types::dbg_addr,
     crypto::{get_key_pair, Signature},
-    crypto::{AccountKeyPair, AuthorityKeyPair, KeypairTraits},
+    crypto::{AccountKeyPair, AuthorityKeyPair},
     object::{Owner, GAS_VALUE_FOR_TESTING, OBJECT_START_VERSION},
     MOVE_STDLIB_PACKAGE_ID, SUI_CLOCK_OBJECT_ID, SUI_FRAMEWORK_PACKAGE_ID,
     SUI_SYSTEM_STATE_OBJECT_ID,
@@ -4480,7 +4480,7 @@ async fn test_consensus_message_processed() {
     let initial_shared_version = shared_object.version();
 
     let dir = tempfile::TempDir::new().unwrap();
-    let network_config = sui_config::builder::ConfigBuilder::new(&dir)
+    let network_config = sui_swarm_config::network_config_builder::ConfigBuilder::new(&dir)
         .committee_size(2.try_into().unwrap())
         .with_objects(vec![gas_object.clone(), shared_object.clone()])
         .build();
