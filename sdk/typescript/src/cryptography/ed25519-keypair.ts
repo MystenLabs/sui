@@ -4,7 +4,7 @@
 import nacl from 'tweetnacl';
 import { ExportedKeypair, Keypair, PRIVATE_KEY_SIZE } from './keypair';
 import { Ed25519PublicKey } from './ed25519-publickey';
-import { mnemonicToSeedHex } from './mnemonics';
+import { isValidHardenedPath, mnemonicToSeedHex } from './mnemonics';
 import { derivePath } from '../utils/ed25519-hd-key';
 import { toB64 } from '@mysten/bcs';
 import { SignatureScheme } from './signature';
@@ -126,6 +126,10 @@ export class Ed25519Keypair implements Keypair {
     mnemonics: string,
     path: HardenedEd25519Path = DEFAULT_ED25519_DERIVATION_PATH,
   ): Ed25519Keypair {
+    if (!isValidHardenedPath(path)) {
+      throw new Error('Invalid derivation path');
+    }
+
     const { key } = derivePath(path, mnemonicToSeedHex(mnemonics));
     return Ed25519Keypair.fromSecretKey(key);
   }

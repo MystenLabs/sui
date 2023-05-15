@@ -6,7 +6,7 @@ import { PublicKey } from './publickey';
 import { sha256 } from '@noble/hashes/sha256';
 import { Secp256k1PublicKey } from './secp256k1-publickey';
 import { secp256k1 } from '@noble/curves/secp256k1';
-import { mnemonicToSeed } from './mnemonics';
+import { isValidBIP32Path, mnemonicToSeed } from './mnemonics';
 import { HDKey } from '@scure/bip32';
 import { toB64 } from '@mysten/bcs';
 import { SignatureScheme } from './signature';
@@ -131,6 +131,10 @@ export class Secp256k1Keypair implements Keypair {
     mnemonics: string,
     path: Secp256k1Path = DEFAULT_SECP256K1_DERIVATION_PATH,
   ): Secp256k1Keypair {
+    if (!isValidBIP32Path(path)) {
+      throw new Error('Invalid derivation path');
+    }
+
     const key = HDKey.fromMasterSeed(mnemonicToSeed(mnemonics)).derive(path);
     if (key.publicKey == null || key.privateKey == null) {
       throw new Error('Invalid key');
