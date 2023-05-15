@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useGetSystemState } from '@mysten/core';
+import { useGetSystemState, useAppsBackend } from '@mysten/core';
 import { useQuery } from '@tanstack/react-query';
 import { ParentSize } from '@visx/responsive';
 import { TooltipWithBounds, useTooltip } from '@visx/tooltip';
@@ -15,7 +15,6 @@ import {
 } from './types';
 
 import { useNetwork } from '~/context';
-import { useAppsBackend } from '~/hooks/useAppsBackend';
 import { Card } from '~/ui/Card';
 import { Heading } from '~/ui/Heading';
 import { Placeholder } from '~/ui/Placeholder';

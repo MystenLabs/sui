@@ -3,12 +3,7 @@
 
 import { useCallback } from 'react';
 
-import { useNetwork } from '~/context';
-import { Network } from '~/utils/api/DefaultRpcClient';
-
 export function useAppsBackend() {
-    const [network] = useNetwork();
-
     const request = useCallback(
         async <T>(
             path: string,
@@ -17,7 +12,7 @@ export function useAppsBackend() {
         ): Promise<T> => {
             const query = new URLSearchParams(queryString);
             const res = await fetch(
-                network === Network.LOCAL
+                process.env.NODE_ENV === 'development'
                     ? `http://localhost:3003/${path}?${query}`
                     : `https://apps-backend.sui.io/${path}?${query}`,
                 options
@@ -29,7 +24,7 @@ export function useAppsBackend() {
 
             return res.json();
         },
-        [network]
+        []
     );
 
     return { request };
