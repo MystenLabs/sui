@@ -38,6 +38,10 @@ export function formatBalance(
     return formatAmount(bn);
 }
 
+const ELLIPSIS = '\u{2026}';
+const SYMBOL_TRUNCATE_LENGTH = 5;
+const NAME_TRUNCATE_LENGTH = 10;
+
 export function useCoinMetadata(coinType?: string | null) {
     const rpc = useRpcClient();
     return useQuery({
@@ -64,6 +68,22 @@ export function useCoinMetadata(coinType?: string | null) {
             }
 
             return rpc.getCoinMetadata({ coinType });
+        },
+        select(data) {
+            if (!data) return null;
+
+            return {
+                ...data,
+                symbol:
+                    data.symbol.length > SYMBOL_TRUNCATE_LENGTH
+                        ? data.symbol.slice(0, SYMBOL_TRUNCATE_LENGTH) +
+                          ELLIPSIS
+                        : data.symbol,
+                name:
+                    data.name.length > NAME_TRUNCATE_LENGTH
+                        ? data.name.slice(0, NAME_TRUNCATE_LENGTH) + ELLIPSIS
+                        : data.name,
+            };
         },
         retry: false,
         enabled: !!coinType,
