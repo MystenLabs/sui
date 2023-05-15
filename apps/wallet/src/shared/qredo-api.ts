@@ -56,6 +56,8 @@ export type AccessTokenRenewalFunction = (
     qredoID: string
 ) => Promise<string | null>;
 
+const MAX_TRIES_TO_RENEW_ACCESS_TOKEN = 1;
+
 export class QredoAPI {
     readonly baseURL: string;
     readonly qredoID: string;
@@ -116,9 +118,22 @@ export class QredoAPI {
         );
     }
 
+    async #renewAccessToken() {
+        if (!this.#renewAccessTokenFN) {
+            return false;
+        }
+        if (!this.#accessTokenRenewInProgress) {
+            this.#accessTokenRenewInProgress = this.#renewAccessTokenFN(
+                this.qredoID
+            ).finally(() => (this.#accessTokenRenewInProgress = null));
+        }
+        this.#accessToken = await this.#accessTokenRenewInProgress;
+        return !!this.#accessToken;
+    }
+
     #request = async (...params: Parameters<typeof fetch>) => {
         let tries = 0;
-        while (tries++ <= 1) {
+        while (tries++ <= MAX_TRIES_TO_RENEW_ACCESS_TOKEN) {
             // TODO: add monitoring?
             const response = await fetch(params[0], {
                 ...params[1],
@@ -131,21 +146,13 @@ export class QredoAPI {
             if (response.ok) {
                 return dataJson;
             }
-            if (response.status === 401) {
-                if (this.#renewAccessTokenFN && tries === 1) {
-                    if (this.#accessTokenRenewInProgress) {
-                        await this.#accessTokenRenewInProgress;
-                    } else {
-                        this.#accessTokenRenewInProgress =
-                            this.#renewAccessTokenFN(this.qredoID).finally(
-                                () => (this.#accessTokenRenewInProgress = null)
-                            );
-                        this.#accessToken = await this
-                            .#accessTokenRenewInProgress;
-                    }
-                    if (this.#accessToken) {
-                        continue;
-                    }
+            if (
+                response.status === 401 &&
+                tries <= MAX_TRIES_TO_RENEW_ACCESS_TOKEN
+            ) {
+                if (await this.#renewAccessToken()) {
+                    // skip the rest and retry the request with the new access token
+                    continue;
                 }
                 throw new QredoAPIUnauthorizedError(response.status, dataJson);
             }
