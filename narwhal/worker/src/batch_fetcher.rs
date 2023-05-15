@@ -414,19 +414,12 @@ mod tests {
             metrics: Arc::new(WorkerMetrics::default()),
             protocol_config: latest_protocol_version(),
         };
-        let mut expected_batches = HashMap::from_iter(vec![
+        let expected_batches = HashMap::from_iter(vec![
             (batch1.digest(), batch1.clone()),
             (batch2.digest(), batch2.clone()),
             (batch3.digest(), batch3.clone()),
         ]);
-        let mut fetched_batches = fetcher.fetch(digests, known_workers).await;
-        // Reset metadata from the fetched and expected batches
-        for batch in fetched_batches.values_mut() {
-            batch.metadata_mut().created_at = 0;
-        }
-        for batch in expected_batches.values_mut() {
-            batch.metadata_mut().created_at = 0;
-        }
+        let fetched_batches = fetcher.fetch(digests, known_workers).await;
         assert_eq!(fetched_batches, expected_batches);
     }
 

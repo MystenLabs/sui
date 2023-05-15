@@ -106,7 +106,7 @@ impl NarwhalManager {
         let worker_nodes = WorkerNodes::new(
             config.registry_service.clone(),
             config.parameters.clone(),
-            protocol_config.clone(),
+            protocol_config,
         );
 
         let store_cache_metrics =

@@ -296,7 +296,7 @@ impl Worker {
                 network: Some(network.clone()),
                 batch_fetcher: Some(batch_fetcher),
                 validator: validator.clone(),
-                protocol_config: protocol_config.clone(),
+                protocol_config,
             }),
         );
 
