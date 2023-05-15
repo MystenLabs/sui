@@ -1220,7 +1220,9 @@ pub async fn build_server(
     server.register_module(IndexerApi::new(
         state.clone(),
         ReadApi::new(state.clone(), metrics.clone()),
-        config.name_service_resolver_object_id,
+        config.name_service_package_address,
+        config.name_service_registry_id,
+        config.name_service_reverse_registry_id,
         metrics.clone(),
     ))?;
     server.register_module(MoveUtils::new(state.clone()))?;
