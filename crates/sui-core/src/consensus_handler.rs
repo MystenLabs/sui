@@ -424,6 +424,7 @@ pub(crate) fn classify(transaction: &ConsensusTransaction) -> &'static str {
     }
 }
 
+#[derive(Debug)]
 pub struct SequencedConsensusTransaction {
     pub certificate: Arc<narwhal_types::Certificate>,
     pub certificate_author: AuthorityName,
@@ -431,6 +432,7 @@ pub struct SequencedConsensusTransaction {
     pub transaction: SequencedConsensusTransactionKind,
 }
 
+#[derive(Debug)]
 pub enum SequencedConsensusTransactionKind {
     External(ConsensusTransaction),
     System(VerifiedExecutableTransaction),

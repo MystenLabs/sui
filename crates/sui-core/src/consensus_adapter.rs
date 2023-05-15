@@ -190,6 +190,9 @@ impl SubmitToConsensus for TransactionsClient<sui_network::tonic::transport::Cha
         transaction: &ConsensusTransaction,
         _epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult {
+        if matches!(transaction.kind, ConsensusTransactionKind::EndOfPublish(..)) {
+            warn!("actually submitting end of publish {:?}", transaction);
+        }
         let serialized =
             bcs::to_bytes(transaction).expect("Serializing consensus transaction cannot fail");
         let bytes = Bytes::from(serialized.clone());
@@ -746,6 +749,10 @@ impl ConsensusAdapter {
             false
         };
         if send_end_of_publish {
+            warn!(
+                "attempting to send end_of_publish for epoch {}",
+                epoch_store.epoch()
+            );
             // sending message outside of any locks scope
             if let Err(err) = self.submit(
                 ConsensusTransaction::new_end_of_publish(self.authority),
