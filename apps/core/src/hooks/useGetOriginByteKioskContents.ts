@@ -60,6 +60,7 @@ export function useGetOriginByteKioskContents(
                 ids: kioskObjectIds.flat(),
                 options: {
                     showDisplay: true,
+                    showType: true,
                 },
             });
 
