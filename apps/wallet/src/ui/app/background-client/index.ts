@@ -8,14 +8,9 @@ import {
     type ExportedKeypair,
     type SignedMessage,
 } from '@mysten/sui.js';
-import { type QueryClient } from '@tanstack/react-query';
 import { lastValueFrom, map, take } from 'rxjs';
 
 import { growthbook } from '../experimentation/feature-gating';
-import {
-    QREDO_CONNECTION_INFO_KEY_COMMON,
-    QREDO_PENDING_REQUEST_KEY_COMMON,
-} from '../pages/qredo-connect/utils';
 import { createMessage } from '_messages';
 import { PortStream } from '_messaging/PortStream';
 import { type BasePayload } from '_payloads';
@@ -58,15 +53,13 @@ export class BackgroundClient {
     private _portStream: PortStream | null = null;
     private _dispatch: AppDispatch | null = null;
     private _initialized = false;
-    private _queryClient: QueryClient | null = null;
 
-    public init(dispatch: AppDispatch, queryClient: QueryClient) {
+    public init(dispatch: AppDispatch) {
         if (this._initialized) {
             throw new Error('[BackgroundClient] already initialized');
         }
         this._initialized = true;
         this._dispatch = dispatch;
-        this._queryClient = queryClient;
         this.createPortStream();
         this.sendAppStatus();
         this.setupAppStatusUpdateInterval();
@@ -503,7 +496,7 @@ export class BackgroundClient {
     }
 
     private handleIncomingMessage(msg: Message) {
-        if (!this._initialized || !this._dispatch || !this._queryClient) {
+        if (!this._initialized || !this._dispatch) {
             throw new Error(
                 'BackgroundClient is not initialized to handle incoming messages'
             );
@@ -530,17 +523,6 @@ export class BackgroundClient {
         } else if (isSetNetworkPayload(payload)) {
             action = changeActiveNetwork({
                 network: payload.network,
-            });
-        } else if (isQredoConnectPayload(payload, 'qredoUpdate')) {
-            const entitiesToKey: Record<
-                QredoConnectPayload<'qredoUpdate'>['args']['entities'],
-                readonly string[]
-            > = {
-                pendingRequests: QREDO_PENDING_REQUEST_KEY_COMMON,
-                qredoConnections: QREDO_CONNECTION_INFO_KEY_COMMON,
-            };
-            this._queryClient.invalidateQueries({
-                queryKey: entitiesToKey[payload.args.entities],
             });
         }
         if (action) {

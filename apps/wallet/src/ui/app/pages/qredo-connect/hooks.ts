@@ -5,17 +5,16 @@ import { useQuery } from '@tanstack/react-query';
 
 import { useBackgroundClient } from '../../hooks/useBackgroundClient';
 import { useQredoAPI } from '../../hooks/useQredoAPI';
-import { QREDO_PENDING_REQUEST_KEY_COMMON } from './utils';
 import { type GetWalletsParams } from '_src/shared/qredo-api';
 
 export function useQredoUIPendingRequest(requestID?: string) {
     const backgroundClient = useBackgroundClient();
     return useQuery({
-        queryKey: [...QREDO_PENDING_REQUEST_KEY_COMMON, requestID],
+        queryKey: ['qredo-connect', 'pending-request', requestID],
         queryFn: async () =>
             await backgroundClient.fetchPendingQredoConnectRequest(requestID!),
-        // events from background service will invalidate this key (when qredo pending requests change)
-        staleTime: Infinity,
+        staleTime: 0,
+        refetchInterval: 1000,
         enabled: !!requestID,
         meta: { skipPersistedCache: true },
     });

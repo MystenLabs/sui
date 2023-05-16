@@ -3,16 +3,16 @@
 
 import { useQuery } from '@tanstack/react-query';
 
-import { QREDO_CONNECTION_INFO_KEY_COMMON } from '../pages/qredo-connect/utils';
 import { useBackgroundClient } from './useBackgroundClient';
 
 export function useQredoInfo(qredoID?: string) {
     const backgroundClient = useBackgroundClient();
     return useQuery({
-        queryKey: [...QREDO_CONNECTION_INFO_KEY_COMMON, qredoID],
+        queryKey: ['qredo', 'info', qredoID],
         queryFn: async () => backgroundClient.getQredoConnectionInfo(qredoID!),
         enabled: !!qredoID,
-        staleTime: Infinity,
+        staleTime: 0,
+        refetchInterval: 1000,
         meta: { skipPersistedCache: true },
     });
 }
