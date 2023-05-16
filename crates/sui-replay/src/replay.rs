@@ -75,10 +75,10 @@ pub struct ExecutionSandboxState {
 }
 
 impl ExecutionSandboxState {
-    pub fn check_effects(&self) -> Result<(), LocalExecError> {
+    pub fn check_effects(&self) -> Result<(), ReplayEngineError> {
         if self.transaction_info.effects != self.local_exec_effects {
             error!("Replay tool forked {}", self.transaction_info.tx_digest);
-            return Err(LocalExecError::EffectsForked {
+            return Err(ReplayEngineError::EffectsForked {
                 digest: self.transaction_info.tx_digest,
                 diff: format!("\n{}", self.diff_effects()),
                 on_chain: Box::new(self.transaction_info.effects.clone()),
@@ -226,12 +226,12 @@ impl LocalExec {
     pub async fn multi_download(
         &self,
         objs: &[(ObjectID, SequenceNumber)],
-    ) -> Result<Vec<Object>, LocalExecError> {
+    ) -> Result<Vec<Object>, ReplayEngineError> {
         let mut num_retries_for_timeout = self.num_retries_for_timeout as i64;
         while num_retries_for_timeout >= 0 {
             match self.fetcher.multi_get_versioned(objs).await {
                 Ok(objs) => return Ok(objs),
-                Err(LocalExecError::SuiRpcRequestTimeout) => {
+                Err(ReplayEngineError::SuiRpcRequestTimeout) => {
                     warn!(
                         "RPC request timed out. Retries left {}. Sleeping for {}s",
                         num_retries_for_timeout,
@@ -243,19 +243,19 @@ impl LocalExec {
                 Err(e) => return Err(e),
             }
         }
-        Err(LocalExecError::SuiRpcRequestTimeout)
+        Err(ReplayEngineError::SuiRpcRequestTimeout)
     }
     /// Wrapper around fetcher in case we want to add more functionality
     /// Such as fetching from local DB from snapshot
     pub async fn multi_download_latest(
         &self,
         objs: &[ObjectID],
-    ) -> Result<Vec<Object>, LocalExecError> {
+    ) -> Result<Vec<Object>, ReplayEngineError> {
         let mut num_retries_for_timeout = self.num_retries_for_timeout as i64;
         while num_retries_for_timeout >= 0 {
             match self.fetcher.multi_get_latest(objs).await {
                 Ok(objs) => return Ok(objs),
-                Err(LocalExecError::SuiRpcRequestTimeout) => {
+                Err(ReplayEngineError::SuiRpcRequestTimeout) => {
                     warn!(
                         "RPC request timed out. Retries left {}. Sleeping for {}s",
                         num_retries_for_timeout,
@@ -267,18 +267,18 @@ impl LocalExec {
                 Err(e) => return Err(e),
             }
         }
-        Err(LocalExecError::SuiRpcRequestTimeout)
+        Err(ReplayEngineError::SuiRpcRequestTimeout)
     }
 
     pub async fn fetch_loaded_child_refs(
         &self,
         tx_digest: &TransactionDigest,
-    ) -> Result<Vec<(ObjectID, SequenceNumber)>, LocalExecError> {
+    ) -> Result<Vec<(ObjectID, SequenceNumber)>, ReplayEngineError> {
         // Get the child objects loaded
         self.fetcher.get_loaded_child_objects(tx_digest).await
     }
 
-    pub async fn new_from_fn_url(http_url: &str) -> Result<Self, LocalExecError> {
+    pub async fn new_from_fn_url(http_url: &str) -> Result<Self, ReplayEngineError> {
         Self::new_for_remote(
             SuiClientBuilder::default()
                 .request_timeout(RPC_TIMEOUT_ERR_SLEEP_RETRY_PERIOD)
@@ -293,19 +293,19 @@ impl LocalExec {
     /// prptocol version tables including which system packages to fetch
     /// If this function is called across epoch boundaries, the info might be stale.
     /// But it should only be called once per epoch.
-    pub async fn init_for_execution(mut self) -> Result<Self, LocalExecError> {
+    pub async fn init_for_execution(mut self) -> Result<Self, ReplayEngineError> {
         self.populate_protocol_version_tables().await?;
         Ok(self)
     }
 
-    pub async fn reset_for_new_execution_with_client(self) -> Result<Self, LocalExecError> {
+    pub async fn reset_for_new_execution_with_client(self) -> Result<Self, ReplayEngineError> {
         Self::new_for_remote(self.client.expect("Remote client not initialized"))
             .await?
             .init_for_execution()
             .await
     }
 
-    pub async fn new_for_remote(client: SuiClient) -> Result<Self, LocalExecError> {
+    pub async fn new_for_remote(client: SuiClient) -> Result<Self, ReplayEngineError> {
         // Use a throwaway metrics registry for local execution.
         let registry = prometheus::Registry::new();
         let metrics = Arc::new(LimitsMetrics::new(&registry));
@@ -329,7 +329,7 @@ impl LocalExec {
         })
     }
 
-    pub async fn new_for_state_dump(path: &str) -> Result<Self, LocalExecError> {
+    pub async fn new_for_state_dump(path: &str) -> Result<Self, ReplayEngineError> {
         // Use a throwaway metrics registry for local execution.
         let registry = prometheus::Registry::new();
         let metrics = Arc::new(LimitsMetrics::new(&registry));
@@ -366,7 +366,7 @@ impl LocalExec {
     pub async fn multi_download_and_store(
         &mut self,
         objs: &[(ObjectID, SequenceNumber)],
-    ) -> Result<Vec<Object>, LocalExecError> {
+    ) -> Result<Vec<Object>, ReplayEngineError> {
         let objs = self.multi_download(objs).await?;
 
         // Backfill the store
@@ -393,7 +393,7 @@ impl LocalExec {
         &mut self,
         objs: Vec<ObjectID>,
         protocol_version: u64,
-    ) -> Result<Vec<Object>, LocalExecError> {
+    ) -> Result<Vec<Object>, ReplayEngineError> {
         let syst_packages = self.system_package_versions_for_epoch(protocol_version)?;
         let syst_packages_objs = self.multi_download(&syst_packages).await?;
 
@@ -435,7 +435,7 @@ impl LocalExec {
         &self,
         object_id: &ObjectID,
         version: SequenceNumber,
-    ) -> Result<Object, LocalExecError> {
+    ) -> Result<Object, ReplayEngineError> {
         if self
             .storage
             .object_version_cache
@@ -449,7 +449,7 @@ impl LocalExec {
                 .lock()
                 .expect("Cannot lock")
                 .get(&(*object_id, version))
-                .ok_or(LocalExecError::InternalCacheInvariantViolation {
+                .ok_or(ReplayEngineError::InternalCacheInvariantViolation {
                     id: *object_id,
                     version: Some(version),
                 })?
@@ -479,7 +479,7 @@ impl LocalExec {
     pub fn download_latest_object(
         &self,
         object_id: &ObjectID,
-    ) -> Result<Option<Object>, LocalExecError> {
+    ) -> Result<Option<Object>, ReplayEngineError> {
         let resp = block_on({
             //info!("Downloading latest object {object_id}");
             self.multi_download_latest(&[*object_id])
@@ -491,11 +491,11 @@ impl LocalExec {
 
         match resp {
             Ok(v) => Ok(Some(v)),
-            Err(LocalExecError::ObjectNotExist { id }) => {
+            Err(ReplayEngineError::ObjectNotExist { id }) => {
                 error!("Could not find object {id} on RPC server. It might have been pruned, deleted, or never existed.");
                 Ok(None)
             }
-            Err(LocalExecError::ObjectDeleted {
+            Err(ReplayEngineError::ObjectDeleted {
                 id,
                 version,
                 digest,
@@ -503,7 +503,7 @@ impl LocalExec {
                 error!("Object {id} {version} {digest} was deleted on RPC server.");
                 Ok(None)
             }
-            Err(err) => Err(LocalExecError::SuiRpcError {
+            Err(err) => Err(ReplayEngineError::SuiRpcError {
                 err: err.to_string(),
             }),
         }
@@ -512,11 +512,11 @@ impl LocalExec {
     pub async fn get_checkpoint_txs(
         &self,
         checkpoint_id: u64,
-    ) -> Result<Vec<TransactionDigest>, LocalExecError> {
+    ) -> Result<Vec<TransactionDigest>, ReplayEngineError> {
         self.fetcher
             .get_checkpoint_txs(checkpoint_id)
             .await
-            .map_err(|e| LocalExecError::SuiRpcError { err: e.to_string() })
+            .map_err(|e| ReplayEngineError::SuiRpcError { err: e.to_string() })
     }
 
     pub async fn execute_all_in_checkpoints(
@@ -525,7 +525,7 @@ impl LocalExec {
         expensive_safety_check_config: &ExpensiveSafetyCheckConfig,
         terminate_early: bool,
         use_authority: bool,
-    ) -> Result<(u64, u64), LocalExecError> {
+    ) -> Result<(u64, u64), ReplayEngineError> {
         // Get all the TXs at this checkpoint
         let mut txs = Vec::new();
         for checkpoint_id in checkpoint_ids {
@@ -559,7 +559,7 @@ impl LocalExec {
         tx_info: &OnChainTransactionInfo,
         override_transaction_kind: Option<TransactionKind>,
         expensive_safety_check_config: ExpensiveSafetyCheckConfig,
-    ) -> Result<ExecutionSandboxState, LocalExecError> {
+    ) -> Result<ExecutionSandboxState, ReplayEngineError> {
         let tx_digest = &tx_info.tx_digest;
         // A lot of the logic here isnt designed for genesis
         if *tx_digest == TransactionDigest::genesis() || tx_info.sender == SuiAddress::ZERO {
@@ -579,11 +579,9 @@ impl LocalExec {
                 local_exec_status: Ok(()),
             });
         }
-
         // Initialize the state necessary for execution
         // Get the input objects
         let input_objects = self.initialize_execution_env_state(tx_info).await?;
-
         // At this point we have all the objects needed for replay
 
         // This assumes we already initialized the protocol version table `protocol_version_epoch_table`
@@ -627,7 +625,8 @@ impl LocalExec {
         );
 
         let all_required_objects = self.storage.all_objects();
-        let effects = SuiTransactionBlockEffects::try_from(res.1).map_err(LocalExecError::from)?;
+        let effects =
+            SuiTransactionBlockEffects::try_from(res.1).map_err(ReplayEngineError::from)?;
 
         Ok(ExecutionSandboxState {
             transaction_info: tx_info.clone(),
@@ -643,7 +642,7 @@ impl LocalExec {
         &mut self,
         tx_digest: &TransactionDigest,
         expensive_safety_check_config: ExpensiveSafetyCheckConfig,
-    ) -> Result<ExecutionSandboxState, LocalExecError> {
+    ) -> Result<ExecutionSandboxState, ReplayEngineError> {
         if self.is_remote_replay() {
             assert!(
             !self.protocol_version_system_package_table.is_empty()
@@ -674,7 +673,7 @@ impl LocalExec {
         &mut self,
         pre_run_sandbox: &ExecutionSandboxState,
         override_transaction_data: Option<TransactionData>,
-    ) -> Result<ExecutionSandboxState, LocalExecError> {
+    ) -> Result<ExecutionSandboxState, ReplayEngineError> {
         assert!(
             override_transaction_data.is_none(),
             "Custom transaction data is not supported yet"
@@ -776,7 +775,8 @@ impl LocalExec {
             Some(q) => Err(q),
             None => Ok(()),
         };
-        let effects = SuiTransactionBlockEffects::try_from(res.0).map_err(LocalExecError::from)?;
+        let effects =
+            SuiTransactionBlockEffects::try_from(res.0).map_err(ReplayEngineError::from)?;
 
         Ok(ExecutionSandboxState {
             transaction_info: pre_run_sandbox.transaction_info.clone(),
@@ -793,7 +793,7 @@ impl LocalExec {
         &mut self,
         tx_digest: &TransactionDigest,
         expensive_safety_check_config: ExpensiveSafetyCheckConfig,
-    ) -> Result<ExecutionSandboxState, LocalExecError> {
+    ) -> Result<ExecutionSandboxState, ReplayEngineError> {
         // Use the lighterweight execution engine to get the pre-run state
         let pre_run_sandbox = self
             .execution_engine_execute_impl(tx_digest, expensive_safety_check_config)
@@ -808,7 +808,7 @@ impl LocalExec {
         &mut self,
         tx_digest: &TransactionDigest,
         expensive_safety_check_config: ExpensiveSafetyCheckConfig,
-    ) -> Result<ExecutionSandboxState, LocalExecError> {
+    ) -> Result<ExecutionSandboxState, ReplayEngineError> {
         let sandbox_state = self
             .execution_engine_execute_impl(tx_digest, expensive_safety_check_config)
             .await?;
@@ -819,7 +819,7 @@ impl LocalExec {
     pub async fn execute_state_dump(
         &mut self,
         expensive_safety_check_config: ExpensiveSafetyCheckConfig,
-    ) -> Result<(ExecutionSandboxState, NodeStateDump), LocalExecError> {
+    ) -> Result<(ExecutionSandboxState, NodeStateDump), ReplayEngineError> {
         assert!(!self.is_remote_replay());
 
         let d = match self.fetcher.clone() {
@@ -839,7 +839,7 @@ impl LocalExec {
         tx_digest: &TransactionDigest,
         expensive_safety_check_config: ExpensiveSafetyCheckConfig,
         use_authority: bool,
-    ) -> Result<ExecutionSandboxState, LocalExecError> {
+    ) -> Result<ExecutionSandboxState, ReplayEngineError> {
         if use_authority {
             self.certificate_execute(tx_digest, expensive_safety_check_config.clone())
                 .await
@@ -862,7 +862,7 @@ impl LocalExec {
         &self,
         obj_id: &ObjectID,
         package_expected: bool,
-    ) -> Result<Option<Object>, LocalExecError> {
+    ) -> Result<Option<Object>, ReplayEngineError> {
         if package_expected {
             if let Some(obj) = self
                 .storage
@@ -914,12 +914,12 @@ impl LocalExec {
     pub fn system_package_versions_for_epoch(
         &self,
         epoch: u64,
-    ) -> Result<Vec<(ObjectID, SequenceNumber)>, LocalExecError> {
+    ) -> Result<Vec<(ObjectID, SequenceNumber)>, ReplayEngineError> {
         match &self.fetcher {
             Fetchers::Remote(_) => Ok(self
                 .protocol_version_system_package_table
                 .get(&epoch)
-                .ok_or(LocalExecError::FrameworkObjectVersionTableNotPopulated { epoch })?
+                .ok_or(ReplayEngineError::FrameworkObjectVersionTableNotPopulated { epoch })?
                 .clone()
                 .into_iter()
                 .collect()),
@@ -936,7 +936,7 @@ impl LocalExec {
 
     pub async fn protocol_ver_to_epoch_map(
         &self,
-    ) -> Result<BTreeMap<u64, ProtocolVersionSummary>, LocalExecError> {
+    ) -> Result<BTreeMap<u64, ProtocolVersionSummary>, ReplayEngineError> {
         let mut range_map = BTreeMap::new();
         let epoch_change_events = self.fetcher.get_epoch_change_events(false).await?;
 
@@ -1033,7 +1033,7 @@ impl LocalExec {
         version
     }
 
-    pub async fn populate_protocol_version_tables(&mut self) -> Result<(), LocalExecError> {
+    pub async fn populate_protocol_version_tables(&mut self) -> Result<(), ReplayEngineError> {
         self.protocol_version_epoch_table = self.protocol_ver_to_epoch_map().await?;
 
         let system_package_revisions = self.system_package_versions().await?;
@@ -1073,7 +1073,8 @@ impl LocalExec {
 
     pub async fn system_package_versions(
         &self,
-    ) -> Result<BTreeMap<ObjectID, Vec<(SequenceNumber, TransactionDigest)>>, LocalExecError> {
+    ) -> Result<BTreeMap<ObjectID, Vec<(SequenceNumber, TransactionDigest)>>, ReplayEngineError>
+    {
         let system_package_ids = Self::system_package_ids(
             *self
                 .protocol_version_epoch_table
@@ -1113,21 +1114,21 @@ impl LocalExec {
                 .collect();
             system_package_objs = match self.multi_download(&previous_ver_refs).await {
                 Ok(packages) => packages,
-                Err(LocalExecError::ObjectNotExist { id }) => {
+                Err(ReplayEngineError::ObjectNotExist { id }) => {
                     // This happens when the RPC server prunes older object
                     // Replays in the current protocol version will work but old ones might not
                     // as we cannot fetch the package
                     warn!("Object {} does not exist on RPC server. This might be due to pruning. Historical replays might not work", id);
                     break;
                 }
-                Err(LocalExecError::ObjectVersionNotFound { id, version }) => {
+                Err(ReplayEngineError::ObjectVersionNotFound { id, version }) => {
                     // This happens when the RPC server prunes older object
                     // Replays in the current protocol version will work but old ones might not
                     // as we cannot fetch the package
                     warn!("Object {} at version {} does not exist on RPC server. This might be due to pruning. Historical replays might not work", id, version);
                     break;
                 }
-                Err(LocalExecError::ObjectVersionTooHigh {
+                Err(ReplayEngineError::ObjectVersionTooHigh {
                     id,
                     asked_version,
                     latest_version,
@@ -1135,7 +1136,7 @@ impl LocalExec {
                     warn!("Object {} at version {} does not exist on RPC server. Latest version is {}. This might be due to pruning. Historical replays might not work", id, asked_version,latest_version );
                     break;
                 }
-                Err(LocalExecError::ObjectDeleted {
+                Err(ReplayEngineError::ObjectDeleted {
                     id,
                     version,
                     digest,
@@ -1155,16 +1156,19 @@ impl LocalExec {
     pub async fn get_protocol_config(
         &self,
         epoch_id: EpochId,
-    ) -> Result<ProtocolConfig, LocalExecError> {
+    ) -> Result<ProtocolConfig, ReplayEngineError> {
         self.protocol_version_epoch_table
             .iter()
             .rev()
             .find(|(_, rg)| epoch_id >= rg.epoch_start)
             .map(|(p, _rg)| Ok(ProtocolConfig::get_for_version((*p).into())))
-            .unwrap_or_else(|| Err(LocalExecError::ProtocolVersionNotFound { epoch: epoch_id }))
+            .unwrap_or_else(|| Err(ReplayEngineError::ProtocolVersionNotFound { epoch: epoch_id }))
     }
 
-    pub async fn checkpoints_for_epoch(&self, epoch_id: u64) -> Result<(u64, u64), LocalExecError> {
+    pub async fn checkpoints_for_epoch(
+        &self,
+        epoch_id: u64,
+    ) -> Result<(u64, u64), ReplayEngineError> {
         let epoch_change_events = self
             .fetcher
             .get_epoch_change_events(true)
@@ -1180,7 +1184,7 @@ impl LocalExec {
                     Ok((epoch, _)) => epoch == epoch_id,
                     Err(_) => false,
                 })
-                .ok_or(LocalExecError::EventNotFound { epoch: epoch_id })?;
+                .ok_or(ReplayEngineError::EventNotFound { epoch: epoch_id })?;
             let epoch_change_tx = epoch_change_events[idx].id.tx_digest;
             (
                 self.fetcher
@@ -1195,7 +1199,7 @@ impl LocalExec {
         let next_epoch_change_tx = epoch_change_events
             .get(start_epoch_idx + 1)
             .map(|v| v.id.tx_digest)
-            .ok_or(LocalExecError::UnableToDetermineCheckpoint { epoch: epoch_id })?;
+            .ok_or(ReplayEngineError::UnableToDetermineCheckpoint { epoch: epoch_id })?;
 
         let next_epoch_checkpoint = self
             .fetcher
@@ -1210,7 +1214,10 @@ impl LocalExec {
     pub async fn get_epoch_start_timestamp_and_rgp(
         &self,
         epoch_id: u64,
-    ) -> Result<(u64, u64), LocalExecError> {
+    ) -> Result<(u64, u64), ReplayEngineError> {
+        if epoch_id == 0 {
+            return Err(ReplayEngineError::EpochNotSupported { epoch: epoch_id });
+        }
         self.fetcher
             .get_epoch_start_timestamp_and_rgp(epoch_id)
             .await
@@ -1219,7 +1226,7 @@ impl LocalExec {
     async fn resolve_tx_components(
         &self,
         tx_digest: &TransactionDigest,
-    ) -> Result<OnChainTransactionInfo, LocalExecError> {
+    ) -> Result<OnChainTransactionInfo, ReplayEngineError> {
         assert!(self.is_remote_replay());
         // Fetch full transaction content
         let tx_info = self.fetcher.get_transaction(tx_digest).await?;
@@ -1233,7 +1240,7 @@ impl LocalExec {
         let input_objs = orig_tx
             .transaction_data()
             .input_objects()
-            .map_err(|e| LocalExecError::UserInputError { err: e })?;
+            .map_err(|e| ReplayEngineError::UserInputError { err: e })?;
         let tx_kind_orig = orig_tx.transaction_data().kind();
 
         // Download the objects at the version right before the execution of this TX
@@ -1280,7 +1287,7 @@ impl LocalExec {
     async fn resolve_tx_components_from_dump(
         &self,
         tx_digest: &TransactionDigest,
-    ) -> Result<OnChainTransactionInfo, LocalExecError> {
+    ) -> Result<OnChainTransactionInfo, ReplayEngineError> {
         assert!(!self.is_remote_replay());
 
         let dp = self.fetcher.as_node_state_dump();
@@ -1300,7 +1307,7 @@ impl LocalExec {
         let input_objs = orig_tx
             .transaction_data()
             .input_objects()
-            .map_err(|e| LocalExecError::UserInputError { err: e })?;
+            .map_err(|e| ReplayEngineError::UserInputError { err: e })?;
         let tx_kind_orig = orig_tx.transaction_data().kind();
 
         // Download the objects at the version right before the execution of this TX
@@ -1341,7 +1348,7 @@ impl LocalExec {
     async fn resolve_download_input_objects(
         &mut self,
         tx_info: &OnChainTransactionInfo,
-    ) -> Result<Vec<(InputObjectKind, Object)>, LocalExecError> {
+    ) -> Result<Vec<(InputObjectKind, Object)>, ReplayEngineError> {
         // Download the input objects
         let mut package_inputs = vec![];
         let mut imm_owned_inputs = vec![];
@@ -1369,7 +1376,7 @@ impl LocalExec {
                         shared_inputs.push(o.clone());
                         Ok(())
                     } else {
-                        Err(LocalExecError::InternalCacheInvariantViolation {
+                        Err(ReplayEngineError::InternalCacheInvariantViolation {
                             id: *id,
                             version: None,
                         })
@@ -1447,7 +1454,7 @@ impl LocalExec {
     async fn initialize_execution_env_state(
         &mut self,
         tx_info: &OnChainTransactionInfo,
-    ) -> Result<Vec<(InputObjectKind, Object)>, LocalExecError> {
+    ) -> Result<Vec<(InputObjectKind, Object)>, ReplayEngineError> {
         // We need this for other activities in this session
         self.current_protocol_version = tx_info.protocol_config.version.as_u64();
 
@@ -1568,7 +1575,7 @@ impl ParentSync for LocalExec {
 }
 
 impl ResourceResolver for LocalExec {
-    type Error = LocalExecError;
+    type Error = ReplayEngineError;
 
     /// In this case we might need to download a Move object on the fly which was not present in the
     /// modified at versions list because packages are immutable
@@ -1581,7 +1588,7 @@ impl ResourceResolver for LocalExec {
             self_: &LocalExec,
             address: &AccountAddress,
             typ: &StructTag,
-        ) -> Result<Option<Vec<u8>>, LocalExecError> {
+        ) -> Result<Option<Vec<u8>>, ReplayEngineError> {
             // If package not present fetch it from the network or some remote location
             let Some(object) = self_.get_or_download_object(
                 &ObjectID::from(*address),false /* we expect a Move obj*/)? else {
@@ -1618,7 +1625,7 @@ impl ResourceResolver for LocalExec {
 }
 
 impl ModuleResolver for LocalExec {
-    type Error = LocalExecError;
+    type Error = ReplayEngineError;
 
     /// This fetches a module which must already be present in the store
     /// We do not download
@@ -1626,10 +1633,10 @@ impl ModuleResolver for LocalExec {
         fn inner(
             self_: &LocalExec,
             module_id: &ModuleId,
-        ) -> Result<Option<Vec<u8>>, LocalExecError> {
+        ) -> Result<Option<Vec<u8>>, ReplayEngineError> {
             Ok(self_
                 .get_package(&ObjectID::from(*module_id.address()))
-                .map_err(LocalExecError::from)?
+                .map_err(ReplayEngineError::from)?
                 .and_then(|package| {
                     package
                         .serialized_module_map()
@@ -1651,7 +1658,7 @@ impl ModuleResolver for LocalExec {
 }
 
 impl ModuleResolver for &mut LocalExec {
-    type Error = LocalExecError;
+    type Error = ReplayEngineError;
 
     fn get_module(&self, module_id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
         // Recording event here will be double-counting since its already recorded in the get_module fn
@@ -1723,7 +1730,7 @@ impl ObjectStore for &mut LocalExec {
 }
 
 impl GetModule for LocalExec {
-    type Error = LocalExecError;
+    type Error = ReplayEngineError;
     type Item = CompiledModule;
 
     fn get_module_by_id(&self, id: &ModuleId) -> anyhow::Result<Option<Self::Item>, Self::Error> {
@@ -1745,7 +1752,7 @@ impl GetModule for LocalExec {
 pub fn get_vm(
     protocol_config: &ProtocolConfig,
     expensive_safety_check_config: ExpensiveSafetyCheckConfig,
-) -> Result<Arc<adapter::MoveVM>, LocalExecError> {
+) -> Result<Arc<adapter::MoveVM>, ReplayEngineError> {
     let native_functions = sui_move_natives::all_natives(/* disable silent */ false);
     let move_vm = Arc::new(
         adapter::new_move_vm(

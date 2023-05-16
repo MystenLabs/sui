@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::types::LocalExecError;
+use crate::types::ReplayEngineError;
 use crate::types::EPOCH_CHANGE_STRUCT_TAG;
 use async_trait::async_trait;
 use futures::future::join_all;
@@ -36,41 +36,49 @@ pub(crate) trait DataFetcher {
     async fn multi_get_versioned(
         &self,
         objects: &[(ObjectID, SequenceNumber)],
-    ) -> Result<Vec<Object>, LocalExecError>;
+    ) -> Result<Vec<Object>, ReplayEngineError>;
 
     /// Fetch the latest versions of objects
-    async fn multi_get_latest(&self, objects: &[ObjectID]) -> Result<Vec<Object>, LocalExecError>;
+    async fn multi_get_latest(
+        &self,
+        objects: &[ObjectID],
+    ) -> Result<Vec<Object>, ReplayEngineError>;
 
     /// Fetch the TXs for this checkpoint
-    async fn get_checkpoint_txs(&self, id: u64) -> Result<Vec<TransactionDigest>, LocalExecError>;
+    async fn get_checkpoint_txs(
+        &self,
+        id: u64,
+    ) -> Result<Vec<TransactionDigest>, ReplayEngineError>;
 
     /// Fetch the transaction info for a given transaction digest
     async fn get_transaction(
         &self,
         tx_digest: &TransactionDigest,
-    ) -> Result<SuiTransactionBlockResponse, LocalExecError>;
+    ) -> Result<SuiTransactionBlockResponse, ReplayEngineError>;
 
     async fn get_loaded_child_objects(
         &self,
         tx_digest: &TransactionDigest,
-    ) -> Result<Vec<(ObjectID, SequenceNumber)>, LocalExecError>;
+    ) -> Result<Vec<(ObjectID, SequenceNumber)>, ReplayEngineError>;
 
-    async fn get_latest_checkpoint_sequence_number(&self) -> Result<u64, LocalExecError>;
+    async fn get_latest_checkpoint_sequence_number(&self) -> Result<u64, ReplayEngineError>;
 
-    async fn fetch_random_tx(
+    async fn fetch_random_transaction(
         &self,
         // TODO: add more params
         checkpoint_id_start: Option<u64>,
         checkpoint_id_end: Option<u64>,
-    ) -> Result<TransactionDigest, LocalExecError>;
+    ) -> Result<TransactionDigest, ReplayEngineError>;
 
     async fn get_epoch_start_timestamp_and_rgp(
         &self,
         epoch_id: u64,
-    ) -> Result<(u64, u64), LocalExecError>;
+    ) -> Result<(u64, u64), ReplayEngineError>;
 
-    async fn get_epoch_change_events(&self, reverse: bool)
-        -> Result<Vec<SuiEvent>, LocalExecError>;
+    async fn get_epoch_change_events(
+        &self,
+        reverse: bool,
+    ) -> Result<Vec<SuiEvent>, ReplayEngineError>;
 }
 
 #[derive(Clone)]
@@ -101,21 +109,27 @@ impl DataFetcher for Fetchers {
     async fn multi_get_versioned(
         &self,
         objects: &[(ObjectID, SequenceNumber)],
-    ) -> Result<Vec<Object>, LocalExecError> {
+    ) -> Result<Vec<Object>, ReplayEngineError> {
         match self {
             Fetchers::Remote(q) => q.multi_get_versioned(objects).await,
             Fetchers::NodeStateDump(q) => q.multi_get_versioned(objects).await,
         }
     }
 
-    async fn multi_get_latest(&self, objects: &[ObjectID]) -> Result<Vec<Object>, LocalExecError> {
+    async fn multi_get_latest(
+        &self,
+        objects: &[ObjectID],
+    ) -> Result<Vec<Object>, ReplayEngineError> {
         match self {
             Fetchers::Remote(q) => q.multi_get_latest(objects).await,
             Fetchers::NodeStateDump(q) => q.multi_get_latest(objects).await,
         }
     }
 
-    async fn get_checkpoint_txs(&self, id: u64) -> Result<Vec<TransactionDigest>, LocalExecError> {
+    async fn get_checkpoint_txs(
+        &self,
+        id: u64,
+    ) -> Result<Vec<TransactionDigest>, ReplayEngineError> {
         match self {
             Fetchers::Remote(q) => q.get_checkpoint_txs(id).await,
             Fetchers::NodeStateDump(q) => q.get_checkpoint_txs(id).await,
@@ -125,7 +139,7 @@ impl DataFetcher for Fetchers {
     async fn get_transaction(
         &self,
         tx_digest: &TransactionDigest,
-    ) -> Result<SuiTransactionBlockResponse, LocalExecError> {
+    ) -> Result<SuiTransactionBlockResponse, ReplayEngineError> {
         match self {
             Fetchers::Remote(q) => q.get_transaction(tx_digest).await,
             Fetchers::NodeStateDump(q) => q.get_transaction(tx_digest).await,
@@ -135,32 +149,32 @@ impl DataFetcher for Fetchers {
     async fn get_loaded_child_objects(
         &self,
         tx_digest: &TransactionDigest,
-    ) -> Result<Vec<(ObjectID, SequenceNumber)>, LocalExecError> {
+    ) -> Result<Vec<(ObjectID, SequenceNumber)>, ReplayEngineError> {
         match self {
             Fetchers::Remote(q) => q.get_loaded_child_objects(tx_digest).await,
             Fetchers::NodeStateDump(q) => q.get_loaded_child_objects(tx_digest).await,
         }
     }
 
-    async fn get_latest_checkpoint_sequence_number(&self) -> Result<u64, LocalExecError> {
+    async fn get_latest_checkpoint_sequence_number(&self) -> Result<u64, ReplayEngineError> {
         match self {
             Fetchers::Remote(q) => q.get_latest_checkpoint_sequence_number().await,
             Fetchers::NodeStateDump(q) => q.get_latest_checkpoint_sequence_number().await,
         }
     }
 
-    async fn fetch_random_tx(
+    async fn fetch_random_transaction(
         &self,
         checkpoint_id_start: Option<u64>,
         checkpoint_id_end: Option<u64>,
-    ) -> Result<TransactionDigest, LocalExecError> {
+    ) -> Result<TransactionDigest, ReplayEngineError> {
         match self {
             Fetchers::Remote(q) => {
-                q.fetch_random_tx(checkpoint_id_start, checkpoint_id_end)
+                q.fetch_random_transaction(checkpoint_id_start, checkpoint_id_end)
                     .await
             }
             Fetchers::NodeStateDump(q) => {
-                q.fetch_random_tx(checkpoint_id_start, checkpoint_id_end)
+                q.fetch_random_transaction(checkpoint_id_start, checkpoint_id_end)
                     .await
             }
         }
@@ -169,7 +183,7 @@ impl DataFetcher for Fetchers {
     async fn get_epoch_start_timestamp_and_rgp(
         &self,
         epoch_id: u64,
-    ) -> Result<(u64, u64), LocalExecError> {
+    ) -> Result<(u64, u64), ReplayEngineError> {
         match self {
             Fetchers::Remote(q) => q.get_epoch_start_timestamp_and_rgp(epoch_id).await,
             Fetchers::NodeStateDump(q) => q.get_epoch_start_timestamp_and_rgp(epoch_id).await,
@@ -179,7 +193,7 @@ impl DataFetcher for Fetchers {
     async fn get_epoch_change_events(
         &self,
         reverse: bool,
-    ) -> Result<Vec<SuiEvent>, LocalExecError> {
+    ) -> Result<Vec<SuiEvent>, ReplayEngineError> {
         match self {
             Fetchers::Remote(q) => q.get_epoch_change_events(reverse).await,
             Fetchers::NodeStateDump(q) => q.get_epoch_change_events(reverse).await,
@@ -199,7 +213,7 @@ impl DataFetcher for RemoteFetcher {
     async fn multi_get_versioned(
         &self,
         objects: &[(ObjectID, VersionNumber)],
-    ) -> Result<Vec<Object>, LocalExecError> {
+    ) -> Result<Vec<Object>, ReplayEngineError> {
         let options = SuiObjectDataOptions::bcs_lossless();
 
         let objs: Vec<_> = objects
@@ -220,14 +234,17 @@ impl DataFetcher for RemoteFetcher {
             .await
             .into_iter()
             .collect::<Result<Vec<Vec<_>>, _>>()
-            .map_err(LocalExecError::from)?
+            .map_err(ReplayEngineError::from)?
             .iter()
             .flatten()
             .map(|q| convert_past_obj_response(q.clone()))
             .collect::<Result<Vec<_>, _>>()
     }
 
-    async fn multi_get_latest(&self, objects: &[ObjectID]) -> Result<Vec<Object>, LocalExecError> {
+    async fn multi_get_latest(
+        &self,
+        objects: &[ObjectID],
+    ) -> Result<Vec<Object>, ReplayEngineError> {
         let options = SuiObjectDataOptions::bcs_lossless();
 
         let objectsx = objects.chunks(*QUERY_MAX_RESULT_LIMIT).map(|q| {
@@ -240,40 +257,43 @@ impl DataFetcher for RemoteFetcher {
             .await
             .into_iter()
             .collect::<Result<Vec<Vec<_>>, _>>()
-            .map_err(LocalExecError::from)?
+            .map_err(ReplayEngineError::from)?
             .iter()
             .flatten()
             .map(obj_from_sui_obj_response)
             .collect::<Result<Vec<_>, _>>()
     }
 
-    async fn get_checkpoint_txs(&self, id: u64) -> Result<Vec<TransactionDigest>, LocalExecError> {
+    async fn get_checkpoint_txs(
+        &self,
+        id: u64,
+    ) -> Result<Vec<TransactionDigest>, ReplayEngineError> {
         Ok(self
             .rpc_client
             .read_api()
             .get_checkpoint(id.into())
             .await
-            .map_err(|q| LocalExecError::SuiRpcError { err: q.to_string() })?
+            .map_err(|q| ReplayEngineError::SuiRpcError { err: q.to_string() })?
             .transactions)
     }
 
     async fn get_transaction(
         &self,
         tx_digest: &TransactionDigest,
-    ) -> Result<SuiTransactionBlockResponse, LocalExecError> {
+    ) -> Result<SuiTransactionBlockResponse, ReplayEngineError> {
         let tx_fetch_opts = SuiTransactionBlockResponseOptions::full_content();
 
         self.rpc_client
             .read_api()
             .get_transaction_with_options(*tx_digest, tx_fetch_opts)
             .await
-            .map_err(LocalExecError::from)
+            .map_err(ReplayEngineError::from)
     }
 
     async fn get_loaded_child_objects(
         &self,
         tx_digest: &TransactionDigest,
-    ) -> Result<Vec<(ObjectID, SequenceNumber)>, LocalExecError> {
+    ) -> Result<Vec<(ObjectID, SequenceNumber)>, ReplayEngineError> {
         let loaded_child_objs = match self
             .rpc_client
             .read_api()
@@ -283,7 +303,7 @@ impl DataFetcher for RemoteFetcher {
             Ok(objs) => objs,
             Err(e) => {
                 error!("Error getting dynamic fields loaded objects: {}. This RPC server might not support this feature yet", e);
-                return Err(LocalExecError::UnableToGetDynamicFieldLoadedObjects {
+                return Err(ReplayEngineError::UnableToGetDynamicFieldLoadedObjects {
                     rpc_err: e.to_string(),
                 });
             }
@@ -297,23 +317,23 @@ impl DataFetcher for RemoteFetcher {
             .collect::<Vec<_>>())
     }
 
-    async fn get_latest_checkpoint_sequence_number(&self) -> Result<u64, LocalExecError> {
+    async fn get_latest_checkpoint_sequence_number(&self) -> Result<u64, ReplayEngineError> {
         self.rpc_client
             .read_api()
             .get_latest_checkpoint_sequence_number()
             .await
-            .map_err(LocalExecError::from)
+            .map_err(ReplayEngineError::from)
     }
 
-    async fn fetch_random_tx(
+    async fn fetch_random_transaction(
         &self,
         // TODO: add more params
-        checkpoint_id_start: Option<u64>,
-        checkpoint_id_end: Option<u64>,
-    ) -> Result<TransactionDigest, LocalExecError> {
-        let checkpoint_id_end =
-            checkpoint_id_end.unwrap_or(self.get_latest_checkpoint_sequence_number().await?);
-        let checkpoint_id_start = checkpoint_id_start.unwrap_or(1);
+        checkpoint_id_start_inclusive: Option<u64>,
+        checkpoint_id_end_inclusive: Option<u64>,
+    ) -> Result<TransactionDigest, ReplayEngineError> {
+        let checkpoint_id_end = checkpoint_id_end_inclusive
+            .unwrap_or(self.get_latest_checkpoint_sequence_number().await?);
+        let checkpoint_id_start = checkpoint_id_start_inclusive.unwrap_or(1);
         let checkpoint_id = rand::thread_rng().gen_range(checkpoint_id_start..=checkpoint_id_end);
 
         let txs = self.get_checkpoint_txs(checkpoint_id).await?;
@@ -325,7 +345,7 @@ impl DataFetcher for RemoteFetcher {
     async fn get_epoch_start_timestamp_and_rgp(
         &self,
         epoch_id: u64,
-    ) -> Result<(u64, u64), LocalExecError> {
+    ) -> Result<(u64, u64), ReplayEngineError> {
         let event = self
             .get_epoch_change_events(true)
             .await?
@@ -334,12 +354,12 @@ impl DataFetcher for RemoteFetcher {
                 Ok((epoch, _)) => epoch == epoch_id,
                 Err(_) => false,
             })
-            .ok_or(LocalExecError::EventNotFound { epoch: epoch_id })?;
+            .ok_or(ReplayEngineError::EventNotFound { epoch: epoch_id })?;
 
         let reference_gas_price = if let serde_json::Value::Object(w) = event.parsed_json {
             u64::from_str(&w["reference_gas_price"].to_string().replace('\"', "")).unwrap()
         } else {
-            return Err(LocalExecError::UnexpectedEventFormat {
+            return Err(ReplayEngineError::UnexpectedEventFormat {
                 event: event.clone(),
             });
         };
@@ -355,13 +375,13 @@ impl DataFetcher for RemoteFetcher {
         if let TransactionKind::ChangeEpoch(change) = tx_kind_orig {
             return Ok((change.epoch_start_timestamp_ms, reference_gas_price));
         }
-        Err(LocalExecError::InvalidEpochChangeTx { epoch: epoch_id })
+        Err(ReplayEngineError::InvalidEpochChangeTx { epoch: epoch_id })
     }
 
     async fn get_epoch_change_events(
         &self,
         reverse: bool,
-    ) -> Result<Vec<SuiEvent>, LocalExecError> {
+    ) -> Result<Vec<SuiEvent>, ReplayEngineError> {
         let struct_tag_str = EPOCH_CHANGE_STRUCT_TAG.to_string();
         let struct_tag = parse_struct_tag(&struct_tag_str)?;
 
@@ -371,7 +391,7 @@ impl DataFetcher for RemoteFetcher {
             .event_api()
             .query_events(EventFilter::MoveEventType(struct_tag), None, None, reverse)
             .await
-            .map_err(|e| LocalExecError::UnableToQuerySystemEvents {
+            .map_err(|e| ReplayEngineError::UnableToQuerySystemEvents {
                 rpc_err: e.to_string(),
             })?
             .data
@@ -380,23 +400,23 @@ impl DataFetcher for RemoteFetcher {
     }
 }
 
-fn convert_past_obj_response(resp: SuiPastObjectResponse) -> Result<Object, LocalExecError> {
+fn convert_past_obj_response(resp: SuiPastObjectResponse) -> Result<Object, ReplayEngineError> {
     match resp {
         SuiPastObjectResponse::VersionFound(o) => obj_from_sui_obj_data(&o),
-        SuiPastObjectResponse::ObjectDeleted(r) => Err(LocalExecError::ObjectDeleted {
+        SuiPastObjectResponse::ObjectDeleted(r) => Err(ReplayEngineError::ObjectDeleted {
             id: r.object_id,
             version: r.version,
             digest: r.digest,
         }),
-        SuiPastObjectResponse::ObjectNotExists(id) => Err(LocalExecError::ObjectNotExist { id }),
+        SuiPastObjectResponse::ObjectNotExists(id) => Err(ReplayEngineError::ObjectNotExist { id }),
         SuiPastObjectResponse::VersionNotFound(id, version) => {
-            Err(LocalExecError::ObjectVersionNotFound { id, version })
+            Err(ReplayEngineError::ObjectVersionNotFound { id, version })
         }
         SuiPastObjectResponse::VersionTooHigh {
             object_id,
             asked_version,
             latest_version,
-        } => Err(LocalExecError::ObjectVersionTooHigh {
+        } => Err(ReplayEngineError::ObjectVersionTooHigh {
             id: object_id,
             asked_version,
             latest_version,
@@ -404,26 +424,26 @@ fn convert_past_obj_response(resp: SuiPastObjectResponse) -> Result<Object, Loca
     }
 }
 
-fn obj_from_sui_obj_response(o: &SuiObjectResponse) -> Result<Object, LocalExecError> {
-    let o = o.object().map_err(LocalExecError::from)?.clone();
+fn obj_from_sui_obj_response(o: &SuiObjectResponse) -> Result<Object, ReplayEngineError> {
+    let o = o.object().map_err(ReplayEngineError::from)?.clone();
     obj_from_sui_obj_data(&o)
 }
 
-fn obj_from_sui_obj_data(o: &SuiObjectData) -> Result<Object, LocalExecError> {
+fn obj_from_sui_obj_data(o: &SuiObjectData) -> Result<Object, ReplayEngineError> {
     match TryInto::<Object>::try_into(o.clone()) {
         Ok(obj) => Ok(obj),
         Err(e) => Err(e.into()),
     }
 }
 
-pub fn extract_epoch_and_version(ev: SuiEvent) -> Result<(u64, u64), LocalExecError> {
+pub fn extract_epoch_and_version(ev: SuiEvent) -> Result<(u64, u64), ReplayEngineError> {
     if let serde_json::Value::Object(w) = ev.parsed_json {
         let epoch = u64::from_str(&w["epoch"].to_string().replace('\"', "")).unwrap();
         let version = u64::from_str(&w["protocol_version"].to_string().replace('\"', "")).unwrap();
         return Ok((epoch, version));
     }
 
-    Err(LocalExecError::UnexpectedEventFormat { event: ev })
+    Err(ReplayEngineError::UnexpectedEventFormat { event: ev })
 }
 
 #[derive(Debug, Clone)]
@@ -469,14 +489,14 @@ impl DataFetcher for NodeStateDumpFetcher {
     async fn multi_get_versioned(
         &self,
         objects: &[(ObjectID, SequenceNumber)],
-    ) -> Result<Vec<Object>, LocalExecError> {
+    ) -> Result<Vec<Object>, ReplayEngineError> {
         let mut resp = vec![];
         objects.iter().try_for_each(|(id, version)| {
             if let Some(obj) = self.object_ref_pool.get(&(*id, *version)) {
                 resp.push(obj.clone());
                 return Ok(());
             }
-            Err(LocalExecError::ObjectVersionNotFound {
+            Err(ReplayEngineError::ObjectVersionNotFound {
                 id: *id,
                 version: *version,
             })
@@ -484,33 +504,39 @@ impl DataFetcher for NodeStateDumpFetcher {
         Ok(resp)
     }
 
-    async fn multi_get_latest(&self, objects: &[ObjectID]) -> Result<Vec<Object>, LocalExecError> {
+    async fn multi_get_latest(
+        &self,
+        objects: &[ObjectID],
+    ) -> Result<Vec<Object>, ReplayEngineError> {
         let mut resp = vec![];
         objects.iter().try_for_each(|id| {
             if let Some(obj) = self.latest_object_version_pool.get(id) {
                 resp.push(obj.clone());
                 return Ok(());
             }
-            Err(LocalExecError::ObjectNotExist { id: *id })
+            Err(ReplayEngineError::ObjectNotExist { id: *id })
         })?;
         Ok(resp)
     }
 
-    async fn get_checkpoint_txs(&self, _id: u64) -> Result<Vec<TransactionDigest>, LocalExecError> {
+    async fn get_checkpoint_txs(
+        &self,
+        _id: u64,
+    ) -> Result<Vec<TransactionDigest>, ReplayEngineError> {
         unimplemented!("get_checkpoint_txs for state dump is not implemented")
     }
 
     async fn get_transaction(
         &self,
         _tx_digest: &TransactionDigest,
-    ) -> Result<SuiTransactionBlockResponse, LocalExecError> {
+    ) -> Result<SuiTransactionBlockResponse, ReplayEngineError> {
         unimplemented!("get_transaction for state dump is not implemented")
     }
 
     async fn get_loaded_child_objects(
         &self,
         _tx_digest: &TransactionDigest,
-    ) -> Result<Vec<(ObjectID, SequenceNumber)>, LocalExecError> {
+    ) -> Result<Vec<(ObjectID, SequenceNumber)>, ReplayEngineError> {
         Ok(self
             .node_state_dump
             .loaded_child_objects
@@ -520,23 +546,23 @@ impl DataFetcher for NodeStateDumpFetcher {
             .collect())
     }
 
-    async fn get_latest_checkpoint_sequence_number(&self) -> Result<u64, LocalExecError> {
+    async fn get_latest_checkpoint_sequence_number(&self) -> Result<u64, ReplayEngineError> {
         unimplemented!("get_latest_checkpoint_sequence_number for state dump is not implemented")
     }
 
-    async fn fetch_random_tx(
+    async fn fetch_random_transaction(
         &self,
         // TODO: add more params
         _checkpoint_id_start: Option<u64>,
         _checkpoint_id_end: Option<u64>,
-    ) -> Result<TransactionDigest, LocalExecError> {
+    ) -> Result<TransactionDigest, ReplayEngineError> {
         unimplemented!("fetch_random_tx for state dump is not implemented")
     }
 
     async fn get_epoch_start_timestamp_and_rgp(
         &self,
         _epoch_id: u64,
-    ) -> Result<(u64, u64), LocalExecError> {
+    ) -> Result<(u64, u64), ReplayEngineError> {
         Ok((
             self.node_state_dump.epoch_start_timestamp_ms,
             self.node_state_dump.reference_gas_price,
@@ -546,7 +572,7 @@ impl DataFetcher for NodeStateDumpFetcher {
     async fn get_epoch_change_events(
         &self,
         _reverse: bool,
-    ) -> Result<Vec<SuiEvent>, LocalExecError> {
+    ) -> Result<Vec<SuiEvent>, ReplayEngineError> {
         unimplemented!("get_epoch_change_events for state dump is not implemented")
     }
 }
