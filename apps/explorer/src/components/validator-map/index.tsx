@@ -88,7 +88,8 @@ export default function ValidatorMap({ minHeight }: Props) {
             }),
         {
             // Some validators will come back as null from the location API
-            select: (validators) => validators.filter((validator: ValidatorMapData) => validator),
+            select: (validators) =>
+                validators.filter((validator: ValidatorMapData) => validator),
         }
     );
 
@@ -189,7 +190,7 @@ export default function ValidatorMap({ minHeight }: Props) {
                                     numberFormatter.format(
                                         validatorData.length
                                     )) ||
-                                '--'
+                                    '--'
                             }
                         </NodeStat>
                         <NodeStat title="Nodes">
