@@ -133,7 +133,6 @@ Browser.windows.onRemoved.addListener(async (id) => {
     await Qredo.handleOnWindowClosed(id);
 });
 
-Qredo.registerForQredoChanges(connections);
 Qredo.onQredoEvent('onConnectionResponse', ({ allowed, request }) => {
     request.messageIDs.forEach((aMessageID) => {
         connections.notifyContentScript(

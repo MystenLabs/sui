@@ -17,7 +17,6 @@ type Methods = {
     getPendingRequestResponse: { request: UIQredoPendingRequest | null };
     getQredoInfo: { qredoID: string; refreshAccessToken: boolean };
     getQredoInfoResponse: { qredoInfo: UIQredoInfo | null };
-    qredoUpdate: { entities: 'pendingRequests' | 'qredoConnections' };
     acceptQredoConnection: {
         qredoID: string;
         accounts: Wallet[];

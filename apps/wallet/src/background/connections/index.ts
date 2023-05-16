@@ -125,10 +125,6 @@ export class Connections {
         notification:
             | { event: 'networkChanged'; network: NetworkEnvType }
             | { event: 'lockStatusUpdate'; isLocked: boolean }
-            | {
-                  event: 'qredoUpdate';
-                  entities: QredoConnectPayload<'qredoUpdate'>['args']['entities'];
-              }
     ) {
         for (const aConnection of this.#connections) {
             if (aConnection instanceof UiConnection) {
@@ -144,17 +140,6 @@ export class Connections {
                     case 'lockStatusUpdate':
                         aConnection.sendLockedStatusUpdate(
                             notification.isLocked
-                        );
-                        break;
-                    case 'qredoUpdate':
-                        aConnection.send(
-                            createMessage<QredoConnectPayload<'qredoUpdate'>>({
-                                type: 'qredo-connect',
-                                method: 'qredoUpdate',
-                                args: {
-                                    entities: notification.entities,
-                                },
-                            })
                         );
                         break;
                 }

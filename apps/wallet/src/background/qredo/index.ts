@@ -126,8 +126,6 @@ export async function getUIQredoPendingRequest(requestID: string) {
     return null;
 }
 
-export { registerForQredoChanges } from './storage';
-
 const IN_PROGRESS_ACCESS_TOKENS_RENEWALS: Record<
     string,
     Promise<AccessTokenResponse> | null
