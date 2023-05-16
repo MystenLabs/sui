@@ -97,7 +97,7 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
         cursor: Option<ObjectID>,
         limit: Option<usize>,
     ) -> RpcResult<ObjectsPage> {
-        with_tracing!("get_owned_objects", async move {
+        with_tracing!(async move {
             let limit = validate_limit(limit, *QUERY_MAX_RESULT_LIMIT)?;
             self.metrics.get_owned_objects_limit.report(limit as u64);
             let SuiObjectResponseQuery { filter, options } = query.unwrap_or_default();
@@ -151,7 +151,7 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
         limit: Option<usize>,
         descending_order: Option<bool>,
     ) -> RpcResult<TransactionBlocksPage> {
-        with_tracing!("query_transaction_blocks", async move {
+        with_tracing!(async move {
             let limit = cap_page_limit(limit);
             self.metrics.query_tx_blocks_limit.report(limit as u64);
             let descending = descending_order.unwrap_or_default();
@@ -201,7 +201,7 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
         limit: Option<usize>,
         descending_order: Option<bool>,
     ) -> RpcResult<EventPage> {
-        with_tracing!("query_events", async move {
+        with_tracing!(async move {
             let descending = descending_order.unwrap_or_default();
             let limit = cap_page_limit(limit);
             self.metrics.query_events_limit.report(limit as u64);
@@ -258,7 +258,7 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
         cursor: Option<ObjectID>,
         limit: Option<usize>,
     ) -> RpcResult<DynamicFieldPage> {
-        with_tracing!("get_dynamic_fields", async move {
+        with_tracing!(async move {
             let limit = cap_page_limit(limit);
             self.metrics.get_dynamic_fields_limit.report(limit as u64);
             let mut data = self
@@ -288,7 +288,7 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
         parent_object_id: ObjectID,
         name: DynamicFieldName,
     ) -> RpcResult<SuiObjectResponse> {
-        with_tracing!("get_dynamic_field_object", async move {
+        with_tracing!(async move {
             let DynamicFieldName {
                 type_: name_type,
                 value,
@@ -315,7 +315,7 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
 
     #[instrument(skip(self))]
     async fn resolve_name_service_address(&self, name: String) -> RpcResult<Option<SuiAddress>> {
-        with_tracing!("resolve_name_service_address", async move {
+        with_tracing!(async move {
             let dynamic_field_table_object_id = self
                 .get_name_service_dynamic_field_table_object_id(/* reverse_lookup */ false)
                 .await?;
@@ -389,7 +389,7 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
         _cursor: Option<ObjectID>,
         _limit: Option<usize>,
     ) -> RpcResult<Page<String, ObjectID>> {
-        with_tracing!("resolve_name_service_names", async move {
+        with_tracing!(async move {
             let dynamic_field_table_object_id = self
                 .get_name_service_dynamic_field_table_object_id(/* reverse_lookup */ true)
                 .await?;
