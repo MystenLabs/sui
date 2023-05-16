@@ -922,7 +922,7 @@ mod tests {
         let config = FaucetConfig::default();
 
         let reasonable_value = (config.num_coins as u64 * config.amount) * 10;
-        let _res = SuiClientCommands::SplitCoin {
+        SuiClientCommands::SplitCoin {
             coin_id: *gases[0].id(),
             amounts: Some(vec![reasonable_value]),
             gas_budget: 50000000,
@@ -932,12 +932,14 @@ mod tests {
             serialize_signed_transaction: false,
         }
         .execute(&mut context)
-        .await;
+        .await
+        .expect("split failed");
 
+        let destination_address = SuiAddress::random_for_testing_only();
         // Transfer all valid gases away except for 1
         for gas in gases.iter().take(gases.len() - 1) {
-            let _res = SuiClientCommands::TransferSui {
-                to: SuiAddress::random_for_testing_only(),
+            SuiClientCommands::TransferSui {
+                to: destination_address,
                 sui_coin_object_id: *gas.id(),
                 gas_budget: 50000000,
                 amount: None,
@@ -945,8 +947,14 @@ mod tests {
                 serialize_signed_transaction: false,
             }
             .execute(&mut context)
-            .await;
+            .await
+            .expect("transfer failed");
         }
+
+        // Assert that the coins were transferred away successfully to destination address
+        let gases = get_current_gases(destination_address, &mut context).await;
+        assert!(gases.len() > 0);
+
         let tmp = tempfile::tempdir().unwrap();
         let prom_registry = Registry::new();
         let config = FaucetConfig::default();
@@ -969,13 +977,15 @@ mod tests {
         }))
         .await;
 
-        // Check that the gas wasn't discarded
+        // Check that the gas was discarded for being too small
         let discarded = faucet.metrics.total_discarded_coins.get();
         assert_eq!(discarded, 1);
 
         // Check that the WAL is empty so we don't retry bad requests
         let wal = faucet.wal.lock().await;
         assert!(wal.log.is_empty());
+
+        // Assert that the coins were transferred away successfully to destination address
     }
 
     #[tokio::test]
@@ -999,10 +1009,12 @@ mod tests {
         .execute(&mut context)
         .await;
 
+        let destination_address = SuiAddress::random_for_testing_only();
+
         // Transfer all valid gases away
         for gas in gases {
-            let _res = SuiClientCommands::TransferSui {
-                to: SuiAddress::random_for_testing_only(),
+            SuiClientCommands::TransferSui {
+                to: destination_address,
                 sui_coin_object_id: *gas.id(),
                 gas_budget: 50000000,
                 amount: None,
@@ -1010,8 +1022,13 @@ mod tests {
                 serialize_signed_transaction: false,
             }
             .execute(&mut context)
-            .await;
+            .await
+            .expect("transfer failed");
         }
+
+        // Assert that the coins were transferred away successfully to destination address
+        let gases = get_current_gases(destination_address, &mut context).await;
+        assert!(gases.len() > 0);
 
         let tmp = tempfile::tempdir().unwrap();
         let prom_registry = Registry::new();
@@ -1024,15 +1041,14 @@ mod tests {
         .await
         .unwrap();
 
+        let destination_address = SuiAddress::random_for_testing_only();
         // Assert that faucet will discard and also terminate
         let res = faucet
-            .send(
-                Uuid::new_v4(),
-                SuiAddress::random_for_testing_only(),
-                &[30000000000],
-            )
+            .send(Uuid::new_v4(), destination_address, &[30000000000])
             .await;
-        println!("{:?}", res);
+
+        // Assert that the result is an Error
+        assert!(matches!(res, Err(FaucetError::NoGasCoinAvailable)));
     }
 
     async fn test_basic_interface(faucet: &impl Faucet) {
