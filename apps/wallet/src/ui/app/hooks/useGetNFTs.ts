@@ -5,16 +5,9 @@ import {
     useGetOwnedObjects,
     useGetOriginByteKioskContents,
 } from '@mysten/core';
-import {
-    getObjectDisplay,
-    type SuiObjectData,
-    type SuiAddress,
-    type SuiObjectResponse,
-} from '@mysten/sui.js';
+import { type SuiObjectData, type SuiAddress } from '@mysten/sui.js';
 
 import useAppSelector from './useAppSelector';
-
-const hasDisplayData = (obj: SuiObjectResponse) => !!getObjectDisplay(obj).data;
 
 export function useGetNFTs(address?: SuiAddress | null) {
     const {
@@ -40,15 +33,12 @@ export function useGetNFTs(address?: SuiAddress | null) {
         useGetOriginByteKioskContents(address, !shouldFetchKioskContents);
 
     const filteredKioskContents =
-        obKioskContents
-            ?.filter(hasDisplayData)
-            .map(({ data }) => data as SuiObjectData) || [];
+        obKioskContents?.map(({ data }) => data as SuiObjectData) || [];
 
     const nfts = [
         ...filteredKioskContents,
         ...(data?.pages
             .flatMap((page) => page.data)
-            .filter(hasDisplayData)
             .map(({ data }) => data as SuiObjectData) || []),
     ];
 
