@@ -82,7 +82,7 @@ export default function ValidatorMap({ minHeight }: Props) {
         isError,
     } = useQuery(
         ['validator-map'],
-        async (): Promise<ValidatorMapData[]>  =>
+        (): Promise<ValidatorMapData[]> =>
             appsBe(`validator-map`, {
                 network: network.toLowerCase(),
             }),
@@ -189,7 +189,7 @@ export default function ValidatorMap({ minHeight }: Props) {
                                     numberFormatter.format(
                                         validatorData.length
                                     )) ||
-                                    '--'
+                                '--'
                             }
                         </NodeStat>
                         <NodeStat title="Nodes">
