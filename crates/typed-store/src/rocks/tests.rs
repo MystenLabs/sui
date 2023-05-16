@@ -605,7 +605,7 @@ async fn test_iter_with_bounds(#[values(true, false)] is_transactional: bool) {
 
 #[rstest]
 #[tokio::test]
-async fn test_iter_with_bounds_extended(#[values(true, false)] is_transactional: bool) {
+async fn test_range_iter(#[values(true, false)] is_transactional: bool) {
     let db = open_map(temp_dir(), None, is_transactional);
     let min = u64::MAX - 100;
     let max = u64::MAX;
@@ -614,13 +614,7 @@ async fn test_iter_with_bounds_extended(#[values(true, false)] is_transactional:
             db.insert(&i, &i.to_string()).unwrap();
         }
     }
-    let db_iter = db
-        .iter_with_bounds_extended(
-            IterRangeBound::Inclusive(min),
-            IterRangeBound::Inclusive(max),
-        )
-        .skip_prior_to(&(min + 50))
-        .unwrap();
+    let db_iter = db.range_iter(min..=max).skip_prior_to(&(min + 50)).unwrap();
 
     assert_eq!(
         (min + 49..min + 50)
@@ -640,10 +634,7 @@ async fn test_iter_with_bounds_extended(#[values(true, false)] is_transactional:
     }
 
     // Skip prior to will return an iterator starting with an "unexpected" key if the sought one is not in the table
-    let db_iter = db
-        .iter_with_bounds_extended(IterRangeBound::Inclusive(1), IterRangeBound::Inclusive(99))
-        .skip_prior_to(&50)
-        .unwrap();
+    let db_iter = db.range_iter(1..=99).skip_prior_to(&50).unwrap();
 
     assert_eq!(
         (49..50)
@@ -653,10 +644,7 @@ async fn test_iter_with_bounds_extended(#[values(true, false)] is_transactional:
         db_iter.collect::<Vec<_>>()
     );
 
-    let db_iter = db
-        .iter_with_bounds_extended(IterRangeBound::Inclusive(1), IterRangeBound::Inclusive(99))
-        .skip_prior_to(&1)
-        .unwrap();
+    let db_iter = db.range_iter(1..=99).skip_prior_to(&1).unwrap();
 
     assert_eq!(
         (1..50)
@@ -666,10 +654,7 @@ async fn test_iter_with_bounds_extended(#[values(true, false)] is_transactional:
         db_iter.collect::<Vec<_>>()
     );
 
-    let db_iter = db
-        .iter_with_bounds_extended(IterRangeBound::Exclusive(1), IterRangeBound::Inclusive(99))
-        .skip_prior_to(&2)
-        .unwrap();
+    let db_iter = db.range_iter(2..=99).skip_prior_to(&2).unwrap();
 
     assert_eq!(
         (2..50)
@@ -679,10 +664,7 @@ async fn test_iter_with_bounds_extended(#[values(true, false)] is_transactional:
         db_iter.collect::<Vec<_>>()
     );
 
-    let db_iter = db
-        .iter_with_bounds_extended(IterRangeBound::Exclusive(1), IterRangeBound::Exclusive(99))
-        .skip_prior_to(&2)
-        .unwrap();
+    let db_iter = db.range_iter(2..99).skip_prior_to(&2).unwrap();
 
     assert_eq!(
         (2..50)
@@ -701,27 +683,18 @@ async fn test_iter_with_bounds_extended(#[values(true, false)] is_transactional:
     );
 
     // Skip to a key which is not within the bounds (bound is [1, 50))
-    let db_iter = db
-        .iter_with_bounds_extended(IterRangeBound::Inclusive(1), IterRangeBound::Inclusive(50))
-        .skip_to(&50)
-        .unwrap();
+    let db_iter = db.range_iter(1..=50).skip_to(&50).unwrap();
     assert_eq!(Vec::<(i32, String)>::new(), db_iter.collect::<Vec<_>>());
 
     // Skip to first key in the bound (bound is [1, 49))
-    let db_iter = db
-        .iter_with_bounds_extended(IterRangeBound::Inclusive(1), IterRangeBound::Exclusive(49))
-        .skip_to(&1)
-        .unwrap();
+    let db_iter = db.range_iter(1..49).skip_to(&1).unwrap();
     assert_eq!(
         (1..49).map(|i| (i, i.to_string())).collect::<Vec<_>>(),
         db_iter.collect::<Vec<_>>()
     );
 
     // Skip to a key which is not within the bounds (bound is [1, 50))
-    let db_iter = db
-        .iter_with_bounds_extended(IterRangeBound::Inclusive(1), IterRangeBound::Inclusive(50))
-        .skip_prior_to(&50)
-        .unwrap();
+    let db_iter = db.range_iter(1..=50).skip_prior_to(&50).unwrap();
     assert_eq!(vec![(49, "49".to_string())], db_iter.collect::<Vec<_>>());
 }
 

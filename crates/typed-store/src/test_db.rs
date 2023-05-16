@@ -6,6 +6,7 @@ use std::{
     borrow::Borrow,
     collections::{btree_map::Iter, BTreeMap, HashMap, VecDeque},
     marker::PhantomData,
+    ops::RangeBounds,
     sync::{Arc, RwLock},
 };
 
@@ -281,11 +282,7 @@ where
         unimplemented!("umplemented API");
     }
 
-    fn iter_with_bounds_extended(
-        &'a self,
-        _lower_bound: crate::traits::IterRangeBound<K>,
-        _upper_bound: crate::traits::IterRangeBound<K>,
-    ) -> Self::Iterator {
+    fn range_iter(&'a self, _range: impl RangeBounds<K>) -> Self::Iterator {
         unimplemented!("umplemented API");
     }
 

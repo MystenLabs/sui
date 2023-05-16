@@ -3,6 +3,7 @@
 use crate::TypedStoreError;
 use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Serialize};
+use std::ops::RangeBounds;
 use std::{borrow::Borrow, collections::BTreeMap, error::Error};
 
 pub trait Map<'a, K, V>
@@ -63,11 +64,7 @@ where
 
     /// Similar to `iter_with_bounds` but allows specifying inclusivity/exclusivity of ranges explicitly.
     /// TODO: find better name
-    fn iter_with_bounds_extended(
-        &'a self,
-        lower_bound: IterRangeBound<K>,
-        upper_bound: IterRangeBound<K>,
-    ) -> Self::Iterator;
+    fn range_iter(&'a self, range: impl RangeBounds<K>) -> Self::Iterator;
 
     /// Same as `iter` but performs status check
     fn safe_iter(&'a self) -> Self::SafeIterator;
@@ -136,14 +133,6 @@ where
 
     /// Try to catch up with primary when running as secondary
     fn try_catch_up_with_primary(&self) -> Result<(), Self::Error>;
-}
-
-pub enum IterRangeBound<K>
-where
-    K: Serialize + DeserializeOwned + ?Sized,
-{
-    Inclusive(K),
-    Exclusive(K),
 }
 
 #[async_trait]

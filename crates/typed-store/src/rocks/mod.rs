@@ -9,7 +9,7 @@ pub(crate) mod values;
 
 use crate::{
     metrics::{DBMetrics, RocksDBPerfContext, SamplingInterval},
-    traits::{IterRangeBound, Map, TableSummary},
+    traits::{Map, TableSummary},
 };
 use bincode::Options;
 use collectable::TryExtend;
@@ -29,6 +29,7 @@ use std::{
     collections::BTreeMap,
     env,
     marker::PhantomData,
+    ops::RangeBounds,
     path::{Path, PathBuf},
     sync::Arc,
     time::Duration,
@@ -41,6 +42,7 @@ use tracing::{error, info, instrument, warn};
 use self::{iter::Iter, keys::Keys, values::Values};
 use crate::rocks::safe_iter::SafeIter;
 pub use errors::TypedStoreError;
+use std::ops::Bound;
 use sui_macros::{fail_point, nondeterministic};
 
 // Write buffer size per RocksDB instance can be set via the env var below.
@@ -1757,11 +1759,7 @@ where
 
     /// Similar to `iter_with_bounds` but allows specifying inclusivity/exclusivity of ranges explicitly.
     /// TODO: find better name
-    fn iter_with_bounds_extended(
-        &'a self,
-        lower_bound: IterRangeBound<K>,
-        upper_bound: IterRangeBound<K>,
-    ) -> Self::Iterator {
+    fn range_iter(&'a self, range: impl RangeBounds<K>) -> Self::Iterator {
         // TODO: Change the metrics?
         let _timer = self
             .db_metrics
@@ -1786,13 +1784,16 @@ where
         };
         let mut readopts = ReadOptions::default();
 
+        let lower_bound = range.start_bound();
+        let upper_bound = range.end_bound();
+
         match lower_bound {
-            IterRangeBound::Inclusive(lower_bound) => {
+            Bound::Included(lower_bound) => {
                 // Rocksdb lower bound is inclusive by default so nothing to do
                 let key_buf = be_fix_int_ser(&lower_bound).expect("Serialization must not fail");
                 readopts.set_iterate_lower_bound(key_buf);
             }
-            IterRangeBound::Exclusive(lower_bound) => {
+            Bound::Excluded(lower_bound) => {
                 let mut key_buf =
                     be_fix_int_ser(&lower_bound).expect("Serialization must not fail");
 
@@ -1800,10 +1801,11 @@ where
                 big_endian_saturating_add_one(&mut key_buf);
                 readopts.set_iterate_lower_bound(key_buf);
             }
+            Bound::Unbounded => (),
         };
 
         match upper_bound {
-            IterRangeBound::Inclusive(upper_bound) => {
+            Bound::Included(upper_bound) => {
                 let mut key_buf =
                     be_fix_int_ser(&upper_bound).expect("Serialization must not fail");
 
@@ -1814,11 +1816,12 @@ where
                     readopts.set_iterate_upper_bound(key_buf);
                 }
             }
-            IterRangeBound::Exclusive(upper_bound) => {
+            Bound::Excluded(upper_bound) => {
                 // Rocksdb upper bound is inclusive by default so nothing to do
                 let key_buf = be_fix_int_ser(&upper_bound).expect("Serialization must not fail");
                 readopts.set_iterate_upper_bound(key_buf);
             }
+            Bound::Unbounded => (),
         };
 
         let db_iter = self.rocksdb.raw_iterator_cf(&self.cf(), readopts);

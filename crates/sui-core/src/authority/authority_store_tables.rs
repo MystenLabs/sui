@@ -146,12 +146,8 @@ impl AuthorityPerpetualTables {
         object_id: ObjectID,
         version: SequenceNumber,
     ) -> Option<Object> {
-        use typed_store::traits::IterRangeBound;
-        let lower_bound = IterRangeBound::Inclusive(ObjectKey::min_for_id(&object_id));
-        let upper_bound = IterRangeBound::Inclusive(ObjectKey::max_for_id(&object_id));
-
         let Ok(iter) = self.objects
-            .iter_with_bounds_extended(lower_bound, upper_bound)
+            .range_iter(ObjectKey::min_for_id(&object_id)..=ObjectKey::max_for_id(&object_id))
             .skip_prior_to(&ObjectKey(object_id, version))else {
             return None
         };
