@@ -518,7 +518,7 @@ fn create_input_calls(
         .move_call(
             package,
             Identifier::from_str("coin_factory").unwrap(),
-            Identifier::from_str(format!("mint_vec").as_str()).unwrap(),
+            Identifier::from_str("mint_vec").unwrap(),
             vec![],
             vec![
                 CallArg::from(cap),
