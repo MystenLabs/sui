@@ -61,3 +61,7 @@ yarn-error.log*
 # misc
 *.key
 .env
+Cargo.lock
+genesis.blob
+fullnode.yaml
+suidb/

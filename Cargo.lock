@@ -10332,6 +10332,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "sui-simple-fullnode"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap 3.2.23",
+ "move-binary-format",
+ "move-bytecode-utils",
+ "move-core-types",
+ "sui-adapter-latest",
+ "sui-config",
+ "sui-core",
+ "sui-node",
+ "sui-types",
+ "tokio",
+ "typed-store",
+]
+
+[[package]]
 name = "sui-simulator"
 version = "0.7.0"
 dependencies = [

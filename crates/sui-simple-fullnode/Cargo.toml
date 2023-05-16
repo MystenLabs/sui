@@ -1,0 +1,23 @@
+[package]
+name = "sui-simple-fullnode"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+clap = { version = "3.2.17", features = ["derive"] }
+tokio = { version = "1.28.1", features = ["full"] }
+anyhow = { version = "1.0.64", features = ["backtrace"] }
+
+
+sui-adapter = { path = "../../sui-execution/latest/sui-adapter", package = "sui-adapter-latest" }
+sui-config = { path = "../sui-config" }
+sui-types = { path = "../sui-types" }
+sui-core = { path = "../sui-core" }
+sui-node = { path = "../sui-node" }
+
+typed-store.workspace = true
+move-binary-format.workspace = true
+move-core-types.workspace = true
+move-bytecode-utils.workspace = true
