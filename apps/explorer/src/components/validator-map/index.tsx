@@ -83,7 +83,7 @@ export default function ValidatorMap({ minHeight }: Props) {
     } = useQuery(
         ['validator-map'],
         (): Promise<ValidatorMapData[]> =>
-            appsBe(`validator-map`, {
+            appsBe('validator-map', {
                 network: network.toLowerCase(),
             }),
         {
