@@ -23,6 +23,7 @@ pub struct GetGasParameters {
 }
 
 fn native_get(
+    use_original_id: bool,
     gas_params: &GetGasParameters,
     context: &mut NativeContext,
     ty_args: Vec<Type>,
@@ -34,7 +35,12 @@ fn native_get(
     // Charge base fee
     native_charge_gas_early_exit!(context, gas_params.base);
 
-    let type_tag = context.type_to_type_tag(&ty_args[0])?;
+    let type_tag = if use_original_id {
+        context.type_to_runtime_type_tag(&ty_args[0])
+    } else {
+        context.type_to_type_tag(&ty_args[0])
+    }?;
+
     let type_name = type_tag.to_canonical_string();
 
     // Charge base fee
@@ -56,8 +62,10 @@ fn native_get(
     ))
 }
 
-pub fn make_native_get(gas_params: GetGasParameters) -> NativeFunction {
-    Arc::new(move |context, ty_args, args| native_get(&gas_params, context, ty_args, args))
+pub fn make_native_get(use_original_id: bool, gas_params: GetGasParameters) -> NativeFunction {
+    Arc::new(move |context, ty_args, args| {
+        native_get(use_original_id, &gas_params, context, ty_args, args)
+    })
 }
 
 #[derive(Debug, Clone)]
@@ -66,7 +74,16 @@ pub struct GasParameters {
 }
 
 pub fn make_all(gas_params: GasParameters) -> impl Iterator<Item = (String, NativeFunction)> {
-    let natives = [("get", make_native_get(gas_params.get))];
+    let natives = [
+        (
+            "get",
+            make_native_get(/* use_original_id */ false, gas_params.get.clone()),
+        ),
+        (
+            "get_original",
+            make_native_get(/* use_original_id */ true, gas_params.get),
+        ),
+    ];
 
     crate::natives::helpers::make_module_natives(natives)
 }

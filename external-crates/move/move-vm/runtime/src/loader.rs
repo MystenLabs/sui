@@ -2345,17 +2345,25 @@ struct FieldInstantiation {
 //
 
 struct StructInfo {
-    struct_tag: Option<StructTag>,
+    runtime_struct_tag: Option<StructTag>,
+    defining_struct_tag: Option<StructTag>,
     struct_layout: Option<MoveStructLayout>,
     annotated_struct_layout: Option<MoveStructLayout>,
     node_count: Option<usize>,
     annotated_node_count: Option<usize>,
 }
 
+#[derive(Copy, Clone, PartialEq, Eq)]
+enum StructTagType {
+    Runtime,
+    Defining,
+}
+
 impl StructInfo {
     fn new() -> Self {
         Self {
-            struct_tag: None,
+            runtime_struct_tag: None,
+            defining_struct_tag: None,
             struct_layout: None,
             annotated_struct_layout: None,
             node_count: None,
@@ -2388,44 +2396,78 @@ const MAX_TYPE_TO_LAYOUT_NODES: usize = 256;
 const MAX_TYPE_INSTANTIATION_NODES: usize = 128;
 
 impl Loader {
+    fn read_cached_struct_tag(
+        &self,
+        gidx: CachedStructIndex,
+        ty_args: &[Type],
+        tag_type: StructTagType,
+    ) -> Option<StructTag> {
+        let cache = self.type_cache.read();
+        let map = cache.structs.get(&gidx)?;
+        let info = map.get(ty_args)?;
+
+        match tag_type {
+            StructTagType::Runtime => info.runtime_struct_tag.clone(),
+            StructTagType::Defining => info.defining_struct_tag.clone(),
+        }
+    }
+
     fn struct_gidx_to_type_tag(
         &self,
         gidx: CachedStructIndex,
         ty_args: &[Type],
+        tag_type: StructTagType,
     ) -> PartialVMResult<StructTag> {
-        if let Some(struct_map) = self.type_cache.read().structs.get(&gidx) {
-            if let Some(struct_info) = struct_map.get(ty_args) {
-                if let Some(struct_tag) = &struct_info.struct_tag {
-                    return Ok(struct_tag.clone());
-                }
-            }
+        if let Some(cached) = self.read_cached_struct_tag(gidx, ty_args, tag_type) {
+            return Ok(cached);
         }
 
         let ty_arg_tags = ty_args
             .iter()
-            .map(|ty| self.type_to_type_tag(ty))
+            .map(|ty| self.type_to_type_tag_impl(ty, tag_type))
             .collect::<PartialVMResult<Vec<_>>>()?;
         let struct_type = self.module_cache.read().struct_at(gidx);
-        let struct_tag = StructTag {
-            address: *struct_type.defining_id.address(),
-            module: struct_type.defining_id.name().to_owned(),
-            name: struct_type.name.clone(),
-            type_params: ty_arg_tags,
-        };
 
-        self.type_cache
-            .write()
+        let mut cache = self.type_cache.write();
+        let info = cache
             .structs
             .entry(gidx)
             .or_insert_with(HashMap::new)
             .entry(ty_args.to_vec())
-            .or_insert_with(StructInfo::new)
-            .struct_tag = Some(struct_tag.clone());
+            .or_insert_with(StructInfo::new);
 
-        Ok(struct_tag)
+        match tag_type {
+            StructTagType::Runtime => {
+                let tag = StructTag {
+                    address: *struct_type.runtime_id.address(),
+                    module: struct_type.runtime_id.name().to_owned(),
+                    name: struct_type.name.clone(),
+                    type_params: ty_arg_tags,
+                };
+
+                info.runtime_struct_tag = Some(tag.clone());
+                Ok(tag)
+            }
+
+            StructTagType::Defining => {
+                let tag = StructTag {
+                    address: *struct_type.defining_id.address(),
+                    module: struct_type.defining_id.name().to_owned(),
+                    name: struct_type.name.clone(),
+                    type_params: ty_arg_tags,
+                };
+
+                info.defining_struct_tag = Some(tag.clone());
+                Ok(tag)
+            }
+        }
     }
 
-    fn type_to_type_tag_impl(&self, ty: &Type) -> PartialVMResult<TypeTag> {
+    fn type_to_type_tag_impl(
+        &self,
+        ty: &Type,
+        tag_type: StructTagType,
+    ) -> PartialVMResult<TypeTag> {
         Ok(match ty {
             Type::Bool => TypeTag::Bool,
             Type::U8 => TypeTag::U8,
@@ -2436,13 +2478,17 @@ impl Loader {
             Type::U256 => TypeTag::U256,
             Type::Address => TypeTag::Address,
             Type::Signer => TypeTag::Signer,
-            Type::Vector(ty) => TypeTag::Vector(Box::new(self.type_to_type_tag(ty)?)),
-            Type::Struct(gidx) => {
-                TypeTag::Struct(Box::new(self.struct_gidx_to_type_tag(*gidx, &[])?))
+            Type::Vector(ty) => {
+                TypeTag::Vector(Box::new(self.type_to_type_tag_impl(ty, tag_type)?))
             }
-            Type::StructInstantiation(gidx, ty_args) => {
-                TypeTag::Struct(Box::new(self.struct_gidx_to_type_tag(*gidx, ty_args)?))
-            }
+            Type::Struct(gidx) => TypeTag::Struct(Box::new(self.struct_gidx_to_type_tag(
+                *gidx,
+                &[],
+                tag_type,
+            )?)),
+            Type::StructInstantiation(gidx, ty_args) => TypeTag::Struct(Box::new(
+                self.struct_gidx_to_type_tag(*gidx, ty_args, tag_type)?,
+            )),
             Type::Reference(_) | Type::MutableReference(_) | Type::TyParam(_) => {
                 return Err(
                     PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
@@ -2590,7 +2636,7 @@ impl Loader {
             );
         }
         let count_before = *count;
-        let struct_tag = self.struct_gidx_to_type_tag(gidx, ty_args)?;
+        let struct_tag = self.struct_gidx_to_type_tag(gidx, ty_args, StructTagType::Defining)?;
         let field_layouts = struct_type
             .field_names
             .iter()
@@ -2659,7 +2705,11 @@ impl Loader {
     }
 
     pub(crate) fn type_to_type_tag(&self, ty: &Type) -> PartialVMResult<TypeTag> {
-        self.type_to_type_tag_impl(ty)
+        self.type_to_type_tag_impl(ty, StructTagType::Defining)
+    }
+
+    pub(crate) fn type_to_runtime_type_tag(&self, ty: &Type) -> PartialVMResult<TypeTag> {
+        self.type_to_type_tag_impl(ty, StructTagType::Runtime)
     }
 
     pub(crate) fn type_to_type_layout(&self, ty: &Type) -> PartialVMResult<MoveTypeLayout> {
