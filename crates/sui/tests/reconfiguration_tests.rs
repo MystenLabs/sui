@@ -10,7 +10,6 @@ use rand::{rngs::StdRng, SeedableRng};
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-use sui_config::builder::ConfigBuilder;
 use sui_config::NodeConfig;
 use sui_core::authority_aggregator::{AuthAggMetrics, AuthorityAggregator};
 use sui_core::consensus_adapter::position_submit_certificate;
@@ -18,6 +17,7 @@ use sui_core::safe_client::SafeClientMetricsBase;
 use sui_json_rpc_types::SuiTransactionBlockEffectsAPI;
 use sui_macros::sim_test;
 use sui_node::SuiNodeHandle;
+use sui_swarm_config::network_config_builder::ConfigBuilder;
 use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::base_types::{AuthorityName, ObjectRef, SuiAddress};
 use sui_types::crypto::{

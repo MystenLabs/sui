@@ -25,7 +25,7 @@ export class DerivedAccount implements Account {
         derivationPath: string;
         keypair: Keypair;
     }) {
-        this.type = AccountType.IMPORTED;
+        this.type = AccountType.DERIVED;
         this.derivationPath = derivationPath;
         this.accountKeypair = new AccountKeypair(keypair);
         this.address = this.accountKeypair.publicKey.toSuiAddress();

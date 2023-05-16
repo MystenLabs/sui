@@ -7,6 +7,7 @@ import {
     is,
     getExecutionStatusType,
     getTransactionDigest,
+    getTransactionSender,
 } from '@mysten/sui.js';
 import { useMemo } from 'react';
 
@@ -33,6 +34,7 @@ const getSummary = (
     } else {
         return {
             gas,
+            sender: getTransactionSender(transaction),
             balanceChanges: balanceChangeSummary,
             digest: getTransactionDigest(transaction),
             label: getLabel(transaction, currentAddress),

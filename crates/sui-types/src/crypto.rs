@@ -555,7 +555,7 @@ pub fn random_committee_key_pairs_of_size(size: usize) -> Vec<AuthorityKeyPair> 
     (0..size)
         .map(|_| {
             // TODO: We are generating the keys 4 times to match exactly as how we generate
-            // keys in ConfigBuilder::build (sui-config/src/builder.rs). This is because
+            // keys in ConfigBuilder::build (sui-config/src/network_config_builder). This is because
             // we are using these key generation functions as fixtures and we call them
             // independently in different paths and exact the results to be the same.
             // We should eliminate them.

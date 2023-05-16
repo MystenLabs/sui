@@ -55,7 +55,6 @@ sui-core = { path = "../sui-core" }
 sui-macros = { path = "../sui-macros" }
 sui-node = { path = "../sui-node" }
 sui-simulator = { path = "../sui-simulator" }
-test-utils = { path = "../test-utils" }
 
 [package.metadata.cargo-udeps.ignore]
 normal = ["jemalloc-ctl"]

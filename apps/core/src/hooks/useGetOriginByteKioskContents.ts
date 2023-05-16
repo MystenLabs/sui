@@ -20,19 +20,20 @@ export function useGetOriginByteKioskContents(
         StructType: ORIGINBYTE_KIOSK_OWNER_TOKEN,
     });
 
-    return useQuery(
-        ['originbyte-kiosk-contents', address],
-        async () => {
-            // find list of kiosk IDs owned by address
-            const obKioskIds = data!.pages
-                .flatMap((page) => page.data)
-                .map(
-                    (obj) =>
-                        obj.data?.content &&
-                        'fields' in obj.data.content &&
-                        obj.data.content.fields.kiosk
-                );
+    // find list of kiosk IDs owned by address
+    const obKioskIds =
+        data?.pages
+            .flatMap((page) => page.data)
+            .map(
+                (obj) =>
+                    obj.data?.content &&
+                    'fields' in obj.data.content &&
+                    obj.data.content.fields.kiosk
+            ) ?? [];
 
+    return useQuery({
+        queryKey: ['originbyte-kiosk-contents', address, obKioskIds],
+        queryFn: async () => {
             if (!obKioskIds.length) return [];
 
             // fetch the user's kiosks
@@ -59,11 +60,12 @@ export function useGetOriginByteKioskContents(
                 ids: kioskObjectIds.flat(),
                 options: {
                     showDisplay: true,
+                    showType: true,
                 },
             });
 
             return kioskContent;
         },
-        { enabled: !!data?.pages.length && !disable && !!address }
-    );
+        enabled: !!obKioskIds.length && !disable && !!address,
+    });
 }

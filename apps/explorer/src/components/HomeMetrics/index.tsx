@@ -23,19 +23,22 @@ export function HomeMetrics() {
     // todo: remove this hook when we enable enhanced rpc client by default
     const enhancedRpc = useEnhancedRpcClient();
 
-    const { data: gasData } = useQuery(['home', 'reference-gas-price'], () =>
-        rpc.getReferenceGasPrice()
-    );
+    const { data: gasData } = useQuery({
+        queryKey: ['home', 'reference-gas-price'],
+        queryFn: () => rpc.getReferenceGasPrice(),
+    });
 
     const { data: systemState } = useGetSystemState();
 
     const { data: transactionCount } = useGetTotalTransactionBlocks();
 
-    const { data: networkMetrics } = useQuery(
-        ['home', 'metrics'],
-        () => enhancedRpc.getNetworkMetrics(),
-        { cacheTime: 24 * 60 * 60 * 1000, staleTime: Infinity, retry: 5 }
-    );
+    const { data: networkMetrics } = useQuery({
+        queryKey: ['home', 'metrics'],
+        queryFn: () => enhancedRpc.getNetworkMetrics(),
+        cacheTime: 24 * 60 * 60 * 1000,
+        staleTime: Infinity,
+        retry: 5,
+    });
 
     return (
         <Card spacing="none">

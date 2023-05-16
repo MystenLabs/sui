@@ -306,7 +306,7 @@ function ValidatorPageResult() {
 
     return (
         <div>
-            <div className="mt-8 grid gap-5 md:grid-cols-2">
+            <div className="grid gap-5 md:grid-cols-2">
                 <Card spacing="lg">
                     <div className="flex w-full basis-full flex-col gap-8">
                         <Heading

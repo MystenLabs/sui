@@ -6,10 +6,8 @@ use camino::Utf8PathBuf;
 use clap::Parser;
 use fastcrypto::encoding::{Encoding, Hex};
 use std::path::PathBuf;
-use sui_config::{
-    genesis::{Builder, UnsignedGenesis},
-    SUI_GENESIS_FILENAME,
-};
+use sui_config::{genesis::UnsignedGenesis, SUI_GENESIS_FILENAME};
+use sui_genesis_builder::Builder;
 use sui_types::multiaddr::Multiaddr;
 use sui_types::{
     base_types::SuiAddress,
@@ -136,7 +134,7 @@ pub fn run(cmd: Ceremony) -> Result<()> {
             let network_keypair: NetworkKeyPair = read_network_keypair_from_file(network_key_file)?;
             let pop = generate_proof_of_possession(&keypair, (&account_keypair.public()).into());
             builder = builder.add_validator(
-                sui_config::ValidatorInfo {
+                sui_genesis_builder::validator_info::ValidatorInfo {
                     name,
                     protocol_key: keypair.public().into(),
                     worker_key: worker_keypair.public().clone(),
@@ -264,7 +262,8 @@ fn check_protocol_version(builder: &Builder, protocol_version: ProtocolVersion) 
 mod test {
     use super::*;
     use anyhow::Result;
-    use sui_config::{utils, ValidatorInfo};
+    use sui_config::utils;
+    use sui_genesis_builder::validator_info::ValidatorInfo;
     use sui_keys::keypair_file::{write_authority_keypair_to_file, write_keypair_to_file};
     use sui_types::crypto::{get_key_pair_from_rng, AccountKeyPair, AuthorityKeyPair, SuiKeyPair};
 

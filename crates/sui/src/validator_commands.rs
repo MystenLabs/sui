@@ -9,7 +9,7 @@ use std::{
     fs,
     path::PathBuf,
 };
-use sui_config::genesis::GenesisValidatorInfo;
+use sui_genesis_builder::validator_info::GenesisValidatorInfo;
 
 use sui_types::{
     base_types::{ObjectID, ObjectRef, SuiAddress},
@@ -234,7 +234,7 @@ impl SuiValidatorCommand {
                 let pop =
                     generate_proof_of_possession(&keypair, (&account_keypair.public()).into());
                 let validator_info = GenesisValidatorInfo {
-                    info: sui_config::ValidatorInfo {
+                    info: sui_genesis_builder::validator_info::ValidatorInfo {
                         name,
                         protocol_key: keypair.public().into(),
                         worker_key: worker_keypair.public().clone(),

@@ -20,12 +20,9 @@ use sui::{
     client_commands::{SuiClientCommandResult, SuiClientCommands},
     sui_commands::SuiCommand,
 };
+use sui_config::{Config, NodeConfig, SUI_BENCHMARK_GENESIS_GAS_KEYSTORE_FILENAME};
 use sui_config::{
-    genesis_config::{AccountConfig, GenesisConfig},
-    Config, NodeConfig, SUI_BENCHMARK_GENESIS_GAS_KEYSTORE_FILENAME,
-};
-use sui_config::{
-    NetworkConfig, PersistedConfig, SUI_CLIENT_CONFIG, SUI_FULLNODE_CONFIG, SUI_GENESIS_FILENAME,
+    PersistedConfig, SUI_CLIENT_CONFIG, SUI_FULLNODE_CONFIG, SUI_GENESIS_FILENAME,
     SUI_KEYSTORE_FILENAME, SUI_NETWORK_CONFIG,
 };
 use sui_json::SuiJsonValue;
@@ -38,6 +35,8 @@ use sui_macros::sim_test;
 use sui_move_build::{BuildConfig, SuiPackageHooks};
 use sui_sdk::sui_client_config::SuiClientConfig;
 use sui_sdk::wallet_context::WalletContext;
+use sui_swarm_config::genesis_config::{AccountConfig, GenesisConfig};
+use sui_swarm_config::network_config::NetworkConfig;
 use sui_types::base_types::SuiAddress;
 use sui_types::crypto::{
     Ed25519SuiSignature, Secp256k1SuiSignature, SignatureScheme, SuiKeyPair, SuiSignatureInner,
