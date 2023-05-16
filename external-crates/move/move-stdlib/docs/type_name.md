@@ -8,6 +8,7 @@ Functionality for converting Move types into values. Use with care!
 
 -  [Struct `TypeName`](#0x1_type_name_TypeName)
 -  [Function `get`](#0x1_type_name_get)
+-  [Function `get_original`](#0x1_type_name_get_original)
 -  [Function `borrow_string`](#0x1_type_name_borrow_string)
 -  [Function `into_string`](#0x1_type_name_into_string)
 
@@ -54,7 +55,11 @@ Functionality for converting Move types into values. Use with care!
 
 ## Function `get`
 
-Return a value representation of the type <code>T</code>.
+Return a value representation of the type <code>T</code>.  Package IDs
+that appear in fully qualified type names in the output from
+this function are original IDs (the ID of the first version of
+the package, even if the type in question was introduced in a
+later upgrade).
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="type_name.md#0x1_type_name_get">get</a>&lt;T&gt;(): <a href="type_name.md#0x1_type_name_TypeName">type_name::TypeName</a>
@@ -67,6 +72,33 @@ Return a value representation of the type <code>T</code>.
 
 
 <pre><code><b>public</b> <b>native</b> <b>fun</b> <a href="type_name.md#0x1_type_name_get">get</a>&lt;T&gt;(): <a href="type_name.md#0x1_type_name_TypeName">TypeName</a>;
+</code></pre>
+
+
+
+</details>
+
+<a name="0x1_type_name_get_original"></a>
+
+## Function `get_original`
+
+Return a value representation of the type <code>T</code>.  Package IDs
+that appear in fully qualified type names in the output from
+this function are original IDs (the ID of the first version of
+the package, even if the type in question was introduced in a
+later upgrade).
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="type_name.md#0x1_type_name_get_original">get_original</a>&lt;T&gt;(): <a href="type_name.md#0x1_type_name_TypeName">type_name::TypeName</a>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>native</b> <b>fun</b> <a href="type_name.md#0x1_type_name_get_original">get_original</a>&lt;T&gt;(): <a href="type_name.md#0x1_type_name_TypeName">TypeName</a>;
 </code></pre>
 
 
