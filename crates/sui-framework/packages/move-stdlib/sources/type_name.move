@@ -36,7 +36,7 @@ module std::type_name {
     /// the package, even if the type in question was introduced in a
     /// later upgrade).
     public native fun get_original<T>(): TypeName;
-    spec get {
+    spec get_original {
         pragma opaque;
     }
 
