@@ -1,12 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import {
-    useCoinMetadata,
-    useFormatCoin,
-    CoinFormat,
-    useGetCoins,
-} from '@mysten/core';
+import { useCoinMetadata, useFormatCoin, CoinFormat } from '@mysten/core';
 import { ArrowRight16 } from '@mysten/icons';
 import { SUI_TYPE_ARG, Coin as CoinAPI, type CoinStruct } from '@mysten/sui.js';
 import { Field, Form, useFormikContext, Formik } from 'formik';
@@ -25,7 +20,7 @@ import { AddressInput } from '_components/address-input';
 import Alert from '_components/alert';
 import Loading from '_components/loading';
 import { parseAmount } from '_helpers';
-import { useTransactionGasBudget } from '_hooks';
+import { useTransactionGasBudget, useGetAllCoins } from '_hooks';
 import { GAS_SYMBOL } from '_src/ui/app/redux/slices/sui-objects/Coin';
 import { InputWithAction } from '_src/ui/app/shared/InputWithAction';
 
@@ -37,7 +32,6 @@ const initialValues = {
 };
 
 export type FormValues = typeof initialValues;
-const MAX_COINS_PER_REQUEST = 100;
 
 export type SubmitProps = {
     to: string;
@@ -113,43 +107,19 @@ export function SendTokenForm({
 }: SendTokenFormProps) {
     const activeAddress = useActiveAddress();
     // Get all coins of the type
+    const { data: coinsData, isLoading: coinsIsLoading } = useGetAllCoins(
+        coinType,
+        activeAddress!
+    );
 
-    const {
-        data: coinsData,
-        isLoading: coinsIsLoading,
-        hasNextPage: coinsHasNextPage,
-        fetchNextPage: fetchNextPageCoins,
-        isFetchingNextPage: isFetchingNextPageCoin,
-    } = useGetCoins(coinType, activeAddress!, MAX_COINS_PER_REQUEST);
+    const { data: suiCoinsData, isLoading: suiCoinsIsLoading } = useGetAllCoins(
+        SUI_TYPE_ARG,
+        activeAddress!
+    );
 
-    const {
-        data: suiCoinsData,
-        isLoading: suiCoinsIsLoading,
-        hasNextPage: suiCoinsHasNextPage,
-        fetchNextPage: fetchNextPageSuiCoins,
-        isFetchingNextPage: isFetchingNextPageSuiCoin,
-    } = useGetCoins(SUI_TYPE_ARG, activeAddress!, MAX_COINS_PER_REQUEST);
-
-    useEffect(() => {
-        // Keep fetching coins until there is no more coins to fetch : coinsHasNextPage = false
-        if (coinsHasNextPage && !isFetchingNextPageCoin) {
-            fetchNextPageCoins();
-        }
-        if (suiCoinsHasNextPage && !isFetchingNextPageSuiCoin) {
-            fetchNextPageSuiCoins();
-        }
-    }, [
-        coinsHasNextPage,
-        isFetchingNextPageCoin,
-        isFetchingNextPageSuiCoin,
-        suiCoinsHasNextPage,
-        fetchNextPageCoins,
-        fetchNextPageSuiCoins,
-    ]);
-
-    const suiCoins = suiCoinsData?.pages?.flatMap(({ data }) => data) || [];
-    const coins = coinsData?.pages?.flatMap(({ data }) => data) || [];
-    const coinBalance = CoinAPI.totalBalance(coins);
+    const suiCoins = suiCoinsData?.length ? suiCoinsData : [];
+    const coins = coinsData?.length ? coinsData : [];
+    const coinBalance = CoinAPI.totalBalance(coins || []);
     const suiBalance = CoinAPI.totalBalance(suiCoins);
 
     const coinMetadata = useCoinMetadata(coinType);
@@ -160,11 +130,11 @@ export function SendTokenForm({
         coinType,
         CoinFormat.FULL
     );
-
     const validationSchemaStepOne = useMemo(
         () => createValidationSchemaStepOne(coinBalance, symbol, coinDecimals),
         [coinBalance, symbol, coinDecimals]
     );
+
     // remove the comma from the token balance
     const formattedTokenBalance = tokenBalance.replace(/,/g, '');
     const initAmountBig = parseAmount(initialAmount, coinDecimals);
@@ -175,10 +145,7 @@ export function SendTokenForm({
                 queryResult.isLoading ||
                 coinMetadata.isLoading ||
                 suiCoinsIsLoading ||
-                coinsIsLoading ||
-                // Depending on the number of coins object, it can take a while to fetch all the coins
-                !!coinsHasNextPage ||
-                !!suiCoinsHasNextPage
+                coinsIsLoading
             }
         >
             <Formik
