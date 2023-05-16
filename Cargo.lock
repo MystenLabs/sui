@@ -9651,6 +9651,7 @@ name = "sui-faucet"
 version = "1.2.0"
 dependencies = [
  "anyhow",
+ "async-recursion",
  "async-trait",
  "axum",
  "clap 3.2.23",
