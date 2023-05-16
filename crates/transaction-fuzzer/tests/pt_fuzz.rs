@@ -7,9 +7,7 @@ use transaction_fuzzer::account_universe::AccountCurrent;
 use transaction_fuzzer::account_universe::AccountData;
 use transaction_fuzzer::executor::Executor;
 use transaction_fuzzer::programmable_transaction_gen::{
-    gen_many_input_match, gen_many_merge_coins_input_match, gen_many_move_vec_input_match,
-    gen_many_split_coins_input_match, gen_many_transfers_input_match, gen_programmable_transaction,
-    MAX_ITERATIONS_INPUT_MATCH,
+    gen_many_input_match, gen_programmable_transaction, MAX_ITERATIONS_INPUT_MATCH,
 };
 use transaction_fuzzer::type_arg_fuzzer::{run_pt, run_pt_effects};
 
@@ -47,7 +45,6 @@ fn publish_coin_factory(
         .iter()
         .find(|(_, owner)| matches!(owner, Owner::Immutable))
         .unwrap();
-    let account_owner = Owner::AddressOwner(account.initial_data.account.address);
     let cap = effects
         .created()
         .iter()
@@ -70,6 +67,10 @@ fn publish_coin_factory(
     (package.0, cap.0)
 }
 
+/// This function runs programmable transaction block and checks if it executed successfully. It
+/// also updates the treasury cap of a coin used for testing which gets updated between transaction
+/// blocks if coins get minted. We need this to work around limitations of the proptest framework
+/// where no external mutable state can be used to the `prop_compose` macro.
 pub fn run_pt_success(
     account: &mut AccountCurrent,
     exec: &mut Executor,

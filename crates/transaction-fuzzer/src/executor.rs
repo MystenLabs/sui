@@ -4,20 +4,17 @@
 // Copyright (c) The Diem Core Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{fmt::Debug, path::PathBuf, str::FromStr, sync::Arc};
-
-use move_core_types::identifier::Identifier;
+use std::{fmt::Debug, path::PathBuf, sync::Arc};
 
 use sui_core::authority::test_authority_builder::TestAuthorityBuilder;
 use sui_core::{authority::AuthorityState, test_utils::send_and_confirm_transaction};
 use sui_move_build::BuildConfig;
-use sui_protocol_config::ProtocolConfig;
 use sui_types::base_types::ObjectID;
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
 use sui_types::error::SuiError;
 use sui_types::execution_status::{ExecutionFailureStatus, ExecutionStatus};
 use sui_types::object::Object;
-use sui_types::transaction::{CallArg, TransactionData, VerifiedTransaction};
+use sui_types::transaction::{TransactionData, VerifiedTransaction};
 use sui_types::utils::to_sender_signed_transaction;
 use tokio::runtime::Runtime;
 

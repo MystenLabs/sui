@@ -10,7 +10,7 @@ use proptest::prelude::*;
 use sui_protocol_config::ProtocolConfig;
 use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress};
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
-use sui_types::transaction::{Argument, CallArg, Command, ObjectArg, ProgrammableTransaction};
+use sui_types::transaction::{Argument, CallArg, Command, ProgrammableTransaction};
 
 static PROTOCOL_CONFIG: Lazy<ProtocolConfig> = Lazy::new(ProtocolConfig::get_for_max_version);
 
@@ -174,7 +174,6 @@ pub fn gen_command_input_match() -> impl Strategy<Value = CommandSketch> {
 }
 
 pub fn arg_len_strategy_input_match() -> impl Strategy<Value = usize> {
-    let max_args = PROTOCOL_CONFIG.max_arguments() as usize;
     prop_oneof![
         20 => 1usize..10,
         10 => 10usize..MAX_ARG_LEN_INPUT_MATCH
@@ -202,90 +201,6 @@ prop_compose! {
     }
 }
 
-prop_compose! {
-    pub fn gen_many_transfers_input_match(recipient: SuiAddress, package: ObjectID, cap: ObjectRef)
-        (mut command_sketches in vec(gen_transfer_input_match(), 1..=MAX_COMMANDS_INPUT_MATCH)) -> ProgrammableTransaction {
-            let mut builder = ProgrammableTransactionBuilder::new();
-            let mut cmd_num = -1;
-            // does not matter which is picked as first as they are generated randomly anyway
-            let first_cmd_sketch = command_sketches.pop().unwrap();
-            let (first_cmd, cmd_inc) = gen_transfer_input(&mut builder, None, &first_cmd_sketch, cmd_num, recipient, package, cap);
-            builder.command(first_cmd);
-            cmd_num += cmd_inc + 1;
-            let mut prev_cmd = first_cmd_sketch;
-            for cmd_sketch in command_sketches {
-                let (cmd, cmd_inc) = gen_transfer_input(&mut builder, Some(&prev_cmd), &cmd_sketch, cmd_num, recipient, package, cap);
-                builder.command(cmd);
-                cmd_num += cmd_inc + 1;
-                prev_cmd = cmd_sketch;
-            }
-            builder.finish()
-    }
-}
-
-prop_compose! {
-    pub fn gen_many_split_coins_input_match(recipient: SuiAddress, package: ObjectID, cap: ObjectRef)
-        (mut command_sketches in vec(gen_split_coins_input_match(), 1..=MAX_COMMANDS_INPUT_MATCH)) -> ProgrammableTransaction {
-            let mut builder = ProgrammableTransactionBuilder::new();
-            let mut cmd_num = -1;
-            // does not matter which is picked as first as they are generated randomly anyway
-            let first_cmd_sketch = command_sketches.pop().unwrap();
-            let (first_cmd, cmd_inc) = gen_split_coins_input(&mut builder, None, &first_cmd_sketch, cmd_num, recipient, package, cap);
-            builder.command(first_cmd);
-            cmd_num += cmd_inc + 1;
-            let mut prev_cmd = first_cmd_sketch;
-            for cmd_sketch in command_sketches {
-                let (cmd, cmd_inc) = gen_split_coins_input(&mut builder, Some(&prev_cmd), &cmd_sketch, cmd_num, recipient, package, cap);
-                builder.command(cmd);
-                cmd_num += cmd_inc + 1;
-                prev_cmd = cmd_sketch;
-            }
-            builder.finish()
-    }
-}
-
-prop_compose! {
-    pub fn gen_many_merge_coins_input_match(recipient: SuiAddress, package: ObjectID, cap: ObjectRef)
-        (mut command_sketches in vec(gen_merge_coins_input_match(), 1..=MAX_COMMANDS_INPUT_MATCH)) -> ProgrammableTransaction {
-            let mut builder = ProgrammableTransactionBuilder::new();
-            let mut cmd_num = -1;
-            // does not matter which is picked as first as they are generated randomly anyway
-            let first_cmd_sketch = command_sketches.pop().unwrap();
-            let (first_cmd, cmd_inc) = gen_merge_coins_input(&mut builder, None, &first_cmd_sketch, cmd_num, recipient, package, cap);
-            builder.command(first_cmd);
-            cmd_num += cmd_inc + 1;
-            let mut prev_cmd = first_cmd_sketch;
-            for cmd_sketch in command_sketches {
-                let (cmd, cmd_inc) = gen_merge_coins_input(&mut builder, Some(&prev_cmd), &cmd_sketch, cmd_num, recipient, package, cap);
-                builder.command(cmd);
-                cmd_num += cmd_inc + 1;
-                prev_cmd = cmd_sketch;
-            }
-            builder.finish()
-    }
-}
-
-prop_compose! {
-    pub fn gen_many_move_vec_input_match(recipient: SuiAddress, package: ObjectID, cap: ObjectRef)
-        (mut command_sketches in vec(gen_move_vec_input_match(), 1..=MAX_COMMANDS_INPUT_MATCH)) -> ProgrammableTransaction {
-            let mut builder = ProgrammableTransactionBuilder::new();
-            let mut cmd_num = -1;
-            // does not matter which is picked as first as they are generated randomly anyway
-            let first_cmd_sketch = command_sketches.pop().unwrap();
-            let (first_cmd, cmd_inc) = gen_move_vec_input(&mut builder, None, &first_cmd_sketch, cmd_num, recipient, package, cap);
-            builder.command(first_cmd);
-            cmd_num += cmd_inc + 1;
-            let mut prev_cmd = first_cmd_sketch;
-            for cmd_sketch in command_sketches {
-                let (cmd, cmd_inc) = gen_move_vec_input(&mut builder, Some(&prev_cmd), &cmd_sketch, cmd_num, recipient, package, cap);
-                builder.command(cmd);
-                cmd_num += cmd_inc + 1;
-                prev_cmd = cmd_sketch;
-            }
-            builder.finish()
-    }
-}
-
 fn gen_input(
     builder: &mut ProgrammableTransactionBuilder,
     prev_command: Option<&CommandSketch>,
@@ -305,33 +220,15 @@ fn gen_input(
             package,
             cap,
         ),
-        CommandSketch::SplitCoins(_) => gen_split_coins_input(
-            builder,
-            prev_command,
-            cmd,
-            prev_cmd_num,
-            recipient,
-            package,
-            cap,
-        ),
-        CommandSketch::MergeCoins(_) => gen_merge_coins_input(
-            builder,
-            prev_command,
-            cmd,
-            prev_cmd_num,
-            recipient,
-            package,
-            cap,
-        ),
-        CommandSketch::MakeMoveVec(_) => gen_move_vec_input(
-            builder,
-            prev_command,
-            cmd,
-            prev_cmd_num,
-            recipient,
-            package,
-            cap,
-        ),
+        CommandSketch::SplitCoins(_) => {
+            gen_split_coins_input(builder, cmd, prev_cmd_num, package, cap)
+        }
+        CommandSketch::MergeCoins(_) => {
+            gen_merge_coins_input(builder, prev_command, cmd, prev_cmd_num, package, cap)
+        }
+        CommandSketch::MakeMoveVec(_) => {
+            gen_move_vec_input(builder, prev_command, cmd, prev_cmd_num, package, cap)
+        }
     }
 }
 
@@ -368,10 +265,8 @@ pub fn gen_transfer_input(
 
 pub fn gen_split_coins_input(
     builder: &mut ProgrammableTransactionBuilder,
-    prev_command: Option<&CommandSketch>,
     cmd: &CommandSketch,
     prev_cmd_num: i64,
-    recipient: SuiAddress,
     package: ObjectID,
     cap: ObjectRef,
 ) -> (Command, i64) {
@@ -409,7 +304,6 @@ pub fn gen_merge_coins_input(
     prev_command: Option<&CommandSketch>,
     cmd: &CommandSketch,
     prev_cmd_num: i64,
-    recipient: SuiAddress,
     package: ObjectID,
     cap: ObjectRef,
 ) -> (Command, i64) {
@@ -483,7 +377,6 @@ pub fn gen_move_vec_input(
     prev_command: Option<&CommandSketch>,
     cmd: &CommandSketch,
     prev_cmd_num: i64,
-    recipient: SuiAddress,
     package: ObjectID,
     cap: ObjectRef,
 ) -> (Command, i64) {
@@ -621,17 +514,19 @@ fn create_input_calls(
     coin_value: u64,
     input_size: u64,
 ) {
-    builder.move_call(
-        package,
-        Identifier::from_str("coin_factory").unwrap(),
-        Identifier::from_str(format!("mint_vec").as_str()).unwrap(),
-        vec![],
-        vec![
-            CallArg::from(cap),
-            CallArg::from(coin_value),
-            CallArg::from(input_size),
-        ],
-    );
+    builder
+        .move_call(
+            package,
+            Identifier::from_str("coin_factory").unwrap(),
+            Identifier::from_str(format!("mint_vec").as_str()).unwrap(),
+            vec![],
+            vec![
+                CallArg::from(cap),
+                CallArg::from(coin_value),
+                CallArg::from(input_size),
+            ],
+        )
+        .unwrap();
     create_unpack_call(builder, package, prev_cmd_num + 1, input_size);
 }
 
