@@ -2119,7 +2119,7 @@ impl ReadWriteOptions {
 impl Default for ReadWriteOptions {
     fn default() -> Self {
         Self {
-            ignore_range_deletions: false,
+            ignore_range_deletions: true,
             sync_to_disk: std::env::var("SUI_DB_SYNC_TO_DISK").map_or(false, |v| v != "0"),
         }
     }
