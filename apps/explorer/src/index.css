@@ -2,6 +2,14 @@
 @tailwind components;
 @tailwind utilities;
 
+html,
+body,
+#root {
+    height: 100%;
+    width: 100%;
+    position: relative;
+}
+
 /* Define some colors as CSS variables for use outside of the Tailwind class context: */
 :root {
     --success-light: theme('colors.success.light');
