@@ -281,6 +281,14 @@ where
         unimplemented!("umplemented API");
     }
 
+    fn iter_with_bounds_extended(
+        &'a self,
+        _lower_bound: crate::traits::IterRangeBound<K>,
+        _upper_bound: crate::traits::IterRangeBound<K>,
+    ) -> Self::Iterator {
+        unimplemented!("umplemented API");
+    }
+
     fn safe_iter(&'a self) -> Self::SafeIterator {
         TestDBIterBuilder {
             rows: self.rows.read().unwrap(),

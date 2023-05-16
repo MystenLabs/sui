@@ -61,6 +61,14 @@ where
     fn iter_with_bounds(&'a self, lower_bound: Option<K>, upper_bound: Option<K>)
         -> Self::Iterator;
 
+    /// Similar to `iter_with_bounds` but allows specifying inclusivity/exclusivity of ranges explicitly.
+    /// TODO: find better name
+    fn iter_with_bounds_extended(
+        &'a self,
+        lower_bound: IterRangeBound<K>,
+        upper_bound: IterRangeBound<K>,
+    ) -> Self::Iterator;
+
     /// Same as `iter` but performs status check
     fn safe_iter(&'a self) -> Self::SafeIterator;
 
@@ -128,6 +136,14 @@ where
 
     /// Try to catch up with primary when running as secondary
     fn try_catch_up_with_primary(&self) -> Result<(), Self::Error>;
+}
+
+pub enum IterRangeBound<K>
+where
+    K: Serialize + DeserializeOwned + ?Sized,
+{
+    Inclusive(K),
+    Exclusive(K),
 }
 
 #[async_trait]

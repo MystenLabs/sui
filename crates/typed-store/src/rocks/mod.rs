@@ -9,7 +9,7 @@ pub(crate) mod values;
 
 use crate::{
     metrics::{DBMetrics, RocksDBPerfContext, SamplingInterval},
-    traits::{Map, TableSummary},
+    traits::{IterRangeBound, Map, TableSummary},
 };
 use bincode::Options;
 use collectable::TryExtend;
@@ -1755,6 +1755,84 @@ where
         )
     }
 
+    /// Similar to `iter_with_bounds` but allows specifying inclusivity/exclusivity of ranges explicitly.
+    /// TODO: find better name
+    fn iter_with_bounds_extended(
+        &'a self,
+        lower_bound: IterRangeBound<K>,
+        upper_bound: IterRangeBound<K>,
+    ) -> Self::Iterator {
+        // TODO: Change the metrics?
+        let _timer = self
+            .db_metrics
+            .op_metrics
+            .rocksdb_iter_latency_seconds
+            .with_label_values(&[&self.cf])
+            .start_timer();
+        let bytes_scanned = self
+            .db_metrics
+            .op_metrics
+            .rocksdb_iter_bytes
+            .with_label_values(&[&self.cf]);
+        let keys_scanned = self
+            .db_metrics
+            .op_metrics
+            .rocksdb_iter_keys
+            .with_label_values(&[&self.cf]);
+        let _perf_ctx = if self.iter_sample_interval.sample() {
+            Some(RocksDBPerfContext::default())
+        } else {
+            None
+        };
+        let mut readopts = ReadOptions::default();
+
+        match lower_bound {
+            IterRangeBound::Inclusive(lower_bound) => {
+                // Rocksdb lower bound is inclusive by default so nothing to do
+                let key_buf = be_fix_int_ser(&lower_bound).expect("Serialization must not fail");
+                readopts.set_iterate_lower_bound(key_buf);
+            }
+            IterRangeBound::Exclusive(lower_bound) => {
+                let mut key_buf =
+                    be_fix_int_ser(&lower_bound).expect("Serialization must not fail");
+
+                // Since we want exclusive, we need to increment the key to exclude the previous
+                big_endian_saturating_add_one(&mut key_buf);
+                readopts.set_iterate_lower_bound(key_buf);
+            }
+        };
+
+        match upper_bound {
+            IterRangeBound::Inclusive(upper_bound) => {
+                let mut key_buf =
+                    be_fix_int_ser(&upper_bound).expect("Serialization must not fail");
+
+                // If the key is already at the limit, there's nowhere else to go, so no upper bound
+                if !is_max(&key_buf) {
+                    // Since we want exclusive, we need to increment the key to get the upper bound
+                    big_endian_saturating_add_one(&mut key_buf);
+                    readopts.set_iterate_upper_bound(key_buf);
+                }
+            }
+            IterRangeBound::Exclusive(upper_bound) => {
+                // Rocksdb upper bound is inclusive by default so nothing to do
+                let key_buf = be_fix_int_ser(&upper_bound).expect("Serialization must not fail");
+                readopts.set_iterate_upper_bound(key_buf);
+            }
+        };
+
+        let db_iter = self.rocksdb.raw_iterator_cf(&self.cf(), readopts);
+        Iter::new(
+            self.cf.clone(),
+            db_iter,
+            Some(_timer),
+            _perf_ctx,
+            Some(bytes_scanned),
+            Some(keys_scanned),
+            Some(self.db_metrics.clone()),
+        )
+    }
+
     fn keys(&'a self) -> Self::Keys {
         let mut db_iter = self
             .rocksdb
@@ -2401,4 +2479,56 @@ fn populate_missing_cfs(
             .map(|(name, opts)| (name.to_string(), (*opts).clone())),
     );
     Ok(cfs)
+}
+
+/// Given a vec<u8>, find the value which is one more than the vector
+/// if the vector was a big endian number.
+/// If the vector is already minimum, don't change it.
+fn big_endian_saturating_add_one(v: &mut Vec<u8>) {
+    if is_max(v) {
+        return;
+    }
+    for i in (0..v.len()).rev() {
+        if v[i] == u8::MAX {
+            v[i] = 0;
+        } else {
+            v[i] += 1;
+            break;
+        }
+    }
+}
+
+/// Check if all the bytes in the vector are 0xFF
+fn is_max(v: &[u8]) -> bool {
+    v.iter().all(|&x| x == u8::MAX)
+}
+
+#[allow(clippy::assign_op_pattern)]
+#[test]
+fn test_helpers() {
+    let v = vec![];
+    assert!(is_max(&v));
+
+    fn check_add(v: Vec<u8>) {
+        let mut v = v;
+        let num = Num32::from_big_endian(&v);
+        big_endian_saturating_add_one(&mut v);
+        assert!(num + 1 == Num32::from_big_endian(&v));
+    }
+
+    uint::construct_uint! {
+        // 32 byte number
+        #[cfg_attr(feature = "scale-info", derive(TypeInfo))]
+        struct Num32(4);
+    }
+
+    let mut v = vec![255; 32];
+    big_endian_saturating_add_one(&mut v);
+    assert!(Num32::MAX == Num32::from_big_endian(&v));
+
+    check_add(vec![1; 32]);
+    check_add(vec![6; 32]);
+    check_add(vec![254; 32]);
+
+    // TBD: More tests coming with randomized arrays
 }
