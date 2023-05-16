@@ -22,6 +22,8 @@ reqwest = { version = "0.11.13", default_features= false, features = ["blocking"
 tap = "1.0.1"
 serde = { version = "1.0.144", features = ["derive"] }
 snap = "1.1.0"
+git-version = "0.3.5"
+const-str = "0.5.3"
 
 sui-tls = { path = "../sui-tls" }
 sui-macros = { path = "../sui-macros" }
