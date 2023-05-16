@@ -3,6 +3,11 @@
 
 import Browser from 'webextension-polyfill';
 
+import {
+    type QredoConnectIdentity,
+    type QredoConnection,
+    type QredoConnectPendingRequest,
+} from './types';
 import { type QredoConnectInput } from '_src/dapp-interface/WalletStandardInterface';
 
 export function qredoConnectPageUrl(requestID: string) {
@@ -41,4 +46,17 @@ export function validateInputOrThrow(input: QredoConnectInput) {
         apiUrl: apiUrl.toString(),
         token,
     };
+}
+
+export function isSameQredoConnection<T1 extends QredoConnectIdentity | string>(
+    a: T1,
+    b: QredoConnectPendingRequest | QredoConnection
+) {
+    return (
+        (typeof a === 'string' && b.id === a) ||
+        (typeof a === 'object' &&
+            a.apiUrl === b.apiUrl &&
+            a.origin === b.origin &&
+            a.service === b.service)
+    );
 }
