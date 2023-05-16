@@ -11781,7 +11781,6 @@ dependencies = [
  "sui-core",
  "sui-move-build",
  "sui-protocol-config",
- "sui-replay",
  "sui-types",
  "test-utils",
  "tokio",

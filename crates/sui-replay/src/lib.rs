@@ -3,7 +3,12 @@
 
 use async_recursion::async_recursion;
 use clap::Parser;
+use fuzz::ReplayFuzzer;
+use fuzz::ReplayFuzzerConfig;
+use fuzz::ShuffleMutator;
+use rand::SeedableRng;
 use sui_types::message_envelope::Message;
+use transaction_provider::TransactionSource;
 
 use crate::replay::LocalExec;
 use crate::replay::ProtocolVersionSummary;
@@ -15,6 +20,7 @@ mod data_fetcher;
 mod db_rider;
 pub mod fuzz;
 mod replay;
+pub mod transaction_provider;
 pub mod types;
 
 #[derive(Parser, Clone)]
@@ -58,6 +64,16 @@ pub enum ReplayToolCommand {
         max_tasks: u64,
     },
 
+    #[clap(name = "fz")]
+    Fuzz {
+        #[clap(long, short)]
+        start_checkpoint: Option<u64>,
+        #[clap(long, short)]
+        num_mutations_per_base: u64,
+        #[clap(long, short = 'b', default_value = "18446744073709551614")]
+        num_base_transactions: u64,
+    },
+
     #[clap(name = "report")]
     Report,
 }
@@ -75,6 +91,25 @@ pub async fn execute_replay_command(
         ExpensiveSafetyCheckConfig::default()
     };
     Ok(match cmd {
+        ReplayToolCommand::Fuzz {
+            start_checkpoint,
+            num_mutations_per_base,
+            num_base_transactions,
+        } => {
+            let config = ReplayFuzzerConfig {
+                num_mutations_per_base,
+                mutator: Box::new(ShuffleMutator {
+                    rng: rand::rngs::StdRng::from_seed([0u8; 32]),
+                    num_mutations_per_base_left: num_mutations_per_base,
+                }),
+                tx_source: TransactionSource::TailLatest { start_checkpoint },
+                fail_over_on_err: false,
+                expensive_safety_check_config: Default::default(),
+            };
+            let fuzzer = ReplayFuzzer::new(rpc_url, config).await.unwrap();
+            fuzzer.run(num_base_transactions).await.unwrap();
+            (1u64, 1u64)
+        }
         ReplayToolCommand::ReplayDump { path, show_effects } => {
             let mut lx = LocalExec::new_for_state_dump(&path).await?;
             let (sandbox_state, node_dump_state) = lx.execute_state_dump(safety).await?;
