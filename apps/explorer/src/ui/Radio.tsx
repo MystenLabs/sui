@@ -30,11 +30,11 @@ export type RadioOptionProps = ExtractProps<
 export function RadioOption({ label, children, ...props }: RadioOptionProps) {
     return (
         <HeadlessRadioGroup.Option
-            className="flex cursor-pointer flex-col rounded-md border border-transparent bg-white text-steel-dark hover:text-steel-darker ui-checked:border-steel ui-checked:text-hero-dark"
+            className="flex flex-col rounded-md border border-transparent bg-white text-steel-dark hover:text-steel-darker ui-checked:border-steel  ui-checked:text-hero-dark  ui-disabled:text-gray-60"
             {...props}
         >
             {label && (
-                <HeadlessRadioGroup.Label className="cursor-pointer px-2 py-1 text-captionSmall font-semibold">
+                <HeadlessRadioGroup.Label className="cursor-pointer px-2 py-1 text-captionSmall font-semibold ui-disabled:cursor-default">
                     {label}
                 </HeadlessRadioGroup.Label>
             )}
