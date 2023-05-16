@@ -953,7 +953,7 @@ mod tests {
 
         // Assert that the coins were transferred away successfully to destination address
         let gases = get_current_gases(destination_address, &mut context).await;
-        assert!(gases.len() > 0);
+        assert!(!gases.is_empty());
 
         let tmp = tempfile::tempdir().unwrap();
         let prom_registry = Registry::new();
@@ -984,8 +984,6 @@ mod tests {
         // Check that the WAL is empty so we don't retry bad requests
         let wal = faucet.wal.lock().await;
         assert!(wal.log.is_empty());
-
-        // Assert that the coins were transferred away successfully to destination address
     }
 
     #[tokio::test]
@@ -1028,7 +1026,7 @@ mod tests {
 
         // Assert that the coins were transferred away successfully to destination address
         let gases = get_current_gases(destination_address, &mut context).await;
-        assert!(gases.len() > 0);
+        assert!(!gases.is_empty());
 
         let tmp = tempfile::tempdir().unwrap();
         let prom_registry = Registry::new();
