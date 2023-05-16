@@ -18,7 +18,6 @@ export { useGetTransferAmount } from './useGetTransferAmount';
 export { useGetCoinBalance } from './useGetCoinBalance';
 export { useGetAllBalances } from './useGetAllBalances';
 export { useOwnedNFT } from './useOwnedNFT';
-export { useGetCoins } from './useGetCoins';
 export * from './useSigner';
 export * from './useTransactionData';
 export * from './useActiveAddress';
