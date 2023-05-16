@@ -82,13 +82,13 @@ export default function ValidatorMap({ minHeight }: Props) {
         isError,
     } = useQuery(
         ['validator-map'],
-        async () =>
+        async (): Promise<ValidatorMapData[]>  =>
             appsBe(`validator-map`, {
                 network: network.toLowerCase(),
-            }).then((res) => res as ValidatorMapData[]),
+            }),
         {
             // Some validators will come back as null from the location API
-            select: (validators) => validators.filter((validator) => validator),
+            select: (validators) => validators.filter((validator: ValidatorMapData) => validator),
         }
     );
 
