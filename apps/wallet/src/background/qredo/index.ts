@@ -9,7 +9,7 @@ import {
     createPendingRequest,
     getAllPendingRequests,
     getPendingRequest,
-    storePendingRequests,
+    storeAllPendingRequests,
     updatePendingRequest,
 } from './storage';
 import { type QredoConnectPendingRequest } from './types';
@@ -58,6 +58,7 @@ export async function requestUserApproval(
             token,
             origin,
             originFavIcon: connection.originFavIcon,
+            accessToken: null,
         },
         message.id
     );
@@ -90,5 +91,7 @@ export async function handleOnWindowClosed(
             remainingRequests.push(aRequest);
         }
     });
-    await storePendingRequests(remainingRequests);
+    if (allRequests.length !== remainingRequests.length) {
+        await storeAllPendingRequests(remainingRequests);
+    }
 }
