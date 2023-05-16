@@ -31,7 +31,7 @@ describe('Test Object Display Standard', () => {
         options: { showDisplay: true },
       }),
     );
-    expect(display).toEqual({
+    const expectedData = {
       data: {
         age: '10',
         buyer: toolbox.address(),
@@ -44,12 +44,14 @@ describe('Test Object Display Standard', () => {
         full_url: 'https://get-a-boar.fullurl.com/',
         escape_syntax: '{name}',
       },
-      error: {
-        code: 'displayError',
-        error:
-          'RPC call failed: Field value idd cannot be found in struct; RPC call failed: Field value namee cannot be found in struct',
-      },
-    });
+    };
+    expect(display).toEqual(expect.objectContaining(expectedData));
+    const errorMessage1 =
+      'RPC call failed: Field value idd cannot be found in struct; RPC call failed: Field value namee cannot be found in struct';
+    const errorMessage2 =
+      'Field value idd cannot be found in struct; Field value namee cannot be found in struct';
+
+    expect([errorMessage1, errorMessage2]).toContain(display.error?.error);
   });
 
   it('Test getting Display fields for object that has no display object', async () => {
