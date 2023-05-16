@@ -5,6 +5,7 @@ import { useEffect } from 'react';
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 
 import { QredoConnectInfoPage } from './pages/qredo-connect/QredoConnectInfoPage';
+import { SelectQredoAccountsPage } from './pages/qredo-connect/SelectQredoAccountsPage';
 import { RestrictedPage } from './pages/restricted';
 import { AppType } from './redux/slices/app/AppType';
 import { Staking } from './staking/home';
@@ -96,6 +97,10 @@ const App = () => {
                 <Route
                     path="qredo-connect/:requestID"
                     element={<QredoConnectInfoPage />}
+                />
+                <Route
+                    path="qredo-connect/:id/select"
+                    element={<SelectQredoAccountsPage />}
                 />
             </Route>
 
