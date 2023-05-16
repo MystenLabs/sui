@@ -28,7 +28,7 @@ export function useGetOwnedObjects(
                 cursor: pageParam,
             }),
         {
-            staleTime: 10 * 60 * 1000,
+            staleTime: 10 * 1000,
             enabled: !!address,
             getNextPageParam: (lastPage) =>
                 lastPage?.hasNextPage ? lastPage.nextCursor : null,
