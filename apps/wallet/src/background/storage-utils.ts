@@ -52,3 +52,11 @@ export async function setToSessionStorage<T>(...params: SetParams<T>) {
     }
     return setToStorage<T>(SESSION_STORAGE, ...params);
 }
+
+export const addSessionStorageEventListener: Browser.Storage.LocalStorageArea['onChanged']['addListener'] =
+    (...params) => {
+        if (!SESSION_STORAGE) {
+            return;
+        }
+        SESSION_STORAGE.onChanged.addListener(...params);
+    };

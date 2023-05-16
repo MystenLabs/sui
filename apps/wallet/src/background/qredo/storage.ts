@@ -1,12 +1,16 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { debounce } from 'throttle-debounce';
 import { v4 as uuid } from 'uuid';
+import Browser from 'webextension-polyfill';
 
+import { type Connections } from '../connections';
 import {
     setToSessionStorage,
     getFromSessionStorage,
     isSessionStorageSupported,
+    addSessionStorageEventListener,
     getFromLocalStorage,
     setToLocalStorage,
 } from '../storage-utils';
@@ -168,4 +172,38 @@ export async function storeQredoConnectionAccessToken(
         existingConnection.accessToken = accessToken;
         await storeQredoConnection(existingConnection);
     }
+}
+
+const debouncedUIPendingQredoUpdate = debounce(
+    100,
+    (connections: Connections) => {
+        connections.notifyUI({
+            event: 'qredoUpdate',
+            entities: 'pendingRequests',
+        });
+    }
+);
+
+const debouncedUIQredoConnectionUpdate = debounce(
+    100,
+    async (connections: Connections) => {
+        connections.notifyUI({
+            event: 'qredoUpdate',
+            entities: 'qredoConnections',
+        });
+    }
+);
+
+export function registerForQredoChanges(connections: Connections) {
+    addSessionStorageEventListener((changes) => {
+        if (SESSION_STORAGE_KEY in changes) {
+            debouncedUIPendingQredoUpdate(connections);
+            debouncedUIQredoConnectionUpdate(connections);
+        }
+    });
+    Browser.storage.local.onChanged.addListener((changes) => {
+        if (STORAGE_ACCEPTED_CONNECTIONS_KEY in changes) {
+            debouncedUIQredoConnectionUpdate(connections);
+        }
+    });
 }
