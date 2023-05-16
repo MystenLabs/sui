@@ -8,8 +8,12 @@ use crate::{with_tracing, SuiRpcModule};
 use async_trait::async_trait;
 use jsonrpsee::core::RpcResult;
 use jsonrpsee::RpcModule;
-use move_binary_format::file_format_common::VERSION_MAX;
-use move_binary_format::normalized::Type;
+#[cfg(test)]
+use mockall::automock;
+use move_binary_format::{
+    file_format_common::VERSION_MAX,
+    normalized::{Module as NormalizedModule, Type},
+};
 use move_core_types::identifier::Identifier;
 use std::collections::BTreeMap;
 use std::sync::Arc;
@@ -24,13 +28,73 @@ use sui_types::move_package::normalize_modules;
 use sui_types::object::{Data, ObjectRead};
 use tracing::instrument;
 
-pub struct MoveUtils {
+#[cfg_attr(test, automock)]
+#[async_trait]
+pub trait MoveUtilsInternalTrait {
+    fn get_state(&self) -> &AuthorityState;
+
+    async fn get_move_module(
+        &self,
+        package: ObjectID,
+        module_name: String,
+    ) -> Result<NormalizedModule, Error>;
+
+    async fn get_move_modules_by_package(
+        &self,
+        package: ObjectID,
+    ) -> Result<BTreeMap<String, NormalizedModule>, Error>;
+
+    fn get_object_read(&self, package: ObjectID) -> Result<ObjectRead, Error>;
+}
+
+pub struct MoveUtilsInternal {
     state: Arc<AuthorityState>,
+}
+
+impl MoveUtilsInternal {
+    pub fn new(state: Arc<AuthorityState>) -> Self {
+        Self { state }
+    }
+}
+
+#[async_trait]
+impl MoveUtilsInternalTrait for MoveUtilsInternal {
+    fn get_state(&self) -> &AuthorityState {
+        &self.state
+    }
+
+    async fn get_move_module(
+        &self,
+        package: ObjectID,
+        module_name: String,
+    ) -> Result<NormalizedModule, Error> {
+        get_move_module(self.get_state(), package, module_name).await
+    }
+
+    async fn get_move_modules_by_package(
+        &self,
+        package: ObjectID,
+    ) -> Result<BTreeMap<String, NormalizedModule>, Error> {
+        get_move_modules_by_package(self.get_state(), package).await
+    }
+
+    fn get_object_read(&self, package: ObjectID) -> Result<ObjectRead, Error> {
+        self.get_state()
+            .get_object_read(&package)
+            .map_err(Error::from)
+    }
+}
+
+pub struct MoveUtils {
+    internal: Arc<dyn MoveUtilsInternalTrait + Send + Sync>,
 }
 
 impl MoveUtils {
     pub fn new(state: Arc<AuthorityState>) -> Self {
-        Self { state }
+        Self {
+            internal: Arc::new(MoveUtilsInternal::new(state))
+                as Arc<dyn MoveUtilsInternalTrait + Send + Sync>,
+        }
     }
 }
 
@@ -52,7 +116,7 @@ impl MoveUtilsServer for MoveUtils {
         package: ObjectID,
     ) -> RpcResult<BTreeMap<String, SuiMoveNormalizedModule>> {
         with_tracing!(async move {
-            let modules = get_move_modules_by_package(&self.state, package).await?;
+            let modules = self.internal.get_move_modules_by_package(package).await?;
             Ok(modules
                 .into_iter()
                 .map(|(name, module)| (name, module.into()))
@@ -67,7 +131,7 @@ impl MoveUtilsServer for MoveUtils {
         module_name: String,
     ) -> RpcResult<SuiMoveNormalizedModule> {
         with_tracing!(async move {
-            let module = get_move_module(&self.state, package, module_name).await?;
+            let module = self.internal.get_move_module(package, module_name).await?;
             Ok(module.into())
         })
     }
@@ -80,7 +144,7 @@ impl MoveUtilsServer for MoveUtils {
         struct_name: String,
     ) -> RpcResult<SuiMoveNormalizedStruct> {
         with_tracing!(async move {
-            let module = get_move_module(&self.state, package, module_name).await?;
+            let module = self.internal.get_move_module(package, module_name).await?;
             let structs = module.structs;
             let identifier = Identifier::new(struct_name.as_str()).map_err(|e| {
                 Error::SuiRpcInputError(SuiRpcInputError::GenericInvalid(format!("{e}")))
@@ -102,7 +166,7 @@ impl MoveUtilsServer for MoveUtils {
         function_name: String,
     ) -> RpcResult<SuiMoveNormalizedFunction> {
         with_tracing!(async move {
-            let module = get_move_module(&self.state, package, module_name).await?;
+            let module = self.internal.get_move_module(package, module_name).await?;
             let functions = module.functions;
             let identifier = Identifier::new(function_name.as_str()).map_err(|e| {
                 Error::SuiRpcInputError(SuiRpcInputError::GenericInvalid(format!("{e}")))
@@ -124,7 +188,7 @@ impl MoveUtilsServer for MoveUtils {
         function: String,
     ) -> RpcResult<Vec<MoveFunctionArgType>> {
         with_tracing!(async move {
-            let object_read = self.state.get_object_read(&package).map_err(Error::from)?;
+            let object_read = self.internal.get_object_read(package)?;
 
             let normalized = match object_read {
                 ObjectRead::Exists(_obj_ref, object, _layout) => match object.data {
@@ -178,5 +242,69 @@ impl MoveUtilsServer for MoveUtils {
                 ))),
             }?)
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+
+    mod get_normalized_move_module_tests {
+        use super::super::*;
+        use jsonrpsee::types::ErrorObjectOwned;
+        use move_binary_format::file_format::basic_test_module;
+
+        fn setup() -> (ObjectID, String) {
+            (ObjectID::random(), String::from("test_module"))
+        }
+
+        #[tokio::test]
+        async fn test_success_response() {
+            let (package, module_name) = setup();
+            let mut mock_internal = MockMoveUtilsInternalTrait::new();
+
+            let m = basic_test_module();
+            let normalized_module = NormalizedModule::new(&m);
+            let expected_module: SuiMoveNormalizedModule = normalized_module.clone().into();
+
+            mock_internal
+                .expect_get_move_module()
+                .return_once(move |_package, _module_name| Ok(normalized_module));
+
+            let move_utils = MoveUtils {
+                internal: Arc::new(mock_internal),
+            };
+
+            let response = move_utils
+                .get_normalized_move_module(package, module_name)
+                .await;
+
+            assert!(response.is_ok());
+            let result = response.unwrap();
+            assert_eq!(result, expected_module);
+        }
+
+        #[tokio::test]
+        async fn test_no_module_found() {
+            let (package, module_name) = setup();
+            let mut mock_internal = MockMoveUtilsInternalTrait::new();
+            let error_string = format!("No module found with module name {module_name}");
+            let expected_error =
+                Error::SuiRpcInputError(SuiRpcInputError::GenericNotFound(error_string.clone()));
+            mock_internal
+                .expect_get_move_module()
+                .return_once(move |_package, _module_name| Err(expected_error));
+            let move_utils = MoveUtils {
+                internal: Arc::new(mock_internal),
+            };
+
+            let response = move_utils
+                .get_normalized_move_module(package, module_name)
+                .await;
+            let error_result = response.unwrap_err();
+            let error_object: ErrorObjectOwned = error_result.into();
+
+            assert_eq!(error_object.code(), -32602);
+            assert_eq!(error_object.message(), &error_string);
+        }
     }
 }
