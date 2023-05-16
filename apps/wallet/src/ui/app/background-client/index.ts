@@ -8,9 +8,14 @@ import {
     type ExportedKeypair,
     type SignedMessage,
 } from '@mysten/sui.js';
+import { type QueryClient } from '@tanstack/react-query';
 import { lastValueFrom, map, take } from 'rxjs';
 
 import { growthbook } from '../experimentation/feature-gating';
+import {
+    QREDO_CONNECTION_INFO_KEY_COMMON,
+    QREDO_PENDING_REQUEST_KEY_COMMON,
+} from '../pages/qredo-connect/utils';
 import { createMessage } from '_messages';
 import { PortStream } from '_messaging/PortStream';
 import { type BasePayload } from '_payloads';
@@ -25,6 +30,10 @@ import { setActiveOrigin, changeActiveNetwork } from '_redux/slices/app';
 import { setPermissions } from '_redux/slices/permissions';
 import { setTransactionRequests } from '_redux/slices/transaction-requests';
 import { type SerializedLedgerAccount } from '_src/background/keyring/LedgerAccount';
+import {
+    isQredoConnectPayload,
+    type QredoConnectPayload,
+} from '_src/shared/messaging/messages/payloads/QredoConnect';
 
 import type { SuiAddress, SuiTransactionBlockResponse } from '@mysten/sui.js';
 import type { Message } from '_messages';
@@ -49,13 +58,15 @@ export class BackgroundClient {
     private _portStream: PortStream | null = null;
     private _dispatch: AppDispatch | null = null;
     private _initialized = false;
+    private _queryClient: QueryClient | null = null;
 
-    public init(dispatch: AppDispatch) {
+    public init(dispatch: AppDispatch, queryClient: QueryClient) {
         if (this._initialized) {
             throw new Error('[BackgroundClient] already initialized');
         }
         this._initialized = true;
         this._dispatch = dispatch;
+        this._queryClient = queryClient;
         this.createPortStream();
         this.sendAppStatus();
         this.setupAppStatusUpdateInterval();
@@ -364,6 +375,85 @@ export class BackgroundClient {
         );
     }
 
+    public fetchPendingQredoConnectRequest(requestID: string) {
+        return lastValueFrom(
+            this.sendMessage(
+                createMessage<QredoConnectPayload<'getPendingRequest'>>({
+                    type: 'qredo-connect',
+                    method: 'getPendingRequest',
+                    args: { requestID },
+                })
+            ).pipe(
+                take(1),
+                map(({ payload }) => {
+                    if (
+                        isQredoConnectPayload(
+                            payload,
+                            'getPendingRequestResponse'
+                        )
+                    ) {
+                        return payload.args.request;
+                    }
+                    throw new Error(
+                        'Error unknown response for fetch pending qredo requests message'
+                    );
+                })
+            )
+        );
+    }
+
+    public getQredoConnectionInfo(qredoID: string, refreshAccessToken = false) {
+        return lastValueFrom(
+            this.sendMessage(
+                createMessage<QredoConnectPayload<'getQredoInfo'>>({
+                    type: 'qredo-connect',
+                    method: 'getQredoInfo',
+                    args: { qredoID, refreshAccessToken },
+                })
+            ).pipe(
+                take(1),
+                map(({ payload }) => {
+                    if (
+                        isQredoConnectPayload(payload, 'getQredoInfoResponse')
+                    ) {
+                        return payload.args;
+                    }
+                    throw new Error(
+                        'Error unknown response for get qredo info message'
+                    );
+                })
+            )
+        );
+    }
+
+    public acceptQredoConnection(
+        args: QredoConnectPayload<'acceptQredoConnection'>['args']
+    ) {
+        return lastValueFrom(
+            this.sendMessage(
+                createMessage<QredoConnectPayload<'acceptQredoConnection'>>({
+                    type: 'qredo-connect',
+                    method: 'acceptQredoConnection',
+                    args,
+                })
+            ).pipe(take(1))
+        );
+    }
+
+    public rejectQredoConnection(
+        args: QredoConnectPayload<'rejectQredoConnection'>['args']
+    ) {
+        return lastValueFrom(
+            this.sendMessage(
+                createMessage<QredoConnectPayload<'rejectQredoConnection'>>({
+                    type: 'qredo-connect',
+                    method: 'rejectQredoConnection',
+                    args,
+                })
+            ).pipe(take(1))
+        );
+    }
+
     private setupAppStatusUpdateInterval() {
         setInterval(() => {
             this.sendAppStatus();
@@ -413,7 +503,7 @@ export class BackgroundClient {
     }
 
     private handleIncomingMessage(msg: Message) {
-        if (!this._initialized || !this._dispatch) {
+        if (!this._initialized || !this._dispatch || !this._queryClient) {
             throw new Error(
                 'BackgroundClient is not initialized to handle incoming messages'
             );
@@ -440,6 +530,17 @@ export class BackgroundClient {
         } else if (isSetNetworkPayload(payload)) {
             action = changeActiveNetwork({
                 network: payload.network,
+            });
+        } else if (isQredoConnectPayload(payload, 'qredoUpdate')) {
+            const entitiesToKey: Record<
+                QredoConnectPayload<'qredoUpdate'>['args']['entities'],
+                readonly string[]
+            > = {
+                pendingRequests: QREDO_PENDING_REQUEST_KEY_COMMON,
+                qredoConnections: QREDO_CONNECTION_INFO_KEY_COMMON,
+            };
+            this._queryClient.invalidateQueries({
+                queryKey: entitiesToKey[payload.args.entities],
             });
         }
         if (action) {

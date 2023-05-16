@@ -32,7 +32,7 @@ async function init() {
         Object.defineProperty(window, 'store', { value: store });
     }
     store.dispatch(initAppType(getFromLocationSearch(window.location.search)));
-    await thunkExtras.background.init(store.dispatch);
+    await thunkExtras.background.init(store.dispatch, queryClient);
     const { apiEnv, customRPC } = store.getState().app;
     setAttributes({ apiEnv, customRPC });
 }
@@ -69,7 +69,13 @@ function AppWrapper() {
                     <Fragment key={network}>
                         <PersistQueryClientProvider
                             client={queryClient}
-                            persistOptions={{ persister }}
+                            persistOptions={{
+                                persister,
+                                dehydrateOptions: {
+                                    shouldDehydrateQuery: ({ meta }) =>
+                                        !meta?.skipPersistedCache,
+                                },
+                            }}
                         >
                             <RpcClientContext.Provider
                                 value={api.instance.fullNode}
