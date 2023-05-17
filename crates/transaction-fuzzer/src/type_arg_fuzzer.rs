@@ -6,7 +6,10 @@ use move_core_types::{account_address::AccountAddress, identifier::Identifier};
 use proptest::arbitrary::*;
 use proptest::prelude::*;
 
+use sui_core::test_utils::send_and_confirm_transaction;
 use sui_types::base_types::ObjectID;
+use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
+use sui_types::error::SuiError;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::transaction::{ProgrammableTransaction, TransactionData, TransactionKind};
 use sui_types::utils::to_sender_signed_transaction;
@@ -145,6 +148,16 @@ pub fn pt_for_tags(type_tags: Vec<TypeTag>) -> ProgrammableTransaction {
 }
 
 pub fn run_pt(account: &mut AccountCurrent, exec: &mut Executor, pt: ProgrammableTransaction) {
+    let result = run_pt_effects(account, exec, pt);
+    let status = result.map(|effects| effects.status().clone());
+    assert_is_acceptable_result(&status);
+}
+
+pub fn run_pt_effects(
+    account: &mut AccountCurrent,
+    exec: &mut Executor,
+    pt: ProgrammableTransaction,
+) -> Result<TransactionEffects, SuiError> {
     let gas_object = account.new_gas_object(exec);
     let gas_object_ref = gas_object.compute_object_reference();
     let kind = TransactionKind::ProgrammableTransaction(pt);
@@ -156,6 +169,7 @@ pub fn run_pt(account: &mut AccountCurrent, exec: &mut Executor, pt: Programmabl
         GAS_PRICE,
     );
     let signed_txn = to_sender_signed_transaction(tx_data, &account.initial_data.account.key);
-    let result = exec.execute_transaction(signed_txn);
-    assert_is_acceptable_result(&result);
+    exec.rt
+        .block_on(send_and_confirm_transaction(&exec.state, None, signed_txn))
+        .map(|(_, effects)| effects.into_data())
 }
