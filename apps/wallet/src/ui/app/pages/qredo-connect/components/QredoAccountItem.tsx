@@ -22,7 +22,7 @@ export function QredoAccountItem({
 }: QredoAccountItemProps) {
     return (
         <div
-            className="flex flex-row items-center flex-nowrap group gap-3 py-4 cursor-pointer"
+            className="flex items-center flex-nowrap group gap-3 py-4 cursor-pointer"
             onClick={onClick}
         >
             <CheckFill16
@@ -36,7 +36,7 @@ export function QredoAccountItem({
                     {formatAddress(address)}
                 </Text>
                 {labels.length ? (
-                    <div className="flex flex-row gap-1 flex-wrap">
+                    <div className="flex gap-1 flex-wrap">
                         {labels.map(({ key, value }) => (
                             <BadgeLabel key={key} label={value} />
                         ))}
