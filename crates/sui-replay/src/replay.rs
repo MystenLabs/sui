@@ -285,6 +285,7 @@ impl LocalExec {
                 .max_concurrent_requests(MAX_CONCURRENT_REQUESTS)
                 .build(http_url)
                 .await?,
+            None,
         )
         .await
     }
@@ -299,20 +300,24 @@ impl LocalExec {
     }
 
     pub async fn reset_for_new_execution_with_client(self) -> Result<Self, ReplayEngineError> {
-        Self::new_for_remote(self.client.expect("Remote client not initialized"))
-            .await?
-            .init_for_execution()
-            .await
+        Self::new_for_remote(
+            self.client.expect("Remote client not initialized"),
+            Some(self.fetcher.into_remote()),
+        )
+        .await?
+        .init_for_execution()
+        .await
     }
 
-    pub async fn new_for_remote(client: SuiClient) -> Result<Self, ReplayEngineError> {
+    pub async fn new_for_remote(
+        client: SuiClient,
+        remote_fetcher: Option<RemoteFetcher>,
+    ) -> Result<Self, ReplayEngineError> {
         // Use a throwaway metrics registry for local execution.
         let registry = prometheus::Registry::new();
         let metrics = Arc::new(LimitsMetrics::new(&registry));
 
-        let fetcher = RemoteFetcher {
-            rpc_client: client.clone(),
-        };
+        let fetcher = remote_fetcher.unwrap_or(RemoteFetcher::new(client.clone()));
 
         Ok(Self {
             client: Some(client),
@@ -565,7 +570,7 @@ impl LocalExec {
         if *tx_digest == TransactionDigest::genesis() || tx_info.sender == SuiAddress::ZERO {
             // Genesis.
             warn!(
-                "Genesis replay not supported: {}, skipping transaction",
+                "Genesis/system TX replay not supported: {}, skipping transaction",
                 tx_digest
             );
             // Return the same data from onchain since we dont want to fail nor do we want to recompute

@@ -36,6 +36,7 @@ pub struct TransactionProvider {
 impl Debug for TransactionProvider {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("TransactionProvider")
+            // TODO: impl Debug for fetcher
             //.field("fetcher", &self.fetcher)
             .field("source", &self.source)
             .field("last_checkpoint", &self.last_checkpoint)
@@ -47,13 +48,13 @@ impl Debug for TransactionProvider {
 impl TransactionProvider {
     pub async fn new(http_url: &str, source: TransactionSource) -> Result<Self, ReplayEngineError> {
         Ok(Self {
-            fetcher: RemoteFetcher {
-                rpc_client: SuiClientBuilder::default()
+            fetcher: RemoteFetcher::new(
+                SuiClientBuilder::default()
                     .request_timeout(RPC_TIMEOUT_ERR_SLEEP_RETRY_PERIOD)
                     .max_concurrent_requests(MAX_CONCURRENT_REQUESTS)
                     .build(http_url)
                     .await?,
-            },
+            ),
             source,
             last_checkpoint: None,
             transactions_left: VecDeque::new(),
