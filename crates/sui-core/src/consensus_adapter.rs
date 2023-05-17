@@ -613,7 +613,7 @@ impl ConsensusAdapter {
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) {
         if matches!(transaction.kind, ConsensusTransactionKind::EndOfPublish(..)) {
-            info!(epoch=?epoch_store.epoch(), "Submitting EndOfPublish message to Narwhal");
+            warn!(epoch=?epoch_store.epoch(), "Submitting EndOfPublish message to Narwhal");
             epoch_store.record_epoch_pending_certs_process_time_metric();
         }
 
@@ -740,7 +740,7 @@ impl ConsensusAdapter {
             // RejectAllCerts is when 2f+1 other validators already sequenced their EndOfPublish message.
             if reconfig_guard.is_reject_user_certs() {
                 let pending_count = epoch_store.pending_consensus_certificates_count();
-                debug!(epoch=?epoch_store.epoch(), ?pending_count, "Deciding whether to send EndOfPublish");
+                warn!(epoch=?epoch_store.epoch(), ?pending_count, "Deciding whether to send EndOfPublish");
                 pending_count == 0 // send end of epoch if empty
             } else {
                 false
@@ -860,8 +860,8 @@ impl ReconfigurationInitiator for Arc<ConsensusAdapter> {
                 return;
             }
             let pending_count = epoch_store.pending_consensus_certificates_count();
-            debug!(epoch=?epoch_store.epoch(), ?pending_count, "Trying to close epoch");
             let send_end_of_publish = pending_count == 0;
+            warn!(epoch=?epoch_store.epoch(), ?pending_count, ?send_end_of_publish, "Trying to close epoch");
             epoch_store.close_user_certs(reconfig_guard);
             send_end_of_publish
         };

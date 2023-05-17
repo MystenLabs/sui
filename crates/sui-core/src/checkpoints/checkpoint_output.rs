@@ -99,6 +99,11 @@ impl<T: SubmitToConsensus + ReconfigurationInitiator> CheckpointOutput
             .last_sent_checkpoint_signature
             .set(checkpoint_seq as i64);
         if checkpoint_timestamp >= self.next_reconfiguration_timestamp_ms {
+            tracing::warn!(
+                "checkpoint_timestamp {} >= next_reconfiguration_timestamp_ms {}, closing epoch",
+                checkpoint_timestamp,
+                self.next_reconfiguration_timestamp_ms
+            );
             // close_epoch is ok if called multiple times
             self.sender.close_epoch(epoch_store);
         }

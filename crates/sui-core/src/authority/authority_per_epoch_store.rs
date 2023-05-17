@@ -1276,6 +1276,7 @@ impl AuthorityPerEpochStore {
     }
 
     pub fn close_user_certs(&self, mut lock_guard: RwLockWriteGuard<'_, ReconfigState>) {
+        warn!("Closing user certificates");
         lock_guard.close_user_certs();
         self.store_reconfig_state(&lock_guard)
             .expect("Updating reconfig state cannot fail");
