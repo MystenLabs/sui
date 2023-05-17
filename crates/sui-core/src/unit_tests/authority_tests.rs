@@ -5006,18 +5006,26 @@ async fn test_for_inc_201_dry_run() {
         kind,
         sender,
         vec![],
-        TEST_ONLY_GAS_UNIT_FOR_GENERIC * rgp,
+        TEST_ONLY_GAS_UNIT_FOR_PUBLISH * rgp,
         rgp,
     );
 
     let signed = to_sender_signed_transaction(txn_data, &sender_key);
-    let (DryRunTransactionBlockResponse { events, .. }, _, _, _) = fullnode
+    let (
+        DryRunTransactionBlockResponse {
+            events, effects, ..
+        },
+        _,
+        _,
+        _,
+    ) = fullnode
         .dry_exec_transaction(
             signed.data().intent_message().value.clone(),
             *signed.digest(),
         )
         .await
         .unwrap();
+    assert_eq!(effects.status(), &SuiExecutionStatus::Success);
 
     assert_eq!(1, events.data.len());
     assert_eq!(
