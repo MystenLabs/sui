@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { type SuiAddress } from '@mysten/sui.js';
+
 export type QredoAPIErrorResponse = {
     code: string;
     msg: string;
@@ -50,6 +52,53 @@ export type GetWalletsResponse = {
 
 export type GetWalletsParams = {
     filters?: { address?: string };
+};
+
+export type NetworkType = 'mainnet' | 'testnet' | 'devnet';
+
+export type TransactionStatus =
+    | 'pending'
+    | 'created'
+    | 'authorized'
+    | 'approved'
+    | 'expired'
+    | 'cancelled'
+    | 'rejected'
+    | 'signed'
+    | 'scheduled'
+    | 'pushed'
+    | 'confirmed'
+    | 'mined'
+    | 'failed';
+
+export type PostTransactionParams = {
+    messageWithIntent: string;
+    broadcast: boolean;
+    network: NetworkType;
+    from: SuiAddress;
+};
+
+export type TransactionInfoResponse = {
+    txID: string;
+    status: TransactionStatus;
+    txBytes: string;
+    sig: string;
+    timestamps: Partial<{
+        created: number;
+        authorized: number;
+        approved: number;
+        signed: number;
+        scheduled: number;
+        pushed: number;
+        confirmed: number;
+        mined: number;
+    }>;
+    events: {
+        id: string;
+        timestamp: number;
+        status: TransactionStatus;
+        message: string;
+    }[];
 };
 
 export type AccessTokenRenewalFunction = (
@@ -115,6 +164,26 @@ export class QredoAPI {
             `${this.baseURL}connect/sui/wallets${
                 searchQuery ? `?${searchQuery}` : ''
             }`
+        );
+    }
+
+    public createTransaction(
+        params: PostTransactionParams
+    ): Promise<TransactionInfoResponse> {
+        return this.#request(`${this.baseURL}connect/sui/transactions`, {
+            method: 'post',
+            body: JSON.stringify(params),
+            headers: {
+                'Content-Type': 'application/json',
+            },
+        });
+    }
+
+    public getTransaction(
+        transactionID: string
+    ): Promise<TransactionInfoResponse> {
+        return this.#request(
+            `${this.baseURL}connect/sui/transactions/${transactionID}`
         );
     }
 

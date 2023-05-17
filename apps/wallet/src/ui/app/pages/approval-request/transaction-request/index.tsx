@@ -54,7 +54,9 @@ export function TransactionRequest({ txRequest }: TransactionRequestProps) {
         transaction: data,
         currentAddress: addressForTransaction,
     });
-
+    if (!signer) {
+        return null;
+    }
     return (
         <>
             <UserApproveContainer

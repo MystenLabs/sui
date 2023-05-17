@@ -44,7 +44,11 @@ export function SignMessageRequest({ request }: SignMessageRequestProps) {
             originFavIcon={request.originFavIcon}
             approveTitle="Sign"
             rejectTitle="Reject"
+            approveDisabled={!signer}
             onSubmit={async (approved) => {
+                if (!signer) {
+                    return;
+                }
                 await dispatch(
                     respondToTransactionRequest({
                         txRequestID: request.id,

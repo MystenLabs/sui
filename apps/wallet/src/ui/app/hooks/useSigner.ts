@@ -2,9 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { LedgerSigner } from '../LedgerSigner';
+import { QredoSigner } from '../QredoSigner';
 import { useSuiLedgerClient } from '../components/ledger/SuiLedgerClientProvider';
 import { useAccounts } from './useAccounts';
 import { useActiveAccount } from './useActiveAccount';
+import { useQredoAPI } from './useQredoAPI';
 import { thunkExtras } from '_redux/store/thunk-extras';
 import { AccountType } from '_src/background/keyring/Account';
 
@@ -19,6 +21,11 @@ export function useSigner(address?: SuiAddress) {
 
     const { connectToLedger } = useSuiLedgerClient();
     const { api, background } = thunkExtras;
+    const [qredoAPI] = useQredoAPI(
+        signerAccount?.type === AccountType.QREDO
+            ? signerAccount.qredoConnectionID
+            : undefined
+    );
 
     if (!signerAccount) {
         throw new Error("Can't find account for the signer address");
@@ -30,6 +37,11 @@ export function useSigner(address?: SuiAddress) {
             signerAccount.derivationPath,
             api.instance.fullNode
         );
+    }
+    if (signerAccount.type === AccountType.QREDO) {
+        return qredoAPI
+            ? new QredoSigner(api.instance.fullNode, signerAccount, qredoAPI)
+            : null;
     }
     return api.getSignerInstance(signerAccount, background);
 }
