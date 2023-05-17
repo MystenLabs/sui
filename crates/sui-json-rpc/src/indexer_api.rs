@@ -333,13 +333,18 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
                     name: NAME_SERVICE_DOMAIN_STRUCT.to_owned(),
                     type_params: vec![],
                 }));
-
                 let domain = Domain::from_str(&name).map_err(|e| {
-                    Error::UnexpectedError(format!("Failed to parse NameService Domain with error: {:?}", e))
+                    Error::UnexpectedError(format!(
+                        "Failed to parse NameService Domain with error: {:?}",
+                        e
+                    ))
                 })?;
-
-                let domain_bcs_value =
-                    bcs::to_bytes(&domain).context("Unable to serialize name")?;
+                let domain_bcs_value = bcs::to_bytes(&domain).map_err(|e| {
+                    Error::SuiRpcInputError(SuiRpcInputError::GenericInvalid(format!(
+                        "Unable to serialize name: {:?} with error: {:?}",
+                        domain, e
+                    )))
+                })?;
                 let record_object_id_option = self
                     .state
                     .get_dynamic_field_object_id(
@@ -348,10 +353,10 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
                         &domain_bcs_value,
                     )
                     .map_err(|e| {
-                        Error::UnexpectedError(format!(
+                        Error::SuiRpcInputError(SuiRpcInputError::GenericInvalid(format!(
                             "Read name service registry dynamic field table failed with error: {:?}",
                             e
-                        ))
+                        )))
                     })?;
                 if let Some(record_object_id) = record_object_id_option {
                     let record_object_read =
@@ -360,17 +365,26 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
                                 "Failed to get object read of name: {:?} with error: {:?}",
                                 record_object_id, e
                             );
-                            Error::UnexpectedError(format!("Failed to get object read of name with error {:?}", e))
+                            Error::UnexpectedError(format!(
+                                "Failed to get object read of name with error {:?}",
+                                e
+                            ))
                         })?;
                     let record_parsed_move_object =
                         SuiParsedMoveObject::try_from_object_read(record_object_read)?;
                     // NOTE: "value" is the field name to get the address info
                     let address_info_move_value = record_parsed_move_object
                         .read_dynamic_field_value(NAME_SERVICE_VALUE)
-                        .ok_or_else(|| Error::UnexpectedError(format!("Cannot find value field in record Move struct")))?;
+                        .ok_or_else(|| {
+                            Error::UnexpectedError(
+                                "Cannot find value field in record Move struct".to_string(),
+                            )
+                        })?;
                     let address_info_move_struct = match address_info_move_value {
                         SuiMoveValue::Struct(a) => Ok(a),
-                        _ => Err(Error::UnexpectedError(format!("value field is not found."))),
+                        _ => Err(Error::UnexpectedError(
+                            "value field is not found.".to_string(),
+                        )),
                     }?;
                     // NOTE: "target_address" is the field name to get the address
                     let address_str_move_value = address_info_move_struct
@@ -398,9 +412,9 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
                 }
                 Ok(None)
             } else {
-                Err(Error::UnexpectedError(format!(
-                    "Name service package address or registry ID is not set"
-                )))?
+                Err(Error::UnexpectedError(
+                    "Name service package address or registry ID is not set.".to_string(),
+                ))?
             }
         })
     }
@@ -415,14 +429,19 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
         with_tracing!(async move {
             if let Some(reverse_registry_id) = self.ns_reverse_registry_id {
                 let name_type_tag = TypeTag::Address;
-                let name_bcs_value =
-                    bcs::to_bytes(&address).context("Unable to serialize address")?;
+                let addr_bcs_value = bcs::to_bytes(&address).map_err(|e| {
+                    Error::SuiRpcInputError(SuiRpcInputError::GenericInvalid(format!(
+                        "Unable to serialize address: {:?} with error: {:?}",
+                        address, e
+                    )))
+                })?;
+
                 let addr_object_id = self
                     .state
                     .get_dynamic_field_object_id(
                         reverse_registry_id,
                         name_type_tag,
-                        &name_bcs_value,
+                        &addr_bcs_value,
                     )
                     .map_err(|e| {
                         Error::UnexpectedError(format!(
@@ -430,23 +449,37 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
                             e
                         ))
                     })?
-                    .ok_or_else(|| Error::UnexpectedError(format!("Record not found for address: {:?}", address)))?;
+                    .ok_or_else(|| {
+                        Error::UnexpectedError(format!(
+                            "Record not found for address: {:?}",
+                            address
+                        ))
+                    })?;
                 let addr_object_read =
                     self.state.get_object_read(&addr_object_id).map_err(|e| {
                         warn!(
                             "Failed to get object read of address {:?} with error: {:?}",
                             addr_object_id, e
                         );
-                        Error::UnexpectedError(format!("Failed to get object read of address with err: {:?}", e))
+                        Error::UnexpectedError(format!(
+                            "Failed to get object read of address with err: {:?}",
+                            e
+                        ))
                     })?;
                 let addr_parsed_move_object =
                     SuiParsedMoveObject::try_from_object_read(addr_object_read)?;
                 let address_info_move_value = addr_parsed_move_object
                     .read_dynamic_field_value(NAME_SERVICE_VALUE)
-                    .ok_or_else(|| Error::UnexpectedError(format!("Cannot find value field in record Move struct")))?;
+                    .ok_or_else(|| {
+                        Error::UnexpectedError(
+                            "Cannot find value field in record Move struct".to_string(),
+                        )
+                    })?;
                 let domain_info_move_struct = match address_info_move_value {
                     SuiMoveValue::Struct(a) => Ok(a),
-                    _ => Err(Error::UnexpectedError(format!("value field is not found."))),
+                    _ => Err(Error::UnexpectedError(
+                        "value field is not found.".to_string(),
+                    )),
                 }?;
                 let labels_move_value = domain_info_move_struct
                     .read_dynamic_field_value("labels")
@@ -479,9 +512,9 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
                     has_next_page: false,
                 })
             } else {
-                Err(Error::UnexpectedError(format!(
-                    "Name service package address or reverse registry ID is not set"
-                )))?
+                Err(Error::UnexpectedError(
+                    "Name service reverse registry ID is not set".to_string(),
+                ))?
             }
         })
     }
