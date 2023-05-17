@@ -229,6 +229,13 @@ where
                             "Unexpected response from fullnode for object checkpoints: {}",
                             fn_e
                         );
+                    } else if let Err(IndexerError::FullNodeReadingError(fn_e)) = download_result {
+                        warn!("Fullnode reading error for object checkpoints {}: {}. It can be transient or due to rate limiting.", next_cursor_sequence_number, fn_e);
+                    } else {
+                        warn!(
+                            "Error downloading object checkpoints: {:?}",
+                            download_result
+                        );
                     }
                     break;
                 }
@@ -240,7 +247,10 @@ where
             current_parallel_downloads =
                 std::cmp::min(downloaded_checkpoints.len() + 1, MAX_PARALLEL_DOWNLOADS);
             if downloaded_checkpoints.is_empty() {
-                warn!("No object checkpoints downloaded, retrying in next iteration ...");
+                warn!(
+                    "No object checkpoints were downloaded for sequence number {}, retrying...",
+                    next_cursor_sequence_number
+                );
                 continue;
             }
 
@@ -341,6 +351,10 @@ where
                             "Unexpected response from fullnode for checkpoints: {}",
                             fn_e
                         );
+                    } else if let Err(IndexerError::FullNodeReadingError(fn_e)) = download_result {
+                        warn!("Fullnode reading error for checkpoints {}: {}. It can be transient or due to rate limiting.", next_cursor_sequence_number, fn_e);
+                    } else {
+                        warn!("Error downloading checkpoints: {:?}", download_result);
                     }
                     break;
                 }
@@ -353,7 +367,10 @@ where
             current_parallel_downloads =
                 std::cmp::min(downloaded_checkpoints.len() + 1, MAX_PARALLEL_DOWNLOADS);
             if downloaded_checkpoints.is_empty() {
-                warn!("No checkpoints downloaded, retrying in next iteration ...");
+                warn!(
+                    "No checkpoints were downloaded for sequence number {}, retrying...",
+                    next_cursor_sequence_number
+                );
                 continue;
             }
 
