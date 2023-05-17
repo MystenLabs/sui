@@ -5,9 +5,12 @@ use crate::types::ReplayEngineError;
 use crate::types::EPOCH_CHANGE_STRUCT_TAG;
 use async_trait::async_trait;
 use futures::future::join_all;
+use lru::LruCache;
 use move_core_types::parser::parse_struct_tag;
+use parking_lot::RwLock;
 use rand::Rng;
 use std::collections::BTreeMap;
+use std::num::NonZeroUsize;
 use std::str::FromStr;
 use sui_core::authority::NodeStateDump;
 use sui_json_rpc::api::QUERY_MAX_RESULT_LIMIT;
@@ -28,6 +31,7 @@ use sui_types::transaction::SenderSignedData;
 use sui_types::transaction::TransactionDataAPI;
 use sui_types::transaction::TransactionKind;
 use tracing::error;
+
 /// This trait defines the interfaces for fetching data from some local or remote store
 #[async_trait]
 pub(crate) trait DataFetcher {
@@ -89,6 +93,13 @@ pub enum Fetchers {
 
 impl Fetchers {
     pub fn as_remote(&self) -> &RemoteFetcher {
+        match self {
+            Fetchers::Remote(q) => q,
+            Fetchers::NodeStateDump(_) => panic!("not a remote fetcher"),
+        }
+    }
+
+    pub fn into_remote(self) -> RemoteFetcher {
         match self {
             Fetchers::Remote(q) => q,
             Fetchers::NodeStateDump(_) => panic!("not a remote fetcher"),
@@ -201,10 +212,102 @@ impl DataFetcher for Fetchers {
     }
 }
 
-#[derive(Clone)]
+const VERSIONED_OBJECT_CACHE_CAPACITY: Option<NonZeroUsize> = NonZeroUsize::new(1_000);
+const LATEST_OBJECT_CACHE_CAPACITY: Option<NonZeroUsize> = NonZeroUsize::new(1_000);
+const EPOCH_INFO_CACHE_CAPACITY: Option<NonZeroUsize> = NonZeroUsize::new(10_000);
+
 pub struct RemoteFetcher {
     /// This is used to download items not in store
     pub rpc_client: SuiClient,
+    /// Cache versioned objects
+    pub versioned_object_cache: RwLock<LruCache<(ObjectID, VersionNumber), Object>>,
+    /// Cache non-versioned objects
+    pub latest_object_cache: RwLock<LruCache<ObjectID, Object>>,
+    /// Cache epoch info
+    pub epoch_info_cache: RwLock<LruCache<u64, (u64, u64)>>,
+}
+
+impl Clone for RemoteFetcher {
+    fn clone(&self) -> Self {
+        let mut latest =
+            LruCache::new(LATEST_OBJECT_CACHE_CAPACITY.expect("Cache size must be non zero"));
+        self.latest_object_cache.read().iter().for_each(|(k, v)| {
+            latest.put(*k, v.clone());
+        });
+
+        let mut versioned =
+            LruCache::new(VERSIONED_OBJECT_CACHE_CAPACITY.expect("Cache size must be non zero"));
+        self.versioned_object_cache
+            .read()
+            .iter()
+            .for_each(|(k, v)| {
+                versioned.put(*k, v.clone());
+            });
+
+        let mut ep = LruCache::new(EPOCH_INFO_CACHE_CAPACITY.expect("Cache size must be non zero"));
+        self.epoch_info_cache.read().iter().for_each(|(k, v)| {
+            ep.put(*k, *v);
+        });
+
+        Self {
+            rpc_client: self.rpc_client.clone(),
+            versioned_object_cache: RwLock::new(versioned),
+            latest_object_cache: RwLock::new(latest),
+            epoch_info_cache: RwLock::new(ep),
+        }
+    }
+}
+
+impl RemoteFetcher {
+    pub fn new(rpc_client: SuiClient) -> Self {
+        Self {
+            rpc_client,
+            versioned_object_cache: RwLock::new(LruCache::new(
+                VERSIONED_OBJECT_CACHE_CAPACITY.expect("Cache size must be non zero"),
+            )),
+            latest_object_cache: RwLock::new(LruCache::new(
+                LATEST_OBJECT_CACHE_CAPACITY.expect("Cache size must be non zero"),
+            )),
+            epoch_info_cache: RwLock::new(LruCache::new(
+                EPOCH_INFO_CACHE_CAPACITY.expect("Cache size must be non zero"),
+            )),
+        }
+    }
+
+    pub fn check_versioned_cache(
+        &self,
+        objects: &[(ObjectID, VersionNumber)],
+    ) -> (Vec<Object>, Vec<(ObjectID, VersionNumber)>) {
+        let mut to_fetch = Vec::new();
+        let mut cached = Vec::new();
+        for (object_id, version) in objects {
+            if let Some(obj) = self
+                .versioned_object_cache
+                .read()
+                .peek(&(*object_id, *version))
+            {
+                cached.push(obj.clone());
+            } else {
+                to_fetch.push((*object_id, *version));
+            }
+        }
+
+        (cached, to_fetch)
+    }
+
+    pub fn check_latest_cache(&self, objects: &[ObjectID]) -> (Vec<Object>, Vec<ObjectID>) {
+        let mut to_fetch = Vec::new();
+        let mut cached = Vec::new();
+        for object_id in objects {
+            if let Some(obj) = self.latest_object_cache.read().peek(object_id) {
+                cached.push(obj.clone());
+            } else {
+                to_fetch.push(*object_id);
+            }
+        }
+
+        (cached, to_fetch)
+    }
 }
 
 #[async_trait]
@@ -214,9 +317,12 @@ impl DataFetcher for RemoteFetcher {
         &self,
         objects: &[(ObjectID, VersionNumber)],
     ) -> Result<Vec<Object>, ReplayEngineError> {
+        // First check which we have in cache
+        let (cached, to_fetch) = self.check_versioned_cache(objects);
+
         let options = SuiObjectDataOptions::bcs_lossless();
 
-        let objs: Vec<_> = objects
+        let objs: Vec<_> = to_fetch
             .iter()
             .map(|(object_id, version)| SuiGetPastObjectRequest {
                 object_id: *object_id,
@@ -239,15 +345,30 @@ impl DataFetcher for RemoteFetcher {
             .flatten()
             .map(|q| convert_past_obj_response(q.clone()))
             .collect::<Result<Vec<_>, _>>()
+            .map(|mut x| {
+                // Add the cached objects to the result
+                x.extend(cached);
+                // Backfill the cache
+                for obj in &x {
+                    let r = obj.compute_object_reference();
+                    self.versioned_object_cache
+                        .write()
+                        .put((r.0, r.1), obj.clone());
+                }
+                x
+            })
     }
 
     async fn multi_get_latest(
         &self,
         objects: &[ObjectID],
     ) -> Result<Vec<Object>, ReplayEngineError> {
+        // First check which we have in cache
+        let (cached, to_fetch) = self.check_latest_cache(objects);
+
         let options = SuiObjectDataOptions::bcs_lossless();
 
-        let objectsx = objects.chunks(*QUERY_MAX_RESULT_LIMIT).map(|q| {
+        let objectsx = to_fetch.chunks(*QUERY_MAX_RESULT_LIMIT).map(|q| {
             self.rpc_client
                 .read_api()
                 .multi_get_object_with_options(q.to_vec(), options.clone())
@@ -262,6 +383,15 @@ impl DataFetcher for RemoteFetcher {
             .flatten()
             .map(obj_from_sui_obj_response)
             .collect::<Result<Vec<_>, _>>()
+            .map(|mut x| {
+                // Add the cached objects to the result
+                x.extend(cached);
+                // Backfill the cache
+                for obj in &x {
+                    self.latest_object_cache.write().put(obj.id(), obj.clone());
+                }
+                x
+            })
     }
 
     async fn get_checkpoint_txs(
@@ -346,6 +476,11 @@ impl DataFetcher for RemoteFetcher {
         &self,
         epoch_id: u64,
     ) -> Result<(u64, u64), ReplayEngineError> {
+        // Check epoch info cache
+        if let Some((ts, rgp)) = self.epoch_info_cache.read().peek(&epoch_id) {
+            return Ok((*ts, *rgp));
+        }
+
         let event = self
             .get_epoch_change_events(true)
             .await?
@@ -373,6 +508,12 @@ impl DataFetcher for RemoteFetcher {
         let tx_kind_orig = orig_tx.transaction_data().kind();
 
         if let TransactionKind::ChangeEpoch(change) = tx_kind_orig {
+            // Backfill cache
+            self.epoch_info_cache.write().put(
+                epoch_id,
+                (change.epoch_start_timestamp_ms, reference_gas_price),
+            );
+
             return Ok((change.epoch_start_timestamp_ms, reference_gas_price));
         }
         Err(ReplayEngineError::InvalidEpochChangeTx { epoch: epoch_id })

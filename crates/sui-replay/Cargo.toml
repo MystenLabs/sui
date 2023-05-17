@@ -22,6 +22,8 @@ similar = "2.2.0"
 thiserror = "1.0.34"
 tracing = "0.1.36"
 rand = "0.8.5"
+lru = "0.10"
+parking_lot = "0.12.1"
 
 move-binary-format.workspace = true
 move-bytecode-utils.workspace = true

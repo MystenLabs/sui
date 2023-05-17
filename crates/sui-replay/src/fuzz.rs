@@ -142,8 +142,8 @@ impl ReplayFuzzer {
 
         while num_base_tx > 0 {
             info!(
-                "Starting fuzz with new base TX {}",
-                self.sandbox_state.transaction_info.tx_digest
+                "Starting fuzz with new base TX {}, with at most {} mutations",
+                self.sandbox_state.transaction_info.tx_digest, self.config.num_mutations_per_base
             );
             while let Some(mutation) = self.next_mutation(&tx_kind) {
                 info!(
