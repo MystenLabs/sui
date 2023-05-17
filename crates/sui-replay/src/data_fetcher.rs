@@ -246,7 +246,7 @@ impl Clone for RemoteFetcher {
 
         let mut ep = LruCache::new(EPOCH_INFO_CACHE_CAPACITY.expect("Cache size must be non zero"));
         self.epoch_info_cache.read().iter().for_each(|(k, v)| {
-            ep.put(*k, v.clone());
+            ep.put(*k, *v);
         });
 
         Self {
