@@ -581,11 +581,9 @@ where
 
                 let transactions_handler = self.clone();
                 spawn_monitored_task!(async move {
-                    // NOTE: only index move_calls for Explorer metrics for now,
-                    // will re-enable others later.
                     let mut transaction_index_tables_commit_res = transactions_handler
                         .state
-                        .persist_transaction_index_tables(&[], &move_calls, &[])
+                        .persist_transaction_index_tables(&input_objects, &move_calls, &recipients)
                         .await;
                     while let Err(e) = transaction_index_tables_commit_res {
                         warn!(

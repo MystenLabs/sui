@@ -5,7 +5,7 @@ use std::collections::HashMap;
 
 use diesel::prelude::*;
 
-use crate::schema::{active_addresses, addresses};
+use crate::schema::{active_addresses, address_stats, addresses};
 use crate::types::AddressData;
 
 #[derive(Queryable, Insertable, Debug)]
@@ -82,4 +82,15 @@ pub fn dedup_from_addresses(from_addrs: Vec<AddressData>) -> Vec<ActiveAddress> 
             acc
         });
     active_addr_map.into_values().collect()
+}
+
+#[derive(Queryable, Insertable, Debug)]
+#[diesel(table_name = address_stats, primary_key(checkpoint))]
+pub struct AddressStats {
+    pub checkpoint: i64,
+    pub epoch: i64,
+    pub timestamp_ms: i64,
+    pub cumulative_addresses: i64,
+    pub cumulative_active_addresses: i64,
+    pub daily_active_addresses: i64,
 }
