@@ -22,7 +22,7 @@ futures = "0.3.23"
 backoff = "0.4.0"
 object_store = "=0.5.4"
 prometheus = "0.13.3"
-zstd = "0.12.3+zstd.1.5.2"
+zstd = "0.12.3"
 typed-store.workspace = true
 typed-store-derive.workspace = true
 sui-types = { path = "../sui-types" }
