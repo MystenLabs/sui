@@ -29,6 +29,8 @@ rusoto_core = { version = "0.48.0", default_features=false, features=["rustls"] 
 rusoto_kms = { version = "0.48.0", default_features=false, features=["rustls"] }
 aws-config = "0.55.1"
 prometheus = "0.13.3"
+git-version = "0.3.5"
+const-str = "0.5.3"
 
 sui-adapter = { path = "../../sui-execution/latest/sui-adapter", package = "sui-adapter-latest" }
 
