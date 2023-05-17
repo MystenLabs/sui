@@ -147,7 +147,7 @@ impl AuthorityPerpetualTables {
         version: SequenceNumber,
     ) -> Option<Object> {
         let Ok(iter) = self.objects
-            .iter()
+            .range_iter(ObjectKey::min_for_id(&object_id)..=ObjectKey::max_for_id(&object_id))
             .skip_prior_to(&ObjectKey(object_id, version))else {
             return None
         };
