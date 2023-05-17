@@ -69,7 +69,13 @@ function AppWrapper() {
                     <Fragment key={network}>
                         <PersistQueryClientProvider
                             client={queryClient}
-                            persistOptions={{ persister }}
+                            persistOptions={{
+                                persister,
+                                dehydrateOptions: {
+                                    shouldDehydrateQuery: ({ meta }) =>
+                                        !meta?.skipPersistedCache,
+                                },
+                            }}
                         >
                             <RpcClientContext.Provider
                                 value={api.instance.fullNode}
