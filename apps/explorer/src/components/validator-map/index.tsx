@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { type QueryKey, useQuery } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { ParentSize } from '@visx/responsive';
 import { TooltipWithBounds, useTooltip } from '@visx/tooltip';
 import React, { type ReactNode, useCallback, useMemo } from 'react';
@@ -81,7 +81,7 @@ export default function ValidatorMap({ minHeight }: Props) {
         isLoading,
         isError,
     } = useQuery({
-        queryKey: 'validator-map' as unknown as QueryKey,
+        queryKey: ['validator-map'],
         queryFn: (): Promise<ValidatorMapData[]> =>
             appsBe('validator-map', {
                 network: network.toLowerCase(),
