@@ -27,3 +27,24 @@ export function useGetObject(objectId?: string | null) {
         enabled: !!normalizedObjId,
     });
 }
+
+export function useGetObjects(objectIds?: string[]) {
+    const rpc = useRpcClient();
+    const normalizedObjIds =
+        objectIds?.map((objectId) => normalizeSuiAddress(objectId)) || [];
+
+    return useQuery({
+        queryKey: ['objects', ...normalizedObjIds],
+        queryFn: () => {
+            const queries = normalizedObjIds.map((objectId) => {
+                return rpc.getObject({
+                    id: objectId,
+                    options: defaultOptions,
+                });
+            });
+
+            return Promise.all(queries);
+        },
+        enabled: !!normalizedObjIds,
+    });
+}

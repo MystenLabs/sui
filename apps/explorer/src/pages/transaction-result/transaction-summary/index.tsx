@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useTransactionSummary } from '@mysten/core';
+import { useTransactionSummaryWithNFTs } from '@mysten/core';
 import {
     getTransactionKind,
     getTransactionKindName,
@@ -11,12 +11,15 @@ import {
 import { BalanceChanges } from './BalanceChanges';
 import { ObjectChanges } from './ObjectChanges';
 
+import { LoadingSpinner } from '~/ui/LoadingSpinner';
+import { Text } from '~/ui/Text';
+
 interface TransactionSummaryProps {
     transaction: SuiTransactionBlockResponse;
 }
 
 export function TransactionSummary({ transaction }: TransactionSummaryProps) {
-    const summary = useTransactionSummary({
+    const summaryData = useTransactionSummaryWithNFTs({
         transaction,
     });
 
@@ -24,8 +27,22 @@ export function TransactionSummary({ transaction }: TransactionSummaryProps) {
         getTransactionKind(transaction)!
     );
 
-    const balanceChanges = summary?.balanceChanges;
-    const objectSummary = summary?.objectSummary;
+    const balanceChanges = summaryData?.balanceChanges;
+    const objectSummary = summaryData?.objectSummary;
+    const objectSummaryNFTData = summaryData?.objectSummaryNFTData;
+
+    if (summaryData?.isLoading) {
+        return (
+            <div className="relative h-verticalListLong">
+                <div className="absolute left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-2">
+                    <LoadingSpinner />
+                    <Text variant="pBody/medium" color="steel-dark">
+                        Loading
+                    </Text>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="flex flex-wrap gap-4 md:gap-8">
@@ -33,7 +50,12 @@ export function TransactionSummary({ transaction }: TransactionSummaryProps) {
                 transactionKindName === 'ProgrammableTransaction' && (
                     <BalanceChanges changes={balanceChanges} />
                 )}
-            {objectSummary && <ObjectChanges objectSummary={objectSummary} />}
+            {objectSummary && (
+                <ObjectChanges
+                    objectSummary={objectSummary}
+                    objectSummaryNFTData={objectSummaryNFTData}
+                />
+            )}
         </div>
     );
 }

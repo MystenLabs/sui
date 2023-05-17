@@ -6,7 +6,6 @@ import {
     getGroupByOwner,
     LocationIdType,
     type ObjectChangeSummary,
-    useGetNFTMeta,
 } from '@mysten/core';
 import { ChevronRight12 } from '@mysten/icons';
 import {
@@ -45,10 +44,13 @@ enum ItemLabels {
     type = 'Type',
 }
 
-type ObjectChangeEntryData<T> = Record<
-    string,
-    (T & { locationIdType: LocationIdType })[]
->;
+type ObjectChangeEntryType<T> = T & { locationIdType: LocationIdType };
+
+type ObjectChangeEntryData<T> = Record<string, ObjectChangeEntryType<T>[]>;
+
+type ObjectChangeEntryDataNFT<T> = T & {
+    nftMeta: Record<string, string | null>;
+};
 
 const DEFAULT_ITEMS_TO_SHOW = 5;
 
@@ -179,19 +181,19 @@ function ObjectDetailPanel({
 function ObjectDetail({
     objectType,
     objectId,
+    nftMeta,
+    isNFT,
 }: {
     objectType: string;
     objectId: string;
+    isNFT?: boolean;
+    nftMeta?: Record<string, string | null>;
 }) {
     const separator = '::';
     const objectTypeSplit = objectType?.split(separator) || [];
     const packageId = objectTypeSplit[0];
     const moduleName = objectTypeSplit[1];
     const typeName = objectTypeSplit.slice(2).join(separator);
-
-    const nftMetaData = useGetNFTMeta(objectId);
-
-    const isNFT = !!nftMetaData.data;
 
     const objectDetailLabels = [
         ItemLabels.package,
@@ -203,8 +205,8 @@ function ObjectDetail({
         return (
             <NFTItem
                 objectId={objectId}
-                description={nftMetaData.data?.description!}
-                imageUrl={nftMetaData.data?.imageUrl!}
+                description={nftMeta?.description!}
+                imageUrl={nftMeta?.imageUrl!}
             />
         );
     }
@@ -234,12 +236,15 @@ interface ObjectChangeEntriesProps extends ObjectChangeEntryBaseProps {
         | SuiObjectChangeMutated
         | SuiObjectChangeCreated
         | SuiObjectChangePublished
+        | ObjectChangeEntryDataNFT<SuiObjectChangeMutated>
     )[];
+    isNFT?: boolean;
 }
 
 function ObjectChangeEntries({
     changeEntries,
     type,
+    isNFT,
 }: ObjectChangeEntriesProps) {
     const title = Labels[type];
 
@@ -272,11 +277,12 @@ function ObjectChangeEntries({
     } else {
         expandableItems = (
             changeEntries as (SuiObjectChangeMutated | SuiObjectChangeCreated)[]
-        ).map(({ objectId, objectType }) => (
+        ).map(({ objectId, ...rest }) => (
             <ObjectDetail
+                isNFT={isNFT}
                 key={objectId}
                 objectId={objectId}
-                objectType={objectType}
+                {...rest}
             />
         ));
     }
@@ -301,7 +307,12 @@ function ObjectChangeEntries({
                 defaultItemsToShow={DEFAULT_ITEMS_TO_SHOW}
                 itemsLabel="Objects"
             >
-                <div className="flex max-h-[300px] flex-col gap-3 overflow-y-auto">
+                <div
+                    className={clsx(
+                        'flex gap-3 overflow-y-auto',
+                        isNFT ? 'flex-row' : 'max-h-[300px] flex-col'
+                    )}
+                >
                     <ExpandableListItems />
                 </div>
 
@@ -317,14 +328,18 @@ function ObjectChangeEntries({
 
 interface ObjectChangeEntriesCardsProps extends ObjectChangeEntryBaseProps {
     data:
+        | ObjectChangeEntryDataNFT<SuiObjectChangeMutated>
+        | ObjectChangeEntryDataNFT<SuiObjectChangeCreated>
         | ObjectChangeEntryData<SuiObjectChangeMutated>
         | ObjectChangeEntryData<SuiObjectChangeTransferred>
         | ObjectChangeEntryData<SuiObjectChangeCreated>;
+    isNFT?: boolean;
 }
 
 export function ObjectChangeEntriesCards({
     data,
     type,
+    isNFT,
 }: ObjectChangeEntriesCardsProps) {
     if (!data) {
         return null;
@@ -377,6 +392,7 @@ export function ObjectChangeEntriesCards({
                         <ObjectChangeEntries
                             changeEntries={changes}
                             type={type}
+                            isNFT={isNFT}
                         />
                     </TransactionBlockCard>
                 );
@@ -386,27 +402,65 @@ export function ObjectChangeEntriesCards({
 }
 
 interface ObjectChangesProps {
-    objectSummary: ObjectChangeSummary;
+    objectSummary?: ObjectChangeSummary;
+    objectSummaryNFTData?: {
+        created?: ObjectChangeEntryDataNFT<SuiObjectChangeCreated>[];
+        mutated?: ObjectChangeEntryDataNFT<SuiObjectChangeMutated>[];
+    };
 }
 
-export function ObjectChanges({ objectSummary }: ObjectChangesProps) {
+export function ObjectChanges({
+    objectSummary,
+    objectSummaryNFTData,
+}: ObjectChangesProps) {
     if (!objectSummary) {
         return null;
     }
 
     const createdChangesByOwner = getGroupByOwner(objectSummary?.created);
+    const createdNFTsChangesByOwner = getGroupByOwner(
+        objectSummaryNFTData?.created || []
+    );
+
     const updatedChangesByOwner = getGroupByOwner(objectSummary?.mutated);
+    const updatedNFTsChangesByOwner = getGroupByOwner(
+        objectSummaryNFTData?.mutated || []
+    );
+
     const transferredChangesByOwner = getGroupByOwner(
         objectSummary?.transferred
     );
 
+    console.log('createdNFTsChangesByOwner', createdNFTsChangesByOwner);
+    console.log('updatedNFTsChangesByOwner', updatedNFTsChangesByOwner);
+
     return (
         <>
+            {objectSummaryNFTData?.created?.length ? (
+                <ObjectChangeEntriesCards
+                    isNFT
+                    type="created"
+                    data={
+                        createdNFTsChangesByOwner as unknown as ObjectChangeEntryDataNFT<SuiObjectChangeCreated>
+                    }
+                />
+            ) : null}
+
             {objectSummary?.created?.length ? (
                 <ObjectChangeEntriesCards
                     type="created"
                     data={
                         createdChangesByOwner as unknown as ObjectChangeEntryData<SuiObjectChangeCreated>
+                    }
+                />
+            ) : null}
+
+            {objectSummaryNFTData?.mutated?.length ? (
+                <ObjectChangeEntriesCards
+                    isNFT
+                    type="mutated"
+                    data={
+                        updatedNFTsChangesByOwner as unknown as ObjectChangeEntryDataNFT<SuiObjectChangeMutated>
                     }
                 />
             ) : null}
