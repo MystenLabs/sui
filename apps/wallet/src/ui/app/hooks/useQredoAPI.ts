@@ -22,8 +22,6 @@ export function useQredoAPI(qredoID?: string) {
             qredoID
         ) {
             const instance = API_INSTANCES[qredoID];
-            // if apiUrl changes that will mean the qredo ID will change
-            // so no need to check this case
             if (
                 instance &&
                 instance.accessToken !== data.qredoInfo.accessToken

@@ -21,7 +21,7 @@ export function useQredoUIPendingRequest(requestID?: string) {
 }
 
 export function useFetchQredoAccounts(
-    qredoID?: string,
+    qredoID: string,
     enabled?: boolean,
     params?: GetWalletsParams
 ) {
