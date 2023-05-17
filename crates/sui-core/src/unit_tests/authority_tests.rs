@@ -799,6 +799,68 @@ async fn test_dev_inspect_return_values() {
 }
 
 #[tokio::test]
+async fn test_paranoid_mode_with_natives() {
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
+    let gas_object_id = ObjectID::random();
+    let mut expensive_safety_checks_config = ExpensiveSafetyCheckConfig::default();
+    expensive_safety_checks_config.enable_paranoid_checks();
+    let authority_state = init_state_with_ids_and_expensive_checks(
+        vec![(sender, gas_object_id)],
+        expensive_safety_checks_config,
+    )
+    .await;
+
+    let gas_object = authority_state
+        .get_object(&gas_object_id)
+        .await
+        .unwrap()
+        .unwrap();
+    let gas_object_ref = gas_object.compute_object_reference();
+
+    let mut builder = ProgrammableTransactionBuilder::new();
+    let vector = builder.programmable_move_call(
+        MOVE_STDLIB_PACKAGE_ID,
+        ident_str!("vector").to_owned(),
+        ident_str!("empty").to_owned(),
+        vec![TypeTag::U8],
+        vec![],
+    );
+    let value = builder
+        .input(CallArg::Pure(bcs::to_bytes(&(1_u8)).unwrap()))
+        .unwrap();
+    builder.programmable_move_call(
+        MOVE_STDLIB_PACKAGE_ID,
+        ident_str!("vector").to_owned(),
+        ident_str!("push_back").to_owned(),
+        vec![TypeTag::U8],
+        vec![vector, value],
+    );
+    builder.programmable_move_call(
+        MOVE_STDLIB_PACKAGE_ID,
+        ident_str!("vector").to_owned(),
+        ident_str!("pop_back").to_owned(),
+        vec![TypeTag::U8],
+        vec![vector],
+    );
+
+    let rgp = authority_state.reference_gas_price_for_testing().unwrap();
+    let data = TransactionData::new_programmable(
+        sender,
+        vec![gas_object_ref],
+        builder.finish(),
+        rgp * TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS * 10,
+        rgp,
+    );
+
+    let transaction = to_sender_signed_transaction(data, &sender_key);
+    let signed_effects = send_and_confirm_transaction(&authority_state, transaction)
+        .await
+        .unwrap()
+        .1;
+    assert_eq!(signed_effects.data().status(), &ExecutionStatus::Success);
+}
+
+#[tokio::test]
 async fn test_dev_inspect_gas_coin_argument() {
     let (validator, fullnode, _object_basics) =
         init_state_with_ids_and_object_basics_with_fullnode(vec![]).await;
