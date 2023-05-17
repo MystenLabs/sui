@@ -3,6 +3,9 @@
 
 use std::fmt::{self, Display, Formatter, Write};
 
+use crate::balance_changes::BalanceChange;
+use crate::object_changes::ObjectChange;
+use crate::{Filter, Page, SuiEvent, SuiObjectRef};
 use enum_dispatch::enum_dispatch;
 use fastcrypto::encoding::Base64;
 use move_binary_format::access::ModuleAccess;
@@ -10,7 +13,7 @@ use move_binary_format::binary_views::BinaryIndexedView;
 use move_binary_format::CompiledModule;
 use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::identifier::IdentStr;
-use move_core_types::language_storage::{ModuleId, TypeTag};
+use move_core_types::language_storage::{ModuleId, StructTag, TypeTag};
 use move_core_types::value::MoveTypeLayout;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -20,28 +23,26 @@ use sui_types::base_types::{
     EpochId, ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest,
 };
 use sui_types::digests::{ObjectDigest, TransactionEventsDigest};
-use sui_types::error::{ExecutionError, SuiError};
+use sui_types::effects::{TransactionEffects, TransactionEffectsAPI, TransactionEvents};
+use sui_types::error::{ExecutionError, SuiError, SuiResult};
+use sui_types::execution_status::ExecutionStatus;
 use sui_types::gas::GasCostSummary;
-use sui_types::messages::{
-    Argument, CallArg, Command, ExecuteTransactionRequestType, ExecutionStatus, GenesisObject,
-    InputObjectKind, ObjectArg, ProgrammableMoveCall, ProgrammableTransaction, SenderSignedData,
-    TransactionData, TransactionDataAPI, TransactionEffects, TransactionEffectsAPI,
-    TransactionEvents, TransactionKind, VersionedProtocolMessage,
-};
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
-use sui_types::move_package::disassemble_modules;
 use sui_types::object::Owner;
 use sui_types::parse_sui_type_tag;
-use sui_types::query::TransactionFilter;
+use sui_types::quorum_driver_types::ExecuteTransactionRequestType;
 use sui_types::signature::GenericSignature;
 use sui_types::storage::{DeleteKind, WriteKind};
+use sui_types::sui_serde::Readable;
 use sui_types::sui_serde::{
     BigInt, SequenceNumber as AsSequenceNumber, SuiTypeTag as AsSuiTypeTag,
 };
-
-use crate::balance_changes::BalanceChange;
-use crate::object_changes::ObjectChange;
-use crate::{Page, SuiEvent, SuiMovePackage, SuiObjectRef};
+use sui_types::transaction::{
+    Argument, CallArg, Command, GenesisObject, InputObjectKind, ObjectArg, ProgrammableMoveCall,
+    ProgrammableTransaction, SenderSignedData, TransactionData, TransactionDataAPI,
+    TransactionKind, VersionedProtocolMessage,
+};
+use sui_types::SUI_FRAMEWORK_ADDRESS;
 
 // similar to EpochId of sui-types but BigInt
 pub type SuiEpochId = BigInt<u64>;
@@ -235,6 +236,39 @@ impl PartialEq for SuiTransactionBlockResponse {
             && self.confirmed_local_execution == other.confirmed_local_execution
             && self.checkpoint == other.checkpoint
     }
+}
+
+pub fn get_new_package_obj_from_response(
+    response: &SuiTransactionBlockResponse,
+) -> Option<ObjectRef> {
+    response.object_changes.as_ref().and_then(|changes| {
+        changes
+            .iter()
+            .find(|change| matches!(change, ObjectChange::Published { .. }))
+            .map(|change| change.object_ref())
+    })
+}
+
+pub fn get_new_package_upgrade_cap_from_response(
+    response: &SuiTransactionBlockResponse,
+) -> Option<ObjectRef> {
+    response.object_changes.as_ref().and_then(|changes| {
+        changes
+            .iter()
+            .find(|change| {
+                matches!(change, ObjectChange::Created {
+                    owner: Owner::AddressOwner(_),
+                    object_type: StructTag {
+                        address: SUI_FRAMEWORK_ADDRESS,
+                        module,
+                        name,
+                        ..
+                    },
+                    ..
+                } if module.as_str() == "package" && name.as_str() == "UpgradeCap")
+            })
+            .map(|change| change.object_ref())
+    })
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
@@ -672,7 +706,7 @@ impl SuiTransactionBlockEvents {
         tx_digest: TransactionDigest,
         timestamp_ms: Option<u64>,
         resolver: &impl GetModule,
-    ) -> Result<Self, SuiError> {
+    ) -> SuiResult<Self> {
         Ok(Self {
             data: events
                 .data
@@ -727,7 +761,7 @@ impl DevInspectResults {
         events: TransactionEvents,
         return_values: Result<Vec<ExecutionResult>, ExecutionError>,
         resolver: &impl GetModule,
-    ) -> Result<Self, anyhow::Error> {
+    ) -> SuiResult<Self> {
         let tx_digest = *effects.transaction_digest();
         let mut error = None;
         let mut results = None;
@@ -1145,9 +1179,9 @@ pub enum SuiCommand {
     MergeCoins(SuiArgument, Vec<SuiArgument>),
     /// Publishes a Move package. It takes the package bytes and a list of the package's transitive
     /// dependencies to link against on-chain.
-    Publish(SuiMovePackage, Vec<ObjectID>),
+    Publish(Vec<ObjectID>),
     /// Upgrades a Move package
-    Upgrade(SuiMovePackage, Vec<ObjectID>, ObjectID, SuiArgument),
+    Upgrade(Vec<ObjectID>, ObjectID, SuiArgument),
     /// `forall T: Vec<T> -> vector<T>`
     /// Given n-values of the same type, it constructs a vector. For non objects or an empty vector,
     /// the type tag must be specified.
@@ -1186,16 +1220,15 @@ impl Display for SuiCommand {
                 write_sep(f, coins, ",")?;
                 write!(f, ")")
             }
-            Self::Publish(_bytes, deps) => {
-                write!(f, "Publish(_,")?;
+            Self::Publish(deps) => {
+                write!(f, "Publish(<modules>,")?;
                 write_sep(f, deps, ",")?;
                 write!(f, ")")
             }
-            Self::Upgrade(_bytes, deps, current_package_id, ticket) => {
-                write!(f, "Upgrade({ticket},")?;
+            Self::Upgrade(deps, current_package_id, ticket) => {
+                write!(f, "Upgrade(<modules>, {ticket},")?;
                 write_sep(f, deps, ",")?;
                 write!(f, ", {current_package_id}")?;
-                write!(f, ", _)")?;
                 write!(f, ")")
             }
         }
@@ -1218,24 +1251,14 @@ impl From<Command> for SuiCommand {
                 arg.into(),
                 args.into_iter().map(SuiArgument::from).collect(),
             ),
-            Command::Publish(modules, dep_ids) => SuiCommand::Publish(
-                SuiMovePackage {
-                    disassembled: disassemble_modules(modules.iter()).unwrap_or_default(),
-                },
-                dep_ids,
-            ),
+            Command::Publish(_modules, dep_ids) => SuiCommand::Publish(dep_ids),
             Command::MakeMoveVec(tag_opt, args) => SuiCommand::MakeMoveVec(
                 tag_opt.map(|tag| tag.to_string()),
                 args.into_iter().map(SuiArgument::from).collect(),
             ),
-            Command::Upgrade(modules, dep_ids, current_package_id, ticket) => SuiCommand::Upgrade(
-                SuiMovePackage {
-                    disassembled: disassemble_modules(modules.iter()).unwrap_or_default(),
-                },
-                dep_ids,
-                current_package_id,
-                SuiArgument::from(ticket),
-            ),
+            Command::Upgrade(_modules, dep_ids, current_package_id, ticket) => {
+                SuiCommand::Upgrade(dep_ids, current_package_id, SuiArgument::from(ticket))
+            }
         }
     }
 }
@@ -1538,6 +1561,16 @@ pub struct SuiPureValue {
     value: SuiJsonValue,
 }
 
+impl SuiPureValue {
+    pub fn value(&self) -> SuiJsonValue {
+        self.value.clone()
+    }
+
+    pub fn value_type(&self) -> Option<TypeTag> {
+        self.value_type.clone()
+    }
+}
+
 #[serde_as]
 #[derive(Eq, PartialEq, Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "objectType", rename_all = "camelCase")]
@@ -1561,4 +1594,119 @@ pub enum SuiObjectArg {
         initial_shared_version: SequenceNumber,
         mutable: bool,
     },
+}
+
+#[serde_as]
+#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(rename = "LoadedChildObject", rename_all = "camelCase")]
+pub struct SuiLoadedChildObject {
+    object_id: ObjectID,
+    #[schemars(with = "AsSequenceNumber")]
+    #[serde_as(as = "AsSequenceNumber")]
+    sequence_number: SequenceNumber,
+}
+
+impl SuiLoadedChildObject {
+    pub fn new(object_id: ObjectID, sequence_number: SequenceNumber) -> Self {
+        Self {
+            object_id,
+            sequence_number,
+        }
+    }
+
+    pub fn object_id(&self) -> ObjectID {
+        self.object_id
+    }
+
+    pub fn sequence_number(&self) -> SequenceNumber {
+        self.sequence_number
+    }
+}
+
+#[serde_as]
+#[derive(Serialize, Deserialize, Debug, JsonSchema, Clone, Default)]
+#[serde(rename_all = "camelCase", rename = "LoadedChildObjectsResponse")]
+pub struct SuiLoadedChildObjectsResponse {
+    pub loaded_child_objects: Vec<SuiLoadedChildObject>,
+}
+
+#[derive(Clone)]
+pub struct EffectsWithInput {
+    pub effects: SuiTransactionBlockEffects,
+    pub input: TransactionData,
+}
+
+impl From<EffectsWithInput> for SuiTransactionBlockEffects {
+    fn from(e: EffectsWithInput) -> Self {
+        e.effects
+    }
+}
+
+#[serde_as]
+#[derive(Clone, Debug, JsonSchema, Serialize, Deserialize)]
+pub enum TransactionFilter {
+    /// Query by checkpoint.
+    Checkpoint(
+        #[schemars(with = "BigInt<u64>")]
+        #[serde_as(as = "Readable<BigInt<u64>, _>")]
+        CheckpointSequenceNumber,
+    ),
+    /// Query by move function.
+    MoveFunction {
+        package: ObjectID,
+        module: Option<String>,
+        function: Option<String>,
+    },
+    /// Query by input object.
+    InputObject(ObjectID),
+    /// Query by changed object, including created, mutated and unwrapped objects.
+    ChangedObject(ObjectID),
+    /// Query by sender address.
+    FromAddress(SuiAddress),
+    /// Query by recipient address.
+    ToAddress(SuiAddress),
+    /// Query by sender and recipient address.
+    FromAndToAddress { from: SuiAddress, to: SuiAddress },
+    /// Query by transaction kind
+    TransactionKind(String),
+}
+
+impl Filter<EffectsWithInput> for TransactionFilter {
+    fn matches(&self, item: &EffectsWithInput) -> bool {
+        match self {
+            TransactionFilter::InputObject(o) => {
+                let Ok(input_objects) = item.input.input_objects() else {
+                    return false;
+                };
+                input_objects.iter().any(|object| object.object_id() == *o)
+            }
+            TransactionFilter::ChangedObject(o) => item
+                .effects
+                .mutated()
+                .iter()
+                .any(|oref: &OwnedObjectRef| &oref.reference.object_id == o),
+            TransactionFilter::FromAddress(a) => &item.input.sender() == a,
+            TransactionFilter::ToAddress(a) => {
+                let mutated: &[OwnedObjectRef] = item.effects.mutated();
+                mutated.iter().chain(item.effects.unwrapped().iter()).any(|oref: &OwnedObjectRef| {
+                    matches!(oref.owner, Owner::AddressOwner(owner) if owner == *a)
+                })
+            }
+            TransactionFilter::FromAndToAddress { from, to } => {
+                Self::FromAddress(*from).matches(item) && Self::ToAddress(*to).matches(item)
+            }
+            TransactionFilter::MoveFunction {
+                package,
+                module,
+                function,
+            } => item.input.move_calls().into_iter().any(|(p, m, f)| {
+                p == package
+                    && (module.is_none() || matches!(module,  Some(m2) if m2 == &m.to_string()))
+                    && (function.is_none() || matches!(function, Some(f2) if f2 == &f.to_string()))
+            }),
+            TransactionFilter::TransactionKind(kind) => item.input.kind().to_string() == *kind,
+            // these filters are not supported, rpc will reject these filters on subscription
+            TransactionFilter::Checkpoint(_) => false,
+        }
+    }
 }

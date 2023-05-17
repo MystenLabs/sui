@@ -1,40 +1,39 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::io::{stderr, stdout, Write};
-use std::num::NonZeroUsize;
-use std::path::{Path, PathBuf};
-use std::{fs, io};
-
-use anyhow::{anyhow, bail};
-use clap::*;
-use fastcrypto::traits::KeyPair;
-use move_package::BuildConfig;
-use sui_config::genesis_config::DEFAULT_NUMBER_OF_AUTHORITIES;
-use sui_framework_build::compiled_package::SuiPackageHooks;
-use tracing::info;
-
-use sui_config::{
-    builder::ConfigBuilder, NetworkConfig, SUI_BENCHMARK_GENESIS_GAS_KEYSTORE_FILENAME,
-    SUI_KEYSTORE_FILENAME,
-};
-use sui_config::{genesis_config::GenesisConfig, SUI_GENESIS_FILENAME};
-use sui_config::{
-    sui_config_dir, Config, PersistedConfig, FULL_NODE_DB_PATH, SUI_CLIENT_CONFIG,
-    SUI_FULLNODE_CONFIG, SUI_NETWORK_CONFIG,
-};
-use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
-use sui_swarm::memory::Swarm;
-use sui_types::crypto::{SignatureScheme, SuiKeyPair};
-
-use crate::client_commands::{SuiClientCommands, WalletContext};
-use crate::config::{SuiClientConfig, SuiEnv};
+use crate::client_commands::SuiClientCommands;
 use crate::console::start_console;
 use crate::fire_drill::{run_fire_drill, FireDrill};
 use crate::genesis_ceremony::{run, Ceremony};
 use crate::keytool::KeyToolCommand;
 use crate::validator_commands::SuiValidatorCommand;
+use anyhow::{anyhow, bail};
+use clap::*;
+use fastcrypto::traits::KeyPair;
+use move_package::BuildConfig;
+use std::io::{stderr, stdout, Write};
+use std::num::NonZeroUsize;
+use std::path::{Path, PathBuf};
+use std::{fs, io};
+use sui_config::{
+    sui_config_dir, Config, PersistedConfig, FULL_NODE_DB_PATH, SUI_CLIENT_CONFIG,
+    SUI_FULLNODE_CONFIG, SUI_NETWORK_CONFIG,
+};
+use sui_config::{
+    SUI_BENCHMARK_GENESIS_GAS_KEYSTORE_FILENAME, SUI_GENESIS_FILENAME, SUI_KEYSTORE_FILENAME,
+};
+use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_move::{self, execute_move_command};
+use sui_move_build::SuiPackageHooks;
+use sui_sdk::sui_client_config::{SuiClientConfig, SuiEnv};
+use sui_sdk::wallet_context::WalletContext;
+use sui_swarm::memory::Swarm;
+use sui_swarm_config::genesis_config::{GenesisConfig, DEFAULT_NUMBER_OF_AUTHORITIES};
+use sui_swarm_config::network_config::NetworkConfig;
+use sui_swarm_config::network_config_builder::ConfigBuilder;
+use sui_swarm_config::network_config_builder::FullnodeConfigBuilder;
+use sui_types::crypto::{SignatureScheme, SuiKeyPair};
+use tracing::info;
 
 #[allow(clippy::large_enum_variant)]
 #[derive(Parser)]
@@ -251,12 +250,12 @@ impl SuiCommand {
                 let keystore_path =
                     keystore_path.unwrap_or(sui_config_dir()?.join(SUI_KEYSTORE_FILENAME));
                 let mut keystore = Keystore::from(FileBasedKeystore::new(&keystore_path)?);
-                cmd.execute(&mut keystore)
+                cmd.execute(&mut keystore).await
             }
             SuiCommand::Console { config } => {
                 let config = config.unwrap_or(sui_config_dir()?.join(SUI_CLIENT_CONFIG));
                 prompt_if_no_config(&config, false).await?;
-                let context = WalletContext::new(&config, None).await?;
+                let context = WalletContext::new(&config, None, None).await?;
                 start_console(context, &mut stdout(), &mut stderr()).await
             }
             SuiCommand::Client {
@@ -267,7 +266,7 @@ impl SuiCommand {
             } => {
                 let config_path = config.unwrap_or(sui_config_dir()?.join(SUI_CLIENT_CONFIG));
                 prompt_if_no_config(&config_path, accept_defaults).await?;
-                let mut context = WalletContext::new(&config_path, None).await?;
+                let mut context = WalletContext::new(&config_path, None, None).await?;
                 if let Some(cmd) = cmd {
                     cmd.execute(&mut context).await?.print(!json);
                 } else {
@@ -286,7 +285,7 @@ impl SuiCommand {
             } => {
                 let config_path = config.unwrap_or(sui_config_dir()?.join(SUI_CLIENT_CONFIG));
                 prompt_if_no_config(&config_path, accept_defaults).await?;
-                let mut context = WalletContext::new(&config_path, None).await?;
+                let mut context = WalletContext::new(&config_path, None, None).await?;
                 if let Some(cmd) = cmd {
                     cmd.execute(&mut context).await?.print(!json);
                 } else {
@@ -307,7 +306,7 @@ impl SuiCommand {
     }
 }
 
-async fn genesis(
+pub async fn genesis(
     from_config: Option<PathBuf>,
     write_config: Option<PathBuf>,
     working_dir: Option<PathBuf>,
@@ -412,28 +411,14 @@ async fn genesis(
         genesis_conf.parameters.epoch_duration_ms = epoch_duration_ms;
     }
     let mut network_config = if let Some(validators) = validator_info {
-        if genesis_conf.committee_size != 0 && genesis_conf.committee_size != validators.len() {
-            bail!(
-                "Committee size {} is different from the number of validators {}!",
-                genesis_conf.committee_size,
-                validators.len()
-            );
-        }
         builder
-            .initial_accounts_config(genesis_conf)
+            .with_genesis_config(genesis_conf)
             .with_validators(validators)
             .build()
     } else {
         builder
-            .committee_size(
-                NonZeroUsize::new(if genesis_conf.committee_size != 0 {
-                    genesis_conf.committee_size
-                } else {
-                    DEFAULT_NUMBER_OF_AUTHORITIES
-                })
-                .unwrap(),
-            )
-            .initial_accounts_config(genesis_conf)
+            .committee_size(NonZeroUsize::new(DEFAULT_NUMBER_OF_AUTHORITIES).unwrap())
+            .with_genesis_config(genesis_conf)
             .build()
     };
 
@@ -454,8 +439,7 @@ async fn genesis(
 
     info!("Client keystore is stored in {:?}.", keystore_path);
 
-    let mut fullnode_config = network_config
-        .fullnode_config_builder()
+    let mut fullnode_config = FullnodeConfigBuilder::new(&network_config)
         .with_event_store()
         .with_dir(FULL_NODE_DB_PATH.into())
         .build()?;

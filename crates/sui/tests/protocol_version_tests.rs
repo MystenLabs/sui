@@ -11,7 +11,7 @@ use test_utils::authority::start_node;
 async fn test_validator_panics_on_unsupported_protocol_version() {
     let dir = tempfile::TempDir::new().unwrap();
     let latest_version = ProtocolVersion::MAX;
-    let network_config = sui_config::builder::ConfigBuilder::new(&dir)
+    let network_config = sui_swarm_config::network_config_builder::ConfigBuilder::new(&dir)
         .with_protocol_version(ProtocolVersion::new(latest_version.as_u64() + 1))
         .with_supported_protocol_versions(SupportedProtocolVersions::new_for_testing(
             latest_version.as_u64(),
@@ -66,25 +66,25 @@ mod sim_only_tests {
     use std::sync::Arc;
     use sui_core::authority::framework_injection;
     use sui_framework::BuiltInFramework;
-    use sui_framework_build::compiled_package::BuildConfig;
     use sui_json_rpc::api::WriteApiClient;
     use sui_macros::*;
+    use sui_move_build::{BuildConfig, CompiledPackage};
     use sui_protocol_config::SupportedProtocolVersions;
     use sui_types::base_types::ObjectID;
+    use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
     use sui_types::id::ID;
+    use sui_types::object::Owner;
     use sui_types::sui_system_state::{
         epoch_start_sui_system_state::EpochStartSystemStateTrait, get_validator_from_table,
         SuiSystemState, SuiSystemStateTrait, SUI_SYSTEM_STATE_SIM_TEST_DEEP_V2,
         SUI_SYSTEM_STATE_SIM_TEST_SHALLOW_V2, SUI_SYSTEM_STATE_SIM_TEST_V1,
     };
+    use sui_types::transaction::{Command, ProgrammableMoveCall};
     use sui_types::{
-        base_types::SequenceNumber,
-        digests::TransactionDigest,
-        messages::{TransactionEffectsAPI, TransactionKind},
-        object::Object,
-        programmable_transaction_builder::ProgrammableTransactionBuilder,
-        storage::ObjectStore,
-        MOVE_STDLIB_OBJECT_ID, SUI_FRAMEWORK_OBJECT_ID, SUI_SYSTEM_PACKAGE_ID,
+        base_types::SequenceNumber, digests::TransactionDigest, object::Object,
+        programmable_transaction_builder::ProgrammableTransactionBuilder, storage::ObjectStore,
+        transaction::TransactionKind, MOVE_STDLIB_PACKAGE_ID, SUI_FRAMEWORK_PACKAGE_ID,
+        SUI_SYSTEM_PACKAGE_ID,
     };
     use test_utils::network::{TestCluster, TestClusterBuilder};
     use tokio::time::{sleep, Duration};
@@ -302,7 +302,6 @@ mod sim_only_tests {
     async fn test_framework_compatible_upgrade() {
         // Make a number of compatible changes, and expect the upgrade to go through:
         // - Add a new module, struct, and function
-        // - Add a new ability to an existing struct
         // - Remove an ability from an existing type constraint
         // - Change the implementation of an existing function
         // - Change the signature and implementation of a private function
@@ -314,7 +313,7 @@ mod sim_only_tests {
         expect_upgrade_succeeded(&cluster).await;
         assert_eq!(call_canary(&cluster).await, 43);
 
-        let (modified_at, mutated_to) = get_framework_upgrade_effects(&cluster).await;
+        let (modified_at, mutated_to) = get_framework_upgrade_versions(&cluster).await;
         assert_eq!(Some(SequenceNumber::from(1)), modified_at);
         assert_eq!(Some(SequenceNumber::from(2)), mutated_to);
     }
@@ -323,6 +322,15 @@ mod sim_only_tests {
     async fn test_framework_incompatible_struct_layout() {
         // Upgrade attempts to change an existing struct layout
         let cluster = run_framework_upgrade("base", "change_struct_layout").await;
+        assert_eq!(call_canary(&cluster).await, 42);
+        expect_upgrade_failed(&cluster).await;
+        assert_eq!(call_canary(&cluster).await, 42);
+    }
+
+    #[sim_test]
+    async fn test_framework_add_struct_ability() {
+        // Upgrade attempts to add an ability to a struct
+        let cluster = run_framework_upgrade("base", "add_struct_ability").await;
         assert_eq!(call_canary(&cluster).await, 42);
         expect_upgrade_failed(&cluster).await;
         assert_eq!(call_canary(&cluster).await, 42);
@@ -364,6 +372,62 @@ mod sim_only_tests {
         assert_eq!(call_canary(&cluster).await, 42);
     }
 
+    #[sim_test]
+    async fn test_new_framework_package() {
+        ProtocolConfig::poison_get_for_min_version();
+
+        let sui_extra = ObjectID::from_single_byte(0x42);
+        framework_injection::set_override(sui_extra, fixture_modules("extra_package"));
+
+        let cluster = TestClusterBuilder::new()
+            .with_epoch_duration_ms(20000)
+            .with_supported_protocol_versions(SupportedProtocolVersions::new_for_testing(
+                START, FINISH,
+            ))
+            .build()
+            .await
+            .unwrap();
+
+        expect_upgrade_succeeded(&cluster).await;
+
+        // Make sure the epoch change event includes the event from the new package's module
+        // initializer
+        let effects = get_framework_upgrade_effects(&cluster, &sui_extra).await;
+
+        let shared_id = effects
+            .created()
+            .iter()
+            .find_map(|(obj, owner)| {
+                if let Owner::Shared { .. } = owner {
+                    Some(obj.0)
+                } else {
+                    None
+                }
+            })
+            .unwrap();
+
+        let shared = get_object(&cluster, &shared_id).await;
+        let type_ = shared.type_().unwrap();
+        assert_eq!(type_.module().as_str(), "msim_extra_1");
+        assert_eq!(type_.name().as_str(), "S");
+
+        // Call a function from the newly published system package
+        assert_eq!(
+            dev_inspect_call(
+                &cluster,
+                ProgrammableMoveCall {
+                    package: sui_extra,
+                    module: ident_str!("msim_extra_1").to_owned(),
+                    function: ident_str!("canary").to_owned(),
+                    type_arguments: vec![],
+                    arguments: vec![],
+                }
+            )
+            .await,
+            43,
+        );
+    }
+
     async fn run_framework_upgrade(from: &str, to: &str) -> TestCluster {
         ProtocolConfig::poison_get_for_min_version();
 
@@ -380,20 +444,26 @@ mod sim_only_tests {
     }
 
     async fn call_canary(cluster: &TestCluster) -> u64 {
+        dev_inspect_call(
+            cluster,
+            ProgrammableMoveCall {
+                package: SUI_SYSTEM_PACKAGE_ID,
+                module: ident_str!("msim_extra_1").to_owned(),
+                function: ident_str!("canary").to_owned(),
+                type_arguments: vec![],
+                arguments: vec![],
+            },
+        )
+        .await
+    }
+
+    async fn dev_inspect_call(cluster: &TestCluster, call: ProgrammableMoveCall) -> u64 {
         let client = cluster.rpc_client();
         let sender = cluster.accounts.first().cloned().unwrap();
 
         let pt = {
             let mut builder = ProgrammableTransactionBuilder::new();
-            builder
-                .move_call(
-                    SUI_SYSTEM_PACKAGE_ID,
-                    ident_str!("msim_extra_1").to_owned(),
-                    ident_str!("canary").to_owned(),
-                    vec![],
-                    vec![],
-                )
-                .unwrap();
+            builder.command(Command::MoveCall(Box::new(call)));
             builder.finish()
         };
         let txn = TransactionKind::programmable(pt);
@@ -422,26 +492,10 @@ mod sim_only_tests {
         monitor_version_change(&cluster, FINISH /* expected proto version */).await;
     }
 
-    async fn get_framework_upgrade_effects(
+    async fn get_framework_upgrade_versions(
         cluster: &TestCluster,
     ) -> (Option<SequenceNumber>, Option<SequenceNumber>) {
-        let node_handle = cluster
-            .swarm
-            .validators()
-            .next()
-            .unwrap()
-            .get_node_handle()
-            .unwrap();
-
-        let effects = node_handle
-            .with_async(|node| async {
-                let db = node.state().db();
-                let framework = db.get_object(&SUI_SYSTEM_PACKAGE_ID);
-                let digest = framework.unwrap().unwrap().previous_transaction;
-                let effects = db.get_executed_effects(&digest);
-                effects.unwrap().unwrap()
-            })
-            .await;
+        let effects = get_framework_upgrade_effects(cluster, &SUI_SYSTEM_PACKAGE_ID).await;
 
         let modified_at = effects
             .modified_at_versions()
@@ -454,6 +508,43 @@ mod sim_only_tests {
             .find_map(|((id, v, _), _)| (id == &SUI_SYSTEM_PACKAGE_ID).then_some(*v));
 
         (modified_at, mutated_to)
+    }
+
+    async fn get_framework_upgrade_effects(
+        cluster: &TestCluster,
+        package: &ObjectID,
+    ) -> TransactionEffects {
+        let node_handle = cluster
+            .swarm
+            .validators()
+            .next()
+            .unwrap()
+            .get_node_handle()
+            .unwrap();
+
+        node_handle
+            .with_async(|node| async {
+                let db = node.state().db();
+                let framework = db.get_object(package);
+                let digest = framework.unwrap().unwrap().previous_transaction;
+                let effects = db.get_executed_effects(&digest);
+                effects.unwrap().unwrap()
+            })
+            .await
+    }
+
+    async fn get_object(cluster: &TestCluster, package: &ObjectID) -> Object {
+        let node_handle = cluster
+            .swarm
+            .validators()
+            .next()
+            .unwrap()
+            .get_node_handle()
+            .unwrap();
+
+        node_handle
+            .with_async(|node| async { node.state().db().get_object(package).unwrap().unwrap() })
+            .await
     }
 
     #[sim_test]
@@ -750,17 +841,13 @@ mod sim_only_tests {
         framework_injection::set_override_cb(SUI_SYSTEM_PACKAGE_ID, f)
     }
 
-    /// Get compiled modules for Sui Framework, built from fixture `fixture` in the
+    /// Get compiled modules for Sui System, built from fixture `fixture` in the
     /// `framework_upgrades` directory.
     fn sui_system_modules(fixture: &str) -> Vec<CompiledModule> {
-        let mut package = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-        package.extend(["tests", "framework_upgrades", fixture]);
-
-        let mut config = BuildConfig::new_for_testing();
-        config.run_bytecode_verifier = true;
-
-        let pkg = config.build(package).unwrap();
-        pkg.get_sui_system_modules().cloned().collect()
+        fixture_package(fixture)
+            .get_sui_system_modules()
+            .cloned()
+            .collect()
     }
 
     /// Like `sui_system_modules`, but package the modules in an `Object`.
@@ -770,11 +857,26 @@ mod sim_only_tests {
             TransactionDigest::genesis(),
             u64::MAX,
             &[
-                BuiltInFramework::get_package_by_id(&MOVE_STDLIB_OBJECT_ID).genesis_move_package(),
-                BuiltInFramework::get_package_by_id(&SUI_FRAMEWORK_OBJECT_ID)
+                BuiltInFramework::get_package_by_id(&MOVE_STDLIB_PACKAGE_ID).genesis_move_package(),
+                BuiltInFramework::get_package_by_id(&SUI_FRAMEWORK_PACKAGE_ID)
                     .genesis_move_package(),
             ],
         )
         .unwrap()
+    }
+
+    /// Get root compiled modules, built from fixture `fixture` in the `framework_upgrades`
+    /// directory.
+    fn fixture_modules(fixture: &str) -> Vec<CompiledModule> {
+        fixture_package(fixture).into_modules()
+    }
+
+    fn fixture_package(fixture: &str) -> CompiledPackage {
+        let mut package = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        package.extend(["tests", "framework_upgrades", fixture]);
+
+        let mut config = BuildConfig::new_for_testing();
+        config.run_bytecode_verifier = true;
+        config.build(package).unwrap()
     }
 }

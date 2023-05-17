@@ -1,8 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useEpochProgress } from './useEpochProgress';
-
+import { useEpochProgress } from '~/pages/epochs/utils';
 import { ProgressCircle } from '~/ui/ProgressCircle';
 import { Text } from '~/ui/Text';
 
@@ -14,7 +13,7 @@ export function EpochTimer() {
             <div className="w-5 text-steel-darker">
                 <ProgressCircle progress={progress} />
             </div>
-            <Text variant="p2/medium" color="steel-darker">
+            <Text variant="pBodySmall/medium" color="steel-darker">
                 Epoch {epoch} in progress. {label}
             </Text>
         </div>

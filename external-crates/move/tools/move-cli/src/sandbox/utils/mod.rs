@@ -350,6 +350,8 @@ pub(crate) fn explain_publish_error(
                 check_struct_layout: true,
                 check_friend_linking: false,
                 check_private_entry_linking: true,
+                disallowed_new_abilities: AbilitySet::EMPTY,
+                disallow_change_struct_type_params: false,
             })
             .check(&old_api, &new_api)
             .is_err()
@@ -362,6 +364,8 @@ pub(crate) fn explain_publish_error(
                 check_struct_layout: false,
                 check_friend_linking: false,
                 check_private_entry_linking: true,
+                disallowed_new_abilities: AbilitySet::EMPTY,
+                disallow_change_struct_type_params: false,
             })
             .check(&old_api, &new_api)
             .is_err()
@@ -573,7 +577,7 @@ pub(crate) fn is_bytecode_file(path: &Path) -> bool {
 pub(crate) fn contains_module(path: &Path) -> bool {
     is_bytecode_file(path)
         && match fs::read(path) {
-            Ok(bytes) => CompiledModule::deserialize(&bytes).is_ok(),
+            Ok(bytes) => CompiledModule::deserialize_with_defaults(&bytes).is_ok(),
             Err(_) => false,
         }
 }

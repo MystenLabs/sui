@@ -22,9 +22,10 @@ const textStyles = cva([], {
             captionSmall: 'uppercase text-captionSmall',
             captionSmallExtra:
                 'uppercase tracking-wider text-captionSmallExtra',
-            p1: 'text-p1',
-            p2: 'text-p2',
-            p3: 'text-p3',
+            pBody: 'text-pBody',
+            pBodySmall: 'text-pBodySmall',
+            pSubtitle: 'text-pSubtitle',
+            pSubtitleSmall: 'text-pSubtitleSmall',
         },
         color: {
             'gray-100': 'text-gray-100',
@@ -67,8 +68,13 @@ const textStyles = cva([], {
 
 export interface TextProps extends VariantProps<typeof textStyles> {
     children: ReactNode;
+    title?: string;
 }
 
-export function Text({ children, ...styleProps }: TextProps) {
-    return <div className={textStyles(styleProps)}>{children}</div>;
+export function Text({ children, title, ...styleProps }: TextProps) {
+    return (
+        <div title={title} className={textStyles(styleProps)}>
+            {children}
+        </div>
+    );
 }

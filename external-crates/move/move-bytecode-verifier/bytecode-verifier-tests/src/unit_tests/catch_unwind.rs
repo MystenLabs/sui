@@ -9,6 +9,7 @@ use move_core_types::{
 };
 use std::panic::{self, PanicInfo};
 
+#[ignore]
 #[test]
 fn test_unwind() {
     let scenario = FailScenario::setup();

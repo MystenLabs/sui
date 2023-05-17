@@ -1,12 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useRpcClient, convertNumberToDate } from '@mysten/core';
+import { useRpcClient } from '@mysten/core';
 import { useQuery } from '@tanstack/react-query';
 import { useParams } from 'react-router-dom';
 
 import { CheckpointTransactionBlocks } from './CheckpointTransactionBlocks';
 
+import { SuiAmount } from '~/components/Table/SuiAmount';
 import { Banner } from '~/ui/Banner';
 import { DescriptionList, DescriptionItem } from '~/ui/DescriptionList';
 import { EpochLink } from '~/ui/InternalLink';
@@ -20,9 +21,11 @@ export default function CheckpointDetail() {
     const digestOrSequenceNumber = /^\d+$/.test(id!) ? parseInt(id!, 10) : id;
 
     const rpc = useRpcClient();
-    const { data, isError, isLoading } = useQuery(['checkpoints', id], () =>
-        rpc.getCheckpoint({ id: String(digestOrSequenceNumber!) })
-    );
+    const { data, isError, isLoading } = useQuery({
+        queryKey: ['checkpoints', digestOrSequenceNumber],
+        queryFn: () =>
+            rpc.getCheckpoint({ id: String(digestOrSequenceNumber!) }),
+    });
 
     if (isError)
         return (
@@ -30,7 +33,6 @@ export default function CheckpointDetail() {
                 There was an issue retrieving data for checkpoint: {id}
             </Banner>
         );
-
     if (isLoading) return <LoadingSpinner />;
 
     return (
@@ -47,7 +49,7 @@ export default function CheckpointDetail() {
                             <DescriptionList>
                                 <DescriptionItem title="Checkpoint Sequence No.">
                                     <Text
-                                        variant="p1/medium"
+                                        variant="pBody/medium"
                                         color="steel-darker"
                                     >
                                         {data.sequenceNumber}
@@ -58,13 +60,23 @@ export default function CheckpointDetail() {
                                 </DescriptionItem>
                                 <DescriptionItem title="Checkpoint Timestamp">
                                     <Text
-                                        variant="p1/medium"
+                                        variant="pBody/medium"
                                         color="steel-darker"
                                     >
                                         {data.timestampMs
-                                            ? convertNumberToDate(
-                                                  Number(data.timestampMs ?? 0)
-                                              )
+                                            ? new Date(
+                                                  Number(data.timestampMs)
+                                              ).toLocaleString(undefined, {
+                                                  month: 'short',
+                                                  day: 'numeric',
+                                                  year: 'numeric',
+                                                  hour: 'numeric',
+                                                  minute: '2-digit',
+                                                  second: '2-digit',
+                                                  hour12: false,
+                                                  timeZone: 'UTC',
+                                                  timeZoneName: 'short',
+                                              })
                                             : '--'}
                                     </Text>
                                 </DescriptionItem>
@@ -82,7 +94,7 @@ export default function CheckpointDetail() {
                                             title="Signature"
                                         >
                                             <Text
-                                                variant="p1/medium"
+                                                variant="pBody/medium"
                                                 color="steel-darker"
                                             >
                                                 {data.validatorSignature}
@@ -96,33 +108,36 @@ export default function CheckpointDetail() {
                 </TabGroup>
                 <TabGroup as="div" size="lg">
                     <TabList>
-                        <Tab>Gas & Storage Fee</Tab>
+                        <Tab>Gas & Storage Fees</Tab>
                     </TabList>
                     <TabPanels>
                         <DescriptionList>
                             <DescriptionItem title="Computation Fee">
-                                <Text variant="p1/medium" color="steel-darker">
-                                    {
+                                <SuiAmount
+                                    full
+                                    amount={
                                         data.epochRollingGasCostSummary
                                             .computationCost
                                     }
-                                </Text>
+                                />
                             </DescriptionItem>
                             <DescriptionItem title="Storage Fee">
-                                <Text variant="p1/medium" color="steel-darker">
-                                    {
+                                <SuiAmount
+                                    full
+                                    amount={
                                         data.epochRollingGasCostSummary
                                             .storageCost
                                     }
-                                </Text>
+                                />
                             </DescriptionItem>
                             <DescriptionItem title="Storage Rebate">
-                                <Text variant="p1/medium" color="steel-darker">
-                                    {
+                                <SuiAmount
+                                    full
+                                    amount={
                                         data.epochRollingGasCostSummary
                                             .storageRebate
                                     }
-                                </Text>
+                                />
                             </DescriptionItem>
                         </DescriptionList>
                     </TabPanels>
@@ -135,8 +150,7 @@ export default function CheckpointDetail() {
                     <TabPanels>
                         <div className="mt-4">
                             <CheckpointTransactionBlocks
-                                digest={data.digest}
-                                transactions={data.transactions || []}
+                                id={data.sequenceNumber}
                             />
                         </div>
                     </TabPanels>

@@ -3,18 +3,18 @@
 
 import {
     formatPercentageDisplay,
-    useGetRollingAverageApys,
+    useGetValidatorsApy,
+    calculateStakeShare,
+    useGetSystemState,
 } from '@mysten/core';
 import { useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
 import { useActiveAddress } from '../../hooks/useActiveAddress';
-import { calculateStakeShare } from '../calculateStakeShare';
 import { getStakeSuiBySuiId } from '../getStakeSuiBySuiId';
 import { getTokenStakeSuiForValidator } from '../getTokenStakeSuiForValidator';
 import { StakeAmount } from '../home/StakeAmount';
 import { useGetDelegatedStake } from '../useGetDelegatedStake';
-import { useSystemState } from '../useSystemState';
 import { ValidatorLogo } from '../validators/ValidatorLogo';
 import { Card } from '_app/shared/card';
 import Alert from '_components/alert';
@@ -39,7 +39,7 @@ export function ValidatorFormDetail({
         data: system,
         isLoading: loadingValidators,
         isError: errorValidators,
-    } = useSystemState();
+    } = useGetSystemState();
 
     const {
         data: stakeData,
@@ -48,9 +48,7 @@ export function ValidatorFormDetail({
         error,
     } = useGetDelegatedStake(accountAddress || '');
 
-    const { data: rollingAverageApys } = useGetRollingAverageApys(
-        system?.activeValidators.length || null
-    );
+    const { data: rollingAverageApys } = useGetValidatorsApy();
 
     const validatorData = useMemo(() => {
         if (!system) return null;
@@ -78,14 +76,17 @@ export function ValidatorFormDetail({
     }, [system]);
 
     const totalStakePercentage = useMemo(() => {
-        if (!system || !stakeData) return null;
+        if (!system || !validatorData) return null;
+
         return calculateStakeShare(
-            getTokenStakeSuiForValidator(stakeData, validatorAddress),
+            BigInt(validatorData.stakingPoolSuiBalance),
             BigInt(totalValidatorsStake)
         );
-    }, [stakeData, system, totalValidatorsStake, validatorAddress]);
+    }, [system, totalValidatorsStake, validatorData]);
 
-    const apy = rollingAverageApys?.[validatorAddress] ?? null;
+    const { apy, isApyApproxZero } = rollingAverageApys?.[validatorAddress] ?? {
+        apy: null,
+    };
 
     if (isLoading || loadingValidators) {
         return (
@@ -158,7 +159,11 @@ export function ValidatorFormDetail({
                                 weight="semibold"
                                 color="gray-90"
                             >
-                                {apy === null ? '--' : `${apy}%`}
+                                {formatPercentageDisplay(
+                                    apy,
+                                    '--',
+                                    isApyApproxZero
+                                )}
                             </Text>
                         </div>
                         <div className="flex gap-2 items-center justify-between">
@@ -168,9 +173,9 @@ export function ValidatorFormDetail({
                                     weight="medium"
                                     color="steel-darker"
                                 >
-                                    Staking Share
+                                    Stake Share
                                 </Text>
-                                <IconTooltip tip="This is the Annualized Percentage Yield of the a specific validator’s past operations. Note there is no guarantee this APY will be true in the future." />
+                                <IconTooltip tip="The percentage of total stake managed by this validator" />
                             </div>
 
                             <Text

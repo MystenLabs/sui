@@ -68,23 +68,21 @@ pub async fn get_object_changes<P: ObjectProvider<Error = E>, E>(
             .await?;
         if let Some(o) = o {
             if let Some(type_) = o.type_() {
-                if !type_.is_coin() {
-                    let object_type = type_.clone().into();
-                    match kind {
-                        DeleteKind::Normal => object_changes.push(ObjectChange::Deleted {
-                            sender,
-                            object_type,
-                            object_id: *id,
-                            version: *version,
-                        }),
-                        DeleteKind::Wrap => object_changes.push(ObjectChange::Wrapped {
-                            sender,
-                            object_type,
-                            object_id: *id,
-                            version: *version,
-                        }),
-                        _ => {}
-                    }
+                let object_type = type_.clone().into();
+                match kind {
+                    DeleteKind::Normal => object_changes.push(ObjectChange::Deleted {
+                        sender,
+                        object_type,
+                        object_id: *id,
+                        version: *version,
+                    }),
+                    DeleteKind::Wrap => object_changes.push(ObjectChange::Wrapped {
+                        sender,
+                        object_type,
+                        object_id: *id,
+                        version: *version,
+                    }),
+                    _ => {}
                 }
             }
         };

@@ -9,11 +9,20 @@ use std::ops::Mul;
 /// Scope of meterinng
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Scope {
+    // Metering is for transaction level
+    Transaction,
+    // Metering is for package level
+    Package,
     // Metering is for module level
     Module,
     // Metering is for function level
     Function,
 }
+
+pub const ANALYZE_FUNCTION_BASE_COST: u128 = 10;
+pub const EXECUTE_BLOCK_BASE_COST: u128 = 10;
+pub const PER_BACKEDGE_COST: u128 = 10;
+pub const PER_SUCCESSOR_COST: u128 = 10;
 
 /// Trait for a metering verification.
 pub trait Meter {
@@ -72,18 +81,18 @@ struct Bounds {
 
 impl Meter for BoundMeter {
     fn enter_scope(&mut self, name: &str, scope: Scope) {
-        let bounds = self.get_bounds(scope);
+        let bounds = self.get_bounds_mut(scope);
         bounds.name = name.into();
         bounds.units = 0;
     }
 
     fn transfer(&mut self, from: Scope, to: Scope, factor: f32) -> PartialVMResult<()> {
-        let units = (self.get_bounds(from).units as f32 * factor) as u128;
+        let units = (self.get_bounds_mut(from).units as f32 * factor) as u128;
         self.add(to, units)
     }
 
     fn add(&mut self, scope: Scope, units: u128) -> PartialVMResult<()> {
-        self.get_bounds(scope).add(units)
+        self.get_bounds_mut(scope).add(units)
     }
 }
 
@@ -112,7 +121,7 @@ impl BoundMeter {
             mod_bounds: Bounds {
                 name: "<unknown>".to_string(),
                 units: 0,
-                max: config.max_per_fun_meter_units,
+                max: config.max_per_mod_meter_units,
             },
             fun_bounds: Bounds {
                 name: "<unknown>".to_string(),
@@ -122,12 +131,28 @@ impl BoundMeter {
         }
     }
 
-    fn get_bounds(&mut self, scope: Scope) -> &mut Bounds {
+    fn get_bounds_mut(&mut self, scope: Scope) -> &mut Bounds {
         if scope == Scope::Module {
             &mut self.mod_bounds
         } else {
             &mut self.fun_bounds
         }
+    }
+
+    fn get_bounds(&self, scope: Scope) -> &Bounds {
+        if scope == Scope::Module {
+            &self.mod_bounds
+        } else {
+            &self.fun_bounds
+        }
+    }
+
+    pub fn get_usage(&self, scope: Scope) -> u128 {
+        self.get_bounds(scope).units
+    }
+
+    pub fn get_limit(&self, scope: Scope) -> Option<u128> {
+        self.get_bounds(scope).max
     }
 }
 

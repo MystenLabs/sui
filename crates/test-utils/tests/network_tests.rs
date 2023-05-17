@@ -6,8 +6,8 @@ use sui_framework::BuiltInFramework;
 use sui_json_rpc::api::ReadApiClient;
 use sui_json_rpc_types::SuiObjectResponse;
 use sui_types::{
-    base_types::ObjectID, digests::TransactionDigest, object::Object, MOVE_STDLIB_OBJECT_ID,
-    SUI_FRAMEWORK_OBJECT_ID, SUI_SYSTEM_ADDRESS, SUI_SYSTEM_PACKAGE_ID,
+    base_types::ObjectID, digests::TransactionDigest, object::Object, MOVE_STDLIB_PACKAGE_ID,
+    SUI_FRAMEWORK_PACKAGE_ID, SUI_SYSTEM_ADDRESS, SUI_SYSTEM_PACKAGE_ID,
 };
 use test_utils::network::TestClusterBuilder;
 
@@ -64,8 +64,8 @@ async fn test_package_override() {
             &framework_modules,
             TransactionDigest::genesis(),
             [
-                BuiltInFramework::get_package_by_id(&MOVE_STDLIB_OBJECT_ID).genesis_move_package(),
-                BuiltInFramework::get_package_by_id(&SUI_FRAMEWORK_OBJECT_ID)
+                BuiltInFramework::get_package_by_id(&MOVE_STDLIB_PACKAGE_ID).genesis_move_package(),
+                BuiltInFramework::get_package_by_id(&SUI_FRAMEWORK_PACKAGE_ID)
                     .genesis_move_package(),
             ],
         )

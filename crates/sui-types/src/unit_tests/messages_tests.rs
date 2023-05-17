@@ -2,16 +2,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::hash_map::DefaultHasher;
-use std::collections::BTreeMap;
-
-use fastcrypto::traits::AggregateAuthenticator;
-use fastcrypto::traits::KeyPair;
-use move_core_types::language_storage::StructTag;
-use roaring::RoaringBitmap;
-
 use super::*;
 use crate::base_types::random_object_ref;
+use crate::committee::Committee;
 use crate::crypto::bcs_signable_test::{get_obligation_input, Foo};
 use crate::crypto::Secp256k1SuiSignature;
 use crate::crypto::SuiKeyPair;
@@ -22,7 +15,18 @@ use crate::crypto::{
     get_key_pair, AccountKeyPair, AuthorityKeyPair, AuthorityPublicKeyBytes,
     AuthoritySignInfoTrait, SuiAuthoritySignature,
 };
+use crate::digests::TransactionEventsDigest;
+use crate::effects::{SignedTransactionEffects, TransactionEffects, TransactionEffectsAPI};
+use crate::execution_status::ExecutionStatus;
+use crate::gas::GasCostSummary;
 use crate::object::Owner;
+use fastcrypto::traits::AggregateAuthenticator;
+use fastcrypto::traits::KeyPair;
+use move_core_types::language_storage::StructTag;
+use roaring::RoaringBitmap;
+use std::collections::hash_map::DefaultHasher;
+use std::collections::BTreeMap;
+use std::hash::Hasher;
 
 #[test]
 fn test_signed_values() {
@@ -1030,11 +1034,7 @@ fn test_change_epoch_transaction() {
     assert!(tx.contains_shared_object());
     assert_eq!(
         tx.shared_input_objects().next().unwrap(),
-        SharedInputObject {
-            id: SUI_SYSTEM_STATE_OBJECT_ID,
-            initial_shared_version: SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
-            mutable: true,
-        }
+        SharedInputObject::SUI_SYSTEM_OBJ
     );
     assert!(tx.is_system_tx());
     assert_eq!(
@@ -1335,6 +1335,11 @@ fn test_certificate_digest() {
 // If this test fails, the value of the constant must be increased
 #[test]
 fn check_approx_effects_components_size() {
+    use crate::effects::{
+        APPROX_SIZE_OF_EPOCH_ID, APPROX_SIZE_OF_EXECUTION_STATUS, APPROX_SIZE_OF_GAS_COST_SUMMARY,
+        APPROX_SIZE_OF_OBJECT_REF, APPROX_SIZE_OF_OPT_TX_EVENTS_DIGEST, APPROX_SIZE_OF_OWNER,
+        APPROX_SIZE_OF_TX_DIGEST,
+    };
     use std::mem::size_of;
 
     assert!(

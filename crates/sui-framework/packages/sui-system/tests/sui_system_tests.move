@@ -185,6 +185,36 @@ module sui_system::sui_system_tests {
     }
 
     #[test]
+    #[expected_failure(abort_code = validator::EGasPriceHigherThanThreshold)]
+    fun test_set_gas_price_failure() {
+        let scenario_val = test_scenario::begin(@0x0);
+        let scenario = &mut scenario_val;
+        set_up_sui_system_state(vector[@0x1, @0x2]);
+
+        // Fails here since the gas price is too high.
+        set_gas_price_helper(@0x1, 100_001, scenario);
+
+        test_scenario::end(scenario_val);
+    }
+
+    #[test]
+    #[expected_failure(abort_code = validator::ECommissionRateTooHigh)]
+    fun test_set_commission_rate_failure() {
+        let scenario_val = test_scenario::begin(@0x0);
+        let scenario = &mut scenario_val;
+        set_up_sui_system_state(vector[@0x1, @0x2]);
+
+        test_scenario::next_tx(scenario, @0x2);
+        let system_state = test_scenario::take_shared<SuiSystemState>(scenario);
+
+        // Fails here since the commission rate is too high.
+        sui_system::request_set_commission_rate(&mut system_state, 2001, test_scenario::ctx(scenario));
+        test_scenario::return_shared(system_state);
+
+        test_scenario::end(scenario_val);
+    }
+
+    #[test]
     #[expected_failure(abort_code = sui_system_state_inner::ENotValidator)]
     fun test_report_non_validator_failure() {
         let scenario_val = test_scenario::begin(@0x0);

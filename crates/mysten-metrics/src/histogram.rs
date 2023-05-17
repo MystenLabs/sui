@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::monitored_scope;
 use futures::FutureExt;
 use parking_lot::Mutex;
 use prometheus::{
@@ -178,6 +179,10 @@ impl Histogram {
         HistogramVec::new_in_registry(name, desc, &[], registry).with_label_values(&[])
     }
 
+    pub fn observe(&self, v: Point) {
+        self.report(v)
+    }
+
     pub fn report(&self, v: Point) {
         match self.channel.try_send((self.labels.clone(), v)) {
             Ok(()) => {}
@@ -256,6 +261,7 @@ impl HistogramCollector {
 
 impl HistogramReporter {
     pub fn report(&mut self, labeled_data: HashMap<HistogramLabels, Vec<Point>>) {
+        let _scope = monitored_scope("HistogramReporter::report");
         let mut reset_labels = self.known_labels.clone();
         for (label, mut data) in labeled_data {
             self.known_labels.insert(label.clone());

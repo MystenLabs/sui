@@ -5,9 +5,7 @@ import { cva, type VariantProps } from 'class-variance-authority';
 import { useState } from 'react';
 
 const imageStyle = cva(
-    [
-        'bg-gradient-to-r from-gradient-blue-start to-gradient-blue-end text-white capitalize overflow-hidden',
-    ],
+    ['text-white capitalize overflow-hidden bg-gray-40  shrink-0'],
     {
         variants: {
             size: {
@@ -38,7 +36,7 @@ export interface ImageIconProps extends VariantProps<typeof imageStyle> {
 
 function FallBackAvatar({ str }: { str: string }) {
     return (
-        <div className="flex h-full w-full items-center justify-center">
+        <div className="flex h-full w-full items-center justify-center bg-gradient-to-r from-gradient-blue-start to-gradient-blue-end">
             {str?.slice(0, 2)}
         </div>
     );
@@ -60,7 +58,7 @@ export function ImageIcon({
                 <img
                     src={src || ''}
                     alt={alt}
-                    className="flex h-full w-full items-center justify-center"
+                    className="flex h-full w-full items-center justify-center object-contain"
                     onError={() => setError(true)}
                 />
             )}

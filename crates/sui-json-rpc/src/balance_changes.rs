@@ -1,30 +1,33 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::ops::Neg;
 use std::sync::Arc;
 
 use async_trait::async_trait;
 use move_core_types::language_storage::TypeTag;
-use sui_types::digests::ObjectDigest;
+use mysten_metrics::spawn_monitored_task;
 use tokio::sync::RwLock;
 
 use sui_core::authority::AuthorityState;
 use sui_json_rpc_types::BalanceChange;
 use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber};
 use sui_types::coin::Coin;
+use sui_types::digests::ObjectDigest;
+use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
 use sui_types::error::SuiError;
+use sui_types::execution_status::ExecutionStatus;
 use sui_types::gas_coin::GAS;
-use sui_types::messages::{ExecutionStatus, TransactionEffects};
-use sui_types::messages::{InputObjectKind, TransactionEffectsAPI};
 use sui_types::object::{Object, Owner};
 use sui_types::storage::WriteKind;
+use sui_types::transaction::InputObjectKind;
 
 pub async fn get_balance_changes_from_effect<P: ObjectProvider<Error = E>, E>(
     object_provider: &P,
     effects: &TransactionEffects,
     input_objs: Vec<InputObjectKind>,
+    mocked_coin: Option<ObjectID>,
 ) -> Result<Vec<BalanceChange>, E> {
     let (_, gas_owner) = effects.gas_object();
 
@@ -40,7 +43,12 @@ pub async fn get_balance_changes_from_effect<P: ObjectProvider<Error = E>, E>(
     let all_mutated: Vec<(&ObjectRef, &Owner, WriteKind)> = effects.all_changed_objects();
     let all_mutated = all_mutated
         .iter()
-        .map(|((id, version, digest), _, _)| (*id, *version, Some(*digest)))
+        .filter_map(|((id, version, digest), _, _)| {
+            if matches!(mocked_coin, Some(coin) if *id == coin) {
+                return None;
+            }
+            Some((*id, *version, Some(*digest)))
+        })
         .collect::<Vec<_>>();
 
     let input_objs_to_digest = input_objs
@@ -50,12 +58,26 @@ pub async fn get_balance_changes_from_effect<P: ObjectProvider<Error = E>, E>(
             InputObjectKind::MovePackage(_) | InputObjectKind::SharedMoveObject { .. } => None,
         })
         .collect::<HashMap<ObjectID, ObjectDigest>>();
+    let unwrapped_then_deleted = effects
+        .unwrapped_then_deleted()
+        .iter()
+        .map(|e| e.0)
+        .collect::<HashSet<_>>();
     get_balance_changes(
         object_provider,
         &effects
             .modified_at_versions()
             .iter()
-            .map(|(id, version)| (*id, *version, input_objs_to_digest.get(id).cloned()))
+            .filter_map(|(id, version)| {
+                if matches!(mocked_coin, Some(coin) if *id == coin) {
+                    return None;
+                }
+                // We won't be able to get dynamic object from object provider today
+                if unwrapped_then_deleted.contains(id) {
+                    return None;
+                }
+                Some((*id, *version, input_objs_to_digest.get(id).cloned()))
+            })
             .collect::<Vec<_>>(),
         &all_mutated,
     )
@@ -109,26 +131,25 @@ async fn fetch_coins<P: ObjectProvider<Error = E>, E>(
     let mut all_mutated_coins = vec![];
     for (id, version, digest_opt) in objects {
         // TODO: use multi get object
-        if let Ok(o) = object_provider.get_object(id, version).await {
-            if let Some(type_) = o.type_() {
-                if type_.is_coin() {
-                    if let Some(digest) = digest_opt {
-                        // TODO: can we return Err here instead?
-                        assert_eq!(
-                            *digest,
-                            o.digest(),
-                            "Object digest mismatch--got bad data from object_provider?"
-                        )
-                    }
-                    let [coin_type]: [TypeTag; 1] =
-                        type_.clone().into_type_params().try_into().unwrap();
-                    all_mutated_coins.push((
-                        o.owner,
-                        coin_type,
-                        // we know this is a coin, safe to unwrap
-                        Coin::extract_balance_if_coin(&o).unwrap().unwrap(),
-                    ))
+        let o = object_provider.get_object(id, version).await?;
+        if let Some(type_) = o.type_() {
+            if type_.is_coin() {
+                if let Some(digest) = digest_opt {
+                    // TODO: can we return Err here instead?
+                    assert_eq!(
+                        *digest,
+                        o.digest(),
+                        "Object digest mismatch--got bad data from object_provider?"
+                    )
                 }
+                let [coin_type]: [TypeTag; 1] =
+                    type_.clone().into_type_params().try_into().unwrap();
+                all_mutated_coins.push((
+                    o.owner,
+                    coin_type,
+                    // we know this is a coin, safe to unwrap
+                    Coin::extract_balance_if_coin(&o).unwrap().unwrap(),
+                ))
             }
         }
     }
@@ -158,10 +179,7 @@ impl ObjectProvider for Arc<AuthorityState> {
         id: &ObjectID,
         version: &SequenceNumber,
     ) -> Result<Object, Self::Error> {
-        Ok(self
-            .get_past_object_read(id, *version)
-            .await?
-            .into_object()?)
+        Ok(self.get_past_object_read(id, *version)?.into_object()?)
     }
 
     async fn find_object_lt_or_eq_version(
@@ -169,7 +187,12 @@ impl ObjectProvider for Arc<AuthorityState> {
         id: &ObjectID,
         version: &SequenceNumber,
     ) -> Result<Option<Object>, Self::Error> {
-        Ok(self.database.find_object_lt_or_eq_version(*id, *version))
+        let database = self.database.clone();
+        let id = *id;
+        let version = *version;
+        spawn_monitored_task!(async move { database.find_object_lt_or_eq_version(id, version) })
+            .await
+            .map_err(|e| SuiError::GenericStorageError(e.to_string()))
     }
 }
 

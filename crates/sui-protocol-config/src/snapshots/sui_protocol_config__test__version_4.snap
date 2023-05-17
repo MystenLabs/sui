@@ -24,6 +24,8 @@ move_binary_format_version: 6
 max_move_object_size: 256000
 max_move_package_size: 102400
 max_tx_gas: 50000000000
+max_gas_price: 100000
+max_gas_computation_bucket: 5000000
 max_loop_depth: 5
 max_generic_instantiation_length: 32
 max_function_parameters: 128

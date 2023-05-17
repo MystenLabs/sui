@@ -3,38 +3,6 @@
 
 import { useEffect, useMemo, useState } from 'react';
 
-const stdToN = (original: number, length: number) =>
-    String(original).padStart(length, '0');
-
-export const convertNumberToDate = (epochMilliSecs: number | null): string => {
-    if (!epochMilliSecs) return 'Not Available';
-
-    const date = new Date(epochMilliSecs);
-
-    const MONTHS = [
-        'Jan',
-        'Feb',
-        'Mar',
-        'Apr',
-        'May',
-        'Jun',
-        'Jul',
-        'Aug',
-        'Sep',
-        'Oct',
-        'Nov',
-        'Dec',
-    ];
-
-    return `${MONTHS[date.getUTCMonth()]} ${stdToN(
-        date.getUTCDate(),
-        2
-    )}, ${date.getUTCFullYear()}, ${stdToN(date.getUTCHours(), 2)}:${stdToN(
-        date.getUTCMinutes(),
-        2
-    )}:${stdToN(date.getUTCSeconds(), 2)} UTC`;
-};
-
 const TIME_LABEL = {
     year: {
         full: 'year',

@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useFormatCoin } from '@mysten/core';
+import { useFormatCoin, useGetTimeBeforeEpochNumber } from '@mysten/core';
 import { SUI_TYPE_ARG } from '@mysten/sui.js';
 import { Form } from 'formik';
 import { useMemo } from 'react';
@@ -9,7 +9,6 @@ import { useMemo } from 'react';
 import { useTransactionGasBudget, useActiveAddress } from '../../hooks';
 import { GAS_SYMBOL } from '../../redux/slices/sui-objects/Coin';
 import { Heading } from '../../shared/heading';
-import { useGetTimeBeforeEpochNumber } from '../useGetTimeBeforeEpochNumber';
 import { createUnstakeTransaction } from './utils/transaction';
 import { Card } from '_app/shared/card';
 import { Text } from '_app/shared/text';
@@ -19,7 +18,7 @@ export type StakeFromProps = {
     stakedSuiId: string;
     coinBalance: bigint;
     coinType: string;
-    stakingReward?: number;
+    stakingReward?: string;
     epoch: number;
 };
 
@@ -91,7 +90,11 @@ export function UnStakeForm({
                 }
                 footer={
                     <div className="flex gap-0.5 justify-between w-full">
-                        <Text variant="p2" weight="medium" color="steel-darker">
+                        <Text
+                            variant="pBodySmall"
+                            weight="medium"
+                            color="steel-darker"
+                        >
                             Total unstaked SUI
                         </Text>
                         <div className="flex gap-0.5 ml-auto">

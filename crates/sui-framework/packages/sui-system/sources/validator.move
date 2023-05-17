@@ -79,10 +79,17 @@ module sui_system::validator {
     /// Capability code is not valid
     const EInvalidCap: u64 = 101;
 
+    /// Validator trying to set gas price higher than threshold.
+    const EGasPriceHigherThanThreshold: u64 = 102;
 
-    const MAX_COMMISSION_RATE: u64 = 10_000; // Max rate is 100%, which is 10K base points
+    // TODO: potentially move this value to onchain config.
+    const MAX_COMMISSION_RATE: u64 = 2_000; // Max rate is 20%, which is 2000 base points
 
     const MAX_VALIDATOR_METADATA_LENGTH: u64 = 256;
+
+    // TODO: Move this to onchain config when we have a good way to do it.
+    /// Max gas price a validator can set is 100K MIST.
+    const MAX_VALIDATOR_GAS_PRICE: u64 = 100_000;
 
     struct ValidatorMetadata has store {
         /// The Sui Address of the validator. This is the sender that created the Validator object,
@@ -244,6 +251,7 @@ module sui_system::validator {
             EValidatorMetadataExceedingLengthLimit
         );
         assert!(commission_rate <= MAX_COMMISSION_RATE, ECommissionRateTooHigh);
+        assert!(gas_price < MAX_VALIDATOR_GAS_PRICE, EGasPriceHigherThanThreshold);
 
         let metadata = new_metadata(
             sui_address,
@@ -373,6 +381,7 @@ module sui_system::validator {
         verified_cap: ValidatorOperationCap,
         new_price: u64,
     ) {
+        assert!(new_price < MAX_VALIDATOR_GAS_PRICE, EGasPriceHigherThanThreshold);
         let validator_address = *validator_cap::verified_operation_cap_address(&verified_cap);
         assert!(validator_address == self.metadata.sui_address, EInvalidCap);
         self.next_epoch_gas_price = new_price;
@@ -385,6 +394,7 @@ module sui_system::validator {
         new_price: u64
     ) {
         assert!(is_preactive(self), ENotValidatorCandidate);
+        assert!(new_price < MAX_VALIDATOR_GAS_PRICE, EGasPriceHigherThanThreshold);
         let validator_address = *validator_cap::verified_operation_cap_address(&verified_cap);
         assert!(validator_address == self.metadata.sui_address, EInvalidCap);
         self.next_epoch_gas_price = new_price;

@@ -143,7 +143,7 @@ impl RosettaServerCommand {
                 let sui_client = wait_for_sui_client(full_node_url).await;
                 let rosetta_path = data_path.join("rosetta_db");
                 info!("Rosetta db path : {rosetta_path:?}");
-                let rosetta = RosettaOnlineServer::new(env, sui_client, &rosetta_path);
+                let rosetta = RosettaOnlineServer::new(env, sui_client);
                 rosetta.serve(addr).await??;
             }
 
@@ -169,13 +169,13 @@ impl RosettaServerCommand {
                 let registry_service = metrics::start_prometheus_server(config.metrics_address);
                 // Staring a full node for the rosetta server.
                 let rpc_address = format!("http://127.0.0.1:{}", config.json_rpc_address.port());
-                let _node = SuiNode::start(&config, registry_service).await?;
+                let _node = SuiNode::start(&config, registry_service, None).await?;
 
                 let sui_client = wait_for_sui_client(rpc_address).await;
 
                 let rosetta_path = data_path.join("rosetta_db");
                 info!("Rosetta db path : {rosetta_path:?}");
-                let rosetta = RosettaOnlineServer::new(env, sui_client, &rosetta_path);
+                let rosetta = RosettaOnlineServer::new(env, sui_client);
                 rosetta.serve(addr).await??;
             }
         };

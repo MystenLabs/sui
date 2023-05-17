@@ -16,20 +16,18 @@ const Sui = require('@mysten/ledgerjs-hw-app-sui').default;
 
 const getPublicKey = async () => {
     const sui = new Sui(await Transport.create());
-    return await sui.getPublicKey("44'/784'/0'/0/0");
+    return await sui.getPublicKey("44'/784'/0'/0'/0'");
 };
 
 const signTransaction = async () => {
-    const transport = await Transport.create();
     const sui = new Sui(await Transport.create());
     return await sui.signTransaction(
-        "44'/784'/0'/0/0",
+        "44'/784'/0'/0'/0'",
         '<transaction contents>'
     );
 };
 
 const getVersion = async () => {
-    const transport = await Transport.create();
     const sui = new Sui(await Transport.create());
     return await sui.getVersion();
 };
@@ -69,21 +67,24 @@ doAll().catch((err) => console.log(err));
 
 ```javascript
 import Sui from 'ledgerjs-hw-app-sui';
+
+const transport = await Transport.create();
 const sui = new Sui(transport);
 ```
 
 ### getPublicKey
 
-Get Sui address for a given BIP-32 path.
+Gets the Sui address for a given BIP-32 path.
 
 #### Parameters
 
 -   `path` **[string](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/String)** a path in BIP-32 format
+-   `displayOnDevice` **[boolean](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Boolean)** whether or not to display the address on the Ledger device.
 
 #### Examples
 
 ```javascript
-const publicKey = await sui.getPublicKey("44'/784'/0'/0/0");
+const publicKey = await sui.getPublicKey("44'/784'/0'/0'/0'");
 ```
 
 Returns **[Promise](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Promise)&lt;[string](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/String)>** an object with a public key.
@@ -100,7 +101,7 @@ Sign a transaction with a given BIP-32 path.
 
 ```javascript
 const publicKey = await sui.signTransaction(
-    "44'/784'/0'/0/0",
+    "44'/784'/0'/0'/0'",
     '<transaction contents>'
 );
 ```

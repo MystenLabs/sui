@@ -3,18 +3,29 @@
 
 use move_binary_format::file_format::CompiledModule;
 
-use sui_adapter::adapter::{default_verifier_config, run_metered_move_bytecode_verifier_impl};
-use sui_framework_build::compiled_package::{BuildConfig, CompiledPackage};
+use move_bytecode_verifier::meter::Scope;
+use prometheus::Registry;
+use std::{collections::BTreeMap, path::PathBuf, sync::Arc, time::Instant};
+use sui_adapter::adapter::{
+    default_verifier_config, run_metered_move_bytecode_verifier,
+    run_metered_move_bytecode_verifier_impl,
+};
+use sui_framework::BuiltInFramework;
+use sui_move_build::{BuildConfig, CompiledPackage, SuiPackageHooks};
 use sui_protocol_config::ProtocolConfig;
 use sui_types::{
-    base_types::ObjectID,
+    base_types::{random_object_ref, ObjectID},
+    crypto::{get_key_pair, AccountKeyPair},
     digests::TransactionDigest,
     error::{ExecutionErrorKind, SuiError},
+    execution_status::PackageUpgradeError,
+    metrics::BytecodeVerifierMetrics,
     move_package::{MovePackage, TypeOrigin, UpgradeInfo},
     object::{Data, Object, OBJECT_START_VERSION},
+    programmable_transaction_builder::ProgrammableTransactionBuilder,
+    transaction::{Command, TransactionData, TransactionDataAPI, TransactionKind},
 };
-
-use std::{collections::BTreeMap, path::PathBuf};
+use sui_verifier::meter::SuiVerifierMeter;
 
 macro_rules! type_origin_table {
     {} => { Vec::new() };
@@ -102,7 +113,12 @@ fn test_upgraded() {
 
     let c_id2 = ObjectID::from_single_byte(0xc2);
     let c_new = c_pkg
-        .new_upgraded(c_id2, &build_test_modules("Cv2"), u64::MAX, [])
+        .new_upgraded(
+            c_id2,
+            &build_test_modules("Cv2"),
+            &ProtocolConfig::get_for_max_version(),
+            [],
+        )
         .unwrap();
 
     let mut expected_version = OBJECT_START_VERSION;
@@ -125,7 +141,12 @@ fn test_depending_on_upgrade() {
 
     let c_id2 = ObjectID::from_single_byte(0xc2);
     let c_new = c_pkg
-        .new_upgraded(c_id2, &build_test_modules("Cv2"), u64::MAX, [])
+        .new_upgraded(
+            c_id2,
+            &build_test_modules("Cv2"),
+            &ProtocolConfig::get_for_max_version(),
+            [],
+        )
         .unwrap();
 
     let b_pkg = MovePackage::new_initial(&build_test_modules("B"), u64::MAX, [&c_new]).unwrap();
@@ -145,14 +166,24 @@ fn test_upgrade_upgrades_linkage() {
 
     let c_id2 = ObjectID::from_single_byte(0xc2);
     let c_new = c_pkg
-        .new_upgraded(c_id2, &build_test_modules("Cv2"), u64::MAX, [])
+        .new_upgraded(
+            c_id2,
+            &build_test_modules("Cv2"),
+            &ProtocolConfig::get_for_max_version(),
+            [],
+        )
         .unwrap();
 
     let b_pkg = MovePackage::new_initial(&build_test_modules("B"), u64::MAX, [&c_pkg]).unwrap();
 
     let b_id2 = ObjectID::from_single_byte(0xb2);
     let b_new = b_pkg
-        .new_upgraded(b_id2, &build_test_modules("B"), u64::MAX, [&c_new])
+        .new_upgraded(
+            b_id2,
+            &build_test_modules("B"),
+            &ProtocolConfig::get_for_max_version(),
+            [&c_new],
+        )
         .unwrap();
 
     assert_eq!(
@@ -177,14 +208,24 @@ fn test_upgrade_linkage_digest_to_new_dep() {
 
     let c_id2 = ObjectID::from_single_byte(0xc2);
     let c_new = c_pkg
-        .new_upgraded(c_id2, &build_test_modules("Cv2"), u64::MAX, [])
+        .new_upgraded(
+            c_id2,
+            &build_test_modules("Cv2"),
+            &ProtocolConfig::get_for_max_version(),
+            [],
+        )
         .unwrap();
 
     let b_pkg = MovePackage::new_initial(&build_test_modules("B"), u64::MAX, [&c_pkg]).unwrap();
 
     let b_id2 = ObjectID::from_single_byte(0xb2);
     let b_new = b_pkg
-        .new_upgraded(b_id2, &build_test_modules("B"), u64::MAX, [&c_new])
+        .new_upgraded(
+            b_id2,
+            &build_test_modules("B"),
+            &ProtocolConfig::get_for_max_version(),
+            [&c_new],
+        )
         .unwrap();
 
     assert_eq!(
@@ -196,8 +237,9 @@ fn test_upgrade_linkage_digest_to_new_dep() {
 
     // Make sure that we compute the package digest off of the update dependencies and not the old
     // dependencies in the linkage table.
+    let hash_modules = true;
     assert_eq!(
-        b_new.digest(),
+        b_new.digest(hash_modules),
         MovePackage::compute_digest_for_modules_and_deps(
             &build_test_modules("B")
                 .iter()
@@ -207,7 +249,8 @@ fn test_upgrade_linkage_digest_to_new_dep() {
                     bytes
                 })
                 .collect::<Vec<_>>(),
-            [&c_id2]
+            [&c_id2],
+            hash_modules,
         )
     )
 }
@@ -219,14 +262,24 @@ fn test_upgrade_downngrades_linkage() {
 
     let c_id2 = ObjectID::from_single_byte(0xc2);
     let c_new = c_pkg
-        .new_upgraded(c_id2, &build_test_modules("Cv2"), u64::MAX, [])
+        .new_upgraded(
+            c_id2,
+            &build_test_modules("Cv2"),
+            &ProtocolConfig::get_for_max_version(),
+            [],
+        )
         .unwrap();
 
     let b_pkg = MovePackage::new_initial(&build_test_modules("B"), u64::MAX, [&c_new]).unwrap();
 
     let b_id2 = ObjectID::from_single_byte(0xb2);
     let b_new = b_pkg
-        .new_upgraded(b_id2, &build_test_modules("B"), u64::MAX, [&c_pkg])
+        .new_upgraded(
+            b_id2,
+            &build_test_modules("B"),
+            &ProtocolConfig::get_for_max_version(),
+            [&c_pkg],
+        )
         .unwrap();
 
     assert_eq!(
@@ -251,7 +304,12 @@ fn test_transitively_depending_on_upgrade() {
 
     let c_id2 = ObjectID::from_single_byte(0xc2);
     let c_new = c_pkg
-        .new_upgraded(c_id2, &build_test_modules("Cv2"), u64::MAX, [])
+        .new_upgraded(
+            c_id2,
+            &build_test_modules("Cv2"),
+            &ProtocolConfig::get_for_max_version(),
+            [],
+        )
         .unwrap();
 
     let b_id1 = ObjectID::from_single_byte(0xb1);
@@ -275,19 +333,27 @@ fn package_digest_changes_with_dep_upgrades_and_in_sync_with_move_package_digest
 
     let c_id2 = ObjectID::from_single_byte(0xc2);
     let c_v2 = c_v1
-        .new_upgraded(c_id2, &build_test_modules("Cv2"), u64::MAX, [])
+        .new_upgraded(
+            c_id2,
+            &build_test_modules("Cv2"),
+            &ProtocolConfig::get_for_max_version(),
+            [],
+        )
         .unwrap();
 
     let b_pkg = MovePackage::new_initial(&build_test_modules("B"), u64::MAX, [&c_v1]).unwrap();
 
     let b_v2 = MovePackage::new_initial(&build_test_modules("Bv2"), u64::MAX, [&c_v2]).unwrap();
 
-    let local_v1 = build_test_package("B").get_package_digest(false);
-    let local_v2 = build_test_package("Bv2").get_package_digest(false);
+    let with_unpublished_deps = false;
+    let hash_modules = true;
+    let local_v1 = build_test_package("B").get_package_digest(with_unpublished_deps, hash_modules);
+    let local_v2 =
+        build_test_package("Bv2").get_package_digest(with_unpublished_deps, hash_modules);
 
-    assert_ne!(b_pkg.digest(), b_v2.digest());
-    assert_eq!(b_pkg.digest(), local_v1);
-    assert_eq!(b_v2.digest(), local_v2);
+    assert_ne!(b_pkg.digest(hash_modules), b_v2.digest(hash_modules));
+    assert_eq!(b_pkg.digest(hash_modules), local_v1);
+    assert_eq!(b_v2.digest(hash_modules), local_v2);
     assert_ne!(local_v1, local_v2);
 }
 
@@ -327,7 +393,12 @@ fn test_fail_on_transitive_dependency_downgrade() {
 
     let c_id2 = ObjectID::from_single_byte(0xc2);
     let c_new = c_pkg
-        .new_upgraded(c_id2, &build_test_modules("Cv2"), u64::MAX, [])
+        .new_upgraded(
+            c_id2,
+            &build_test_modules("Cv2"),
+            &ProtocolConfig::get_for_max_version(),
+            [],
+        )
         .unwrap();
 
     let b_pkg = MovePackage::new_initial(&build_test_modules("B"), u64::MAX, [&c_new]).unwrap();
@@ -347,17 +418,37 @@ fn test_fail_on_upgrade_missing_type() {
 
     let c_id2 = ObjectID::from_single_byte(0xc2);
     let err = c_pkg
-        .new_upgraded(c_id2, &build_test_modules("Cv1"), u64::MAX, [])
+        .new_upgraded(
+            c_id2,
+            &build_test_modules("Cv1"),
+            &ProtocolConfig::get_for_max_version(),
+            [],
+        )
         .unwrap_err();
 
+    assert_eq!(
+        err.kind(),
+        &ExecutionErrorKind::PackageUpgradeError {
+            upgrade_error: PackageUpgradeError::IncompatibleUpgrade
+        }
+    );
+
+    // At versions before version 5 this was an invariant violation
+    let err = c_pkg
+        .new_upgraded(
+            c_id2,
+            &build_test_modules("Cv1"),
+            &ProtocolConfig::get_for_version(4.into()),
+            [],
+        )
+        .unwrap_err();
     assert_eq!(err.kind(), &ExecutionErrorKind::InvariantViolation);
 }
 
 pub fn build_test_package(test_dir: &str) -> CompiledPackage {
-    let build_config = BuildConfig::new_for_testing();
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     path.extend(["src", "unit_tests", "data", "move_package", test_dir]);
-    sui_framework::build_move_package(&path, build_config).unwrap()
+    BuildConfig::new_for_testing().build(path).unwrap()
 }
 
 pub fn build_test_modules(test_dir: &str) -> Vec<CompiledModule> {
@@ -369,21 +460,107 @@ pub fn build_test_modules(test_dir: &str) -> Vec<CompiledModule> {
 
 #[tokio::test]
 async fn test_metered_move_bytecode_verifier() {
+    move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks));
     let path =
         PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../sui-framework/packages/sui-framework");
-    let compiled_package =
-        sui_framework::build_move_package(&path, BuildConfig::new_for_testing()).unwrap();
+    let compiled_package = BuildConfig::new_for_testing().build(path).unwrap();
     let compiled_modules_bytes: Vec<_> = compiled_package.get_modules().cloned().collect();
 
     let mut metered_verifier_config = default_verifier_config(
         &ProtocolConfig::get_for_max_version(),
         true, /* enable metering */
     );
-
+    let registry = &Registry::new();
+    let bytecode_verifier_metrics = Arc::new(BytecodeVerifierMetrics::new(registry));
+    let mut meter = SuiVerifierMeter::new(&metered_verifier_config);
+    let timer_start = Instant::now();
     // Default case should pass
-    let r =
-        run_metered_move_bytecode_verifier_impl(&compiled_modules_bytes, &metered_verifier_config);
+    let r = run_metered_move_bytecode_verifier_impl(
+        &compiled_modules_bytes,
+        &ProtocolConfig::get_for_max_version(),
+        &metered_verifier_config,
+        &mut meter,
+        &bytecode_verifier_metrics,
+    );
+    let elapsed = timer_start.elapsed().as_micros() as f64 / (1000.0 * 1000.0);
     assert!(r.is_ok());
+
+    // Ensure metrics worked as expected
+
+    // The number of module success samples must equal the number of modules
+    assert!(
+        bytecode_verifier_metrics
+            .verifier_runtime_per_module_success_latency
+            .get_sample_count()
+            == compiled_modules_bytes.len() as u64
+    );
+    // Others must be zero
+    assert!(
+        bytecode_verifier_metrics
+            .verifier_runtime_per_module_timeout_latency
+            .get_sample_count()
+            == 0
+    );
+    assert!(
+        bytecode_verifier_metrics
+            .verifier_runtime_per_ptb_success_latency
+            .get_sample_count()
+            == 0
+    );
+    assert!(
+        bytecode_verifier_metrics
+            .verifier_runtime_per_ptb_timeout_latency
+            .get_sample_count()
+            == 0
+    );
+
+    // Each success timer must be non zero and less than our elapsed time
+    assert!(
+        bytecode_verifier_metrics
+            .verifier_runtime_per_module_success_latency
+            .get_sample_sum()
+            > 0.0
+    );
+    assert!(
+        bytecode_verifier_metrics
+            .verifier_runtime_per_module_success_latency
+            .get_sample_sum()
+            < elapsed
+    );
+
+    // No failures expected in counter
+    assert!(
+        bytecode_verifier_metrics
+            .verifier_timeout_metrics
+            .with_label_values(&[
+                BytecodeVerifierMetrics::MOVE_VERIFIER_TAG,
+                BytecodeVerifierMetrics::TIMEOUT_TAG,
+            ])
+            .get()
+            == 0
+    );
+    assert!(
+        bytecode_verifier_metrics
+            .verifier_timeout_metrics
+            .with_label_values(&[
+                BytecodeVerifierMetrics::SUI_VERIFIER_TAG,
+                BytecodeVerifierMetrics::TIMEOUT_TAG,
+            ])
+            .get()
+            == 0
+    );
+
+    // Counter must equal number of modules
+    assert!(
+        bytecode_verifier_metrics
+            .verifier_timeout_metrics
+            .with_label_values(&[
+                BytecodeVerifierMetrics::OVERALL_TAG,
+                BytecodeVerifierMetrics::SUCCESS_TAG,
+            ])
+            .get()
+            == compiled_modules_bytes.len() as u64
+    );
 
     // Use low limits. Should fail
     metered_verifier_config.max_back_edges_per_function = Some(100);
@@ -391,13 +568,277 @@ async fn test_metered_move_bytecode_verifier() {
     metered_verifier_config.max_per_mod_meter_units = Some(10_000);
     metered_verifier_config.max_per_fun_meter_units = Some(10_000);
 
-    let r =
-        run_metered_move_bytecode_verifier_impl(&compiled_modules_bytes, &metered_verifier_config);
-
-    assert!(
-        r.unwrap_err()
-            == SuiError::ModuleVerificationFailure {
-                error: "Verification timedout".to_string()
-            }
+    let mut meter = SuiVerifierMeter::new(&metered_verifier_config);
+    let timer_start = Instant::now();
+    let r = run_metered_move_bytecode_verifier_impl(
+        &compiled_modules_bytes,
+        &ProtocolConfig::get_for_max_version(),
+        &metered_verifier_config,
+        &mut meter,
+        &bytecode_verifier_metrics,
     );
+    let elapsed = timer_start.elapsed().as_micros() as f64 / (1000.0 * 1000.0);
+
+    assert!(matches!(
+        r.unwrap_err(),
+        SuiError::ModuleVerificationFailure { .. }
+    ));
+
+    // Some new modules might have passed
+    assert!(
+        (bytecode_verifier_metrics
+            .verifier_runtime_per_module_success_latency
+            .get_sample_count()
+            >= compiled_modules_bytes.len() as u64)
+            && (bytecode_verifier_metrics
+                .verifier_runtime_per_module_success_latency
+                .get_sample_count()
+                < 2 * compiled_modules_bytes.len() as u64)
+    );
+    // Others must be zero
+    assert!(
+        bytecode_verifier_metrics
+            .verifier_runtime_per_module_timeout_latency
+            .get_sample_count()
+            > 0
+    );
+    assert!(
+        bytecode_verifier_metrics
+            .verifier_runtime_per_ptb_success_latency
+            .get_sample_count()
+            == 0
+    );
+    assert!(
+        bytecode_verifier_metrics
+            .verifier_runtime_per_ptb_timeout_latency
+            .get_sample_count()
+            == 0
+    );
+
+    // Each success timer must be non zero and less than our elapsed time
+    assert!(
+        bytecode_verifier_metrics
+            .verifier_runtime_per_module_timeout_latency
+            .get_sample_sum()
+            > 0.0
+    );
+    assert!(
+        bytecode_verifier_metrics
+            .verifier_runtime_per_module_timeout_latency
+            .get_sample_sum()
+            < elapsed
+    );
+
+    // One failure
+    assert!(
+        bytecode_verifier_metrics
+            .verifier_timeout_metrics
+            .with_label_values(&[
+                BytecodeVerifierMetrics::MOVE_VERIFIER_TAG,
+                BytecodeVerifierMetrics::TIMEOUT_TAG,
+            ])
+            .get()
+            == 1
+    );
+    // Sui verifier did not fail
+    assert!(
+        bytecode_verifier_metrics
+            .verifier_timeout_metrics
+            .with_label_values(&[
+                BytecodeVerifierMetrics::SUI_VERIFIER_TAG,
+                BytecodeVerifierMetrics::TIMEOUT_TAG,
+            ])
+            .get()
+            == 0
+    );
+
+    // This should be slighltly higher as some modules passed
+    assert!(
+        bytecode_verifier_metrics
+            .verifier_timeout_metrics
+            .with_label_values(&[
+                BytecodeVerifierMetrics::OVERALL_TAG,
+                BytecodeVerifierMetrics::SUCCESS_TAG,
+            ])
+            .get()
+            > compiled_modules_bytes.len() as u64
+    );
+
+    // Check shared meter logic works across all publish in PT
+    use sui_move_build::BuildConfig;
+    let (sender, _): (_, AccountKeyPair) = get_key_pair();
+
+    // Module bytes
+    let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    path.push("src/unit_tests/data/publish_with_event");
+    let modules = BuildConfig::new_for_testing()
+        .build(path)
+        .unwrap()
+        .get_package_bytes(false);
+
+    let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    path.push("src/unit_tests/data/managed_coin");
+    let modules2 = BuildConfig::new_for_testing()
+        .build(path)
+        .unwrap()
+        .get_package_bytes(false);
+    let mut builder = ProgrammableTransactionBuilder::new();
+    builder.command(Command::Publish(
+        modules.clone(),
+        BuiltInFramework::all_package_ids(),
+    ));
+    builder.command(Command::Publish(
+        modules,
+        BuiltInFramework::all_package_ids(),
+    ));
+    builder.command(Command::Publish(
+        modules2,
+        BuiltInFramework::all_package_ids(),
+    ));
+    let kind: TransactionKind = TransactionKind::programmable(builder.finish());
+
+    let tx_data = TransactionData::new(kind, sender, random_object_ref(), 100000, 1000);
+    let protocol_config = ProtocolConfig::get_for_max_version();
+
+    let metered_verifier_config =
+        default_verifier_config(&protocol_config, true /* enable metering */);
+    // Check if the same meter is indeed used for all modules
+    let mut meter = SuiVerifierMeter::new(&metered_verifier_config);
+    if let TransactionKind::ProgrammableTransaction(pt) = tx_data.kind() {
+        pt.non_system_packages_to_be_published()
+            .try_for_each(|q| {
+                let (prev_meter_val_fun, prev_meter_val_mod) = (
+                    meter.get_usage(Scope::Function),
+                    meter.get_usage(Scope::Module),
+                );
+
+                let err = run_metered_move_bytecode_verifier(
+                    q,
+                    &protocol_config,
+                    &metered_verifier_config,
+                    &mut meter,
+                    &bytecode_verifier_metrics,
+                );
+                // Check that at least one of the meter values has increased
+                assert!(
+                    (meter.get_usage(Scope::Module) > prev_meter_val_mod)
+                        || (meter.get_usage(Scope::Function) > prev_meter_val_fun)
+                );
+
+                err
+            })
+            .expect("Metering should not fail. Meter limits might have changed");
+    }
+}
+
+#[tokio::test]
+async fn test_meter_system_packages() {
+    move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks));
+
+    let metered_verifier_config = default_verifier_config(
+        &ProtocolConfig::get_for_max_version(),
+        true, /* enable metering */
+    );
+    let registry = &Registry::new();
+    let bytecode_verifier_metrics = Arc::new(BytecodeVerifierMetrics::new(registry));
+    let mut meter = SuiVerifierMeter::new(&metered_verifier_config);
+    for system_package in BuiltInFramework::iter_system_packages() {
+        run_metered_move_bytecode_verifier_impl(
+            &system_package.modules(),
+            &ProtocolConfig::get_for_max_version(),
+            &metered_verifier_config,
+            &mut meter,
+            &bytecode_verifier_metrics,
+        )
+        .unwrap_or_else(|_| {
+            panic!(
+                "Verification of all system packages should succeed, but failed on {}",
+                system_package.id(),
+            )
+        });
+    }
+
+    // Ensure metrics worked as expected
+    // No failures expected in counter
+    assert!(
+        bytecode_verifier_metrics
+            .verifier_timeout_metrics
+            .with_label_values(&[
+                BytecodeVerifierMetrics::MOVE_VERIFIER_TAG,
+                BytecodeVerifierMetrics::TIMEOUT_TAG,
+            ])
+            .get()
+            == 0
+    );
+    assert!(
+        bytecode_verifier_metrics
+            .verifier_timeout_metrics
+            .with_label_values(&[
+                BytecodeVerifierMetrics::SUI_VERIFIER_TAG,
+                BytecodeVerifierMetrics::TIMEOUT_TAG,
+            ])
+            .get()
+            == 0
+    );
+
+    // Counter must equal number of modules
+    assert!(
+        bytecode_verifier_metrics
+            .verifier_timeout_metrics
+            .with_label_values(&[
+                BytecodeVerifierMetrics::OVERALL_TAG,
+                BytecodeVerifierMetrics::SUCCESS_TAG,
+            ])
+            .get()
+            == BuiltInFramework::iter_system_packages().fold(0, |sm, x| sm + x.modules().len())
+                as u64
+    );
+}
+
+#[tokio::test]
+async fn test_build_and_verify_programmability_examples() {
+    move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks));
+
+    let metered_verifier_config = default_verifier_config(
+        &ProtocolConfig::get_for_max_version(),
+        true, /* enable metering */
+    );
+    let registry = &Registry::new();
+    let bytecode_verifier_metrics = Arc::new(BytecodeVerifierMetrics::new(registry));
+    let mut examples = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    examples.extend(["..", "..", "sui_programmability", "examples"]);
+
+    for example in std::fs::read_dir(&examples).unwrap() {
+        let Ok(example) = example else { continue };
+        let path = example.path();
+
+        if !path.is_dir() {
+            continue;
+        }
+
+        let manifest = path.join("Move.toml");
+        if !manifest.exists() {
+            continue;
+        };
+
+        let modules = BuildConfig::new_for_testing()
+            .build(path)
+            .unwrap()
+            .into_modules();
+
+        let mut meter = SuiVerifierMeter::new(&metered_verifier_config);
+        run_metered_move_bytecode_verifier_impl(
+            &modules,
+            &ProtocolConfig::get_for_max_version(),
+            &metered_verifier_config,
+            &mut meter,
+            &bytecode_verifier_metrics,
+        )
+        .unwrap_or_else(|_| {
+            panic!(
+                "Verification of example: '{:?}' failed",
+                example.file_name(),
+            )
+        });
+    }
 }

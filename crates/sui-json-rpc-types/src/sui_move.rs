@@ -18,7 +18,6 @@ use serde_with::serde_as;
 use std::collections::BTreeMap;
 use std::fmt;
 use std::fmt::{Display, Formatter, Write};
-use sui_types::sui_serde::BigInt;
 use tracing::warn;
 
 use sui_types::base_types::{ObjectID, SuiAddress};
@@ -288,18 +287,13 @@ pub enum MoveFunctionArgType {
 #[derive(Debug, Deserialize, Serialize, JsonSchema, Clone, Eq, PartialEq)]
 #[serde(untagged, rename = "MoveValue")]
 pub enum SuiMoveValue {
-    Number(
-        #[schemars(with = "BigInt<u64>")]
-        #[serde_as(as = "BigInt<u64>")]
-        u64,
-    ),
+    // u64 and u128 are converted to String to avoid overflow
+    Number(u32),
     Bool(bool),
     Address(SuiAddress),
     Vector(Vec<SuiMoveValue>),
     String(String),
-    UID {
-        id: ObjectID,
-    },
+    UID { id: ObjectID },
     Struct(SuiMoveStruct),
     Option(Box<Option<SuiMoveValue>>),
 }
@@ -348,7 +342,7 @@ impl From<MoveValue> for SuiMoveValue {
         match value {
             MoveValue::U8(value) => SuiMoveValue::Number(value.into()),
             MoveValue::U16(value) => SuiMoveValue::Number(value.into()),
-            MoveValue::U32(value) => SuiMoveValue::Number(value.into()),
+            MoveValue::U32(value) => SuiMoveValue::Number(value),
             MoveValue::U64(value) => SuiMoveValue::String(format!("{value}")),
             MoveValue::U128(value) => SuiMoveValue::String(format!("{value}")),
             MoveValue::U256(value) => SuiMoveValue::String(format!("{value}")),
@@ -425,6 +419,14 @@ impl SuiMoveStruct {
                     .collect::<BTreeMap<_, _>>();
                 json!(fields)
             }
+        }
+    }
+
+    pub fn read_dynamic_field_value(&self, field_name: &str) -> Option<SuiMoveValue> {
+        match self {
+            SuiMoveStruct::WithFields(fields) => fields.get(field_name).cloned(),
+            SuiMoveStruct::WithTypes { type_: _, fields } => fields.get(field_name).cloned(),
+            _ => None,
         }
     }
 }

@@ -6,13 +6,11 @@ import { Connection, JsonRpcProvider } from '@mysten/sui.js';
 
 import { BackgroundServiceSigner } from './background-client/BackgroundServiceSigner';
 import { queryClient } from './helpers/queryClient';
-import { growthbook } from '_app/experimentation/feature-gating';
 import {
     AccountType,
     type SerializedAccount,
 } from '_src/background/keyring/Account';
 import { API_ENV } from '_src/shared/api-env';
-import { FEATURES } from '_src/shared/experimentation/features';
 
 import type { BackgroundClient } from './background-client';
 import type { SuiAddress, SignerWithProvider } from '@mysten/sui.js';
@@ -27,9 +25,11 @@ export const API_ENV_TO_INFO: Record<API_ENV, EnvInfo> = {
     [API_ENV.devNet]: { name: 'Sui Devnet', env: API_ENV.devNet },
     [API_ENV.customRPC]: { name: 'Custom RPC URL', env: API_ENV.customRPC },
     [API_ENV.testNet]: { name: 'Sui Testnet', env: API_ENV.testNet },
+    [API_ENV.mainnet]: { name: 'Sui Mainnet', env: API_ENV.mainnet },
 };
 
 export const ENV_TO_API: Record<API_ENV, Connection | null> = {
+    [API_ENV.customRPC]: null,
     [API_ENV.local]: new Connection({
         fullnode: process.env.API_ENDPOINT_LOCAL_FULLNODE || '',
         faucet: process.env.API_ENDPOINT_LOCAL_FAUCET || '',
@@ -38,10 +38,12 @@ export const ENV_TO_API: Record<API_ENV, Connection | null> = {
         fullnode: process.env.API_ENDPOINT_DEV_NET_FULLNODE || '',
         faucet: process.env.API_ENDPOINT_DEV_NET_FAUCET || '',
     }),
-    [API_ENV.customRPC]: null,
     [API_ENV.testNet]: new Connection({
         fullnode: process.env.API_ENDPOINT_TEST_NET_FULLNODE || '',
         faucet: process.env.API_ENDPOINT_TEST_NET_FAUCET || '',
+    }),
+    [API_ENV.mainnet]: new Connection({
+        fullnode: process.env.API_ENDPOINT_MAINNET_FULLNODE || '',
     }),
 };
 
@@ -66,20 +68,16 @@ function getDefaultAPI(env: API_ENV) {
 }
 
 export const DEFAULT_API_ENV = getDefaultApiEnv();
-const SENTRY_MONITORED_ENVS = [API_ENV.devNet, API_ENV.testNet];
+const SENTRY_MONITORED_ENVS = [
+    API_ENV.mainnet,
+    API_ENV.devNet,
+    API_ENV.testNet,
+];
 
 type NetworkTypes = keyof typeof API_ENV;
 
 export const generateActiveNetworkList = (): NetworkTypes[] => {
-    const excludedNetworks: NetworkTypes[] = [];
-
-    if (!growthbook.isOn(FEATURES.USE_TEST_NET_ENDPOINT)) {
-        excludedNetworks.push(API_ENV.testNet);
-    }
-
-    return Object.values(API_ENV).filter(
-        (env) => !excludedNetworks.includes(env as keyof typeof API_ENV)
-    );
+    return Object.values(API_ENV);
 };
 
 export default class ApiProvider {

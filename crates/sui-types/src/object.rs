@@ -17,11 +17,13 @@ use serde_with::serde_as;
 use serde_with::Bytes;
 
 use crate::base_types::{MoveObjectType, ObjectIDParseError};
+use crate::coin::Coin;
 use crate::crypto::{default_hash, deterministic_random_account_key};
 use crate::error::{ExecutionError, ExecutionErrorKind, UserInputError, UserInputResult};
 use crate::error::{SuiError, SuiResult};
 use crate::gas_coin::TOTAL_SUPPLY_MIST;
 use crate::is_system_package;
+use crate::layout_resolver::LayoutResolver;
 use crate::move_package::MovePackage;
 use crate::{
     base_types::{
@@ -68,6 +70,10 @@ impl ObjectFormatOptions {
         ObjectFormatOptions {
             include_types: true,
         }
+    }
+
+    pub fn include_types(&self) -> bool {
+        self.include_types
     }
 }
 
@@ -171,12 +177,15 @@ impl MoveObject {
     pub fn has_public_transfer(&self) -> bool {
         self.has_public_transfer
     }
+
     pub fn id(&self) -> ObjectID {
         Self::id_opt(&self.contents).unwrap()
     }
 
     pub fn id_opt(contents: &[u8]) -> Result<ObjectID, ObjectIDParseError> {
-        // TODO: Ensure safe index to to parse ObjectID. https://github.com/MystenLabs/sui/issues/6278
+        if ID_END_INDEX > contents.len() {
+            return Err(ObjectIDParseError::TryFromSliceError);
+        }
         ObjectID::try_from(&contents[0..ID_END_INDEX])
     }
 
@@ -345,8 +354,19 @@ impl MoveObject {
     }
 
     /// Get the total amount of SUI embedded in `self`. Intended for testing purposes
-    pub fn get_total_sui(&self, resolver: &impl GetModule) -> Result<u64, SuiError> {
-        let layout = self.get_layout(ObjectFormatOptions::with_types(), resolver)?;
+    pub fn get_total_sui(
+        &self,
+        layout_resolver: &mut impl LayoutResolver,
+    ) -> Result<u64, SuiError> {
+        if self.type_.is_gas_coin() {
+            // Fast path without deserialization.
+            return Ok(self.get_coin_value_unsafe());
+        }
+        // If this is a coin but not a SUI coin, the SUI balance must be 0.
+        if self.type_.is_coin() {
+            return Ok(0);
+        }
+        let layout = layout_resolver.get_layout(self, ObjectFormatOptions::with_types())?;
         let move_struct = self.to_move_struct(&layout)?;
         Ok(Self::get_total_sui_in_struct(&move_struct, 0))
     }
@@ -459,6 +479,7 @@ impl Data {
 #[derive(
     Eq, PartialEq, Debug, Clone, Copy, Deserialize, Serialize, Hash, JsonSchema, Ord, PartialOrd,
 )]
+#[cfg_attr(feature = "fuzzing", derive(proptest_derive::Arbitrary))]
 pub enum Owner {
     /// Object is exclusively owned by a single address, and is mutable.
     AddressOwner(SuiAddress),
@@ -475,6 +496,19 @@ pub enum Owner {
 }
 
 impl Owner {
+    // NOTE: only return address of AddressOwner, otherwise return error,
+    // ObjectOwner's address is converted from object id, thus we will skip it.
+    pub fn get_address_owner_address(&self) -> SuiResult<SuiAddress> {
+        match self {
+            Self::AddressOwner(address) => Ok(*address),
+            Self::Shared { .. } | Self::Immutable | Self::ObjectOwner(_) => {
+                Err(SuiError::UnexpectedOwnerType)
+            }
+        }
+    }
+
+    // NOTE: this function will return address of both AddressOwner and ObjectOwner,
+    // address of ObjectOwner is converted from object id, even though the type is SuiAddress.
     pub fn get_owner_address(&self) -> SuiResult<SuiAddress> {
         match self {
             Self::AddressOwner(address) | Self::ObjectOwner(address) => Ok(*address),
@@ -580,7 +614,9 @@ impl Object {
             previous_transaction,
         );
 
+        #[cfg(not(msim))]
         assert!(ret.is_system_package());
+
         ret
     }
 
@@ -615,14 +651,14 @@ impl Object {
         new_package_id: ObjectID,
         modules: &[CompiledModule],
         previous_transaction: TransactionDigest,
-        max_move_package_size: u64,
+        protocol_config: &ProtocolConfig,
         dependencies: impl IntoIterator<Item = &'p MovePackage>,
     ) -> Result<Self, ExecutionError> {
         Ok(Self::new_package_from_data(
             Data::Package(previous_package.new_upgraded(
                 new_package_id,
                 modules,
-                max_move_package_size,
+                protocol_config,
                 dependencies,
             )?),
             previous_transaction,
@@ -708,6 +744,40 @@ impl Object {
         ObjectDigest::new(default_hash(self))
     }
 
+    pub fn is_coin(&self) -> bool {
+        if let Some(move_object) = self.data.try_as_move() {
+            move_object.type_().is_coin()
+        } else {
+            false
+        }
+    }
+
+    pub fn is_gas_coin(&self) -> bool {
+        if let Some(move_object) = self.data.try_as_move() {
+            move_object.type_().is_gas_coin()
+        } else {
+            false
+        }
+    }
+
+    // TODO: use `MoveObj::get_balance_unsafe` instead.
+    // context: https://github.com/MystenLabs/sui/pull/10679#discussion_r1165877816
+    pub fn as_coin_maybe(&self) -> Option<Coin> {
+        if let Some(move_object) = self.data.try_as_move() {
+            let coin: Coin = bcs::from_bytes(move_object.contents()).ok()?;
+            Some(coin)
+        } else {
+            None
+        }
+    }
+
+    pub fn coin_type_maybe(&self) -> Option<TypeTag> {
+        if let Some(move_object) = self.data.try_as_move() {
+            move_object.type_().coin_type_maybe()
+        } else {
+            None
+        }
+    }
     /// Approximate size of the object in bytes. This is used for gas metering.
     /// This will be slgihtly different from the serialized size, but
     /// we also don't want to serialize the object just to get the size.
@@ -762,10 +832,13 @@ impl Object {
 // Testing-related APIs.
 impl Object {
     /// Get the total amount of SUI embedded in `self`, including both Move objects and the storage rebate
-    pub fn get_total_sui(&self, resolver: &impl GetModule) -> Result<u64, SuiError> {
+    pub fn get_total_sui(
+        &self,
+        layout_resolver: &mut impl LayoutResolver,
+    ) -> Result<u64, SuiError> {
         Ok(self.storage_rebate
             + match &self.data {
-                Data::Move(m) => m.get_total_sui(resolver)?,
+                Data::Move(m) => m.get_total_sui(layout_resolver)?,
                 Data::Package(_) => 0,
             })
     }

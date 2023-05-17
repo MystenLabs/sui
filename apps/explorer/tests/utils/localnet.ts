@@ -20,9 +20,7 @@ export async function split_coin(address: string) {
     if (!keypair) {
         throw new Error('missing keypair');
     }
-    const provider = new JsonRpcProvider(localnetConnection, {
-        skipDataValidation: false,
-    });
+    const provider = new JsonRpcProvider(localnetConnection);
     const signer = new RawSigner(keypair, provider);
 
     const coins = await provider.getCoins({ owner: address });

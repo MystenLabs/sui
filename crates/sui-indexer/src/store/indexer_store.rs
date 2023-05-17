@@ -20,7 +20,7 @@ use sui_types::storage::ObjectStore;
 
 use crate::errors::IndexerError;
 use crate::metrics::IndexerMetrics;
-use crate::models::addresses::Address;
+use crate::models::addresses::{ActiveAddress, Address};
 use crate::models::checkpoints::Checkpoint;
 use crate::models::epoch::DBEpochInfo;
 use crate::models::events::Event;
@@ -36,6 +36,7 @@ pub trait IndexerStore {
     type ModuleCache;
 
     async fn get_latest_checkpoint_sequence_number(&self) -> Result<i64, IndexerError>;
+    async fn get_latest_object_checkpoint_sequence_number(&self) -> Result<i64, IndexerError>;
     async fn get_checkpoint(&self, id: CheckpointId) -> Result<RpcCheckpoint, IndexerError>;
     async fn get_checkpoint_sequence_number(
         &self,
@@ -189,7 +190,7 @@ pub trait IndexerStore {
     ) -> Result<usize, IndexerError>;
     // TODO(gegaowp): keep this method in this trait for now for easier reverting,
     // will remove it if it's no longer needed.
-    async fn persist_all_checkpoint_data(
+    fn persist_all_checkpoint_data(
         &self,
         data: &TemporaryCheckpointStore,
     ) -> Result<usize, IndexerError>;
@@ -200,13 +201,17 @@ pub trait IndexerStore {
     ) -> Result<usize, IndexerError>;
     async fn persist_object_changes(
         &self,
-        checkpoint_seq: i64,
+        checkpoint: &Checkpoint,
         tx_object_changes: &[TransactionObjectChanges],
         object_mutation_latency: Histogram,
         object_deletion_latency: Histogram,
     ) -> Result<(), IndexerError>;
     async fn persist_events(&self, events: &[Event]) -> Result<(), IndexerError>;
-    async fn persist_addresses(&self, addresses: &[Address]) -> Result<(), IndexerError>;
+    async fn persist_addresses(
+        &self,
+        addresses: &[Address],
+        active_addresses: &[ActiveAddress],
+    ) -> Result<(), IndexerError>;
     async fn persist_packages(&self, packages: &[Package]) -> Result<(), IndexerError>;
     // NOTE: these tables are for tx query performance optimization
     async fn persist_transaction_index_tables(
@@ -281,6 +286,7 @@ pub struct TemporaryCheckpointStore {
     pub events: Vec<Event>,
     pub object_changes: Vec<TransactionObjectChanges>,
     pub addresses: Vec<Address>,
+    pub active_addresses: Vec<ActiveAddress>,
     pub packages: Vec<Package>,
     pub input_objects: Vec<InputObject>,
     pub move_calls: Vec<MoveCall>,

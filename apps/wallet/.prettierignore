@@ -6,5 +6,4 @@ yarn-error.log*
 .next/
 .swc/
 out/
-font-icons/output/
 CHANGELOG.md

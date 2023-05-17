@@ -9,7 +9,7 @@ use std::{
     fs,
     path::PathBuf,
 };
-use sui_config::genesis::GenesisValidatorInfo;
+use sui_genesis_builder::validator_info::GenesisValidatorInfo;
 
 use sui_types::{
     base_types::{ObjectID, ObjectRef, SuiAddress},
@@ -24,7 +24,6 @@ use sui_types::{
 };
 use tap::tap::TapOptional;
 
-use crate::client_commands::WalletContext;
 use crate::fire_drill::get_gas_obj_ref;
 use clap::*;
 use colored::Colorize;
@@ -46,16 +45,13 @@ use sui_keys::{
         write_authority_keypair_to_file, write_keypair_to_file,
     },
 };
+use sui_sdk::wallet_context::WalletContext;
 use sui_sdk::SuiClient;
 use sui_types::crypto::{
     generate_proof_of_possession, get_authority_key_pair, AuthorityPublicKeyBytes,
 };
-use sui_types::messages::Transaction;
-use sui_types::messages::{CallArg, ObjectArg, TransactionData};
-use sui_types::{
-    crypto::{AuthorityKeyPair, NetworkKeyPair, SignatureScheme, SuiKeyPair},
-    SUI_SYSTEM_OBJ_CALL_ARG,
-};
+use sui_types::crypto::{AuthorityKeyPair, NetworkKeyPair, SignatureScheme, SuiKeyPair};
+use sui_types::transaction::{CallArg, ObjectArg, Transaction, TransactionData};
 
 const DEFAULT_GAS_BUDGET: u64 = 200_000_000; // 0.2 SUI
 
@@ -238,7 +234,7 @@ impl SuiValidatorCommand {
                 let pop =
                     generate_proof_of_possession(&keypair, (&account_keypair.public()).into());
                 let validator_info = GenesisValidatorInfo {
-                    info: sui_config::ValidatorInfo {
+                    info: sui_genesis_builder::validator_info::ValidatorInfo {
                         name,
                         protocol_key: keypair.public().into(),
                         worker_key: worker_keypair.public().clone(),
@@ -554,7 +550,7 @@ async fn call_0x5(
 ) -> anyhow::Result<SuiTransactionBlockResponse> {
     let sender = context.active_address()?;
     let sui_client = context.get_client().await?;
-    let mut args = vec![SUI_SYSTEM_OBJ_CALL_ARG];
+    let mut args = vec![CallArg::SUI_SYSTEM_MUT];
     args.extend(call_args);
     let rgp = sui_client
         .governance_api()
@@ -582,13 +578,13 @@ async fn call_0x5(
     let transaction =
         Transaction::from_data(tx_data, Intent::sui_transaction(), vec![signature]).verify()?;
     sui_client
-        .quorum_driver()
+        .quorum_driver_api()
         .execute_transaction_block(
             transaction,
             SuiTransactionBlockResponseOptions::new()
                 .with_input()
                 .with_effects(),
-            Some(sui_types::messages::ExecuteTransactionRequestType::WaitForLocalExecution),
+            Some(sui_types::quorum_driver_types::ExecuteTransactionRequestType::WaitForLocalExecution),
         )
         .await
         .map_err(|err| anyhow::anyhow!(err.to_string()))

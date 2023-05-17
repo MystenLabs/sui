@@ -13,6 +13,7 @@ pub use sui_extended::*;
 pub use sui_governance::*;
 pub use sui_move::*;
 pub use sui_object::*;
+pub use sui_protocol::*;
 pub use sui_transaction::*;
 use sui_types::base_types::ObjectID;
 use sui_types::dynamic_field::DynamicFieldInfo;
@@ -30,13 +31,14 @@ mod sui_extended;
 mod sui_governance;
 mod sui_move;
 mod sui_object;
+mod sui_protocol;
 mod sui_transaction;
 
 pub type DynamicFieldPage = Page<DynamicFieldInfo, ObjectID>;
 /// `next_cursor` points to the last item in the page;
 /// Reading with `next_cursor` will start from the next item after `next_cursor` if
 /// `next_cursor` is `Some`, otherwise it will start from the first item.
-#[derive(Clone, Debug, JsonSchema, Serialize, Deserialize)]
+#[derive(Clone, Debug, JsonSchema, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct Page<T, C> {
     pub data: Vec<T>,

@@ -1,7 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useCoinDecimals } from '@mysten/core';
+import { useFeatureIsOn } from '@growthbook/growthbook-react';
+import { useCoinMetadata, useGetSystemState } from '@mysten/core';
 import { ArrowLeft16 } from '@mysten/icons';
 import {
     getTransactionDigest,
@@ -20,7 +21,6 @@ import { getSignerOperationErrorMessage } from '../../helpers/errorMessages';
 import { getDelegationDataByStakeId } from '../getDelegationByStakeId';
 import { getStakeSuiBySuiId } from '../getStakeSuiBySuiId';
 import { useGetDelegatedStake } from '../useGetDelegatedStake';
-import { useSystemState } from '../useSystemState';
 import StakeForm from './StakeForm';
 import { UnStakeForm } from './UnstakeForm';
 import { ValidatorFormDetail } from './ValidatorFormDetail';
@@ -41,6 +41,7 @@ import Loading from '_components/loading';
 import { parseAmount } from '_helpers';
 import { useSigner, useGetCoinBalance } from '_hooks';
 import { Coin } from '_redux/slices/sui-objects/Coin';
+import { FEATURES } from '_src/shared/experimentation/features';
 import { trackEvent } from '_src/shared/plausible';
 
 import type { FormikHelpers } from 'formik';
@@ -64,8 +65,12 @@ function StakingCard() {
     const { data: allDelegation, isLoading } = useGetDelegatedStake(
         accountAddress || ''
     );
+    const effectsOnlySharedTransactions = useFeatureIsOn(
+        FEATURES.WALLET_EFFECTS_ONLY_SHARED_TRANSACTION as string
+    );
 
-    const { data: system, isLoading: validatorsIsloading } = useSystemState();
+    const { data: system, isLoading: validatorsIsloading } =
+        useGetSystemState();
 
     const totalTokenBalance = useMemo(() => {
         if (!allDelegation) return 0n;
@@ -84,9 +89,10 @@ function StakingCard() {
         [coinType]
     );
 
-    const suiEarned = stakeData?.estimatedReward || 0;
+    const suiEarned = stakeData?.estimatedReward || '0';
 
-    const [coinDecimals] = useCoinDecimals(coinType);
+    const { data: metadata } = useCoinMetadata(coinType);
+    const coinDecimals = metadata?.decimals ?? 0;
     // set minimum stake amount to 1 SUI
     const minimumStake = parseAmount('1', coinDecimals);
 
@@ -137,6 +143,9 @@ function StakingCard() {
                 );
                 return await signer.signAndExecuteTransactionBlock({
                     transactionBlock,
+                    requestType: effectsOnlySharedTransactions
+                        ? 'WaitForEffectsCert'
+                        : 'WaitForLocalExecution',
                     options: {
                         showInput: true,
                         showEffects: true,
@@ -164,6 +173,9 @@ function StakingCard() {
                 const transactionBlock = createUnstakeTransaction(stakedSuiId);
                 return await signer.signAndExecuteTransactionBlock({
                     transactionBlock,
+                    requestType: effectsOnlySharedTransactions
+                        ? 'WaitForEffectsCert'
+                        : 'WaitForLocalExecution',
                     options: {
                         showInput: true,
                         showEffects: true,
@@ -225,8 +237,9 @@ function StakingCard() {
                 navigate(
                     `/receipt?${new URLSearchParams({
                         txdigest: txDigest,
-                        from: 'stake',
-                    }).toString()}`
+                        from: 'tokens',
+                    }).toString()}`,
+                    { state: { response } }
                 );
             } catch (error) {
                 toast.error(
@@ -303,10 +316,7 @@ function StakingCard() {
                                 {(unstake || touched.amount) &&
                                 errors.amount ? (
                                     <div className="mt-2 flex flex-col flex-nowrap">
-                                        <Alert
-                                            mode="warning"
-                                            className="text-body"
-                                        >
+                                        <Alert mode="warning">
                                             {errors.amount}
                                         </Alert>
                                     </div>
@@ -319,16 +329,17 @@ function StakingCard() {
                                             initialIsOpen
                                         >
                                             <Text
-                                                variant="p3"
+                                                variant="pSubtitle"
                                                 color="steel-dark"
                                                 weight="normal"
                                             >
-                                                The staked SUI starts earning
-                                                reward at the end of the Epoch
-                                                in which it was staked. The
-                                                rewards will become available at
-                                                the end of one full Epoch of
-                                                staking.
+                                                Staked SUI starts counting as
+                                                validator’s stake at the end of
+                                                the Epoch in which it was
+                                                staked. Rewards are earned
+                                                separately for each Epoch and
+                                                become available at the end of
+                                                each Epoch.
                                             </Text>
                                         </Collapse>
                                     </div>

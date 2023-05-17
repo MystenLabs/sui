@@ -137,6 +137,26 @@ async fn test_multi_get(#[values(true, false)] is_transactional: bool) {
 
 #[rstest]
 #[tokio::test]
+async fn test_chunked_multi_get(#[values(true, false)] is_transactional: bool) {
+    let db = open_map(temp_dir(), None, is_transactional);
+
+    db.insert(&123, &"123".to_string())
+        .expect("Failed to insert");
+    db.insert(&456, &"456".to_string())
+        .expect("Failed to insert");
+
+    let result = db
+        .chunked_multi_get([123, 456, 789], 1)
+        .expect("Failed to chunk multi get");
+
+    assert_eq!(result.len(), 3);
+    assert_eq!(result[0], Some("123".to_string()));
+    assert_eq!(result[1], Some("456".to_string()));
+    assert_eq!(result[2], None);
+}
+
+#[rstest]
+#[tokio::test]
 async fn test_skip(#[values(true, false)] is_transactional: bool) {
     let db = open_map(temp_dir(), None, is_transactional);
 
@@ -530,6 +550,154 @@ async fn test_clear() {
     assert_eq!(db.safe_iter().count(), 0);
 }
 
+#[rstest]
+#[tokio::test]
+async fn test_iter_with_bounds(#[values(true, false)] is_transactional: bool) {
+    let db = open_map(temp_dir(), None, is_transactional);
+
+    // Add [1, 50) and (50, 100) in the db
+    for i in 1..100 {
+        if i != 50 {
+            db.insert(&i, &i.to_string()).unwrap();
+        }
+    }
+
+    // Skip prior to will return an iterator starting with an "unexpected" key if the sought one is not in the table
+    let db_iter = db
+        .iter_with_bounds(Some(1), Some(100))
+        .skip_prior_to(&50)
+        .unwrap();
+
+    assert_eq!(
+        (49..50)
+            .chain(51..100)
+            .map(|i| (i, i.to_string()))
+            .collect::<Vec<_>>(),
+        db_iter.collect::<Vec<_>>()
+    );
+
+    // Same logic in the keys iterator
+    let db_iter = db.keys().skip_prior_to(&50).unwrap();
+
+    assert_eq!(
+        (49..50).chain(51..100).map(Ok).collect::<Vec<_>>(),
+        db_iter.collect::<Vec<_>>()
+    );
+
+    // Skip to a key which is not within the bounds (bound is [1, 50))
+    let db_iter = db.iter_with_bounds(Some(1), Some(50)).skip_to(&50).unwrap();
+    assert_eq!(Vec::<(i32, String)>::new(), db_iter.collect::<Vec<_>>());
+
+    // Skip to first key in the bound (bound is [1, 50))
+    let db_iter = db.iter_with_bounds(Some(1), Some(50)).skip_to(&1).unwrap();
+    assert_eq!(
+        (1..50).map(|i| (i, i.to_string())).collect::<Vec<_>>(),
+        db_iter.collect::<Vec<_>>()
+    );
+
+    // Skip to a key which is not within the bounds (bound is [1, 50))
+    let db_iter = db
+        .iter_with_bounds(Some(1), Some(50))
+        .skip_prior_to(&50)
+        .unwrap();
+    assert_eq!(vec![(49, "49".to_string())], db_iter.collect::<Vec<_>>());
+}
+
+#[rstest]
+#[tokio::test]
+async fn test_range_iter(#[values(true, false)] is_transactional: bool) {
+    let db = open_map(temp_dir(), None, is_transactional);
+    let min = u64::MAX - 100;
+    let max = u64::MAX;
+    for i in min..=max {
+        if i != min + 50 {
+            db.insert(&i, &i.to_string()).unwrap();
+        }
+    }
+    let db_iter = db.range_iter(min..=max).skip_prior_to(&(min + 50)).unwrap();
+
+    assert_eq!(
+        (min + 49..min + 50)
+            .chain(min + 51..=max)
+            .map(|i| (i, i.to_string()))
+            .collect::<Vec<_>>(),
+        db_iter.collect::<Vec<_>>()
+    );
+
+    let db = open_map(temp_dir(), None, is_transactional);
+
+    // Add [1, 50) and (50, 100) in the db
+    for i in 1..100 {
+        if i != 50 {
+            db.insert(&i, &i.to_string()).unwrap();
+        }
+    }
+
+    // Skip prior to will return an iterator starting with an "unexpected" key if the sought one is not in the table
+    let db_iter = db.range_iter(1..=99).skip_prior_to(&50).unwrap();
+
+    assert_eq!(
+        (49..50)
+            .chain(51..100)
+            .map(|i| (i, i.to_string()))
+            .collect::<Vec<_>>(),
+        db_iter.collect::<Vec<_>>()
+    );
+
+    let db_iter = db.range_iter(1..=99).skip_prior_to(&1).unwrap();
+
+    assert_eq!(
+        (1..50)
+            .chain(51..100)
+            .map(|i| (i, i.to_string()))
+            .collect::<Vec<_>>(),
+        db_iter.collect::<Vec<_>>()
+    );
+
+    let db_iter = db.range_iter(2..=99).skip_prior_to(&2).unwrap();
+
+    assert_eq!(
+        (2..50)
+            .chain(51..100)
+            .map(|i| (i, i.to_string()))
+            .collect::<Vec<_>>(),
+        db_iter.collect::<Vec<_>>()
+    );
+
+    let db_iter = db.range_iter(2..99).skip_prior_to(&2).unwrap();
+
+    assert_eq!(
+        (2..50)
+            .chain(51..99)
+            .map(|i| (i, i.to_string()))
+            .collect::<Vec<_>>(),
+        db_iter.collect::<Vec<_>>()
+    );
+
+    // Same logic in the keys iterator
+    let db_iter = db.keys().skip_prior_to(&50).unwrap();
+
+    assert_eq!(
+        (49..50).chain(51..100).map(Ok).collect::<Vec<_>>(),
+        db_iter.collect::<Vec<_>>()
+    );
+
+    // Skip to a key which is not within the bounds (bound is [1, 50))
+    let db_iter = db.range_iter(1..=50).skip_to(&50).unwrap();
+    assert_eq!(Vec::<(i32, String)>::new(), db_iter.collect::<Vec<_>>());
+
+    // Skip to first key in the bound (bound is [1, 49))
+    let db_iter = db.range_iter(1..49).skip_to(&1).unwrap();
+    assert_eq!(
+        (1..49).map(|i| (i, i.to_string())).collect::<Vec<_>>(),
+        db_iter.collect::<Vec<_>>()
+    );
+
+    // Skip to a key which is not within the bounds (bound is [1, 50))
+    let db_iter = db.range_iter(1..=50).skip_prior_to(&50).unwrap();
+    assert_eq!(vec![(49, "49".to_string())], db_iter.collect::<Vec<_>>());
+}
+
 #[tokio::test]
 async fn test_is_empty() {
     let db = DBMap::<i32, String>::open(
@@ -655,7 +823,7 @@ async fn test_transactional() {
     let path = temp_dir();
     let opt = rocksdb::Options::default();
     let rocksdb =
-        open_cf_opts_transactional(path, None, MetricConf::default(), &[("cf", &opt)]).unwrap();
+        open_cf_opts_transactional(path, None, MetricConf::default(), &[("cf", opt)]).unwrap();
     let db = DBMap::<String, String>::reopen(&rocksdb, None, &ReadWriteOptions::default())
         .expect("Failed to re-open storage");
 
@@ -679,7 +847,7 @@ async fn test_transaction_snapshot() {
     let path = temp_dir();
     let opt = rocksdb::Options::default();
     let rocksdb =
-        open_cf_opts_transactional(path, None, MetricConf::default(), &[("cf", &opt)]).unwrap();
+        open_cf_opts_transactional(path, None, MetricConf::default(), &[("cf", opt)]).unwrap();
     let db = DBMap::<String, String>::reopen(&rocksdb, None, &ReadWriteOptions::default())
         .expect("Failed to re-open storage");
 
@@ -766,7 +934,7 @@ async fn test_retry_transaction() {
     let path = temp_dir();
     let opt = rocksdb::Options::default();
     let rocksdb =
-        open_cf_opts_transactional(path, None, MetricConf::default(), &[("cf", &opt)]).unwrap();
+        open_cf_opts_transactional(path, None, MetricConf::default(), &[("cf", opt)]).unwrap();
     let db = DBMap::<String, String>::reopen(&rocksdb, None, &ReadWriteOptions::default())
         .expect("Failed to re-open storage");
 
@@ -826,7 +994,7 @@ async fn test_transaction_read_your_write() {
     let path = temp_dir();
     let opt = rocksdb::Options::default();
     let rocksdb =
-        open_cf_opts_transactional(path, None, MetricConf::default(), &[("cf", &opt)]).unwrap();
+        open_cf_opts_transactional(path, None, MetricConf::default(), &[("cf", opt)]).unwrap();
     let db = DBMap::<String, String>::reopen(&rocksdb, None, &ReadWriteOptions::default())
         .expect("Failed to re-open storage");
     db.insert(&key1.to_string(), &"1".to_string()).unwrap();
@@ -891,7 +1059,7 @@ async fn open_as_secondary_test() {
         None,
         None,
         MetricConf::default(),
-        &[("table", &opt)],
+        &[("table", opt)],
     )
     .unwrap();
     let secondary_db = DBMap::<i32, String>::reopen(
@@ -1047,7 +1215,7 @@ fn open_map<P: AsRef<Path>, K, V>(
             path,
             None,
             MetricConf::default(),
-            &[(cf, &default_db_options().options)],
+            &[(cf, default_db_options().options)],
         )
         .map(|db| DBMap::new(db, &ReadWriteOptions::default(), cf))
         .expect("failed to open rocksdb")
@@ -1066,7 +1234,10 @@ fn open_map<P: AsRef<Path>, K, V>(
 fn open_rocksdb<P: AsRef<Path>>(path: P, opt_cfs: &[&str], is_transactional: bool) -> Arc<RocksDB> {
     if is_transactional {
         let options = default_db_options().options;
-        let cfs: Vec<_> = opt_cfs.iter().map(|name| (*name, &options)).collect();
+        let cfs: Vec<_> = opt_cfs
+            .iter()
+            .map(|name| (*name, options.clone()))
+            .collect();
         open_cf_opts_transactional(path, None, MetricConf::default(), &cfs)
             .expect("failed to open rocksdb")
     } else {

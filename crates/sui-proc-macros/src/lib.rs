@@ -37,6 +37,7 @@ pub fn init_static_initializers(_args: TokenStream, item: TokenStream) -> TokenS
             std::thread::spawn(|| {
                 use sui_protocol_config::ProtocolConfig;
                 ::sui_simulator::telemetry_subscribers::init_for_testing();
+                ::sui_simulator::sui_adapter::execution_engine::get_denied_certificates();
                 ::sui_simulator::sui_framework::BuiltInFramework::all_package_ids();
                 ::sui_simulator::sui_types::gas::SuiGasStatus::new_unmetered(
                     &ProtocolConfig::get_for_min_version(),
@@ -52,18 +53,18 @@ pub fn init_static_initializers(_args: TokenStream, item: TokenStream) -> TokenS
                     // Initialize the static initializers here:
                     // https://github.com/move-language/move/blob/652badf6fd67e1d4cc2aa6dc69d63ad14083b673/language/tools/move-package/src/package_lock.rs#L12
                     use std::path::PathBuf;
-                    use sui_simulator::sui_framework_build::compiled_package::{BuildConfig, SuiPackageHooks};
-                    use sui_simulator::sui_framework::build_move_package;
+                    use sui_simulator::sui_move_build::{BuildConfig, SuiPackageHooks};
                     use sui_simulator::tempfile::TempDir;
                     use sui_simulator::move_package::package_hooks::register_package_hooks;
 
                     move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks {}));
                     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-                    path.push("../../sui_programmability/examples/basics");
+                    path.extend(["..", "..", "sui_programmability", "examples", "basics"]);
                     let mut build_config = BuildConfig::default();
 
                     build_config.config.install_dir = Some(TempDir::new().unwrap().into_path());
-                    let _all_module_bytes = build_move_package(&path, build_config)
+                    let _all_module_bytes = build_config
+                        .build(path)
                         .unwrap()
                         .get_package_bytes(/* with_unpublished_deps */ false);
                 }

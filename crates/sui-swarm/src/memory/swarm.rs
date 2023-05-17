@@ -12,14 +12,15 @@ use std::{
     mem, ops,
     path::{Path, PathBuf},
 };
-use sui_config::builder::{
-    CommitteeConfig, ConfigBuilder, ProtocolVersionsConfig, SupportedProtocolVersionsCallback,
-};
-use sui_config::genesis_config::{GenesisConfig, ValidatorConfigInfo};
 use sui_config::node::DBCheckpointConfig;
-use sui_config::NetworkConfig;
 use sui_node::SuiNodeHandle;
 use sui_protocol_config::{ProtocolVersion, SupportedProtocolVersions};
+use sui_swarm_config::genesis_config::{AccountConfig, GenesisConfig, ValidatorGenesisConfig};
+use sui_swarm_config::network_config::NetworkConfig;
+use sui_swarm_config::network_config_builder::FullnodeConfigBuilder;
+use sui_swarm_config::network_config_builder::{
+    CommitteeConfig, ConfigBuilder, ProtocolVersionsConfig, SupportedProtocolVersionsCallback,
+};
 use sui_types::base_types::AuthorityName;
 use sui_types::object::Object;
 use tempfile::TempDir;
@@ -29,12 +30,11 @@ pub struct SwarmBuilder<R = OsRng> {
     // template: NodeConfig,
     dir: Option<PathBuf>,
     committee: CommitteeConfig,
-    initial_accounts_config: Option<GenesisConfig>,
+    genesis_config: Option<GenesisConfig>,
     additional_objects: Vec<Object>,
     fullnode_count: usize,
     fullnode_rpc_addr: Option<SocketAddr>,
     with_event_store: bool,
-    initial_protocol_version: ProtocolVersion,
     supported_protocol_versions_config: ProtocolVersionsConfig,
     db_checkpoint_config: DBCheckpointConfig,
 }
@@ -46,12 +46,11 @@ impl SwarmBuilder {
             rng: OsRng,
             dir: None,
             committee: CommitteeConfig::Size(NonZeroUsize::new(1).unwrap()),
-            initial_accounts_config: None,
+            genesis_config: None,
             additional_objects: vec![],
             fullnode_count: 0,
             fullnode_rpc_addr: None,
             with_event_store: false,
-            initial_protocol_version: SupportedProtocolVersions::SYSTEM_DEFAULT.max,
             supported_protocol_versions_config: ProtocolVersionsConfig::Default,
             db_checkpoint_config: DBCheckpointConfig::default(),
         }
@@ -64,12 +63,11 @@ impl<R> SwarmBuilder<R> {
             rng,
             dir: self.dir,
             committee: self.committee,
-            initial_accounts_config: self.initial_accounts_config,
+            genesis_config: self.genesis_config,
             additional_objects: self.additional_objects,
             fullnode_count: self.fullnode_count,
             fullnode_rpc_addr: self.fullnode_rpc_addr,
             with_event_store: false,
-            initial_protocol_version: SupportedProtocolVersions::SYSTEM_DEFAULT.max,
             supported_protocol_versions_config: ProtocolVersionsConfig::Default,
             db_checkpoint_config: DBCheckpointConfig::default(),
         }
@@ -93,13 +91,19 @@ impl<R> SwarmBuilder<R> {
         self
     }
 
-    pub fn with_validators(mut self, validators: Vec<ValidatorConfigInfo>) -> Self {
+    pub fn with_validators(mut self, validators: Vec<ValidatorGenesisConfig>) -> Self {
         self.committee = CommitteeConfig::Validators(validators);
         self
     }
 
-    pub fn initial_accounts_config(mut self, initial_accounts_config: GenesisConfig) -> Self {
-        self.initial_accounts_config = Some(initial_accounts_config);
+    pub fn with_genesis_config(mut self, genesis_config: GenesisConfig) -> Self {
+        assert!(self.genesis_config.is_none());
+        self.genesis_config = Some(genesis_config);
+        self
+    }
+
+    pub fn with_accounts(mut self, accounts: Vec<AccountConfig>) -> Self {
+        self.get_or_init_genesis_config().accounts = accounts;
         self
     }
 
@@ -119,16 +123,16 @@ impl<R> SwarmBuilder<R> {
     }
 
     pub fn with_epoch_duration_ms(mut self, epoch_duration_ms: u64) -> Self {
-        let mut initial_accounts_config = self
-            .initial_accounts_config
-            .unwrap_or_else(GenesisConfig::for_local_testing);
-        initial_accounts_config.parameters.epoch_duration_ms = epoch_duration_ms;
-        self.initial_accounts_config = Some(initial_accounts_config);
+        self.get_or_init_genesis_config()
+            .parameters
+            .epoch_duration_ms = epoch_duration_ms;
         self
     }
 
     pub fn with_protocol_version(mut self, v: ProtocolVersion) -> Self {
-        self.initial_protocol_version = v;
+        self.get_or_init_genesis_config()
+            .parameters
+            .protocol_version = v;
         self
     }
 
@@ -154,6 +158,13 @@ impl<R> SwarmBuilder<R> {
         self.db_checkpoint_config = db_checkpoint_config;
         self
     }
+
+    fn get_or_init_genesis_config(&mut self) -> &mut GenesisConfig {
+        if self.genesis_config.is_none() {
+            self.genesis_config = Some(GenesisConfig::for_local_testing());
+        }
+        self.genesis_config.as_mut().unwrap()
+    }
 }
 
 impl<R: rand::RngCore + rand::CryptoRng> SwarmBuilder<R> {
@@ -167,8 +178,8 @@ impl<R: rand::RngCore + rand::CryptoRng> SwarmBuilder<R> {
 
         let mut config_builder = ConfigBuilder::new(dir.as_ref());
 
-        if let Some(initial_accounts_config) = self.initial_accounts_config {
-            config_builder = config_builder.initial_accounts_config(initial_accounts_config);
+        if let Some(genesis_config) = self.genesis_config {
+            config_builder = config_builder.with_genesis_config(genesis_config);
         }
 
         let network_config = config_builder
@@ -176,7 +187,6 @@ impl<R: rand::RngCore + rand::CryptoRng> SwarmBuilder<R> {
             .with_swarm()
             .rng(self.rng)
             .with_objects(self.additional_objects)
-            .with_protocol_version(self.initial_protocol_version)
             .with_supported_protocol_versions_config(
                 self.supported_protocol_versions_config.clone(),
             )
@@ -194,8 +204,7 @@ impl<R: rand::RngCore + rand::CryptoRng> SwarmBuilder<R> {
             (0..self.fullnode_count).for_each(|_| {
                 let spvc = self.supported_protocol_versions_config.clone();
                 //let spvc = spvc.clone();
-                let mut config = network_config
-                    .fullnode_config_builder()
+                let mut config = FullnodeConfigBuilder::new(&network_config)
                     .with_supported_protocol_versions_config(spvc)
                     .with_db_checkpoint_config(self.db_checkpoint_config.clone())
                     .with_random_dir()
@@ -231,8 +240,7 @@ impl<R: rand::RngCore + rand::CryptoRng> SwarmBuilder<R> {
             .collect();
 
         let fullnodes = if let Some(fullnode_rpc_addr) = self.fullnode_rpc_addr {
-            let mut config = network_config
-                .fullnode_config_builder()
+            let mut config = FullnodeConfigBuilder::new(&network_config)
                 .with_supported_protocol_versions_config(self.supported_protocol_versions_config)
                 .set_event_store(self.with_event_store)
                 .with_random_dir()

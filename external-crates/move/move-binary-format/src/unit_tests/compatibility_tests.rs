@@ -518,6 +518,8 @@ fn private_entry_signature_change_allowed() {
         check_struct_layout: true,
         check_friend_linking: true,
         check_private_entry_linking: false,
+        disallowed_new_abilities: AbilitySet::EMPTY,
+        disallow_change_struct_type_params: false,
     }
     .check(&module, &updated_module)
     .is_ok());
@@ -528,6 +530,8 @@ fn private_entry_signature_change_allowed() {
         check_struct_layout: true,
         check_friend_linking: true,
         check_private_entry_linking: false,
+        disallowed_new_abilities: AbilitySet::EMPTY,
+        disallow_change_struct_type_params: false,
     }
     .check(&updated_module, &module)
     .is_ok());
@@ -614,6 +618,8 @@ fn entry_fun_compat_tests() {
             check_struct_layout: true,
             check_friend_linking: true,
             check_private_entry_linking: false,
+            disallowed_new_abilities: AbilitySet::EMPTY,
+            disallow_change_struct_type_params: false,
         }
         .check(prev, new)
         .is_ok());
@@ -631,6 +637,8 @@ fn entry_fun_compat_tests() {
             check_struct_layout: true,
             check_friend_linking: false,
             check_private_entry_linking: false,
+            disallowed_new_abilities: AbilitySet::EMPTY,
+            disallow_change_struct_type_params: false,
         }
         .check(prev, new)
         .is_ok());
@@ -640,6 +648,8 @@ fn entry_fun_compat_tests() {
             check_struct_layout: true,
             check_friend_linking: true,
             check_private_entry_linking: false,
+            disallowed_new_abilities: AbilitySet::EMPTY,
+            disallow_change_struct_type_params: false,
         }
         .check(prev, new)
         .is_err());
@@ -651,6 +661,8 @@ fn entry_fun_compat_tests() {
             check_struct_layout: true,
             check_friend_linking: true,
             check_private_entry_linking: false,
+            disallowed_new_abilities: AbilitySet::EMPTY,
+            disallow_change_struct_type_params: false,
         }
         .check(prev, new)
         .is_err());
@@ -673,7 +685,9 @@ fn public_entry_signature_change_disallowed() {
         check_struct_and_pub_function_linking: true,
         check_struct_layout: true,
         check_friend_linking: true,
-        check_private_entry_linking: false
+        check_private_entry_linking: false,
+        disallowed_new_abilities: AbilitySet::EMPTY,
+        disallow_change_struct_type_params: false,
     }
     .check(&module, &updated_module)
     .is_err());
@@ -682,7 +696,9 @@ fn public_entry_signature_change_disallowed() {
         check_struct_and_pub_function_linking: true,
         check_struct_layout: true,
         check_friend_linking: true,
-        check_private_entry_linking: false
+        check_private_entry_linking: false,
+        disallowed_new_abilities: AbilitySet::EMPTY,
+        disallow_change_struct_type_params: false,
     }
     .check(&updated_module, &module)
     .is_err());
@@ -691,7 +707,9 @@ fn public_entry_signature_change_disallowed() {
         check_struct_and_pub_function_linking: true,
         check_struct_layout: true,
         check_friend_linking: true,
-        check_private_entry_linking: true
+        check_private_entry_linking: true,
+        disallowed_new_abilities: AbilitySet::EMPTY,
+        disallow_change_struct_type_params: false,
     }
     .check(&module, &updated_module)
     .is_err());
@@ -712,7 +730,9 @@ fn friend_entry_signature_change_allowed() {
         check_struct_and_pub_function_linking: true,
         check_struct_layout: true,
         check_friend_linking: false,
-        check_private_entry_linking: false
+        check_private_entry_linking: false,
+        disallowed_new_abilities: AbilitySet::EMPTY,
+        disallow_change_struct_type_params: false,
     }
     .check(&module, &updated_module)
     .is_ok());
@@ -721,7 +741,9 @@ fn friend_entry_signature_change_allowed() {
         check_struct_and_pub_function_linking: true,
         check_struct_layout: true,
         check_friend_linking: true,
-        check_private_entry_linking: false
+        check_private_entry_linking: false,
+        disallowed_new_abilities: AbilitySet::EMPTY,
+        disallow_change_struct_type_params: false,
     }
     .check(&module, &updated_module)
     .is_err());
@@ -730,7 +752,9 @@ fn friend_entry_signature_change_allowed() {
         check_struct_and_pub_function_linking: true,
         check_struct_layout: true,
         check_friend_linking: false,
-        check_private_entry_linking: true
+        check_private_entry_linking: true,
+        disallowed_new_abilities: AbilitySet::EMPTY,
+        disallow_change_struct_type_params: false,
     }
     .check(&module, &updated_module)
     .is_err());
@@ -739,7 +763,9 @@ fn friend_entry_signature_change_allowed() {
         check_struct_and_pub_function_linking: true,
         check_struct_layout: true,
         check_friend_linking: true,
-        check_private_entry_linking: true
+        check_private_entry_linking: true,
+        disallowed_new_abilities: AbilitySet::EMPTY,
+        disallow_change_struct_type_params: false,
     }
     .check(&module, &updated_module)
     .is_err());

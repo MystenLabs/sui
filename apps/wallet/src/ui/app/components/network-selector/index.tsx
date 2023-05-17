@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { Check24 } from '@mysten/icons';
 import cl from 'classnames';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useMemo, useState, useEffect } from 'react';
@@ -8,7 +9,6 @@ import { toast } from 'react-hot-toast';
 
 import { CustomRPCInput } from './custom-rpc-input';
 import { API_ENV_TO_INFO, generateActiveNetworkList } from '_app/ApiProvider';
-import Icon, { SuiIcons } from '_components/icon';
 import { useAppSelector, useAppDispatch } from '_hooks';
 import { changeActiveNetwork } from '_redux/slices/app';
 import { API_ENV } from '_src/shared/api-env';
@@ -68,8 +68,7 @@ const NetworkSelector = () => {
                             }}
                             className={st.networkSelector}
                         >
-                            <Icon
-                                icon={SuiIcons.CheckFill}
+                            <Check24
                                 className={cl(
                                     st.networkIcon,
                                     st.selectedNetwork,

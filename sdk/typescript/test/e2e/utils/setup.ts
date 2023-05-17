@@ -77,9 +77,7 @@ export function getProvider(): JsonRpcProvider {
       fullnode: DEFAULT_FULLNODE_URL,
       faucet: DEFAULT_FAUCET_URL,
     }),
-    {
-      skipDataValidation: false,
-    },
+    {},
   );
 }
 

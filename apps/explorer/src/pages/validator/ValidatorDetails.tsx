@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import {
-    useGetRollingAverageApys,
+    useGetValidatorsApy,
     useGetValidatorsEvents,
     useGetSystemState,
 } from '@mysten/core';
@@ -35,14 +35,19 @@ function ValidatorDetails() {
 
     const validatorData = useMemo(() => {
         if (!data) return null;
-        return data.activeValidators.find((av) => av.suiAddress === id) || null;
+        return (
+            data.activeValidators.find(
+                ({ suiAddress, stakingPoolId }) =>
+                    suiAddress === id || stakingPoolId === id
+            ) || null
+        );
     }, [id, data]);
 
     const atRiskRemainingEpochs = getAtRiskRemainingEpochs(data, id);
 
     const numberOfValidators = data?.activeValidators.length ?? null;
     const { data: rollingAverageApys, isLoading: validatorsApysLoading } =
-        useGetRollingAverageApys(numberOfValidators);
+        useGetValidatorsApy();
 
     const { data: validatorEvents, isLoading: validatorsEventsLoading } =
         useGetValidatorsEvents({
@@ -56,7 +61,8 @@ function ValidatorDetails() {
             validatorEvents,
             id
         )?.pool_staking_reward;
-        return Number(rewards) || 0;
+
+        return rewards ? Number(rewards) : null;
     }, [id, validatorEvents]);
 
     if (isLoading || validatorsEventsLoading || validatorsApysLoading) {
@@ -76,8 +82,8 @@ function ValidatorDetails() {
             </div>
         );
     }
+    const { apy, isApyApproxZero } = rollingAverageApys?.[id] ?? { apy: null };
 
-    const apy = rollingAverageApys?.[id] || 0;
     const tallyingScore =
         validatorEvents?.find(
             ({ parsedJson }) => parsedJson?.validator_address === id
@@ -92,7 +98,7 @@ function ValidatorDetails() {
                     validatorData={validatorData}
                     epoch={data.epoch}
                     epochRewards={validatorRewards}
-                    apy={apy}
+                    apy={isApyApproxZero ? '~0' : apy}
                     tallyingScore={tallyingScore}
                 />
             </div>

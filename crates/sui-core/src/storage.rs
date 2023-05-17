@@ -7,8 +7,7 @@ use sui_types::base_types::TransactionDigest;
 use sui_types::committee::Committee;
 use sui_types::committee::EpochId;
 use sui_types::digests::{TransactionEffectsDigest, TransactionEventsDigest};
-use sui_types::messages::VerifiedTransaction;
-use sui_types::messages::{TransactionEffects, TransactionEvents};
+use sui_types::effects::{TransactionEffects, TransactionEvents};
 use sui_types::messages_checkpoint::CheckpointContentsDigest;
 use sui_types::messages_checkpoint::CheckpointDigest;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
@@ -18,6 +17,7 @@ use sui_types::messages_checkpoint::VerifiedCheckpoint;
 use sui_types::messages_checkpoint::VerifiedCheckpointContents;
 use sui_types::storage::ReadStore;
 use sui_types::storage::WriteStore;
+use sui_types::transaction::VerifiedTransaction;
 use typed_store::Map;
 
 use crate::authority::AuthorityStore;
@@ -81,10 +81,32 @@ impl ReadStore for RocksDbStore {
             })
     }
 
+    fn get_full_checkpoint_contents_by_sequence_number(
+        &self,
+        sequence_number: CheckpointSequenceNumber,
+    ) -> Result<Option<FullCheckpointContents>, Self::Error> {
+        self.checkpoint_store
+            .get_full_checkpoint_contents_by_sequence_number(sequence_number)
+    }
+
     fn get_full_checkpoint_contents(
         &self,
         digest: &CheckpointContentsDigest,
     ) -> Result<Option<FullCheckpointContents>, Self::Error> {
+        // First look to see if we saved the complete contents already.
+        if let Some(seq_num) = self
+            .checkpoint_store
+            .get_sequence_number_by_contents_digest(digest)?
+        {
+            let contents = self
+                .checkpoint_store
+                .get_full_checkpoint_contents_by_sequence_number(seq_num)?;
+            if contents.is_some() {
+                return Ok(contents);
+            }
+        }
+
+        // Otherwise gather it from the individual components.
         self.checkpoint_store
             .get_checkpoint_contents(digest)?
             .map(|contents| FullCheckpointContents::from_checkpoint_contents(&self, contents))
@@ -143,12 +165,13 @@ impl WriteStore for RocksDbStore {
 
     fn insert_checkpoint_contents(
         &self,
+        checkpoint: &VerifiedCheckpoint,
         contents: VerifiedCheckpointContents,
     ) -> Result<(), Self::Error> {
         self.authority_store
             .multi_insert_transaction_and_effects(contents.iter())?;
         self.checkpoint_store
-            .insert_checkpoint_contents(contents.into_inner().into_checkpoint_contents())
+            .insert_verified_checkpoint_contents(checkpoint, contents)
     }
 
     fn insert_committee(&self, new_committee: Committee) -> Result<(), Self::Error> {

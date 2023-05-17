@@ -8,7 +8,6 @@ use axum::{
     routing::{get, post},
     Router,
 };
-use mysten_metrics::spawn_monitored_task;
 use serde::Deserialize;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::sync::Arc;
@@ -34,19 +33,24 @@ use tracing::info;
 // View current all capabilities from all authorities that have been received by this node:
 //
 //   $ curl 'http://127.0.0.1:1337/capabilities'
+//
+// View the node config (private keys will be masked):
+//
+//   $ curl 'http://127.0.0.1:1337/node-config'
 
 const LOGGING_ROUTE: &str = "/logging";
 const SET_BUFFER_STAKE_ROUTE: &str = "/set-override-buffer-stake";
 const CLEAR_BUFFER_STAKE_ROUTE: &str = "/clear-override-buffer-stake";
 const FORCE_CLOSE_EPOCH: &str = "/force-close-epoch";
 const CAPABILITIES: &str = "/capabilities";
+const NODE_CONFIG: &str = "/node-config";
 
 struct AppState {
     node: Arc<SuiNode>,
     filter_handle: FilterHandle,
 }
 
-pub fn start_admin_server(node: Arc<SuiNode>, port: u16, filter_handle: FilterHandle) {
+pub async fn run_admin_server(node: Arc<SuiNode>, port: u16, filter_handle: FilterHandle) {
     let filter = filter_handle.get().unwrap();
 
     let app_state = AppState {
@@ -57,6 +61,7 @@ pub fn start_admin_server(node: Arc<SuiNode>, port: u16, filter_handle: FilterHa
     let app = Router::new()
         .route(LOGGING_ROUTE, get(get_filter))
         .route(CAPABILITIES, get(capabilities))
+        .route(NODE_CONFIG, get(node_config))
         .route(LOGGING_ROUTE, post(set_filter))
         .route(
             SET_BUFFER_STAKE_ROUTE,
@@ -76,12 +81,10 @@ pub fn start_admin_server(node: Arc<SuiNode>, port: u16, filter_handle: FilterHa
         "starting admin server"
     );
 
-    spawn_monitored_task!(async move {
-        axum::Server::bind(&socket_address)
-            .serve(app.into_make_service())
-            .await
-            .unwrap();
-    });
+    axum::Server::bind(&socket_address)
+        .serve(app.into_make_service())
+        .await
+        .unwrap()
 }
 
 async fn get_filter(State(state): State<Arc<AppState>>) -> (StatusCode, String) {
@@ -114,6 +117,13 @@ async fn capabilities(State(state): State<Arc<AppState>>) -> (StatusCode, String
     }
 
     (StatusCode::OK, output)
+}
+
+async fn node_config(State(state): State<Arc<AppState>>) -> (StatusCode, String) {
+    let node_config = &state.node.config;
+
+    // Note private keys will be masked
+    (StatusCode::OK, format!("{:#?}\n", node_config))
 }
 
 #[derive(Deserialize)]

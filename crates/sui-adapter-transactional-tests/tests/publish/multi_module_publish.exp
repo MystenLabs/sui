@@ -1,0 +1,9 @@
+processed 3 tasks
+
+task 1 'publish'. lines 6-15:
+created: object(1,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 5046400,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2 'view-object'. lines 17-17:
+1,0::{M1, M2}

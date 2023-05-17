@@ -93,6 +93,18 @@ impl ObjectChecker {
             }
             (
                 None,
+                Some(SuiObjectResponseError::DynamicFieldNotFound {
+                    parent_object_id: object_id,
+                }),
+            ) => {
+                panic!(
+                    "Node can't find dynamic field for {} with client {:?}",
+                    object_id,
+                    client.read_api()
+                )
+            }
+            (
+                None,
                 Some(SuiObjectResponseError::Deleted {
                     object_id,
                     version: _,

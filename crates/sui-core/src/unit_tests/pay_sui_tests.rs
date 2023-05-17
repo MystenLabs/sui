@@ -1,23 +1,21 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::authority::authority_tests::{
-    init_state, init_state_with_committee, send_and_confirm_transaction,
-};
+use crate::authority::authority_tests::{init_state_with_committee, send_and_confirm_transaction};
+use crate::authority::test_authority_builder::TestAuthorityBuilder;
 use crate::authority::AuthorityState;
 use futures::future::join_all;
 use std::collections::HashMap;
 use std::sync::Arc;
 use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress};
 use sui_types::crypto::AccountKeyPair;
+use sui_types::effects::{SignedTransactionEffects, TransactionEffectsAPI};
 use sui_types::error::UserInputError;
+use sui_types::execution_status::{ExecutionFailureStatus, ExecutionStatus};
 use sui_types::gas_coin::GasCoin;
-use sui_types::messages::{
-    ExecutionFailureStatus, ExecutionStatus, SignedTransactionEffects, TransactionData,
-    TransactionEffectsAPI,
-};
 use sui_types::object::Object;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
+use sui_types::transaction::TransactionData;
 use sui_types::utils::to_sender_signed_transaction;
 use sui_types::{base_types::dbg_addr, crypto::get_key_pair, error::SuiError};
 
@@ -391,7 +389,7 @@ async fn execute_pay_sui(
     sender_key: AccountKeyPair,
     gas_budget: u64,
 ) -> PaySuiTransactionBlockExecutionResult {
-    let authority_state = init_state().await;
+    let authority_state = TestAuthorityBuilder::new().build().await;
 
     let input_coin_refs: Vec<ObjectRef> = input_coin_objects
         .iter()
@@ -426,7 +424,9 @@ async fn execute_pay_all_sui(
     gas_budget: u64,
 ) -> PaySuiTransactionBlockExecutionResult {
     let dir = tempfile::TempDir::new().unwrap();
-    let network_config = sui_config::builder::ConfigBuilder::new(&dir)
+    let network_config = sui_swarm_config::network_config_builder::ConfigBuilder::new(&dir)
+        // TODO: fix numbers in tests to not depend on rgp being 1
+        .with_reference_gas_price(1)
         .with_objects(
             input_coin_objects
                 .clone()

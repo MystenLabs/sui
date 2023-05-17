@@ -2,12 +2,14 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use move_bytecode_verifier::{verifier::MAX_CONSTANT_VECTOR_LEN, VerifierConfig};
+use move_bytecode_verifier::{
+    verifier::DEFAULT_MAX_CONSTANT_VECTOR_LEN, verifier::DEFAULT_MAX_IDENTIFIER_LENGTH,
+    VerifierConfig,
+};
 
 pub mod ability_field_requirements_tests;
 pub mod binary_samples;
 pub mod bounds_tests;
-pub mod catch_unwind;
 pub mod code_unit_tests;
 pub mod constants_tests;
 pub mod control_flow_tests;
@@ -49,6 +51,7 @@ pub(crate) fn production_config() -> VerifierConfig {
         // Same as the default.
         max_per_fun_meter_units: Some(1000 * 8000),
         max_per_mod_meter_units: Some(1000 * 8000),
-        max_constant_vector_len: Some(MAX_CONSTANT_VECTOR_LEN),
+        max_constant_vector_len: Some(DEFAULT_MAX_CONSTANT_VECTOR_LEN),
+        max_idenfitier_len: Some(DEFAULT_MAX_IDENTIFIER_LENGTH),
     }
 }

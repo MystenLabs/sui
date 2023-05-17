@@ -20,7 +20,7 @@ use sui_core::test_utils::make_transfer_object_transaction;
 use sui_types::{
     base_types::{ObjectRef, SuiAddress},
     crypto::{get_key_pair, AccountKeyPair},
-    messages::VerifiedTransaction,
+    transaction::VerifiedTransaction,
 };
 
 /// TODO: This should be the amount that is being transferred instead of MAX_GAS.

@@ -27,9 +27,9 @@ use sui_types::base_types::{ObjectDigest, ObjectID, SequenceNumber, SuiAddress};
 use sui_types::crypto::AggregateAuthoritySignature;
 use sui_types::digests::TransactionDigest;
 use sui_types::gas_coin::GasCoin;
-use sui_types::messages::{TransactionData, TEST_ONLY_GAS_UNIT_FOR_TRANSFER};
 use sui_types::messages_checkpoint::CheckpointDigest;
 use sui_types::object::Object;
+use sui_types::transaction::{TransactionData, TEST_ONLY_GAS_UNIT_FOR_TRANSFER};
 
 fn indexer_benchmark(c: &mut Criterion) {
     let pg_host = env::var("POSTGRES_HOST").unwrap_or_else(|_| "localhost".into());
@@ -37,7 +37,7 @@ fn indexer_benchmark(c: &mut Criterion) {
     let pw = env::var("POSTGRES_PASSWORD").unwrap_or_else(|_| "postgrespw".into());
     let db_url = format!("postgres://postgres:{pw}@{pg_host}:{pg_port}");
 
-    let rt = Runtime::new().unwrap();
+    let rt: Runtime = Runtime::new().unwrap();
     let (mut checkpoints, store) = rt.block_on(async {
         let (blocking_cp, async_cp) = new_pg_connection_pool(&db_url).await.unwrap();
         reset_database(&mut blocking_cp.get().unwrap(), true).unwrap();
@@ -51,7 +51,7 @@ fn indexer_benchmark(c: &mut Criterion) {
     });
 
     c.bench_function("persist_checkpoint", |b| {
-        b.iter(|| rt.block_on(store.persist_all_checkpoint_data(&checkpoints.pop().unwrap())))
+        b.iter(|| store.persist_all_checkpoint_data(&checkpoints.pop().unwrap()))
     });
 
     let mut checkpoints = (20..100).cycle().map(CheckpointId::SequenceNumber);
@@ -77,6 +77,8 @@ fn create_checkpoint(sequence_number: i64) -> TemporaryCheckpointStore {
             total_storage_rebate: i64::MAX,
             total_transaction_blocks: 1000,
             total_transactions: 1000,
+            total_successful_transaction_blocks: 1000,
+            total_successful_transactions: 1000,
             network_total_transactions: 0,
             timestamp_ms: Utc::now().timestamp_millis(),
         },
@@ -89,6 +91,7 @@ fn create_checkpoint(sequence_number: i64) -> TemporaryCheckpointStore {
             deleted_objects: vec![],
         }],
         addresses: vec![],
+        active_addresses: vec![],
         packages: vec![],
         input_objects: vec![],
         move_calls: vec![],
@@ -122,6 +125,7 @@ fn create_transaction(sequence_number: i64) -> Transaction {
         timestamp_ms: Some(Utc::now().timestamp_millis()),
         transaction_kind: "test".to_string(),
         transaction_count: 0,
+        execution_success: true,
         created: vec![],
         mutated: vec![],
         deleted: vec![],

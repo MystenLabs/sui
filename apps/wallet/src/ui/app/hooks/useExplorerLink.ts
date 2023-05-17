@@ -28,7 +28,7 @@ export type ExplorerLinkConfig =
           type: ExplorerLinkType.address;
           useActiveAddress: true;
       }
-    | { type: ExplorerLinkType.object; objectID: ObjectId }
+    | { type: ExplorerLinkType.object; objectID: ObjectId; moduleName?: string }
     | { type: ExplorerLinkType.transaction; transactionID: TransactionDigest }
     | { type: ExplorerLinkType.validator; validator: SuiAddress };
 
@@ -54,6 +54,8 @@ export function useExplorerLink(linkConfig: ExplorerLinkConfig) {
         type === ExplorerLinkType.transaction ? linkConfig.transactionID : null;
     const validator =
         type === ExplorerLinkType.validator ? linkConfig.validator : null;
+    const moduleName =
+        type === ExplorerLinkType.object ? linkConfig.moduleName : null;
 
     // fallback to localhost if customRPC is not set
     const customRPCUrl = customRPC || 'http://localhost:3000/';
@@ -67,7 +69,12 @@ export function useExplorerLink(linkConfig: ExplorerLinkConfig) {
             case ExplorerLinkType.object:
                 return (
                     objectID &&
-                    getObjectUrl(objectID, selectedApiEnv, customRPCUrl)
+                    getObjectUrl(
+                        objectID,
+                        selectedApiEnv,
+                        customRPCUrl,
+                        moduleName
+                    )
                 );
             case ExplorerLinkType.transaction:
                 return (
@@ -89,6 +96,7 @@ export function useExplorerLink(linkConfig: ExplorerLinkConfig) {
         address,
         selectedApiEnv,
         customRPCUrl,
+        moduleName,
         objectID,
         transactionID,
         validator,

@@ -4,20 +4,22 @@
 use crate::authority::{AuthorityState, EffectsNotifyRead};
 use crate::authority_aggregator::{AuthorityAggregator, TimeoutConfig};
 use crate::epoch::committee_store::CommitteeStore;
+use crate::state_accumulator::StateAccumulator;
 use crate::test_authority_clients::LocalAuthorityClient;
+use fastcrypto::hash::MultisetHash;
 use fastcrypto::traits::KeyPair;
 use move_core_types::account_address::AccountAddress;
 use move_core_types::ident_str;
 use prometheus::Registry;
 use shared_crypto::intent::{Intent, IntentScope};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 use sui_config::genesis::Genesis;
-use sui_config::ValidatorInfo;
 use sui_framework::BuiltInFramework;
-use sui_framework_build::compiled_package::{BuildConfig, CompiledPackage, SuiPackageHooks};
+use sui_genesis_builder::validator_info::ValidatorInfo;
+use sui_move_build::{BuildConfig, CompiledPackage, SuiPackageHooks};
 use sui_protocol_config::ProtocolConfig;
 use sui_types::base_types::{random_object_ref, ObjectID};
 use sui_types::crypto::{
@@ -25,9 +27,11 @@ use sui_types::crypto::{
     NetworkKeyPair, SuiKeyPair,
 };
 use sui_types::crypto::{AuthorityKeyPair, Signer};
-use sui_types::messages::ObjectArg;
-use sui_types::messages::TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS;
-use sui_types::messages::{
+use sui_types::effects::{SignedTransactionEffects, TransactionEffects};
+use sui_types::error::SuiError;
+use sui_types::transaction::ObjectArg;
+use sui_types::transaction::TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS;
+use sui_types::transaction::{
     CallArg, SignedTransaction, TransactionData, VerifiedTransaction,
     TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
 };
@@ -38,13 +42,56 @@ use sui_types::{
     committee::Committee,
     crypto::{AuthoritySignInfo, AuthoritySignature},
     message_envelope::Message,
-    messages::{CertifiedTransaction, Transaction, TransactionEffects},
     object::Object,
+    transaction::{CertifiedTransaction, Transaction},
 };
 use tokio::time::timeout;
 use tracing::{info, warn};
 
 const WAIT_FOR_TX_TIMEOUT: Duration = Duration::from_secs(15);
+
+pub async fn send_and_confirm_transaction(
+    authority: &AuthorityState,
+    fullnode: Option<&AuthorityState>,
+    transaction: VerifiedTransaction,
+) -> Result<(CertifiedTransaction, SignedTransactionEffects), SuiError> {
+    // Make the initial request
+    let epoch_store = authority.load_epoch_store_one_call_per_task();
+    let response = authority
+        .handle_transaction(&epoch_store, transaction.clone())
+        .await?;
+    let vote = response.status.into_signed_for_testing();
+
+    // Collect signatures from a quorum of authorities
+    let committee = authority.clone_committee_for_testing();
+    let certificate =
+        CertifiedTransaction::new(transaction.into_message(), vec![vote.clone()], &committee)
+            .unwrap()
+            .verify(&committee)
+            .unwrap();
+
+    // Submit the confirmation. *Now* execution actually happens, and it should fail when we try to look up our dummy module.
+    // we unfortunately don't get a very descriptive error message, but we can at least see that something went wrong inside the VM
+    //
+    // We also check the incremental effects of the transaction on the live object set against StateAccumulator
+    // for testing and regression detection
+    let state_acc = StateAccumulator::new(authority.database.clone());
+    let mut state = state_acc.accumulate_live_object_set();
+    let (result, _execution_error_opt) = authority.try_execute_for_test(&certificate).await?;
+    let state_after = state_acc.accumulate_live_object_set();
+    let effects_acc = state_acc.accumulate_effects(
+        vec![result.inner().data().clone()],
+        epoch_store.protocol_config(),
+    );
+    state.union(&effects_acc);
+
+    assert_eq!(state_after.digest(), state.digest());
+
+    if let Some(fullnode) = fullnode {
+        fullnode.try_execute_for_test(&certificate).await?;
+    }
+    Ok((certificate.into_inner(), result.into_inner()))
+}
 
 // note: clippy is confused about this being dead - it appears to only be used in cfg(test), but
 // adding #[cfg(test)] causes other targets to fail
@@ -54,7 +101,7 @@ where
     R: rand::CryptoRng + rand::RngCore,
 {
     let dir = tempfile::TempDir::new().unwrap();
-    let network_config = sui_config::builder::ConfigBuilder::new(&dir)
+    let network_config = sui_swarm_config::network_config_builder::ConfigBuilder::new(&dir)
         .rng(rng)
         .build();
     let genesis = network_config.genesis;
@@ -136,8 +183,8 @@ pub fn compile_basics_package() -> CompiledPackage {
     compile_example_package("../../sui_programmability/examples/basics")
 }
 
-pub fn compile_nfts_package() -> CompiledPackage {
-    compile_example_package("../../sui_programmability/examples/nfts")
+pub fn compile_managed_coin_package() -> CompiledPackage {
+    compile_example_package("../../crates/sui-core/src/unit_tests/data/managed_coin")
 }
 
 pub fn compile_example_package(relative_path: &str) -> CompiledPackage {
@@ -145,8 +192,7 @@ pub fn compile_example_package(relative_path: &str) -> CompiledPackage {
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     path.push(relative_path);
 
-    let build_config = BuildConfig::new_for_testing();
-    sui_framework::build_move_package(&path, build_config).unwrap()
+    BuildConfig::new_for_testing().build(path).unwrap()
 }
 
 async fn init_genesis(
@@ -170,7 +216,7 @@ async fn init_genesis(
     let pkg_id = pkg.id();
     genesis_objects.push(pkg);
 
-    let mut builder = sui_config::genesis::Builder::new().add_objects(genesis_objects);
+    let mut builder = sui_genesis_builder::Builder::new().add_objects(genesis_objects);
     let mut key_pairs = Vec::new();
     for i in 0..committee_size {
         let key_pair: AuthorityKeyPair = get_key_pair().1;
@@ -233,15 +279,13 @@ pub async fn init_local_authorities_with_genesis(
     let mut clients = BTreeMap::new();
     let mut states = Vec::new();
     for (authority_name, secret) in key_pairs {
-        let client = LocalAuthorityClient::new(committee.clone(), secret, genesis).await;
+        let client = LocalAuthorityClient::new(secret, genesis).await;
         states.push(client.state.clone());
         clients.insert(authority_name, client);
     }
     let timeouts = TimeoutConfig {
-        authority_request_timeout: Duration::from_secs(5),
         pre_quorum_timeout: Duration::from_secs(5),
         post_quorum_timeout: Duration::from_secs(5),
-        serial_authority_request_timeout: Duration::from_secs(1),
         serial_authority_request_interval: Duration::from_secs(1),
     };
     let committee_store = Arc::new(CommitteeStore::new_for_testing(&committee));
@@ -251,6 +295,7 @@ pub async fn init_local_authorities_with_genesis(
             committee_store,
             clients,
             &Registry::new(),
+            Arc::new(HashMap::new()),
             timeouts,
         ),
         states,

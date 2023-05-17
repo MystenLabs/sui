@@ -294,7 +294,11 @@ pub struct PrimaryMetrics {
     /// 0 if there is no inflight certificates fetching, 1 otherwise.
     pub certificate_fetcher_inflight_fetch: IntGauge,
     /// Number of fetched certificates successfully processed by core.
-    pub certificate_fetcher_num_certificates_processed: IntGauge,
+    pub certificate_fetcher_num_certificates_processed: IntCounter,
+    /// Total time spent in certificate verifications, in microseconds.
+    pub certificate_fetcher_total_verification_us: IntCounter,
+    /// Total time spent to accept certificates via Synchronizer, in microseconds.
+    pub certificate_fetcher_total_accept_us: IntCounter,
     /// Number of votes that were requested but not sent due to previously having voted differently
     pub votes_dropped_equivocation_protection: IntCounter,
     /// Number of pending batches in proposer
@@ -316,6 +320,8 @@ pub struct PrimaryMetrics {
     pub header_to_certificate_latency: Histogram,
     /// Millisecs taken to wait for max parent time, when proposing headers.
     pub header_max_parent_wait_ms: IntCounter,
+    /// Counts when the GC loop in synchronizer times out waiting for consensus commit.
+    pub synchronizer_gc_timeout: IntCounter,
 }
 
 impl PrimaryMetrics {
@@ -426,9 +432,21 @@ impl PrimaryMetrics {
                 registry
             )
             .unwrap(),
-            certificate_fetcher_num_certificates_processed: register_int_gauge_with_registry!(
+            certificate_fetcher_num_certificates_processed: register_int_counter_with_registry!(
                 "certificate_fetcher_num_certificates_processed",
                 "Number of fetched certificates successfully processed by core.",
+                registry
+            )
+            .unwrap(),
+            certificate_fetcher_total_verification_us: register_int_counter_with_registry!(
+                "certificate_fetcher_total_verification_us",
+                "Total time spent in certificate verifications, in microseconds.",
+                registry
+            )
+            .unwrap(),
+            certificate_fetcher_total_accept_us: register_int_counter_with_registry!(
+                "certificate_fetcher_total_accept_us",
+                "Total time spent to accept certificates via Synchronizer, in microseconds.",
                 registry
             )
             .unwrap(),
@@ -482,6 +500,11 @@ impl PrimaryMetrics {
             header_max_parent_wait_ms: register_int_counter_with_registry!(
                 "header_max_parent_wait_ms",
                 "Millisecs taken to wait for max parent time, when proposing headers.",
+                registry
+            ).unwrap(),
+            synchronizer_gc_timeout: register_int_counter_with_registry!(
+                "synchronizer_gc_timeout",
+                "Counts when the GC loop in synchronizer times out waiting for consensus commit.",
                 registry
             ).unwrap(),
         }

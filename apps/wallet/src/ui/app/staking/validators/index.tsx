@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { useActiveAddress } from '../../hooks/useActiveAddress';
@@ -9,12 +8,10 @@ import { useGetDelegatedStake } from '../useGetDelegatedStake';
 import { SelectValidatorCard } from './SelectValidatorCard';
 import { ValidatorsCard } from './ValidatorsCard';
 import Alert from '_components/alert';
-import { SuiIcons } from '_components/icon';
 import Loading from '_components/loading';
 import Overlay from '_components/overlay';
 
 export function Validators() {
-    const [showModal, setShowModal] = useState(true);
     const accountAddress = useActiveAddress();
     const {
         data: stakedValidators,
@@ -24,9 +21,6 @@ export function Validators() {
     } = useGetDelegatedStake(accountAddress || '');
 
     const navigate = useNavigate();
-    const close = () => {
-        navigate('/');
-    };
 
     const pageTitle = stakedValidators?.length
         ? 'Stake & Earn SUI'
@@ -34,18 +28,18 @@ export function Validators() {
 
     return (
         <Overlay
-            showModal={showModal}
-            setShowModal={setShowModal}
+            showModal
             title={isLoading ? 'Loading' : pageTitle}
-            closeIcon={SuiIcons.Close}
-            closeOverlay={close}
+            closeOverlay={() => navigate('/')}
         >
             <div className="w-full flex flex-col flex-nowrap">
                 <Loading loading={isLoading}>
                     {isError ? (
-                        <Alert className="mb-2">
-                            <strong>{error?.message}</strong>
-                        </Alert>
+                        <div className="mb-2">
+                            <Alert>
+                                <strong>{error?.message}</strong>
+                            </Alert>
+                        </div>
                     ) : null}
 
                     {stakedValidators?.length ? (

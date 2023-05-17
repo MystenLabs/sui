@@ -1,0 +1,23 @@
+# Dependency graph and an (insufficient) override (ov) - override is incorrect.
+#                                 +----+
+#                           +---->| C  |--------------+
+#                           |     +----+              |
+#                           |                         |
+#                 +----+    |                         |
+#           +---->| A  |----+                         |
+#           |     +----+    |                         |
+#           |       |       |                         |
+# +----+    |       |       |     +----+              |
+# |Root|----+       |ov(1)  +---->| D  |------+       |
+# +----+    |       +----+        +----+      |       |
+#           |            |                v1  |       |
+#           |     +----+ +------->+----+<-----+       |
+#           +---->| B  |--------->| E  |  v2          |
+#                 +----+   v3     +----+<-------------+
+[package]
+name = "Root"
+version = "0.0.0"
+
+[dependencies]
+A = { local = "./deps_only/A" }
+B = { local = "./deps_only/B" }

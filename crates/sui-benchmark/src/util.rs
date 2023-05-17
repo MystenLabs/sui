@@ -8,16 +8,15 @@ use sui_types::{base_types::SuiAddress, crypto::SuiKeyPair};
 use crate::ValidatorProxy;
 use std::path::PathBuf;
 use std::sync::Arc;
+use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::base_types::ObjectRef;
-use sui_types::messages::{
-    TransactionData, VerifiedTransaction, TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
-    TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
+use sui_types::transaction::{
+    TransactionData, VerifiedTransaction, TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
 };
 use sui_types::utils::to_sender_signed_transaction;
 
 use crate::workloads::Gas;
 use sui_types::crypto::{AccountKeyPair, KeypairTraits};
-use test_utils::messages::create_publish_move_package_transaction;
 use test_utils::transaction::parse_package_ref;
 
 // This is the maximum gas we will transfer from primary coin into any gas coin
@@ -64,16 +63,9 @@ pub async fn publish_basics_package(
     keypair: &AccountKeyPair,
     gas_price: u64,
 ) -> ObjectRef {
-    let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    path.push("../../sui_programmability/examples/basics");
-    let transaction = create_publish_move_package_transaction(
-        gas,
-        path,
-        sender,
-        keypair,
-        gas_price * TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
-        gas_price,
-    );
+    let transaction = TestTransactionBuilder::new(sender, gas, gas_price)
+        .publish_examples("basics")
+        .build_and_sign(keypair);
     let effects = proxy
         .execute_transaction_block(transaction.into())
         .await

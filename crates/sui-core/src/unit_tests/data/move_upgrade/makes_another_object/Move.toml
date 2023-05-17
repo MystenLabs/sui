@@ -1,0 +1,9 @@
+[package]
+name = "makes_another_object"
+version = "0.0.1"
+
+[dependencies]
+Sui = { local = "../../../../../../sui-framework/packages/sui-framework" }
+
+[addresses]
+base_addr =  "0x0"

@@ -6,7 +6,7 @@ use futures::future;
 use move_binary_format::access::ModuleAccess;
 use move_binary_format::CompiledModule;
 use std::{collections::HashMap, fmt::Debug};
-use sui_framework_build::compiled_package::CompiledPackage;
+use sui_move_build::CompiledPackage;
 use sui_types::error::SuiObjectResponseError;
 use thiserror::Error;
 
@@ -277,7 +277,7 @@ impl<'a> BytecodeSourceVerifier<'a> {
         for (storage_id, pkg) in addresses.zip(resp) {
             let SuiRawMovePackage { module_map, .. } = pkg?;
             for (name, bytes) in module_map {
-                let Ok(module) = CompiledModule::deserialize(&bytes) else {
+                let Ok(module) = CompiledModule::deserialize_with_defaults(&bytes) else {
                     err.push(SourceVerificationError::OnChainDependencyDeserializationError {
                         address: storage_id,
                         module: name.into(),

@@ -51,7 +51,13 @@ impl<S: Clone + Eq, const STRENGTH: bool> StakeAggregator<S, STRENGTH> {
     /// A generic version of inserting arbitrary type of V (e.g. void type).
     /// If V is AuthoritySignInfo, the `insert` function should be used instead since it does extra
     /// checks and aggregations in the end.
-    pub fn insert_generic(&mut self, authority: AuthorityName, s: S) -> InsertResult<()> {
+    /// Returns Map authority -> S, without aggregating it.
+    /// If you want to get an aggregated signature instead, use `StakeAggregator::insert`
+    pub fn insert_generic(
+        &mut self,
+        authority: AuthorityName,
+        s: S,
+    ) -> InsertResult<&HashMap<AuthorityName, S>> {
         match self.data.entry(authority) {
             Entry::Occupied(oc) => {
                 return InsertResult::Failed {
@@ -69,7 +75,7 @@ impl<S: Clone + Eq, const STRENGTH: bool> StakeAggregator<S, STRENGTH> {
         if votes > 0 {
             self.total_votes += votes;
             if self.total_votes >= self.committee.threshold::<STRENGTH>() {
-                InsertResult::QuorumReached(())
+                InsertResult::QuorumReached(&self.data)
             } else {
                 InsertResult::NotEnoughVotes {
                     bad_votes: 0,

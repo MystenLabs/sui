@@ -211,54 +211,19 @@ pub trait MoveTestAdapter<'a>: Sized {
             }
             TaskCommand::Publish(PublishCommand { gas_budget, syntax }, extra_args) => {
                 let syntax = syntax.unwrap_or_else(|| self.default_syntax());
-                let data = match data {
-                    Some(f) => f,
-                    None => panic!(
-                        "Expected a module text block following 'publish' starting on lines {}-{}",
-                        start_line, command_lines_stop
-                    ),
-                };
-                let state = self.compiled_state();
-                let (modules, warnings_opt) = match syntax {
-                    SyntaxChoice::Source => {
-                        let (units, warnings_opt) = compile_source_units(state, data.path())?;
-                        let modules = units
-                            .into_iter()
-                            .map(|unit| match unit {
-                                AnnotatedCompiledUnit::Module(annot_module) => {
-                                    let (named_addr_opt, _id) = annot_module.module_id();
-                                    let named_addr_opt = named_addr_opt.map(|n| n.value);
-                                    let module = annot_module.named_module.module;
-                                    (named_addr_opt, module)
-                                }
-                                AnnotatedCompiledUnit::Script(_) => panic!(
-                                    "Expected a module text block, not a script, \
-                                    following 'publish' starting on lines {}-{}",
-                                    start_line, command_lines_stop
-                                ),
-                            })
-                            .collect();
-                        (modules, warnings_opt)
-                    }
-                    SyntaxChoice::IR => {
-                        let module = compile_ir_module(state, data.path())?;
-                        (vec![(None, module)], None)
-                    }
-                };
-                let (output, mut modules) =
-                    self.publish_modules(modules, gas_budget, extra_args)?;
-                match syntax {
-                    SyntaxChoice::Source => {
-                        let path = data.path().to_str().unwrap().to_owned();
-                        self.compiled_state()
-                            .add_with_source_file(modules, (path, data))
-                    }
-                    SyntaxChoice::IR => {
-                        let module = modules.pop().unwrap().1;
-                        self.compiled_state()
-                            .add_and_generate_interface_file(module);
-                    }
-                };
+                let (warnings_opt, output, data, modules) = compile_any(
+                    self,
+                    "publish",
+                    syntax,
+                    name,
+                    number,
+                    start_line,
+                    command_lines_stop,
+                    stop_line,
+                    data,
+                    |adapter, modules| adapter.publish_modules(modules, gas_budget, extra_args),
+                )?;
+                store_modules(self, syntax, data, modules);
                 Ok(merge_output(warnings_opt, output))
             }
             TaskCommand::Run(
@@ -537,6 +502,86 @@ impl<'a> CompiledState<'a> {
     }
 }
 
+pub fn compile_any<'a, A: MoveTestAdapter<'a>>(
+    test_adapter: &mut A,
+    command: &str,
+    syntax: SyntaxChoice,
+    _name: String,
+    _number: usize,
+    start_line: usize,
+    command_lines_stop: usize,
+    _stop_line: usize,
+    data: Option<NamedTempFile>,
+    handler: impl FnOnce(
+        &mut A,
+        Vec<(Option<Symbol>, CompiledModule)>,
+    ) -> Result<(Option<String>, Vec<(Option<Symbol>, CompiledModule)>)>,
+) -> Result<(
+    Option<String>,
+    Option<String>,
+    NamedTempFile,
+    Vec<(Option<Symbol>, CompiledModule)>,
+)> {
+    let data = match data {
+        Some(f) => f,
+        None => panic!(
+            "Expected a module text block following '{command}' starting on lines {}-{}",
+            start_line, command_lines_stop
+        ),
+    };
+    let state = test_adapter.compiled_state();
+    let (modules, warnings_opt) = match syntax {
+        SyntaxChoice::Source => {
+            let (units, warnings_opt) = compile_source_units(state, data.path())?;
+            let modules = units
+                .into_iter()
+                .map(|unit| match unit {
+                    AnnotatedCompiledUnit::Module(annot_module) => {
+                        let (named_addr_opt, _id) = annot_module.module_id();
+                        let named_addr_opt = named_addr_opt.map(|n| n.value);
+                        let module = annot_module.named_module.module;
+                        (named_addr_opt, module)
+                    }
+                    AnnotatedCompiledUnit::Script(_) => panic!(
+                        "Expected a module text block, not a script, \
+                        following '{command}' starting on lines {}-{}",
+                        start_line, command_lines_stop
+                    ),
+                })
+                .collect();
+            (modules, warnings_opt)
+        }
+        SyntaxChoice::IR => {
+            let module = compile_ir_module(state, data.path())?;
+            (vec![(None, module)], None)
+        }
+    };
+    let (output, modules) = handler(test_adapter, modules)?;
+    Ok((warnings_opt, output, data, modules))
+}
+
+pub fn store_modules<'a, A: MoveTestAdapter<'a>>(
+    test_adapter: &mut A,
+    syntax: SyntaxChoice,
+    data: NamedTempFile,
+    mut modules: Vec<(Option<Symbol>, CompiledModule)>,
+) {
+    match syntax {
+        SyntaxChoice::Source => {
+            let path = data.path().to_str().unwrap().to_owned();
+            test_adapter
+                .compiled_state()
+                .add_with_source_file(modules, (path, data))
+        }
+        SyntaxChoice::IR => {
+            let module = modules.pop().unwrap().1;
+            test_adapter
+                .compiled_state()
+                .add_and_generate_interface_file(module);
+        }
+    }
+}
+
 pub fn compile_source_units(
     state: &CompiledState,
     file_name: impl AsRef<Path>,
@@ -555,10 +600,11 @@ pub fn compile_source_units(
     }
 
     use move_compiler::PASS_COMPILATION;
+    let named_address_mapping = state.named_address_mapping.clone();
     let (mut files, comments_and_compiler_res) = move_compiler::Compiler::from_files(
         vec![file_name.as_ref().to_str().unwrap().to_owned()],
         state.source_files().cloned().collect::<Vec<_>>(),
-        state.named_address_mapping.clone(),
+        named_address_mapping,
     )
     .set_pre_compiled_lib_opt(state.pre_compiled_deps)
     .set_flags(move_compiler::Flags::empty().set_sources_shadow_deps(true))

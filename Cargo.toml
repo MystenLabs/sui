@@ -66,7 +66,6 @@ members = [
     "crates/prometheus-closure-metric",
     "crates/shared-crypto",
     "crates/sui",
-    "crates/sui-adapter",
     "crates/sui-adapter-transactional-tests",
     "crates/sui-benchmark",
     "crates/sui-cluster-test",
@@ -76,9 +75,9 @@ members = [
     "crates/sui-cost-tables",
     "crates/sui-faucet",
     "crates/sui-framework",
-    "crates/sui-framework-build",
     "crates/sui-framework-snapshot",
     "crates/sui-framework-tests",
+    "crates/sui-genesis-builder",
     "crates/sui-indexer",
     "crates/sui-json",
     "crates/sui-json-rpc",
@@ -86,6 +85,7 @@ members = [
     "crates/sui-keys",
     "crates/sui-macros",
     "crates/sui-move",
+    "crates/sui-move-build",
     "crates/sui-network",
     "crates/sui-node",
     "crates/sui-open-rpc",
@@ -94,14 +94,19 @@ members = [
     "crates/sui-protocol-config",
     "crates/sui-protocol-config-macros",
     "crates/sui-proxy",
+    "crates/sui-replay",
     "crates/sui-rosetta",
     "crates/sui-rpc-loadgen",
     "crates/sui-sdk",
     "crates/sui-simulator",
+    "crates/sui-snapshot",
     "crates/sui-source-validation",
     "crates/sui-storage",
+    "crates/sui-surfer",
     "crates/sui-swarm",
+    "crates/sui-swarm-config",
     "crates/sui-telemetry",
+    "crates/sui-test-transaction-builder",
     "crates/sui-test-validator",
     "crates/sui-tls",
     "crates/sui-tool",
@@ -109,10 +114,10 @@ members = [
     "crates/sui-transactional-test-runner",
     "crates/sui-types",
     "crates/sui-upgrade-compatibility-transactional-tests",
-    "crates/sui-verifier",
     "crates/sui-verifier-transactional-tests",
     "crates/telemetry-subscribers",
     "crates/test-utils",
+    "crates/transaction-fuzzer",
     "crates/typed-store",
     "crates/typed-store-derive",
     "crates/workspace-hack",
@@ -130,11 +135,14 @@ members = [
     "narwhal/test-utils",
     "narwhal/types",
     "narwhal/worker",
+    "sui-execution/latest/sui-adapter",
+    "sui-execution/latest/sui-move-natives",
+    "sui-execution/latest/sui-verifier",
 ]
 
 [workspace.package]
-# This version string will be inherited by sui-core, sui-faucet, sui-node, sui-tools, sui-sdk, and sui crates
-version = "0.32.0"
+# This version string will be inherited by sui-core, sui-faucet, sui-node, sui-tools, sui-sdk, and sui crates.
+version = "1.2.0"
 
 [profile.release]
 # debug = 1 means line charts only, which is minimum needed for good stack traces
@@ -173,7 +181,7 @@ opt-level = 1
 # Dependencies that should be kept in sync through the whole workspace
 [workspace.dependencies]
 bcs = "0.1.4"
-tokio = "1.27.0"
+tokio = "1.28.1"
 axum = { version = "0.6.6", default-features = false, features = ["headers", "tokio", "http1", "http2", "json", "matched-path", "original-uri", "form", "query"] }
 
 # Move dependencies
@@ -198,14 +206,14 @@ move-prover-boogie-backend = { path = "external-crates/move/move-prover/boogie-b
 move-stackless-bytecode = { path = "external-crates/move/move-prover/bytecode" }
 move-symbol-pool = { path = "external-crates/move/move-symbol-pool" }
 
-fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "84fd7c7428c5f59185aecc56a2e0a006e8e07de1" }
-fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "84fd7c7428c5f59185aecc56a2e0a006e8e07de1", package = "fastcrypto-zkp" }
+fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "c27e87fb539c88b6fe1eac7dd82561254bb1e07a" }
+fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "c27e87fb539c88b6fe1eac7dd82561254bb1e07a", package = "fastcrypto-zkp" }
 
 # anemo dependencies
-anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "40e3bf357313fe5caa924673711af8be4dc4096e" }
-anemo-build = { git = "https://github.com/mystenlabs/anemo.git", rev = "40e3bf357313fe5caa924673711af8be4dc4096e" }
-anemo-cli = { git = "https://github.com/mystenlabs/anemo.git", rev = "40e3bf357313fe5caa924673711af8be4dc4096e"}
-anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "40e3bf357313fe5caa924673711af8be4dc4096e"}
+anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "77f225832e361d068318073a6e06ec0310a16891" }
+anemo-build = { git = "https://github.com/mystenlabs/anemo.git", rev = "77f225832e361d068318073a6e06ec0310a16891" }
+anemo-cli = { git = "https://github.com/mystenlabs/anemo.git", rev = "77f225832e361d068318073a6e06ec0310a16891"}
+anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "77f225832e361d068318073a6e06ec0310a16891"}
 
 # Use the same workspace-hack across crates.
 workspace-hack = { path = "crates/workspace-hack" }

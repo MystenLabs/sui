@@ -12,17 +12,20 @@ use move_core_types::{
     account_address::AccountAddress, ident_str, identifier::Identifier, value::MoveTypeLayout,
 };
 use serde_json::{json, Value};
-use sui_framework::BuiltInFramework;
-use sui_framework_build::compiled_package::BuildConfig;
 use test_fuzz::runtime::num_traits::ToPrimitive;
 
-use crate::ResolvedCallArg;
+use sui_framework::BuiltInFramework;
+use sui_move_build::BuildConfig;
 use sui_types::base_types::{
     ObjectID, SuiAddress, TransactionDigest, STD_ASCII_MODULE_NAME, STD_ASCII_STRUCT_NAME,
     STD_OPTION_MODULE_NAME, STD_OPTION_STRUCT_NAME,
 };
+use sui_types::dynamic_field::derive_dynamic_field_id;
+use sui_types::gas_coin::GasCoin;
 use sui_types::object::Object;
-use sui_types::MOVE_STDLIB_ADDRESS;
+use sui_types::{parse_sui_type_tag, MOVE_STDLIB_ADDRESS};
+
+use crate::ResolvedCallArg;
 
 use super::{check_valid_homogeneous, HEX_PREFIX};
 use super::{resolve_move_function_args, SuiJsonValue};
@@ -80,6 +83,15 @@ fn test_json_is_homogeneous() {
     for arg in checks {
         assert!(check_valid_homogeneous(&arg).is_ok());
     }
+}
+
+#[test]
+fn test_json_struct_homogeneous() {
+    let positive = json!({"inner_vec":[1, 2, 3, 4, 5, 6, 7]});
+    assert!(SuiJsonValue::new(positive).is_ok());
+
+    let negative = json!({"inner_vec":[1, 2, 3, true, 5, 6, 7]});
+    assert!(SuiJsonValue::new(negative).is_err());
 }
 
 #[test]
@@ -475,15 +487,9 @@ fn test_basic_args_linter_top_level() {
     .map(|q| SuiJsonValue::new(q.clone()).unwrap())
     .collect();
 
-    let json_args = resolve_move_function_args(
-        example_package,
-        module.clone(),
-        function.clone(),
-        &[],
-        args,
-        /* allow_arbitrary_function_call */ false,
-    )
-    .unwrap();
+    let json_args =
+        resolve_move_function_args(example_package, module.clone(), function.clone(), &[], args)
+            .unwrap();
 
     assert!(!json_args.is_empty());
 
@@ -522,15 +528,7 @@ fn test_basic_args_linter_top_level() {
     .iter()
     .map(|q| SuiJsonValue::new(q.clone()).unwrap())
     .collect();
-    assert!(resolve_move_function_args(
-        example_package,
-        module,
-        function,
-        &[],
-        args,
-        /* allow_arbitrary_function_call */ false,
-    )
-    .is_err());
+    assert!(resolve_move_function_args(example_package, module, function, &[], args,).is_err());
 
     // Test with vecu8 as address
     let path =
@@ -567,15 +565,7 @@ fn test_basic_args_linter_top_level() {
         .map(|q| SuiJsonValue::new(q.clone()).unwrap())
         .collect();
 
-    let args = resolve_move_function_args(
-        framework_pkg,
-        module,
-        function,
-        &[],
-        args,
-        /* allow_arbitrary_function_call */ false,
-    )
-    .unwrap();
+    let args = resolve_move_function_args(framework_pkg, module, function, &[], args).unwrap();
 
     assert_eq!(
         args[0].0,
@@ -611,15 +601,7 @@ fn test_basic_args_linter_top_level() {
         .map(|q| SuiJsonValue::new(q.clone()).unwrap())
         .collect();
 
-    let args = resolve_move_function_args(
-        framework_pkg,
-        module,
-        function,
-        &[],
-        args,
-        /* allow_arbitrary_function_call */ false,
-    )
-    .unwrap();
+    let args = resolve_move_function_args(framework_pkg, module, function, &[], args).unwrap();
 
     assert_eq!(
         args[0].0,
@@ -664,15 +646,7 @@ fn test_basic_args_linter_top_level() {
 
     let args = vec![SuiJsonValue::new(Value::Array(vec![object_id1, object_id2])).unwrap()];
 
-    let args = resolve_move_function_args(
-        example_package,
-        module,
-        function,
-        &[],
-        args,
-        /* allow_arbitrary_function_call */ false,
-    )
-    .unwrap();
+    let args = resolve_move_function_args(example_package, module, function, &[], args).unwrap();
 
     assert!(matches!(args[0].0, ResolvedCallArg::ObjVec { .. }));
 
@@ -859,4 +833,98 @@ fn test_sui_call_arg_option_type() {
 
     let s = SuiJsonValue::from_str("[test, test2]").unwrap();
     println!("{s:?}");
+}
+
+#[test]
+fn test_convert_struct() {
+    let layout = MoveTypeLayout::Struct(GasCoin::layout());
+
+    let value = json!({"id":"0xf1416fe18c7baa1673187375777a7606708481311cb3548509ec91a5871c6b9a", "balance": "1000000"});
+    let sui_json = SuiJsonValue::new(value).unwrap();
+
+    let bcs = sui_json.to_bcs_bytes(&layout).unwrap();
+
+    let coin: GasCoin = bcs::from_bytes(&bcs).unwrap();
+    assert_eq!(
+        coin.0.id.id.bytes,
+        ObjectID::from_str("0xf1416fe18c7baa1673187375777a7606708481311cb3548509ec91a5871c6b9a")
+            .unwrap()
+    );
+    assert_eq!(coin.0.balance.value(), 1000000);
+}
+
+#[test]
+fn test_convert_string_vec() {
+    let test_vec = vec!["0xbbb", "test_str"];
+    let bcs = bcs::to_bytes(&test_vec).unwrap();
+    let string_layout = MoveTypeLayout::Struct(MoveStructLayout::WithTypes {
+        type_: StructTag {
+            address: MOVE_STDLIB_ADDRESS,
+            module: STD_ASCII_MODULE_NAME.into(),
+            name: STD_ASCII_STRUCT_NAME.into(),
+            type_params: vec![],
+        },
+        fields: vec![MoveFieldLayout {
+            name: ident_str!("bytes").into(),
+            layout: MoveTypeLayout::Vector(Box::new(MoveTypeLayout::U8)),
+        }],
+    });
+
+    let layout = MoveTypeLayout::Vector(Box::new(string_layout));
+
+    let value = json!(test_vec);
+    let sui_json = SuiJsonValue::new(value).unwrap();
+
+    let bcs2 = sui_json.to_bcs_bytes(&layout).unwrap();
+
+    assert_eq!(bcs, bcs2);
+}
+
+#[test]
+fn test_string_vec_df_name_child_id_eq() {
+    let parent_id =
+        ObjectID::from_str("0x13a3ab664bfbdff0ab03cd1ce8c6fb3f31a8803f2e6e0b14b610f8e94fcb8509")
+            .unwrap();
+    let name = json!({
+        "labels": [
+            "0x0001",
+            "sui"
+        ]
+    });
+
+    let string_layout = MoveTypeLayout::Struct(MoveStructLayout::WithTypes {
+        type_: StructTag {
+            address: MOVE_STDLIB_ADDRESS,
+            module: STD_ASCII_MODULE_NAME.into(),
+            name: STD_ASCII_STRUCT_NAME.into(),
+            type_params: vec![],
+        },
+        fields: vec![MoveFieldLayout {
+            name: ident_str!("bytes").into(),
+            layout: MoveTypeLayout::Vector(Box::new(MoveTypeLayout::U8)),
+        }],
+    });
+
+    let layout = MoveTypeLayout::Struct(MoveStructLayout::WithFields(vec![MoveFieldLayout::new(
+        Identifier::from_str("labels").unwrap(),
+        MoveTypeLayout::Vector(Box::new(string_layout)),
+    )]));
+
+    let sui_json = SuiJsonValue::new(name).unwrap();
+    let bcs2 = sui_json.to_bcs_bytes(&layout).unwrap();
+
+    let child_id = derive_dynamic_field_id(
+        parent_id,
+        &parse_sui_type_tag(
+            "0x3278d6445c6403c96abe9e25cc1213a85de2bd627026ee57906691f9bbf2bf8a::domain::Domain",
+        )
+        .unwrap(),
+        &bcs2,
+    )
+    .unwrap();
+
+    assert_eq!(
+        "0x2c2e361ee262b9f1f9a930e27e092cce5906b1e63a699ee60aec2de452ab9c70",
+        child_id.to_string()
+    );
 }

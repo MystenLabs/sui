@@ -23,7 +23,7 @@ export function Header({
     rightContent,
 }: HeaderProps) {
     return (
-        <header className="grid grid-cols-header items-center gap-3 px-3 py-1">
+        <header className="grid grid-cols-header items-center gap-3 px-3 py-2">
             <div>
                 <Link to="/" className="no-underline text-gray-90">
                     <Logo networkName={networkName} />
@@ -35,7 +35,7 @@ export function Header({
                 </div>
             )}
             {rightContent && (
-                <div className="col-start-3 justify-self-end">
+                <div className="col-start-3 mr-1 justify-self-end">
                     {rightContent}
                 </div>
             )}

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::fmt;
+use std::fmt::Write;
 use std::fmt::{Debug, Display, Formatter};
 use std::marker::PhantomData;
 use std::ops::Deref;
@@ -21,7 +22,10 @@ use serde_with::{Bytes, DeserializeAs, SerializeAs};
 
 use sui_protocol_config::ProtocolVersion;
 
-use crate::{parse_sui_struct_tag, parse_sui_type_tag};
+use crate::{
+    parse_sui_struct_tag, parse_sui_type_tag, DEEPBOOK_ADDRESS, SUI_CLOCK_ADDRESS,
+    SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_ADDRESS, SUI_SYSTEM_STATE_ADDRESS,
+};
 
 #[inline]
 fn to_custom_error<'de, D, E>(e: E) -> D::Error
@@ -149,41 +153,6 @@ impl<'de> DeserializeAs<'de, roaring::RoaringBitmap> for SuiBitmap {
     }
 }
 
-/// Macro for implementing serde Serialize/Deserialize for a type that implements AsRef<[u8]>.
-/// To be used only for non-fixed-size types (see `serialize_deserialize_with_to_from_bytes` in
-/// FastCrypto for fixed-size types).
-#[macro_export]
-macro_rules! serde_to_from_bytes {
-    ($type:ty) => {
-        impl ::serde::Serialize for $type {
-            fn serialize<S: ::serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-                match serializer.is_human_readable() {
-                    true => serializer.serialize_str(&self.encode_base64()),
-                    false => self.as_ref().serialize(serializer),
-                }
-            }
-        }
-
-        impl<'de> ::serde::Deserialize<'de> for $type {
-            fn deserialize<D: ::serde::Deserializer<'de>>(
-                deserializer: D,
-            ) -> Result<Self, D::Error> {
-                use serde::de::Error;
-                match deserializer.is_human_readable() {
-                    true => {
-                        let s = <String as ::serde::Deserialize>::deserialize(deserializer)?;
-                        Self::decode_base64(&s).map_err(::serde::de::Error::custom)
-                    }
-                    false => {
-                        let data: Vec<u8> = Vec::deserialize(deserializer)?;
-                        Self::from_bytes(&data).map_err(|e| Error::custom(e.to_string()))
-                    }
-                }
-            }
-        }
-    };
-}
-
 pub struct SuiStructTag;
 
 impl SerializeAs<StructTag> for SuiStructTag {
@@ -191,8 +160,47 @@ impl SerializeAs<StructTag> for SuiStructTag {
     where
         S: Serializer,
     {
-        let s = value.to_string();
-        s.serialize(serializer)
+        let f = to_sui_struct_tag_string(value).map_err(S::Error::custom)?;
+        f.serialize(serializer)
+    }
+}
+
+const SUI_ADDRESSES: [AccountAddress; 7] = [
+    AccountAddress::ZERO,
+    AccountAddress::ONE,
+    SUI_FRAMEWORK_ADDRESS,
+    SUI_SYSTEM_ADDRESS,
+    DEEPBOOK_ADDRESS,
+    SUI_SYSTEM_STATE_ADDRESS,
+    SUI_CLOCK_ADDRESS,
+];
+/// Serialize StructTag as a string, retaining the leading zeros in the address.
+pub fn to_sui_struct_tag_string(value: &StructTag) -> Result<String, fmt::Error> {
+    let mut f = String::new();
+    // trim leading zeros if address is in SUI_ADDRESSES
+    let address = if SUI_ADDRESSES.contains(&value.address) {
+        value.address.short_str_lossless()
+    } else {
+        value.address.to_canonical_string()
+    };
+
+    write!(f, "0x{}::{}::{}", address, value.module, value.name)?;
+    if let Some(first_ty) = value.type_params.first() {
+        write!(f, "<")?;
+        write!(f, "{}", to_sui_type_tag_string(first_ty)?)?;
+        for ty in value.type_params.iter().skip(1) {
+            write!(f, ", {}", to_sui_type_tag_string(ty)?)?;
+        }
+        write!(f, ">")?;
+    }
+    Ok(f)
+}
+
+fn to_sui_type_tag_string(value: &TypeTag) -> Result<String, fmt::Error> {
+    match value {
+        TypeTag::Vector(t) => Ok(format!("vector<{}>", to_sui_type_tag_string(t)?)),
+        TypeTag::Struct(s) => to_sui_struct_tag_string(s),
+        _ => Ok(value.to_string()),
     }
 }
 
@@ -213,7 +221,7 @@ impl SerializeAs<TypeTag> for SuiTypeTag {
     where
         S: Serializer,
     {
-        let s = value.to_string();
+        let s = to_sui_type_tag_string(value).map_err(S::Error::custom)?;
         s.serialize(serializer)
     }
 }

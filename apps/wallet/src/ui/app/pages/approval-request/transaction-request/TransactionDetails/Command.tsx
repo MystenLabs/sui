@@ -10,6 +10,8 @@ import {
     type MakeMoveVecTransaction,
     type PublishTransaction,
     toB64,
+    TypeTagSerializer,
+    type TypeTag,
 } from '@mysten/sui.js';
 import { useState } from 'react';
 
@@ -35,6 +37,10 @@ function convertCommandArgumentToString(
     }
 
     if (typeof arg === 'object' && 'Some' in arg) {
+        if (typeof arg.Some === 'object') {
+            // MakeMoveVecTransaction['type'] is TypeTag type
+            return TypeTagSerializer.tagToString(arg.Some as TypeTag);
+        }
         return arg.Some;
     }
 
@@ -112,7 +118,7 @@ export function Command({ command }: CommandProps) {
             </button>
 
             {expanded && (
-                <div className="mt-2 text-p2 font-medium text-steel">
+                <div className="mt-2 text-pBodySmall font-medium text-steel">
                     ({convertCommandToString(command)})
                 </div>
             )}

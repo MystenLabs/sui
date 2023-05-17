@@ -4,12 +4,11 @@
 
 use std::collections::HashMap;
 use std::env;
-use std::net::{IpAddr, Ipv4Addr, SocketAddr};
-use std::str::FromStr;
+use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::SystemTime;
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use axum::{extract::Extension, http::StatusCode, routing::get, Router};
 use backoff::future::retry;
 use backoff::ExponentialBackoff;
@@ -28,6 +27,7 @@ use prometheus::{Registry, TextEncoder};
 use regex::Regex;
 use rustls::client::{ServerCertVerified, ServerCertVerifier};
 use rustls::{Certificate, Error, ServerName};
+use tokio::runtime::Handle;
 use tracing::{info, warn};
 use url::Url;
 
@@ -39,7 +39,7 @@ use errors::IndexerError;
 use handlers::checkpoint_handler::CheckpointHandler;
 use mysten_metrics::{spawn_monitored_task, RegistryService};
 use store::IndexerStore;
-use sui_core::event_handler::EventHandler;
+use sui_core::event_handler::SubscriptionHandler;
 use sui_json_rpc::{JsonRpcServerBuilder, ServerHandle, CLIENT_SDK_TYPE_HEADER};
 use sui_sdk::{SuiClient, SuiClientBuilder};
 
@@ -88,7 +88,17 @@ const IMPLEMENTED_METHODS: [&str; 9] = [
 )]
 pub struct IndexerConfig {
     #[clap(long)]
-    pub db_url: String,
+    pub db_url: Option<String>,
+    #[clap(long)]
+    pub db_user_name: Option<String>,
+    #[clap(long)]
+    pub db_password: Option<String>,
+    #[clap(long)]
+    pub db_host: Option<String>,
+    #[clap(long)]
+    pub db_port: Option<u16>,
+    #[clap(long)]
+    pub db_name: Option<String>,
     #[clap(long)]
     pub rpc_client_url: String,
     #[clap(long, default_value = "0.0.0.0", global = true)]
@@ -114,27 +124,46 @@ pub struct IndexerConfig {
 
 impl IndexerConfig {
     /// returns connection url without the db name
-    pub fn base_connection_url(&self) -> String {
-        let url = Url::parse(&self.db_url).expect("Failed to parse URL");
-        format!(
+    pub fn base_connection_url(&self) -> Result<String, anyhow::Error> {
+        let url_str = self.get_db_url()?;
+        let url = Url::parse(&url_str).expect("Failed to parse URL");
+        Ok(format!(
             "{}://{}:{}@{}:{}/",
             url.scheme(),
             url.username(),
             url.password().unwrap_or_default(),
             url.host_str().unwrap_or_default(),
             url.port().unwrap_or_default()
-        )
+        ))
     }
 
     pub fn all_implemented_methods() -> Vec<String> {
         IMPLEMENTED_METHODS.iter().map(|&s| s.to_string()).collect()
+    }
+
+    pub fn get_db_url(&self) -> Result<String, anyhow::Error> {
+        match (&self.db_url, &self.db_user_name, &self.db_password, &self.db_host, &self.db_port, &self.db_name) {
+            (Some(db_url), _, _, _, _, _) => Ok(db_url.clone()),
+            (None, Some(db_user_name), Some(db_password), Some(db_host), Some(db_port), Some(db_name)) => {
+                Ok(format!(
+                    "postgres://{}:{}@{}:{}/{}",
+                    db_user_name, db_password, db_host, db_port, db_name
+                ))
+            }
+            _ => Err(anyhow!("Invalid db connection config, either db_url or (db_user_name, db_password, db_host, db_port, db_name) must be provided")),
+        }
     }
 }
 
 impl Default for IndexerConfig {
     fn default() -> Self {
         Self {
-            db_url: "postgres://postgres:postgres@localhost:5432/sui_indexer".to_string(),
+            db_url: Some("postgres://postgres:postgres@localhost:5432/sui_indexer".to_string()),
+            db_user_name: None,
+            db_password: None,
+            db_host: None,
+            db_port: None,
+            db_name: None,
             rpc_client_url: "http://127.0.0.1:9000".to_string(),
             client_metric_host: "0.0.0.0".to_string(),
             client_metric_port: 9184,
@@ -157,19 +186,25 @@ impl Indexer {
         registry: &Registry,
         store: S,
         metrics: IndexerMetrics,
+        custom_runtime: Option<Handle>,
     ) -> Result<(), IndexerError> {
         info!(
             "Sui indexer of version {:?} started...",
             env!("CARGO_PKG_VERSION")
         );
-        let event_handler = Arc::new(EventHandler::default());
+        let event_handler = Arc::new(SubscriptionHandler::default());
 
         if config.rpc_server_worker && config.fullnode_sync_worker {
             info!("Starting indexer with both fullnode sync and RPC server");
-            let handle =
-                build_json_rpc_server(registry, store.clone(), event_handler.clone(), config)
-                    .await
-                    .expect("Json rpc server should not run into errors upon start.");
+            let handle = build_json_rpc_server(
+                registry,
+                store.clone(),
+                event_handler.clone(),
+                config,
+                custom_runtime,
+            )
+            .await
+            .expect("Json rpc server should not run into errors upon start.");
             // let JSON RPC server run forever.
             spawn_monitored_task!(handle.stopped());
 
@@ -192,10 +227,15 @@ impl Indexer {
             .await
         } else if config.rpc_server_worker {
             info!("Starting indexer with only RPC server");
-            let handle =
-                build_json_rpc_server(registry, store.clone(), event_handler.clone(), config)
-                    .await
-                    .expect("Json rpc server should not run into errors upon start.");
+            let handle = build_json_rpc_server(
+                registry,
+                store.clone(),
+                event_handler.clone(),
+                config,
+                custom_runtime,
+            )
+            .await
+            .expect("Json rpc server should not run into errors upon start.");
             handle.stopped().await;
             Ok(())
         } else if config.fullnode_sync_worker {
@@ -363,8 +403,9 @@ pub async fn get_async_pg_pool_connection(
 pub async fn build_json_rpc_server<S: IndexerStore + Sync + Send + 'static + Clone>(
     prometheus_registry: &Registry,
     state: S,
-    event_handler: Arc<EventHandler>,
+    event_handler: Arc<SubscriptionHandler>,
     config: &IndexerConfig,
+    custom_runtime: Option<Handle>,
 ) -> Result<ServerHandle, IndexerError> {
     let mut builder = JsonRpcServerBuilder::new(env!("CARGO_PKG_VERSION"), prometheus_registry);
     let http_client = get_http_client(config.rpc_client_url.as_str())?;
@@ -388,10 +429,10 @@ pub async fn build_json_rpc_server<S: IndexerStore + Sync + Send + 'static + Clo
     builder.register_module(MoveUtilsApi::new(http_client))?;
     let default_socket_addr = SocketAddr::new(
         // unwrap() here is safe b/c the address is a static config.
-        IpAddr::V4(Ipv4Addr::from_str(config.rpc_server_url.as_str()).unwrap()),
+        config.rpc_server_url.as_str().parse().unwrap(),
         config.rpc_server_port,
     );
-    Ok(builder.start(default_socket_addr).await?)
+    Ok(builder.start(default_socket_addr, custom_runtime).await?)
 }
 
 fn convert_url(url_str: &str) -> Option<String> {

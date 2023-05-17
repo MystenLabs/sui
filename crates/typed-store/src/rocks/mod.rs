@@ -13,7 +13,11 @@ use crate::{
 };
 use bincode::Options;
 use collectable::TryExtend;
-use rocksdb::{checkpoint::Checkpoint, BlockBasedOptions, Cache, LiveFile};
+use itertools::Itertools;
+use rocksdb::{
+    checkpoint::Checkpoint, BlockBasedOptions, BottommostLevelCompaction, Cache, CompactOptions,
+    LiveFile, OptimisticTransactionDB, SnapshotWithThreadMode,
+};
 use rocksdb::{
     properties, AsColumnFamilyRef, CStrLike, ColumnFamilyDescriptor, DBWithThreadMode, Error,
     ErrorKind, IteratorMode, MultiThreaded, OptimisticTransactionOptions, ReadOptions, Transaction,
@@ -25,31 +29,51 @@ use std::{
     collections::BTreeMap,
     env,
     marker::PhantomData,
+    ops::RangeBounds,
     path::{Path, PathBuf},
     sync::Arc,
     time::Duration,
 };
+use std::{collections::HashSet, ffi::CStr};
 use tap::TapFallible;
 use tokio::sync::oneshot;
-use tracing::{debug, error, info, instrument};
+use tracing::{error, info, instrument, warn};
 
 use self::{iter::Iter, keys::Keys, values::Values};
 use crate::rocks::safe_iter::SafeIter;
 pub use errors::TypedStoreError;
+use std::ops::Bound;
 use sui_macros::{fail_point, nondeterministic};
 
 // Write buffer size per RocksDB instance can be set via the env var below.
 // If the env var is not set, use the default value in MiB.
-const ENV_VAR_DB_WRITE_BUFFER_SIZE: &str = "MYSTEN_DB_WRITE_BUFFER_SIZE_MB";
+const ENV_VAR_DB_WRITE_BUFFER_SIZE: &str = "DB_WRITE_BUFFER_SIZE_MB";
 const DEFAULT_DB_WRITE_BUFFER_SIZE: usize = 1024;
 
 // Write ahead log size per RocksDB instance can be set via the env var below.
 // If the env var is not set, use the default value in MiB.
-const ENV_VAR_DB_WAL_SIZE: &str = "MYSTEN_DB_WAL_SIZE_MB";
+const ENV_VAR_DB_WAL_SIZE: &str = "DB_WAL_SIZE_MB";
 const DEFAULT_DB_WAL_SIZE: usize = 1024;
 
+// Environment variable to control behavior of write throughput optimized tables.
 const ENV_VAR_L0_NUM_FILES_COMPACTION_TRIGGER: &str = "L0_NUM_FILES_COMPACTION_TRIGGER";
+const DEFAULT_L0_NUM_FILES_COMPACTION_TRIGGER: usize = 6;
+const ENV_VAR_MAX_WRITE_BUFFER_SIZE_MB: &str = "MAX_WRITE_BUFFER_SIZE_MB";
+const DEFAULT_MAX_WRITE_BUFFER_SIZE_MB: usize = 256;
+const ENV_VAR_MAX_WRITE_BUFFER_NUMBER: &str = "MAX_WRITE_BUFFER_NUMBER";
+const DEFAULT_MAX_WRITE_BUFFER_NUMBER: usize = 6;
+const ENV_VAR_TARGET_FILE_SIZE_BASE_MB: &str = "TARGET_FILE_SIZE_BASE_MB";
+const DEFAULT_TARGET_FILE_SIZE_BASE_MB: usize = 128;
+
+// Set to 1 to disable blob storage for transactions and effects.
+const ENV_VAR_DISABLE_BLOB_STORAGE: &str = "DISABLE_BLOB_STORAGE";
+
 const ENV_VAR_MAX_BACKGROUND_JOBS: &str = "MAX_BACKGROUND_JOBS";
+
+// TODO: remove this after Rust rocksdb has the TOTAL_BLOB_FILES_SIZE property built-in.
+// From https://github.com/facebook/rocksdb/blob/bd80433c73691031ba7baa65c16c63a83aef201a/include/rocksdb/db.h#L1169
+const ROCKSDB_PROPERTY_TOTAL_BLOB_FILES_SIZE: &CStr =
+    unsafe { CStr::from_bytes_with_nul_unchecked("rocksdb.total-blob-file-size\0".as_bytes()) };
 
 #[cfg(test)]
 mod tests;
@@ -392,8 +416,28 @@ impl RocksDB {
         delegate_call!(self.compact_range_cf(cf, start, end))
     }
 
+    pub fn compact_range_to_bottom<K: AsRef<[u8]>>(
+        &self,
+        cf: &impl AsColumnFamilyRef,
+        start: Option<K>,
+        end: Option<K>,
+    ) {
+        let opt = &mut CompactOptions::default();
+        opt.set_bottommost_level_compaction(BottommostLevelCompaction::ForceOptimized);
+        delegate_call!(self.compact_range_cf_opt(cf, start, end, opt))
+    }
+
     pub fn flush(&self) -> Result<(), TypedStoreError> {
         delegate_call!(self.flush()).map_err(|e| TypedStoreError::RocksDBError(e.into_string()))
+    }
+
+    pub fn snapshot(&self) -> RocksDBSnapshot<'_> {
+        match self {
+            Self::DBWithThreadMode(d) => RocksDBSnapshot::DBWithThreadMode(d.underlying.snapshot()),
+            Self::OptimisticTransactionDB(d) => {
+                RocksDBSnapshot::OptimisticTransactionDB(d.underlying.snapshot())
+            }
+        }
     }
 
     pub fn checkpoint(&self, path: &Path) -> Result<(), TypedStoreError> {
@@ -419,31 +463,31 @@ impl RocksDB {
         delegate_call!(self.set_options_cf(cf, opts))
     }
 
-    pub fn read_sampling_interval(&self) -> SamplingInterval {
+    pub fn get_sampling_interval(&self) -> SamplingInterval {
         match self {
-            Self::DBWithThreadMode(d) => d.metric_conf.read_sample_interval.clone(),
-            Self::OptimisticTransactionDB(d) => d.metric_conf.read_sample_interval.clone(),
+            Self::DBWithThreadMode(d) => d.metric_conf.read_sample_interval.new_from_self(),
+            Self::OptimisticTransactionDB(d) => d.metric_conf.read_sample_interval.new_from_self(),
+        }
+    }
+
+    pub fn multiget_sampling_interval(&self) -> SamplingInterval {
+        match self {
+            Self::DBWithThreadMode(d) => d.metric_conf.read_sample_interval.new_from_self(),
+            Self::OptimisticTransactionDB(d) => d.metric_conf.read_sample_interval.new_from_self(),
         }
     }
 
     pub fn write_sampling_interval(&self) -> SamplingInterval {
         match self {
-            Self::DBWithThreadMode(d) => d.metric_conf.write_sample_interval.clone(),
-            Self::OptimisticTransactionDB(d) => d.metric_conf.write_sample_interval.clone(),
+            Self::DBWithThreadMode(d) => d.metric_conf.write_sample_interval.new_from_self(),
+            Self::OptimisticTransactionDB(d) => d.metric_conf.write_sample_interval.new_from_self(),
         }
     }
 
-    pub fn iter_latency_sampling_interval(&self) -> SamplingInterval {
+    pub fn iter_sampling_interval(&self) -> SamplingInterval {
         match self {
-            Self::DBWithThreadMode(d) => d.metric_conf.iter_latency_sample_interval.clone(),
-            Self::OptimisticTransactionDB(d) => d.metric_conf.iter_latency_sample_interval.clone(),
-        }
-    }
-
-    pub fn iter_bytes_sampling_interval(&self) -> SamplingInterval {
-        match self {
-            Self::DBWithThreadMode(d) => d.metric_conf.iter_bytes_sample_interval.clone(),
-            Self::OptimisticTransactionDB(d) => d.metric_conf.iter_bytes_sample_interval.clone(),
+            Self::DBWithThreadMode(d) => d.metric_conf.iter_sample_interval.new_from_self(),
+            Self::OptimisticTransactionDB(d) => d.metric_conf.iter_sample_interval.new_from_self(),
         }
     }
 
@@ -472,6 +516,43 @@ impl RocksDB {
             .and_then(|f| f.to_str())
             .unwrap_or("unknown")
             .to_string()
+    }
+}
+
+pub enum RocksDBSnapshot<'a> {
+    DBWithThreadMode(rocksdb::Snapshot<'a>),
+    OptimisticTransactionDB(SnapshotWithThreadMode<'a, OptimisticTransactionDB>),
+}
+
+impl<'a> RocksDBSnapshot<'a> {
+    pub fn multi_get_cf_opt<'b: 'a, K, I, W>(
+        &'a self,
+        keys: I,
+        readopts: ReadOptions,
+    ) -> Vec<Result<Option<Vec<u8>>, rocksdb::Error>>
+    where
+        K: AsRef<[u8]>,
+        I: IntoIterator<Item = (&'b W, K)>,
+        W: 'b + AsColumnFamilyRef,
+    {
+        match self {
+            Self::DBWithThreadMode(s) => s.multi_get_cf_opt(keys, readopts),
+            Self::OptimisticTransactionDB(s) => s.multi_get_cf_opt(keys, readopts),
+        }
+    }
+    pub fn multi_get_cf<'b: 'a, K, I, W>(
+        &'a self,
+        keys: I,
+    ) -> Vec<Result<Option<Vec<u8>>, rocksdb::Error>>
+    where
+        K: AsRef<[u8]>,
+        I: IntoIterator<Item = (&'b W, K)>,
+        W: 'b + AsColumnFamilyRef,
+    {
+        match self {
+            Self::DBWithThreadMode(s) => s.multi_get_cf(keys),
+            Self::OptimisticTransactionDB(s) => s.multi_get_cf(keys),
+        }
     }
 }
 
@@ -537,8 +618,7 @@ pub struct MetricConf {
     pub db_name_override: Option<String>,
     pub read_sample_interval: SamplingInterval,
     pub write_sample_interval: SamplingInterval,
-    pub iter_latency_sample_interval: SamplingInterval,
-    pub iter_bytes_sample_interval: SamplingInterval,
+    pub iter_sample_interval: SamplingInterval,
 }
 
 impl MetricConf {
@@ -547,8 +627,7 @@ impl MetricConf {
             db_name_override: Some(db_name.to_string()),
             read_sample_interval: SamplingInterval::default(),
             write_sample_interval: SamplingInterval::default(),
-            iter_latency_sample_interval: SamplingInterval::default(),
-            iter_bytes_sample_interval: SamplingInterval::default(),
+            iter_sample_interval: SamplingInterval::default(),
         }
     }
     pub fn with_sampling(read_interval: SamplingInterval) -> Self {
@@ -556,8 +635,7 @@ impl MetricConf {
             db_name_override: None,
             read_sample_interval: read_interval,
             write_sample_interval: SamplingInterval::default(),
-            iter_latency_sample_interval: SamplingInterval::default(),
-            iter_bytes_sample_interval: SamplingInterval::default(),
+            iter_sample_interval: SamplingInterval::default(),
         }
     }
 }
@@ -573,10 +651,10 @@ pub struct DBMap<K, V> {
     cf: String,
     pub opts: ReadWriteOptions,
     db_metrics: Arc<DBMetrics>,
-    read_sample_interval: SamplingInterval,
+    get_sample_interval: SamplingInterval,
+    multiget_sample_interval: SamplingInterval,
     write_sample_interval: SamplingInterval,
-    iter_latency_sample_interval: SamplingInterval,
-    iter_bytes_sample_interval: SamplingInterval,
+    iter_sample_interval: SamplingInterval,
     _metrics_task_cancel_handle: Arc<oneshot::Sender<()>>,
 }
 
@@ -616,10 +694,10 @@ impl<K, V> DBMap<K, V> {
             cf: opt_cf.to_string(),
             db_metrics: db_metrics_cloned,
             _metrics_task_cancel_handle: Arc::new(sender),
-            read_sample_interval: db.read_sampling_interval(),
+            get_sample_interval: db.get_sampling_interval(),
+            multiget_sample_interval: db.multiget_sampling_interval(),
             write_sample_interval: db.write_sampling_interval(),
-            iter_bytes_sample_interval: db.iter_bytes_sampling_interval(),
-            iter_latency_sample_interval: db.iter_latency_sampling_interval(),
+            iter_sample_interval: db.iter_sampling_interval(),
         }
     }
 
@@ -700,6 +778,18 @@ impl<K, V> DBMap<K, V> {
         Ok(())
     }
 
+    pub fn compact_range_to_bottom<J: Serialize>(
+        &self,
+        start: &J,
+        end: &J,
+    ) -> Result<(), TypedStoreError> {
+        let from_buf = be_fix_int_ser(start.borrow())?;
+        let to_buf = be_fix_int_ser(end.borrow())?;
+        self.rocksdb
+            .compact_range_to_bottom(&self.cf(), Some(from_buf), Some(to_buf));
+        Ok(())
+    }
+
     pub fn cf(&self) -> Arc<rocksdb::BoundColumnFamily<'_>> {
         self.rocksdb
             .cf_handle(&self.cf)
@@ -741,6 +831,14 @@ impl<K, V> DBMap<K, V> {
             .with_label_values(&[cf_name])
             .set(
                 Self::get_int_property(rocksdb, &cf, properties::TOTAL_SST_FILES_SIZE)
+                    .unwrap_or(METRICS_ERROR),
+            );
+        db_metrics
+            .cf_metrics
+            .rocksdb_total_blob_files_size
+            .with_label_values(&[cf_name])
+            .set(
+                Self::get_int_property(rocksdb, &cf, ROCKSDB_PROPERTY_TOTAL_BLOB_FILES_SIZE)
                     .unwrap_or(METRICS_ERROR),
             );
         db_metrics
@@ -871,38 +969,6 @@ impl<K, V> DBMap<K, V> {
                 Self::get_int_property(rocksdb, &cf, properties::BACKGROUND_ERRORS)
                     .unwrap_or(METRICS_ERROR),
             );
-        let db_name = rocksdb.db_name();
-        if let RocksDB::DBWithThreadMode(ref rocksdb) = **rocksdb {
-            let mem_usage_stats =
-                rocksdb::perf::get_memory_usage_stats(Some(&[&rocksdb.underlying]), None);
-            db_metrics
-                .rocksdb_mem_table_usage
-                .with_label_values(&[&db_name])
-                .set(
-                    mem_usage_stats
-                        .as_ref()
-                        .map(|x| x.mem_table_total as i64)
-                        .unwrap_or(METRICS_ERROR),
-                );
-            db_metrics
-                .rocksdb_unflushed_mem_table_usage
-                .with_label_values(&[&db_name])
-                .set(
-                    mem_usage_stats
-                        .as_ref()
-                        .map(|x| x.mem_table_unflushed as i64)
-                        .unwrap_or(METRICS_ERROR),
-                );
-            db_metrics
-                .rocksdb_table_readers_usage
-                .with_label_values(&[&db_name])
-                .set(
-                    mem_usage_stats
-                        .as_ref()
-                        .map(|x| x.mem_table_readers_total as i64)
-                        .unwrap_or(METRICS_ERROR),
-                );
-        }
     }
 
     pub fn transaction(&self) -> Result<DBTransaction<'_>, TypedStoreError> {
@@ -915,6 +981,10 @@ impl<K, V> DBMap<K, V> {
 
     pub fn checkpoint_db(&self, path: &Path) -> Result<(), TypedStoreError> {
         self.rocksdb.checkpoint(path)
+    }
+
+    pub fn snapshot(&self) -> Result<RocksDBSnapshot<'_>, TypedStoreError> {
+        Ok(self.rocksdb.snapshot())
     }
 
     pub fn table_summary(&self) -> eyre::Result<TableSummary> {
@@ -1280,10 +1350,13 @@ impl<'a> DBTransaction<'a> {
             .transaction
             .raw_iterator_cf_opt(&db.cf(), db.opts.readopts());
         Iter::new(
-            RocksDBRawIter::OptimisticTransaction(db_iter),
             db.cf.clone(),
-            &db.db_metrics,
-            &db.iter_bytes_sample_interval,
+            RocksDBRawIter::OptimisticTransaction(db_iter),
+            None,
+            None,
+            None,
+            None,
+            None,
         )
     }
 
@@ -1426,14 +1499,14 @@ where
 
     #[instrument(level = "trace", skip_all, err)]
     fn get(&self, key: &K) -> Result<Option<V>, TypedStoreError> {
-        let report_metrics = if self.read_sample_interval.sample() {
-            let timer = self
-                .db_metrics
-                .op_metrics
-                .rocksdb_get_latency_seconds
-                .with_label_values(&[&self.cf])
-                .start_timer();
-            Some((timer, RocksDBPerfContext::default()))
+        let _timer = self
+            .db_metrics
+            .op_metrics
+            .rocksdb_get_latency_seconds
+            .with_label_values(&[&self.cf])
+            .start_timer();
+        let perf_ctx = if self.get_sample_interval.sample() {
+            Some(RocksDBPerfContext::default())
         } else {
             None
         };
@@ -1441,12 +1514,12 @@ where
         let res = self
             .rocksdb
             .get_pinned_cf(&self.cf(), &key_buf, &self.opts.readopts())?;
-        if report_metrics.is_some() {
-            self.db_metrics
-                .op_metrics
-                .rocksdb_get_bytes
-                .with_label_values(&[&self.cf])
-                .observe(res.as_ref().map_or(0.0, |v| v.len() as f64));
+        self.db_metrics
+            .op_metrics
+            .rocksdb_get_bytes
+            .with_label_values(&[&self.cf])
+            .observe(res.as_ref().map_or(0.0, |v| v.len() as f64));
+        if perf_ctx.is_some() {
             self.db_metrics
                 .read_perf_ctx_metrics
                 .report_metrics(&self.cf);
@@ -1459,14 +1532,14 @@ where
 
     #[instrument(level = "trace", skip_all, err)]
     fn get_raw_bytes(&self, key: &K) -> Result<Option<Vec<u8>>, TypedStoreError> {
-        let report_metrics = if self.read_sample_interval.sample() {
-            let timer = self
-                .db_metrics
-                .op_metrics
-                .rocksdb_get_latency_seconds
-                .with_label_values(&[&self.cf])
-                .start_timer();
-            Some((timer, RocksDBPerfContext::default()))
+        let _timer = self
+            .db_metrics
+            .op_metrics
+            .rocksdb_get_latency_seconds
+            .with_label_values(&[&self.cf])
+            .start_timer();
+        let perf_ctx = if self.get_sample_interval.sample() {
+            Some(RocksDBPerfContext::default())
         } else {
             None
         };
@@ -1474,12 +1547,12 @@ where
         let res = self
             .rocksdb
             .get_pinned_cf(&self.cf(), &key_buf, &self.opts.readopts())?;
-        if report_metrics.is_some() {
-            self.db_metrics
-                .op_metrics
-                .rocksdb_get_bytes
-                .with_label_values(&[&self.cf])
-                .observe(res.as_ref().map_or(0.0, |v| v.len() as f64));
+        self.db_metrics
+            .op_metrics
+            .rocksdb_get_bytes
+            .with_label_values(&[&self.cf])
+            .observe(res.as_ref().map_or(0.0, |v| v.len() as f64));
+        if perf_ctx.is_some() {
             self.db_metrics
                 .read_perf_ctx_metrics
                 .report_metrics(&self.cf);
@@ -1492,25 +1565,25 @@ where
 
     #[instrument(level = "trace", skip_all, err)]
     fn insert(&self, key: &K, value: &V) -> Result<(), TypedStoreError> {
-        let report_metrics = if self.write_sample_interval.sample() {
-            let timer = self
-                .db_metrics
-                .op_metrics
-                .rocksdb_put_latency_seconds
-                .with_label_values(&[&self.cf])
-                .start_timer();
-            Some((timer, RocksDBPerfContext::default()))
+        let _timer = self
+            .db_metrics
+            .op_metrics
+            .rocksdb_put_latency_seconds
+            .with_label_values(&[&self.cf])
+            .start_timer();
+        let perf_ctx = if self.write_sample_interval.sample() {
+            Some(RocksDBPerfContext::default())
         } else {
             None
         };
         let key_buf = be_fix_int_ser(key)?;
         let value_buf = bcs::to_bytes(value)?;
-        if report_metrics.is_some() {
-            self.db_metrics
-                .op_metrics
-                .rocksdb_put_bytes
-                .with_label_values(&[&self.cf])
-                .observe((key_buf.len() + value_buf.len()) as f64);
+        self.db_metrics
+            .op_metrics
+            .rocksdb_put_bytes
+            .with_label_values(&[&self.cf])
+            .observe((key_buf.len() + value_buf.len()) as f64);
+        if perf_ctx.is_some() {
             self.db_metrics
                 .write_perf_ctx_metrics
                 .report_metrics(&self.cf);
@@ -1522,26 +1595,26 @@ where
 
     #[instrument(level = "trace", skip_all, err)]
     fn remove(&self, key: &K) -> Result<(), TypedStoreError> {
-        let report_metrics = if self.write_sample_interval.sample() {
-            let timer = self
-                .db_metrics
-                .op_metrics
-                .rocksdb_delete_latency_seconds
-                .with_label_values(&[&self.cf])
-                .start_timer();
-            Some((timer, RocksDBPerfContext::default()))
+        let _timer = self
+            .db_metrics
+            .op_metrics
+            .rocksdb_delete_latency_seconds
+            .with_label_values(&[&self.cf])
+            .start_timer();
+        let perf_ctx = if self.write_sample_interval.sample() {
+            Some(RocksDBPerfContext::default())
         } else {
             None
         };
         let key_buf = be_fix_int_ser(key)?;
         self.rocksdb
             .delete_cf(&self.cf(), key_buf, &self.opts.writeopts())?;
-        if report_metrics.is_some() {
-            self.db_metrics
-                .op_metrics
-                .rocksdb_deletes
-                .with_label_values(&[&self.cf])
-                .inc();
+        self.db_metrics
+            .op_metrics
+            .rocksdb_deletes
+            .with_label_values(&[&self.cf])
+            .inc();
+        if perf_ctx.is_some() {
             self.db_metrics
                 .write_perf_ctx_metrics
                 .report_metrics(&self.cf);
@@ -1562,61 +1635,204 @@ where
     }
 
     fn iter(&'a self) -> Self::Iterator {
-        let report_metrics = if self.iter_latency_sample_interval.sample() {
-            let timer = self
-                .db_metrics
-                .op_metrics
-                .rocksdb_iter_latency_seconds
-                .with_label_values(&[&self.cf])
-                .start_timer();
-            Some((timer, RocksDBPerfContext::default()))
+        let _timer = self
+            .db_metrics
+            .op_metrics
+            .rocksdb_iter_latency_seconds
+            .with_label_values(&[&self.cf])
+            .start_timer();
+        let bytes_scanned = self
+            .db_metrics
+            .op_metrics
+            .rocksdb_iter_bytes
+            .with_label_values(&[&self.cf]);
+        let keys_scanned = self
+            .db_metrics
+            .op_metrics
+            .rocksdb_iter_keys
+            .with_label_values(&[&self.cf]);
+        let _perf_ctx = if self.iter_sample_interval.sample() {
+            Some(RocksDBPerfContext::default())
         } else {
             None
         };
         let db_iter = self
             .rocksdb
             .raw_iterator_cf(&self.cf(), self.opts.readopts());
-        if let Some((timer, _perf_ctx)) = report_metrics {
-            timer.stop_and_record();
-            self.db_metrics
-                .read_perf_ctx_metrics
-                .report_metrics(&self.cf);
-        }
         Iter::new(
-            db_iter,
             self.cf.clone(),
-            &self.db_metrics,
-            &self.iter_bytes_sample_interval,
+            db_iter,
+            Some(_timer),
+            _perf_ctx,
+            Some(bytes_scanned),
+            Some(keys_scanned),
+            Some(self.db_metrics.clone()),
         )
     }
 
     fn safe_iter(&'a self) -> Self::SafeIterator {
-        let report_metrics = if self.iter_latency_sample_interval.sample() {
-            let timer = self
-                .db_metrics
-                .op_metrics
-                .rocksdb_iter_latency_seconds
-                .with_label_values(&[&self.cf])
-                .start_timer();
-            Some((timer, RocksDBPerfContext::default()))
+        let _timer = self
+            .db_metrics
+            .op_metrics
+            .rocksdb_iter_latency_seconds
+            .with_label_values(&[&self.cf])
+            .start_timer();
+        let _perf_ctx = if self.iter_sample_interval.sample() {
+            Some(RocksDBPerfContext::default())
         } else {
             None
         };
+        let bytes_scanned = self
+            .db_metrics
+            .op_metrics
+            .rocksdb_iter_bytes
+            .with_label_values(&[&self.cf]);
+        let keys_scanned = self
+            .db_metrics
+            .op_metrics
+            .rocksdb_iter_keys
+            .with_label_values(&[&self.cf]);
         let mut db_iter = self
             .rocksdb
             .raw_iterator_cf(&self.cf(), self.opts.readopts());
         db_iter.seek_to_first();
-        if let Some((timer, _perf_ctx)) = report_metrics {
-            timer.stop_and_record();
-            self.db_metrics
-                .read_perf_ctx_metrics
-                .report_metrics(&self.cf);
-        }
         SafeIter::new(
-            db_iter,
             self.cf.clone(),
-            &self.db_metrics,
-            &self.iter_bytes_sample_interval,
+            db_iter,
+            Some(_timer),
+            _perf_ctx,
+            Some(bytes_scanned),
+            Some(keys_scanned),
+            Some(self.db_metrics.clone()),
+        )
+    }
+
+    /// Returns an iterator visiting each key-value pair in the map. By proving bounds of the
+    /// scan range, RocksDB scan avoid unnecessary scans.
+    /// Lower bound is inclusive, while upper bound is exclusive.
+    fn iter_with_bounds(
+        &'a self,
+        lower_bound: Option<K>,
+        upper_bound: Option<K>,
+    ) -> Self::Iterator {
+        let _timer = self
+            .db_metrics
+            .op_metrics
+            .rocksdb_iter_latency_seconds
+            .with_label_values(&[&self.cf])
+            .start_timer();
+        let bytes_scanned = self
+            .db_metrics
+            .op_metrics
+            .rocksdb_iter_bytes
+            .with_label_values(&[&self.cf]);
+        let keys_scanned = self
+            .db_metrics
+            .op_metrics
+            .rocksdb_iter_keys
+            .with_label_values(&[&self.cf]);
+        let _perf_ctx = if self.iter_sample_interval.sample() {
+            Some(RocksDBPerfContext::default())
+        } else {
+            None
+        };
+        let mut readopts = ReadOptions::default();
+        if let Some(lower_bound) = lower_bound {
+            let key_buf = be_fix_int_ser(&lower_bound).unwrap();
+            readopts.set_iterate_lower_bound(key_buf);
+        }
+        if let Some(upper_bound) = upper_bound {
+            let key_buf = be_fix_int_ser(&upper_bound).unwrap();
+            readopts.set_iterate_upper_bound(key_buf);
+        }
+        let db_iter = self.rocksdb.raw_iterator_cf(&self.cf(), readopts);
+        Iter::new(
+            self.cf.clone(),
+            db_iter,
+            Some(_timer),
+            _perf_ctx,
+            Some(bytes_scanned),
+            Some(keys_scanned),
+            Some(self.db_metrics.clone()),
+        )
+    }
+
+    /// Similar to `iter_with_bounds` but allows specifying inclusivity/exclusivity of ranges explicitly.
+    /// TODO: find better name
+    fn range_iter(&'a self, range: impl RangeBounds<K>) -> Self::Iterator {
+        // TODO: Change the metrics?
+        let _timer = self
+            .db_metrics
+            .op_metrics
+            .rocksdb_iter_latency_seconds
+            .with_label_values(&[&self.cf])
+            .start_timer();
+        let bytes_scanned = self
+            .db_metrics
+            .op_metrics
+            .rocksdb_iter_bytes
+            .with_label_values(&[&self.cf]);
+        let keys_scanned = self
+            .db_metrics
+            .op_metrics
+            .rocksdb_iter_keys
+            .with_label_values(&[&self.cf]);
+        let _perf_ctx = if self.iter_sample_interval.sample() {
+            Some(RocksDBPerfContext::default())
+        } else {
+            None
+        };
+        let mut readopts = ReadOptions::default();
+
+        let lower_bound = range.start_bound();
+        let upper_bound = range.end_bound();
+
+        match lower_bound {
+            Bound::Included(lower_bound) => {
+                // Rocksdb lower bound is inclusive by default so nothing to do
+                let key_buf = be_fix_int_ser(&lower_bound).expect("Serialization must not fail");
+                readopts.set_iterate_lower_bound(key_buf);
+            }
+            Bound::Excluded(lower_bound) => {
+                let mut key_buf =
+                    be_fix_int_ser(&lower_bound).expect("Serialization must not fail");
+
+                // Since we want exclusive, we need to increment the key to exclude the previous
+                big_endian_saturating_add_one(&mut key_buf);
+                readopts.set_iterate_lower_bound(key_buf);
+            }
+            Bound::Unbounded => (),
+        };
+
+        match upper_bound {
+            Bound::Included(upper_bound) => {
+                let mut key_buf =
+                    be_fix_int_ser(&upper_bound).expect("Serialization must not fail");
+
+                // If the key is already at the limit, there's nowhere else to go, so no upper bound
+                if !is_max(&key_buf) {
+                    // Since we want exclusive, we need to increment the key to get the upper bound
+                    big_endian_saturating_add_one(&mut key_buf);
+                    readopts.set_iterate_upper_bound(key_buf);
+                }
+            }
+            Bound::Excluded(upper_bound) => {
+                // Rocksdb upper bound is inclusive by default so nothing to do
+                let key_buf = be_fix_int_ser(&upper_bound).expect("Serialization must not fail");
+                readopts.set_iterate_upper_bound(key_buf);
+            }
+            Bound::Unbounded => (),
+        };
+
+        let db_iter = self.rocksdb.raw_iterator_cf(&self.cf(), readopts);
+        Iter::new(
+            self.cf.clone(),
+            db_iter,
+            Some(_timer),
+            _perf_ctx,
+            Some(bytes_scanned),
+            Some(keys_scanned),
+            Some(self.db_metrics.clone()),
         )
     }
 
@@ -1647,24 +1863,22 @@ where
     where
         J: Borrow<K>,
     {
-        let report_metrics = if self.read_sample_interval.sample() {
-            let timer = self
-                .db_metrics
-                .op_metrics
-                .rocksdb_multiget_latency_seconds
-                .with_label_values(&[&self.cf])
-                .start_timer();
-            Some((timer, RocksDBPerfContext::default()))
+        let _timer = self
+            .db_metrics
+            .op_metrics
+            .rocksdb_multiget_latency_seconds
+            .with_label_values(&[&self.cf])
+            .start_timer();
+        let perf_ctx = if self.multiget_sample_interval.sample() {
+            Some(RocksDBPerfContext::default())
         } else {
             None
         };
         let cf = self.cf();
-
         let keys_bytes: Result<Vec<_>, TypedStoreError> = keys
             .into_iter()
             .map(|k| Ok((&cf, be_fix_int_ser(k.borrow())?)))
             .collect();
-
         let results = self
             .rocksdb
             .multi_get_cf(keys_bytes?, &self.opts.readopts());
@@ -1673,12 +1887,12 @@ where
                 .as_ref()
                 .map_or(0.0, |e| e.as_ref().map_or(0.0, |v| v.len() as f64))
         };
-        if report_metrics.is_some() {
-            self.db_metrics
-                .op_metrics
-                .rocksdb_multiget_bytes
-                .with_label_values(&[&self.cf])
-                .observe(results.iter().map(entry_size).sum());
+        self.db_metrics
+            .op_metrics
+            .rocksdb_multiget_bytes
+            .with_label_values(&[&self.cf])
+            .observe(results.iter().map(entry_size).sum());
+        if perf_ctx.is_some() {
             self.db_metrics
                 .read_perf_ctx_metrics
                 .report_metrics(&self.cf);
@@ -1705,6 +1919,40 @@ where
             .collect();
 
         values_parsed
+    }
+
+    /// Returns a vector of values corresponding to the keys provided.
+    #[instrument(level = "trace", skip_all, err)]
+    fn chunked_multi_get<J>(
+        &self,
+        keys: impl IntoIterator<Item = J>,
+        chunk_size: usize,
+    ) -> Result<Vec<Option<V>>, TypedStoreError>
+    where
+        J: Borrow<K>,
+    {
+        let cf = self.cf();
+        let keys_bytes = keys
+            .into_iter()
+            .map(|k| (&cf, be_fix_int_ser(k.borrow()).unwrap()));
+        let chunked_keys = keys_bytes.into_iter().chunks(chunk_size);
+        let snapshot = self.snapshot()?;
+        let mut results = vec![];
+        for chunk in chunked_keys.into_iter() {
+            let chunk_result = snapshot.multi_get_cf(chunk);
+            let values_parsed: Result<Vec<_>, TypedStoreError> = chunk_result
+                .into_iter()
+                .map(|value_byte| {
+                    let value_byte = value_byte?;
+                    match value_byte {
+                        Some(data) => Ok(Some(bcs::from_bytes(&data)?)),
+                        None => Ok(None),
+                    }
+                })
+                .collect();
+            results.extend(values_parsed?);
+        }
+        Ok(results)
     }
 
     /// Convenience method for batch insertion
@@ -1768,11 +2016,10 @@ where
 
 pub fn read_size_from_env(var_name: &str) -> Option<usize> {
     env::var(var_name)
-        .tap_err(|e| debug!("Env var {} is not set: {}", var_name, e))
         .ok()?
         .parse::<usize>()
         .tap_err(|e| {
-            info!(
+            warn!(
                 "Env var {} does not contain valid usize integer: {}",
                 var_name, e
             )
@@ -1796,14 +2043,132 @@ impl ReadWriteOptions {
     }
 }
 
+// TODO: refactor this into a builder pattern, where rocksdb::Options are
+// generated after a call to build().
 #[derive(Default, Clone)]
 pub struct DBOptions {
     pub options: rocksdb::Options,
     pub rw_options: ReadWriteOptions,
 }
 
-/// Base options to be used across all rocksdb instances.
-pub fn base_db_options() -> DBOptions {
+impl DBOptions {
+    // Optimize lookup perf for tables where no scans are performed.
+    // If non-trivial number of values can be > 512B in size, it is beneficial to also
+    // specify optimize_for_large_values_no_scan().
+    pub fn optimize_for_point_lookup(mut self, block_cache_size_mb: usize) -> DBOptions {
+        // NOTE: this overwrites the block options.
+        self.options
+            .optimize_for_point_lookup(block_cache_size_mb as u64);
+        self
+    }
+
+    // Optimize write and lookup perf for tables which are rarely scanned, and have large values.
+    // https://rocksdb.org/blog/2021/05/26/integrated-blob-db.html
+    pub fn optimize_for_large_values_no_scan(mut self, min_blob_size: u64) -> DBOptions {
+        if env::var(ENV_VAR_DISABLE_BLOB_STORAGE).is_ok() {
+            info!("Large value blob storage optimization is disabled via env var.");
+            return self;
+        }
+
+        // Blob settings.
+        self.options.set_enable_blob_files(true);
+        self.options
+            .set_blob_compression_type(rocksdb::DBCompressionType::Lz4);
+        self.options.set_enable_blob_gc(true);
+        // Since each blob can have non-trivial size overhead, and compression does not work across blobs,
+        // set a min blob size in bytes to so small transactions and effects are kept in sst files.
+        self.options.set_min_blob_size(min_blob_size);
+
+        // Increase write buffer size to 256MiB.
+        let write_buffer_size = read_size_from_env(ENV_VAR_MAX_WRITE_BUFFER_SIZE_MB)
+            .unwrap_or(DEFAULT_MAX_WRITE_BUFFER_SIZE_MB)
+            * 1024
+            * 1024;
+        self.options.set_write_buffer_size(write_buffer_size);
+        // Since large blobs are not in sst files, reduce the target file size and base level
+        // target size.
+        let target_file_size_base = 64 << 20;
+        self.options
+            .set_target_file_size_base(target_file_size_base);
+        // Level 1 default to 64MiB * 6 ~ 384MiB.
+        let max_level_zero_file_num = read_size_from_env(ENV_VAR_L0_NUM_FILES_COMPACTION_TRIGGER)
+            .unwrap_or(DEFAULT_L0_NUM_FILES_COMPACTION_TRIGGER);
+        self.options
+            .set_max_bytes_for_level_base(target_file_size_base * max_level_zero_file_num as u64);
+
+        self
+    }
+
+    // Optimize tables with a mix of lookup and scan workloads.
+    pub fn optimize_for_read(mut self, block_cache_size_mb: usize) -> DBOptions {
+        self.options
+            .set_block_based_table_factory(&get_block_options(block_cache_size_mb));
+        self
+    }
+
+    // Optimize DB receiving significant insertions.
+    pub fn optimize_db_for_write_throughput(mut self, db_max_write_buffer_gb: u64) -> DBOptions {
+        self.options
+            .set_db_write_buffer_size(db_max_write_buffer_gb as usize * 1024 * 1024 * 1024);
+        self.options
+            .set_max_total_wal_size(db_max_write_buffer_gb * 1024 * 1024 * 1024);
+        self
+    }
+
+    // Optimize tables receiving significant insertions.
+    pub fn optimize_for_write_throughput(mut self) -> DBOptions {
+        // Increase write buffer size to 256MiB.
+        let write_buffer_size = read_size_from_env(ENV_VAR_MAX_WRITE_BUFFER_SIZE_MB)
+            .unwrap_or(DEFAULT_MAX_WRITE_BUFFER_SIZE_MB)
+            * 1024
+            * 1024;
+        self.options.set_write_buffer_size(write_buffer_size);
+        // Increase write buffers to keep to 6 before slowing down writes.
+        let max_write_buffer_number = read_size_from_env(ENV_VAR_MAX_WRITE_BUFFER_NUMBER)
+            .unwrap_or(DEFAULT_MAX_WRITE_BUFFER_NUMBER);
+        self.options
+            .set_max_write_buffer_number(max_write_buffer_number.try_into().unwrap());
+        // Keep 1 write buffer so recent writes can be read from memory.
+        self.options
+            .set_max_write_buffer_size_to_maintain((write_buffer_size).try_into().unwrap());
+
+        // Increase compaction trigger for level 0 to 6.
+        let max_level_zero_file_num = read_size_from_env(ENV_VAR_L0_NUM_FILES_COMPACTION_TRIGGER)
+            .unwrap_or(DEFAULT_L0_NUM_FILES_COMPACTION_TRIGGER);
+        self.options.set_level_zero_file_num_compaction_trigger(
+            max_level_zero_file_num.try_into().unwrap(),
+        );
+        self.options.set_level_zero_slowdown_writes_trigger(
+            (max_level_zero_file_num * 4).try_into().unwrap(),
+        );
+        self.options
+            .set_level_zero_stop_writes_trigger((max_level_zero_file_num * 5).try_into().unwrap());
+
+        // Increase sst file size to 128MiB.
+        self.options.set_target_file_size_base(
+            read_size_from_env(ENV_VAR_TARGET_FILE_SIZE_BASE_MB)
+                .unwrap_or(DEFAULT_TARGET_FILE_SIZE_BASE_MB) as u64
+                * 1024
+                * 1024,
+        );
+
+        // Increase level 1 target size to 256MiB * 6 ~ 1.5GiB.
+        self.options
+            .set_max_bytes_for_level_base((write_buffer_size * max_level_zero_file_num) as u64);
+
+        self
+    }
+
+    // Optimize tables receiving significant deletions.
+    // TODO: revisit when intra-epoch pruning is enabled.
+    pub fn optimize_for_pruning(mut self) -> DBOptions {
+        self.options.set_min_write_buffer_number_to_merge(2);
+        self
+    }
+}
+
+/// Creates a default RocksDB option, to be used when RocksDB option is unspecified.
+pub fn default_db_options() -> DBOptions {
     let mut opt = rocksdb::Options::default();
 
     // One common issue when running tests on Mac is that the default ulimit is too low,
@@ -1814,13 +2179,21 @@ pub fn base_db_options() -> DBOptions {
     }
 
     // The table cache is locked for updates and this determines the number
-    // of shards, ie 2^6. Increase in case of lock contentions.
+    // of shards, ie 2^10. Increase in case of lock contentions.
     opt.set_table_cache_num_shard_bits(10);
 
+    // LSM compression settings
     opt.set_min_level_to_compress(2);
     opt.set_compression_type(rocksdb::DBCompressionType::Lz4);
     opt.set_bottommost_compression_type(rocksdb::DBCompressionType::Zstd);
     opt.set_bottommost_zstd_max_train_bytes(1024 * 1024, true);
+
+    opt.set_max_background_jobs(
+        read_size_from_env(ENV_VAR_MAX_BACKGROUND_JOBS)
+            .unwrap_or(2)
+            .try_into()
+            .unwrap(),
+    );
 
     // Sui uses multiple RocksDB in a node, so total sizes of write buffers and WAL can be higher
     // than the limits below.
@@ -1844,94 +2217,33 @@ pub fn base_db_options() -> DBOptions {
     opt.increase_parallelism(4);
     opt.set_enable_pipelined_write(true);
 
+    opt.set_block_based_table_factory(&get_block_options(128));
+
+    // Set memtable bloomfilter.
+    opt.set_memtable_prefix_bloom_ratio(0.02);
+
     DBOptions {
         options: opt,
         rw_options: ReadWriteOptions::default(),
     }
 }
 
-/// Creates a default RocksDB option, to be used when RocksDB option is not specified..
-pub fn default_db_options() -> DBOptions {
-    let mut opt = base_db_options();
-
+fn get_block_options(block_cache_size_mb: usize) -> BlockBasedOptions {
     // Set options mostly similar to those used in optimize_for_point_lookup(),
     // except non-default binary and hash index, to hopefully reduce lookup latencies
     // without causing any regression for scanning, with slightly more memory usages.
     // https://github.com/facebook/rocksdb/blob/11cb6af6e5009c51794641905ca40ce5beec7fee/options/options.cc#L611-L621
     let mut block_options = BlockBasedOptions::default();
-    // Configure a 64MiB block cache.
-    block_options.set_block_cache(&Cache::new_lru_cache(64 << 20).unwrap());
+    // Increase block size to 16KiB.
+    // https://github.com/EighteenZi/rocksdb_wiki/blob/master/Memory-usage-in-RocksDB.md#indexes-and-filter-blocks
+    block_options.set_block_size(16 * 1024);
+    // Configure a block cache.
+    block_options.set_block_cache(&Cache::new_lru_cache(block_cache_size_mb << 20).unwrap());
     // Set a bloomfilter with 1% false positive rate.
     block_options.set_bloom_filter(10.0, false);
-
     // From https://github.com/EighteenZi/rocksdb_wiki/blob/master/Block-Cache.md#caching-index-and-filter-blocks
     block_options.set_pin_l0_filter_and_index_blocks_in_cache(true);
-
-    opt.options.set_block_based_table_factory(&block_options);
-    // Set memtable bloomfilter.
-    opt.options.set_memtable_prefix_bloom_ratio(0.02);
-
-    opt
-}
-
-/// Creates a default RocksDB option, optimized for point lookup.
-pub fn point_lookup_db_options() -> DBOptions {
-    let mut db_options = default_db_options();
-    db_options
-        .options
-        .optimize_for_point_lookup(64 /* 64MB (default is 8) */);
-    db_options
-}
-
-/// Use it only for tables which observe high write rate and grow quickly in size
-pub fn optimized_for_high_throughput_options(
-    block_cache_size_mb: usize,
-    optimize_for_point_lookup: bool,
-) -> DBOptions {
-    let mut db_options = default_db_options();
-    db_options.options.set_write_buffer_size(128 * 1024 * 1024);
-    db_options.options.set_min_write_buffer_number_to_merge(2);
-    db_options.options.set_max_write_buffer_number(6);
-    db_options
-        .options
-        .set_level_zero_file_num_compaction_trigger(
-            read_size_from_env(ENV_VAR_L0_NUM_FILES_COMPACTION_TRIGGER)
-                .unwrap_or(4)
-                .try_into()
-                .unwrap(),
-        );
-    db_options
-        .options
-        .set_target_file_size_base(64 * 1024 * 1024);
-    db_options
-        .options
-        .set_max_bytes_for_level_base(512 * 1024 * 1024);
-
-    db_options.options.set_max_background_jobs(
-        read_size_from_env(ENV_VAR_MAX_BACKGROUND_JOBS)
-            .unwrap_or(2)
-            .try_into()
-            .unwrap(),
-    );
-
-    if optimize_for_point_lookup {
-        db_options
-            .options
-            .optimize_for_point_lookup(block_cache_size_mb as u64);
-    } else {
-        let mut block_options = BlockBasedOptions::default();
-        block_options
-            .set_block_cache(&Cache::new_lru_cache(block_cache_size_mb * 1024 * 1024).unwrap());
-        // Set a bloomfilter with 1% false positive rate.
-        block_options.set_bloom_filter(10.0, false);
-
-        // From https://github.com/EighteenZi/rocksdb_wiki/blob/master/Block-Cache.md#caching-index-and-filter-blocks
-        block_options.set_pin_l0_filter_and_index_blocks_in_cache(true);
-        db_options
-            .options
-            .set_block_based_table_factory(&block_options);
-    }
-    db_options
+    block_options
 }
 
 /// Opens a database with options, and a number of column families that are created if they do not exist.
@@ -1943,7 +2255,10 @@ pub fn open_cf<P: AsRef<Path>>(
     opt_cfs: &[&str],
 ) -> Result<Arc<RocksDB>, TypedStoreError> {
     let options = db_options.unwrap_or_else(|| default_db_options().options);
-    let column_descriptors: Vec<_> = opt_cfs.iter().map(|name| (*name, &options)).collect();
+    let column_descriptors: Vec<_> = opt_cfs
+        .iter()
+        .map(|name| (*name, options.clone()))
+        .collect();
     open_cf_opts(
         path,
         Some(options.clone()),
@@ -1952,26 +2267,9 @@ pub fn open_cf<P: AsRef<Path>>(
     )
 }
 
-fn prepare_db_options<P: AsRef<Path>>(
-    path: &P,
-    db_options: Option<rocksdb::Options>,
-    opt_cfs: &[(&str, &rocksdb::Options)],
-) -> rocksdb::Options {
+fn prepare_db_options(db_options: Option<rocksdb::Options>) -> rocksdb::Options {
     // Customize database options
     let mut options = db_options.unwrap_or_else(|| default_db_options().options);
-    let mut opt_cfs: std::collections::HashMap<_, _> = opt_cfs.iter().cloned().collect();
-    let cfs = rocksdb::DBWithThreadMode::<MultiThreaded>::list_cf(&options, path)
-        .ok()
-        .unwrap_or_default();
-
-    let default_db_options = default_db_options();
-    // Add CFs not explicitly listed
-    for cf_key in cfs.iter() {
-        if !opt_cfs.contains_key(&cf_key[..]) {
-            opt_cfs.insert(cf_key, &default_db_options.options);
-        }
-    }
-
     options.create_if_missing(true);
     options.create_missing_column_families(true);
     options
@@ -1983,7 +2281,7 @@ pub fn open_cf_opts<P: AsRef<Path>>(
     path: P,
     db_options: Option<rocksdb::Options>,
     metric_conf: MetricConf,
-    opt_cfs: &[(&str, &rocksdb::Options)],
+    opt_cfs: &[(&str, rocksdb::Options)],
 ) -> Result<Arc<RocksDB>, TypedStoreError> {
     let path = path.as_ref();
     // In the simulator, we intercept the wall clock in the test thread only. This causes problems
@@ -1993,15 +2291,16 @@ pub fn open_cf_opts<P: AsRef<Path>>(
     // resolves the issue.
     //
     // This is a no-op in non-simulator builds.
+
+    let cfs = populate_missing_cfs(opt_cfs, path)?;
     nondeterministic!({
-        let options = prepare_db_options(&path, db_options, opt_cfs);
+        let options = prepare_db_options(db_options);
         let rocksdb = {
             rocksdb::DBWithThreadMode::<MultiThreaded>::open_cf_descriptors(
                 &options,
                 path,
-                opt_cfs
-                    .iter()
-                    .map(|(name, opts)| ColumnFamilyDescriptor::new(*name, (*opts).clone())),
+                cfs.into_iter()
+                    .map(|(name, opts)| ColumnFamilyDescriptor::new(name, opts)),
             )?
         };
         Ok(Arc::new(RocksDB::DBWithThreadMode(
@@ -2020,18 +2319,18 @@ pub fn open_cf_opts_transactional<P: AsRef<Path>>(
     path: P,
     db_options: Option<rocksdb::Options>,
     metric_conf: MetricConf,
-    opt_cfs: &[(&str, &rocksdb::Options)],
+    opt_cfs: &[(&str, rocksdb::Options)],
 ) -> Result<Arc<RocksDB>, TypedStoreError> {
     let path = path.as_ref();
+    let cfs = populate_missing_cfs(opt_cfs, path)?;
     // See comment above for explanation of why nondeterministic is necessary here.
     nondeterministic!({
-        let options = prepare_db_options(&path, db_options, opt_cfs);
+        let options = prepare_db_options(db_options);
         let rocksdb = rocksdb::OptimisticTransactionDB::<MultiThreaded>::open_cf_descriptors(
             &options,
             path,
-            opt_cfs
-                .iter()
-                .map(|(name, opts)| ColumnFamilyDescriptor::new(*name, (*opts).clone())),
+            cfs.into_iter()
+                .map(|(name, opts)| ColumnFamilyDescriptor::new(name, opts)),
         )?;
         Ok(Arc::new(RocksDB::OptimisticTransactionDB(
             OptimisticTransactionDBWrapper {
@@ -2049,7 +2348,7 @@ pub fn open_cf_opts_secondary<P: AsRef<Path>>(
     secondary_path: Option<P>,
     db_options: Option<rocksdb::Options>,
     metric_conf: MetricConf,
-    opt_cfs: &[(&str, &rocksdb::Options)],
+    opt_cfs: &[(&str, rocksdb::Options)],
 ) -> Result<Arc<RocksDB>, TypedStoreError> {
     let primary_path = primary_path.as_ref();
     let secondary_path = secondary_path.as_ref().map(|p| p.as_ref());
@@ -2071,7 +2370,7 @@ pub fn open_cf_opts_secondary<P: AsRef<Path>>(
         // Add CFs not explicitly listed
         for cf_key in cfs.iter() {
             if !opt_cfs.contains_key(&cf_key[..]) {
-                opt_cfs.insert(cf_key, &default_db_options.options);
+                opt_cfs.insert(cf_key, default_db_options.options.clone());
             }
         }
 
@@ -2159,4 +2458,80 @@ pub enum RocksDBAccessType {
 
 pub fn safe_drop_db(path: PathBuf) -> Result<(), rocksdb::Error> {
     rocksdb::DB::destroy(&rocksdb::Options::default(), path)
+}
+
+fn populate_missing_cfs(
+    input_cfs: &[(&str, rocksdb::Options)],
+    path: &Path,
+) -> Result<Vec<(String, rocksdb::Options)>, rocksdb::Error> {
+    let mut cfs = vec![];
+    let input_cf_index: HashSet<_> = input_cfs.iter().map(|(name, _)| *name).collect();
+    let existing_cfs =
+        rocksdb::DBWithThreadMode::<MultiThreaded>::list_cf(&rocksdb::Options::default(), path)
+            .ok()
+            .unwrap_or_default();
+
+    for cf_name in existing_cfs {
+        if !input_cf_index.contains(&cf_name[..]) {
+            cfs.push((cf_name, rocksdb::Options::default()));
+        }
+    }
+    cfs.extend(
+        input_cfs
+            .iter()
+            .map(|(name, opts)| (name.to_string(), (*opts).clone())),
+    );
+    Ok(cfs)
+}
+
+/// Given a vec<u8>, find the value which is one more than the vector
+/// if the vector was a big endian number.
+/// If the vector is already minimum, don't change it.
+fn big_endian_saturating_add_one(v: &mut Vec<u8>) {
+    if is_max(v) {
+        return;
+    }
+    for i in (0..v.len()).rev() {
+        if v[i] == u8::MAX {
+            v[i] = 0;
+        } else {
+            v[i] += 1;
+            break;
+        }
+    }
+}
+
+/// Check if all the bytes in the vector are 0xFF
+fn is_max(v: &[u8]) -> bool {
+    v.iter().all(|&x| x == u8::MAX)
+}
+
+#[allow(clippy::assign_op_pattern)]
+#[test]
+fn test_helpers() {
+    let v = vec![];
+    assert!(is_max(&v));
+
+    fn check_add(v: Vec<u8>) {
+        let mut v = v;
+        let num = Num32::from_big_endian(&v);
+        big_endian_saturating_add_one(&mut v);
+        assert!(num + 1 == Num32::from_big_endian(&v));
+    }
+
+    uint::construct_uint! {
+        // 32 byte number
+        #[cfg_attr(feature = "scale-info", derive(TypeInfo))]
+        struct Num32(4);
+    }
+
+    let mut v = vec![255; 32];
+    big_endian_saturating_add_one(&mut v);
+    assert!(Num32::MAX == Num32::from_big_endian(&v));
+
+    check_add(vec![1; 32]);
+    check_add(vec![6; 32]);
+    check_add(vec![254; 32]);
+
+    // TBD: More tests coming with randomized arrays
 }

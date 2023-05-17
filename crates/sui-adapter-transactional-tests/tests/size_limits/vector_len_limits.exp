@@ -3,7 +3,7 @@ processed 10 tasks
 task 1 'publish'. lines 8-30:
 created: object(1,0)
 mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 4864000,  storage_rebate: 0, non_refundable_storage_fee: 0
+gas summary: computation_cost: 1000000, storage_cost: 4316800,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 2 'run'. lines 31-33:
 mutated: object(0,0)
@@ -15,7 +15,7 @@ gas summary: computation_cost: 5000000, storage_cost: 13,  storage_rebate: 13, n
 
 task 4 'run'. lines 37-39:
 mutated: object(0,0)
-gas summary: computation_cost: 2100352000, storage_cost: 13,  storage_rebate: 13, non_refundable_storage_fee: 0
+gas summary: computation_cost: 2100351000, storage_cost: 13,  storage_rebate: 13, non_refundable_storage_fee: 0
 
 task 5 'run'. lines 40-44:
 Error: Transaction Effects Status: Move Primitive Runtime Error. Location: Test::M1::push_n_items (function index 0) at offset 11. Arithmetic error, stack overflow, max value depth, etc.
@@ -31,7 +31,7 @@ gas summary: computation_cost: 5000000, storage_cost: 13,  storage_rebate: 13, n
 
 task 8 'run'. lines 51-53:
 mutated: object(0,0)
-gas summary: computation_cost: 2100352000, storage_cost: 13,  storage_rebate: 13, non_refundable_storage_fee: 0
+gas summary: computation_cost: 2100351000, storage_cost: 13,  storage_rebate: 13, non_refundable_storage_fee: 0
 
 task 9 'run'. lines 54-54:
 Error: Transaction Effects Status: Move Primitive Runtime Error. Location: Test::M1::push_n_items (function index 0) at offset 11. Arithmetic error, stack overflow, max value depth, etc.

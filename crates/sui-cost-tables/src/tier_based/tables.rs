@@ -34,9 +34,9 @@ pub const VEC_SIZE: AbstractMemorySize = AbstractMemorySize::new(8);
 /// For exists checks on data that doesn't exists this is the multiplier that is used.
 pub const MIN_EXISTS_DATA_SIZE: AbstractMemorySize = AbstractMemorySize::new(100);
 
-static ZERO_COST_SCHEDULE: Lazy<CostTable> = Lazy::new(zero_cost_schedule);
+pub static ZERO_COST_SCHEDULE: Lazy<CostTable> = Lazy::new(zero_cost_schedule);
 
-pub static INITIAL_COST_SCHEDULE: Lazy<CostTable> = Lazy::new(initial_cost_schedule);
+pub static INITIAL_COST_SCHEDULE: Lazy<CostTable> = Lazy::new(initial_cost_schedule_v1);
 
 /// The Move VM implementation of state for gas metering.
 ///
@@ -46,8 +46,9 @@ pub static INITIAL_COST_SCHEDULE: Lazy<CostTable> = Lazy::new(initial_cost_sched
 /// Every client must use an instance of this type to interact with the Move VM.
 #[allow(dead_code)]
 #[derive(Debug)]
-pub struct GasStatus<'a> {
-    cost_table: &'a CostTable,
+pub struct GasStatus {
+    pub gas_model_version: u64,
+    cost_table: CostTable,
     gas_left: InternalGas,
     gas_price: u64,
     initial_budget: InternalGas,
@@ -71,13 +72,18 @@ pub struct GasStatus<'a> {
     instructions_current_tier_mult: u64,
 }
 
-impl<'a> GasStatus<'a> {
+impl GasStatus {
     /// Initialize the gas state with metering enabled.
     ///
     /// Charge for every operation and fail when there is no more gas to pay for operations.
     /// This is the instantiation that must be used when executing a user script.
 
-    pub fn new_v2(cost_table: &'a CostTable, budget: u64, gas_price: u64) -> Self {
+    pub fn new_v2(
+        cost_table: CostTable,
+        budget: u64,
+        gas_price: u64,
+        gas_model_version: u64,
+    ) -> Self {
         assert!(gas_price > 0, "gas price cannot be 0");
         let budget_in_unit = budget / gas_price;
         let gas_left = Self::to_internal_units(budget_in_unit);
@@ -88,6 +94,7 @@ impl<'a> GasStatus<'a> {
         let (instructions_current_tier_mult, instructions_next_tier_start) =
             cost_table.instruction_tier(0);
         Self {
+            gas_model_version,
             gas_left,
             gas_price,
             initial_budget: gas_left,
@@ -107,7 +114,7 @@ impl<'a> GasStatus<'a> {
         }
     }
 
-    pub fn new(cost_table: &'a CostTable, gas_left: Gas) -> Self {
+    pub fn new(cost_table: CostTable, gas_left: Gas) -> Self {
         let (stack_height_current_tier_mult, stack_height_next_tier_start) =
             cost_table.stack_height_tier(0);
         let (stack_size_current_tier_mult, stack_size_next_tier_start) =
@@ -115,6 +122,7 @@ impl<'a> GasStatus<'a> {
         let (instructions_current_tier_mult, instructions_next_tier_start) =
             cost_table.instruction_tier(0);
         Self {
+            gas_model_version: 1,
             gas_left: gas_left.to_unit(),
             gas_price: 1,
             initial_budget: InternalGas::new(0),
@@ -140,10 +148,11 @@ impl<'a> GasStatus<'a> {
     /// code that does not have to charge the user.
     pub fn new_unmetered() -> Self {
         Self {
+            gas_model_version: 4,
             gas_left: InternalGas::new(0),
             gas_price: 1,
             initial_budget: InternalGas::new(0),
-            cost_table: &ZERO_COST_SCHEDULE,
+            cost_table: ZERO_COST_SCHEDULE.clone(),
             charge: false,
             stack_height_high_water_mark: 0,
             stack_height_current: 0,
@@ -286,7 +295,7 @@ impl<'a> GasStatus<'a> {
 
     /// Return the `CostTable` behind this `GasStatus`.
     pub fn cost_table(&self) -> &CostTable {
-        self.cost_table
+        &self.cost_table
     }
 
     /// Return the gas left.
@@ -331,8 +340,14 @@ impl<'a> GasStatus<'a> {
     }
 
     // Charge the number of bytes with the cost per byte value
+    // As more bytes are read throughout the computation the cost per bytes is increased.
     pub fn charge_bytes(&mut self, size: usize, cost_per_byte: u64) -> PartialVMResult<()> {
-        let computation_cost = size as u64 * cost_per_byte;
+        let computation_cost = if self.gas_model_version == 4 {
+            self.increase_stack_size(size as u64)?;
+            self.stack_size_current_tier_mult * size as u64 * cost_per_byte
+        } else {
+            size as u64 * cost_per_byte
+        };
         self.deduct_units(computation_cost)
     }
 }
@@ -385,7 +400,7 @@ fn get_simple_instruction_stack_change(
     }
 }
 
-impl<'b> GasMeter for GasStatus<'b> {
+impl GasMeter for GasStatus {
     /// Charge an instruction and fail if not enough gas units are left.
     fn charge_simple_instr(&mut self, instr: SimpleInstruction) -> PartialVMResult<()> {
         let (pops, pushes, pop_size, push_size) = get_simple_instruction_stack_change(instr);
@@ -733,7 +748,7 @@ pub fn unit_cost_schedule() -> CostTable {
     }
 }
 
-pub fn initial_cost_schedule() -> CostTable {
+pub fn initial_cost_schedule_v1() -> CostTable {
     let instruction_tiers: BTreeMap<u64, u64> = vec![
         (0, 1),
         (3000, 2),
@@ -780,27 +795,128 @@ pub fn initial_cost_schedule() -> CostTable {
     }
 }
 
+pub fn initial_cost_schedule_v2() -> CostTable {
+    let instruction_tiers: BTreeMap<u64, u64> = vec![
+        (0, 1),
+        (3000, 2),
+        (6000, 3),
+        (8000, 5),
+        (9000, 9),
+        (9500, 16),
+        (10000, 29),
+        (10500, 50),
+        (12000, 150),
+        (15000, 250),
+    ]
+    .into_iter()
+    .collect();
+
+    let stack_height_tiers: BTreeMap<u64, u64> = vec![
+        (0, 1),
+        (400, 2),
+        (800, 3),
+        (1200, 5),
+        (1500, 9),
+        (1800, 16),
+        (2000, 29),
+        (2200, 50),
+        (3000, 150),
+        (5000, 250),
+    ]
+    .into_iter()
+    .collect();
+
+    let stack_size_tiers: BTreeMap<u64, u64> = vec![
+        (0, 1),
+        (2000, 2),
+        (5000, 3),
+        (8000, 5),
+        (10000, 9),
+        (11000, 16),
+        (11500, 29),
+        (11500, 50),
+        (15000, 150),
+        (20000, 250),
+    ]
+    .into_iter()
+    .collect();
+
+    CostTable {
+        instruction_tiers,
+        stack_size_tiers,
+        stack_height_tiers,
+    }
+}
+
+pub fn initial_cost_schedule_v3() -> CostTable {
+    let instruction_tiers: BTreeMap<u64, u64> = vec![
+        (0, 1),
+        (3000, 2),
+        (6000, 3),
+        (8000, 5),
+        (9000, 9),
+        (9500, 16),
+        (10000, 29),
+        (10500, 50),
+        (15000, 100),
+    ]
+    .into_iter()
+    .collect();
+
+    let stack_height_tiers: BTreeMap<u64, u64> = vec![
+        (0, 1),
+        (400, 2),
+        (800, 3),
+        (1200, 5),
+        (1500, 9),
+        (1800, 16),
+        (2000, 29),
+        (2200, 50),
+        (5000, 100),
+    ]
+    .into_iter()
+    .collect();
+
+    let stack_size_tiers: BTreeMap<u64, u64> = vec![
+        (0, 1),
+        (2000, 2),
+        (5000, 3),
+        (8000, 5),
+        (10000, 9),
+        (11000, 16),
+        (11500, 29),
+        (11500, 50),
+        (20000, 100),
+    ]
+    .into_iter()
+    .collect();
+
+    CostTable {
+        instruction_tiers,
+        stack_size_tiers,
+        stack_height_tiers,
+    }
+}
+
 // Convert from our representation of gas costs to the type that the MoveVM expects for unit tests.
 // We don't want our gas depending on the MoveVM test utils and we don't want to fix our
 // representation to whatever is there, so instead we perform this translation from our gas units
 // and cost schedule to the one expected by the Move unit tests.
 pub fn initial_cost_schedule_for_unit_tests() -> move_vm_test_utils::gas_schedule::CostTable {
+    let table = initial_cost_schedule_v3();
     move_vm_test_utils::gas_schedule::CostTable {
-        instruction_tiers: INITIAL_COST_SCHEDULE
+        instruction_tiers: table
             .instruction_tiers
-            .clone()
             .into_iter()
             .map(|(k, v)| (k, v))
             .collect(),
-        stack_height_tiers: INITIAL_COST_SCHEDULE
+        stack_height_tiers: table
             .stack_height_tiers
-            .clone()
             .into_iter()
             .map(|(k, v)| (k, v))
             .collect(),
-        stack_size_tiers: INITIAL_COST_SCHEDULE
+        stack_size_tiers: table
             .stack_size_tiers
-            .clone()
             .into_iter()
             .map(|(k, v)| (k, v))
             .collect(),

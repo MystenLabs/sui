@@ -13,6 +13,8 @@ use crate::crypto::{
 pub use crate::digests::{ObjectDigest, TransactionDigest, TransactionEffectsDigest};
 use crate::dynamic_field::DynamicFieldInfo;
 use crate::dynamic_field::DynamicFieldType;
+use crate::effects::TransactionEffects;
+use crate::effects::TransactionEffectsAPI;
 use crate::epoch_data::EpochData;
 use crate::error::ExecutionErrorKind;
 use crate::error::SuiError;
@@ -22,17 +24,17 @@ use crate::gas_coin::GAS;
 use crate::governance::StakedSui;
 use crate::governance::STAKED_SUI_STRUCT_NAME;
 use crate::governance::STAKING_POOL_MODULE_NAME;
-use crate::messages::Transaction;
-use crate::messages::TransactionEffects;
-use crate::messages::TransactionEffectsAPI;
-use crate::messages::VerifiedTransaction;
 use crate::messages_checkpoint::CheckpointTimestamp;
 use crate::multisig::MultiSigPublicKey;
 use crate::object::{Object, Owner};
 use crate::parse_sui_struct_tag;
 use crate::signature::GenericSignature;
-use crate::sui_serde::HexAccountAddress;
 use crate::sui_serde::Readable;
+use crate::sui_serde::{to_sui_struct_tag_string, HexAccountAddress};
+use crate::transaction::Transaction;
+use crate::transaction::VerifiedTransaction;
+use crate::MOVE_STDLIB_ADDRESS;
+use crate::SUI_CLOCK_OBJECT_ID;
 use crate::SUI_FRAMEWORK_ADDRESS;
 use crate::SUI_SYSTEM_ADDRESS;
 use anyhow::anyhow;
@@ -40,6 +42,9 @@ use fastcrypto::encoding::decode_bytes_hex;
 use fastcrypto::encoding::{Encoding, Hex};
 use fastcrypto::hash::HashFunction;
 use fastcrypto::traits::AllowedRng;
+use move_binary_format::binary_views::BinaryIndexedView;
+use move_binary_format::file_format::SignatureToken;
+use move_bytecode_utils::resolve_struct;
 use move_core_types::account_address::AccountAddress;
 use move_core_types::ident_str;
 use move_core_types::identifier::IdentStr;
@@ -48,6 +53,7 @@ use move_core_types::language_storage::StructTag;
 use move_core_types::language_storage::TypeTag;
 use rand::Rng;
 use schemars::JsonSchema;
+use serde::ser::Error;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use shared_crypto::intent::HashingIntentScope;
@@ -74,6 +80,7 @@ mod base_types_tests;
     Deserialize,
     JsonSchema,
 )]
+#[cfg_attr(feature = "fuzzing", derive(proptest_derive::Arbitrary))]
 pub struct SequenceNumber(u64);
 
 impl SequenceNumber {
@@ -83,6 +90,10 @@ impl SequenceNumber {
         } else {
             Some(SequenceNumber(self.0 - 1))
         }
+    }
+
+    pub fn next(&self) -> SequenceNumber {
+        SequenceNumber(self.0 + 1)
     }
 }
 
@@ -191,6 +202,15 @@ impl MoveObjectType {
             MoveObjectType_::StakedSui => vec![],
             MoveObjectType_::Coin(inner) => vec![inner],
             MoveObjectType_::Other(s) => s.type_params,
+        }
+    }
+
+    pub fn coin_type_maybe(&self) -> Option<TypeTag> {
+        match &self.0 {
+            MoveObjectType_::GasCoin => Some(GAS::type_tag()),
+            MoveObjectType_::Coin(inner) => Some(inner.clone()),
+            MoveObjectType_::StakedSui => None,
+            MoveObjectType_::Other(_) => None,
         }
     }
 
@@ -386,25 +406,20 @@ impl ObjectInfo {
 const PACKAGE: &str = "package";
 impl ObjectType {
     pub fn is_gas_coin(&self) -> bool {
-        match self {
-            ObjectType::Struct(s) => s.is_gas_coin(),
-            ObjectType::Package => false,
-        }
+        matches!(self, ObjectType::Struct(s) if s.is_gas_coin())
     }
 
     pub fn is_coin(&self) -> bool {
-        match self {
-            ObjectType::Struct(s) => s.is_coin(),
-            ObjectType::Package => false,
-        }
+        matches!(self, ObjectType::Struct(s) if s.is_coin())
     }
 
     /// Return true if `self` is `0x2::coin::Coin<t>`
     pub fn is_coin_t(&self, t: &TypeTag) -> bool {
-        match self {
-            ObjectType::Struct(s) => s.is_coin_t(t),
-            ObjectType::Package => false,
-        }
+        matches!(self, ObjectType::Struct(s) if s.is_coin_t(t))
+    }
+
+    pub fn is_package(&self) -> bool {
+        matches!(self, ObjectType::Package)
     }
 }
 
@@ -426,6 +441,7 @@ pub const SUI_ADDRESS_LENGTH: usize = ObjectID::LENGTH;
 #[derive(
     Eq, Default, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Serialize, Deserialize, JsonSchema,
 )]
+#[cfg_attr(feature = "fuzzing", derive(proptest_derive::Arbitrary))]
 pub struct SuiAddress(
     #[schemars(with = "Hex")]
     #[serde_as(as = "Readable<Hex, _>")]
@@ -545,13 +561,13 @@ impl From<&PublicKey> for SuiAddress {
     }
 }
 
-impl From<MultiSigPublicKey> for SuiAddress {
+impl From<&MultiSigPublicKey> for SuiAddress {
     /// Derive a SuiAddress from [struct MultiSigPublicKey]. A MultiSig address
     /// is defined as the 32-byte Blake2b hash of serializing the flag, the
-    /// threshold, concatenation of each participating flag, public keys and
+    /// threshold, concatenation of all n flag, public keys and
     /// its weight. `flag_MultiSig || threshold || flag_1 || pk_1 || weight_1
     /// || ... || flag_n || pk_n || weight_n`.
-    fn from(multisig_pk: MultiSigPublicKey) -> Self {
+    fn from(multisig_pk: &MultiSigPublicKey) -> Self {
         let mut hasher = DefaultHash::default();
         hasher.update([SignatureScheme::MultiSig.flag()]);
         hasher.update(multisig_pk.threshold().to_le_bytes());
@@ -579,7 +595,7 @@ impl TryFrom<&GenericSignature> for SuiAddress {
                 })?;
                 SuiAddress::from(&pub_key)
             }
-            GenericSignature::MultiSig(ms) => ms.multisig_pk.clone().into(),
+            GenericSignature::MultiSig(ms) => ms.get_pk().into(),
         })
     }
 }
@@ -683,12 +699,27 @@ impl VerifiedExecutionData {
 
 pub const STD_OPTION_MODULE_NAME: &IdentStr = ident_str!("option");
 pub const STD_OPTION_STRUCT_NAME: &IdentStr = ident_str!("Option");
+pub const RESOLVED_STD_OPTION: (&AccountAddress, &IdentStr, &IdentStr) = (
+    &MOVE_STDLIB_ADDRESS,
+    STD_OPTION_MODULE_NAME,
+    STD_OPTION_STRUCT_NAME,
+);
 
 pub const STD_ASCII_MODULE_NAME: &IdentStr = ident_str!("ascii");
 pub const STD_ASCII_STRUCT_NAME: &IdentStr = ident_str!("String");
+pub const RESOLVED_ASCII_STR: (&AccountAddress, &IdentStr, &IdentStr) = (
+    &MOVE_STDLIB_ADDRESS,
+    STD_ASCII_MODULE_NAME,
+    STD_ASCII_STRUCT_NAME,
+);
 
 pub const STD_UTF8_MODULE_NAME: &IdentStr = ident_str!("string");
 pub const STD_UTF8_STRUCT_NAME: &IdentStr = ident_str!("String");
+pub const RESOLVED_UTF8_STR: (&AccountAddress, &IdentStr, &IdentStr) = (
+    &MOVE_STDLIB_ADDRESS,
+    STD_UTF8_MODULE_NAME,
+    STD_UTF8_STRUCT_NAME,
+);
 
 pub const TX_CONTEXT_MODULE_NAME: &IdentStr = ident_str!("tx_context");
 pub const TX_CONTEXT_STRUCT_NAME: &IdentStr = ident_str!("TxContext");
@@ -707,14 +738,63 @@ pub struct TxContext {
     ids_created: u64,
 }
 
+#[derive(PartialEq, Eq, Clone, Copy)]
+pub enum TxContextKind {
+    // No TxContext
+    None,
+    // &mut TxContext
+    Mutable,
+    // &TxContext
+    Immutable,
+}
+
 impl TxContext {
     pub fn new(sender: &SuiAddress, digest: &TransactionDigest, epoch_data: &EpochData) -> Self {
+        Self::new_from_components(
+            sender,
+            digest,
+            &epoch_data.epoch_id(),
+            epoch_data.epoch_start_timestamp(),
+        )
+    }
+
+    pub fn new_from_components(
+        sender: &SuiAddress,
+        digest: &TransactionDigest,
+        epoch_id: &EpochId,
+        epoch_timestamp_ms: u64,
+    ) -> Self {
         Self {
             sender: AccountAddress::new(sender.0),
             digest: digest.into_inner().to_vec(),
-            epoch: epoch_data.epoch_id(),
-            epoch_timestamp_ms: epoch_data.epoch_start_timestamp(),
+            epoch: *epoch_id,
+            epoch_timestamp_ms,
             ids_created: 0,
+        }
+    }
+
+    /// Returns whether the type signature is &mut TxContext, &TxContext, or none of the above.
+    pub fn kind(view: &BinaryIndexedView<'_>, s: &SignatureToken) -> TxContextKind {
+        use SignatureToken as S;
+        let (kind, s) = match s {
+            S::MutableReference(s) => (TxContextKind::Mutable, s),
+            S::Reference(s) => (TxContextKind::Immutable, s),
+            _ => return TxContextKind::None,
+        };
+
+        let S::Struct(idx) = &**s else {
+            return TxContextKind::None;
+        };
+
+        let (module_addr, module_name, struct_name) = resolve_struct(view, *idx);
+        let is_tx_context_type = module_name == TX_CONTEXT_MODULE_NAME
+            && module_addr == &SUI_FRAMEWORK_ADDRESS
+            && struct_name == TX_CONTEXT_STRUCT_NAME;
+
+        if is_tx_context_type {
+            kind
+        } else {
+            TxContextKind::None
         }
     }
 
@@ -1004,6 +1084,10 @@ impl ObjectID {
     pub fn to_hex_uncompressed(&self) -> String {
         format!("{self}")
     }
+
+    pub fn is_clock(&self) -> bool {
+        *self == SUI_CLOCK_OBJECT_ID
+    }
 }
 
 impl From<SuiAddress> for ObjectID {
@@ -1102,7 +1186,11 @@ impl From<SuiAddress> for AccountAddress {
 impl fmt::Display for MoveObjectType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> std::fmt::Result {
         let s: StructTag = self.clone().into();
-        write!(f, "{}", s)
+        write!(
+            f,
+            "{}",
+            to_sui_struct_tag_string(&s).map_err(fmt::Error::custom)?
+        )
     }
 }
 

@@ -30,6 +30,9 @@ use std::fmt::{Display, Formatter};
 const DYNAMIC_FIELD_MODULE_NAME: &IdentStr = ident_str!("dynamic_field");
 const DYNAMIC_FIELD_FIELD_STRUCT_NAME: &IdentStr = ident_str!("Field");
 
+const DYNAMIC_OBJECT_FIELD_MODULE_NAME: &IdentStr = ident_str!("dynamic_object_field");
+const DYNAMIC_OBJECT_FIELD_WRAPPER_STRUCT_NAME: &IdentStr = ident_str!("Wrapper");
+
 /// Rust version of the Move sui::dynamic_field::Field type
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct Field<N, V> {
@@ -87,12 +90,27 @@ impl DynamicFieldInfo {
             && tag.name.as_ident_str() == DYNAMIC_FIELD_FIELD_STRUCT_NAME
     }
 
+    pub fn is_dynamic_object_field_wrapper(tag: &StructTag) -> bool {
+        tag.address == SUI_FRAMEWORK_ADDRESS
+            && tag.module.as_ident_str() == DYNAMIC_OBJECT_FIELD_MODULE_NAME
+            && tag.name.as_ident_str() == DYNAMIC_OBJECT_FIELD_WRAPPER_STRUCT_NAME
+    }
+
     pub fn dynamic_field_type(key: TypeTag, value: TypeTag) -> StructTag {
         StructTag {
             address: SUI_FRAMEWORK_ADDRESS,
             name: DYNAMIC_FIELD_FIELD_STRUCT_NAME.to_owned(),
             module: DYNAMIC_FIELD_MODULE_NAME.to_owned(),
             type_params: vec![key, value],
+        }
+    }
+
+    pub fn dynamic_object_field_wrapper(key: TypeTag) -> StructTag {
+        StructTag {
+            address: SUI_FRAMEWORK_ADDRESS,
+            module: DYNAMIC_OBJECT_FIELD_MODULE_NAME.to_owned(),
+            name: DYNAMIC_OBJECT_FIELD_WRAPPER_STRUCT_NAME.to_owned(),
+            type_params: vec![key],
         }
     }
 
@@ -216,9 +234,10 @@ fn extract_id_value(id_value: &MoveValue) -> Option<ObjectID> {
 pub fn is_dynamic_object(move_struct: &MoveStruct) -> bool {
     match move_struct {
         MoveStruct::WithTypes { type_, .. } => {
-            matches!(&type_.type_params[0], TypeTag::Struct(tag) if tag.address == SUI_FRAMEWORK_ADDRESS
-        && tag.module.as_str() == "dynamic_object_field"
-        && tag.name.as_str() == "Wrapper")
+            matches!(
+                &type_.type_params[0],
+                TypeTag::Struct(tag) if DynamicFieldInfo::is_dynamic_object_field_wrapper(tag)
+            )
         }
         _ => false,
     }

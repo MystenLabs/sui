@@ -11,7 +11,7 @@ export function AutoLockSettings() {
     return (
         <MenuLayout title="Auto Lock" back={backUrl}>
             <div className="flex flex-col gap-3.75 mt-3.75">
-                <Text color="gray-90" weight="medium" variant="p1">
+                <Text color="gray-90" weight="medium" variant="pBody">
                     Set the idle time in minutes before Sui Wallet locks itself.
                 </Text>
                 <AutoLockTimerSelector />

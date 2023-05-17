@@ -16,10 +16,10 @@ const textStyles = cva(['break-words'], {
             subtitleSmallExtra: 'text-subtitleSmallExtra',
             caption: 'uppercase text-caption',
             captionSmall: 'uppercase text-captionSmall',
-            p1: 'text-p1',
-            p2: 'text-p2',
-            p3: 'text-p3',
-            p4: 'text-p4',
+            pBody: 'text-pBody',
+            pBodySmall: 'text-pBodySmall',
+            pSubtitle: 'text-pSubtitle',
+            pSubtitleSmall: 'text-pSubtitleSmall',
         },
         weight: {
             medium: 'font-medium',
@@ -45,6 +45,7 @@ const textStyles = cva(['break-words'], {
             'hero-dark': 'text-hero-dark',
             'success-dark': 'text-success-dark',
             issue: 'text-issue',
+            'issue-dark': 'text-issue-dark',
         },
         uppercase: { true: 'uppercase' },
         italic: {

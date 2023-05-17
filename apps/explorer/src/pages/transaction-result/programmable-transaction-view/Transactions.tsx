@@ -4,6 +4,7 @@ import { type SuiTransaction } from '@mysten/sui.js';
 
 import { Transaction } from './Transaction';
 
+import { ExpandableList } from '~/ui/ExpandableList';
 import { TableHeader } from '~/ui/TableHeader';
 
 interface Props {
@@ -19,15 +20,18 @@ export function Transactions({ transactions }: Props) {
         <>
             <TableHeader>Transactions</TableHeader>
             <ul className="flex flex-col gap-8">
-                {transactions.map((transaction, index) => {
-                    const [[type, data]] = Object.entries(transaction);
+                <ExpandableList
+                    items={transactions.map((transaction, index) => {
+                        const [[type, data]] = Object.entries(transaction);
 
-                    return (
-                        <li key={index}>
-                            <Transaction type={type} data={data} />
-                        </li>
-                    );
-                })}
+                        return (
+                            <li key={index}>
+                                <Transaction type={type} data={data} />
+                            </li>
+                        );
+                    })}
+                    defaultItemsToShow={10}
+                />
             </ul>
         </>
     );

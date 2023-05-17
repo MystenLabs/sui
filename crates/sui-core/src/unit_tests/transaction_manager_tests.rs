@@ -3,14 +3,16 @@
 
 use std::{time::Duration, vec};
 
+use sui_test_transaction_builder::TestTransactionBuilder;
+use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::{
     base_types::ObjectID,
     crypto::deterministic_random_account_key,
-    messages::{CallArg, ObjectArg, VerifiedExecutableTransaction, TEST_ONLY_GAS_UNIT_FOR_GENERIC},
+    digests::TransactionEffectsDigest,
     object::Object,
-    SUI_FRAMEWORK_OBJECT_ID,
+    transaction::{CallArg, ObjectArg},
+    SUI_FRAMEWORK_PACKAGE_ID,
 };
-use test_utils::messages::move_transaction;
 use tokio::{
     sync::mpsc::{unbounded_channel, UnboundedReceiver},
     time::sleep,
@@ -28,7 +30,10 @@ fn make_transaction_manager(
     state: &AuthorityState,
 ) -> (
     TransactionManager,
-    UnboundedReceiver<VerifiedExecutableTransaction>,
+    UnboundedReceiver<(
+        VerifiedExecutableTransaction,
+        Option<TransactionEffectsDigest>,
+    )>,
 ) {
     // Create a new transaction manager instead of reusing the authority's, to examine
     // transaction_manager output from rx_ready_certificates.
@@ -47,15 +52,11 @@ fn make_transaction(gas_object: Object, input: Vec<CallArg>) -> VerifiedExecutab
     // Use fake module, function, package and gas prices since they are irrelevant for testing
     // transaction manager.
     let rgp = 100;
-    let transaction = move_transaction(
-        gas_object,
-        "counter",
-        "assert_value",
-        SUI_FRAMEWORK_OBJECT_ID,
-        input,
-        rgp,
-        rgp * TEST_ONLY_GAS_UNIT_FOR_GENERIC,
-    );
+    let (sender, keypair) = deterministic_random_account_key();
+    let transaction =
+        TestTransactionBuilder::new(sender, gas_object.compute_object_reference(), rgp)
+            .move_call(SUI_FRAMEWORK_PACKAGE_ID, "counter", "assert_value", input)
+            .build_and_sign(&keypair);
     VerifiedExecutableTransaction::new_system(transaction, 0)
 }
 
@@ -83,6 +84,8 @@ async fn transaction_manager_basics() {
     let (transaction_manager, mut rx_ready_certificates) = make_transaction_manager(&state);
     // TM should output no transaction.
     assert!(rx_ready_certificates.try_recv().is_err());
+    // TM should be empty at the beginning.
+    transaction_manager.check_empty_for_testing();
 
     // Enqueue empty vec should not crash.
     transaction_manager
@@ -94,10 +97,22 @@ async fn transaction_manager_basics() {
     // Enqueue a transaction with existing gas object, empty input.
     let transaction = make_transaction(gas_objects[0].clone(), vec![]);
     transaction_manager
-        .enqueue(vec![transaction], &state.epoch_store_for_testing())
+        .enqueue(vec![transaction.clone()], &state.epoch_store_for_testing())
         .unwrap();
     // TM should output the transaction eventually.
     rx_ready_certificates.recv().await.unwrap();
+
+    assert_eq!(transaction_manager.inflight_queue_len(), 1);
+
+    // Notify TM about transaction commit
+    transaction_manager.notify_commit(
+        transaction.digest(),
+        vec![],
+        &state.epoch_store_for_testing(),
+    );
+
+    // TM should be empty.
+    transaction_manager.check_empty_for_testing();
 
     // Enqueue a transaction with a new gas object, empty input.
     let gas_object_new =
@@ -110,12 +125,16 @@ async fn transaction_manager_basics() {
     sleep(Duration::from_secs(1)).await;
     assert!(rx_ready_certificates.try_recv().is_err());
 
+    assert_eq!(transaction_manager.inflight_queue_len(), 1);
+
     // Duplicated enqueue is allowed.
     transaction_manager
         .enqueue(vec![transaction.clone()], &state.epoch_store_for_testing())
         .unwrap();
     sleep(Duration::from_secs(1)).await;
     assert!(rx_ready_certificates.try_recv().is_err());
+
+    assert_eq!(transaction_manager.inflight_queue_len(), 1);
 
     // Notify TM about availability of the gas object.
     transaction_manager.objects_available(
@@ -133,8 +152,14 @@ async fn transaction_manager_basics() {
     assert!(rx_ready_certificates.try_recv().is_err());
 
     // Notify TM about transaction commit
-    transaction_manager
-        .certificate_executed(transaction.digest(), &state.epoch_store_for_testing());
+    transaction_manager.notify_commit(
+        transaction.digest(),
+        vec![],
+        &state.epoch_store_for_testing(),
+    );
+
+    // TM should be empty at the end.
+    transaction_manager.check_empty_for_testing();
 }
 
 #[tokio::test(flavor = "current_thread", start_paused = true)]
@@ -221,6 +246,8 @@ async fn transaction_manager_read_lock() {
     sleep(Duration::from_secs(1)).await;
     assert!(rx_ready_certificates.try_recv().is_err());
 
+    assert_eq!(transaction_manager.inflight_queue_len(), 3);
+
     // Notify TM about availability of the shared object.
     transaction_manager.objects_available(
         vec![InputKey(shared_object.id(), Some(shared_version))],
@@ -228,8 +255,8 @@ async fn transaction_manager_read_lock() {
     );
 
     // TM should output the 2 read-only transactions eventually.
-    let tx_0 = rx_ready_certificates.recv().await.unwrap();
-    let tx_1 = rx_ready_certificates.recv().await.unwrap();
+    let tx_0 = rx_ready_certificates.recv().await.unwrap().0;
+    let tx_1 = rx_ready_certificates.recv().await.unwrap().0;
     let mut want_digests = vec![transaction_read_0.digest(), transaction_read_1.digest()];
     want_digests.sort();
     let mut got_digests = vec![tx_0.digest(), tx_1.digest()];
@@ -240,11 +267,19 @@ async fn transaction_manager_read_lock() {
     sleep(Duration::from_secs(1)).await;
     assert!(rx_ready_certificates.try_recv().is_err());
 
+    assert_eq!(transaction_manager.inflight_queue_len(), 3);
+
     // Notify TM about read-only transaction commit
-    transaction_manager.certificate_executed(tx_0.digest(), &state.epoch_store_for_testing());
-    transaction_manager.certificate_executed(tx_1.digest(), &state.epoch_store_for_testing());
+    transaction_manager.notify_commit(tx_0.digest(), vec![], &state.epoch_store_for_testing());
+    transaction_manager.notify_commit(tx_1.digest(), vec![], &state.epoch_store_for_testing());
 
     // TM should output the default-lock transaction eventually.
-    let tx_2 = rx_ready_certificates.recv().await.unwrap();
+    let tx_2 = rx_ready_certificates.recv().await.unwrap().0;
     assert_eq!(tx_2.digest(), transaction_default.digest());
+
+    assert_eq!(transaction_manager.inflight_queue_len(), 1);
+
+    // Notify TM about default-lock transaction commit
+    transaction_manager.notify_commit(tx_2.digest(), vec![], &state.epoch_store_for_testing());
+    transaction_manager.check_empty_for_testing();
 }

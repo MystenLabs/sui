@@ -11,7 +11,7 @@ First, note Move is based upon the well-supported [Rust](https://www.rust-lang.o
  * [Sui Move announcement](https://sui.io/resources-move/why-we-created-sui-move/)
  * [Sui source code](https://github.com/MystenLabs/sui)
  * [`rustdoc` output](../build/install.md#rustdoc)
- * [Sui Move by Example](../explore/move-examples/index.md)
+ * [Sui Move by Example](https://examples.sui.io)
 
 ## Move resources
 
@@ -39,6 +39,6 @@ One fundamental difference between the EVM and Move is the data model for assets
 
 Sui heavily leverages the Move data model for performance. Sui's persistent state is a set of programmable Move objects that can be updated, created, and destroyed by transactions. Each object has ownership metadata that allows Sui validators to both execute and commit transactions using the object in parallel with causally unrelated transactions. Move's type system ensures the integrity of this ownership metadata across executions. The result is a system where developers write ordinary Move smart contracts, but validators leverage the data model to execute and commit transactions as efficiently as possible.
 
-This is simply not possible with the EVM data model. Because assets are stored in dynamically indexable maps, a validator would be unable to determine when transactions might touch the same asset. Sui's parallel execution and commitment scheme needs a language like Move with the vocabulary to describe structured assets that can flow freely across contracts. To be blunt: **even if we preferred the EVM/Solidity to Move, we could not use them in Sui without sacrificing the performance breakthroughs that make Sui unique**.
+This is simply not possible with the EVM data model. Because assets are stored in dynamically indexable maps, a validator would be unable to determine when transactions might touch the same asset. Sui's parallel execution and commitment scheme needs a language like Move with the vocabulary to describe structured assets that can flow freely across contracts. To be blunt: **even if the community preferred the EVM/Solidity to Move, Sui could not use them without sacrificing the performance breakthroughs that make Sui unique**.
 
 One of the main advantages of Move is data composability. It is always possible to create a new struct (asset) Y that will hold initial asset X in it. Even more - with addition of generics, it is possible to define generic wrapper Z(T) that will be able to wrap any asset, providing additional properties to a wrapped asset or combining it with others. See how composability works in our [Sandwich example](https://github.com/MystenLabs/sui/tree/main/sui_programmability/examples/basics/sources/sandwich.move).

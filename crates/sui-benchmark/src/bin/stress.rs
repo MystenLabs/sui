@@ -86,6 +86,7 @@ async fn main() -> Result<()> {
             .unwrap(),
     );
     let registry: Registry = registry_service.default_registry();
+    mysten_metrics::init_metrics(&registry);
 
     let barrier = Arc::new(Barrier::new(2));
     let cloned_barrier = barrier.clone();
@@ -111,13 +112,13 @@ async fn main() -> Result<()> {
     let stress_stat_collection = opts.stress_stat_collection;
     barrier.wait().await;
 
-    // sleep with a random delay to avoid conflicts.
-    const STAGGER_INTERVAL: Duration = Duration::from_secs(60);
-    const STAGGER_MAX_JITTER_MS: u64 = 1000;
+    // Add a small randomized delay before workloads start, to even out the traffic.
+    const START_DELAY_INTERVAL: Duration = Duration::from_secs(2);
+    const START_DELAY_MAX_JITTER_MS: u64 = 2000;
     if opts.staggered_start_max_multiplier > 0 {
-        let delay = STAGGER_INTERVAL
+        let delay = START_DELAY_INTERVAL
             * rand::thread_rng().gen_range(0..opts.staggered_start_max_multiplier)
-            + Duration::from_millis(rand::thread_rng().gen_range(0..STAGGER_MAX_JITTER_MS));
+            + Duration::from_millis(rand::thread_rng().gen_range(0..START_DELAY_MAX_JITTER_MS));
         sleep(delay).await;
     }
 

@@ -8,6 +8,7 @@ import { KeepAliveConnection } from './KeepAliveConnection';
 import { UiConnection } from './UiConnection';
 import { createMessage } from '_messages';
 import { KEEP_ALIVE_BG_PORT_NAME } from '_src/content-script/keep-bg-alive';
+import { type QredoConnectPayload } from '_src/shared/messaging/messages/payloads/QredoConnect';
 
 import type { NetworkEnvType } from '../NetworkEnv';
 import type { Connection } from './Connection';
@@ -17,6 +18,8 @@ import type {
     WalletStatusChange,
     WalletStatusChangePayload,
 } from '_payloads/wallet-status-change';
+
+const appOrigin = new URL(Browser.runtime.getURL('')).origin;
 
 export class Connections {
     #connections: (Connection | KeepAliveConnection)[] = [];
@@ -30,6 +33,11 @@ export class Connections {
                         connection = new ContentScriptConnection(port);
                         break;
                     case UiConnection.CHANNEL:
+                        if (port.sender?.origin !== appOrigin) {
+                            throw new Error(
+                                `[Connections] UI connections are not allowed for origin ${port.sender?.origin}`
+                            );
+                        }
                         connection = new UiConnection(port);
                         break;
                     case KEEP_ALIVE_BG_PORT_NAME:
@@ -66,6 +74,12 @@ export class Connections {
                   origin: string;
                   change: WalletStatusChange;
               }
+            | {
+                  event: 'qredoConnectResult';
+                  origin: string;
+                  allowed: boolean;
+              },
+        messageID?: string
     ) {
         for (const aConnection of this.#connections) {
             if (aConnection instanceof ContentScriptConnection) {
@@ -83,6 +97,22 @@ export class Connections {
                                     type: 'wallet-status-changed',
                                     ...notification.change,
                                 })
+                            );
+                        }
+                        break;
+                    case 'qredoConnectResult':
+                        if (notification.origin === aConnection.origin) {
+                            aConnection.send(
+                                createMessage<
+                                    QredoConnectPayload<'connectResponse'>
+                                >(
+                                    {
+                                        type: 'qredo-connect',
+                                        method: 'connectResponse',
+                                        args: { allowed: notification.allowed },
+                                    },
+                                    messageID
+                                )
                             );
                         }
                         break;

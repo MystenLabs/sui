@@ -1,0 +1,38 @@
+processed 8 tasks
+
+init:
+A: object(0,0)
+
+task 1 'publish'. lines 6-23:
+created: object(1,0), object(1,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 7668400,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2 'upgrade'. lines 24-41:
+created: object(2,0)
+mutated: object(0,0), object(1,1)
+gas summary: computation_cost: 1000000, storage_cost: 7683600,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+
+task 3 'upgrade'. lines 42-71:
+created: object(3,0)
+mutated: object(0,0), object(1,1)
+gas summary: computation_cost: 1000000, storage_cost: 8907200,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+
+task 4 'upgrade'. lines 72-99:
+created: object(4,0)
+mutated: object(0,0), object(1,1)
+gas summary: computation_cost: 1000000, storage_cost: 9994000,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+
+task 5 'run'. lines 101-101:
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 6 'run'. lines 103-103:
+created: object(6,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 2432000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 7 'view-object'. lines 105-105:
+Owner: Account Address ( A )
+Version: 3
+Contents: V0::base_module::Object {id: sui::object::UID {id: sui::object::ID {bytes: fake(6,0)}}, field0: 10u64, field1: 10u64}

@@ -24,7 +24,7 @@ test('Apps tab', async ({ page, extensionUrl }) => {
         .click();
 
     await expect(page.getByRole('main')).toHaveText(
-        /Builders in sui ecosystem/i
+        /Apps below are actively curated but do not indicate any endorsement or relationship with Sui Wallet. Please DYOR./i
     );
 });
 

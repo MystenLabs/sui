@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use async_trait::async_trait;
-use futures::executor::block_on;
 use futures::future::join_all;
 use jsonrpsee::core::RpcResult;
 use jsonrpsee::http_client::HttpClient;
@@ -11,9 +10,9 @@ use jsonrpsee::RpcModule;
 use sui_json_rpc::api::{ReadApiClient, ReadApiServer};
 use sui_json_rpc::SuiRpcModule;
 use sui_json_rpc_types::{
-    Checkpoint, CheckpointId, CheckpointPage, SuiEvent, SuiGetPastObjectRequest,
-    SuiObjectDataOptions, SuiObjectResponse, SuiPastObjectResponse, SuiTransactionBlockResponse,
-    SuiTransactionBlockResponseOptions,
+    Checkpoint, CheckpointId, CheckpointPage, ProtocolConfigResponse, SuiEvent,
+    SuiGetPastObjectRequest, SuiObjectDataOptions, SuiObjectResponse, SuiPastObjectResponse,
+    SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
 };
 use sui_open_rpc::Module;
 use sui_types::base_types::{ObjectID, SequenceNumber};
@@ -23,6 +22,7 @@ use sui_types::sui_serde::BigInt;
 use crate::errors::IndexerError;
 use crate::store::IndexerStore;
 use crate::types::SuiTransactionBlockResponseWithOptions;
+use sui_json_rpc_types::SuiLoadedChildObjectsResponse;
 
 pub(crate) struct ReadApi<S> {
     fullnode: HttpClient,
@@ -127,7 +127,7 @@ impl<S> ReadApiServer for ReadApi<S>
 where
     S: IndexerStore + Sync + Send + 'static,
 {
-    fn get_object(
+    async fn get_object(
         &self,
         object_id: ObjectID,
         options: Option<SuiObjectDataOptions>,
@@ -138,15 +138,15 @@ where
                 .indexer_metrics()
                 .get_object_latency
                 .start_timer();
-            let obj_resp = block_on(async { self.fullnode.get_object(object_id, options).await });
+            let obj_resp = self.fullnode.get_object(object_id, options).await;
             obj_guard.stop_and_record();
             return obj_resp;
         }
 
-        Ok(block_on(self.get_object_internal(object_id, options))?)
+        Ok(self.get_object_internal(object_id, options).await?)
     }
 
-    fn multi_get_objects(
+    async fn multi_get_objects(
         &self,
         object_ids: Vec<ObjectID>,
         options: Option<SuiObjectDataOptions>,
@@ -156,8 +156,7 @@ where
             .indexer_metrics()
             .multi_get_objects_latency
             .start_timer();
-        let objs_resp =
-            block_on(async { self.fullnode.multi_get_objects(object_ids, options).await });
+        let objs_resp = self.fullnode.multi_get_objects(object_ids, options).await;
         objs_guard.stop_and_record();
         objs_resp
     }
@@ -202,7 +201,7 @@ where
             .await?)
     }
 
-    fn multi_get_transaction_blocks(
+    async fn multi_get_transaction_blocks(
         &self,
         digests: Vec<TransactionDigest>,
         options: Option<SuiTransactionBlockResponseOptions>,
@@ -216,14 +215,16 @@ where
                 .indexer_metrics()
                 .multi_get_transaction_blocks_latency
                 .start_timer();
-            let multi_tx_resp =
-                block_on(self.fullnode.multi_get_transaction_blocks(digests, options));
+            let multi_tx_resp = self
+                .fullnode
+                .multi_get_transaction_blocks(digests, options)
+                .await;
             multi_tx_guard.stop_and_record();
             return multi_tx_resp;
         }
-        Ok(block_on(
-            self.multi_get_transaction_blocks_internal(&digests, options),
-        )?)
+        Ok(self
+            .multi_get_transaction_blocks_internal(&digests, options)
+            .await?)
     }
 
     async fn try_get_past_object(
@@ -245,7 +246,7 @@ where
         past_obj_resp
     }
 
-    fn try_multi_get_past_objects(
+    async fn try_multi_get_past_objects(
         &self,
         past_objects: Vec<SuiGetPastObjectRequest>,
         options: Option<SuiObjectDataOptions>,
@@ -255,10 +256,10 @@ where
             .indexer_metrics()
             .try_multi_get_past_objects_latency
             .start_timer();
-        let multi_past_obj_resp = block_on(
-            self.fullnode
-                .try_multi_get_past_objects(past_objects, options),
-        );
+        let multi_past_obj_resp = self
+            .fullnode
+            .try_multi_get_past_objects(past_objects, options)
+            .await;
         multi_past_obj_guard.stop_and_record();
         multi_past_obj_resp
     }
@@ -300,10 +301,10 @@ where
         Ok(self.state.get_checkpoint(id).await?)
     }
 
-    fn get_checkpoints(
+    async fn get_checkpoints(
         &self,
         cursor: Option<BigInt<u64>>,
-        limit: Option<BigInt<u64>>,
+        limit: Option<usize>,
         descending_order: bool,
     ) -> RpcResult<CheckpointPage> {
         let cps_guard = self
@@ -311,23 +312,60 @@ where
             .indexer_metrics()
             .get_checkpoints_latency
             .start_timer();
-        let cps_resp = block_on(
-            self.fullnode
-                .get_checkpoints(cursor, limit, descending_order),
-        );
+        let cps_resp = self
+            .fullnode
+            .get_checkpoints(cursor, limit, descending_order)
+            .await;
         cps_guard.stop_and_record();
         cps_resp
     }
 
-    fn get_events(&self, transaction_digest: TransactionDigest) -> RpcResult<Vec<SuiEvent>> {
+    async fn get_checkpoints_deprecated_limit(
+        &self,
+        cursor: Option<BigInt<u64>>,
+        limit: Option<BigInt<u64>>,
+        descending_order: bool,
+    ) -> RpcResult<CheckpointPage> {
+        self.get_checkpoints(cursor, limit.map(|l| *l as usize), descending_order)
+            .await
+    }
+
+    async fn get_events(&self, transaction_digest: TransactionDigest) -> RpcResult<Vec<SuiEvent>> {
         let events_guard = self
             .state
             .indexer_metrics()
             .get_events_latency
             .start_timer();
-        let events_resp = block_on(self.fullnode.get_events(transaction_digest));
+        let events_resp = self.fullnode.get_events(transaction_digest).await;
         events_guard.stop_and_record();
         events_resp
+    }
+    async fn get_loaded_child_objects(
+        &self,
+        digest: TransactionDigest,
+    ) -> RpcResult<SuiLoadedChildObjectsResponse> {
+        let dynamic_fields_load_obj_guard = self
+            .state
+            .indexer_metrics()
+            .get_loaded_child_objects_latency
+            .start_timer();
+        let dyn_fields_resp = self.fullnode.get_loaded_child_objects(digest).await;
+        dynamic_fields_load_obj_guard.stop_and_record();
+        dyn_fields_resp
+    }
+
+    async fn get_protocol_config(
+        &self,
+        version: Option<BigInt<u64>>,
+    ) -> RpcResult<ProtocolConfigResponse> {
+        let protocol_config_guard = self
+            .state
+            .indexer_metrics()
+            .get_protocol_config_latency
+            .start_timer();
+        let protocol_config_resp = self.fullnode.get_protocol_config(version).await;
+        protocol_config_guard.stop_and_record();
+        protocol_config_resp
     }
 }
 

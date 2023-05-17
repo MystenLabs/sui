@@ -13,7 +13,7 @@
 
 /// A typical lifetime of an auction looks as follows:
 /// - auction is created by the owner and shared with the bidders
-/// - bidders submit bids to try out-biding one another
+/// - bidders submit bids to try out-bidding one another
 ///   - if a submitted bid is higher than the current bid (initially
 ///   there is no bid), the auction is updated with the current bid
 ///   and funds representing previous highest bid are sent to the

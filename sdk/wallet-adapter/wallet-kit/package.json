@@ -1,6 +1,6 @@
 {
   "name": "@mysten/wallet-kit",
-  "version": "0.4.3",
+  "version": "0.4.6",
   "description": "TODO: Write description",
   "license": "Apache-2.0",
   "author": "Mysten Labs <build@mystenlabs.com>",
@@ -9,6 +9,7 @@
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
+      "types": "./dist/index.d.ts",
       "source": "./src/index.tsx",
       "import": "./dist/index.mjs",
       "require": "./dist/index.js"
@@ -32,7 +33,7 @@
     "react-dom": "*"
   },
   "dependencies": {
-    "@headlessui/react": "^1.7.13",
+    "@headlessui/react": "^1.7.14",
     "@mysten/sui.js": "workspace:*",
     "@mysten/wallet-adapter-base": "workspace:*",
     "@mysten/wallet-adapter-unsafe-burner": "workspace:*",
@@ -42,11 +43,11 @@
     "@stitches/react": "^1.2.8"
   },
   "devDependencies": {
-    "@types/react": "^18.0.28",
+    "@types/react": "^18.0.35",
     "@types/react-dom": "^18.0.11",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "tsup": "^6.7.0",
-    "typescript": "^4.9.4"
+    "typescript": "^5.0.4"
   }
 }

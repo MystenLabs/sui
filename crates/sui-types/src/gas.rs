@@ -2,13 +2,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::effects::{TransactionEffects, TransactionEffectsAPI};
 use crate::sui_serde::BigInt;
 use crate::sui_serde::Readable;
 use crate::{
     error::{ExecutionError, UserInputError, UserInputResult},
     gas_model::gas_v1::{self, SuiCostTable as SuiCostTableV1, SuiGasStatus as SuiGasStatusV1},
     gas_model::gas_v2::{self, SuiCostTable as SuiCostTableV2, SuiGasStatus as SuiGasStatusV2},
-    messages::{TransactionEffects, TransactionEffectsAPI},
     object::Object,
 };
 use enum_dispatch::enum_dispatch;
@@ -22,9 +22,9 @@ use sui_protocol_config::ProtocolConfig;
 sui_macros::checked_arithmetic! {
 
 #[enum_dispatch]
-pub trait SuiGasStatusAPI<'a> {
+pub trait SuiGasStatusAPI {
     fn is_unmetered(&self) -> bool;
-    fn move_gas_status(&mut self) -> &mut GasStatus<'a>;
+    fn move_gas_status(&mut self) -> &mut GasStatus;
     fn bucketize_computation(&mut self) -> Result<(), ExecutionError>;
     fn summary(&self) -> GasCostSummary;
     fn gas_budget(&self) -> u64;
@@ -46,12 +46,12 @@ pub trait SuiGasStatusAPI<'a> {
 }
 
 #[enum_dispatch(SuiGasStatusAPI)]
-pub enum SuiGasStatus<'a> {
-    V1(SuiGasStatusV1<'a>),
-    V2(SuiGasStatusV2<'a>),
+pub enum SuiGasStatus {
+    V1(SuiGasStatusV1),
+    V2(SuiGasStatusV2),
 }
 
-impl<'a> SuiGasStatus<'a> {
+impl SuiGasStatus {
     pub fn new_with_budget(gas_budget: u64, gas_price: u64, config: &ProtocolConfig) -> Self {
         match config.gas_model_version() {
             1 => Self::V1(SuiGasStatusV1::new_with_budget(
@@ -59,7 +59,7 @@ impl<'a> SuiGasStatus<'a> {
                 gas_price,
                 config,
             )),
-            2 | 3 => Self::V2(SuiGasStatusV2::new_with_budget(
+            2 | 3 | 4 | 5 => Self::V2(SuiGasStatusV2::new_with_budget(
                 gas_budget,
                 gas_price,
                 config,
@@ -71,7 +71,7 @@ impl<'a> SuiGasStatus<'a> {
     pub fn new_unmetered(config: &ProtocolConfig) -> Self {
         match config.gas_model_version() {
             1 => Self::V1(SuiGasStatusV1::new_unmetered()),
-            2 | 3 => Self::V2(SuiGasStatusV2::new_unmetered()),
+            2 | 3 | 4 | 5 => Self::V2(SuiGasStatusV2::new_unmetered()),
             _ => panic!("unknown gas model version"),
         }
     }
@@ -86,7 +86,7 @@ impl SuiCostTable {
     pub fn new(config: &ProtocolConfig) -> Self {
         match config.gas_model_version() {
             1 => Self::V1(SuiCostTableV1::new(config)),
-            2 | 3 => Self::V2(SuiCostTableV2::new(config)),
+            2 | 3 | 4 | 5 => Self::V2(SuiCostTableV2::new(config)),
             _ => panic!("unknown gas model version"),
         }
     }
@@ -98,7 +98,7 @@ impl SuiCostTable {
     pub fn unmetered(config: &ProtocolConfig) -> Self {
         match config.gas_model_version() {
             1 => Self::V1(SuiCostTableV1::unmetered()),
-            2 | 3 => Self::V2(SuiCostTableV2::unmetered()),
+            2 | 3 | 4 | 5 => Self::V2(SuiCostTableV2::unmetered()),
             _ => panic!("unknown gas model version"),
         }
     }
@@ -144,12 +144,12 @@ impl SuiCostTable {
         }
     }
 
-    pub fn into_gas_status_for_testing<'a>(
+    pub fn into_gas_status_for_testing(
         self,
         gas_budget: u64,
         gas_price: u64,
         storage_price: u64,
-    ) -> SuiGasStatus<'a> {
+    ) -> SuiGasStatus {
         match self {
             Self::V1(cost_table) => SuiGasStatus::V1(SuiGasStatusV1::new_for_testing(
                 gas_budget,

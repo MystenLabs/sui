@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use async_trait::async_trait;
-use futures::executor::block_on;
 use jsonrpsee::core::RpcResult;
 use jsonrpsee::http_client::HttpClient;
 use jsonrpsee::RpcModule;
@@ -49,15 +48,19 @@ impl CoinReadApiServer for CoinReadApi {
         self.fullnode.get_all_coins(owner, cursor, limit).await
     }
 
-    fn get_balance(&self, owner: SuiAddress, coin_type: Option<String>) -> RpcResult<Balance> {
-        block_on(self.fullnode.get_balance(owner, coin_type))
+    async fn get_balance(
+        &self,
+        owner: SuiAddress,
+        coin_type: Option<String>,
+    ) -> RpcResult<Balance> {
+        self.fullnode.get_balance(owner, coin_type).await
     }
 
-    fn get_all_balances(&self, owner: SuiAddress) -> RpcResult<Vec<Balance>> {
-        block_on(self.fullnode.get_all_balances(owner))
+    async fn get_all_balances(&self, owner: SuiAddress) -> RpcResult<Vec<Balance>> {
+        self.fullnode.get_all_balances(owner).await
     }
 
-    async fn get_coin_metadata(&self, coin_type: String) -> RpcResult<SuiCoinMetadata> {
+    async fn get_coin_metadata(&self, coin_type: String) -> RpcResult<Option<SuiCoinMetadata>> {
         self.fullnode.get_coin_metadata(coin_type).await
     }
 

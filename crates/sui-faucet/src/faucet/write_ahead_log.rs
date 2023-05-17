@@ -5,7 +5,7 @@ use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 use sui_types::base_types::SuiAddress;
-use sui_types::{base_types::ObjectID, messages::TransactionData};
+use sui_types::{base_types::ObjectID, transaction::TransactionData};
 use typed_store::rocks::{DBMap, TypedStoreError};
 use typed_store::traits::{TableSummary, TypedStoreDebug};
 use typed_store::Map;
@@ -76,7 +76,18 @@ impl WriteAheadLog {
     /// pending transaction exists, `Ok(None)` if not, and `Err(_)` if there was an internal error
     /// accessing the WAL.
     pub(crate) fn reclaim(&self, coin: ObjectID) -> Result<Option<Entry>, TypedStoreError> {
-        self.log.get(&coin)
+        match self.log.get(&coin) {
+            Ok(entry) => Ok(entry),
+            Err(TypedStoreError::SerializationError(_)) => {
+                // Remove bad log from the store, so we don't crash on start up, this can happen if we update the
+                // WAL Entry and have some leftover Entry from the WAL.
+                self.log
+                    .remove(&coin)
+                    .expect("Coin: {coin:?} unable to be removed from log.");
+                Ok(None)
+            }
+            Err(err) => Err(err),
+        }
     }
 
     /// Indicate that the transaction in flight for `coin` has landed, and the entry in the WAL can
@@ -98,7 +109,7 @@ impl WriteAheadLog {
 mod tests {
     use sui_types::{
         base_types::{random_object_ref, ObjectRef},
-        messages::TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
+        transaction::TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
     };
 
     use super::*;

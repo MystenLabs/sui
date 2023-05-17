@@ -79,5 +79,5 @@ fuzz_target!(|code_unit: CodeUnit| {
     };
 
     module.function_defs.push(fun_def);
-    let _ = move_bytecode_verifier::verify_module(&module);
+    let _ = move_bytecode_verifier::verify_module_unmetered(&module);
 });

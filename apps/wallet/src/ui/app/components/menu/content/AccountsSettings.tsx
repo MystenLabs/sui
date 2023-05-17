@@ -24,9 +24,6 @@ export function AccountsSettings() {
         FEATURES.WALLET_MULTI_ACCOUNTS
     ).on;
     const createAccountMutation = useDeriveNextAccountMutation();
-    const { on: isLedgerIntegrationEnabled } = useFeature(
-        FEATURES.WALLET_LEDGER_INTEGRATION
-    );
     const navigate = useNavigate();
     const appType = useAppSelector((state) => state.app.appType);
     const connectLedgerModalUrl = useNextMenuUrl(
@@ -57,25 +54,23 @@ export function AccountsSettings() {
                         />
                     </>
                 ) : null}
-                {isLedgerIntegrationEnabled ? (
-                    <Button
-                        variant="outline"
-                        size="tall"
-                        text="Connect Ledger Wallet"
-                        before={<LockedLockIcon />}
-                        onClick={async () => {
-                            if (appType === AppType.popup) {
-                                const { origin, pathname } = window.location;
-                                await Browser.tabs.create({
-                                    url: `${origin}/${pathname}#${connectLedgerModalUrl}`,
-                                });
-                                window.close();
-                            } else {
-                                navigate(connectLedgerModalUrl);
-                            }
-                        }}
-                    />
-                ) : null}
+                <Button
+                    variant="outline"
+                    size="tall"
+                    text="Connect Ledger Wallet"
+                    before={<LockedLockIcon />}
+                    onClick={async () => {
+                        if (appType === AppType.popup) {
+                            const { origin, pathname } = window.location;
+                            await Browser.tabs.create({
+                                url: `${origin}/${pathname}#${connectLedgerModalUrl}`,
+                            });
+                            window.close();
+                        } else {
+                            navigate(connectLedgerModalUrl);
+                        }
+                    }}
+                />
                 <Outlet />
             </div>
         </MenuLayout>

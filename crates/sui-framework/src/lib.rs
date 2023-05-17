@@ -2,34 +2,31 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use move_binary_format::compatibility::Compatibility;
+use move_binary_format::file_format::AbilitySet;
 use move_binary_format::CompiledModule;
 use move_core_types::gas_algebra::InternalGas;
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use std::fmt::Formatter;
-use std::path::Path;
-use sui_framework_build::compiled_package::{BuildConfig, CompiledPackage};
 use sui_types::base_types::ObjectRef;
 use sui_types::storage::ObjectStore;
+use sui_types::DEEPBOOK_PACKAGE_ID;
 use sui_types::{
     base_types::ObjectID,
     digests::TransactionDigest,
-    error::SuiResult,
     move_package::MovePackage,
     object::{Object, OBJECT_START_VERSION},
-    MOVE_STDLIB_OBJECT_ID, SUI_FRAMEWORK_OBJECT_ID, SUI_SYSTEM_PACKAGE_ID,
+    MOVE_STDLIB_PACKAGE_ID, SUI_FRAMEWORK_PACKAGE_ID, SUI_SYSTEM_PACKAGE_ID,
 };
 use tracing::error;
 
-pub mod natives;
-
 /// Represents a system package in the framework, that's built from the source code inside
 /// sui-framework.
-#[derive(Serialize, PartialEq, Eq, Deserialize)]
+#[derive(Clone, Serialize, PartialEq, Eq, Deserialize)]
 pub struct SystemPackage {
-    id: ObjectID,
-    bytes: Vec<Vec<u8>>,
-    dependencies: Vec<ObjectID>,
+    pub id: ObjectID,
+    pub bytes: Vec<Vec<u8>>,
+    pub dependencies: Vec<ObjectID>,
 }
 
 impl SystemPackage {
@@ -57,7 +54,7 @@ impl SystemPackage {
     pub fn modules(&self) -> Vec<CompiledModule> {
         self.bytes
             .iter()
-            .map(|b| CompiledModule::deserialize(b).unwrap())
+            .map(|b| CompiledModule::deserialize_with_defaults(b).unwrap())
             .collect()
     }
 
@@ -99,7 +96,7 @@ macro_rules! define_system_packages {
                 )),*
             ]
         });
-        &Lazy::force(&PACKAGES)
+        Lazy::force(&PACKAGES)
     }}
 }
 
@@ -110,16 +107,21 @@ impl BuiltInFramework {
         // place we need to worry about if any of them changes.
         // TODO: Is it possible to derive dependencies from the bytecode instead of manually specifying them?
         define_system_packages!([
-            (MOVE_STDLIB_OBJECT_ID, "move-stdlib", []),
+            (MOVE_STDLIB_PACKAGE_ID, "move-stdlib", []),
             (
-                SUI_FRAMEWORK_OBJECT_ID,
+                SUI_FRAMEWORK_PACKAGE_ID,
                 "sui-framework",
-                [MOVE_STDLIB_OBJECT_ID]
+                [MOVE_STDLIB_PACKAGE_ID]
             ),
             (
                 SUI_SYSTEM_PACKAGE_ID,
                 "sui-system",
-                [MOVE_STDLIB_OBJECT_ID, SUI_FRAMEWORK_OBJECT_ID]
+                [MOVE_STDLIB_PACKAGE_ID, SUI_FRAMEWORK_PACKAGE_ID]
+            ),
+            (
+                DEEPBOOK_PACKAGE_ID,
+                "deepbook",
+                [MOVE_STDLIB_PACKAGE_ID, SUI_FRAMEWORK_PACKAGE_ID]
             )
         ])
         .iter()
@@ -148,19 +150,6 @@ pub fn legacy_test_cost() -> InternalGas {
     InternalGas::new(0)
 }
 
-/// Wrapper of the build command that verifies the framework version. Should eventually be removed once we can
-/// do this in the obvious way (via version checks)
-pub fn build_move_package(path: &Path, config: BuildConfig) -> SuiResult<CompiledPackage> {
-    //let test_mode = config.config.test_mode;
-    let pkg = config.build(path.to_path_buf())?;
-    /*if test_mode {
-        pkg.verify_framework_version(get_sui_framework_test(), get_move_stdlib_test())?;
-    } else {
-        pkg.verify_framework_version(get_sui_framework(), get_move_stdlib())?;
-    }*/
-    Ok(pkg)
-}
-
 /// Check whether the framework defined by `modules` is compatible with the framework that is
 /// already on-chain (i.e. stored in `object_store`) at `id`.
 ///
@@ -178,13 +167,26 @@ pub async fn compare_system_package<S: ObjectStore>(
     modules: &[CompiledModule],
     dependencies: Vec<ObjectID>,
     max_binary_format_version: u32,
+    no_extraneous_module_bytes: bool,
 ) -> Option<ObjectRef> {
     let cur_object = match object_store.get_object(id) {
         Ok(Some(cur_object)) => cur_object,
 
         Ok(None) => {
-            error!("No framework package at {id}");
-            return None;
+            // creating a new framework package--nothing to check
+            return Some(
+                Object::new_system_package(
+                    modules,
+                    // note: execution_engine assumes any system package with version OBJECT_START_VERSION is freshly created
+                    // rather than upgraded
+                    OBJECT_START_VERSION,
+                    dependencies,
+                    // Genesis is fine here, we only use it to calculate an object ref that we can use
+                    // for all validators to commit to the same bytes in the update
+                    TransactionDigest::genesis(),
+                )
+                .compute_object_reference(),
+            );
         }
 
         Err(e) => {
@@ -217,6 +219,8 @@ pub async fn compare_system_package<S: ObjectStore>(
         check_struct_layout: true,
         check_friend_linking: false,
         check_private_entry_linking: true,
+        disallowed_new_abilities: AbilitySet::ALL,
+        disallow_change_struct_type_params: true,
     };
 
     let new_pkg = new_object
@@ -224,14 +228,17 @@ pub async fn compare_system_package<S: ObjectStore>(
         .try_as_package_mut()
         .expect("Created as package");
 
-    let cur_normalized = match cur_pkg.normalize(max_binary_format_version) {
-        Ok(v) => v,
-        Err(e) => {
-            error!("Could not normalize existing package: {e:?}");
-            return None;
-        }
-    };
-    let mut new_normalized = new_pkg.normalize(max_binary_format_version).ok()?;
+    let cur_normalized =
+        match cur_pkg.normalize(max_binary_format_version, no_extraneous_module_bytes) {
+            Ok(v) => v,
+            Err(e) => {
+                error!("Could not normalize existing package: {e:?}");
+                return None;
+            }
+        };
+    let mut new_normalized = new_pkg
+        .normalize(max_binary_format_version, no_extraneous_module_bytes)
+        .ok()?;
 
     for (name, cur_module) in cur_normalized {
         let Some(new_module) = new_normalized.remove(&name) else {

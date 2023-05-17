@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use prometheus::{
-    register_histogram_with_registry, register_int_counter_with_registry, Histogram, IntCounter,
-    Registry,
+    register_histogram_with_registry, register_int_counter_with_registry,
+    register_int_gauge_with_registry, Histogram, IntCounter, IntGauge, Registry,
 };
 
 /// Prometheus metrics for sui-indexer.
@@ -21,6 +21,9 @@ pub struct IndexerMetrics {
     pub total_transaction_committed: IntCounter,
     pub total_object_change_committed: IntCounter,
     pub total_epoch_committed: IntCounter,
+    pub latest_fullnode_checkpoint_sequence_number: IntGauge,
+    pub latest_indexer_checkpoint_sequence_number: IntGauge,
+    pub latest_indexer_object_checkpoint_sequence_number: IntGauge,
     // checkpoint E2E latency is:
     // fullnode_download_latency + checkpoint_index_latency + db_commit_latency
     pub fullnode_checkpoint_wait_and_download_latency: Histogram,
@@ -47,6 +50,7 @@ pub struct IndexerMetrics {
     pub get_checkpoint_latency: Histogram,
     pub get_checkpoints_latency: Histogram,
     pub get_events_latency: Histogram,
+    pub get_loaded_child_objects_latency: Histogram,
     pub get_total_transaction_blocks_latency: Histogram,
     pub get_latest_checkpoint_sequence_number_latency: Histogram,
     // indexer.rs
@@ -55,6 +59,7 @@ pub struct IndexerMetrics {
     pub query_events_latency: Histogram,
     pub get_dynamic_fields_latency: Histogram,
     pub get_dynamic_field_object_latency: Histogram,
+    pub get_protocol_config_latency: Histogram,
 }
 
 impl IndexerMetrics {
@@ -93,6 +98,24 @@ impl IndexerMetrics {
             total_epoch_committed: register_int_counter_with_registry!(
                 "total_epoch_committed",
                 "Total number of epoch committed",
+                registry,
+            )
+            .unwrap(),
+            latest_fullnode_checkpoint_sequence_number: register_int_gauge_with_registry!(
+                "latest_fullnode_checkpoint_sequence_number",
+                "Latest checkpoint sequence number from the Full Node",
+                registry,
+            )
+            .unwrap(),
+            latest_indexer_checkpoint_sequence_number: register_int_gauge_with_registry!(
+                "latest_indexer_checkpoint_sequence_number",
+                "Latest checkpoint sequence number from the Indexer",
+                registry,
+            )
+            .unwrap(),
+            latest_indexer_object_checkpoint_sequence_number: register_int_gauge_with_registry!(
+                "latest_indexer_object_checkpoint_sequence_number",
+                "Latest object checkpoint sequence number from the Indexer",
                 registry,
             )
             .unwrap(),
@@ -288,6 +311,20 @@ impl IndexerMetrics {
             get_dynamic_field_object_latency: register_histogram_with_registry!(
                 "get_dynamic_field_object_latency",
                 "Time spent in get_dynamic_field_object on the fullnode behind.",
+                LATENCY_SEC_BUCKETS.to_vec(),
+                registry
+            )
+            .unwrap(),
+            get_loaded_child_objects_latency: register_histogram_with_registry!(
+                "get_loaded_child_objects_latency",
+                "Time spent in get_loaded_child_objects_latency on the fullnode behind.",
+                LATENCY_SEC_BUCKETS.to_vec(),
+                registry
+            )
+            .unwrap(),
+            get_protocol_config_latency: register_histogram_with_registry!(
+                "get_protocol_config_latency",
+                "Time spent in get_protocol_config_latency on the fullnode behind.",
                 LATENCY_SEC_BUCKETS.to_vec(),
                 registry
             )

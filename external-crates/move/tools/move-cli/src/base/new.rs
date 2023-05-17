@@ -76,7 +76,7 @@ version = \"{version}\"
 [addresses]"
         )?;
         for (addr_name, addr_val) in addrs {
-            writeln!(w, "{addr_name} =  \"{addr_val}\"")?;
+            writeln!(w, "{addr_name} = \"{addr_val}\"")?;
         }
         if !custom.is_empty() {
             writeln!(w, "{}", custom)?;

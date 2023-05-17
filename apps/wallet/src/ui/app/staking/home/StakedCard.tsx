@@ -1,14 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useFormatCoin } from '@mysten/core';
+import { useFormatCoin, useGetTimeBeforeEpochNumber } from '@mysten/core';
 import { SUI_TYPE_ARG, type SuiAddress } from '@mysten/sui.js';
 import { cx, cva, type VariantProps } from 'class-variance-authority';
 import { Link } from 'react-router-dom';
 
-import { useGetTimeBeforeEpochNumber } from '../useGetTimeBeforeEpochNumber';
 import { ValidatorLogo } from '../validators/ValidatorLogo';
-import { NUM_OF_EPOCH_BEFORE_EARNING } from '_src/shared/constants';
+import { NUM_OF_EPOCH_BEFORE_STAKING_REWARDS_REDEEMABLE } from '_src/shared/constants';
 import { CountDownTimer } from '_src/ui/app/shared/countdown-timer';
 import { Text } from '_src/ui/app/shared/text';
 import { IconTooltip } from '_src/ui/app/shared/tooltip';
@@ -45,7 +44,7 @@ interface DelegationObjectWithValidator extends StakeObject {
 
 const cardStyle = cva(
     [
-        'group flex no-underline flex-col p-3.75 pr-2 py-3 box-border w-full rounded-2xl border border-solid',
+        'group flex no-underline flex-col p-3.75 pr-2 py-3 box-border w-full rounded-2xl border border-solid h-36',
     ],
     {
         variants: {
@@ -134,7 +133,8 @@ export function StakeCard({
     // For cool down epoch, show Available to withdraw add rewards to principal
     // Reward earning epoch is 2 epochs after stake request epoch
     const earningRewardsEpoch =
-        Number(stakeRequestEpoch) + NUM_OF_EPOCH_BEFORE_EARNING;
+        Number(stakeRequestEpoch) +
+        NUM_OF_EPOCH_BEFORE_STAKING_REWARDS_REDEEMABLE;
     const isEarnedRewards = currentEpoch >= Number(earningRewardsEpoch);
     const delegationState = inactiveValidator
         ? StakeState.IN_ACTIVE
@@ -142,10 +142,16 @@ export function StakeCard({
         ? StakeState.EARNING
         : StakeState.WARM_UP;
 
-    const rewards = isEarnedRewards && estimatedReward ? estimatedReward : 0;
-    const [principalStaked, symbol] = useFormatCoin(principal, SUI_TYPE_ARG);
+    const rewards =
+        isEarnedRewards && estimatedReward ? BigInt(estimatedReward) : 0n;
+
+    // For inactive validator, show principal + rewards
+    const [principalStaked, symbol] = useFormatCoin(
+        inactiveValidator ? principal + rewards : principal,
+        SUI_TYPE_ARG
+    );
     const [rewardsStaked] = useFormatCoin(rewards, SUI_TYPE_ARG);
-    const isEarning = delegationState === StakeState.EARNING && rewards > 0;
+    const isEarning = delegationState === StakeState.EARNING && rewards > 0n;
 
     // Applicable only for warm up
     const epochBeforeRewards =
@@ -176,22 +182,23 @@ export function StakeCard({
                 earnColor={isEarning}
                 earningRewardEpoch={Number(epochBeforeRewards)}
             >
-                <div className="flex justify-between items-start mb-1">
+                <div className="flex mb-1">
                     <ValidatorLogo
                         validatorAddress={validatorAddress}
                         size="subtitle"
                         iconSize="md"
                         stacked
+                        activeEpoch={delegationObject.stakeRequestEpoch}
                     />
 
-                    <div className="text-steel text-p1 opacity-0 group-hover:opacity-100">
+                    <div className="text-steel text-pBody opacity-0 group-hover:opacity-100">
                         <IconTooltip
                             tip="Object containing the delegated staked SUI tokens, owned by each delegator"
                             placement="top"
                         />
                     </div>
                 </div>
-                <div className="flex-1 mb-4">
+                <div className="flex-1">
                     <div className="flex items-baseline gap-1">
                         <Text variant="body" weight="semibold" color="gray-90">
                             {principalStaked}

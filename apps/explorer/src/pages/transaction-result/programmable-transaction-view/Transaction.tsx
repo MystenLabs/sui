@@ -12,45 +12,38 @@ import { flattenSuiArguments } from './utils';
 
 import { ErrorBoundary } from '~/components/error-boundary/ErrorBoundary';
 import { ObjectLink } from '~/ui/InternalLink';
+import { Text } from '~/ui/Text';
 
 export interface TransactionProps<T> {
     type: string;
     data: T;
 }
 
-function TransactionContent({
-    type,
-    children,
-}: {
-    type: string;
-    children?: ReactNode;
-}) {
+function TransactionContent({ children }: { children?: ReactNode }) {
     return (
-        <>
-            <div className="text-heading6 font-semibold text-steel-darker">
-                {type}
-            </div>
-            {children && (
-                <div className="text-bodyMedium pt-2 font-medium text-steel-dark">
-                    {children}
-                </div>
-            )}
-        </>
+        <Text variant="pBody/normal" color="steel-dark">
+            {children}
+        </Text>
     );
 }
 
 function ArrayArgument({
-    type,
     data,
 }: TransactionProps<(SuiArgument | SuiArgument[])[] | undefined>) {
     return (
-        <TransactionContent type={type}>
-            {data && <>({flattenSuiArguments(data)})</>}
+        <TransactionContent>
+            {data && (
+                <span className="break-all">
+                    <Text variant="pBody/medium">
+                        ({flattenSuiArguments(data)})
+                    </Text>
+                </span>
+            )}
         </TransactionContent>
     );
 }
 
-function MoveCall({ type, data }: TransactionProps<MoveCallSuiTransaction>) {
+function MoveCall({ data }: TransactionProps<MoveCallSuiTransaction>) {
     const {
         module,
         package: movePackage,
@@ -58,16 +51,29 @@ function MoveCall({ type, data }: TransactionProps<MoveCallSuiTransaction>) {
         arguments: args,
         type_arguments: typeArgs,
     } = data;
+
     return (
-        <TransactionContent type={type}>
-            (package: <ObjectLink objectId={movePackage} />, module:{' '}
-            <ObjectLink
-                objectId={`${movePackage}?module=${module}`}
-                label={`'${module}'`}
-            />
-            , function: <span className="text-sui-dark">{func}</span>
-            {args && <>, arguments: [{flattenSuiArguments(args!)}]</>}
-            {typeArgs && <>, type_arguments: {typeArgs}</>})
+        <TransactionContent>
+            <Text variant="pBody/medium">
+                (package: <ObjectLink objectId={movePackage} />, module:{' '}
+                <ObjectLink
+                    objectId={`${movePackage}?module=${module}`}
+                    label={`'${module}'`}
+                />
+                , function:{' '}
+                <span className="break-all text-hero-dark">{func}</span>
+                {args && (
+                    <span className="break-all">
+                        , arguments: [{flattenSuiArguments(args!)}]
+                    </span>
+                )}
+                {typeArgs && (
+                    <span className="break-all">
+                        , type_arguments: {typeArgs}
+                    </span>
+                )}
+                )
+            </Text>
         </TransactionContent>
     );
 }

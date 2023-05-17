@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { GrowthBookProvider } from '@growthbook/growthbook-react';
-import { PostHogAnalyticsProvider, RpcClientContext } from '@mysten/core';
-import { QueryClientProvider } from '@tanstack/react-query';
+import { RpcClientContext } from '@mysten/core';
+import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
 import { Fragment, StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Provider } from 'react-redux';
@@ -12,7 +12,7 @@ import { HashRouter } from 'react-router-dom';
 import App from './app';
 import { SuiLedgerClientProvider } from './app/components/ledger/SuiLedgerClientProvider';
 import { growthbook } from './app/experimentation/feature-gating';
-import { queryClient } from './app/helpers/queryClient';
+import { persister, queryClient } from './app/helpers/queryClient';
 import { useAppSelector } from './app/hooks';
 import { ErrorBoundary } from '_components/error-boundary';
 import { initAppType } from '_redux/slices/app';
@@ -25,7 +25,6 @@ import { api, thunkExtras } from '_store/thunk-extras';
 import './styles/global.scss';
 import '@fontsource/inter/variable.css';
 import '@fontsource/red-hat-mono/variable.css';
-import '_font-icons/output/sui-icons.scss';
 import 'bootstrap-icons/font/bootstrap-icons.scss';
 
 async function init() {
@@ -35,7 +34,7 @@ async function init() {
     store.dispatch(initAppType(getFromLocationSearch(window.location.search)));
     await thunkExtras.background.init(store.dispatch);
     const { apiEnv, customRPC } = store.getState().app;
-    setAttributes(growthbook, { apiEnv, customRPC });
+    setAttributes({ apiEnv, customRPC });
 }
 
 function renderApp() {
@@ -60,28 +59,29 @@ function AppWrapper() {
 
     return (
         <GrowthBookProvider growthbook={growthbook}>
-            <PostHogAnalyticsProvider projectApiKey="phc_oJAUptxSr0KC1JOYN6KNbkTUZU00NDvujz7hy1MBHVe">
-                <HashRouter>
-                    <SuiLedgerClientProvider>
-                        {/*
-                         * NOTE: We set a key here to force the entire react tree to be re-created when the network changes so that
-                         * the RPC client instance (api.instance.fullNode) is updated correctly. In the future, we should look into
-                         * making the API provider instance a reactive value and moving it out of the redux-thunk middleware
-                         */}
-                        <Fragment key={network}>
-                            <QueryClientProvider client={queryClient}>
-                                <RpcClientContext.Provider
-                                    value={api.instance.fullNode}
-                                >
-                                    <ErrorBoundary>
-                                        <App />
-                                    </ErrorBoundary>
-                                </RpcClientContext.Provider>
-                            </QueryClientProvider>
-                        </Fragment>
-                    </SuiLedgerClientProvider>
-                </HashRouter>
-            </PostHogAnalyticsProvider>
+            <HashRouter>
+                <SuiLedgerClientProvider>
+                    {/*
+                     * NOTE: We set a key here to force the entire react tree to be re-created when the network changes so that
+                     * the RPC client instance (api.instance.fullNode) is updated correctly. In the future, we should look into
+                     * making the API provider instance a reactive value and moving it out of the redux-thunk middleware
+                     */}
+                    <Fragment key={network}>
+                        <PersistQueryClientProvider
+                            client={queryClient}
+                            persistOptions={{ persister }}
+                        >
+                            <RpcClientContext.Provider
+                                value={api.instance.fullNode}
+                            >
+                                <ErrorBoundary>
+                                    <App />
+                                </ErrorBoundary>
+                            </RpcClientContext.Provider>
+                        </PersistQueryClientProvider>
+                    </Fragment>
+                </SuiLedgerClientProvider>
+            </HashRouter>
         </GrowthBookProvider>
     );
 }

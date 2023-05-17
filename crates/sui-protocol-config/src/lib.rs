@@ -5,12 +5,12 @@ use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
 use std::cell::RefCell;
 use std::sync::atomic::{AtomicBool, Ordering};
-use sui_protocol_config_macros::ProtocolConfigGetters;
+use sui_protocol_config_macros::{ProtocolConfigFeatureFlagsGetters, ProtocolConfigGetters};
 use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 4;
+const MAX_PROTOCOL_VERSION: u64 = 11;
 
 // Record history of protocol version allocations here:
 //
@@ -21,6 +21,22 @@ const MAX_PROTOCOL_VERSION: u64 = 4;
 //            `max_size_written_objects_system_tx`
 // Version 4: New reward slashing rate. Framework changes to skip stake susbidy when the epoch
 //            length is short.
+// Version 5: Package upgrade compatibility error fix. New gas cost table. New scoring decision
+//            mechanism that includes up to f scoring authorities.
+// Version 6: Change to how bytes are charged in the gas meter, increase buffer stake to 0.5f
+// Version 7: Disallow adding new abilities to types during package upgrades,
+//            disable_invariant_violation_check_in_swap_loc,
+//            disable init functions becoming entry,
+//            hash module bytes individually before computing package digest.
+// Version 8: Disallow changing abilities and type constraints for type parameters in structs
+//            during upgrades.
+// Version 9: Limit the length of Move idenfitiers to 128.
+//            Disallow extraneous module bytes,
+//            advance_to_highest_supported_protocol_version,
+// Version 10:increase bytecode verifier `max_verifier_meter_ticks_per_function` and
+//            `max_meter_ticks_per_module` limits each from 6_000_000 to 16_000_000. sui-system
+//            framework changes.
+// Version 11: Introduce `std::type_name::get_original` to the system frameworks.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -113,7 +129,7 @@ impl SupportedProtocolVersions {
 pub struct Error(pub String);
 
 /// Records on/off feature flags that may vary at each protocol version.
-#[derive(Default, Clone, Serialize, Debug)]
+#[derive(Default, Clone, Serialize, Debug, ProtocolConfigFeatureFlagsGetters)]
 struct FeatureFlags {
     // Add feature flags here, e.g.:
     // new_protocol_feature: bool,
@@ -130,6 +146,39 @@ struct FeatureFlags {
     // object runtime.
     #[serde(skip_serializing_if = "is_false")]
     loaded_child_objects_fixed: bool,
+    // If true, treat missing types in the upgraded modules when creating an upgraded package as a
+    // compatibility error.
+    #[serde(skip_serializing_if = "is_false")]
+    missing_type_is_compatibility_error: bool,
+    // If true, then the scoring decision mechanism will not get disabled when we do have more than
+    // f low scoring authorities, but it will simply flag as low scoring only up to f authorities.
+    #[serde(skip_serializing_if = "is_false")]
+    scoring_decision_with_validity_cutoff: bool,
+    // Re-order end of epoch messages to the end of the commit
+    #[serde(skip_serializing_if = "is_false")]
+    consensus_order_end_of_epoch_last: bool,
+    // Disallow adding abilities to types during package upgrades.
+    #[serde(skip_serializing_if = "is_false")]
+    disallow_adding_abilities_on_upgrade: bool,
+    // Disables unnecessary invariant check in the Move VM when swapping the value out of a local
+    #[serde(skip_serializing_if = "is_false")]
+    disable_invariant_violation_check_in_swap_loc: bool,
+    // advance to highest supported protocol version at epoch change, instead of the next consecutive
+    // protocol version.
+    #[serde(skip_serializing_if = "is_false")]
+    advance_to_highest_supported_protocol_version: bool,
+    // If true, disallow entry modifiers on entry functions
+    #[serde(skip_serializing_if = "is_false")]
+    ban_entry_init: bool,
+    // If true, hash module bytes individually when calculating package digests for upgrades
+    #[serde(skip_serializing_if = "is_false")]
+    package_digest_hash_module: bool,
+    // If true, disallow changing struct type parameters during package upgrades
+    #[serde(skip_serializing_if = "is_false")]
+    disallow_change_struct_type_params_on_upgrade: bool,
+    // If true, checks no extra bytes in a compiled module
+    #[serde(skip_serializing_if = "is_false")]
+    no_extraneous_module_bytes: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -225,6 +274,12 @@ pub struct ProtocolConfig {
     /// Maximum number of gas units that a single MoveCall transaction can use. Enforced by the Sui adapter.
     max_tx_gas: Option<u64>,
 
+    /// Maximum amount of the proposed gas price in MIST (defined in the transaction).
+    max_gas_price: Option<u64>,
+
+    /// The max computation bucket for gas. This is the max that can be charged for computation.
+    max_gas_computation_bucket: Option<u64>,
+
     /// Maximum number of nested loops. Enforced by the Move bytecode verifier.
     max_loop_depth: Option<u64>,
 
@@ -284,6 +339,9 @@ pub struct ProtocolConfig {
 
     /// Maximum length of a vector in Move. Enforced by the VM during execution, and for constants, by the verifier.
     max_move_vector_len: Option<u64>,
+
+    /// Maximum length of an `Identifier` in Move. Enforced by the bytecode verifier at signing.
+    max_move_identifier_len: Option<u64>,
 
     /// Maximum number of back edges in Move function. Enforced by the bytecode verifier at signing.
     max_back_edges_per_function: Option<u64>,
@@ -553,6 +611,12 @@ pub struct ProtocolConfig {
     hmac_hmac_sha3_256_cost_base: Option<u64>,
     hmac_hmac_sha3_256_input_cost_per_byte: Option<u64>,
     hmac_hmac_sha3_256_input_cost_per_block: Option<u64>,
+
+    // Const params for consensus scoring decision
+    // The scaling factor property for the MED outlier detection
+    scoring_decision_mad_divisor: Option<f64>,
+    // The cutoff value for the MED outlier detection
+    scoring_decision_cutoff_value: Option<f64>,
 }
 
 // feature flags
@@ -595,6 +659,49 @@ impl ProtocolConfig {
     pub fn loaded_child_objects_fixed(&self) -> bool {
         self.feature_flags.loaded_child_objects_fixed
     }
+
+    pub fn missing_type_is_compatibility_error(&self) -> bool {
+        self.feature_flags.missing_type_is_compatibility_error
+    }
+
+    pub fn scoring_decision_with_validity_cutoff(&self) -> bool {
+        self.feature_flags.scoring_decision_with_validity_cutoff
+    }
+
+    pub fn consensus_order_end_of_epoch_last(&self) -> bool {
+        self.feature_flags.consensus_order_end_of_epoch_last
+    }
+
+    pub fn disallow_adding_abilities_on_upgrade(&self) -> bool {
+        self.feature_flags.disallow_adding_abilities_on_upgrade
+    }
+
+    pub fn disable_invariant_violation_check_in_swap_loc(&self) -> bool {
+        self.feature_flags
+            .disable_invariant_violation_check_in_swap_loc
+    }
+
+    pub fn advance_to_highest_supported_protocol_version(&self) -> bool {
+        self.feature_flags
+            .advance_to_highest_supported_protocol_version
+    }
+
+    pub fn ban_entry_init(&self) -> bool {
+        self.feature_flags.ban_entry_init
+    }
+
+    pub fn package_digest_hash_module(&self) -> bool {
+        self.feature_flags.package_digest_hash_module
+    }
+
+    pub fn disallow_change_struct_type_params_on_upgrade(&self) -> bool {
+        self.feature_flags
+            .disallow_change_struct_type_params_on_upgrade
+    }
+
+    pub fn no_extraneous_module_bytes(&self) -> bool {
+        self.feature_flags.no_extraneous_module_bytes
+    }
 }
 
 // Special getters
@@ -609,6 +716,12 @@ impl ProtocolConfig {
     /// Instead we want to be able to selectively fetch this value
     pub fn max_size_written_objects_system_tx_as_option(&self) -> Option<u64> {
         self.max_size_written_objects_system_tx
+    }
+
+    /// We don't want to use the default getter which unwraps and could panic.
+    /// Instead we want to be able to selectively fetch this value
+    pub fn max_move_identifier_len_as_option(&self) -> Option<u64> {
+        self.max_move_identifier_len
     }
 }
 
@@ -642,6 +755,18 @@ impl ProtocolConfig {
                 ret
             }
         })
+    }
+
+    /// Get the value ProtocolConfig that are in effect during the given protocol version.
+    /// Or none if the version is not supported.
+    pub fn get_for_version_if_supported(version: ProtocolVersion) -> Option<Self> {
+        if version.0 >= ProtocolVersion::MIN.0 && version.0 <= ProtocolVersion::MAX_ALLOWED.0 {
+            let mut ret = Self::get_for_version_impl(version);
+            ret.version = version;
+            Some(ret)
+        } else {
+            None
+        }
     }
 
     #[cfg(not(msim))]
@@ -719,6 +844,8 @@ impl ProtocolConfig {
                 max_move_object_size: Some(250 * 1024),
                 max_move_package_size: Some(100 * 1024),
                 max_tx_gas: Some(10_000_000_000),
+                max_gas_price: Some(100_000),
+                max_gas_computation_bucket: Some(5_000_000),
                 max_loop_depth: Some(5),
                 max_generic_instantiation_length: Some(32),
                 max_function_parameters: Some(128),
@@ -937,6 +1064,13 @@ impl ProtocolConfig {
                 max_size_written_objects: None,
                 max_size_written_objects_system_tx: None,
 
+                // Const params for consensus scoring decision
+                scoring_decision_mad_divisor: None,
+                scoring_decision_cutoff_value: None,
+
+                // Limits the length of a Move identifier
+                max_move_identifier_len: None,
+
                 // When adding a new constant, set it to None in the earliest version, like this:
                 // new_constant: None,
             },
@@ -971,6 +1105,53 @@ impl ProtocolConfig {
                 cfg.gas_model_version = Some(3);
                 cfg
             }
+            5 => {
+                let mut cfg = Self::get_for_version_impl(version - 1);
+                cfg.feature_flags.missing_type_is_compatibility_error = true;
+                cfg.gas_model_version = Some(4);
+                cfg.feature_flags.scoring_decision_with_validity_cutoff = true;
+                cfg.scoring_decision_mad_divisor = Some(2.3);
+                cfg.scoring_decision_cutoff_value = Some(2.5);
+                cfg
+            }
+            6 => {
+                let mut cfg = Self::get_for_version_impl(version - 1);
+                cfg.gas_model_version = Some(5);
+                cfg.buffer_stake_for_protocol_upgrade_bps = Some(5000);
+                cfg.feature_flags.consensus_order_end_of_epoch_last = true;
+                cfg
+            }
+            7 => {
+                let mut cfg = Self::get_for_version_impl(version - 1);
+                cfg.feature_flags.disallow_adding_abilities_on_upgrade = true;
+                cfg.feature_flags
+                    .disable_invariant_violation_check_in_swap_loc = true;
+                cfg.feature_flags.ban_entry_init = true;
+                cfg.feature_flags.package_digest_hash_module = true;
+                cfg
+            }
+            8 => {
+                let mut cfg = Self::get_for_version_impl(version - 1);
+                cfg.feature_flags
+                    .disallow_change_struct_type_params_on_upgrade = true;
+                cfg
+            }
+            9 => {
+                let mut cfg = Self::get_for_version_impl(version - 1);
+                // Limits the length of a Move identifier
+                cfg.max_move_identifier_len = Some(128);
+                cfg.feature_flags.no_extraneous_module_bytes = true;
+                cfg.feature_flags
+                    .advance_to_highest_supported_protocol_version = true;
+                cfg
+            }
+            10 => {
+                let mut cfg = Self::get_for_version_impl(version - 1);
+                cfg.max_verifier_meter_ticks_per_function = Some(16_000_000);
+                cfg.max_meter_ticks_per_module = Some(16_000_000);
+                cfg
+            }
+            11 => Self::get_for_version_impl(version - 1),
             // Use this template when making changes:
             //
             //     // modify an existing constant.
@@ -1015,6 +1196,10 @@ impl ProtocolConfig {
     }
     pub fn set_package_upgrades_for_testing(&mut self, val: bool) {
         self.feature_flags.package_upgrades = val
+    }
+    pub fn set_advance_to_highest_supported_protocol_version_for_testing(&mut self, val: bool) {
+        self.feature_flags
+            .advance_to_highest_supported_protocol_version = val
     }
 }
 
@@ -1083,16 +1268,26 @@ macro_rules! check_limit {
 /// metered_limit is always less than or equal to unmetered_hard_limit
 #[macro_export]
 macro_rules! check_limit_by_meter {
-    ($is_metered:expr, $x:expr, $metered_limit:expr, $unmetered_hard_limit:expr) => {{
+    ($is_metered:expr, $x:expr, $metered_limit:expr, $unmetered_hard_limit:expr, $metric:expr) => {{
         // If this is metered, we use the metered_limit limit as the upper bound
-        let h = if $is_metered {
-            $metered_limit
+        let (h, metered_str) = if $is_metered {
+            ($metered_limit, "metered")
         } else {
             // Unmetered gets more headroom
-            $unmetered_hard_limit
+            ($unmetered_hard_limit, "unmetered")
         };
         use sui_protocol_config::check_limit_in_range;
-        check_limit_in_range($x as u64, $metered_limit, h)
+        let result = check_limit_in_range($x as u64, $metered_limit, h);
+        match result {
+            LimitThresholdCrossed::None => {}
+            LimitThresholdCrossed::Soft(_, _) => {
+                $metric.with_label_values(&[metered_str, "soft"]).inc();
+            }
+            LimitThresholdCrossed::Hard(_, _) => {
+                $metric.with_label_values(&[metered_str, "hard"]).inc();
+            }
+        };
+        result
     }};
 }
 
@@ -1102,11 +1297,10 @@ mod test {
     use insta::assert_yaml_snapshot;
 
     #[test]
-    fn snaphost_tests() {
+    fn snapshot_tests() {
         println!("\n============================================================================");
         println!("!                                                                          !");
         println!("! IMPORTANT: never update snapshots from this test. only add new versions! !");
-        println!("! (it is actually ok to update them up until mainnet launches)             !");
         println!("!                                                                          !");
         println!("============================================================================\n");
         for i in MIN_PROTOCOL_VERSION..=MAX_PROTOCOL_VERSION {
@@ -1117,6 +1311,85 @@ mod test {
             );
         }
     }
+
+    #[test]
+    fn lookup_by_string_test() {
+        let prot: ProtocolConfig = ProtocolConfig::get_for_version(ProtocolVersion::new(1));
+        // Does not exist
+        assert!(prot.lookup_attr("some random string".to_string()).is_none());
+
+        assert!(
+            prot.lookup_attr("max_arguments".to_string())
+                == Some(ProtocolConfigValue::u32(prot.max_arguments())),
+        );
+
+        // We didnt have this in version 1
+        assert!(prot
+            .lookup_attr("max_move_identifier_len".to_string())
+            .is_none());
+
+        // But we did in version 9
+        let prot: ProtocolConfig = ProtocolConfig::get_for_version(ProtocolVersion::new(9));
+        assert!(
+            prot.lookup_attr("max_move_identifier_len".to_string())
+                == Some(ProtocolConfigValue::u64(prot.max_move_identifier_len()))
+        );
+
+        let prot: ProtocolConfig = ProtocolConfig::get_for_version(ProtocolVersion::new(1));
+        // We didnt have this in version 1
+        assert!(prot
+            .attr_map()
+            .get("max_move_identifier_len")
+            .unwrap()
+            .is_none());
+        // We had this in version 1
+        assert!(
+            prot.attr_map().get("max_arguments").unwrap()
+                == &Some(ProtocolConfigValue::u32(prot.max_arguments()))
+        );
+
+        // Check feature flags
+        let prot: ProtocolConfig = ProtocolConfig::get_for_version(ProtocolVersion::new(1));
+        // Does not exist
+        assert!(prot
+            .feature_flags
+            .lookup_attr("some random string".to_owned())
+            .is_none());
+        assert!(prot
+            .feature_flags
+            .attr_map()
+            .get("some random string")
+            .is_none());
+
+        // Was false in v1
+        assert!(
+            prot.feature_flags
+                .lookup_attr("package_upgrades".to_owned())
+                == Some(false)
+        );
+        assert!(
+            prot.feature_flags
+                .attr_map()
+                .get("package_upgrades")
+                .unwrap()
+                == &false
+        );
+        let prot: ProtocolConfig = ProtocolConfig::get_for_version(ProtocolVersion::new(4));
+        // Was true from v3 and up
+        assert!(
+            prot.feature_flags
+                .lookup_attr("package_upgrades".to_owned())
+                == Some(true)
+        );
+        assert!(
+            prot.feature_flags
+                .attr_map()
+                .get("package_upgrades")
+                .unwrap()
+                == &true
+        );
+    }
+
     #[test]
     fn limit_range_fn_test() {
         let low = 100u32;

@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useGrowthBook } from '@growthbook/growthbook-react';
-import { usePostHog } from 'posthog-js/react';
 import { useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import Browser from 'webextension-polyfill';
@@ -24,11 +23,10 @@ export function usePageView() {
     const activeNetwork =
         customRPC && apiEnv === 'customRPC' ? customRPC : apiEnv.toUpperCase();
     const growthBook = useGrowthBook();
-    const postHog = usePostHog();
 
     useEffect(() => {
         if (growthBook) {
-            setAttributes(growthBook, { apiEnv, customRPC });
+            setAttributes({ apiEnv, customRPC });
         }
 
         trackPageview({
@@ -41,12 +39,7 @@ export function usePageView() {
                 source: `${location.pathname}${location.search}`,
             },
         });
-
-        postHog?.capture('$pageview', {
-            url: location.pathname,
-            network: activeNetwork,
-        });
-    }, [activeNetwork, location, growthBook, apiEnv, customRPC, postHog]);
+    }, [activeNetwork, location, growthBook, apiEnv, customRPC]);
 }
 
 export function isValidUrl(url: string | null) {

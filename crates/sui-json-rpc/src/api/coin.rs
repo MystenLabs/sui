@@ -38,8 +38,8 @@ pub trait CoinReadApi {
     ) -> RpcResult<CoinPage>;
 
     /// Return the total coin balance for one coin type, owned by the address owner.
-    #[method(name = "getBalance", blocking)]
-    fn get_balance(
+    #[method(name = "getBalance")]
+    async fn get_balance(
         &self,
         /// the owner's Sui address
         owner: SuiAddress,
@@ -48,8 +48,8 @@ pub trait CoinReadApi {
     ) -> RpcResult<Balance>;
 
     /// Return the total coin balance for all coin type, owned by the address owner.
-    #[method(name = "getAllBalances", blocking)]
-    fn get_all_balances(
+    #[method(name = "getAllBalances")]
+    async fn get_all_balances(
         &self,
         /// the owner's Sui address
         owner: SuiAddress,
@@ -61,7 +61,7 @@ pub trait CoinReadApi {
         &self,
         /// type name for the coin (e.g., 0x168da5bf1f48dafc111b0a488fa454aca95e0b5e::usdc::USDC)
         coin_type: String,
-    ) -> RpcResult<SuiCoinMetadata>;
+    ) -> RpcResult<Option<SuiCoinMetadata>>;
 
     /// Return total supply for a coin
     #[method(name = "getTotalSupply")]

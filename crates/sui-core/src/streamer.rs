@@ -4,15 +4,15 @@
 use crate::event_handler::EVENT_DISPATCH_BUFFER_SIZE;
 use futures::Stream;
 use mysten_metrics::spawn_monitored_task;
+use parking_lot::RwLock;
 use std::collections::BTreeMap;
 use std::fmt::Debug;
 use std::sync::Arc;
 use sui_json_rpc_types::Filter;
 use sui_types::base_types::ObjectID;
 use sui_types::error::SuiError;
-use tokio::runtime::Handle;
+use tokio::sync::mpsc;
 use tokio::sync::mpsc::Sender;
-use tokio::sync::{mpsc, RwLock};
 use tokio_stream::wrappers::ReceiverStream;
 use tracing::{debug, warn};
 
@@ -20,14 +20,15 @@ type Subscribers<T, F> = Arc<RwLock<BTreeMap<String, (Sender<T>, F)>>>;
 
 /// The Streamer splits a mpsc channel into multiple mpsc channels using the subscriber's `Filter<T>` object.
 /// Data will be sent to the subscribers in parallel and the subscription will be dropped if it received a send error.
-pub struct Streamer<T, F: Filter<T>> {
+pub struct Streamer<T, S, F: Filter<T>> {
     streamer_queue: Sender<T>,
-    subscribers: Subscribers<T, F>,
+    subscribers: Subscribers<S, F>,
 }
 
-impl<T, F> Streamer<T, F>
+impl<T, S, F> Streamer<T, S, F>
 where
-    T: Clone + Debug + Send + Sync + 'static,
+    S: From<T> + Clone + Debug + Send + Sync + 'static,
+    T: Clone + Send + Sync + 'static,
     F: Filter<T> + Clone + Send + Sync + 'static + Clone,
 {
     pub fn spawn(buffer: usize) -> Self {
@@ -46,20 +47,20 @@ where
         streamer
     }
 
-    async fn send_to_all_subscribers(subscribers: Subscribers<T, F>, data: T) {
-        for (id, (subscriber, filter)) in subscribers.read().await.clone() {
+    async fn send_to_all_subscribers(subscribers: Subscribers<S, F>, data: T) {
+        for (id, (subscriber, filter)) in subscribers.read().clone() {
             if !(filter.matches(&data)) {
                 continue;
             }
             let data = data.clone();
             let subscribers = subscribers.clone();
             spawn_monitored_task!(async move {
-                match subscriber.send(data).await {
+                match subscriber.send(data.into()).await {
                     Ok(_) => {
                         debug!("Sending Move event to subscriber [{id}].")
                     }
                     Err(e) => {
-                        subscribers.write().await.remove(&id);
+                        subscribers.write().remove(&id);
                         warn!("Error sending event, removing subscriber [{id}] from subscriber list. Error: {e}");
                     }
                 }
@@ -68,12 +69,11 @@ where
     }
 
     /// Subscribe to the data stream filtered by the filter object.
-    pub fn subscribe(&self, filter: F) -> impl Stream<Item = T> {
-        let handle = Handle::current();
-        let _ = handle.enter();
-        let mut subscribers = futures::executor::block_on(async { self.subscribers.write().await });
-        let (tx, rx) = mpsc::channel::<T>(EVENT_DISPATCH_BUFFER_SIZE);
-        subscribers.insert(ObjectID::random().to_string(), (tx, filter));
+    pub fn subscribe(&self, filter: F) -> impl Stream<Item = S> {
+        let (tx, rx) = mpsc::channel::<S>(EVENT_DISPATCH_BUFFER_SIZE);
+        self.subscribers
+            .write()
+            .insert(ObjectID::random().to_string(), (tx, filter));
         ReceiverStream::new(rx)
     }
 

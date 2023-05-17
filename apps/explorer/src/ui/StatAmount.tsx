@@ -15,7 +15,7 @@ export function StatAmount({ dollarAmount, date, ...props }: StatAmountProps) {
     return (
         <div className="flex flex-col justify-start gap-2 text-gray-75">
             <div className="flex flex-col items-baseline gap-2.5 text-gray-100">
-                {date && <DateCard date={date} />}
+                {date ? <DateCard date={date} /> : null}
                 <div className="flex flex-col items-baseline gap-2.5">
                     <Heading
                         as="h4"

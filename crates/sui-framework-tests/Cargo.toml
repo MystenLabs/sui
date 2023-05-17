@@ -9,11 +9,11 @@ publish = false
 
 [dev-dependencies]
 sui-move = { path = "../sui-move", features = ["unit_test"] }
-sui-framework = { path = "../sui-framework" }
-sui-framework-build = { path = "../sui-framework-build" }
+sui-move-build = { path = "../sui-move-build" }
 
 move-cli.workspace = true
 move-package.workspace = true
+move-unit-test.workspace = true
 
 [dependencies]
 workspace-hack = { version = "0.1", path = "../workspace-hack" }

@@ -15,7 +15,7 @@ tokens and coins. <code><a href="coin.md#0x2_coin_Coin">Coin</a></code> can be d
 -  [Constants](#@Constants_0)
 -  [Function `total_supply`](#0x2_coin_total_supply)
 -  [Function `treasury_into_supply`](#0x2_coin_treasury_into_supply)
--  [Function `supply`](#0x2_coin_supply)
+-  [Function `supply_immut`](#0x2_coin_supply_immut)
 -  [Function `supply_mut`](#0x2_coin_supply_mut)
 -  [Function `value`](#0x2_coin_value)
 -  [Function `balance`](#0x2_coin_balance)
@@ -43,13 +43,13 @@ tokens and coins. <code><a href="coin.md#0x2_coin_Coin">Coin</a></code> can be d
 -  [Function `get_symbol`](#0x2_coin_get_symbol)
 -  [Function `get_description`](#0x2_coin_get_description)
 -  [Function `get_icon_url`](#0x2_coin_get_icon_url)
+-  [Function `supply`](#0x2_coin_supply)
 
 
 <pre><code><b>use</b> <a href="">0x1::ascii</a>;
 <b>use</b> <a href="">0x1::option</a>;
 <b>use</b> <a href="">0x1::string</a>;
 <b>use</b> <a href="balance.md#0x2_balance">0x2::balance</a>;
-<b>use</b> <a href="event.md#0x2_event">0x2::event</a>;
 <b>use</b> <a href="object.md#0x2_object">0x2::object</a>;
 <b>use</b> <a href="transfer.md#0x2_transfer">0x2::transfer</a>;
 <b>use</b> <a href="tx_context.md#0x2_tx_context">0x2::tx_context</a>;
@@ -194,9 +194,6 @@ coins of type <code>T</code>. Transferable
 
 ## Struct `CurrencyCreated`
 
-Emitted when new currency is created through the <code>create_currency</code> call.
-Contains currency metadata for off-chain discovery. Type parameter <code>T</code>
-matches the one in <code><a href="coin.md#0x2_coin_Coin">Coin</a>&lt;T&gt;</code>
 
 
 <pre><code><b>struct</b> <a href="coin.md#0x2_coin_CurrencyCreated">CurrencyCreated</a>&lt;T&gt; <b>has</b> <b>copy</b>, drop
@@ -213,10 +210,7 @@ matches the one in <code><a href="coin.md#0x2_coin_Coin">Coin</a>&lt;T&gt;</code
 <code>decimals: u8</code>
 </dt>
 <dd>
- Number of decimal places the coin uses.
- A coin with <code>value </code> N and <code>decimals</code> D should be shown as N / 10^D
- E.g., a coin with <code>value</code> 7002 and decimals 3 should be displayed as 7.002
- This is metadata for display usage only.
+
 </dd>
 </dl>
 
@@ -313,14 +307,14 @@ to different security guarantees (TreasuryCap can be created only once for a typ
 
 </details>
 
-<a name="0x2_coin_supply"></a>
+<a name="0x2_coin_supply_immut"></a>
 
-## Function `supply`
+## Function `supply_immut`
 
 Get immutable reference to the treasury's <code>Supply</code>.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="coin.md#0x2_coin_supply">supply</a>&lt;T&gt;(treasury: &<b>mut</b> <a href="coin.md#0x2_coin_TreasuryCap">coin::TreasuryCap</a>&lt;T&gt;): &<a href="balance.md#0x2_balance_Supply">balance::Supply</a>&lt;T&gt;
+<pre><code><b>public</b> <b>fun</b> <a href="coin.md#0x2_coin_supply_immut">supply_immut</a>&lt;T&gt;(treasury: &<a href="coin.md#0x2_coin_TreasuryCap">coin::TreasuryCap</a>&lt;T&gt;): &<a href="balance.md#0x2_balance_Supply">balance::Supply</a>&lt;T&gt;
 </code></pre>
 
 
@@ -329,7 +323,7 @@ Get immutable reference to the treasury's <code>Supply</code>.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="coin.md#0x2_coin_supply">supply</a>&lt;T&gt;(treasury: &<b>mut</b> <a href="coin.md#0x2_coin_TreasuryCap">TreasuryCap</a>&lt;T&gt;): &Supply&lt;T&gt; {
+<pre><code><b>public</b> <b>fun</b> <a href="coin.md#0x2_coin_supply_immut">supply_immut</a>&lt;T&gt;(treasury: &<a href="coin.md#0x2_coin_TreasuryCap">TreasuryCap</a>&lt;T&gt;): &Supply&lt;T&gt; {
     &treasury.total_supply
 }
 </code></pre>
@@ -810,11 +804,6 @@ type, ensuring that there's only one <code><a href="coin.md#0x2_coin_TreasuryCap
     // Make sure there's only one instance of the type T
     <b>assert</b>!(sui::types::is_one_time_witness(&witness), <a href="coin.md#0x2_coin_EBadWitness">EBadWitness</a>);
 
-    // Emit Currency metadata <b>as</b> an <a href="event.md#0x2_event">event</a>.
-    <a href="event.md#0x2_event_emit">event::emit</a>(<a href="coin.md#0x2_coin_CurrencyCreated">CurrencyCreated</a>&lt;T&gt; {
-        decimals
-    });
-
     (
         <a href="coin.md#0x2_coin_TreasuryCap">TreasuryCap</a> {
             id: <a href="object.md#0x2_object_new">object::new</a>(ctx),
@@ -1219,6 +1208,30 @@ Update the url of the coin in <code><a href="coin.md#0x2_coin_CoinMetadata">Coin
     metadata: &<a href="coin.md#0x2_coin_CoinMetadata">CoinMetadata</a>&lt;T&gt;
 ): Option&lt;Url&gt; {
     metadata.icon_url
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_coin_supply"></a>
+
+## Function `supply`
+
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="coin.md#0x2_coin_supply">supply</a>&lt;T&gt;(treasury: &<b>mut</b> <a href="coin.md#0x2_coin_TreasuryCap">coin::TreasuryCap</a>&lt;T&gt;): &<a href="balance.md#0x2_balance_Supply">balance::Supply</a>&lt;T&gt;
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="coin.md#0x2_coin_supply">supply</a>&lt;T&gt;(treasury: &<b>mut</b> <a href="coin.md#0x2_coin_TreasuryCap">TreasuryCap</a>&lt;T&gt;): &Supply&lt;T&gt; {
+    &treasury.total_supply
 }
 </code></pre>
 

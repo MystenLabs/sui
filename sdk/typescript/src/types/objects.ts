@@ -107,6 +107,8 @@ export const SuiRawData = union([
 ]);
 export type SuiRawData = Infer<typeof SuiRawData>;
 
+export const SUI_DECIMALS = 9;
+
 export const MIST_PER_SUI = BigInt(1000000000);
 
 export const ObjectDigest = string();
@@ -456,9 +458,17 @@ export type PaginatedObjectsResponse = Infer<typeof PaginatedObjectsResponse>;
 
 // mirrors sui_json_rpc_types:: SuiObjectDataFilter
 export type SuiObjectDataFilter =
+  | { MatchAll: SuiObjectDataFilter[] }
+  | { MatchAny: SuiObjectDataFilter[] }
+  | { MatchNone: SuiObjectDataFilter[] }
   | { Package: ObjectId }
   | { MoveModule: { package: ObjectId; module: string } }
-  | { StructType: string };
+  | { StructType: string }
+  | { AddressOwner: string }
+  | { ObjectOwner: string }
+  | { ObjectId: string }
+  | { ObjectIds: string[] }
+  | { Version: string };
 
 export type SuiObjectResponseQuery = {
   filter?: SuiObjectDataFilter;

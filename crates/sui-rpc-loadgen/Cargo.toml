@@ -37,7 +37,7 @@ shellexpand = "3.0.0"
 sui = { path = "../sui" }
 sui-node = { path = "../sui-node" }
 sui-json-rpc-types= { path = "../sui-json-rpc-types" }
-sui-types = { path = "../sui-types" }
+sui-types = { path = "../sui-types", features = ["test-utils"]}
 sui-config = { path = "../sui-config" }
 sui-keys = { path = "../sui-keys" }
 sui-sdk = { path = "../sui-sdk" }

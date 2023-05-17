@@ -5,9 +5,10 @@ use std::path::{Path, PathBuf};
 
 use move_binary_format::{
     compatibility::{Compatibility, InclusionCheck},
+    file_format::AbilitySet,
     normalized, CompiledModule,
 };
-use sui_framework_build::compiled_package::{BuildConfig, SuiPackageHooks};
+use sui_move_build::{BuildConfig, SuiPackageHooks};
 
 pub const TEST_DIR: &str = "tests";
 
@@ -62,6 +63,8 @@ fn check_all_compatibilities(
             check_struct_layout: true,
             check_friend_linking: true,
             check_private_entry_linking: false,
+            disallowed_new_abilities: AbilitySet::ALL,
+            disallow_change_struct_type_params: true,
         },
         // Full compat but allow private entry functions and friends to change
         Compatibility {
@@ -69,6 +72,8 @@ fn check_all_compatibilities(
             check_struct_layout: true,
             check_friend_linking: false,
             check_private_entry_linking: false,
+            disallowed_new_abilities: AbilitySet::ALL,
+            disallow_change_struct_type_params: true,
         },
         // Full compat but allow friends to change
         Compatibility {
@@ -76,6 +81,8 @@ fn check_all_compatibilities(
             check_struct_layout: true,
             check_friend_linking: false,
             check_private_entry_linking: true,
+            disallowed_new_abilities: AbilitySet::ALL,
+            disallow_change_struct_type_params: true,
         },
         Compatibility::no_check(),
     ];

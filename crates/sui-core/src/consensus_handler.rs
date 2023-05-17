@@ -5,7 +5,10 @@ use crate::authority::authority_per_epoch_store::{
     AuthorityPerEpochStore, ExecutionIndicesWithHash,
 };
 use crate::authority::AuthorityMetrics;
-use crate::checkpoints::CheckpointService;
+use crate::checkpoints::{
+    CheckpointService, CheckpointServiceNotify, PendingCheckpoint, PendingCheckpointInfo,
+};
+use std::cmp::Ordering;
 
 use crate::scoring_decision::update_low_scoring_authorities;
 use crate::transaction_manager::TransactionManager;
@@ -20,18 +23,19 @@ use narwhal_types::{BatchAPI, CertificateAPI, ConsensusOutput, HeaderAPI};
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 use std::collections::hash_map::DefaultHasher;
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeSet, HashMap, HashSet};
 use std::hash::{Hash, Hasher};
 use std::num::NonZeroUsize;
 use std::sync::Arc;
 use sui_types::base_types::{AuthorityName, EpochId, TransactionDigest};
-use sui_types::messages::{
-    ConsensusTransaction, ConsensusTransactionKey, ConsensusTransactionKind,
-    VerifiedExecutableTransaction, VerifiedTransaction,
-};
 use sui_types::storage::ParentSync;
+use sui_types::transaction::VerifiedTransaction;
 
-use tracing::{debug, error, instrument};
+use sui_types::executable_transaction::VerifiedExecutableTransaction;
+use sui_types::messages_consensus::{
+    ConsensusTransaction, ConsensusTransactionKey, ConsensusTransactionKind,
+};
+use tracing::{debug, error, info, instrument};
 
 pub struct ConsensusHandler<T> {
     /// A store created for each epoch. ConsensusHandler is recreated each epoch, with the
@@ -161,6 +165,7 @@ impl<T: ParentSync + Send + Sync> ExecutionState for ConsensusHandler<T> {
             consensus_output.sub_dag.reputation_score.clone(),
             self.authority_names_to_hostnames.clone(),
             &self.metrics,
+            self.epoch_store.protocol_config(),
         );
 
         self.metrics
@@ -206,7 +211,12 @@ impl<T: ParentSync + Send + Sync> ExecutionState for ConsensusHandler<T> {
             }
         }
 
+        let mut roots = BTreeSet::new();
         for (seq, (serialized, transaction, output_cert)) in transactions.into_iter().enumerate() {
+            if let Some(digest) = transaction.executable_transaction_digest() {
+                roots.insert(digest);
+            }
+
             let index = ExecutionIndices {
                 last_committed_round: round,
                 sub_dag_index: consensus_output.sub_dag.sub_dag_index,
@@ -239,6 +249,16 @@ impl<T: ParentSync + Send + Sync> ExecutionState for ConsensusHandler<T> {
                 consensus_index: index_with_hash,
                 transaction,
             });
+        }
+
+        // (!) Should not add new transactions to sequenced_transactions beyond this point
+
+        if self
+            .epoch_store
+            .protocol_config()
+            .consensus_order_end_of_epoch_last()
+        {
+            reorder_end_of_publish(&mut sequenced_transactions);
         }
 
         self.metrics
@@ -289,10 +309,38 @@ impl<T: ParentSync + Send + Sync> ExecutionState for ConsensusHandler<T> {
         self.transaction_scheduler
             .schedule(transactions_to_schedule)
             .await;
-
-        self.epoch_store
-            .handle_commit_boundary(round, timestamp, &self.checkpoint_service)
-            .expect("Unrecoverable error in consensus handler when processing commit boundary")
+        // The last block in this function notifies about new checkpoint if needed
+        let final_checkpoint_round = self
+            .epoch_store
+            .final_epoch_checkpoint()
+            .expect("final_epoch_checkpoint failed");
+        let final_checkpoint = match final_checkpoint_round.map(|r| r.cmp(&round)) {
+            Some(Ordering::Less) => {
+                debug!(
+                    "Not forming checkpoint for round {} above final checkpoint round {:?}",
+                    round, final_checkpoint_round
+                );
+                return;
+            }
+            Some(Ordering::Equal) => true,
+            Some(Ordering::Greater) => false,
+            None => false,
+        };
+        let checkpoint = PendingCheckpoint {
+            roots: roots.into_iter().collect(),
+            details: PendingCheckpointInfo {
+                timestamp_ms: timestamp,
+                last_of_epoch: final_checkpoint,
+                commit_height: round,
+            },
+        };
+        self.checkpoint_service
+            .notify_checkpoint(&self.epoch_store, checkpoint)
+            .expect("notify_checkpoint has failed");
+        if final_checkpoint {
+            info!(epoch=?self.epoch(), "Received 2f+1 EndOfPublish messages, notifying last checkpoint");
+            self.epoch_store.record_end_of_message_quorum_time_metric();
+        }
     }
 
     async fn last_executed_sub_dag_index(&self) -> u64 {
@@ -303,6 +351,10 @@ impl<T: ParentSync + Send + Sync> ExecutionState for ConsensusHandler<T> {
 
         index_with_hash.index.sub_dag_index
     }
+}
+
+fn reorder_end_of_publish(sequenced_transactions: &mut [SequencedConsensusTransaction]) {
+    sequenced_transactions.sort_by_key(SequencedConsensusTransaction::is_end_of_publish);
 }
 
 struct AsyncTransactionScheduler {
@@ -357,7 +409,7 @@ impl<T> ConsensusHandler<T> {
     }
 }
 
-fn classify(transaction: &ConsensusTransaction) -> &'static str {
+pub(crate) fn classify(transaction: &ConsensusTransaction) -> &'static str {
     match &transaction.kind {
         ConsensusTransactionKind::UserTransaction(certificate) => {
             if certificate.contains_shared_object() {
@@ -415,6 +467,19 @@ impl SequencedConsensusTransactionKind {
             SequencedConsensusTransactionKind::System(_) => true,
         }
     }
+
+    pub fn executable_transaction_digest(&self) -> Option<TransactionDigest> {
+        match self {
+            SequencedConsensusTransactionKind::External(ext) => {
+                if let ConsensusTransactionKind::UserTransaction(txn) = &ext.kind {
+                    Some(*txn.digest())
+                } else {
+                    None
+                }
+            }
+            SequencedConsensusTransactionKind::System(txn) => Some(*txn.digest()),
+        }
+    }
 }
 
 impl SequencedConsensusTransaction {
@@ -424,6 +489,14 @@ impl SequencedConsensusTransaction {
 
     pub fn key(&self) -> SequencedConsensusTransactionKey {
         self.transaction.key()
+    }
+
+    pub fn is_end_of_publish(&self) -> bool {
+        if let SequencedConsensusTransactionKind::External(ref transaction) = self.transaction {
+            matches!(transaction.kind, ConsensusTransactionKind::EndOfPublish(..))
+        } else {
+            false
+        }
     }
 }
 
@@ -436,7 +509,6 @@ impl VerifiedSequencedConsensusTransaction {
     }
 }
 
-#[cfg(test)]
 impl SequencedConsensusTransaction {
     pub fn new_test(transaction: ConsensusTransaction) -> Self {
         Self {
@@ -448,32 +520,134 @@ impl SequencedConsensusTransaction {
     }
 }
 
-#[test]
-pub fn test_update_hash() {
-    let index0 = ExecutionIndices {
-        sub_dag_index: 0,
-        transaction_index: 0,
-        last_committed_round: 0,
-    };
-    let index1 = ExecutionIndices {
-        sub_dag_index: 0,
-        transaction_index: 1,
-        last_committed_round: 0,
-    };
-    let index2 = ExecutionIndices {
-        sub_dag_index: 1,
-        transaction_index: 0,
-        last_committed_round: 0,
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use narwhal_types::Certificate;
+    use sui_protocol_config::SupportedProtocolVersions;
+    use sui_types::base_types::AuthorityName;
+    use sui_types::messages_consensus::{
+        AuthorityCapabilities, ConsensusTransaction, ConsensusTransactionKind,
     };
 
-    let last_seen = ExecutionIndicesWithHash {
-        index: index1,
-        hash: 1000,
-    };
+    #[test]
+    pub fn test_update_hash() {
+        let index0 = ExecutionIndices {
+            sub_dag_index: 0,
+            transaction_index: 0,
+            last_committed_round: 0,
+        };
+        let index1 = ExecutionIndices {
+            sub_dag_index: 0,
+            transaction_index: 1,
+            last_committed_round: 0,
+        };
+        let index2 = ExecutionIndices {
+            sub_dag_index: 1,
+            transaction_index: 0,
+            last_committed_round: 0,
+        };
 
-    let last_seen = Mutex::new(last_seen);
-    let tx = &[0];
-    assert!(update_hash(&last_seen, index0, tx).is_none());
-    assert!(update_hash(&last_seen, index1, tx).is_none());
-    assert!(update_hash(&last_seen, index2, tx).is_some());
+        let last_seen = ExecutionIndicesWithHash {
+            index: index1,
+            hash: 1000,
+        };
+
+        let last_seen = Mutex::new(last_seen);
+        let tx = &[0];
+        assert!(update_hash(&last_seen, index0, tx).is_none());
+        assert!(update_hash(&last_seen, index1, tx).is_none());
+        assert!(update_hash(&last_seen, index2, tx).is_some());
+    }
+
+    #[test]
+    fn test_reorder_end_of_publish() {
+        let mut v = vec![cap_txn(10), cap_txn(1)];
+        reorder_end_of_publish(&mut v);
+        assert_eq!(
+            extract(v),
+            vec!["cap(10)".to_string(), "cap(1)".to_string()]
+        );
+        let mut v = vec![cap_txn(1), cap_txn(10)];
+        reorder_end_of_publish(&mut v);
+        assert_eq!(
+            extract(v),
+            vec!["cap(1)".to_string(), "cap(10)".to_string()]
+        );
+        let mut v = vec![cap_txn(1), eop_txn(1), cap_txn(10), eop_txn(10)];
+        reorder_end_of_publish(&mut v);
+        assert_eq!(
+            extract(v),
+            vec![
+                "cap(1)".to_string(),
+                "cap(10)".to_string(),
+                "eop(1)".to_string(),
+                "eop(10)".to_string()
+            ]
+        );
+        let mut v = vec![cap_txn(1), eop_txn(10), cap_txn(10), eop_txn(1)];
+        reorder_end_of_publish(&mut v);
+        assert_eq!(
+            extract(v),
+            vec![
+                "cap(1)".to_string(),
+                "cap(10)".to_string(),
+                "eop(10)".to_string(),
+                "eop(1)".to_string()
+            ]
+        );
+    }
+
+    fn extract(v: Vec<SequencedConsensusTransaction>) -> Vec<String> {
+        v.into_iter().map(extract_one).collect()
+    }
+
+    fn extract_one(t: SequencedConsensusTransaction) -> String {
+        match t.transaction {
+            SequencedConsensusTransactionKind::External(ext) => match ext.kind {
+                ConsensusTransactionKind::EndOfPublish(authority) => {
+                    format!("eop({})", authority.0[0])
+                }
+                ConsensusTransactionKind::CapabilityNotification(cap) => {
+                    format!("cap({})", cap.generation)
+                }
+                _ => unreachable!(),
+            },
+            SequencedConsensusTransactionKind::System(_) => unreachable!(),
+        }
+    }
+
+    fn eop_txn(a: u8) -> SequencedConsensusTransaction {
+        let mut authority = AuthorityName::default();
+        authority.0[0] = a;
+        txn(ConsensusTransactionKind::EndOfPublish(authority))
+    }
+
+    fn cap_txn(generation: u64) -> SequencedConsensusTransaction {
+        txn(ConsensusTransactionKind::CapabilityNotification(
+            AuthorityCapabilities {
+                authority: Default::default(),
+                generation,
+                supported_protocol_versions: SupportedProtocolVersions::SYSTEM_DEFAULT,
+                available_system_packages: vec![],
+            },
+        ))
+    }
+
+    fn txn(kind: ConsensusTransactionKind) -> SequencedConsensusTransaction {
+        let c = ConsensusTransaction {
+            kind,
+            tracking_id: Default::default(),
+        };
+        let transaction = SequencedConsensusTransactionKind::External(c);
+        let certificate = Arc::new(Certificate::default());
+        let certificate_author = Default::default();
+        let consensus_index = Default::default();
+        SequencedConsensusTransaction {
+            certificate,
+            certificate_author,
+            consensus_index,
+            transaction,
+        }
+    }
 }

@@ -2,21 +2,20 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import {
-    useGetRollingAverageApys,
+    useGetValidatorsApy,
     formatPercentageDisplay,
+    calculateStakeShare,
+    useGetSystemState,
 } from '@mysten/core';
 import { ArrowRight16 } from '@mysten/icons';
 import cl from 'classnames';
 import { useState, useMemo } from 'react';
 
-import { calculateStakeShare } from '../calculateStakeShare';
-import { useSystemState } from '../useSystemState';
 import { ValidatorListItem } from './ValidatorListItem';
 import { Button } from '_app/shared/ButtonUI';
 import { Content, Menu } from '_app/shared/bottom-menu-layout';
 import { Text } from '_app/shared/text';
 import Alert from '_components/alert';
-import Icon, { SuiIcons } from '_components/icon';
 import LoadingIndicator from '_components/loading/LoadingIndicator';
 
 type SortKeys = 'name' | 'stakeShare' | 'apy';
@@ -32,11 +31,9 @@ export function SelectValidatorCard() {
     );
     const [sortKey, setSortKey] = useState<SortKeys | null>(null);
     const [sortAscending, setSortAscending] = useState(true);
-    const { data, isLoading, isError } = useSystemState();
+    const { data, isLoading, isError } = useGetSystemState();
 
-    const { data: rollingAverageApys } = useGetRollingAverageApys(
-        data?.activeValidators.length || null
-    );
+    const { data: rollingAverageApys } = useGetValidatorsApy();
 
     const selectValidator = (address: string) => {
         setSelectedValidator((state) => (state !== address ? address : null));
@@ -63,15 +60,21 @@ export function SelectValidatorCard() {
         [data?.activeValidators]
     );
     const validatorList = useMemo(() => {
-        const sortedAsc = validatorsRandomOrder.map((validator) => ({
-            name: validator.name,
-            address: validator.suiAddress,
-            apy: rollingAverageApys?.[validator.suiAddress] ?? null,
-            stakeShare: calculateStakeShare(
-                BigInt(validator.stakingPoolSuiBalance),
-                BigInt(totalStake)
-            ),
-        }));
+        const sortedAsc = validatorsRandomOrder.map((validator) => {
+            const { apy, isApyApproxZero } = rollingAverageApys?.[
+                validator.suiAddress
+            ] ?? { apy: null };
+            return {
+                name: validator.name,
+                address: validator.suiAddress,
+                apy,
+                isApyApproxZero,
+                stakeShare: calculateStakeShare(
+                    BigInt(validator.stakingPoolSuiBalance),
+                    BigInt(totalStake)
+                ),
+            };
+        });
         if (sortKey) {
             sortedAsc.sort((a, b) => {
                 if (sortKey === 'name') {
@@ -149,10 +152,9 @@ export function SelectValidatorCard() {
                                             {value}
                                         </Text>
                                         {sortKey === key && (
-                                            <Icon
-                                                icon={SuiIcons.ArrowLeft}
+                                            <ArrowRight16
                                                 className={cl(
-                                                    'text-captionSmall font-thin  text-hero',
+                                                    'text-captionSmall font-thin text-hero',
                                                     sortAscending
                                                         ? 'rotate-90'
                                                         : '-rotate-90'
@@ -193,7 +195,8 @@ export function SelectValidatorCard() {
                                         !sortKey || sortKey === 'name'
                                             ? null
                                             : validator[sortKey],
-                                        '-'
+                                        '-',
+                                        validator?.isApyApproxZero
                                     )}
                                 />
                             </div>

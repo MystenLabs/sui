@@ -3,17 +3,21 @@
 
 use crate::authority::authority_store_types::{ObjectContentDigest, StoreData, StoreObject};
 use crate::checkpoints::CheckpointStore;
-use mysten_metrics::monitored_scope;
+use mysten_metrics::{monitored_scope, spawn_monitored_task};
 use prometheus::{
     register_int_counter_with_registry, register_int_gauge_with_registry, IntCounter, IntGauge,
     Registry,
 };
+use rocksdb::LiveFile;
 use std::cmp::{max, min};
 use std::collections::HashMap;
+use std::time::SystemTime;
 use std::{sync::Arc, time::Duration};
 use sui_config::node::AuthorityStorePruningConfig;
 use sui_storage::mutex_table::RwLockTable;
-use sui_types::messages::{TransactionEffects, TransactionEffectsAPI};
+use sui_types::base_types::SequenceNumber;
+use sui_types::effects::TransactionEffects;
+use sui_types::effects::TransactionEffectsAPI;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::{
     base_types::{ObjectID, VersionNumber},
@@ -21,8 +25,8 @@ use sui_types::{
 };
 use tokio::sync::oneshot::{self, Sender};
 use tokio::time::Instant;
-use tracing::log::{debug, error};
-use typed_store::Map;
+use tracing::log::{debug, error, info};
+use typed_store::{Map, TypedStoreError};
 
 use super::authority_store_tables::AuthorityPerpetualTables;
 
@@ -70,6 +74,7 @@ impl AuthorityStorePruner {
         checkpoint_number: CheckpointSequenceNumber,
         deletion_method: DeletionMethod,
         metrics: Arc<AuthorityStorePruningMetrics>,
+        indirect_objects_threshold: usize,
     ) -> anyhow::Result<()> {
         let _scope = monitored_scope("ObjectsLivePruner");
         let mut wb = perpetual_db.objects.batch();
@@ -84,15 +89,18 @@ impl AuthorityStorePruner {
             .num_pruned_objects
             .inc_by(object_keys_to_prune.len() as u64);
         let mut indirect_objects: HashMap<_, i64> = HashMap::new();
-        for object in perpetual_db
-            .objects
-            .multi_get(object_keys_to_prune.iter())?
-            .into_iter()
-            .flatten()
-        {
-            if let StoreObject::Value(obj) = object.into_inner() {
-                if let StoreData::IndirectObject(indirect_object) = obj.data {
-                    *indirect_objects.entry(indirect_object.digest).or_default() -= 1;
+
+        if indirect_objects_threshold > 0 && indirect_objects_threshold < usize::MAX {
+            for object in perpetual_db
+                .objects
+                .multi_get(object_keys_to_prune.iter())?
+                .into_iter()
+                .flatten()
+            {
+                if let StoreObject::Value(obj) = object.into_inner() {
+                    if let StoreData::IndirectObject(indirect_object) = obj.data {
+                        *indirect_objects.entry(indirect_object.digest).or_default() -= 1;
+                    }
                 }
             }
         }
@@ -137,12 +145,13 @@ impl AuthorityStorePruner {
     }
 
     /// Prunes old object versions based on effects from all checkpoints from epochs eligible for pruning
-    async fn prune_objects_for_eligible_epochs(
+    pub async fn prune_objects_for_eligible_epochs(
         perpetual_db: &Arc<AuthorityPerpetualTables>,
         checkpoint_store: &Arc<CheckpointStore>,
         objects_lock_table: &Arc<RwLockTable<ObjectContentDigest>>,
         config: AuthorityStorePruningConfig,
         metrics: Arc<AuthorityStorePruningMetrics>,
+        indirect_objects_threshold: usize,
     ) -> anyhow::Result<()> {
         let deletion_method = if config.use_range_deletion {
             DeletionMethod::RangeDelete
@@ -162,23 +171,19 @@ impl AuthorityStorePruner {
             "Starting object pruning. Current epoch: {}. Latest pruned checkpoint: {}",
             current_epoch, checkpoint_number
         );
-        let iter = checkpoint_store
-            .certified_checkpoints
-            .iter()
-            .skip_to(&(checkpoint_number + 1))?
-            .map(|(k, ckpt)| (k, ckpt.into_inner()));
 
-        #[allow(clippy::explicit_counter_loop)]
-        for (_, checkpoint) in iter {
-            checkpoint_number = *checkpoint.sequence_number();
+        loop {
+            let Some(ckpt) = checkpoint_store.certified_checkpoints.get(&(checkpoint_number + 1))? else {break;};
+            let checkpoint = ckpt.into_inner();
             // Skipping because  checkpoint's epoch or checkpoint number is too new.
             // We have to respect the highest executed checkpoint watermark because there might be
             // parts of the system that still require access to old object versions (i.e. state accumulator)
             if (current_epoch < checkpoint.epoch() + config.num_epochs_to_retain)
-                || (checkpoint_number > highest_executed_checkpoint)
+                || (*checkpoint.sequence_number() > highest_executed_checkpoint)
             {
                 break;
             }
+            checkpoint_number = *checkpoint.sequence_number();
             checkpoints_in_batch += 1;
             if network_total_transactions == checkpoint.network_total_transactions {
                 continue;
@@ -207,6 +212,7 @@ impl AuthorityStorePruner {
                     checkpoint_number,
                     deletion_method,
                     metrics.clone(),
+                    indirect_objects_threshold,
                 )
                 .await?;
                 batch_effects = vec![];
@@ -221,13 +227,48 @@ impl AuthorityStorePruner {
                 checkpoint_number,
                 deletion_method,
                 metrics.clone(),
+                indirect_objects_threshold,
             )
             .await?;
         }
-        debug!(
-            "Finished pruner iteration. Latest pruned checkpoint: {}",
-            checkpoint_number
-        );
+        Ok(())
+    }
+
+    fn compact_next_sst_file(
+        perpetual_db: Arc<AuthorityPerpetualTables>,
+        delay_days: usize,
+    ) -> anyhow::Result<()> {
+        let db_path = perpetual_db.objects.rocksdb.path();
+        let mut sst_file_for_compaction: Option<LiveFile> = None;
+        let time_threshold =
+            SystemTime::now() - Duration::from_secs(delay_days as u64 * 24 * 60 * 60);
+        for sst_file in perpetual_db.objects.rocksdb.live_files()? {
+            let file_path = db_path.join(sst_file.name.clone().trim_matches('/'));
+            let last_modified = std::fs::metadata(file_path)?.modified()?;
+            if sst_file.column_family_name != "objects"
+                || sst_file.level < 2
+                || sst_file.start_key.is_none()
+                || sst_file.end_key.is_none()
+                || last_modified > time_threshold
+            {
+                continue;
+            }
+            if let Some(candidate) = &sst_file_for_compaction {
+                if candidate.size > sst_file.size {
+                    continue;
+                }
+            }
+            sst_file_for_compaction = Some(sst_file);
+        }
+        if let Some(sst_file) = sst_file_for_compaction {
+            info!(
+                "Manual compaction of sst file {:?}. Size: {:?}, level: {:?}",
+                sst_file.name, sst_file.size, sst_file.level
+            );
+            let start_key: ObjectKey = bcs::from_bytes(sst_file.start_key.as_ref().unwrap())?;
+            let end_key: ObjectKey = bcs::from_bytes(sst_file.end_key.as_ref().unwrap())?;
+            perpetual_db.objects.compact_range(&start_key, &end_key)?;
+        }
         Ok(())
     }
 
@@ -238,27 +279,46 @@ impl AuthorityStorePruner {
         checkpoint_store: Arc<CheckpointStore>,
         objects_lock_table: Arc<RwLockTable<ObjectContentDigest>>,
         metrics: Arc<AuthorityStorePruningMetrics>,
+        indirect_objects_threshold: usize,
     ) -> Sender<()> {
         let (sender, mut recv) = tokio::sync::oneshot::channel();
         debug!(
             "Starting object pruning service with num_epochs_to_retain={}",
             config.num_epochs_to_retain
         );
-        let tick_duration = if config.num_epochs_to_retain > 0 {
-            Duration::from_millis(epoch_duration_ms / 2)
-        } else {
-            Duration::from_secs(config.pruning_run_delay_seconds.unwrap_or(60))
-        };
-
-        let pruning_initial_delay = min(tick_duration, Duration::from_secs(300));
+        let tick_duration = Duration::from_secs(config.pruning_run_delay_seconds.unwrap_or(
+            if config.num_epochs_to_retain > 0 {
+                min(epoch_duration_ms / (2 * 1000), 60 * 60)
+            } else {
+                60
+            },
+        ));
+        let pruning_initial_delay =
+            Duration::from_secs(config.pruning_run_delay_seconds.unwrap_or(60 * 60));
         let mut prune_interval =
             tokio::time::interval_at(Instant::now() + pruning_initial_delay, tick_duration);
 
+        let perpetual_db_for_compaction = perpetual_db.clone();
+        if let Some(delay_days) = config.periodic_compaction_threshold_days {
+            spawn_monitored_task!(async move {
+                loop {
+                    let db = perpetual_db_for_compaction.clone();
+                    let result = tokio::task::spawn_blocking(move || {
+                        Self::compact_next_sst_file(db, delay_days)
+                    })
+                    .await;
+                    if let Err(err) = result {
+                        error!("Failed to compact sst file: {:?}", err);
+                    }
+                    tokio::time::sleep(Duration::from_secs(1)).await;
+                }
+            });
+        }
         tokio::task::spawn(async move {
             loop {
                 tokio::select! {
                     _ = prune_interval.tick(), if config.num_epochs_to_retain != u64::MAX => {
-                        if let Err(err) = Self::prune_objects_for_eligible_epochs(&perpetual_db, &checkpoint_store, &objects_lock_table, config, metrics.clone()).await {
+                        if let Err(err) = Self::prune_objects_for_eligible_epochs(&perpetual_db, &checkpoint_store, &objects_lock_table, config, metrics.clone(), indirect_objects_threshold).await {
                             error!("Failed to prune objects: {:?}", err);
                         }
                     },
@@ -275,6 +335,7 @@ impl AuthorityStorePruner {
         pruning_config: AuthorityStorePruningConfig,
         epoch_duration_ms: u64,
         registry: &Registry,
+        indirect_objects_threshold: usize,
     ) -> Self {
         AuthorityStorePruner {
             _objects_pruner_cancel_handle: Self::setup_objects_pruning(
@@ -284,14 +345,21 @@ impl AuthorityStorePruner {
                 checkpoint_store,
                 objects_lock_table,
                 AuthorityStorePruningMetrics::new(registry),
+                indirect_objects_threshold,
             ),
         }
+    }
+
+    pub fn compact(perpetual_db: &Arc<AuthorityPerpetualTables>) -> Result<(), TypedStoreError> {
+        perpetual_db.objects.compact_range(
+            &ObjectKey(ObjectID::ZERO, SequenceNumber::MIN),
+            &ObjectKey(ObjectID::MAX, SequenceNumber::MAX),
+        )
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use fs_extra::dir::get_size;
     use more_asserts as ma;
     use std::path::Path;
     use std::time::Duration;
@@ -309,7 +377,8 @@ mod tests {
     use prometheus::Registry;
     use sui_storage::mutex_table::RwLockTable;
     use sui_types::base_types::{ObjectDigest, VersionNumber};
-    use sui_types::messages::{TransactionEffects, TransactionEffectsAPI};
+    use sui_types::effects::TransactionEffects;
+    use sui_types::effects::TransactionEffectsAPI;
     use sui_types::{
         base_types::{ObjectID, SequenceNumber},
         object::Object,
@@ -477,6 +546,7 @@ mod tests {
                 0,
                 deletion_method,
                 metrics,
+                1,
             )
             .await
             .unwrap();
@@ -538,7 +608,7 @@ mod tests {
     async fn test_db_size_after_compaction() -> Result<(), anyhow::Error> {
         let primary_path = tempfile::tempdir()?.into_path();
         let perpetual_db = Arc::new(AuthorityPerpetualTables::open(&primary_path, None));
-        let total_unique_object_ids = 200_000;
+        let total_unique_object_ids = 10_000;
         let num_versions_per_object = 10;
         let ids = ObjectID::in_range(ObjectID::ZERO, total_unique_object_ids)?;
         let mut to_delete = vec![];
@@ -553,8 +623,29 @@ mod tests {
                     .insert(&ObjectKey(id, SequenceNumber::from(i)), &obj)?;
             }
         }
+
+        fn get_sst_size(path: &Path) -> u64 {
+            let mut size = 0;
+            for entry in std::fs::read_dir(path).unwrap() {
+                let entry = entry.unwrap();
+                let path = entry.path();
+                if let Some(ext) = path.extension() {
+                    if ext != "sst" {
+                        continue;
+                    }
+                    size += std::fs::metadata(path).unwrap().len();
+                }
+            }
+            size
+        }
+
+        let db_path = primary_path.clone().join("perpetual");
+        let start = ObjectKey(ObjectID::ZERO, SequenceNumber::MIN);
+        let end = ObjectKey(ObjectID::MAX, SequenceNumber::MAX);
+
         perpetual_db.objects.rocksdb.flush()?;
-        let before_compaction_size = get_size(primary_path.clone()).unwrap();
+        perpetual_db.objects.compact_range_to_bottom(&start, &end)?;
+        let before_compaction_size = get_sst_size(&db_path);
 
         let mut effects = TransactionEffects::default();
         *effects.modified_at_versions_mut_for_testing() = to_delete;
@@ -567,14 +658,14 @@ mod tests {
             0,
             DeletionMethod::RangeDelete,
             metrics,
+            0,
         )
         .await;
         info!("Total pruned keys = {:?}", total_pruned);
-        let start = ObjectKey(ObjectID::ZERO, SequenceNumber::MIN);
-        let end = ObjectKey(ObjectID::MAX, SequenceNumber::MAX);
-        perpetual_db.objects.compact_range(&start, &end)?;
 
-        let after_compaction_size = get_size(primary_path).unwrap();
+        perpetual_db.objects.rocksdb.flush()?;
+        perpetual_db.objects.compact_range_to_bottom(&start, &end)?;
+        let after_compaction_size = get_sst_size(&db_path);
 
         info!(
             "Before compaction disk size = {:?}, after compaction disk size = {:?}",
@@ -604,6 +695,7 @@ mod tests {
             0,
             DeletionMethod::RangeDelete,
             metrics,
+            1,
         )
         .await?;
         let guard = pprof::ProfilerGuardBuilder::default()
@@ -639,6 +731,7 @@ mod tests {
             0,
             DeletionMethod::RangeDelete,
             metrics,
+            1,
         )
         .await?;
         if let Ok(()) = perpetual_db.objects.flush() {

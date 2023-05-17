@@ -6,8 +6,7 @@ use jsonrpsee::core::RpcResult;
 use jsonrpsee::RpcModule;
 
 use sui_json_rpc::api::{
-    validate_limit, ExtendedApiServer, QUERY_MAX_RESULT_LIMIT_CHECKPOINTS,
-    QUERY_MAX_RESULT_LIMIT_OBJECTS,
+    validate_limit, ExtendedApiServer, QUERY_MAX_RESULT_LIMIT, QUERY_MAX_RESULT_LIMIT_CHECKPOINTS,
 };
 use sui_json_rpc::SuiRpcModule;
 use sui_json_rpc_types::{
@@ -35,7 +34,7 @@ impl<S: IndexerStore> ExtendedApi<S> {
         cursor: Option<CheckpointedObjectID>,
         limit: Option<usize>,
     ) -> Result<QueryObjectsPage, IndexerError> {
-        let limit = validate_limit(limit, QUERY_MAX_RESULT_LIMIT_OBJECTS)?;
+        let limit = validate_limit(limit, *QUERY_MAX_RESULT_LIMIT)?;
 
         let at_checkpoint = if let Some(CheckpointedObjectID {
             at_checkpoint: Some(cp),
@@ -89,13 +88,10 @@ impl<S: IndexerStore + Sync + Send + 'static> ExtendedApiServer for ExtendedApi<
     async fn get_epochs(
         &self,
         cursor: Option<BigInt<u64>>,
-        limit: Option<BigInt<u64>>,
+        limit: Option<usize>,
         descending_order: Option<bool>,
     ) -> RpcResult<EpochPage> {
-        let limit = validate_limit(
-            limit.map(|s| *s as usize),
-            QUERY_MAX_RESULT_LIMIT_CHECKPOINTS,
-        )?;
+        let limit = validate_limit(limit, QUERY_MAX_RESULT_LIMIT_CHECKPOINTS)?;
         let mut epochs = self
             .state
             .get_epochs(cursor.map(|c| *c), limit + 1, descending_order)
@@ -119,11 +115,9 @@ impl<S: IndexerStore + Sync + Send + 'static> ExtendedApiServer for ExtendedApi<
         &self,
         query: SuiObjectResponseQuery,
         cursor: Option<CheckpointedObjectID>,
-        limit: Option<BigInt<u64>>,
+        limit: Option<usize>,
     ) -> RpcResult<QueryObjectsPage> {
-        Ok(self
-            .query_objects_internal(query, cursor, limit.map(|l| *l as usize))
-            .await?)
+        Ok(self.query_objects_internal(query, cursor, limit).await?)
     }
 
     async fn get_network_metrics(&self) -> RpcResult<NetworkMetrics> {

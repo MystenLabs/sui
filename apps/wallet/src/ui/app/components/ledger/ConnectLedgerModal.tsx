@@ -46,23 +46,26 @@ export function ConnectLedgerModal({
                         <LedgerLogo />
                     </div>
                     <div className="break-words text-center mt-4.5">
-                        <Text variant="p2" color="steel-darker" weight="normal">
+                        <Text
+                            variant="pBodySmall"
+                            color="steel-darker"
+                            weight="normal"
+                        >
                             Connect your ledger to your computer, unlock it, and
                             launch the Sui app. Click Continue when done.
                         </Text>
                         <div className="flex items-center justify-center mt-2">
                             <Text
-                                variant="p2"
+                                variant="pBodySmall"
                                 color="steel-dark"
                                 weight="normal"
                             >
                                 Need more help?&nbsp;
                             </Text>
-                            {/* TODO: Replace this link with the correct URL once the tutorial is ready */}
                             <span>
                                 <Link
                                     underline="hover"
-                                    href="https://mystenlabs.com"
+                                    href="https://support.ledger.com/hc/articles/10136570195101"
                                     text="View tutorial."
                                     color="heroDark"
                                 />

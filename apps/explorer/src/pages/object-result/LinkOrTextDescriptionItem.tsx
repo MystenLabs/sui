@@ -30,7 +30,7 @@ export function LinkOrTextDescriptionItem({
                     {urlData.display}
                 </Link>
             ) : typeof value === 'string' ? (
-                <Text variant="p1/medium" color="steel-darker">
+                <Text variant="pBody/medium" color="steel-darker">
                     {value}
                 </Text>
             ) : (

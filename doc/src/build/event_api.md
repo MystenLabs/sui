@@ -18,7 +18,7 @@ A Sui node emits the following types of events:
 
 ## Move event
 
-Move calls emit Move events. You can [define custom events](../explore/move-examples/basics.md#events) in Move contracts.
+Move calls emit Move events. You can [define custom events](https://examples.sui.io/basics/events.html) in Move contracts.
 
 ### Attributes
 
@@ -494,7 +494,7 @@ You can use `EventFilter` to filter the events included in your subscription to 
 
 ### Combining filters
 
-We provide a few operators for combining filters:
+Sui provides a few operators for combining filters:
 
 | Operator | Description | JSON-RPC Parameter Example |
 |----------| ----------- | -------------------------- |

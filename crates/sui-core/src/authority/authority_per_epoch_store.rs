@@ -4,7 +4,6 @@
 use futures::future::{join_all, select, Either};
 use futures::FutureExt;
 use narwhal_executor::ExecutionIndices;
-use narwhal_types::Round;
 use parking_lot::RwLock;
 use parking_lot::{Mutex, RwLockReadGuard};
 use rocksdb::Options;
@@ -20,24 +19,22 @@ use sui_types::base_types::{AuthorityName, EpochId, ObjectID, SequenceNumber, Tr
 use sui_types::committee::Committee;
 use sui_types::crypto::{AuthoritySignInfo, AuthorityStrongQuorumSignInfo};
 use sui_types::error::{SuiError, SuiResult};
-use sui_types::messages::{
-    AuthorityCapabilities, CertifiedTransaction, ConsensusTransaction, ConsensusTransactionKey,
-    ConsensusTransactionKind, SenderSignedData, SharedInputObject, TransactionData,
-    TransactionDataAPI, TransactionEffects, TransactionEffectsAPI, TrustedExecutableTransaction,
-    VerifiedCertificate, VerifiedExecutableTransaction, VerifiedSignedTransaction,
-};
 use sui_types::signature::GenericSignature;
+use sui_types::transaction::{
+    CertifiedTransaction, SenderSignedData, SharedInputObject, TransactionData, TransactionDataAPI,
+    VerifiedCertificate, VerifiedSignedTransaction,
+};
 use tracing::{debug, error, info, trace, warn};
 use typed_store::rocks::{
-    point_lookup_db_options, DBBatch, DBMap, DBOptions, MetricConf, TypedStoreError,
+    default_db_options, DBBatch, DBMap, DBOptions, MetricConf, TypedStoreError,
 };
 use typed_store::traits::{TableSummary, TypedStoreDebug};
 
-use crate::authority::epoch_start_configuration::EpochStartConfiguration;
+use crate::authority::epoch_start_configuration::{EpochFlag, EpochStartConfiguration};
 use crate::authority::{AuthorityStore, ResolverWrapper};
 use crate::checkpoints::{
     BuilderCheckpointSummary, CheckpointCommitHeight, CheckpointServiceNotify, EpochStats,
-    PendingCheckpoint, PendingCheckpointInfo,
+    PendingCheckpoint,
 };
 use crate::consensus_handler::{
     SequencedConsensusTransaction, SequencedConsensusTransactionKey,
@@ -55,15 +52,20 @@ use mysten_common::sync::notify_once::NotifyOnce;
 use mysten_common::sync::notify_read::NotifyRead;
 use mysten_metrics::monitored_scope;
 use prometheus::IntCounter;
-use std::cmp::Ordering as CmpOrdering;
 use sui_adapter::adapter;
 use sui_macros::fail_point;
 use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
 use sui_storage::mutex_table::{MutexGuard, MutexTable};
+use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
+use sui_types::executable_transaction::{
+    TrustedExecutableTransaction, VerifiedExecutableTransaction,
+};
 use sui_types::message_envelope::TrustedEnvelope;
 use sui_types::messages_checkpoint::{
     CheckpointContents, CheckpointSequenceNumber, CheckpointSignatureMessage, CheckpointSummary,
-    CheckpointTimestamp,
+};
+use sui_types::messages_consensus::{
+    AuthorityCapabilities, ConsensusTransaction, ConsensusTransactionKey, ConsensusTransactionKind,
 };
 use sui_types::storage::{transaction_input_object_keys, ObjectKey, ParentSync};
 use sui_types::sui_system_state::epoch_start_sui_system_state::{
@@ -171,7 +173,7 @@ pub struct AuthorityPerEpochStore {
 #[derive(DBMapUtils)]
 pub struct AuthorityEpochTables {
     /// This is map between the transaction digest and transactions found in the `transaction_lock`.
-    #[default_options_override_fn = "transactions_table_default_config"]
+    #[default_options_override_fn = "signed_transactions_table_default_config"]
     signed_transactions:
         DBMap<TransactionDigest, TrustedEnvelope<SenderSignedData, AuthoritySignInfo>>,
 
@@ -204,6 +206,7 @@ pub struct AuthorityEpochTables {
     /// progress. But it is more complex, because it would be necessary to track inflight
     /// executions not ordered by indices. For now, tracking inflight certificates as a map
     /// seems easier.
+    #[default_options_override_fn = "pending_execution_table_default_config"]
     pending_execution: DBMap<TransactionDigest, TrustedExecutableTransaction>,
 
     /// Track which transactions have been processed in handle_consensus_transaction. We must be
@@ -217,13 +220,11 @@ pub struct AuthorityEpochTables {
     consensus_message_processed: DBMap<SequencedConsensusTransactionKey, bool>,
 
     /// Map stores pending transactions that this authority submitted to consensus
+    #[default_options_override_fn = "pending_consensus_transactions_table_default_config"]
     pending_consensus_transactions: DBMap<ConsensusTransactionKey, ConsensusTransaction>,
 
-    /// This is an inverse index for consensus_message_processed - it allows to select
-    /// all transactions at the specific consensus range
-    ///
-    /// The consensus position for the transaction is defined as first position at which valid
-    /// certificate for this transaction is seen in consensus
+    /// this table is not used
+    #[allow(dead_code)]
     consensus_message_order: DBMap<ExecutionIndices, TransactionDigest>,
 
     /// The following table is used to store a single value (the corresponding key is a constant). The value
@@ -232,10 +233,8 @@ pub struct AuthorityEpochTables {
     /// every message output by consensus (and in the right order).
     last_consensus_index: DBMap<u64, ExecutionIndicesWithHash>,
 
-    /// This table lists all checkpoint boundaries in the consensus sequence
-    ///
-    /// The key in this table is incremental index and value is corresponding narwhal
-    /// consensus output index
+    /// this table is not used
+    #[allow(dead_code)]
     checkpoint_boundary: DBMap<u64, u64>,
 
     /// This table contains current reconfiguration state for validator for current epoch
@@ -258,8 +257,7 @@ pub struct AuthorityEpochTables {
     /// Non-empty list of transactions here might result in empty list when we are forming checkpoint.
     /// Because we don't want to create checkpoints with empty content(see CheckpointBuilder::write_checkpoint),
     /// the sequence number of checkpoint does not match height here.
-    ///
-    /// The boolean value indicates whether this is the last checkpoint of the epoch.
+    #[default_options_override_fn = "pending_checkpoints_table_default_config"]
     pending_checkpoints: DBMap<CheckpointCommitHeight, PendingCheckpoint>,
 
     /// Checkpoint builder maintains internal list of transactions it included in checkpoints here
@@ -274,7 +272,7 @@ pub struct AuthorityEpochTables {
     /// user signature for this transaction here. This will be included in the checkpoint later.
     user_signatures_for_checkpoints: DBMap<TransactionDigest, Vec<GenericSignature>>,
 
-    /// This table is not ued
+    /// This table is not used
     #[allow(dead_code)]
     builder_checkpoint_summary: DBMap<CheckpointSequenceNumber, CheckpointSummary>,
     /// Maps sequence number to checkpoint summary, used by CheckpointBuilder to build checkpoint within epoch
@@ -291,6 +289,30 @@ pub struct AuthorityEpochTables {
     /// Contains a single key, which overrides the value of
     /// ProtocolConfig::buffer_stake_for_protocol_upgrade_bps
     override_protocol_upgrade_buffer_stake: DBMap<u64, u64>,
+}
+
+fn signed_transactions_table_default_config() -> DBOptions {
+    default_db_options()
+        .optimize_for_write_throughput()
+        .optimize_for_large_values_no_scan(1 << 10)
+}
+
+fn pending_execution_table_default_config() -> DBOptions {
+    default_db_options()
+        .optimize_for_write_throughput()
+        .optimize_for_large_values_no_scan(1 << 10)
+}
+
+fn pending_consensus_transactions_table_default_config() -> DBOptions {
+    default_db_options()
+        .optimize_for_write_throughput()
+        .optimize_for_large_values_no_scan(1 << 10)
+}
+
+fn pending_checkpoints_table_default_config() -> DBOptions {
+    default_db_options()
+        .optimize_for_write_throughput()
+        .optimize_for_large_values_no_scan(1 << 10)
 }
 
 impl AuthorityEpochTables {
@@ -389,6 +411,12 @@ impl AuthorityPerEpochStore {
         );
         let signature_verifier =
             SignatureVerifier::new(committee.clone(), signature_verifier_metrics);
+        let is_validator = committee.authority_index(&name).is_some();
+        if is_validator {
+            assert!(epoch_start_configuration
+                .flags()
+                .contains(&EpochFlag::InMemoryCheckpointRoots));
+        }
         let s = Arc::new(Self {
             committee,
             protocol_config,
@@ -453,7 +481,7 @@ impl AuthorityPerEpochStore {
         )
     }
 
-    pub fn committee(&self) -> &Committee {
+    pub fn committee(&self) -> &Arc<Committee> {
         &self.committee
     }
 
@@ -602,13 +630,6 @@ impl AuthorityPerEpochStore {
         Ok(self.tables.next_shared_object_versions.multi_get(ids)?)
     }
 
-    pub fn get_last_checkpoint_boundary(&self) -> (u64, Option<u64>) {
-        match self.tables.checkpoint_boundary.iter().skip_to_last().next() {
-            Some((idx, height)) => (idx, Some(height)),
-            None => (0, None),
-        }
-    }
-
     pub fn get_last_consensus_index(&self) -> SuiResult<ExecutionIndicesWithHash> {
         self.tables
             .last_consensus_index
@@ -629,27 +650,6 @@ impl AuthorityPerEpochStore {
             .skip_to(&from_checkpoint)?
             .take_while(|(checkpoint, _)| *checkpoint <= to_checkpoint)
             .collect())
-    }
-
-    pub fn get_transactions_in_checkpoint_range(
-        &self,
-        from_height_excluded: Option<u64>,
-        to_height_included: u64,
-    ) -> SuiResult<Vec<TransactionDigest>> {
-        let mut iter = self.tables.consensus_message_order.iter();
-        if let Some(from_height_excluded) = from_height_excluded {
-            let last_previous = ExecutionIndices::end_for_commit(from_height_excluded);
-            iter = iter.skip_to(&last_previous)?;
-        }
-        // skip_to lands to key the last_key or key after it
-        // technically here we need to check if first item in stream has a key equal to last_previous
-        // however in practice this can not happen because number of batches in certificate is
-        // limited and is less then u64::MAX
-        let roots: Vec<_> = iter
-            .take_while(|(idx, _tx)| idx.last_committed_round <= to_height_included)
-            .map(|(_idx, tx)| tx)
-            .collect();
-        Ok(roots)
     }
 
     /// Returns future containing the state digest for the given epoch
@@ -877,11 +877,6 @@ impl AuthorityPerEpochStore {
         .await
     }
 
-    pub fn insert_checkpoint_boundary(&self, index: u64, height: u64) -> SuiResult {
-        self.tables.checkpoint_boundary.insert(&index, &height)?;
-        Ok(())
-    }
-
     /// When submitting a certificate caller **must** provide a ReconfigState lock guard
     /// and verify that it allows new user certificates
     pub fn insert_pending_consensus_transactions(
@@ -1036,7 +1031,7 @@ impl AuthorityPerEpochStore {
             .override_protocol_upgrade_buffer_stake
             .get(&OVERRIDE_PROTOCOL_UPGRADE_BUFFER_STAKE_INDEX)
             .expect("force_protocol_upgrade read cannot fail")
-            .tap_some(|b| warn!("using overrided buffer stake value of {}", b))
+            .tap_some(|b| warn!("using overridden buffer stake value of {}", b))
             .unwrap_or_else(|| {
                 self.protocol_config()
                     .buffer_stake_for_protocol_upgrade_bps()
@@ -1261,7 +1256,6 @@ impl AuthorityPerEpochStore {
     /// Tables updated:
     ///  * consensus_message_processed - indicate that this certificate was processed by consensus
     ///  * last_consensus_index - records last processed position in consensus stream
-    ///  * consensus_message_order - records at what position this transaction was first seen in consensus
     /// Self::consensus_message_processed returns true after this call for given certificate
     fn finish_consensus_transaction_process_with_batch(
         &self,
@@ -1304,11 +1298,6 @@ impl AuthorityPerEpochStore {
         certificate: &VerifiedExecutableTransaction,
         consensus_index: ExecutionIndicesWithHash,
     ) -> SuiResult {
-        let transaction_digest = *certificate.digest();
-        batch.insert_batch(
-            &self.tables.consensus_message_order,
-            [(consensus_index.index, transaction_digest)],
-        )?;
         batch.insert_batch(
             &self.tables.pending_execution,
             [(*certificate.digest(), certificate.clone().serializable())],
@@ -1331,56 +1320,6 @@ impl AuthorityPerEpochStore {
             .tables
             .final_epoch_checkpoint
             .get(&FINAL_EPOCH_CHECKPOINT_INDEX)?)
-    }
-
-    /// Returns transaction digests from consensus_message_order table in the "checkpoint range".
-    ///
-    /// Checkpoint range is defined from the last seen checkpoint(excluded) to the provided
-    /// to_height (included)
-    pub fn last_checkpoint(
-        &self,
-        to_height_included: u64,
-    ) -> SuiResult<Option<(u64, Vec<TransactionDigest>)>> {
-        let (index, from_height_excluded) = self.get_last_checkpoint_boundary();
-
-        if let Some(from_height_excluded) = from_height_excluded {
-            if from_height_excluded >= to_height_included {
-                // Due to crash recovery we might enter this function twice for same boundary
-                debug!("Not returning last checkpoint - already processed");
-                return Ok(None);
-            }
-        }
-
-        let roots =
-            self.get_transactions_in_checkpoint_range(from_height_excluded, to_height_included)?;
-
-        debug!(
-            "Selected {} roots between narwhal commit rounds {:?} and {}",
-            roots.len(),
-            from_height_excluded,
-            to_height_included
-        );
-
-        Ok(Some((index, roots)))
-    }
-    pub fn record_checkpoint_boundary(&self, commit_round: u64) -> SuiResult {
-        let (index, height) = self.get_last_checkpoint_boundary();
-
-        if let Some(height) = height {
-            if height >= commit_round {
-                // Due to crash recovery we might see same boundary twice
-                debug!("Not recording checkpoint boundary - already updated");
-                return Ok(());
-            }
-        }
-
-        let index = index + 1;
-        debug!(
-            "Recording checkpoint boundary {} at {}",
-            index, commit_round
-        );
-        self.insert_checkpoint_boundary(index, commit_round)?;
-        Ok(())
     }
 
     pub fn get_reconfig_state_read_lock_guard(
@@ -1682,50 +1621,6 @@ impl AuthorityPerEpochStore {
         }
     }
 
-    pub fn handle_commit_boundary<C: CheckpointServiceNotify>(
-        &self,
-        round: Round,
-        timestamp_ms: CheckpointTimestamp,
-        checkpoint_service: &Arc<C>,
-    ) -> SuiResult {
-        debug!("Commit boundary at {}", round);
-        // This exchange is restart safe because of following:
-        //
-        // We try to read last checkpoint content and send it to the checkpoint service
-        // CheckpointService::notify_checkpoint is idempotent in case you send same last checkpoint multiple times
-        //
-        // Only after CheckpointService::notify_checkpoint stores checkpoint in it's store we update checkpoint boundary
-        if let Some((index, roots)) = self.last_checkpoint(round)? {
-            let final_checkpoint_round = self.final_epoch_checkpoint()?;
-            let final_checkpoint = match final_checkpoint_round.map(|r| r.cmp(&round)) {
-                Some(CmpOrdering::Less) => {
-                    debug!(
-                        "Not forming checkpoint for round {} above final checkpoint round {:?}",
-                        round, final_checkpoint_round
-                    );
-                    return Ok(());
-                }
-                Some(CmpOrdering::Equal) => true,
-                Some(CmpOrdering::Greater) => false,
-                None => false,
-            };
-            let checkpoint = PendingCheckpoint {
-                roots,
-                details: PendingCheckpointInfo {
-                    timestamp_ms,
-                    last_of_epoch: final_checkpoint,
-                    commit_height: index,
-                },
-            };
-            checkpoint_service.notify_checkpoint(self, checkpoint)?;
-            if final_checkpoint {
-                info!(epoch=?self.epoch(), "Received 2f+1 EndOfPublish messages, notifying last checkpoint");
-                self.record_end_of_message_quorum_time_metric();
-            }
-        }
-        self.record_checkpoint_boundary(round)
-    }
-
     pub fn get_pending_checkpoints(
         &self,
         last: Option<CheckpointCommitHeight>,
@@ -1899,7 +1794,7 @@ impl AuthorityPerEpochStore {
         }
     }
 
-    fn record_end_of_message_quorum_time_metric(&self) {
+    pub fn record_end_of_message_quorum_time_metric(&self) {
         if let Some(epoch_close_time) = *self.epoch_close_time.read() {
             self.metrics
                 .epoch_end_of_publish_quorum_time_since_epoch_close_ms
@@ -1969,10 +1864,6 @@ impl AuthorityPerEpochStore {
     }
 }
 
-fn transactions_table_default_config() -> DBOptions {
-    point_lookup_db_options()
-}
-
 impl ExecutionComponents {
     fn new(
         protocol_config: &ProtocolConfig,
@@ -1980,7 +1871,7 @@ impl ExecutionComponents {
         metrics: Arc<ResolverMetrics>,
         expensive_safety_check_config: &ExpensiveSafetyCheckConfig,
     ) -> Self {
-        let native_functions = sui_framework::natives::all_natives(/* silent */ true);
+        let native_functions = sui_move_natives::all_natives(/* silent */ true);
         let move_vm = Arc::new(
             adapter::new_move_vm(
                 native_functions.clone(),

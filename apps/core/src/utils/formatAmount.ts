@@ -12,20 +12,22 @@ export function formatAmountParts(
 
     let postfix = '';
     let bn = new BigNumber(amount.toString());
+    const bnAbs = bn.abs();
 
-    if (bn.gte(1_000_000_000)) {
+    // use absolute value to determine the postfix
+    if (bnAbs.gte(1_000_000_000)) {
         bn = bn.shiftedBy(-9);
         postfix = 'B';
-    } else if (bn.gte(1_000_000)) {
+    } else if (bnAbs.gte(1_000_000)) {
         bn = bn.shiftedBy(-6);
         postfix = 'M';
-    } else if (bn.gte(10_000)) {
+    } else if (bnAbs.gte(10_000)) {
         bn = bn.shiftedBy(-3);
         postfix = 'K';
     }
 
-    if (bn.gte(1)) {
-        bn = bn.decimalPlaces(3, BigNumber.ROUND_DOWN);
+    if (bnAbs.gte(1)) {
+        bn = bn.decimalPlaces(2, BigNumber.ROUND_DOWN);
     }
 
     return [bn.toFormat(), postfix];

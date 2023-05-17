@@ -8,33 +8,23 @@ license = "Apache-2.0"
 publish = false
 
 [dependencies]
-better_any = "0.1.1"
 bcs = "0.1.4"
-linked-hash-map = "0.5.6"
 serde = { version = "1.0.144", features = ["derive"] }
-smallvec = "1.9.0"
 once_cell = "1.16"
 tracing = "0.1.36"
 
-fastcrypto.workspace = true
-fastcrypto-zkp.workspace = true
-
-sui-framework-build = { path = "../sui-framework-build" }
 sui-types = { path = "../sui-types" }
 
 move-binary-format.workspace = true
 move-core-types.workspace = true
-move-stdlib.workspace = true
-move-vm-runtime.workspace = true
-move-vm-types.workspace = true
-sui-protocol-config = { path = "../sui-protocol-config" }
+
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [build-dependencies]
 anyhow = { version = "1.0.64", features = ["backtrace"] }
 bcs = "0.1.4"
 
-sui-framework-build = { path = "../sui-framework-build" }
+sui-move-build = { path = "../sui-move-build" }
 
 move-binary-format.workspace = true
 move-package.workspace = true

@@ -12,16 +12,18 @@ export function useGetAllBalances(address?: SuiAddress | null) {
     const rpc = useRpcClient();
     const refetchInterval = useFeatureValue(
         FEATURES.WALLET_BALANCE_REFETCH_INTERVAL,
-        8_000
+        20_000
     );
 
-    return useQuery(
-        ['get-all-balance', address],
-        async () =>
+    return useQuery({
+        queryKey: ['get-all-balance', address],
+        queryFn: async () =>
             (await rpc.getAllBalances({ owner: address! })).sort(
                 ({ coinType: a }, { coinType: b }) =>
                     Coin.getCoinSymbol(a).localeCompare(Coin.getCoinSymbol(b))
             ),
-        { enabled: !!address, refetchInterval }
-    );
+        enabled: !!address,
+        refetchInterval,
+        staleTime: 5_000,
+    });
 }

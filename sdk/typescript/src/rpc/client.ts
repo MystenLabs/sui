@@ -91,7 +91,6 @@ export class JsonRpcClient {
     method: string,
     args: RequestParamsLike,
     struct: Struct<T>,
-    skipDataValidation: boolean = false,
   ): Promise<T> {
     const req = { method, args };
 
@@ -106,7 +105,7 @@ export class JsonRpcClient {
     } else if (is(response, ValidResponse)) {
       const [err] = validate(response.result, struct);
 
-      if (skipDataValidation && err) {
+      if (err) {
         console.warn(
           new RPCValidationError({
             req,
@@ -115,13 +114,8 @@ export class JsonRpcClient {
           }),
         );
         return response.result;
-      } else if (err) {
-        throw new RPCValidationError({
-          req,
-          result: response.result,
-          cause: err,
-        });
       }
+
       return response.result;
     }
     // Unexpected response:

@@ -9,10 +9,13 @@ use move_command_line_common::{parser::Parser as MoveCLParser, values::ValueToke
 use move_core_types::identifier::Identifier;
 use move_core_types::u256::U256;
 use move_core_types::value::{MoveStruct, MoveValue};
+use move_symbol_pool::Symbol;
+use move_transactional_test_runner::tasks::SyntaxChoice;
 use sui_types::base_types::SuiAddress;
-use sui_types::messages::{Argument, CallArg, ObjectArg};
+use sui_types::move_package::UpgradePolicy;
 use sui_types::object::Owner;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
+use sui_types::transaction::{Argument, CallArg, ObjectArg};
 
 use crate::test_adapter::{FakeID, SuiTestAdapter};
 
@@ -29,6 +32,8 @@ pub struct SuiRunArgs {
     /// caution!
     #[clap(long = "protocol-version")]
     pub protocol_version: Option<u64>,
+    #[clap(long = "uncharged")]
+    pub uncharged: bool,
 }
 
 #[derive(Debug, clap::Parser)]
@@ -96,6 +101,47 @@ pub struct ProgrammableTransactionCommand {
 }
 
 #[derive(Debug, clap::Parser)]
+pub struct UpgradePackageCommand {
+    #[clap(long = "package")]
+    pub package: String,
+    #[clap(long = "upgrade-capability", parse(try_from_str = parse_fake_id))]
+    pub upgrade_capability: FakeID,
+    #[clap(
+        long = "dependencies",
+        multiple_values(true),
+        multiple_occurrences(false)
+    )]
+    pub dependencies: Vec<String>,
+    #[clap(long = "sender")]
+    pub sender: String,
+    #[clap(long = "gas-budget")]
+    pub gas_budget: Option<u64>,
+    #[clap(long = "syntax")]
+    pub syntax: Option<SyntaxChoice>,
+    #[clap(long = "policy", default_value="compatible", parse(try_from_str = parse_policy))]
+    pub policy: u8,
+}
+
+#[derive(Debug, clap::Parser)]
+pub struct StagePackageCommand {
+    #[clap(long = "syntax")]
+    pub syntax: Option<SyntaxChoice>,
+    #[clap(
+        long = "dependencies",
+        multiple_values(true),
+        multiple_occurrences(false)
+    )]
+    pub dependencies: Vec<String>,
+}
+
+#[derive(Debug, clap::Parser)]
+pub struct SetAddressCommand {
+    pub address: String,
+    #[clap(parse(try_from_str = ParsedValue::parse))]
+    pub input: ParsedValue<SuiExtraValueArgs>,
+}
+
+#[derive(Debug, clap::Parser)]
 pub enum SuiSubcommand {
     #[clap(name = "view-object")]
     ViewObject(ViewObjectCommand),
@@ -105,21 +151,29 @@ pub enum SuiSubcommand {
     ConsensusCommitPrologue(ConsensusCommitPrologueCommand),
     #[clap(name = "programmable")]
     ProgrammableTransaction(ProgrammableTransactionCommand),
+    #[clap(name = "upgrade")]
+    UpgradePackage(UpgradePackageCommand),
+    #[clap(name = "stage-package")]
+    StagePackage(StagePackageCommand),
+    #[clap(name = "set-address")]
+    SetAddress(SetAddressCommand),
 }
 
 #[derive(Debug)]
 pub enum SuiExtraValueArgs {
     Object(FakeID),
+    Digest(String),
 }
 
 pub enum SuiValue {
     MoveValue(MoveValue),
     Object(FakeID),
     ObjVec(Vec<FakeID>),
+    Digest(String),
 }
 
 impl SuiExtraValueArgs {
-    fn parse_value_impl<'a, I: Iterator<Item = (ValueToken, &'a str)>>(
+    fn parse_object_value<'a, I: Iterator<Item = (ValueToken, &'a str)>>(
         parser: &mut MoveCLParser<'a, ValueToken, I>,
     ) -> anyhow::Result<Self> {
         let contents = parser.advance(ValueToken::Ident)?;
@@ -144,6 +198,17 @@ impl SuiExtraValueArgs {
         parser.advance(ValueToken::RParen)?;
         Ok(SuiExtraValueArgs::Object(fake_id))
     }
+
+    fn parse_digest_value<'a, I: Iterator<Item = (ValueToken, &'a str)>>(
+        parser: &mut MoveCLParser<'a, ValueToken, I>,
+    ) -> anyhow::Result<Self> {
+        let contents = parser.advance(ValueToken::Ident)?;
+        ensure!(contents == "digest");
+        parser.advance(ValueToken::LParen)?;
+        let package = parser.advance(ValueToken::Ident)?;
+        parser.advance(ValueToken::RParen)?;
+        Ok(SuiExtraValueArgs::Digest(package.to_owned()))
+    }
 }
 
 impl SuiValue {
@@ -152,6 +217,7 @@ impl SuiValue {
             SuiValue::MoveValue(v) => v,
             SuiValue::Object(_) => panic!("unexpected nested Sui object in args"),
             SuiValue::ObjVec(_) => panic!("unexpected nested Sui object vector in args"),
+            SuiValue::Digest(_) => panic!("unexpected nested Sui package digest in args"),
         }
     }
 
@@ -160,6 +226,7 @@ impl SuiValue {
             SuiValue::MoveValue(_) => panic!("unexpected nested non-object value in args"),
             SuiValue::Object(v) => v,
             SuiValue::ObjVec(_) => panic!("unexpected nested Sui object vector in args"),
+            SuiValue::Digest(_) => panic!("unexpected nested Sui package digest in args"),
         }
     }
 
@@ -192,6 +259,13 @@ impl SuiValue {
             SuiValue::Object(fake_id) => CallArg::Object(Self::object_arg(fake_id, test_adapter)?),
             SuiValue::MoveValue(v) => CallArg::Pure(v.simple_serialize().unwrap()),
             SuiValue::ObjVec(_) => bail!("obj vec is not supported as an input"),
+            SuiValue::Digest(pkg) => {
+                let pkg = Symbol::from(pkg);
+                let Some(staged) = test_adapter.staged_modules.get(&pkg) else {
+                    bail!("Unbound staged package '{pkg}'")
+                };
+                CallArg::Pure(bcs::to_bytes(&staged.digest).unwrap())
+            }
         })
     }
 
@@ -200,17 +274,17 @@ impl SuiValue {
         builder: &mut ProgrammableTransactionBuilder,
         test_adapter: &SuiTestAdapter,
     ) -> anyhow::Result<Argument> {
-        Ok(match self {
-            SuiValue::Object(fake_id) => builder.obj(Self::object_arg(fake_id, test_adapter)?)?,
+        match self {
             SuiValue::ObjVec(vec) => builder.make_obj_vec(
                 vec.iter()
                     .map(|fake_id| Self::object_arg(*fake_id, test_adapter))
                     .collect::<Result<Vec<ObjectArg>, _>>()?,
-            )?,
-            SuiValue::MoveValue(v) => {
-                builder.input(CallArg::Pure(v.simple_serialize().unwrap()))?
+            ),
+            value => {
+                let call_arg = value.into_call_arg(test_adapter)?;
+                builder.input(call_arg)
             }
-        })
+        }
     }
 }
 
@@ -221,7 +295,8 @@ impl ParsableValue for SuiExtraValueArgs {
         parser: &mut MoveCLParser<'a, ValueToken, I>,
     ) -> Option<anyhow::Result<Self>> {
         match parser.peek()? {
-            (ValueToken::Ident, "object") => Some(Self::parse_value_impl(parser)),
+            (ValueToken::Ident, "object") => Some(Self::parse_object_value(parser)),
+            (ValueToken::Ident, "digest") => Some(Self::parse_digest_value(parser)),
             _ => None,
         }
     }
@@ -264,6 +339,7 @@ impl ParsableValue for SuiExtraValueArgs {
     ) -> anyhow::Result<Self::ConcreteValue> {
         match self {
             SuiExtraValueArgs::Object(id) => Ok(SuiValue::Object(id)),
+            SuiExtraValueArgs::Digest(pkg) => Ok(SuiValue::Digest(pkg)),
         }
     }
 }
@@ -279,5 +355,14 @@ fn parse_fake_id(s: &str) -> anyhow::Result<FakeID> {
         u256_bytes.reverse();
         let address: SuiAddress = SuiAddress::from_bytes(&u256_bytes).unwrap();
         FakeID::Known(address.into())
+    })
+}
+
+fn parse_policy(x: &str) -> anyhow::Result<u8> {
+    Ok(match x {
+            "compatible" => UpgradePolicy::COMPATIBLE,
+            "additive" => UpgradePolicy::ADDITIVE,
+            "dep_only" => UpgradePolicy::DEP_ONLY,
+        _ => bail!("Invalid upgrade policy {x}. Policy must be one of 'compatible', 'additive', or 'dep_only'")
     })
 }

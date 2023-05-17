@@ -1,4 +1,4 @@
-FROM rust:1.65.0 AS chef
+FROM rust:1.68.2 AS chef
 WORKDIR sui
 ARG GIT_REVISION
 ENV GIT_REVISION=$GIT_REVISION
@@ -36,6 +36,7 @@ FROM chef AS builder
 # built as they were built and cached by the previous layer.
 COPY Cargo.toml Cargo.lock ./
 COPY crates crates
+COPY sui-execution sui-execution
 COPY narwhal narwhal
 COPY external-crates external-crates
 RUN cargo build --release \

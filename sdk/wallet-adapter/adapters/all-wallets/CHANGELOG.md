@@ -1,5 +1,28 @@
 # @mysten/wallet-adapter-all-wallets
 
+## 0.5.6
+
+### Patch Changes
+
+- @mysten/wallet-adapter-unsafe-burner@0.8.6
+- @mysten/wallet-adapter-wallet-standard@0.7.6
+
+## 0.5.5
+
+### Patch Changes
+
+- @mysten/wallet-adapter-unsafe-burner@0.8.5
+- @mysten/wallet-adapter-wallet-standard@0.7.5
+
+## 0.5.4
+
+### Patch Changes
+
+- b4f0bfc76: Fix type definitions for package exports.
+- Updated dependencies [b4f0bfc76]
+  - @mysten/wallet-adapter-wallet-standard@0.7.4
+  - @mysten/wallet-adapter-unsafe-burner@0.8.4
+
 ## 0.5.3
 
 ### Patch Changes

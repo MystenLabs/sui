@@ -24,9 +24,9 @@ use sui_sdk::rpc_types::{
 use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress};
 use sui_types::gas_coin::{GasCoin, GAS};
 use sui_types::governance::{ADD_STAKE_FUN_NAME, WITHDRAW_STAKE_FUN_NAME};
-use sui_types::messages::TransactionData;
 use sui_types::object::Owner;
 use sui_types::sui_system_state::SUI_SYSTEM_MODULE_NAME;
+use sui_types::transaction::TransactionData;
 use sui_types::{SUI_SYSTEM_ADDRESS, SUI_SYSTEM_PACKAGE_ID};
 
 use crate::types::{
