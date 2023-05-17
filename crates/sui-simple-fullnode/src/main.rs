@@ -15,16 +15,22 @@ use sui_core::epoch::committee_store::CommitteeStore;
 use sui_core::epoch::epoch_metrics::EpochMetrics;
 use sui_core::module_cache_metrics::ResolverMetrics;
 use sui_core::signature_verifier::SignatureVerifierMetrics;
+use sui_core::storage::RocksDbStore;
 use sui_core::transaction_input_checker::get_gas_status;
+use sui_node;
 use sui_node::metrics;
+use sui_types::message_envelope::Message;
 use sui_types::metrics::LimitsMetrics;
 use sui_types::multiaddr::Multiaddr;
 use sui_types::software_version::VERSION;
+use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
+use sui_types::sui_system_state::get_sui_system_state;
 use sui_types::sui_system_state::SuiSystemStateTrait;
 use sui_types::temporary_store::TemporaryStore;
 use sui_types::transaction::InputObjectKind;
 use sui_types::transaction::InputObjects;
 use sui_types::transaction::TransactionDataAPI;
+use tokio::sync::watch;
 use typed_store::rocks::default_db_options;
 
 pub mod syncoexec;
@@ -37,6 +43,14 @@ struct Args {
     #[clap(long)]
     pub config_path: PathBuf,
 
+    /// Specifies the watermark up to which I will download checkpoints
+    #[clap(long)]
+    download: Option<u64>,
+
+    /// Specifies whether I will execute or not
+    #[clap(long)]
+    execute: bool,
+
     #[clap(long, help = "Specify address to listen on")]
     listen_address: Option<Multiaddr>,
 }
@@ -46,12 +60,12 @@ async fn main() {
     let args = Args::parse();
     let mut config = NodeConfig::load(&args.config_path).unwrap();
     let genesis = config.genesis().expect("Could not load genesis");
-    // let runtimes = SuiRuntimes::new(&config);
-
-    // stores
     let registry_service = { metrics::start_prometheus_server(config.metrics_address) };
     let prometheus_registry = registry_service.default_registry();
     let metrics = Arc::new(LimitsMetrics::new(&prometheus_registry));
+    let checkpoint_store = CheckpointStore::new(&config.db_path().join("checkpoints"));
+
+    // stores
     let genesis_committee = genesis.committee().expect("Could not get committee");
     // committee store
     let committee_store = Arc::new(CommitteeStore::new(
@@ -60,7 +74,6 @@ async fn main() {
         None,
     ));
     // checkpoint store
-    let checkpoint_store = CheckpointStore::new(&config.db_path().join("checkpoints"));
     // authority store
     let perpetual_options = default_db_options().optimize_db_for_write_throughput(4);
     let perpetual_tables = Arc::new(AuthorityPerpetualTables::open(
@@ -99,7 +112,7 @@ async fn main() {
     let cache_metrics = Arc::new(ResolverMetrics::new(&prometheus_registry));
     let signature_verifier_metrics = SignatureVerifierMetrics::new(&prometheus_registry);
     let epoch_options = default_db_options().optimize_db_for_write_throughput(4);
-    let epoch_store = AuthorityPerEpochStore::new(
+    let mut epoch_store = AuthorityPerEpochStore::new(
         config.protocol_public_key(),
         committee.clone(),
         &config.db_path().join("store"),
@@ -111,6 +124,32 @@ async fn main() {
         signature_verifier_metrics,
         &config.expensive_safety_check_config,
     );
+
+    if let Some(watermark) = args.download {
+        let highest_verified_checkpoint_seq = checkpoint_store
+            .get_highest_verified_checkpoint()
+            .expect("Could not get highest checkpoint")
+            .expect("Could not get highest checkpoint")
+            .sequence_number;
+        if highest_verified_checkpoint_seq <= watermark {
+            // we have already downloaded all the checkpoints up to the watermark -> nothing to do
+            let state_sync_store = RocksDbStore::new(
+                store.clone(),
+                committee_store.clone(),
+                checkpoint_store.clone(),
+            );
+            let (trusted_peer_change_tx, trusted_peer_change_rx) =
+                watch::channel(Default::default());
+            let (p2p_network, discovery_handle, state_sync_handle) =
+                sui_node::SuiNode::create_p2p_network(
+                    &config,
+                    state_sync_store,
+                    trusted_peer_change_rx,
+                    &prometheus_registry,
+                )
+                .expect("could not create p2p network");
+        }
+    }
 
     let mut memory_store = MemoryBackedStore::new();
     for obj in genesis.objects() {
@@ -129,7 +168,9 @@ async fn main() {
         .get_checkpoint_by_sequence_number(checkpoint_seq)
         .expect("Cannot get checkpoint")
     {
-        println!("{}", checkpoint_seq);
+        if checkpoint_seq % 1000 == 0 {
+            println!("{}", checkpoint_seq);
+        }
         checkpoint_seq += 1;
 
         let (seq, _summary) = checkpoint_summary.into_summary_and_sequence();
@@ -138,7 +179,7 @@ async fn main() {
             .expect("Contents must exist")
             .expect("Contents must exist");
         for tx_digest in contents.iter() {
-            println!("Digest: {:?}", tx_digest);
+            // println!("Digest: {:?}", tx_digest);
             let tx = store
                 .get_transaction_block(&tx_digest.transaction)
                 .expect("Transaction exists")
@@ -203,6 +244,54 @@ async fn main() {
                     false,
                     &HashSet::new(),
                 );
+
+            // Critical check: are the effects the same?
+            if effects.digest() != tx_digest.effects {
+                println!("Effects mismatch at checkpoint {}", seq);
+                let old_effects = store
+                    .get_executed_effects(&tx_digest.transaction)
+                    .expect("Effects must exist");
+                println!("Past effects: {:?}", old_effects);
+                println!("New effects: {:?}", effects);
+            }
+            assert!(
+                effects.digest() == tx_digest.effects,
+                "Effects digest mismatch"
+            );
+
+            // And now we mutate the store.
+            // First delete:
+            for obj_del in &inner_temp_store.deleted {
+                memory_store.objects.remove(obj_del.0);
+            }
+            for (obj_add_id, (oref, obj, _)) in inner_temp_store.written {
+                memory_store.objects.insert(obj_add_id, (oref, obj));
+            }
+        }
+
+        if _summary.end_of_epoch_data.is_some() {
+            println!("END OF EPOCH at checkpoint {}", seq);
+            let latest_state = get_sui_system_state(&&memory_store)
+                .expect("Read Sui System State object cannot fail");
+            let new_epoch_start_state = latest_state.into_epoch_start_state();
+            let next_epoch_committee = new_epoch_start_state.get_sui_committee();
+            let next_epoch = next_epoch_committee.epoch();
+            let last_checkpoint = checkpoint_store
+                .get_epoch_last_checkpoint(epoch_store.epoch())
+                .expect("Error loading last checkpoint for current epoch")
+                .expect("Could not load last checkpoint for current epoch");
+            let epoch_start_configuration =
+                EpochStartConfiguration::new(new_epoch_start_state, *last_checkpoint.digest());
+            assert_eq!(epoch_store.epoch() + 1, next_epoch);
+            epoch_store = epoch_store.new_at_next_epoch(
+                config.protocol_public_key(),
+                next_epoch_committee,
+                epoch_start_configuration,
+                store.clone(),
+                &config.expensive_safety_check_config,
+            );
+            println!("New epoch store has epoch {}", epoch_store.epoch());
+            epoch += 1;
         }
     }
 }

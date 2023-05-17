@@ -545,7 +545,7 @@ impl SuiNode {
             .is_transaction_executed_in_checkpoint(digest)
     }
 
-    fn create_p2p_network(
+    pub fn create_p2p_network(
         config: &NodeConfig,
         state_sync_store: RocksDbStore,
         trusted_peer_change_rx: watch::Receiver<TrustedPeerChangeEvent>,
