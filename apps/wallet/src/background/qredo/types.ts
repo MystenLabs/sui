@@ -23,6 +23,14 @@ export type UIQredoPendingRequest = Pick<
     'id' | 'service' | 'apiUrl' | 'origin' | 'originFavIcon'
 > & { partialToken: `…${string}` };
 
+export type UIQredoInfo = {
+    id: string;
+    accessToken: string | null;
+    apiUrl: string;
+    service: string;
+    accounts: Wallet[];
+};
+
 export type QredoConnection = Omit<
     QredoConnectPendingRequest,
     'token' | 'windowID' | 'messageIDs'

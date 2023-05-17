@@ -130,5 +130,18 @@ NetworkEnv.on('changed', async (network) => {
 });
 
 Browser.windows.onRemoved.addListener(async (id) => {
-    await Qredo.handleOnWindowClosed(id, connections);
+    await Qredo.handleOnWindowClosed(id);
+});
+
+Qredo.onQredoEvent('onConnectionResponse', ({ allowed, request }) => {
+    request.messageIDs.forEach((aMessageID) => {
+        connections.notifyContentScript(
+            {
+                event: 'qredoConnectResult',
+                origin: request.origin,
+                allowed,
+            },
+            aMessageID
+        );
+    });
 });
