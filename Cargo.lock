@@ -10816,6 +10816,7 @@ dependencies = [
  "serde-name",
  "serde_json",
  "serde_with",
+ "serde_yaml",
  "shared-crypto",
  "signature 1.6.4",
  "static_assertions",

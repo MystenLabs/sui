@@ -9,7 +9,8 @@ use syn::{
     parse2, parse_macro_input,
     punctuated::Punctuated,
     spanned::Spanned,
-    Attribute, BinOp, Expr, ExprBinary, ExprMacro, Item, ItemMacro, Stmt, StmtMacro, Token, UnOp,
+    Attribute, BinOp, Data, DataEnum, DeriveInput, Expr, ExprBinary, ExprMacro, Item, ItemMacro,
+    Stmt, StmtMacro, Token, UnOp,
 };
 
 #[proc_macro_attribute]
@@ -508,5 +509,38 @@ impl Fold for CheckArithmetic {
         };
 
         parse2(expr).unwrap()
+    }
+}
+
+#[proc_macro_derive(EnumVariantOrder)]
+pub fn enum_variant_order_derive(input: TokenStream) -> TokenStream {
+    let ast = parse_macro_input!(input as DeriveInput);
+    let name = &ast.ident;
+
+    if let Data::Enum(DataEnum { variants, .. }) = ast.data {
+        let variant_entries = variants
+            .iter()
+            .enumerate()
+            .map(|(index, variant)| {
+                let variant_name = variant.ident.to_string();
+                quote! {
+                    map.insert( #index, (#variant_name).to_string());
+                }
+            })
+            .collect::<Vec<_>>();
+
+        let deriv = quote! {
+            impl #name {
+                pub fn order_to_variant_map() -> std::collections::BTreeMap<usize, String > {
+                    let mut map = std::collections::BTreeMap::new();
+                    #(#variant_entries)*
+                    map
+                }
+            }
+        };
+
+        deriv.into()
+    } else {
+        panic!("EnumVariantOrder can only be used with enums.");
     }
 }

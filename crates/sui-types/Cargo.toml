@@ -67,6 +67,7 @@ bincode = "1.3.3"
 criterion = { version = "0.4.0", features = ["async", "async_tokio"] }
 proptest = "1.0.0"
 proptest-derive = "0.3.0"
+serde_yaml = "0.8.26"
 
 [[bench]]
 name = "accumulator_bench"
