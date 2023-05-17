@@ -23,6 +23,8 @@ pub struct Checkpoint {
     pub transactions: Vec<Option<String>>,
     pub previous_checkpoint_digest: Option<String>,
     pub end_of_epoch: bool,
+    // total_gas_cost can be negative,
+    // which means that overall rebate is greater than overall cost.
     pub total_gas_cost: i64,
     pub total_computation_cost: i64,
     pub total_storage_cost: i64,
@@ -45,9 +47,9 @@ impl Checkpoint {
     ) -> Result<Self, IndexerError> {
         let total_gas_cost = rpc_checkpoint
             .epoch_rolling_gas_cost_summary
-            .computation_cost
-            + rpc_checkpoint.epoch_rolling_gas_cost_summary.storage_cost
-            - rpc_checkpoint.epoch_rolling_gas_cost_summary.storage_rebate;
+            .computation_cost as i64
+            + rpc_checkpoint.epoch_rolling_gas_cost_summary.storage_cost as i64
+            - rpc_checkpoint.epoch_rolling_gas_cost_summary.storage_rebate as i64;
 
         let checkpoint_transactions: Vec<Option<String>> = rpc_checkpoint
             .transactions
@@ -62,7 +64,7 @@ impl Checkpoint {
             transactions: checkpoint_transactions,
             previous_checkpoint_digest: rpc_checkpoint.previous_digest.map(|d| d.base58_encode()),
             end_of_epoch: rpc_checkpoint.end_of_epoch_data.is_some(),
-            total_gas_cost: total_gas_cost as i64,
+            total_gas_cost,
             total_computation_cost: rpc_checkpoint
                 .epoch_rolling_gas_cost_summary
                 .computation_cost as i64,
