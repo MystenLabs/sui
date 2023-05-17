@@ -20,7 +20,7 @@ use sui_types::storage::ObjectStore;
 
 use crate::errors::IndexerError;
 use crate::metrics::IndexerMetrics;
-use crate::models::addresses::{ActiveAddress, Address};
+use crate::models::addresses::{ActiveAddress, Address, AddressStats};
 use crate::models::checkpoints::Checkpoint;
 use crate::models::epoch::DBEpochInfo;
 use crate::models::events::Event;
@@ -235,6 +235,11 @@ pub trait IndexerStore {
     fn module_cache(&self) -> &Self::ModuleCache;
 
     fn indexer_metrics(&self) -> &IndexerMetrics;
+
+    /// methods for address stats
+    async fn get_last_address_processed_checkpoint(&self) -> Result<i64, IndexerError>;
+    async fn calculate_address_stats(&self, checkpoint: i64) -> Result<AddressStats, IndexerError>;
+    async fn persist_address_stats(&self, addr_stats: &AddressStats) -> Result<(), IndexerError>;
 }
 
 #[derive(Clone, Debug)]
