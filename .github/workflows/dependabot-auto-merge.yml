@@ -47,7 +47,7 @@ jobs:
         uses: ahmadnassri/action-dependabot-auto-merge@v2.6.6
         with:
           github-token: ${{ secrets.AUTOMERGE_TOKEN }}
-          command: "squash and merge"
+          command: 'squash and merge'
           target: minor
       - name: Enable auto-merge for Dependabot PRs on patch versions
         if: ${{steps.metadata.outputs.update-type == 'version-update:semver-patch'}}
@@ -55,3 +55,4 @@ jobs:
         env:
           PR_URL: ${{github.event.pull_request.html_url}}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
