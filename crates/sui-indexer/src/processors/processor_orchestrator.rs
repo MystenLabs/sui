@@ -61,7 +61,7 @@ where
                 let addr_stats_exec_res = address_stats_processor.start().await;
                 if let Err(e) = &addr_stats_exec_res {
                     warn!(
-                        "Indexer addres stats processor failed with error: {:?}, retrying...",
+                        "Indexer address stats processor failed with error: {:?}, retrying...",
                         e
                     );
                 }
@@ -70,7 +70,7 @@ where
             .await;
             if let Err(e) = addr_stats_result {
                 error!(
-                    "Indexer addres stats processor failed after retrials with error {:?}",
+                    "Indexer address stats processor failed after retries with error {:?}",
                     e
                 );
             }
