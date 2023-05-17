@@ -7,7 +7,7 @@ use anyhow::Result;
 use move_binary_format::{access::ModuleAccess, file_format::CompiledModule};
 use move_bytecode_verifier::meter::Meter;
 use move_bytecode_verifier::{verify_module_with_config_metered, VerifierConfig};
-use move_core_types::{account_address::AccountAddress, vm_status::StatusCode};
+use move_core_types::account_address::AccountAddress;
 pub use move_vm_runtime::move_vm::MoveVM;
 use move_vm_runtime::{
     config::{VMConfig, VMRuntimeLimitsConfig},
@@ -15,6 +15,7 @@ use move_vm_runtime::{
     native_functions::NativeFunctionTable,
 };
 use sui_types::metrics::BytecodeVerifierMetrics;
+use sui_verifier::check_for_verifier_timeout;
 use tracing::instrument;
 
 use sui_move_natives::{object_runtime::ObjectRuntime, NativesCostTable};
@@ -27,7 +28,7 @@ use sui_types::{
     object::Owner,
     storage::ChildObjectResolver,
 };
-use sui_verifier::verifier::sui_verify_module_metered;
+use sui_verifier::verifier::sui_verify_module_metered_check_timeout_only;
 
 sui_macros::checked_arithmetic! {
 
@@ -212,29 +213,24 @@ pub fn run_metered_move_bytecode_verifier_impl(
 
         if let Err(e) = verify_module_with_config_metered(verifier_config, module, meter) {
             // Check that the status indicates mtering timeout
-            if [
-                StatusCode::PROGRAM_TOO_COMPLEX,
-                StatusCode::TOO_MANY_BACK_EDGES,
-            ]
-            .contains(&e.major_status())
-            {
+            if check_for_verifier_timeout(&e.major_status()) {
                 // Discard success timer, but record timeout/failure timer
                 metrics.verifier_runtime_per_module_timeout_latency.observe(per_module_meter_verifier_timer.stop_and_discard());
                 metrics.verifier_timeout_metrics.with_label_values(&[BytecodeVerifierMetrics::MOVE_VERIFIER_TAG, BytecodeVerifierMetrics::TIMEOUT_TAG]).inc();
                 return Err(SuiError::ModuleVerificationFailure {
-                    error: "Verification timedout".to_string(),
+                    error: format!("Verification timedout: {}", e),
                 });
             };
-        } else if let Err(err) = sui_verify_module_metered(protocol_config, module, &BTreeMap::new(), meter) {
-                // Discard success timer, but record timeout/failure timer
-                metrics.verifier_runtime_per_module_timeout_latency.observe(per_module_meter_verifier_timer.stop_and_discard());
-                metrics.verifier_timeout_metrics.with_label_values(&[ BytecodeVerifierMetrics::SUI_VERIFIER_TAG, BytecodeVerifierMetrics::TIMEOUT_TAG]).inc();
-                return Err(err.into());
-        } else {
-            // Save the success timer
-            per_module_meter_verifier_timer.stop_and_record();
-            metrics.verifier_timeout_metrics.with_label_values(&[BytecodeVerifierMetrics::OVERALL_TAG, BytecodeVerifierMetrics::SUCCESS_TAG]).inc();
+        } else if let Err(err) = sui_verify_module_metered_check_timeout_only(protocol_config, module, &BTreeMap::new(), meter) {
+            // We only checked that the failure was due to timeout
+            // Discard success timer, but record timeout/failure timer
+            metrics.verifier_runtime_per_module_timeout_latency.observe(per_module_meter_verifier_timer.stop_and_discard());
+            metrics.verifier_timeout_metrics.with_label_values(&[ BytecodeVerifierMetrics::SUI_VERIFIER_TAG, BytecodeVerifierMetrics::TIMEOUT_TAG]).inc();
+            return Err(err.into());
         }
+        // Save the success timer
+        per_module_meter_verifier_timer.stop_and_record();
+        metrics.verifier_timeout_metrics.with_label_values(&[BytecodeVerifierMetrics::OVERALL_TAG, BytecodeVerifierMetrics::SUCCESS_TAG]).inc();
     }
     Ok(())
 }
