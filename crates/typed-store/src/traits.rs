@@ -3,6 +3,7 @@
 use crate::TypedStoreError;
 use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Serialize};
+use std::ops::RangeBounds;
 use std::{borrow::Borrow, collections::BTreeMap, error::Error};
 
 pub trait Map<'a, K, V>
@@ -60,6 +61,10 @@ where
     /// Returns an iterator visiting each key-value pair in the map.
     fn iter_with_bounds(&'a self, lower_bound: Option<K>, upper_bound: Option<K>)
         -> Self::Iterator;
+
+    /// Similar to `iter_with_bounds` but allows specifying inclusivity/exclusivity of ranges explicitly.
+    /// TODO: find better name
+    fn range_iter(&'a self, range: impl RangeBounds<K>) -> Self::Iterator;
 
     /// Same as `iter` but performs status check
     fn safe_iter(&'a self) -> Self::SafeIterator;
