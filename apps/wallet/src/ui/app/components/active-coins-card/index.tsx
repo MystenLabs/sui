@@ -32,7 +32,7 @@ export function ActiveCoinsCard({
                             to={`/send/select?${new URLSearchParams({
                                 type: activeCoin.coinType,
                             }).toString()}`}
-                            className="border-solid border border-gray-45 rounded-2lg py-2.5 px-3 no-underline flex gap-2 items-center w-full"
+                            className="border-solid border border-gray-45 rounded-2lg no-underline flex gap-2 items-center w-full overflow-hidden"
                         >
                             <CoinItem
                                 coinType={activeCoin.coinType}
@@ -50,7 +50,7 @@ export function ActiveCoinsCard({
                                         type: coinType,
                                     }).toString()}`}
                                     key={coinType}
-                                    className="py-3.75 px-1.5 no-underline flex gap-2 items-center w-full hover:bg-sui/10 group"
+                                    className="no-underline w-full"
                                 >
                                     <CoinItem
                                         coinType={coinType}

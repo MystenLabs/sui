@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useFormatCoin } from '@mysten/core';
+import { type ReactNode } from 'react';
 
 import { Text } from '_app/shared/text';
 import { CoinIcon } from '_components/coin-icon';
@@ -11,18 +12,25 @@ type CoinItemProps = {
     balance: bigint;
     isActive?: boolean;
     usd?: number;
+    centerAction?: ReactNode;
 };
 
-export function CoinItem({ coinType, balance, isActive, usd }: CoinItemProps) {
+export function CoinItem({
+    coinType,
+    balance,
+    isActive,
+    usd,
+    centerAction,
+}: CoinItemProps) {
     const [formatted, symbol, { data: coinMeta }] = useFormatCoin(
         balance,
         coinType
     );
 
     return (
-        <div className="flex gap-2.5 w-full justify-center items-center">
+        <div className="flex gap-2.5 w-full py-3 pl-1.5 pr-2 justify-center items-center rounded hover:bg-sui/10">
             <CoinIcon coinType={coinType} size={isActive ? 'sm' : 'md'} />
-            <div className="flex flex-1 gap-1.5 justify-between">
+            <div className="flex flex-1 gap-1.5 justify-between items-center">
                 <div className="flex flex-col gap-1.5">
                     <Text
                         variant="body"
@@ -42,6 +50,9 @@ export function CoinItem({ coinType, balance, isActive, usd }: CoinItemProps) {
                         </Text>
                     ) : null}
                 </div>
+
+                {centerAction}
+
                 <div className="flex flex-row justify-center items-center">
                     {isActive ? (
                         <Text
