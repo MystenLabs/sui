@@ -21,7 +21,7 @@ async fn test_blocking_execution() -> Result<(), anyhow::Error> {
     let node = &test_cluster.fullnode_handle.sui_node;
 
     let temp_dir = tempfile::tempdir().unwrap();
-    let reconfig_channel = node.subscribe_to_epoch_change();
+    let reconfig_channel = node.with(|node| node.subscribe_to_epoch_change());
     let orchestrator = TransactiondOrchestrator::new_with_network_clients(
         node.state(),
         reconfig_channel,
@@ -86,7 +86,7 @@ async fn test_fullnode_wal_log() -> Result<(), anyhow::Error> {
     let node = &test_cluster.fullnode_handle.sui_node;
 
     let temp_dir = tempfile::tempdir().unwrap();
-    let reconfig_channel = node.subscribe_to_epoch_change();
+    let reconfig_channel = node.with(|node| node.subscribe_to_epoch_change());
     tokio::task::yield_now().await;
     let orchestrator = TransactiondOrchestrator::new_with_network_clients(
         node.state(),
@@ -163,34 +163,30 @@ async fn test_fullnode_wal_log() -> Result<(), anyhow::Error> {
 async fn test_transaction_orchestrator_reconfig() {
     telemetry_subscribers::init_for_testing();
     let test_cluster = TestClusterBuilder::new().build().await.unwrap();
-    let epoch = test_cluster
-        .fullnode_handle
-        .sui_node
-        .transaction_orchestrator()
-        .unwrap()
-        .quorum_driver()
-        .current_epoch();
+    let epoch = test_cluster.fullnode_handle.sui_node.with(|node| {
+        node.transaction_orchestrator()
+            .unwrap()
+            .quorum_driver()
+            .current_epoch()
+    });
     assert_eq!(epoch, 0);
 
     test_cluster.trigger_reconfiguration().await;
 
-    let epoch = test_cluster
-        .fullnode_handle
-        .sui_node
-        .transaction_orchestrator()
-        .unwrap()
-        .quorum_driver()
-        .current_epoch();
+    let epoch = test_cluster.fullnode_handle.sui_node.with(|node| {
+        node.transaction_orchestrator()
+            .unwrap()
+            .quorum_driver()
+            .current_epoch()
+    });
     assert_eq!(epoch, 1);
 
     assert_eq!(
-        test_cluster
-            .fullnode_handle
-            .sui_node
+        test_cluster.fullnode_handle.sui_node.with(|node| node
             .clone_authority_aggregator()
             .unwrap()
             .committee
-            .epoch,
+            .epoch),
         1
     );
 }
@@ -221,8 +217,7 @@ async fn test_tx_across_epoch_boundaries() {
     let to = test_cluster
         .fullnode_handle
         .sui_node
-        .transaction_orchestrator()
-        .unwrap();
+        .with(|node| node.transaction_orchestrator().unwrap());
 
     let tx_digest = *tx.digest();
     info!(?tx_digest, "Submitting tx");
