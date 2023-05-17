@@ -4,7 +4,6 @@
 use mysten_metrics::RegistryService;
 use prometheus::Registry;
 use rand::{prelude::StdRng, SeedableRng};
-use std::net::IpAddr;
 use std::num::NonZeroUsize;
 use std::time::Duration;
 use sui_config::NodeConfig;
@@ -12,7 +11,7 @@ use sui_core::authority_client::AuthorityAPI;
 use sui_core::authority_client::NetworkAuthorityClient;
 pub use sui_node::{SuiNode, SuiNodeHandle};
 use sui_swarm_config::network_config::NetworkConfig;
-use sui_swarm_config::network_config_builder::{ConfigBuilder, FullnodeConfigBuilder};
+use sui_swarm_config::network_config_builder::ConfigBuilder;
 use sui_types::base_types::ObjectID;
 use sui_types::messages_grpc::ObjectInfoRequest;
 use sui_types::multiaddr::Multiaddr;
@@ -104,10 +103,10 @@ pub async fn start_node(config: &NodeConfig, registry_service: RegistryService) 
 /// most of the time.
 #[cfg(msim)]
 pub async fn start_node(config: &NodeConfig, registry_service: RegistryService) -> SuiNodeHandle {
-    use std::net::SocketAddr;
+    use std::net::{IpAddr, SocketAddr};
 
     let config = config.clone();
-    let socket_addr = mysten_network::multiaddr::to_socket_addr(&config.network_address).unwrap();
+    let socket_addr = config.network_address.to_socket_addr().unwrap();
     let ip = match socket_addr {
         SocketAddr::V4(v4) => IpAddr::V4(*v4.ip()),
         _ => panic!("unsupported protocol"),
@@ -143,29 +142,6 @@ pub async fn spawn_test_authorities(config: &NetworkConfig) -> Vec<SuiNodeHandle
         handles.push(node);
     }
     handles
-}
-
-/// This function can be called after `spawn_test_authorities` to
-/// start a fullnode.
-pub async fn spawn_fullnode(config: &NetworkConfig, rpc_port: Option<u16>) -> SuiNodeHandle {
-    let registry_service = RegistryService::new(Registry::new());
-
-    let mut builder = FullnodeConfigBuilder::new(config);
-
-    if cfg!(msim) {
-        let ip_addr: IpAddr = "11.10.0.0".to_string().parse().unwrap();
-        builder = builder
-            .with_listen_ip(ip_addr)
-            .with_port(8080)
-            .with_p2p_port(8084)
-            .with_rpc_port(rpc_port.unwrap_or(9000))
-            .with_admin_port(8888);
-    } else {
-        builder = builder.set_rpc_port(rpc_port);
-    }
-
-    let fullnode_config = builder.build().unwrap();
-    start_node(&fullnode_config, registry_service).await
 }
 
 /// Get a network client to communicate with the consensus.

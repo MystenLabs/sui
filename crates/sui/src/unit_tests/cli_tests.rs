@@ -161,7 +161,7 @@ async fn test_genesis_for_benchmarks() -> Result<(), anyhow::Error> {
     for (i, expected_ip) in benchmark_ips.into_iter().enumerate() {
         let config_path = &working_dir.join(sui_config::validator_config_file(i));
         let config = NodeConfig::load(config_path)?;
-        let socket_address = sui_types::multiaddr::to_socket_addr(&config.network_address).unwrap();
+        let socket_address = config.network_address.to_socket_addr().unwrap();
         assert_eq!(expected_ip, socket_address.ip().to_string());
     }
 

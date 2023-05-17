@@ -11,6 +11,7 @@ use anyhow::{anyhow, bail};
 use clap::*;
 use fastcrypto::traits::KeyPair;
 use move_package::BuildConfig;
+use rand::rngs::OsRng;
 use std::io::{stderr, stdout, Write};
 use std::num::NonZeroUsize;
 use std::path::{Path, PathBuf};
@@ -31,7 +32,7 @@ use sui_swarm::memory::Swarm;
 use sui_swarm_config::genesis_config::{GenesisConfig, DEFAULT_NUMBER_OF_AUTHORITIES};
 use sui_swarm_config::network_config::NetworkConfig;
 use sui_swarm_config::network_config_builder::ConfigBuilder;
-use sui_swarm_config::network_config_builder::FullnodeConfigBuilder;
+use sui_swarm_config::node_config_builder::FullnodeConfigBuilder;
 use sui_types::crypto::{SignatureScheme, SuiKeyPair};
 use tracing::info;
 
@@ -171,16 +172,17 @@ impl SuiCommand {
                             network_config_path
                         ))
                     })?;
-
-                let mut swarm = if no_full_node {
-                    Swarm::builder()
+                let mut swarm_builder = Swarm::builder()
+                    .dir(sui_config_dir()?)
+                    .with_network_config(network_config);
+                if no_full_node {
+                    swarm_builder = swarm_builder.with_fullnode_count(0);
                 } else {
-                    Swarm::builder()
-                        .with_fullnode_rpc_addr(sui_config::node::default_json_rpc_address())
-                        .with_event_store()
+                    swarm_builder = swarm_builder
+                        .with_fullnode_count(1)
+                        .with_fullnode_rpc_addr(sui_config::node::default_json_rpc_address());
                 }
-                .from_network_config(sui_config_dir()?, network_config);
-
+                let mut swarm = swarm_builder.build();
                 swarm.launch().await?;
 
                 let mut interval = tokio::time::interval(std::time::Duration::from_secs(3));
@@ -439,12 +441,11 @@ async fn genesis(
 
     info!("Client keystore is stored in {:?}.", keystore_path);
 
-    let mut fullnode_config = FullnodeConfigBuilder::new(&network_config)
-        .with_event_store()
-        .with_dir(FULL_NODE_DB_PATH.into())
-        .build()?;
+    let fullnode_config = FullnodeConfigBuilder::new()
+        .with_config_directory(FULL_NODE_DB_PATH.into())
+        .with_rpc_addr(sui_config::node::default_json_rpc_address())
+        .build(&mut OsRng, &network_config);
 
-    fullnode_config.json_rpc_address = sui_config::node::default_json_rpc_address();
     fullnode_config.save(sui_config_dir.join(SUI_FULLNODE_CONFIG))?;
 
     for (i, validator) in network_config

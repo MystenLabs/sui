@@ -169,8 +169,7 @@ async fn reconfig_with_revert_end_to_end_test() {
     let net = test_cluster
         .fullnode_handle
         .sui_node
-        .clone_authority_aggregator()
-        .unwrap();
+        .with(|node| node.clone_authority_aggregator().unwrap());
     let cert = net
         .process_transaction(tx.clone())
         .await
@@ -438,8 +437,7 @@ async fn test_validator_resign_effects() {
     let net = test_cluster
         .fullnode_handle
         .sui_node
-        .clone_authority_aggregator()
-        .unwrap();
+        .with(|node| node.clone_authority_aggregator().unwrap());
     let effects1 = net
         .process_transaction(tx)
         .await

@@ -132,7 +132,7 @@ async fn test_net_determinism() {
 
     sleep(Duration::from_millis(1000)).await;
 
-    let node = test_cluster.start_fullnode().await.unwrap();
+    let handle = test_cluster.start_fullnode().await;
 
-    wait_for_tx(digest, node.sui_node.state().clone()).await;
+    wait_for_tx(digest, handle.sui_node.state()).await;
 }
