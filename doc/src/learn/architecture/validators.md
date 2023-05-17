@@ -6,7 +6,7 @@ The Sui network is operated by a set of independent *validators*, each running i
 
 To learn how to set up and run a Sui Validator node, including how staking and rewards work, see [Sui Validator Node](../../build/validator-node.md).
 
-Sui uses Delegated Proof-of-Stake (DPoS) to determine which validators operate the network and their voting power. Validators are incentivized to participate in good faith via a share of transaction fees, staking rewards, and slashing stake and staking rewards in case of misbehavior.
+Sui uses Delegated Proof-of-Stake (DPoS) to determine which validators operate the network and their voting power. Validators are incentivized to participate in good faith via a share of transaction fees and staking rewards, and by slashing future staking rewards in cases of misbehavior.
 
 ## Epochs
 
