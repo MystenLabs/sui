@@ -36,7 +36,10 @@ use sui_types::{
     SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_ADDRESS,
 };
 
-use crate::{verification_failure, TEST_SCENARIO_MODULE_NAME};
+use crate::{
+    check_for_verifier_timeout, to_verification_timeout_error, verification_failure,
+    TEST_SCENARIO_MODULE_NAME,
+};
 pub(crate) const JOIN_BASE_COST: u128 = 10;
 pub(crate) const JOIN_PER_LOCAL_COST: u128 = 5;
 pub(crate) const STEP_BASE_COST: u128 = 15;
@@ -115,7 +118,10 @@ fn verify_id_leak(module: &CompiledModule, meter: &mut impl Meter) -> Result<(),
         verifier
             .analyze_function(initial_state, &func_view, meter)
             .map_err(|err| {
-                if let Some(message) = err.source().as_ref() {
+                // Handle verifificaiton timeout specially
+                if check_for_verifier_timeout(&err.major_status()) {
+                    to_verification_timeout_error(err.to_string())
+                } else if let Some(message) = err.source().as_ref() {
                     let function_name = binary_view
                         .identifier_at(binary_view.function_handle_at(func_def.function).name);
                     let module_name = module.self_id();
