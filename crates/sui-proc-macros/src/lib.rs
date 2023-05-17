@@ -525,8 +525,8 @@ impl Fold for CheckArithmetic {
 ///     }
 ///     let order_map = MyEnum::order_to_variant_map();
 ///     assert!(order_map.get(0).unwrap() == "A");
-///     assert!(order_map.get(1)).unwrap() == "B");
-///     assert!(order_map.get(2)).unwrap() == "C");
+///     assert!(order_map.get(1).unwrap() == "B");
+///     assert!(order_map.get(2).unwrap() == "C");
 /// ```
 #[proc_macro_derive(EnumVariantOrder)]
 pub fn enum_variant_order_derive(input: TokenStream) -> TokenStream {
