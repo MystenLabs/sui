@@ -15,8 +15,7 @@ use syn::{parse_macro_input, Data, DeriveInput, Fields, Type};
 ///     pub fn new_constant(&self) -> u64 {
 ///         self.new_constant.expect(Self::CONSTANT_ERR_MSG)
 ///     }
-///     /// Returns the value of the field if exists at the given version, otherise None
-///     /// Useful when one doesnt want to crash. Particularly for feature gating
+///     /// Returns the value of the field if exists at the given version, otherise None.
 ///     pub fn new_constant_as_option(&self) -> Option<u64> {
 ///         self.new_constant
 ///     }
