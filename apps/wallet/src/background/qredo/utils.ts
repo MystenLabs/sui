@@ -49,6 +49,8 @@ export function validateInputOrThrow(input: QredoConnectInput) {
     };
 }
 
+const UI_TOKEN_MAX_LENGTH = 8;
+
 export function toUIQredoPendingRequest(
     stored: QredoConnectPendingRequest
 ): UIQredoPendingRequest {
@@ -58,7 +60,7 @@ export function toUIQredoPendingRequest(
         apiUrl: stored.apiUrl,
         origin: stored.origin,
         originFavIcon: stored.originFavIcon,
-        partialToken: `…${stored.token.slice(-8)}`,
+        partialToken: `…${stored.token.slice(-UI_TOKEN_MAX_LENGTH)}`,
     };
 }
 
