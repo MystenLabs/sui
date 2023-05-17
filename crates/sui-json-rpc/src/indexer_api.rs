@@ -347,24 +347,16 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
                 })?;
                 let record_object_id_option = self
                     .state
-                    .get_dynamic_field_object_id(
-                        registry_id,
-                        name_type_tag,
-                        &domain_bcs_value,
-                    )
+                    .get_dynamic_field_object_id(registry_id, name_type_tag, &domain_bcs_value)
                     .map_err(|e| {
                         Error::SuiRpcInputError(SuiRpcInputError::GenericInvalid(format!(
-                            "Read name service registry dynamic field table failed with error: {:?}",
+                            "Unable to lookup name in name service registry with error: {:?}",
                             e
                         )))
                     })?;
                 if let Some(record_object_id) = record_object_id_option {
                     let record_object_read =
                         self.state.get_object_read(&record_object_id).map_err(|e| {
-                            warn!(
-                                "Failed to get object read of name: {:?} with error: {:?}",
-                                record_object_id, e
-                            );
                             Error::UnexpectedError(format!(
                                 "Failed to get object read of name with error {:?}",
                                 e
