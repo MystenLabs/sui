@@ -6,18 +6,21 @@ import LoadingIndicator from '../../components/loading/LoadingIndicator';
 import { BalanceChanges } from './cards/BalanceChanges';
 import { ExplorerLinkCard } from './cards/ExplorerLink';
 import { GasSummary } from './cards/GasSummary';
-import { ObjectChanges } from './cards/ObjectChanges';
+import { ObjectChanges } from './cards/object-summary/ObjectChanges';
 
 export function TransactionSummary({
     summary,
     isLoading,
+    isError,
     /* todo: remove this, we're using it until we update tx approval page */
     showGasSummary = false,
 }: {
     summary: TransactionSummaryType;
     isLoading?: boolean;
+    isError?: boolean;
     showGasSummary?: boolean;
 }) {
+    if (isError) return null;
     return (
         <section className="-mx-5 bg-sui/10">
             {isLoading ? (

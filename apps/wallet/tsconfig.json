@@ -2,6 +2,7 @@
     "extends": "./configs/ts/tsconfig.dev",
     "include": ["src", "configs", "tests"],
     "compilerOptions": {
-        "noEmit": true
+        "noEmit": true,
+        "noErrorTruncation": true
     }
 }

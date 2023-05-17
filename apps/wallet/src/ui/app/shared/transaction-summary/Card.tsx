@@ -13,7 +13,7 @@ interface CardProps {
 
 export const SummaryCardFooter = ({ children }: { children: ReactNode }) => {
     return (
-        <div className="p-3 -m-4.5 rounded-b-2xl flex justify-between items-center bg-sui/10 ">
+        <div className="-mb-4.5 -mx-4.5 px-4 py-2 rounded-b-2xl flex justify-between items-center bg-sui/10 ">
             {children}
         </div>
     );
@@ -30,7 +30,7 @@ export function Card({ heading, children, after, footer = null }: CardProps) {
                     {after && <div>{after}</div>}
                 </div>
             )}
-            <div>{children}</div>
+            {children}
             {footer}
         </div>
     );

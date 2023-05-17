@@ -1,27 +1,34 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 import {
-    type SuiTransactionBlockResponse,
     type SuiAddress,
-    type DryRunTransactionBlockResponse,
     SuiObjectChangeTransferred,
     SuiObjectChangeCreated,
     SuiObjectChangeMutated,
     SuiObjectChangePublished,
+    SuiObjectChange,
+    SuiObjectChangeTypes,
+    DisplayFieldsResponse,
+    SuiObjectChangeDeleted,
+    SuiObjectChangeWrapped,
 } from '@mysten/sui.js';
+import { groupByOwner } from './groupByOwner';
+
+export type WithDisplayFields<T> = T & { display?: DisplayFieldsResponse };
+
+export type SuiObjectChangeWithDisplay = WithDisplayFields<SuiObjectChange>;
 
 export type ObjectChangeSummary = {
-    mutated: SuiObjectChangeMutated[];
-    created: SuiObjectChangeCreated[];
-    transferred: SuiObjectChangeTransferred[];
-    published: SuiObjectChangePublished[];
+    [K in SuiObjectChangeTypes]: Record<
+        SuiObjectChangeTypes,
+        SuiObjectChangeWithDisplay[]
+    >;
 };
 
 export const getObjectChangeSummary = (
-    transaction: DryRunTransactionBlockResponse | SuiTransactionBlockResponse,
+    objectChanges: SuiObjectChangeWithDisplay[],
     currentAddress?: SuiAddress | null
 ) => {
-    const { objectChanges } = transaction;
     if (!objectChanges) return null;
 
     const mutated = objectChanges.filter(
@@ -43,10 +50,20 @@ export const getObjectChangeSummary = (
         (change) => change.type === 'published'
     ) as SuiObjectChangePublished[];
 
+    const wrapped = objectChanges.filter(
+        (change) => change.type === 'wrapped'
+    ) as SuiObjectChangeWrapped[];
+
+    const deleted = objectChanges.filter(
+        (change) => change.type === 'deleted'
+    ) as SuiObjectChangeDeleted[];
+
     return {
-        mutated,
-        created,
-        transferred,
-        published,
+        mutated: groupByOwner(mutated),
+        created: groupByOwner(created),
+        transferred: groupByOwner(transferred),
+        published: groupByOwner(published),
+        wrapped: groupByOwner(wrapped),
+        deleted: groupByOwner(deleted),
     };
 };

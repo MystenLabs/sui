@@ -6,4 +6,4 @@ export * from './getObjectChangeSummary';
 export * from './getLabel';
 export * from './getSummary';
 export * from './getGasSummary';
-export * from './getGroupByOwner';
+export * from './groupByOwner';
