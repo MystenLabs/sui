@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useQuery } from '@tanstack/react-query';
+import { type QueryKey, useQuery } from '@tanstack/react-query';
 import { ParentSize } from '@visx/responsive';
 import { TooltipWithBounds, useTooltip } from '@visx/tooltip';
 import React, { type ReactNode, useCallback, useMemo } from 'react';
@@ -80,18 +80,16 @@ export default function ValidatorMap({ minHeight }: Props) {
         data: validatorData,
         isLoading,
         isError,
-    } = useQuery(
-        ['validator-map'],
-        (): Promise<ValidatorMapData[]> =>
+    } = useQuery({
+        queryKey: 'validator-map' as unknown as QueryKey,
+        queryFn: (): Promise<ValidatorMapData[]> =>
             appsBe('validator-map', {
                 network: network.toLowerCase(),
             }),
-        {
+        select: (validators: ValidatorMapData[]) =>
             // Some validators will come back as null from the location API
-            select: (validators) =>
-                validators.filter((validator: ValidatorMapData) => validator),
-        }
-    );
+            validators.filter((validator: ValidatorMapData) => validator),
+    });
 
     const { countryCount, validatorMap } = useMemo<{
         countryCount: number | null;
