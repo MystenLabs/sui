@@ -20,7 +20,7 @@ use std::usize;
 use sui_keys::keypair_file::{read_authority_keypair_from_file, read_keypair_from_file};
 use sui_protocol_config::SupportedProtocolVersions;
 use sui_storage::object_store::ObjectStoreConfig;
-use sui_types::base_types::ObjectID;
+use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::crypto::AuthorityPublicKeyBytes;
 use sui_types::crypto::KeypairTraits;
 use sui_types::crypto::NetworkKeyPair;
@@ -113,7 +113,13 @@ pub struct NodeConfig {
     pub expensive_safety_check_config: ExpensiveSafetyCheckConfig,
 
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub name_service_resolver_object_id: Option<ObjectID>,
+    pub name_service_package_address: Option<SuiAddress>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub name_service_registry_id: Option<ObjectID>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub name_service_reverse_registry_id: Option<ObjectID>,
 
     #[serde(default)]
     pub transaction_deny_config: TransactionDenyConfig,
