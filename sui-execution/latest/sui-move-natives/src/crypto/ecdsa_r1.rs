@@ -48,6 +48,17 @@ pub struct EcdsaR1EcrecoverCostParams {
     ///  Cost per block of `msg` with `hash=1`implying SHA256, with block size = 64
     pub ecdsa_r1_ecrecover_sha256_msg_cost_per_block: InternalGas,
 }
+/***************************************************************************************************
+ * native fun secp256r1_ecrecover
+ * Implementation of the Move native function `secp256r1_ecrecover(signature: &vector<u8>, msg: &vector<u8>, hash: u8): vector<u8>`
+ * This function has two cost modes depending on the hash being set to `KECCAK256` or `SHA256`. The core formula is same but constants differ.
+ * If hash = 0, we use the `keccak256` cost constants, otherwise we use the `sha256` cost constants.
+ *   gas cost: ecdsa_r1_ecrecover_cost_base                    | covers various fixed costs in the oper
+ *              + ecdsa_r1_ecrecover_msg_cost_per_byte    * size_of(msg)        | covers cost of operating on each byte of `msg`
+ *              + ecdsa_r1_ecrecover_msg_cost_per_block   * num_blocks(msg)     | covers cost of operating on each block in `msg`
+ * Note: each block is of size `KECCAK256_BLOCK_SIZE` bytes for `keccak256` and `SHA256_BLOCK_SIZE` for `sha256`, and we round up.
+ *       `signature` is fixed size, so the cost is included in the base cost.
+ **************************************************************************************************/
 pub fn ecrecover(
     context: &mut NativeContext,
     ty_args: Vec<Type>,
@@ -144,6 +155,17 @@ pub struct EcdsaR1Secp256R1VerifyCostParams {
     ///  Cost per block of `msg` with `hash=1`implying SHA256, with block size = 64
     pub ecdsa_r1_secp256r1_verify_sha256_msg_cost_per_block: InternalGas,
 }
+/***************************************************************************************************
+ * native fun secp256r1_verify
+ * Implementation of the Move native function `secp256r1_verify(signature: &vector<u8>, public_key: &vector<u8>, msg: &vector<u8>, hash: u8): bool`
+ * This function has two cost modes depending on the hash being set to `KECCAK256` or `SHA256`. The core formula is same but constants differ.
+ * If hash = 0, we use the `keccak256` cost constants, otherwise we use the `sha256` cost constants.
+ *   gas cost: ecdsa_r1_secp256r1_verify_cost_base                    | covers various fixed costs in the oper
+ *              + ecdsa_r1_secp256r1_verify_msg_cost_per_byte    * size_of(msg)        | covers cost of operating on each byte of `msg`
+ *              + ecdsa_r1_secp256r1_verify_msg_cost_per_block   * num_blocks(msg)     | covers cost of operating on each block in `msg`
+ * Note: each block is of size `KECCAK256_BLOCK_SIZE` bytes for `keccak256` and `SHA256_BLOCK_SIZE` for `sha256`, and we round up.
+ *       `signature` and `public_key` are fixed size, so their costs are included in the base cost.
+ **************************************************************************************************/
 pub fn secp256r1_verify(
     context: &mut NativeContext,
     ty_args: Vec<Type>,
