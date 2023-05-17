@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::genesis_config::AccountConfig;
+use crate::genesis_config::{AccountConfig, DEFAULT_GAS_AMOUNT};
 use crate::genesis_config::{GenesisConfig, ValidatorGenesisConfig};
 use crate::network_config::NetworkConfig;
 use fastcrypto::encoding::{Encoding, Hex};
@@ -314,11 +314,18 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
             for validator in &validators {
                 let account_key: PublicKey = validator.account_key_pair.public();
                 let address = SuiAddress::from(&account_key);
+                // Give each validator some gas so they can pay for their transactions.
+                let gas_coin = TokenAllocation {
+                    recipient_address: address,
+                    amount_mist: DEFAULT_GAS_AMOUNT,
+                    staked_with_validator: None,
+                };
                 let stake = TokenAllocation {
                     recipient_address: address,
                     amount_mist: validator.stake,
                     staked_with_validator: Some(address),
                 };
+                builder.add_allocation(gas_coin);
                 builder.add_allocation(stake);
             }
             builder.build()
