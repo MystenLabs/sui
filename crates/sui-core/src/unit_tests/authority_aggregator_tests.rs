@@ -257,7 +257,7 @@ async fn execute_transaction_with_fault_configs(
     for (index, config) in configs_before_process_transaction {
         set_local_client_config(&mut authorities, *index, *config);
     }
-    let rgp = genesis.reference_gas_price();
+    let rgp = reference_gas_price(&authorities);
     let tx = make_transfer_object_transaction(
         gas_object1.compute_object_reference(),
         gas_object2.compute_object_reference(),
@@ -286,6 +286,20 @@ async fn execute_transaction_with_fault_configs(
         .process_certificate(cert.into_cert_for_testing().into())
         .await
         .is_ok()
+}
+
+fn reference_gas_price(authorities: &AuthorityAggregator<LocalAuthorityClient>) -> u64 {
+    authorities
+        .authority_clients
+        .values()
+        .find_map(|client| {
+            client
+                .authority_client()
+                .state
+                .reference_gas_price_for_testing()
+                .ok()
+        })
+        .unwrap()
 }
 
 fn effects_with_tx(digest: TransactionDigest) -> TransactionEffects {
@@ -320,7 +334,7 @@ async fn test_quorum_map_and_reduce_timeout() {
     let gas_object1 = Object::with_owner_for_testing(addr1);
     let genesis_objects = vec![pkg.clone(), gas_object1.clone()];
     let (mut authorities, _, genesis, _) = init_local_authorities(4, genesis_objects).await;
-    let rgp = genesis.reference_gas_price();
+    let rgp = reference_gas_price(&authorities);
     let pkg = genesis.object(pkg.id()).unwrap();
     let gas_object1 = genesis.object(gas_object1.id()).unwrap();
     let gas_ref_1 = gas_object1.compute_object_reference();

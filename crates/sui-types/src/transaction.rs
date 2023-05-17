@@ -52,6 +52,8 @@ pub const TEST_ONLY_GAS_UNIT_FOR_SPLIT_COIN: u64 = 1_000_000;
 
 pub const GAS_PRICE_FOR_SYSTEM_TX: u64 = 1;
 
+pub const DEFAULT_VALIDATOR_GAS_PRICE: u64 = 1000;
+
 const BLOCKED_MOVE_FUNCTIONS: [(ObjectID, &str, &str); 0] = [];
 
 #[cfg(test)]
