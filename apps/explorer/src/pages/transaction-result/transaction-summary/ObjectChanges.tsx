@@ -3,16 +3,15 @@
 
 import { Disclosure } from '@headlessui/react';
 import {
-    getGroupByOwner,
     LocationIdType,
-    type ObjectChangeSummary,
+    type ObjectSummaryChange,
+    type ObjectSummaryChangeWithNFT,
 } from '@mysten/core';
 import { ChevronRight12 } from '@mysten/icons';
 import {
     type SuiObjectChangeCreated,
     type SuiObjectChangeMutated,
     type SuiObjectChangePublished,
-    type SuiObjectChangeTransferred,
 } from '@mysten/sui.js';
 import clsx from 'clsx';
 import { type ReactNode, useState } from 'react';
@@ -43,14 +42,6 @@ enum ItemLabels {
     module = 'Module',
     type = 'Type',
 }
-
-type ObjectChangeEntryType<T> = T & { locationIdType: LocationIdType };
-
-type ObjectChangeEntryData<T> = Record<string, ObjectChangeEntryType<T>[]>;
-
-type ObjectChangeEntryDataNFT<T> = T & {
-    nftMeta: Record<string, string | null>;
-};
 
 const DEFAULT_ITEMS_TO_SHOW = 5;
 
@@ -232,12 +223,7 @@ function ObjectDetail({
 }
 
 interface ObjectChangeEntriesProps extends ObjectChangeEntryBaseProps {
-    changeEntries: (
-        | SuiObjectChangeMutated
-        | SuiObjectChangeCreated
-        | SuiObjectChangePublished
-        | ObjectChangeEntryDataNFT<SuiObjectChangeMutated>
-    )[];
+    changeEntries: ObjectSummaryChangeWithNFT<ObjectSummaryChange>[];
     isNFT?: boolean;
 }
 
@@ -251,29 +237,29 @@ function ObjectChangeEntries({
     let expandableItems = [];
 
     if (type === 'published') {
-        expandableItems = (changeEntries as SuiObjectChangePublished[]).map(
-            ({ packageId, modules }) => (
-                <ObjectDetailPanel
-                    key={packageId}
-                    panelContent={
-                        <div className="mt-2 flex flex-col gap-2">
+        expandableItems = (
+            changeEntries as unknown as ObjectSummaryChangeWithNFT<SuiObjectChangePublished>[]
+        ).map(({ packageId, modules }) => (
+            <ObjectDetailPanel
+                key={packageId}
+                panelContent={
+                    <div className="mt-2 flex flex-col gap-2">
+                        <Item
+                            label={ItemLabels.package}
+                            packageId={packageId}
+                        />
+                        {modules.map((moduleName, index) => (
                             <Item
-                                label={ItemLabels.package}
+                                key={index}
+                                label={ItemLabels.module}
+                                moduleName={moduleName}
                                 packageId={packageId}
                             />
-                            {modules.map((moduleName, index) => (
-                                <Item
-                                    key={index}
-                                    label={ItemLabels.module}
-                                    moduleName={moduleName}
-                                    packageId={packageId}
-                                />
-                            ))}
-                        </div>
-                    }
-                />
-            )
-        );
+                        ))}
+                    </div>
+                }
+            />
+        ));
     } else {
         expandableItems = (
             changeEntries as (SuiObjectChangeMutated | SuiObjectChangeCreated)[]
@@ -327,12 +313,7 @@ function ObjectChangeEntries({
 }
 
 interface ObjectChangeEntriesCardsProps extends ObjectChangeEntryBaseProps {
-    data:
-        | ObjectChangeEntryDataNFT<SuiObjectChangeMutated>
-        | ObjectChangeEntryDataNFT<SuiObjectChangeCreated>
-        | ObjectChangeEntryData<SuiObjectChangeMutated>
-        | ObjectChangeEntryData<SuiObjectChangeTransferred>
-        | ObjectChangeEntryData<SuiObjectChangeCreated>;
+    data: Record<string, ObjectSummaryChangeWithNFT<ObjectSummaryChange>[]>;
     isNFT?: boolean;
 }
 
@@ -402,10 +383,30 @@ export function ObjectChangeEntriesCards({
 }
 
 interface ObjectChangesProps {
-    objectSummary?: ObjectChangeSummary;
+    objectSummary?: {
+        created?: Record<
+            string,
+            ObjectSummaryChangeWithNFT<ObjectSummaryChange>[]
+        >;
+        mutated?: Record<
+            string,
+            ObjectSummaryChangeWithNFT<ObjectSummaryChange>[]
+        >;
+        transferred?: Record<
+            string,
+            ObjectSummaryChangeWithNFT<ObjectSummaryChange>[]
+        >;
+        published?: SuiObjectChangePublished[];
+    };
     objectSummaryNFTData?: {
-        created?: ObjectChangeEntryDataNFT<SuiObjectChangeCreated>[];
-        mutated?: ObjectChangeEntryDataNFT<SuiObjectChangeMutated>[];
+        created?: Record<
+            string,
+            ObjectSummaryChangeWithNFT<SuiObjectChangeCreated>[]
+        >;
+        mutated?: Record<
+            string,
+            ObjectSummaryChangeWithNFT<SuiObjectChangeMutated>[]
+        >;
     };
 }
 
@@ -417,76 +418,51 @@ export function ObjectChanges({
         return null;
     }
 
-    const createdChangesByOwner = getGroupByOwner(objectSummary?.created);
-    const createdNFTsChangesByOwner = getGroupByOwner(
-        objectSummaryNFTData?.created || []
-    );
-
-    const updatedChangesByOwner = getGroupByOwner(objectSummary?.mutated);
-    const updatedNFTsChangesByOwner = getGroupByOwner(
-        objectSummaryNFTData?.mutated || []
-    );
-
-    const transferredChangesByOwner = getGroupByOwner(
-        objectSummary?.transferred
-    );
-
-    console.log('createdNFTsChangesByOwner', createdNFTsChangesByOwner);
-    console.log('updatedNFTsChangesByOwner', updatedNFTsChangesByOwner);
-
     return (
         <>
-            {objectSummaryNFTData?.created?.length ? (
+            {objectSummaryNFTData?.created ? (
                 <ObjectChangeEntriesCards
                     isNFT
                     type="created"
-                    data={
-                        createdNFTsChangesByOwner as unknown as ObjectChangeEntryDataNFT<SuiObjectChangeCreated>
-                    }
+                    data={objectSummaryNFTData?.created}
                 />
             ) : null}
 
-            {objectSummary?.created?.length ? (
+            {objectSummary?.created ? (
                 <ObjectChangeEntriesCards
                     type="created"
-                    data={
-                        createdChangesByOwner as unknown as ObjectChangeEntryData<SuiObjectChangeCreated>
-                    }
+                    data={objectSummary?.created}
                 />
             ) : null}
 
-            {objectSummaryNFTData?.mutated?.length ? (
+            {objectSummaryNFTData?.mutated ? (
                 <ObjectChangeEntriesCards
                     isNFT
                     type="mutated"
-                    data={
-                        updatedNFTsChangesByOwner as unknown as ObjectChangeEntryDataNFT<SuiObjectChangeMutated>
-                    }
+                    data={objectSummaryNFTData?.mutated}
                 />
             ) : null}
 
-            {objectSummary.mutated?.length ? (
+            {objectSummary.mutated ? (
                 <ObjectChangeEntriesCards
                     type="mutated"
-                    data={
-                        updatedChangesByOwner as unknown as ObjectChangeEntryData<SuiObjectChangeMutated>
-                    }
+                    data={objectSummary.mutated}
                 />
             ) : null}
 
-            {objectSummary.transferred?.length ? (
+            {objectSummary.transferred ? (
                 <ObjectChangeEntriesCards
                     type="transferred"
-                    data={
-                        transferredChangesByOwner as unknown as ObjectChangeEntryData<SuiObjectChangeTransferred>
-                    }
+                    data={objectSummary.transferred}
                 />
             ) : null}
 
             {objectSummary.published?.length ? (
                 <TransactionBlockCard title="Changes" size="sm" shadow>
                     <ObjectChangeEntries
-                        changeEntries={objectSummary.published}
+                        changeEntries={
+                            objectSummary.published as unknown as ObjectSummaryChangeWithNFT<ObjectSummaryChange>[]
+                        }
                         type="published"
                     />
                 </TransactionBlockCard>

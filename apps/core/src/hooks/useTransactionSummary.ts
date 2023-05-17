@@ -7,8 +7,7 @@ import {
     getTransactionSender,
     is,
     type SuiAddress,
-    SuiObjectChangeCreated,
-    SuiObjectChangeMutated,
+    SuiObjectChangePublished,
     type SuiTransactionBlockResponse,
 } from '@mysten/sui.js';
 import { useMemo } from 'react';
@@ -16,6 +15,7 @@ import { useMemo } from 'react';
 import {
     getBalanceChangeSummary,
     getGasSummary,
+    getGroupByOwner,
     getLabel,
     getObjectChangeSummary,
 } from '../utils/transaction';
@@ -59,7 +59,6 @@ const getObjectSummaryNFTData = <T extends { objectId: string }>({
 }) => {
     const objectIdsFromNFTData = nftsMeta.data.objectIds;
     const objectIdsFromNFTDataSet = new Set(objectIdsFromNFTData);
-    console.log('nftsMeta.data.metaData', nftsMeta.data.metaData);
 
     return originalData.reduce((acc, obj) => {
         if (objectIdsFromNFTDataSet.has(obj.objectId)) {
@@ -93,7 +92,7 @@ export function useTransactionSummaryWithNFTs({
 
     const { objectSummary, balanceChanges } = summary || {};
 
-    const { created, mutated } = objectSummary || {};
+    const { created, mutated, transferred } = objectSummary || {};
 
     const createdObjectIds = created?.map((obj) => obj.objectId) || [];
     const mutatedObjectIds = mutated?.map((obj) => obj.objectId) || [];
@@ -102,10 +101,18 @@ export function useTransactionSummaryWithNFTs({
     const mutatedNFTData = useNFTsMeta(mutatedObjectIds);
 
     return useMemo(() => {
+        const filteredObjectSummary = {
+            ...(summary?.objectSummary || {}),
+            published: [] as SuiObjectChangePublished[],
+            mutated: getGroupByOwner(mutated || []),
+            created: getGroupByOwner(created || []),
+            transferred: getGroupByOwner(transferred || []),
+        };
+
         const respObject = {
             ...summary,
-            objectSummary,
             balanceChanges,
+            objectSummary: filteredObjectSummary,
             objectSummaryNFTData: {},
             isLoading: createdNFTData.isLoading || mutatedNFTData.isLoading,
         };
@@ -126,47 +133,39 @@ export function useTransactionSummaryWithNFTs({
             return respObject;
         }
 
-        const filteredObjectSummary = {
-            mutated: [],
-            created: [],
-            transferred: [],
-            published: [],
-            ...summary.objectSummary,
-        };
-
         const objectSummaryNFTData = {
-            created: [] as (SuiObjectChangeCreated & {
-                nftMeta: Record<string, string | null>;
-            })[],
-            mutated: [] as (SuiObjectChangeMutated & {
-                nftMeta: Record<string, string | null>;
-            })[],
+            created: {},
+            mutated: {},
         };
 
         if (created) {
             const objectIdsFromNFTData = createdNFTData.data.objectIds;
             const excludedObjectIdsSet = new Set(objectIdsFromNFTData);
-            filteredObjectSummary.created = created.filter(
-                (obj) => !excludedObjectIdsSet.has(obj.objectId)
+            filteredObjectSummary.created = getGroupByOwner(
+                created.filter((obj) => !excludedObjectIdsSet.has(obj.objectId))
             );
 
-            objectSummaryNFTData.created = getObjectSummaryNFTData({
-                nftsMeta: createdNFTData,
-                originalData: created,
-            });
+            objectSummaryNFTData.created = getGroupByOwner(
+                getObjectSummaryNFTData({
+                    nftsMeta: createdNFTData,
+                    originalData: created,
+                })
+            );
         }
 
         if (mutated) {
             const objectIdsFromNFTData = mutatedNFTData.data.objectIds;
             const excludedObjectIdsSet = new Set(objectIdsFromNFTData);
-            filteredObjectSummary.mutated = mutated.filter(
-                (obj) => !excludedObjectIdsSet.has(obj.objectId)
+            filteredObjectSummary.mutated = getGroupByOwner(
+                mutated.filter((obj) => !excludedObjectIdsSet.has(obj.objectId))
             );
 
-            objectSummaryNFTData.mutated = getObjectSummaryNFTData({
-                nftsMeta: mutatedNFTData,
-                originalData: mutated,
-            });
+            objectSummaryNFTData.mutated = getGroupByOwner(
+                getObjectSummaryNFTData({
+                    nftsMeta: mutatedNFTData,
+                    originalData: mutated,
+                })
+            );
         }
 
         return {
@@ -180,8 +179,8 @@ export function useTransactionSummaryWithNFTs({
         createdNFTData,
         mutated,
         mutatedNFTData,
-        objectSummary,
         summary,
+        transferred,
     ]);
 }
 

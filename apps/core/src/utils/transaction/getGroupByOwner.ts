@@ -14,10 +14,15 @@ export enum LocationIdType {
     Unknown = 'Unknown',
 }
 
-type ObjectSummaryChange =
+export type ObjectSummaryChange =
     | SuiObjectChangeMutated
     | SuiObjectChangeCreated
     | SuiObjectChangeTransferred;
+
+export type ObjectSummaryChangeWithNFT<T> = T & {
+    locationIdType: LocationIdType;
+    nftMeta?: Record<string, string | null>;
+};
 
 export function getGroupByOwner(objectSummaryChanges: ObjectSummaryChange[]) {
     if (!objectSummaryChanges) {
@@ -28,7 +33,7 @@ export function getGroupByOwner(objectSummaryChanges: ObjectSummaryChange[]) {
         (
             mapByOwner: Record<
                 string,
-                ObjectSummaryChange & { locationIdType: string }[]
+                ObjectSummaryChangeWithNFT<ObjectSummaryChange>[]
             >,
             change
         ) => {
