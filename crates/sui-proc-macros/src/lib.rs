@@ -512,6 +512,22 @@ impl Fold for CheckArithmetic {
     }
 }
 
+/// This proc macro generates a function `order_to_variant_map` which returns a map
+/// of the position of each variant to the name of the variant.
+/// It is intended to catch changes in enum order when backward compat is required.
+/// ```rust,ignore
+///    /// Example for this enum
+///    #[derive(EnumVariantOrder)]
+///    pub enum MyEnum {
+///         A,
+///         B(u64),
+///         C{x: bool, y: i8},
+///     }
+///     let order_map = MyEnum::order_to_variant_map();
+///     assert!(order_map.get(0).unwrap() == "A");
+///     assert!(order_map.get(1)).unwrap() == "B");
+///     assert!(order_map.get(2)).unwrap() == "C");
+/// ```
 #[proc_macro_derive(EnumVariantOrder)]
 pub fn enum_variant_order_derive(input: TokenStream) -> TokenStream {
     let ast = parse_macro_input!(input as DeriveInput);
