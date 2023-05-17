@@ -1,5 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+
 use crate::bank::BenchmarkBank;
 use crate::options::Opts;
 use crate::util::get_ed25519_keypair_from_keystore;
@@ -11,7 +12,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::thread::JoinHandle;
 use std::time::Duration;
-use sui_config::utils;
+use sui_config::local_ip_utils;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::SuiAddress;
 use sui_types::crypto::{deterministic_random_account_key, AccountKeyPair};
@@ -112,8 +113,8 @@ impl Env {
             .clone();
         // Make the client runtime wait until we are done creating genesis objects
         let cloned_config = config.clone();
-        let fullnode_ip = format!("{}", utils::get_local_ip_for_tests());
-        let fullnode_rpc_port = utils::get_available_port(&fullnode_ip);
+        let fullnode_ip = local_ip_utils::localhost_for_testing();
+        let fullnode_rpc_port = local_ip_utils::get_available_port(&fullnode_ip);
         let fullnode_barrier = Arc::new(Barrier::new(2));
         let fullnode_barrier_clone = fullnode_barrier.clone();
         // spawn a thread to spin up sui nodes on the multi-threaded server runtime.

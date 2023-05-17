@@ -11158,7 +11158,6 @@ dependencies = [
  "move-core-types",
  "move-package",
  "mysten-metrics",
- "mysten-network",
  "prometheus",
  "rand 0.8.5",
  "serde_json",

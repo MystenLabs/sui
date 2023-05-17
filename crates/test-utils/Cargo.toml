@@ -35,8 +35,6 @@ sui-test-transaction-builder = { path = "../sui-test-transaction-builder" }
 mysten-metrics = { path = "../mysten-metrics"}
 shared-crypto = { path = "../shared-crypto" }
 
-mysten-network.workspace = true
-
 move-binary-format.workspace = true
 move-core-types.workspace = true
 move-package.workspace = true

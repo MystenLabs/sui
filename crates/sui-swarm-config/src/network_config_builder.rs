@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::genesis_config::{AccountConfig, DEFAULT_GAS_AMOUNT};
+use crate::genesis_config::{AccountConfig, ValidatorGenesisConfigBuilder, DEFAULT_GAS_AMOUNT};
 use crate::genesis_config::{GenesisConfig, ValidatorGenesisConfig};
 use crate::network_config::NetworkConfig;
 use fastcrypto::encoding::{Encoding, Hex};
@@ -21,12 +21,11 @@ use sui_config::node::{
     default_enable_index_processing, default_end_of_epoch_broadcast_channel_capacity,
     AuthorityKeyPairWithPath, AuthorityStorePruningConfig, DBCheckpointConfig,
     ExpensiveSafetyCheckConfig, KeyPairWithPath, StateDebugDumpConfig,
-    DEFAULT_GRPC_CONCURRENCY_LIMIT, DEFAULT_VALIDATOR_GAS_PRICE,
+    DEFAULT_GRPC_CONCURRENCY_LIMIT,
 };
-use sui_config::utils;
+use sui_config::p2p::{P2pConfig, SeedPeer};
 use sui_config::{
-    p2p::{P2pConfig, SeedPeer},
-    ConsensusConfig, NodeConfig, AUTHORITIES_DB_NAME, CONSENSUS_DB_NAME,
+    local_ip_utils, ConsensusConfig, NodeConfig, AUTHORITIES_DB_NAME, CONSENSUS_DB_NAME,
 };
 use sui_protocol_config::SupportedProtocolVersions;
 use sui_types::base_types::{AuthorityName, SuiAddress};
@@ -35,6 +34,7 @@ use sui_types::crypto::{
     generate_proof_of_possession, get_key_pair_from_rng, AccountKeyPair, AuthorityKeyPair,
     AuthorityPublicKeyBytes, KeypairTraits, NetworkKeyPair, PublicKey, SuiKeyPair,
 };
+use sui_types::multiaddr::Multiaddr;
 use sui_types::object::Object;
 
 pub enum CommitteeConfig {
@@ -239,26 +239,6 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
         let committee = self.committee.take().unwrap();
 
         let mut rng = self.rng.take().unwrap();
-
-        let validator_with_account_key = |idx: usize,
-                                          protocol_key_pair: AuthorityKeyPair,
-                                          account_key_pair: AccountKeyPair,
-                                          rng: &mut R|
-         -> ValidatorGenesisConfig {
-            let (worker_key_pair, network_key_pair): (NetworkKeyPair, NetworkKeyPair) =
-                (get_key_pair_from_rng(rng).1, get_key_pair_from_rng(rng).1);
-
-            ValidatorGenesisConfig::new(
-                idx,
-                protocol_key_pair,
-                worker_key_pair,
-                account_key_pair.into(),
-                network_key_pair,
-                self.reference_gas_price
-                    .unwrap_or(DEFAULT_VALIDATOR_GAS_PRICE),
-            )
-        };
-
         let validators = match committee {
             CommitteeConfig::Size(size) => {
                 // We always get fixed protocol keys from this function (which is isolated from
@@ -268,11 +248,13 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
                 let (_, keys) = Committee::new_simple_test_committee_of_size(size.into());
 
                 keys.into_iter()
-                    .enumerate()
-                    .map(|(i, authority_key)| {
-                        let account_key_pair =
-                            get_key_pair_from_rng::<AccountKeyPair, _>(&mut rng).1;
-                        validator_with_account_key(i, authority_key, account_key_pair, &mut rng)
+                    .map(|authority_key| {
+                        let mut builder = ValidatorGenesisConfigBuilder::new()
+                            .with_protocol_key_pair(authority_key);
+                        if let Some(rgp) = self.reference_gas_price {
+                            builder = builder.with_gas_price(rgp);
+                        }
+                        builder.build(&mut rng)
                     })
                     .collect::<Vec<_>>()
             }
@@ -284,9 +266,14 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
                 let (_, protocol_keys) = Committee::new_simple_test_committee_of_size(keys.len());
                 keys.into_iter()
                     .zip(protocol_keys.into_iter())
-                    .enumerate()
-                    .map(|(i, (account_key, protocol_key))| {
-                        validator_with_account_key(i, protocol_key, account_key, &mut rng)
+                    .map(|(account_key, protocol_key)| {
+                        let mut builder = ValidatorGenesisConfigBuilder::new()
+                            .with_protocol_key_pair(protocol_key)
+                            .with_account_key_pair(account_key);
+                        if let Some(rgp) = self.reference_gas_price {
+                            builder = builder.with_gas_price(rgp);
+                        }
+                        builder.build(&mut rng)
                     })
                     .collect::<Vec<_>>()
             }
@@ -359,106 +346,20 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
             .into_iter()
             .enumerate()
             .map(|(idx, validator)| {
-                let public_key: AuthorityPublicKeyBytes = validator.key_pair.public().into();
-                let mut key_path = Hex::encode(public_key);
-                key_path.truncate(12);
-                let db_path = self
-                    .config_directory
-                    .join(AUTHORITIES_DB_NAME)
-                    .join(key_path.clone());
-                let network_address = validator.network_address;
-                let consensus_address = validator.consensus_address;
-                let consensus_db_path =
-                    self.config_directory.join(CONSENSUS_DB_NAME).join(key_path);
-                let internal_worker_address = validator.consensus_internal_worker_address;
-                let consensus_config = ConsensusConfig {
-                    address: consensus_address,
-                    db_path: consensus_db_path,
-                    internal_worker_address,
-                    max_pending_transactions: None,
-                    max_submit_position: None,
-                    submit_delay_step_override_millis: None,
-                    narwhal_config: ConsensusParameters {
-                        network_admin_server: match self.validator_ip_sel {
-                            ValidatorIpSelection::Simulator => NetworkAdminServerParameters {
-                                primary_network_admin_server_port: 8889,
-                                worker_network_admin_server_base_port: 8890,
-                            },
-                            _ => NetworkAdminServerParameters {
-                                primary_network_admin_server_port: utils::get_available_port(
-                                    "127.0.0.1",
-                                ),
-                                worker_network_admin_server_base_port: utils::get_available_port(
-                                    "127.0.0.1",
-                                ),
-                            },
-                        },
-                        prometheus_metrics: PrometheusMetricsParameters {
-                            socket_addr: validator.narwhal_metrics_address,
-                        },
-                        ..Default::default()
-                    },
-                };
-
-                let p2p_config = P2pConfig {
-                    listen_address: validator.p2p_listen_address.unwrap_or_else(|| {
-                        validator
-                            .p2p_address
-                            .udp_multiaddr_to_listen_address()
-                            .unwrap()
-                    }),
-                    external_address: Some(validator.p2p_address),
-                    ..Default::default()
-                };
-
                 let supported_protocol_versions = match &self.supported_protocol_versions_config {
                     ProtocolVersionsConfig::Default => SupportedProtocolVersions::SYSTEM_DEFAULT,
                     ProtocolVersionsConfig::Global(v) => *v,
-                    ProtocolVersionsConfig::PerValidator(func) => func(idx, Some(public_key)),
+                    ProtocolVersionsConfig::PerValidator(func) => {
+                        func(idx, Some(validator.key_pair.public().into()))
+                    }
                 };
-
-                NodeConfig {
-                    protocol_key_pair: AuthorityKeyPairWithPath::new(validator.key_pair),
-                    network_key_pair: KeyPairWithPath::new(SuiKeyPair::Ed25519(
-                        validator.network_key_pair,
-                    )),
-                    account_key_pair: KeyPairWithPath::new(validator.account_key_pair),
-                    worker_key_pair: KeyPairWithPath::new(SuiKeyPair::Ed25519(
-                        validator.worker_key_pair,
-                    )),
-                    db_path,
-                    network_address,
-                    metrics_address: validator.metrics_address,
-                    // TODO: admin server is hard coded to start on 127.0.0.1 - we should probably
-                    // provide the entire socket address here to avoid confusion.
-                    admin_interface_port: match self.validator_ip_sel {
-                        ValidatorIpSelection::Simulator => 8888,
-                        _ => utils::get_available_port("127.0.0.1"),
-                    },
-                    json_rpc_address: utils::available_local_socket_address(),
-                    consensus_config: Some(consensus_config),
-                    enable_event_processing: false,
-                    enable_index_processing: default_enable_index_processing(),
-                    genesis: sui_config::node::Genesis::new(genesis.clone()),
-                    grpc_load_shed: None,
-                    grpc_concurrency_limit: Some(DEFAULT_GRPC_CONCURRENCY_LIMIT),
-                    p2p_config,
-                    authority_store_pruning_config: AuthorityStorePruningConfig::validator_config(),
-                    end_of_epoch_broadcast_channel_capacity:
-                        default_end_of_epoch_broadcast_channel_capacity(),
-                    checkpoint_executor_config: Default::default(),
-                    metrics: None,
-                    supported_protocol_versions: Some(supported_protocol_versions),
-                    db_checkpoint_config: self.db_checkpoint_config.clone(),
-                    indirect_objects_threshold: usize::MAX,
-                    expensive_safety_check_config: ExpensiveSafetyCheckConfig::new_enable_all(),
-                    name_service_package_address: None,
-                    name_service_registry_id: None,
-                    name_service_reverse_registry_id: None,
-                    transaction_deny_config: Default::default(),
-                    certificate_deny_config: Default::default(),
-                    state_debug_dump_config: self.state_debug_dump_config.clone(),
-                }
+                create_node_config(
+                    validator,
+                    genesis.clone(),
+                    self.config_directory.clone(),
+                    supported_protocol_versions,
+                    self.db_checkpoint_config.clone(),
+                )
             })
             .collect();
         NetworkConfig {
@@ -466,6 +367,92 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
             genesis,
             account_keys,
         }
+    }
+}
+
+pub fn create_node_config(
+    validator: ValidatorGenesisConfig,
+    genesis: sui_config::genesis::Genesis,
+    config_directory: PathBuf,
+    supported_protocol_versions: SupportedProtocolVersions,
+    db_checkpoint_config: DBCheckpointConfig,
+) -> NodeConfig {
+    let public_key: AuthorityPublicKeyBytes = validator.key_pair.public().into();
+    let mut key_path = Hex::encode(public_key);
+    key_path.truncate(12);
+    let db_path = config_directory
+        .join(AUTHORITIES_DB_NAME)
+        .join(key_path.clone());
+    let network_address = validator.network_address;
+    let consensus_address = validator.consensus_address;
+    let consensus_db_path = config_directory.join(CONSENSUS_DB_NAME).join(key_path);
+    let internal_worker_address = validator.consensus_internal_worker_address;
+    let localhost = local_ip_utils::localhost_for_testing();
+    let consensus_config = ConsensusConfig {
+        address: consensus_address,
+        db_path: consensus_db_path,
+        internal_worker_address,
+        max_pending_transactions: None,
+        max_submit_position: None,
+        submit_delay_step_override_millis: None,
+        narwhal_config: ConsensusParameters {
+            network_admin_server: NetworkAdminServerParameters {
+                primary_network_admin_server_port: local_ip_utils::get_available_port(&localhost),
+                worker_network_admin_server_base_port: local_ip_utils::get_available_port(
+                    &localhost,
+                ),
+            },
+            prometheus_metrics: PrometheusMetricsParameters {
+                socket_addr: validator.narwhal_metrics_address,
+            },
+            ..Default::default()
+        },
+    };
+
+    let p2p_config = P2pConfig {
+        listen_address: validator.p2p_listen_address.unwrap_or_else(|| {
+            validator
+                .p2p_address
+                .udp_multiaddr_to_listen_address()
+                .unwrap()
+        }),
+        external_address: Some(validator.p2p_address),
+        ..Default::default()
+    };
+
+    NodeConfig {
+        protocol_key_pair: AuthorityKeyPairWithPath::new(validator.key_pair),
+        network_key_pair: KeyPairWithPath::new(SuiKeyPair::Ed25519(validator.network_key_pair)),
+        account_key_pair: KeyPairWithPath::new(validator.account_key_pair),
+        worker_key_pair: KeyPairWithPath::new(SuiKeyPair::Ed25519(validator.worker_key_pair)),
+        db_path,
+        network_address,
+        metrics_address: validator.metrics_address,
+        admin_interface_port: local_ip_utils::get_available_port(&localhost),
+        json_rpc_address: local_ip_utils::new_tcp_address_for_testing(&localhost)
+            .to_socket_addr()
+            .unwrap(),
+        consensus_config: Some(consensus_config),
+        enable_event_processing: false,
+        enable_index_processing: default_enable_index_processing(),
+        genesis: sui_config::node::Genesis::new(genesis),
+        grpc_load_shed: None,
+        grpc_concurrency_limit: Some(DEFAULT_GRPC_CONCURRENCY_LIMIT),
+        p2p_config,
+        authority_store_pruning_config: AuthorityStorePruningConfig::validator_config(),
+        end_of_epoch_broadcast_channel_capacity: default_end_of_epoch_broadcast_channel_capacity(),
+        checkpoint_executor_config: Default::default(),
+        metrics: None,
+        supported_protocol_versions: Some(supported_protocol_versions),
+        db_checkpoint_config,
+        indirect_objects_threshold: usize::MAX,
+        expensive_safety_check_config: ExpensiveSafetyCheckConfig::new_enable_all(),
+        name_service_package_address: None,
+        name_service_registry_id: None,
+        name_service_reverse_registry_id: None,
+        transaction_deny_config: Default::default(),
+        certificate_deny_config: Default::default(),
+        state_debug_dump_config: Default::default(),
     }
 }
 
@@ -643,12 +630,15 @@ impl<'a> FullnodeConfigBuilder<'a> {
             .dir
             .unwrap_or_else(|| OsRng.next_u32().to_string().into());
 
-        let listen_ip = self.listen_ip.unwrap_or_else(utils::get_local_ip_for_tests);
+        let current_ip = local_ip_utils::get_current_ip_for_testing()
+            .parse()
+            .unwrap();
+        let listen_ip = self.listen_ip.unwrap_or(current_ip);
         let listen_ip_str = format!("{}", listen_ip);
 
         let get_available_port = |public_port| {
-            if listen_ip.is_loopback() || listen_ip == utils::get_local_ip_for_tests() {
-                utils::get_available_port(&listen_ip_str)
+            if listen_ip.is_loopback() || listen_ip == current_ip {
+                local_ip_utils::get_available_port(&listen_ip_str)
             } else {
                 public_port
             }
@@ -679,7 +669,7 @@ impl<'a> FullnodeConfigBuilder<'a> {
 
             P2pConfig {
                 listen_address: address,
-                external_address: Some(utils::socket_address_to_udp_multiaddr(address)),
+                external_address: Some(Multiaddr::new_from_socket_address(address)),
                 seed_peers,
                 ..Default::default()
             }
@@ -703,7 +693,7 @@ impl<'a> FullnodeConfigBuilder<'a> {
 
             db_path: db_path.join(dir_name),
             network_address,
-            metrics_address: utils::available_local_socket_address(),
+            metrics_address: local_ip_utils::new_local_tcp_socket_for_testing(),
             // TODO: admin server is hard coded to start on 127.0.0.1 - we should probably
             // provide the entire socket address here to avoid confusion.
             admin_interface_port: self.admin_port.unwrap_or_else(|| get_available_port(8888)),

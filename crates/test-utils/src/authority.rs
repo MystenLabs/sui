@@ -107,7 +107,7 @@ pub async fn start_node(config: &NodeConfig, registry_service: RegistryService) 
     use std::net::SocketAddr;
 
     let config = config.clone();
-    let socket_addr = mysten_network::multiaddr::to_socket_addr(&config.network_address).unwrap();
+    let socket_addr = config.network_address.to_socket_addr().unwrap();
     let ip = match socket_addr {
         SocketAddr::V4(v4) => IpAddr::V4(*v4.ip()),
         _ => panic!("unsupported protocol"),
