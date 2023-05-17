@@ -78,11 +78,9 @@ pub fn run_pt_success(
     cap: ObjectRef,
 ) -> ObjectRef {
     for i in 0..pt.inputs.len() {
-        if let CallArg::Object(a) = pt.inputs[i] {
-            if let ObjectArg::ImmOrOwnedObject(obj_ref) = a {
-                if obj_ref.0 == cap.0 {
-                    pt.inputs[i] = CallArg::Object(ObjectArg::ImmOrOwnedObject(cap));
-                }
+        if let CallArg::Object(ObjectArg::ImmOrOwnedObject(obj_ref)) = pt.inputs[i] {
+            if obj_ref.0 == cap.0 {
+                pt.inputs[i] = CallArg::Object(ObjectArg::ImmOrOwnedObject(cap));
             }
         }
     }
