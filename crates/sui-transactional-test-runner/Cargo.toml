@@ -30,6 +30,7 @@ move-transactional-test-runner.workspace = true
 
 sui-adapter = { path = "../../sui-execution/latest/sui-adapter", package = "sui-adapter-latest"}
 sui-config = { path = "../sui-config" }
+sui-swarm-config = { path = "../sui-swarm-config" }
 sui-core = { path = "../sui-core", features = ["test-utils"] }
 sui-framework = { path = "../sui-framework" }
 sui-protocol-config = { path = "../sui-protocol-config" }

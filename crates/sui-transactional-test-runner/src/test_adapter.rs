@@ -311,7 +311,8 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
         let object_ids = objects.iter().map(|obj| obj.id()).collect::<Vec<_>>();
         let validator = {
             let dir = tempfile::TempDir::new().unwrap();
-            let network_config = sui_config::builder::ConfigBuilder::new(&dir).build();
+            let network_config =
+                sui_swarm_config::network_config_builder::ConfigBuilder::new(&dir).build();
             let genesis = network_config.genesis;
             let keypair = network_config.validator_configs[0]
                 .protocol_key_pair()

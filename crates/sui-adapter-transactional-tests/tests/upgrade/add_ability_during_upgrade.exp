@@ -33,7 +33,8 @@ Error: Transaction Effects Status: Invalid package upgrade. New package is incom
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: PackageUpgradeError { upgrade_error: IncompatibleUpgrade }, source: Some(PartialVMError { major_status: BACKWARD_INCOMPATIBLE_MODULE_UPDATE, sub_status: None, message: None, exec_state: None, indices: [], offsets: [] }), command: Some(1) } }
 
 task 8 'upgrade'. lines 45-48:
-Error: Error checking transaction input objects: PackageVerificationTimedout { err: "Error executing ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: SuiMoveVerificationError, source: Some(\"First field of struct Foo must be 'id', dummy_field found\"), command: None } }" }
+Error: Transaction Effects Status: Sui Move Bytecode Verification Error. Please run the Sui Move Verifier for more information.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: SuiMoveVerificationError, source: Some("First field of struct Foo must be 'id', dummy_field found"), command: Some(1) } }
 
 task 9 'upgrade'. lines 50-56:
 Error: Transaction Effects Status: Invalid package upgrade. New package is incompatible with previous version
