@@ -150,14 +150,15 @@ pub fn url_from_str(s: &str) -> Result<Uri, ReplayEngineError> {
 
 #[test]
 fn test_yaml() {
-    let set = ReplayableNetworkConfigSet::default();
+    let mut set = ReplayableNetworkConfigSet::default();
 
     let path = tempfile::tempdir().unwrap().path().to_path_buf();
     let path_str = path.to_str().unwrap().to_owned();
 
-    set.save_config(Some(path_str.clone())).unwrap();
+    let final_path = set.save_config(Some(path_str.clone())).unwrap();
 
     // Read from file
     let data = ReplayableNetworkConfigSet::load_config(Some(path_str)).unwrap();
+    set.path = Some(final_path);
     assert!(set == data);
 }
