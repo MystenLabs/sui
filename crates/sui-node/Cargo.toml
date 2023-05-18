@@ -25,6 +25,7 @@ snap = "1.1.0"
 git-version = "0.3.5"
 const-str = "0.5.3"
 
+sui-archival = { path = "../sui-archival" }
 sui-tls = { path = "../sui-tls" }
 sui-macros = { path = "../sui-macros" }
 sui-config = { path = "../sui-config" }

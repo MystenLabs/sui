@@ -3,10 +3,9 @@
 #![allow(dead_code)]
 
 use crate::{
-    compute_sha3_checksum, create_file_metadata, Blob, Encoding, FileCompression, FileMetadata,
-    FileType, Manifest, ManifestV1, BLOB_ENCODING_BYTES, FILE_MAX_BYTES, MAGIC_BYTES,
-    MANIFEST_FILE_MAGIC, OBJECT_FILE_MAGIC, OBJECT_REF_BYTES, REFERENCE_FILE_MAGIC,
-    SEQUENCE_NUM_BYTES,
+    compute_sha3_checksum, create_file_metadata, FileCompression, FileMetadata, FileType, Manifest,
+    ManifestV1, FILE_MAX_BYTES, MAGIC_BYTES, MANIFEST_FILE_MAGIC, OBJECT_FILE_MAGIC,
+    OBJECT_REF_BYTES, REFERENCE_FILE_MAGIC, SEQUENCE_NUM_BYTES,
 };
 use anyhow::{anyhow, Context, Result};
 use backoff::future::retry;
@@ -26,6 +25,7 @@ use std::sync::Arc;
 use sui_core::authority::authority_store_tables::{AuthorityPerpetualTables, LiveObject};
 use sui_storage::object_store::util::{copy_file, delete_recursively, path_to_filesystem};
 use sui_storage::object_store::ObjectStoreConfig;
+use sui_storage::{Blob, Encoding, BLOB_ENCODING_BYTES};
 use sui_types::base_types::{ObjectID, ObjectRef};
 use tokio::sync::mpsc;
 use tokio::sync::mpsc::{Receiver, Sender};
@@ -191,7 +191,7 @@ impl LiveObjectSetWriterV1 {
         if cut_new_part_file {
             self.cut().await?;
         }
-        self.n += blob.append_to_file(&mut self.wbuf)?;
+        self.n += blob.write(&mut self.wbuf)?;
         Ok(())
     }
     async fn write_object_ref(&mut self, object_ref: &ObjectRef) -> Result<()> {
