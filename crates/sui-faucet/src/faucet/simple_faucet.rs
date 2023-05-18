@@ -811,9 +811,11 @@ mod tests {
         let faucet_address = faucet.wallet_mut().active_address().unwrap();
         let uuid = Uuid::new_v4();
         let coin_response = faucet.prepare_gas_coin(100, uuid).await;
+        let coin_id;
 
         match coin_response {
             GasCoinResponse::ValidGasCoin(gas) => {
+                coin_id = gas;
                 let tx_data = faucet
                     .build_pay_sui_txn(gas, faucet_address, recipient, &[100], 200_000_000)
                     .await
@@ -836,9 +838,18 @@ mod tests {
         }
 
         faucet.retry_wal_coins().await.ok();
+        let mut wal = faucet.wal.lock().await;
+        assert!(!wal.log.is_empty());
 
-        let wal_2 = faucet.wal.lock().await;
-        assert!(wal_2.log.is_empty());
+        // Set in flight to false so WAL will clear
+        wal.set_in_flight(coin_id, false)
+            .expect("Unable to set in flight status to false.");
+        drop(wal);
+
+        faucet.retry_wal_coins().await.ok();
+        let wal = faucet.wal.lock().await;
+        assert!(wal.log.is_empty());
+
         let total_coins = faucet.metrics.total_available_coins.get();
         let discarded_coins = faucet.metrics.total_discarded_coins.get();
         assert_eq!(total_coins, original_available);
