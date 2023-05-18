@@ -282,7 +282,9 @@ impl GovernanceReadApiServer for GovernanceReadApi {
                 .rates
                 .into_iter()
                 .filter_map(|(epoch, rate)| {
-                    if epoch >= system_state_summary.stake_subsidy_start_epoch {
+                    if epoch >= system_state_summary.stake_subsidy_start_epoch
+                        && (1.0 / rate.rate()) < 1.2
+                    {
                         Some(rate)
                     } else {
                         None
