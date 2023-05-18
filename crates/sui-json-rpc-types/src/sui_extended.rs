@@ -145,3 +145,15 @@ pub struct MoveFunctionName {
     #[serde_as(as = "DisplayFromStr")]
     pub function: Identifier,
 }
+
+#[serde_as]
+#[derive(Serialize, Deserialize, Debug, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct AddressMetrics {
+    pub checkpoint: u64,
+    pub epoch: u64,
+    pub timestamp_ms: u64,
+    pub cumulative_addresses: u64,
+    pub cumulative_active_addresses: u64,
+    pub daily_active_addresses: u64,
+}
