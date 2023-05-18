@@ -45,6 +45,12 @@ module deepbook::math {
     }
 
     // divide two floating numbers
+    public(friend) fun unsafe_div(x: u64, y: u64): u64 {
+        let (_, result) = unsafe_div_round(x, y);
+        result
+    }
+
+    // divide two floating numbers
     // also returns whether the result is rounded down
     public(friend) fun unsafe_div_round(x: u64, y: u64): (bool, u64) {
         let x = (x as u128);
@@ -147,13 +153,13 @@ module deepbook::math {
     #[test]
     #[expected_failure(abort_code = EUnderflow)]
     fun test_mul_underflow() {
-        mul(99_999_999, 1);
+        mul(999_999_999, 1);
     }
 
     #[test]
     #[expected_failure(abort_code = EUnderflow)]
     fun test_mul_round_check_underflow() {
-        mul_round(99_999_999, 1);
+        mul_round(999_999_999, 1);
     }
 
     #[test]
@@ -164,6 +170,22 @@ module deepbook::math {
         (is_round, result) = unsafe_mul_round(9_999_999_999, 1);
         assert_eq(is_round, true);
         assert_eq(result, 9);
+        (is_round, result) = mul_round(9_999_999_999, 1);
+        assert_eq(is_round, true);
+        assert_eq(result, 9);
+    }
+
+    #[test]
+    fun test_div() {
+        let (is_round, result) = unsafe_div_round(1, 1_000_000_000);
+        assert_eq(is_round, false);
+        assert_eq(result, 1);
+        (is_round, result) = unsafe_div_round(1, 9_999_999_999);
+        assert_eq(is_round, true);
+        assert_eq(result, 0);
+        (is_round, result) = unsafe_div_round(1, 999_999_999);
+        assert_eq(is_round, true);
+        assert_eq(result, 1);
     }
 
     #[test]
@@ -175,6 +197,9 @@ module deepbook::math {
         assert_eq(is_round, true);
         assert_eq(result, 0);
         (is_round, result) = unsafe_div_round(1, 999_999_999);
+        assert_eq(is_round, true);
+        assert_eq(result, 1);
+        (is_round, result) = div_round(1, 999_999_999);
         assert_eq(is_round, true);
         assert_eq(result, 1);
     }
