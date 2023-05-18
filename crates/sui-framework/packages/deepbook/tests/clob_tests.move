@@ -1764,6 +1764,16 @@ module deepbook::clob_test {
             mint_account_cap_transfer(alice, test::ctx(&mut test));
             mint_account_cap_transfer(bob, test::ctx(&mut test));
         };
+        next_tx(&mut test, bob);
+        {
+            let pool = test::take_shared<Pool<SUI, USD>>(&mut test);
+            let account_cap = test::take_from_address<AccountCap>(&test, bob);
+            let (base_quantity_filled, quote_quantity_filled) = clob::test_match_bid_with_quote_quantity<SUI, USD>(&mut pool, 500, MAX_PRICE, 0);
+            assert_eq(base_quantity_filled, 0);
+            assert_eq(quote_quantity_filled, 0);
+            test::return_to_address<AccountCap>(bob, account_cap);
+            test::return_shared(pool);
+        };
         next_tx(&mut test, alice);
         {
             let pool = test::take_shared<Pool<SUI, USD>>(&mut test);
@@ -1845,6 +1855,14 @@ module deepbook::clob_test {
             );
             assert!(base_quantity_filled == 1000 + 495, 0);
             assert!(quote_quantity_filled == 4498, 0);
+            let (base_quantity_filled, quote_quantity_filled) = clob::test_match_bid_with_quote_quantity(
+                &mut pool,
+                500,
+                0,
+                0,
+            );
+            assert_eq(base_quantity_filled, 0);
+            assert_eq(quote_quantity_filled, 0);
             test::return_shared(pool);
         };
         next_tx(&mut test, bob);
@@ -1902,6 +1920,36 @@ module deepbook::clob_test {
             test::return_shared(pool);
             test::return_to_address<AccountCap>(alice, account_cap_alice);
         };
+
+        next_tx(&mut test, bob);
+        {
+            let pool = test::take_shared<Pool<SUI, USD>>(&mut test);
+            let (base_quantity_filled, quote_quantity_filled) = clob::test_match_bid_with_quote_quantity(
+                &mut pool,
+                3000,
+                MAX_PRICE,
+                0,
+            );
+            assert_eq(base_quantity_filled, 505);
+            assert_eq(quote_quantity_filled, 2539);
+            test::return_shared(pool);
+        };
+
+        next_tx(&mut test, bob);
+        {
+            let pool = test::take_shared<Pool<SUI, USD>>(&mut test);
+            {
+                let (_, _, _, asks) = get_pool_stat(&pool);
+                clob::check_empty_tick_level(asks, 2 * FLOAT_SCALING);
+            };
+            {
+                let (_, _, _, asks) = get_pool_stat(&pool);
+                clob::check_empty_tick_level(asks, 5 * FLOAT_SCALING);
+            };
+
+            test::return_shared(pool);
+        };
+
         end(test)
     }
 
