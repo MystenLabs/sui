@@ -24,6 +24,10 @@ tracing = "0.1.36"
 rand = "0.8.5"
 lru = "0.10"
 parking_lot = "0.12.1"
+serde_with = "2.1.0"
+serde_yaml = "0.8.26"
+shellexpand = "3.1.0"
+tempfile = "3.3.0"
 
 move-binary-format.workspace = true
 move-bytecode-utils.workspace = true

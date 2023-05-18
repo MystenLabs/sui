@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::config::ReplayableNetworkConfigSet;
 use crate::data_fetcher::extract_epoch_and_version;
 use crate::data_fetcher::DataFetcher;
 use crate::data_fetcher::Fetchers;
@@ -56,6 +57,7 @@ use sui_types::transaction::{
     TransactionData, TransactionDataAPI, TransactionKind, VerifiedTransaction,
 };
 use sui_types::DEEPBOOK_PACKAGE_ID;
+use tracing::info;
 use tracing::{error, warn};
 
 // TODO: add persistent cache. But perf is good enough already.
@@ -288,6 +290,67 @@ impl LocalExec {
             None,
         )
         .await
+    }
+
+    pub async fn replay_with_network_config(
+        rpc_url: Option<String>,
+        path: Option<String>,
+        tx_digest: TransactionDigest,
+        expensive_safety_check_config: ExpensiveSafetyCheckConfig,
+        use_authority: bool,
+    ) -> Result<ExecutionSandboxState, ReplayEngineError> {
+        async fn inner_exec(
+            rpc_url: String,
+            tx_digest: TransactionDigest,
+            expensive_safety_check_config: ExpensiveSafetyCheckConfig,
+            use_authority: bool,
+        ) -> Result<ExecutionSandboxState, ReplayEngineError> {
+            LocalExec::new_from_fn_url(&rpc_url)
+                .await?
+                .init_for_execution()
+                .await?
+                .execute_transaction(&tx_digest, expensive_safety_check_config, use_authority)
+                .await
+        }
+
+        if let Some(url) = rpc_url.clone() {
+            info!("Using RPC URL: {}", url);
+            if let Ok(x) = inner_exec(
+                url,
+                tx_digest,
+                expensive_safety_check_config.clone(),
+                use_authority,
+            )
+            .await
+            {
+                return Ok(x);
+            }
+            warn!("Failed to execute transaction with provided RPC URL. Attempting to load configs from file");
+        }
+
+        let cfg = ReplayableNetworkConfigSet::load_config(path)?;
+        for cfg in &cfg.base_network_configs {
+            info!(
+                "Attempting to replay with network rpc: {}",
+                cfg.public_full_node.clone()
+            );
+            match inner_exec(
+                cfg.public_full_node.clone(),
+                tx_digest,
+                expensive_safety_check_config.clone(),
+                use_authority,
+            )
+            .await
+            {
+                Ok(exec_state) => return Ok(exec_state),
+                Err(e) => {
+                    warn!("Failed to execute transaction with network config: {}. Attempting next network config...", e);
+                    continue;
+                }
+            }
+        }
+        error!("No more configs to attempt. Try specifing Full Node RPC URL directly or provide a config file with a valid URL");
+        Err(ReplayEngineError::UnableToExecuteWithNetworkConfigs { cfgs: cfg })
     }
 
     /// This captures the state of the network at a given point in time and populates
