@@ -229,6 +229,13 @@ where
                             "Unexpected response from fullnode for object checkpoints: {}",
                             fn_e
                         );
+                    } else if let Err(IndexerError::FullNodeReadingError(fn_e)) = download_result {
+                        warn!("Fullnode reading error for object checkpoints {}: {}. It can be transient or due to rate limiting.", next_cursor_sequence_number, fn_e);
+                    } else {
+                        warn!(
+                            "Error downloading object checkpoints: {:?}",
+                            download_result
+                        );
                     }
                     break;
                 }
@@ -240,7 +247,10 @@ where
             current_parallel_downloads =
                 std::cmp::min(downloaded_checkpoints.len() + 1, MAX_PARALLEL_DOWNLOADS);
             if downloaded_checkpoints.is_empty() {
-                warn!("No object checkpoints downloaded, retrying in next iteration ...");
+                warn!(
+                    "No object checkpoints were downloaded for sequence number {}, retrying...",
+                    next_cursor_sequence_number
+                );
                 continue;
             }
 
@@ -341,6 +351,10 @@ where
                             "Unexpected response from fullnode for checkpoints: {}",
                             fn_e
                         );
+                    } else if let Err(IndexerError::FullNodeReadingError(fn_e)) = download_result {
+                        warn!("Fullnode reading error for checkpoints {}: {}. It can be transient or due to rate limiting.", next_cursor_sequence_number, fn_e);
+                    } else {
+                        warn!("Error downloading checkpoints: {:?}", download_result);
                     }
                     break;
                 }
@@ -353,7 +367,10 @@ where
             current_parallel_downloads =
                 std::cmp::min(downloaded_checkpoints.len() + 1, MAX_PARALLEL_DOWNLOADS);
             if downloaded_checkpoints.is_empty() {
-                warn!("No checkpoints downloaded, retrying in next iteration ...");
+                warn!(
+                    "No checkpoints were downloaded for sequence number {}, retrying...",
+                    next_cursor_sequence_number
+                );
                 continue;
             }
 
@@ -479,34 +496,6 @@ where
                     }
                 });
 
-                // MUSTFIX(gegaowp): temp. turn off tx index table commit to reduce short-term storage consumption.
-                // this include recipients, input_objects and move_calls.
-                // let transactions_handler = self.clone();
-                // spawn_monitored_task!(async move {
-                //     let mut transaction_index_tables_commit_res = transactions_handler
-                //         .state
-                //         .persist_transaction_index_tables(&input_objects, &move_calls, &recipients)
-                //         .await;
-                //     while let Err(e) = transaction_index_tables_commit_res {
-                //         warn!(
-                //             "Indexer transaction index tables commit failed with error: {:?}, retrying after {:?} milli-secs...",
-                //             e, DB_COMMIT_RETRY_INTERVAL_IN_MILLIS
-                //         );
-                //         tokio::time::sleep(std::time::Duration::from_millis(
-                //             DB_COMMIT_RETRY_INTERVAL_IN_MILLIS,
-                //         ))
-                //         .await;
-                //         transaction_index_tables_commit_res = transactions_handler
-                //             .state
-                //             .persist_transaction_index_tables(
-                //                 &input_objects,
-                //                 &move_calls,
-                //                 &recipients,
-                //             )
-                //             .await;
-                //     }
-                // });
-
                 let checkpoint_tx_db_guard =
                     self.metrics.checkpoint_db_commit_latency.start_timer();
                 let mut checkpoint_tx_commit_res = self
@@ -566,9 +555,9 @@ where
                     addresses: _,
                     active_addresses: _,
                     packages,
-                    input_objects: _,
+                    input_objects,
                     move_calls,
-                    recipients: _,
+                    recipients,
                 } = indexed_checkpoint;
                 let checkpoint_seq = checkpoint.sequence_number;
 
@@ -592,11 +581,9 @@ where
 
                 let transactions_handler = self.clone();
                 spawn_monitored_task!(async move {
-                    // NOTE: only index move_calls for Explorer metrics for now,
-                    // will re-enable others later.
                     let mut transaction_index_tables_commit_res = transactions_handler
                         .state
-                        .persist_transaction_index_tables(&[], &move_calls, &[])
+                        .persist_transaction_index_tables(&input_objects, &move_calls, &recipients)
                         .await;
                     while let Err(e) = transaction_index_tables_commit_res {
                         warn!(
@@ -609,7 +596,11 @@ where
                         .await;
                         transaction_index_tables_commit_res = transactions_handler
                             .state
-                            .persist_transaction_index_tables(&[], &move_calls, &[])
+                            .persist_transaction_index_tables(
+                                &input_objects,
+                                &move_calls,
+                                &recipients,
+                            )
                             .await;
                     }
                 });
