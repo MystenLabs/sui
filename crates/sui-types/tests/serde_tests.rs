@@ -5,6 +5,8 @@ use move_core_types::language_storage::StructTag;
 use serde::Serialize;
 use serde_json::Value;
 use serde_with::serde_as;
+use std::str::FromStr;
+use sui_types::base_types::ObjectType;
 use sui_types::parse_sui_struct_tag;
 use sui_types::sui_serde::SuiStructTag;
 
@@ -22,4 +24,16 @@ fn test_struct_tag_serde() {
 
     let tag2 = parse_sui_struct_tag(&json).unwrap();
     assert_eq!(tag, tag2);
+}
+
+#[test]
+fn test_object_type_to_string() {
+    let object_type = ObjectType::from_str(
+        "0x1a1aa18691be519899bf5187f5ce80af629407dd4f68d4175b99f4dc09497c1::custodian::AccountCap",
+    )
+    .unwrap();
+    assert_eq!(
+        object_type.to_string(),
+        "0x01a1aa18691be519899bf5187f5ce80af629407dd4f68d4175b99f4dc09497c1::custodian::AccountCap"
+    );
 }
