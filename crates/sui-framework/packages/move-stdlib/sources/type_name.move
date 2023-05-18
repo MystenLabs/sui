@@ -35,8 +35,8 @@ module std::type_name {
     /// this function are original IDs (the ID of the first version of
     /// the package, even if the type in question was introduced in a
     /// later upgrade).
-    public native fun get_original<T>(): TypeName;
-    spec get_original {
+    public native fun get_with_original_ids<T>(): TypeName;
+    spec get_with_original_ids {
         pragma opaque;
     }
 
