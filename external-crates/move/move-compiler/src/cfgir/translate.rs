@@ -183,6 +183,7 @@ fn module(
     mdef: H::ModuleDefinition,
 ) -> (ModuleIdent, G::ModuleDefinition) {
     let H::ModuleDefinition {
+        warning_filter,
         package_name,
         attributes,
         is_source_module,
@@ -193,11 +194,14 @@ fn module(
         constants: hconstants,
     } = mdef;
 
+    context.env.add_warning_filter_scope(warning_filter.clone());
     let constants = hconstants.map(|name, c| constant(context, name, c));
     let functions = hfunctions.map(|name, f| function(context, name, f));
+    context.env.pop_warning_filter_scope();
     (
         module_ident,
         G::ModuleDefinition {
+            warning_filter,
             package_name,
             attributes,
             is_source_module,
@@ -222,6 +226,7 @@ fn scripts(
 
 fn script(context: &mut Context, hscript: H::Script) -> G::Script {
     let H::Script {
+        warning_filter,
         package_name,
         attributes,
         loc,
@@ -229,9 +234,12 @@ fn script(context: &mut Context, hscript: H::Script) -> G::Script {
         function_name,
         function: hfunction,
     } = hscript;
+    context.env.add_warning_filter_scope(warning_filter.clone());
     let constants = hconstants.map(|name, c| constant(context, name, c));
     let function = function(context, function_name, hfunction);
+    context.env.pop_warning_filter_scope();
     G::Script {
+        warning_filter,
         package_name,
         attributes,
         loc,
@@ -247,6 +255,7 @@ fn script(context: &mut Context, hscript: H::Script) -> G::Script {
 
 fn constant(context: &mut Context, _name: ConstantName, c: H::Constant) -> G::Constant {
     let H::Constant {
+        warning_filter,
         index,
         attributes,
         loc,
@@ -254,10 +263,13 @@ fn constant(context: &mut Context, _name: ConstantName, c: H::Constant) -> G::Co
         value: (locals, block),
     } = c;
 
+    context.env.add_warning_filter_scope(warning_filter.clone());
     let final_value = constant_(context, loc, signature.clone(), locals, block);
     let value = final_value.and_then(move_value_from_exp);
 
+    context.env.pop_warning_filter_scope();
     G::Constant {
+        warning_filter,
         index,
         attributes,
         loc,
@@ -386,6 +398,7 @@ pub(crate) fn move_value_from_value_(v_: Value_) -> MoveValue {
 
 fn function(context: &mut Context, _name: FunctionName, f: H::Function) -> G::Function {
     let H::Function {
+        warning_filter,
         index,
         attributes,
         visibility,
@@ -394,8 +407,11 @@ fn function(context: &mut Context, _name: FunctionName, f: H::Function) -> G::Fu
         acquires,
         body,
     } = f;
+    context.env.add_warning_filter_scope(warning_filter.clone());
     let body = function_body(context, &signature, &acquires, body);
+    context.env.pop_warning_filter_scope();
     G::Function {
+        warning_filter,
         index,
         attributes,
         visibility,
