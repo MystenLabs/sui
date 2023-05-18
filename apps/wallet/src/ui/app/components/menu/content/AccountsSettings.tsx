@@ -63,7 +63,7 @@ export function AccountsSettings() {
                         if (appType === AppType.popup) {
                             const { origin, pathname } = window.location;
                             await Browser.tabs.create({
-                                url: `${origin}/${pathname}#${connectLedgerModalUrl}`,
+                                url: `${origin}${pathname}#${connectLedgerModalUrl}`,
                             });
                             window.close();
                         } else {
