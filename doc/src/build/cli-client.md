@@ -453,10 +453,16 @@ auto-injected by the platform at the point of a function call.
   --type-args <type_for_t_1> <type_for_t_2> ... <type_for_t_n>
   ```
   where each of the types above can be among the following non-exhaustive list:
-  - a primitive type, such as `u8, bool, address`
-  - a composition of primitive types, like `vector<(u32, u8)>`
-  - a type or struct defined in a published, public Sui Move package, specified thusly:
-  `<package_id>::<module_identifier>::<struct_identifier>`
+  - a primitive type, such as `u8`, `bool`, `address`
+  - a composition of primitive types, like `vector<u8>`
+  - a non-generic type or struct defined in a published, public Sui Move package, specified thusly:
+  `[package-id]::[module-identifier]::[Struct]`.
+  An example of such a type would be `0x1234::xy::Zzy`
+  - generic types with arbitrarily nested parameters, in the form
+  `[package-id]::[module]::[Struct]<T_1, ..., T_n>`, where `T_1`, ..., `T_n` are fully
+  qualified, fully instantiated types, and `[package-id]::[module]::[Struct]` is a generic type
+  with `n` parameters.
+  An example of such a type would be `vector<0x123::foo::Bar<u32, bool>>`
 
   When, upon calling `sui client call`, an error similar to
   ```
