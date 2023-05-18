@@ -45,6 +45,7 @@ import {
   SuiObjectResponseQuery,
   ValidatorsApy,
   MoveCallMetrics,
+  ObjectRead,
 } from '../types';
 import { DynamicFieldName, DynamicFieldPage } from '../types/dynamic_fields';
 import {
@@ -391,6 +392,18 @@ export class JsonRpcProvider {
       'sui_getObject',
       [input.id, input.options],
       SuiObjectResponse,
+    );
+  }
+
+  async tryGetPastObject(input: {
+    id: ObjectId;
+    version: number;
+    options?: SuiObjectDataOptions;
+  }): Promise<ObjectRead> {
+    return await this.client.requestWithType(
+      'sui_tryGetPastObject',
+      [input.id, input.version, input.options],
+      ObjectRead,
     );
   }
 
