@@ -124,7 +124,7 @@ fn update_hash(
 #[async_trait]
 impl<T: ParentSync + Send + Sync> ExecutionState for ConsensusHandler<T> {
     /// This function will be called by Narwhal, after Narwhal sequenced this certificate.
-    #[instrument(level = "trace", skip_all)]
+    #[instrument(level = "warn", skip_all)]
     async fn handle_consensus_output(&self, consensus_output: ConsensusOutput) {
         let _scope = monitored_scope("HandleConsensusOutput");
 

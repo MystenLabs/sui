@@ -962,9 +962,11 @@ impl AuthorityPerEpochStore {
     ) -> Result<(), SuiError> {
         let registration = self.consensus_notify_read.register_one(&key);
         if self.is_consensus_message_processed(&key)? {
+            warn!("consensus message already processed {:?}", key);
             return Ok(());
         }
         registration.await;
+        warn!("consensus message was notified {:?}", key);
         Ok(())
     }
 
@@ -1211,6 +1213,7 @@ impl AuthorityPerEpochStore {
             &self.tables.last_consensus_index,
             [(LAST_CONSENSUS_INDEX_ADDR, consensus_index)],
         )?;
+        warn!("recording consensus message processed {:?}", key);
         batch.insert_batch(&self.tables.consensus_message_processed, [(key, true)])?;
         Ok(())
     }
@@ -1276,7 +1279,7 @@ impl AuthorityPerEpochStore {
     }
 
     pub fn close_user_certs(&self, mut lock_guard: RwLockWriteGuard<'_, ReconfigState>) {
-        warn!("Closing user certificates");
+        warn!(epoch = ?self.epoch(), "Closing user certificates");
         lock_guard.close_user_certs();
         self.store_reconfig_state(&lock_guard)
             .expect("Updating reconfig state cannot fail");
@@ -1427,6 +1430,7 @@ impl AuthorityPerEpochStore {
             .chain(end_of_publish_transactions.iter())
         {
             let key = tx.0.transaction.key();
+            warn!("notify consensus read {:?}", key);
             self.consensus_notify_read.notify(&key, &());
         }
 

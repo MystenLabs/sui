@@ -100,6 +100,7 @@ impl<T: SubmitToConsensus + ReconfigurationInitiator> CheckpointOutput
             .set(checkpoint_seq as i64);
         if checkpoint_timestamp >= self.next_reconfiguration_timestamp_ms {
             tracing::warn!(
+                epoch = ?epoch_store.epoch(),
                 "checkpoint_timestamp {} >= next_reconfiguration_timestamp_ms {}, closing epoch",
                 checkpoint_timestamp,
                 self.next_reconfiguration_timestamp_ms
