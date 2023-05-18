@@ -1,0 +1,48 @@
+[package]
+name = "sui-archival"
+version = "0.1.0"
+edition = "2021"
+publish = false
+license = "Apache-2.0"
+authors = ["Mysten Labs <build@mystenlabs.com>"]
+
+[dependencies]
+integer-encoding = "3.0.1"
+anyhow = "1.0.68"
+serde = { version = "1.0.144", features = ["derive"] }
+bcs = "0.1.4"
+byteorder = "1.4.3"
+tracing = "0.1.36"
+bytes = "1.4.0"
+tokio-stream = "0.1.14"
+num_enum = "0.6.1"
+futures = "0.3.23"
+backoff = "0.4.0"
+rand = "0.8.5"
+object_store = "=0.5.4"
+prometheus = "0.13.3"
+zstd = "0.12.3+zstd.1.5.2"
+typed-store.workspace = true
+typed-store-derive.workspace = true
+sui-types = { path = "../sui-types" }
+sui-core = { path = "../sui-core" }
+sui-storage = { path = "../sui-storage" }
+sui-protocol-config = { path = "../sui-protocol-config" }
+fastcrypto = { workspace = true, features = ["copy_key"] }
+tokio = { workspace = true, features = ["full"] }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+[dev-dependencies]
+tempfile = "3.3.0"
+telemetry-subscribers.workspace = true
+move-binary-format.workspace = true
+move-core-types.workspace = true
+move-package.workspace = true
+tokio = { workspace = true, features = ["test-util"] }
+ed25519-consensus = { version = "2.0.1" }
+fastcrypto = { workspace = true }
+sui-swarm-config = { path = "../sui-swarm-config" }
+sui-macros = { path = "../sui-macros" }
+
+[target.'cfg(msim)'.dependencies]
+sui-simulator = { path = "../sui-simulator" }

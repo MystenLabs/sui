@@ -19,7 +19,7 @@ use crate::authority::test_authority_builder::TestAuthorityBuilder;
 use crate::{
     authority::AuthorityState, checkpoints::CheckpointStore, state_accumulator::StateAccumulator,
 };
-use sui_network::state_sync::test_utils::{empty_contents, CommitteeFixture};
+use sui_swarm_config::test_utils::{empty_contents, CommitteeFixture};
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemState;
 
 /// Test checkpoint executor happy path, test that checkpoint executor correctly
