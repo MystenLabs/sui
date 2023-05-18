@@ -17,7 +17,7 @@ module test::self_transfer {
         id: UID
     }
 
-    init(ctx: &mut TxContext) {
+    fun init(ctx: &mut TxContext) {
         transfer::public_transfer(S1 { id: object::new(ctx), }, tx_context::sender(ctx));
         transfer::transfer(S1 { id: object::new(ctx), }, tx_context::sender(ctx));
     }
@@ -51,4 +51,3 @@ module test::self_transfer {
         transfer::transfer(S1 { id: object::new(ctx), }, xfer_address);
     }
 }
-

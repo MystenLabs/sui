@@ -23,6 +23,7 @@ move-bytecode-utils.workspace = true
 move-command-line-common.workspace = true
 move-compiler.workspace = true
 move-core-types.workspace = true
+move-model.workspace = true
 move-stdlib.workspace = true
 move-symbol-pool.workspace = true
 move-transactional-test-runner.workspace = true
@@ -33,6 +34,7 @@ sui-move-natives = { path = "../../sui-execution/latest/sui-move-natives", packa
 
 sui-core = { path = "../sui-core" }
 sui-framework = { path = "../sui-framework" }
+sui-move = { path = "../sui-move" }
 sui-protocol-config = { path = "../sui-protocol-config" }
 sui-types = { path = "../sui-types", features = ["test-utils"]}
 workspace-hack = { version = "0.1", path = "../workspace-hack" }

@@ -8,7 +8,7 @@ use anyhow::bail;
 use bimap::btree::BiBTreeMap;
 use fastcrypto::hash::MultisetHash;
 use move_binary_format::{file_format::CompiledScript, CompiledModule};
-use move_bytecode_utils::module_cache::GetModule;
+use move_bytecode_utils::{module_cache::GetModule, Modules};
 use move_command_line_common::{
     address::ParsedAddress, files::verify_and_create_named_address_mapping,
 };
@@ -23,6 +23,7 @@ use move_core_types::{
     language_storage::{ModuleId, TypeTag},
     value::MoveStruct,
 };
+use move_model::run_bytecode_model_builder;
 use move_symbol_pool::Symbol;
 use move_transactional_test_runner::{
     framework::{compile_any, store_modules, CompiledState, MoveTestAdapter},
@@ -46,6 +47,7 @@ use sui_core::{
 };
 use sui_framework::BuiltInFramework;
 use sui_framework::DEFAULT_FRAMEWORK_PATH;
+use sui_move::linters::driver::lint_execute;
 use sui_protocol_config::ProtocolConfig;
 use sui_types::accumulator::Accumulator;
 use sui_types::effects::TransactionEffectsAPI;
@@ -384,6 +386,19 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
         extra: Self::ExtraPublishArgs,
     ) -> anyhow::Result<(Option<String>, Vec<(Option<Symbol>, CompiledModule)>)> {
         self.next_task();
+
+        // linting (before modules get their IDs reassigned)
+        let modules_map = Modules::new(
+            modules
+                .iter()
+                .map(|(_, compiled_module)| compiled_module)
+                .chain(GENESIS.modules.iter().flatten()),
+        );
+        let graph = modules_map.compute_dependency_graph();
+        let dep_sorted_modules = graph.compute_topological_order().unwrap();
+        let env = run_bytecode_model_builder(dep_sorted_modules)?;
+        let mut lint_output = lint_execute(env, ObjectID::ZERO, false);
+
         let SuiPublishArgs {
             sender,
             upgradeable,
@@ -458,7 +473,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                 _ => (),
             }
         }
-        let output = self.object_summary_output(&summary);
+        let object_summary_output = self.object_summary_output(&summary);
         let published_modules = self
             .storage
             .get_object(&created_package)
@@ -475,6 +490,14 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                 )
             })
             .collect();
+        let output = if lint_output.is_empty() {
+            object_summary_output
+        } else {
+            if let Some(o) = object_summary_output {
+                lint_output.push_str(o.as_str());
+            }
+            Some(lint_output)
+        };
         Ok((output, published_modules))
     }
 
