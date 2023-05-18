@@ -207,7 +207,7 @@ impl MultiSig {
         for s in full_sigs {
             bitmap.insert(multisig_pk.get_index(s.to_public_key()?).ok_or(
                 SuiError::IncorrectSigner {
-                    error: "pk does not exist".to_string(),
+                    error: format!("pk does not exist: {:?}", s.to_public_key()?),
                 },
             )?);
             sigs.push(s.to_compressed()?);
