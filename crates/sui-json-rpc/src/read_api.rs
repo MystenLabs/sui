@@ -935,6 +935,17 @@ impl ReadApiServer for ReadApi {
                 .map(ProtocolConfigResponse::from)?)
         })
     }
+
+    #[instrument(skip(self))]
+    async fn get_chain_identifier(&self) -> RpcResult<String> {
+        with_tracing!(async move {
+            let ci = self
+                .state
+                .get_chain_identifier()
+                .ok_or(anyhow!("Chain identifier not found"))?;
+            Ok(ci.to_string())
+        })
+    }
 }
 
 impl SuiRpcModule for ReadApi {
