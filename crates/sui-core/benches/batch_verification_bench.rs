@@ -12,7 +12,7 @@ use std::sync::Arc;
 use sui_core::test_utils::{make_cert_with_large_committee, make_dummy_tx};
 use sui_types::committee::Committee;
 use sui_types::crypto::{get_key_pair, AccountKeyPair, AuthorityKeyPair};
-use sui_types::messages::CertifiedTransaction;
+use sui_types::transaction::CertifiedTransaction;
 
 use sui_core::signature_verifier::*;
 

@@ -19,6 +19,7 @@ pub use indexer::IndexerApiServer;
 pub use move_utils::MoveUtilsClient;
 pub use move_utils::MoveUtilsOpenRpc;
 pub use move_utils::MoveUtilsServer;
+use once_cell::sync::Lazy;
 use prometheus::{register_int_counter_with_registry, IntCounter};
 pub use read::ReadApiClient;
 pub use read::ReadApiOpenRpc;
@@ -26,6 +27,7 @@ pub use read::ReadApiServer;
 pub use transaction_builder::TransactionBuilderClient;
 pub use transaction_builder::TransactionBuilderOpenRpc;
 pub use transaction_builder::TransactionBuilderServer;
+use typed_store::rocks::read_size_from_env;
 pub use write::WriteApiClient;
 pub use write::WriteApiOpenRpc;
 pub use write::WriteApiServer;
@@ -39,20 +41,20 @@ mod read;
 mod transaction_builder;
 mod write;
 
-/// Maximum number of events returned in an event query.
-/// This is equivalent to EVENT_QUERY_MAX_LIMIT in `sui-storage` crate.
-/// To avoid unnecessary dependency on that crate, we have a reference here
-/// for document purposes.
-pub const QUERY_MAX_RESULT_LIMIT: usize = 1000;
+const RPC_QUERY_MAX_RESULT_LIMIT: &str = "RPC_QUERY_MAX_RESULT_LIMIT";
+const DEFAULT_RPC_QUERY_MAX_RESULT_LIMIT: usize = 50;
+
+pub static QUERY_MAX_RESULT_LIMIT: Lazy<usize> = Lazy::new(|| {
+    read_size_from_env(RPC_QUERY_MAX_RESULT_LIMIT).unwrap_or(DEFAULT_RPC_QUERY_MAX_RESULT_LIMIT)
+});
+
 // TODOD(chris): make this configurable
 pub const QUERY_MAX_RESULT_LIMIT_CHECKPOINTS: usize = 100;
 
-pub const QUERY_MAX_RESULT_LIMIT_OBJECTS: usize = 256;
-
 pub fn cap_page_limit(limit: Option<usize>) -> usize {
     let limit = limit.unwrap_or_default();
-    if limit > QUERY_MAX_RESULT_LIMIT || limit == 0 {
-        QUERY_MAX_RESULT_LIMIT
+    if limit > *QUERY_MAX_RESULT_LIMIT || limit == 0 {
+        *QUERY_MAX_RESULT_LIMIT
     } else {
         limit
     }
@@ -96,6 +98,12 @@ pub struct JsonRpcMetrics {
 
     pub get_stake_sui_result_size: Histogram,
     pub get_stake_sui_result_size_total: IntCounter,
+
+    pub get_stake_sui_latency: Histogram,
+    pub get_delegated_sui_latency: Histogram,
+
+    pub orchestrator_latency_ms: Histogram,
+    pub post_orchestrator_latency_ms: Histogram,
 }
 
 impl JsonRpcMetrics {
@@ -240,6 +248,26 @@ impl JsonRpcMetrics {
                 registry
             )
             .unwrap(),
+            get_stake_sui_latency: Histogram::new_in_registry(
+                "get_stake_sui_latency",
+                "The latency of get stake sui, in ms",
+                registry,
+            ),
+            get_delegated_sui_latency: Histogram::new_in_registry(
+                "get_delegated_sui_latency",
+                "The latency of get delegated sui, in ms",
+                registry,
+            ),
+            orchestrator_latency_ms: Histogram::new_in_registry(
+                "json_rpc_orchestrator_latency",
+                "The latency of submitting transaction via transaction orchestrator, in ms",
+                registry,
+            ),
+            post_orchestrator_latency_ms: Histogram::new_in_registry(
+                "json_rpc_post_orchestrator_latency",
+                "The latency of response processing after transaction orchestrator, in ms",
+                registry,
+            ),
         }
     }
 

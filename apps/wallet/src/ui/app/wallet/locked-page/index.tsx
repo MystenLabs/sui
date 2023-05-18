@@ -82,6 +82,7 @@ export default function LockedPage() {
                                         <PasswordInputField
                                             name="password"
                                             disabled={isSubmitting}
+                                            autoFocus
                                         />
                                         {touched.password && errors.password ? (
                                             <Alert>{errors.password}</Alert>

@@ -56,7 +56,7 @@ The distinction between third-party owned vs validator-owned rewards and stake i
 
 ### Find the exchange rate
 
-Each epoch change emits a `0x2::validator_set::ValidatorEpochInfo` event per validator with the exchange rate information. You can use the Events API to query events.
+Each epoch change emits a `0x3::validator_set::ValidatorEpochInfoEventV2` event per validator with the exchange rate information. You can use the Events API to query events.
 
 ## Staking rewards
 
@@ -100,7 +100,7 @@ In practice, the process for submitting a gas price quote for the Gas Price Surv
 For example, to set the price quote for the next epoch to 42, run:
 
 ```shell
-sui client call --package 0x2 --module sui_system --function request_set_gas_price --args 0x5 \"42\" --gas-budget 1000
+sui client call --package 0x3 --module sui_system --function request_set_gas_price --args 0x5 \"42\" --gas-budget 1000
 ```
 
 Importantly, the gas object’s value persists across epochs so that a validator who does not update and submit a new quote uses the same quote from the previous epoch. Hence, a validator seeking to optimize its own operations should update its quote every epoch in response to changes in network operations and market conditions.
@@ -114,7 +114,7 @@ The protocol only computes the global Tallying Rule score at the epoch boundary 
 For example, to report a validator whose Sui address is `0x44840a79dd5cf1f5efeff1379f5eece04c72db13512a2e31e8750f5176285446` as bad or non-performant, run:
 
 ```shell
-sui client call --package 0x2 --module sui_system --function report_validator --args 0x5 0x44840a79dd5cf1f5efeff1379f5eece04c72db13512a2e31e8750f5176285446 --gas-budget 1000
+sui client call --package 0x3 --module sui_system --function report_validator --args 0x5 0x44840a79dd5cf1f5efeff1379f5eece04c72db13512a2e31e8750f5176285446 --gas-budget 1000
 ```
 
 The Tallying Rule should be implemented through a social equilibrium. The validator set should actively monitor itself and if one validator is clearly non-performant, then the other validators should score that validator with a 0 and slash its rewards. Community members can launch public dashboards tracking validator performance and that can be used as further signal into a validator’s operations. There is no limit on the number of validators that can receive a 0 tallying score in an epoch.

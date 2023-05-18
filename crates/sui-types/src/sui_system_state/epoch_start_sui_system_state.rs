@@ -64,10 +64,6 @@ impl EpochStartSystemState {
         })
     }
 
-    pub fn new_for_testing() -> Self {
-        Self::new_for_testing_with_epoch(0)
-    }
-
     pub fn new_for_testing_with_epoch(epoch: EpochId) -> Self {
         Self::V1(EpochStartSystemStateV1::new_for_testing_with_epoch(epoch))
     }
@@ -93,7 +89,7 @@ impl EpochStartSystemStateV1 {
         Self {
             epoch,
             protocol_version: ProtocolVersion::MAX.as_u64(),
-            reference_gas_price: 1,
+            reference_gas_price: crate::transaction::DEFAULT_VALIDATOR_GAS_PRICE,
             safe_mode: false,
             epoch_start_timestamp_ms: 0,
             epoch_duration_ms: 1000,

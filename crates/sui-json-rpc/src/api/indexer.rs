@@ -4,9 +4,11 @@
 use jsonrpsee::core::RpcResult;
 use jsonrpsee_proc_macros::rpc;
 
+use sui_json_rpc_types::SuiTransactionBlockEffects;
 use sui_json_rpc_types::{
     DynamicFieldPage, EventFilter, EventPage, ObjectsPage, Page, SuiEvent, SuiObjectResponse,
     SuiObjectResponseQuery, SuiTransactionBlockResponseQuery, TransactionBlocksPage,
+    TransactionFilter,
 };
 use sui_open_rpc_macros::open_rpc;
 use sui_types::base_types::{ObjectID, SuiAddress};
@@ -18,12 +20,12 @@ use sui_types::event::EventID;
 #[rpc(server, client, namespace = "suix")]
 pub trait IndexerApi {
     /// Return the list of objects owned by an address.
-    /// Note that if the address owns more than `QUERY_MAX_RESULT_LIMIT_OBJECTS` objects,
+    /// Note that if the address owns more than `QUERY_MAX_RESULT_LIMIT` objects,
     /// the pagination is not accurate, because previous page may have been updated when
     /// the next page is fetched.
     /// Please use suix_queryObjects if this is a concern.
-    #[method(name = "getOwnedObjects", blocking)]
-    fn get_owned_objects(
+    #[method(name = "getOwnedObjects")]
+    async fn get_owned_objects(
         &self,
         /// the owner's Sui address
         address: SuiAddress,
@@ -31,13 +33,13 @@ pub trait IndexerApi {
         query: Option<SuiObjectResponseQuery>,
         /// An optional paging cursor. If provided, the query will start from the next item after the specified cursor. Default to start from the first item if not specified.
         cursor: Option<ObjectID>,
-        /// Max number of items returned per page, default to [QUERY_MAX_RESULT_LIMIT_OBJECTS] if not specified.
+        /// Max number of items returned per page, default to [QUERY_MAX_RESULT_LIMIT] if not specified.
         limit: Option<usize>,
     ) -> RpcResult<ObjectsPage>;
 
     /// Return list of transactions for a specified query criteria.
-    #[method(name = "queryTransactionBlocks", blocking)]
-    fn query_transaction_blocks(
+    #[method(name = "queryTransactionBlocks")]
+    async fn query_transaction_blocks(
         &self,
         /// the transaction query criteria.
         query: SuiTransactionBlockResponseQuery,
@@ -50,8 +52,8 @@ pub trait IndexerApi {
     ) -> RpcResult<TransactionBlocksPage>;
 
     /// Return list of events for a specified query criteria.
-    #[method(name = "queryEvents", blocking)]
-    fn query_events(
+    #[method(name = "queryEvents")]
+    async fn query_events(
         &self,
         /// the event query criteria.
         query: EventFilter,
@@ -71,9 +73,13 @@ pub trait IndexerApi {
         filter: EventFilter,
     );
 
+    /// Subscribe to a stream of Sui transaction effects
+    #[subscription(name = "subscribeTransaction", item = SuiTransactionBlockEffects)]
+    fn subscribe_transaction(&self, filter: TransactionFilter);
+
     /// Return the list of dynamic field objects owned by an object.
-    #[method(name = "getDynamicFields", blocking)]
-    fn get_dynamic_fields(
+    #[method(name = "getDynamicFields")]
+    async fn get_dynamic_fields(
         &self,
         /// The ID of the parent object
         parent_object_id: ObjectID,
@@ -84,8 +90,8 @@ pub trait IndexerApi {
     ) -> RpcResult<DynamicFieldPage>;
 
     /// Return the dynamic field object information for a specified object
-    #[method(name = "getDynamicFieldObject", blocking)]
-    fn get_dynamic_field_object(
+    #[method(name = "getDynamicFieldObject")]
+    async fn get_dynamic_field_object(
         &self,
         /// The ID of the queried parent object
         parent_object_id: ObjectID,
@@ -99,7 +105,7 @@ pub trait IndexerApi {
         &self,
         /// The name to resolve
         name: String,
-    ) -> RpcResult<SuiAddress>;
+    ) -> RpcResult<Option<SuiAddress>>;
 
     /// Return the resolved names given address,
     /// if multiple names are resolved, the first one is the primary name.

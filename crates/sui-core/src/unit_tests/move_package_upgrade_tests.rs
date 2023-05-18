@@ -1,36 +1,31 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use move_core_types::{account_address::AccountAddress, ident_str, language_storage::StructTag};
-use move_symbol_pool::Symbol;
+use move_core_types::{ident_str, language_storage::StructTag};
 use sui_move_build::BuildConfig;
 use sui_protocol_config::ProtocolConfig;
 use sui_types::{
     base_types::{ObjectID, ObjectRef, SuiAddress},
     crypto::{get_key_pair, AccountKeyPair},
-    messages::{
-        Argument, CommandArgumentError, ExecutionFailureStatus, ObjectArg, PackageUpgradeError,
-        ProgrammableTransaction, TransactionEffects, TransactionEffectsV1,
-        TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
-    },
     move_package::UpgradePolicy,
     object::{Object, Owner},
     programmable_transaction_builder::ProgrammableTransactionBuilder,
     storage::{BackingPackageStore, ObjectStore},
-    MOVE_STDLIB_OBJECT_ID, SUI_FRAMEWORK_OBJECT_ID,
+    transaction::{Argument, ObjectArg, ProgrammableTransaction, TEST_ONLY_GAS_UNIT_FOR_PUBLISH},
+    MOVE_STDLIB_PACKAGE_ID, SUI_FRAMEWORK_PACKAGE_ID,
 };
 
-use std::{
-    collections::{BTreeMap, BTreeSet},
-    path::PathBuf,
-    str::FromStr,
-    sync::Arc,
+use std::{collections::BTreeSet, path::PathBuf, str::FromStr, sync::Arc};
+use sui_types::effects::{TransactionEffects, TransactionEffectsV1};
+use sui_types::execution_status::{
+    CommandArgumentError, ExecutionFailureStatus, PackageUpgradeError,
 };
 
+use crate::authority::test_authority_builder::TestAuthorityBuilder;
 use crate::authority::{
-    authority_tests::{execute_programmable_transaction, init_state},
-    move_integration_tests::build_and_publish_test_package_with_upgrade_cap,
-    AuthorityState,
+    authority_test_utils::build_test_modules_with_dep_addr,
+    authority_tests::execute_programmable_transaction,
+    move_integration_tests::build_and_publish_test_package_with_upgrade_cap, AuthorityState,
 };
 
 macro_rules! move_call {
@@ -49,9 +44,12 @@ fn build_upgrade_test_modules(test_dir: &str) -> (Vec<u8>, Vec<Vec<u8>>) {
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     path.extend(["src", "unit_tests", "data", "move_upgrade", test_dir]);
     let with_unpublished_deps = false;
+    let hash_modules = true;
     let package = BuildConfig::new_for_testing().build(path).unwrap();
     (
-        package.get_package_digest(with_unpublished_deps).to_vec(),
+        package
+            .get_package_digest(with_unpublished_deps, hash_modules)
+            .to_vec(),
         package.get_package_bytes(with_unpublished_deps),
     )
 }
@@ -61,42 +59,15 @@ pub fn build_upgrade_test_modules_with_dep_addr(
     dep_original_addresses: impl IntoIterator<Item = (&'static str, ObjectID)>,
     dep_ids: impl IntoIterator<Item = (&'static str, ObjectID)>,
 ) -> (Vec<u8>, Vec<Vec<u8>>, Vec<ObjectID>) {
-    let mut build_config = BuildConfig::new_for_testing();
-    for (addr_name, obj_id) in dep_original_addresses {
-        build_config
-            .config
-            .additional_named_addresses
-            .insert(addr_name.to_string(), AccountAddress::from(obj_id));
-    }
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     path.extend(["src", "unit_tests", "data", "move_upgrade", test_dir]);
-    let mut package = build_config.build(path).unwrap();
-
-    let dep_id_mapping: BTreeMap<_, _> = dep_ids
-        .into_iter()
-        .map(|(dep_name, obj_id)| (Symbol::from(dep_name), obj_id))
-        .collect();
-
-    assert_eq!(
-        dep_id_mapping.len(),
-        package.dependency_ids.unpublished.len()
-    );
-    for unpublished_dep in &package.dependency_ids.unpublished {
-        let published_id = dep_id_mapping.get(unpublished_dep).unwrap();
-        // Make sure we aren't overriding a package
-        assert!(package
-            .dependency_ids
-            .published
-            .insert(*unpublished_dep, *published_id)
-            .is_none())
-    }
-
-    // No unpublished deps
+    let package = build_test_modules_with_dep_addr(path, dep_original_addresses, dep_ids);
     let with_unpublished_deps = false;
-    package.dependency_ids.unpublished = BTreeSet::new();
-
+    let hash_modules = true;
     (
-        package.get_package_digest(with_unpublished_deps).to_vec(),
+        package
+            .get_package_digest(with_unpublished_deps, hash_modules)
+            .to_vec(),
         package.get_package_bytes(with_unpublished_deps),
         package.dependency_ids.published.values().cloned().collect(),
     )
@@ -120,12 +91,12 @@ pub fn build_upgrade_txn(
     let digest_arg = builder.pure(digest).unwrap();
     let upgrade_ticket = move_call! {
         builder,
-        (SUI_FRAMEWORK_OBJECT_ID)::package::authorize_upgrade(Argument::Input(0), upgrade_arg, digest_arg)
+        (SUI_FRAMEWORK_PACKAGE_ID)::package::authorize_upgrade(Argument::Input(0), upgrade_arg, digest_arg)
     };
     let upgrade_receipt = builder.upgrade(current_pkg_id, upgrade_ticket, vec![], modules);
     move_call! {
         builder,
-        (SUI_FRAMEWORK_OBJECT_ID)::package::commit_upgrade(Argument::Input(0), upgrade_receipt)
+        (SUI_FRAMEWORK_PACKAGE_ID)::package::commit_upgrade(Argument::Input(0), upgrade_receipt)
     };
 
     builder.finish()
@@ -142,6 +113,7 @@ struct UpgradeStateRunner {
 
 impl UpgradeStateRunner {
     pub async fn new(base_package_name: &str) -> Self {
+        telemetry_subscribers::init_for_testing();
         let _dont_remove = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
             config.set_package_upgrades_for_testing(true);
             config
@@ -149,7 +121,7 @@ impl UpgradeStateRunner {
         let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
         let gas_object_id = ObjectID::random();
         let gas_object = Object::with_id_owner_for_testing(gas_object_id, sender);
-        let authority_state = init_state().await;
+        let authority_state = TestAuthorityBuilder::new().build().await;
         authority_state.insert_genesis_object(gas_object).await;
 
         let (package, upgrade_cap) = build_and_publish_test_package_with_upgrade_cap(
@@ -219,11 +191,11 @@ impl UpgradeStateRunner {
             let digest = builder.pure(digest).unwrap();
             let ticket = move_call! {
                 builder,
-                (SUI_FRAMEWORK_OBJECT_ID)::package::authorize_upgrade(cap, policy, digest)
+                (SUI_FRAMEWORK_PACKAGE_ID)::package::authorize_upgrade(cap, policy, digest)
             };
 
             let receipt = builder.upgrade(package_id, ticket, dep_ids, modules);
-            move_call! { builder, (SUI_FRAMEWORK_OBJECT_ID)::package::commit_upgrade(cap, receipt) };
+            move_call! { builder, (SUI_FRAMEWORK_PACKAGE_ID)::package::commit_upgrade(cap, receipt) };
 
             builder.finish()
         };
@@ -298,8 +270,12 @@ async fn test_upgrade_package_happy_path() {
         .get_package(&runner.package.0)
         .unwrap()
         .unwrap();
+    let config = ProtocolConfig::get_for_max_version();
     let normalized_modules = package
-        .normalize(ProtocolConfig::get_for_max_version().move_binary_format_version())
+        .normalize(
+            config.move_binary_format_version(),
+            config.no_extraneous_module_bytes(),
+        )
         .unwrap();
     assert!(normalized_modules.contains_key("new_module"));
     assert!(normalized_modules["new_module"]
@@ -337,7 +313,7 @@ async fn test_upgrade_introduces_type_then_uses_it() {
             UpgradePolicy::COMPATIBLE,
             digest,
             modules,
-            vec![SUI_FRAMEWORK_OBJECT_ID, MOVE_STDLIB_OBJECT_ID],
+            vec![SUI_FRAMEWORK_PACKAGE_ID, MOVE_STDLIB_PACKAGE_ID],
         )
         .await;
 
@@ -351,7 +327,7 @@ async fn test_upgrade_introduces_type_then_uses_it() {
             UpgradePolicy::COMPATIBLE,
             digest,
             modules,
-            vec![SUI_FRAMEWORK_OBJECT_ID, MOVE_STDLIB_OBJECT_ID],
+            vec![SUI_FRAMEWORK_PACKAGE_ID, MOVE_STDLIB_PACKAGE_ID],
         )
         .await;
 
@@ -450,7 +426,7 @@ async fn test_upgrade_package_compatibility_too_permissive() {
             let cap = builder
                 .obj(ObjectArg::ImmOrOwnedObject(runner.upgrade_cap))
                 .unwrap();
-            move_call! { builder, (SUI_FRAMEWORK_OBJECT_ID)::package::only_dep_upgrades(cap) };
+            move_call! { builder, (SUI_FRAMEWORK_PACKAGE_ID)::package::only_dep_upgrades(cap) };
             builder.finish()
         })
         .await;
@@ -608,7 +584,7 @@ async fn test_upgrade_package_dep_only_mode() {
             UpgradePolicy::DEP_ONLY,
             digest,
             modules,
-            vec![SUI_FRAMEWORK_OBJECT_ID, MOVE_STDLIB_OBJECT_ID],
+            vec![SUI_FRAMEWORK_PACKAGE_ID, MOVE_STDLIB_PACKAGE_ID],
         )
         .await;
 
@@ -656,9 +632,9 @@ async fn test_upgrade_ticket_doesnt_match() {
         let digest_arg = builder.pure(digest).unwrap();
         let upgrade_ticket = move_call! {
             builder,
-            (SUI_FRAMEWORK_OBJECT_ID)::package::authorize_upgrade(Argument::Input(0), upgrade_arg, digest_arg)
+            (SUI_FRAMEWORK_PACKAGE_ID)::package::authorize_upgrade(Argument::Input(0), upgrade_arg, digest_arg)
         };
-        builder.upgrade(MOVE_STDLIB_OBJECT_ID, upgrade_ticket, vec![], modules);
+        builder.upgrade(MOVE_STDLIB_PACKAGE_ID, upgrade_ticket, vec![], modules);
         builder.finish()
     };
     let TransactionEffects::V1(effects) = runner.run(pt).await;
@@ -722,7 +698,7 @@ async fn test_multiple_upgrades(
             if use_empty_deps {
                 vec![]
             } else {
-                vec![SUI_FRAMEWORK_OBJECT_ID, MOVE_STDLIB_OBJECT_ID]
+                vec![SUI_FRAMEWORK_PACKAGE_ID, MOVE_STDLIB_PACKAGE_ID]
             },
         )
         .await;
@@ -757,12 +733,12 @@ async fn test_interleaved_upgrades() {
         let digest_arg = builder.pure(digest).unwrap();
         let upgrade_ticket = move_call! {
             builder,
-            (SUI_FRAMEWORK_OBJECT_ID)::package::authorize_upgrade(Argument::Input(0), upgrade_arg, digest_arg)
+            (SUI_FRAMEWORK_PACKAGE_ID)::package::authorize_upgrade(Argument::Input(0), upgrade_arg, digest_arg)
         };
         let upgrade_receipt = builder.upgrade(current_package_id, upgrade_ticket, vec![], modules);
         move_call! {
             builder,
-            (SUI_FRAMEWORK_OBJECT_ID)::package::commit_upgrade(Argument::Input(0), upgrade_receipt)
+            (SUI_FRAMEWORK_PACKAGE_ID)::package::commit_upgrade(Argument::Input(0), upgrade_receipt)
         };
 
         builder.finish()
@@ -797,12 +773,12 @@ async fn test_interleaved_upgrades() {
         let digest_arg = builder.pure(digest).unwrap();
         let upgrade_ticket = move_call! {
             builder,
-            (SUI_FRAMEWORK_OBJECT_ID)::package::authorize_upgrade(Argument::Input(0), upgrade_arg, digest_arg)
+            (SUI_FRAMEWORK_PACKAGE_ID)::package::authorize_upgrade(Argument::Input(0), upgrade_arg, digest_arg)
         };
         let upgrade_receipt = builder.upgrade(current_package_id, upgrade_ticket, dep_ids, modules);
         move_call! {
             builder,
-            (SUI_FRAMEWORK_OBJECT_ID)::package::commit_upgrade(Argument::Input(0), upgrade_receipt)
+            (SUI_FRAMEWORK_PACKAGE_ID)::package::commit_upgrade(Argument::Input(0), upgrade_receipt)
         };
 
         builder.finish()
@@ -1047,7 +1023,7 @@ async fn test_upgraded_types_in_one_txn() {
             UpgradePolicy::COMPATIBLE,
             digest,
             modules,
-            vec![SUI_FRAMEWORK_OBJECT_ID, MOVE_STDLIB_OBJECT_ID],
+            vec![SUI_FRAMEWORK_PACKAGE_ID, MOVE_STDLIB_PACKAGE_ID],
         )
         .await;
 
@@ -1061,7 +1037,7 @@ async fn test_upgraded_types_in_one_txn() {
             UpgradePolicy::COMPATIBLE,
             digest,
             modules,
-            vec![SUI_FRAMEWORK_OBJECT_ID, MOVE_STDLIB_OBJECT_ID],
+            vec![SUI_FRAMEWORK_PACKAGE_ID, MOVE_STDLIB_PACKAGE_ID],
         )
         .await;
 
@@ -1220,12 +1196,12 @@ async fn test_conflicting_versions_across_calls() {
         let digest_arg = builder.pure(digest).unwrap();
         let upgrade_ticket = move_call! {
             builder,
-            (SUI_FRAMEWORK_OBJECT_ID)::package::authorize_upgrade(Argument::Input(0), upgrade_arg, digest_arg)
+            (SUI_FRAMEWORK_PACKAGE_ID)::package::authorize_upgrade(Argument::Input(0), upgrade_arg, digest_arg)
         };
         let upgrade_receipt = builder.upgrade(current_package_id, upgrade_ticket, dep_ids, modules);
         move_call! {
             builder,
-            (SUI_FRAMEWORK_OBJECT_ID)::package::commit_upgrade(Argument::Input(0), upgrade_receipt)
+            (SUI_FRAMEWORK_PACKAGE_ID)::package::commit_upgrade(Argument::Input(0), upgrade_receipt)
         };
 
         builder.finish()
@@ -1265,4 +1241,77 @@ async fn test_conflicting_versions_across_calls() {
 
     // verify that execution aborts in the second (counting from 0) command
     assert_eq!(call_error.1, Some(1));
+}
+
+#[tokio::test]
+async fn test_upgrade_cross_module_refs() {
+    let mut runner = UpgradeStateRunner::new("move_upgrade/object_cross_module_ref").await;
+    let package_v1 = runner.package.0;
+
+    // create instances of objects within module and cross module
+    let TransactionEffects::V1(effects) = runner
+        .run({
+            let mut builder = ProgrammableTransactionBuilder::new();
+            move_call! { builder, (package_v1)::base::make_objs() };
+            builder.finish()
+        })
+        .await;
+
+    assert!(effects.status.is_ok(), "{:#?}", effects.status);
+    assert_eq!(effects.created.len(), 2);
+
+    // Upgrade and cross module, cross version type usage
+    let (digest, modules) = build_upgrade_test_modules("object_cross_module_ref1");
+    let effects = runner
+        .upgrade(
+            UpgradePolicy::COMPATIBLE,
+            digest,
+            modules,
+            vec![SUI_FRAMEWORK_PACKAGE_ID, MOVE_STDLIB_PACKAGE_ID],
+        )
+        .await;
+
+    assert!(effects.status.is_ok(), "{:#?}", effects.status);
+    let package_v2 = runner.package.0;
+
+    // create instances of objects within module and cross module for v2
+    let TransactionEffects::V1(effects) = runner
+        .run({
+            let mut builder = ProgrammableTransactionBuilder::new();
+            move_call! { builder, (package_v2)::base::make_objs() };
+            move_call! { builder, (package_v2)::base::make_objs_v2() };
+            builder.finish()
+        })
+        .await;
+
+    assert!(effects.status.is_ok(), "{:#?}", effects.status);
+    assert_eq!(effects.created.len(), 5);
+
+    // Upgrade and cross module, cross version type usage
+    let (digest, modules) = build_upgrade_test_modules("object_cross_module_ref2");
+    let effects = runner
+        .upgrade(
+            UpgradePolicy::COMPATIBLE,
+            digest,
+            modules,
+            vec![SUI_FRAMEWORK_PACKAGE_ID, MOVE_STDLIB_PACKAGE_ID],
+        )
+        .await;
+
+    assert!(effects.status.is_ok(), "{:#?}", effects.status);
+    let package_v2 = runner.package.0;
+
+    // create instances of objects within module and cross module for v2
+    let TransactionEffects::V1(effects) = runner
+        .run({
+            let mut builder = ProgrammableTransactionBuilder::new();
+            move_call! { builder, (package_v2)::base::make_objs() };
+            move_call! { builder, (package_v2)::base::make_objs_v2() };
+            move_call! { builder, (package_v2)::base::make_objs_v3() };
+            builder.finish()
+        })
+        .await;
+
+    assert!(effects.status.is_ok(), "{:#?}", effects.status);
+    assert_eq!(effects.created.len(), 6);
 }

@@ -16,12 +16,18 @@ import {
   assert,
   Struct,
   define,
+  unknown,
+  record,
 } from 'superstruct';
 import { ObjectId, normalizeSuiObjectId } from '../types/common';
 import { TRANSACTION_TYPE, WellKnownEncoding, create } from './utils';
+import { TypeTagSerializer } from '../signers/txn-data-serializers/type-tag-serializer';
 
 const option = <T extends Struct<any, any>>(some: T) =>
-  union([object({ None: literal(null) }), object({ Some: some })]);
+  union([
+    object({ None: union([literal(true), literal(null)]) }),
+    object({ Some: some }),
+  ]);
 
 export const TransactionBlockInput = object({
   kind: literal('Input'),
@@ -97,7 +103,10 @@ export type MergeCoinsTransaction = Infer<typeof MergeCoinsTransaction>;
 
 export const MakeMoveVecTransaction = object({
   kind: literal('MakeMoveVec'),
-  type: optional(option(string())),
+  // TODO: ideally we should use `TypeTag` instead of `record()` here,
+  // but TypeTag is recursively defined and it's tricky to define a
+  // recursive struct in superstruct
+  type: optional(option(record(string(), unknown()))),
   objects: array(ObjectTransactionArgument),
 });
 export type MakeMoveVecTransaction = Infer<typeof MakeMoveVecTransaction>;
@@ -239,7 +248,9 @@ export const Transactions = {
     return create(
       {
         kind: 'MakeMoveVec',
-        type: type ? { Some: type } : { None: null },
+        type: type
+          ? { Some: TypeTagSerializer.parseFromStr(type) }
+          : { None: null },
         objects,
       },
       MakeMoveVecTransaction,

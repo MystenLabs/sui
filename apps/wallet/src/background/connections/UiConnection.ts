@@ -3,8 +3,13 @@
 
 import { BehaviorSubject, filter, switchMap, takeUntil } from 'rxjs';
 
-import FeatureGating from '../FeatureGating';
 import NetworkEnv from '../NetworkEnv';
+import {
+    acceptQredoConnection,
+    getUIQredoInfo,
+    getUIQredoPendingRequest,
+    rejectQredoConnection,
+} from '../qredo';
 import { Connection } from './Connection';
 import { createMessage } from '_messages';
 import { type ErrorPayload, isBasePayload } from '_payloads';
@@ -20,6 +25,11 @@ import Permissions from '_src/background/Permissions';
 import Tabs from '_src/background/Tabs';
 import Transactions from '_src/background/Transactions';
 import Keyring from '_src/background/keyring';
+import { growthbook } from '_src/shared/experimentation/features';
+import {
+    type QredoConnectPayload,
+    isQredoConnectPayload,
+} from '_src/shared/messaging/messages/payloads/QredoConnect';
 
 import type { Message } from '_messages';
 import type { PortChannelName } from '_messaging/PortChannelName';
@@ -114,11 +124,13 @@ export class UiConnection extends Connection {
                 isBasePayload(payload) &&
                 payload.type === 'get-features'
             ) {
+                await growthbook.loadFeatures();
                 this.send(
                     createMessage<LoadedFeaturesPayload>(
                         {
                             type: 'features-response',
-                            features: await FeatureGating.getLoadedFeatures(),
+                            features: growthbook.getFeatures(),
+                            attributes: growthbook.getAttributes(),
                         },
                         id
                     )
@@ -138,6 +150,49 @@ export class UiConnection extends Connection {
                 );
             } else if (isSetNetworkPayload(payload)) {
                 await NetworkEnv.setActiveNetwork(payload.network);
+                this.send(createMessage({ type: 'done' }, id));
+            } else if (isQredoConnectPayload(payload, 'getPendingRequest')) {
+                this.send(
+                    createMessage<
+                        QredoConnectPayload<'getPendingRequestResponse'>
+                    >(
+                        {
+                            type: 'qredo-connect',
+                            method: 'getPendingRequestResponse',
+                            args: {
+                                request: await getUIQredoPendingRequest(
+                                    payload.args.requestID
+                                ),
+                            },
+                        },
+                        msg.id
+                    )
+                );
+            } else if (isQredoConnectPayload(payload, 'getQredoInfo')) {
+                this.send(
+                    createMessage<QredoConnectPayload<'getQredoInfoResponse'>>(
+                        {
+                            type: 'qredo-connect',
+                            method: 'getQredoInfoResponse',
+                            args: {
+                                qredoInfo: await getUIQredoInfo(
+                                    payload.args.qredoID,
+                                    payload.args.refreshAccessToken
+                                ),
+                            },
+                        },
+                        msg.id
+                    )
+                );
+            } else if (
+                isQredoConnectPayload(payload, 'acceptQredoConnection')
+            ) {
+                await acceptQredoConnection(payload.args);
+                this.send(createMessage({ type: 'done' }, id));
+            } else if (
+                isQredoConnectPayload(payload, 'rejectQredoConnection')
+            ) {
+                await rejectQredoConnection(payload.args);
                 this.send(createMessage({ type: 'done' }, id));
             }
         } catch (e) {

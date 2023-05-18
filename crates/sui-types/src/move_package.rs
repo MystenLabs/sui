@@ -1,18 +1,17 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::execution_status::PackageUpgradeError;
 use crate::{
     base_types::{ObjectID, SequenceNumber},
     crypto::DefaultHash,
     error::{ExecutionError, ExecutionErrorKind, SuiError, SuiResult},
     id::{ID, UID},
-    messages::PackageUpgradeError,
     object::OBJECT_START_VERSION,
     SUI_FRAMEWORK_ADDRESS,
 };
 use derive_more::Display;
 use fastcrypto::hash::HashFunction;
-use move_binary_format::binary_views::BinaryIndexedView;
 use move_binary_format::file_format::CompiledModule;
 use move_binary_format::normalized;
 use move_binary_format::{
@@ -20,6 +19,7 @@ use move_binary_format::{
     compatibility::{Compatibility, InclusionCheck},
     errors::PartialVMResult,
 };
+use move_binary_format::{binary_views::BinaryIndexedView, file_format::AbilitySet};
 use move_core_types::{
     account_address::AccountAddress,
     ident_str,
@@ -135,19 +135,32 @@ impl UpgradePolicy {
         Self::try_from(*policy).is_ok()
     }
 
+    fn compatibility_check_for_protocol(protocol_config: &ProtocolConfig) -> Compatibility {
+        let disallowed_new_abilities = if protocol_config.disallow_adding_abilities_on_upgrade() {
+            AbilitySet::ALL
+        } else {
+            AbilitySet::EMPTY
+        };
+        Compatibility {
+            check_struct_and_pub_function_linking: true,
+            check_struct_layout: true,
+            check_friend_linking: false,
+            check_private_entry_linking: false,
+            disallowed_new_abilities,
+            disallow_change_struct_type_params: protocol_config
+                .disallow_change_struct_type_params_on_upgrade(),
+        }
+    }
+
     pub fn check_compatibility(
         &self,
         old_module: &normalized::Module,
         new_module: &normalized::Module,
+        protocol_config: &ProtocolConfig,
     ) -> PartialVMResult<()> {
         match self {
-            Self::Compatible => Compatibility {
-                check_struct_and_pub_function_linking: true,
-                check_struct_layout: true,
-                check_friend_linking: false,
-                check_private_entry_linking: false,
-            }
-            .check(old_module, new_module),
+            Self::Compatible => Self::compatibility_check_for_protocol(protocol_config)
+                .check(old_module, new_module),
             Self::Additive => InclusionCheck::Subset.check(old_module, new_module),
             Self::DepOnly => InclusionCheck::Equal.check(old_module, new_module),
         }
@@ -220,12 +233,13 @@ impl MovePackage {
         Ok(pkg)
     }
 
-    pub fn digest(&self) -> [u8; 32] {
+    pub fn digest(&self, hash_modules: bool) -> [u8; 32] {
         Self::compute_digest_for_modules_and_deps(
             self.module_map.values(),
             self.linkage_table
                 .values()
                 .map(|UpgradeInfo { upgraded_id, .. }| upgraded_id),
+            hash_modules,
         )
     }
 
@@ -234,18 +248,31 @@ impl MovePackage {
     pub fn compute_digest_for_modules_and_deps<'a>(
         modules: impl IntoIterator<Item = &'a Vec<u8>>,
         object_ids: impl IntoIterator<Item = &'a ObjectID>,
+        hash_modules: bool,
     ) -> [u8; 32] {
-        let mut bytes: Vec<&[u8]> = modules
-            .into_iter()
-            .map(|x| x.as_ref())
-            .chain(object_ids.into_iter().map(|obj_id| obj_id.as_ref()))
-            .collect();
+        let mut module_digests: Vec<[u8; 32]>;
+        let mut components: Vec<&[u8]> = vec![];
+        if !hash_modules {
+            for module in modules {
+                components.push(module.as_ref())
+            }
+        } else {
+            module_digests = vec![];
+            for module in modules {
+                let mut digest = DefaultHash::default();
+                digest.update(module);
+                module_digests.push(digest.finalize().digest);
+            }
+            components.extend(module_digests.iter().map(|d| d.as_ref()))
+        }
+
+        components.extend(object_ids.into_iter().map(|o| o.as_ref()));
         // NB: sorting so the order of the modules and the order of the dependencies does not matter.
-        bytes.sort();
+        components.sort();
 
         let mut digest = DefaultHash::default();
-        for b in bytes {
-            digest.update(b);
+        for c in components {
+            digest.update(c);
         }
         digest.finalize().digest
     }
@@ -465,7 +492,7 @@ impl MovePackage {
     /// `MovePackage::id()` in the case of package upgrades).
     pub fn original_package_id(&self) -> ObjectID {
         let bytes = self.module_map.values().next().expect("Empty module map");
-        let module = CompiledModule::deserialize(bytes)
+        let module = CompiledModule::deserialize_with_defaults(bytes)
             .expect("A Move package contains a module that cannot be deserialized");
         (*module.address()).into()
     }
@@ -474,6 +501,7 @@ impl MovePackage {
         &self,
         module: &Identifier,
         max_binary_format_version: u32,
+        check_no_bytes_remaining: bool,
     ) -> SuiResult<CompiledModule> {
         // TODO use the session's cache
         let bytes = self
@@ -482,11 +510,14 @@ impl MovePackage {
             .ok_or_else(|| SuiError::ModuleNotFound {
                 module_name: module.to_string(),
             })?;
-        CompiledModule::deserialize_with_max_version(bytes, max_binary_format_version).map_err(
-            |error| SuiError::ModuleDeserializationFailure {
-                error: error.to_string(),
-            },
+        CompiledModule::deserialize_with_config(
+            bytes,
+            max_binary_format_version,
+            check_no_bytes_remaining,
         )
+        .map_err(|error| SuiError::ModuleDeserializationFailure {
+            error: error.to_string(),
+        })
     }
 
     pub fn disassemble(&self) -> SuiResult<BTreeMap<String, Value>> {
@@ -496,8 +527,13 @@ impl MovePackage {
     pub fn normalize(
         &self,
         max_binary_format_version: u32,
+        check_no_bytes_remaining: bool,
     ) -> SuiResult<BTreeMap<String, normalized::Module>> {
-        normalize_modules(self.module_map.values(), max_binary_format_version)
+        normalize_modules(
+            self.module_map.values(),
+            max_binary_format_version,
+            check_no_bytes_remaining,
+        )
     }
 }
 
@@ -554,6 +590,18 @@ impl UpgradeReceipt {
     }
 }
 
+/// Checks if a function is annotated with one of the test-related annotations
+pub fn is_test_fun(name: &IdentStr, module: &CompiledModule, fn_info_map: &FnInfoMap) -> bool {
+    let fn_name = name.to_string();
+    let mod_handle = module.self_handle();
+    let mod_addr = *module.address_identifier_at(mod_handle.address);
+    let fn_info_key = FnInfoKey { fn_name, mod_addr };
+    match fn_info_map.get(&fn_info_key) {
+        Some(fn_info) => fn_info.is_test,
+        None => false,
+    }
+}
+
 pub fn disassemble_modules<'a, I>(modules: I) -> SuiResult<BTreeMap<String, Value>>
 where
     I: Iterator<Item = &'a Vec<u8>>,
@@ -562,7 +610,7 @@ where
     for bytecode in modules {
         // this function is only from JSON RPC - it is OK to deserialize with max Move binary
         // version
-        let module = CompiledModule::deserialize(bytecode).map_err(|error| {
+        let module = CompiledModule::deserialize_with_defaults(bytecode).map_err(|error| {
             SuiError::ModuleDeserializationFailure {
                 error: error.to_string(),
             }
@@ -586,17 +634,21 @@ where
 pub fn normalize_modules<'a, I>(
     modules: I,
     max_binary_format_version: u32,
+    check_no_bytes_remaining: bool,
 ) -> SuiResult<BTreeMap<String, normalized::Module>>
 where
     I: Iterator<Item = &'a Vec<u8>>,
 {
     let mut normalized_modules = BTreeMap::new();
     for bytecode in modules {
-        let module =
-            CompiledModule::deserialize_with_max_version(bytecode, max_binary_format_version)
-                .map_err(|error| SuiError::ModuleDeserializationFailure {
-                    error: error.to_string(),
-                })?;
+        let module = CompiledModule::deserialize_with_config(
+            bytecode,
+            max_binary_format_version,
+            check_no_bytes_remaining,
+        )
+        .map_err(|error| SuiError::ModuleDeserializationFailure {
+            error: error.to_string(),
+        })?;
         let normalized_module = normalized::Module::new(&module);
         normalized_modules.insert(normalized_module.name.to_string(), normalized_module);
     }

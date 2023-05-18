@@ -617,6 +617,11 @@ pub enum StatusCode {
     RESERVED_VERIFICATION_ERROR_5 = 1127,
 
     TOO_MANY_VECTOR_ELEMENTS = 1128,
+    IDENTIFIER_TOO_LONG = 1129,
+
+    // Bytecode verifier determined code to complex
+    // or took too long to run based on metering policies
+    PROGRAM_TOO_COMPLEX = 1130,
 
     // These are errors that the VM might raise if a violation of internal
     // invariants takes place.
@@ -665,6 +670,7 @@ pub enum StatusCode {
     VALUE_DESERIALIZATION_ERROR = 3023,
     CODE_DESERIALIZATION_ERROR = 3024,
     INVALID_FLAG_BITS = 3025,
+    TRAILING_BYTES = 3026,
 
     // Errors that can arise at runtime
     // Runtime Errors: 4000-4999

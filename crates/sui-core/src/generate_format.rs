@@ -13,14 +13,19 @@ use rand::SeedableRng;
 use serde_reflection::{Registry, Result, Samples, Tracer, TracerConfig};
 use shared_crypto::intent::{Intent, IntentMessage, PersonalMessage};
 use std::{fs::File, io::Write};
+use sui_types::execution_status::{
+    CommandArgumentError, ExecutionFailureStatus, ExecutionStatus, PackageUpgradeError,
+    TypeArgumentError,
+};
+use sui_types::messages_grpc::ObjectInfoRequestKind;
 use sui_types::{
     base_types::MoveObjectType_,
     crypto::Signer,
-    messages::TransactionExpiration,
     messages_checkpoint::{
         CheckpointContents, CheckpointContentsDigest, CheckpointDigest, CheckpointSummary,
         FullCheckpointContents,
     },
+    transaction::TransactionExpiration,
 };
 use sui_types::{
     base_types::{
@@ -30,14 +35,11 @@ use sui_types::{
         get_key_pair, get_key_pair_from_rng, AccountKeyPair, AuthorityKeyPair,
         AuthorityPublicKeyBytes, AuthoritySignature, KeypairTraits, Signature, SuiKeyPair,
     },
-    messages::{
-        Argument, CallArg, Command, CommandArgumentError, ExecutionFailureStatus, ExecutionStatus,
-        ObjectArg, ObjectInfoRequestKind, PackageUpgradeError, TransactionKind, TypeArgumentError,
-    },
     multisig::{MultiSig, MultiSigPublicKey},
     object::{Data, Owner},
     signature::GenericSignature,
     storage::DeleteKind,
+    transaction::{Argument, CallArg, Command, ObjectArg, TransactionKind},
 };
 use typed_store::rocks::TypedStoreError;
 

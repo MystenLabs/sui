@@ -20,7 +20,7 @@ use sui_types::storage::ObjectStore;
 
 use crate::errors::IndexerError;
 use crate::metrics::IndexerMetrics;
-use crate::models::addresses::Address;
+use crate::models::addresses::{ActiveAddress, Address, AddressStats};
 use crate::models::checkpoints::Checkpoint;
 use crate::models::epoch::DBEpochInfo;
 use crate::models::events::Event;
@@ -36,6 +36,7 @@ pub trait IndexerStore {
     type ModuleCache;
 
     async fn get_latest_checkpoint_sequence_number(&self) -> Result<i64, IndexerError>;
+    async fn get_latest_object_checkpoint_sequence_number(&self) -> Result<i64, IndexerError>;
     async fn get_checkpoint(&self, id: CheckpointId) -> Result<RpcCheckpoint, IndexerError>;
     async fn get_checkpoint_sequence_number(
         &self,
@@ -200,13 +201,17 @@ pub trait IndexerStore {
     ) -> Result<usize, IndexerError>;
     async fn persist_object_changes(
         &self,
-        checkpoint_seq: i64,
+        checkpoint: &Checkpoint,
         tx_object_changes: &[TransactionObjectChanges],
         object_mutation_latency: Histogram,
         object_deletion_latency: Histogram,
     ) -> Result<(), IndexerError>;
     async fn persist_events(&self, events: &[Event]) -> Result<(), IndexerError>;
-    async fn persist_addresses(&self, addresses: &[Address]) -> Result<(), IndexerError>;
+    async fn persist_addresses(
+        &self,
+        addresses: &[Address],
+        active_addresses: &[ActiveAddress],
+    ) -> Result<(), IndexerError>;
     async fn persist_packages(&self, packages: &[Package]) -> Result<(), IndexerError>;
     // NOTE: these tables are for tx query performance optimization
     async fn persist_transaction_index_tables(
@@ -230,6 +235,11 @@ pub trait IndexerStore {
     fn module_cache(&self) -> &Self::ModuleCache;
 
     fn indexer_metrics(&self) -> &IndexerMetrics;
+
+    /// methods for address stats
+    async fn get_last_address_processed_checkpoint(&self) -> Result<i64, IndexerError>;
+    async fn calculate_address_stats(&self, checkpoint: i64) -> Result<AddressStats, IndexerError>;
+    async fn persist_address_stats(&self, addr_stats: &AddressStats) -> Result<(), IndexerError>;
 }
 
 #[derive(Clone, Debug)]
@@ -281,6 +291,7 @@ pub struct TemporaryCheckpointStore {
     pub events: Vec<Event>,
     pub object_changes: Vec<TransactionObjectChanges>,
     pub addresses: Vec<Address>,
+    pub active_addresses: Vec<ActiveAddress>,
     pub packages: Vec<Package>,
     pub input_objects: Vec<InputObject>,
     pub move_calls: Vec<MoveCall>,

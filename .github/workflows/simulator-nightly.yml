@@ -25,7 +25,7 @@ jobs:
           version: 11.3.1
       - name: Authorize against Teleport
         id: auth
-        uses: teleport-actions/auth@05047917b0e5bf81f3ef65e7856cadbcfec9140a # pin@v1
+        uses: teleport-actions/auth@9091dad16a564f3c5b9c2ec520b234a4872b6879 # pin@v1
         with:
           # Specify the publically accessible address of your Teleport proxy.
           proxy: proxy.mysten-int.com:443
@@ -92,7 +92,7 @@ jobs:
         echo "gh_job_link=${gh_job_link}" >> $GITHUB_ENV        
 
     - name: Post to slack
-      uses: slackapi/slack-github-action@936158bbe252e9a6062e793ea4609642c966e302 # pin@v1.21.0
+      uses: slackapi/slack-github-action@v1.24.0 # pin@v1.21.0
       env:
         SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
         SUI_SHA: ${{ env.sui_sha }}

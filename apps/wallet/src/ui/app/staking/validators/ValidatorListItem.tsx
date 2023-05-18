@@ -1,12 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { CheckFill16 } from '@mysten/icons';
 import { cx } from 'class-variance-authority';
 import { motion, AnimatePresence } from 'framer-motion';
 
 import { ValidatorLogo } from './ValidatorLogo';
 import { Text } from '_app/shared/text';
-import Icon, { SuiIcons } from '_components/icon';
 
 type ValidatorListItemProp = {
     selected?: boolean;
@@ -34,9 +34,9 @@ export function ValidatorListItem({
                     <div className="flex gap-2.5 items-center justify-start">
                         <div className="relative flex gap-0.5 w-full">
                             {selected && (
-                                <Icon
-                                    icon={SuiIcons.CheckFill}
-                                    className="absolute text-success text-heading6 translate-x-4 -translate-y-1 rounded-full bg-white"
+                                <CheckFill16
+                                    fill="fillCurrent"
+                                    className="text-success text-heading6 absolute translate-x-4 -translate-y-1 rounded-full bg-white"
                                 />
                             )}
                             <ValidatorLogo

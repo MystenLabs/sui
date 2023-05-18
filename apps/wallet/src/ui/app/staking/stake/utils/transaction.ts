@@ -9,9 +9,13 @@ export function createStakeTransaction(amount: bigint, validator: string) {
     tx.moveCall({
         target: '0x3::sui_system::request_add_stake',
         arguments: [
-            tx.object(SUI_SYSTEM_STATE_OBJECT_ID),
+            tx.sharedObjectRef({
+                objectId: SUI_SYSTEM_STATE_OBJECT_ID,
+                initialSharedVersion: 1,
+                mutable: true,
+            }),
             stakeCoin,
-            tx.pure(validator),
+            tx.pure(validator, 'address'),
         ],
     });
     return tx;

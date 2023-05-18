@@ -3,20 +3,20 @@
 
 use std::path::PathBuf;
 use std::time::Duration;
-use sui_config::NetworkConfig;
 use sui_macros::*;
 use sui_node::SuiNodeHandle;
+use sui_swarm_config::network_config::NetworkConfig;
+use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber};
+use sui_types::crypto::deterministic_random_account_key;
+use sui_types::effects::{TransactionEffects, TransactionEffectsAPI, TransactionEvents};
 use sui_types::error::SuiResult;
-use sui_types::messages::{
-    CallArg, ExecutionFailureStatus, ExecutionStatus, ObjectArg, TransactionEffects,
-    TransactionEffectsAPI, TransactionEvents, TEST_ONLY_GAS_UNIT_FOR_GENERIC,
-};
+use sui_types::execution_status::{ExecutionFailureStatus, ExecutionStatus};
 use sui_types::multiaddr::Multiaddr;
 use sui_types::object::{generate_test_gas_objects, Object, Owner, OBJECT_START_VERSION};
+use sui_types::transaction::{CallArg, ObjectArg};
 use sui_types::SUI_FRAMEWORK_ADDRESS;
 use test_utils::authority::{spawn_test_authorities, test_authority_configs_with_objects};
-use test_utils::messages::move_transaction;
 use test_utils::transaction::{
     publish_package, submit_shared_object_transaction, submit_single_owner_transaction,
 };
@@ -149,46 +149,48 @@ impl TestEnvironment {
         &mut self,
         function: &'static str,
         arguments: Vec<CallArg>,
-    ) -> (TransactionEffects, TransactionEvents) {
+    ) -> (TransactionEffects, TransactionEvents, Vec<Object>) {
         let rgp = self.configs.genesis.reference_gas_price();
-        submit_single_owner_transaction(
-            move_transaction(
-                self.gas_objects.pop().unwrap(),
-                "shared_objects_version",
-                function,
-                self.move_package,
-                arguments,
-                rgp * TEST_ONLY_GAS_UNIT_FOR_GENERIC,
-                rgp,
-            ),
-            &self.configs.net_addresses(),
+        let (sender, keypair) = deterministic_random_account_key();
+        let transaction = TestTransactionBuilder::new(
+            sender,
+            self.gas_objects.pop().unwrap().compute_object_reference(),
+            rgp,
         )
-        .await
+        .move_call(
+            self.move_package,
+            "shared_objects_version",
+            function,
+            arguments,
+        )
+        .build_and_sign(&keypair);
+        submit_single_owner_transaction(transaction, &self.configs.net_addresses()).await
     }
 
     async fn shared_move_call(
         &mut self,
         function: &'static str,
         arguments: Vec<CallArg>,
-    ) -> SuiResult<(TransactionEffects, TransactionEvents)> {
+    ) -> SuiResult<(TransactionEffects, TransactionEvents, Vec<Object>)> {
         let rgp = self.configs.genesis.reference_gas_price();
-        submit_shared_object_transaction(
-            move_transaction(
-                self.gas_objects.pop().unwrap(),
-                "shared_objects_version",
-                function,
-                self.move_package,
-                arguments,
-                rgp * TEST_ONLY_GAS_UNIT_FOR_GENERIC,
-                rgp,
-            ),
-            &self.configs.net_addresses(),
+        let (sender, keypair) = deterministic_random_account_key();
+        let transaction = TestTransactionBuilder::new(
+            sender,
+            self.gas_objects.pop().unwrap().compute_object_reference(),
+            rgp,
         )
-        .await
+        .move_call(
+            self.move_package,
+            "shared_objects_version",
+            function,
+            arguments,
+        )
+        .build_and_sign(&keypair);
+        submit_shared_object_transaction(transaction, &self.configs.net_addresses()).await
     }
 
     async fn create_counter(&mut self) -> (ObjectRef, Owner) {
-        let (fx, _) = self.owned_move_call("create_counter", vec![]).await;
+        let (fx, _, _) = self.owned_move_call("create_counter", vec![]).await;
         assert!(fx.status().is_ok());
 
         *fx.created()
@@ -198,7 +200,7 @@ impl TestEnvironment {
     }
 
     async fn create_shared_counter(&mut self) -> (ObjectRef, Owner) {
-        let (fx, _) = self.owned_move_call("create_shared_counter", vec![]).await;
+        let (fx, _, _) = self.owned_move_call("create_shared_counter", vec![]).await;
         assert!(fx.status().is_ok());
 
         *fx.created()
@@ -211,7 +213,7 @@ impl TestEnvironment {
         &mut self,
         counter: ObjectRef,
     ) -> Result<(ObjectRef, Owner), ExecutionFailureStatus> {
-        let (fx, _) = self
+        let (fx, _, _) = self
             .owned_move_call(
                 "share_counter",
                 vec![CallArg::Object(ObjectArg::ImmOrOwnedObject(counter))],
@@ -230,7 +232,7 @@ impl TestEnvironment {
     }
 
     async fn increment_owned_counter(&mut self, counter: ObjectRef) -> (ObjectRef, Owner) {
-        let (fx, _) = self
+        let (fx, _, _) = self
             .owned_move_call(
                 "increment_counter",
                 vec![CallArg::Object(ObjectArg::ImmOrOwnedObject(counter))],
@@ -250,7 +252,7 @@ impl TestEnvironment {
         counter: ObjectID,
         initial_shared_version: SequenceNumber,
     ) -> SuiResult<(ObjectRef, Owner)> {
-        let (fx, _) = self
+        let (fx, _, _) = self
             .shared_move_call(
                 "increment_counter",
                 vec![CallArg::Object(ObjectArg::SharedObject {

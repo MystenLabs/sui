@@ -3,10 +3,11 @@
 
 import { Check12, X12 } from '@mysten/icons';
 import { Ed25519PublicKey, type SuiAddress } from '@mysten/sui.js';
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import toast from 'react-hot-toast';
 
 import { useSuiLedgerClient } from '../../ledger/SuiLedgerClientProvider';
+import LoadingIndicator from '../../loading/LoadingIndicator';
 import {
     getLedgerConnectionErrorMessage,
     getSuiApplicationErrorMessage,
@@ -25,33 +26,46 @@ enum VerificationStatus {
     NOT_VERIFIED = 'NOT_VERIFIED',
 }
 
-const resetVerificationStatusTimeout = 5000;
+const resetVerificationStatusDelay = 5000;
+const loadingStateDelay = 200;
 
 export function VerifyLedgerConnectionStatus({
     accountAddress,
     derivationPath,
 }: VerifyLedgerConnectionLinkProps) {
     const { connectToLedger } = useSuiLedgerClient();
+    const [isLoading, setLoading] = useState(false);
     const [verificationStatus, setVerificationStatus] = useState(
         VerificationStatus.UNKNOWN
     );
-    const timeoutIdRef = useRef<number>();
-
-    useEffect(() => {
-        return () => clearTimeout(timeoutIdRef.current);
-    }, []);
 
     switch (verificationStatus) {
         case VerificationStatus.UNKNOWN:
+            if (isLoading) {
+                return (
+                    <div className="flex gap-1 text-hero-dark">
+                        <LoadingIndicator color="inherit" />
+                        <Text variant="bodySmall">
+                            Please confirm on your Ledger...
+                        </Text>
+                    </div>
+                );
+            }
+
             return (
                 <Link
                     text="Verify Ledger connection"
                     onClick={async () => {
+                        const loadingTimeoutId = setTimeout(() => {
+                            setLoading(true);
+                        }, loadingStateDelay);
+
                         try {
                             const suiLedgerClient = await connectToLedger();
                             const publicKeyResult =
                                 await suiLedgerClient.getPublicKey(
-                                    derivationPath
+                                    derivationPath,
+                                    true
                                 );
                             const publicKey = new Ed25519PublicKey(
                                 publicKeyResult.publicKey
@@ -63,18 +77,25 @@ export function VerifyLedgerConnectionStatus({
                                     ? VerificationStatus.VERIFIED
                                     : VerificationStatus.NOT_VERIFIED
                             );
-
-                            timeoutIdRef.current = window.setTimeout(() => {
-                                setVerificationStatus(
-                                    VerificationStatus.UNKNOWN
-                                );
-                            }, resetVerificationStatusTimeout);
                         } catch (error) {
                             const errorMessage =
                                 getLedgerConnectionErrorMessage(error) ||
                                 getSuiApplicationErrorMessage(error) ||
                                 'Something went wrong';
                             toast.error(errorMessage);
+
+                            setVerificationStatus(
+                                VerificationStatus.NOT_VERIFIED
+                            );
+                        } finally {
+                            clearTimeout(loadingTimeoutId);
+                            setLoading(false);
+
+                            window.setTimeout(() => {
+                                setVerificationStatus(
+                                    VerificationStatus.UNKNOWN
+                                );
+                            }, resetVerificationStatusDelay);
                         }
                     }}
                     color="heroDark"

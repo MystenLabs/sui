@@ -5,6 +5,7 @@ use fastcrypto::error::FastCryptoError;
 use hyper::header::InvalidHeaderValue;
 use jsonrpsee::core::Error as RpcError;
 use jsonrpsee::types::error::CallError;
+use jsonrpsee::types::ErrorObject;
 use sui_types::error::{SuiError, SuiObjectResponseError, UserInputError};
 use sui_types::quorum_driver_types::QuorumDriverError;
 use thiserror::Error;
@@ -47,10 +48,68 @@ pub enum Error {
 
     #[error(transparent)]
     SuiObjectResponseError(#[from] SuiObjectResponseError),
+
+    #[error(transparent)]
+    SuiRpcInputError(#[from] SuiRpcInputError),
 }
 
 impl From<Error> for RpcError {
     fn from(e: Error) -> Self {
-        RpcError::Call(CallError::Failed(e.into()))
+        e.to_rpc_error()
     }
+}
+
+impl Error {
+    pub fn to_rpc_error(self) -> RpcError {
+        match self {
+            Error::UserInputError(user_input_error) => {
+                RpcError::Call(CallError::InvalidParams(user_input_error.into()))
+            }
+            Error::SuiRpcInputError(sui_json_rpc_input_error) => {
+                RpcError::Call(CallError::InvalidParams(sui_json_rpc_input_error.into()))
+            }
+            Error::SuiError(sui_error) => match sui_error {
+                SuiError::TransactionNotFound { .. } | SuiError::TransactionsNotFound { .. } => {
+                    RpcError::Call(CallError::InvalidParams(sui_error.into()))
+                }
+                _ => RpcError::Call(CallError::Failed(sui_error.into())),
+            },
+            Error::QuorumDriverError(err) => match err {
+                QuorumDriverError::NonRecoverableTransactionError { errors } => {
+                    let error_object = ErrorObject::owned(
+                        -32000,
+                        "Transaction has non recoverable errors from at least 1/3 of validators",
+                        Some(errors),
+                    );
+                    RpcError::Call(CallError::Custom(error_object))
+                }
+                _ => RpcError::Call(CallError::Failed(err.into())),
+            },
+            _ => RpcError::Call(CallError::Failed(self.into())),
+        }
+    }
+}
+
+#[derive(Debug, Error)]
+pub enum SuiRpcInputError {
+    #[error("Input contains duplicates")]
+    ContainsDuplicates,
+
+    #[error("Input exceeds limit of {0}")]
+    SizeLimitExceeded(String),
+
+    #[error("{0}")]
+    GenericNotFound(String),
+
+    #[error("{0}")]
+    GenericInvalid(String),
+
+    #[error("request_type` must set to `None` or `WaitForLocalExecution` if effects is required in the response")]
+    InvalidExecuteTransactionRequestType,
+
+    #[error("Unsupported protocol version requested. Min supported: {0}, max supported: {1}")]
+    ProtocolVersionUnsupported(u64, u64),
+
+    #[error("Unable to serialize: {0}")]
+    CannotSerialize(#[from] bcs::Error),
 }

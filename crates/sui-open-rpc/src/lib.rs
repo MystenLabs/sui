@@ -101,6 +101,8 @@ impl Project {
                 }
 
                 method.examples = examples
+            } else {
+                println!("No example found for method: {}", method.name);
             }
         }
     }

@@ -1,0 +1,50 @@
+[package]
+name = "sui-replay"
+version = "0.1.0"
+authors = ["Mysten Labs <build@mystenlabs.com>"]
+license = "Apache-2.0"
+publish = false
+edition = "2021"
+
+[dependencies]
+anyhow = { version = "1.0.64", features = ["backtrace"] }
+bcs = "0.1.4"
+prometheus = "0.13.3"
+async-trait = "0.1.61"
+jsonrpsee = { version = "0.16.2", features = ["http-client"] }
+async-recursion = "1.0.4"
+clap = { version = "4.1.4", features = ["derive"] }
+colored = "2.0.0"
+futures = "0.3.23"
+serde = { version = "1.0.144", features = ["derive"] }
+serde_json = "1.0.88"
+similar = "2.2.0"
+thiserror = "1.0.34"
+tracing = "0.1.36"
+rand = "0.8.5"
+lru = "0.10"
+parking_lot = "0.12.1"
+
+move-binary-format.workspace = true
+move-bytecode-utils.workspace = true
+move-core-types.workspace = true
+move-package.workspace = true
+tokio.workspace = true
+typed-store.workspace = true
+
+# TODO use sui-execution versioned crate
+sui-adapter = { path = "../../sui-execution/latest/sui-adapter", package = "sui-adapter-latest" }
+sui-move-natives = { path = "../../sui-execution/latest/sui-move-natives", package = "sui-move-natives-latest" }
+
+sui-config = { path = "../sui-config" }
+sui-core = { path = "../sui-core" }
+sui-framework = { path = "../sui-framework" }
+sui-json-rpc = { path = "../sui-json-rpc" }
+sui-json-rpc-types = { path = "../sui-json-rpc-types" }
+sui-protocol-config = { path = "../sui-protocol-config" }
+sui-sdk = { path = "../sui-sdk" }
+sui-storage = { path = "../sui-storage" }
+sui-types = { path = "../sui-types" }
+sui-macros = { path = "../sui-macros" }
+
+workspace-hack = { version = "0.1", path = "../workspace-hack" }

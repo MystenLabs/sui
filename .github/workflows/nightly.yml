@@ -33,7 +33,6 @@ jobs:
     runs-on: [ubuntu-ghcloud]
     steps:
       - uses: actions/checkout@v3
-      - uses: actions-rs/toolchain@v1
       - name: cargo build
         uses: actions-rs/cargo@v1
         with:
@@ -45,7 +44,6 @@ jobs:
   #   runs-on: [ubuntu-ghcloud]
   #   steps:
   #     - uses: actions/checkout@v3
-  #     - uses: actions-rs/toolchain@v1
   #     # Enable caching of the 'librocksdb-sys' crate by additionally caching the
   #     # 'librocksdb-sys' src directory which is managed by cargo
   #     - uses: bmwill/rust-cache@v1 # Fork of 'Swatinem/rust-cache' which allows caching additional paths
@@ -81,7 +79,7 @@ jobs:
       - uses: technote-space/workflow-conclusion-action@v3
 
       - name: Post to slack
-        uses: slackapi/slack-github-action@v1.23.0
+        uses: slackapi/slack-github-action@v1.24.0
         env:
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
         if: env.WORKFLOW_CONCLUSION == 'failure' # notify only if failure

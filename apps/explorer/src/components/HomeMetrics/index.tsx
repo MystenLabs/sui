@@ -2,42 +2,18 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import {
-    formatAmountParts,
     useGetSystemState,
     useRpcClient,
+    useGetTotalTransactionBlocks,
 } from '@mysten/core';
 import { useQuery } from '@tanstack/react-query';
 
+import { FormattedStatsAmount, StatsWrapper } from './FormattedStatsAmount';
 import { MetricGroup } from './MetricGroup';
 
 import { useEnhancedRpcClient } from '~/hooks/useEnhancedRpc';
 import { Card } from '~/ui/Card';
 import { Heading } from '~/ui/Heading';
-import { Stats, type StatsProps } from '~/ui/Stats';
-
-// Simple wrapper around stats to avoid text wrapping:
-function StatsWrapper(props: StatsProps) {
-    return (
-        <div className="flex-shrink-0">
-            <Stats {...props} />
-        </div>
-    );
-}
-
-function FormattedStatsAmount({
-    amount,
-    ...props
-}: Omit<StatsProps, 'children'> & {
-    amount?: string | number | bigint;
-}) {
-    const [formattedAmount, postfix] = formatAmountParts(amount);
-
-    return (
-        <StatsWrapper {...props} postfix={postfix}>
-            {formattedAmount}
-        </StatsWrapper>
-    );
-}
 
 // const HOME_REFETCH_INTERVAL = 5 * 1000;
 
@@ -47,23 +23,22 @@ export function HomeMetrics() {
     // todo: remove this hook when we enable enhanced rpc client by default
     const enhancedRpc = useEnhancedRpcClient();
 
-    const { data: gasData } = useQuery(['home', 'reference-gas-price'], () =>
-        rpc.getReferenceGasPrice()
-    );
+    const { data: gasData } = useQuery({
+        queryKey: ['home', 'reference-gas-price'],
+        queryFn: () => rpc.getReferenceGasPrice(),
+    });
 
     const { data: systemState } = useGetSystemState();
 
-    const { data: transactionCount } = useQuery(
-        ['home', 'transaction-count'],
-        () => rpc.getTotalTransactionBlocks(),
-        { cacheTime: 24 * 60 * 60 * 1000, staleTime: Infinity, retry: 5 }
-    );
+    const { data: transactionCount } = useGetTotalTransactionBlocks();
 
-    const { data: networkMetrics } = useQuery(
-        ['home', 'metrics'],
-        () => enhancedRpc.getNetworkMetrics(),
-        { cacheTime: 24 * 60 * 60 * 1000, staleTime: Infinity, retry: 5 }
-    );
+    const { data: networkMetrics } = useQuery({
+        queryKey: ['home', 'metrics'],
+        queryFn: () => enhancedRpc.getNetworkMetrics(),
+        cacheTime: 24 * 60 * 60 * 1000,
+        staleTime: Infinity,
+        retry: 5,
+    });
 
     return (
         <Card spacing="none">
@@ -93,8 +68,8 @@ export function HomeMetrics() {
                             : '--'}
                     </StatsWrapper>
                     <StatsWrapper
-                        label="Gas Price"
-                        tooltip="Current gas price"
+                        label="Reference Gas Price"
+                        tooltip="Transaction sent at RGP will process promptly during regular network operations"
                         postfix="MIST"
                     >
                         {gasData ? gasData.toLocaleString() : null}

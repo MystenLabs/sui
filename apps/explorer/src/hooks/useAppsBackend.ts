@@ -12,13 +12,15 @@ export function useAppsBackend() {
     return useCallback(
         async <T>(
             path: string,
-            queryString: Record<string, any>
+            queryString: Record<string, any>,
+            options?: RequestInit
         ): Promise<T> => {
             const query = new URLSearchParams(queryString);
             const res = await fetch(
                 network === Network.LOCAL
                     ? `http://localhost:3003/${path}?${query}`
-                    : `https://apps-backend.sui.io/${path}?${query}`
+                    : `https://apps-backend.sui.io/${path}?${query}`,
+                options
             );
 
             if (!res.ok) {

@@ -3,7 +3,6 @@
 
 use std::cmp::Ordering;
 use std::ops::Not;
-use std::path::Path;
 use std::sync::Arc;
 use std::{iter, mem, thread};
 
@@ -12,8 +11,8 @@ use fastcrypto::hash::MultisetHash;
 use futures::stream::FuturesUnordered;
 use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::resolver::ModuleResolver;
+use move_vm_runtime::move_vm::MoveVM;
 use once_cell::sync::OnceCell;
-use rocksdb::Options;
 use serde::{Deserialize, Serialize};
 use sui_types::messages_checkpoint::ECMHLiveObjectSetDigest;
 use tokio::sync::{RwLock, RwLockReadGuard, RwLockWriteGuard};
@@ -44,7 +43,9 @@ use crate::authority::epoch_start_configuration::{EpochFlag, EpochStartConfigura
 use super::authority_store_tables::LiveObject;
 use super::{authority_store_tables::AuthorityPerpetualTables, *};
 use mysten_common::sync::notify_read::NotifyRead;
+use sui_adapter::type_layout_resolver::TypeLayoutResolver;
 use sui_storage::package_object_cache::PackageObjectCache;
+use sui_types::effects::{TransactionEffects, TransactionEvents};
 use sui_types::gas_coin::TOTAL_SUPPLY_MIST;
 use typed_store::rocks::util::is_ref_count_value;
 
@@ -111,6 +112,8 @@ pub struct AuthorityStore {
 
     // Implementation detail to support notify_read_effects().
     pub(crate) executed_effects_notify_read: NotifyRead<TransactionDigest, TransactionEffects>,
+    pub(crate) executed_effects_digests_notify_read:
+        NotifyRead<TransactionDigest, TransactionEffectsDigest>,
 
     pub(crate) root_state_notify_read: NotifyRead<EpochId, (CheckpointSequenceNumber, Accumulator)>,
     /// This lock denotes current 'execution epoch'.
@@ -137,16 +140,15 @@ impl AuthorityStore {
     /// Open an authority store by directory path.
     /// If the store is empty, initialize it using genesis.
     pub async fn open(
-        path: &Path,
-        db_options: Option<Options>,
+        perpetual_tables: Arc<AuthorityPerpetualTables>,
         genesis: &Genesis,
         committee_store: &Arc<CommitteeStore>,
         indirect_objects_threshold: usize,
         enable_epoch_sui_conservation_check: bool,
         registry: &Registry,
     ) -> SuiResult<Arc<Self>> {
-        let perpetual_tables = Arc::new(AuthorityPerpetualTables::open(path, db_options.clone()));
         let epoch_start_configuration = if perpetual_tables.database_is_empty()? {
+            info!("Creating new epoch start config from genesis");
             let epoch_start_configuration = EpochStartConfiguration::new(
                 genesis.sui_system_object().into_epoch_start_state(),
                 *genesis.checkpoint().digest(),
@@ -156,15 +158,18 @@ impl AuthorityStore {
                 .await?;
             epoch_start_configuration
         } else {
+            info!("Loading epoch start config from DB");
             perpetual_tables
                 .epoch_start_configuration
                 .get(&())?
                 .expect("Epoch start configuration must be set in non-empty DB")
         };
         let cur_epoch = perpetual_tables.get_recovery_epoch_at_restart()?;
+        info!("Epoch start config: {:?}", epoch_start_configuration);
+        info!("Cur epoch: {:?}", cur_epoch);
         let committee = committee_store
             .get_committee(&cur_epoch)?
-            .expect("Committee of the current epoch must exist");
+            .unwrap_or_else(|| panic!("Committee of the current epoch ({}) must exist", cur_epoch));
         let this = Self::open_inner(
             genesis,
             perpetual_tables,
@@ -194,8 +199,7 @@ impl AuthorityStore {
     }
 
     pub async fn open_with_committee_for_testing(
-        path: &Path,
-        db_options: Option<Options>,
+        perpetual_tables: Arc<AuthorityPerpetualTables>,
         committee: &Committee,
         genesis: &Genesis,
         indirect_objects_threshold: usize,
@@ -203,7 +207,6 @@ impl AuthorityStore {
         // TODO: Since we always start at genesis, the committee should be technically the same
         // as the genesis committee.
         assert_eq!(committee.epoch, 0);
-        let perpetual_tables = Arc::new(AuthorityPerpetualTables::open(path, db_options.clone()));
         Self::open_inner(
             genesis,
             perpetual_tables,
@@ -229,6 +232,7 @@ impl AuthorityStore {
             mutex_table: MutexTable::new(NUM_SHARDS),
             perpetual_tables,
             executed_effects_notify_read: NotifyRead::new(),
+            executed_effects_digests_notify_read: NotifyRead::new(),
             root_state_notify_read:
                 NotifyRead::<EpochId, (CheckpointSequenceNumber, Accumulator)>::new(),
             execution_lock: RwLock::new(epoch),
@@ -272,13 +276,6 @@ impl AuthorityStore {
                 .enumerate()
                 .map(|(i, e)| ((event_digests, i), e));
             store.perpetual_tables.events.multi_insert(events).unwrap();
-            // When we are opening the db table, the only time when it's safe to
-            // check SUI conservation is at genesis. Otherwise we may be in the middle of
-            // an epoch and the SUI conservation check will fail. This also initialize
-            // the expected_network_sui_amount table.
-            store
-                .expensive_check_sui_conservation()
-                .expect("SUI conservation check cannot fail at genesis");
         }
 
         Ok(store)
@@ -353,6 +350,15 @@ impl AuthorityStore {
             Some(digest) => Ok(self.perpetual_tables.effects.get(&digest)?),
             None => Ok(None),
         }
+    }
+
+    /// Given a list of transaction digests, returns a list of the corresponding effects only if they have been
+    /// executed. For transactions that have not been executed, None is returned.
+    pub fn multi_get_executed_effects_digests(
+        &self,
+        digests: &[TransactionDigest],
+    ) -> SuiResult<Vec<Option<TransactionEffectsDigest>>> {
+        Ok(self.perpetual_tables.executed_effects.multi_get(digests)?)
     }
 
     /// Given a list of transaction digests, returns a list of the corresponding effects only if they have been
@@ -686,17 +692,17 @@ impl AuthorityStore {
 
     /// Insert a genesis object.
     /// TODO: delete this method entirely (still used by authority_tests.rs)
-    pub(crate) async fn insert_genesis_object(&self, object: Object) -> SuiResult {
+    pub(crate) fn insert_genesis_object(&self, object: Object) -> SuiResult {
         // We only side load objects with a genesis parent transaction.
         debug_assert!(object.previous_transaction == TransactionDigest::genesis());
         let object_ref = object.compute_object_reference();
-        self.insert_object_direct(object_ref, &object).await
+        self.insert_object_direct(object_ref, &object)
     }
 
     /// Insert an object directly into the store, and also update relevant tables
     /// NOTE: does not handle transaction lock.
     /// This is used to insert genesis objects
-    async fn insert_object_direct(&self, object_ref: ObjectRef, object: &Object) -> SuiResult {
+    fn insert_object_direct(&self, object_ref: ObjectRef, object: &Object) -> SuiResult {
         let mut write_batch = self.perpetual_tables.objects.batch();
 
         // Insert object
@@ -723,6 +729,53 @@ impl AuthorityStore {
 
         write_batch.write()?;
 
+        Ok(())
+    }
+
+    /// NOTE: this function is only to be used for fuzzing and testing. Never use in prod
+    #[cfg(not(release))]
+    pub(crate) async fn insert_raw_object_unchecked_for_testing(
+        &self,
+        objects: &[Object],
+    ) -> SuiResult {
+        // Sideload directly
+        for o in objects {
+            self.insert_object_direct(o.compute_object_reference(), o)?;
+        }
+        Ok(())
+    }
+
+    /// Insert objects directly into the object table, but do not touch other tables.
+    /// This is used in fullnode to insert objects from validators certificate handling response
+    /// in fast path execution.
+    /// This is best-efforts. If the object needs to be stored as an indirect object then we
+    /// do not insert this object at all.
+    ///
+    /// Caveat: if an Object is regularly inserted as an indirect object in the stiore, but the threshold
+    /// changes in the fullnode which causes it to be considered as non-indirect, and only inserted
+    /// to the object store, this would cause the reference counting to be incorrect.
+    ///
+    /// TODO: handle this in a more resilient way.
+    pub(crate) fn fullnode_fast_path_insert_objects_to_object_store_maybe(
+        &self,
+        objects: &Vec<Object>,
+    ) -> SuiResult {
+        let mut write_batch = self.perpetual_tables.objects.batch();
+
+        for obj in objects {
+            let StoreObjectPair(store_object, indirect_object) =
+                get_store_object_pair(obj.clone(), self.indirect_objects_threshold);
+            // Do not insert to store if the object needs to stored as indirect object too.
+            if indirect_object.is_some() {
+                continue;
+            }
+            write_batch.insert_batch(
+                &self.perpetual_tables.objects,
+                std::iter::once((ObjectKey(obj.id(), obj.version()), store_object)),
+            )?;
+        }
+
+        write_batch.write()?;
         Ok(())
     }
 
@@ -877,6 +930,8 @@ impl AuthorityStore {
             events,
             max_binary_format_version: _,
             loaded_child_objects: _,
+            no_extraneous_module_bytes: _,
+            runtime_read_objects: _,
         } = inner_temporary_store;
         trace!(written =? written.values().map(|((obj_id, ver, _), _, _)| (obj_id, ver)).collect::<Vec<_>>(),
                "batch_update_objects: temp store written");
@@ -1409,7 +1464,7 @@ impl AuthorityStore {
     pub fn multi_get_transaction_blocks(
         &self,
         tx_digests: &[TransactionDigest],
-    ) -> Result<Vec<Option<VerifiedTransaction>>, SuiError> {
+    ) -> SuiResult<Vec<Option<VerifiedTransaction>>> {
         Ok(self
             .perpetual_tables
             .transactions
@@ -1455,7 +1510,7 @@ impl AuthorityStore {
         self.perpetual_tables.iter_live_object_set()
     }
 
-    pub fn expensive_check_sui_conservation(self: &Arc<Self>) -> SuiResult {
+    pub fn expensive_check_sui_conservation(self: &Arc<Self>, move_vm: &Arc<MoveVM>) -> SuiResult {
         if !self.enable_epoch_sui_conservation_check {
             return Ok(());
         }
@@ -1464,8 +1519,9 @@ impl AuthorityStore {
                 .expect("Read sui system state object cannot fail")
                 .protocol_version(),
         );
+        let protocol_config = ProtocolConfig::get_for_version(protocol_version);
         // Prior to gas model v2, SUI conservation is not guaranteed.
-        if ProtocolConfig::get_for_version(protocol_version).gas_model_version() <= 1 {
+        if protocol_config.gas_model_version() <= 1 {
             return Ok(());
         }
 
@@ -1486,6 +1542,8 @@ impl AuthorityStore {
                             mem::swap(&mut pending_objects, &mut task_objects);
                             let package_cache_clone = package_cache.clone();
                             pending_tasks.push(s.spawn(move || {
+                                let mut layout_resolver =
+                                    TypeLayoutResolver::new(move_vm, &package_cache_clone);
                                 let mut total_storage_rebate = 0;
                                 let mut total_sui = 0;
                                 for object in task_objects {
@@ -1493,7 +1551,7 @@ impl AuthorityStore {
                                     // get_total_sui includes storage rebate, however all storage rebate is
                                     // also stored in the storage fund, so we need to subtract it here.
                                     total_sui +=
-                                        object.get_total_sui(&package_cache_clone).unwrap()
+                                        object.get_total_sui(&mut layout_resolver).unwrap()
                                             - object.storage_rebate;
                                 }
                                 if count % 50_000_000 == 0 {
@@ -1511,9 +1569,11 @@ impl AuthorityStore {
                 (init.0 + result.0, init.1 + result.1)
             })
         });
+        let mut layout_resolver = TypeLayoutResolver::new(move_vm, self.as_ref());
         for object in pending_objects {
             total_storage_rebate += object.storage_rebate;
-            total_sui += object.get_total_sui(self).unwrap() - object.storage_rebate;
+            total_sui +=
+                object.get_total_sui(&mut layout_resolver).unwrap() - object.storage_rebate;
         }
         info!(
             "Scanned {} live objects, took {:?}",
@@ -1622,6 +1682,8 @@ impl AuthorityStore {
                     root_state_hash, live_object_set_hash
                 );
             }
+        } else {
+            info!("State consistency check passed");
         }
 
         if !panic {
@@ -1808,6 +1870,16 @@ impl From<LockDetails> for LockDetailsWrapper {
 /// A potential input to a transaction.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct InputKey(pub ObjectID, pub Option<SequenceNumber>);
+
+impl From<&Object> for InputKey {
+    fn from(obj: &Object) -> Self {
+        if obj.is_package() {
+            InputKey(obj.id(), None)
+        } else {
+            InputKey(obj.id(), Some(obj.version()))
+        }
+    }
+}
 
 /// How a transaction should lock a given input object.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd)]

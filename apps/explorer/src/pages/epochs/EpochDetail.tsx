@@ -7,19 +7,19 @@ import { useQuery } from '@tanstack/react-query';
 import { useMemo } from 'react';
 import { useParams } from 'react-router-dom';
 
-import { CheckpointsTable } from '../checkpoints/CheckpointsTable';
 import { validatorsTableData } from '../validators/Validators';
 import { EpochProgress } from './stats/EpochProgress';
 import { EpochStats } from './stats/EpochStats';
 import { ValidatorStatus } from './stats/ValidatorStatus';
 
+import { CheckpointsTable } from '~/components/checkpoints/CheckpointsTable';
 import { useEnhancedRpcClient } from '~/hooks/useEnhancedRpc';
 import { Banner } from '~/ui/Banner';
-import { Card } from '~/ui/Card';
 import { LoadingSpinner } from '~/ui/LoadingSpinner';
 import { Stats, type StatsProps } from '~/ui/Stats';
 import { TableCard } from '~/ui/TableCard';
 import { Tab, TabGroup, TabList, TabPanel, TabPanels } from '~/ui/Tabs';
+import { getEpochStorageFundFlow } from '~/utils/getStorageFundFlow';
 
 function SuiStats({
     amount,
@@ -40,13 +40,15 @@ export default function EpochDetail() {
     const { id } = useParams();
     const enhancedRpc = useEnhancedRpcClient();
     const { data: systemState } = useGetSystemState();
-    const { data, isLoading, isError } = useQuery(['epoch', id], async () =>
-        enhancedRpc.getEpochs({
-            // todo: endpoint returns no data for epoch 0
-            cursor: id === '0' ? undefined : (Number(id!) - 1).toString(),
-            limit: 1,
-        })
-    );
+    const { data, isLoading, isError } = useQuery({
+        queryKey: ['epoch', id],
+        queryFn: async () =>
+            enhancedRpc.getEpochs({
+                // todo: endpoint returns no data for epoch 0
+                cursor: id === '0' ? undefined : (Number(id!) - 1).toString(),
+                limit: 1,
+            }),
+    });
 
     const [epochData] = data?.data ?? [];
     const isCurrentEpoch = useMemo(
@@ -75,30 +77,23 @@ export default function EpochDetail() {
             </Banner>
         );
 
-    const fundInflow = epochData.endOfEpochInfo
-        ? BigInt(epochData.endOfEpochInfo.storageFundReinvestment) +
-          BigInt(epochData.endOfEpochInfo.storageCharge) +
-          BigInt(epochData.endOfEpochInfo.leftoverStorageFundInflow)
-        : null;
-
-    const fundOutflow = epochData.endOfEpochInfo
-        ? BigInt(epochData.endOfEpochInfo.storageRebate)
-        : null;
-
-    const netInflow =
-        fundInflow && fundOutflow ? fundInflow - fundOutflow : null;
+    const { fundInflow, fundOutflow, netInflow } = getEpochStorageFundFlow(
+        epochData.endOfEpochInfo
+    );
 
     return (
         <div className="flex flex-col space-y-16">
             <div className="grid grid-flow-row gap-4 sm:gap-2 md:flex md:gap-6">
-                <EpochProgress
-                    epoch={epochData.epoch}
-                    inProgress={isCurrentEpoch}
-                    start={Number(epochData.epochStartTimestamp)}
-                    end={Number(
-                        epochData.endOfEpochInfo?.epochEndTimestamp ?? 0
-                    )}
-                />
+                <div className="flex min-w-[136px] max-w-[240px]">
+                    <EpochProgress
+                        epoch={epochData.epoch}
+                        inProgress={isCurrentEpoch}
+                        start={Number(epochData.epochStartTimestamp)}
+                        end={Number(
+                            epochData.endOfEpochInfo?.epochEndTimestamp ?? 0
+                        )}
+                    />
+                </div>
 
                 <EpochStats label="Rewards">
                     <SuiStats
@@ -133,11 +128,7 @@ export default function EpochDetail() {
                     <SuiStats label="Fund Outflow" amount={fundOutflow} />
                 </EpochStats>
 
-                {isCurrentEpoch ? (
-                    <Card spacing="lg">
-                        <ValidatorStatus />
-                    </Card>
-                ) : null}
+                {isCurrentEpoch ? <ValidatorStatus /> : null}
             </div>
 
             <TabGroup size="lg">

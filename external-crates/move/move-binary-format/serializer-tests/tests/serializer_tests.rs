@@ -11,7 +11,7 @@ proptest! {
         let mut serialized = Vec::with_capacity(2048);
         module.serialize(&mut serialized).expect("serialization should work");
 
-        let deserialized_module = CompiledModule::deserialize(&serialized)
+        let deserialized_module = CompiledModule::deserialize_with_defaults(&serialized)
             .expect("deserialization should work");
 
         prop_assert_eq!(module, deserialized_module);

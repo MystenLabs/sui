@@ -6,7 +6,6 @@ import { Link } from 'react-router-dom';
 
 import { CoinItem } from './CoinItem';
 import { useActiveAddress } from '_app/hooks/useActiveAddress';
-import { Text } from '_app/shared/text';
 import Loading from '_components/loading';
 import { useGetAllBalances } from '_hooks';
 
@@ -33,7 +32,7 @@ export function ActiveCoinsCard({
                             to={`/send/select?${new URLSearchParams({
                                 type: activeCoin.coinType,
                             }).toString()}`}
-                            className="bg-gray-40 rounded-2lg py-2.5 px-3 no-underline flex gap-2 items-center w-full"
+                            className="border-solid border border-gray-45 rounded-2lg py-2.5 px-3 no-underline flex gap-2 items-center w-full"
                         >
                             <CoinItem
                                 coinType={activeCoin.coinType}
@@ -44,21 +43,14 @@ export function ActiveCoinsCard({
                     )
                 ) : (
                     <div className="flex flex-col w-full">
-                        <Text
-                            variant="caption"
-                            color="steel-darker"
-                            weight="semibold"
-                        >
-                            My Coins
-                        </Text>
-                        <div className="flex flex-col justify-between items-center mt-2">
+                        <div className="flex flex-col justify-between items-center mt-2 divide-y divide-solid divide-gray-45 divide-x-0">
                             {coins?.map(({ coinType, totalBalance }) => (
                                 <Link
                                     to={`/send?${new URLSearchParams({
                                         type: coinType,
                                     }).toString()}`}
                                     key={coinType}
-                                    className="py-3.75 px-1.5 no-underline flex gap-2 items-center w-full hover:bg-sui/10 group border-t border-solid border-transparent border-t-gray-45"
+                                    className="py-3.75 px-1.5 no-underline flex gap-2 items-center w-full hover:bg-sui/10 group"
                                 >
                                     <CoinItem
                                         coinType={coinType}

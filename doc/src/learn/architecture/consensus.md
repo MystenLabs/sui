@@ -2,7 +2,7 @@
 title: Narwhal and Bullshark, Sui's Mempool and Consensus Engines
 ---
 
-This is a brief introduction to [Narwhal](https://github.com/MystenLabs/narwhal), and [Bullshark](https://arxiv.org/abs/2209.05633), the high-throughput mempool and consensus engines offered by Mysten Labs. Sui uses Narwhal as the mempool and Bullshark as the consensus engine by default, to sequence transactions that require a total ordering, synchronize transactions between validators and periodically checkpoint the network's state.
+This is a brief introduction to [Narwhal](https://github.com/MystenLabs/narwhal) and [Bullshark](https://arxiv.org/abs/2209.05633), the high-throughput mempool and consensus engines offered by Mysten Labs. Sui uses Narwhal as the mempool and Bullshark as the consensus engine by default, to sequence transactions that require a total ordering, synchronize transactions between validators and periodically checkpoint the network's state.
 
 The names highlight that the components split the responsibilities of:
  * ensuring the availability of data submitted to consensus = [Narwhal](https://arxiv.org/abs/2105.11827)
@@ -25,9 +25,9 @@ The [consensus](https://github.com/MystenLabs/sui/blob/main/narwhal/consensus) c
 
 ## Architecture
 
-A Narwhal instance sets up a message-passing system comprised of a set of $3f+1$ units of stake divided amongst a set of nodes, and assumes a computationally bounded adversary that controls the network and can corrupt parties holding up to f units of stake. The validators collaborate in forming a leaderless graph of batches of transactions - which the literature (in the context of DAG-based consensus) designates as _blocks_ and that we label as _collections_ - to emphasize we're in a context where the mempool data is used by an unspecified consensus algorithm.
+A Narwhal instance sets up a message-passing system comprised of a set of $3f+1$ units of stake divided amongst a set of nodes, and assumes a computationally bounded adversary that controls the network and can corrupt parties holding up to f units of stake. The validators collaborate in forming a leaderless graph of batches of transactions - which the literature (in the context of DAG-based consensus) designates as _blocks_ and that Sui labels _collections_ - to emphasize that this happens in a context where the mempool data is used by an unspecified consensus algorithm.
 
-The graph's *vertices* consist of certified collections. Each valid collection signed by its validator-author must contain a round number and must itself be signed by a quorum (2f+1) of validator stake. We call those 2f+1 signatures a _certificate of availability_. Furthermore, that collection must contain hash pointers to a quorum of valid certificates (that is, certificates from validators with 2f + 1 units of stake) from the previous round (see Danezis & al. Fig 2), which constitute the *edges* of the graph.
+The graph's *vertices* consist of certified collections. Each valid collection signed by its validator-author must contain a round number and must itself be signed by a quorum (2f+1) of validator stake. These 2f+1 signatures are called a _certificate of availability_. Furthermore, that collection must contain hash pointers to a quorum of valid certificates (that is, certificates from validators with 2f + 1 units of stake) from the previous round (see Danezis & al. Fig 2), which constitute the *edges* of the graph.
 
 Each collection is formed in the following way: each validator _reliably broadcasts_ a collection for each round. Subject to specified validity conditions, if validators with 2f + 1 stake receive a collection, they acknowledge it with a signature each. Signatures from 2f + 1 validators by stake form a certificate of availability that is then shared and potentially included in collections at round r + 1.
 
@@ -73,7 +73,7 @@ flowchart TB
 
 ## Dependencies
 
-Narwhal is implemented using [Tokio](https://github.com/tokio-rs/tokio), [RocksDB](https://github.com/facebook/rocksdb/) and generic cryptography. The cryptography contains implementations of node signing using BLS12-377, BLS12-381, and Ed25519.
+Narwhal is implemented using [Tokio](https://github.com/tokio-rs/tokio), [RocksDB](https://github.com/facebook/rocksdb/) and generic cryptography implemented in [fastcrypto](https://github.com/MystenLabs/fastcrypto).
 
 ## Configuration
 

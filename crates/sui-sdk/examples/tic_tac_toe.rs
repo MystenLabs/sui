@@ -22,11 +22,11 @@ use sui_sdk::{
     types::{
         base_types::{ObjectID, SuiAddress},
         id::UID,
-        messages::Transaction,
+        transaction::Transaction,
     },
     SuiClient, SuiClientBuilder,
 };
-use sui_types::messages::ExecuteTransactionRequestType;
+use sui_types::quorum_driver_types::ExecuteTransactionRequestType;
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
@@ -101,7 +101,7 @@ impl TicTacToe {
 
         let response = self
             .client
-            .quorum_driver()
+            .quorum_driver_api()
             .execute_transaction_block(
                 Transaction::from_data(
                     create_game_call,
@@ -206,7 +206,7 @@ impl TicTacToe {
             // Execute the transaction.
             let response = self
                 .client
-                .quorum_driver()
+                .quorum_driver_api()
                 .execute_transaction_block(
                     Transaction::from_data(
                         place_mark_call,

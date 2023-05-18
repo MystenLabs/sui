@@ -10,8 +10,6 @@ use std::path::Path;
 #[cfg(not(msim))]
 use std::str::FromStr;
 use std::time::Duration;
-use sui_config::genesis_config::DEFAULT_GAS_AMOUNT;
-use sui_config::genesis_config::DEFAULT_NUMBER_OF_OBJECT_PER_ACCOUNT;
 use sui_config::SUI_KEYSTORE_FILENAME;
 use sui_json::{call_args, type_args};
 use sui_json_rpc_types::ObjectChange;
@@ -24,13 +22,14 @@ use sui_json_rpc_types::{
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_macros::sim_test;
 use sui_move_build::BuildConfig;
+use sui_swarm_config::genesis_config::{DEFAULT_GAS_AMOUNT, DEFAULT_NUMBER_OF_OBJECT_PER_ACCOUNT};
 use sui_types::balance::Supply;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::SequenceNumber;
 use sui_types::coin::{TreasuryCap, COIN_MODULE_NAME};
 use sui_types::digests::ObjectDigest;
 use sui_types::gas_coin::GAS;
-use sui_types::messages::ExecuteTransactionRequestType;
+use sui_types::quorum_driver_types::ExecuteTransactionRequestType;
 use sui_types::utils::to_sender_signed_transaction;
 use sui_types::{parse_sui_struct_tag, SUI_FRAMEWORK_ADDRESS};
 use test_utils::network::TestClusterBuilder;
@@ -498,7 +497,8 @@ async fn test_get_metadata() -> Result<(), anyhow::Error> {
 
     let result: SuiCoinMetadata = http_client
         .get_coin_metadata(format!("{package_id}::trusted_coin::TRUSTED_COIN"))
-        .await?;
+        .await?
+        .unwrap();
 
     assert_eq!("TRUSTED", result.symbol);
     assert_eq!("Trusted Coin for test", result.description);

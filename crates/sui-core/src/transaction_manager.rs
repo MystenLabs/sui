@@ -9,11 +9,12 @@ use std::{
 
 use mysten_metrics::monitored_scope;
 use parking_lot::RwLock;
+use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::{
     base_types::ObjectID,
     committee::EpochId,
     digests::TransactionEffectsDigest,
-    messages::{TransactionDataAPI, VerifiedCertificate, VerifiedExecutableTransaction},
+    transaction::{TransactionDataAPI, VerifiedCertificate},
 };
 use sui_types::{base_types::TransactionDigest, error::SuiResult};
 use tokio::sync::mpsc::UnboundedSender;

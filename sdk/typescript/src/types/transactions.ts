@@ -81,9 +81,19 @@ export const SuiTransaction = union([
   object({ TransferObjects: tuple([array(SuiArgument), SuiArgument]) }),
   object({ SplitCoins: tuple([SuiArgument, array(SuiArgument)]) }),
   object({ MergeCoins: tuple([SuiArgument, array(SuiArgument)]) }),
-  object({ Publish: tuple([SuiMovePackage, array(ObjectId)]) }),
   object({
-    Upgrade: tuple([SuiMovePackage, array(ObjectId), ObjectId, SuiArgument]),
+    Publish: union([
+      // TODO: Remove this after 0.34 is released:
+      tuple([SuiMovePackage, array(ObjectId)]),
+      array(ObjectId),
+    ]),
+  }),
+  object({
+    Upgrade: union([
+      // TODO: Remove this after 0.34 is released:
+      tuple([SuiMovePackage, array(ObjectId), ObjectId, SuiArgument]),
+      tuple([array(ObjectId), ObjectId, SuiArgument]),
+    ]),
   }),
   object({ MakeMoveVec: tuple([nullable(string()), array(SuiArgument)]) }),
 ]);
@@ -276,6 +286,9 @@ export type SuiTransactionBlockResponseQuery = {
 };
 
 export type TransactionFilter =
+  | { Checkpoint: string }
+  | { FromAndToAddress: { from: string; to: string } }
+  | { TransactionKind: string }
   | {
       MoveFunction: {
         package: ObjectId;

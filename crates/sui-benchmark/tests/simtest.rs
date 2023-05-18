@@ -3,8 +3,6 @@
 
 #[cfg(msim)]
 mod test {
-    use fastcrypto::ed25519::Ed25519KeyPair;
-    use move_core_types::language_storage::StructTag;
     use rand::{distributions::uniform::SampleRange, thread_rng, Rng};
     use std::path::PathBuf;
     use std::str::FromStr;
@@ -26,18 +24,11 @@ mod test {
     use sui_core::authority::framework_injection;
     use sui_core::checkpoints::CheckpointStore;
     use sui_framework::BuiltInFramework;
-    use sui_json_rpc_types::SuiExecutionStatus;
-    use sui_json_rpc_types::SuiObjectDataOptions;
-    use sui_json_rpc_types::SuiTransactionBlockEffectsAPI;
     use sui_macros::{register_fail_point_async, register_fail_points, sim_test};
     use sui_protocol_config::{ProtocolVersion, SupportedProtocolVersions};
     use sui_simulator::{configs::*, SimConfig};
     use sui_types::base_types::{ObjectRef, SuiAddress};
     use sui_types::messages_checkpoint::VerifiedCheckpoint;
-    use sui_types::DEEPBOOK_OBJECT_ID;
-    use test_utils::messages::{
-        create_publish_move_package_transaction, get_sui_gas_object_with_wallet_context,
-    };
     use test_utils::network::{TestCluster, TestClusterBuilder};
     use tracing::{error, info};
     use typed_store::traits::Map;
@@ -263,24 +254,41 @@ mod test {
     }
 
     #[sim_test(config = "test_config()")]
-    async fn test_testnet_upgrade_compatibility() {
+    async fn test_upgrade_compatibility() {
         // This test is intended to test the compatibility of the latest protocol version with
-        // the previous protocol version on testnet. It does this by starting a testnet with
+        // the previous protocol version. It does this by starting a network with
         // the previous protocol version that this binary supports, and then upgrading the network
         // to the latest protocol version.
         let max_ver = ProtocolVersion::MAX.as_u64();
         let min_ver = max_ver - 1;
+        let timeout = tokio::time::timeout(
+            Duration::from_secs(1000),
+            test_protocol_upgrade_compatibility_impl(min_ver),
+        )
+        .await;
+        match timeout {
+            Ok(_) => {}
+            Err(_) => {
+                panic!("testnet upgrade compatibility test timed out");
+            }
+        }
+    }
+
+    async fn test_protocol_upgrade_compatibility_impl(starting_version: u64) {
+        let max_ver = ProtocolVersion::MAX.as_u64();
         let init_framework =
-            sui_framework_snapshot::load_bytecode_snapshot("testnet", min_ver).unwrap();
+            sui_framework_snapshot::load_bytecode_snapshot(starting_version).unwrap();
         let mut test_cluster = init_test_cluster_builder(7, 5000)
-            .with_protocol_version(ProtocolVersion::new(min_ver))
+            .with_protocol_version(ProtocolVersion::new(starting_version))
             .with_supported_protocol_versions(SupportedProtocolVersions::new_for_testing(
-                min_ver, min_ver,
+                starting_version,
+                starting_version,
             ))
             .with_fullnode_supported_protocol_versions_config(
-                SupportedProtocolVersions::new_for_testing(min_ver, max_ver),
+                SupportedProtocolVersions::new_for_testing(starting_version, max_ver),
             )
             .with_objects(init_framework.into_iter().map(|p| p.genesis_object()))
+            .with_stake_subsidy_start_epoch(10)
             .build()
             .await
             .unwrap();
@@ -291,18 +299,25 @@ mod test {
         let finished = Arc::new(AtomicBool::new(false));
         let finished_clone = finished.clone();
         let _handle = tokio::task::spawn(async move {
-            for version in min_ver..=max_ver {
+            for version in starting_version..=max_ver {
                 info!("Targeting protocol version: {}", version);
                 test_cluster.wait_for_all_nodes_upgrade_to(version).await;
                 info!("All nodes are at protocol version: {}", version);
                 // Let all nodes run for a bit at this version.
                 tokio::time::sleep(Duration::from_secs(50)).await;
                 if version == max_ver {
+                    let stake_subsidy_start_epoch = test_cluster
+                        .sui_client()
+                        .governance_api()
+                        .get_latest_sui_system_state()
+                        .await
+                        .unwrap()
+                        .stake_subsidy_start_epoch;
+                    assert_eq!(stake_subsidy_start_epoch, 20);
                     break;
                 }
                 let next_version = version + 1;
-                let new_framework =
-                    sui_framework_snapshot::load_bytecode_snapshot("testnet", next_version);
+                let new_framework = sui_framework_snapshot::load_bytecode_snapshot(next_version);
                 let new_framework_ref: Vec<_> = match &new_framework {
                     Ok(f) => f.iter().collect(),
                     Err(_) => {
@@ -318,44 +333,10 @@ mod test {
                 }
                 info!("Framework injected");
                 test_cluster
-                    .upgrade_protocol(SupportedProtocolVersions::new_for_testing(
-                        min_ver,
-                        next_version,
-                    ))
-                    .await;
-                // TODO: move these DeepBook-specific checks into their own test or remove them
-                // make sure we can read the DeepBook package
-                assert!(test_cluster
-                    .sui_client()
-                    .read_api()
-                    .get_object_with_options(
-                        DEEPBOOK_OBJECT_ID,
-                        SuiObjectDataOptions::default().with_type()
+                    .update_validator_supported_versions(
+                        SupportedProtocolVersions::new_for_testing(starting_version, next_version),
                     )
-                    .await
-                    .unwrap()
-                    .data
-                    .unwrap()
-                    .type_
-                    .unwrap()
-                    .is_package());
-
-                let keypair = test_init_data.keypair();
-                let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-                path.push("tests/data/deepbook_client");
-                let tx = create_publish_move_package_transaction(
-                    test_init_data.all_gas[1].1,
-                    path,
-                    test_init_data.sender,
-                    &keypair,
-                    1_000_000_000,
-                    1000,
-                );
-                let response = test_cluster.execute_transaction(tx).await.unwrap();
-                assert_eq!(
-                    *response.effects.unwrap().status(),
-                    SuiExecutionStatus::Success
-                );
+                    .await;
             }
             finished_clone.store(true, Ordering::SeqCst);
         });
@@ -401,7 +382,7 @@ mod test {
     struct TestInitData {
         keystore_path: PathBuf,
         genesis: Genesis,
-        pub all_gas: Vec<(StructTag, ObjectRef)>,
+        pub primary_gas: ObjectRef,
         pub sender: SuiAddress,
     }
 
@@ -411,17 +392,14 @@ mod test {
             Self {
                 keystore_path: test_cluster.swarm.dir().join(SUI_KEYSTORE_FILENAME),
                 genesis: test_cluster.swarm.config().genesis.clone(),
-                all_gas: get_sui_gas_object_with_wallet_context(&test_cluster.wallet, &sender)
-                    .await,
+                primary_gas: test_cluster
+                    .wallet
+                    .get_one_gas_object_owned_by_address(sender)
+                    .await
+                    .unwrap()
+                    .unwrap(),
                 sender,
             }
-        }
-
-        pub fn keypair(&self) -> Arc<Ed25519KeyPair> {
-            Arc::new(
-                get_ed25519_keypair_from_keystore(self.keystore_path.clone(), &self.sender)
-                    .unwrap(),
-            )
         }
     }
 
@@ -429,14 +407,13 @@ mod test {
         let TestInitData {
             keystore_path,
             genesis,
-            all_gas,
+            primary_gas,
             sender,
         } = init_data;
 
         let ed25519_keypair =
             Arc::new(get_ed25519_keypair_from_keystore(keystore_path, &sender).unwrap());
-        let (_, gas) = all_gas.get(0).unwrap();
-        let primary_coin = (gas.clone(), sender, ed25519_keypair.clone());
+        let primary_coin = (primary_gas, sender, ed25519_keypair.clone());
 
         let registry = prometheus::Registry::new();
         let proxy: Arc<dyn ValidatorProxy + Send + Sync> =

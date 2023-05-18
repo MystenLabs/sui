@@ -51,7 +51,7 @@ impl BytecodeViewerConfig {
     pub fn start_viewer(&self) {
         let bytecode_bytes =
             fs::read(&self.module_binary_path).expect("Unable to read bytecode file");
-        let compiled_module = CompiledModule::deserialize(&bytecode_bytes)
+        let compiled_module = CompiledModule::deserialize_with_defaults(&bytecode_bytes)
             .expect("Module blob can't be deserialized");
 
         let source_map = source_map_from_file(&self.module_sourcemap_path).unwrap();

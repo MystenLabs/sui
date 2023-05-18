@@ -8,7 +8,8 @@ use crate::executor::{ExecutionResult, Executor};
 use once_cell::sync::Lazy;
 use proptest::{prelude::*, strategy::Union};
 use std::{fmt, sync::Arc};
-use sui_types::{messages::VerifiedTransaction, storage::ObjectStore};
+use sui_adapter::type_layout_resolver::TypeLayoutResolver;
+use sui_types::{storage::ObjectStore, transaction::VerifiedTransaction};
 
 mod account;
 mod helpers;
@@ -28,7 +29,7 @@ static UNIVERSE_SIZE: Lazy<usize> = Lazy::new(|| {
                 panic!("Could not parse universe size, aborting: {:?}", err);
             }
         },
-        Err(env::VarError::NotPresent) => 20,
+        Err(env::VarError::NotPresent) => 30,
         Err(err) => {
             panic!(
                 "Could not read universe size from the environment, aborting: {:?}",
@@ -100,15 +101,14 @@ pub fn log_balance_strategy(min_balance: u64, max_balance: u64) -> impl Strategy
 pub fn run_and_assert_universe(
     universe: AccountUniverseGen,
     transaction_gens: Vec<impl AUTransactionGen + Clone>,
+    executor: &mut Executor,
 ) -> Result<(), TestCaseError> {
-    let mut executor = Executor::new();
-    let mut universe = universe.setup(&mut executor);
+    let mut universe = universe.setup(executor);
     let (transactions, expected_values): (Vec<_>, Vec<_>) = transaction_gens
         .iter()
-        .map(|transaction_gen| transaction_gen.clone().apply(&mut universe, &mut executor))
+        .map(|transaction_gen| transaction_gen.clone().apply(&mut universe, executor))
         .unzip();
     let outputs = executor.execute_transactions(transactions);
-
     prop_assert_eq!(outputs.len(), expected_values.len());
 
     for (idx, (output, expected)) in outputs.iter().zip(&expected_values).enumerate() {
@@ -120,24 +120,23 @@ pub fn run_and_assert_universe(
             output
         );
     }
-
-    assert_accounts_match(&universe, &executor)
+    assert_accounts_match(&universe, executor)
 }
 
 pub fn assert_accounts_match(
     universe: &AccountUniverse,
     executor: &Executor,
 ) -> Result<(), TestCaseError> {
+    let state = executor.state.clone();
+    let store = state.db();
+    let epoch_store = state.load_epoch_store_one_call_per_task();
+    let move_vm = epoch_store.move_vm();
+    let mut layout_resolver = TypeLayoutResolver::new(move_vm, store.as_ref());
     for (idx, account) in universe.accounts().iter().enumerate() {
         for (balance_idx, acc_object) in account.current_coins.iter().enumerate() {
-            let object = executor
-                .state
-                .db()
-                .get_object(&acc_object.id())
-                .unwrap()
-                .unwrap();
+            let object = store.get_object(&acc_object.id()).unwrap().unwrap();
             let total_sui_value =
-                object.get_total_sui(&executor.state.db()).unwrap() - object.storage_rebate;
+                object.get_total_sui(&mut layout_resolver).unwrap() - object.storage_rebate;
             let account_balance_i = account.current_balances[balance_idx];
             prop_assert_eq!(
                 account_balance_i,

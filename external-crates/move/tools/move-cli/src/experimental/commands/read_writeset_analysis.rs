@@ -26,7 +26,7 @@ pub fn analyze_read_write_set(
     concretize: ConcretizeMode,
     verbose: bool,
 ) -> Result<()> {
-    let module_id = CompiledModule::deserialize(&fs::read(module_file)?)
+    let module_id = CompiledModule::deserialize_with_defaults(&fs::read(module_file)?)
         .map_err(|e| anyhow!("Error deserializing module: {:?}", e))?
         .self_id();
     let fun_id = Identifier::new(function.to_string())?;

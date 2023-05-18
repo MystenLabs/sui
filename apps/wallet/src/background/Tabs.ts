@@ -155,7 +155,18 @@ class Tabs {
         return this._onActiveOrigin.asObservable();
     }
 
-    public async highlight(option: { url: string } | { tabID: number }) {
+    public async highlight(
+        option: { windowID?: number } & (
+            | {
+                  url: string;
+                  match?: (values: {
+                      url: string;
+                      inAppRedirectUrl?: string;
+                  }) => boolean;
+              }
+            | { tabID: number }
+        )
+    ) {
         let tabToHighlight: BrowserTabs.Tab | null = null;
         if ('tabID' in option) {
             try {
@@ -163,14 +174,42 @@ class Tabs {
             } catch (e) {
                 //Do nothing
             }
-        }
-        if ('url' in option) {
-            const url = option.url.split('#')[0];
+        } else {
+            const inAppUrlToMatch = option.url.split('#')[1] || '';
             const tabs = (
                 await Browser.tabs.query({
-                    url,
+                    url: option.url.split('#')[0],
+                    windowId: option.windowID,
                 })
-            ).filter((aTab) => aTab.url === option.url);
+            ).filter((aTab) => {
+                let inAppRedirectUrl: string | undefined = undefined;
+                if (aTab.url === option.url) {
+                    return true;
+                }
+                if (!aTab.url) {
+                    return false;
+                }
+                try {
+                    const tabURL = new URL(aTab.url);
+                    if (tabURL.hash.startsWith('#/locked?url=')) {
+                        inAppRedirectUrl = decodeURIComponent(
+                            tabURL.hash.replace('#/locked?url=', '')
+                        );
+                        if (inAppRedirectUrl === inAppUrlToMatch) {
+                            return true;
+                        }
+                    }
+                } catch (e) {
+                    // do nothing
+                }
+                if (
+                    option.match &&
+                    option.match({ url: aTab.url, inAppRedirectUrl })
+                ) {
+                    return true;
+                }
+                return false;
+            });
             if (tabs.length) {
                 tabToHighlight = tabs[0];
             }

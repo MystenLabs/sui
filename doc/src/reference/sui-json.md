@@ -17,13 +17,13 @@ This table shows the restrictions placed on JSON types to make them SuiJSON comp
 
 ## Type coercion reasoning
 
-Due to the loosely typed nature of JSON/SuiJSON and the strongly typed nature of Move types, we sometimes need to overload SuiJSON types to represent multiple Move types.
+Due to the loosely typed nature of JSON/SuiJSON and the strongly typed nature of Move types, you sometimes need to overload SuiJSON types to represent multiple Move types.
 
-For example `SuiJSON::Number` can represent both *U8* and *U32*. This means we have to coerce and sometimes convert types.
+For example `SuiJSON::Number` can represent both *U8* and *U32*. This means you have to coerce and sometimes convert types.
 
-Which type we coerce depends on the expected Move type. For example, if the Move function expects a U8, we must have received a `SuiJSON::Number` with a value less than 256. More importantly, we have no way to easily express Move addresses in JSON, so we encode them as hex strings prefixed by `0x`.
+Which type you coerce depends on the expected Move type. For example, if the Move function expects a U8, you must have received a `SuiJSON::Number` with a value less than 256. More importantly, you have no way to easily express Move addresses in JSON, so you encode them as hex strings prefixed by `0x`.
 
-Additionally, Move supports U128 and U256 but JSON doesn't. As a result we allow encoding numbers as strings.
+Additionally, Move supports U128 and U256 but JSON doesn't. As a result Sui allows encoding numbers as strings.
 
 ## Type coercion rules
 
@@ -39,6 +39,6 @@ Additionally, Move supports U128 and U256 but JSON doesn't. As a result we allow
 | Address | 32 byte hex string prefixed with `0x` | `"0xbc33e6e4818f9f2ef77d020b35c24be738213e64d9e58839ee7b4222029610de"` | `0xbc33`: string too short<br>`bc33e6e4818f9f2ef77d020b35c24be738213e64d9e58839ee7b4222029610de`: missing `0x` prefix<br>`0xG2B1A39A1514E1D8A7CE45919CFEB4FEE70B4E01`: invalid hex char `G` |
 | ObjectID | 32 byte hex string prefixed with `0x` | `"0x1b879f00b03357c95a908b7fb568712f5be862c5cb0a5894f62d06e9098de6dc"` | Similar to above |
 | Identifier | Typically used for module and function names. Encoded as one of the following:<ul><li>A String whose first character is a letter and the remaining characters are letters, digits or underscore.</li><li>A String whose first character is an underscore, and there is at least one further letter, digit or underscore</li></ul> | `"function"`,<br>`"_function"`,<br>`"some_name"`,<br>`"\___\_some_name"`,<br>`"Another"` | `"_"`: missing trailing underscore, digit or letter,<br>`"8name"`: cannot start with digit,<br>`".function"`: cannot start with period,<br>`" "`: cannot be empty space,<br>`"func name"`: cannot have spaces |
-| Vector&lt;Move Type> | Homogeneous vector of aforementioned types including nested vectors of primitive types (only "flat" vectors of ObjectIDs are allowed) | `[1,2,3,4]`: simple U8 vector<br>`[[3,600],[],[0,7,4]]`: nested U32 vector `["0x2B1A39A1514E1D8A7CE45919CFEB4FEE", "0x2B1A39A1514E1D8A7CE45919CFEB4FEF"]`: ObjectID vector | `[1,2,3,false]`: not homogeneous JSON<br>`[1,2,null,4]`: invalid elements<br>`[1,2,"7"]`: although we allow encoding numbers as strings meaning this array can evaluate to `[1,2,7]`, the array is still ambiguous so it fails the homogeneity check. |
-| Vector&lt;U8> | <em>For convenience, we allow:</em><br>U8 vectors represented as UTF-8 (and ASCII) strings. | `"√®ˆbo72 √∂†∆˚–œ∑π2ie"`: UTF-8<br>`"abcdE738-2 _=?"`: ASCII | |
+| Vector&lt;Move Type> | Homogeneous vector of aforementioned types including nested vectors of primitive types (only "flat" vectors of ObjectIDs are allowed) | `[1,2,3,4]`: simple U8 vector<br>`[[3,600],[],[0,7,4]]`: nested U32 vector `["0x2B1A39A1514E1D8A7CE45919CFEB4FEE", "0x2B1A39A1514E1D8A7CE45919CFEB4FEF"]`: ObjectID vector | `[1,2,3,false]`: not homogeneous JSON<br>`[1,2,null,4]`: invalid elements<br>`[1,2,"7"]`: although Sui allows encoding numbers as strings meaning this array can evaluate to `[1,2,7]`, the array is still ambiguous so it fails the homogeneity check. |
+| Vector&lt;U8> | <em>For convenience, Sui allows:</em><br>U8 vectors represented as UTF-8 (and ASCII) strings. | `"√®ˆbo72 √∂†∆˚–œ∑π2ie"`: UTF-8<br>`"abcdE738-2 _=?"`: ASCII | |
 

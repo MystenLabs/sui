@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use move_binary_format::compatibility::Compatibility;
+use move_binary_format::file_format::AbilitySet;
 use move_binary_format::CompiledModule;
 use move_core_types::gas_algebra::InternalGas;
 use once_cell::sync::Lazy;
@@ -9,17 +10,15 @@ use serde::{Deserialize, Serialize};
 use std::fmt::Formatter;
 use sui_types::base_types::ObjectRef;
 use sui_types::storage::ObjectStore;
-use sui_types::DEEPBOOK_OBJECT_ID;
+use sui_types::DEEPBOOK_PACKAGE_ID;
 use sui_types::{
     base_types::ObjectID,
     digests::TransactionDigest,
     move_package::MovePackage,
     object::{Object, OBJECT_START_VERSION},
-    MOVE_STDLIB_OBJECT_ID, SUI_FRAMEWORK_OBJECT_ID, SUI_SYSTEM_OBJECT_ID,
+    MOVE_STDLIB_PACKAGE_ID, SUI_FRAMEWORK_PACKAGE_ID, SUI_SYSTEM_PACKAGE_ID,
 };
 use tracing::error;
-
-pub mod natives;
 
 /// Represents a system package in the framework, that's built from the source code inside
 /// sui-framework.
@@ -55,7 +54,7 @@ impl SystemPackage {
     pub fn modules(&self) -> Vec<CompiledModule> {
         self.bytes
             .iter()
-            .map(|b| CompiledModule::deserialize(b).unwrap())
+            .map(|b| CompiledModule::deserialize_with_defaults(b).unwrap())
             .collect()
     }
 
@@ -97,7 +96,7 @@ macro_rules! define_system_packages {
                 )),*
             ]
         });
-        &Lazy::force(&PACKAGES)
+        Lazy::force(&PACKAGES)
     }}
 }
 
@@ -108,21 +107,21 @@ impl BuiltInFramework {
         // place we need to worry about if any of them changes.
         // TODO: Is it possible to derive dependencies from the bytecode instead of manually specifying them?
         define_system_packages!([
-            (MOVE_STDLIB_OBJECT_ID, "move-stdlib", []),
+            (MOVE_STDLIB_PACKAGE_ID, "move-stdlib", []),
             (
-                SUI_FRAMEWORK_OBJECT_ID,
+                SUI_FRAMEWORK_PACKAGE_ID,
                 "sui-framework",
-                [MOVE_STDLIB_OBJECT_ID]
+                [MOVE_STDLIB_PACKAGE_ID]
             ),
             (
-                SUI_SYSTEM_OBJECT_ID,
+                SUI_SYSTEM_PACKAGE_ID,
                 "sui-system",
-                [MOVE_STDLIB_OBJECT_ID, SUI_FRAMEWORK_OBJECT_ID]
+                [MOVE_STDLIB_PACKAGE_ID, SUI_FRAMEWORK_PACKAGE_ID]
             ),
             (
-                DEEPBOOK_OBJECT_ID,
+                DEEPBOOK_PACKAGE_ID,
                 "deepbook",
-                [MOVE_STDLIB_OBJECT_ID, SUI_FRAMEWORK_OBJECT_ID]
+                [MOVE_STDLIB_PACKAGE_ID, SUI_FRAMEWORK_PACKAGE_ID]
             )
         ])
         .iter()
@@ -168,6 +167,7 @@ pub async fn compare_system_package<S: ObjectStore>(
     modules: &[CompiledModule],
     dependencies: Vec<ObjectID>,
     max_binary_format_version: u32,
+    no_extraneous_module_bytes: bool,
 ) -> Option<ObjectRef> {
     let cur_object = match object_store.get_object(id) {
         Ok(Some(cur_object)) => cur_object,
@@ -219,6 +219,8 @@ pub async fn compare_system_package<S: ObjectStore>(
         check_struct_layout: true,
         check_friend_linking: false,
         check_private_entry_linking: true,
+        disallowed_new_abilities: AbilitySet::ALL,
+        disallow_change_struct_type_params: true,
     };
 
     let new_pkg = new_object
@@ -226,14 +228,17 @@ pub async fn compare_system_package<S: ObjectStore>(
         .try_as_package_mut()
         .expect("Created as package");
 
-    let cur_normalized = match cur_pkg.normalize(max_binary_format_version) {
-        Ok(v) => v,
-        Err(e) => {
-            error!("Could not normalize existing package: {e:?}");
-            return None;
-        }
-    };
-    let mut new_normalized = new_pkg.normalize(max_binary_format_version).ok()?;
+    let cur_normalized =
+        match cur_pkg.normalize(max_binary_format_version, no_extraneous_module_bytes) {
+            Ok(v) => v,
+            Err(e) => {
+                error!("Could not normalize existing package: {e:?}");
+                return None;
+            }
+        };
+    let mut new_normalized = new_pkg
+        .normalize(max_binary_format_version, no_extraneous_module_bytes)
+        .ok()?;
 
     for (name, cur_module) in cur_normalized {
         let Some(new_module) = new_normalized.remove(&name) else {

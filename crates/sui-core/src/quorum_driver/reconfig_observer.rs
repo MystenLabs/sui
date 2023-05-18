@@ -18,7 +18,7 @@ use crate::{
 use super::QuorumDriver;
 
 #[async_trait]
-pub trait ReconfigObserver<A> {
+pub trait ReconfigObserver<A: Clone> {
     async fn run(&mut self, quorum_driver: Arc<QuorumDriver<A>>);
     fn clone_boxed(&self) -> Box<dyn ReconfigObserver<A> + Send + Sync>;
 }
@@ -124,7 +124,7 @@ pub struct DummyReconfigObserver;
 #[async_trait]
 impl<A> ReconfigObserver<A> for DummyReconfigObserver
 where
-    A: AuthorityAPI + Send + Sync + 'static,
+    A: AuthorityAPI + Send + Sync + Clone + 'static,
 {
     fn clone_boxed(&self) -> Box<dyn ReconfigObserver<A> + Send + Sync> {
         Box::new(Self {})

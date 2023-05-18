@@ -1,9 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { StakeAdd16 } from '@mysten/icons';
 import { type Meta, type StoryObj } from '@storybook/react';
 
-import Icon, { SuiIcons } from '../components/icon';
 import { ButtonConnectedTo } from './ButtonConnectedTo';
 
 export default {
@@ -42,7 +42,7 @@ export const LongText: StoryObj<typeof ButtonConnectedTo> = {
     args: {
         text: 'Button with very long text',
         bgOnHover: 'grey',
-        iconBefore: <Icon icon={SuiIcons.Add} />,
-        iconAfter: <Icon icon={SuiIcons.Add} />,
+        iconBefore: <StakeAdd16 />,
+        iconAfter: <StakeAdd16 />,
     },
 };

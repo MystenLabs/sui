@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useFeature } from '@growthbook/growthbook-react';
+import { useGetSystemState } from '@mysten/core';
 import { Plus12 } from '@mysten/icons';
 import { useMemo } from 'react';
 
@@ -10,7 +11,6 @@ import { getAllStakeSui } from '../getAllStakeSui';
 import { StakeAmount } from '../home/StakeAmount';
 import { StakeCard } from '../home/StakedCard';
 import { useGetDelegatedStake } from '../useGetDelegatedStake';
-import { useSystemState } from '../useSystemState';
 import { Button } from '_app/shared/ButtonUI';
 import BottomMenuLayout, {
     Menu,
@@ -31,7 +31,7 @@ export function ValidatorsCard() {
         error,
     } = useGetDelegatedStake(accountAddress || '');
 
-    const { data: system } = useSystemState();
+    const { data: system } = useGetSystemState();
     const activeValidators = system?.activeValidators;
 
     // Total active stake for all Staked validators
@@ -44,10 +44,21 @@ export function ValidatorsCard() {
         return delegatedStake?.flatMap((delegation) => {
             return delegation.stakes.map((d) => ({
                 ...d,
+                // flag any inactive validator for the stakeSui object
+                // if the stakingPoolId is not found in the activeValidators list flag as inactive
+                inactiveValidator: !activeValidators?.find(
+                    ({ stakingPoolId }) =>
+                        stakingPoolId === delegation.stakingPool
+                ),
                 validatorAddress: delegation.validatorAddress,
             }));
         });
-    }, [delegatedStake]);
+    }, [activeValidators, delegatedStake]);
+
+    // Check if there are any inactive validators
+    const hasInactiveValidatorDelegation = delegations?.some(
+        ({ inactiveValidator }) => inactiveValidator
+    );
 
     // Get total rewards for all delegations
     const totalEarnTokenReward = useMemo(() => {
@@ -79,8 +90,8 @@ export function ValidatorsCard() {
 
     if (isError) {
         return (
-            <div className="p-2 w-full flex justify-center items-center h-full">
-                <Alert className="mb-2">
+            <div className="p-2 w-full flex justify-center items-center h-full mb-2">
+                <Alert>
                     <strong>{error?.message}</strong>
                 </Alert>
             </div>
@@ -92,6 +103,31 @@ export function ValidatorsCard() {
             <BottomMenuLayout>
                 <Content>
                     <div className="mb-4">
+                        {hasInactiveValidatorDelegation ? (
+                            <div className="mb-3">
+                                <Alert>
+                                    Unstake SUI from the inactive validators and
+                                    stake on an active validator to start
+                                    earning rewards again.
+                                </Alert>
+                            </div>
+                        ) : null}
+                        <div className="grid grid-cols-2 gap-2.5 mb-4">
+                            {system &&
+                                delegations
+                                    ?.filter(
+                                        ({ inactiveValidator }) =>
+                                            inactiveValidator
+                                    )
+                                    .map((delegation) => (
+                                        <StakeCard
+                                            delegationObject={delegation}
+                                            currentEpoch={Number(system.epoch)}
+                                            key={delegation.stakedSuiId}
+                                            inactiveValidator
+                                        />
+                                    ))}
+                        </div>
                         <Card
                             padding="none"
                             header={
@@ -128,13 +164,18 @@ export function ValidatorsCard() {
 
                         <div className="grid grid-cols-2 gap-2.5 mt-4">
                             {system &&
-                                delegations?.map((delegation) => (
-                                    <StakeCard
-                                        delegationObject={delegation}
-                                        currentEpoch={Number(system.epoch)}
-                                        key={delegation.stakedSuiId}
-                                    />
-                                ))}
+                                delegations
+                                    ?.filter(
+                                        ({ inactiveValidator }) =>
+                                            !inactiveValidator
+                                    )
+                                    .map((delegation) => (
+                                        <StakeCard
+                                            delegationObject={delegation}
+                                            currentEpoch={Number(system.epoch)}
+                                            key={delegation.stakedSuiId}
+                                        />
+                                    ))}
                         </div>
                     </div>
                 </Content>

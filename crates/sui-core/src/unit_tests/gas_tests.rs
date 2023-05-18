@@ -5,12 +5,15 @@ use super::*;
 
 use super::authority_tests::{init_state_with_ids, send_and_confirm_transaction};
 use super::move_integration_tests::build_and_try_publish_test_package;
-use crate::authority::authority_tests::{init_state, init_state_with_ids_and_object_basics};
+use crate::authority::authority_tests::init_state_with_ids_and_object_basics;
+use crate::authority::test_authority_builder::TestAuthorityBuilder;
 use move_core_types::account_address::AccountAddress;
 use move_core_types::ident_str;
 use once_cell::sync::Lazy;
 use sui_protocol_config::ProtocolConfig;
 use sui_types::crypto::AccountKeyPair;
+use sui_types::effects::TransactionEvents;
+use sui_types::execution_status::{ExecutionFailureStatus, ExecutionStatus};
 use sui_types::gas::SuiCostTable;
 use sui_types::gas_coin::GasCoin;
 use sui_types::object::GAS_VALUE_FOR_TESTING;
@@ -126,7 +129,7 @@ where
     const GAS_AMOUNT: u64 = 10_000_000_000;
     let gas_coins = make_gas_coins(sender, GAS_AMOUNT, coin_num);
     let gas_coin_ids: Vec<_> = gas_coins.iter().map(|obj| obj.id()).collect();
-    let authority_state = init_state().await;
+    let authority_state = TestAuthorityBuilder::new().build().await;
     for obj in gas_coins {
         authority_state.insert_genesis_object(obj).await;
     }
@@ -262,7 +265,8 @@ async fn touch_gas_coins(
         .unwrap()
         .unwrap()
         .compute_object_reference();
-    let data = TransactionData::new(kind, sender, gas_object_ref, 100_000_000, 1);
+    let rgp = authority_state.reference_gas_price_for_testing().unwrap();
+    let data = TransactionData::new(kind, sender, gas_object_ref, 100_000_000, rgp);
     let tx = to_sender_signed_transaction(data, sender_key);
 
     send_and_confirm_transaction(authority_state, tx)
@@ -337,7 +341,7 @@ async fn test_oog_computation_oog_storage() -> SuiResult {
 // - computation ok, OOG for storage, minimal storage ok
 #[tokio::test]
 async fn test_computation_ok_oog_storage_minimal_ok() -> SuiResult {
-    const GAS_PRICE: u64 = 30;
+    const GAS_PRICE: u64 = 1001;
     const BUDGET: u64 = 1_100_000;
     let (sender, sender_key) = get_key_pair();
     check_oog_transaction(
@@ -369,7 +373,7 @@ async fn test_computation_ok_oog_storage_minimal_ok() -> SuiResult {
 // - computation ok, OOG for storage, OOG for minimal storage (e.g. computation is entire budget)
 #[tokio::test]
 async fn test_computation_ok_oog_storage() -> SuiResult {
-    const GAS_PRICE: u64 = 30;
+    const GAS_PRICE: u64 = 1001;
     const BUDGET: u64 = 35_000;
     let (sender, sender_key) = get_key_pair();
     check_oog_transaction(
@@ -510,8 +514,9 @@ async fn test_transfer_sui_insufficient_gas() {
     let gas_object_id = ObjectID::random();
     let gas_object = Object::with_id_owner_gas_for_testing(gas_object_id, sender, *MIN_GAS_BUDGET);
     let gas_object_ref = gas_object.compute_object_reference();
-    let authority_state = init_state().await;
+    let authority_state = TestAuthorityBuilder::new().build().await;
     authority_state.insert_genesis_object(gas_object).await;
+    let rgp = authority_state.reference_gas_price_for_testing().unwrap();
 
     let pt = {
         let mut builder = ProgrammableTransactionBuilder::new();
@@ -519,7 +524,7 @@ async fn test_transfer_sui_insufficient_gas() {
         builder.finish()
     };
     let kind = TransactionKind::ProgrammableTransaction(pt);
-    let data = TransactionData::new(kind, sender, gas_object_ref, *MIN_GAS_BUDGET, 1);
+    let data = TransactionData::new(kind, sender, gas_object_ref, *MIN_GAS_BUDGET, rgp);
     let tx = to_sender_signed_transaction(data, &sender_key);
 
     let effects = send_and_confirm_transaction(&authority_state, tx)
@@ -541,7 +546,7 @@ async fn test_transfer_sui_insufficient_gas() {
 #[tokio::test]
 async fn test_invalid_gas_owners() {
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
-    let authority_state = init_state().await;
+    let authority_state = TestAuthorityBuilder::new().build().await;
 
     let init_object = |o: Object| async {
         let obj_ref = o.compute_object_reference();
@@ -583,7 +588,7 @@ async fn test_invalid_gas_owners() {
             sender,
             vec![good_gas_object, bad_gas_object],
             *MAX_GAS_BUDGET,
-            1,
+            1111,
         );
         let tx = to_sender_signed_transaction(data, sender_key);
 

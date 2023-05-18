@@ -17,17 +17,14 @@ schemars = "0.8.12"
 sui-framework = { path = "../sui-framework" }
 sui-protocol-config = { path = "../sui-protocol-config" }
 sui-types = { path = "../sui-types" }
-sui-verifier = { path = "../sui-verifier" }
 
 move-binary-format.workspace = true
+move-bytecode-utils.workspace = true
 move-core-types.workspace = true
 fastcrypto = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
 test-fuzz = "3.0.4"
-workspace-hack.workspace = true
 sui-types = { path = "../sui-types", features = ["test-utils"] }
-
-sui-adapter = { path = "../sui-adapter" }
 sui-move-build = { path = "../sui-move-build" }

@@ -1,4 +1,4 @@
-FROM rust:1.65.0 AS chef
+FROM rust:1.68.2 AS chef
 ARG PROFILE=release
 WORKDIR sui
 RUN apt-get update && apt-get install -y cmake clang
@@ -39,6 +39,7 @@ ARG PROFILE=release
 ARG GIT_REVISION
 COPY Cargo.toml Cargo.lock ./
 COPY crates crates
+COPY sui-execution sui-execution
 COPY narwhal narwhal
 COPY external-crates external-crates
 RUN cargo build --profile $PROFILE --bin sui-node

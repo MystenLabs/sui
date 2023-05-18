@@ -23,7 +23,7 @@ The Sui economy has five core components:
 * The [proof-of-stake mechanism](../tokenomics/proof-of-stake.md) is used to select, incentivize, and reward honest behavior by Sui Validators and the SUI owners that stake with them.
 * On-chain voting is used for governance and protocol upgrades.
 
-Throughout, we use the visual representation in the following figure to aid the discussion. 
+Throughout, use the visual representation in the following figure to aid the discussion. 
 
 ![Sui tokenomics flow](../../../static/sui-tokenomics-flow.png "See staking and tokenomics in Sui")
 *Visualize staking and tokenomics in Sui*

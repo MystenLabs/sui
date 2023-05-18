@@ -8,16 +8,22 @@ import { genTableDataFromTxData } from '../transactions/TxCardUtils';
 
 import {
     DEFAULT_TRANSACTIONS_LIMIT,
-    useGetTransactionBlocksForAddress,
-} from '~/hooks/useGetTransactionBlocksForAddress';
+    useGetTransactionBlocks,
+} from '~/hooks/useGetTransactionBlocks';
 import { Heading } from '~/ui/Heading';
 import { Pagination } from '~/ui/Pagination';
 import { PlaceholderTable } from '~/ui/PlaceholderTable';
 import { RadioGroup, RadioOption } from '~/ui/Radio';
 import { TableCard } from '~/ui/TableCard';
 
+export enum FILTER_VALUES {
+    INPUT = 'InputObject',
+    CHANGED = 'ChangedObject',
+}
+
 type TransactionBlocksForAddressProps = {
     address: string;
+    filter?: FILTER_VALUES;
     isObject?: boolean;
 };
 
@@ -25,11 +31,6 @@ enum PAGE_ACTIONS {
     NEXT,
     PREV,
     FIRST,
-}
-
-enum FILTER_VALUES {
-    INPUT = 'InputObject',
-    CHANGED = 'ChangedObject',
 }
 
 type TransactionBlocksForAddressActionType = {
@@ -74,9 +75,10 @@ const reducer = (
 
 function TransactionBlocksForAddress({
     address,
+    filter = FILTER_VALUES.CHANGED,
     isObject = false,
 }: TransactionBlocksForAddressProps) {
-    const [filterValue, setFilterValue] = useState(FILTER_VALUES.CHANGED);
+    const [filterValue, setFilterValue] = useState(filter);
     const [currentPageState, dispatch] = useReducer(reducer, {
         InputObject: 0,
         ChangedObject: 0,
@@ -89,14 +91,15 @@ function TransactionBlocksForAddress({
         isFetchingNextPage,
         fetchNextPage,
         hasNextPage,
-    } = useGetTransactionBlocksForAddress(address, {
+    } = useGetTransactionBlocks({
         [filterValue]: address,
     } as TransactionFilter);
 
     const currentPage = currentPageState[filterValue];
-    const cardData = data
-        ? genTableDataFromTxData(data.pages[currentPage].data)
-        : undefined;
+    const cardData =
+        data && data.pages[currentPage]
+            ? genTableDataFromTxData(data.pages[currentPage].data)
+            : undefined;
 
     return (
         <div data-testid="tx">
@@ -168,9 +171,11 @@ function TransactionBlocksForAddress({
 
                                 filterValue,
                             });
-                            // setCurrentPage(currentPage + 1);
                         }}
-                        hasNext={Boolean(hasNextPage)}
+                        hasNext={
+                            Boolean(hasNextPage) &&
+                            Boolean(data?.pages[currentPage])
+                        }
                         hasPrev={currentPageState[filterValue] !== 0}
                         onPrev={() =>
                             dispatch({

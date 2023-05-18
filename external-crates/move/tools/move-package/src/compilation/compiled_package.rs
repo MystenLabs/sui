@@ -250,7 +250,7 @@ impl OnDiskCompiledPackage {
                 Ok(CompiledUnitWithSource { unit, source_path })
             }
             Err(_) => {
-                let module = CompiledModule::deserialize(&bytecode_bytes)?;
+                let module = CompiledModule::deserialize_with_defaults(&bytecode_bytes)?;
                 let (address_bytes, module_name) = {
                     let id = module.self_id();
                     let parsed_addr = NumericalAddress::new(

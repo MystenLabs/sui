@@ -5,44 +5,41 @@ use futures::{stream, StreamExt};
 use std::time::{Duration, SystemTime};
 use sui_core::authority_client::AuthorityAPI;
 use sui_core::consensus_adapter::position_submit_certificate;
-use sui_types::messages::{
-    CallArg, CommandArgumentError, ExecutionFailureStatus, ExecutionStatus, ObjectArg,
-    ObjectInfoRequest, TransactionEffectsAPI, TEST_ONLY_GAS_UNIT_FOR_GENERIC,
-};
+use sui_types::transaction::{CallArg, ObjectArg};
 use test_utils::authority::get_client;
+use test_utils::authority::{spawn_test_authorities, test_authority_configs_with_objects};
 use test_utils::transaction::{
     publish_counter_package, submit_shared_object_transaction, submit_single_owner_transaction,
 };
-use test_utils::{
-    authority::{spawn_test_authorities, test_authority_configs_with_objects},
-    messages::{move_transaction, test_shared_object_transactions},
-};
 
 use sui_macros::sim_test;
+use sui_test_transaction_builder::TestTransactionBuilder;
+use sui_types::base_types::dbg_addr;
+use sui_types::crypto::deterministic_random_account_key;
+use sui_types::effects::TransactionEffectsAPI;
 use sui_types::event::Event;
-use sui_types::object::{generate_test_gas_objects, Object};
-use sui_types::{SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION};
+use sui_types::execution_status::{CommandArgumentError, ExecutionFailureStatus, ExecutionStatus};
+use sui_types::messages_grpc::ObjectInfoRequest;
+use sui_types::object::generate_test_gas_objects;
+use sui_types::SUI_CLOCK_OBJECT_ID;
 
 /// Send a simple shared object transaction to Sui and ensures the client gets back a response.
 #[sim_test]
 async fn shared_object_transaction() {
     let gas_objects = generate_test_gas_objects();
-    let mut objects = vec![Object::shared_for_testing()];
-    objects.extend(gas_objects.into_iter());
 
     // Get the authority configs and spawn them. Note that it is important to not drop
     // the handles (or the authorities will stop).
-    let (configs, objects) = test_authority_configs_with_objects(objects);
+    let (configs, objects) = test_authority_configs_with_objects(gas_objects);
     let rgp = configs.genesis.reference_gas_price();
-    let mut objects = objects.into_iter();
-    let shared_object = objects.next().unwrap();
-    let gas_objects: Vec<_> = objects.collect();
     let _handles = spawn_test_authorities(&configs).await;
 
     // Make a test shared object certificate.
-    let transaction = test_shared_object_transactions(Some(shared_object), Some(gas_objects), rgp)
-        .pop()
-        .unwrap();
+    let (sender, keypair) = deterministic_random_account_key();
+    let transaction =
+        TestTransactionBuilder::new(sender, objects[0].compute_object_reference(), rgp)
+            .call_staking(objects[1].compute_object_reference(), dbg_addr(2))
+            .build_and_sign(&keypair);
 
     // Submit the transaction. Note that this transaction is random and we do not expect
     // it to be successfully executed by the Move execution engine.
@@ -55,23 +52,20 @@ async fn shared_object_transaction() {
 #[sim_test]
 async fn many_shared_object_transactions() {
     let gas_objects = generate_test_gas_objects();
-    let mut objects = vec![Object::shared_for_testing()];
-    objects.extend(gas_objects.into_iter());
 
     // Get the authority configs and spawn them. Note that it is important to not drop
     // the handles (or the authorities will stop).
-    let (configs, objects) = test_authority_configs_with_objects(objects);
+    let (configs, objects) = test_authority_configs_with_objects(gas_objects);
     let rgp = configs.genesis.reference_gas_price();
-    let mut objects = objects.into_iter();
-    let shared_object = objects.next().unwrap();
-    let gas_objects: Vec<_> = objects.collect();
 
     let _handles = spawn_test_authorities(&configs).await;
 
     // Make a test shared object certificate.
-    let transaction = test_shared_object_transactions(Some(shared_object), Some(gas_objects), rgp)
-        .pop()
-        .unwrap();
+    let (sender, keypair) = deterministic_random_account_key();
+    let transaction =
+        TestTransactionBuilder::new(sender, objects[0].compute_object_reference(), rgp)
+            .call_staking(objects[1].compute_object_reference(), dbg_addr(2))
+            .build_and_sign(&keypair);
 
     // Submit the transaction. Note that this transaction is random and we do not expect
     // it to be successfully executed by the Move execution engine.
@@ -98,17 +92,17 @@ async fn call_shared_object_contract() {
             .await
             .0;
 
+    let (sender, keypair) = deterministic_random_account_key();
     // Make a transaction to create a counter.
-    let transaction = move_transaction(
-        gas_objects.pop().unwrap(),
-        "counter",
-        "create",
-        package_id,
-        /* arguments */ Vec::default(),
-        rgp * TEST_ONLY_GAS_UNIT_FOR_GENERIC,
+    let transaction = TestTransactionBuilder::new(
+        sender,
+        gas_objects.pop().unwrap().compute_object_reference(),
         rgp,
-    );
-    let (effects, _) = submit_single_owner_transaction(transaction, &configs.net_addresses()).await;
+    )
+    .call_counter_create(package_id)
+    .build_and_sign(&keypair);
+    let (effects, _, _) =
+        submit_single_owner_transaction(transaction, &configs.net_addresses()).await;
     assert!(matches!(effects.status(), ExecutionStatus::Success { .. }));
     let counter_creation_transaction = *effects.transaction_digest();
     let ((counter_id, counter_initial_shared_version, _), _) = effects.created()[0];
@@ -126,21 +120,25 @@ async fn call_shared_object_contract() {
     // Send two read only transactions
     for _ in 0..2 {
         // Ensure the value of the counter is `0`.
-        let transaction = move_transaction(
-            gas_objects.pop().unwrap(),
+        let transaction = TestTransactionBuilder::new(
+            sender,
+            gas_objects.pop().unwrap().compute_object_reference(),
+            rgp,
+        )
+        .move_call(
+            package_id,
             "counter",
             "assert_value",
-            package_id,
             vec![
                 CallArg::Object(counter_object_arg_imm),
                 CallArg::Pure(0u64.to_le_bytes().to_vec()),
             ],
-            rgp * TEST_ONLY_GAS_UNIT_FOR_GENERIC,
-            rgp,
-        );
-        let (effects, _) = submit_shared_object_transaction(transaction, &configs.net_addresses())
-            .await
-            .unwrap();
+        )
+        .build_and_sign(&keypair);
+        let (effects, _, _) =
+            submit_shared_object_transaction(transaction, &configs.net_addresses())
+                .await
+                .unwrap();
         assert!(matches!(effects.status(), ExecutionStatus::Success { .. }));
         // Only genesis, assert_value, and counter creation are dependencies
         // Note that this assert would fail for second transaction
@@ -152,16 +150,14 @@ async fn call_shared_object_contract() {
     }
 
     // Make a transaction to increment the counter.
-    let transaction = move_transaction(
-        gas_objects.pop().unwrap(),
-        "counter",
-        "increment",
-        package_id,
-        vec![CallArg::Object(counter_object_arg)],
-        rgp * TEST_ONLY_GAS_UNIT_FOR_GENERIC,
+    let transaction = TestTransactionBuilder::new(
+        sender,
+        gas_objects.pop().unwrap().compute_object_reference(),
         rgp,
-    );
-    let (effects, _) = submit_shared_object_transaction(transaction, &configs.net_addresses())
+    )
+    .call_counter_increment(package_id, counter_id, counter_initial_shared_version)
+    .build_and_sign(&keypair);
+    let (effects, _, _) = submit_shared_object_transaction(transaction, &configs.net_addresses())
         .await
         .unwrap();
     let increment_transaction = *effects.transaction_digest();
@@ -178,11 +174,15 @@ async fn call_shared_object_contract() {
     let mut assert_value_mut_transaction = None;
     for imm in [true, false] {
         // Ensure the value of the counter is `1`.
-        let transaction = move_transaction(
-            gas_objects.pop().unwrap(),
+        let transaction = TestTransactionBuilder::new(
+            sender,
+            gas_objects.pop().unwrap().compute_object_reference(),
+            rgp,
+        )
+        .move_call(
+            package_id,
             "counter",
             "assert_value",
-            package_id,
             vec![
                 CallArg::Object(if imm {
                     counter_object_arg_imm
@@ -191,12 +191,12 @@ async fn call_shared_object_contract() {
                 }),
                 CallArg::Pure(1u64.to_le_bytes().to_vec()),
             ],
-            rgp * TEST_ONLY_GAS_UNIT_FOR_GENERIC,
-            rgp,
-        );
-        let (effects, _) = submit_shared_object_transaction(transaction, &configs.net_addresses())
-            .await
-            .unwrap();
+        )
+        .build_and_sign(&keypair);
+        let (effects, _, _) =
+            submit_shared_object_transaction(transaction, &configs.net_addresses())
+                .await
+                .unwrap();
         assert!(matches!(effects.status(), ExecutionStatus::Success { .. }));
         // Genesis, assert_value, and increment transaction are dependencies
         assert_eq!(effects.dependencies().len(), 3);
@@ -207,16 +207,19 @@ async fn call_shared_object_contract() {
     let assert_value_mut_transaction = assert_value_mut_transaction.unwrap();
 
     // And last check - attempt to send increment transaction with immutable reference
-    let transaction = move_transaction(
-        gas_objects.pop().unwrap(),
+    let transaction = TestTransactionBuilder::new(
+        sender,
+        gas_objects.pop().unwrap().compute_object_reference(),
+        rgp,
+    )
+    .move_call(
+        package_id,
         "counter",
         "increment",
-        package_id,
         vec![CallArg::Object(counter_object_arg_imm)],
-        rgp * TEST_ONLY_GAS_UNIT_FOR_GENERIC,
-        rgp,
-    );
-    let (effects, _) = submit_shared_object_transaction(transaction, &configs.net_addresses())
+    )
+    .build_and_sign(&keypair);
+    let (effects, _, _) = submit_shared_object_transaction(transaction, &configs.net_addresses())
         .await
         .unwrap();
     // Transaction fails
@@ -252,28 +255,33 @@ async fn access_clock_object_test() {
             .await
             .0;
 
-    let clock_object_arg = ObjectArg::SharedObject {
-        id: SUI_CLOCK_OBJECT_ID,
-        initial_shared_version: SUI_CLOCK_OBJECT_SHARED_VERSION,
-        mutable: false,
-    };
-
-    let transaction = move_transaction(
-        gas_objects.pop().unwrap(),
-        "clock",
-        "get_time",
-        package_id,
-        vec![CallArg::Object(clock_object_arg)],
-        rgp * TEST_ONLY_GAS_UNIT_FOR_GENERIC,
+    let (sender, keypair) = deterministic_random_account_key();
+    let transaction = TestTransactionBuilder::new(
+        sender,
+        gas_objects.pop().unwrap().compute_object_reference(),
         rgp,
-    );
+    )
+    .move_call(package_id, "clock", "get_time", vec![CallArg::CLOCK_IMM])
+    .build_and_sign(&keypair);
     let digest = *transaction.digest();
     let start = SystemTime::now()
         .duration_since(SystemTime::UNIX_EPOCH)
         .unwrap();
-    let (effects, events) = submit_shared_object_transaction(transaction, &configs.net_addresses())
-        .await
-        .unwrap();
+    let (effects, events, objects) =
+        submit_shared_object_transaction(transaction, &configs.net_addresses())
+            .await
+            .unwrap();
+
+    assert_eq!(
+        objects.first().unwrap().compute_object_reference(),
+        effects
+            .shared_objects()
+            .iter()
+            .find(|(id, _, _)| *id == SUI_CLOCK_OBJECT_ID)
+            .unwrap()
+            .clone()
+    );
+
     let finish = SystemTime::now()
         .duration_since(SystemTime::UNIX_EPOCH)
         .unwrap();
@@ -337,17 +345,17 @@ async fn shared_object_flood() {
             .await
             .0;
 
+    let (sender, keypair) = deterministic_random_account_key();
     // Make a transaction to create a counter.
-    let transaction = move_transaction(
-        gas_objects.pop().unwrap(),
-        "counter",
-        "create",
-        package_id,
-        /* arguments */ Vec::default(),
-        rgp * TEST_ONLY_GAS_UNIT_FOR_GENERIC,
+    let transaction = TestTransactionBuilder::new(
+        sender,
+        gas_objects.pop().unwrap().compute_object_reference(),
         rgp,
-    );
-    let (effects, _) = submit_single_owner_transaction(transaction, &configs.net_addresses()).await;
+    )
+    .call_counter_create(package_id)
+    .build_and_sign(&keypair);
+    let (effects, _, _) =
+        submit_single_owner_transaction(transaction, &configs.net_addresses()).await;
     assert!(matches!(effects.status(), ExecutionStatus::Success { .. }));
     let ((counter_id, counter_initial_shared_version, _), _) = effects.created()[0];
     let counter_object_arg = ObjectArg::SharedObject {
@@ -357,52 +365,56 @@ async fn shared_object_flood() {
     };
 
     // Ensure the value of the counter is `0`.
-    let transaction = move_transaction(
-        gas_objects.pop().unwrap(),
+    let transaction = TestTransactionBuilder::new(
+        sender,
+        gas_objects.pop().unwrap().compute_object_reference(),
+        rgp,
+    )
+    .move_call(
+        package_id,
         "counter",
         "assert_value",
-        package_id,
         vec![
             CallArg::Object(counter_object_arg),
             CallArg::Pure(0u64.to_le_bytes().to_vec()),
         ],
-        rgp * TEST_ONLY_GAS_UNIT_FOR_GENERIC,
-        rgp,
-    );
-    let (effects, _) = submit_shared_object_transaction(transaction, &configs.net_addresses())
+    )
+    .build_and_sign(&keypair);
+    let (effects, _, _) = submit_shared_object_transaction(transaction, &configs.net_addresses())
         .await
         .unwrap();
     assert!(matches!(effects.status(), ExecutionStatus::Success { .. }));
 
     // Make a transaction to increment the counter.
-    let transaction = move_transaction(
-        gas_objects.pop().unwrap(),
-        "counter",
-        "increment",
-        package_id,
-        vec![CallArg::Object(counter_object_arg)],
-        rgp * TEST_ONLY_GAS_UNIT_FOR_GENERIC,
+    let transaction = TestTransactionBuilder::new(
+        sender,
+        gas_objects.pop().unwrap().compute_object_reference(),
         rgp,
-    );
-    let (effects, _) = submit_shared_object_transaction(transaction, &configs.net_addresses())
+    )
+    .call_counter_increment(package_id, counter_id, counter_initial_shared_version)
+    .build_and_sign(&keypair);
+    let (effects, _, _) = submit_shared_object_transaction(transaction, &configs.net_addresses())
         .await
         .unwrap();
     assert!(matches!(effects.status(), ExecutionStatus::Success { .. }));
 
     // Ensure the value of the counter is `1`.
-    let transaction = move_transaction(
-        gas_objects.pop().unwrap(),
+    let transaction = TestTransactionBuilder::new(
+        sender,
+        gas_objects.pop().unwrap().compute_object_reference(),
+        rgp,
+    )
+    .move_call(
+        package_id,
         "counter",
         "assert_value",
-        package_id,
         vec![
             CallArg::Object(counter_object_arg),
             CallArg::Pure(1u64.to_le_bytes().to_vec()),
         ],
-        rgp * TEST_ONLY_GAS_UNIT_FOR_GENERIC,
-        rgp,
-    );
-    let (effects, _) = submit_shared_object_transaction(transaction, &configs.net_addresses())
+    )
+    .build_and_sign(&keypair);
+    let (effects, _, _) = submit_shared_object_transaction(transaction, &configs.net_addresses())
         .await
         .unwrap();
     assert!(matches!(effects.status(), ExecutionStatus::Success { .. }));
@@ -426,16 +438,14 @@ async fn shared_object_sync() {
             .0;
 
     // Send a transaction to create a counter, to all but one authority.
-    let create_counter_transaction = move_transaction(
-        gas_objects.pop().unwrap(),
-        "counter",
-        "create",
-        package_id,
-        /* arguments */ Vec::default(),
-        rgp * TEST_ONLY_GAS_UNIT_FOR_GENERIC,
+    let (sender, keypair) = deterministic_random_account_key();
+    let create_counter_transaction = TestTransactionBuilder::new(
+        sender,
+        gas_objects.pop().unwrap().compute_object_reference(),
         rgp,
-    );
-
+    )
+    .call_counter_create(package_id)
+    .build_and_sign(&keypair);
     let committee = configs.committee_with_network();
     let (slow_validators, fast_validators): (Vec<_>, Vec<_>) = committee
         .network_metadata
@@ -448,7 +458,7 @@ async fn shared_object_sync() {
             ) > 0
         });
 
-    let (effects, _) = submit_single_owner_transaction(
+    let (effects, _, _) = submit_single_owner_transaction(
         create_counter_transaction.clone(),
         &slow_validators
             .iter()
@@ -458,11 +468,6 @@ async fn shared_object_sync() {
     .await;
     assert!(matches!(effects.status(), ExecutionStatus::Success { .. }));
     let ((counter_id, counter_initial_shared_version, _), _) = effects.created()[0];
-    let counter_object_arg = ObjectArg::SharedObject {
-        id: counter_id,
-        initial_shared_version: counter_initial_shared_version,
-        mutable: true,
-    };
 
     // Check that the counter object exists in at least one of the validators the transaction was
     // sent to.
@@ -486,18 +491,16 @@ async fn shared_object_sync() {
         .is_err());
 
     // Make a transaction to increment the counter.
-    let increment_counter_transaction = move_transaction(
-        gas_objects.pop().unwrap(),
-        "counter",
-        "increment",
-        package_id,
-        vec![CallArg::Object(counter_object_arg)],
-        rgp * TEST_ONLY_GAS_UNIT_FOR_GENERIC,
+    let increment_counter_transaction = TestTransactionBuilder::new(
+        sender,
+        gas_objects.pop().unwrap().compute_object_reference(),
         rgp,
-    );
+    )
+    .call_counter_increment(package_id, counter_id, counter_initial_shared_version)
+    .build_and_sign(&keypair);
 
     // Let's submit the transaction to the original set of validators.
-    let (effects, _) = submit_shared_object_transaction(
+    let (effects, _, _) = submit_shared_object_transaction(
         increment_counter_transaction.clone(),
         &configs.net_addresses()[1..],
     )
@@ -507,7 +510,7 @@ async fn shared_object_sync() {
 
     // Submit transactions to the out-of-date authority.
     // It will succeed because we share owned object certificates through narwhal
-    let (effects, _) = submit_shared_object_transaction(
+    let (effects, _, _) = submit_shared_object_transaction(
         increment_counter_transaction,
         &configs.net_addresses()[0..1],
     )
@@ -534,19 +537,18 @@ async fn replay_shared_object_transaction() {
             .0;
 
     // Send a transaction to create a counter (only to one authority) -- twice.
-    let create_counter_transaction = move_transaction(
-        gas_objects.pop().unwrap(),
-        "counter",
-        "create",
-        package_id,
-        /* arguments */ Vec::default(),
-        rgp * TEST_ONLY_GAS_UNIT_FOR_GENERIC,
+    let (sender, keypair) = deterministic_random_account_key();
+    let create_counter_transaction = TestTransactionBuilder::new(
+        sender,
+        gas_objects.pop().unwrap().compute_object_reference(),
         rgp,
-    );
+    )
+    .call_counter_create(package_id)
+    .build_and_sign(&keypair);
 
     let mut version = None;
     for _ in 0..2 {
-        let (effects, _) = submit_single_owner_transaction(
+        let (effects, _, _) = submit_single_owner_transaction(
             create_counter_transaction.clone(),
             &configs.net_addresses(),
         )

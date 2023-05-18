@@ -15,12 +15,12 @@ use async_trait::async_trait;
 use futures::future::join_all;
 use rand::seq::SliceRandom;
 use std::sync::Arc;
+use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::crypto::get_key_pair;
 use sui_types::{
     base_types::{ObjectDigest, ObjectID, SequenceNumber},
-    messages::VerifiedTransaction,
+    transaction::VerifiedTransaction,
 };
-use test_utils::messages::{make_counter_create_transaction, make_counter_increment_transaction};
 use tracing::{debug, error, info};
 
 #[derive(Debug)]
@@ -47,18 +47,20 @@ impl Payload for SharedCounterTestPayload {
         self.gas.0 = effects.gas_object().0;
     }
     fn make_transaction(&mut self) -> VerifiedTransaction {
-        make_counter_increment_transaction(
-            self.gas.0,
-            self.package_id,
-            self.counter_id,
-            self.counter_initial_shared_version,
+        TestTransactionBuilder::new(
             self.gas.1,
-            &self.gas.2,
+            self.gas.0,
             self.system_state_observer
                 .state
                 .borrow()
                 .reference_gas_price,
         )
+        .call_counter_increment(
+            self.package_id,
+            self.counter_id,
+            self.counter_initial_shared_version,
+        )
+        .build_and_sign(self.gas.2.as_ref())
     }
 }
 
@@ -196,13 +198,9 @@ impl Workload<dyn Payload> for SharedCounterWorkload {
         }
         let mut futures = vec![];
         for (gas, sender, keypair) in tail.iter() {
-            let transaction = make_counter_create_transaction(
-                *gas,
-                self.basics_package_id.unwrap(),
-                *sender,
-                keypair,
-                gas_price,
-            );
+            let transaction = TestTransactionBuilder::new(*sender, *gas, gas_price)
+                .call_counter_create(self.basics_package_id.unwrap())
+                .build_and_sign(keypair.as_ref());
             let proxy_ref = proxy.clone();
             futures.push(async move {
                 if let Ok(effects) = proxy_ref

@@ -4,7 +4,7 @@
 use std::collections::BTreeMap;
 use std::future;
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 use fastcrypto::encoding::Base64;
 use futures::stream;
@@ -13,29 +13,30 @@ use futures_core::Stream;
 use jsonrpsee::core::client::Subscription;
 
 use crate::error::{Error, SuiRpcResult};
-use crate::{RpcClient, WAIT_FOR_TX_TIMEOUT_SEC};
+use crate::RpcClient;
 use sui_json_rpc::api::GovernanceReadApiClient;
 use sui_json_rpc::api::{
     CoinReadApiClient, IndexerApiClient, MoveUtilsClient, ReadApiClient, WriteApiClient,
 };
-use sui_json_rpc_types::SuiLoadedChildObjectsResponse;
 use sui_json_rpc_types::{
     Balance, Checkpoint, CheckpointId, Coin, CoinPage, DelegatedStake,
     DryRunTransactionBlockResponse, DynamicFieldPage, EventFilter, EventPage, ObjectsPage,
-    SuiCoinMetadata, SuiCommittee, SuiEvent, SuiGetPastObjectRequest, SuiMoveNormalizedModule,
-    SuiObjectDataOptions, SuiObjectResponse, SuiObjectResponseQuery, SuiPastObjectResponse,
-    SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
+    ProtocolConfigResponse, SuiCoinMetadata, SuiCommittee, SuiEvent, SuiGetPastObjectRequest,
+    SuiMoveNormalizedModule, SuiObjectDataOptions, SuiObjectResponse, SuiObjectResponseQuery,
+    SuiPastObjectResponse, SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
     SuiTransactionBlockResponseQuery, TransactionBlocksPage,
 };
+use sui_json_rpc_types::{CheckpointPage, SuiLoadedChildObjectsResponse};
 use sui_types::balance::Supply;
 use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress, TransactionDigest};
-use sui_types::committee::EpochId;
-use sui_types::error::TRANSACTION_NOT_FOUND_MSG_PREFIX;
 use sui_types::event::EventID;
-use sui_types::messages::{ExecuteTransactionRequestType, TransactionData, VerifiedTransaction};
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
+use sui_types::quorum_driver_types::ExecuteTransactionRequestType;
 use sui_types::sui_serde::BigInt;
 use sui_types::sui_system_state::sui_system_state_summary::SuiSystemStateSummary;
+use sui_types::transaction::{TransactionData, VerifiedTransaction};
+
+const WAIT_FOR_LOCAL_EXECUTION_RETRY_COUNT: u8 = 3;
 
 #[derive(Debug)]
 pub struct ReadApi {
@@ -173,6 +174,20 @@ impl ReadApi {
         Ok(self.api.http.get_checkpoint(id).await?)
     }
 
+    /// Return paginated list of checkpoints
+    pub async fn get_checkpoints(
+        &self,
+        cursor: Option<BigInt<u64>>,
+        limit: Option<usize>,
+        descending_order: bool,
+    ) -> SuiRpcResult<CheckpointPage> {
+        Ok(self
+            .api
+            .http
+            .get_checkpoints(cursor, limit, descending_order)
+            .await?)
+    }
+
     /// Return the sequence number of the latest checkpoint that has been executed
     pub async fn get_latest_checkpoint_sequence_number(
         &self,
@@ -249,6 +264,13 @@ impl ReadApi {
     ) -> SuiRpcResult<SuiLoadedChildObjectsResponse> {
         Ok(self.api.http.get_loaded_child_objects(digest).await?)
     }
+
+    pub async fn get_protocol_config(
+        &self,
+        version: Option<BigInt<u64>>,
+    ) -> SuiRpcResult<ProtocolConfigResponse> {
+        Ok(self.api.http.get_protocol_config(version).await?)
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -290,19 +312,28 @@ impl CoinReadApi {
         coin_type: Option<String>,
     ) -> impl Stream<Item = Coin> + '_ {
         stream::unfold(
-            (vec![], None, true, coin_type),
-            move |(mut data, cursor, first, coin_type)| async move {
+            (
+                vec![],
+                /* cursor */ None,
+                /* has_next_page */ true,
+                coin_type,
+            ),
+            move |(mut data, cursor, has_next_page, coin_type)| async move {
                 if let Some(item) = data.pop() {
-                    Some((item, (data, cursor, false, coin_type)))
-                } else if (cursor.is_none() && first) || cursor.is_some() {
+                    Some((item, (data, cursor, /* has_next_page */ true, coin_type)))
+                } else if has_next_page {
                     let page = self
                         .get_coins(owner, coin_type.clone(), cursor, Some(100))
                         .await
                         .ok()?;
                     let mut data = page.data;
                     data.reverse();
-                    data.pop()
-                        .map(|item| (item, (data, page.next_cursor, false, coin_type)))
+                    data.pop().map(|item| {
+                        (
+                            item,
+                            (data, page.next_cursor, page.has_next_page, coin_type),
+                        )
+                    })
                 } else {
                     None
                 }
@@ -315,18 +346,12 @@ impl CoinReadApi {
         address: SuiAddress,
         coin_type: Option<String>,
         amount: u128,
-        locked_until_epoch: Option<EpochId>,
         exclude: Vec<ObjectID>,
     ) -> SuiRpcResult<Vec<Coin>> {
         let mut total = 0u128;
         let coins = self
             .get_coins_stream(address, coin_type)
-            .filter(|coin: &Coin| {
-                future::ready(
-                    locked_until_epoch == coin.locked_until_epoch
-                        && !exclude.contains(&coin.coin_object_id),
-                )
-            })
+            .filter(|coin: &Coin| future::ready(!exclude.contains(&coin.coin_object_id)))
             .take_while(|coin: &Coin| {
                 let ready = future::ready(total < amount);
                 total += coin.balance as u128;
@@ -353,7 +378,10 @@ impl CoinReadApi {
         Ok(self.api.http.get_all_balances(owner).await?)
     }
 
-    pub async fn get_coin_metadata(&self, coin_type: String) -> SuiRpcResult<SuiCoinMetadata> {
+    pub async fn get_coin_metadata(
+        &self,
+        coin_type: String,
+    ) -> SuiRpcResult<Option<SuiCoinMetadata>> {
         Ok(self.api.http.get_coin_metadata(coin_type).await?)
     }
 
@@ -434,11 +462,11 @@ impl EventApi {
 }
 
 #[derive(Clone)]
-pub struct QuorumDriver {
+pub struct QuorumDriverApi {
     api: Arc<RpcClient>,
 }
 
-impl QuorumDriver {
+impl QuorumDriverApi {
     pub(crate) fn new(api: Arc<RpcClient>) -> Self {
         Self { api }
     }
@@ -446,10 +474,9 @@ impl QuorumDriver {
     /// Execute a transaction with a FullNode client. `request_type`
     /// defaults to `ExecuteTransactionRequestType::WaitForLocalExecution`.
     /// When `ExecuteTransactionRequestType::WaitForLocalExecution` is used,
-    /// but returned `confirmed_local_execution` is false, the client polls
-    /// the fullnode until the fullnode recognizes this transaction, or
-    /// until times out (see WAIT_FOR_TX_TIMEOUT_SEC). If it times out, an
-    /// error is returned from this call.
+    /// but returned `confirmed_local_execution` is false, the client will
+    /// keep retry for WAIT_FOR_LOCAL_EXECUTION_RETRY_COUNT times. If it
+    /// still fails, it will return an error.
     pub async fn execute_transaction_block(
         &self,
         tx: VerifiedTransaction,
@@ -458,70 +485,39 @@ impl QuorumDriver {
     ) -> SuiRpcResult<SuiTransactionBlockResponse> {
         let (tx_bytes, signatures) = tx.to_tx_bytes_and_signatures();
         let request_type = request_type.unwrap_or_else(|| options.default_execution_request_type());
-        let mut response: SuiTransactionBlockResponse = self
-            .api
-            .http
-            .execute_transaction_block(
-                tx_bytes,
-                signatures,
-                Some(options),
-                Some(request_type.clone()),
-            )
-            .await?;
+        let mut retry_count = 0;
+        let start = Instant::now();
+        while retry_count < WAIT_FOR_LOCAL_EXECUTION_RETRY_COUNT {
+            let response: SuiTransactionBlockResponse = self
+                .api
+                .http
+                .execute_transaction_block(
+                    tx_bytes.clone(),
+                    signatures.clone(),
+                    Some(options.clone()),
+                    Some(request_type.clone()),
+                )
+                .await?;
 
-        Ok(match request_type {
-            ExecuteTransactionRequestType::WaitForEffectsCert => response,
-            ExecuteTransactionRequestType::WaitForLocalExecution => {
-                if let Some(confirmed_local_execution) = response.confirmed_local_execution {
-                    if !confirmed_local_execution {
-                        Self::wait_until_fullnode_sees_tx(
-                            &self.api,
-                            *response
-                                .effects
-                                .as_ref()
-                                .map(|e| e.transaction_digest())
-                                .ok_or_else(|| {
-                                    Error::DataError("Expect effects to be non-empty".to_string())
-                                })?,
-                        )
-                        .await?;
+            match request_type {
+                ExecuteTransactionRequestType::WaitForEffectsCert => {
+                    return Ok(response);
+                }
+                ExecuteTransactionRequestType::WaitForLocalExecution => {
+                    if let Some(true) = response.confirmed_local_execution {
+                        return Ok(response);
+                    } else {
+                        // If fullnode executed the cert in the network but did not confirm local
+                        // execution, it must have timed out and hence we could retry.
+                        retry_count += 1;
                     }
                 }
-                response.confirmed_local_execution = Some(true);
-                response
-            }
-        })
-    }
-
-    async fn wait_until_fullnode_sees_tx(
-        c: &RpcClient,
-        tx_digest: TransactionDigest,
-    ) -> SuiRpcResult<()> {
-        let start = Instant::now();
-        loop {
-            let resp = ReadApiClient::get_transaction_block(
-                &c.http,
-                tx_digest,
-                Some(SuiTransactionBlockResponseOptions::new()),
-            )
-            .await;
-            if let Err(err) = resp {
-                if err.to_string().contains(TRANSACTION_NOT_FOUND_MSG_PREFIX) {
-                    tokio::time::sleep(Duration::from_millis(300)).await;
-                } else {
-                    // immediately return on other types of errors
-                    return Err(Error::TransactionConfirmationError(tx_digest, err));
-                }
-            } else {
-                return Ok(());
-            }
-            if start.elapsed().as_secs() >= WAIT_FOR_TX_TIMEOUT_SEC {
-                return Err(Error::FailToConfirmTransactionStatus(
-                    tx_digest,
-                    WAIT_FOR_TX_TIMEOUT_SEC,
-                ));
             }
         }
+        Err(Error::FailToConfirmTransactionStatus(
+            *tx.digest(),
+            start.elapsed().as_secs(),
+        ))
     }
 }
 

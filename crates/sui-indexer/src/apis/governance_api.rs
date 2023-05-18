@@ -8,8 +8,8 @@ use jsonrpsee::RpcModule;
 
 use sui_json_rpc::api::{GovernanceReadApiClient, GovernanceReadApiServer};
 use sui_json_rpc::SuiRpcModule;
-use sui_json_rpc_types::DelegatedStake;
 use sui_json_rpc_types::SuiCommittee;
+use sui_json_rpc_types::{DelegatedStake, ValidatorApys};
 use sui_open_rpc::Module;
 use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::sui_serde::BigInt;
@@ -49,6 +49,10 @@ impl GovernanceReadApiServer for GovernanceReadApi {
 
     async fn get_reference_gas_price(&self) -> RpcResult<BigInt<u64>> {
         self.fullnode.get_reference_gas_price().await
+    }
+
+    async fn get_validators_apy(&self) -> RpcResult<ValidatorApys> {
+        self.fullnode.get_validators_apy().await
     }
 }
 

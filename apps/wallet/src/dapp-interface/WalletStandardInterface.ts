@@ -18,6 +18,7 @@ import {
     type StandardEventsListeners,
     type SuiSignTransactionBlockMethod,
     type SuiSignMessageMethod,
+    SUI_MAINNET_CHAIN,
 } from '@mysten/wallet-standard';
 import mitt, { type Emitter } from 'mitt';
 import { filter, map, type Observable } from 'rxjs';
@@ -33,6 +34,10 @@ import {
     ALL_PERMISSION_TYPES,
 } from '_payloads/permissions';
 import { API_ENV } from '_src/shared/api-env';
+import {
+    isQredoConnectPayload,
+    type QredoConnectPayload,
+} from '_src/shared/messaging/messages/payloads/QredoConnect';
 import { type SignMessageRequest } from '_src/shared/messaging/messages/payloads/transactions/SignMessage';
 import { isWalletStatusChangePayload } from '_src/shared/messaging/messages/payloads/wallet-status-change';
 
@@ -65,6 +70,17 @@ type SuiWalletStakeFeature = {
         stake: (input: StakeInput) => Promise<void>;
     };
 };
+export type QredoConnectInput = {
+    service: string;
+    apiUrl: string;
+    token: string;
+};
+type QredoConnectFeature = {
+    'qredo:connect': {
+        version: '0.0.1';
+        qredoConnect: (input: QredoConnectInput) => Promise<void>;
+    };
+};
 type ChainType = Wallet['chains'][number];
 const API_ENV_TO_CHAIN: Record<
     Exclude<API_ENV, API_ENV.customRPC>,
@@ -73,6 +89,7 @@ const API_ENV_TO_CHAIN: Record<
     [API_ENV.local]: SUI_LOCALNET_CHAIN,
     [API_ENV.devNet]: SUI_DEVNET_CHAIN,
     [API_ENV.testNet]: SUI_TESTNET_CHAIN,
+    [API_ENV.mainnet]: SUI_MAINNET_CHAIN,
 };
 
 export class SuiWallet implements Wallet {
@@ -103,7 +120,8 @@ export class SuiWallet implements Wallet {
     get features(): StandardConnectFeature &
         StandardEventsFeature &
         SuiFeatures &
-        SuiWalletStakeFeature {
+        SuiWalletStakeFeature &
+        QredoConnectFeature {
         return {
             'standard:connect': {
                 version: '1.0.0',
@@ -129,6 +147,10 @@ export class SuiWallet implements Wallet {
             'sui:signMessage': {
                 version: '1.0.0',
                 signMessage: this.#signMessage,
+            },
+            'qredo:connect': {
+                version: '0.0.1',
+                qredoConnect: this.#qredoConnect,
             },
         };
     }
@@ -337,6 +359,31 @@ export class SuiWallet implements Wallet {
         this.#activeChain =
             env === API_ENV.customRPC ? 'sui:unknown' : API_ENV_TO_CHAIN[env];
     }
+
+    #qredoConnect = async (input: QredoConnectInput): Promise<void> => {
+        if (process.env.NODE_ENV !== 'development') {
+            throw new Error('This feature is not implemented yet.');
+        }
+        const allowed = await mapToPromise(
+            this.#send<
+                QredoConnectPayload<'connect'>,
+                QredoConnectPayload<'connectResponse'>
+            >({
+                type: 'qredo-connect',
+                method: 'connect',
+                args: { ...input },
+            }),
+            (response) => {
+                if (!isQredoConnectPayload(response, 'connectResponse')) {
+                    throw new Error('Invalid qredo connect response');
+                }
+                return response.args.allowed;
+            }
+        );
+        if (!allowed) {
+            throw new Error('Rejected by user');
+        }
+    };
 
     #send<
         RequestPayload extends Payload,

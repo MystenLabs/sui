@@ -1,11 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { roundFloat, useGetRollingAverageApys } from '@mysten/core';
+import {
+    roundFloat,
+    useGetValidatorsApy,
+    useGetSystemState,
+} from '@mysten/core';
 import { type SuiAddress } from '@mysten/sui.js';
 import { useMemo } from 'react';
 
-import { useSystemState } from '../../staking/useSystemState';
 import { Text } from '_app/shared/text';
 import { IconTooltip } from '_app/shared/tooltip';
 import LoadingIndicator from '_components/loading/LoadingIndicator';
@@ -17,10 +20,8 @@ type DelegatedAPYProps = {
 };
 
 export function DelegatedAPY({ stakedValidators }: DelegatedAPYProps) {
-    const { data, isLoading } = useSystemState();
-    const { data: rollingAverageApys } = useGetRollingAverageApys(
-        data?.activeValidators.length || null
-    );
+    const { data, isLoading } = useGetSystemState();
+    const { data: rollingAverageApys } = useGetValidatorsApy();
 
     const averageNetworkAPY = useMemo(() => {
         if (!data || !rollingAverageApys) return null;
@@ -28,7 +29,7 @@ export function DelegatedAPY({ stakedValidators }: DelegatedAPYProps) {
         let stakedAPYs = 0;
 
         stakedValidators.forEach((validatorAddress) => {
-            stakedAPYs += rollingAverageApys?.[validatorAddress] || 0;
+            stakedAPYs += rollingAverageApys?.[validatorAddress]?.apy || 0;
         });
 
         const averageAPY = stakedAPYs / stakedValidators.length;

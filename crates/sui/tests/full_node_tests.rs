@@ -12,39 +12,40 @@ use move_core_types::value::MoveStructLayout;
 use mysten_metrics::RegistryService;
 use prometheus::Registry;
 use serde_json::json;
-use sui::client_commands::{SuiClientCommandResult, SuiClientCommands, WalletContext};
-use sui_json_rpc_types::EventFilter;
+use sui::client_commands::{SuiClientCommandResult, SuiClientCommands};
 use sui_json_rpc_types::{
-    type_and_fields_from_move_struct, SuiEvent, SuiExecutionStatus, SuiTransactionBlockEffectsAPI,
-    SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
+    type_and_fields_from_move_struct, EventPage, SuiEvent, SuiExecutionStatus,
+    SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
 };
+use sui_json_rpc_types::{EventFilter, TransactionFilter};
 use sui_keys::keystore::AccountKeystore;
 use sui_macros::*;
 use sui_node::SuiNode;
+use sui_sdk::wallet_context::WalletContext;
+use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_tool::restore_from_db_checkpoint;
+use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
 use sui_types::base_types::{ObjectRef, SequenceNumber};
 use sui_types::crypto::{get_key_pair, SuiKeyPair};
 use sui_types::event::{Event, EventID};
 use sui_types::message_envelope::Message;
-use sui_types::messages::{
-    ExecuteTransactionRequest, ExecuteTransactionRequestType, ExecuteTransactionResponse, GasData,
-    QuorumDriverResponse, TransactionData, TransactionKind, TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
-};
+use sui_types::messages_grpc::TransactionInfoRequest;
 use sui_types::object::{Object, ObjectRead, Owner, PastObjectRead};
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
-use sui_types::query::TransactionFilter;
-use sui_types::utils::to_sender_signed_transaction_with_multi_signers;
-use sui_types::{base_types::ObjectID, messages::TransactionInfoRequest};
+use sui_types::quorum_driver_types::{
+    ExecuteTransactionRequest, ExecuteTransactionRequestType, ExecuteTransactionResponse,
+    QuorumDriverResponse,
+};
+use sui_types::transaction::{
+    CallArg, GasData, TransactionData, TransactionKind, TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS,
+    TEST_ONLY_GAS_UNIT_FOR_SPLIT_COIN, TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
+};
+use sui_types::utils::{
+    to_sender_signed_transaction, to_sender_signed_transaction_with_multi_signers,
+};
+use sui_types::SUI_CLOCK_OBJECT_ID;
 use test_utils::authority::test_and_configure_authority_configs;
-use test_utils::messages::make_transactions_with_wallet_context;
-use test_utils::messages::{
-    get_gas_object_with_wallet_context, make_transfer_object_transaction_with_wallet_context,
-};
 use test_utils::network::{start_fullnode_from_config, TestClusterBuilder};
-use test_utils::transaction::{
-    create_devnet_nft, delete_devnet_nft, increment_counter,
-    publish_basics_package_and_make_counter, publish_nfts_package, transfer_coin,
-};
 use test_utils::transaction::{wait_for_all_txes, wait_for_tx};
 use tokio::sync::Mutex;
 use tokio::time::timeout;
@@ -62,7 +63,7 @@ async fn test_full_node_follows_txes() -> Result<(), anyhow::Error> {
     // merged we should be able to root out the flakiness.
     sleep(Duration::from_millis(10)).await;
 
-    let (transferred_object, _, receiver, digest, _, _) = transfer_coin(context).await?;
+    let (transferred_object, _, receiver, digest, _) = transfer_coin(context).await?;
 
     wait_for_tx(digest, node.state().clone()).await;
 
@@ -90,9 +91,11 @@ async fn test_full_node_shared_objects() -> Result<(), anyhow::Error> {
     let context = &mut test_cluster.wallet;
 
     let sender = context.config.keystore.addresses().get(0).cloned().unwrap();
-    let (package_ref, counter_ref) = publish_basics_package_and_make_counter(context, sender).await;
+    let (package_ref, counter_ref) = context.publish_basics_package_and_make_counter().await;
 
-    let response = increment_counter(context, sender, None, package_ref.0, counter_ref.0).await;
+    let response = context
+        .increment_counter(sender, None, package_ref.0, counter_ref.0, counter_ref.1)
+        .await;
     let digest = response.digest;
     wait_for_tx(digest, node.state().clone()).await;
 
@@ -112,7 +115,7 @@ async fn test_sponsored_transaction() -> Result<(), anyhow::Error> {
 
     // This makes sender send one coin to sponsor.
     // The sent coin is used as sponsor gas in the following sponsored tx.
-    let (sent_coin, sender_, receiver, _, object_ref, _) = transfer_coin(context).await.unwrap();
+    let (sent_coin, sender_, receiver, _, object_ref) = transfer_coin(context).await.unwrap();
     assert_eq!(sender, sender_);
     assert_eq!(sponsor, receiver);
     let context: &WalletContext = &test_cluster.wallet;
@@ -161,8 +164,10 @@ async fn test_full_node_move_function_index() -> Result<(), anyhow::Error> {
     let sender = test_cluster.get_address_0();
     let context = &mut test_cluster.wallet;
 
-    let (package_ref, counter_ref) = publish_basics_package_and_make_counter(context, sender).await;
-    let response = increment_counter(context, sender, None, package_ref.0, counter_ref.0).await;
+    let (package_ref, counter_ref) = context.publish_basics_package_and_make_counter().await;
+    let response = context
+        .increment_counter(sender, None, package_ref.0, counter_ref.0, counter_ref.1)
+        .await;
     let digest = response.digest;
 
     wait_for_tx(digest, node.state().clone()).await;
@@ -224,7 +229,7 @@ async fn test_full_node_indexes() -> Result<(), anyhow::Error> {
     let node = &test_cluster.fullnode_handle.sui_node;
     let context = &mut test_cluster.wallet;
 
-    let (transferred_object, sender, receiver, digest, _, _) = transfer_coin(context).await?;
+    let (transferred_object, sender, receiver, digest, _) = transfer_coin(context).await?;
 
     wait_for_tx(digest, node.state().clone()).await;
 
@@ -460,13 +465,11 @@ async fn test_full_node_sync_flood() -> Result<(), anyhow::Error> {
     // Start a new fullnode that is not on the write path
     let node = test_cluster.start_fullnode().await.unwrap().sui_node;
 
-    let sender = test_cluster.get_address_0();
     let context = test_cluster.wallet;
 
     let mut futures = Vec::new();
 
-    let (package_ref, counter_ref) =
-        publish_basics_package_and_make_counter(&context, sender).await;
+    let (package_ref, counter_ref) = context.publish_basics_package_and_make_counter().await;
 
     let context = Arc::new(Mutex::new(context));
 
@@ -497,7 +500,10 @@ async fn test_full_node_sync_flood() -> Result<(), anyhow::Error> {
                         count: None,
                         coin_id: object_to_split.0,
                         gas: Some(gas_object_id),
-                        gas_budget: 50000,
+                        gas_budget: TEST_ONLY_GAS_UNIT_FOR_SPLIT_COIN
+                            * context.get_reference_gas_price().await.unwrap(),
+                        serialize_unsigned_transaction: false,
+                        serialize_signed_transaction: false,
                     }
                     .execute(context)
                     .await
@@ -512,15 +518,16 @@ async fn test_full_node_sync_flood() -> Result<(), anyhow::Error> {
 
                 let context = &context.lock().await;
                 shared_tx_digest = Some(
-                    increment_counter(
-                        context,
-                        sender,
-                        Some(gas_object_id),
-                        package_ref.0,
-                        counter_ref.0,
-                    )
-                    .await
-                    .digest,
+                    context
+                        .increment_counter(
+                            sender,
+                            Some(gas_object_id),
+                            package_ref.0,
+                            counter_ref.0,
+                            counter_ref.1,
+                        )
+                        .await
+                        .digest,
                 );
             }
             tx.send((owned_tx_digest.unwrap(), shared_tx_digest.unwrap()))
@@ -563,7 +570,7 @@ async fn test_full_node_sub_and_query_move_event_ok() -> Result<(), anyhow::Erro
     let ws_client = fullnode.ws_client;
 
     let context = &mut test_cluster.wallet;
-    let package_id = publish_nfts_package(context).await.0;
+    let package_id = context.publish_nfts_package().await.0;
 
     let struct_tag_str = format!("{package_id}::devnet_nft::MintNFTEvent");
     let struct_tag = parse_struct_tag(&struct_tag_str).unwrap();
@@ -577,7 +584,7 @@ async fn test_full_node_sub_and_query_move_event_ok() -> Result<(), anyhow::Erro
         .await
         .unwrap();
 
-    let (sender, object_id, digest) = create_devnet_nft(context, package_id).await?;
+    let (sender, object_id, digest) = context.create_devnet_nft(package_id).await;
     wait_for_tx(digest, node.state().clone()).await;
 
     // Wait for streaming
@@ -660,9 +667,9 @@ async fn test_full_node_event_read_api_ok() {
     let node = &test_cluster.fullnode_handle.sui_node;
     let jsonrpc_client = &test_cluster.fullnode_handle.rpc_client;
 
-    let (package_id, gas_id_1, _, _) = publish_nfts_package(context).await;
+    let (package_id, gas_id_1, _) = context.publish_nfts_package().await;
 
-    let (transferred_object, _, _, digest, _, _) = transfer_coin(context).await.unwrap();
+    let (transferred_object, _, _, digest, _) = transfer_coin(context).await.unwrap();
 
     wait_for_tx(digest, node.state().clone()).await;
 
@@ -691,7 +698,7 @@ async fn test_full_node_event_read_api_ok() {
     // This is a poor substitute for the post processing taking some time
     sleep(Duration::from_millis(1000)).await;
 
-    let (_sender, _object_id, digest2) = create_devnet_nft(context, package_id).await.unwrap();
+    let (_sender, _object_id, digest2) = context.create_devnet_nft(package_id).await;
     wait_for_tx(digest2, node.state().clone()).await;
 
     // Add a delay to ensure event processing is done after transaction commits.
@@ -708,6 +715,42 @@ async fn test_full_node_event_read_api_ok() {
 }
 
 #[sim_test]
+async fn test_full_node_event_query_by_module_ok() {
+    let mut test_cluster = TestClusterBuilder::new()
+        .enable_fullnode_events()
+        .build()
+        .await
+        .unwrap();
+
+    let context = &mut test_cluster.wallet;
+    let node = &test_cluster.fullnode_handle.sui_node;
+    let jsonrpc_client = &test_cluster.fullnode_handle.rpc_client;
+
+    let (package_id, _, _) = context.publish_nfts_package().await;
+
+    // This is a poor substitute for the post processing taking some time
+    sleep(Duration::from_millis(1000)).await;
+
+    let (_sender, _object_id, digest2) = context.create_devnet_nft(package_id).await;
+    wait_for_tx(digest2, node.state().clone()).await;
+
+    // Add a delay to ensure event processing is done after transaction commits.
+    sleep(Duration::from_secs(5)).await;
+
+    // query by move event module
+    let params = rpc_params![EventFilter::MoveEventModule {
+        package: package_id,
+        module: ident_str!("devnet_nft").into()
+    }];
+    let page: EventPage = jsonrpc_client
+        .request("suix_queryEvents", params)
+        .await
+        .unwrap();
+    assert_eq!(page.data.len(), 1);
+    assert_eq!(page.data[0].id.tx_digest, digest2);
+}
+
+#[sim_test]
 async fn test_full_node_transaction_orchestrator_basic() -> Result<(), anyhow::Error> {
     let mut test_cluster = TestClusterBuilder::new().build().await?;
     let node = test_cluster.start_fullnode().await?.sui_node;
@@ -721,7 +764,7 @@ async fn test_full_node_transaction_orchestrator_basic() -> Result<(), anyhow::E
         .expect("Fullnode should have transaction orchestrator toggled on.");
 
     let txn_count = 4;
-    let mut txns = make_transactions_with_wallet_context(context, txn_count).await;
+    let mut txns = context.batch_make_transfer_transactions(txn_count).await;
     assert!(
         txns.len() >= txn_count,
         "Expect at least {} txns. Do we generate enough gas objects during genesis?",
@@ -745,6 +788,7 @@ async fn test_full_node_transaction_orchestrator_basic() -> Result<(), anyhow::E
         QuorumDriverResponse {
             effects_cert: certified_txn_effects,
             events: txn_events,
+            ..
         },
     ) = rx.recv().await.unwrap().unwrap();
     let (cte, events, is_executed_locally) = *res;
@@ -773,6 +817,7 @@ async fn test_full_node_transaction_orchestrator_basic() -> Result<(), anyhow::E
         QuorumDriverResponse {
             effects_cert: certified_txn_effects,
             events: txn_events,
+            ..
         },
     ) = rx.recv().await.unwrap().unwrap();
     let (cte, events, is_executed_locally) = *res;
@@ -793,7 +838,7 @@ async fn test_validator_node_has_no_transaction_orchestrator() {
     let configs = test_and_configure_authority_configs(1);
     let validator_config = &configs.validator_configs()[0];
     let registry_service = RegistryService::new(Registry::new());
-    let node = SuiNode::start(validator_config, registry_service)
+    let node = SuiNode::start(validator_config, registry_service, None)
         .await
         .unwrap();
     assert!(node.transaction_orchestrator().is_none());
@@ -818,7 +863,7 @@ async fn test_execute_tx_with_serialized_signature() -> Result<(), anyhow::Error
     let jsonrpc_client = &test_cluster.fullnode_handle.rpc_client;
 
     let txn_count = 4;
-    let txns = make_transactions_with_wallet_context(context, txn_count).await;
+    let txns = context.batch_make_transfer_transactions(txn_count).await;
     for txn in txns {
         let tx_digest = txn.digest();
         let (tx_bytes, signatures) = txn.to_tx_bytes_and_signatures();
@@ -851,7 +896,7 @@ async fn test_full_node_transaction_orchestrator_rpc_ok() -> Result<(), anyhow::
     let jsonrpc_client = &test_cluster.fullnode_handle.rpc_client;
 
     let txn_count = 4;
-    let mut txns = make_transactions_with_wallet_context(context, txn_count).await;
+    let mut txns = context.batch_make_transfer_transactions(txn_count).await;
     assert!(
         txns.len() >= txn_count,
         "Expect at least {} txns. Do we generate enough gas objects during genesis?",
@@ -943,10 +988,10 @@ async fn test_get_objects_read() -> Result<(), anyhow::Error> {
     let rgp = test_cluster.get_reference_gas_price().await;
     let node = test_cluster.fullnode_handle.sui_node.clone();
     let context = &mut test_cluster.wallet;
-    let package_id = publish_nfts_package(context).await.0;
+    let package_id = context.publish_nfts_package().await.0;
 
     // Create the object
-    let (sender, object_id, _) = create_devnet_nft(context, package_id).await?;
+    let (sender, object_id, _) = context.create_devnet_nft(package_id).await;
     sleep(Duration::from_secs(3)).await;
 
     let recipient = context.config.keystore.addresses().get(1).cloned().unwrap();
@@ -955,16 +1000,15 @@ async fn test_get_objects_read() -> Result<(), anyhow::Error> {
     let (object_ref_v1, object_v1, _) = get_obj_read_from_node(&node, object_id).await?;
 
     // Transfer the object from sender to recipient
-    let gas_ref = get_gas_object_with_wallet_context(context, &sender)
+    let gas_ref = context
+        .get_one_gas_object_owned_by_address(sender)
         .await
-        .expect("Expect at least one available gas object");
-    let nft_transfer_tx = make_transfer_object_transaction_with_wallet_context(
-        object_ref_v1,
-        gas_ref,
-        context,
-        sender,
-        recipient,
-        rgp,
+        .unwrap()
+        .unwrap();
+    let nft_transfer_tx = context.sign_transaction(
+        &TestTransactionBuilder::new(sender, gas_ref, rgp)
+            .transfer(object_ref_v1, recipient)
+            .build(),
     );
     context
         .execute_transaction_block(nft_transfer_tx)
@@ -981,7 +1025,9 @@ async fn test_get_objects_read() -> Result<(), anyhow::Error> {
         .expect("Failed to transfer coins to recipient");
 
     // Delete the object
-    let response = delete_devnet_nft(context, &recipient, package_id, object_ref_v2).await;
+    let response = context
+        .delete_devnet_nft(recipient, package_id, object_ref_v2)
+        .await;
     assert_eq!(
         *response.effects.unwrap().status(),
         SuiExecutionStatus::Success
@@ -1044,6 +1090,7 @@ async fn test_full_node_bootstrap_from_snapshot() -> Result<(), anyhow::Error> {
     telemetry_subscribers::init_for_testing();
     let mut test_cluster = TestClusterBuilder::new()
         .with_epoch_duration_ms(10_000)
+        // This will also do aggressive pruning and compaction of the snapshot
         .with_enable_db_checkpoints_fullnodes()
         .build()
         .await?;
@@ -1087,4 +1134,94 @@ async fn test_full_node_bootstrap_from_snapshot() -> Result<(), anyhow::Error> {
     let (_transferred_object, _, _, digest_after_restore, ..) = transfer_coin(context).await?;
     wait_for_tx(digest_after_restore, node.state().clone()).await;
     Ok(())
+}
+
+#[sim_test]
+async fn test_pass_back_clock_object() -> Result<(), anyhow::Error> {
+    let mut test_cluster = TestClusterBuilder::new().build().await?;
+    let rgp = test_cluster.get_reference_gas_price().await;
+    let node = test_cluster.start_fullnode().await?.sui_node;
+
+    let context = &mut test_cluster.wallet;
+
+    let sender = context.config.keystore.addresses().get(0).cloned().unwrap();
+
+    // TODO: this is publishing the wrong package - we should be publishing the one in `sui-core/src/unit_tests/data` instead.
+    let package_ref = context.publish_basics_package().await;
+
+    let gas_obj = context
+        .get_one_gas_object_owned_by_address(sender)
+        .await
+        .unwrap()
+        .unwrap();
+
+    let transaction_orchestrator = node
+        .transaction_orchestrator()
+        .expect("Fullnode should have transaction orchestrator toggled on.");
+    let mut rx = node
+        .subscribe_to_transaction_orchestrator_effects()
+        .expect("Fullnode should have transaction orchestrator toggled on.");
+
+    let tx_data = TransactionData::new_move_call(
+        sender,
+        package_ref.0,
+        ident_str!("object_basics").to_owned(),
+        ident_str!("use_clock").to_owned(),
+        /* type_args */ vec![],
+        gas_obj,
+        vec![CallArg::CLOCK_IMM],
+        TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS * rgp,
+        rgp,
+    )
+    .unwrap();
+    let tx =
+        to_sender_signed_transaction(tx_data, context.config.keystore.get_key(&sender).unwrap());
+
+    let digest = *tx.digest();
+    let _res = transaction_orchestrator
+        .execute_transaction_block(ExecuteTransactionRequest {
+            transaction: tx.into(),
+            request_type: ExecuteTransactionRequestType::WaitForLocalExecution,
+        })
+        .await
+        .unwrap_or_else(|e| panic!("Failed to execute transaction {:?}: {:?}", digest, e));
+    println!("res: {:?}", _res);
+
+    let (
+        _tx,
+        QuorumDriverResponse {
+            effects_cert: _certified_txn_effects,
+            events: _txn_events,
+            objects,
+        },
+    ) = rx.recv().await.unwrap().unwrap();
+    assert!(objects.iter().any(|o| o.id() == SUI_CLOCK_OBJECT_ID));
+    Ok(())
+}
+
+async fn transfer_coin(
+    context: &mut WalletContext,
+) -> Result<
+    (
+        ObjectID,
+        SuiAddress,
+        SuiAddress,
+        TransactionDigest,
+        ObjectRef,
+    ),
+    anyhow::Error,
+> {
+    let gas_price = context.get_reference_gas_price().await?;
+    let accounts_and_objs = context.get_all_accounts_and_gas_objects().await.unwrap();
+    let sender = accounts_and_objs[0].0;
+    let receiver = accounts_and_objs[1].0;
+    let gas_object = accounts_and_objs[0].1[0];
+    let object_to_send = accounts_and_objs[0].1[1];
+    let txn = context.sign_transaction(
+        &TestTransactionBuilder::new(sender, gas_object, gas_price)
+            .transfer(object_to_send, receiver)
+            .build(),
+    );
+    let resp = context.execute_transaction_block(txn).await?;
+    Ok((object_to_send.0, sender, receiver, resp.digest, gas_object))
 }

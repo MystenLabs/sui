@@ -3,7 +3,7 @@
 
 import {
     roundFloat,
-    useGetRollingAverageApys,
+    useGetValidatorsApy,
     type ApyByValidator,
     useGetValidatorsEvents,
     formatPercentageDisplay,
@@ -29,9 +29,7 @@ import { Tooltip } from '~/ui/Tooltip';
 import { getValidatorMoveEvent } from '~/utils/getValidatorMoveEvent';
 import { VALIDATOR_LOW_STAKE_GRACE_PERIOD } from '~/utils/validatorConstants';
 
-const APY_DECIMALS = 3;
-
-const NodeMap = lazy(() => import('../../components/node-map'));
+const ValidatorMap = lazy(() => import('../../components/validator-map'));
 
 export function validatorsTableData(
     validators: SuiValidatorSummary[],
@@ -56,6 +54,10 @@ export function validatorsTableData(
                     ([address]) => address === validator.suiAddress
                 );
                 const isAtRisk = !!atRiskValidator;
+                const lastReward = event?.pool_staking_reward ?? null;
+                const { apy, isApyApproxZero } = rollingAverageApys?.[
+                    validator.suiAddress
+                ] ?? { apy: null };
 
                 return {
                     name: {
@@ -64,12 +66,13 @@ export function validatorsTableData(
                     },
                     stake: totalStake,
                     // show the rolling average apy even if its zero, otherwise show -- for no data
-                    apy: rollingAverageApys?.[validator.suiAddress] ?? null,
+                    apy: formatPercentageDisplay(apy, '--', isApyApproxZero),
                     nextEpochGasPrice: validator.nextEpochGasPrice,
                     commission: Number(validator.commissionRate) / 100,
                     img: img,
                     address: validator.suiAddress,
-                    lastReward: Number(event?.pool_staking_reward) || 0,
+                    lastReward: lastReward ?? null,
+                    votingPower: Number(validator.votingPower) / 100,
                     atRisk: isAtRisk
                         ? VALIDATOR_LOW_STAKE_GRACE_PERIOD -
                           Number(atRiskValidator[1])
@@ -147,7 +150,7 @@ export function validatorsTableData(
                     const apy = props.getValue();
                     return (
                         <Text variant="bodySmall/medium" color="steel-darker">
-                            {formatPercentageDisplay(apy)}
+                            {apy}
                         </Text>
                     );
                 },
@@ -169,11 +172,23 @@ export function validatorsTableData(
                 accessorKey: 'lastReward',
                 cell: (props: any) => {
                     const lastReward = props.getValue();
-                    return lastReward > 0 ? (
-                        <StakeColumn stake={lastReward} />
+                    return lastReward !== null ? (
+                        <StakeColumn stake={Number(lastReward)} />
                     ) : (
                         <Text variant="bodySmall/medium" color="steel-darker">
                             --
+                        </Text>
+                    );
+                },
+            },
+            {
+                header: 'Voting Power',
+                accessorKey: 'votingPower',
+                cell: (props: any) => {
+                    const votingPower = props.getValue();
+                    return (
+                        <Text variant="bodySmall/medium" color="steel-darker">
+                            {votingPower}%
                         </Text>
                     );
                 },
@@ -226,8 +241,7 @@ function ValidatorPageResult() {
         order: 'descending',
     });
 
-    const { data: rollingAverageApys } =
-        useGetRollingAverageApys(numberOfValidators);
+    const { data: validatorsApy } = useGetValidatorsApy();
 
     const totalStaked = useMemo(() => {
         if (!data) return 0;
@@ -240,18 +254,29 @@ function ValidatorPageResult() {
     }, [data]);
 
     const averageAPY = useMemo(() => {
-        if (
-            !rollingAverageApys ||
-            Object.keys(rollingAverageApys)?.length === 0
-        )
+        if (!validatorsApy || Object.keys(validatorsApy)?.length === 0)
             return null;
-        const apys = Object.values(rollingAverageApys);
-        const averageAPY = apys?.reduce((acc, cur) => acc + cur, 0);
-        return roundFloat(averageAPY / apys.length, APY_DECIMALS);
-    }, [rollingAverageApys]);
+
+        // if all validators have isApyApproxZero, return ~0
+        if (
+            Object.values(validatorsApy)?.every(
+                ({ isApyApproxZero }) => isApyApproxZero
+            )
+        ) {
+            return '~0';
+        }
+
+        // exclude validators with no apy
+        const apys = Object.values(validatorsApy)?.filter(
+            (a) => a.apy > 0 && !a.isApyApproxZero
+        );
+        const averageAPY = apys?.reduce((acc, cur) => acc + cur.apy, 0);
+        // in case of no apy, return 0
+        return apys.length > 0 ? roundFloat(averageAPY / apys.length) : 0;
+    }, [validatorsApy]);
 
     const lastEpochRewardOnAllValidators = useMemo(() => {
-        if (!validatorEvents) return 0;
+        if (!validatorEvents) return null;
         let totalRewards = 0;
 
         validatorEvents.forEach(({ parsedJson }) => {
@@ -267,9 +292,9 @@ function ValidatorPageResult() {
             data.activeValidators,
             data.atRiskValidators,
             validatorEvents,
-            rollingAverageApys
+            validatorsApy || null
         );
-    }, [data, validatorEvents, rollingAverageApys]);
+    }, [data, validatorEvents, validatorsApy]);
 
     if (isError || validatorEventError) {
         return (
@@ -281,7 +306,7 @@ function ValidatorPageResult() {
 
     return (
         <div>
-            <div className="mt-8 grid gap-5 md:grid-cols-2">
+            <div className="grid gap-5 md:grid-cols-2">
                 <Card spacing="lg">
                     <div className="flex w-full basis-full flex-col gap-8">
                         <Heading
@@ -301,15 +326,18 @@ function ValidatorPageResult() {
                                 />
 
                                 <Stats
-                                    label="Last Epoch SUI Rewards"
+                                    label="Last Epoch Rewards"
                                     tooltip="The stake rewards collected during the last epoch."
                                     unavailable={
-                                        lastEpochRewardOnAllValidators <= 0
+                                        lastEpochRewardOnAllValidators === null
                                     }
                                 >
                                     <DelegationAmount
                                         amount={
-                                            lastEpochRewardOnAllValidators || 0n
+                                            typeof lastEpochRewardOnAllValidators ===
+                                            'number'
+                                                ? lastEpochRewardOnAllValidators
+                                                : 0n
                                         }
                                         isStats
                                     />
@@ -340,7 +368,7 @@ function ValidatorPageResult() {
 
                 <ErrorBoundary>
                     <Suspense fallback={null}>
-                        <NodeMap minHeight={230} />
+                        <ValidatorMap minHeight={230} />
                     </Suspense>
                 </ErrorBoundary>
             </div>

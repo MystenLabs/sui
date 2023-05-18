@@ -10,27 +10,27 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 
-use anyhow::anyhow;
 use itertools::Itertools;
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::{ModuleId, StructTag, TypeTag};
 use prometheus::{register_int_counter_with_registry, IntCounter, Registry};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::collections::BTreeMap;
+use tokio::sync::OwnedMutexGuard;
 
+use crate::mutex_table::MutexTable;
 use crate::sharded_lru::ShardedLruCache;
-use sui_json_rpc_types::SuiObjectDataFilter;
+use sui_json_rpc_types::{SuiObjectDataFilter, TransactionFilter};
 use sui_types::base_types::{
     ObjectDigest, ObjectID, SequenceNumber, SuiAddress, TransactionDigest, TxSequenceNumber,
 };
 use sui_types::base_types::{ObjectInfo, ObjectRef};
 use sui_types::digests::TransactionEventsDigest;
 use sui_types::dynamic_field::{self, DynamicFieldInfo};
-use sui_types::error::{SuiError, SuiResult};
-use sui_types::messages::TransactionEvents;
+use sui_types::effects::TransactionEvents;
+use sui_types::error::{SuiError, SuiResult, UserInputError};
 use sui_types::object::Owner;
 use sui_types::parse_sui_struct_tag;
-use sui_types::query::TransactionFilter;
 use sui_types::temporary_store::TxCoins;
 use tokio::task::spawn_blocking;
 use tracing::{debug, trace};
@@ -46,17 +46,19 @@ type CoinIndexKey = (SuiAddress, String, ObjectID);
 type DynamicFieldKey = (ObjectID, ObjectID);
 type EventId = (TxSequenceNumber, usize);
 type EventIndex = (TransactionEventsDigest, TransactionDigest, u64);
+type AllBalance = HashMap<TypeTag, TotalBalance>;
 
 pub const MAX_TX_RANGE_SIZE: u64 = 4096;
 
 pub const MAX_GET_OWNED_OBJECT_SIZE: usize = 256;
 const ENV_VAR_COIN_INDEX_BLOCK_CACHE_SIZE_MB: &str = "COIN_INDEX_BLOCK_CACHE_MB";
 const ENV_VAR_DISABLE_INDEX_CACHE: &str = "DISABLE_INDEX_CACHE";
+const ENV_VAR_INVALIDATE_INSTEAD_OF_UPDATE: &str = "INVALIDATE_INSTEAD_OF_UPDATE";
 
 #[derive(Default, Copy, Clone, Debug, Eq, PartialEq)]
 pub struct TotalBalance {
-    pub balance: u128,
-    pub num_coins: usize,
+    pub balance: i128,
+    pub num_coins: i64,
 }
 
 #[derive(Debug)]
@@ -116,6 +118,14 @@ impl IndexStoreMetrics {
 pub struct IndexStoreCaches {
     per_coin_type_balance: ShardedLruCache<(SuiAddress, TypeTag), SuiResult<TotalBalance>>,
     all_balances: ShardedLruCache<SuiAddress, SuiResult<Arc<HashMap<TypeTag, TotalBalance>>>>,
+    locks: MutexTable<SuiAddress>,
+}
+
+#[derive(Default)]
+pub struct IndexStoreCacheUpdates {
+    _locks: Vec<OwnedMutexGuard<()>>,
+    per_coin_type_balance_changes: Vec<((SuiAddress, TypeTag), SuiResult<TotalBalance>)>,
+    all_balance_changes: Vec<(SuiAddress, SuiResult<Arc<AllBalance>>)>,
 }
 
 #[derive(DBMapUtils)]
@@ -183,6 +193,8 @@ pub struct IndexStoreTables {
     #[default_options_override_fn = "index_table_default_config"]
     event_by_move_event: DBMap<(StructTag, EventId), EventIndex>,
     #[default_options_override_fn = "index_table_default_config"]
+    event_by_event_module: DBMap<(ModuleId, EventId), EventIndex>,
+    #[default_options_override_fn = "index_table_default_config"]
     event_by_sender: DBMap<(SuiAddress, EventId), EventIndex>,
     #[default_options_override_fn = "index_table_default_config"]
     event_by_time: DBMap<(u64, EventId), EventIndex>,
@@ -193,6 +205,7 @@ pub struct IndexStore {
     tables: IndexStoreTables,
     caches: IndexStoreCaches,
     metrics: Arc<IndexStoreMetrics>,
+    max_type_length: u64,
 }
 
 // These functions are used to initialize the DB tables
@@ -244,13 +257,14 @@ fn coin_index_table_default_config() -> DBOptions {
 }
 
 impl IndexStore {
-    pub fn new(path: PathBuf, registry: &Registry) -> Self {
+    pub fn new(path: PathBuf, registry: &Registry, max_type_length: Option<u64>) -> Self {
         let tables =
             IndexStoreTables::open_tables_read_write(path, MetricConf::default(), None, None);
         let metrics = IndexStoreMetrics::new(registry);
         let caches = IndexStoreCaches {
             per_coin_type_balance: ShardedLruCache::new(1_000_000, 1000),
             all_balances: ShardedLruCache::new(1_000_000, 1000),
+            locks: MutexTable::new(128),
         };
         let next_sequence_number = tables
             .transaction_order
@@ -266,6 +280,7 @@ impl IndexStore {
             next_sequence_number,
             caches,
             metrics: Arc::new(metrics),
+            max_type_length: max_type_length.unwrap_or(128),
         }
     }
 
@@ -275,21 +290,35 @@ impl IndexStore {
         batch: &mut DBBatch,
         object_index_changes: &ObjectIndexChanges,
         tx_coins: Option<TxCoins>,
-    ) -> SuiResult<()> {
+    ) -> SuiResult<IndexStoreCacheUpdates> {
         // In production if this code path is hit, we should expect `tx_coins` to not be None.
         // However, in many tests today we do not distinguish validator and/or fullnode, so
         // we gracefully exist here.
         if tx_coins.is_none() {
-            return Ok(());
+            return Ok(IndexStoreCacheUpdates::default());
         }
-
+        // Acquire locks on changed coin owners
+        let mut addresses: HashSet<SuiAddress> = HashSet::new();
+        addresses.extend(
+            object_index_changes
+                .deleted_owners
+                .iter()
+                .map(|(owner, _)| *owner),
+        );
+        addresses.extend(
+            object_index_changes
+                .new_owners
+                .iter()
+                .map(|((owner, _), _)| *owner),
+        );
+        let _locks = self.caches.locks.acquire_locks(addresses.into_iter()).await;
+        let mut balance_changes: HashMap<SuiAddress, HashMap<TypeTag, TotalBalance>> =
+            HashMap::new();
         // Index coin info
         let (input_coins, written_coins) = tx_coins.unwrap();
-        let mut address_coin_type_to_invalidate: HashSet<(SuiAddress, TypeTag)> = HashSet::new();
-        let mut addresses_to_invalidate: HashSet<SuiAddress> = HashSet::new();
         // 1. Delete old owner if the object is deleted or transferred to a new owner,
         // by looking at `object_index_changes.deleted_owners`.
-        // Objects in `deleted_owners` must be owned by `Owner::Address` befoer the tx,
+        // Objects in `deleted_owners` must be owned by `Owner::Address` before the tx,
         // hence must appear in the tx inputs.
         // They also mut be coin type (see `AuthorityState::commit_certificate`).
         let coin_delete_keys = object_index_changes
@@ -297,15 +326,22 @@ impl IndexStore {
             .iter()
             .filter_map(|(owner, obj_id)| {
                 // If it's not in `input_coins`, then it's not a coin type. Skip.
-                let coin_type_tag = input_coins.get(obj_id)?
-                .coin_type_maybe().unwrap_or_else(|| {
+                let object = input_coins.get(obj_id)?;
+                let coin_type_tag = object.coin_type_maybe().unwrap_or_else(|| {
                     panic!(
                         "object_id: {:?} in input_coins is not a coin type, input_coins: {:?}, tx_digest: {:?}",
                         obj_id, input_coins, digest
                     )
                 });
-                address_coin_type_to_invalidate.insert((*owner, coin_type_tag.clone()));
-                addresses_to_invalidate.insert(*owner);
+                let map = balance_changes.entry(*owner).or_insert(HashMap::new());
+                let entry = map.entry(coin_type_tag.clone()).or_insert(TotalBalance {
+                    num_coins: 0,
+                    balance: 0
+                });
+                if let Ok(Some(coin_info)) = &self.tables.coin_index.get(&(*owner, coin_type_tag.to_string(), *obj_id)) {
+                    entry.num_coins -= 1;
+                    entry.balance -= coin_info.balance as i128;
+                }
                 Some((*owner, coin_type_tag.to_string(), *obj_id))
             }).collect::<Vec<_>>();
         trace!(
@@ -319,7 +355,7 @@ impl IndexStore {
         // For a object to appear in `new_owners`, it must be owned by `Owner::Address` after the tx.
         // It also must not be deleted, hence appear in written_coins (see `AuthorityState::commit_certificate`)
         // It also must be a coin type (see `AuthorityState::commit_certificate`).
-        // Here the coin could be transfered to a new address, to simply have the metadata changed (digest, balance etc)
+        // Here the coin could be transferred to a new address, to simply have the metadata changed (digest, balance etc)
         // due to a successful or failed transaction.
         let coin_add_keys = object_index_changes
         .new_owners
@@ -339,8 +375,19 @@ impl IndexStore {
                     obj_id, written_coins, digest
                 )
             });
-            address_coin_type_to_invalidate.insert((*owner, coin_type_tag.clone()));
-            addresses_to_invalidate.insert(*owner);
+            let map = balance_changes.entry(*owner).or_insert(HashMap::new());
+            let entry = map.entry(coin_type_tag.clone()).or_insert(TotalBalance {
+                num_coins: 0,
+                balance: 0
+            });
+            let result = self.tables.coin_index.get(&(*owner, coin_type_tag.to_string(), *obj_id));
+            if let Ok(Some(coin_info)) = &result {
+                entry.balance -= coin_info.balance as i128;
+                entry.balance += coin.balance.value() as i128;
+            } else if let Ok(None) = &result {
+                entry.num_coins += 1;
+                entry.balance += coin.balance.value() as i128;
+            }
             Some(((*owner, coin_type_tag.to_string(), *obj_id), (CoinInfo {version: obj_info.version, digest: obj_info.digest, balance: coin.balance.value(), previous_transaction: *digest})))
         }).collect::<Vec<_>>();
         trace!(
@@ -348,13 +395,35 @@ impl IndexStore {
             "coin_add_keys: {:?}",
             coin_add_keys,
         );
-        batch.insert_batch(&self.tables.coin_index, coin_add_keys.into_iter())?;
-        self.invalidate_per_coin_type_cache(address_coin_type_to_invalidate.into_iter())
-            .await?;
-        self.invalidate_all_balance_cache(addresses_to_invalidate.into_iter())
-            .await?;
 
-        Ok(())
+        batch.insert_batch(&self.tables.coin_index, coin_add_keys.into_iter())?;
+
+        let per_coin_type_balance_changes: Vec<_> = balance_changes
+            .iter()
+            .flat_map(|(address, balance_map)| {
+                balance_map.iter().map(|(type_tag, balance)| {
+                    (
+                        (*address, type_tag.clone()),
+                        Ok::<TotalBalance, SuiError>(*balance),
+                    )
+                })
+            })
+            .collect();
+        let all_balance_changes: Vec<_> = balance_changes
+            .into_iter()
+            .map(|(address, balance_map)| {
+                (
+                    address,
+                    Ok::<Arc<HashMap<TypeTag, TotalBalance>>, SuiError>(Arc::new(balance_map)),
+                )
+            })
+            .collect();
+        let cache_updates = IndexStoreCacheUpdates {
+            _locks,
+            per_coin_type_balance_changes,
+            all_balance_changes,
+        };
+        Ok(cache_updates)
     }
 
     pub async fn index_tx(
@@ -414,7 +483,7 @@ impl IndexStore {
             &self.tables.transactions_to_addr,
             mutated_objects.filter_map(|(_, owner)| {
                 owner
-                    .get_owner_address()
+                    .get_address_owner_address()
                     .ok()
                     .map(|addr| ((addr, sequence), digest))
             }),
@@ -426,7 +495,8 @@ impl IndexStore {
         )?;
 
         // Coin Index
-        self.index_coin(digest, &mut batch, &object_index_changes, tx_coins)
+        let cache_updates = self
+            .index_coin(digest, &mut batch, &object_index_changes, tx_coins)
             .await?;
 
         // Owner index
@@ -502,6 +572,19 @@ impl IndexStore {
             }),
         )?;
 
+        batch.insert_batch(
+            &self.tables.event_by_event_module,
+            events.data.iter().enumerate().map(|(i, e)| {
+                (
+                    (
+                        ModuleId::new(e.type_.address, e.type_.module.clone()),
+                        (sequence, i),
+                    ),
+                    (event_digest, *digest, timestamp_ms),
+                )
+            }),
+        )?;
+
         // Loaded child objects table
         let loaded_child_objects: Vec<_> = loaded_child_objects.into_iter().collect();
         batch.insert_batch(
@@ -509,7 +592,36 @@ impl IndexStore {
             std::iter::once((*digest, loaded_child_objects)),
         )?;
 
+        let invalidate_caches =
+            read_size_from_env(ENV_VAR_INVALIDATE_INSTEAD_OF_UPDATE).unwrap_or(0) > 0;
+
+        if invalidate_caches {
+            // Invalidate cache before writing to db so we always serve latest values
+            self.invalidate_per_coin_type_cache(
+                cache_updates
+                    .per_coin_type_balance_changes
+                    .iter()
+                    .map(|x| x.0.clone()),
+            )
+            .await?;
+            self.invalidate_all_balance_cache(
+                cache_updates.all_balance_changes.iter().map(|x| x.0),
+            )
+            .await?;
+        }
+
         batch.write()?;
+
+        if !invalidate_caches {
+            // We cannot update the cache before updating the db or else on failing to write to db
+            // we will update the cache (when we retry to index this transaction again we would have
+            // updated the cache twice). However, this only means cache is eventually consistent with
+            // the db (within a very short delay)
+            self.update_per_coin_type_cache(cache_updates.per_coin_type_balance_changes)
+                .await?;
+            self.update_all_balance_cache(cache_updates.all_balance_changes)
+                .await?;
+        }
         Ok(sequence)
     }
 
@@ -523,12 +635,12 @@ impl IndexStore {
         cursor: Option<TransactionDigest>,
         limit: Option<usize>,
         reverse: bool,
-    ) -> Result<Vec<TransactionDigest>, anyhow::Error> {
+    ) -> SuiResult<Vec<TransactionDigest>> {
         // Lookup TransactionDigest sequence number,
         let cursor = if let Some(cursor) = cursor {
             Some(
                 self.get_transaction_seq(&cursor)?
-                    .ok_or_else(|| anyhow!("Transaction [{cursor:?}] not found."))?,
+                    .ok_or(SuiError::TransactionNotFound { digest: cursor })?,
             )
         } else {
             None
@@ -555,7 +667,9 @@ impl IndexStore {
             }
             // NOTE: filter via checkpoint sequence number is implemented in
             // `get_transactions` of authority.rs.
-            Some(_) => Err(anyhow!("Unsupported filter: {:?}", filter)),
+            Some(_) => Err(SuiError::UserInputError {
+                error: UserInputError::Unsupported(format!("{:?}", filter)),
+            }),
             None => {
                 let iter = self.tables.transaction_order.iter();
 
@@ -699,18 +813,43 @@ impl IndexStore {
         limit: Option<usize>,
         reverse: bool,
     ) -> SuiResult<Vec<TransactionDigest>> {
+        // If we are passed a function with no module return a UserInputError
+        if function.is_some() && module.is_none() {
+            return Err(SuiError::UserInputError {
+                error: UserInputError::MoveFunctionInputError(
+                    "Cannot supply function without supplying module".to_string(),
+                ),
+            });
+        }
+
+        // We cannot have a cursor without filling out the other keys.
+        if cursor.is_some() && (module.is_none() || function.is_none()) {
+            return Err(SuiError::UserInputError {
+                error: UserInputError::MoveFunctionInputError(
+                    "Cannot supply cursor without supplying module and function".to_string(),
+                ),
+            });
+        }
+
         let cursor_val = cursor.unwrap_or(if reverse {
             TxSequenceNumber::MAX
         } else {
             TxSequenceNumber::MIN
         });
 
-        let key = (
-            package,
-            module.clone().unwrap_or_default(),
-            function.clone().unwrap_or_default(),
-            cursor_val,
-        );
+        let max_string = "Z".repeat(self.max_type_length.try_into().unwrap());
+        let module_val = module.clone().unwrap_or(if reverse {
+            max_string.clone()
+        } else {
+            "".to_string()
+        });
+
+        let function_val =
+            function
+                .clone()
+                .unwrap_or(if reverse { max_string } else { "".to_string() });
+
+        let key = (package, module_val, function_val, cursor_val);
         let iter = self.tables.transactions_by_move_function.iter();
         Ok(if reverse {
             let iter = iter
@@ -907,6 +1046,24 @@ impl IndexStore {
         )
     }
 
+    pub fn events_by_move_event_module(
+        &self,
+        module_id: &ModuleId,
+        tx_seq: TxSequenceNumber,
+        event_seq: usize,
+        limit: usize,
+        descending: bool,
+    ) -> SuiResult<Vec<(TransactionEventsDigest, TransactionDigest, usize, u64)>> {
+        Self::get_event_from_index(
+            &self.tables.event_by_event_module,
+            module_id,
+            tx_seq,
+            event_seq,
+            limit,
+            descending,
+        )
+    }
+
     pub fn events_by_sender(
         &self,
         sender: &SuiAddress,
@@ -964,7 +1121,7 @@ impl IndexStore {
         &self,
         object: ObjectID,
         cursor: Option<ObjectID>,
-    ) -> SuiResult<impl Iterator<Item = DynamicFieldInfo> + '_> {
+    ) -> SuiResult<impl Iterator<Item = (ObjectID, DynamicFieldInfo)> + '_> {
         debug!(?object, "get_dynamic_fields");
         let iter_lower_bound = (object, ObjectID::ZERO);
         let iter_upper_bound = (object, ObjectID::MAX);
@@ -977,7 +1134,7 @@ impl IndexStore {
             // skip an extra b/c the cursor is exclusive
             .skip(usize::from(cursor.is_some()))
             .take_while(move |((object_owner, _), _)| (object_owner == &object))
-            .map(|(_, object_info)| object_info))
+            .map(|((_, c), object_info)| (c, object_info)))
     }
 
     pub fn get_dynamic_field_object_id(
@@ -996,12 +1153,17 @@ impl IndexStore {
                 },
             )?;
 
-        if self
+        if let Some(info) = self
             .tables
             .dynamic_field_index
-            .contains_key(&(object, dynamic_field_id))?
+            .get(&(object, dynamic_field_id))?
         {
-            return Ok(Some(dynamic_field_id));
+            // info.object_id != dynamic_field_id ==> is_wrapper
+            debug_assert!(
+                info.object_id == dynamic_field_id
+                    || matches!(name_type, TypeTag::Struct(tag) if DynamicFieldInfo::is_dynamic_object_field_wrapper(&tag))
+            );
+            return Ok(Some(info.object_id));
         }
 
         let dynamic_object_field_struct = DynamicFieldInfo::dynamic_object_field_wrapper(name_type);
@@ -1112,6 +1274,7 @@ impl IndexStore {
             // The object id 0 is the smallest possible
             .skip_to(&(owner, starting_object_id))?
             .skip(usize::from(starting_object_id != ObjectID::ZERO))
+            .take_while(move |((address_owner, _), _)| address_owner == &owner)
             .filter(move |(_, o)| {
                 if let Some(filter) = filter.as_ref() {
                     filter.matches(o)
@@ -1119,7 +1282,6 @@ impl IndexStore {
                     true
                 }
             })
-            .take_while(move |((address_owner, _), _)| address_owner == &owner)
             .map(|(_, object_info)| object_info))
     }
 
@@ -1272,13 +1434,12 @@ impl IndexStore {
             Self::get_owned_coins_iterator(&coin_index, owner, Some(coin_type_str.clone()))?
                 .map(|(_coin_type, obj_id, coin)| (coin_type_str.clone(), obj_id, coin));
 
-        let mut balance = 0u128;
+        let mut balance = 0i128;
         let mut num_coins = 0;
         for (_coin_type, _obj_id, coin_info) in coins {
-            balance += coin_info.balance as u128;
+            balance += coin_info.balance as i128;
             num_coins += 1;
         }
-
         Ok(TotalBalance { balance, num_coins })
     }
 
@@ -1294,10 +1455,10 @@ impl IndexStore {
             .map(|(coin_type, obj_id, coin)| (coin_type, obj_id, coin))
             .group_by(|(coin_type, _obj_id, _coin)| coin_type.clone());
         for (coin_type, coins) in &coins {
-            let mut total_balance = 0u128;
+            let mut total_balance = 0i128;
             let mut coin_object_count = 0;
             for (_coin_type, _obj_id, coin_info) in coins {
-                total_balance += coin_info.balance as u128;
+                total_balance += coin_info.balance as i128;
                 coin_object_count += 1;
             }
             let coin_type =
@@ -1336,6 +1497,76 @@ impl IndexStore {
         self.caches.all_balances.batch_invalidate(addresses).await;
         Ok(())
     }
+
+    async fn update_per_coin_type_cache(
+        &self,
+        keys: impl IntoIterator<Item = ((SuiAddress, TypeTag), SuiResult<TotalBalance>)>,
+    ) -> SuiResult {
+        self.caches
+            .per_coin_type_balance
+            .batch_merge(keys, Self::merge_balance)
+            .await;
+        Ok(())
+    }
+
+    fn merge_balance(
+        old_balance: &SuiResult<TotalBalance>,
+        balance_delta: &SuiResult<TotalBalance>,
+    ) -> SuiResult<TotalBalance> {
+        if let Ok(old_balance) = old_balance {
+            if let Ok(balance_delta) = balance_delta {
+                Ok(TotalBalance {
+                    balance: old_balance.balance + balance_delta.balance,
+                    num_coins: old_balance.num_coins + balance_delta.num_coins,
+                })
+            } else {
+                balance_delta.clone()
+            }
+        } else {
+            old_balance.clone()
+        }
+    }
+
+    async fn update_all_balance_cache(
+        &self,
+        keys: impl IntoIterator<Item = (SuiAddress, SuiResult<Arc<HashMap<TypeTag, TotalBalance>>>)>,
+    ) -> SuiResult {
+        self.caches
+            .all_balances
+            .batch_merge(keys, Self::merge_all_balance)
+            .await;
+        Ok(())
+    }
+
+    fn merge_all_balance(
+        old_balance: &SuiResult<Arc<HashMap<TypeTag, TotalBalance>>>,
+        balance_delta: &SuiResult<Arc<HashMap<TypeTag, TotalBalance>>>,
+    ) -> SuiResult<Arc<HashMap<TypeTag, TotalBalance>>> {
+        if let Ok(old_balance) = old_balance {
+            if let Ok(balance_delta) = balance_delta {
+                let mut new_balance = HashMap::new();
+                for (key, value) in old_balance.iter() {
+                    new_balance.insert(key.clone(), *value);
+                }
+                for (key, delta) in balance_delta.iter() {
+                    let old = new_balance.entry(key.clone()).or_insert(TotalBalance {
+                        balance: 0,
+                        num_coins: 0,
+                    });
+                    let new_total = TotalBalance {
+                        balance: old.balance + delta.balance,
+                        num_coins: old.num_coins + delta.num_coins,
+                    };
+                    new_balance.insert(key.clone(), new_total);
+                }
+                Ok(Arc::new(new_balance))
+            } else {
+                balance_delta.clone()
+            }
+        } else {
+            old_balance.clone()
+        }
+    }
 }
 
 #[cfg(test)]
@@ -1348,8 +1579,8 @@ mod tests {
     use std::env::temp_dir;
     use sui_types::base_types::{ObjectInfo, ObjectType, SuiAddress};
     use sui_types::digests::TransactionDigest;
+    use sui_types::effects::TransactionEvents;
     use sui_types::gas_coin::GAS;
-    use sui_types::messages::TransactionEvents;
     use sui_types::object;
     use sui_types::object::Owner;
     use sui_types::storage::WriteKind;
@@ -1363,7 +1594,7 @@ mod tests {
         // and verified from both db and cache.
         // This tests make sure we are invalidating entries in the cache and always reading latest
         // balance.
-        let index_store = IndexStore::new(temp_dir(), &Registry::default());
+        let index_store = IndexStore::new(temp_dir(), &Registry::default(), Some(128));
         let address: SuiAddress = AccountAddress::random().into();
         let mut written_objects = BTreeMap::new();
         let mut object_map = BTreeMap::new();
@@ -1468,6 +1699,21 @@ mod tests {
             address,
             GAS::type_tag(),
         )?;
+        let balance = index_store.get_balance(address, GAS::type_tag()).await?;
+        assert_eq!(balance, balance_from_db);
+        assert_eq!(balance.balance, 700);
+        assert_eq!(balance.num_coins, 7);
+        // Invalidate per coin type balance cache and read from all balance cache to ensure
+        // the balance matches
+        index_store
+            .caches
+            .per_coin_type_balance
+            .invalidate(&(address, GAS::type_tag()))
+            .await;
+        let all_balance = index_store.get_all_balance(address).await;
+        let all_balance = all_balance?;
+        assert_eq!(all_balance.get(&GAS::type_tag()).unwrap().balance, 700);
+        assert_eq!(all_balance.get(&GAS::type_tag()).unwrap().num_coins, 7);
         let balance = index_store.get_balance(address, GAS::type_tag()).await?;
         assert_eq!(balance, balance_from_db);
         assert_eq!(balance.balance, 700);

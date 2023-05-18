@@ -18,6 +18,7 @@ pub struct CheckpointExecutorMetrics {
     pub checkpoint_prepare_latency_us: Histogram,
     pub checkpoint_transaction_count: Histogram,
     pub checkpoint_contents_age_ms: Histogram,
+    pub last_executed_checkpoint_age_ms: Histogram,
     pub accumulator_inconsistent_state: IntGauge,
 }
 
@@ -73,6 +74,11 @@ impl CheckpointExecutorMetrics {
                 "checkpoint_contents_age_ms",
                 "Age of checkpoints when they arrive for execution",
                 registry,
+            ),
+            last_executed_checkpoint_age_ms: Histogram::new_in_registry(
+                "last_executed_checkpoint_age_ms",
+                "Age of the last executed checkpoint",
+                registry
             ),
             accumulator_inconsistent_state: register_int_gauge_with_registry!(
                 "accumulator_inconsistent_state",

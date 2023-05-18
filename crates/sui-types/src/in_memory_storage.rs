@@ -22,6 +22,7 @@ use std::collections::BTreeMap;
 pub struct InMemoryStorage {
     persistent: BTreeMap<ObjectID, Object>,
     last_entry_for_deleted: BTreeMap<ObjectID, ObjectRef>,
+    wrapped: BTreeMap<ObjectID, VersionNumber>,
 }
 
 impl BackingPackageStore for InMemoryStorage {
@@ -146,6 +147,7 @@ impl InMemoryStorage {
         Self {
             persistent,
             last_entry_for_deleted: BTreeMap::new(),
+            wrapped: BTreeMap::new(),
         }
     }
 
@@ -164,11 +166,20 @@ impl InMemoryStorage {
     pub fn insert_object(&mut self, object: Object) {
         let id = object.id();
         self.last_entry_for_deleted.remove(&id);
+        self.wrapped.remove(&id);
         self.persistent.insert(id, object);
     }
 
     pub fn objects(&self) -> &BTreeMap<ObjectID, Object> {
         &self.persistent
+    }
+
+    pub fn wrapped(&self) -> &BTreeMap<ObjectID, VersionNumber> {
+        &self.wrapped
+    }
+
+    pub fn get_wrapped(&self, id: &ObjectID) -> Option<VersionNumber> {
+        self.wrapped.get(id).copied()
     }
 
     pub fn into_inner(self) -> BTreeMap<ObjectID, Object> {
@@ -185,10 +196,19 @@ impl InMemoryStorage {
             debug_assert!(new_object.id() == _id);
             self.insert_object(new_object);
         }
-        for (id, _) in deleted {
+        for (id, (ver, kind)) in deleted {
             if let Some(obj) = self.persistent.remove(&id) {
                 self.last_entry_for_deleted
                     .insert(id, obj.compute_object_reference());
+            }
+            match kind {
+                DeleteKind::Wrap => {
+                    self.wrapped.insert(id, ver);
+                }
+                DeleteKind::UnwrapThenDelete => {
+                    self.wrapped.remove(&id);
+                }
+                _ => (),
             }
         }
     }

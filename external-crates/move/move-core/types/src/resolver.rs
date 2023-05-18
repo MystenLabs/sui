@@ -8,6 +8,7 @@ use crate::{
     language_storage::{ModuleId, StructTag},
 };
 use std::fmt::Debug;
+use std::sync::Arc;
 
 /// Traits for resolving Move modules and resources from persistent storage
 
@@ -108,6 +109,13 @@ impl<T: ResourceResolver + ?Sized> ResourceResolver for &T {
 }
 
 impl<T: ModuleResolver + ?Sized> ModuleResolver for &T {
+    type Error = T::Error;
+    fn get_module(&self, module_id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
+        (**self).get_module(module_id)
+    }
+}
+
+impl<T: ModuleResolver + ?Sized> ModuleResolver for Arc<T> {
     type Error = T::Error;
     fn get_module(&self, module_id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
         (**self).get_module(module_id)

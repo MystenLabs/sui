@@ -28,7 +28,6 @@ jobs:
     runs-on: ubuntu-ghcloud
     steps:
       - uses: actions/checkout@7dd9e2a3dc350cf687eb1b2a4fadfee8c8e49675 # pin@v3
-      - uses: actions-rs/toolchain@16499b5e05bf2e26879000db0c1d13f7e13fa3af # pin@v1
       # Disabled for now as it makes test runs take longer
       # - uses: bmwill/rust-cache@v1 # Fork of 'Swatinem/rust-cache' which allows caching additional paths
       - uses: pnpm/action-setup@c3b53f6a16e57305370b4ae5a540c2077a1d50dd # pin@v2.2.4
@@ -65,20 +64,21 @@ jobs:
           path: apps/explorer/playwright-report/
           retention-days: 30
 
-      # Disable wallet devenet test
-      # - name: Build Wallet
-      #   # need to run Wallet e2e when its upstream(TS SDK and Rust) or itself is changed
-      #   if: ${{ needs.diff.outputs.isWallet == 'true' || needs.diff.outputs.isRust == 'true' || needs.diff.outputs.isTypescriptSDK == 'true'}}
-      #   run: pnpm wallet build
-      # - name: Run Wallet e2e tests
-      #   if: ${{ needs.diff.outputs.isWallet == 'true' || needs.diff.outputs.isRust == 'true' || needs.diff.outputs.isTypescriptSDK == 'true'}}
-      #   run: xvfb-run --auto-servernum --server-args="-screen 0 1280x960x24" -- pnpm wallet playwright test
-      # - uses: actions/upload-artifact@v3
-      #   if: always()
-      #   with:
-      #     name: playwright-report-wallet
-      #     path: apps/wallet/playwright-report/
-      #     retention-days: 30
+      - name: Set Wallet env
+        run: echo "API_ENV=local" > "$PWD/apps/wallet/configs/environment/.env"
+      - name: Build Wallet
+        # need to run Wallet e2e when its upstream(TS SDK and Rust) or itself is changed
+        if: ${{ needs.diff.outputs.isWallet == 'true' || needs.diff.outputs.isRust == 'true' || needs.diff.outputs.isTypescriptSDK == 'true'}}
+        run: pnpm wallet build:dev
+      - name: Run Wallet e2e tests
+        if: ${{ needs.diff.outputs.isWallet == 'true' || needs.diff.outputs.isRust == 'true' || needs.diff.outputs.isTypescriptSDK == 'true'}}
+        run: xvfb-run --auto-servernum --server-args="-screen 0 1280x960x24" -- pnpm wallet playwright test
+      - uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: playwright-report-wallet
+          path: apps/wallet/playwright-report/
+          retention-days: 30
 
   # Run e2e test against localnet built on the devnet branch for backward compatibility check
   local_devnet_branch:

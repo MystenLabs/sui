@@ -2,23 +2,32 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useFeatureIsOn } from '@growthbook/growthbook-react';
-import { Info12 } from '@mysten/icons';
+import {
+    Info12,
+    WalletActionBuy24,
+    WalletActionSend24,
+    Swap16,
+} from '@mysten/icons';
 import { SUI_TYPE_ARG, Coin } from '@mysten/sui.js';
 import { useMemo } from 'react';
+import { Link } from 'react-router-dom';
 
+import { useOnrampProviders } from '../onramp/useOnrampProviders';
 import { CoinActivitiesCard } from './CoinActivityCard';
 import { TokenIconLink } from './TokenIconLink';
 import CoinBalance from './coin-balance';
-import IconLink from './icon-link';
 import { useActiveAddress } from '_app/hooks/useActiveAddress';
+import { LargeButton } from '_app/shared/LargeButton';
 import { Text } from '_app/shared/text';
+import { CoinItem } from '_components/active-coins-card/CoinItem';
 import Alert from '_components/alert';
 import Loading from '_components/loading';
-import { SuiIcons } from '_font-icons/output/sui-icons';
 import { useGetAllBalances, useGetCoinBalance } from '_hooks';
 import { AccountSelector } from '_src/ui/app/components/AccountSelector';
+import { useLedgerNotification } from '_src/ui/app/hooks/useLedgerNotification';
 import PageTitle from '_src/ui/app/shared/PageTitle';
 import FaucetRequestButton from '_src/ui/app/shared/faucet/FaucetRequestButton';
+import { IndentedTitle } from '_src/ui/app/shared/indented-title';
 
 type TokenDetailsProps = {
     coinType?: string;
@@ -43,23 +52,29 @@ function MyTokens() {
         <Loading loading={isFirstTimeLoading}>
             {balance?.length ? (
                 <div className="flex flex-1 justify-start flex-col w-full mt-6">
-                    <Text variant="caption" color="steel" weight="semibold">
-                        MY COINS
-                    </Text>
-                    <div className="flex flex-col w-full justify-center divide-y divide-solid divide-steel/20 divide-x-0">
-                        {balance.map(({ coinType, totalBalance }) => (
-                            <CoinBalance
-                                type={coinType}
-                                balance={BigInt(totalBalance)}
-                                key={coinType}
-                            />
-                        ))}
-                    </div>
+                    <IndentedTitle title="My Coins">
+                        <div className="flex flex-col w-full justify-center divide-y divide-solid divide-steel/20 divide-x-0 px-1 mb-10">
+                            {balance.map(({ coinType, totalBalance }) => (
+                                <Link
+                                    to={`/send?type=${encodeURIComponent(
+                                        coinType
+                                    )}`}
+                                    key={coinType}
+                                    className="py-3 no-underline items-center w-full"
+                                >
+                                    <CoinItem
+                                        coinType={coinType}
+                                        balance={BigInt(totalBalance)}
+                                    />
+                                </Link>
+                            ))}
+                        </div>
+                    </IndentedTitle>
                 </div>
             ) : null}
             {noSuiToken ? (
                 <div className="flex flex-col flex-nowrap justify-center items-center gap-2 text-center mt-6 px-2.5">
-                    <FaucetRequestButton trackEventSource="home" />
+                    <FaucetRequestButton />
                     <Text variant="pBodySmall" color="gray-80" weight="normal">
                         To conduct transactions on the Sui network, you need SUI
                         in your wallet.
@@ -80,6 +95,10 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
         isFetched,
     } = useGetCoinBalance(activeCoinType, accountAddress);
     const networkOutage = useFeatureIsOn('wallet-network-outage');
+
+    useLedgerNotification();
+
+    const { providers } = useOnrampProviders();
 
     const tokenBalance = coinBalance?.totalBalance || BigInt(0);
 
@@ -126,15 +145,21 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
                             </div>
                         </Alert>
                     ) : null}
-                    <div className="flex flex-nowrap gap-2 justify-center w-full mt-5">
-                        <IconLink
-                            icon={SuiIcons.Buy}
-                            to="/"
-                            disabled={true}
-                            text="Buy"
-                        />
-                        <IconLink
-                            icon={SuiIcons.ArrowLeft}
+                    <div className="flex flex-nowrap gap-3 justify-center w-full mt-5">
+                        <LargeButton
+                            center
+                            to="/onramp"
+                            disabled={
+                                (coinType && coinType !== SUI_TYPE_ARG) ||
+                                !providers?.length
+                            }
+                            top={<WalletActionBuy24 />}
+                        >
+                            Buy
+                        </LargeButton>
+
+                        <LargeButton
+                            center
                             to={`/send${
                                 coinBalance?.coinType
                                     ? `?${new URLSearchParams({
@@ -143,26 +168,23 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
                                     : ''
                             }`}
                             disabled={!tokenBalance}
-                            text="Send"
-                        />
-                        <IconLink
-                            icon={SuiIcons.Swap}
-                            to="/"
-                            disabled={true}
-                            text="Swap"
-                        />
+                            top={<WalletActionSend24 />}
+                        >
+                            Send
+                        </LargeButton>
+
+                        <LargeButton center to="/" disabled top={<Swap16 />}>
+                            Swap
+                        </LargeButton>
                     </div>
 
                     {activeCoinType === SUI_TYPE_ARG && accountAddress ? (
                         <div className="mt-6 flex justify-start gap-2 flex-col w-full">
-                            <Text
-                                variant="caption"
-                                color="steel-darker"
-                                weight="semibold"
-                            >
-                                SUI Stake
-                            </Text>
-                            <TokenIconLink accountAddress={accountAddress} />
+                            <IndentedTitle title="SUI Stake">
+                                <TokenIconLink
+                                    accountAddress={accountAddress}
+                                />
+                            </IndentedTitle>
                         </div>
                     ) : null}
 

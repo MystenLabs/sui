@@ -17,7 +17,7 @@ use tokio::task::JoinHandle;
 use tracing::{error, info, warn};
 
 use mysten_metrics::spawn_monitored_task;
-use sui_core::event_handler::EventHandler;
+use sui_core::event_handler::SubscriptionHandler;
 use sui_json_rpc::api::{GovernanceReadApiClient, ReadApiClient};
 use sui_json_rpc_types::{
     OwnedObjectRef, SuiGetPastObjectRequest, SuiObjectData, SuiObjectDataOptions, SuiRawData,
@@ -28,10 +28,12 @@ use sui_types::base_types::{ObjectID, SequenceNumber};
 use sui_types::committee::EpochId;
 use sui_types::messages_checkpoint::{CheckpointCommitment, CheckpointSequenceNumber};
 use sui_types::sui_system_state::sui_system_state_summary::SuiSystemStateSummary;
+use sui_types::transaction::SenderSignedData;
 use sui_types::SUI_SYSTEM_ADDRESS;
 
 use crate::errors::IndexerError;
 use crate::metrics::IndexerMetrics;
+use crate::models::addresses::{dedup_from_addresses, dedup_from_and_to_addresses};
 use crate::models::checkpoints::Checkpoint;
 use crate::models::epoch::{DBEpochInfo, SystemEpochInfoEvent};
 use crate::models::objects::{DeletedObject, Object, ObjectStatus};
@@ -48,7 +50,7 @@ use crate::IndexerConfig;
 const MAX_PARALLEL_DOWNLOADS: usize = 24;
 const DOWNLOAD_RETRY_INTERVAL_IN_SECS: u64 = 10;
 const DB_COMMIT_RETRY_INTERVAL_IN_MILLIS: u64 = 100;
-const MULTI_GET_CHUNK_SIZE: usize = 200;
+const MULTI_GET_CHUNK_SIZE: usize = 50;
 const CHECKPOINT_QUEUE_LIMIT: usize = 24;
 const EPOCH_QUEUE_LIMIT: usize = 2;
 
@@ -56,7 +58,7 @@ const EPOCH_QUEUE_LIMIT: usize = 2;
 pub struct CheckpointHandler<S> {
     state: S,
     http_client: HttpClient,
-    event_handler: Arc<EventHandler>,
+    event_handler: Arc<SubscriptionHandler>,
     metrics: IndexerMetrics,
     config: IndexerConfig,
     checkpoint_sender: Arc<Mutex<Sender<TemporaryCheckpointStore>>>,
@@ -75,7 +77,7 @@ where
     pub fn new(
         state: S,
         http_client: HttpClient,
-        event_handler: Arc<EventHandler>,
+        event_handler: Arc<SubscriptionHandler>,
         metrics: IndexerMetrics,
         config: &IndexerConfig,
     ) -> Self {
@@ -195,7 +197,10 @@ where
         info!("Indexer object checkpoint download & index task started...");
         // NOTE: important not to cast i64 to u64 here,
         // because -1 will be returned when checkpoints table is empty.
-        let last_seq_from_db = self.state.get_latest_checkpoint_sequence_number().await?;
+        let last_seq_from_db = self
+            .state
+            .get_latest_object_checkpoint_sequence_number()
+            .await?;
         if last_seq_from_db > 0 {
             info!("Resuming from checkpoint {last_seq_from_db}");
         }
@@ -224,6 +229,13 @@ where
                             "Unexpected response from fullnode for object checkpoints: {}",
                             fn_e
                         );
+                    } else if let Err(IndexerError::FullNodeReadingError(fn_e)) = download_result {
+                        warn!("Fullnode reading error for object checkpoints {}: {}. It can be transient or due to rate limiting.", next_cursor_sequence_number, fn_e);
+                    } else {
+                        warn!(
+                            "Error downloading object checkpoints: {:?}",
+                            download_result
+                        );
                     }
                     break;
                 }
@@ -235,14 +247,18 @@ where
             current_parallel_downloads =
                 std::cmp::min(downloaded_checkpoints.len() + 1, MAX_PARALLEL_DOWNLOADS);
             if downloaded_checkpoints.is_empty() {
-                warn!("No object checkpoints downloaded, retrying in next iteration ...");
+                warn!(
+                    "No object checkpoints were downloaded for sequence number {}, retrying...",
+                    next_cursor_sequence_number
+                );
                 continue;
             }
 
             // Index checkpoint data
             let indexed_checkpoint_epoch_vec = join_all(downloaded_checkpoints.iter().map(
                 |downloaded_checkpoint| async {
-                    self.index_checkpoint(downloaded_checkpoint).await
+                    self.index_checkpoint(downloaded_checkpoint, /* index_epoch */ true)
+                        .await
                 },
             ))
             .await
@@ -256,8 +272,35 @@ where
                 );
                 e
             })?;
-            let (indexed_checkpoints, _indexed_epochs): (Vec<_>, Vec<_>) =
+            let (indexed_checkpoints, indexed_epochs): (Vec<_>, Vec<_>) =
                 indexed_checkpoint_epoch_vec.into_iter().unzip();
+            for epoch in indexed_epochs.into_iter().flatten() {
+                // for the first epoch, we need to store the epoch data first,
+                // otherwise send it to channel to be committed later.
+                if epoch.last_epoch.is_none() {
+                    let epoch_db_guard = self.metrics.epoch_db_commit_latency.start_timer();
+                    info!("Persisting first epoch...");
+                    let mut persist_first_epoch_res = self.state.persist_epoch(&epoch).await;
+                    while persist_first_epoch_res.is_err() {
+                        warn!("Failed to persist first epoch, retrying...");
+                        persist_first_epoch_res = self.state.persist_epoch(&epoch).await;
+                    }
+                    epoch_db_guard.stop_and_record();
+                    self.metrics.total_epoch_committed.inc();
+                    info!("Persisted first epoch");
+                } else {
+                    let epoch_sender_guard = self.epoch_sender.lock().await;
+                    // NOTE: when the channel is full, epoch_sender_guard will wait until the channel has space.
+                    epoch_sender_guard.send(epoch).await.map_err(|e| {
+                        error!(
+                            "Failed to send indexed epoch to epoch commit handler with error {}",
+                            e.to_string()
+                        );
+                        IndexerError::MpscChannelError(e.to_string())
+                    })?;
+                    drop(epoch_sender_guard);
+                }
+            }
 
             let object_sender_guard = self.object_checkpoint_sender.lock().await;
             // NOTE: when the channel is full, checkpoint_sender_guard will wait until the channel has space.
@@ -308,6 +351,10 @@ where
                             "Unexpected response from fullnode for checkpoints: {}",
                             fn_e
                         );
+                    } else if let Err(IndexerError::FullNodeReadingError(fn_e)) = download_result {
+                        warn!("Fullnode reading error for checkpoints {}: {}. It can be transient or due to rate limiting.", next_cursor_sequence_number, fn_e);
+                    } else {
+                        warn!("Error downloading checkpoints: {:?}", download_result);
                     }
                     break;
                 }
@@ -320,7 +367,10 @@ where
             current_parallel_downloads =
                 std::cmp::min(downloaded_checkpoints.len() + 1, MAX_PARALLEL_DOWNLOADS);
             if downloaded_checkpoints.is_empty() {
-                warn!("No checkpoints downloaded, retrying in next iteration ...");
+                warn!(
+                    "No checkpoints were downloaded for sequence number {}, retrying...",
+                    next_cursor_sequence_number
+                );
                 continue;
             }
 
@@ -328,7 +378,8 @@ where
             let index_guard = self.metrics.checkpoint_index_latency.start_timer();
             let indexed_checkpoint_epoch_vec = join_all(downloaded_checkpoints.iter().map(
                 |downloaded_checkpoint| async {
-                    self.index_checkpoint(downloaded_checkpoint).await
+                    self.index_checkpoint(downloaded_checkpoint, /* index_epoch */ false)
+                        .await
                 },
             ))
             .await
@@ -342,7 +393,7 @@ where
                 );
                 e
             })?;
-            let (indexed_checkpoints, indexed_epochs): (Vec<_>, Vec<_>) =
+            let (indexed_checkpoints, _indexed_epochs): (Vec<_>, Vec<_>) =
                 indexed_checkpoint_epoch_vec.into_iter().unzip();
             index_guard.stop_and_record();
 
@@ -360,41 +411,14 @@ where
             }
             drop(checkpoint_sender_guard);
 
-            for epoch in indexed_epochs.into_iter().flatten() {
-                // for the first epoch, we need to store the epoch data first,
-                // otherwise send it to channel to be committed later.
-                if epoch.last_epoch.is_none() {
-                    let epoch_db_guard = self.metrics.epoch_db_commit_latency.start_timer();
-                    info!("Persisting first epoch...");
-                    let mut persist_first_epoch_res = self.state.persist_epoch(&epoch).await;
-                    while persist_first_epoch_res.is_err() {
-                        warn!("Failed to persist first epoch, retrying...");
-                        persist_first_epoch_res = self.state.persist_epoch(&epoch).await;
-                    }
-                    epoch_db_guard.stop_and_record();
-                    self.metrics.total_epoch_committed.inc();
-                    info!("Persisted first epoch");
-                } else {
-                    let epoch_sender_guard = self.epoch_sender.lock().await;
-                    // NOTE: when the channel is full, epoch_sender_guard will wait until the channel has space.
-                    epoch_sender_guard.send(epoch).await.map_err(|e| {
-                        error!(
-                            "Failed to send indexed epoch to epoch commit handler with error {}",
-                            e.to_string()
-                        );
-                        IndexerError::MpscChannelError(e.to_string())
-                    })?;
-                    drop(epoch_sender_guard);
-                }
-            }
-
             // NOTE(gegaowp): today ws processing actually will block next checkpoint download,
             // we can pipeline this as well in the future if needed
             for checkpoint in &downloaded_checkpoints {
                 let ws_guard = self.metrics.subscription_process_latency.start_timer();
                 for tx in &checkpoint.transactions {
+                    let data: SenderSignedData = bcs::from_bytes(&tx.raw_transaction)?;
                     self.event_handler
-                        .process_events(&tx.effects, &tx.events)
+                        .process_tx(data.transaction_data(), &tx.effects, &tx.events)
                         .await?;
                 }
                 ws_guard.stop_and_record();
@@ -423,12 +447,13 @@ where
                     checkpoint,
                     transactions,
                     events,
-                    object_changes: _tx_object_changes,
-                    addresses: _,
-                    packages,
-                    input_objects,
-                    move_calls,
-                    recipients,
+                    object_changes: _,
+                    addresses,
+                    active_addresses,
+                    packages: _,
+                    input_objects: _,
+                    move_calls: _,
+                    recipients: _,
                 } = indexed_checkpoint;
                 let checkpoint_seq = checkpoint.sequence_number;
 
@@ -449,64 +474,24 @@ where
                     }
                 });
 
-                // let addresses_handler = self.clone();
-                // spawn_monitored_task!(async move {
-                //     let mut address_commit_res =
-                //         addresses_handler.state.persist_addresses(&addresses).await;
-                //     while let Err(e) = address_commit_res {
-                //         warn!(
-                //             "Indexer address commit failed with error: {:?}, retrying after {:?} milli-secs...",
-                //             e, DB_COMMIT_RETRY_INTERVAL_IN_MILLIS
-                //         );
-                //         tokio::time::sleep(std::time::Duration::from_millis(
-                //             DB_COMMIT_RETRY_INTERVAL_IN_MILLIS,
-                //         ))
-                //         .await;
-                //         address_commit_res =
-                //             addresses_handler.state.persist_addresses(&addresses).await;
-                //     }
-                // });
-
-                let packages_handler = self.clone();
+                let addresses_handler = self.clone();
                 spawn_monitored_task!(async move {
-                    let mut package_commit_res =
-                        packages_handler.state.persist_packages(&packages).await;
-                    while let Err(e) = package_commit_res {
-                        warn!(
-                            "Indexer package commit failed with error: {:?}, retrying after {:?} milli-secs...",
-                            e, DB_COMMIT_RETRY_INTERVAL_IN_MILLIS
-                        );
-                        tokio::time::sleep(std::time::Duration::from_millis(
-                            DB_COMMIT_RETRY_INTERVAL_IN_MILLIS,
-                        ))
-                        .await;
-                        package_commit_res =
-                            packages_handler.state.persist_packages(&packages).await;
-                    }
-                });
-
-                let transactions_handler = self.clone();
-                spawn_monitored_task!(async move {
-                    let mut transaction_index_tables_commit_res = transactions_handler
+                    let mut address_commit_res = addresses_handler
                         .state
-                        .persist_transaction_index_tables(&input_objects, &move_calls, &recipients)
+                        .persist_addresses(&addresses, &active_addresses)
                         .await;
-                    while let Err(e) = transaction_index_tables_commit_res {
+                    while let Err(e) = address_commit_res {
                         warn!(
-                            "Indexer transaction index tables commit failed with error: {:?}, retrying after {:?} milli-secs...",
+                            "Indexer address commit failed with error: {:?}, retrying after {:?} milli-secs...",
                             e, DB_COMMIT_RETRY_INTERVAL_IN_MILLIS
                         );
                         tokio::time::sleep(std::time::Duration::from_millis(
                             DB_COMMIT_RETRY_INTERVAL_IN_MILLIS,
                         ))
                         .await;
-                        transaction_index_tables_commit_res = transactions_handler
+                        address_commit_res = addresses_handler
                             .state
-                            .persist_transaction_index_tables(
-                                &input_objects,
-                                &move_calls,
-                                &recipients,
-                            )
+                            .persist_addresses(&addresses, &active_addresses)
                             .await;
                     }
                 });
@@ -568,19 +553,64 @@ where
                     events: _,
                     object_changes: tx_object_changes,
                     addresses: _,
-                    packages: _,
-                    input_objects: _,
-                    move_calls: _,
-                    recipients: _,
+                    active_addresses: _,
+                    packages,
+                    input_objects,
+                    move_calls,
+                    recipients,
                 } = indexed_checkpoint;
                 let checkpoint_seq = checkpoint.sequence_number;
 
-                // NOTE: commit object changes in the curren task to stick to the original order.
+                let packages_handler = self.clone();
+                spawn_monitored_task!(async move {
+                    let mut package_commit_res =
+                        packages_handler.state.persist_packages(&packages).await;
+                    while let Err(e) = package_commit_res {
+                        warn!(
+                            "Indexer package commit failed with error: {:?}, retrying after {:?} milli-secs...",
+                            e, DB_COMMIT_RETRY_INTERVAL_IN_MILLIS
+                        );
+                        tokio::time::sleep(std::time::Duration::from_millis(
+                            DB_COMMIT_RETRY_INTERVAL_IN_MILLIS,
+                        ))
+                        .await;
+                        package_commit_res =
+                            packages_handler.state.persist_packages(&packages).await;
+                    }
+                });
+
+                let transactions_handler = self.clone();
+                spawn_monitored_task!(async move {
+                    let mut transaction_index_tables_commit_res = transactions_handler
+                        .state
+                        .persist_transaction_index_tables(&input_objects, &move_calls, &recipients)
+                        .await;
+                    while let Err(e) = transaction_index_tables_commit_res {
+                        warn!(
+                            "Indexer transaction index tables commit failed with error: {:?}, retrying after {:?} milli-secs...",
+                            e, DB_COMMIT_RETRY_INTERVAL_IN_MILLIS
+                        );
+                        tokio::time::sleep(std::time::Duration::from_millis(
+                            DB_COMMIT_RETRY_INTERVAL_IN_MILLIS,
+                        ))
+                        .await;
+                        transaction_index_tables_commit_res = transactions_handler
+                            .state
+                            .persist_transaction_index_tables(
+                                &input_objects,
+                                &move_calls,
+                                &recipients,
+                            )
+                            .await;
+                    }
+                });
+
+                // NOTE: commit object changes in the current task to stick to the original order.
                 let object_db_guard = self.metrics.object_db_commit_latency.start_timer();
                 let mut object_changes_commit_res = self
                     .state
                     .persist_object_changes(
-                        checkpoint_seq,
+                        &checkpoint,
                         &tx_object_changes,
                         self.metrics.object_mutation_db_commit_latency.clone(),
                         self.metrics.object_deletion_db_commit_latency.clone(),
@@ -598,7 +628,7 @@ where
                     object_changes_commit_res = self
                         .state
                         .persist_object_changes(
-                            checkpoint_seq,
+                            &checkpoint,
                             &tx_object_changes,
                             self.metrics.object_mutation_db_commit_latency.clone(),
                             self.metrics.object_deletion_db_commit_latency.clone(),
@@ -749,6 +779,7 @@ where
     async fn index_checkpoint(
         &self,
         data: &CheckpointData,
+        index_epoch: bool,
     ) -> Result<(TemporaryCheckpointStore, Option<TemporaryEpochStore>), IndexerError> {
         let CheckpointData {
             checkpoint,
@@ -830,146 +861,179 @@ where
             .flat_map(|tx| tx.get_recipients(checkpoint.epoch, checkpoint.sequence_number))
             .collect();
 
-        // // Index addresses
-        // let addresses = transactions
-        //     .iter()
-        //     .flat_map(|tx| {
-        //         tx.get_addresses(checkpoint.epoch, checkpoint.sequence_number)
-        //     })
-        //     .collect();
-
-        // Index epoch
-        let epoch_index = if checkpoint.epoch == 0 && checkpoint.sequence_number == 0 {
-            // very first epoch
-            let system_state: SuiSystemStateSummary = self
-                .http_client
-                .get_latest_sui_system_state()
-                .await
-                .map_err(|e| {
-                    IndexerError::FullNodeReadingError(format!(
-                        "Failed to get latest system state with error {:?}",
-                        e
-                    ))
-                })?;
-            let validators = system_state
-                .active_validators
-                .iter()
-                .map(|v| (system_state.epoch, v.clone()).into())
-                .collect();
-
-            Some(TemporaryEpochStore {
-                last_epoch: None,
-                new_epoch: DBEpochInfo {
-                    epoch: 0,
-                    first_checkpoint_id: 0,
-                    epoch_start_timestamp: system_state.epoch_start_timestamp_ms as i64,
-                    ..Default::default()
-                },
-                system_state: system_state.into(),
-                validators,
+        // Index addresses
+        // NOTE: dedup is necessary because there are multiple transactions in a checkpoint,
+        // otherwise error of `ON CONFLICT DO UPDATE command cannot affect row a second time` will be thrown.
+        let from_and_to_address_data = transactions
+            .iter()
+            .flat_map(|tx| {
+                tx.get_from_and_to_addresses(checkpoint.epoch, checkpoint.sequence_number)
             })
-        } else if let Some(end_of_epoch_data) = &checkpoint.end_of_epoch_data {
-            // Find system state object
-            let system_state: SuiSystemStateSummary = self
-                .http_client
-                .get_latest_sui_system_state()
-                .await
-                .map_err(|e| {
-                    IndexerError::FullNodeReadingError(format!(
-                        "Failed to get latest system state with error {:?}",
-                        e
-                    ))
-                })?;
+            .collect();
+        let from_address_data = transactions
+            .iter()
+            .map(|tx| tx.get_from_address())
+            .collect();
+        let addresses = dedup_from_and_to_addresses(from_and_to_address_data);
+        let active_addresses = dedup_from_addresses(from_address_data);
 
-            let epoch_event = transactions.iter().find_map(|tx| {
-                tx.events.data.iter().find(|ev| {
-                    ev.type_.address == SUI_SYSTEM_ADDRESS
-                        && ev.type_.module.as_ident_str() == ident_str!("sui_system_state_inner")
-                        && ev.type_.name.as_ident_str() == ident_str!("SystemEpochInfoEvent")
-                })
-            });
+        // NOTE: Index epoch when object checkpoint index has reached the same checkpoint,
+        // because epoch info is based on the latest system state object by the current checkpoint.
+        let mut epoch_index = None;
+        if index_epoch {
+            epoch_index = if checkpoint.epoch == 0 && checkpoint.sequence_number == 0 {
+                // very first epoch
+                // NOTE: tmp. using latest system state to save storage on indexer.
+                // let system_state = get_sui_system_state(data)?;
+                // let system_state: SuiSystemStateSummary = system_state.into_sui_system_state_summary();
+                let system_state: SuiSystemStateSummary = self
+                    .http_client
+                    .get_latest_sui_system_state()
+                    .await
+                    .map_err(|e| {
+                        IndexerError::FullNodeReadingError(format!(
+                            "Failed to get latest system state with error {:?}",
+                            e
+                        ))
+                    })?;
+                let validators = system_state
+                    .active_validators
+                    .iter()
+                    .map(|v| (system_state.epoch, v.clone()).into())
+                    .collect();
 
-            let event = epoch_event
-                .map(|e| bcs::from_bytes::<SystemEpochInfoEvent>(&e.bcs))
-                .transpose()?;
-
-            let validators = system_state
-                .active_validators
-                .iter()
-                .map(|v| (system_state.epoch, v.clone()).into())
-                .collect();
-
-            let epoch_commitments = end_of_epoch_data
-                .epoch_commitments
-                .iter()
-                .map(|c| match c {
-                    CheckpointCommitment::ECMHLiveObjectSetDigest(d) => {
-                        Some(d.digest.into_inner().to_vec())
-                    }
-                })
-                .collect();
-
-            let (next_epoch_committee, next_epoch_committee_stake) =
-                end_of_epoch_data.next_epoch_committee.iter().fold(
-                    (vec![], vec![]),
-                    |(mut names, mut stakes), (name, stake)| {
-                        names.push(Some(name.as_bytes().to_vec()));
-                        stakes.push(Some(*stake as i64));
-                        (names, stakes)
+                Some(TemporaryEpochStore {
+                    last_epoch: None,
+                    new_epoch: DBEpochInfo {
+                        epoch: 0,
+                        first_checkpoint_id: 0,
+                        epoch_start_timestamp: system_state.epoch_start_timestamp_ms as i64,
+                        ..Default::default()
                     },
-                );
+                    system_state: system_state.into(),
+                    validators,
+                })
+            } else if let Some(end_of_epoch_data) = &checkpoint.end_of_epoch_data {
+                // Find system state object
+                // NOTE: tmp. using latest system state to save storage on indexer.
+                // let system_state = get_sui_system_state(data)?;
+                // let system_state: SuiSystemStateSummary = system_state.into_sui_system_state_summary();
+                let system_state: SuiSystemStateSummary = self
+                    .http_client
+                    .get_latest_sui_system_state()
+                    .await
+                    .map_err(|e| {
+                        IndexerError::FullNodeReadingError(format!(
+                            "Failed to get latest system state with error {:?}",
+                            e
+                        ))
+                    })?;
 
-            let event = event.as_ref();
+                let epoch_event = transactions.iter().find_map(|tx| {
+                    tx.events.data.iter().find(|ev| {
+                        ev.type_.address == SUI_SYSTEM_ADDRESS
+                            && ev.type_.module.as_ident_str()
+                                == ident_str!("sui_system_state_inner")
+                            && ev.type_.name.as_ident_str() == ident_str!("SystemEpochInfoEvent")
+                    })
+                });
 
-            Some(TemporaryEpochStore {
-                last_epoch: Some(DBEpochInfo {
-                    epoch: system_state.epoch as i64 - 1,
-                    first_checkpoint_id: 0,
-                    last_checkpoint_id: Some(checkpoint.sequence_number as i64),
-                    epoch_start_timestamp: 0,
-                    epoch_end_timestamp: Some(checkpoint.timestamp_ms as i64),
-                    epoch_total_transactions: 0,
-                    next_epoch_version: Some(
-                        end_of_epoch_data.next_epoch_protocol_version.as_u64() as i64,
-                    ),
-                    next_epoch_committee,
-                    next_epoch_committee_stake,
-                    stake_subsidy_amount: event.map(|e| e.stake_subsidy_amount),
-                    reference_gas_price: event.map(|e| e.reference_gas_price),
-                    storage_fund_balance: event.map(|e| e.storage_fund_balance),
-                    total_gas_fees: event.map(|e| e.total_gas_fees),
-                    total_stake_rewards_distributed: event
-                        .map(|e| e.total_stake_rewards_distributed),
-                    total_stake: event.map(|e| e.total_stake),
-                    storage_fund_reinvestment: event.map(|e| e.storage_fund_reinvestment),
-                    storage_charge: event.map(|e| e.storage_charge),
-                    protocol_version: event.map(|e| e.protocol_version),
-                    storage_rebate: event.map(|e| e.storage_rebate),
-                    leftover_storage_fund_inflow: event.map(|e| e.leftover_storage_fund_inflow),
-                    epoch_commitments,
-                }),
-                new_epoch: DBEpochInfo {
-                    epoch: system_state.epoch as i64,
-                    first_checkpoint_id: checkpoint.sequence_number as i64 + 1,
-                    epoch_start_timestamp: system_state.epoch_start_timestamp_ms as i64,
-                    ..Default::default()
-                },
-                system_state: system_state.into(),
-                validators,
-            })
-        } else {
-            None
-        };
+                let event = epoch_event
+                    .map(|e| bcs::from_bytes::<SystemEpochInfoEvent>(&e.bcs))
+                    .transpose()?;
 
+                let validators = system_state
+                    .active_validators
+                    .iter()
+                    .map(|v| (system_state.epoch, v.clone()).into())
+                    .collect();
+
+                let epoch_commitments = end_of_epoch_data
+                    .epoch_commitments
+                    .iter()
+                    .map(|c| match c {
+                        CheckpointCommitment::ECMHLiveObjectSetDigest(d) => {
+                            Some(d.digest.into_inner().to_vec())
+                        }
+                    })
+                    .collect();
+
+                let (next_epoch_committee, next_epoch_committee_stake) =
+                    end_of_epoch_data.next_epoch_committee.iter().fold(
+                        (vec![], vec![]),
+                        |(mut names, mut stakes), (name, stake)| {
+                            names.push(Some(name.as_bytes().to_vec()));
+                            stakes.push(Some(*stake as i64));
+                            (names, stakes)
+                        },
+                    );
+
+                let event = event.as_ref();
+
+                Some(TemporaryEpochStore {
+                    last_epoch: Some(DBEpochInfo {
+                        epoch: system_state.epoch as i64 - 1,
+                        first_checkpoint_id: 0,
+                        last_checkpoint_id: Some(checkpoint.sequence_number as i64),
+                        epoch_start_timestamp: 0,
+                        epoch_end_timestamp: Some(checkpoint.timestamp_ms as i64),
+                        epoch_total_transactions: 0,
+                        next_epoch_version: Some(
+                            end_of_epoch_data.next_epoch_protocol_version.as_u64() as i64,
+                        ),
+                        next_epoch_committee,
+                        next_epoch_committee_stake,
+                        stake_subsidy_amount: event.map(|e| e.stake_subsidy_amount),
+                        reference_gas_price: event.map(|e| e.reference_gas_price),
+                        storage_fund_balance: event.map(|e| e.storage_fund_balance),
+                        total_gas_fees: event.map(|e| e.total_gas_fees),
+                        total_stake_rewards_distributed: event
+                            .map(|e| e.total_stake_rewards_distributed),
+                        total_stake: event.map(|e| e.total_stake),
+                        storage_fund_reinvestment: event.map(|e| e.storage_fund_reinvestment),
+                        storage_charge: event.map(|e| e.storage_charge),
+                        protocol_version: event.map(|e| e.protocol_version),
+                        storage_rebate: event.map(|e| e.storage_rebate),
+                        leftover_storage_fund_inflow: event.map(|e| e.leftover_storage_fund_inflow),
+                        epoch_commitments,
+                    }),
+                    new_epoch: DBEpochInfo {
+                        epoch: system_state.epoch as i64,
+                        first_checkpoint_id: checkpoint.sequence_number as i64 + 1,
+                        epoch_start_timestamp: system_state.epoch_start_timestamp_ms as i64,
+                        ..Default::default()
+                    },
+                    system_state: system_state.into(),
+                    validators,
+                })
+            } else {
+                None
+            };
+        }
         let total_transactions = db_transactions.iter().map(|t| t.transaction_count).sum();
+        let total_successful_transaction_blocks = db_transactions
+            .iter()
+            .filter(|t| t.execution_success)
+            .count();
+        let total_successful_transactions = db_transactions
+            .iter()
+            .filter(|t| t.execution_success)
+            .map(|t| t.transaction_count)
+            .sum();
 
         Ok((
             TemporaryCheckpointStore {
-                checkpoint: Checkpoint::from(checkpoint, total_transactions)?,
+                checkpoint: Checkpoint::from(
+                    checkpoint,
+                    total_transactions,
+                    total_successful_transactions,
+                    total_successful_transaction_blocks as i64,
+                )?,
                 transactions: db_transactions,
                 events,
                 object_changes: objects_changes,
-                addresses: vec![],
+                addresses,
+                active_addresses,
                 packages,
                 input_objects,
                 move_calls,
@@ -1065,12 +1129,12 @@ pub async fn fetch_changed_objects(
     .await
     .into_iter()
     .try_fold(vec![], |mut acc, chunk| {
-        let object_datas = chunk.0?.into_iter().try_fold(vec![], |mut acc, resp| {
+        let object_data = chunk.0?.into_iter().try_fold(vec![], |mut acc, resp| {
             let object_data = resp.into_object()?;
             acc.push(object_data);
             Ok::<Vec<SuiObjectData>, Error>(acc)
         })?;
-        let mutated_object_chunk = chunk.1.into_iter().zip(object_datas);
+        let mutated_object_chunk = chunk.1.into_iter().zip(object_data);
         acc.extend(mutated_object_chunk);
         Ok::<_, Error>(acc)
     })

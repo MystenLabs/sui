@@ -12,8 +12,8 @@ import { Stats } from '~/ui/Stats';
 type StatsCardProps = {
     validatorData: SuiValidatorSummary;
     epoch: number | string;
-    epochRewards: number;
-    apy: number;
+    epochRewards: number | null;
+    apy: number | string | null;
     tallyingScore: string | null;
 };
 
@@ -49,7 +49,7 @@ export function ValidatorStats({
                             <Stats
                                 label="Staking APY"
                                 tooltip="This is the Annualized Percentage Yield of the a specific validator’s past operations. Note there is no guarantee this APY will be true in the future."
-                                unavailable={apy <= 0}
+                                unavailable={apy === null}
                             >
                                 {apy}%
                             </Stats>
@@ -96,12 +96,16 @@ export function ValidatorStats({
                         </Heading>
                         <div className="flex flex-col gap-8">
                             <Stats
-                                label="Last Epoch SUI Rewards"
+                                label="Last Epoch Rewards"
                                 tooltip="The stake rewards collected during the last epoch."
-                                unavailable={Number(epochRewards) <= 0}
+                                unavailable={epochRewards === null}
                             >
                                 <DelegationAmount
-                                    amount={epochRewards}
+                                    amount={
+                                        typeof epochRewards === 'number'
+                                            ? epochRewards
+                                            : 0n
+                                    }
                                     isStats
                                 />
                             </Stats>

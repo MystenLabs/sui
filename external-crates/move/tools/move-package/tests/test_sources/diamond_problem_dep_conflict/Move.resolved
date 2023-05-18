@@ -1,0 +1,3 @@
+Failed to resolve dependencies for package 'Root': Resolving dependencies for package 'B': Conflicting dependencies found:
+C = { local = "deps_only/C", version = "2.0.0" }
+C = { local = "deps_only/C", version = "1.0.0" }

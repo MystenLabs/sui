@@ -10,11 +10,11 @@ use std::sync::Arc;
 use sui_types::base_types::AuthorityName;
 use sui_types::error::SuiResult;
 use sui_types::message_envelope::Message;
-use sui_types::messages::ConsensusTransaction;
 use sui_types::messages_checkpoint::{
     CertifiedCheckpointSummary, CheckpointContents, CheckpointSignatureMessage, CheckpointSummary,
     SignedCheckpointSummary, VerifiedCheckpoint,
 };
+use sui_types::messages_consensus::ConsensusTransaction;
 use tracing::{debug, info, trace};
 
 use super::CheckpointMetrics;
@@ -67,8 +67,15 @@ impl<T: SubmitToConsensus + ReconfigurationInitiator> CheckpointOutput
     ) -> SuiResult {
         let checkpoint_seq = summary.sequence_number;
         let checkpoint_timestamp = summary.timestamp_ms;
+        self.metrics.checkpoint_creation_latency_ms.observe(
+            summary
+                .timestamp()
+                .elapsed()
+                .unwrap_or_default()
+                .as_millis() as u64,
+        );
         debug!(
-            "Sending checkpoint signature at sequence {checkpoint_seq} to consensus, timestamp {checkpoint_timestamp}. 
+            "Sending checkpoint signature at sequence {checkpoint_seq} to consensus, timestamp {checkpoint_timestamp}.
             {}ms left till end of epoch at timestamp {}",
             self.next_reconfiguration_timestamp_ms.saturating_sub(checkpoint_timestamp), self.next_reconfiguration_timestamp_ms
         );

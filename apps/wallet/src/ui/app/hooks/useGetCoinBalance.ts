@@ -15,15 +15,14 @@ export function useGetCoinBalance(
     const rpc = useRpcClient();
     const refetchInterval = useFeatureValue(
         FEATURES.WALLET_BALANCE_REFETCH_INTERVAL,
-        8_000
+        20_000
     );
 
-    return useQuery(
-        ['coin-balance', address, coinType],
-        () => rpc.getBalance({ owner: address!, coinType }),
-        {
-            enabled: !!address && !!coinType,
-            refetchInterval,
-        }
-    );
+    return useQuery({
+        queryKey: ['coin-balance', address, coinType],
+        queryFn: () => rpc.getBalance({ owner: address!, coinType }),
+        enabled: !!address && !!coinType,
+        refetchInterval,
+        staleTime: 5_000,
+    });
 }

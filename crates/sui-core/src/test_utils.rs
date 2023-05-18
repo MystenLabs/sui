@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::authority::test_authority_builder::TestAuthorityBuilder;
 use crate::authority::{AuthorityState, EffectsNotifyRead};
 use crate::authority_aggregator::{AuthorityAggregator, TimeoutConfig};
 use crate::epoch::committee_store::CommitteeStore;
@@ -13,13 +12,13 @@ use move_core_types::account_address::AccountAddress;
 use move_core_types::ident_str;
 use prometheus::Registry;
 use shared_crypto::intent::{Intent, IntentScope};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 use sui_config::genesis::Genesis;
-use sui_config::ValidatorInfo;
 use sui_framework::BuiltInFramework;
+use sui_genesis_builder::validator_info::ValidatorInfo;
 use sui_move_build::{BuildConfig, CompiledPackage, SuiPackageHooks};
 use sui_protocol_config::ProtocolConfig;
 use sui_types::base_types::{random_object_ref, ObjectID};
@@ -28,13 +27,14 @@ use sui_types::crypto::{
     NetworkKeyPair, SuiKeyPair,
 };
 use sui_types::crypto::{AuthorityKeyPair, Signer};
+use sui_types::effects::{SignedTransactionEffects, TransactionEffects};
 use sui_types::error::SuiError;
-use sui_types::messages::TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS;
-use sui_types::messages::{
+use sui_types::transaction::ObjectArg;
+use sui_types::transaction::TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS;
+use sui_types::transaction::{
     CallArg, SignedTransaction, TransactionData, VerifiedTransaction,
     TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
 };
-use sui_types::messages::{ObjectArg, SignedTransactionEffects};
 use sui_types::utils::create_fake_transaction;
 use sui_types::utils::to_sender_signed_transaction;
 use sui_types::{
@@ -42,25 +42,13 @@ use sui_types::{
     committee::Committee,
     crypto::{AuthoritySignInfo, AuthoritySignature},
     message_envelope::Message,
-    messages::{CertifiedTransaction, Transaction, TransactionEffects},
     object::Object,
+    transaction::{CertifiedTransaction, Transaction},
 };
 use tokio::time::timeout;
 use tracing::{info, warn};
 
 const WAIT_FOR_TX_TIMEOUT: Duration = Duration::from_secs(15);
-
-pub async fn init_state() -> Arc<AuthorityState> {
-    let dir = tempfile::TempDir::new().unwrap();
-    let network_config = sui_config::builder::ConfigBuilder::new(&dir).build();
-    let genesis = network_config.genesis;
-    let keypair = network_config.validator_configs[0]
-        .protocol_key_pair()
-        .copy();
-    TestAuthorityBuilder::new()
-        .build(genesis.committee().unwrap(), &keypair, &genesis)
-        .await
-}
 
 pub async fn send_and_confirm_transaction(
     authority: &AuthorityState,
@@ -113,7 +101,7 @@ where
     R: rand::CryptoRng + rand::RngCore,
 {
     let dir = tempfile::TempDir::new().unwrap();
-    let network_config = sui_config::builder::ConfigBuilder::new(&dir)
+    let network_config = sui_swarm_config::network_config_builder::ConfigBuilder::new(&dir)
         .rng(rng)
         .build();
     let genesis = network_config.genesis;
@@ -195,10 +183,6 @@ pub fn compile_basics_package() -> CompiledPackage {
     compile_example_package("../../sui_programmability/examples/basics")
 }
 
-pub fn compile_nfts_package() -> CompiledPackage {
-    compile_example_package("../../sui_programmability/examples/nfts")
-}
-
 pub fn compile_managed_coin_package() -> CompiledPackage {
     compile_example_package("../../crates/sui-core/src/unit_tests/data/managed_coin")
 }
@@ -232,7 +216,7 @@ async fn init_genesis(
     let pkg_id = pkg.id();
     genesis_objects.push(pkg);
 
-    let mut builder = sui_config::genesis::Builder::new().add_objects(genesis_objects);
+    let mut builder = sui_genesis_builder::Builder::new().add_objects(genesis_objects);
     let mut key_pairs = Vec::new();
     for i in 0..committee_size {
         let key_pair: AuthorityKeyPair = get_key_pair().1;
@@ -295,15 +279,13 @@ pub async fn init_local_authorities_with_genesis(
     let mut clients = BTreeMap::new();
     let mut states = Vec::new();
     for (authority_name, secret) in key_pairs {
-        let client = LocalAuthorityClient::new(committee.clone(), secret, genesis).await;
+        let client = LocalAuthorityClient::new(secret, genesis).await;
         states.push(client.state.clone());
         clients.insert(authority_name, client);
     }
     let timeouts = TimeoutConfig {
-        authority_request_timeout: Duration::from_secs(5),
         pre_quorum_timeout: Duration::from_secs(5),
         post_quorum_timeout: Duration::from_secs(5),
-        serial_authority_request_timeout: Duration::from_secs(1),
         serial_authority_request_interval: Duration::from_secs(1),
     };
     let committee_store = Arc::new(CommitteeStore::new_for_testing(&committee));
@@ -313,6 +295,7 @@ pub async fn init_local_authorities_with_genesis(
             committee_store,
             clients,
             &Registry::new(),
+            Arc::new(HashMap::new()),
             timeouts,
         ),
         states,
@@ -368,7 +351,7 @@ pub fn make_transfer_object_transaction(
         object_ref,
         sender,
         gas_object,
-        gas_price * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
+        gas_price * TEST_ONLY_GAS_UNIT_FOR_TRANSFER * 10,
         gas_price,
     );
     to_sender_signed_transaction(data, keypair)

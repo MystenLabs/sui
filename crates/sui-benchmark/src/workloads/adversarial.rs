@@ -25,18 +25,16 @@ use std::sync::Arc;
 use strum::{EnumCount, IntoEnumIterator};
 use strum_macros::{EnumCount as EnumCountMacro, EnumIter};
 use sui_protocol_config::ProtocolConfig;
-use sui_types::messages::Command;
-use sui_types::messages::{CallArg, ObjectArg, TransactionEffectsAPI};
+use sui_test_transaction_builder::TestTransactionBuilder;
+use sui_types::base_types::{random_object_ref, ObjectRef};
+use sui_types::effects::TransactionEffectsAPI;
+use sui_types::transaction::Command;
+use sui_types::transaction::{CallArg, ObjectArg};
 use sui_types::{base_types::ObjectID, object::Owner};
-use sui_types::{base_types::SuiAddress, crypto::get_key_pair, messages::VerifiedTransaction};
-use sui_types::{
-    base_types::{random_object_ref, ObjectRef},
-    messages::TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
-};
-use sui_types::{messages::TransactionData, utils::to_sender_signed_transaction};
+use sui_types::{base_types::SuiAddress, crypto::get_key_pair, transaction::VerifiedTransaction};
+use sui_types::{transaction::TransactionData, utils::to_sender_signed_transaction};
 use tracing::debug;
 
-use test_utils::messages::create_publish_move_package_transaction;
 /// Number of vectors to create in LargeTransientRuntimeVectors workload
 const NUM_VECTORS: u64 = 1_000;
 
@@ -100,7 +98,7 @@ impl FromStr for AdversarialPayloadType {
 
 impl Distribution<AdversarialPayloadType> for Standard {
     fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> AdversarialPayloadType {
-        // Excluse the "Random" variant
+        // Exclude the "Random" variant
         let n = rng.gen_range(1..AdversarialPayloadType::COUNT);
         AdversarialPayloadType::iter().nth(n).unwrap()
     }
@@ -243,15 +241,9 @@ impl AdversarialTestPayload {
             AdversarialPayloadType::MaxPackagePublish => {
                 let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
                 path.push("src/workloads/data/max_package");
-
-                create_publish_move_package_transaction(
-                    account.gas,
-                    path,
-                    self.sender,
-                    account.key(),
-                    gas_price * TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
-                    gas_price,
-                )
+                TestTransactionBuilder::new(self.sender, account.gas, gas_price)
+                    .publish(path)
+                    .build_and_sign(account.key())
             }
             _ => self.state.move_call_pt(
                 self.sender,
@@ -469,14 +461,9 @@ impl Workload<dyn Payload> for AdversarialWorkload {
         } = system_state_observer.state.borrow().clone();
         let protocol_config = protocol_config.unwrap();
         let gas_budget = protocol_config.max_tx_gas();
-        let transaction = create_publish_move_package_transaction(
-            gas.0,
-            path,
-            gas.1,
-            &gas.2,
-            gas_budget,
-            reference_gas_price,
-        );
+        let transaction = TestTransactionBuilder::new(gas.1, gas.0, reference_gas_price)
+            .publish(path)
+            .build_and_sign(gas.2.as_ref());
         let effects = proxy
             .execute_transaction_block(transaction.into())
             .await

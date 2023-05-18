@@ -815,9 +815,7 @@ fn verify_instr(
                     return Err(verifier.error(StatusCode::TYPE_MISMATCH, offset));
                 }
             }
-            verifier
-                .stack
-                .push(ST::Vector(Box::new(element_type.clone())));
+            verifier.push(meter, ST::Vector(Box::new(element_type.clone())))?;
         }
 
         Bytecode::VecLen(idx) => {
