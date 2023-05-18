@@ -1331,8 +1331,10 @@ impl AuthorityState {
 
         transaction_kind.check_version_supported(epoch_store.protocol_config())?;
 
+        let reference_gas_price = epoch_store.reference_gas_price();
+        let protocol_config = epoch_store.protocol_config();
         let gas_price = match gas_price {
-            None => epoch_store.reference_gas_price(),
+            None => reference_gas_price,
             Some(gas) => {
                 if gas == 0 {
                     epoch_store.reference_gas_price()
@@ -1341,7 +1343,20 @@ impl AuthorityState {
                 }
             }
         };
-        let protocol_config = epoch_store.protocol_config();
+        if gas_price < reference_gas_price {
+            return Err(UserInputError::GasPriceUnderRGP {
+                gas_price,
+                reference_gas_price,
+            }
+            .into());
+        }
+        if protocol_config.gas_model_version() >= 4 && gas_price >= protocol_config.max_gas_price()
+        {
+            return Err(UserInputError::GasPriceTooHigh {
+                max_gas_price: protocol_config.max_gas_price(),
+            }
+            .into());
+        }
         let max_tx_gas = protocol_config.max_tx_gas();
 
         let gas_object_id = ObjectID::random();
