@@ -18,8 +18,8 @@ use sui_types::{TypeTag, SUI_FRAMEWORK_PACKAGE_ID};
 use crate::account_universe::AccountCurrent;
 use crate::executor::{assert_is_acceptable_result, Executor};
 
-const GAS: u64 = 1_000_000;
-const GAS_PRICE: u64 = 1;
+const GAS_PRICE: u64 = 700;
+const GAS: u64 = 1_000_000 * GAS_PRICE;
 
 pub fn gen_type_tag() -> impl Strategy<Value = TypeTag> {
     prop_oneof![

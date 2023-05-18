@@ -18,7 +18,7 @@ use sui_types::transaction::{TransactionData, VerifiedTransaction};
 use sui_types::utils::to_sender_signed_transaction;
 use tokio::runtime::Runtime;
 
-use crate::account_universe::{AccountCurrent, INITIAL_BALANCE};
+use crate::account_universe::{AccountCurrent, PUBLISH_BUDGET};
 
 pub type ExecutionResult = Result<ExecutionStatus, SuiError>;
 
@@ -124,8 +124,8 @@ impl Executor {
             gas_object.compute_object_reference(),
             modules,
             dep_ids,
-            INITIAL_BALANCE,
-            1,
+            PUBLISH_BUDGET,
+            1000,
         );
         let txn = to_sender_signed_transaction(data, &account.initial_data.account.key);
         let effects = self
