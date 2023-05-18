@@ -97,10 +97,10 @@ struct Inner {
     dag: Option<Arc<Dag>>,
     /// Contains Synchronizer specific metrics among other Primary metrics.
     metrics: Arc<PrimaryMetrics>,
-    /// Background tasks synchronizing worker batches for processed certificates.
-    batch_tasks: Mutex<JoinSet<DagResult<()>>>,
     /// Background tasks broadcasting newly formed certificates.
     certificate_senders: Mutex<JoinSet<()>>,
+    /// A background task that synchronizes batches
+    tx_batch_tasks: mpsc::Sender<(Header, u64, bool)>,
     /// Aggregates certificates to use as parents for new headers.
     certificates_aggregators: Mutex<BTreeMap<Round, Box<CertificatesAggregator>>>,
     /// State for tracking suspended certificates and when they can be accepted.
@@ -325,6 +325,7 @@ impl Synchronizer {
             broadcast::channel(CHANNEL_CAPACITY);
         let (tx_certificate_acceptor, mut rx_certificate_acceptor) =
             mpsc::channel(CHANNEL_CAPACITY);
+        let (tx_batch_tasks, mut rx_batch_tasks) = mpsc::channel(CHANNEL_CAPACITY);
         let inner = Arc::new(Inner {
             authority_id,
             committee: committee.clone(),
@@ -345,7 +346,7 @@ impl Synchronizer {
             genesis,
             dag,
             metrics,
-            batch_tasks: Mutex::new(JoinSet::new()),
+            tx_batch_tasks,
             certificate_senders: Mutex::new(JoinSet::new()),
             certificates_aggregators: Mutex::new(BTreeMap::new()),
             state: tokio::sync::Mutex::new(State::default()),
@@ -474,6 +475,32 @@ impl Synchronizer {
                 // Error can be ignored.
                 if tx_own_certificate_broadcast.send(cert).is_err() {
                     error!("Failed to populate initial certificate to send to peers!");
+                }
+            }
+        });
+
+        // Start a task to async download batches if needed
+        let weak_inner = Arc::downgrade(&inner);
+        spawn_monitored_task!(async move {
+            let mut batch_tasks: JoinSet<DagResult<()>> = JoinSet::new();
+
+            loop {
+                tokio::select! {
+                    Some((header, max_age, certified)) = rx_batch_tasks.recv() => {
+                        let Some(inner) = weak_inner.upgrade() else {
+                            debug!("Synchronizer is shutting down.");
+                            return;
+                        };
+
+                        batch_tasks.spawn(async move {
+                            Synchronizer::sync_batches_internal(inner.clone(), &header, max_age, certified).await
+                        });
+                    },
+                    Some(result) = batch_tasks.join_next() => {
+                        if let Err(err) = result  {
+                            error!("Error when synchronizing batches: {err:?}")
+                        }
+                    }
                 }
             }
         });
@@ -654,12 +681,13 @@ impl Synchronizer {
         // Instruct workers to download any missing batches referenced in this certificate.
         // Since this header got certified, we are sure that all the data it refers to (ie. its batches and its parents) are available.
         // We can thus continue the processing of the certificate without blocking on batch synchronization.
-        let inner = self.inner.clone();
         let header = certificate.header().clone();
         let max_age = self.inner.gc_depth.saturating_sub(1);
-        self.inner.batch_tasks.lock().spawn(async move {
-            Synchronizer::sync_batches_internal(inner, &header, max_age, true).await
-        });
+        self.inner
+            .tx_batch_tasks
+            .send((header.clone(), max_age, true))
+            .await
+            .map_err(|_| DagError::ShuttingDown)?;
 
         let highest_processed_round = self.inner.highest_processed_round.load(Ordering::Acquire);
         if highest_processed_round + NEW_CERTIFICATE_ROUND_LIMIT < certificate.round() {
