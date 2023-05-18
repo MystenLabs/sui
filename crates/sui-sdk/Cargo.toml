@@ -43,7 +43,7 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 clap = { version = "3.2.17", features = ["derive"] }
 dirs = "4.0.0"
 async-recursion = "1.0.0"
-tempfile = "3.3.0"
+tempfile = { path = "../sui-tempfile" }
 test-utils = { path = "../test-utils" }
 futures-core = "0.3.21"
 futures = "0.3.23"

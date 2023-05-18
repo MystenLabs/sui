@@ -23,7 +23,7 @@ serde_json = "1.0.88"
 similar = "2.2.0"
 strum = "0.24.1"
 strum_macros = "^0.24"
-tempfile = "3.3.0"
+tempfile = { path = "../sui-tempfile" }
 thiserror = "1.0.34"
 tracing = "0.1.36"
 prometheus = "0.13.3"

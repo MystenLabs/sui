@@ -26,7 +26,7 @@ tap = "1.0"
 
 eyre = "0.6.8"
 rocksdb = "0.20.1"
-tempfile = "3.3.0"
+tempfile = { path = "../sui-tempfile" }
 
 sui = { path = "../sui" }
 sui-node = { path = "../sui-node" }

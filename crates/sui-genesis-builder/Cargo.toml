@@ -22,7 +22,7 @@ rand = "0.8.5"
 serde = { version = "1.0.144", features = ["derive", "rc"] }
 serde_with = "2.1.0"
 serde_yaml = "0.8.26"
-tempfile = "3.3.0"
+tempfile = { path = "../sui-tempfile" }
 tracing = "0.1.36"
 prometheus = "0.13.3"
 
@@ -44,5 +44,5 @@ sui-simulator = { path = "../sui-simulator" }
 
 [dev-dependencies]
 insta = { version = "1.21.1", features = ["redactions", "yaml"] }
-tempfile = "3.3.0"
+tempfile = { path = "../sui-tempfile" }
 sui-types = { path = "../sui-types", features = ["test-utils"] }

@@ -31,7 +31,7 @@ itertools = "0.10.4"
 
 eyre = "0.6.8"
 rocksdb = "0.20.1"
-tempfile = "3.3.0"
+tempfile = { path = "../sui-tempfile" }
 shellexpand = "3.0.0"
 
 sui = { path = "../sui" }

@@ -33,7 +33,7 @@ use sui_types::crypto::SuiKeyPair;
 use sui_types::crypto::SuiSignatureInner;
 use sui_types::transaction::TransactionData;
 use sui_types::transaction::TEST_ONLY_GAS_UNIT_FOR_TRANSFER;
-use tempfile::TempDir;
+//use tempfile::TempDir;
 use tokio::test;
 const TEST_MNEMONIC: &str = "result crisp session latin must fruit genuine question prevent start coconut brave speak student dismiss";
 
@@ -93,7 +93,7 @@ async fn test_flag_in_signature_and_keypair() -> Result<(), anyhow::Error> {
 
 #[test]
 async fn test_read_write_keystore_with_flag() {
-    let dir = tempfile::TempDir::new().unwrap();
+    let dir = tempfile::tempdir().unwrap();
 
     // create Secp256k1 keypair
     let kp_secp = SuiKeyPair::Secp256k1(get_key_pair().1);
@@ -146,7 +146,7 @@ async fn test_read_write_keystore_with_flag() {
 
 #[test]
 async fn test_sui_operations_config() {
-    let temp_dir = TempDir::new().unwrap();
+    let temp_dir = tempfile::tempdir().unwrap();
     let path = temp_dir.path().join("sui.keystore");
     let path1 = path.clone();
     // This is the hardcoded keystore in sui-operation: https://github.com/MystenLabs/sui-operations/blob/af04c9d3b61610dbb36401aff6bef29d06ef89f8/docker/config/generate/static/sui.keystore
@@ -180,7 +180,7 @@ async fn test_sui_operations_config() {
 
 #[test]
 async fn test_load_keystore_err() {
-    let temp_dir = TempDir::new().unwrap();
+    let temp_dir = tempfile::tempdir().unwrap();
     let path = temp_dir.path().join("sui.keystore");
     let path2 = path.clone();
 

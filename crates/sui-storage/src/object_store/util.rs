@@ -161,11 +161,11 @@ mod tests {
     use object_store::path::Path;
     use std::fs;
     use std::num::NonZeroUsize;
-    use tempfile::TempDir;
+    //use tempfile::TempDir;
 
     #[tokio::test]
     pub async fn test_copy_recursively() -> anyhow::Result<()> {
-        let input = TempDir::new()?;
+        let input = tempfile::tempdir()?;
         let input_path = input.path();
         let child = input_path.join("child");
         fs::create_dir(&child)?;
@@ -176,7 +176,7 @@ mod tests {
         let file2 = grandchild.join("file2");
         fs::write(file2, b"Lorem ipsum")?;
 
-        let output = TempDir::new()?;
+        let output = tempfile::tempdir()?;
         let output_path = output.path();
 
         let input_store = ObjectStoreConfig {
@@ -219,7 +219,7 @@ mod tests {
 
     #[tokio::test]
     pub async fn test_delete_recursively() -> anyhow::Result<()> {
-        let input = TempDir::new()?;
+        let input = tempfile::tempdir()?;
         let input_path = input.path();
         let child = input_path.join("child");
         fs::create_dir(&child)?;

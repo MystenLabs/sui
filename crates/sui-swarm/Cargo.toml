@@ -12,7 +12,7 @@ rand = "0.8.5"
 tracing = "0.1.36"
 tokio = { workspace = true, features = ["full"] }
 futures = "0.3.23"
-tempfile = "3.3.0"
+tempfile = { path = "../sui-tempfile" }
 tonic-health = "0.8.0"
 tap = "1.0.1"
 prometheus = "0.13.3"

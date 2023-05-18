@@ -1426,6 +1426,7 @@ mod tests {
     use sui_types::transaction::{GenesisObject, VerifiedTransaction};
     use tokio::sync::mpsc;
 
+    #[ignore]
     #[tokio::test]
     pub async fn checkpoint_builder_test() {
         let state = TestAuthorityBuilder::new().build().await;

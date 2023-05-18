@@ -4542,7 +4542,7 @@ async fn test_consensus_message_processed() {
     };
     let initial_shared_version = shared_object.version();
 
-    let dir = tempfile::TempDir::new().unwrap();
+    let dir = tempfile::tempdir().unwrap();
     let network_config = sui_swarm_config::network_config_builder::ConfigBuilder::new(&dir)
         .committee_size(2.try_into().unwrap())
         .with_objects(vec![gas_object.clone(), shared_object.clone()])

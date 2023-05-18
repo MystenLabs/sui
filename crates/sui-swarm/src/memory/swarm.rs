@@ -173,7 +173,7 @@ impl<R: rand::RngCore + rand::CryptoRng> SwarmBuilder<R> {
         let dir = if let Some(dir) = self.dir {
             SwarmDirectory::Persistent(dir)
         } else {
-            SwarmDirectory::Temporary(TempDir::new().unwrap())
+            SwarmDirectory::Temporary(tempfile::tempdir().unwrap())
         };
 
         let mut config_builder = ConfigBuilder::new(dir.as_ref());

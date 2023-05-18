@@ -15,7 +15,7 @@ sui-adapter = { path = "../../sui-execution/latest/sui-adapter", package = "sui-
 sui-framework = { path = "../sui-framework" }
 sui-move-build = { path = "../sui-move-build" }
 sui-types = { path = "../sui-types" }
-tempfile = "3.3.0"
+tempfile = { path = "../sui-tempfile" }
 tracing = "0.1"
 anemo.workspace = true
 anemo-tower.workspace = true

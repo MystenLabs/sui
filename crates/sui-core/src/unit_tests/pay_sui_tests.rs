@@ -425,7 +425,7 @@ async fn execute_pay_all_sui(
     sender_key: AccountKeyPair,
     gas_budget: u64,
 ) -> PaySuiTransactionBlockExecutionResult {
-    let dir = tempfile::TempDir::new().unwrap();
+    let dir = tempfile::tempdir().unwrap();
     let network_config = sui_swarm_config::network_config_builder::ConfigBuilder::new(&dir)
         // TODO: fix numbers in tests to not depend on rgp being 1
         .with_reference_gas_price(1)

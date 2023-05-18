@@ -1122,7 +1122,7 @@ mod test {
     #[test]
     #[cfg_attr(msim, ignore)]
     fn ceremony() {
-        let dir = tempfile::TempDir::new().unwrap();
+        let dir = tempfile::tempdir().unwrap();
 
         let key: AuthorityKeyPair = get_key_pair_from_rng(&mut rand::rngs::OsRng).1;
         let worker_key: NetworkKeyPair = get_key_pair_from_rng(&mut rand::rngs::OsRng).1;

@@ -617,7 +617,7 @@ version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "eb8f2cd6962fa53c0e2a9d3f97eaa7dbd1e3cbbeeb4745403515b42ae07b3ff6"
 dependencies = [
- "tempfile",
+ "tempfile 3.4.0",
  "winapi",
 ]
 
@@ -5257,7 +5257,7 @@ dependencies = [
  "serde 1.0.152",
  "serde_json",
  "serde_yaml",
- "tempfile",
+ "tempfile 3.4.0",
  "toml_edit 0.14.4",
  "walkdir",
 ]
@@ -5302,7 +5302,7 @@ dependencies = [
  "petgraph 0.5.1",
  "regex",
  "sha3 0.9.1",
- "tempfile",
+ "tempfile 3.4.0",
  "walkdir",
 ]
 
@@ -5508,7 +5508,7 @@ dependencies = [
  "serde 1.0.152",
  "serde_yaml",
  "sha2 0.9.9",
- "tempfile",
+ "tempfile 3.4.0",
  "toml",
  "walkdir",
  "whoami",
@@ -5717,7 +5717,7 @@ dependencies = [
  "once_cell",
  "rayon",
  "regex",
- "tempfile",
+ "tempfile 3.4.0",
 ]
 
 [[package]]
@@ -6005,7 +6005,7 @@ dependencies = [
  "rand 0.8.5",
  "serde 1.0.152",
  "serde_json",
- "tempfile",
+ "tempfile 3.4.0",
  "thiserror",
  "tracing",
  "workspace-hack",
@@ -6122,7 +6122,7 @@ dependencies = [
  "rand 0.8.5",
  "serde 1.0.152",
  "telemetry-subscribers",
- "tempfile",
+ "tempfile 3.4.0",
  "thiserror",
  "tokio",
  "tonic",
@@ -6250,7 +6250,7 @@ dependencies = [
  "sui-macros",
  "tap",
  "telemetry-subscribers",
- "tempfile",
+ "tempfile 3.4.0",
  "thiserror",
  "tokio",
  "tonic",
@@ -6277,7 +6277,7 @@ dependencies = [
  "prometheus",
  "sui-macros",
  "tap",
- "tempfile",
+ "tempfile 3.4.0",
  "tokio",
  "tracing",
  "typed-store",
@@ -6308,7 +6308,7 @@ dependencies = [
  "prometheus",
  "rand 0.8.5",
  "telemetry-subscribers",
- "tempfile",
+ "tempfile 3.4.0",
  "tokio",
  "tonic",
  "tracing",
@@ -6394,7 +6394,7 @@ dependencies = [
  "reqwest",
  "tap",
  "telemetry-subscribers",
- "tempfile",
+ "tempfile 3.4.0",
  "thiserror",
  "tokio",
  "tonic",
@@ -7324,7 +7324,7 @@ dependencies = [
  "parking_lot 0.12.1",
  "smallvec",
  "symbolic-demangle",
- "tempfile",
+ "tempfile 3.4.0",
  "thiserror",
 ]
 
@@ -7540,7 +7540,7 @@ dependencies = [
  "rand_xorshift",
  "regex-syntax",
  "rusty-fork",
- "tempfile",
+ "tempfile 3.4.0",
  "unarray",
 ]
 
@@ -7583,7 +7583,7 @@ dependencies = [
  "prost-types",
  "regex",
  "syn 1.0.107",
- "tempfile",
+ "tempfile 3.4.0",
  "which",
 ]
 
@@ -8426,7 +8426,7 @@ checksum = "cb3dcc6e454c328bb824492db107ab7c0ae8fcffe4ad210136ef014458c1bc4f"
 dependencies = [
  "fnv",
  "quick-error 1.2.3",
- "tempfile",
+ "tempfile 3.4.0",
  "wait-timeout",
 ]
 
@@ -9355,7 +9355,7 @@ dependencies = [
  "sui-verifier-latest",
  "tap",
  "telemetry-subscribers",
- "tempfile",
+ "tempfile 0.1.0",
  "test-utils",
  "tokio",
  "tracing",
@@ -9483,7 +9483,7 @@ dependencies = [
  "sui-test-transaction-builder",
  "sui-types",
  "telemetry-subscribers",
- "tempfile",
+ "tempfile 0.1.0",
  "test-utils",
  "tokio",
  "tracing",
@@ -9517,7 +9517,7 @@ dependencies = [
  "sui-simulator",
  "sui-storage",
  "sui-types",
- "tempfile",
+ "tempfile 0.1.0",
  "tracing",
  "workspace-hack",
 ]
@@ -9598,7 +9598,7 @@ dependencies = [
  "sui-verifier-latest",
  "tap",
  "telemetry-subscribers",
- "tempfile",
+ "tempfile 0.1.0",
  "test-fuzz",
  "test-utils",
  "thiserror",
@@ -9675,7 +9675,7 @@ dependencies = [
  "sui-types",
  "tap",
  "telemetry-subscribers",
- "tempfile",
+ "tempfile 0.1.0",
  "test-utils",
  "thiserror",
  "tokio",
@@ -9765,7 +9765,7 @@ dependencies = [
  "sui-simulator",
  "sui-storage",
  "sui-types",
- "tempfile",
+ "tempfile 0.1.0",
  "tracing",
  "workspace-hack",
 ]
@@ -9939,7 +9939,7 @@ dependencies = [
  "signature 1.6.4",
  "slip10_ed25519",
  "sui-types",
- "tempfile",
+ "tempfile 0.1.0",
  "tiny-bip39",
  "workspace-hack",
 ]
@@ -9995,7 +9995,7 @@ dependencies = [
  "sui-simulator",
  "sui-types",
  "telemetry-subscribers",
- "tempfile",
+ "tempfile 0.1.0",
  "tokio",
  "tracing",
 ]
@@ -10018,7 +10018,7 @@ dependencies = [
  "sui-protocol-config",
  "sui-types",
  "sui-verifier-latest",
- "tempfile",
+ "tempfile 0.1.0",
  "workspace-hack",
 ]
 
@@ -10311,7 +10311,7 @@ dependencies = [
  "sui-swarm-config",
  "sui-types",
  "telemetry-subscribers",
- "tempfile",
+ "tempfile 0.1.0",
  "test-utils",
  "thiserror",
  "tokio",
@@ -10356,7 +10356,7 @@ dependencies = [
  "sui-types",
  "tap",
  "telemetry-subscribers",
- "tempfile",
+ "tempfile 0.1.0",
  "test-utils",
  "thiserror",
  "tokio",
@@ -10400,7 +10400,7 @@ dependencies = [
  "sui-test-transaction-builder",
  "sui-transaction-builder",
  "sui-types",
- "tempfile",
+ "tempfile 0.1.0",
  "test-utils",
  "thiserror",
  "tokio",
@@ -10424,7 +10424,7 @@ dependencies = [
  "sui-move-build",
  "sui-types",
  "telemetry-subscribers",
- "tempfile",
+ "tempfile 0.1.0",
  "tower",
  "tracing",
  "workspace-hack",
@@ -10450,7 +10450,7 @@ dependencies = [
  "sui-protocol-config",
  "sui-storage",
  "sui-types",
- "tempfile",
+ "tempfile 0.1.0",
  "tokio",
  "tokio-stream",
  "tracing",
@@ -10478,7 +10478,7 @@ dependencies = [
  "sui-move-build",
  "sui-sdk",
  "sui-types",
- "tempfile",
+ "tempfile 0.1.0",
  "test-utils",
  "thiserror",
  "tokio",
@@ -10517,7 +10517,7 @@ dependencies = [
  "sui-simulator",
  "sui-types",
  "tap",
- "tempfile",
+ "tempfile 0.1.0",
  "tokio",
  "tracing",
  "typed-store",
@@ -10575,7 +10575,7 @@ dependencies = [
  "sui-types",
  "tap",
  "telemetry-subscribers",
- "tempfile",
+ "tempfile 0.1.0",
  "tokio",
  "tonic-health",
  "tracing",
@@ -10615,7 +10615,7 @@ dependencies = [
  "sui-simulator",
  "sui-storage",
  "sui-types",
- "tempfile",
+ "tempfile 0.1.0",
  "tracing",
  "workspace-hack",
 ]
@@ -10729,7 +10729,7 @@ dependencies = [
  "sui-storage",
  "sui-types",
  "telemetry-subscribers",
- "tempfile",
+ "tempfile 0.1.0",
  "thiserror",
  "tokio",
  "tracing",
@@ -10781,7 +10781,7 @@ dependencies = [
  "sui-move-natives-latest",
  "sui-protocol-config",
  "sui-types",
- "tempfile",
+ "tempfile 3.4.0",
  "workspace-hack",
 ]
 
@@ -11018,6 +11018,17 @@ dependencies = [
 
 [[package]]
 name = "tempfile"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "once_cell",
+ "tempfile 3.4.0",
+ "tracing",
+ "workspace-hack",
+]
+
+[[package]]
+name = "tempfile"
 version = "3.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "af18f7ae1acd354b992402e9ec5864359d693cd8a79dcbef59f76891701c1e95"
@@ -11168,7 +11179,7 @@ dependencies = [
  "sui-swarm-config",
  "sui-test-transaction-builder",
  "sui-types",
- "tempfile",
+ "tempfile 0.1.0",
  "tokio",
  "tracing",
  "workspace-hack",
@@ -11858,7 +11869,7 @@ dependencies = [
  "sui-macros",
  "syn 1.0.107",
  "tap",
- "tempfile",
+ "tempfile 0.1.0",
  "thiserror",
  "tokio",
  "tracing",
@@ -11876,7 +11887,7 @@ dependencies = [
  "quote 1.0.26",
  "rocksdb",
  "syn 1.0.107",
- "tempfile",
+ "tempfile 0.1.0",
  "tokio",
  "typed-store",
  "workspace-hack",
@@ -13275,7 +13286,7 @@ dependencies = [
  "tap",
  "target-lexicon",
  "target-spec",
- "tempfile",
+ "tempfile 3.4.0",
  "tera",
  "term",
  "termcolor",

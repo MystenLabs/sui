@@ -10,7 +10,7 @@ publish = false
 [dependencies]
 anyhow = { version = "1.0.64", features = ["backtrace"] }
 fastcrypto = { workspace = true }
-tempfile = "3.3.0"
+tempfile = { path = "../sui-tempfile" }
 
 sui-adapter = { path = "../../sui-execution/latest/sui-adapter", package = "sui-adapter-latest" }
 sui-verifier = { path = "../../sui-execution/latest/sui-verifier", package = "sui-verifier-latest" }

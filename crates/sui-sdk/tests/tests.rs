@@ -1,13 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use tempfile::TempDir;
+//use tempfile::TempDir;
 
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_types::crypto::Ed25519SuiSignature;
 use sui_types::crypto::{SignatureScheme, SuiSignatureInner};
 #[test]
 fn mnemonic_test() {
-    let temp_dir = TempDir::new().unwrap();
+    let temp_dir = tempfile::tempdir().unwrap();
     let keystore_path = temp_dir.path().join("sui.keystore");
     let mut keystore = Keystore::from(FileBasedKeystore::new(&keystore_path).unwrap());
     let (address, phrase, scheme) = keystore
@@ -25,7 +25,7 @@ fn mnemonic_test() {
 
 #[test]
 fn keystore_display_test() -> Result<(), anyhow::Error> {
-    let temp_dir = TempDir::new().unwrap();
+    let temp_dir = tempfile::tempdir().unwrap();
     let keystore_path = temp_dir.path().join("sui.keystore");
     let keystore = Keystore::from(FileBasedKeystore::new(&keystore_path).unwrap());
     assert!(keystore.to_string().contains("sui.keystore"));

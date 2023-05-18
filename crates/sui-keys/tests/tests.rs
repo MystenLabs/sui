@@ -3,7 +3,7 @@
 use std::str::FromStr;
 
 use fastcrypto::hash::HashFunction;
-use tempfile::TempDir;
+//use tempfile::TempDir;
 
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_types::crypto::{DefaultHash, SignatureScheme, SuiSignatureInner};
@@ -13,7 +13,7 @@ use sui_types::{
 };
 #[test]
 fn mnemonic_test() {
-    let temp_dir = TempDir::new().unwrap();
+    let temp_dir = tempfile::tempdir().unwrap();
     let keystore_path = temp_dir.path().join("sui.keystore");
     let mut keystore = Keystore::from(FileBasedKeystore::new(&keystore_path).unwrap());
     let (address, phrase, scheme) = keystore
@@ -36,7 +36,7 @@ fn sui_wallet_address_mnemonic_test() -> Result<(), anyhow::Error> {
     let expected_address =
         SuiAddress::from_str("0x936accb491f0facaac668baaedcf4d0cfc6da1120b66f77fa6a43af718669973")?;
 
-    let temp_dir = TempDir::new().unwrap();
+    let temp_dir = tempfile::tempdir().unwrap();
     let keystore_path = temp_dir.path().join("sui.keystore");
     let mut keystore = Keystore::from(FileBasedKeystore::new(&keystore_path).unwrap());
 
@@ -62,7 +62,7 @@ fn sui_wallet_address_mnemonic_test() -> Result<(), anyhow::Error> {
 
 #[test]
 fn keystore_display_test() -> Result<(), anyhow::Error> {
-    let temp_dir = TempDir::new().unwrap();
+    let temp_dir = tempfile::tempdir().unwrap();
     let keystore_path = temp_dir.path().join("sui.keystore");
     let keystore = Keystore::from(FileBasedKeystore::new(&keystore_path).unwrap());
     assert!(keystore.to_string().contains("sui.keystore"));

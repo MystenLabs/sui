@@ -28,7 +28,7 @@ eyre = "0.6.8"
 rocksdb = "0.20.1"
 typed-store.workspace = true
 typed-store-derive.workspace = true
-tempfile = "3.3.0"
+tempfile = { path = "../sui-tempfile" }
 fastcrypto.workspace = true
 sui-swarm-config = { path = "../sui-swarm-config" }
 sui-types = { path = "../sui-types" }
@@ -51,6 +51,6 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 sui-sdk = { path = "../sui-sdk" }
 sui-move-build = { path = "../sui-move-build" }
 test-utils = { path = "../test-utils" }
-tempfile = "3.3.0"
+tempfile = { path = "../sui-tempfile" }
 rand = "0.8.5"
 reqwest = { version = "0.11.13", default_features= false, features = ["rustls-tls"] }

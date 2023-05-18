@@ -340,11 +340,11 @@ mod tests {
     use std::fs;
     use sui_storage::object_store::util::path_to_filesystem;
     use sui_storage::object_store::{ObjectStoreConfig, ObjectStoreType};
-    use tempfile::TempDir;
+    //use tempfile::TempDir;
 
     #[tokio::test]
     async fn test_basic() -> anyhow::Result<()> {
-        let checkpoint_dir = TempDir::new()?;
+        let checkpoint_dir = tempfile::tempdir()?;
         let checkpoint_dir_path = checkpoint_dir.path();
         let local_epoch0_checkpoint = checkpoint_dir_path.join("epoch_0");
         fs::create_dir(&local_epoch0_checkpoint)?;
@@ -357,7 +357,7 @@ mod tests {
         let file3 = nested_dir.join("file3");
         fs::write(file3, b"Lorem ipsum")?;
 
-        let remote_checkpoint_dir = TempDir::new()?;
+        let remote_checkpoint_dir = tempfile::tempdir()?;
         let remote_checkpoint_dir_path = remote_checkpoint_dir.path();
         let remote_epoch0_checkpoint = remote_checkpoint_dir_path.join("epoch_0");
 
@@ -419,11 +419,11 @@ mod tests {
 
     #[tokio::test]
     async fn test_upload_resumes() -> anyhow::Result<()> {
-        let checkpoint_dir = TempDir::new()?;
+        let checkpoint_dir = tempfile::tempdir()?;
         let checkpoint_dir_path = checkpoint_dir.path();
         let local_epoch0_checkpoint = checkpoint_dir_path.join("epoch_0");
 
-        let remote_checkpoint_dir = TempDir::new()?;
+        let remote_checkpoint_dir = tempfile::tempdir()?;
         let remote_checkpoint_dir_path = remote_checkpoint_dir.path();
         let remote_epoch0_checkpoint = remote_checkpoint_dir_path.join("epoch_0");
 
@@ -528,7 +528,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_missing_epochs() -> anyhow::Result<()> {
-        let checkpoint_dir = TempDir::new()?;
+        let checkpoint_dir = tempfile::tempdir()?;
         let checkpoint_dir_path = checkpoint_dir.path();
         let local_epoch0_checkpoint = checkpoint_dir_path.join("epoch_0");
         fs::create_dir(&local_epoch0_checkpoint)?;
@@ -537,7 +537,7 @@ mod tests {
         // Missing epoch 2
         let local_epoch3_checkpoint = checkpoint_dir_path.join("epoch_3");
         fs::create_dir(&local_epoch3_checkpoint)?;
-        let remote_checkpoint_dir = TempDir::new()?;
+        let remote_checkpoint_dir = tempfile::tempdir()?;
         let remote_checkpoint_dir_path = remote_checkpoint_dir.path();
 
         let input_store_config = ObjectStoreConfig {

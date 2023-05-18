@@ -106,6 +106,7 @@ members = [
     "crates/sui-swarm",
     "crates/sui-swarm-config",
     "crates/sui-telemetry",
+    "crates/sui-tempfile",
     "crates/sui-test-transaction-builder",
     "crates/sui-test-validator",
     "crates/sui-tls",

@@ -270,7 +270,7 @@ mod test {
     #[test]
     #[cfg_attr(msim, ignore)]
     fn ceremony() -> Result<()> {
-        let dir = tempfile::TempDir::new().unwrap();
+        let dir = tempfile::tempdir().unwrap();
 
         let validators = (0..10)
             .map(|i| {

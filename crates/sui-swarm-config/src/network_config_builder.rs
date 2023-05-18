@@ -475,7 +475,7 @@ mod tests {
 
     #[test]
     fn serialize_genesis_config_in_place() {
-        let dir = tempfile::TempDir::new().unwrap();
+        let dir = tempfile::tempdir().unwrap();
         let network_config = crate::network_config_builder::ConfigBuilder::new(&dir).build();
         let genesis = network_config.genesis;
 
@@ -503,10 +503,10 @@ mod tests {
 
     #[test]
     fn load_genesis_config_from_file() {
-        let file = tempfile::NamedTempFile::new().unwrap();
+        let file = tempfile::tempfile().unwrap();
         let genesis_config = Genesis::new_from_file(file.path());
 
-        let dir = tempfile::TempDir::new().unwrap();
+        let dir = tempfile::tempdir().unwrap();
         let network_config = crate::network_config_builder::ConfigBuilder::new(&dir).build();
         let genesis = network_config.genesis;
         genesis.save(file.path()).unwrap();
@@ -751,7 +751,7 @@ mod test {
 
     #[test]
     fn roundtrip() {
-        let dir = tempfile::TempDir::new().unwrap();
+        let dir = tempfile::tempdir().unwrap();
         let network_config = crate::network_config_builder::ConfigBuilder::new(&dir).build();
         let genesis = network_config.genesis;
 

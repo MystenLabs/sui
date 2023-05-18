@@ -33,7 +33,7 @@ serde_json = "1.0.88"
 serde_with = "2.1.0"
 signature = "1.6.0"
 tap = "1.0"
-tempfile = "3.3.0"
+tempfile = { path = "../sui-tempfile" }
 thiserror = "1.0.34"
 tokio = { workspace = true, features = ["full", "tracing", "test-util"] }
 tokio-retry = "0.3"
