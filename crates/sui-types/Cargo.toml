@@ -51,6 +51,7 @@ shared-crypto = { path = "../shared-crypto" }
 mysten-network = { path = "../mysten-network" }
 mysten-metrics = { path = "../mysten-metrics" }
 sui-macros = { path = "../sui-macros" }
+sui-enum-compat-util = { path = "../sui-enum-compat-util" }
 
 fastcrypto = { workspace = true, features = ["copy_key"] }
 

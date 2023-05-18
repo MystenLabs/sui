@@ -9649,6 +9649,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "sui-enum-compat-util"
+version = "0.1.0"
+dependencies = [
+ "serde_yaml",
+ "workspace-hack",
+]
+
+[[package]]
 name = "sui-faucet"
 version = "1.2.0"
 dependencies = [
@@ -9918,7 +9926,9 @@ dependencies = [
  "serde 1.0.152",
  "serde_json",
  "serde_with",
+ "sui-enum-compat-util",
  "sui-json",
+ "sui-macros",
  "sui-protocol-config",
  "sui-types",
  "tracing",
@@ -10163,6 +10173,7 @@ dependencies = [
  "msim-macros",
  "proc-macro2 1.0.54",
  "quote 1.0.26",
+ "sui-enum-compat-util",
  "syn 2.0.10",
  "workspace-hack",
 ]
@@ -10831,6 +10842,7 @@ dependencies = [
  "strum",
  "strum_macros",
  "sui-cost-tables",
+ "sui-enum-compat-util",
  "sui-macros",
  "sui-protocol-config",
  "tap",
