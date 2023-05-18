@@ -109,10 +109,10 @@ module sui::transfer_policy {
         TransferRequest { item, paid, from, receipts: vec_set::empty() }
     }
 
-    /// Register a type in the Kiosk system and receive an `TransferPolicyCap`
-    /// which is required to confirm kiosk deals for the `T`. If there's no
-    /// `TransferPolicyCap` available for use, the type can not be traded in
-    /// kiosks.
+    /// Register a type in the Kiosk system and receive a `TransferPolicy` and
+    /// a `TransferPolicyCap` for the type. The `TransferPolicy` is required to
+    /// confirm kiosk deals for the `T`. If there's no `TransferPolicy`
+    /// available for use, the type can not be traded in kiosks.
     public fun new<T>(
         pub: &Publisher, ctx: &mut TxContext
     ): (TransferPolicy<T>, TransferPolicyCap<T>) {
