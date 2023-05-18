@@ -453,7 +453,7 @@ impl SimpleFaucet {
             .execute_transaction_block(
                 tx.clone(),
                 SuiTransactionBlockResponseOptions::new().with_effects(),
-                Some(ExecuteTransactionRequestType::WaitForEffectsCert),
+                Some(ExecuteTransactionRequestType::WaitForLocalExecution),
             )
             .await
             .tap_err(|e| {
