@@ -45,6 +45,7 @@ import {
   SuiObjectResponseQuery,
   ValidatorsApy,
   MoveCallMetrics,
+  ProtocolConfig,
 } from '../types';
 import { DynamicFieldName, DynamicFieldPage } from '../types/dynamic_fields';
 import {
@@ -820,6 +821,16 @@ export class JsonRpcProvider {
       'suix_getValidatorsApy',
       [],
       ValidatorsApy,
+    );
+  }
+
+  async getProtocolConfig(input?: {
+    version?: string;
+  }): Promise<ProtocolConfig> {
+    return await this.client.requestWithType(
+      'sui_getProtocolConfig',
+      [input?.version],
+      ProtocolConfig,
     );
   }
 
