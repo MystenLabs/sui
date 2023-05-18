@@ -1708,6 +1708,34 @@ WHERE e1.epoch = e2.epoch
         .context("Failed persisting address stats to PostgresDB")?;
         Ok(())
     }
+
+    async fn get_latest_address_stats(&self) -> Result<AddressStats, IndexerError> {
+        read_only_blocking!(&self.blocking_cp, |conn| {
+            address_stats::dsl::address_stats
+                .order_by(address_stats::checkpoint.desc())
+                .first(conn)
+        })
+        .context("Failed reading latest address stats from PostgresDB")
+    }
+
+    async fn get_checkpoint_address_stats(
+        &self,
+        checkpoint: i64,
+    ) -> Result<AddressStats, IndexerError> {
+        read_only_blocking!(&self.blocking_cp, |conn| {
+            address_stats::dsl::address_stats
+                .filter(address_stats::checkpoint.eq(checkpoint))
+                .order_by(address_stats::epoch.asc())
+                .first(conn)
+        })
+        .context(
+            format!(
+                "Failed reading address stats of checkpoint {} from PostgresDB",
+                checkpoint
+            )
+            .as_str(),
+        )
+    }
 }
 
 fn persist_transaction_object_changes(

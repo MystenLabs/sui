@@ -240,6 +240,11 @@ pub trait IndexerStore {
     async fn get_last_address_processed_checkpoint(&self) -> Result<i64, IndexerError>;
     async fn calculate_address_stats(&self, checkpoint: i64) -> Result<AddressStats, IndexerError>;
     async fn persist_address_stats(&self, addr_stats: &AddressStats) -> Result<(), IndexerError>;
+    async fn get_latest_address_stats(&self) -> Result<AddressStats, IndexerError>;
+    async fn get_checkpoint_address_stats(
+        &self,
+        checkpoint: i64,
+    ) -> Result<AddressStats, IndexerError>;
 }
 
 #[derive(Clone, Debug)]
