@@ -138,9 +138,9 @@ impl ReplayFuzzer {
     }
 
     pub async fn run(mut self, mut num_base_tx: u64) -> Result<(), ReplayFuzzError> {
-        let mut tx_kind = self.sandbox_state.transaction_info.kind.clone();
-
         while num_base_tx > 0 {
+            let mut tx_kind = self.sandbox_state.transaction_info.kind.clone();
+
             info!(
                 "Starting fuzz with new base TX {}, with at most {} mutations",
                 self.sandbox_state.transaction_info.tx_digest, self.config.num_mutations_per_base
