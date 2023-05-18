@@ -3,7 +3,7 @@ name = "Kiosk"
 version = "0.0.1"
 
 # for Sui testnet
-published-at = "0xbd8fc1947cf119350184107a3087e2dc27efefa0dd82e25a1f699069fe81a585"
+published-at = "bd8fc1947cf119350184107a3087e2dc27efefa0dd82e25a1f699069fe81a585"
 
 [dependencies]
 Sui = { local = "../crates/sui-framework/packages/sui-framework" }
