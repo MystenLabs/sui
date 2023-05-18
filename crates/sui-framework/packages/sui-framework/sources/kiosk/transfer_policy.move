@@ -26,7 +26,7 @@ module sui::transfer_policy {
     use std::option::{Self, Option};
     use std::type_name::{Self, TypeName};
     use sui::package::{Self, Publisher};
-    use sui::tx_context::TxContext;
+    use sui::tx_context::{sender, TxContext};
     use sui::object::{Self, ID, UID};
     use sui::vec_set::{Self, VecSet};
     use sui::dynamic_field as df;
@@ -126,6 +126,15 @@ module sui::transfer_policy {
             TransferPolicy { id, rules: vec_set::empty(), balance: balance::zero() },
             TransferPolicyCap { id: object::new(ctx), policy_id }
         )
+    }
+
+    /// Initialize the Tranfer Policy in the default scenario: Create and share
+    /// the `TransferPolicy`, transfer `TransferPolicyCap` to the transaction
+    /// sender.
+    entry fun default<T>(pub: &Publisher, ctx: &mut TxContext) {
+        let (policy, cap) = new<T>(pub, ctx);
+        sui::transfer::share_object(policy);
+        sui::transfer::transfer(cap, sender(ctx));
     }
 
     /// Withdraw some amount of profits from the `TransferPolicy`. If amount
