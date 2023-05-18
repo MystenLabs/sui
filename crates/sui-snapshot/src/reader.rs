@@ -29,6 +29,7 @@ use sui_storage::object_store::ObjectStoreConfig;
 use sui_storage::{Blob, Encoding};
 use sui_types::base_types::{ObjectDigest, ObjectID, ObjectRef, SequenceNumber};
 use tokio::sync::Mutex;
+use sui_storage::{Blob, Encoding};
 
 pub type DigestByBucketAndPartition = BTreeMap<u32, BTreeMap<u32, [u8; 32]>>;
 pub struct StateSnapshotReaderV1 {

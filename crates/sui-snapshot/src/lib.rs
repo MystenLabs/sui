@@ -22,6 +22,7 @@ use sui_core::epoch::committee_store::CommitteeStore;
 use sui_storage::object_store::util::path_to_filesystem;
 use sui_storage::{compute_sha3_checksum, FileCompression, SHA3_BYTES};
 use sui_types::accumulator::Accumulator;
+use sui_storage::{compute_sha3_checksum, FileCompression, SHA3_BYTES};
 use sui_types::base_types::ObjectID;
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
 use sui_types::sui_system_state::get_sui_system_state;
