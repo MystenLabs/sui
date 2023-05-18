@@ -5,6 +5,8 @@ use std::collections::HashMap;
 
 use diesel::prelude::*;
 
+use sui_json_rpc_types::AddressMetrics;
+
 use crate::schema::{active_addresses, address_stats, addresses};
 use crate::types::AddressData;
 
@@ -93,4 +95,17 @@ pub struct AddressStats {
     pub cumulative_addresses: i64,
     pub cumulative_active_addresses: i64,
     pub daily_active_addresses: i64,
+}
+
+impl From<AddressStats> for AddressMetrics {
+    fn from(stats: AddressStats) -> Self {
+        AddressMetrics {
+            checkpoint: stats.checkpoint as u64,
+            epoch: stats.epoch as u64,
+            timestamp_ms: stats.timestamp_ms as u64,
+            cumulative_addresses: stats.cumulative_addresses as u64,
+            cumulative_active_addresses: stats.cumulative_active_addresses as u64,
+            daily_active_addresses: stats.daily_active_addresses as u64,
+        }
+    }
 }

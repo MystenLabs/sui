@@ -47,7 +47,7 @@ module A2::m {
 
     entry fun canary<T>(use_original: bool, ctx: &mut TxContext) {
         let type = if (use_original) {
-            type_name::get_original<T>()
+            type_name::get_with_original_ids<T>()
         } else {
             type_name::get<T>()
         };

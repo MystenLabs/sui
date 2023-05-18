@@ -73,6 +73,7 @@ members = [
     "crates/sui-core",
     "crates/sui-cost",
     "crates/sui-cost-tables",
+    "crates/sui-enum-compat-util",
     "crates/sui-faucet",
     "crates/sui-framework",
     "crates/sui-framework-snapshot",
