@@ -70,7 +70,6 @@ pub async fn check_transaction_input(
 ) -> SuiResult<(SuiGasStatus, InputObjects)> {
     transaction.check_version_supported(epoch_store.protocol_config())?;
     transaction.validity_check(epoch_store.protocol_config())?;
-    check_non_system_packages_to_be_published(transaction, epoch_store.protocol_config(), metrics)?;
     let input_objects = transaction.input_objects()?;
     transaction_signing_filter::check_transaction_for_signing(
         transaction,
@@ -78,6 +77,10 @@ pub async fn check_transaction_input(
         transaction_deny_config,
         store,
     )?;
+
+    // Runs verifier, which could be expensive.
+    check_non_system_packages_to_be_published(transaction, epoch_store.protocol_config(), metrics)?;
+
     let objects = store.check_input_objects(&input_objects, epoch_store.protocol_config())?;
     let gas_status = get_gas_status(&objects, transaction.gas(), epoch_store, transaction).await?;
     let input_objects = check_objects(transaction, input_objects, objects)?;
