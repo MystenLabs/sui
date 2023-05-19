@@ -80,25 +80,21 @@ export type PostTransactionParams = {
 
 export type TransactionInfoResponse = {
     txID: string;
+    txHash: string;
     status: TransactionStatus;
-    txBytes: string;
+    messageWithIntent: string;
     sig: string;
-    timestamps: Partial<{
-        created: number;
-        authorized: number;
-        approved: number;
-        signed: number;
-        scheduled: number;
-        pushed: number;
-        confirmed: number;
-        mined: number;
-    }>;
+    timestamps: Partial<Record<TransactionStatus, number>>;
     events: {
         id: string;
         timestamp: number;
         status: TransactionStatus;
         message: string;
     }[];
+    from: string;
+    network: string;
+    createdBy: string;
+    accountID: string;
 };
 
 export type AccessTokenRenewalFunction = (
