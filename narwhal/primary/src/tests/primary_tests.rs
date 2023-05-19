@@ -1,6 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use super::{NetworkModel, Primary, PrimaryReceiverHandler, CHANNEL_CAPACITY};
+use super::{Primary, PrimaryReceiverHandler, CHANNEL_CAPACITY};
 use crate::{
     common::create_db_stores,
     metrics::{PrimaryChannelMetrics, PrimaryMetrics},
@@ -113,7 +113,6 @@ async fn get_network_peers_from_admin_server() {
             )
             .1,
         )),
-        NetworkModel::Asynchronous,
         &mut tx_shutdown,
         tx_feedback,
         &Registry::new(),
@@ -237,7 +236,6 @@ async fn get_network_peers_from_admin_server() {
             )
             .1,
         )),
-        NetworkModel::Asynchronous,
         &mut tx_shutdown_2,
         tx_feedback_2,
         &Registry::new(),

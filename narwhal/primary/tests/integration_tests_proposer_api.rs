@@ -13,7 +13,7 @@ use fastcrypto::{
 use narwhal_primary as primary;
 use narwhal_primary::NUM_SHUTDOWN_RECEIVERS;
 use network::client::NetworkClient;
-use primary::{NetworkModel, Primary, CHANNEL_CAPACITY};
+use primary::{Primary, CHANNEL_CAPACITY};
 use prometheus::Registry;
 use rand::thread_rng;
 use std::{collections::BTreeSet, sync::Arc, time::Duration};
@@ -133,7 +133,6 @@ async fn test_rounds_errors() {
             )
             .1,
         )),
-        NetworkModel::Asynchronous,
         &mut tx_shutdown,
         tx_feedback,
         &Registry::new(),
@@ -227,7 +226,6 @@ async fn test_rounds_return_successful_response() {
         rx_feedback,
         rx_consensus_round_updates,
         /* external_consensus */ Some(dag.clone()),
-        NetworkModel::Asynchronous,
         &mut tx_shutdown,
         tx_feedback,
         &Registry::new(),
@@ -391,7 +389,6 @@ async fn test_node_read_causal_signed_certificates() {
         rx_feedback,
         rx_consensus_round_updates,
         /* dag */ Some(dag.clone()),
-        NetworkModel::Asynchronous,
         &mut tx_shutdown,
         tx_feedback,
         &Registry::new(),
@@ -439,7 +436,6 @@ async fn test_node_read_causal_signed_certificates() {
             )
             .1,
         )),
-        NetworkModel::Asynchronous,
         &mut tx_shutdown_2,
         tx_feedback_2,
         &Registry::new(),

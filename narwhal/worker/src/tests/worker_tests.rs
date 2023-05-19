@@ -14,7 +14,7 @@ use fastcrypto::{
 };
 use futures::stream::FuturesOrdered;
 use futures::StreamExt;
-use primary::{NetworkModel, Primary, CHANNEL_CAPACITY, NUM_SHUTDOWN_RECEIVERS};
+use primary::{Primary, CHANNEL_CAPACITY, NUM_SHUTDOWN_RECEIVERS};
 use prometheus::Registry;
 use std::time::Duration;
 use storage::NodeStorage;
@@ -421,7 +421,6 @@ async fn get_network_peers_from_admin_server() {
             )
             .1,
         )),
-        NetworkModel::Asynchronous,
         &mut tx_shutdown,
         tx_feedback,
         &Registry::new(),
@@ -545,7 +544,6 @@ async fn get_network_peers_from_admin_server() {
             )
             .1,
         )),
-        NetworkModel::Asynchronous,
         &mut tx_shutdown_2,
         tx_feedback_2,
         &Registry::new(),
