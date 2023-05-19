@@ -12,7 +12,7 @@ use tracing::debug;
 #[path = "unit_tests/cli_tests.rs"]
 mod cli_tests;
 
-const LOG_FILE_ENABLE: &str = "LOG_FILE_ENABLE";
+const SUI_CLI_LOG_FILE_ENABLE: &str = "SUI_CLI_LOG_FILE_ENABLE";
 
 const GIT_REVISION: &str = {
     if let Some(revision) = option_env!("GIT_REVISION") {
@@ -32,13 +32,13 @@ const GIT_REVISION: &str = {
 const VERSION: &str = const_str::concat!(env!("CARGO_PKG_VERSION"), "-", GIT_REVISION);
 
 pub fn read_log_file_flag_env() -> Option<u8> {
-    env::var(LOG_FILE_ENABLE)
+    env::var(SUI_CLI_LOG_FILE_ENABLE)
         .ok()?
         .parse::<u8>()
         .map_err(|e| {
             println!(
                 "Env var {} does not contain valid u8 integer: {}",
-                LOG_FILE_ENABLE, e
+                SUI_CLI_LOG_FILE_ENABLE, e
             )
         })
         .ok()
