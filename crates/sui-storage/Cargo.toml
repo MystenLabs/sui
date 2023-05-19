@@ -12,6 +12,7 @@ futures = "0.3.23"
 serde = { version = "1.0.144", features = ["derive"] }
 tokio = { workspace = true, features = ["full", "tracing"] }
 rocksdb = "0.20.1"
+clap = { version = "4.3.0", features = ["derive"] }
 tracing = "0.1.36"
 anyhow = "1.0.64"
 tempfile = "3.3.0"
@@ -24,6 +25,10 @@ bcs = "0.1.4"
 prometheus = "0.13.3"
 itertools = "0.10.5"
 url = "2.3.1"
+integer-encoding = "3.0.1"
+num_enum = "0.6.1"
+byteorder = "1.4.3"
+zstd = { version = "0.12.3", features = ["experimental"]}
 
 sui-simulator = { path = "../sui-simulator" }
 sui-types = { path = "../sui-types" }

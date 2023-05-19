@@ -129,6 +129,9 @@ pub struct NodeConfig {
 
     #[serde(default)]
     pub state_debug_dump_config: StateDebugDumpConfig,
+
+    #[serde(default)]
+    pub state_archive_config: StateArchiveConfig,
 }
 
 fn default_authority_store_pruning_config() -> AuthorityStorePruningConfig {
@@ -218,6 +221,10 @@ impl NodeConfig {
 
     pub fn db_path(&self) -> PathBuf {
         self.db_path.join("live")
+    }
+
+    pub fn archive_path(&self) -> PathBuf {
+        self.db_path.join("archive")
     }
 
     pub fn db_checkpoint_path(&self) -> PathBuf {
@@ -504,6 +511,13 @@ pub struct DBCheckpointConfig {
     pub perform_index_db_checkpoints_at_epoch_end: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub prune_and_compact_before_upload: Option<bool>,
+}
+
+#[derive(Default, Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct StateArchiveConfig {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub object_store_config: Option<ObjectStoreConfig>,
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize, Eq)]

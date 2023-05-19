@@ -19,6 +19,7 @@ sui-types = { path = "../sui-types" }
 sui-config = { path = "../sui-config" }
 shared-crypto = { path = "../shared-crypto" }
 sui-swarm-config = { path = "../sui-swarm-config" }
+sui-storage = { path = "../sui-storage" }
 
 mysten-network.workspace = true
 

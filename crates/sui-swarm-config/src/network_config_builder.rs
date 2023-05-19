@@ -10,6 +10,7 @@ use narwhal_config::{
 };
 use rand::rngs::OsRng;
 use rand::RngCore;
+use std::default::Default;
 use std::net::{IpAddr, SocketAddr};
 use std::{
     num::NonZeroUsize,
@@ -20,7 +21,7 @@ use sui_config::genesis::{TokenAllocation, TokenDistributionScheduleBuilder};
 use sui_config::node::{
     default_enable_index_processing, default_end_of_epoch_broadcast_channel_capacity,
     AuthorityKeyPairWithPath, AuthorityStorePruningConfig, DBCheckpointConfig,
-    ExpensiveSafetyCheckConfig, KeyPairWithPath, StateDebugDumpConfig,
+    ExpensiveSafetyCheckConfig, KeyPairWithPath, StateArchiveConfig, StateDebugDumpConfig,
     DEFAULT_GRPC_CONCURRENCY_LIMIT, DEFAULT_VALIDATOR_GAS_PRICE,
 };
 use sui_config::utils;
@@ -458,6 +459,7 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
                     transaction_deny_config: Default::default(),
                     certificate_deny_config: Default::default(),
                     state_debug_dump_config: self.state_debug_dump_config.clone(),
+                    state_archive_config: StateArchiveConfig::default(),
                 }
             })
             .collect();
@@ -731,6 +733,7 @@ impl<'a> FullnodeConfigBuilder<'a> {
             transaction_deny_config: Default::default(),
             certificate_deny_config: Default::default(),
             state_debug_dump_config: Default::default(),
+            state_archive_config: StateArchiveConfig::default(),
         })
     }
 }

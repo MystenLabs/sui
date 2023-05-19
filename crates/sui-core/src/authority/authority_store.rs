@@ -13,6 +13,7 @@ use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::resolver::ModuleResolver;
 use move_vm_runtime::move_vm::MoveVM;
 use once_cell::sync::OnceCell;
+use rocksdb::WriteBatch;
 use serde::{Deserialize, Serialize};
 use sui_types::messages_checkpoint::ECMHLiveObjectSetDigest;
 use tokio::sync::{RwLock, RwLockReadGuard, RwLockWriteGuard};
@@ -1458,6 +1459,25 @@ impl AuthorityStore {
         }
 
         write_batch.write()?;
+        Ok(())
+    }
+
+    pub fn multi_insert_transaction_and_effects_wb<'a>(
+        &self,
+        transactions: impl Iterator<Item = &'a VerifiedExecutionData>,
+        write_batch: &mut DBBatch,
+    ) -> Result<(), TypedStoreError> {
+        for tx in transactions {
+            write_batch
+                .insert_batch(
+                    &self.perpetual_tables.transactions,
+                    [(tx.transaction.digest(), tx.transaction.serializable_ref())],
+                )?
+                .insert_batch(
+                    &self.perpetual_tables.effects,
+                    [(tx.effects.digest(), &tx.effects)],
+                )?;
+        }
         Ok(())
     }
 

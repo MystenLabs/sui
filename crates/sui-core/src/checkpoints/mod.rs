@@ -160,7 +160,8 @@ impl CheckpointStore {
                 );
             }
             self.insert_checkpoint_contents(contents).unwrap();
-            self.insert_verified_checkpoint(checkpoint.clone()).unwrap();
+            self.insert_verified_checkpoint(&[checkpoint.clone()])
+                .unwrap();
             self.update_highest_synced_checkpoint(&checkpoint).unwrap();
         }
     }
@@ -303,42 +304,53 @@ impl CheckpointStore {
 
     pub fn insert_certified_checkpoint(
         &self,
-        checkpoint: &VerifiedCheckpoint,
+        checkpoints: &[VerifiedCheckpoint],
     ) -> Result<(), TypedStoreError> {
         let mut batch = self.certified_checkpoints.batch();
-        batch
-            .insert_batch(
-                &self.certified_checkpoints,
-                [(checkpoint.sequence_number(), checkpoint.serializable_ref())],
-            )?
-            .insert_batch(
-                &self.checkpoint_by_digest,
-                [(checkpoint.digest(), checkpoint.serializable_ref())],
-            )?;
-        if checkpoint.next_epoch_committee().is_some() {
-            batch.insert_batch(
-                &self.epoch_last_checkpoint_map,
-                [(&checkpoint.epoch(), checkpoint.sequence_number())],
-            )?;
+        for checkpoint in checkpoints.into_iter() {
+            batch
+                .insert_batch(
+                    &self.certified_checkpoints,
+                    [(checkpoint.sequence_number(), checkpoint.serializable_ref())],
+                )?
+                .insert_batch(
+                    &self.checkpoint_by_digest,
+                    [(checkpoint.digest(), checkpoint.serializable_ref())],
+                )?;
+            if checkpoint.next_epoch_committee().is_some() {
+                batch.insert_batch(
+                    &self.epoch_last_checkpoint_map,
+                    [(&checkpoint.epoch(), checkpoint.sequence_number())],
+                )?;
+            }
         }
+
         batch.write()
     }
 
     pub fn insert_verified_checkpoint(
         &self,
-        checkpoint: VerifiedCheckpoint,
+        checkpoints: &[VerifiedCheckpoint],
     ) -> Result<(), TypedStoreError> {
-        self.insert_certified_checkpoint(&checkpoint)?;
+        let highest_checkpoint = checkpoints
+            .iter()
+            .max_by_key(|x| *x.sequence_number())
+            .unwrap()
+            .clone();
+        self.insert_certified_checkpoint(checkpoints)?;
 
         // Update latest
-        if Some(*checkpoint.sequence_number())
+        if Some(*highest_checkpoint.sequence_number())
             > self
                 .get_highest_verified_checkpoint()?
                 .map(|x| *x.sequence_number())
         {
             self.watermarks.insert(
                 &CheckpointWatermark::HighestVerified,
-                &(*checkpoint.sequence_number(), *checkpoint.digest()),
+                &(
+                    *highest_checkpoint.sequence_number(),
+                    *highest_checkpoint.digest(),
+                ),
             )?;
         }
 
@@ -397,22 +409,24 @@ impl CheckpointStore {
 
     pub fn insert_verified_checkpoint_contents(
         &self,
-        checkpoint: &VerifiedCheckpoint,
-        full_contents: VerifiedCheckpointContents,
+        checkpoints: &[VerifiedCheckpoint],
+        full_contents: &[VerifiedCheckpointContents],
     ) -> Result<(), TypedStoreError> {
-        self.checkpoint_sequence_by_contents_digest
-            .insert(&checkpoint.content_digest, checkpoint.sequence_number())?;
-        let full_contents = full_contents.into_inner();
-
         let mut batch = self.full_checkpoint_content.batch();
-        batch.insert_batch(
-            &self.full_checkpoint_content,
-            [(checkpoint.sequence_number(), &full_contents)],
-        )?;
+        for (checkpoint, content) in checkpoints.into_iter().zip(full_contents.into_iter()) {
+            batch.insert_batch(
+                &self.checkpoint_sequence_by_contents_digest,
+                [(checkpoint.content_digest, checkpoint.sequence_number())],
+            )?;
+            let full_contents = content.clone().into_inner();
+            batch.insert_batch(
+                &self.full_checkpoint_content,
+                [(checkpoint.sequence_number(), &full_contents)],
+            )?;
 
-        let contents = full_contents.into_checkpoint_contents();
-
-        batch.insert_batch(&self.checkpoint_content, [(contents.digest(), &contents)])?;
+            let contents = full_contents.into_checkpoint_contents();
+            batch.insert_batch(&self.checkpoint_content, [(contents.digest(), &contents)])?;
+        }
 
         batch.write()
     }
@@ -1142,7 +1156,8 @@ impl CheckpointAggregator {
                         ),
                     );
 
-                    self.tables.insert_certified_checkpoint(&summary)?;
+                    self.tables
+                        .insert_certified_checkpoint(&[summary.clone()])?;
                     self.metrics
                         .last_certified_checkpoint
                         .set(current.summary.sequence_number as i64);

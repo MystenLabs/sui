@@ -18,6 +18,7 @@ use sui_types::messages_checkpoint::VerifiedCheckpointContents;
 use sui_types::storage::ReadStore;
 use sui_types::storage::WriteStore;
 use sui_types::transaction::VerifiedTransaction;
+use typed_store::rocks::{DBBatch, TypedStoreError};
 use typed_store::Map;
 
 use crate::authority::AuthorityStore;
@@ -152,7 +153,8 @@ impl WriteStore for RocksDbStore {
             self.insert_committee(committee)?;
         }
 
-        self.checkpoint_store.insert_verified_checkpoint(checkpoint)
+        self.checkpoint_store
+            .insert_verified_checkpoint(&[checkpoint])
     }
 
     fn update_highest_synced_checkpoint(
@@ -171,7 +173,7 @@ impl WriteStore for RocksDbStore {
         self.authority_store
             .multi_insert_transaction_and_effects(contents.iter())?;
         self.checkpoint_store
-            .insert_verified_checkpoint_contents(checkpoint, contents)
+            .insert_verified_checkpoint_contents(&[checkpoint.clone()], &[contents])
     }
 
     fn insert_committee(&self, new_committee: Committee) -> Result<(), Self::Error> {
@@ -179,5 +181,38 @@ impl WriteStore for RocksDbStore {
             .insert_new_committee(&new_committee)
             .unwrap();
         Ok(())
+    }
+
+    fn batch_insert_checkpoint_contents(
+        &self,
+        checkpoints: &[VerifiedCheckpoint],
+        contents: &[VerifiedCheckpointContents],
+    ) -> Result<(), Self::Error> {
+        let flattened = contents.into_iter().map(|x| x.iter()).flatten();
+        self.authority_store
+            .multi_insert_transaction_and_effects(flattened)?;
+        self.checkpoint_store
+            .insert_verified_checkpoint_contents(checkpoints, contents);
+        Ok(())
+    }
+
+    fn batch_insert_checkpoint(
+        &self,
+        checkpoints: &[VerifiedCheckpoint],
+    ) -> Result<(), Self::Error> {
+        for checkpoint in checkpoints.iter() {
+            if let Some(EndOfEpochData {
+                next_epoch_committee,
+                ..
+            }) = checkpoint.end_of_epoch_data.as_ref()
+            {
+                let next_committee = next_epoch_committee.iter().cloned().collect();
+                let committee =
+                    Committee::new(checkpoint.epoch().saturating_add(1), next_committee);
+                self.insert_committee(committee)?;
+            }
+        }
+        self.checkpoint_store
+            .insert_verified_checkpoint(checkpoints)
     }
 }

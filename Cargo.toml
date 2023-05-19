@@ -66,6 +66,7 @@ members = [
     "crates/prometheus-closure-metric",
     "crates/shared-crypto",
     "crates/sui",
+    "crates/sui-archival",
     "crates/sui-adapter-transactional-tests",
     "crates/sui-benchmark",
     "crates/sui-cluster-test",

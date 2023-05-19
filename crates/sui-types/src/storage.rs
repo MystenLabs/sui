@@ -337,7 +337,13 @@ pub trait WriteStore: ReadStore {
         checkpoint: &VerifiedCheckpoint,
         contents: VerifiedCheckpointContents,
     ) -> Result<(), Self::Error>;
-
+    fn batch_insert_checkpoint_contents(
+        &self,
+        checkpoint: &[VerifiedCheckpoint],
+        contents: &[VerifiedCheckpointContents],
+    ) -> Result<(), Self::Error>;
+    fn batch_insert_checkpoint(&self, checkpoint: &[VerifiedCheckpoint])
+        -> Result<(), Self::Error>;
     fn insert_committee(&self, new_committee: Committee) -> Result<(), Self::Error>;
 }
 
@@ -363,6 +369,20 @@ impl<T: WriteStore> WriteStore for &T {
 
     fn insert_committee(&self, new_committee: Committee) -> Result<(), Self::Error> {
         WriteStore::insert_committee(*self, new_committee)
+    }
+
+    fn batch_insert_checkpoint_contents(
+        &self,
+        checkpoint: &[VerifiedCheckpoint],
+        contents: &[VerifiedCheckpointContents],
+    ) -> Result<(), Self::Error> {
+        WriteStore::batch_insert_checkpoint_contents(*self, checkpoint, contents)
+    }
+    fn batch_insert_checkpoint(
+        &self,
+        checkpoint: &[VerifiedCheckpoint],
+    ) -> Result<(), Self::Error> {
+        WriteStore::batch_insert_checkpoint(*self, checkpoint)
     }
 }
 
@@ -690,6 +710,27 @@ impl WriteStore for SharedInMemoryStore {
 
     fn insert_committee(&self, new_committee: Committee) -> Result<(), Self::Error> {
         self.inner_mut().insert_committee(new_committee);
+        Ok(())
+    }
+
+    fn batch_insert_checkpoint_contents(
+        &self,
+        checkpoints: &[VerifiedCheckpoint],
+        contents: &[VerifiedCheckpointContents],
+    ) -> Result<(), Self::Error> {
+        for (checkpoint, content) in checkpoints.into_iter().zip(contents.into_iter()) {
+            self.insert_checkpoint_contents(checkpoint, content.clone())?;
+        }
+        Ok(())
+    }
+
+    fn batch_insert_checkpoint(
+        &self,
+        checkpoints: &[VerifiedCheckpoint],
+    ) -> Result<(), Self::Error> {
+        for checkpoint in checkpoints.into_iter() {
+            self.insert_checkpoint(checkpoint.clone())?;
+        }
         Ok(())
     }
 }

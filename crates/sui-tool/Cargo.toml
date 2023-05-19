@@ -27,6 +27,7 @@ tempfile = "3.3.0"
 thiserror = "1.0.34"
 tracing = "0.1.36"
 prometheus = "0.13.3"
+indicatif = "0.17.2"
 
 anemo-cli.workspace = true
 anemo.workspace = true
@@ -40,6 +41,7 @@ typed-store.workspace = true
 fastcrypto.workspace = true
 
 narwhal-types = { path = "../../narwhal/types" }
+sui-archival = { path = "../sui-archival" }
 sui-config = { path = "../sui-config" }
 sui-core = { path = "../sui-core" }
 sui-framework = { path = "../sui-framework" }
