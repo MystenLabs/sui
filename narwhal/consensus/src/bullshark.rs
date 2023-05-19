@@ -105,7 +105,6 @@ impl Bullshark {
         }
     }
 
-    // TODO: duplicated in tusk.rs
     /// Returns the certificate (and the certificate's digest) originated by the leader of the
     /// specified round (if any).
     fn leader<'a>(

@@ -387,8 +387,8 @@ impl Proposer {
         enough_votes
     }
 
-    /// Whether we can advance the DAG or need to wait for the leader/more votes. This is only relevant in
-    /// partial synchrony. Note that if we timeout, we ignore this check and advance anyway.
+    /// Whether we can advance the DAG or need to wait for the leader/more votes.
+    /// Note that if we timeout, we ignore this check and advance anyway.
     fn ready(&mut self) -> bool {
         match self.round % 2 {
             0 => self.update_leader(),
