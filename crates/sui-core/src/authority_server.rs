@@ -78,6 +78,26 @@ impl AuthorityServerHandle {
     }
 }
 
+struct TimerGuard {
+    start: std::time::Instant,
+    name: &'static str,
+}
+
+impl TimerGuard {
+    fn new(name: &'static str) -> Self {
+        Self {
+            start: std::time::Instant::now(),
+            name,
+        }
+    }
+}
+
+impl Drop for TimerGuard {
+    fn drop(&mut self) {
+        tracing::debug!("Latency for {} {:?}", self.name, self.start.elapsed());
+    }
+}
+
 pub struct AuthorityServer {
     address: Multiaddr,
     pub state: Arc<AuthorityState>,
@@ -371,16 +391,25 @@ impl ValidatorService {
 
         let shared_object_tx = certificate.contains_shared_object();
 
-        let _metrics_guard = if wait_for_effects {
+        let (_metrics_guard, _timer_guard) = if wait_for_effects {
             if shared_object_tx {
-                metrics.handle_certificate_consensus_latency.start_timer()
+                (
+                    metrics.handle_certificate_consensus_latency.start_timer(),
+                    Some(TimerGuard::new("shared_obj")),
+                )
             } else {
-                metrics
-                    .handle_certificate_non_consensus_latency
-                    .start_timer()
+                (
+                    metrics
+                        .handle_certificate_non_consensus_latency
+                        .start_timer(),
+                    None,
+                )
             }
         } else {
-            metrics.submit_certificate_consensus_latency.start_timer()
+            (
+                metrics.submit_certificate_consensus_latency.start_timer(),
+                Some(TimerGuard::new("submit_cert")),
+            )
         };
 
         // 1) Check if cert already executed
