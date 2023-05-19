@@ -1367,7 +1367,7 @@ impl CheckpointServiceNotify for CheckpointService {
             );
             return Ok(());
         }
-        debug!(
+        warn!(
             checkpoint_commit_height = checkpoint.height(),
             "Pending checkpoint has {} roots",
             checkpoint.roots.len(),

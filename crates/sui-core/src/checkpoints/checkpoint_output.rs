@@ -74,7 +74,7 @@ impl<T: SubmitToConsensus + ReconfigurationInitiator> CheckpointOutput
                 .unwrap_or_default()
                 .as_millis() as u64,
         );
-        debug!(
+        tracing::warn!(
             "Sending checkpoint signature at sequence {checkpoint_seq} to consensus, timestamp {checkpoint_timestamp}.
             {}ms left till end of epoch at timestamp {}",
             self.next_reconfiguration_timestamp_ms.saturating_sub(checkpoint_timestamp), self.next_reconfiguration_timestamp_ms
@@ -165,7 +165,7 @@ impl CertifiedCheckpointOutput for SendCheckpointToStateSync {
         &self,
         summary: &CertifiedCheckpointSummary,
     ) -> SuiResult {
-        info!(
+        tracing::warn!(
             "Certified checkpoint with sequence {} and digest {}",
             summary.sequence_number,
             summary.digest()
