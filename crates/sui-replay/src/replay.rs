@@ -837,7 +837,7 @@ impl LocalExec {
         let res = authority_state
             .try_execute_immediately(certificate, None, &epoch_store)
             .await
-            .unwrap();
+            .map_err(ReplayEngineError::from)?;
 
         let exec_res = match res.1 {
             Some(q) => Err(q),

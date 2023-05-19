@@ -167,7 +167,11 @@ impl ReplayFuzzer {
                 "Ended fuzz with for base TX {}\n",
                 self.sandbox_state.transaction_info.tx_digest
             );
-            self = self.re_init().await.unwrap();
+            self = self
+                .re_init()
+                .await
+                .map_err(ReplayEngineError::from)
+                .map_err(ReplayFuzzError::from)?;
             num_base_tx -= 1;
         }
 
