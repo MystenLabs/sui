@@ -614,6 +614,8 @@ mod tests {
     use sui_sdk::wallet_context::WalletContext;
     use test_utils::network::TestClusterBuilder;
 
+    use crate::faucet;
+
     use super::*;
 
     #[tokio::test]
@@ -810,33 +812,27 @@ mod tests {
         let recipient = SuiAddress::random_for_testing_only();
         let faucet_address = faucet.wallet_mut().active_address().unwrap();
         let uuid = Uuid::new_v4();
-        let coin_response = faucet.prepare_gas_coin(100, uuid).await;
-        let coin_id;
 
-        match coin_response {
-            GasCoinResponse::ValidGasCoin(gas) => {
-                coin_id = gas;
-                let tx_data = faucet
-                    .build_pay_sui_txn(gas, faucet_address, recipient, &[100], 200_000_000)
-                    .await
-                    .map_err(FaucetError::internal)
-                    .unwrap();
+        let GasCoinResponse::ValidGasCoin(coin_id) = faucet.prepare_gas_coin(100, uuid).await else {
+            panic!("prepare_gas_coin did not give a valid coin.")
+        };
 
-                let mut wal = faucet.wal.lock().await;
-                // Check no wal
-                assert!(wal.log.is_empty());
-                wal.reserve(Uuid::new_v4(), gas, recipient, tx_data)
-                    .map_err(FaucetError::internal)
-                    .ok();
-                // Check the wal has one entry
-                assert!(!wal.log.is_empty());
-                drop(wal);
-            }
-            _ => {
-                panic!("prepare_gas_coin_did not give a valid function.");
-            }
-        }
+        let tx_data = faucet
+            .build_pay_sui_txn(coin_id, faucet_address, recipient, &[100], 200_000_000)
+            .await
+            .map_err(FaucetError::internal)
+            .unwrap();
 
+        let mut wal = faucet.wal.lock().await;
+
+        // Check no WAL
+        assert!(wal.log.is_empty());
+        wal.reserve(Uuid::new_v4(), coin_id, recipient, tx_data)
+            .map_err(FaucetError::internal)
+            .ok();
+        drop(wal);
+
+        // Check WAL is not empty but will not clear because txn is in_flight
         faucet.retry_wal_coins().await.ok();
         let mut wal = faucet.wal.lock().await;
         assert!(!wal.log.is_empty());

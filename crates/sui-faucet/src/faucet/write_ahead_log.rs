@@ -10,6 +10,7 @@ use typed_store::rocks::{DBMap, TypedStoreError};
 use typed_store::traits::{TableSummary, TypedStoreDebug};
 use typed_store::Map;
 
+use tracing::info;
 use typed_store_derive::DBMapUtils;
 use uuid::Uuid;
 
@@ -114,6 +115,11 @@ impl WriteAheadLog {
         if let Some(mut entry) = self.log.get(&coin)? {
             entry.in_flight = bool;
             self.log.insert(&coin, &entry)?;
+        } else {
+            info!(
+                ?coin,
+                "Attempted to set inflight a coin that was not in the WAL."
+            );
         }
         Ok(())
     }
