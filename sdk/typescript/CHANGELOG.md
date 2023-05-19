@@ -1,5 +1,13 @@
 # @mysten/sui.js
 
+## 0.34.1
+
+### Patch Changes
+
+- 85719ac933: Add `tryGetPastObject` support in the provider.
+- c3d9cc87f3: Update ts-sdk e2e test to reflect new rpc error language
+- 02a6063f82: Add `normalizeStructTag` and `parseStructTag` helper functions
+
 ## 0.34.0
 
 ### Minor Changes
