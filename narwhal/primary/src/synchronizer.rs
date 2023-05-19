@@ -529,6 +529,9 @@ impl Synchronizer {
                             if let Err(err) = result  {
                                 error!("Error when synchronizing batches: {err:?}")
                             }
+                        },
+                        else => {
+                            break;
                         }
                     }
                 }
