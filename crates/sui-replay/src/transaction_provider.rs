@@ -88,7 +88,7 @@ impl TransactionProvider {
     }
 
     pub async fn next(&mut self) -> Result<Option<TransactionDigest>, ReplayEngineError> {
-        let tx = match &self.source {
+        let tx = match self.source {
             TransactionSource::Random => {
                 let tx = self.fetcher.fetch_random_transaction(None, None).await?;
                 Some(tx)
@@ -96,7 +96,7 @@ impl TransactionProvider {
             TransactionSource::FromCheckpoint(checkpoint_id) => {
                 let tx = self
                     .fetcher
-                    .fetch_random_transaction(Some(*checkpoint_id), Some(*checkpoint_id))
+                    .fetch_random_transaction(Some(checkpoint_id), Some(checkpoint_id))
                     .await?;
                 Some(tx)
             }
@@ -107,12 +107,17 @@ impl TransactionProvider {
                     let next_checkpoint = match start {
                         Some(x) => match x {
                             // Checkpoint specified
-                            FuzzStartPoint::Checkpoint(checkpoint_id) => Some(*checkpoint_id),
+                            FuzzStartPoint::Checkpoint(checkpoint_id) => {
+                                self.source = TransactionSource::TailLatest {
+                                    start: Some(FuzzStartPoint::Checkpoint(checkpoint_id + 1)),
+                                };
+                                Some(checkpoint_id)
+                            }
                             // Digest specified. Find the checkpoint for the digest
                             FuzzStartPoint::TxDigest(tx_digest) => {
                                 let ch = self
                                     .fetcher
-                                    .get_transaction(tx_digest)
+                                    .get_transaction(&tx_digest)
                                     .await?
                                     .checkpoint
                                     .expect("Transaction must have a checkpoint");
@@ -143,7 +148,7 @@ impl TransactionProvider {
             } => {
                 let tx = self
                     .fetcher
-                    .fetch_random_transaction(Some(*checkpoint_start), Some(*checkpoint_end))
+                    .fetch_random_transaction(Some(checkpoint_start), Some(checkpoint_end))
                     .await?;
                 Some(tx)
             }
