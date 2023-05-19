@@ -704,27 +704,6 @@ impl ProtocolConfig {
     }
 }
 
-// Special getters
-impl ProtocolConfig {
-    /// We don't want to use the default getter which unwraps and could panic.
-    /// Instead we want to be able to selectively fetch this value
-    pub fn max_size_written_objects_as_option(&self) -> Option<u64> {
-        self.max_size_written_objects
-    }
-
-    /// We don't want to use the default getter which unwraps and could panic.
-    /// Instead we want to be able to selectively fetch this value
-    pub fn max_size_written_objects_system_tx_as_option(&self) -> Option<u64> {
-        self.max_size_written_objects_system_tx
-    }
-
-    /// We don't want to use the default getter which unwraps and could panic.
-    /// Instead we want to be able to selectively fetch this value
-    pub fn max_move_identifier_len_as_option(&self) -> Option<u64> {
-        self.max_move_identifier_len
-    }
-}
-
 #[cfg(not(msim))]
 static POISON_VERSION_METHODS: AtomicBool = AtomicBool::new(false);
 
@@ -1310,6 +1289,15 @@ mod test {
                 ProtocolConfig::get_for_version(cur)
             );
         }
+    }
+
+    #[test]
+    fn test_getters() {
+        let prot: ProtocolConfig = ProtocolConfig::get_for_version(ProtocolVersion::new(1));
+        assert_eq!(
+            prot.max_arguments(),
+            prot.max_arguments_as_option().unwrap()
+        );
     }
 
     #[test]
