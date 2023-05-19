@@ -573,7 +573,7 @@ async fn test_dev_inspect_dynamic_field() {
     };
     let kind = TransactionKind::programmable(pt);
     let DevInspectResults { error, .. } = fullnode
-        .dev_inspect_transaction_block(sender, kind, Some(1))
+        .dev_inspect_transaction_block(sender, kind, None)
         .await
         .unwrap();
     // produces an error
@@ -815,7 +815,7 @@ async fn test_dev_inspect_gas_coin_argument() {
     };
     let kind = TransactionKind::programmable(pt);
     let results = fullnode
-        .dev_inspect_transaction_block(sender, kind, Some(1))
+        .dev_inspect_transaction_block(sender, kind, None)
         .await
         .unwrap()
         .results
@@ -843,6 +843,38 @@ async fn test_dev_inspect_gas_coin_argument() {
     } = &results[1];
     assert!(mutable_reference_outputs.is_empty());
     assert!(return_values.is_empty());
+}
+
+#[tokio::test]
+async fn test_dev_inspect_gas_price() {
+    use sui_types::crypto::get_authority_key_pair;
+
+    let fullnode_key_pair = get_authority_key_pair().1;
+    let fullnode = TestAuthorityBuilder::new()
+        .with_keypair(&fullnode_key_pair)
+        .with_reference_gas_price(500)
+        .build()
+        .await;
+
+    let sender = SuiAddress::random_for_testing_only();
+    let recipient = SuiAddress::random_for_testing_only();
+    let amount = 500;
+    let pt = {
+        let mut builder = ProgrammableTransactionBuilder::new();
+        builder.pay_sui(vec![recipient], vec![amount]).unwrap();
+        builder.finish()
+    };
+    let kind = TransactionKind::programmable(pt);
+    assert!(fullnode
+        .dev_inspect_transaction_block(sender, kind.clone(), Some(1))
+        .await
+        .is_err());
+    let epoch_store = fullnode.epoch_store_for_testing();
+    let protocol_config = epoch_store.protocol_config();
+    assert!(fullnode
+        .dev_inspect_transaction_block(sender, kind, Some(protocol_config.max_gas_price() + 1))
+        .await
+        .is_err());
 }
 
 fn check_coin_value(actual_value: &[u8], actual_type: &SuiTypeTag, expected_value: u64) {
@@ -877,7 +909,11 @@ async fn test_dev_inspect_uses_unbound_object() {
     let kind = TransactionKind::programmable(pt);
 
     let result = fullnode
-        .dev_inspect_transaction_block(sender, kind, Some(1))
+        .dev_inspect_transaction_block(
+            sender,
+            kind,
+            Some(fullnode.reference_gas_price_for_testing().unwrap()),
+        )
         .await;
     let Err(err) = result else { panic!() };
     assert!(err.to_string().contains("ObjectNotFound"));
@@ -1015,16 +1051,16 @@ async fn test_dry_run_dev_inspect_dynamic_field_too_new() {
         }))],
     };
     let kind = TransactionKind::programmable(pt.clone());
+    let rgp = fullnode.reference_gas_price_for_testing().unwrap();
     // dev inspect
     let DevInspectResults { effects, .. } = fullnode
-        .dev_inspect_transaction_block(sender, kind, Some(1))
+        .dev_inspect_transaction_block(sender, kind, Some(rgp))
         .await
         .unwrap();
     assert_eq!(effects.deleted().len(), 1);
     let deleted = &effects.deleted()[0];
     assert_eq!(field.0, deleted.object_id);
     assert_eq!(deleted.version, SequenceNumber::MAX);
-    let rgp = fullnode.reference_gas_price_for_testing().unwrap();
     // dry run
     let data = TransactionData::new_programmable(
         sender,
@@ -1076,7 +1112,7 @@ async fn test_dry_run_dev_inspect_max_gas_version() {
     let kind = TransactionKind::programmable(pt.clone());
     // dev inspect
     let DevInspectResults { effects, .. } = fullnode
-        .dev_inspect_transaction_block(sender, kind, Some(1))
+        .dev_inspect_transaction_block(sender, kind, Some(rgp + 100))
         .await
         .unwrap();
     assert_eq!(effects.status(), &SuiExecutionStatus::Success);
@@ -4973,7 +5009,11 @@ async fn test_for_inc_201_dev_inspect() {
     ));
     let kind = TransactionKind::programmable(builder.finish());
     let DevInspectResults { events, .. } = fullnode
-        .dev_inspect_transaction_block(sender, kind, Some(1))
+        .dev_inspect_transaction_block(
+            sender,
+            kind,
+            Some(fullnode.reference_gas_price_for_testing().unwrap() + 1000),
+        )
         .await
         .unwrap();
 

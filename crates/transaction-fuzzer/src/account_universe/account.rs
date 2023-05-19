@@ -15,7 +15,8 @@ use sui_types::{
 
 use crate::executor::Executor;
 
-pub const INITIAL_BALANCE: u64 = 10_000_000_000;
+pub const INITIAL_BALANCE: u64 = 100_000_000_000_000;
+pub const PUBLISH_BUDGET: u64 = 1_000_000_000;
 pub const NUM_GAS_OBJECTS: usize = 1;
 
 #[derive(Debug)]

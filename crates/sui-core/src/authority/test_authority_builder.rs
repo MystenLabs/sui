@@ -127,7 +127,6 @@ impl<'a> TestAuthorityBuilder<'a> {
 
     pub async fn build(self) -> Arc<AuthorityState> {
         let local_network_config = sui_config::builder::ConfigBuilder::new_with_temp_dir()
-            // TODO: change the default to 1000 instead after fixing tests.
             .with_reference_gas_price(self.reference_gas_price.unwrap_or(1))
             .build();
         let genesis = &self.genesis.unwrap_or(&local_network_config.genesis);
