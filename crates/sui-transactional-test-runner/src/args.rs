@@ -48,6 +48,8 @@ pub struct SuiPublishArgs {
         multiple_occurrences(false)
     )]
     pub dependencies: Vec<String>,
+    #[clap(long = "lint")]
+    pub lint: bool,
 }
 
 #[derive(Debug, clap::Parser)]

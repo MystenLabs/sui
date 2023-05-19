@@ -387,23 +387,28 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
     ) -> anyhow::Result<(Option<String>, Vec<(Option<Symbol>, CompiledModule)>)> {
         self.next_task();
 
-        // linting (before modules get their IDs reassigned)
-        let modules_map = Modules::new(
-            modules
-                .iter()
-                .map(|(_, compiled_module)| compiled_module)
-                .chain(GENESIS.modules.iter().flatten()),
-        );
-        let graph = modules_map.compute_dependency_graph();
-        let dep_sorted_modules = graph.compute_topological_order().unwrap();
-        let env = run_bytecode_model_builder(dep_sorted_modules)?;
-        let mut lint_output = lint_execute(env, ObjectID::ZERO, false);
-
         let SuiPublishArgs {
             sender,
             upgradeable,
             dependencies,
+            lint,
         } = extra;
+
+        let mut lint_output = "".to_string();
+        if lint {
+            // linting (before modules get their IDs reassigned)
+            let modules_map = Modules::new(
+                modules
+                    .iter()
+                    .map(|(_, compiled_module)| compiled_module)
+                    .chain(GENESIS.modules.iter().flatten()),
+            );
+            let graph = modules_map.compute_dependency_graph();
+            let dep_sorted_modules = graph.compute_topological_order().unwrap();
+            let env = run_bytecode_model_builder(dep_sorted_modules)?;
+            lint_output = lint_execute(env, ObjectID::ZERO, false);
+        }
+
         let named_addr_opt = modules.first().unwrap().0;
         let first_module_name = modules.first().unwrap().1.self_id().name().to_string();
         let modules_bytes = modules

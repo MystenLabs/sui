@@ -3,7 +3,7 @@
 
 //# init --addresses test=0x0
 
-//# publish
+//# publish --lint
 module test::self_transfer {
     use sui::object::{Self, UID};
     use sui::transfer;
