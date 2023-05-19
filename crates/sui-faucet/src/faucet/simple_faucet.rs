@@ -566,6 +566,11 @@ impl SimpleFaucet {
     pub fn wallet_mut(&mut self) -> &mut WalletContext {
         &mut self.wallet
     }
+
+    #[cfg(test)]
+    pub fn teardown(self) -> WalletContext {
+        self.wallet
+    }
 }
 
 #[async_trait]
@@ -1067,6 +1072,72 @@ mod tests {
 
         // Assert that the result is an Error
         assert!(matches!(res, Err(FaucetError::NoGasCoinAvailable)));
+    }
+
+    #[tokio::test]
+    async fn test_faucet_restart_clears_wal() {
+        let test_cluster = TestClusterBuilder::new().build().await.unwrap();
+        let context = test_cluster.wallet;
+        let tmp = tempfile::tempdir().unwrap();
+        let prom_registry = Registry::new();
+        let config = FaucetConfig::default();
+
+        let mut faucet = SimpleFaucet::new(
+            context,
+            &prom_registry,
+            &tmp.path().join("faucet.wal"),
+            config,
+        )
+        .await
+        .unwrap();
+
+        let recipient = SuiAddress::random_for_testing_only();
+        let faucet_address = faucet.wallet_mut().active_address().unwrap();
+        let uuid = Uuid::new_v4();
+
+        let GasCoinResponse::ValidGasCoin(coin_id) = faucet.prepare_gas_coin(100, uuid).await else {
+            panic!("prepare_gas_coin did not give a valid coin.")
+        };
+
+        let tx_data = faucet
+            .build_pay_sui_txn(coin_id, faucet_address, recipient, &[100], 200_000_000)
+            .await
+            .map_err(FaucetError::internal)
+            .unwrap();
+
+        let mut wal = faucet.wal.lock().await;
+
+        // Check no WAL
+        assert!(wal.log.is_empty());
+        wal.reserve(Uuid::new_v4(), coin_id, recipient, tx_data)
+            .map_err(FaucetError::internal)
+            .ok();
+        drop(wal);
+
+        // Check WAL is not empty but will not clear because txn is in_flight
+        let mut wal = faucet.wal.lock().await;
+        assert!(!wal.log.is_empty());
+
+        // Set in flight to false so WAL will clear
+        wal.set_in_flight(coin_id, false)
+            .expect("Unable to set in flight status to false.");
+        drop(wal);
+
+        let kept_context = faucet.teardown();
+        // Simulate a faucet restart and check that it clears the WAL
+        let prom_registry_new = Registry::new();
+
+        let faucet_restarted = SimpleFaucet::new(
+            kept_context,
+            &prom_registry_new,
+            &tmp.path().join("faucet.wal"),
+            FaucetConfig::default(),
+        )
+        .await
+        .unwrap();
+
+        let restarted_wal = faucet_restarted.wal.lock().await;
+        assert!(restarted_wal.log.is_empty())
     }
 
     async fn test_basic_interface(faucet: &impl Faucet) {
