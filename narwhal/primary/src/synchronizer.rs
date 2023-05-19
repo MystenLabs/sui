@@ -40,11 +40,9 @@ use types::{
     Certificate, CertificateAPI, CertificateDigest, Header, HeaderAPI, PrimaryToPrimaryClient,
     Round, SendCertificateRequest, SendCertificateResponse, WorkerSynchronizeMessage,
 };
+use types::metered_channel::channel_with_total;
 
-use crate::{
-    aggregators::CertificatesAggregator, certificate_fetcher::CertificateFetcherCommand,
-    metrics::PrimaryMetrics, CHANNEL_CAPACITY,
-};
+use crate::{aggregators::CertificatesAggregator, certificate_fetcher::CertificateFetcherCommand, metrics::PrimaryMetrics, CHANNEL_CAPACITY, PrimaryChannelMetrics};
 
 #[cfg(test)]
 #[path = "tests/synchronizer_tests.rs"]
@@ -315,6 +313,7 @@ impl Synchronizer {
         rx_synchronizer_network: oneshot::Receiver<Network>,
         dag: Option<Arc<Dag>>,
         metrics: Arc<PrimaryMetrics>,
+        primary_channel_metrics: &PrimaryChannelMetrics
     ) -> Self {
         let committee: &Committee = &committee;
         let genesis = Self::make_genesis(committee);
@@ -324,8 +323,15 @@ impl Synchronizer {
         let (tx_own_certificate_broadcast, _rx_own_certificate_broadcast) =
             broadcast::channel(CHANNEL_CAPACITY);
         let (tx_certificate_acceptor, mut rx_certificate_acceptor) =
-            mpsc::channel(CHANNEL_CAPACITY);
-        let (tx_batch_tasks, mut rx_batch_tasks) = mpsc::channel(CHANNEL_CAPACITY);
+            channel_with_total(CHANNEL_CAPACITY,
+                               &primary_channel_metrics.tx_certificate_acceptor,
+                               &primary_channel_metrics.tx_certificate_acceptor_total);
+
+        let (tx_batch_tasks, mut rx_batch_tasks) =
+            channel_with_total(CHANNEL_CAPACITY,
+                               &primary_channel_metrics.tx_batch_tasks,
+                               &primary_channel_metrics.tx_batch_tasks_total);
+
         let inner = Arc::new(Inner {
             authority_id,
             committee: committee.clone(),
