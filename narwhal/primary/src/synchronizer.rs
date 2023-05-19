@@ -29,20 +29,23 @@ use std::{
 };
 use storage::{CertificateStore, PayloadStore};
 use tokio::{
-    sync::{broadcast, mpsc, oneshot, watch, MutexGuard},
+    sync::{broadcast, oneshot, watch, MutexGuard},
     task::JoinSet,
     time::{sleep, timeout},
 };
 use tracing::{debug, error, instrument, trace, warn};
+use types::metered_channel::channel_with_total;
 use types::{
     ensure,
     error::{AcceptNotification, DagError, DagResult},
     Certificate, CertificateAPI, CertificateDigest, Header, HeaderAPI, PrimaryToPrimaryClient,
     Round, SendCertificateRequest, SendCertificateResponse, WorkerSynchronizeMessage,
 };
-use types::metered_channel::channel_with_total;
 
-use crate::{aggregators::CertificatesAggregator, certificate_fetcher::CertificateFetcherCommand, metrics::PrimaryMetrics, CHANNEL_CAPACITY, PrimaryChannelMetrics};
+use crate::{
+    aggregators::CertificatesAggregator, certificate_fetcher::CertificateFetcherCommand,
+    metrics::PrimaryMetrics, PrimaryChannelMetrics, CHANNEL_CAPACITY,
+};
 
 #[cfg(test)]
 #[path = "tests/synchronizer_tests.rs"]
@@ -80,7 +83,7 @@ struct Inner {
     /// Send certificates to be accepted into a separate task that runs
     /// `process_certificate_with_lock()` in a loop.
     /// See comment above `process_certificate_with_lock()` for why this is necessary.
-    tx_certificate_acceptor: mpsc::Sender<(Certificate, oneshot::Sender<DagResult<()>>, bool)>,
+    tx_certificate_acceptor: Sender<(Certificate, oneshot::Sender<DagResult<()>>, bool)>,
     /// Output all certificates to the consensus layer. Must send certificates in causal order.
     tx_new_certificates: Sender<Certificate>,
     /// Send valid a quorum of certificates' ids to the `Proposer` (along with their round).
@@ -98,7 +101,7 @@ struct Inner {
     /// Background tasks broadcasting newly formed certificates.
     certificate_senders: Mutex<JoinSet<()>>,
     /// A background task that synchronizes batches
-    tx_batch_tasks: mpsc::Sender<(Header, u64, bool)>,
+    tx_batch_tasks: Sender<(Header, u64, bool)>,
     /// Aggregates certificates to use as parents for new headers.
     certificates_aggregators: Mutex<BTreeMap<Round, Box<CertificatesAggregator>>>,
     /// State for tracking suspended certificates and when they can be accepted.
@@ -313,7 +316,7 @@ impl Synchronizer {
         rx_synchronizer_network: oneshot::Receiver<Network>,
         dag: Option<Arc<Dag>>,
         metrics: Arc<PrimaryMetrics>,
-        primary_channel_metrics: &PrimaryChannelMetrics
+        primary_channel_metrics: &PrimaryChannelMetrics,
     ) -> Self {
         let committee: &Committee = &committee;
         let genesis = Self::make_genesis(committee);
@@ -322,15 +325,17 @@ impl Synchronizer {
         let gc_round = rx_consensus_round_updates.borrow().gc_round;
         let (tx_own_certificate_broadcast, _rx_own_certificate_broadcast) =
             broadcast::channel(CHANNEL_CAPACITY);
-        let (tx_certificate_acceptor, mut rx_certificate_acceptor) =
-            channel_with_total(CHANNEL_CAPACITY,
-                               &primary_channel_metrics.tx_certificate_acceptor,
-                               &primary_channel_metrics.tx_certificate_acceptor_total);
+        let (tx_certificate_acceptor, mut rx_certificate_acceptor) = channel_with_total(
+            CHANNEL_CAPACITY,
+            &primary_channel_metrics.tx_certificate_acceptor,
+            &primary_channel_metrics.tx_certificate_acceptor_total,
+        );
 
-        let (tx_batch_tasks, mut rx_batch_tasks) =
-            channel_with_total(CHANNEL_CAPACITY,
-                               &primary_channel_metrics.tx_batch_tasks,
-                               &primary_channel_metrics.tx_batch_tasks_total);
+        let (tx_batch_tasks, mut rx_batch_tasks) = channel_with_total(
+            CHANNEL_CAPACITY,
+            &primary_channel_metrics.tx_batch_tasks,
+            &primary_channel_metrics.tx_batch_tasks_total,
+        );
 
         let inner = Arc::new(Inner {
             authority_id,
