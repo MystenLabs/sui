@@ -137,6 +137,10 @@ pub struct AuthorityPerEpochStore {
 
     /// This is used to notify all epoch specific tasks that epoch has ended.
     epoch_alive_notify: NotifyOnce,
+
+    /// Used to notify all epoch specific tasks that user certs are closed.
+    user_certs_closed_notify: NotifyOnce,
+
     /// This lock acts as a barrier for tasks that should not be executed in parallel with reconfiguration
     /// See comments in AuthorityPerEpochStore::epoch_terminated() on how this is used
     /// Crash recovery note: we write next epoch in the database first, and then use this lock to
@@ -426,6 +430,7 @@ impl AuthorityPerEpochStore {
             db_options,
             reconfig_state_mem: RwLock::new(reconfig_state),
             epoch_alive_notify,
+            user_certs_closed_notify: NotifyOnce::new(),
             epoch_alive: tokio::sync::RwLock::new(true),
             consensus_notify_read: NotifyRead::new(),
             signature_verifier,
@@ -1277,7 +1282,15 @@ impl AuthorityPerEpochStore {
         if epoch_close_time.is_none() {
             // Only update it the first time epoch is closed.
             *epoch_close_time = Some(Instant::now());
+
+            self.user_certs_closed_notify
+                .notify()
+                .expect("user_certs_closed_notify called twice on same epoch store");
         }
+    }
+
+    pub async fn user_certs_closed_notify(&self) {
+        self.user_certs_closed_notify.wait().await
     }
 
     /// Notify epoch is terminated, can only be called once on epoch store
