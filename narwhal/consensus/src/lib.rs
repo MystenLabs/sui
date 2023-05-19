@@ -14,7 +14,6 @@ pub mod consensus;
 pub mod consensus_utils;
 pub mod dag;
 pub mod metrics;
-pub mod tusk;
 pub mod utils;
 
 pub use crate::consensus::Consensus;
