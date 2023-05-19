@@ -212,7 +212,10 @@ impl CheckpointSummary {
     pub fn report_checkpoint_age_ms(&self, metrics: &Histogram) {
         SystemTime::now()
             .duration_since(self.timestamp())
-            .map(|latency| metrics.report(latency.as_millis() as u64))
+            .map(|latency| {
+                tracing::debug!("checkpoint age {}ms", latency.as_millis());
+                metrics.report(latency.as_millis() as u64)
+            })
             .tap_err(|err| {
                 warn!(
                     checkpoint_seq = self.sequence_number,
