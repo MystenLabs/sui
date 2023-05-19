@@ -43,13 +43,6 @@ pub fn lint_execute(env: GlobalEnv, published_addr: ObjectID, color: bool) -> St
                 // linting suppressed on a per-function basis
                 continue;
             }
-            if func_env.get_name_str() == "public_transfer_bad" {
-                eprintln!(
-                    "FUN ATTRIBUTES: {:?} {}",
-                    func_env.get_attributes(),
-                    has_no_lint_attr(&env, func_env.get_attributes())
-                );
-            }
             // module inits are supposed to be unused
             if func_env.visibility() != Visibility::Public
                 && func_env.get_name_str() != "init"
