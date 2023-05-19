@@ -17,10 +17,10 @@ export function useGetAllBalances(address?: SuiAddress | null) {
 
     return useQuery({
         queryKey: ['get-all-balance', address],
-        queryFn: async () =>
-            (await rpc.getAllBalances({ owner: address! })).sort(
-                ({ coinType: a }, { coinType: b }) =>
-                    Coin.getCoinSymbol(a).localeCompare(Coin.getCoinSymbol(b))
+        queryFn: async () => await rpc.getAllBalances({ owner: address! }),
+        select: (data) =>
+            [...data].sort(({ coinType: a }, { coinType: b }) =>
+                Coin.getCoinSymbol(a).localeCompare(Coin.getCoinSymbol(b))
             ),
         enabled: !!address,
         refetchInterval,
