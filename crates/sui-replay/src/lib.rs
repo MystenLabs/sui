@@ -5,8 +5,7 @@ use async_recursion::async_recursion;
 use clap::Parser;
 use fuzz::ReplayFuzzer;
 use fuzz::ReplayFuzzerConfig;
-use fuzz::ShuffleMutator;
-use rand::SeedableRng;
+use fuzz_mutations::base_fuzzers;
 use sui_types::message_envelope::Message;
 use transaction_provider::TransactionSource;
 
@@ -19,6 +18,7 @@ use tracing::{error, info};
 mod data_fetcher;
 mod db_rider;
 pub mod fuzz;
+pub mod fuzz_mutations;
 mod replay;
 pub mod transaction_provider;
 pub mod types;
@@ -98,10 +98,7 @@ pub async fn execute_replay_command(
         } => {
             let config = ReplayFuzzerConfig {
                 num_mutations_per_base,
-                mutator: Box::new(ShuffleMutator {
-                    rng: rand::rngs::StdRng::from_seed([0u8; 32]),
-                    num_mutations_per_base_left: num_mutations_per_base,
-                }),
+                mutator: Box::new(base_fuzzers(num_mutations_per_base)),
                 tx_source: TransactionSource::TailLatest { start_checkpoint },
                 fail_over_on_err: false,
                 expensive_safety_check_config: Default::default(),

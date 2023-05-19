@@ -14,7 +14,6 @@ use crate::{
     transaction_provider::{TransactionProvider, TransactionSource},
     types::ReplayEngineError,
 };
-use rand::seq::SliceRandom;
 
 // Step 1: Get a transaction T from the network
 // Step 2: Create the sandbox and verify the TX does not fork locally
@@ -201,35 +200,5 @@ pub enum ReplayFuzzError {
 impl From<ReplayEngineError> for ReplayFuzzError {
     fn from(err: ReplayEngineError) -> Self {
         ReplayFuzzError::LocalExecError { err }
-    }
-}
-
-pub struct ShuffleMutator {
-    pub rng: rand::rngs::StdRng,
-    pub num_mutations_per_base_left: u64,
-}
-
-impl TransactionKindMutator for ShuffleMutator {
-    fn mutate(&mut self, transaction_kind: &TransactionKind) -> Option<TransactionKind> {
-        if self.num_mutations_per_base_left == 0 {
-            // Nothing else to do
-            return None;
-        }
-
-        self.num_mutations_per_base_left -= 1;
-        if let TransactionKind::ProgrammableTransaction(mut p) = transaction_kind.clone() {
-            // Simple command and arg shuffle mutation
-            // TODO: do more complicated mutations
-            p.commands.shuffle(&mut self.rng);
-            p.inputs.shuffle(&mut self.rng);
-            Some(TransactionKind::ProgrammableTransaction(p))
-        } else {
-            // Other types not supported yet
-            None
-        }
-    }
-
-    fn reset(&mut self, mutations_per_base: u64) {
-        self.num_mutations_per_base_left = mutations_per_base;
     }
 }
