@@ -6,14 +6,24 @@ use self::index_search::{search_index, SearchRange};
 use crate::db_tool::db_dump::{compact, print_table_metadata};
 use anyhow::bail;
 use clap::Parser;
+use prometheus::Registry;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
+use sui_archival::reader::ArchiveReaderV1;
+use sui_config::genesis::Genesis;
 use sui_core::authority::authority_store_tables::AuthorityPerpetualTables;
+use sui_core::authority::AuthorityStore;
 use sui_core::checkpoints::CheckpointStore;
+use sui_core::epoch::committee_store::CommitteeStore;
+use sui_core::storage::RocksDbStore;
+use sui_storage::object_store::{ObjectStoreConfig, ObjectStoreType};
 use sui_types::base_types::{EpochId, ObjectID, SequenceNumber};
 use sui_types::digests::TransactionDigest;
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::storage::ObjectKey;
+use tempfile::tempdir;
 use typed_store::rocks::MetricConf;
+
 pub mod db_dump;
 mod index_search;
 

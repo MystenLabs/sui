@@ -2,13 +2,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use fastcrypto::traits::ToFromBytes;
 use futures::future::join_all;
 use itertools::Itertools;
 use std::collections::BTreeMap;
 use std::fmt::Write;
+use std::num::NonZeroUsize;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use std::time::Duration;
 use std::{fs, io};
 use sui_config::{genesis::Genesis, NodeConfig};
@@ -22,10 +24,22 @@ use sui_types::{base_types::*, object::Owner};
 use tokio::time::Instant;
 
 use anyhow::anyhow;
+use prometheus::Registry;
+use sui_archival::reader::ArchiveReaderV1;
+use sui_core::authority::authority_store_tables::AuthorityPerpetualTables;
+use sui_core::authority::AuthorityStore;
+use sui_core::checkpoints::CheckpointStore;
+use sui_core::epoch::committee_store::CommitteeStore;
+use sui_core::storage::RocksDbStore;
+use sui_storage::object_store::{ObjectStoreConfig, ObjectStoreType};
+use sui_types::messages_checkpoint::VerifiedCheckpointContents;
 use sui_types::messages_grpc::{
     ObjectInfoRequest, ObjectInfoRequestKind, ObjectInfoResponse, TransactionInfoRequest,
     TransactionStatus,
 };
+use sui_types::storage::{ReadStore, WriteStore};
+use tempfile::tempdir;
+use typed_store::rocks::MetricConf;
 
 pub mod commands;
 pub mod db_tool;
@@ -610,5 +624,71 @@ pub async fn restore_from_db_checkpoint(
     db_checkpoint_path: &Path,
 ) -> Result<(), anyhow::Error> {
     copy_dir_all(db_checkpoint_path, config.db_path(), vec![])?;
+    Ok(())
+}
+
+pub async fn state_sync_from_archive(
+    path: &Path,
+    genesis: &Path,
+    remote_store_config: ObjectStoreConfig,
+) -> Result<()> {
+    let genesis = Genesis::load(genesis).unwrap();
+    let genesis_committee = genesis.committee()?;
+
+    let checkpoint_store = Arc::new(CheckpointStore::open_tables_read_write(
+        path.join("checkpoints"),
+        MetricConf::default(),
+        None,
+        None,
+    ));
+    // Only insert the genesis checkpoint if the DB is empty and doesn't have it already
+    if checkpoint_store
+        .get_checkpoint_by_digest(genesis.checkpoint().digest())
+        .unwrap()
+        .is_none()
+    {
+        checkpoint_store.insert_checkpoint_contents(genesis.checkpoint_contents().clone())?;
+        checkpoint_store.insert_verified_checkpoint(genesis.checkpoint())?;
+        checkpoint_store.update_highest_synced_checkpoint(&genesis.checkpoint())?;
+    }
+
+    let perpetual_db = Arc::new(AuthorityPerpetualTables::open(&path.join("store"), None));
+
+    let committee_store = Arc::new(CommitteeStore::new(
+        path.join("epochs"),
+        &genesis_committee,
+        None,
+    ));
+
+    let store = AuthorityStore::open(
+        perpetual_db,
+        &genesis,
+        &committee_store,
+        usize::MAX,
+        false,
+        &Registry::default(),
+    )
+    .await?;
+
+    let start = checkpoint_store
+        .get_highest_synced_checkpoint_seq_number()?
+        .map(|c| c + 1)
+        .unwrap_or(0);
+    let state_sync_store = RocksDbStore::new(store, committee_store, checkpoint_store);
+    let mut archive_reader =
+        ArchiveReaderV1::new(remote_store_config, NonZeroUsize::new(2).unwrap())?;
+    archive_reader.sync_manifest_once().await?;
+    println!(
+        "Latest available checkpoint in archive store: {}",
+        archive_reader.latest_available_checkpoint()?
+    );
+    println!("Starting syncing checkpoints from checkpoint seq num: {start}");
+    archive_reader
+        .read(state_sync_store, start..u64::MAX)
+        .await?;
+    let end = checkpoint_store
+        .get_highest_synced_checkpoint_seq_number()?
+        .unwrap();
+    println!("Highest synced checkpoint after sync: {end}");
     Ok(())
 }

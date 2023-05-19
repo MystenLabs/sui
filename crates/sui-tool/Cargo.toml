@@ -40,6 +40,7 @@ typed-store.workspace = true
 fastcrypto.workspace = true
 
 narwhal-types = { path = "../../narwhal/types" }
+sui-archival = { path = "../sui-archival" }
 sui-config = { path = "../sui-config" }
 sui-core = { path = "../sui-core" }
 sui-framework = { path = "../sui-framework" }

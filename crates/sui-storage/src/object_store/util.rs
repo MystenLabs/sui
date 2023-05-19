@@ -33,6 +33,17 @@ pub async fn put(
     Ok(())
 }
 
+pub async fn get(location: &Path, from: Arc<DynObjectStore>) -> Result<Bytes, object_store::Error> {
+    let backoff = backoff::ExponentialBackoff::default();
+    let bytes = retry(backoff, || async {
+        from.get(location).await.map_err(backoff::Error::transient)
+    })
+    .await?
+    .bytes()
+    .await?;
+    Ok(bytes)
+}
+
 pub async fn copy_file(
     path_in: Path,
     path_out: Path,
