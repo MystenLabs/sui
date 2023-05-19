@@ -65,6 +65,7 @@ use sui_types::crypto::{
     default_hash, AggregateAuthoritySignature, AuthorityKeyPair, AuthoritySignInfo, NetworkKeyPair,
     Signer,
 };
+use sui_types::digests::ChainIdentifier;
 use sui_types::digests::TransactionEventsDigest;
 use sui_types::dynamic_field::{DynamicFieldInfo, DynamicFieldName, DynamicFieldType, Field};
 use sui_types::effects::{
@@ -162,7 +163,7 @@ pub mod test_authority_builder;
 pub(crate) mod authority_notify_read;
 pub(crate) mod authority_store;
 
-static CHAIN_IDENTIFIER: OnceCell<CheckpointDigest> = OnceCell::new();
+static CHAIN_IDENTIFIER: OnceCell<ChainIdentifier> = OnceCell::new();
 
 pub type ReconfigConsensusMessage = (
     AuthorityKeyPair,
@@ -2297,7 +2298,7 @@ impl AuthorityState {
     }
 
     /// Chain Identifier is the digest of the genesis checkpoint.
-    pub fn get_chain_identifier(&self) -> Option<CheckpointDigest> {
+    pub fn get_chain_identifier(&self) -> Option<ChainIdentifier> {
         if let Some(digest) = CHAIN_IDENTIFIER.get() {
             return Some(*digest);
         }
@@ -2308,8 +2309,8 @@ impl AuthorityState {
             .ok()?
             .tap_none(|| error!("Genesis checkpoint is missing from DB"))?;
         // It's ok if the value is already set due to data races.
-        let _ = CHAIN_IDENTIFIER.set(*checkpoint.digest());
-        Some(*checkpoint.digest())
+        let _ = CHAIN_IDENTIFIER.set(ChainIdentifier::from(*checkpoint.digest()));
+        Some(ChainIdentifier::from(*checkpoint.digest()))
     }
 
     pub fn get_move_object<T>(&self, object_id: &ObjectID) -> SuiResult<T>

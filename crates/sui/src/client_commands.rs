@@ -613,6 +613,10 @@ pub enum SuiClientCommands {
         #[clap(long)]
         signatures: Vec<String>,
     },
+
+    /// Query the chain identifier from the rpc endpoint.
+    #[clap(name = "chain-identifier")]
+    ChainIdentifier,
 }
 
 impl SuiClientCommands {
@@ -1069,6 +1073,15 @@ impl SuiClientCommands {
                     .collect();
                 SuiClientCommandResult::Gas(coins)
             }
+            SuiClientCommands::ChainIdentifier => {
+                let ci = context
+                    .get_client()
+                    .await?
+                    .read_api()
+                    .get_chain_identifier()
+                    .await?;
+                SuiClientCommandResult::ChainIdentifier(ci)
+            }
             SuiClientCommands::SplitCoin {
                 coin_id,
                 amounts,
@@ -1501,6 +1514,9 @@ impl Display for SuiClientCommandResult {
                     writeln!(writer, " {0: ^66} | {1: ^11}", gas.id(), gas.value())?;
                 }
             }
+            SuiClientCommandResult::ChainIdentifier(ci) => {
+                writeln!(writer, "{}", ci)?;
+            }
             SuiClientCommandResult::SplitCoin(response) => {
                 write!(writer, "{}", write_transaction_response(response)?)?;
             }
@@ -1746,6 +1762,7 @@ pub enum SuiClientCommandResult {
     SyncClientState,
     NewAddress((SuiAddress, String, SignatureScheme)),
     Gas(Vec<GasCoin>),
+    ChainIdentifier(String),
     SplitCoin(SuiTransactionBlockResponse),
     MergeCoin(SuiTransactionBlockResponse),
     Switch(SwitchResponse),

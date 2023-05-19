@@ -496,6 +496,23 @@
       ]
     },
     {
+      "name": "sui_getChainIdentifier",
+      "tags": [
+        {
+          "name": "Read API"
+        }
+      ],
+      "description": "Return the chain's identifier",
+      "params": [],
+      "result": {
+        "name": "String",
+        "required": true,
+        "schema": {
+          "type": "string"
+        }
+      }
+    },
+    {
       "name": "sui_getCheckpoint",
       "tags": [
         {

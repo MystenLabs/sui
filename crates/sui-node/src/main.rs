@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use clap::Parser;
-use fastcrypto::encoding::{Encoding, Hex};
 use mysten_common::sync::async_once_cell::AsyncOnceCell;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -126,8 +125,7 @@ fn main() {
     runtimes.metrics.spawn(async move {
         let node = node_once_cell_clone.get().await;
         let chain_identifier = match node.state().get_chain_identifier() {
-            // Unwrap safe: Checkpoint Digest is 32 bytes long
-            Some(chain_identifier) => Hex::encode(chain_identifier.into_inner().get(0..4).unwrap()),
+            Some(chain_identifier) => chain_identifier.to_string(),
             None => "Unknown".to_string(),
         };
 
