@@ -101,7 +101,7 @@ export const SuiTransaction = union([
 export const SuiCallArg = union([
   object({
     type: literal('pure'),
-    valueType: optional(string()),
+    valueType: nullable(string()),
     value: SuiJsonValue,
   }),
   object({
@@ -168,7 +168,7 @@ export const SuiTransactionBlockData = object({
   messageVersion: literal('v1'),
   transaction: SuiTransactionBlockKind,
   sender: SuiAddress,
-  gasData: SuiGasData, // this shit is diff bw wallet and explorer
+  gasData: SuiGasData,
 });
 export type SuiTransactionBlockData = Infer<typeof SuiTransactionBlockData>;
 

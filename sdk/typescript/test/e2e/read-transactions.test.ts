@@ -99,7 +99,13 @@ describe('Transaction Reading API', () => {
   });
 
   it('Query Transactions with opts', async () => {
-    const options = { showEvents: true, showEffects: true };
+    const options = {
+      showInput: true,
+      showEffects: true,
+      showEvents: true,
+      showObjectChanges: true,
+      showBalanceChanges: true,
+    };
     const resp = await toolbox.provider.queryTransactionBlocks({
       options,
       limit: 1,
