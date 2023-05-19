@@ -14,7 +14,12 @@ use std::{net::Ipv4Addr, path::PathBuf};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct FaucetReceipt {
-    pub sent: Vec<CoinInfo>,
+    pub task: String,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct FaucetCompletedReceipt {
+    pub sent: Option<Vec<CoinInfo>>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -27,7 +32,7 @@ pub struct CoinInfo {
 
 #[async_trait]
 pub trait Faucet {
-    /// Send `Coin<SUI>` of the specified amount to the recipient
+    /// Send `Coin<SUI>` of the specified amount to the recipient.
     async fn send(
         &self,
         id: Uuid,

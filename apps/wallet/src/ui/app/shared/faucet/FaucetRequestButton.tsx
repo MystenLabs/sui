@@ -39,9 +39,7 @@ function FaucetRequestButton({
             onClick={() => {
                 toast.promise(mutation.mutateAsync(), {
                     loading: <FaucetMessageInfo loading />,
-                    success: (totalReceived) => (
-                        <FaucetMessageInfo totalReceived={totalReceived} />
-                    ),
+                    success: (task) => <FaucetMessageInfo task={task} />,
                     error: (error) => (
                         <FaucetMessageInfo error={error.message} />
                     ),

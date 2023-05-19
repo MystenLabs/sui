@@ -7,7 +7,8 @@ use serde::{Deserialize, Serialize};
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct FaucetResponse {
-    pub transferred_gas_objects: Vec<CoinInfo>,
+    // This string is the Uuid for the req
+    pub task: Option<String>,
     pub error: Option<String>,
 }
 
@@ -15,7 +16,7 @@ impl From<FaucetError> for FaucetResponse {
     fn from(e: FaucetError) -> Self {
         Self {
             error: Some(e.to_string()),
-            transferred_gas_objects: vec![],
+            task: None,
         }
     }
 }
@@ -23,7 +24,7 @@ impl From<FaucetError> for FaucetResponse {
 impl From<FaucetReceipt> for FaucetResponse {
     fn from(v: FaucetReceipt) -> Self {
         Self {
-            transferred_gas_objects: v.sent,
+            task: Some(v.task),
             error: None,
         }
     }

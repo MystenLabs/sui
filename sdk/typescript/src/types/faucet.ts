@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { array, nullable, number, object, Infer, string } from 'superstruct';
+import { nullable, number, object, Infer, string } from 'superstruct';
 import { TransactionDigest, ObjectId } from './common';
 
 export const FaucetCoinInfo = object({
@@ -13,7 +13,7 @@ export const FaucetCoinInfo = object({
 export type FaucetCoinInfo = Infer<typeof FaucetCoinInfo>;
 
 export const FaucetResponse = object({
-  transferredGasObjects: array(FaucetCoinInfo),
+  task: nullable(string()),
   error: nullable(string()),
 });
 

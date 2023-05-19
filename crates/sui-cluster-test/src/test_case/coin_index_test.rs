@@ -36,7 +36,7 @@ impl TestCaseImpl for CoinIndexTest {
         let rgp = ctx.get_reference_gas_price().await;
 
         // 0. Get some coins first
-        ctx.get_sui_from_faucet(None).await;
+        ctx.request_sui_from_faucet(None).await;
 
         // Record initial balances
         let Balance {

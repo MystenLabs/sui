@@ -31,8 +31,10 @@ impl TestCaseImpl for NativeTransferTest {
 
     async fn run(&self, ctx: &mut TestContext) -> Result<(), anyhow::Error> {
         info!("Testing gas coin transfer");
-        let mut sui_objs = ctx.get_sui_from_faucet(Some(1)).await;
-        let gas_obj = ctx.get_sui_from_faucet(Some(1)).await.swap_remove(0);
+        ctx.request_sui_from_faucet(Some(1)).await;
+        ctx.request_sui_from_faucet(Some(1)).await;
+        let mut sui_objs = ctx.get_unique_gas_object(vec![]).await;
+        let gas_obj = sui_objs.swap_remove(0);
 
         let signer = ctx.get_wallet_address();
         let (recipient_addr, _): (_, AccountKeyPair) = get_key_pair();
@@ -48,11 +50,11 @@ impl TestCaseImpl for NativeTransferTest {
         let data = ctx
             .build_transaction_remotely("unsafe_transferObject", params)
             .await?;
-        let mut response = ctx.sign_and_execute(data, "coin transfer").await;
+        let mut response = ctx.sign_and_execute(data, "object transfer").await;
 
         Self::examine_response(ctx, &mut response, signer, recipient_addr, obj_to_transfer).await;
 
-        let mut sui_objs_2 = ctx.get_sui_from_faucet(Some(1)).await;
+        let mut sui_objs_2 = ctx.get_unique_gas_object(vec![]).await;
         // Test transfer sui
         let obj_to_transfer_2 = *sui_objs_2.swap_remove(0).id();
         let params = rpc_params![

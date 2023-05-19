@@ -6,22 +6,20 @@ use clap::*;
 use cluster::{Cluster, ClusterFactory};
 use config::ClusterTestOpt;
 use futures::{stream::FuturesUnordered, StreamExt};
-use helper::ObjectChecker;
 use jsonrpsee::core::params::ArrayParams;
 use jsonrpsee::{core::client::ClientT, http_client::HttpClientBuilder};
 use std::sync::Arc;
-use sui_faucet::CoinInfo;
 use sui_json_rpc_types::{
     SuiExecutionStatus, SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponse,
     SuiTransactionBlockResponseOptions, TransactionBlockBytes,
 };
 use sui_sdk::wallet_context::WalletContext;
 use sui_types::base_types::TransactionDigest;
-use sui_types::object::Owner;
 use sui_types::quorum_driver_types::ExecuteTransactionRequestType;
 use sui_types::sui_system_state::sui_system_state_summary::SuiSystemStateSummary;
 
 use shared_crypto::intent::Intent;
+use std::thread;
 use sui_sdk::SuiClient;
 use sui_types::gas_coin::GasCoin;
 use sui_types::{
@@ -56,29 +54,53 @@ pub struct TestContext {
 }
 
 impl TestContext {
-    async fn get_sui_from_faucet(&self, minimum_coins: Option<usize>) -> Vec<GasCoin> {
+    // Because faucet now batches requests in order to make these tests pass we need to ensure that we
+    // look for a distinct set of coins
+    async fn request_sui_from_faucet(&self, minimum_coins: Option<usize>) -> Vec<GasCoin> {
         let addr = self.get_wallet_address();
-        let faucet_response = self.faucet.request_sui_coins(addr).await;
+        self.faucet.request_sui_coins(addr).await;
 
-        let coin_info = faucet_response
-            .transferred_gas_objects
+        // Sleep from for faucet to batch transfer
+        thread::sleep(Duration::from_secs(10));
+
+        // Get the coins and check that faucet transferred.
+        let gas_coins: Vec<GasCoin> = self
+            .client
+            .get_wallet()
+            .gas_objects(addr)
+            .await
+            .unwrap()
             .iter()
-            .map(|coin_info| coin_info.transfer_tx_digest)
-            .collect::<Vec<_>>();
-        self.let_fullnode_sync(coin_info, 5).await;
-
-        let gas_coins = self
-            .check_owner_and_into_gas_coin(faucet_response.transferred_gas_objects, addr)
-            .await;
+            // Ok to unwrap() since `get_gas_objects` guarantees gas
+            .map(|(_val, object)| GasCoin::try_from(object).unwrap())
+            .collect();
 
         let minimum_coins = minimum_coins.unwrap_or(1);
-
         if gas_coins.len() < minimum_coins {
             panic!(
                 "Expect to get at least {minimum_coins} Sui Coins for address {addr}, but only got {}",
                 gas_coins.len()
             )
         }
+
+        gas_coins
+    }
+
+    async fn get_unique_gas_object(&self, in_use: Vec<GasCoin>) -> Vec<GasCoin> {
+        let addr = self.get_wallet_address();
+
+        let gas_coins: Vec<GasCoin> = self
+            .client
+            .get_wallet()
+            .gas_objects(addr)
+            .await
+            .unwrap()
+            .iter()
+            // Ok to unwrap() since `get_gas_objects` guarantees gas
+            .map(|(_val, object)| GasCoin::try_from(object).unwrap())
+            // Filter out coins that are already in use
+            .filter(|coin| !in_use.contains(coin))
+            .collect();
 
         gas_coins
     }
@@ -237,26 +259,6 @@ impl TestContext {
                 (false, digest, retry_times + 1)
             }
         }
-    }
-
-    async fn check_owner_and_into_gas_coin(
-        &self,
-        coin_info: Vec<CoinInfo>,
-        owner: SuiAddress,
-    ) -> Vec<GasCoin> {
-        futures::future::join_all(
-            coin_info
-                .iter()
-                .map(|coin_info| {
-                    ObjectChecker::new(coin_info.id)
-                        .owner(Owner::AddressOwner(owner))
-                        .check_into_gas_coin(self.get_fullnode_client())
-                })
-                .collect::<Vec<_>>(),
-        )
-        .await
-        .into_iter()
-        .collect::<Vec<_>>()
     }
 }
 

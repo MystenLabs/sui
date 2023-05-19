@@ -82,6 +82,8 @@ async fn main() -> Result<(), anyhow::Error> {
         config,
     });
 
+    let batching_thread_app_state = Arc::clone(&app_state);
+
     // TODO: restrict access if needed
     let cors = CorsLayer::new()
         .allow_methods(vec![Method::GET, Method::POST])
@@ -112,7 +114,21 @@ async fn main() -> Result<(), anyhow::Error> {
         loop {
             // Every config.wal_retry_interval (Default: 300 seconds) we try to clear the wal coins
             tokio::time::sleep(Duration::from_secs(wal_retry_interval)).await;
-            app_state.faucet.retry_wal_coins().await.unwrap();
+            app_state.clone().faucet.retry_wal_coins().await.unwrap();
+        }
+    });
+
+    // Spawn async thread here to batch_process_faucet reuuests every 2 second window
+    spawn_monitored_task!(async move {
+        info!("Starting task to handle batch faucet requests.");
+        loop {
+            // Every 2 seconds we commit faucet requests
+            tokio::time::sleep(Duration::from_secs(2)).await;
+            batching_thread_app_state
+                .faucet
+                .batch_transfer_gases()
+                .await
+                .unwrap();
         }
     });
 
@@ -140,7 +156,7 @@ async fn request_gas(
     let result = match payload {
         FaucetRequest::FixedAmountRequest(requests) => {
             // We spawn a tokio task for this such that connection drop will not interrupt
-            // it and impact the reclycing of coins
+            // it and impact the recycling of coins
             spawn_monitored_task!(async move {
                 state
                     .faucet
@@ -158,7 +174,7 @@ async fn request_gas(
     match result {
         Ok(v) => {
             info!(uuid =?id, "Request is successfully served");
-            (StatusCode::CREATED, Json(FaucetResponse::from(v)))
+            (StatusCode::ACCEPTED, Json(FaucetResponse::from(v)))
         }
         Err(v) => {
             warn!(uuid =?id, "Failed to request gas: {:?}", v);

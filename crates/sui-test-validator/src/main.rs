@@ -156,7 +156,12 @@ async fn faucet_request(
         }
     };
 
-    if !result.transferred_gas_objects.is_empty() {
+    if !result
+        .task
+        .clone()
+        .expect("unexpected- queue is full")
+        .is_empty()
+    {
         (StatusCode::CREATED, Json(result))
     } else {
         (StatusCode::INTERNAL_SERVER_ERROR, Json(result))
