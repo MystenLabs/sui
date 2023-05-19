@@ -126,6 +126,7 @@ impl<T: ParentSync + Send + Sync> ExecutionState for ConsensusHandler<T> {
     /// This function will be called by Narwhal, after Narwhal sequenced this certificate.
     #[instrument(level = "trace", skip_all)]
     async fn handle_consensus_output(&self, consensus_output: ConsensusOutput) {
+        let handle_timer = std::time::Instant::now();
         let _scope = monitored_scope("HandleConsensusOutput");
 
         // This code no longer supports old protocol versions.
@@ -299,6 +300,7 @@ impl<T: ParentSync + Send + Sync> ExecutionState for ConsensusHandler<T> {
             .consensus_handler_processed_bytes
             .inc_by(bytes as u64);
 
+        tracing::warn!("consensus_handler elapsed 1: {:?}", handle_timer.elapsed());
         let transactions_to_schedule = self
             .epoch_store
             .process_consensus_transactions_and_commit_boundary(
@@ -310,6 +312,7 @@ impl<T: ParentSync + Send + Sync> ExecutionState for ConsensusHandler<T> {
             .await
             .expect("Unrecoverable error in consensus handler");
 
+        tracing::warn!("consensus_handler elapsed 2: {:?}", handle_timer.elapsed());
         self.transaction_scheduler
             .schedule(transactions_to_schedule)
             .await;
@@ -338,6 +341,7 @@ impl<T: ParentSync + Send + Sync> ExecutionState for ConsensusHandler<T> {
                 commit_height: round,
             },
         };
+        tracing::warn!("consensus_handler elapsed 2: {:?}", handle_timer.elapsed());
         self.checkpoint_service
             .notify_checkpoint(&self.epoch_store, checkpoint)
             .expect("notify_checkpoint has failed");

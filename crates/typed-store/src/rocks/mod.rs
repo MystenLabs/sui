@@ -171,7 +171,7 @@ macro_rules! retry_transaction {
                         // TODO: monitoring needed?
                         error!(?delay, ?retries, "excessive transaction retries...");
                     } else {
-                        info!(
+                        warn!(
                             ?delay,
                             ?retries,
                             "transaction write conflict detected, sleeping"
