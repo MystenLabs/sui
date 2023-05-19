@@ -5,7 +5,7 @@ use codespan_reporting::{diagnostic::Severity, term::termcolor::Buffer};
 use std::collections::BTreeSet;
 
 use move_binary_format::file_format::Visibility;
-use move_model::model::GlobalEnv;
+use move_model::{ast::Attribute, model::GlobalEnv};
 use move_stackless_bytecode::{
     stackless_bytecode::{Bytecode, Operation},
     stackless_bytecode_generator::StacklessBytecodeGenerator,
@@ -16,14 +16,40 @@ use sui_types::base_types::ObjectID;
 
 use super::self_transfer::SelfTransferAnalysis;
 
+fn has_no_lint_attr(env: &GlobalEnv, attributes: &[Attribute]) -> bool {
+    attributes.iter().any(|attr| {
+        if let Attribute::Apply(_, s, _) = attr {
+            if s.display(env.symbol_pool()).to_string() == "no_lint" {
+                return true;
+            }
+        }
+        false
+    })
+}
+
 pub fn lint_execute(env: GlobalEnv, published_addr: ObjectID, color: bool) -> String {
     // check for unused functions
     for module_env in env.get_modules() {
+        if has_no_lint_attr(&env, module_env.get_attributes()) {
+            // linting suppressed on a per-module basis
+            continue;
+        }
         if ObjectID::from_address(*module_env.self_address()) != published_addr {
             // do not look at dependencies
             continue;
         }
         for func_env in module_env.get_functions() {
+            if has_no_lint_attr(&env, func_env.get_attributes()) {
+                // linting suppressed on a per-function basis
+                continue;
+            }
+            if func_env.get_name_str() == "public_transfer_bad" {
+                eprintln!(
+                    "FUN ATTRIBUTES: {:?} {}",
+                    func_env.get_attributes(),
+                    has_no_lint_attr(&env, func_env.get_attributes())
+                );
+            }
             // module inits are supposed to be unused
             if func_env.visibility() != Visibility::Public
                 && func_env.get_name_str() != "init"
@@ -35,12 +61,20 @@ pub fn lint_execute(env: GlobalEnv, published_addr: ObjectID, color: bool) -> St
     }
 
     for module_env in env.get_modules() {
+        if has_no_lint_attr(&env, module_env.get_attributes()) {
+            // linting suppressed on a per-module basis
+            continue;
+        }
         if ObjectID::from_address(*module_env.self_address()) != published_addr {
             // do not lint dependencies
             continue;
         }
         let mut packed_types = BTreeSet::new();
         for func_env in module_env.get_functions() {
+            if has_no_lint_attr(&env, func_env.get_attributes()) {
+                // linting suppressed on a per-function basis
+                continue;
+            }
             if func_env.is_native() {
                 // do not lint on native functions
                 continue;
@@ -59,6 +93,10 @@ pub fn lint_execute(env: GlobalEnv, published_addr: ObjectID, color: bool) -> St
         }
         // check for unused types
         for t in module_env.get_structs() {
+            if has_no_lint_attr(&env, t.get_attributes()) {
+                // linting suppressed on a per-type basis
+                continue;
+            }
             // TODO: better check for one-time witness. for now, we just use all caps as a
             // proxy. this will catch all OTW's, but will miss some unused structs
             if !packed_types.contains(&t.get_id())
