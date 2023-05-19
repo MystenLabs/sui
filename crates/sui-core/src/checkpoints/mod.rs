@@ -575,7 +575,7 @@ impl CheckpointBuilder {
             let mut last = self.epoch_store.last_built_checkpoint_commit_height();
             for (height, pending) in self.epoch_store.get_pending_checkpoints(last) {
                 last = Some(height);
-                debug!(
+                warn!(
                     checkpoint_commit_height = height,
                     "Making checkpoint at commit height"
                 );
@@ -586,7 +586,7 @@ impl CheckpointBuilder {
                     continue 'main;
                 }
             }
-            debug!("Waiting for more checkpoints from consensus after processing {last:?}");
+            warn!("Waiting for more checkpoints from consensus after processing {last:?}");
             match select(self.exit.changed().boxed(), self.notify.notified().boxed()).await {
                 Either::Left(_) => {
                     // break loop on exit signal
