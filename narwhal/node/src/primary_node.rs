@@ -14,7 +14,7 @@ use executor::{get_restored_consensus_output, ExecutionState, Executor, Subscrib
 use fastcrypto::traits::{KeyPair as _, VerifyingKey};
 use mysten_metrics::{RegistryID, RegistryService};
 use network::client::NetworkClient;
-use primary::{NetworkModel, Primary, PrimaryChannelMetrics, NUM_SHUTDOWN_RECEIVERS};
+use primary::{Primary, PrimaryChannelMetrics, NUM_SHUTDOWN_RECEIVERS};
 use prometheus::{IntGauge, Registry};
 use std::sync::Arc;
 use std::time::Instant;
@@ -242,7 +242,7 @@ impl PrimaryNodeInner {
         let mut handles = Vec::new();
         let (tx_consensus_round_updates, rx_consensus_round_updates) =
             watch::channel(ConsensusRound::new(0, 0));
-        let (dag, network_model) = if !internal_consensus {
+        let dag = if !internal_consensus {
             debug!("Consensus is disabled: the primary will run w/o Bullshark");
             let consensus_metrics = Arc::new(ConsensusMetrics::new(registry));
             let (handle, dag) = Dag::new(
@@ -254,7 +254,7 @@ impl PrimaryNodeInner {
 
             handles.push(handle);
 
-            (Some(Arc::new(dag)), NetworkModel::Asynchronous)
+            Some(Arc::new(dag))
         } else {
             let consensus_handles = Self::spawn_consensus(
                 authority.id(),
@@ -274,7 +274,7 @@ impl PrimaryNodeInner {
 
             handles.extend(consensus_handles);
 
-            (None, NetworkModel::PartiallySynchronous)
+            None
         };
 
         // TODO: the same set of variables are sent to primary, consensus and downstream
@@ -298,7 +298,6 @@ impl PrimaryNodeInner {
             rx_committed_certificates,
             rx_consensus_round_updates,
             dag,
-            network_model,
             tx_shutdown,
             tx_committed_certificates,
             registry,
