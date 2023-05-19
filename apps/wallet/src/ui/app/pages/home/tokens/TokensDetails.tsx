@@ -216,7 +216,7 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
                 {coinType && <PageTitle title={coinSymbol} back="/tokens" />}
 
                 <div
-                    className="flex flex-col h-full flex-1 flex-grow items-center"
+                    className="flex flex-col h-full flex-1 flex-grow items-center overflow-y-auto"
                     data-testid="coin-page"
                 >
                     {!coinType && <AccountSelector />}
