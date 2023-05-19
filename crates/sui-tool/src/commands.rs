@@ -168,11 +168,13 @@ pub enum ToolCommand {
     #[clap(name = "replay")]
     Replay {
         #[clap(long = "rpc")]
-        rpc_url: String,
+        rpc_url: Option<String>,
         #[clap(long = "safety-checks")]
         safety_checks: bool,
         #[clap(long = "authority")]
         use_authority: bool,
+        #[clap(long = "cfg-path", short)]
+        cfg_path: Option<PathBuf>,
         #[clap(subcommand)]
         cmd: ReplayToolCommand,
     },
@@ -354,8 +356,10 @@ impl ToolCommand {
                 safety_checks,
                 cmd,
                 use_authority,
+                cfg_path,
             } => {
-                execute_replay_command(rpc_url, safety_checks, use_authority, cmd).await?;
+                execute_replay_command(rpc_url, safety_checks, use_authority, cfg_path, cmd)
+                    .await?;
             }
             ToolCommand::SignTransaction {
                 genesis,

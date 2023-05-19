@@ -19,6 +19,8 @@ use thiserror::Error;
 use tokio::time::Duration;
 use tracing::error;
 
+use crate::config::ReplayableNetworkConfigSet;
+
 // TODO: make these configurable
 pub(crate) const RPC_TIMEOUT_ERR_SLEEP_RETRY_PERIOD: Duration = Duration::from_millis(10_000);
 pub(crate) const RPC_TIMEOUT_ERR_NUM_RETRIES: u32 = 2;
@@ -156,6 +158,21 @@ pub enum ReplayEngineError {
 
     #[error("Unsupported epoch in replay engine: {epoch}")]
     EpochNotSupported { epoch: u64 },
+
+    #[error("Unable to open yaml cfg file at {}: {}", path, err)]
+    UnableToOpenYamlFile { path: String, err: String },
+
+    #[error("Unable to write yaml file at {}: {}", path, err)]
+    UnableToWriteYamlFile { path: String, err: String },
+
+    #[error("Unable to convert string {} to URL {}", url, err)]
+    InvalidUrl { url: String, err: String },
+
+    #[error(
+        "Unable to execute transaction with existing network configs {:#?}",
+        cfgs
+    )]
+    UnableToExecuteWithNetworkConfigs { cfgs: ReplayableNetworkConfigSet },
 }
 
 impl From<SuiObjectResponseError> for ReplayEngineError {
