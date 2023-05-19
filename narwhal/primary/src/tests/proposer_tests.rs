@@ -35,7 +35,6 @@ async fn propose_empty() {
         /* max_header_delay */ Duration::from_millis(20),
         /* min_header_delay */ Duration::from_millis(20),
         None,
-        NetworkModel::PartiallySynchronous,
         tx_shutdown.subscribe(),
         /* rx_core */ rx_parents,
         /* rx_workers */ rx_our_digests,
@@ -84,7 +83,6 @@ async fn propose_payload_and_repropose_after_n_seconds() {
         /* min_header_delay */
         Duration::from_millis(1_000_000), // Ensure it is not triggered.
         Some(header_resend_delay),
-        NetworkModel::PartiallySynchronous,
         tx_shutdown.subscribe(),
         /* rx_core */ rx_parents,
         /* rx_workers */ rx_our_digests,
@@ -206,7 +204,6 @@ async fn equivocation_protection() {
         /* min_header_delay */
         Duration::from_millis(1_000_000), // Ensure it is not triggered.
         None,
-        NetworkModel::PartiallySynchronous,
         tx_shutdown.subscribe(),
         /* rx_core */ rx_parents,
         /* rx_workers */ rx_our_digests,
@@ -278,7 +275,6 @@ async fn equivocation_protection() {
         /* min_header_delay */
         Duration::from_millis(1_000_000), // Ensure it is not triggered.
         None,
-        NetworkModel::PartiallySynchronous,
         tx_shutdown.subscribe(),
         /* rx_core */ rx_parents,
         /* rx_workers */ rx_our_digests,

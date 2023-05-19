@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::metrics::ConsensusMetrics;
 use crate::{
-    consensus::{ConsensusProtocol, ConsensusState, Dag},
+    consensus::{ConsensusState, Dag},
     utils, ConsensusError, Outcome,
 };
 use config::{AuthorityIdentifier, Committee, Stake};
@@ -58,8 +58,125 @@ pub struct Bullshark {
     pub num_sub_dags_per_schedule: u64,
 }
 
-impl ConsensusProtocol for Bullshark {
-    fn process_certificate(
+impl Bullshark {
+    /// Create a new Bullshark consensus instance.
+    pub fn new(
+        committee: Committee,
+        store: Arc<ConsensusStore>,
+        metrics: Arc<ConsensusMetrics>,
+        num_sub_dags_per_schedule: u64,
+    ) -> Self {
+        Self {
+            committee,
+            store,
+            last_successful_leader_election_timestamp: Instant::now(),
+            last_leader_election: LastRound::default(),
+            max_inserted_certificate_round: 0,
+            metrics,
+            num_sub_dags_per_schedule,
+        }
+    }
+
+    // Returns the PublicKey of the authority which is the leader for the provided `round`.
+    // Pay attention that this method will return always the first authority as the leader
+    // when used under a test environment.
+    pub fn leader_authority(committee: &Committee, round: Round) -> AuthorityIdentifier {
+        assert_eq!(
+            round % 2,
+            0,
+            "We should never attempt to do a leader election for odd rounds"
+        );
+
+        cfg_if::cfg_if! {
+            if #[cfg(test)] {
+                // We apply round robin in leader election. Since we expect round to be an even number,
+                // 2, 4, 6, 8... it can't work well for leader election as we'll omit leaders. Thus
+                // we can always divide by 2 to get a monotonically incremented sequence,
+                // 2/2 = 1, 4/2 = 2, 6/2 = 3, 8/2 = 4  etc, and then do minus 1 so we can always
+                // start with base zero 0.
+                let next_leader = (round/2 - 1) as usize % committee.size();
+                let authorities = committee.authorities().collect::<Vec<_>>();
+
+                authorities.get(next_leader).unwrap().id()
+            } else {
+                // Elect the leader in a stake-weighted choice seeded by the round
+                committee.leader(round).id()
+            }
+        }
+    }
+
+    /// Returns the certificate (and the certificate's digest) originated by the leader of the
+    /// specified round (if any).
+    fn leader<'a>(
+        committee: &Committee,
+        round: Round,
+        dag: &'a Dag,
+    ) -> Option<&'a (CertificateDigest, Certificate)> {
+        // Note: this function is often called with even rounds only. While we do not aim at random selection
+        // yet (see issue #10), repeated calls to this function should still pick from the whole roster of leaders.
+        let leader = Self::leader_authority(committee, round);
+
+        // Return its certificate and the certificate's digest.
+        dag.get(&round).and_then(|x| x.get(&leader))
+    }
+
+    /// Calculates the reputation score for the current commit by taking into account the reputation
+    /// scores from the previous commit (assuming that exists). It returns the updated reputation score.
+    fn resolve_reputation_score(
+        &self,
+        state: &mut ConsensusState,
+        committed_sequence: &[Certificate],
+        sub_dag_index: u64,
+    ) -> ReputationScores {
+        // we reset the scores for every schedule change window, or initialise when it's the first
+        // sub dag we are going to create.
+        // TODO: when schedule change is implemented we should probably change a little bit
+        // this logic here.
+        let mut reputation_score =
+            if sub_dag_index == 1 || sub_dag_index % self.num_sub_dags_per_schedule == 0 {
+                ReputationScores::new(&self.committee)
+            } else {
+                state
+                    .last_committed_sub_dag
+                    .as_ref()
+                    .expect("Committed sub dag should always exist for sub_dag_index > 1")
+                    .reputation_score
+                    .clone()
+            };
+
+        // update the score for the previous leader. If no previous leader exists,
+        // then this is the first time we commit a leader, so no score update takes place
+        if let Some(last_committed_sub_dag) = state.last_committed_sub_dag.as_ref() {
+            for certificate in committed_sequence {
+                // TODO: we could iterate only the certificates of the round above the previous leader's round
+                if certificate
+                    .header()
+                    .parents()
+                    .iter()
+                    .any(|digest| *digest == last_committed_sub_dag.leader.digest())
+                {
+                    reputation_score.add_score(certificate.origin(), 1);
+                }
+            }
+        }
+
+        // we check if this is the last sub dag of the current schedule. If yes then we mark the
+        // scores as final_of_schedule = true so any downstream user can now that those are the last
+        // ones calculated for the current schedule.
+        reputation_score.final_of_schedule =
+            (sub_dag_index + 1) % self.num_sub_dags_per_schedule == 0;
+
+        // Always ensure that all the authorities are present in the reputation scores - even
+        // when score is zero.
+        assert_eq!(
+            reputation_score.total_authorities() as usize,
+            self.committee.size()
+        );
+
+        reputation_score
+    }
+
+    pub fn process_certificate(
         &mut self,
         state: &mut ConsensusState,
         certificate: Certificate,
@@ -237,125 +354,5 @@ impl ConsensusProtocol for Bullshark {
             .report(total_committed_certificates as u64);
 
         Ok((Outcome::Commit, committed_sub_dags))
-    }
-}
-
-impl Bullshark {
-    /// Create a new Bullshark consensus instance.
-    pub fn new(
-        committee: Committee,
-        store: Arc<ConsensusStore>,
-        metrics: Arc<ConsensusMetrics>,
-        num_sub_dags_per_schedule: u64,
-    ) -> Self {
-        Self {
-            committee,
-            store,
-            last_successful_leader_election_timestamp: Instant::now(),
-            last_leader_election: LastRound::default(),
-            max_inserted_certificate_round: 0,
-            metrics,
-            num_sub_dags_per_schedule,
-        }
-    }
-
-    // Returns the PublicKey of the authority which is the leader for the provided `round`.
-    // Pay attention that this method will return always the first authority as the leader
-    // when used under a test environment.
-    pub fn leader_authority(committee: &Committee, round: Round) -> AuthorityIdentifier {
-        assert_eq!(
-            round % 2,
-            0,
-            "We should never attempt to do a leader election for odd rounds"
-        );
-
-        cfg_if::cfg_if! {
-            if #[cfg(test)] {
-                // We apply round robin in leader election. Since we expect round to be an even number,
-                // 2, 4, 6, 8... it can't work well for leader election as we'll omit leaders. Thus
-                // we can always divide by 2 to get a monotonically incremented sequence,
-                // 2/2 = 1, 4/2 = 2, 6/2 = 3, 8/2 = 4  etc, and then do minus 1 so we can always
-                // start with base zero 0.
-                let next_leader = (round/2 - 1) as usize % committee.size();
-                let authorities = committee.authorities().collect::<Vec<_>>();
-
-                authorities.get(next_leader).unwrap().id()
-            } else {
-                // Elect the leader in a stake-weighted choice seeded by the round
-                committee.leader(round).id()
-            }
-        }
-    }
-
-    // TODO: duplicated in tusk.rs
-    /// Returns the certificate (and the certificate's digest) originated by the leader of the
-    /// specified round (if any).
-    fn leader<'a>(
-        committee: &Committee,
-        round: Round,
-        dag: &'a Dag,
-    ) -> Option<&'a (CertificateDigest, Certificate)> {
-        // Note: this function is often called with even rounds only. While we do not aim at random selection
-        // yet (see issue #10), repeated calls to this function should still pick from the whole roster of leaders.
-        let leader = Self::leader_authority(committee, round);
-
-        // Return its certificate and the certificate's digest.
-        dag.get(&round).and_then(|x| x.get(&leader))
-    }
-
-    /// Calculates the reputation score for the current commit by taking into account the reputation
-    /// scores from the previous commit (assuming that exists). It returns the updated reputation score.
-    fn resolve_reputation_score(
-        &self,
-        state: &mut ConsensusState,
-        committed_sequence: &[Certificate],
-        sub_dag_index: u64,
-    ) -> ReputationScores {
-        // we reset the scores for every schedule change window, or initialise when it's the first
-        // sub dag we are going to create.
-        // TODO: when schedule change is implemented we should probably change a little bit
-        // this logic here.
-        let mut reputation_score =
-            if sub_dag_index == 1 || sub_dag_index % self.num_sub_dags_per_schedule == 0 {
-                ReputationScores::new(&self.committee)
-            } else {
-                state
-                    .last_committed_sub_dag
-                    .as_ref()
-                    .expect("Committed sub dag should always exist for sub_dag_index > 1")
-                    .reputation_score
-                    .clone()
-            };
-
-        // update the score for the previous leader. If no previous leader exists,
-        // then this is the first time we commit a leader, so no score update takes place
-        if let Some(last_committed_sub_dag) = state.last_committed_sub_dag.as_ref() {
-            for certificate in committed_sequence {
-                // TODO: we could iterate only the certificates of the round above the previous leader's round
-                if certificate
-                    .header()
-                    .parents()
-                    .iter()
-                    .any(|digest| *digest == last_committed_sub_dag.leader.digest())
-                {
-                    reputation_score.add_score(certificate.origin(), 1);
-                }
-            }
-        }
-
-        // we check if this is the last sub dag of the current schedule. If yes then we mark the
-        // scores as final_of_schedule = true so any downstream user can now that those are the last
-        // ones calculated for the current schedule.
-        reputation_score.final_of_schedule =
-            (sub_dag_index + 1) % self.num_sub_dags_per_schedule == 0;
-
-        // Always ensure that all the authorities are present in the reputation scores - even
-        // when score is zero.
-        assert_eq!(
-            reputation_score.total_authorities() as usize,
-            self.committee.size()
-        );
-
-        reputation_score
     }
 }

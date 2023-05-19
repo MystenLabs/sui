@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::bullshark::Bullshark;
-use crate::consensus::ConsensusProtocol;
 use crate::consensus::ConsensusState;
 use crate::consensus_utils::make_consensus_store;
 use crate::consensus_utils::NUM_SUB_DAGS_PER_SCHEDULE;

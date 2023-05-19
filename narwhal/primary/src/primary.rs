@@ -87,12 +87,6 @@ pub const NUM_SHUTDOWN_RECEIVERS: u64 = 27;
 /// Maximum duration to fetch certificates from local storage.
 const FETCH_CERTIFICATES_MAX_HANDLER_TIME: Duration = Duration::from_secs(10);
 
-/// The network model in which the primary operates.
-pub enum NetworkModel {
-    PartiallySynchronous,
-    Asynchronous,
-}
-
 pub struct Primary;
 
 impl Primary {
@@ -115,7 +109,6 @@ impl Primary {
         rx_committed_certificates: Receiver<(Round, Vec<Certificate>)>,
         rx_consensus_round_updates: watch::Receiver<ConsensusRound>,
         dag: Option<Arc<Dag>>,
-        network_model: NetworkModel,
         tx_shutdown: &mut PreSubscribedBroadcastSender,
         tx_committed_certificates: Sender<(Round, Vec<Certificate>)>,
         registry: &Registry,
@@ -494,7 +487,6 @@ impl Primary {
             parameters.max_header_delay,
             parameters.min_header_delay,
             None,
-            network_model,
             tx_shutdown.subscribe(),
             rx_parents,
             rx_our_digests,

@@ -4,8 +4,9 @@
 
 #![allow(clippy::mutable_key_type)]
 
+use crate::bullshark::Bullshark;
 use crate::utils::gc_round;
-use crate::{metrics::ConsensusMetrics, ConsensusError, Outcome, SequenceNumber};
+use crate::{metrics::ConsensusMetrics, ConsensusError, SequenceNumber};
 use config::{AuthorityIdentifier, Committee};
 use fastcrypto::hash::Hash;
 use mysten_metrics::spawn_logged_monitored_task;
@@ -250,17 +251,6 @@ impl ConsensusState {
     }
 }
 
-/// Describe how to sequence input certificates.
-pub trait ConsensusProtocol {
-    fn process_certificate(
-        &mut self,
-        // The state of the consensus protocol.
-        state: &mut ConsensusState,
-        // The new certificate.
-        certificate: Certificate,
-    ) -> Result<(Outcome, Vec<CommittedSubDag>), ConsensusError>;
-}
-
 /// Holds information about a committed round in consensus. When a certificate gets committed then
 /// the corresponding certificate's round is considered a "committed" round. It bears both the
 /// committed round and the corresponding garbage collection round.
@@ -301,7 +291,7 @@ impl ConsensusRound {
     }
 }
 
-pub struct Consensus<ConsensusProtocol> {
+pub struct Consensus {
     /// The committee information.
     committee: Committee,
 
@@ -318,7 +308,7 @@ pub struct Consensus<ConsensusProtocol> {
     tx_sequence: metered_channel::Sender<CommittedSubDag>,
 
     /// The consensus protocol to run.
-    protocol: ConsensusProtocol,
+    protocol: Bullshark,
 
     /// Metrics handler
     metrics: Arc<ConsensusMetrics>,
@@ -327,10 +317,7 @@ pub struct Consensus<ConsensusProtocol> {
     state: ConsensusState,
 }
 
-impl<Protocol> Consensus<Protocol>
-where
-    Protocol: ConsensusProtocol + Send + 'static,
-{
+impl Consensus {
     #[must_use]
     pub fn spawn(
         committee: Committee,
@@ -342,7 +329,7 @@ where
         tx_committed_certificates: metered_channel::Sender<(Round, Vec<Certificate>)>,
         tx_consensus_round_updates: watch::Sender<ConsensusRound>,
         tx_sequence: metered_channel::Sender<CommittedSubDag>,
-        protocol: Protocol,
+        protocol: Bullshark,
         metrics: Arc<ConsensusMetrics>,
     ) -> JoinHandle<()> {
         // The consensus state (everything else is immutable).

@@ -1,7 +1,7 @@
 // Copyright(C) Facebook, Inc. and its affiliates.
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::{metrics::PrimaryMetrics, NetworkModel};
+use crate::metrics::PrimaryMetrics;
 use config::{AuthorityIdentifier, Committee, Epoch, WorkerId};
 use fastcrypto::hash::Hash as _;
 use mysten_metrics::spawn_logged_monitored_task;
@@ -59,8 +59,6 @@ pub struct Proposer {
     /// hasn't proposed anything new since then. If None is provided then the
     /// default value will be used instead.
     header_resend_timeout: Option<Duration>,
-    /// The network model in which the node operates.
-    network_model: NetworkModel,
 
     /// Receiver for shutdown.
     rx_shutdown: ConditionalBroadcastReceiver,
@@ -110,7 +108,6 @@ impl Proposer {
         max_header_delay: Duration,
         min_header_delay: Duration,
         header_resend_timeout: Option<Duration>,
-        network_model: NetworkModel,
         rx_shutdown: ConditionalBroadcastReceiver,
         rx_parents: Receiver<(Vec<Certificate>, Round, Epoch)>,
         rx_our_digests: Receiver<OurDigestMessage>,
@@ -130,7 +127,7 @@ impl Proposer {
                     max_header_delay,
                     min_header_delay,
                     header_resend_timeout,
-                    network_model,
+
                     rx_shutdown,
                     rx_parents,
                     rx_our_digests,
@@ -314,35 +311,25 @@ impl Proposer {
     }
 
     fn max_delay(&self) -> Duration {
-        match self.network_model {
-            // In partial synchrony, if this node is going to be the leader of the next
-            // round, we set a lower max timeout value to increase its chance of committing
-            // the leader.
-            NetworkModel::PartiallySynchronous
-                if self.committee.leader(self.round + 1).id() == self.authority_id =>
-            {
-                self.max_header_delay / 2
-            }
-
-            // Otherwise we keep the default timeout value.
-            _ => self.max_header_delay,
+        // If this node is going to be the leader of the next round, we set a lower max
+        // timeout value to increase its chance of being included in the dag.
+        if self.committee.leader(self.round + 1).id() == self.authority_id {
+            self.max_header_delay / 2
+        } else {
+            self.max_header_delay
         }
     }
 
     fn min_delay(&self) -> Duration {
-        match self.network_model {
-            // In partial synchrony, if this node is going to be the leader of the next
-            // round and there are more than 1 primary in the committee, we use a lower
-            // min delay value to increase the chance of committing the leader.
-            NetworkModel::PartiallySynchronous
-                if self.committee.size() > 1
-                    && self.committee.leader(self.round + 1).id() == self.authority_id =>
-            {
-                Duration::ZERO
-            }
-
-            // Otherwise we keep the default timeout value.
-            _ => self.min_header_delay,
+        // If this node is going to be the leader of the next round and there are more than
+        // 1 primary in the committee, we use a lower min delay value to increase the chance
+        // of committing the leader.
+        if self.committee.size() > 1
+            && self.committee.leader(self.round + 1).id() == self.authority_id
+        {
+            Duration::ZERO
+        } else {
+            self.min_header_delay
         }
     }
 
@@ -400,18 +387,12 @@ impl Proposer {
         enough_votes
     }
 
-    /// Whether we can advance the DAG or need to wait for the leader/more votes. This is only relevant in
-    /// partial synchrony. Note that if we timeout, we ignore this check and advance anyway.
+    /// Whether we can advance the DAG or need to wait for the leader/more votes.
+    /// Note that if we timeout, we ignore this check and advance anyway.
     fn ready(&mut self) -> bool {
-        match self.network_model {
-            // In asynchrony we advance immediately.
-            NetworkModel::Asynchronous => true,
-
-            // In partial synchrony, we need to wait for the leader or for enough votes.
-            NetworkModel::PartiallySynchronous => match self.round % 2 {
-                0 => self.update_leader(),
-                _ => self.enough_votes(),
-            },
+        match self.round % 2 {
+            0 => self.update_leader(),
+            _ => self.enough_votes(),
         }
     }
 
@@ -452,9 +433,7 @@ impl Proposer {
             if (max_delay_timed_out || ((enough_digests || min_delay_timed_out) && advance))
                 && enough_parents
             {
-                if max_delay_timed_out
-                    && matches!(self.network_model, NetworkModel::PartiallySynchronous)
-                {
+                if max_delay_timed_out {
                     // It is expected that this timer expires from time to time. If it expires too often, it
                     // either means some validators are Byzantine or that the network is experiencing periods
                     // of asynchrony. In practice, the latter scenario means we misconfigured the parameter
