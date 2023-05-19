@@ -307,8 +307,11 @@ impl SimpleFaucet {
                 // retries this transactions will attempt to try again.
                 if let Err(err) = self.wal.lock().await.set_in_flight(coin_id, false) {
                     error!(
+                        ?recipient,
                         ?coin_id,
-                        "Failed to set coin in flight status in WAL: {:?}", err
+                        ?uuid,
+                        "Failed to set coin in flight status in WAL: {:?}",
+                        err
                     );
                 }
 

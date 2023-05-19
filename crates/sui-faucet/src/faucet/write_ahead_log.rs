@@ -120,6 +120,10 @@ impl WriteAheadLog {
                 ?coin,
                 "Attempted to set inflight a coin that was not in the WAL."
             );
+
+            return Err(TypedStoreError::RocksDBError(format!(
+                "Coin object {coin:?} not found in WAL."
+            )));
         }
         Ok(())
     }
