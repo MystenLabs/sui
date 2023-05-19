@@ -12,6 +12,7 @@ module deepbook::clob_test {
     use sui::object;
     use sui::sui::SUI;
     use sui::test_scenario::{Self as test, Scenario, next_tx, ctx, end, TransactionEffects};
+    use sui::test_utils::assert_eq;
 
     use deepbook::clob::{Self, Pool, Order, USD, account_balance, get_pool_stat, order_id, list_open_orders, mint_account_cap_transfer};
     use deepbook::custodian::{Self, AccountCap};
@@ -101,6 +102,12 @@ module deepbook::clob_test {
         );
     }
 
+    #[test] fun get_best_price() {
+        let _ = get_market_price_(
+            scenario()
+        );
+    }
+
     #[test] fun get_level2_book_status_bid_side() {
         let _ = get_level2_book_status_bid_side_(
             scenario()
@@ -112,6 +119,70 @@ module deepbook::clob_test {
             scenario()
         );
     }
+
+    fun get_market_price_(test: Scenario): TransactionEffects {
+        let (alice, bob) = people();
+        let owner = @0xF;
+        // setup pool and custodian
+        next_tx(&mut test, owner);
+        {
+            clob::setup_test(5000000, 2500000, &mut test, owner);
+            mint_account_cap_transfer(alice, test::ctx(&mut test));
+            mint_account_cap_transfer(bob, test::ctx(&mut test));
+        };
+        next_tx(&mut test, alice);
+        {
+            let pool = test::take_shared<Pool<SUI, USD>>(&mut test);
+            let account_cap = test::take_from_address<AccountCap>(&test, alice);
+            let account_cap_user = object::id(&account_cap);
+            let (base_custodian, quote_custodian) = clob::borrow_mut_custodian(&mut pool);
+            let alice_deposit_WSUI: u64 = 100000;
+            let alice_deposit_USDC: u64 = 100000;
+            custodian::test_increase_user_available_balance<SUI>(base_custodian, account_cap_user, alice_deposit_WSUI);
+            custodian::test_increase_user_available_balance<USD>(quote_custodian, account_cap_user, alice_deposit_USDC);
+            clob::test_inject_limit_order(&mut pool, 5 * FLOAT_SCALING, 500, true, &account_cap, ctx(&mut test));
+            clob::test_inject_limit_order(&mut pool, 5 * FLOAT_SCALING, 500, true, &account_cap, ctx(&mut test));
+            clob::test_inject_limit_order(&mut pool, 4 * FLOAT_SCALING, 500, true, &account_cap, ctx(&mut test));
+            clob::test_inject_limit_order(&mut pool, 4 * FLOAT_SCALING, 500, true, &account_cap, ctx(&mut test));
+            clob::test_inject_limit_order(&mut pool, 3 * FLOAT_SCALING, 1000, true, &account_cap, ctx(&mut test));
+            clob::test_inject_limit_order(&mut pool, 2 * FLOAT_SCALING, 1000, true, &account_cap, ctx(&mut test));
+            clob::test_inject_limit_order(&mut pool, 2 * FLOAT_SCALING, 1000, true, &account_cap, ctx(&mut test));
+            test::return_shared(pool);
+            test::return_to_address<AccountCap>(alice, account_cap);
+        };
+
+        next_tx(&mut test, alice);
+        {
+            let pool = test::take_shared<Pool<SUI, USD>>(&mut test);
+            let account_cap = test::take_from_address<AccountCap>(&test, alice);
+            let account_cap_user = object::id(&account_cap);
+            let (base_custodian, quote_custodian) = clob::borrow_mut_custodian(&mut pool);
+            let alice_deposit_WSUI: u64 = 100000;
+            let alice_deposit_USDC: u64 = 100000;
+            custodian::test_increase_user_available_balance<SUI>(base_custodian, account_cap_user, alice_deposit_WSUI);
+            custodian::test_increase_user_available_balance<USD>(quote_custodian, account_cap_user, alice_deposit_USDC);
+            clob::test_inject_limit_order(&mut pool, 15 * FLOAT_SCALING, 500, false, &account_cap, ctx(&mut test));
+            clob::test_inject_limit_order(&mut pool, 15 * FLOAT_SCALING, 500, false, &account_cap, ctx(&mut test));
+            clob::test_inject_limit_order(&mut pool, 14 * FLOAT_SCALING, 500, false, &account_cap, ctx(&mut test));
+            clob::test_inject_limit_order(&mut pool, 14 * FLOAT_SCALING, 500, false, &account_cap, ctx(&mut test));
+            clob::test_inject_limit_order(&mut pool, 13 * FLOAT_SCALING, 1000, false, &account_cap, ctx(&mut test));
+            clob::test_inject_limit_order(&mut pool, 12 * FLOAT_SCALING, 1000, false, &account_cap, ctx(&mut test));
+            clob::test_inject_limit_order(&mut pool, 12 * FLOAT_SCALING, 1000, false, &account_cap, ctx(&mut test));
+            test::return_shared(pool);
+            test::return_to_address<AccountCap>(alice, account_cap);
+        };
+
+        next_tx(&mut test, alice);{
+            let pool = test::take_shared<Pool<SUI, USD>>(&mut test);
+            let (bid_price, ask_price) = clob::get_market_price<SUI, USD>(&pool);
+            assert_eq(bid_price, 5 * FLOAT_SCALING);
+            assert_eq(ask_price, 12 * FLOAT_SCALING);
+            test::return_shared(pool);
+        };
+
+        end(test)
+    }
+
 
     fun get_level2_book_status_bid_side_(test: Scenario): TransactionEffects {
         let (alice, bob) = people();
