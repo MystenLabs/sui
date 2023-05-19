@@ -10,7 +10,7 @@ use fastcrypto::hash::Hash as _;
 use futures::{stream::FuturesOrdered, StreamExt};
 use mysten_common::sync::notify_once::NotifyOnce;
 use mysten_metrics::metered_channel::Sender;
-use mysten_metrics::{monitored_scope, spawn_monitored_task};
+use mysten_metrics::{monitored_scope, spawn_logged_monitored_task};
 use network::{
     anemo_ext::{NetworkExt, WaitingPeer},
     client::NetworkClient,
@@ -365,30 +365,36 @@ impl Synchronizer {
 
         // Start a task to recover parent certificates for proposer.
         let inner_proposer = inner.clone();
-        spawn_monitored_task!(async move {
-            let last_round_certificates = inner_proposer
-                .certificate_store
-                .last_two_rounds_certs()
-                .expect("Failed recovering certificates in primary core");
-            for certificate in last_round_certificates {
-                if let Err(e) = inner_proposer
-                    .append_certificate_in_aggregator(certificate)
-                    .await
-                {
-                    debug!("Failed to recover certificate, assuming Narwhal is shutting down. {e}");
-                    return;
+        spawn_logged_monitored_task!(
+            async move {
+                let last_round_certificates = inner_proposer
+                    .certificate_store
+                    .last_two_rounds_certs()
+                    .expect("Failed recovering certificates in primary core");
+                for certificate in last_round_certificates {
+                    if let Err(e) = inner_proposer
+                        .append_certificate_in_aggregator(certificate)
+                        .await
+                    {
+                        debug!(
+                            "Failed to recover certificate, assuming Narwhal is shutting down. {e}"
+                        );
+                        return;
+                    }
                 }
-            }
-        });
+            },
+            "SynchronizerCertificateRecovery"
+        );
 
         // Start a task to update gc_round, gc in-memory data, and trigger certificate catchup
         // if no gc / consensus commit happened for 30s.
         let weak_inner = Arc::downgrade(&inner);
-        spawn_monitored_task!(async move {
-            const FETCH_TRIGGER_TIMEOUT: Duration = Duration::from_secs(30);
-            let mut rx_consensus_round_updates = rx_consensus_round_updates.clone();
-            loop {
-                let Ok(result) = timeout(FETCH_TRIGGER_TIMEOUT, rx_consensus_round_updates.changed()).await else {
+        spawn_logged_monitored_task!(
+            async move {
+                const FETCH_TRIGGER_TIMEOUT: Duration = Duration::from_secs(30);
+                let mut rx_consensus_round_updates = rx_consensus_round_updates.clone();
+                loop {
+                    let Ok(result) = timeout(FETCH_TRIGGER_TIMEOUT, rx_consensus_round_updates.changed()).await else {
                     // When consensus commit has not happened for 30s, it is possible that no new
                     // certificate is received by this primary or created in the network, so
                     // fetching should definitely be started.
@@ -405,116 +411,130 @@ impl Synchronizer {
                     warn!("No consensus commit happened for {:?}, triggering certificate fetching.", FETCH_TRIGGER_TIMEOUT);
                     continue;
                 };
-                if result.is_err() {
-                    debug!("Synchronizer is shutting down.");
-                    return;
-                }
-                let _scope = monitored_scope("Synchronizer::gc_iteration");
-                let gc_round = rx_consensus_round_updates.borrow().gc_round;
-                let Some(inner) = weak_inner.upgrade() else {
+                    if result.is_err() {
+                        debug!("Synchronizer is shutting down.");
+                        return;
+                    }
+                    let _scope = monitored_scope("Synchronizer::gc_iteration");
+                    let gc_round = rx_consensus_round_updates.borrow().gc_round;
+                    let Some(inner) = weak_inner.upgrade() else {
                     debug!("Synchronizer is shutting down.");
                     return;
                 };
-                // this is the only task updating gc_round
-                inner.gc_round.store(gc_round, Ordering::Release);
-                inner
-                    .certificates_aggregators
-                    .lock()
-                    .retain(|k, _| k > &gc_round);
-                // Accept certificates at gc round + 1, if there is any.
-                let mut state = inner.state.lock().await;
-                for suspended_cert in state.run_gc(gc_round) {
-                    let suspended_certs = state.accept_children(
-                        suspended_cert.certificate.round(),
-                        suspended_cert.certificate.digest(),
-                    );
-                    // Iteration must be in causal order.
-                    for suspended in iter::once(suspended_cert).chain(suspended_certs.into_iter()) {
-                        match inner.accept_suspended_certificate(&state, suspended).await {
-                            Ok(()) => {}
-                            Err(DagError::ShuttingDown) => return,
-                            Err(e) => {
-                                panic!("Unexpected error accepting certificate during GC! {e}")
+                    // this is the only task updating gc_round
+                    inner.gc_round.store(gc_round, Ordering::Release);
+                    inner
+                        .certificates_aggregators
+                        .lock()
+                        .retain(|k, _| k > &gc_round);
+                    // Accept certificates at gc round + 1, if there is any.
+                    let mut state = inner.state.lock().await;
+                    for suspended_cert in state.run_gc(gc_round) {
+                        let suspended_certs = state.accept_children(
+                            suspended_cert.certificate.round(),
+                            suspended_cert.certificate.digest(),
+                        );
+                        // Iteration must be in causal order.
+                        for suspended in
+                            iter::once(suspended_cert).chain(suspended_certs.into_iter())
+                        {
+                            match inner.accept_suspended_certificate(&state, suspended).await {
+                                Ok(()) => {}
+                                Err(DagError::ShuttingDown) => return,
+                                Err(e) => {
+                                    panic!("Unexpected error accepting certificate during GC! {e}")
+                                }
                             }
                         }
                     }
                 }
-            }
-        });
+            },
+            "SynchronizerGarbageCollection"
+        );
 
         // Start a task to accept certificates. See comment above `process_certificate_with_lock()`
         // for why this task is needed.
         let weak_inner = Arc::downgrade(&inner);
-        spawn_monitored_task!(async move {
-            loop {
-                let Some((certificate, result_sender, early_suspend)) = rx_certificate_acceptor.recv().await else {
+        spawn_logged_monitored_task!(
+            async move {
+                loop {
+                    let Some((certificate, result_sender, early_suspend)) = rx_certificate_acceptor.recv().await else {
                     debug!("Synchronizer is shutting down.");
                     return;
                 };
-                let Some(inner) = weak_inner.upgrade() else {
+                    let Some(inner) = weak_inner.upgrade() else {
                     debug!("Synchronizer is shutting down.");
                     return;
                 };
-                // Ignore error if receiver has been dropped.
-                let _ = result_sender.send(
-                    Self::process_certificate_with_lock(&inner, certificate, early_suspend).await,
-                );
-            }
-        });
+                    // Ignore error if receiver has been dropped.
+                    let _ = result_sender.send(
+                        Self::process_certificate_with_lock(&inner, certificate, early_suspend)
+                            .await,
+                    );
+                }
+            },
+            "SynchronizerCertificateAcceptor"
+        );
 
         // Start tasks to broadcast created certificates.
         let inner_senders = inner.clone();
-        spawn_monitored_task!(async move {
-            let Ok(network) = rx_synchronizer_network.await else {
+        spawn_logged_monitored_task!(
+            async move {
+                let Ok(network) = rx_synchronizer_network.await else {
                 error!("Failed to receive Network!");
                 return;
             };
-            let mut senders = inner_senders.certificate_senders.lock();
-            for (name, _, network_key) in inner_senders
-                .committee
-                .others_primaries_by_id(inner_senders.authority_id)
-                .into_iter()
-            {
-                senders.spawn(Self::push_certificates(
-                    network.clone(),
-                    name,
-                    network_key,
-                    tx_own_certificate_broadcast.subscribe(),
-                ));
-            }
-            if let Some(cert) = highest_created_certificate {
-                // Error can be ignored.
-                if tx_own_certificate_broadcast.send(cert).is_err() {
-                    error!("Failed to populate initial certificate to send to peers!");
+                let mut senders = inner_senders.certificate_senders.lock();
+                for (name, _, network_key) in inner_senders
+                    .committee
+                    .others_primaries_by_id(inner_senders.authority_id)
+                    .into_iter()
+                {
+                    senders.spawn(Self::push_certificates(
+                        network.clone(),
+                        name,
+                        network_key,
+                        tx_own_certificate_broadcast.subscribe(),
+                    ));
                 }
-            }
-        });
+                if let Some(cert) = highest_created_certificate {
+                    // Error can be ignored.
+                    if tx_own_certificate_broadcast.send(cert).is_err() {
+                        error!("Failed to populate initial certificate to send to peers!");
+                    }
+                }
+            },
+            "SynchronizerCertificateBroadcasters"
+        );
 
         // Start a task to async download batches if needed
         let weak_inner = Arc::downgrade(&inner);
-        spawn_monitored_task!(async move {
-            let mut batch_tasks: JoinSet<DagResult<()>> = JoinSet::new();
+        spawn_logged_monitored_task!(
+            async move {
+                let mut batch_tasks: JoinSet<DagResult<()>> = JoinSet::new();
 
-            loop {
-                tokio::select! {
-                    Some((header, max_age, certified)) = rx_batch_tasks.recv() => {
-                        let Some(inner) = weak_inner.upgrade() else {
-                            debug!("Synchronizer is shutting down.");
-                            return;
-                        };
+                loop {
+                    tokio::select! {
+                        Some((header, max_age, certified)) = rx_batch_tasks.recv() => {
+                            let Some(inner) = weak_inner.upgrade() else {
+                                debug!("Synchronizer is shutting down.");
+                                return;
+                            };
 
-                        batch_tasks.spawn(async move {
-                            Synchronizer::sync_batches_internal(inner.clone(), &header, max_age, certified).await
-                        });
-                    },
-                    Some(result) = batch_tasks.join_next() => {
-                        if let Err(err) = result  {
-                            error!("Error when synchronizing batches: {err:?}")
+                            batch_tasks.spawn(async move {
+                                Synchronizer::sync_batches_internal(inner.clone(), &header, max_age, certified).await
+                            });
+                        },
+                        Some(result) = batch_tasks.join_next() => {
+                            if let Err(err) = result  {
+                                error!("Error when synchronizing batches: {err:?}")
+                            }
                         }
                     }
                 }
-            }
-        });
+            },
+            "SynchronizerBatchSynchronizer"
+        );
 
         Self { inner }
     }
