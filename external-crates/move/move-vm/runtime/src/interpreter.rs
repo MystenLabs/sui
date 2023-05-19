@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    config::VMRuntimeLimitsConfig,
     loader::{Function, Loader, Resolver},
     native_functions::NativeContext,
     trace,
@@ -19,6 +18,7 @@ use move_core_types::{
     language_storage::TypeTag,
     vm_status::{StatusCode, StatusType},
 };
+use move_vm_config::runtime::VMRuntimeLimitsConfig;
 use move_vm_types::{
     data_store::DataStore,
     gas::{GasMeter, SimpleInstruction},

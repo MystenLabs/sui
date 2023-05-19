@@ -1,9 +1,9 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::VerifierConfig;
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_core_types::vm_status::StatusCode;
+use move_vm_config::verifier::VerifierConfig;
 use std::ops::Mul;
 
 /// Scope of meterinng

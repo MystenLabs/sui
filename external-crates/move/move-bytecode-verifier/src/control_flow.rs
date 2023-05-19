@@ -16,7 +16,6 @@ use crate::{
     control_flow_v5,
     loop_summary::{LoopPartition, LoopSummary},
     meter::Meter,
-    verifier::VerifierConfig,
 };
 use move_binary_format::{
     access::{ModuleAccess, ScriptAccess},
@@ -28,6 +27,7 @@ use move_binary_format::{
     CompiledModule,
 };
 use move_core_types::vm_status::StatusCode;
+use move_vm_config::verifier::VerifierConfig;
 use std::collections::BTreeSet;
 
 /// Perform control flow verification on the compiled function, returning its `FunctionView` if

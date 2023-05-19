@@ -12,7 +12,6 @@ use move_binary_format::{
     },
     CompiledModule,
 };
-use move_bytecode_verifier::VerifierConfig;
 use move_compiler::Compiler;
 use move_core_types::{
     account_address::AccountAddress,
@@ -23,7 +22,8 @@ use move_core_types::{
     resolver::{LinkageResolver, ModuleResolver, ResourceResolver},
     value::MoveValue,
 };
-use move_vm_runtime::{config::VMConfig, move_vm::MoveVM, session::SerializedReturnValues};
+use move_vm_config::{runtime::VMConfig, verifier::VerifierConfig};
+use move_vm_runtime::{move_vm::MoveVM, session::SerializedReturnValues};
 use move_vm_test_utils::InMemoryStorage;
 use move_vm_types::{gas::UnmeteredGasMeter, loaded_data::runtime_types::Type};
 

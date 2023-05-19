@@ -4,8 +4,8 @@
 
 use move_bytecode_verifier::{
     verifier::DEFAULT_MAX_CONSTANT_VECTOR_LEN, verifier::DEFAULT_MAX_IDENTIFIER_LENGTH,
-    VerifierConfig,
 };
+use move_vm_config::verifier::VerifierConfig;
 
 pub mod ability_field_requirements_tests;
 pub mod binary_samples;

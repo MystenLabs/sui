@@ -34,6 +34,7 @@ exclude = [
     "external-crates/move/move-prover/test-utils",
     "external-crates/move/move-stdlib",
     "external-crates/move/move-symbol-pool",
+    "external-crates/move/move-vm/config",
     "external-crates/move/move-vm/integration-tests",
     "external-crates/move/move-vm/paranoid-tests",
     "external-crates/move/move-vm/runtime",
@@ -197,6 +198,7 @@ move-package = { path = "external-crates/move/tools/move-package" }
 move-stdlib = { path = "external-crates/move/move-stdlib" }
 move-vm-runtime =  { path = "external-crates/move/move-vm/runtime" }
 move-unit-test = { path = "external-crates/move/tools/move-unit-test" }
+move-vm-config = { path = "external-crates/move/move-vm/config" }
 move-vm-test-utils = { path = "external-crates/move/move-vm/test-utils" }
 move-vm-types = { path = "external-crates/move/move-vm/types" }
 move-command-line-common = { path = "external-crates/move/move-command-line-common" }
