@@ -305,9 +305,12 @@ impl SimpleFaucet {
 
                 // We set the inflight status to false so that the async thread that
                 // retries this transactions will attempt to try again.
-                if self.wal.lock().await.set_in_flight(coin_id, false).is_err() {
-                    error!(?coin_id, "Failed to set coin in flight status in WAL");
-                };
+                if let Err(err) = self.wal.lock().await.set_in_flight(coin_id, false) {
+                    error!(
+                        ?coin_id,
+                        "Failed to set coin in flight status in WAL: {:?}", err
+                    );
+                }
 
                 Err(FaucetError::Transfer(
                     "could not complete transfer within timeout".into(),
@@ -618,8 +621,6 @@ mod tests {
     use sui_json_rpc_types::SuiExecutionStatus;
     use sui_sdk::wallet_context::WalletContext;
     use test_utils::network::TestClusterBuilder;
-
-    use crate::faucet;
 
     use super::*;
 
