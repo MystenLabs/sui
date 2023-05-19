@@ -847,10 +847,16 @@ impl CheckpointBuilder {
                 self.metrics.highest_accumulated_epoch.set(epoch as i64);
                 info!("Epoch {epoch} root state hash digest: {root_state_digest:?}");
 
+                let chain = self
+                    .state
+                    .get_chain()
+                    .expect("Genesis checkpoint should exist if creating last checkpoint of epoch");
+
                 let epoch_commitments = if self
                     .epoch_store
                     .protocol_config()
-                    .check_commit_root_state_digest_supported()
+                    .get_commit_root_state_digest_supported_chains()
+                    .contains(chain)
                 {
                     vec![root_state_digest.into()]
                 } else {

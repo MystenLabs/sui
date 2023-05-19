@@ -12,6 +12,21 @@ use tracing::{info, warn};
 const MIN_PROTOCOL_VERSION: u64 = 1;
 const MAX_PROTOCOL_VERSION: u64 = 11;
 
+#[derive(Clone, Serialize, Debug)]
+pub enum Chain {
+    Mainnet,
+    Testnet,
+    Unknown,
+}
+
+impl Default for Chain {
+    fn default() -> Self {
+        Self::Unknown
+    }
+}
+
+type ChainAllowlist = Vec<Chain>;
+
 // Record history of protocol version allocations here:
 //
 // Version 1: Original version.
@@ -135,10 +150,6 @@ struct FeatureFlags {
     // new_protocol_feature: bool,
     #[serde(skip_serializing_if = "is_false")]
     package_upgrades: bool,
-    // If true, validators will commit to the root state digest
-    // in end of epoch checkpoint proposals
-    #[serde(skip_serializing_if = "is_false")]
-    commit_root_state_digest: bool,
     // Pass epoch start time to advance_epoch safe mode function.
     #[serde(skip_serializing_if = "is_false")]
     advance_epoch_start_time_in_safe_mode: bool,
@@ -181,6 +192,14 @@ struct FeatureFlags {
     no_extraneous_module_bytes: bool,
 }
 
+#[derive(Default, Clone, Serialize, Debug)]
+struct FeaturePerChainConfigs {
+    // On which chains validators will commit to the root
+    // state digest in end of epoch checkpoint proposals
+    #[serde(skip_serializing_if = "Vec::is_empty", default)]
+    commit_root_state_digest: ChainAllowlist,
+}
+
 fn is_false(b: &bool) -> bool {
     !b
 }
@@ -217,6 +236,8 @@ pub struct ProtocolConfig {
     pub version: ProtocolVersion,
 
     feature_flags: FeatureFlags,
+
+    feature_per_chain_configs: FeaturePerChainConfigs,
 
     // ==== Transaction input limits ====
     /// Maximum serialized size of a transaction (in bytes).
@@ -648,10 +669,6 @@ impl ProtocolConfig {
         self.feature_flags.package_upgrades
     }
 
-    pub fn check_commit_root_state_digest_supported(&self) -> bool {
-        self.feature_flags.commit_root_state_digest
-    }
-
     pub fn get_advance_epoch_start_time_in_safe_mode(&self) -> bool {
         self.feature_flags.advance_epoch_start_time_in_safe_mode
     }
@@ -701,6 +718,12 @@ impl ProtocolConfig {
 
     pub fn no_extraneous_module_bytes(&self) -> bool {
         self.feature_flags.no_extraneous_module_bytes
+    }
+
+    pub fn get_commit_root_state_digest_supported_chains(&self) -> ChainAllowlist {
+        self.feature_per_chain_configs
+            .commit_root_state_digest
+            .clone()
     }
 }
 
@@ -827,6 +850,8 @@ impl ProtocolConfig {
 
                 // All flags are disabled in V1
                 feature_flags: Default::default(),
+
+                feature_per_chain_configs: Default::default(),
 
                 max_tx_size_bytes: Some(128 * 1024),
                 // We need this number to be at least 100x less than `max_serialized_tx_effects_size_bytes`otherwise effects can be huge
@@ -1151,7 +1176,12 @@ impl ProtocolConfig {
                 cfg.max_meter_ticks_per_module = Some(16_000_000);
                 cfg
             }
-            11 => Self::get_for_version_impl(version - 1),
+            11 => {
+                let mut cfg = Self::get_for_version_impl(version - 1);
+                cfg.feature_per_chain_configs.commit_root_state_digest =
+                    vec![Chain::Testnet, Chain::Unknown];
+                cfg
+            }
             // Use this template when making changes:
             //
             //     // modify an existing constant.
