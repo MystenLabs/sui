@@ -32,16 +32,7 @@ const GIT_REVISION: &str = {
 const VERSION: &str = const_str::concat!(env!("CARGO_PKG_VERSION"), "-", GIT_REVISION);
 
 pub fn read_log_file_flag_env() -> Option<u8> {
-    env::var(SUI_CLI_LOG_FILE_ENABLE)
-        .ok()?
-        .parse::<u8>()
-        .map_err(|e| {
-            println!(
-                "Env var {} does not contain valid u8 integer: {}",
-                SUI_CLI_LOG_FILE_ENABLE, e
-            )
-        })
-        .ok()
+    env::var(SUI_CLI_LOG_FILE_ENABLE).ok()?.parse::<u8>().ok()
 }
 
 #[derive(Parser)]
