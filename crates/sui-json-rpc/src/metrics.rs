@@ -224,9 +224,9 @@ impl Logger for MetricsLogger {
                     .inc();
             } else {
                 self.metrics
-                .client_errors_by_route
-                .with_label_values(&[method_name])
-                .inc();
+                    .client_errors_by_route
+                    .with_label_values(&[method_name])
+                    .inc();
             }
         }
     }
