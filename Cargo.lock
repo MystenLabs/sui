@@ -123,7 +123,7 @@ dependencies = [
 [[package]]
 name = "anemo"
 version = "0.0.0"
-source = "git+https://github.com/mystenlabs/anemo.git?rev=77f225832e361d068318073a6e06ec0310a16891#77f225832e361d068318073a6e06ec0310a16891"
+source = "git+https://github.com/mystenlabs/anemo.git?rev=baa7cfc3ae841f88c2ff773396c5a803c377d054#baa7cfc3ae841f88c2ff773396c5a803c377d054"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -141,10 +141,11 @@ dependencies = [
  "rand 0.8.5",
  "rcgen",
  "ring",
- "rustls",
+ "rustls 0.21.1",
  "serde 1.0.152",
  "serde_json",
  "tap",
+ "thiserror",
  "tokio",
  "tokio-util 0.7.4",
  "tower",
@@ -156,7 +157,7 @@ dependencies = [
 [[package]]
 name = "anemo-build"
 version = "0.0.0"
-source = "git+https://github.com/mystenlabs/anemo.git?rev=77f225832e361d068318073a6e06ec0310a16891#77f225832e361d068318073a6e06ec0310a16891"
+source = "git+https://github.com/mystenlabs/anemo.git?rev=baa7cfc3ae841f88c2ff773396c5a803c377d054#baa7cfc3ae841f88c2ff773396c5a803c377d054"
 dependencies = [
  "prettyplease",
  "proc-macro2 1.0.54",
@@ -167,7 +168,7 @@ dependencies = [
 [[package]]
 name = "anemo-cli"
 version = "0.0.0"
-source = "git+https://github.com/mystenlabs/anemo.git?rev=77f225832e361d068318073a6e06ec0310a16891#77f225832e361d068318073a6e06ec0310a16891"
+source = "git+https://github.com/mystenlabs/anemo.git?rev=baa7cfc3ae841f88c2ff773396c5a803c377d054#baa7cfc3ae841f88c2ff773396c5a803c377d054"
 dependencies = [
  "anemo",
  "anemo-tower",
@@ -183,7 +184,7 @@ dependencies = [
 [[package]]
 name = "anemo-tower"
 version = "0.0.0"
-source = "git+https://github.com/mystenlabs/anemo.git?rev=77f225832e361d068318073a6e06ec0310a16891#77f225832e361d068318073a6e06ec0310a16891"
+source = "git+https://github.com/mystenlabs/anemo.git?rev=baa7cfc3ae841f88c2ff773396c5a803c377d054#baa7cfc3ae841f88c2ff773396c5a803c377d054"
 dependencies = [
  "anemo",
  "bytes",
@@ -1037,7 +1038,7 @@ dependencies = [
  "hyper-rustls",
  "lazy_static 1.4.0",
  "pin-project-lite",
- "rustls",
+ "rustls 0.20.7",
  "tokio",
  "tower",
  "tracing",
@@ -1312,7 +1313,7 @@ dependencies = [
  "http-body",
  "hyper",
  "pin-project-lite",
- "rustls",
+ "rustls 0.20.7",
  "rustls-pemfile",
  "tokio",
  "tokio-rustls",
@@ -4192,7 +4193,7 @@ dependencies = [
  "httpdate",
  "itoa",
  "pin-project-lite",
- "socket2",
+ "socket2 0.4.9",
  "tokio",
  "tower-service",
  "tracing",
@@ -4208,7 +4209,7 @@ dependencies = [
  "http",
  "hyper",
  "log",
- "rustls",
+ "rustls 0.20.7",
  "rustls-native-certs",
  "tokio",
  "tokio-rustls",
@@ -5794,7 +5795,7 @@ dependencies = [
 [[package]]
 name = "msim"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/mysten-sim.git?rev=48ed7409b8b8cc413fae4d9d9638a849282f81c7#48ed7409b8b8cc413fae4d9d9638a849282f81c7"
+source = "git+https://github.com/MystenLabs/mysten-sim.git?rev=5fdd0c5547fa656143eab43fa570893b88d3620f#5fdd0c5547fa656143eab43fa570893b88d3620f"
 dependencies = [
  "ahash 0.7.6",
  "async-task",
@@ -5813,7 +5814,7 @@ dependencies = [
  "rand 0.8.5",
  "real_tokio",
  "serde 1.0.152",
- "socket2",
+ "socket2 0.4.9",
  "tap",
  "tokio-util 0.7.7",
  "toml",
@@ -5824,7 +5825,7 @@ dependencies = [
 [[package]]
 name = "msim-macros"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/mysten-sim.git?rev=48ed7409b8b8cc413fae4d9d9638a849282f81c7#48ed7409b8b8cc413fae4d9d9638a849282f81c7"
+source = "git+https://github.com/MystenLabs/mysten-sim.git?rev=5fdd0c5547fa656143eab43fa570893b88d3620f#5fdd0c5547fa656143eab43fa570893b88d3620f"
 dependencies = [
  "darling",
  "proc-macro2 1.0.54",
@@ -7692,9 +7693,9 @@ dependencies = [
 
 [[package]]
 name = "quinn"
-version = "0.9.3"
+version = "0.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "445cbfe2382fa023c4f2f3c7e1c95c03dcc1df2bf23cebcb2b13e1402c4394d1"
+checksum = "21252f1c0fc131f1b69182db8f34837e8a69737b8251dff75636a9be0518c324"
 dependencies = [
  "bytes",
  "futures-io",
@@ -7702,42 +7703,40 @@ dependencies = [
  "quinn-proto",
  "quinn-udp",
  "rustc-hash",
- "rustls",
+ "rustls 0.21.1",
  "thiserror",
  "tokio",
  "tracing",
- "webpki",
 ]
 
 [[package]]
 name = "quinn-proto"
-version = "0.9.2"
+version = "0.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "72ef4ced82a24bb281af338b9e8f94429b6eca01b4e66d899f40031f074e74c9"
+checksum = "85af4ed6ee5a89f26a26086e9089a6643650544c025158449a3626ebf72884b3"
 dependencies = [
  "bytes",
  "rand 0.8.5",
  "ring",
  "rustc-hash",
- "rustls",
+ "rustls 0.21.1",
  "slab",
  "thiserror",
  "tinyvec",
  "tracing",
- "webpki",
 ]
 
 [[package]]
 name = "quinn-udp"
-version = "0.3.2"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "641538578b21f5e5c8ea733b736895576d0fe329bb883b937db6f4d163dbaaf4"
+checksum = "6df19e284d93757a9fb91d63672f7741b129246a669db09d1c0063071debc0c0"
 dependencies = [
+ "bytes",
  "libc",
- "quinn-proto",
- "socket2",
+ "socket2 0.5.2",
  "tracing",
- "windows-sys 0.42.0",
+ "windows-sys 0.48.0",
 ]
 
 [[package]]
@@ -7966,7 +7965,7 @@ dependencies = [
  "parking_lot 0.12.1",
  "pin-project-lite",
  "signal-hook-registry",
- "socket2",
+ "socket2 0.4.9",
  "tokio-macros 2.1.0 (git+https://github.com/mystenmark/tokio-madsim-fork.git?rev=e4693500118d5e79ce098ee6dfc2c48f3ef19e45)",
  "windows-sys 0.48.0",
 ]
@@ -8060,7 +8059,7 @@ dependencies = [
  "once_cell",
  "percent-encoding",
  "pin-project-lite",
- "rustls",
+ "rustls 0.20.7",
  "rustls-pemfile",
  "serde 1.0.152",
  "serde_json",
@@ -8392,6 +8391,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "rustls"
+version = "0.21.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c911ba11bc8433e811ce56fde130ccf32f5127cab0e0194e9c68c5a5b671791e"
+dependencies = [
+ "log",
+ "ring",
+ "rustls-webpki",
+ "sct",
+]
+
+[[package]]
 name = "rustls-native-certs"
 version = "0.6.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8410,6 +8421,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d194b56d58803a43635bdc398cd17e383d6f71f9182b9a192c127ca42494a59b"
 dependencies = [
  "base64 0.21.0",
+]
+
+[[package]]
+name = "rustls-webpki"
+version = "0.100.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d6207cd5ed3d8dca7816f8f3725513a34609c0c765bf652b8c3cb4cfd87db46b"
+dependencies = [
+ "ring",
+ "untrusted",
 ]
 
 [[package]]
@@ -9119,6 +9140,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "socket2"
+version = "0.5.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6d283f86695ae989d1e18440a943880967156325ba025f05049946bff47bcc2b"
+dependencies = [
+ "libc",
+ "windows-sys 0.48.0",
+]
+
+[[package]]
 name = "soketto"
 version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -9804,7 +9835,7 @@ dependencies = [
  "ntest",
  "prometheus",
  "regex",
- "rustls",
+ "rustls 0.20.7",
  "serde 1.0.152",
  "serde_json",
  "sui-config",
@@ -10226,7 +10257,7 @@ dependencies = [
  "protobuf",
  "rand 0.8.5",
  "reqwest",
- "rustls",
+ "rustls 0.20.7",
  "rustls-pemfile",
  "serde 1.0.152",
  "serde_json",
@@ -10694,7 +10725,7 @@ dependencies = [
  "rand 0.8.5",
  "rcgen",
  "reqwest",
- "rustls",
+ "rustls 0.20.7",
  "tokio",
  "tokio-rustls",
  "tower-layer",
@@ -11348,7 +11379,7 @@ dependencies = [
  "parking_lot 0.12.1",
  "pin-project-lite",
  "signal-hook-registry",
- "socket2",
+ "socket2 0.4.9",
  "tokio-macros 2.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "tracing",
  "windows-sys 0.48.0",
@@ -11404,7 +11435,7 @@ dependencies = [
  "pin-project-lite",
  "postgres-protocol",
  "postgres-types",
- "socket2",
+ "socket2 0.4.9",
  "tokio",
  "tokio-util 0.7.4",
 ]
@@ -11417,7 +11448,7 @@ checksum = "606f2b73660439474394432239c82249c0d45eb5f23d91f401be1e33590444a7"
 dependencies = [
  "futures",
  "ring",
- "rustls",
+ "rustls 0.20.7",
  "tokio",
  "tokio-postgres",
  "tokio-rustls",
@@ -11440,7 +11471,7 @@ version = "0.23.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c43ee83903113e03984cb9e5cebe6c04a5116269e900e3ddba8f068a62adda59"
 dependencies = [
- "rustls",
+ "rustls 0.20.7",
  "tokio",
  "webpki",
 ]
@@ -13191,9 +13222,11 @@ dependencies = [
  "rusticata-macros",
  "rustix 0.36.6",
  "rustix 0.37.7",
- "rustls",
+ "rustls 0.20.7",
+ "rustls 0.21.1",
  "rustls-native-certs",
  "rustls-pemfile",
+ "rustls-webpki",
  "rustversion",
  "rusty-fork",
  "rustyline",
@@ -13259,7 +13292,8 @@ dependencies = [
  "slug",
  "smallvec",
  "snap",
- "socket2",
+ "socket2 0.4.9",
+ "socket2 0.5.2",
  "soketto",
  "spin",
  "spki 0.6.0",
