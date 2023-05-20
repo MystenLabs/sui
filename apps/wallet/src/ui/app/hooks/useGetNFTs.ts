@@ -51,11 +51,6 @@ export function useGetNFTs(address?: SuiAddress | null) {
             .filter(hasDisplayData)
             .map(({ data }) => data as SuiObjectData) || []),
     ];
-    console.log({
-        isLoading,
-        shouldFetchKioskContents,
-        areKioskContentsLoading,
-    });
     return {
         data: nfts,
         isInitialLoading,

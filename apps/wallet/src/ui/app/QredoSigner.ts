@@ -20,6 +20,8 @@ import {
     type QredoAPI,
 } from '_src/shared/qredo-api';
 
+export class QredoActionIgnoredByUser extends Error {}
+
 const POLLING_INTERVAL = 4000;
 const MAX_POLLING_TIMES = Math.ceil((60 * 1000 * 10) / POLLING_INTERVAL);
 
@@ -63,19 +65,28 @@ export class QredoSigner extends WalletSigner {
             false,
             clientIdentifier
         );
-        txInfo = await this.#pollForQredoTransaction(
-            txInfo,
-            (currentTxInfo) =>
-                !currentTxInfo.sig &&
-                [
-                    'pending',
-                    'created',
-                    'authorized',
-                    'approved',
-                    'signed',
-                ].includes(currentTxInfo.status),
-            clientIdentifier
-        );
+        try {
+            txInfo = await this.#pollForQredoTransaction(
+                txInfo,
+                (currentTxInfo) =>
+                    !currentTxInfo.sig &&
+                    [
+                        'pending',
+                        'created',
+                        'authorized',
+                        'approved',
+                        'signed',
+                    ].includes(currentTxInfo.status),
+                clientIdentifier
+            );
+        } finally {
+            if (clientIdentifier) {
+                QredoEvents.emit('qredoActionDone', {
+                    clientIdentifier,
+                    qredoTransactionID: txInfo.txID,
+                });
+            }
+        }
         if (
             ['cancelled', 'expired', 'failed', 'rejected'].includes(
                 txInfo.status
@@ -133,21 +144,30 @@ export class QredoSigner extends WalletSigner {
                 true,
                 clientIdentifier
             );
-            txInfo = await this.#pollForQredoTransaction(
-                txInfo,
-                (tx) =>
-                    [
-                        'pending',
-                        'created',
-                        'authorized',
-                        'approved',
-                        'signed',
-                        'scheduled',
-                        'queued',
-                        'pushed',
-                    ].includes(tx.status),
-                clientIdentifier
-            );
+            try {
+                txInfo = await this.#pollForQredoTransaction(
+                    txInfo,
+                    (tx) =>
+                        [
+                            'pending',
+                            'created',
+                            'authorized',
+                            'approved',
+                            'signed',
+                            'scheduled',
+                            'queued',
+                            'pushed',
+                        ].includes(tx.status),
+                    clientIdentifier
+                );
+            } finally {
+                if (clientIdentifier) {
+                    QredoEvents.emit('qredoActionDone', {
+                        clientIdentifier,
+                        qredoTransactionID: txInfo.txID,
+                    });
+                }
+            }
             if (txInfo.status !== 'confirmed') {
                 throw new Error(`Qredo transaction was ${txInfo.status}`);
             }
@@ -200,12 +220,19 @@ export class QredoSigner extends WalletSigner {
     ) {
         let unsubscribeCallback;
         let userIgnoredUpdates = false;
+        let promiseReject: () => void;
+        const userIgnoredPromise = new Promise((_, reject) => {
+            promiseReject = reject;
+        });
         if (clientIdentifier) {
             unsubscribeCallback = (
                 event: QredoEventsType['clientIgnoredUpdates']
             ) => {
                 if (clientIdentifier === event.clientIdentifier) {
                     userIgnoredUpdates = true;
+                    if (promiseReject) {
+                        promiseReject();
+                    }
                 }
             };
             QredoEvents.on('clientIgnoredUpdates', unsubscribeCallback);
@@ -217,8 +244,8 @@ export class QredoSigner extends WalletSigner {
             keepPolling(currentQredoTransaction) &&
             requestCounter++ < MAX_POLLING_TIMES
         ) {
-            await sleep();
             try {
+                await Promise.race([sleep(), userIgnoredPromise]);
                 currentQredoTransaction = await this.#qredoAPI.getTransaction(
                     currentQredoTransaction.txID
                 );
@@ -231,20 +258,25 @@ export class QredoSigner extends WalletSigner {
             QredoEvents.off('clientIgnoredUpdates', unsubscribeCallback);
         }
         if (userIgnoredUpdates) {
-            throw new Error('User ignored transaction updates');
+            throw new QredoActionIgnoredByUser(
+                'User ignored transaction updates'
+            );
         }
         return currentQredoTransaction;
     }
 }
 
-type QredoEventsType = {
+export type QredoEventsType = {
     qredoTransactionCreated: {
         qredoTransaction: TransactionInfoResponse;
         clientIdentifier: string;
     };
-    clientIgnoredUpdates: {
+    qredoActionDone: {
         clientIdentifier: string;
         qredoTransactionID: string;
+    };
+    clientIgnoredUpdates: {
+        clientIdentifier: string;
     };
 };
 export const QredoEvents = mitt<QredoEventsType>();

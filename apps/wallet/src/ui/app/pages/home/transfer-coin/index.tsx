@@ -25,6 +25,7 @@ import { trackEvent } from '_src/shared/plausible';
 import { getSignerOperationErrorMessage } from '_src/ui/app/helpers/errorMessages';
 import { useSigner } from '_src/ui/app/hooks';
 import { useActiveAddress } from '_src/ui/app/hooks/useActiveAddress';
+import { useQredoTransaction } from '_src/ui/app/hooks/useQredoTransaction';
 
 import type { SubmitProps } from './SendTokenForm';
 
@@ -39,6 +40,7 @@ function TransferCoinPage() {
     const signer = useSigner();
     const address = useActiveAddress();
     const queryClient = useQueryClient();
+    const { clientIdentifier, notificationModal } = useQredoTransaction();
 
     const transaction = useMemo(() => {
         if (!coinType || !signer || !formData || !address) return null;
@@ -64,14 +66,17 @@ function TransferCoinPage() {
                     props: { coinType: coinType! },
                 });
 
-                return signer.signAndExecuteTransactionBlock({
-                    transactionBlock: transaction,
-                    options: {
-                        showInput: true,
-                        showEffects: true,
-                        showEvents: true,
+                return signer.signAndExecuteTransactionBlock(
+                    {
+                        transactionBlock: transaction,
+                        options: {
+                            showInput: true,
+                            showEffects: true,
+                            showEvents: true,
+                        },
                     },
-                });
+                    clientIdentifier
+                );
             } catch (error) {
                 sentryTransaction.setTag('failure', true);
                 throw error;
@@ -170,6 +175,7 @@ function TransferCoinPage() {
                     </>
                 )}
             </div>
+            {notificationModal}
         </Overlay>
     );
 }
