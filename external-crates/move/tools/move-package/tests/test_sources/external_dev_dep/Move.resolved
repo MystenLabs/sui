@@ -15,12 +15,12 @@ ResolvedGraph {
             ],
             "A": [
                 (
-                    "ADep",
-                    Outgoing,
-                ),
-                (
                     "Root",
                     Incoming,
+                ),
+                (
+                    "ADep",
+                    Outgoing,
                 ),
             ],
             "ADep": [
@@ -31,12 +31,12 @@ ResolvedGraph {
             ],
             "B": [
                 (
-                    "BDep",
-                    Outgoing,
-                ),
-                (
                     "Root",
                     Incoming,
+                ),
+                (
+                    "BDep",
+                    Outgoing,
                 ),
             ],
             "BDep": [
