@@ -1,3 +1,6 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 module lint_test_pkg::unused_functions {
     friend lint_test_pkg::unused_functions_friend;
 
