@@ -66,7 +66,8 @@ fn struct_borrow_field() -> PartialVMResult<()> {
     let mut locals = Locals::new(1);
     locals.store_loc(
         0,
-        Value::struct_(Struct::pack(vec![Value::u8(10), Value::bool(false)])), true
+        Value::struct_(Struct::pack(vec![Value::u8(10), Value::bool(false)])),
+        true,
     )?;
     let r: StructRef = locals.borrow_loc(0)?.value_as()?;
 
