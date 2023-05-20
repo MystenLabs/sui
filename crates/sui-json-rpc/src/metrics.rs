@@ -28,7 +28,8 @@ pub struct Metrics {
     /// Request latency, route is a label
     req_latency_by_route: HistogramVec,
     /// Failed requests by route
-    errors_by_route: IntCounterVec,
+    server_errors_by_route: IntCounterVec,
+    client_errors_by_route: IntCounterVec,
     /// Client info
     client: IntCounterVec,
     /// Connection count
@@ -78,8 +79,15 @@ impl MetricsLogger {
                 registry,
             )
             .unwrap(),
-            errors_by_route: register_int_counter_vec_with_registry!(
-                "errors_by_route",
+            client_errors_by_route: register_int_counter_vec_with_registry!(
+                "client_errors_by_route",
+                "Number of errors by route",
+                &["route"],
+                registry,
+            )
+            .unwrap(),
+            server_errors_by_route: register_int_counter_vec_with_registry!(
+                "server_errors_by_route",
                 "Number of errors by route",
                 &["route"],
                 registry,
@@ -211,12 +219,14 @@ impl Logger for MetricsLogger {
             );
             if code == -32000 {
                 self.metrics
-                    .errors_by_route
+                    .server_errors_by_route
                     .with_label_values(&[method_name])
                     .inc();
-                println!("Increment error, received -32000");
             } else {
-                println!("Did not increment error");
+                self.metrics
+                .client_errors_by_route
+                .with_label_values(&[method_name])
+                .inc();
             }
         }
     }
