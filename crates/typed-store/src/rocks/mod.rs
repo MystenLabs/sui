@@ -16,7 +16,8 @@ use collectable::TryExtend;
 use itertools::Itertools;
 use rocksdb::{
     checkpoint::Checkpoint, BlockBasedOptions, BottommostLevelCompaction, Cache, CompactOptions,
-    LiveFile, OptimisticTransactionDB, SnapshotWithThreadMode,
+    DBCompactionStyle, FifoCompactOptions, LiveFile, OptimisticTransactionDB,
+    SnapshotWithThreadMode,
 };
 use rocksdb::{
     properties, AsColumnFamilyRef, CStrLike, ColumnFamilyDescriptor, DBWithThreadMode, Error,
@@ -2083,6 +2084,42 @@ impl DBOptions {
         self.options.set_min_write_buffer_number_to_merge(2);
         self
     }
+
+    pub fn fifo_compaction(mut self) -> DBOptions {
+        self.options.set_num_levels(1);
+        self.options.set_max_open_files(-1);
+
+        let mut fifo_options = FifoCompactOptions::default();
+        fifo_options.set_max_table_files_size(1099511627776);
+        self.options.set_compaction_style(DBCompactionStyle::Fifo);
+        self.options.set_fifo_compaction_options(&fifo_options);
+
+        // Increase write buffer size to 256MiB.
+        let write_buffer_size = read_size_from_env(ENV_VAR_MAX_WRITE_BUFFER_SIZE_MB)
+            .unwrap_or(DEFAULT_MAX_WRITE_BUFFER_SIZE_MB)
+            * 1024
+            * 1024;
+        self.options.set_write_buffer_size(write_buffer_size);
+        // Increase write buffers to keep to 6 before slowing down writes.
+        let max_write_buffer_number = read_size_from_env(ENV_VAR_MAX_WRITE_BUFFER_NUMBER)
+            .unwrap_or(DEFAULT_MAX_WRITE_BUFFER_NUMBER);
+        self.options
+            .set_max_write_buffer_number(max_write_buffer_number.try_into().unwrap());
+        // Keep 1 write buffer so recent writes can be read from memory.
+        self.options
+            .set_max_write_buffer_size_to_maintain((write_buffer_size).try_into().unwrap());
+
+        // Increase sst file size to 256MiB.
+        self.options.set_target_file_size_base(256 * 1024 * 1024);
+
+        self.options.set_min_level_to_compress(0);
+        self.options
+            .set_compression_type(rocksdb::DBCompressionType::Zstd);
+        self.options
+            .set_bottommost_compression_type(rocksdb::DBCompressionType::Zstd);
+
+        self
+    }
 }
 
 /// Creates a default RocksDB option, to be used when RocksDB option is unspecified.
@@ -2212,7 +2249,8 @@ pub fn open_cf_opts<P: AsRef<Path>>(
 
     let cfs = populate_missing_cfs(opt_cfs, path)?;
     nondeterministic!({
-        let options = prepare_db_options(db_options);
+        let mut options = prepare_db_options(db_options);
+        options.set_max_open_files(-1);
         let rocksdb = {
             rocksdb::DBWithThreadMode::<MultiThreaded>::open_cf_descriptors(
                 &options,
