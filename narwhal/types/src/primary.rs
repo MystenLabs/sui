@@ -36,6 +36,7 @@ use std::{
     collections::{HashMap, HashSet},
     time::{Duration, SystemTime},
 };
+use sui_protocol_config::ProtocolConfig;
 use tracing::warn;
 
 /// The round number.
@@ -85,27 +86,81 @@ impl Default for Metadata {
     }
 }
 
+// This is a versioned `Metadata` type
+// Refer to comments above the original `Metadata` struct for more details.
+#[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Eq, Arbitrary, MallocSizeOf)]
+#[enum_dispatch(MetadataAPI)]
+pub enum VersionedMetadata {
+    V1(MetadataV1),
+}
+
+impl VersionedMetadata {
+    pub fn new(_protocol_config: &ProtocolConfig) -> Self {
+        Self::V1(MetadataV1 {
+            created_at: now(),
+            received_at: None,
+        })
+    }
+}
+
+#[enum_dispatch]
+pub trait MetadataAPI {
+    fn created_at(&self) -> &TimestampMs;
+    fn set_created_at(&mut self, ts: TimestampMs);
+    fn received_at(&self) -> Option<TimestampMs>;
+    fn set_received_at(&mut self, ts: TimestampMs);
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Eq, Arbitrary, MallocSizeOf)]
+pub struct MetadataV1 {
+    // timestamp of when the entity created. This is generated
+    // by the node which creates the entity.
+    pub created_at: TimestampMs,
+    // timestamp of when the entity was received by the node. This will help
+    // us calculate latencies that are not affected by clock drift or network
+    // delays.
+    pub received_at: Option<TimestampMs>,
+}
+
+impl MetadataAPI for MetadataV1 {
+    fn created_at(&self) -> &TimestampMs {
+        &self.created_at
+    }
+
+    fn set_created_at(&mut self, ts: TimestampMs) {
+        self.created_at = ts;
+    }
+
+    fn received_at(&self) -> Option<TimestampMs> {
+        self.received_at
+    }
+
+    fn set_received_at(&mut self, ts: TimestampMs) {
+        self.received_at = Some(ts);
+    }
+}
+
 #[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Eq, Arbitrary)]
 #[enum_dispatch(BatchAPI)]
 pub enum Batch {
     V1(BatchV1),
-}
-
-// TODO: Revisit if we should not impl Default for batch
-impl Default for Batch {
-    fn default() -> Self {
-        Self::V1(BatchV1::default())
-    }
+    V2(BatchV2),
 }
 
 impl Batch {
-    pub fn new(transactions: Vec<Transaction>) -> Self {
-        Self::V1(BatchV1::new(transactions))
+    pub fn new(transactions: Vec<Transaction>, protocol_config: &ProtocolConfig) -> Self {
+        // TODO: Remove once we have upgraded to protocol version 11.
+        if protocol_config.narwhal_versioned_metadata() {
+            Self::V2(BatchV2::new(transactions, protocol_config))
+        } else {
+            Self::V1(BatchV1::new(transactions))
+        }
     }
 
     pub fn size(&self) -> usize {
         match self {
             Batch::V1(data) => data.size(),
+            Batch::V2(data) => data.size(),
         }
     }
 }
@@ -116,6 +171,7 @@ impl Hash<{ crypto::DIGEST_LENGTH }> for Batch {
     fn digest(&self) -> BatchDigest {
         match self {
             Batch::V1(data) => data.digest(),
+            Batch::V2(data) => data.digest(),
         }
     }
 }
@@ -126,6 +182,10 @@ pub trait BatchAPI {
     fn transactions_mut(&mut self) -> &mut Vec<Transaction>;
     fn metadata(&self) -> &Metadata;
     fn metadata_mut(&mut self) -> &mut Metadata;
+
+    // BatchV2 APIs
+    fn versioned_metadata(&self) -> &VersionedMetadata;
+    fn versioned_metadata_mut(&mut self) -> &mut VersionedMetadata;
 }
 
 pub type Transaction = Vec<u8>;
@@ -151,6 +211,14 @@ impl BatchAPI for BatchV1 {
     fn metadata_mut(&mut self) -> &mut Metadata {
         &mut self.metadata
     }
+
+    fn versioned_metadata(&self) -> &VersionedMetadata {
+        unimplemented!("BatchV1 does not have a VersionedMetadata field");
+    }
+
+    fn versioned_metadata_mut(&mut self) -> &mut VersionedMetadata {
+        unimplemented!("BatchV1 does not have a VersionedMetadata field");
+    }
 }
 
 impl BatchV1 {
@@ -158,6 +226,51 @@ impl BatchV1 {
         Self {
             transactions,
             metadata: Metadata::default(),
+        }
+    }
+
+    pub fn size(&self) -> usize {
+        self.transactions.iter().map(|t| t.len()).sum()
+    }
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Eq, Arbitrary)]
+pub struct BatchV2 {
+    pub transactions: Vec<Transaction>,
+    pub versioned_metadata: VersionedMetadata,
+}
+
+impl BatchAPI for BatchV2 {
+    fn transactions(&self) -> &Vec<Transaction> {
+        &self.transactions
+    }
+
+    fn transactions_mut(&mut self) -> &mut Vec<Transaction> {
+        &mut self.transactions
+    }
+
+    fn metadata(&self) -> &Metadata {
+        unimplemented!("BatchV2 does not have a Metadata field");
+    }
+
+    fn metadata_mut(&mut self) -> &mut Metadata {
+        unimplemented!("BatchV2 does not have a Metadata field");
+    }
+
+    fn versioned_metadata(&self) -> &VersionedMetadata {
+        &self.versioned_metadata
+    }
+
+    fn versioned_metadata_mut(&mut self) -> &mut VersionedMetadata {
+        &mut self.versioned_metadata
+    }
+}
+
+impl BatchV2 {
+    pub fn new(transactions: Vec<Transaction>, protocol_config: &ProtocolConfig) -> Self {
+        Self {
+            transactions,
+            versioned_metadata: VersionedMetadata::new(protocol_config),
         }
     }
 
@@ -211,6 +324,16 @@ impl BatchDigest {
 }
 
 impl Hash<{ crypto::DIGEST_LENGTH }> for BatchV1 {
+    type TypedDigest = BatchDigest;
+
+    fn digest(&self) -> Self::TypedDigest {
+        BatchDigest::new(
+            crypto::DefaultHashFunction::digest_iterator(self.transactions.iter()).into(),
+        )
+    }
+}
+
+impl Hash<{ crypto::DIGEST_LENGTH }> for BatchV2 {
     type TypedDigest = BatchDigest;
 
     fn digest(&self) -> Self::TypedDigest {
@@ -1310,7 +1433,7 @@ pub struct WorkerDeleteBatchesMessage {
     pub digests: Vec<BatchDigest>,
 }
 
-#[derive(Clone, Default, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct BatchMessage {
     // TODO: revisit including the digest here [see #188]
     pub digest: BatchDigest,
@@ -1360,6 +1483,14 @@ pub struct WorkerOurBatchMessage {
     pub digest: BatchDigest,
     pub worker_id: WorkerId,
     pub metadata: Metadata,
+}
+
+/// Used by worker to inform primary it sealed a new batch.
+#[derive(Clone, Serialize, Deserialize, Eq, PartialEq, Debug)]
+pub struct WorkerOurBatchMessageV2 {
+    pub digest: BatchDigest,
+    pub worker_id: WorkerId,
+    pub metadata: VersionedMetadata,
 }
 
 /// Used by worker to inform primary it received a batch from another authority.
@@ -1432,22 +1563,52 @@ impl From<&Vote> for VoteInfo {
 
 #[cfg(test)]
 mod tests {
-    use crate::{Batch, BatchAPI, BatchV1, Metadata, Timestamp};
+    use crate::{
+        Batch, BatchAPI, BatchV1, BatchV2, Metadata, MetadataAPI, MetadataV1, Timestamp,
+        VersionedMetadata,
+    };
     use std::time::Duration;
+    use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
     use tokio::time::sleep;
 
     #[tokio::test]
     async fn test_elapsed() {
-        let batch = Batch::new(vec![]);
+        // BatchV1
+        let batch = Batch::new(
+            vec![],
+            &ProtocolConfig::get_for_version(ProtocolVersion::new(10)),
+        );
         assert!(batch.metadata().created_at > 0);
 
         sleep(Duration::from_secs(2)).await;
 
         assert!(batch.metadata().created_at.elapsed().as_secs_f64() >= 2.0);
+
+        // BatchV2
+        let batch = Batch::new(
+            vec![],
+            &ProtocolConfig::get_for_version(ProtocolVersion::new(11)),
+        );
+
+        assert!(*batch.versioned_metadata().created_at() > 0);
+
+        assert!(batch.versioned_metadata().received_at().is_none());
+
+        sleep(Duration::from_secs(2)).await;
+
+        assert!(
+            batch
+                .versioned_metadata()
+                .created_at()
+                .elapsed()
+                .as_secs_f64()
+                >= 2.0
+        );
     }
 
     #[test]
     fn test_elapsed_when_newer_than_now() {
+        // BatchV1
         let batch = Batch::V1(BatchV1 {
             transactions: vec![],
             metadata: Metadata {
@@ -1456,5 +1617,23 @@ mod tests {
         });
 
         assert_eq!(batch.metadata().created_at.elapsed().as_secs_f64(), 0.0);
+
+        // BatchV2
+        let batch = Batch::V2(BatchV2 {
+            transactions: vec![],
+            versioned_metadata: VersionedMetadata::V1(MetadataV1 {
+                created_at: 2999309726980, // something in the future - Fri Jan 16 2065 05:35:26
+                received_at: None,
+            }),
+        });
+
+        assert_eq!(
+            batch
+                .versioned_metadata()
+                .created_at()
+                .elapsed()
+                .as_secs_f64(),
+            0.0
+        );
     }
 }

@@ -12,13 +12,14 @@ use network::{client::NetworkClient, WorkerToPrimaryClient};
 use rand::seq::SliceRandom;
 use std::{collections::HashSet, time::Duration};
 use store::{rocks::DBMap, Map};
+use sui_protocol_config::ProtocolConfig;
 use tokio::time::sleep;
 use tracing::{debug, trace, warn};
 use types::{
-    Batch, BatchDigest, FetchBatchesRequest, FetchBatchesResponse, PrimaryToWorker,
-    RequestBatchRequest, RequestBatchResponse, RequestBatchesRequest, RequestBatchesResponse,
-    WorkerBatchMessage, WorkerDeleteBatchesMessage, WorkerOthersBatchMessage,
-    WorkerSynchronizeMessage, WorkerToWorker, WorkerToWorkerClient,
+    now, Batch, BatchAPI, BatchDigest, FetchBatchesRequest, FetchBatchesResponse, MetadataAPI,
+    PrimaryToWorker, RequestBatchRequest, RequestBatchResponse, RequestBatchesRequest,
+    RequestBatchesResponse, WorkerBatchMessage, WorkerDeleteBatchesMessage,
+    WorkerOthersBatchMessage, WorkerSynchronizeMessage, WorkerToWorker, WorkerToWorkerClient,
 };
 
 use mysten_metrics::monitored_future;
@@ -36,6 +37,7 @@ pub struct WorkerReceiverHandler<V> {
     pub client: NetworkClient,
     pub store: DBMap<BatchDigest, Batch>,
     pub validator: V,
+    pub protocol_config: ProtocolConfig,
 }
 
 #[async_trait]
@@ -53,7 +55,15 @@ impl<V: TransactionValidator> WorkerToWorker for WorkerReceiverHandler<V> {
             ));
         }
         let digest = message.batch.digest();
-        self.store.insert(&digest, &message.batch).map_err(|e| {
+
+        let mut batch = message.batch.clone();
+
+        // TODO: Remove once we have upgraded to protocol version 11.
+        if self.protocol_config.narwhal_versioned_metadata() {
+            // Set received_at timestamp for remote batch.
+            batch.versioned_metadata_mut().set_received_at(now());
+        }
+        self.store.insert(&digest, &batch).map_err(|e| {
             anemo::rpc::Status::internal(format!("failed to write to batch store: {e:?}"))
         })?;
         self.client
@@ -141,6 +151,8 @@ pub struct PrimaryReceiverHandler<V> {
     pub batch_fetcher: Option<BatchFetcher>,
     // Validate incoming batches
     pub validator: V,
+    // The protocol configuration.
+    pub protocol_config: ProtocolConfig,
 }
 
 #[async_trait]
@@ -277,7 +289,7 @@ impl<V: TransactionValidator> PrimaryToWorker for PrimaryReceiverHandler<V> {
             while let Some(result) = handles.next().await {
                 match result {
                     Ok(response) => {
-                        if let Some(batch) = response.into_body().batch {
+                        if let Some(mut batch) = response.into_body().batch {
                             if !message.is_certified {
                                 // This batch is not part of a certificate, so we need to validate it.
                                 if let Err(err) = self.validator.validate_batch(&batch).await {
@@ -290,6 +302,11 @@ impl<V: TransactionValidator> PrimaryToWorker for PrimaryReceiverHandler<V> {
                             }
                             let digest = batch.digest();
                             if missing.remove(&digest) {
+                                // TODO: Remove once we have upgraded to protocol version 11.
+                                if self.protocol_config.narwhal_versioned_metadata() {
+                                    // Set received_at timestamp for remote batch.
+                                    batch.versioned_metadata_mut().set_received_at(now());
+                                }
                                 self.store.insert(&digest, &batch).map_err(|e| {
                                     anemo::rpc::Status::internal(format!(
                                         "failed to write to batch store: {e:?}"

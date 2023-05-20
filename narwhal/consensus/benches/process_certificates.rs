@@ -11,7 +11,7 @@ use pprof::criterion::{Output, PProfProfiler};
 use prometheus::Registry;
 use std::{collections::BTreeSet, sync::Arc};
 use storage::NodeStorage;
-use test_utils::{make_optimal_certificates, temp_dir, CommitteeFixture};
+use test_utils::{latest_protocol_version, make_optimal_certificates, temp_dir, CommitteeFixture};
 use tokio::time::Instant;
 use types::{Certificate, Round};
 
@@ -34,8 +34,13 @@ pub fn process_certificates(c: &mut Criterion) {
             .iter()
             .map(|x| x.digest())
             .collect::<BTreeSet<_>>();
-        let (certificates, _next_parents) =
-            make_optimal_certificates(&committee, 1..=rounds, &genesis, &keys);
+        let (certificates, _next_parents) = make_optimal_certificates(
+            &committee,
+            1..=rounds,
+            &genesis,
+            &keys,
+            &latest_protocol_version(),
+        );
 
         let store_path = temp_dir();
         let store = NodeStorage::reopen(&store_path, None);

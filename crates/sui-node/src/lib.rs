@@ -659,8 +659,12 @@ impl SuiNode {
             connection_monitor_status.clone(),
             &registry_service.default_registry(),
         ));
-        let narwhal_manager =
-            Self::construct_narwhal_manager(config, consensus_config, registry_service)?;
+        let narwhal_manager = Self::construct_narwhal_manager(
+            config,
+            consensus_config,
+            registry_service,
+            epoch_store.protocol_config().clone(),
+        )?;
 
         let mut narwhal_epoch_data_remover =
             EpochDataRemover::new(narwhal_manager.get_storage_base_path());
@@ -828,6 +832,7 @@ impl SuiNode {
         config: &NodeConfig,
         consensus_config: &ConsensusConfig,
         registry_service: &RegistryService,
+        protocol_config: ProtocolConfig,
     ) -> Result<NarwhalManager> {
         let narwhal_config = NarwhalConfiguration {
             primary_keypair: config.protocol_key_pair().copy(),
@@ -840,7 +845,11 @@ impl SuiNode {
 
         let metrics = NarwhalManagerMetrics::new(&registry_service.default_registry());
 
-        Ok(NarwhalManager::new(narwhal_config, metrics))
+        Ok(NarwhalManager::new(
+            narwhal_config,
+            metrics,
+            protocol_config,
+        ))
     }
 
     fn construct_consensus_adapter(

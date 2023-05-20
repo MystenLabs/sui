@@ -15,6 +15,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
 use storage::NodeStorage;
+use sui_protocol_config::ProtocolConfig;
 use tokio::sync::RwLock;
 use tokio::task::JoinHandle;
 use tracing::{info, instrument};
@@ -37,6 +38,8 @@ pub struct WorkerNodeInner {
     tx_shutdown: Option<PreSubscribedBroadcastSender>,
     // Peer ID used for local connections.
     own_peer_id: Option<PeerId>,
+    // The protocol configuration.
+    protocol_config: ProtocolConfig,
 }
 
 impl WorkerNodeInner {
@@ -102,6 +105,7 @@ impl WorkerNodeInner {
             store.batch_store.clone(),
             metrics,
             &mut tx_shutdown,
+            self.protocol_config.clone(),
         );
 
         // store the registry
@@ -184,6 +188,7 @@ impl WorkerNode {
         id: WorkerId,
         parameters: Parameters,
         registry_service: RegistryService,
+        protocol_config: ProtocolConfig,
     ) -> WorkerNode {
         let inner = WorkerNodeInner {
             id,
@@ -193,6 +198,7 @@ impl WorkerNode {
             handles: FuturesUnordered::new(),
             tx_shutdown: None,
             own_peer_id: None,
+            protocol_config,
         };
 
         Self {
@@ -257,16 +263,22 @@ pub struct WorkerNodes {
     registry_id: ArcSwapOption<RegistryID>,
     parameters: Parameters,
     client: ArcSwapOption<NetworkClient>,
+    protocol_config: ProtocolConfig,
 }
 
 impl WorkerNodes {
-    pub fn new(registry_service: RegistryService, parameters: Parameters) -> Self {
+    pub fn new(
+        registry_service: RegistryService,
+        parameters: Parameters,
+        protocol_config: ProtocolConfig,
+    ) -> Self {
         Self {
             workers: ArcSwap::from(Arc::new(HashMap::default())),
             registry_service,
             registry_id: ArcSwapOption::empty(),
             parameters,
             client: ArcSwapOption::empty(),
+            protocol_config,
         }
     }
 
@@ -312,6 +324,7 @@ impl WorkerNodes {
                 worker_id,
                 self.parameters.clone(),
                 self.registry_service.clone(),
+                self.protocol_config.clone(),
             );
 
             worker

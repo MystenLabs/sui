@@ -10,7 +10,7 @@ use crate::{
 };
 use fastcrypto::hash::Hash;
 use std::{collections::HashSet, time::Duration};
-use test_utils::{fixture_payload, CommitteeFixture};
+use test_utils::{fixture_payload, latest_protocol_version, CommitteeFixture};
 use tokio::sync::mpsc;
 use types::{CertificateAPI, CertificateDigest, Header, HeaderAPI};
 
@@ -36,7 +36,7 @@ async fn test_get_and_synchronize_block_headers_when_fetched_from_storage() {
     let header = Header::V1(
         author
             .header_builder(&committee)
-            .payload(fixture_payload(1))
+            .payload(fixture_payload(1, &latest_protocol_version()))
             .build()
             .unwrap(),
     );
@@ -96,7 +96,7 @@ async fn test_get_and_synchronize_block_headers_when_fetched_from_peers() {
     let header = Header::V1(
         author
             .header_builder(&committee)
-            .payload(fixture_payload(1))
+            .payload(fixture_payload(1, &latest_protocol_version()))
             .build()
             .unwrap(),
     );
@@ -107,7 +107,7 @@ async fn test_get_and_synchronize_block_headers_when_fetched_from_peers() {
     let header = Header::V1(
         author
             .header_builder(&committee)
-            .payload(fixture_payload(2))
+            .payload(fixture_payload(2, &latest_protocol_version()))
             .build()
             .unwrap(),
     );
@@ -199,7 +199,7 @@ async fn test_get_and_synchronize_block_headers_timeout_on_causal_completion() {
     let header = Header::V1(
         author
             .header_builder(&committee)
-            .payload(fixture_payload(1))
+            .payload(fixture_payload(1, &latest_protocol_version()))
             .build()
             .unwrap(),
     );
@@ -210,7 +210,7 @@ async fn test_get_and_synchronize_block_headers_timeout_on_causal_completion() {
     let header = Header::V1(
         author
             .header_builder(&committee)
-            .payload(fixture_payload(2))
+            .payload(fixture_payload(2, &latest_protocol_version()))
             .build()
             .unwrap(),
     );
@@ -284,7 +284,7 @@ async fn test_synchronize_block_payload() {
     let header = Header::V1(
         author
             .header_builder(&committee)
-            .payload(fixture_payload(1))
+            .payload(fixture_payload(1, &latest_protocol_version()))
             .build()
             .unwrap(),
     );
@@ -297,7 +297,7 @@ async fn test_synchronize_block_payload() {
     let header = Header::V1(
         author
             .header_builder(&committee)
-            .payload(fixture_payload(2))
+            .payload(fixture_payload(2, &latest_protocol_version()))
             .build()
             .unwrap(),
     );

@@ -15,6 +15,7 @@ use node::{execution_state::SimpleExecutionState, metrics::worker_metrics_regist
 use prometheus::{proto::Metric, Registry};
 use std::{cell::RefCell, collections::HashMap, path::PathBuf, rc::Rc, sync::Arc, time::Duration};
 use storage::NodeStorage;
+use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
 use telemetry_subscribers::TelemetryGuards;
 use tokio::{
     sync::{broadcast::Sender, mpsc::channel, RwLock},
@@ -307,6 +308,7 @@ impl PrimaryNodeDetails {
             parameters.clone(),
             internal_consensus_enabled,
             registry_service,
+            ProtocolConfig::get_for_version(ProtocolVersion::max()),
         );
 
         Self {
@@ -429,7 +431,12 @@ impl WorkerNodeDetails {
         worker_cache: WorkerCache,
     ) -> Self {
         let registry_service = RegistryService::new(Registry::new());
-        let node = WorkerNode::new(id, parameters, registry_service);
+        let node = WorkerNode::new(
+            id,
+            parameters,
+            registry_service,
+            ProtocolConfig::get_for_version(ProtocolVersion::max()),
+        );
 
         Self {
             id,

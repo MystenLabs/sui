@@ -14,6 +14,7 @@ use std::collections::BTreeSet;
 use std::sync::Arc;
 use storage::NodeStorage;
 use telemetry_subscribers::TelemetryGuards;
+use test_utils::latest_protocol_version;
 use test_utils::{cluster::Cluster, temp_dir, CommitteeFixture};
 use tokio::sync::watch;
 
@@ -37,14 +38,30 @@ async fn test_recovery() {
         .iter()
         .map(|x| x.digest())
         .collect::<BTreeSet<_>>();
-    let (mut certificates, next_parents) =
-        test_utils::make_optimal_certificates(&committee, 1..=2, &genesis, &ids);
+    let (mut certificates, next_parents) = test_utils::make_optimal_certificates(
+        &committee,
+        1..=2,
+        &genesis,
+        &ids,
+        &latest_protocol_version(),
+    );
 
     // Make two certificate (f+1) with round 3 to trigger the commits.
-    let (_, certificate) =
-        test_utils::mock_certificate(&committee, ids[0], 3, next_parents.clone());
+    let (_, certificate) = test_utils::mock_certificate(
+        &committee,
+        ids[0],
+        3,
+        next_parents.clone(),
+        &latest_protocol_version(),
+    );
     certificates.push_back(certificate);
-    let (_, certificate) = test_utils::mock_certificate(&committee, ids[1], 3, next_parents);
+    let (_, certificate) = test_utils::mock_certificate(
+        &committee,
+        ids[1],
+        3,
+        next_parents,
+        &latest_protocol_version(),
+    );
     certificates.push_back(certificate);
 
     // Spawn the consensus engine and sink the primary channel.
