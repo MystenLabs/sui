@@ -64,7 +64,7 @@ pub(crate) mod tests;
 type CheckpointExecutionBuffer = FuturesOrdered<JoinHandle<VerifiedCheckpoint>>;
 
 /// The interval to log checkpoint progress, in # of checkpoints processed.
-const CHECKPOINT_PROGRESS_LOG_COUNT_INTERVAL: u64 = 5000;
+const CHECKPOINT_PROGRESS_LOG_COUNT_INTERVAL: u64 = 10;
 
 pub struct CheckpointExecutor {
     mailbox: broadcast::Receiver<VerifiedCheckpoint>,
