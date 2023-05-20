@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { useGetSystemState } from '@mysten/core';
 import { useQuery } from '@tanstack/react-query';
 import { ParentSize } from '@visx/responsive';
 import { TooltipWithBounds, useTooltip } from '@visx/tooltip';
@@ -42,6 +43,8 @@ interface Props {
 // NOTE: This component is lazy imported, so it needs to be default exported:
 export default function ValidatorMap({ minHeight }: Props) {
     const [network] = useNetwork();
+    const { data: systemState, isError: systemStateError } =
+        useGetSystemState();
 
     const appsBe = useAppsBackend();
 
@@ -183,10 +186,10 @@ export default function ValidatorMap({ minHeight }: Props) {
                             )}
                             {
                                 // Fetch received response with no errors and the value was not null
-                                (!isError &&
-                                    validatorData &&
+                                (!systemStateError &&
+                                    systemState &&
                                     numberFormatter.format(
-                                        validatorData.length
+                                        systemState.activeValidators.length
                                     )) ||
                                     '--'
                             }
