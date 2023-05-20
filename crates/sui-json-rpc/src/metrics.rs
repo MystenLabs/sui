@@ -189,6 +189,7 @@ impl Logger for MetricsLogger {
         &self,
         method_name: &str,
         success: bool,
+        error_code: Option<i32>,
         started_at: Self::Instant,
         _transport: TransportProtocol,
     ) {
@@ -203,11 +204,20 @@ impl Logger for MetricsLogger {
             .with_label_values(&[method_name])
             .observe(req_latency_secs);
 
-        if !success {
-            self.metrics
-                .errors_by_route
-                .with_label_values(&[method_name])
-                .inc();
+        if let Some(code) = error_code {
+            println!(
+                "RPC call failed: method={}, code={}, success={}, latency={:.3}s",
+                method_name, code, success, req_latency_secs
+            );
+            if code == -32000 {
+                self.metrics
+                    .errors_by_route
+                    .with_label_values(&[method_name])
+                    .inc();
+                println!("Increment error, received -32000");
+            } else {
+                println!("Did not increment error");
+            }
         }
     }
 
