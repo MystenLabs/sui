@@ -2,15 +2,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::pin::Pin;
-use std::sync::Arc;
-
 use config::WorkerId;
 use fastcrypto::hash::Hash;
+use futures::future::BoxFuture;
 use futures::stream::FuturesUnordered;
-use futures::{Future, StreamExt};
+use futures::StreamExt;
 use mysten_metrics::{monitored_scope, spawn_logged_monitored_task};
 use network::{client::NetworkClient, WorkerToPrimaryClient};
+use std::sync::Arc;
 use store::{rocks::DBMap, Map};
 use sui_protocol_config::ProtocolConfig;
 use tokio::{
@@ -175,13 +174,13 @@ impl BatchMaker {
     }
 
     /// Seal and broadcast the current batch.
-    async fn seal(
+    async fn seal<'a>(
         &self,
         timeout: bool,
         mut batch: Batch,
         size: usize,
         responses: Vec<TxResponse>,
-    ) -> Option<Pin<Box<dyn Future<Output = ()> + Send>>> {
+    ) -> Option<BoxFuture<'a, ()>> {
         #[cfg(feature = "benchmark")]
         {
             let digest = batch.digest();
@@ -272,6 +271,7 @@ impl BatchMaker {
         let store = self.store.clone();
         let worker_id = self.id;
 
+        // TODO: Remove once we have upgraded to protocol version 11.
         if self.protocol_config.narwhal_versioned_metadata() {
             // The batch has been sealed so we can officially set its creation time
             // for latency calculations.

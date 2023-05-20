@@ -120,6 +120,7 @@ impl BatchFetcher {
                             // Also persist the batches, so they are available after restarts.
                             let mut write_batch = self.batch_store.batch();
 
+                            // TODO: Remove once we have upgraded to protocol version 11.
                             if self.protocol_config.narwhal_versioned_metadata() {
                                 // Set received_at timestamp for remote batches.
                                 let mut updated_new_batches = HashMap::new();

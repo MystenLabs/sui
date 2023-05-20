@@ -57,6 +57,8 @@ impl<V: TransactionValidator> WorkerToWorker for WorkerReceiverHandler<V> {
         let digest = message.batch.digest();
 
         let mut batch = message.batch.clone();
+
+        // TODO: Remove once we have upgraded to protocol version 11.
         if self.protocol_config.narwhal_versioned_metadata() {
             // Set received_at timestamp for remote batch.
             batch.versioned_metadata_mut().set_received_at(now());
@@ -300,6 +302,7 @@ impl<V: TransactionValidator> PrimaryToWorker for PrimaryReceiverHandler<V> {
                             }
                             let digest = batch.digest();
                             if missing.remove(&digest) {
+                                // TODO: Remove once we have upgraded to protocol version 11.
                                 if self.protocol_config.narwhal_versioned_metadata() {
                                     // Set received_at timestamp for remote batch.
                                     batch.versioned_metadata_mut().set_received_at(now());

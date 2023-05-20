@@ -369,68 +369,72 @@ impl Subscriber {
                 }
             };
             for (digest, batch) in batches {
-                if inner.protocol_config.narwhal_versioned_metadata() {
-                    let metadata = batch.versioned_metadata();
-                    if metadata.received_at().is_some() {
-                        let remote_duration =
-                            metadata.received_at().unwrap().elapsed().as_secs_f64();
-                        debug!(
-                            "Batch was fetched for execution after being received from another worker {}s ago.",
-                            remote_duration
-                        );
-                        inner
-                            .metrics
-                            .batch_execution_latency_without_network_latency
-                            .with_label_values(&["other"])
-                            .observe(remote_duration);
-                    } else {
-                        let local_duration = batch
-                            .versioned_metadata()
-                            .created_at()
-                            .elapsed()
-                            .as_secs_f64();
-                        debug!(
-                            "Batch was fetched for execution after being created locally {}s ago.",
-                            local_duration
-                        );
-                        inner
-                            .metrics
-                            .batch_execution_latency_without_network_latency
-                            .with_label_values(&["own"])
-                            .observe(local_duration);
-                    };
-
-                    let batch_fetch_duration = batch
-                        .versioned_metadata()
-                        .created_at()
-                        .elapsed()
-                        .as_secs_f64();
-                    inner
-                        .metrics
-                        .batch_execution_latency
-                        .observe(batch_fetch_duration);
-                    debug!(
-                        "Batch {:?} took {} seconds since it has been created to when it has been fetched for execution",
-                        digest,
-                        batch_fetch_duration,
-                    );
-                } else {
-                    let batch_fetch_duration = batch.metadata().created_at.elapsed().as_secs_f64();
-                    inner
-                        .metrics
-                        .batch_execution_latency
-                        .observe(batch_fetch_duration);
-                    debug!(
-                        "Batch {:?} took {} seconds since it has been created to when it has been fetched for execution",
-                        digest,
-                        batch_fetch_duration,
-                    );
-                }
+                Self::record_fetched_batch_metrics(inner, &batch, &digest);
                 fetched_batches.insert(digest, batch);
             }
         }
 
         fetched_batches
+    }
+
+    fn record_fetched_batch_metrics(inner: &Inner, batch: &Batch, digest: &BatchDigest) {
+        // TODO: Remove once we have upgraded to protocol version 11.
+        if inner.protocol_config.narwhal_versioned_metadata() {
+            let metadata = batch.versioned_metadata();
+            if let Some(received_at) = metadata.received_at() {
+                let remote_duration = received_at.elapsed().as_secs_f64();
+                debug!(
+                    "Batch was fetched for execution after being received from another worker {}s ago.",
+                    remote_duration
+                );
+                inner
+                    .metrics
+                    .batch_execution_latency_without_network_latency
+                    .with_label_values(&["other"])
+                    .observe(remote_duration);
+            } else {
+                let local_duration = batch
+                    .versioned_metadata()
+                    .created_at()
+                    .elapsed()
+                    .as_secs_f64();
+                debug!(
+                    "Batch was fetched for execution after being created locally {}s ago.",
+                    local_duration
+                );
+                inner
+                    .metrics
+                    .batch_execution_latency_without_network_latency
+                    .with_label_values(&["own"])
+                    .observe(local_duration);
+            };
+
+            let batch_fetch_duration = batch
+                .versioned_metadata()
+                .created_at()
+                .elapsed()
+                .as_secs_f64();
+            inner
+                .metrics
+                .batch_execution_latency
+                .observe(batch_fetch_duration);
+            debug!(
+                "Batch {:?} took {} seconds since it has been created to when it has been fetched for execution",
+                digest,
+                batch_fetch_duration,
+            );
+        } else {
+            let batch_fetch_duration = batch.metadata().created_at.elapsed().as_secs_f64();
+            inner
+                .metrics
+                .batch_execution_latency
+                .observe(batch_fetch_duration);
+            debug!(
+                "Batch {:?} took {} seconds since it has been created to when it has been fetched for execution",
+                digest,
+                batch_fetch_duration,
+            );
+        }
     }
 }
 

@@ -149,6 +149,7 @@ pub enum Batch {
 
 impl Batch {
     pub fn new(transactions: Vec<Transaction>, protocol_config: &ProtocolConfig) -> Self {
+        // TODO: Remove once we have upgraded to protocol version 11.
         if protocol_config.narwhal_versioned_metadata() {
             Self::V2(BatchV2::new(transactions, protocol_config))
         } else {
