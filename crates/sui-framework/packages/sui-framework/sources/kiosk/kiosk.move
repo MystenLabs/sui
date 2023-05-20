@@ -31,6 +31,7 @@
 /// be used to implement application-specific transfer rules.
 ///
 module sui::kiosk {
+    use std::type_name::TypeName;
     use std::option::{Self, Option};
     use sui::object::{Self, UID, ID};
     use sui::dynamic_object_field as dof;
@@ -43,6 +44,7 @@ module sui::kiosk {
     };
     use sui::balance::{Self, Balance};
     use sui::coin::{Self, Coin};
+    use sui::bag::{Self, Bag};
     use sui::sui::SUI;
     use sui::event;
 
@@ -72,6 +74,8 @@ module sui::kiosk {
     const EItemNotFound: u64 = 11;
     /// Delisting an item that is not listed.
     const ENotListed: u64 = 12;
+    /// Attempt to use the Extensions API without authorization.
+    const EExtensionDisabled: u64 = 13;
 
     /// An object which allows selling collectibles within "kiosk" ecosystem.
     /// By default gives the functionality to list an item openly - for anyone
@@ -118,6 +122,15 @@ module sui::kiosk {
         min_price: u64
     }
 
+    /// Extension storage and configuration. Attached to the base object via the
+    /// `ExtensionKey`. Every extension has an isolated storage and can only
+    /// access the `storage` field while not having access to the base object.
+    struct Extension has store {
+        permissions: u32,
+        storage: Bag,
+        types: vector<TypeName>
+    }
+
     // === Utilities ===
 
     /// Hot potato to ensure an item was returned after being taken using
@@ -137,6 +150,13 @@ module sui::kiosk {
     /// can't be `take`n. The item then can only be listed / sold via the PurchaseCap.
     /// Lock is released on `purchase`.
     struct Lock has store, copy, drop { id: ID }
+
+    /// Dynamic field key for an `Extension`. Contains a list of types this
+    /// extension is used for; an empty list means the extension applies to all
+    /// types.
+    ///
+    /// The phantom type parameter `Ext` defines the type of the extension.
+    struct ExtensionKey<phantom Ext> has store, copy, drop { enabled: bool }
 
     // === Events ===
 
@@ -180,7 +200,7 @@ module sui::kiosk {
             profits: balance::zero(),
             owner: sender(ctx),
             item_count: 0,
-            allow_extensions: true
+            allow_extensions: false
         };
 
         let cap = KioskOwnerCap {
@@ -239,8 +259,7 @@ module sui::kiosk {
         self: &mut Kiosk, cap: &KioskOwnerCap, item: T
     ) {
         assert!(object::id(self) == cap.for, ENotOwner);
-        self.item_count = self.item_count + 1;
-        dof::add(&mut self.id, Item { id: object::id(&item) }, item)
+        place_internal(self, item)
     }
 
     /// Place an item to the `Kiosk` and issue a `Lock` for it. Once placed this
@@ -401,6 +420,65 @@ module sui::kiosk {
         coin::take(&mut self.profits, amount, ctx)
     }
 
+    // === Kiosk Extensions API ===
+
+    /// Add an extension to the `Kiosk`. Can only be performed by the Kiosk Owner,
+    /// the visibility is intentionally made `entry` so that the call cannot be
+    /// hidden and called arbitrarily.
+    entry fun add_extension<Ext: drop>(
+        self: &mut Kiosk,
+        cap: &KioskOwnerCap,
+        permissions: u32,
+        ctx: &mut TxContext
+    ) {
+        assert!(object::id(self) == cap.for, ENotOwner);
+        df::add(&mut self.id, ExtensionKey<Ext> { enabled: true }, Extension {
+            storage: bag::new(ctx),
+            permissions,
+            types: vector[]
+        });
+    }
+
+    /// Disables an extension of the `Kiosk`. Can only be performed by the Kiosk Owner.
+    public fun disable_extension<Ext: drop>(self: &mut Kiosk, cap: &KioskOwnerCap) {
+        assert!(object::id(self) == cap.for, ENotOwner);
+        let ext: Extension = df::remove(&mut self.id, ExtensionKey<Ext> { enabled: true });
+        df::add(&mut self.id, ExtensionKey<Ext> { enabled: false }, ext);
+    }
+
+    public fun has_extension<Ext: drop>(self: &Kiosk): bool {
+        df::exists_(&self.id, ExtensionKey<Ext> { enabled: true})
+    }
+
+    /// Get the immutable reference to the `Kiosk` extension storage.
+    public fun ext_storage<Ext: drop>(_: Ext, self: &Kiosk): &Bag {
+        let ext: &Extension = df::borrow(&self.id, ExtensionKey<Ext> { enabled: true });
+        &ext.storage
+    }
+
+    /// Get the mutable reference to the `Kiosk` extension storage.
+    public fun ext_storage_mut<Ext: drop>(_: Ext, self: &mut Kiosk): &mut Bag {
+        let ext: &mut Extension = df::borrow_mut(&mut self.id, ExtensionKey<Ext> { enabled: true });
+        &mut ext.storage
+    }
+
+    /// Extension API: Places the `item` in the `Kiosk`.
+    public fun ext_place<Ext: drop, T: key + store>(
+        _: Ext, self: &mut Kiosk, item: T
+    ) {
+        assert!(df::exists_(&self.id, ExtensionKey<Ext> { enabled: true }), EExtensionDisabled);
+        place_internal(self, item)
+    }
+
+    /// Extension API: Locks the `item` in the `Kiosk` so that it cannot be taken by anyone else.
+    public fun ext_lock<Ext: drop, T: key + store>(
+        _: Ext, self: &mut Kiosk, _policy: &TransferPolicy<T>, item: T
+    ) {
+        assert!(df::exists_(&self.id, ExtensionKey<Ext> { enabled: true }), EExtensionDisabled);
+        df::add(&mut self.id, Lock { id: object::id(&item) }, true);
+        place_internal(self, item)
+    }
+
     // === Kiosk fields access ===
 
     /// Check whether the `item` is present in the `Kiosk`.
@@ -554,5 +632,25 @@ module sui::kiosk {
     /// Get the `min_price` from the `PurchaseCap`.
     public fun purchase_cap_min_price<T: key + store>(self: &PurchaseCap<T>): u64 {
         self.min_price
+    }
+
+    // === Internal Functions ===
+
+    /// Internal implementation of the `place` without authorization checks.
+    fun place_internal<T: key + store>(self: &mut Kiosk, item: T) {
+        self.item_count = self.item_count + 1;
+        dof::add(&mut self.id, Item { id: object::id(&item) }, item)
+    }
+
+    // === Test only ===
+
+    #[test_only]
+    public fun add_extension_for_testing<Ext: drop>(
+        self: &mut Kiosk,
+        cap: &KioskOwnerCap,
+        permissions: u32,
+        ctx: &mut TxContext
+    ) {
+        add_extension<Ext>(self, cap, permissions, ctx)
     }
 }

@@ -305,6 +305,7 @@ module sui::kiosk_tests {
     }
 
     #[test]
+    #[expected_failure(abort_code = sui::kiosk::EExtensionsDisabled)]
     fun test_uid_access() {
         let ctx = &mut test::ctx();
         let (kiosk, owner_cap) = test::get_kiosk(ctx);
