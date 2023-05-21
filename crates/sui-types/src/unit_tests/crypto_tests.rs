@@ -97,9 +97,9 @@ proptest! {
     fn test_get_key_pair_from_private_key_bytes(
         bytes in collection::vec(any::<u8>(), 0..1024)
     ){
-        let _key_pair = get_key_pair_from_bytes::<AuthorityKeyPair>(&bytes);
-        let _key_pair = get_key_pair_from_bytes::<NetworkKeyPair>(&bytes);
-        let _key_pair = get_key_pair_from_bytes::<AccountKeyPair>(&bytes);
+        let _key_pair = get_key_pair_from_private_key_bytes::<AuthorityKeyPair>(&bytes);
+        let _key_pair = get_key_pair_from_private_key_bytes::<NetworkKeyPair>(&bytes);
+        let _key_pair = get_key_pair_from_private_key_bytes::<AccountKeyPair>(&bytes);
     }
 
     #[test]
