@@ -592,6 +592,12 @@ where
 }
 
 // TODO: C-GETTER
+/// Get a keypair from a `bytes` object the includes the concatenation of a private and public key.
+/// Note that for backwards compatibility reasons, although the current implementation expects the
+/// input `bytes` to include both private and public keys, the logic behind this function omits
+/// handling the public key. The output keypair derives the public key from the private key.
+/// If you want to get a keypair from the bytes of a private key only, use
+/// `get_key_pair_from_priv_key_bytes`.
 pub fn get_key_pair_from_bytes<KP: KeypairTraits>(bytes: &[u8]) -> SuiResult<(SuiAddress, KP)>
 where
     <KP as KeypairTraits>::PubKey: SuiPublicKey,
@@ -600,8 +606,9 @@ where
     let pub_key_length = <KP as KeypairTraits>::PubKey::LENGTH;
     if bytes.len() != priv_length + pub_key_length {
         return Err(SuiError::KeyConversionError(format!(
-            "Invalid input byte length, expected {}: {}",
-            priv_length,
+            "Invalid input byte length (note: the input bytes should be the concatenation of private \
+            and public key bytes), expected {}: {}",
+            priv_length + pub_key_length,
             bytes.len()
         )));
     }
@@ -611,6 +618,28 @@ where
             .ok_or(SuiError::InvalidPrivateKey)?,
     )
     .map_err(|_| SuiError::InvalidPrivateKey)?;
+    let kp: KP = sk.into();
+    Ok((kp.public().into(), kp))
+}
+
+// TODO: C-GETTER
+/// Get a keypair from a private key's `bytes`.
+pub fn get_key_pair_from_private_key_bytes<KP: KeypairTraits>(
+    bytes: &[u8],
+) -> SuiResult<(SuiAddress, KP)>
+where
+    <KP as KeypairTraits>::PubKey: SuiPublicKey,
+{
+    let priv_length = <KP as KeypairTraits>::PrivKey::LENGTH;
+    if bytes.len() != priv_length {
+        return Err(SuiError::KeyConversionError(format!(
+            "Invalid input byte length, expected {}: {}",
+            priv_length,
+            bytes.len()
+        )));
+    }
+    let sk = <KP as KeypairTraits>::PrivKey::from_bytes(bytes)
+        .map_err(|_| SuiError::InvalidPrivateKey)?;
     let kp: KP = sk.into();
     Ok((kp.public().into(), kp))
 }
