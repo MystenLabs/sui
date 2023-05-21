@@ -12,7 +12,7 @@ futures = "0.3.23"
 tempfile = "3.3.0"
 tracing = "0.1.36"
 bcs = "0.1.4"
-jsonrpsee = { version = "0.16.2", features = ["http-client"] }
+jsonrpsee = { git="https://github.com/wlmyng/jsonrpsee.git", rev= "b1b300784795f6a64d0fcdf8f03081a9bc38bde8", features = ["http-client"] }
 prometheus = "0.13.3"
 tokio = { workspace = true, features = ["full", "tracing", "test-util"] }
 serde_json = "1.0.88"
