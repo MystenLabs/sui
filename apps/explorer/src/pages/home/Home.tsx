@@ -8,7 +8,6 @@ import { TopValidatorsCard } from '../../components/top-validators-card/TopValid
 
 import { Activity } from '~/components/Activity';
 import { GasPriceCard } from '~/components/GasPriceCard';
-import { Checkpoint } from '~/components/HomeMetrics/Checkpoint';
 import { CurrentEpoch } from '~/components/HomeMetrics/CurrentEpoch';
 import { NetworkTPS } from '~/components/HomeMetrics/NetworkTPS';
 import { OnTheNetwork } from '~/components/HomeMetrics/OnTheNetwork';
@@ -38,23 +37,25 @@ function Home() {
             <div style={{ gridArea: 'tps' }}>
                 <NetworkTPS />
             </div>
-            {isSuiTokenCardEnabled && (
-                <div style={{ gridArea: 'sui-token' }}>
-                    <SuiTokenCard />
-                </div>
-            )}
-            <div style={{ gridArea: 'network' }} className="overflow-hidden">
-                <OnTheNetwork />
-            </div>
             <div style={{ gridArea: 'epoch' }}>
                 <CurrentEpoch />
             </div>
-            <div style={{ gridArea: 'checkpoint' }}>
-                <Checkpoint />
-            </div>
+            {isSuiTokenCardEnabled && (
+                <div style={{ gridArea: 'sui-token' }}>
+                <SuiTokenCard />
+
+                </div>
+            )}
+
             <div style={{ gridArea: 'gas-price' }}>
                 <GasPriceCard useLargeSpacing={!isSuiTokenCardEnabled} />
+
             </div>
+
+            <div style={{ gridArea: 'network' }} className="overflow-hidden">
+                <OnTheNetwork />
+            </div>
+
             <div
                 style={{ gridArea: 'node-map' }}
                 className="h-[360px] xl:h-auto"
