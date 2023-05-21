@@ -16,10 +16,10 @@ type CoinData = {
 };
 
 export function useSuiCoinData() {
-    const makeAppsBackendRequest = useAppsBackend();
+    const { request } = useAppsBackend();
     return useQuery({
         queryKey: ['sui-coin-data'],
-        queryFn: () => makeAppsBackendRequest<CoinData>('coins/sui', {}),
+        queryFn: () => request<CoinData>('coins/sui', {}),
         cacheTime: 24 * 60 * 60 * 1000,
         staleTime: Infinity,
     });

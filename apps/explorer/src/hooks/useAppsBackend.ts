@@ -9,7 +9,7 @@ import { Network } from '~/utils/api/DefaultRpcClient';
 export function useAppsBackend() {
     const [network] = useNetwork();
 
-    return useCallback(
+    const request = useCallback(
         async <T>(
             path: string,
             queryString: Record<string, any>,
@@ -31,4 +31,6 @@ export function useAppsBackend() {
         },
         [network]
     );
+
+    return { request };
 }

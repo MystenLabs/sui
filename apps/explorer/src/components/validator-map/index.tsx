@@ -8,7 +8,11 @@ import { TooltipWithBounds, useTooltip } from '@visx/tooltip';
 import React, { type ReactNode, useCallback, useMemo } from 'react';
 
 import { WorldMap } from './WorldMap';
-import { type NodeLocation, type ValidatorMapData } from './types';
+import {
+    type ValidatorMapResponse,
+    type NodeLocation,
+    type ValidatorMapValidator,
+} from './types';
 
 import { useNetwork } from '~/context';
 import { useAppsBackend } from '~/hooks/useAppsBackend';
@@ -19,7 +23,7 @@ import { Text } from '~/ui/Text';
 
 const HOST = 'https://imgmod.sui.io';
 
-type ValidatorsMap = Record<string, ValidatorMapData>;
+type ValidatorsMap = Record<string, ValidatorMapValidator>;
 
 const numberFormatter = new Intl.NumberFormat('en');
 
@@ -46,7 +50,7 @@ export default function ValidatorMap({ minHeight }: Props) {
     const { data: systemState, isError: systemStateError } =
         useGetSystemState();
 
-    const appsBe = useAppsBackend();
+    const { request } = useAppsBackend();
 
     const { data: nodeData, isSuccess } = useQuery({
         queryKey: ['node-map'],
@@ -88,13 +92,12 @@ export default function ValidatorMap({ minHeight }: Props) {
         isError,
     } = useQuery({
         queryKey: ['validator-map'],
-        queryFn: (): Promise<ValidatorMapData[]> =>
-            appsBe('validator-map', {
+        queryFn: () =>
+            request<ValidatorMapResponse>('validator-map', {
                 network: network.toLowerCase(),
             }),
-        select: (validators: ValidatorMapData[]) =>
-            // Some validators will come back as null from the location API
-            validators.filter((validator: ValidatorMapData) => validator),
+        // NOTE: This selects out just the validators for now, since we don't currently use the node count:
+        select: ({ validators }) => validators,
     });
 
     const { countryCount, validatorMap } = useMemo<{
