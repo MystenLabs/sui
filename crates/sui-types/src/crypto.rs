@@ -592,10 +592,10 @@ where
 }
 
 // TODO: C-GETTER
-/// Get a keypair from a `bytes` object the includes the concatenation of a private and public key.
+/// Get a keypair from a `bytes` object that includes the concatenation of a private and public key.
 /// Note that for backwards compatibility reasons, although the current implementation expects the
 /// input `bytes` to include both private and public keys, the logic behind this function omits
-/// handling the public key. The output keypair derives the public key from the private key.
+/// handling the public key part. The output keypair derives the public key from the private key.
 /// If you want to get a keypair from the bytes of a private key only, use
 /// `get_key_pair_from_priv_key_bytes`.
 pub fn get_key_pair_from_bytes<KP: KeypairTraits>(bytes: &[u8]) -> SuiResult<(SuiAddress, KP)>
