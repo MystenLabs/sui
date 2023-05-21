@@ -221,7 +221,7 @@ export class QredoSigner extends WalletSigner {
         let unsubscribeCallback;
         let userIgnoredUpdates = false;
         let promiseReject: () => void;
-        const userIgnoredPromise = new Promise((_, reject) => {
+        const userIgnoredPromise = new Promise<never>((_, reject) => {
             promiseReject = reject;
         });
         if (clientIdentifier) {
@@ -246,9 +246,10 @@ export class QredoSigner extends WalletSigner {
         ) {
             try {
                 await Promise.race([sleep(), userIgnoredPromise]);
-                currentQredoTransaction = await this.#qredoAPI.getTransaction(
-                    currentQredoTransaction.txID
-                );
+                currentQredoTransaction = await Promise.race([
+                    this.#qredoAPI.getTransaction(currentQredoTransaction.txID),
+                    userIgnoredPromise,
+                ]);
             } catch (e) {
                 // maybe a network error
                 // TODO: stop if 500 or 404 etc?
