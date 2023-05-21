@@ -42,14 +42,12 @@ function Home() {
             </div>
             {isSuiTokenCardEnabled && (
                 <div style={{ gridArea: 'sui-token' }}>
-                <SuiTokenCard />
-
+                    <SuiTokenCard />
                 </div>
             )}
 
             <div style={{ gridArea: 'gas-price' }}>
                 <GasPriceCard useLargeSpacing={!isSuiTokenCardEnabled} />
-
             </div>
 
             <div style={{ gridArea: 'network' }} className="overflow-hidden">

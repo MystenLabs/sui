@@ -4,7 +4,6 @@
 import { StatsWrapper } from './FormattedStatsAmount';
 
 import { useGetNetworkMetrics } from '~/hooks/useGetNetworkMetrics';
-import { Card } from '~/ui/Card';
 
 export function Checkpoint() {
     const { data, isLoading } = useGetNetworkMetrics();

@@ -2,10 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { formatDate, formatAmountParts } from '@mysten/core';
-import { Checkpoint } from '~/components/HomeMetrics/Checkpoint';
 import { format, isToday, isYesterday } from 'date-fns';
 import { useMemo } from 'react';
 
+import { Checkpoint } from '~/components/HomeMetrics/Checkpoint';
 import { useEpochProgress } from '~/pages/epochs/utils';
 import { Card } from '~/ui/Card';
 import { Heading } from '~/ui/Heading';
@@ -37,7 +37,7 @@ export function CurrentEpoch() {
     return (
         <LinkWithQuery to={`/epoch/${epoch}`}>
             <Card bg="highlight" height="full" spacing="lg">
-                <div className='flex flex-col gap-10'>
+                <div className="flex flex-col gap-10">
                     <div className="flex w-full flex-col gap-4">
                         <div className="space-y-4">
                             <div className="flex flex-col gap-2">
@@ -74,7 +74,10 @@ export function CurrentEpoch() {
                             ) : null}
                         </div>
                         <div className="space-y-1.5">
-                            <Heading variant="heading6/medium" color="steel-darker">
+                            <Heading
+                                variant="heading6/medium"
+                                color="steel-darker"
+                            >
                                 {label ?? '--'}
                             </Heading>
                             <ProgressBar animate progress={progress || 0} />
@@ -88,7 +91,10 @@ export function CurrentEpoch() {
                                 {formattedDateString ? 'Started' : '--'}
                             </Text>
 
-                            <Text variant="pSubtitle/semibold" color="steel-dark">
+                            <Text
+                                variant="pSubtitle/semibold"
+                                color="steel-dark"
+                            >
                                 {formattedDateString || '--'}
                             </Text>
                         </div>
