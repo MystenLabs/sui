@@ -10,13 +10,12 @@ edition = "2021"
 anyhow = { version = "1.0.64", features = ["backtrace"] }
 codespan = { version = "0.11", features = ["serialization"] }
 codespan-reporting = { version = "0.11", features = ["serialization"] }
-tokio = { workspace = true, features = ["full"] }
-tracing = "0.1.36"
 clap = { version = "3.2.17", features = ["derive"] }
 colored = "2.0.0"
 once_cell = { version = "1.16", optional = true }
 serde_json = "1.0.88"
 serde_yaml = "0.8.26"
+tracing = "0.1.36"
 prometheus = "0.13.3"
 git-version = "0.3.5"
 const-str = "0.5.3"
@@ -35,6 +34,7 @@ move-unit-test.workspace = true
 move-vm-runtime.workspace = true
 move-vm-test-utils.workspace = true
 telemetry-subscribers.workspace = true
+tokio = { workspace = true, features = ["full"] }
 
 sui-move-natives = { path = "../../sui-execution/latest/sui-move-natives", package = "sui-move-natives-latest" }
 
