@@ -8,8 +8,8 @@ edition = "2021"
 
 [dependencies]
 fastcrypto.workspace = true
-jsonrpsee = { version = "0.16.2", features = ["full"] }
-jsonrpsee-proc-macros = "0.16.2"
+jsonrpsee = { git="https://github.com/wlmyng/jsonrpsee.git", rev= "b1b300784795f6a64d0fcdf8f03081a9bc38bde8", features = ["full"] }
+jsonrpsee-proc-macros = {git="https://github.com/wlmyng/jsonrpsee.git", rev= "b1b300784795f6a64d0fcdf8f03081a9bc38bde8"}
 hyper = "0.14"
 itertools = "0.10.4"
 linked-hash-map = "0.5.6"
