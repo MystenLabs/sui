@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { AxisBottom } from '@visx/axis';
+import { AxisBottom, AxisRight } from '@visx/axis';
 import { curveNatural } from '@visx/curve';
 import { localPoint } from '@visx/event';
 import { scaleLinear } from '@visx/scale';
@@ -12,26 +12,40 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { throttle } from 'throttle-debounce';
 
 import { type EpochGasInfo } from './types';
+import { CoinFormat, formatBalance } from '@mysten/core';
+import { SUI_DECIMALS } from '@mysten/sui.js';
 
 function formatXLabel(epoch: number) {
     return String(epoch);
 }
 
+const UNITS = ['MIST', 'SUI'] as const;
+type UnitsType = (typeof UNITS)[number];
+
 export function isDefined(d: EpochGasInfo) {
     return d.date !== null && d.referenceGasPrice !== null;
 }
 
-const SIDE_MARGIN = 30;
+const SIDE_MARGIN = 35;
 
 const bisectEpoch = bisector(({ epoch }: EpochGasInfo) => epoch).center;
+
+function useGasPriceFormat(gasPrice: bigint | number, unit: 'MIST' | 'SUI') {
+    return formatBalance(
+        gasPrice,
+        unit === 'MIST' ? 0 : SUI_DECIMALS,
+        CoinFormat.FULL
+    )
+}
 
 export type GraphProps = {
     data: EpochGasInfo[];
     width: number;
     height: number;
+    unit: UnitsType
     onHoverElement: (value: EpochGasInfo | null) => void;
 };
-export function Graph({ data, width, height, onHoverElement }: GraphProps) {
+export function Graph({ data, width, height, onHoverElement, unit }: GraphProps) {
     // remove not defined data (graph displays better and helps with hovering/selecting hovered element)
     const adjData = useMemo(() => data.filter(isDefined), [data]);
     const graphTop = 15;
@@ -57,10 +71,12 @@ export function Graph({ data, width, height, onHoverElement }: GraphProps) {
                 ) as [number, number],
                 range: [graphButton, graphTop],
             }),
-        [adjData, graphTop, graphButton]
+        [adjData, graphTop, graphButton, unit]
     );
     const [isTooltipVisible, setIsTooltipVisible] = useState(false);
     const [tooltipX, setTooltipX] = useState(SIDE_MARGIN);
+    const [tooltipY, setTooltipY] = useState(0);
+
     const [hoveredElement, setHoveredElement] = useState<EpochGasInfo | null>(
         null
     );
@@ -73,6 +89,7 @@ export function Graph({ data, width, height, onHoverElement }: GraphProps) {
             const epochIndex = bisectEpoch(adjData, xEpoch, 0);
             const selectedEpoch = adjData[epochIndex];
             setTooltipX(xScale(selectedEpoch.epoch));
+            setTooltipY(yScale(Number(selectedEpoch.referenceGasPrice)));
             setHoveredElement(selectedEpoch);
             setIsTooltipVisible(true);
         },
@@ -90,7 +107,12 @@ export function Graph({ data, width, height, onHoverElement }: GraphProps) {
     }, [handleTooltip]);
     // calculates the total ticks of 4 (~30px + some margin) digit epochs that could fit
     const totalMaxTicksForWidth = Math.floor((width - 2 * SIDE_MARGIN) / 34);
-    const totalTicks = Math.min(
+    const totalMaxTicksForLength = Math.floor((height - 2 * SIDE_MARGIN) / 28);
+    const totalVerticalTicks = Math.min(
+        adjData.length,
+        totalMaxTicksForLength < 1 ? 1 : totalMaxTicksForLength
+    );
+    const totalHorizontalTicks = Math.min(
         adjData.length,
         totalMaxTicksForWidth < 1 ? 1 : totalMaxTicksForWidth
     );
@@ -102,7 +124,7 @@ export function Graph({ data, width, height, onHoverElement }: GraphProps) {
         >
             <line
                 x1={0}
-                y1={graphTop - 5}
+                y1={graphTop - 40}
                 x2={0}
                 y2={graphButton + 10}
                 className={clsx(
@@ -112,12 +134,25 @@ export function Graph({ data, width, height, onHoverElement }: GraphProps) {
                 strokeWidth="1"
                 transform={`translate(${tooltipX})`}
             />
+            <line
+                x1={SIDE_MARGIN}
+                y1={0}
+                x2={width - SIDE_MARGIN}
+                y2={0}
+                className={clsx(
+                    'stroke-gray-60 transition-all ease-ease-out-cubic',
+                    isTooltipVisible ? 'opacity-100' : 'opacity-0'
+                )}
+                strokeWidth="1"
+                transform={`translate(0 ${tooltipY})`}
+            />
             <LinePath<EpochGasInfo>
                 curve={curveNatural}
                 data={adjData}
                 x={(d) => xScale(d.epoch)}
                 y={(d) => yScale(Number(d.referenceGasPrice!))}
                 width="1"
+                stroke='#F2BD24'
             />
             <AxisBottom
                 top={height - 30}
@@ -133,13 +168,28 @@ export function Graph({ data, width, height, onHoverElement }: GraphProps) {
                 tickFormat={(epoch) => formatXLabel(epoch as number)}
                 hideTicks
                 hideAxisLine
-                numTicks={totalTicks}
+                numTicks={totalHorizontalTicks}
+            />
+            <AxisRight
+                tickLabelProps={{
+                    fontFamily: 'none',
+                    fontSize: 'none',
+                    stroke: 'none',
+                    fill: 'none',
+                    className: 'text-subtitle font-medium fill-steel font-sans',
+                }}
+                left={5 - SIDE_MARGIN / 2}
+                scale={yScale}
+                tickFormat={(price) => useGasPriceFormat(Number(price), unit)}
+                hideTicks
+                hideAxisLine
+                numTicks={totalVerticalTicks}
             />
             <rect
                 x={SIDE_MARGIN}
-                y={graphTop - 5}
+                y={graphTop - 10}
                 width={Math.max(0, width - SIDE_MARGIN * 2)}
-                height={Math.max(0, graphButton - graphTop + 5)}
+                height={Math.max(0, graphButton - graphTop + 10)}
                 fill="transparent"
                 stroke="none"
                 onMouseEnter={(e) => {

@@ -26,15 +26,14 @@ import { ListboxSelect } from '~/ui/ListboxSelect';
 import { LoadingSpinner } from '~/ui/LoadingSpinner';
 import { Stats } from '~/ui/Stats';
 import { Text } from '~/ui/Text';
-import { Tooltip } from '~/ui/Tooltip';
 
 const UNITS = ['MIST', 'SUI'] as const;
 type UnitsType = (typeof UNITS)[number];
-const GRAPH_DURATIONS = ['7 EPOCHS', '30 EPOCHS'] as const;
+const GRAPH_DURATIONS = ['7 Epochs', '30 Epochs'] as const;
 type GraphDurationsType = (typeof GRAPH_DURATIONS)[number];
 const GRAPH_DURATIONS_MAP: Record<GraphDurationsType, number> = {
-    '7 EPOCHS': 7,
-    '30 EPOCHS': 30,
+    '7 Epochs': 7,
+    '30 Epochs': 30,
 };
 
 function useHistoricalGasPrices() {
@@ -63,8 +62,8 @@ function useHistoricalGasPrices() {
                     : null,
                 date: anEpoch.endOfEpochInfo?.epochEndTimestamp
                     ? new Date(
-                          Number(anEpoch.endOfEpochInfo?.epochEndTimestamp)
-                      )
+                        Number(anEpoch.endOfEpochInfo?.epochEndTimestamp)
+                    )
                     : null,
             }));
         },
@@ -95,10 +94,10 @@ function useGasPriceAverage(totalEpochs: number) {
 function useGasPriceFormat(gasPrice: bigint | null, unit: 'MIST' | 'SUI') {
     return gasPrice !== null
         ? formatBalance(
-              gasPrice,
-              unit === 'MIST' ? 0 : SUI_DECIMALS,
-              CoinFormat.FULL
-          )
+            gasPrice,
+            unit === 'MIST' ? 0 : SUI_DECIMALS,
+            CoinFormat.FULL
+        )
         : null;
 }
 
@@ -126,8 +125,8 @@ export function GasPriceCard({
         isDataLoading
             ? null
             : lastGasPriceInHistoricalData ??
-                  backupCurrentEpochGasPrice ??
-                  null,
+            backupCurrentEpochGasPrice ??
+            null,
         selectedUnit
     );
     const formattedAverageGasPrice = useGasPriceFormat(
@@ -135,7 +134,7 @@ export function GasPriceCard({
         selectedUnit
     );
     const [selectedGraphDuration, setSelectedGraphsDuration] =
-        useState<GraphDurationsType>('30 EPOCHS');
+        useState<GraphDurationsType>('30 Epochs');
     const graphEpochs = useMemo(
         () =>
             historicalData?.slice(
@@ -154,7 +153,7 @@ export function GasPriceCard({
         ? formatDate(hoveredElement?.date, ['month', 'day'])
         : '-';
     return (
-        <Card spacing="lg" height="full">
+        <Card spacing="lg" height="full" bg="white" border="gray45">
             <div
                 className={clsx(
                     'flex h-full flex-col',
@@ -169,9 +168,11 @@ export function GasPriceCard({
                         >
                             Reference Gas Price
                         </Heading>
-                        <Tooltip tip="Transaction sent at RGP will process promptly during regular network operations">
-                            <Info12 className="h-3.5 w-3.5" />
-                        </Tooltip>
+                        <ListboxSelect
+                            value={selectedGraphDuration}
+                            options={GRAPH_DURATIONS}
+                            onSelect={setSelectedGraphsDuration}
+                        />
                     </div>
                     <FilterList<UnitsType>
                         lessSpacing
@@ -208,7 +209,7 @@ export function GasPriceCard({
                             <div className="flex flex-row self-stretch pr-2">
                                 <div
                                     className={clsx(
-                                        'ml-3 mt-1 flex min-w-0 flex-col flex-nowrap gap-0.5 rounded-md border border-solid border-gray-45 px-2 py-1.5',
+                                        'ml-3 mt-1 flex min-w-0 flex-col flex-nowrap gap-0.5 rounded-md border border-solid border-gray-45 px-2 py-1.5 bg-gray-90',
                                         hoveredElement?.date
                                             ? 'visible'
                                             : 'invisible'
@@ -216,7 +217,7 @@ export function GasPriceCard({
                                 >
                                     <Text
                                         variant="caption/semibold"
-                                        color="hero-dark"
+                                        color="white"
                                         truncate
                                     >
                                         {formattedHoveredPrice
@@ -225,18 +226,13 @@ export function GasPriceCard({
                                     </Text>
                                     <Text
                                         variant="subtitleSmallExtra/medium"
-                                        color="steel-darker"
+                                        color="white"
                                     >
                                         Epoch {hoveredElement?.epoch},{' '}
                                         {formattedHoveredDate}
                                     </Text>
                                 </div>
                                 <div className="flex-1" />
-                                <ListboxSelect
-                                    value={selectedGraphDuration}
-                                    options={GRAPH_DURATIONS}
-                                    onSelect={setSelectedGraphsDuration}
-                                />
                             </div>
                             <div className="relative flex-1 self-stretch">
                                 <ErrorBoundary>
@@ -244,6 +240,7 @@ export function GasPriceCard({
                                         <ParentSize className="absolute">
                                             {(parent) => (
                                                 <Graph
+                                                    unit={selectedUnit}
                                                     width={parent.width}
                                                     height={parent.height}
                                                     data={graphEpochs}
