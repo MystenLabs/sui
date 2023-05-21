@@ -12,7 +12,7 @@ futures = "0.3.24"
 serde_json = "1.0.88"
 tempfile = "3.3.0"
 tokio = { workspace = true, features = ["full"] }
-jsonrpsee = { version = "0.16.2", features = ["http-client"] }
+jsonrpsee = { git="https://github.com/wlmyng/jsonrpsee.git", rev= "b1b300784795f6a64d0fcdf8f03081a9bc38bde8", features = ["http-client"] }
 tracing = "0.1.36"
 clap = { version = "3.1.14", features = ["derive"] }
 reqwest = { version = "0.11.13", default_features= false, features = ["blocking", "json", "rustls-tls"] }
