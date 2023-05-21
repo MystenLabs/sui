@@ -18,6 +18,7 @@ import BottomMenuLayout, {
 import { Text } from '_app/shared/text';
 import { AddressInput } from '_components/address-input';
 import { useSigner } from '_hooks';
+import { QredoActionIgnoredByUser } from '_src/ui/app/QredoSigner';
 import { getSignerOperationErrorMessage } from '_src/ui/app/helpers/errorMessages';
 import { useQredoTransaction } from '_src/ui/app/hooks/useQredoTransaction';
 
@@ -62,13 +63,17 @@ export function TransferNFTForm({ objectId }: { objectId: string }) {
             );
         },
         onError: (error) => {
-            toast.error(
-                <div className="max-w-xs overflow-hidden flex flex-col">
-                    <small className="text-ellipsis overflow-hidden">
-                        {getSignerOperationErrorMessage(error)}
-                    </small>
-                </div>
-            );
+            if (error instanceof QredoActionIgnoredByUser) {
+                navigate('/');
+            } else {
+                toast.error(
+                    <div className="max-w-xs overflow-hidden flex flex-col">
+                        <small className="text-ellipsis overflow-hidden">
+                            {getSignerOperationErrorMessage(error)}
+                        </small>
+                    </div>
+                );
+            }
         },
     });
 

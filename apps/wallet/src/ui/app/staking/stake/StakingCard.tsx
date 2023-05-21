@@ -16,6 +16,7 @@ import { useCallback, useMemo } from 'react';
 import { toast } from 'react-hot-toast';
 import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 
+import { QredoActionIgnoredByUser } from '../../QredoSigner';
 import Alert from '../../components/alert';
 import { getSignerOperationErrorMessage } from '../../helpers/errorMessages';
 import { useQredoTransaction } from '../../hooks/useQredoTransaction';
@@ -256,14 +257,20 @@ function StakingCard() {
                         : undefined
                 );
             } catch (error) {
-                toast.error(
-                    <div className="max-w-xs overflow-hidden flex flex-col">
-                        <strong>{unstake ? 'Unstake' : 'Stake'} failed</strong>
-                        <small className="text-ellipsis overflow-hidden">
-                            {getSignerOperationErrorMessage(error)}
-                        </small>
-                    </div>
-                );
+                if (error instanceof QredoActionIgnoredByUser) {
+                    navigate('/');
+                } else {
+                    toast.error(
+                        <div className="max-w-xs overflow-hidden flex flex-col">
+                            <strong>
+                                {unstake ? 'Unstake' : 'Stake'} failed
+                            </strong>
+                            <small className="text-ellipsis overflow-hidden">
+                                {getSignerOperationErrorMessage(error)}
+                            </small>
+                        </div>
+                    );
+                }
             }
         },
         [
