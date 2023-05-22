@@ -427,7 +427,7 @@ const provider = new JsonRpcProvider();
 
 // calls RPC method 'suix_subscribeEvent' with params:
 // [ { Sender: '0xbff6ccc8707aa517b4f1b95750a2a8c666012df3' } ]
-const subscriptionId = await provider.subscribeEvent({
+const unsubscribe = await provider.subscribeEvent({
   filter: {
     Sender:
       '0xcc2bd176a478baea9a0de7a24cd927661cc6e860d5bacecb9a138ef20dbab231',
@@ -437,11 +437,8 @@ const subscriptionId = await provider.subscribeEvent({
   },
 });
 
-// later, to unsubscribe
-// calls RPC method 'suix_unsubscribeEvent' with params: [ subscriptionId ]
-const subFoundAndRemoved = await provider.unsubscribeEvent({
-  id: subscriptionId,
-});
+// later, to unsubscribe:
+await unsubscribe();
 ```
 
 Subscribe to all events created by a package's `nft` module
