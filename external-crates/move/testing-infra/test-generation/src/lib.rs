@@ -24,7 +24,7 @@ use move_binary_format::{
         AbilitySet, CompiledModule, FunctionDefinitionIndex, SignatureToken, StructHandleIndex,
     },
 };
-use move_bytecode_verifier::verify_module;
+use move_bytecode_verifier::verify_module_unmetered;
 use move_compiler::{compiled_unit::AnnotatedCompiledUnit, Compiler};
 use move_core_types::{
     account_address::AccountAddress,
@@ -44,7 +44,10 @@ use tracing::{debug, error, info};
 
 /// This function calls the Bytecode verifier to test it
 fn run_verifier(module: CompiledModule) -> Result<CompiledModule, String> {
-    verify_module(&module)
+    match verify_module_unmetered(&module) {
+        Ok(_) => Ok(module),
+        Err(err) => Err(format!("Module verification failed: {:#?}", err)),
+    }
 }
 
 static STORAGE_WITH_MOVE_STDLIB: Lazy<InMemoryStorage> = Lazy::new(|| {
@@ -312,26 +315,19 @@ pub fn bytecode_generation(
                 debug!("Done...Running module on VM...");
                 let execution_result = run_vm(verified_module);
                 match execution_result {
-                    Ok(execution_result) => match execution_result {
-                        Ok(_) => {
+                    Ok(_) => {
+                        status = Status::Valid;
+                    }
+                    Err(e) => match e.status_code() {
+                        StatusCode::ARITHMETIC_ERROR | StatusCode::OUT_OF_GAS => {
                             status = Status::Valid;
                         }
-                        Err(e) => match e.status_code() {
-                            StatusCode::ARITHMETIC_ERROR | StatusCode::OUT_OF_GAS => {
-                                status = Status::Valid;
-                            }
-                            _ => {
-                                error!("{}", e);
-                                let uid = rng.gen::<u64>();
-                                output_error_case(module.clone(), output_path.clone(), uid, tid);
-                            }
-                        },
+                        _ => {
+                            error!("{}", e);
+                            let uid = rng.gen::<u64>();
+                            output_error_case(module.clone(), output_path.clone(), uid, tid);
+                        }
                     },
-                    Err(_) => {
-                        // Save modules that cause the VM runtime to panic
-                        let uid = rng.gen::<u64>();
-                        output_error_case(module.clone(), output_path.clone(), uid, tid);
-                    }
                 }
             } else {
                 status = Status::Valid;
