@@ -1,6 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-import { array, boolean, Infer, nullable, object, string } from 'superstruct';
+import {
+  array,
+  boolean,
+  Infer,
+  nullable,
+  number,
+  object,
+  string,
+} from 'superstruct';
 import { SuiValidatorSummary } from './validator';
 
 export const EndOfEpochInfo = object({
@@ -28,6 +36,7 @@ export const EpochInfo = object({
   firstCheckpointId: string(),
   epochStartTimestamp: string(),
   endOfEpochInfo: nullable(EndOfEpochInfo),
+  referenceGasPrice: nullable(number()),
 });
 
 export type EpochInfo = Infer<typeof EpochInfo>;

@@ -8,11 +8,7 @@ import { TooltipWithBounds, useTooltip } from '@visx/tooltip';
 import React, { type ReactNode, useCallback, useMemo } from 'react';
 
 import { WorldMap } from './WorldMap';
-import {
-    type ValidatorMapResponse,
-    type NodeLocation,
-    type ValidatorMapValidator,
-} from './types';
+import { type ValidatorMapResponse, type ValidatorMapValidator } from './types';
 
 import { useNetwork } from '~/context';
 import { useAppsBackend } from '~/hooks/useAppsBackend';
@@ -20,8 +16,7 @@ import { Card } from '~/ui/Card';
 import { Heading } from '~/ui/Heading';
 import { Placeholder } from '~/ui/Placeholder';
 import { Text } from '~/ui/Text';
-
-const HOST = 'https://imgmod.sui.io';
+import { Network } from '~/utils/api/DefaultRpcClient';
 
 type ValidatorsMap = Record<string, ValidatorMapValidator>;
 
@@ -52,53 +47,15 @@ export default function ValidatorMap({ minHeight }: Props) {
 
     const { request } = useAppsBackend();
 
-    const { data: nodeData, isSuccess } = useQuery({
-        queryKey: ['node-map'],
-        queryFn: async () => {
-            const res = await fetch(
-                `${HOST}/location?${new URLSearchParams({
-                    version: 'v2',
-                    window: '1d',
-                })}`,
-                {
-                    method: 'GET',
-                }
-            );
-
-            if (!res.ok) {
-                throw new Error('Failed to fetch node map data');
-            }
-
-            return res.json() as Promise<NodeLocation[]>;
-        },
-    });
-
-    // TODO: make sure this is the right way to get node count
-    const nodeCount = useMemo<number | null>(() => {
-        let count = 0;
-        if (!nodeData) {
-            return null;
-        }
-        nodeData.forEach((node) => {
-            count += node.count;
-        });
-
-        return count;
-    }, [nodeData]);
-
-    const {
-        data: validatorData,
-        isLoading,
-        isError,
-    } = useQuery({
+    const { data, isLoading, isError } = useQuery({
         queryKey: ['validator-map'],
         queryFn: () =>
             request<ValidatorMapResponse>('validator-map', {
                 network: network.toLowerCase(),
             }),
-        // NOTE: This selects out just the validators for now, since we don't currently use the node count:
-        select: ({ validators }) => validators,
     });
+
+    const validatorData = data?.validators;
 
     const { countryCount, validatorMap } = useMemo<{
         countryCount: number | null;
@@ -200,15 +157,17 @@ export default function ValidatorMap({ minHeight }: Props) {
                                     '--'
                             }
                         </NodeStat>
-                        <NodeStat title="Nodes">
-                            {isLoading && (
-                                <Placeholder width="60px" height="0.8em" />
-                            )}
-                            {(isSuccess &&
-                                nodeCount &&
-                                numberFormatter.format(nodeCount)) ||
-                                '--'}
-                        </NodeStat>
+
+                        {network === Network.MAINNET && (
+                            <NodeStat title="Nodes">
+                                {isLoading && (
+                                    <Placeholder width="60px" height="0.8em" />
+                                )}
+                                {(data?.nodeCount &&
+                                    numberFormatter.format(data?.nodeCount)) ||
+                                    '--'}
+                            </NodeStat>
+                        )}
                     </div>
                 </div>
 
