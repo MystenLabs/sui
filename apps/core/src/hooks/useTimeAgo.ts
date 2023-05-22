@@ -100,7 +100,7 @@ export const timeAgo = (
             [TIME_LABEL.day[dateKeyType], TimeUnit.ONE_DAY],
             [TIME_LABEL.hour[dateKeyType], TimeUnit.ONE_HOUR],
         ];
-    } else if (timeCol >= maxTimeUnit && maxTimeUnit >= TimeUnit.ONE_HOUR) {
+    } else if (timeCol >= TimeUnit.ONE_HOUR) {
         timeUnit = [
             [TIME_LABEL.hour[dateKeyType], TimeUnit.ONE_HOUR],
             [TIME_LABEL.min[dateKeyType], TimeUnit.ONE_MINUTE],
