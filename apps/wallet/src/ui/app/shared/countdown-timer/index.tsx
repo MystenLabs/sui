@@ -38,7 +38,13 @@ export function CountDownTimer({
     endLabel = 'now',
     ...styles
 }: CountDownTimerProps) {
-    const timeAgo = useTimeAgo(timestamp, false, true, endLabel);
+    const timeAgo = useTimeAgo({
+        timeFrom: timestamp || null,
+        shortedTimeLabel: false,
+        shouldEnd: true,
+        endLabel: endLabel,
+        maxLabelInHours: true,
+    });
 
     return (
         <div className={timeStyle(styles)}>

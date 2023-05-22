@@ -33,16 +33,23 @@ const TIME_LABEL = {
 const ONE_SECOND = 1000;
 const ONE_MINUTE = ONE_SECOND * 60;
 const ONE_HOUR = ONE_MINUTE * 60;
+const ONE_DAY = ONE_HOUR * 24;
 
 /**
  * Formats a timestamp using `timeAgo`, and automatically updates it when the value is small.
  */
-export function useTimeAgo(
-    timeFrom?: number | null,
-    shortedTimeLabel?: boolean,
-    shouldEnd?: boolean,
-    endLabel?: string
-) {
+
+type TimeAgoOptions = {
+    timeFrom: number | null;
+    shortedTimeLabel: boolean;
+    shouldEnd?: boolean;
+    endLabel?: string;
+    maxLabelInHours?: boolean;
+};
+
+export function useTimeAgo(options: TimeAgoOptions) {
+    const { timeFrom, shortedTimeLabel, shouldEnd, endLabel, maxLabelInHours } =
+        options;
     const [now, setNow] = useState(() => Date.now());
 
     // end interval when the difference between now and timeFrom is less than or equal to 0
@@ -53,8 +60,9 @@ export function useTimeAgo(
         continueInterval;
 
     const formattedTime = useMemo(
-        () => timeAgo(timeFrom, now, shortedTimeLabel, endLabel),
-        [now, timeFrom, shortedTimeLabel, endLabel]
+        () =>
+            timeAgo(timeFrom, now, shortedTimeLabel, endLabel, maxLabelInHours),
+        [timeFrom, now, shortedTimeLabel, endLabel, maxLabelInHours]
     );
 
     useEffect(() => {
@@ -71,7 +79,8 @@ export const timeAgo = (
     epochMilliSecs: number | null | undefined,
     timeNow?: number | null,
     shortenTimeLabel?: boolean,
-    endLabel = `< 1 sec`
+    endLabel = `< 1 sec`,
+    maxLabelInHours = false
 ): string => {
     if (!epochMilliSecs) return '';
 
@@ -81,7 +90,12 @@ export const timeAgo = (
     let timeUnit: [string, number][];
     let timeCol = Math.abs(timeNow - epochMilliSecs);
 
-    if (timeCol >= ONE_HOUR) {
+    if (timeCol >= ONE_DAY && !maxLabelInHours) {
+        timeUnit = [
+            [TIME_LABEL.day[dateKeyType], ONE_DAY],
+            [TIME_LABEL.hour[dateKeyType], ONE_HOUR],
+        ];
+    } else if (timeCol >= ONE_HOUR) {
         timeUnit = [
             [TIME_LABEL.hour[dateKeyType], ONE_HOUR],
             [TIME_LABEL.min[dateKeyType], ONE_MINUTE],
