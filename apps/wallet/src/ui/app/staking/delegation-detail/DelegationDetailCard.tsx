@@ -2,7 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useFeature } from '@growthbook/growthbook-react';
-import { useGetValidatorsApy, useGetSystemState } from '@mysten/core';
+import {
+    useGetValidatorsApy,
+    useGetSystemState,
+    useCoinMetadata,
+} from '@mysten/core';
 import { ArrowLeft16, StakeAdd16, StakeRemove16 } from '@mysten/icons';
 import { SUI_TYPE_ARG } from '@mysten/sui.js';
 import { useMemo } from 'react';
@@ -20,8 +24,10 @@ import { Text } from '_app/shared/text';
 import { IconTooltip } from '_app/shared/tooltip';
 import Alert from '_components/alert';
 import LoadingIndicator from '_components/loading/LoadingIndicator';
+import { parseAmount } from '_helpers';
 import { useAppSelector, useGetCoinBalance } from '_hooks';
 import { API_ENV } from '_src/shared/api-env';
+import { MIN_NUMBER_SUI_TO_STAKE } from '_src/shared/constants';
 import { FEATURES } from '_src/shared/experimentation/features';
 import FaucetRequestButton from '_src/ui/app/shared/faucet/FaucetRequestButton';
 
@@ -53,6 +59,21 @@ export function DelegationDetailCard({
         SUI_TYPE_ARG,
         accountAddress
     );
+    const { data: metadata } = useCoinMetadata(SUI_TYPE_ARG);
+    // set minimum stake amount to 1 SUI
+    const showRequestMoreSuiToken = useMemo(() => {
+        if (
+            !suiCoinBalance?.totalBalance ||
+            !metadata?.decimals ||
+            apiEnv === API_ENV.mainnet
+        )
+            return false;
+
+        return (
+            parseAmount(suiCoinBalance.totalBalance, metadata.decimals) >
+            parseAmount(MIN_NUMBER_SUI_TO_STAKE, metadata.decimals)
+        );
+    }, [apiEnv, metadata?.decimals, suiCoinBalance?.totalBalance]);
 
     const { data: rollingAverageApys } = useGetValidatorsApy();
 
@@ -249,10 +270,19 @@ export function DelegationDetailCard({
                 </Content>
 
                 {/* show faucet request button on devnet or testnet whenever there is only one coin  */}
-                {apiEnv !== API_ENV.mainnet &&
-                suiCoinBalance &&
-                suiCoinBalance?.coinObjectCount <= 1 ? (
-                    <FaucetRequestButton size="tall" />
+                {showRequestMoreSuiToken ? (
+                    <div className="flex flex-col gap-4 items-center">
+                        <div className="w-8/12 text-center">
+                            <Text
+                                variant="pSubtitle"
+                                weight="medium"
+                                color="steel-darker"
+                            >
+                                You need a minimum of 1 SUI to continue staking.
+                            </Text>
+                        </div>
+                        <FaucetRequestButton size="tall" />
+                    </div>
                 ) : (
                     <Button
                         size="tall"
