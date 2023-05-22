@@ -44,7 +44,7 @@ type TimeAgoOptions = {
     shortedTimeLabel: boolean;
     shouldEnd?: boolean;
     endLabel?: string;
-    maxTimeUnitInHours?: boolean;
+    maxTimeLabelInHours?: boolean;
 };
 
 export function useTimeAgo(options: TimeAgoOptions) {
@@ -53,7 +53,7 @@ export function useTimeAgo(options: TimeAgoOptions) {
         shortedTimeLabel,
         shouldEnd,
         endLabel,
-        maxTimeUnitInHours,
+        maxTimeLabelInHours,
     } = options;
     const [now, setNow] = useState(() => Date.now());
 
@@ -71,9 +71,9 @@ export function useTimeAgo(options: TimeAgoOptions) {
                 now,
                 shortedTimeLabel,
                 endLabel,
-                maxTimeUnitInHours
+                maxTimeLabelInHours
             ),
-        [timeFrom, now, shortedTimeLabel, endLabel, maxTimeUnitInHours]
+        [timeFrom, now, shortedTimeLabel, endLabel, maxTimeLabelInHours]
     );
 
     useEffect(() => {
@@ -91,7 +91,7 @@ export const timeAgo = (
     timeNow?: number | null,
     shortenTimeLabel?: boolean,
     endLabel = `< 1 sec`,
-    maxTimeUnitInHours = false
+    maxTimeLabelInHours = false
 ): string => {
     if (!epochMilliSecs) return '';
 
@@ -101,7 +101,7 @@ export const timeAgo = (
     let timeUnit: [string, number][];
     let timeCol = Math.abs(timeNow - epochMilliSecs);
 
-    if (timeCol >= ONE_DAY && !maxTimeUnitInHours) {
+    if (timeCol >= ONE_DAY && !maxTimeLabelInHours) {
         timeUnit = [
             [TIME_LABEL.day[dateKeyType], ONE_DAY],
             [TIME_LABEL.hour[dateKeyType], ONE_HOUR],

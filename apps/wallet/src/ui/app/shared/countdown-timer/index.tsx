@@ -43,7 +43,7 @@ export function CountDownTimer({
         shortedTimeLabel: false,
         shouldEnd: true,
         endLabel: endLabel,
-        maxLabelInHours: true,
+        maxTimeLabelInHours: true,
     });
 
     return (
