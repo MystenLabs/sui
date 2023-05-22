@@ -20,4 +20,4 @@ export const AddressMetrics = object({
   cumulativeAddresses: string(),
   cumulativeActiveAddresses: string(),
   dailyActiveAddresses: string(),
-})
+});
