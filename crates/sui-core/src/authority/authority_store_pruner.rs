@@ -415,7 +415,7 @@ mod tests {
             // so we can read the accurate number of retained versions
             &ReadWriteOptions::default(),
         )?;
-        let iter = objects.iter();
+        let iter = objects.unbounded_iter();
         for (k, _v) in iter {
             after_pruning.insert(k);
         }

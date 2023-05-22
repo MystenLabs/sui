@@ -316,7 +316,7 @@ impl AuthorityStore {
         let data = self
             .perpetual_tables
             .events
-            .iter()
+            .unbounded_iter()
             .skip_to(&(*event_digest, 0))?
             .take_while(|((digest, _), _)| digest == event_digest)
             .map(|(_, e)| e)
@@ -481,7 +481,7 @@ impl AuthorityStore {
         let mut iterator = self
             .perpetual_tables
             .objects
-            .iter()
+            .unbounded_iter()
             .skip_prior_to(&ObjectKey(*object_id, prior_version))?;
 
         if let Some((object_key, value)) = iterator.next() {
@@ -1167,7 +1167,7 @@ impl AuthorityStore {
         let mut iterator = self
             .perpetual_tables
             .owned_object_transaction_locks
-            .iter()
+            .unbounded_iter()
             // Make the max possible entry for this object ID.
             .skip_prior_to(&(object_id, SequenceNumber::MAX, ObjectDigest::MAX))?;
         Ok(iterator
