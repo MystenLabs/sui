@@ -19,8 +19,7 @@ use rand::thread_rng;
 use std::{collections::BTreeSet, sync::Arc, time::Duration};
 use storage::NodeStorage;
 use test_utils::{
-    latest_protocol_version, make_optimal_certificates, make_optimal_signed_certificates, temp_dir,
-    CommitteeFixture,
+    make_optimal_certificates, make_optimal_signed_certificates, temp_dir, CommitteeFixture,
 };
 use tokio::sync::watch;
 use tonic::transport::Channel;
@@ -137,7 +136,6 @@ async fn test_rounds_errors() {
         &mut tx_shutdown,
         tx_feedback,
         &Registry::new(),
-        latest_protocol_version(),
     );
 
     // AND Wait for tasks to start
@@ -231,7 +229,6 @@ async fn test_rounds_return_successful_response() {
         &mut tx_shutdown,
         tx_feedback,
         &Registry::new(),
-        latest_protocol_version(),
     );
 
     // AND Wait for tasks to start
@@ -252,7 +249,6 @@ async fn test_rounds_return_successful_response() {
             .authorities()
             .map(|authority| authority.id())
             .collect::<Vec<AuthorityIdentifier>>(),
-        &latest_protocol_version(),
     );
 
     // Feed the certificates to the Dag
@@ -335,13 +331,8 @@ async fn test_node_read_causal_signed_certificates() {
         .authorities()
         .map(|a| (a.id(), a.keypair().copy()))
         .collect::<Vec<_>>();
-    let (certificates, _next_parents) = make_optimal_signed_certificates(
-        1..=4,
-        &genesis,
-        &committee,
-        &keys,
-        &latest_protocol_version(),
-    );
+    let (certificates, _next_parents) =
+        make_optimal_signed_certificates(1..=4, &genesis, &committee, &keys);
 
     collection_ids.extend(
         certificates
@@ -401,7 +392,6 @@ async fn test_node_read_causal_signed_certificates() {
         &mut tx_shutdown,
         tx_feedback,
         &Registry::new(),
-        latest_protocol_version(),
     );
 
     let (tx_new_certificates_2, rx_new_certificates_2) =
@@ -449,7 +439,6 @@ async fn test_node_read_causal_signed_certificates() {
         &mut tx_shutdown_2,
         tx_feedback_2,
         &Registry::new(),
-        latest_protocol_version(),
     );
 
     // Wait for tasks to start
