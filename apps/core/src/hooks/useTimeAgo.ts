@@ -44,12 +44,17 @@ type TimeAgoOptions = {
     shortedTimeLabel: boolean;
     shouldEnd?: boolean;
     endLabel?: string;
-    maxLabelInHours?: boolean;
+    maxTimeUnitInHours?: boolean;
 };
 
 export function useTimeAgo(options: TimeAgoOptions) {
-    const { timeFrom, shortedTimeLabel, shouldEnd, endLabel, maxLabelInHours } =
-        options;
+    const {
+        timeFrom,
+        shortedTimeLabel,
+        shouldEnd,
+        endLabel,
+        maxTimeUnitInHours,
+    } = options;
     const [now, setNow] = useState(() => Date.now());
 
     // end interval when the difference between now and timeFrom is less than or equal to 0
@@ -61,8 +66,14 @@ export function useTimeAgo(options: TimeAgoOptions) {
 
     const formattedTime = useMemo(
         () =>
-            timeAgo(timeFrom, now, shortedTimeLabel, endLabel, maxLabelInHours),
-        [timeFrom, now, shortedTimeLabel, endLabel, maxLabelInHours]
+            timeAgo(
+                timeFrom,
+                now,
+                shortedTimeLabel,
+                endLabel,
+                maxTimeUnitInHours
+            ),
+        [timeFrom, now, shortedTimeLabel, endLabel, maxTimeUnitInHours]
     );
 
     useEffect(() => {
@@ -80,7 +91,7 @@ export const timeAgo = (
     timeNow?: number | null,
     shortenTimeLabel?: boolean,
     endLabel = `< 1 sec`,
-    maxLabelInHours = false
+    maxTimeUnitInHours = false
 ): string => {
     if (!epochMilliSecs) return '';
 
@@ -90,7 +101,7 @@ export const timeAgo = (
     let timeUnit: [string, number][];
     let timeCol = Math.abs(timeNow - epochMilliSecs);
 
-    if (timeCol >= ONE_DAY && !maxLabelInHours) {
+    if (timeCol >= ONE_DAY && !maxTimeUnitInHours) {
         timeUnit = [
             [TIME_LABEL.day[dateKeyType], ONE_DAY],
             [TIME_LABEL.hour[dateKeyType], ONE_HOUR],
