@@ -22,6 +22,9 @@ export function useQredoTransaction() {
             body={
                 <div className="flex flex-col gap-2.5 text-center items-center relative">
                     <div className="bg-[url('_assets/images/qredo.png')] h-14 w-14 bg-cover" />
+                    <div className="text-steel">
+                        <LoadingIndicator color="inherit" />
+                    </div>
                     <Heading variant="heading6" color="gray-90" weight="medium">
                         Awaiting transaction approval in the Qredo app
                     </Heading>
@@ -30,7 +33,6 @@ export function useQredoTransaction() {
                         custody approvals have been performed the transaction
                         will complete.
                     </Text>
-                    <LoadingIndicator />
                     <Button
                         text="Close"
                         onClick={() => {
