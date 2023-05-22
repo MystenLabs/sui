@@ -22,6 +22,8 @@ export function isDefined(d: EpochGasInfo) {
 }
 
 const SIDE_MARGIN = 30;
+// Need this for spacing for the y-axis
+const HORIZONTAL_OFFSET = 5;
 
 const bisectEpoch = bisector(({ epoch }: EpochGasInfo) => epoch).center;
 
@@ -109,9 +111,9 @@ export function Graph({ data, width, height, onHoverElement }: GraphProps) {
             className="stroke-steel-dark/80 transition hover:stroke-hero"
         >
             <line
-                x1={0}
+                x1={HORIZONTAL_OFFSET}
                 y1={graphTop - 40}
-                x2={0}
+                x2={HORIZONTAL_OFFSET}
                 y2={graphButton + 10}
                 className={clsx(
                     'stroke-gray-60 transition-all ease-ease-out-cubic',
@@ -121,9 +123,9 @@ export function Graph({ data, width, height, onHoverElement }: GraphProps) {
                 transform={`translate(${tooltipX})`}
             />
             <line
-                x1={SIDE_MARGIN}
+                x1={SIDE_MARGIN + HORIZONTAL_OFFSET}
                 y1={0}
-                x2={width - SIDE_MARGIN}
+                x2={width - SIDE_MARGIN + HORIZONTAL_OFFSET}
                 y2={0}
                 className={clsx(
                     'stroke-gray-60 transition-all ease-ease-out-cubic',
@@ -143,6 +145,7 @@ export function Graph({ data, width, height, onHoverElement }: GraphProps) {
                 fill="#F2BD24"
                 fillOpacity={0.1}
                 strokeOpacity={1}
+                transform={`translate(${HORIZONTAL_OFFSET})`}
             />
             <LinePath<EpochGasInfo>
                 curve={curveMonotoneX}
@@ -151,6 +154,7 @@ export function Graph({ data, width, height, onHoverElement }: GraphProps) {
                 y={(d) => yScale(Number(d.referenceGasPrice!))}
                 width="1"
                 stroke="#F2BD24"
+                transform={`translate(${HORIZONTAL_OFFSET})`}
             />
             <AxisBottom
                 top={height - 30}
@@ -167,6 +171,7 @@ export function Graph({ data, width, height, onHoverElement }: GraphProps) {
                 hideTicks
                 hideAxisLine
                 numTicks={totalHorizontalTicks}
+                left={HORIZONTAL_OFFSET}
             />
             <AxisRight
                 tickLabelProps={{
@@ -176,7 +181,7 @@ export function Graph({ data, width, height, onHoverElement }: GraphProps) {
                     fill: 'none',
                     className: 'text-subtitle font-medium fill-steel font-sans',
                 }}
-                left={20 - SIDE_MARGIN / 2}
+                left={SIDE_MARGIN / 2 - HORIZONTAL_OFFSET * 2}
                 scale={yScale}
                 hideTicks
                 hideAxisLine
@@ -201,6 +206,7 @@ export function Graph({ data, width, height, onHoverElement }: GraphProps) {
                     setIsTooltipVisible(false);
                     setHoveredElement(null);
                 }}
+                transform={`translate(${HORIZONTAL_OFFSET})`}
             />
         </svg>
     );
