@@ -458,6 +458,7 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
                     transaction_deny_config: Default::default(),
                     certificate_deny_config: Default::default(),
                     state_debug_dump_config: self.state_debug_dump_config.clone(),
+                    node_stream_producer: None,
                 }
             })
             .collect();
@@ -731,6 +732,7 @@ impl<'a> FullnodeConfigBuilder<'a> {
             transaction_deny_config: Default::default(),
             certificate_deny_config: Default::default(),
             state_debug_dump_config: Default::default(),
+            node_stream_producer: None,
         })
     }
 }

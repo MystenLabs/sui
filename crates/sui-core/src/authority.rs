@@ -1460,6 +1460,27 @@ impl AuthorityState {
             .process_object_index(effects, epoch_store)
             .tap_err(|e| warn!(tx_digest=?digest, "Failed to process object index, index_tx is skipped: {e}"))?;
 
+        let epoch_id = effects.executed_epoch();
+        let sender = cert.data().transaction_data().sender();
+        // Is this the right one?
+        let checkpoint_id = self
+            .checkpoint_store
+            .get_highest_executed_checkpoint_seq_number();
+
+        if indexes.node_stream_supported() {
+            indexes.handle_node_stream(
+                timestamp_ms,
+                epoch_id,
+                checkpoint_id.unwrap().unwrap_or(0), // TODO: handle error
+                &sender,
+                digest,
+                cert,
+                effects,
+                &loaded_child_objects,
+                &self.database,
+            );
+        }
+
         indexes
             .index_tx(
                 cert.data().intent_message().value.sender(),

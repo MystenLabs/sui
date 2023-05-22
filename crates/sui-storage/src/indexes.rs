@@ -13,6 +13,7 @@ use std::sync::Arc;
 use itertools::Itertools;
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::{ModuleId, StructTag, TypeTag};
+use parking_lot::Mutex;
 use prometheus::{register_int_counter_with_registry, IntCounter, Registry};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -206,6 +207,7 @@ pub struct IndexStore {
     caches: IndexStoreCaches,
     metrics: Arc<IndexStoreMetrics>,
     max_type_length: u64,
+    node_stream_producer: Option<Arc<Mutex<node_stream::producer_ex::NodeStreamProducer>>>,
 }
 
 // These functions are used to initialize the DB tables
@@ -258,6 +260,15 @@ fn coin_index_table_default_config() -> DBOptions {
 
 impl IndexStore {
     pub fn new(path: PathBuf, registry: &Registry, max_type_length: Option<u64>) -> Self {
+        Self::new_with_node_stream(path, registry, max_type_length, None)
+    }
+
+    pub fn new_with_node_stream(
+        path: PathBuf,
+        registry: &Registry,
+        max_type_length: Option<u64>,
+        node_stream_host_addr: Option<std::net::SocketAddr>,
+    ) -> Self {
         let tables =
             IndexStoreTables::open_tables_read_write(path, MetricConf::default(), None, None);
         let metrics = IndexStoreMetrics::new(registry);
@@ -281,6 +292,13 @@ impl IndexStore {
             caches,
             metrics: Arc::new(metrics),
             max_type_length: max_type_length.unwrap_or(128),
+            node_stream_producer: node_stream_host_addr.map(|w| {
+                Arc::new(
+                    node_stream::producer_ex::NodeStreamProducer::new(w)
+                        .unwrap()
+                        .into(), // TODO: handle unwrap
+                )
+            }),
         }
     }
 
@@ -623,6 +641,47 @@ impl IndexStore {
                 .await?;
         }
         Ok(sequence)
+    }
+
+    pub fn node_stream_supported(&self) -> bool {
+        self.node_stream_producer.is_some()
+    }
+
+    pub fn handle_node_stream(
+        &self,
+        node_timestamp_ms: u64,
+        epoch_id: u64,
+        checkpoint_id: u64,
+        sender: &SuiAddress,
+        tx_digest: &TransactionDigest,
+        cert: &sui_types::executable_transaction::VerifiedExecutableTransaction,
+        effects: &sui_types::effects::TransactionEffects,
+        loaded_child_objects: &BTreeMap<ObjectID, SequenceNumber>,
+        store: &dyn sui_types::storage::ObjectStore,
+    ) {
+        if !self.node_stream_supported() {
+            tracing::info!("Node stream not supported");
+            return;
+        }
+        node_stream::example::from_post_exec(
+            node_timestamp_ms,
+            checkpoint_id,
+            sender,
+            tx_digest,
+            cert,
+            effects,
+            loaded_child_objects,
+            store,
+        )
+        .into_iter()
+        .for_each(|data| {
+            self.node_stream_producer
+                .as_ref()
+                .unwrap()
+                .lock()
+                .send(epoch_id, data.1, &data.0)
+                .unwrap(); // TODO: handle errors
+        });
     }
 
     pub fn next_sequence_number(&self) -> TxSequenceNumber {

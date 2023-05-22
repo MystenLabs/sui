@@ -97,6 +97,9 @@ pub struct NodeConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub metrics: Option<MetricsConfig>,
 
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub node_stream_producer: Option<SocketAddr>,
+
     /// In a `sui-node` binary, this is set to SupportedProtocolVersions::SYSTEM_DEFAULT
     /// in sui-node/src/main.rs. It is present in the config so that it can be changed by tests in
     /// order to test protocol upgrades.

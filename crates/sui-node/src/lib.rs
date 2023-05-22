@@ -291,12 +291,13 @@ impl SuiNode {
         );
 
         let index_store = if is_full_node && config.enable_index_processing {
-            Some(Arc::new(IndexStore::new(
+            Some(Arc::new(IndexStore::new_with_node_stream(
                 config.db_path().join("indexes"),
                 &prometheus_registry,
                 epoch_store
                     .protocol_config()
                     .max_move_identifier_len_as_option(),
+                config.node_stream_producer,
             )))
         } else {
             None
