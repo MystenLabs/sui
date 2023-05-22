@@ -199,7 +199,9 @@ pub struct AuthorityEpochTables {
     /// versions from the transaction effect. Next object versions are not updated.
     ///
     /// REQUIRED: all authorities must assign the same shared object versions for each transaction.
+    #[default_options_override_fn = "consensus_handler_write_config"]
     assigned_shared_object_versions: DBMap<TransactionDigest, Vec<(ObjectID, SequenceNumber)>>,
+    #[default_options_override_fn = "consensus_handler_write_config"]
     next_shared_object_versions: DBMap<ObjectID, SequenceNumber>,
 
     /// Certificates that have been received from clients or received from consensus, but not yet
@@ -211,7 +213,7 @@ pub struct AuthorityEpochTables {
     /// progress. But it is more complex, because it would be necessary to track inflight
     /// executions not ordered by indices. For now, tracking inflight certificates as a map
     /// seems easier.
-    #[default_options_override_fn = "pending_execution_table_default_config"]
+    #[default_options_override_fn = "consensus_handler_write_config"]
     pending_execution: DBMap<TransactionDigest, TrustedExecutableTransaction>,
 
     /// Track which transactions have been processed in handle_consensus_transaction. We must be
@@ -222,6 +224,7 @@ pub struct AuthorityEpochTables {
     /// Entries in this table can be garbage collected whenever we can prove that we won't receive
     /// another handle_consensus_transaction call for the given digest. This probably means at
     /// epoch change.
+    #[default_options_override_fn = "pending_execution_table_default_config"]
     consensus_message_processed: DBMap<SequencedConsensusTransactionKey, bool>,
 
     /// Map stores pending transactions that this authority submitted to consensus
@@ -236,6 +239,7 @@ pub struct AuthorityEpochTables {
     /// represents the index of the latest consensus message this authority processed. This field is written
     /// by a single process acting as consensus (light) client. It is used to ensure the authority processes
     /// every message output by consensus (and in the right order).
+    #[default_options_override_fn = "pending_execution_table_default_config"]
     last_consensus_index: DBMap<u64, ExecutionIndicesWithHash>,
 
     /// this table is not used
@@ -246,6 +250,7 @@ pub struct AuthorityEpochTables {
     reconfig_state: DBMap<u64, ReconfigState>,
 
     /// Validators that have sent EndOfPublish message in this epoch
+    #[default_options_override_fn = "pending_execution_table_default_config"]
     end_of_publish: DBMap<AuthorityName, ()>,
 
     // todo - if we move processing of entire nw commit into single DB batch,
@@ -275,6 +280,7 @@ pub struct AuthorityEpochTables {
 
     /// When we see certificate through consensus for the first time, we record
     /// user signature for this transaction here. This will be included in the checkpoint later.
+    #[default_options_override_fn = "pending_execution_table_default_config"]
     user_signatures_for_checkpoints: DBMap<TransactionDigest, Vec<GenericSignature>>,
 
     /// This table is not used
@@ -289,11 +295,18 @@ pub struct AuthorityEpochTables {
     pub state_hash_by_checkpoint: DBMap<CheckpointSequenceNumber, Accumulator>,
 
     /// Record of the capabilities advertised by each authority.
+    #[default_options_override_fn = "pending_execution_table_default_config"]
     authority_capabilities: DBMap<AuthorityName, AuthorityCapabilities>,
 
     /// Contains a single key, which overrides the value of
     /// ProtocolConfig::buffer_stake_for_protocol_upgrade_bps
     override_protocol_upgrade_buffer_stake: DBMap<u64, u64>,
+}
+
+fn consensus_handler_write_config() -> DBOptions {
+    default_db_options()
+        .optimize_for_write_throughput()
+        .optimize_for_large_values_no_scan(1 << 10)
 }
 
 fn signed_transactions_table_default_config() -> DBOptions {
