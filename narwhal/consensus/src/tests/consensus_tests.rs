@@ -9,7 +9,6 @@ use std::collections::BTreeSet;
 use std::sync::Arc;
 use storage::NodeStorage;
 use telemetry_subscribers::TelemetryGuards;
-use test_utils::latest_protocol_version;
 use test_utils::{temp_dir, CommitteeFixture};
 use tokio::sync::watch;
 
@@ -53,13 +52,8 @@ async fn test_consensus_recovery_with_bullshark() {
         .iter()
         .map(|x| x.digest())
         .collect::<BTreeSet<_>>();
-    let (certificates, _next_parents) = test_utils::make_optimal_certificates(
-        &committee,
-        1..=7,
-        &genesis,
-        &ids,
-        &latest_protocol_version(),
-    );
+    let (certificates, _next_parents) =
+        test_utils::make_optimal_certificates(&committee, 1..=7, &genesis, &ids);
 
     // AND Spawn the consensus engine.
     let (tx_waiter, rx_waiter) = test_utils::test_channel!(100);
