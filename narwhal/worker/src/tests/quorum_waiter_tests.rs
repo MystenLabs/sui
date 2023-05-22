@@ -3,9 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 use super::*;
 use crate::NUM_SHUTDOWN_RECEIVERS;
-use test_utils::{
-    batch, latest_protocol_version, test_network, CommitteeFixture, WorkerToWorkerMockServer,
-};
+use test_utils::{batch, test_network, CommitteeFixture, WorkerToWorkerMockServer};
 use types::PreSubscribedBroadcastSender;
 
 #[tokio::test]
@@ -33,7 +31,7 @@ async fn wait_for_quorum() {
     );
 
     // Make a batch.
-    let batch = batch(&latest_protocol_version());
+    let batch = batch();
     let message = WorkerBatchMessage {
         batch: batch.clone(),
     };
@@ -90,7 +88,7 @@ async fn pipeline_for_quorum() {
     );
 
     // Make a batch.
-    let batch = batch(&latest_protocol_version());
+    let batch = batch();
     let message = WorkerBatchMessage {
         batch: batch.clone(),
     };
