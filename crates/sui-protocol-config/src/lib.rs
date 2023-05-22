@@ -1144,10 +1144,7 @@ impl ProtocolConfig {
                 cfg.feature_flags.narwhal_versioned_metadata = true;
                 cfg
             }
-            12 => {
-                let cfg = Self::get_for_version_impl(version - 1);
-                cfg
-            }
+            12 => Self::get_for_version_impl(version - 1),
             // Use this template when making changes:
             //
             //     // modify an existing constant.
