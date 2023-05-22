@@ -17,7 +17,6 @@ feature_flags:
   package_digest_hash_module: true
   disallow_change_struct_type_params_on_upgrade: true
   no_extraneous_module_bytes: true
-  narwhal_versioned_metadata: true
 max_tx_size_bytes: 131072
 max_input_objects: 2048
 max_size_written_objects: 5000000

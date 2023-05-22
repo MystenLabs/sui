@@ -13,7 +13,7 @@ use std::num::NonZeroUsize;
 use std::sync::Arc;
 use std::time::Duration;
 use storage::NodeStorage;
-use test_utils::{latest_protocol_version, temp_dir, CommitteeFixture};
+use test_utils::{temp_dir, CommitteeFixture};
 use tokio::sync::mpsc::channel;
 use tokio::time::sleep;
 use worker::TrivialTransactionValidator;
@@ -43,12 +43,7 @@ async fn simple_primary_worker_node_start_stop() {
     let execution_state = Arc::new(SimpleExecutionState::new(tx_confirmation));
 
     // WHEN
-    let primary_node = PrimaryNode::new(
-        parameters.clone(),
-        true,
-        registry_service.clone(),
-        latest_protocol_version(),
-    );
+    let primary_node = PrimaryNode::new(parameters.clone(), true, registry_service.clone());
     primary_node
         .start(
             key_pair.copy(),
@@ -63,11 +58,7 @@ async fn simple_primary_worker_node_start_stop() {
         .unwrap();
 
     // AND
-    let workers = WorkerNodes::new(
-        registry_service,
-        parameters.clone(),
-        latest_protocol_version(),
-    );
+    let workers = WorkerNodes::new(registry_service, parameters.clone());
 
     workers
         .start(
@@ -134,12 +125,7 @@ async fn primary_node_restart() {
     let execution_state = Arc::new(SimpleExecutionState::new(tx_confirmation));
 
     // AND
-    let primary_node = PrimaryNode::new(
-        parameters.clone(),
-        true,
-        registry_service.clone(),
-        latest_protocol_version(),
-    );
+    let primary_node = PrimaryNode::new(parameters.clone(), true, registry_service.clone());
     primary_node
         .start(
             key_pair.copy(),
