@@ -22,9 +22,11 @@ export function ListboxSelect<T extends string>({
             {({ open }) => (
                 <div className="relative">
                     <Listbox.Button className="group flex w-full flex-nowrap items-center gap-1 overflow-hidden rounded-lg border border-solid p-2 text-steel transition-all hover:text-steel-darker ui-open:border-steel ui-not-open:border-transparent ui-not-open:hover:border-steel">
-                        <Text variant="body/bold" color="hero-dark">{value}</Text>
+                        <Text variant="body/bold" color="hero-dark">
+                            {value}
+                        </Text>
                         <ChevronDown16
-                            className="text-steel pointer-events-none h-4 w-4 text-gray-45 transition-all group-hover:text-steel"
+                            className="pointer-events-none h-4 w-4 text-gray-45 text-steel transition-all group-hover:text-steel"
                             aria-hidden="true"
                         />
                     </Listbox.Button>

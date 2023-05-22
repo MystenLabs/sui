@@ -8,7 +8,6 @@ import {
     useGetReferenceGasPrice,
     useRpcClient,
 } from '@mysten/core';
-import { Info12 } from '@mysten/icons';
 import { SUI_DECIMALS } from '@mysten/sui.js';
 import { useQuery } from '@tanstack/react-query';
 import { ParentSize } from '@visx/responsive';
@@ -62,8 +61,8 @@ function useHistoricalGasPrices() {
                     : null,
                 date: anEpoch.endOfEpochInfo?.epochEndTimestamp
                     ? new Date(
-                        Number(anEpoch.endOfEpochInfo?.epochEndTimestamp)
-                    )
+                          Number(anEpoch.endOfEpochInfo?.epochEndTimestamp)
+                      )
                     : null,
             }));
         },
@@ -94,10 +93,10 @@ function useGasPriceAverage(totalEpochs: number) {
 function useGasPriceFormat(gasPrice: bigint | null, unit: 'MIST' | 'SUI') {
     return gasPrice !== null
         ? formatBalance(
-            gasPrice,
-            unit === 'MIST' ? 0 : SUI_DECIMALS,
-            CoinFormat.FULL
-        )
+              gasPrice,
+              unit === 'MIST' ? 0 : SUI_DECIMALS,
+              CoinFormat.FULL
+          )
         : null;
 }
 
@@ -125,8 +124,8 @@ export function GasPriceCard({
         isDataLoading
             ? null
             : lastGasPriceInHistoricalData ??
-            backupCurrentEpochGasPrice ??
-            null,
+                  backupCurrentEpochGasPrice ??
+                  null,
         selectedUnit
     );
     const formattedAverageGasPrice = useGasPriceFormat(
@@ -160,7 +159,7 @@ export function GasPriceCard({
                     useLargeSpacing ? 'gap-8' : 'gap-5'
                 )}
             >
-                <div className="flex gap-2.5">
+                <div className="flex items-center gap-2.5">
                     <div className="flex flex-grow flex-nowrap items-center gap-1 text-steel">
                         <Heading
                             variant="heading4/semibold"
@@ -209,7 +208,7 @@ export function GasPriceCard({
                             <div className="flex flex-row self-stretch pr-2">
                                 <div
                                     className={clsx(
-                                        'ml-3 mt-1 flex min-w-0 flex-col flex-nowrap gap-0.5 rounded-md border border-solid border-gray-45 px-2 py-1.5 bg-gray-90',
+                                        'ml-3 mt-1 flex min-w-0 flex-col flex-nowrap gap-0.5 rounded-md border border-solid border-gray-45 bg-gray-90 px-2 py-1.5',
                                         hoveredElement?.date
                                             ? 'visible'
                                             : 'invisible'
@@ -240,7 +239,6 @@ export function GasPriceCard({
                                         <ParentSize className="absolute">
                                             {(parent) => (
                                                 <Graph
-                                                    unit={selectedUnit}
                                                     width={parent.width}
                                                     height={parent.height}
                                                     data={graphEpochs}
