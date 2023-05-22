@@ -33,7 +33,6 @@ const TIME_LABEL = {
 const ONE_SECOND = 1000;
 const ONE_MINUTE = ONE_SECOND * 60;
 const ONE_HOUR = ONE_MINUTE * 60;
-const ONE_DAY = ONE_HOUR * 24;
 
 /**
  * Formats a timestamp using `timeAgo`, and automatically updates it when the value is small.
@@ -82,12 +81,7 @@ export const timeAgo = (
     let timeUnit: [string, number][];
     let timeCol = Math.abs(timeNow - epochMilliSecs);
 
-    if (timeCol >= ONE_DAY) {
-        timeUnit = [
-            [TIME_LABEL.day[dateKeyType], ONE_DAY],
-            [TIME_LABEL.hour[dateKeyType], ONE_HOUR],
-        ];
-    } else if (timeCol >= ONE_HOUR) {
+    if (timeCol >= ONE_HOUR) {
         timeUnit = [
             [TIME_LABEL.hour[dateKeyType], ONE_HOUR],
             [TIME_LABEL.min[dateKeyType], ONE_MINUTE],
