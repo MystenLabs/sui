@@ -4,12 +4,14 @@
 import '@fontsource/inter/variable.css';
 import '@fontsource/red-hat-mono/variable.css';
 import { GrowthBookProvider } from '@growthbook/growthbook-react';
+import { QueryClientProvider } from '@tanstack/react-query';
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { RouterProvider } from 'react-router-dom';
 
 import { router } from './pages';
 import { growthbook } from './utils/growthbook';
+import { queryClient } from './utils/queryClient';
 import './utils/sentry';
 import { reportWebVitals } from './utils/vitals';
 
@@ -21,7 +23,9 @@ growthbook.loadFeatures();
 ReactDOM.createRoot(document.getElementById('root')!).render(
     <React.StrictMode>
         <GrowthBookProvider growthbook={growthbook}>
-            <RouterProvider router={router} />
+            <QueryClientProvider client={queryClient}>
+                <RouterProvider router={router} />
+            </QueryClientProvider>
         </GrowthBookProvider>
     </React.StrictMode>
 );

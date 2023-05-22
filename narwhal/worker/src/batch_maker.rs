@@ -2,16 +2,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::sync::Arc;
+
 use config::WorkerId;
 use fastcrypto::hash::Hash;
-use futures::future::BoxFuture;
 use futures::stream::FuturesUnordered;
-use futures::StreamExt;
+use futures::{Future, StreamExt};
 use mysten_metrics::{monitored_scope, spawn_logged_monitored_task};
 use network::{client::NetworkClient, WorkerToPrimaryClient};
-use std::sync::Arc;
 use store::{rocks::DBMap, Map};
-use sui_protocol_config::ProtocolConfig;
 use tokio::{
     task::JoinHandle,
     time::{sleep, Duration, Instant},
@@ -20,8 +19,8 @@ use tracing::{error, warn};
 use types::{
     error::DagError,
     metered_channel::{Receiver, Sender},
-    now, Batch, BatchAPI, BatchDigest, ConditionalBroadcastReceiver, MetadataAPI, Transaction,
-    TxResponse, WorkerOurBatchMessage, WorkerOurBatchMessageV2,
+    now, Batch, BatchAPI, BatchDigest, ConditionalBroadcastReceiver, Transaction, TxResponse,
+    WorkerOurBatchMessage,
 };
 
 use crate::metrics::WorkerMetrics;
@@ -61,8 +60,6 @@ pub struct BatchMaker {
     client: NetworkClient,
     /// The batch store to store our own batches.
     store: DBMap<BatchDigest, Batch>,
-    // The protocol configuration.
-    protocol_config: ProtocolConfig,
 }
 
 impl BatchMaker {
@@ -77,7 +74,6 @@ impl BatchMaker {
         node_metrics: Arc<WorkerMetrics>,
         client: NetworkClient,
         store: DBMap<BatchDigest, Batch>,
-        protocol_config: ProtocolConfig,
     ) -> JoinHandle<()> {
         spawn_logged_monitored_task!(
             async move {
@@ -92,7 +88,6 @@ impl BatchMaker {
                     node_metrics,
                     client,
                     store,
-                    protocol_config,
                 }
                 .run()
                 .await;
@@ -106,7 +101,7 @@ impl BatchMaker {
         let timer = sleep(self.max_batch_delay);
         tokio::pin!(timer);
 
-        let mut current_batch = Batch::new(vec![], &self.protocol_config);
+        let mut current_batch = Batch::default();
         let mut current_responses = Vec::new();
         let mut current_batch_size = 0;
 
@@ -129,7 +124,7 @@ impl BatchMaker {
                         }
                         self.node_metrics.parallel_worker_batches.set(batch_pipeline.len() as i64);
 
-                        current_batch = Batch::new(vec![], &self.protocol_config);
+                        current_batch = Batch::default();
                         current_responses = Vec::new();
                         current_batch_size = 0;
 
@@ -150,7 +145,7 @@ impl BatchMaker {
                         }
                         self.node_metrics.parallel_worker_batches.set(batch_pipeline.len() as i64);
 
-                        current_batch = Batch::new(vec![], &self.protocol_config);
+                        current_batch = Batch::default();
                         current_responses = Vec::new();
                         current_batch_size = 0;
                     }
@@ -174,13 +169,13 @@ impl BatchMaker {
     }
 
     /// Seal and broadcast the current batch.
-    async fn seal<'a>(
+    async fn seal(
         &self,
         timeout: bool,
         mut batch: Batch,
         size: usize,
         responses: Vec<TxResponse>,
-    ) -> Option<BoxFuture<'a, ()>> {
+    ) -> Option<impl Future<Output = ()>> {
         #[cfg(feature = "benchmark")]
         {
             let digest = batch.digest();
@@ -271,95 +266,48 @@ impl BatchMaker {
         let store = self.store.clone();
         let worker_id = self.id;
 
-        // TODO: Remove once we have upgraded to protocol version 11.
-        if self.protocol_config.narwhal_versioned_metadata() {
-            // The batch has been sealed so we can officially set its creation time
-            // for latency calculations.
-            batch.versioned_metadata_mut().set_created_at(now());
-            let metadata = batch.versioned_metadata().clone();
+        // The batch has been sealed so we can officially set its creation time
+        // for latency calculations.
+        batch.metadata_mut().created_at = now();
+        let metadata = batch.metadata().clone();
 
-            Some(Box::pin(async move {
-                // Now save it to disk
-                let digest = batch.digest();
+        Some(async move {
+            // Now save it to disk
+            let digest = batch.digest();
 
-                if let Err(e) = store.insert(&digest, &batch) {
-                    error!("Store failed with error: {:?}", e);
-                    return;
-                }
+            if let Err(e) = store.insert(&digest, &batch) {
+                error!("Store failed with error: {:?}", e);
+                return;
+            }
 
-                // Also wait for sending to be done here
-                //
-                // TODO: Here if we get back Err it means that potentially this was not send
-                //       to a quorum. However, if that happens we can still proceed on the basis
-                //       that an other authority will request the batch from us, and we will deliver
-                //       it since it is now stored. So ignore the error for the moment.
-                let _ = done_sending.await;
+            // Also wait for sending to be done here
+            //
+            // TODO: Here if we get back Err it means that potentially this was not send
+            //       to a quorum. However, if that happens we can still proceed on the basis
+            //       that an other authority will request the batch from us, and we will deliver
+            //       it since it is now stored. So ignore the error for the moment.
+            let _ = done_sending.await;
 
-                // Send the batch to the primary.
-                let message = WorkerOurBatchMessageV2 {
-                    digest,
-                    worker_id,
-                    metadata,
-                };
-                if let Err(e) = client.report_our_batch_v2(message).await {
-                    warn!("Failed to report our batch: {}", e);
-                    // Drop all response handers to signal error, since we
-                    // cannot ensure the primary has actually signaled the
-                    // batch will eventually be sent.
-                    // The transaction submitter will see the error and retry.
-                    return;
-                }
+            // Send the batch to the primary.
+            let message = WorkerOurBatchMessage {
+                digest,
+                worker_id,
+                metadata,
+            };
+            if let Err(e) = client.report_our_batch(message).await {
+                warn!("Failed to report our batch: {}", e);
+                // Drop all response handers to signal error, since we
+                // cannot ensure the primary has actually signaled the
+                // batch will eventually be sent.
+                // The transaction submitter will see the error and retry.
+                return;
+            }
 
-                // We now signal back to the transaction sender that the transaction is in a
-                // batch and also the digest of the batch.
-                for response in responses {
-                    let _ = response.send(digest);
-                }
-            }))
-        } else {
-            // The batch has been sealed so we can officially set its creation time
-            // for latency calculations.
-            batch.metadata_mut().created_at = now();
-            let metadata = batch.metadata().clone();
-
-            Some(Box::pin(async move {
-                // Now save it to disk
-                let digest = batch.digest();
-
-                if let Err(e) = store.insert(&digest, &batch) {
-                    error!("Store failed with error: {:?}", e);
-                    return;
-                }
-
-                // Also wait for sending to be done here
-                //
-                // TODO: Here if we get back Err it means that potentially this was not send
-                //       to a quorum. However, if that happens we can still proceed on the basis
-                //       that an other authority will request the batch from us, and we will deliver
-                //       it since it is now stored. So ignore the error for the moment.
-                let _ = done_sending.await;
-
-                // Send the batch to the primary.
-                let message = WorkerOurBatchMessage {
-                    digest,
-                    worker_id,
-                    metadata,
-                };
-                if let Err(e) = client.report_our_batch(message).await {
-                    warn!("Failed to report our batch: {}", e);
-                    // Drop all response handers to signal error, since we
-                    // cannot ensure the primary has actually signaled the
-                    // batch will eventually be sent.
-                    // The transaction submitter will see the error and retry.
-                    return;
-                }
-
-                // We now signal back to the transaction sender that the transaction is in a
-                // batch and also the digest of the batch.
-                for response in responses {
-                    let _ = response.send(digest);
-                }
-            }))
-        }
+            // We now signal back to the transaction sender that the transaction is in a
+            // batch and also the digest of the batch.
+            for response in responses {
+                let _ = response.send(digest);
+            }
+        })
     }
 }
