@@ -95,7 +95,10 @@ function StakingCard() {
     const { data: metadata } = useCoinMetadata(coinType);
     const coinDecimals = metadata?.decimals ?? 0;
     // set minimum stake amount to 1 SUI
-    const minimumStake = parseAmount(MIN_NUMBER_SUI_TO_STAKE, coinDecimals);
+    const minimumStake = parseAmount(
+        MIN_NUMBER_SUI_TO_STAKE.toString(),
+        coinDecimals
+    );
 
     const validationSchema = useMemo(
         () =>

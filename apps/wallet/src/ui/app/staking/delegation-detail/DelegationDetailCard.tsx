@@ -9,6 +9,7 @@ import {
 } from '@mysten/core';
 import { ArrowLeft16, StakeAdd16, StakeRemove16 } from '@mysten/icons';
 import { SUI_TYPE_ARG } from '@mysten/sui.js';
+import BigNumber from 'bignumber.js';
 import { useMemo } from 'react';
 
 import { useActiveAddress } from '../../hooks/useActiveAddress';
@@ -24,7 +25,6 @@ import { Text } from '_app/shared/text';
 import { IconTooltip } from '_app/shared/tooltip';
 import Alert from '_components/alert';
 import LoadingIndicator from '_components/loading/LoadingIndicator';
-import { parseAmount } from '_helpers';
 import { useAppSelector, useGetCoinBalance } from '_hooks';
 import { API_ENV } from '_src/shared/api-env';
 import { MIN_NUMBER_SUI_TO_STAKE } from '_src/shared/constants';
@@ -68,11 +68,11 @@ export function DelegationDetailCard({
             apiEnv === API_ENV.mainnet
         )
             return false;
-
-        return (
-            parseAmount(suiCoinBalance.totalBalance, metadata.decimals) >
-            parseAmount(MIN_NUMBER_SUI_TO_STAKE, metadata.decimals)
+        const currentBalance = new BigNumber(suiCoinBalance.totalBalance);
+        const minStakeAmount = new BigNumber(MIN_NUMBER_SUI_TO_STAKE).shiftedBy(
+            metadata.decimals
         );
+        return currentBalance.lt(minStakeAmount.toString());
     }, [apiEnv, metadata?.decimals, suiCoinBalance?.totalBalance]);
 
     const { data: rollingAverageApys } = useGetValidatorsApy();
@@ -249,7 +249,10 @@ export function DelegationDetailCard({
                                     to={stakeByValidatorAddress}
                                     before={<StakeAdd16 />}
                                     text="Stake SUI"
-                                    disabled={!stakingEnabled}
+                                    disabled={
+                                        !stakingEnabled ||
+                                        showRequestMoreSuiToken
+                                    }
                                 />
                             ) : null}
 
