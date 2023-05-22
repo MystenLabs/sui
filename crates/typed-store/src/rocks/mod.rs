@@ -2100,7 +2100,7 @@ pub struct ReadWriteOptions {
 impl ReadWriteOptions {
     pub fn readopts(&self) -> ReadOptions {
         let mut readopts = ReadOptions::default();
-        readopts.set_ignore_range_deletions(self.ignore_range_deletions);
+        readopts.set_ignore_range_deletions(false);
         readopts
     }
 
