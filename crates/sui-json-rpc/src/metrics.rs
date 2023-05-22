@@ -204,7 +204,7 @@ impl Logger for MetricsLogger {
     fn on_result(
         &self,
         method_name: &str,
-        success: bool,
+        _success: bool,
         error_code: Option<i32>,
         started_at: Self::Instant,
         _transport: TransportProtocol,
