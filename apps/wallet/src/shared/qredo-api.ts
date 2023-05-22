@@ -3,6 +3,8 @@
 
 import { type SuiAddress } from '@mysten/sui.js';
 
+import { toSearchQueryString } from './utils';
+
 export type QredoAPIErrorResponse = {
     code: string;
     msg: string;
@@ -82,7 +84,7 @@ export type TransactionInfoResponse = {
     txID: string;
     txHash: string;
     status: TransactionStatus;
-    messageWithIntent: string;
+    MessageWithIntent: string;
     sig: string;
     timestamps: Partial<Record<TransactionStatus, number>>;
     events: {
@@ -95,6 +97,25 @@ export type TransactionInfoResponse = {
     network: string;
     createdBy: string;
     accountID: string;
+};
+
+export type GetTransactionsParams = {
+    network?: NetworkType;
+    /** Filter by address or part of address */
+    address?: SuiAddress;
+    /** Qredo wallet id */
+    wallet?: string;
+};
+
+export type GetTransactionsItem = {
+    walletID: string;
+    txID: string;
+    txHash: string;
+    status: TransactionStatus;
+};
+
+export type GetTransactionsResponse = {
+    list: GetTransactionsItem[];
 };
 
 export type AccessTokenRenewalFunction = (
@@ -155,11 +176,10 @@ export class QredoAPI {
         if (filters?.address) {
             searchParams.append('address', filters.address);
         }
-        const searchQuery = searchParams.toString();
         return this.#request(
-            `${this.baseURL}connect/sui/wallets${
-                searchQuery ? `?${searchQuery}` : ''
-            }`
+            `${this.baseURL}connect/sui/wallets${toSearchQueryString(
+                searchParams
+            )}`
         );
     }
 
@@ -180,6 +200,16 @@ export class QredoAPI {
     ): Promise<TransactionInfoResponse> {
         return this.#request(
             `${this.baseURL}connect/sui/transactions/${transactionID}`
+        );
+    }
+
+    public getTransactions(
+        params: GetTransactionsParams
+    ): Promise<GetTransactionsResponse> {
+        return this.#request(
+            `${this.baseURL}connect/sui/transactions${toSearchQueryString(
+                new URLSearchParams(params)
+            )}`
         );
     }
 
