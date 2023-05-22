@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useTimeAgo } from '@mysten/core';
+import { useTimeAgo, TimeUnit } from '@mysten/core';
 import { cva, type VariantProps } from 'class-variance-authority';
 
 const timeStyle = cva([], {
@@ -43,7 +43,7 @@ export function CountDownTimer({
         shortedTimeLabel: false,
         shouldEnd: true,
         endLabel: endLabel,
-        maxTimeLabelInHours: true,
+        maxTimeUnit: TimeUnit.ONE_HOUR,
     });
 
     return (
