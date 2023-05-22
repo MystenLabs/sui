@@ -3,7 +3,6 @@
 
 import {
     fromB64,
-    type SignerWithProvider,
     TransactionBlock,
     type SignedMessage,
     type SignedTransaction,
@@ -14,6 +13,7 @@ import {
     createSlice,
 } from '@reduxjs/toolkit';
 
+import { type WalletSigner } from '_src/ui/app/WalletSigner';
 import { getSignerOperationErrorMessage } from '_src/ui/app/helpers/errorMessages';
 
 import type { SuiTransactionBlockResponse } from '@mysten/sui.js';
@@ -39,13 +39,14 @@ export const respondToTransactionRequest = createAsyncThunk<
     {
         txRequestID: string;
         approved: boolean;
-        signer: SignerWithProvider;
+        signer: WalletSigner;
+        clientIdentifier?: string;
     },
     AppThunkConfig
 >(
     'respond-to-transaction-request',
     async (
-        { txRequestID, approved, signer },
+        { txRequestID, approved, signer, clientIdentifier },
         { extra: { background }, getState }
     ) => {
         const state = getState();
@@ -60,22 +61,31 @@ export const respondToTransactionRequest = createAsyncThunk<
         if (approved) {
             try {
                 if (txRequest.tx.type === 'sign-message') {
-                    txResult = await signer.signMessage({
-                        message: fromB64(txRequest.tx.message),
-                    });
+                    txResult = await signer.signMessage(
+                        {
+                            message: fromB64(txRequest.tx.message),
+                        },
+                        clientIdentifier
+                    );
                 } else if (txRequest.tx.type === 'transaction') {
                     const tx = TransactionBlock.from(txRequest.tx.data);
                     if (txRequest.tx.justSign) {
                         // Just a signing request, do not submit
-                        txSigned = await signer.signTransactionBlock({
-                            transactionBlock: tx,
-                        });
+                        txSigned = await signer.signTransactionBlock(
+                            {
+                                transactionBlock: tx,
+                            },
+                            clientIdentifier
+                        );
                     } else {
-                        txResult = await signer.signAndExecuteTransactionBlock({
-                            transactionBlock: tx,
-                            options: txRequest.tx.options,
-                            requestType: txRequest.tx.requestType,
-                        });
+                        txResult = await signer.signAndExecuteTransactionBlock(
+                            {
+                                transactionBlock: tx,
+                                options: txRequest.tx.options,
+                                requestType: txRequest.tx.requestType,
+                            },
+                            clientIdentifier
+                        );
                     }
                 } else {
                     throw new Error(

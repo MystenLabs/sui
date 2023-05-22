@@ -15,8 +15,9 @@ export function useTransactionDryRun(
         // eslint-disable-next-line @tanstack/query/exhaustive-deps
         queryKey: ['dryRunTransaction', transactionBlock.serialize()],
         queryFn: () => {
-            return signer.dryRunTransactionBlock({ transactionBlock });
+            return signer!.dryRunTransactionBlock({ transactionBlock });
         },
+        enabled: !!signer,
     });
     return response;
 }

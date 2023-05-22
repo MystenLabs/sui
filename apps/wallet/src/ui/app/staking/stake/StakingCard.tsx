@@ -16,8 +16,10 @@ import { useCallback, useMemo } from 'react';
 import { toast } from 'react-hot-toast';
 import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 
+import { QredoActionIgnoredByUser } from '../../QredoSigner';
 import Alert from '../../components/alert';
 import { getSignerOperationErrorMessage } from '../../helpers/errorMessages';
+import { useQredoTransaction } from '../../hooks/useQredoTransaction';
 import { getDelegationDataByStakeId } from '../getDelegationByStakeId';
 import { getStakeSuiBySuiId } from '../getStakeSuiBySuiId';
 import { useGetDelegatedStake } from '../useGetDelegatedStake';
@@ -120,6 +122,7 @@ function StakingCard() {
 
     const navigate = useNavigate();
     const signer = useSigner();
+    const { clientIdentifier, notificationModal } = useQredoTransaction();
 
     const stakeToken = useMutation({
         mutationFn: async ({
@@ -145,17 +148,20 @@ function StakingCard() {
                     amount,
                     validatorAddress
                 );
-                return await signer.signAndExecuteTransactionBlock({
-                    transactionBlock,
-                    requestType: effectsOnlySharedTransactions
-                        ? 'WaitForEffectsCert'
-                        : 'WaitForLocalExecution',
-                    options: {
-                        showInput: true,
-                        showEffects: true,
-                        showEvents: true,
+                return await signer.signAndExecuteTransactionBlock(
+                    {
+                        transactionBlock,
+                        requestType: effectsOnlySharedTransactions
+                            ? 'WaitForEffectsCert'
+                            : 'WaitForLocalExecution',
+                        options: {
+                            showInput: true,
+                            showEffects: true,
+                            showEvents: true,
+                        },
                     },
-                });
+                    clientIdentifier
+                );
             } finally {
                 sentryTransaction.finish();
             }
@@ -175,17 +181,20 @@ function StakingCard() {
             });
             try {
                 const transactionBlock = createUnstakeTransaction(stakedSuiId);
-                return await signer.signAndExecuteTransactionBlock({
-                    transactionBlock,
-                    requestType: effectsOnlySharedTransactions
-                        ? 'WaitForEffectsCert'
-                        : 'WaitForLocalExecution',
-                    options: {
-                        showInput: true,
-                        showEffects: true,
-                        showEvents: true,
+                return await signer.signAndExecuteTransactionBlock(
+                    {
+                        transactionBlock,
+                        requestType: effectsOnlySharedTransactions
+                            ? 'WaitForEffectsCert'
+                            : 'WaitForLocalExecution',
+                        options: {
+                            showInput: true,
+                            showEffects: true,
+                            showEvents: true,
+                        },
                     },
-                });
+                    clientIdentifier
+                );
             } finally {
                 sentryTransaction.finish();
             }
@@ -243,17 +252,29 @@ function StakingCard() {
                         txdigest: txDigest,
                         from: 'tokens',
                     }).toString()}`,
-                    { state: { response } }
+                    response?.transaction
+                        ? {
+                              state: {
+                                  response,
+                              },
+                          }
+                        : undefined
                 );
             } catch (error) {
-                toast.error(
-                    <div className="max-w-xs overflow-hidden flex flex-col">
-                        <strong>{unstake ? 'Unstake' : 'Stake'} failed</strong>
-                        <small className="text-ellipsis overflow-hidden">
-                            {getSignerOperationErrorMessage(error)}
-                        </small>
-                    </div>
-                );
+                if (error instanceof QredoActionIgnoredByUser) {
+                    navigate('/');
+                } else {
+                    toast.error(
+                        <div className="max-w-xs overflow-hidden flex flex-col">
+                            <strong>
+                                {unstake ? 'Unstake' : 'Stake'} failed
+                            </strong>
+                            <small className="text-ellipsis overflow-hidden">
+                                {getSignerOperationErrorMessage(error)}
+                            </small>
+                        </div>
+                    );
+                }
             }
         },
         [
@@ -379,6 +400,7 @@ function StakingCard() {
                     )}
                 </Formik>
             </Loading>
+            {notificationModal}
         </div>
     );
 }
