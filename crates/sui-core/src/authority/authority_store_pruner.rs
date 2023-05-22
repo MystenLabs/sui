@@ -286,11 +286,11 @@ impl AuthorityStorePruner {
             "Starting object pruning service with num_epochs_to_retain={}",
             config.num_epochs_to_retain
         );
-        let tick_duration = Duration::from_secs(config.pruning_run_delay_seconds.unwrap_or(
+        let tick_duration = Duration::from_millis(config.pruning_run_delay_seconds.unwrap_or(
             if config.num_epochs_to_retain > 0 {
-                min(epoch_duration_ms / (2 * 1000), 60 * 60)
+                min(epoch_duration_ms / 2, 60 * 60 * 1000)
             } else {
-                60
+                60 * 1000
             },
         ));
         let pruning_initial_delay =
