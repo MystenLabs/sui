@@ -2,11 +2,16 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import {
+  JsonRpcProvider,
   SharedObjectRef,
+  SuiObjectDataOptions,
   SuiObjectRef,
   TransactionArgument,
   TransactionBlock,
 } from '@mysten/sui.js';
+import { KioskData } from './query/kiosk';
+import { DynamicFieldInfo } from '@mysten/sui.js/dist/types/dynamic_fields';
+import { bcs, Kiosk } from './bcs';
 
 /**
  * A valid argument for any of the Kiosk functions.
@@ -45,4 +50,61 @@ export function objArg(
   }
 
   throw new Error('Invalid argument type');
+}
+
+export async function getKioskObject(
+  provider: JsonRpcProvider,
+  id: string,
+): Promise<Kiosk> {
+  const queryRes = await provider.getObject({ id, options: { showBcs: true } });
+
+  if (!queryRes || queryRes.error || !queryRes.data) {
+    throw new Error(`Kiosk ${id} not found; ${queryRes.error}`);
+  }
+
+  // @ts-ignore // needs a fix in TS SDK types
+  return bcs.de('Kiosk', queryRes.data.bcs!.bcsBytes, 'base64');
+}
+
+// helper to extract kiosk data from dynamic fields.
+export function extractKioskData(data: DynamicFieldInfo[]): KioskData {
+  return data.reduce<KioskData>(
+    (acc: KioskData, val: DynamicFieldInfo) => {
+      // e.g. 0x2::kiosk::Item -> kiosk::Item
+      const type = val.name.type.split('::').slice(-2).join('::');
+
+      switch (type) {
+        case 'kiosk::Item':
+          acc.itemIds.push(val.objectId);
+          acc.items.push({
+            itemId: val.objectId,
+            itemType: val.objectType,
+          });
+          break;
+        case 'kiosk::Listing':
+          acc.listingIds.push(val.objectId);
+          acc.listings.push({
+            itemId: val.name.value.id,
+            listingId: val.objectId,
+            isExclusive: val.name.value.is_exclusive,
+          });
+          break;
+      }
+      return acc;
+    },
+    { listings: [], items: [], itemIds: [], listingIds: [] },
+  );
+}
+
+// simple multiGetObjects wrapper to simplify cases on functions.
+export function getObjects(
+  provider: JsonRpcProvider,
+  ids: string[],
+  options: SuiObjectDataOptions,
+) {
+  if (ids.length === 0) {
+    return [];
+  }
+
+  return provider.multiGetObjects({ ids, options });
 }
