@@ -22,7 +22,7 @@ tokio-postgres = "0.7.7"
 diesel-async = { version = "0.2.1", features = ["postgres", "deadpool"] }
 diesel-derive-enum = { version = "2.0.1", features = ["postgres"] }
 futures = "0.3.23"
-jsonrpsee = { version = "0.16.2", features = ["full"] }
+jsonrpsee = { git="https://github.com/wlmyng/jsonrpsee.git", rev= "b1b300784795f6a64d0fcdf8f03081a9bc38bde8", features = ["full"] }
 prometheus = "0.13.3"
 serde = { version = "1.0.144", features = ["derive"] }
 serde_json = "1.0.83"
