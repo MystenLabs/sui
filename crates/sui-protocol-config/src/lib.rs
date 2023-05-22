@@ -37,7 +37,6 @@ const MAX_PROTOCOL_VERSION: u64 = 12;
 //            `max_meter_ticks_per_module` limits each from 6_000_000 to 16_000_000. sui-system
 //            framework changes.
 // Version 11: Introduce `std::type_name::get_with_original_ids` to the system frameworks.
-//             Change NW entities to use versioned metadata field.
 // Version 12: Changes to deepbook in framework to add API for querying marketplace.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
@@ -181,9 +180,6 @@ struct FeatureFlags {
     // If true, checks no extra bytes in a compiled module
     #[serde(skip_serializing_if = "is_false")]
     no_extraneous_module_bytes: bool,
-    // If true, then use the versioned metadata format in narwhal entities.
-    #[serde(skip_serializing_if = "is_false")]
-    narwhal_versioned_metadata: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -673,10 +669,6 @@ impl ProtocolConfig {
         self.feature_flags.scoring_decision_with_validity_cutoff
     }
 
-    pub fn narwhal_versioned_metadata(&self) -> bool {
-        self.feature_flags.narwhal_versioned_metadata
-    }
-
     pub fn consensus_order_end_of_epoch_last(&self) -> bool {
         self.feature_flags.consensus_order_end_of_epoch_last
     }
@@ -1139,11 +1131,7 @@ impl ProtocolConfig {
                 cfg.max_meter_ticks_per_module = Some(16_000_000);
                 cfg
             }
-            11 => {
-                let mut cfg = Self::get_for_version_impl(version - 1);
-                cfg.feature_flags.narwhal_versioned_metadata = true;
-                cfg
-            }
+            11 => Self::get_for_version_impl(version - 1),
             12 => Self::get_for_version_impl(version - 1),
             // Use this template when making changes:
             //

@@ -20,10 +20,7 @@ use std::{
     sync::Arc,
     time::Duration,
 };
-use test_utils::{
-    latest_protocol_version, make_optimal_signed_certificates, mock_signed_certificate,
-    CommitteeFixture,
-};
+use test_utils::{make_optimal_signed_certificates, mock_signed_certificate, CommitteeFixture};
 use tokio::sync::{oneshot, watch};
 use types::{
     error::DagError, Certificate, CertificateAPI, Header, HeaderAPI, PreSubscribedBroadcastSender,
@@ -176,13 +173,8 @@ async fn accept_suspended_certificates() {
         .authorities()
         .map(|a| (a.id(), a.keypair().copy()))
         .collect();
-    let (certificates, next_parents) = make_optimal_signed_certificates(
-        1..=5,
-        &genesis,
-        &committee,
-        keys.as_slice(),
-        &latest_protocol_version(),
-    );
+    let (certificates, next_parents) =
+        make_optimal_signed_certificates(1..=5, &genesis, &committee, keys.as_slice());
     let certificates = certificates.into_iter().collect_vec();
 
     // Try to aceept certificates from round 2 to 5. All of them should be suspended.
@@ -224,7 +216,6 @@ async fn accept_suspended_certificates() {
         2000,
         next_parents,
         &committee,
-        &latest_protocol_version(),
     );
     // The certificate should not be accepted or suspended.
     match synchronizer.try_accept_certificate(cert.clone()).await {
@@ -528,13 +519,8 @@ async fn synchronizer_recover_previous_round() {
         .map(|a| (a.id(), a.keypair().copy()))
         .take(3)
         .collect::<Vec<_>>();
-    let (all_certificates, _next_parents) = make_optimal_signed_certificates(
-        1..=2,
-        &genesis,
-        &committee,
-        &keys,
-        &latest_protocol_version(),
-    );
+    let (all_certificates, _next_parents) =
+        make_optimal_signed_certificates(1..=2, &genesis, &committee, &keys);
     let all_certificates: Vec<_> = all_certificates.into_iter().collect();
     let round_1_certificates = all_certificates[0..3].to_vec();
     let round_2_certificates = all_certificates[3..5].to_vec();
@@ -648,13 +634,8 @@ async fn deliver_certificate_using_dag() {
         .map(|a| (a.id(), a.keypair().copy()))
         .take(3)
         .collect::<Vec<_>>();
-    let (mut certificates, _next_parents) = make_optimal_signed_certificates(
-        1..=4,
-        &genesis,
-        &committee,
-        &keys,
-        &latest_protocol_version(),
-    );
+    let (mut certificates, _next_parents) =
+        make_optimal_signed_certificates(1..=4, &genesis, &committee, &keys);
 
     // insert the certificates in the DAG
     for certificate in certificates.clone() {
@@ -720,13 +701,8 @@ async fn deliver_certificate_using_store() {
         .map(|a| (a.id(), a.keypair().copy()))
         .take(3)
         .collect::<Vec<_>>();
-    let (mut certificates, _next_parents) = make_optimal_signed_certificates(
-        1..=4,
-        &genesis,
-        &committee,
-        &keys,
-        &latest_protocol_version(),
-    );
+    let (mut certificates, _next_parents) =
+        make_optimal_signed_certificates(1..=4, &genesis, &committee, &keys);
 
     // insert the certificates in the DAG
     for certificate in certificates.clone() {
@@ -792,13 +768,8 @@ async fn deliver_certificate_not_found_parents() {
         .map(|a| (a.id(), a.keypair().copy()))
         .take(3)
         .collect::<Vec<_>>();
-    let (mut certificates, _next_parents) = make_optimal_signed_certificates(
-        1..=4,
-        &genesis,
-        &committee,
-        &keys,
-        &latest_protocol_version(),
-    );
+    let (mut certificates, _next_parents) =
+        make_optimal_signed_certificates(1..=4, &genesis, &committee, &keys);
 
     // take the last one (top) and test for parents
     let test_certificate = certificates.pop_back().unwrap();
@@ -868,11 +839,7 @@ async fn sync_batches_drops_old() {
         let header = Header::V1(
             author
                 .header_builder(&fixture.committee())
-                .with_payload_batch(
-                    test_utils::fixture_batch_with_transactions(10, &latest_protocol_version()),
-                    0,
-                    0,
-                )
+                .with_payload_batch(test_utils::fixture_batch_with_transactions(10), 0, 0)
                 .build()
                 .unwrap(),
         );
@@ -891,11 +858,7 @@ async fn sync_batches_drops_old() {
             .header_builder(&fixture.committee())
             .round(2)
             .parents(certificates.keys().cloned().collect())
-            .with_payload_batch(
-                test_utils::fixture_batch_with_transactions(10, &latest_protocol_version()),
-                1,
-                0,
-            )
+            .with_payload_batch(test_utils::fixture_batch_with_transactions(10), 1, 0)
             .build()
             .unwrap(),
     );
@@ -960,13 +923,8 @@ async fn gc_suspended_certificates() {
         .authorities()
         .map(|a| (a.id(), a.keypair().copy()))
         .collect();
-    let (certificates, _next_parents) = make_optimal_signed_certificates(
-        1..=5,
-        &genesis,
-        &committee,
-        keys.as_slice(),
-        &latest_protocol_version(),
-    );
+    let (certificates, _next_parents) =
+        make_optimal_signed_certificates(1..=5, &genesis, &committee, keys.as_slice());
     let certificates = certificates.into_iter().collect_vec();
 
     // Try to aceept certificates from round 2 and above. All of them should be suspended.

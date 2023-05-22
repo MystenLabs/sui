@@ -18,7 +18,6 @@ use prometheus::{register_int_gauge_with_registry, IntGauge, Registry};
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Instant;
-use sui_protocol_config::ProtocolConfig;
 use sui_types::crypto::{AuthorityKeyPair, NetworkKeyPair};
 use tokio::sync::Mutex;
 
@@ -89,25 +88,17 @@ pub struct NarwhalManager {
 }
 
 impl NarwhalManager {
-    pub fn new(
-        config: NarwhalConfiguration,
-        metrics: NarwhalManagerMetrics,
-        protocol_config: ProtocolConfig,
-    ) -> Self {
+    pub fn new(config: NarwhalConfiguration, metrics: NarwhalManagerMetrics) -> Self {
         // Create the Narwhal Primary with configuration
         let primary_node = PrimaryNode::new(
             config.parameters.clone(),
             true,
             config.registry_service.clone(),
-            protocol_config.clone(),
         );
 
         // Create Narwhal Workers with configuration
-        let worker_nodes = WorkerNodes::new(
-            config.registry_service.clone(),
-            config.parameters.clone(),
-            protocol_config,
-        );
+        let worker_nodes =
+            WorkerNodes::new(config.registry_service.clone(), config.parameters.clone());
 
         let store_cache_metrics =
             CertificateStoreCacheMetrics::new(&config.registry_service.default_registry());

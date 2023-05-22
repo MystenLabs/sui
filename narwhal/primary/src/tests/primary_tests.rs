@@ -116,7 +116,6 @@ async fn get_network_peers_from_admin_server() {
         &mut tx_shutdown,
         tx_feedback,
         &Registry::new(),
-        test_utils::latest_protocol_version(),
     );
 
     // Wait for tasks to start
@@ -145,7 +144,6 @@ async fn get_network_peers_from_admin_server() {
         store.batch_store,
         metrics_1,
         &mut tx_shutdown_worker,
-        test_utils::latest_protocol_version(),
     );
 
     // Test getting all known peers for primary 1
@@ -241,7 +239,6 @@ async fn get_network_peers_from_admin_server() {
         &mut tx_shutdown_2,
         tx_feedback_2,
         &Registry::new(),
-        test_utils::latest_protocol_version(),
     );
 
     // Wait for tasks to start
@@ -360,13 +357,8 @@ async fn test_request_vote_has_missing_parents() {
         .authorities()
         .map(|a| (a.id(), a.keypair().copy()))
         .collect();
-    let (certificates, _next_parents) = make_optimal_signed_certificates(
-        1..=3,
-        &genesis,
-        &committee,
-        ids.as_slice(),
-        &test_utils::latest_protocol_version(),
-    );
+    let (certificates, _next_parents) =
+        make_optimal_signed_certificates(1..=3, &genesis, &committee, ids.as_slice());
     let all_certificates = certificates.into_iter().collect_vec();
     let round_2_certs = all_certificates[NUM_PARENTS..(NUM_PARENTS * 2)].to_vec();
     let round_2_parents = round_2_certs[..(NUM_PARENTS / 2)].to_vec();
@@ -379,14 +371,7 @@ async fn test_request_vote_has_missing_parents() {
             .author(author_id)
             .round(3)
             .parents(round_2_certs.iter().map(|c| c.digest()).collect())
-            .with_payload_batch(
-                test_utils::fixture_batch_with_transactions(
-                    10,
-                    &test_utils::latest_protocol_version(),
-                ),
-                0,
-                0,
-            )
+            .with_payload_batch(test_utils::fixture_batch_with_transactions(10), 0, 0)
             .build()
             .unwrap(),
     );
@@ -530,13 +515,8 @@ async fn test_request_vote_accept_missing_parents() {
         .authorities()
         .map(|a| (a.id(), a.keypair().copy()))
         .collect();
-    let (certificates, _next_parents) = make_optimal_signed_certificates(
-        1..=3,
-        &genesis,
-        &committee,
-        ids.as_slice(),
-        &test_utils::latest_protocol_version(),
-    );
+    let (certificates, _next_parents) =
+        make_optimal_signed_certificates(1..=3, &genesis, &committee, ids.as_slice());
     let all_certificates = certificates.into_iter().collect_vec();
     let round_1_certs = all_certificates[..NUM_PARENTS].to_vec();
     let round_2_certs = all_certificates[NUM_PARENTS..(NUM_PARENTS * 2)].to_vec();
@@ -550,14 +530,7 @@ async fn test_request_vote_accept_missing_parents() {
             .author(author_id)
             .round(3)
             .parents(round_2_certs.iter().map(|c| c.digest()).collect())
-            .with_payload_batch(
-                test_utils::fixture_batch_with_transactions(
-                    10,
-                    &test_utils::latest_protocol_version(),
-                ),
-                0,
-                0,
-            )
+            .with_payload_batch(test_utils::fixture_batch_with_transactions(10), 0, 0)
             .build()
             .unwrap(),
     );
@@ -684,14 +657,7 @@ async fn test_request_vote_missing_batches() {
         let header = Header::V1(
             primary
                 .header_builder(&fixture.committee())
-                .with_payload_batch(
-                    test_utils::fixture_batch_with_transactions(
-                        10,
-                        &test_utils::latest_protocol_version(),
-                    ),
-                    0,
-                    0,
-                )
+                .with_payload_batch(test_utils::fixture_batch_with_transactions(10), 0, 0)
                 .build()
                 .unwrap(),
         );
@@ -710,14 +676,7 @@ async fn test_request_vote_missing_batches() {
             .header_builder(&fixture.committee())
             .round(2)
             .parents(certificates.keys().cloned().collect())
-            .with_payload_batch(
-                test_utils::fixture_batch_with_transactions(
-                    10,
-                    &test_utils::latest_protocol_version(),
-                ),
-                1,
-                0,
-            )
+            .with_payload_batch(test_utils::fixture_batch_with_transactions(10), 1, 0)
             .build()
             .unwrap(),
     );
@@ -833,14 +792,7 @@ async fn test_request_vote_already_voted() {
         let header = Header::V1(
             primary
                 .header_builder(&fixture.committee())
-                .with_payload_batch(
-                    test_utils::fixture_batch_with_transactions(
-                        10,
-                        &test_utils::latest_protocol_version(),
-                    ),
-                    0,
-                    0,
-                )
+                .with_payload_batch(test_utils::fixture_batch_with_transactions(10), 0, 0)
                 .build()
                 .unwrap(),
         );
@@ -880,14 +832,7 @@ async fn test_request_vote_already_voted() {
             .header_builder(&fixture.committee())
             .round(2)
             .parents(certificates.keys().cloned().collect())
-            .with_payload_batch(
-                test_utils::fixture_batch_with_transactions(
-                    10,
-                    &test_utils::latest_protocol_version(),
-                ),
-                1,
-                0,
-            )
+            .with_payload_batch(test_utils::fixture_batch_with_transactions(10), 1, 0)
             .build()
             .unwrap(),
     );
@@ -932,14 +877,7 @@ async fn test_request_vote_already_voted() {
             .header_builder(&fixture.committee())
             .round(2)
             .parents(certificates.keys().cloned().collect())
-            .with_payload_batch(
-                test_utils::fixture_batch_with_transactions(
-                    10,
-                    &test_utils::latest_protocol_version(),
-                ),
-                1,
-                0,
-            )
+            .with_payload_batch(test_utils::fixture_batch_with_transactions(10), 1, 0)
             .build()
             .unwrap(),
     );
@@ -1028,8 +966,7 @@ async fn test_fetch_certificates_handler() {
             .into_iter()
             .map(|header| fixture.certificate(&header).digest())
             .collect();
-        (_, current_round) =
-            fixture.headers_round(i, &parents, &test_utils::latest_protocol_version());
+        (_, current_round) = fixture.headers_round(i, &parents);
         headers.extend(current_round.clone());
     }
 
@@ -1197,14 +1134,7 @@ async fn test_process_payload_availability_success() {
         let header = Header::V1(
             author
                 .header_builder(&fixture.committee())
-                .with_payload_batch(
-                    test_utils::fixture_batch_with_transactions(
-                        10,
-                        &test_utils::latest_protocol_version(),
-                    ),
-                    0,
-                    0,
-                )
+                .with_payload_batch(test_utils::fixture_batch_with_transactions(10), 0, 0)
                 .build()
                 .unwrap(),
         );
@@ -1359,14 +1289,7 @@ async fn test_process_payload_availability_when_failures() {
         let header = Header::V1(
             author
                 .header_builder(&committee)
-                .with_payload_batch(
-                    test_utils::fixture_batch_with_transactions(
-                        10,
-                        &test_utils::latest_protocol_version(),
-                    ),
-                    0,
-                    0,
-                )
+                .with_payload_batch(test_utils::fixture_batch_with_transactions(10), 0, 0)
                 .build()
                 .unwrap(),
         );
@@ -1470,14 +1393,7 @@ async fn test_request_vote_created_at_in_future() {
         let header = Header::V1(
             primary
                 .header_builder(&fixture.committee())
-                .with_payload_batch(
-                    test_utils::fixture_batch_with_transactions(
-                        10,
-                        &test_utils::latest_protocol_version(),
-                    ),
-                    0,
-                    0,
-                )
+                .with_payload_batch(test_utils::fixture_batch_with_transactions(10), 0, 0)
                 .build()
                 .unwrap(),
         );
@@ -1521,14 +1437,7 @@ async fn test_request_vote_created_at_in_future() {
             .header_builder(&fixture.committee())
             .round(2)
             .parents(certificates.keys().cloned().collect())
-            .with_payload_batch(
-                test_utils::fixture_batch_with_transactions(
-                    10,
-                    &test_utils::latest_protocol_version(),
-                ),
-                1,
-                0,
-            )
+            .with_payload_batch(test_utils::fixture_batch_with_transactions(10), 1, 0)
             .created_at(created_at)
             .build()
             .unwrap(),
@@ -1559,11 +1468,7 @@ async fn test_request_vote_created_at_in_future() {
         .header_builder(&fixture.committee())
         .round(2)
         .parents(certificates.keys().cloned().collect())
-        .with_payload_batch(
-            test_utils::fixture_batch_with_transactions(10, &test_utils::latest_protocol_version()),
-            1,
-            0,
-        )
+        .with_payload_batch(test_utils::fixture_batch_with_transactions(10), 1, 0)
         .created_at(created_at)
         .build()
         .unwrap();
