@@ -1337,7 +1337,7 @@
             "name": "Result",
             "value": {
               "minSupportedProtocolVersion": "1",
-              "maxSupportedProtocolVersion": "11",
+              "maxSupportedProtocolVersion": "12",
               "protocolVersion": "6",
               "featureFlags": {
                 "advance_epoch_start_time_in_safe_mode": true,

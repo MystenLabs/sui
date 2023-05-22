@@ -10,7 +10,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 11;
+const MAX_PROTOCOL_VERSION: u64 = 12;
 
 // Record history of protocol version allocations here:
 //
@@ -38,6 +38,7 @@ const MAX_PROTOCOL_VERSION: u64 = 11;
 //            framework changes.
 // Version 11: Introduce `std::type_name::get_with_original_ids` to the system frameworks.
 //             Change NW entities to use versioned metadata field.
+// Version 12: Changes to deepbook in framework to add API for querying marketplace.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -1143,6 +1144,7 @@ impl ProtocolConfig {
                 cfg.feature_flags.narwhal_versioned_metadata = true;
                 cfg
             }
+            12 => Self::get_for_version_impl(version - 1),
             // Use this template when making changes:
             //
             //     // modify an existing constant.
