@@ -1091,7 +1091,7 @@ impl DBBatch {
     #[instrument(level = "trace", skip_all, err)]
     pub fn write(self) -> Result<(), TypedStoreError> {
         let db_name = self.rocksdb.db_name();
-        let timer = self
+        let _timer = self
             .db_metrics
             .op_metrics
             .rocksdb_batch_commit_latency_seconds
