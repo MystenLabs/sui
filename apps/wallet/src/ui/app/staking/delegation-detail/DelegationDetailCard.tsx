@@ -4,6 +4,7 @@
 import { useFeature } from '@growthbook/growthbook-react';
 import { useGetValidatorsApy, useGetSystemState } from '@mysten/core';
 import { ArrowLeft16, StakeAdd16, StakeRemove16 } from '@mysten/icons';
+import { SUI_TYPE_ARG } from '@mysten/sui.js';
 import { useMemo } from 'react';
 
 import { useActiveAddress } from '../../hooks/useActiveAddress';
@@ -19,7 +20,10 @@ import { Text } from '_app/shared/text';
 import { IconTooltip } from '_app/shared/tooltip';
 import Alert from '_components/alert';
 import LoadingIndicator from '_components/loading/LoadingIndicator';
+import { useAppSelector, useGetCoinBalance } from '_hooks';
+import { API_ENV } from '_src/shared/api-env';
 import { FEATURES } from '_src/shared/experimentation/features';
+import FaucetRequestButton from '_src/ui/app/shared/faucet/FaucetRequestButton';
 
 type DelegationDetailCardProps = {
     validatorAddress: string;
@@ -43,6 +47,12 @@ export function DelegationDetailCard({
         isLoading,
         isError,
     } = useGetDelegatedStake(accountAddress || '');
+
+    const apiEnv = useAppSelector(({ app }) => app.apiEnv);
+    const { data: suiCoinBalance } = useGetCoinBalance(
+        SUI_TYPE_ARG,
+        accountAddress
+    );
 
     const { data: rollingAverageApys } = useGetValidatorsApy();
 
@@ -237,13 +247,21 @@ export function DelegationDetailCard({
                         </div>
                     </div>
                 </Content>
-                <Button
-                    size="tall"
-                    variant="secondary"
-                    to="/stake"
-                    before={<ArrowLeft16 />}
-                    text="Back"
-                />
+
+                {/* show faucet request button on devnet or testnet whenever there is only one coin  */}
+                {apiEnv !== API_ENV.mainnet &&
+                suiCoinBalance &&
+                suiCoinBalance?.coinObjectCount <= 1 ? (
+                    <FaucetRequestButton size="tall" />
+                ) : (
+                    <Button
+                        size="tall"
+                        variant="secondary"
+                        to="/stake"
+                        before={<ArrowLeft16 />}
+                        text="Back"
+                    />
+                )}
             </BottomMenuLayout>
         </div>
     );
