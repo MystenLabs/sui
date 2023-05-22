@@ -16,7 +16,7 @@ use sui_types::{
     gas::GasCostSummary,
     object::{Object, Owner},
     storage::ObjectStore,
-    transaction::TransactionDataAPI,
+    transaction::{TransactionData, TransactionDataAPI},
     Identifier,
 };
 
@@ -29,7 +29,8 @@ pub enum TxInfoNodeStreamTopic {
     ObjectChangeLight,
     ObjectChangeRaw,
     MoveCall,
-    TransactionDigest,
+    Transaction,
+    Effects,
     GasCostSummary,
     // TODO:
     // CoinBalanceChange
@@ -45,8 +46,9 @@ impl Display for TxInfoNodeStreamTopic {
             TxInfoNodeStreamTopic::ObjectChangeLight => write!(f, "object_change_light"),
             TxInfoNodeStreamTopic::ObjectChangeRaw => write!(f, "object_change_raw"),
             TxInfoNodeStreamTopic::MoveCall => write!(f, "move_call"),
-            TxInfoNodeStreamTopic::TransactionDigest => write!(f, "transaction_digest"),
+            TxInfoNodeStreamTopic::Transaction => write!(f, "transaction"),
             TxInfoNodeStreamTopic::GasCostSummary => write!(f, "gas_cost_summary"),
+            TxInfoNodeStreamTopic::Effects => write!(f, "effects"),
         }
     }
 }
@@ -61,7 +63,8 @@ impl FromStr for TxInfoNodeStreamTopic {
             "object_change_light" => Ok(TxInfoNodeStreamTopic::ObjectChangeLight),
             "object_change_raw" => Ok(TxInfoNodeStreamTopic::ObjectChangeRaw),
             "move_call" => Ok(TxInfoNodeStreamTopic::MoveCall),
-            "transaction_digest" => Ok(TxInfoNodeStreamTopic::TransactionDigest),
+            "transaction" => Ok(TxInfoNodeStreamTopic::Transaction),
+            "effects" => Ok(TxInfoNodeStreamTopic::Effects),
             "gas_cost_summary" => Ok(TxInfoNodeStreamTopic::GasCostSummary),
             _ => Err(anyhow::anyhow!("Invalid topic")),
         }
@@ -109,7 +112,8 @@ pub enum TxInfoData {
     ObjectChangeLight(ObjectChangeStatus),
     ObjectChangeRaw(ObjectChangeStatus, Option<Object>),
     MoveCall(ObjectID, Identifier, Identifier),
-    TransactionDigest,
+    Transaction(TransactionData),
+    Effects(TransactionEffects),
     GasCostSummary(GasCostSummary),
 }
 
@@ -259,8 +263,11 @@ impl TxInfoData {
             },
         ));
 
+        // Effects
+        result.push(Self::Effects(effects));
+
         // Record this TX
-        result.push(Self::TransactionDigest);
+        result.push(Self::Transaction(cert.intent_message().value.clone()));
         result
     }
 
@@ -271,8 +278,9 @@ impl TxInfoData {
             Self::ObjectChangeLight(_) => TxInfoNodeStreamTopic::ObjectChangeLight,
             Self::ObjectChangeRaw(_, _) => TxInfoNodeStreamTopic::ObjectChangeRaw,
             Self::MoveCall(_, _, _) => TxInfoNodeStreamTopic::MoveCall,
-            Self::TransactionDigest => TxInfoNodeStreamTopic::TransactionDigest,
+            Self::Transaction(_) => TxInfoNodeStreamTopic::Transaction,
             Self::GasCostSummary(_) => TxInfoNodeStreamTopic::GasCostSummary,
+            Self::Effects(_) => TxInfoNodeStreamTopic::Effects,
         }
     }
 }
