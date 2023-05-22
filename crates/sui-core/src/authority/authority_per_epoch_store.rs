@@ -1435,16 +1435,26 @@ impl AuthorityPerEpochStore {
         checkpoint_service: &Arc<C>,
         parent_sync_store: impl ParentSync,
     ) -> SuiResult<Vec<VerifiedExecutableTransaction>> {
+        let mut executable_txns = Vec::new();
+
+        for chunk in transactions.chunks(200) {
+            let mut batch = self.db_batch();
+            executable_txns.extend(
+                self.process_consensus_transactions(
+                    &mut batch,
+                    chunk,
+                    checkpoint_service,
+                    &parent_sync_store,
+                )
+                .await?
+                .into_iter(),
+            );
+            batch.write()?;
+        }
+
         let mut batch = self.db_batch();
-        let (executable_txns, _lock) = self
-            .process_consensus_transactions(
-                &mut batch,
-                transactions,
-                end_of_publish_transactions,
-                checkpoint_service,
-                parent_sync_store,
-            )
-            .await?;
+        let _lock =
+            self.process_end_of_publish_transactions(&mut batch, &end_of_publish_transactions)?;
         batch.write()?;
 
         for tx in transactions
@@ -1470,15 +1480,18 @@ impl AuthorityPerEpochStore {
             .into_iter()
             .partition(|txn| !txn.0.is_end_of_publish());
 
-        let (certs, _lock) = self
+        let certs = self
             .process_consensus_transactions(
                 &mut batch,
                 &transactions,
-                &end_of_publish_transactions,
                 checkpoint_service,
                 parent_sync_store,
             )
             .await?;
+
+        let _lock =
+            self.process_end_of_publish_transactions(&mut batch, &end_of_publish_transactions)?;
+
         batch.write()?;
 
         for tx in transactions
@@ -1500,13 +1513,9 @@ impl AuthorityPerEpochStore {
         &self,
         batch: &mut DBBatch,
         transactions: &[VerifiedSequencedConsensusTransaction],
-        end_of_publish_transactions: &[VerifiedSequencedConsensusTransaction],
         checkpoint_service: &Arc<C>,
         parent_sync_store: impl ParentSync,
-    ) -> SuiResult<(
-        Vec<VerifiedExecutableTransaction>,
-        Option<parking_lot::RwLockWriteGuard<ReconfigState>>,
-    )> {
+    ) -> SuiResult<Vec<VerifiedExecutableTransaction>> {
         let mut verified_certificates = Vec::new();
 
         // get the current next versions for each shared object in transactions
@@ -1554,9 +1563,7 @@ impl AuthorityPerEpochStore {
             shared_input_next_versions.into_iter(),
         )?;
 
-        let lock = self.process_end_of_publish_transactions(batch, end_of_publish_transactions)?;
-
-        Ok((verified_certificates, lock))
+        Ok(verified_certificates)
     }
 
     fn process_end_of_publish_transactions(
