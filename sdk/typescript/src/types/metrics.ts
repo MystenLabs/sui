@@ -16,8 +16,8 @@ export const NetworkMetrics = object({
 export const AddressMetrics = object({
   checkpoint: string(),
   epoch: string(),
-  timestamp_ms: string(),
-  cumulative_addresses: string(),
-  cumulative_active_addresses: string(),
-  daily_active_addresses: string(),
+  timestampMs: string(),
+  cumulativeAddresses: string(),
+  cumulativeActiveAddresses: string(),
+  dailyActiveAddresses: string(),
 })

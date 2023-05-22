@@ -785,13 +785,14 @@ export class JsonRpcProvider {
   }
 
   async getAddressMetrics() {
+    console.log(await this.client.request('suix_getLatestAddressMetrics', []))
     return await this.client.requestWithType(
       'suix_getLatestAddressMetrics',
       [],
       AddressMetrics,
     );
   }
-
+  
   /**
    * Return the committee information for the asked epoch
    */
