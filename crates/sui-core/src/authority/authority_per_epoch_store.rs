@@ -1437,7 +1437,7 @@ impl AuthorityPerEpochStore {
     ) -> SuiResult<Vec<VerifiedExecutableTransaction>> {
         let mut executable_txns = Vec::new();
 
-        for chunk in transactions.chunks(200) {
+        for chunk in transactions.chunks(50) {
             let mut batch = self.db_batch();
             executable_txns.extend(
                 self.process_consensus_transactions(
