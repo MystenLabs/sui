@@ -281,7 +281,8 @@ export function DelegationDetailCard({
                                 weight="medium"
                                 color="steel-darker"
                             >
-                                You need a minimum of 1 SUI to continue staking.
+                                You need a minimum of {MIN_NUMBER_SUI_TO_STAKE}{' '}
+                                SUI to continue staking.
                             </Text>
                         </div>
                         <FaucetRequestButton size="tall" />
