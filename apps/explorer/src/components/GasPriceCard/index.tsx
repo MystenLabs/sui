@@ -27,7 +27,7 @@ import { Stats } from '~/ui/Stats';
 import { Text } from '~/ui/Text';
 
 const UNITS = ['MIST', 'SUI'] as const;
-type UnitsType = (typeof UNITS)[number];
+export type UnitsType = (typeof UNITS)[number];
 const GRAPH_DURATIONS = ['7 Epochs', '30 Epochs'] as const;
 type GraphDurationsType = (typeof GRAPH_DURATIONS)[number];
 const GRAPH_DURATIONS_MAP: Record<GraphDurationsType, number> = {
@@ -152,14 +152,14 @@ export function GasPriceCard({
         ? formatDate(hoveredElement?.date, ['month', 'day'])
         : '-';
     return (
-        <Card spacing="lg" height="full" bg="white" border="gray45">
+        <Card spacing="none" height="full" bg="white" border="gray45">
             <div
                 className={clsx(
                     'flex h-full flex-col',
                     useLargeSpacing ? 'gap-8' : 'gap-5'
                 )}
             >
-                <div className="flex items-center gap-2.5">
+                <div className="flex items-center gap-2.5 px-6 pt-6 sm:px-8 sm:pt-8">
                     <div className="flex flex-grow flex-nowrap items-center gap-1 text-steel">
                         <Heading
                             variant="heading4/semibold"
@@ -181,7 +181,7 @@ export function GasPriceCard({
                         onChange={setSelectedUnit}
                     />
                 </div>
-                <div className="flex gap-6 lg:max-xl:gap-12">
+                <div className="flex gap-6 lg:max-xl:gap-12 px-6 sm:px-8">
                     <Stats label="Current" postfix={selectedUnit} size="sm">
                         {formattedCurrentGasPrice}
                     </Stats>
@@ -239,6 +239,7 @@ export function GasPriceCard({
                                         <ParentSize className="absolute">
                                             {(parent) => (
                                                 <Graph
+                                                    unit={selectedUnit}
                                                     width={parent.width}
                                                     height={parent.height}
                                                     data={graphEpochs}

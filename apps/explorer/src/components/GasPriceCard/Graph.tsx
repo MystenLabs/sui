@@ -12,6 +12,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { throttle } from 'throttle-debounce';
 
 import { type EpochGasInfo } from './types';
+import { UnitsType } from '.';
 
 function formatXLabel(epoch: number) {
     return String(epoch);
@@ -22,34 +23,60 @@ export function isDefined(d: EpochGasInfo) {
 }
 
 const SIDE_MARGIN = 30;
-// Need this for spacing for the y-axis
-const HORIZONTAL_OFFSET = 5;
 
 const bisectEpoch = bisector(({ epoch }: EpochGasInfo) => epoch).center;
+
 
 export type GraphProps = {
     data: EpochGasInfo[];
     width: number;
     height: number;
+    unit: UnitsType
     onHoverElement: (value: EpochGasInfo | null) => void;
 };
-export function Graph({ data, width, height, onHoverElement }: GraphProps) {
+export function Graph({ data, width, height, onHoverElement, unit }: GraphProps) {
     // remove not defined data (graph displays better and helps with hovering/selecting hovered element)
     const adjData = useMemo(() => data.filter(isDefined), [data]);
-    const graphTop = 15;
-    const graphButton = Math.max(height - 45, 0);
-    const xScale = useMemo(
+    const graphTop = 10;
+    const graphTooltipOffset = Math.max(height - 45, 0);
+    const yMax = Math.ceil(
+        Math.max(
+            ...adjData.map(({ referenceGasPrice }) =>
+                referenceGasPrice !== null ? Number(referenceGasPrice) : 0
+            )
+        ) / 25
+    ) * 25 + 25;
+
+    const yMin = Math.floor(
+        Math.min(
+            ...adjData.map(({ referenceGasPrice }) =>
+                referenceGasPrice !== null ? Number(referenceGasPrice) : Number.MAX_VALUE
+            )
+        ) / 25
+    ) * 25;
+    const xScaleArea = useMemo(
         () =>
             scaleLinear<number>({
                 domain: extent(adjData, ({ epoch }) => epoch) as [
                     number,
                     number
                 ],
-                range: [SIDE_MARGIN, width - SIDE_MARGIN],
+                range: [0, width],
             }),
         [width, adjData]
     );
-    const yScale = useMemo(
+    const xScaleGraph = useMemo(
+        () =>
+            scaleLinear<number>({
+                domain: extent(adjData, ({ epoch }) => epoch) as [
+                    number,
+                    number
+                ],
+                range: [10, width],
+            }),
+        [width, adjData]
+    );
+    const yScaleLine = useMemo(
         () =>
             scaleLinear<number>({
                 domain: extent(adjData, ({ referenceGasPrice }) =>
@@ -57,14 +84,25 @@ export function Graph({ data, width, height, onHoverElement }: GraphProps) {
                         ? Number(referenceGasPrice)
                         : null
                 ) as [number, number],
-                range: [graphButton, graphTop],
+                range: [height - 40, 30],
             }),
-        [adjData, graphTop, graphButton]
+        [adjData, graphTop, graphTooltipOffset]
+    );
+    const yScaleArea = useMemo(
+        () =>
+            scaleLinear<number>({
+                domain: extent(adjData, ({ referenceGasPrice }) =>
+                    referenceGasPrice !== null
+                        ? Number(referenceGasPrice)
+                        : null
+                ) as [number, number],
+                range: [height, graphTop],
+            }),
+        [adjData, graphTop, graphTooltipOffset]
     );
     const [isTooltipVisible, setIsTooltipVisible] = useState(false);
     const [tooltipX, setTooltipX] = useState(SIDE_MARGIN);
     const [tooltipY, setTooltipY] = useState(0);
-
     const [hoveredElement, setHoveredElement] = useState<EpochGasInfo | null>(
         null
     );
@@ -73,15 +111,15 @@ export function Graph({ data, width, height, onHoverElement }: GraphProps) {
     }, [onHoverElement, hoveredElement]);
     const handleTooltip = useCallback(
         (x: number) => {
-            const xEpoch = xScale.invert(x);
+            const xEpoch = xScaleGraph.invert(x);
             const epochIndex = bisectEpoch(adjData, xEpoch, 0);
             const selectedEpoch = adjData[epochIndex];
-            setTooltipX(xScale(selectedEpoch.epoch));
-            setTooltipY(yScale(Number(selectedEpoch.referenceGasPrice)));
+            setTooltipX(xScaleGraph(selectedEpoch.epoch));
+            setTooltipY(yScaleLine(Number(selectedEpoch.referenceGasPrice)));
             setHoveredElement(selectedEpoch);
             setIsTooltipVisible(true);
         },
-        [xScale, adjData, yScale]
+        [xScaleGraph, adjData, yScaleLine]
     );
     const [handleTooltipThrottled, setHandleTooltipThrottled] =
         useState<ReturnType<typeof throttle>>();
@@ -95,15 +133,14 @@ export function Graph({ data, width, height, onHoverElement }: GraphProps) {
     }, [handleTooltip]);
     // calculates the total ticks of 4 (~30px + some margin) digit epochs that could fit
     const totalMaxTicksForWidth = Math.floor((width - 2 * SIDE_MARGIN) / 34);
-    const totalMaxTicksForLength = Math.floor((height - graphButton) / 20);
-    const totalVerticalTicks = Math.min(
-        adjData.length,
-        totalMaxTicksForLength < 1 ? 1 : totalMaxTicksForLength
-    );
     const totalHorizontalTicks = Math.min(
         adjData.length,
         totalMaxTicksForWidth < 1 ? 1 : totalMaxTicksForWidth
     );
+
+    const middleYValue = (yMax + yMin) / 2;
+    const yTicks = [yMax, middleYValue, yMin];
+    const xTicks = adjData.filter((_, index) => index % 5 === 0 || index === 0).map(d => d.epoch);
     return (
         <svg
             width={width}
@@ -111,10 +148,10 @@ export function Graph({ data, width, height, onHoverElement }: GraphProps) {
             className="stroke-steel-dark/80 transition hover:stroke-hero"
         >
             <line
-                x1={HORIZONTAL_OFFSET}
-                y1={graphTop - 40}
-                x2={HORIZONTAL_OFFSET}
-                y2={graphButton + 10}
+                x1={0}
+                y1={graphTop - 10}
+                x2={0}
+                y2={height}
                 className={clsx(
                     'stroke-gray-60 transition-all ease-ease-out-cubic',
                     isTooltipVisible ? 'opacity-100' : 'opacity-0'
@@ -123,9 +160,9 @@ export function Graph({ data, width, height, onHoverElement }: GraphProps) {
                 transform={`translate(${tooltipX})`}
             />
             <line
-                x1={SIDE_MARGIN + HORIZONTAL_OFFSET}
+                x1={0}
                 y1={0}
-                x2={width - SIDE_MARGIN + HORIZONTAL_OFFSET}
+                x2={width}
                 y2={0}
                 className={clsx(
                     'stroke-gray-60 transition-all ease-ease-out-cubic',
@@ -136,25 +173,23 @@ export function Graph({ data, width, height, onHoverElement }: GraphProps) {
             />
             <AreaClosed<EpochGasInfo>
                 data={adjData}
-                yScale={yScale}
-                x={(d) => xScale(d.epoch)}
-                y={(d) => yScale(Number(d.referenceGasPrice!))}
+                yScale={yScaleArea}
+                x={(d) => xScaleArea(d.epoch)}
+                y={(d) => yScaleLine(Number(d.referenceGasPrice!))}
                 strokeWidth={0}
                 stroke="#F2BD24"
                 curve={curveMonotoneX}
                 fill="#F2BD24"
                 fillOpacity={0.1}
                 strokeOpacity={1}
-                transform={`translate(${HORIZONTAL_OFFSET})`}
             />
             <LinePath<EpochGasInfo>
                 curve={curveMonotoneX}
                 data={adjData}
-                x={(d) => xScale(d.epoch)}
-                y={(d) => yScale(Number(d.referenceGasPrice!))}
+                x={(d) => xScaleArea(d.epoch)}
+                y={(d) => yScaleLine(Number(d.referenceGasPrice!))}
                 width="1"
                 stroke="#F2BD24"
-                transform={`translate(${HORIZONTAL_OFFSET})`}
             />
             <AxisBottom
                 top={height - 30}
@@ -166,12 +201,13 @@ export function Graph({ data, width, height, onHoverElement }: GraphProps) {
                     fill: 'none',
                     className: 'text-subtitle font-medium fill-steel font-sans',
                 }}
-                scale={xScale}
-                tickFormat={(epoch) => formatXLabel(epoch as number)}
                 hideTicks
+                tickValues={xTicks}
+                scale={xScaleGraph}
+                tickFormat={(epoch) => formatXLabel(epoch as number)}
                 hideAxisLine
                 numTicks={totalHorizontalTicks}
-                left={HORIZONTAL_OFFSET}
+                left={0}
             />
             <AxisRight
                 tickLabelProps={{
@@ -181,18 +217,18 @@ export function Graph({ data, width, height, onHoverElement }: GraphProps) {
                     fill: 'none',
                     className: 'text-subtitle font-medium fill-steel font-sans',
                 }}
-                left={SIDE_MARGIN / 2 - HORIZONTAL_OFFSET * 2}
-                scale={yScale}
+                left={width - 30}
+                scale={yScaleLine}
                 hideTicks
                 hideAxisLine
-                numTicks={totalVerticalTicks}
+                tickValues={yTicks}
                 orientation="left"
             />
             <rect
-                x={SIDE_MARGIN}
+                x={0}
                 y={graphTop - 10}
-                width={Math.max(0, width - SIDE_MARGIN * 2)}
-                height={Math.max(0, graphButton - graphTop + 10)}
+                width={width}
+                height={height}
                 fill="transparent"
                 stroke="none"
                 onMouseEnter={(e) => {
@@ -206,7 +242,6 @@ export function Graph({ data, width, height, onHoverElement }: GraphProps) {
                     setIsTooltipVisible(false);
                     setHoveredElement(null);
                 }}
-                transform={`translate(${HORIZONTAL_OFFSET})`}
             />
         </svg>
     );
