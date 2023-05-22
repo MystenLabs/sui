@@ -17,7 +17,7 @@ export function OnTheNetwork() {
 
     return (
         <Card bg="lightBlue" spacing="lg" height="full">
-            <div className="flex flex-col gap-4 md:flex-row gap-5">
+            <div className="flex flex-col gap-4 gap-5 md:flex-row">
                 <div className="flex-1 flex-col">
                     <div className="flex items-center gap-2">
                         <Text color="steel-darker" variant="caption/semibold">
