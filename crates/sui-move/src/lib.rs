@@ -9,6 +9,7 @@ use move_package::BuildConfig;
 use move_unit_test::UnitTestingConfig;
 use std::path::PathBuf;
 
+pub mod analyze;
 #[cfg(feature = "build")]
 pub mod build;
 #[cfg(feature = "coverage")]
@@ -23,6 +24,9 @@ pub mod unit_test;
 
 #[derive(Parser)]
 pub enum Command {
+    /// Analyze the Move packages provided as input.
+    /// The expected format is the JSON output of sui_getObject with `showBcs: true`
+    Analyze(analyze::Analyze),
     #[cfg(feature = "build")]
     Build(build::Build),
     #[cfg(feature = "coverage")]
@@ -49,6 +53,7 @@ pub fn execute_move_command(
     command: Command,
 ) -> anyhow::Result<()> {
     match command {
+        Command::Analyze(c) => c.execute(),
         #[cfg(feature = "build")]
         Command::Build(c) => c.execute(package_path, build_config),
         #[cfg(feature = "coverage")]

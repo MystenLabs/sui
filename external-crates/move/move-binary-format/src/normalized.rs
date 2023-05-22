@@ -325,6 +325,17 @@ impl Type {
         }
     }
 
+    pub fn is_vec_u8(&self) -> bool {
+        use Type::*;
+        match self {
+            Vector(t) => match **t {
+                U8 => true,
+                _ => false,
+            },
+            _ => false,
+        }
+    }
+
     pub fn into_type_tag(self) -> Option<TypeTag> {
         use Type::*;
         Some(if self.is_closed() {

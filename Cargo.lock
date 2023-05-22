@@ -10026,6 +10026,7 @@ dependencies = [
  "serde_yaml",
  "sui-core",
  "sui-cost-tables",
+ "sui-json-rpc-types",
  "sui-macros",
  "sui-move-build",
  "sui-move-natives-latest",
