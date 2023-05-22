@@ -19,11 +19,11 @@ export function OnTheNetwork() {
         <Card bg="lightBlue" spacing="lg" height="full">
             <div className="flex flex-col gap-4 md:flex-row">
                 <div className="mr-5 flex-1 flex-col">
-                    <div className="flex items-center">
+                    <div className="flex items-center gap-2">
                         <Text color="steel-darker" variant="caption/semibold">
                             On the Network
                         </Text>
-                        <hr className="ml-2 flex-1 border-gray-45" />
+                        <hr className="flex-1 border-gray-45" />
                     </div>
                     <div className="mt-5 flex flex-shrink-0 flex-col gap-2">
                         <FormattedStatsAmount
@@ -51,11 +51,11 @@ export function OnTheNetwork() {
                 </div>
 
                 <div className="mr-5 flex-1 flex-col">
-                    <div className="flex items-center">
+                    <div className="flex items-center gap-2">
                         <Text color="steel-darker" variant="caption/semibold">
                             Accounts
                         </Text>
-                        <hr className="ml-2 flex-1 border-gray-45" />
+                        <hr className="flex-1 border-gray-45" />
                     </div>
                     <div className="mt-5 flex flex-shrink-0 flex-col gap-2">
                         <FormattedStatsAmount
