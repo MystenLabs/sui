@@ -50,7 +50,7 @@ export function OnTheNetwork() {
                     </div>
                 </div>
 
-                <div className="flex-1 flex-col gap-5">
+                <div className="flex-1 flex-col">
                     <div className="flex items-center gap-2">
                         <Text color="steel-darker" variant="caption/semibold">
                             Accounts
