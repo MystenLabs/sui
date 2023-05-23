@@ -1011,6 +1011,15 @@ impl AuthorityState {
             epoch_store,
         )
         .await?;
+        info!(
+            "As a {:?}, committed effects: {:?}",
+            if self.is_validator(epoch_store) {
+                "validator"
+            } else {
+                "fullnode"
+            },
+            effects
+        );
         Ok((effects, execution_error_opt))
     }
 

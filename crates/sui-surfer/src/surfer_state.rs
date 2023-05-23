@@ -173,7 +173,7 @@ impl SurferState {
                 }
             }
         };
-        debug!(
+        info!(
             "Successfully executed transaction {:?} with response {:?}",
             tx, response
         );
@@ -202,7 +202,7 @@ impl SurferState {
                 .cluster
                 .get_object_from_fullnode_store(&obj_ref.0)
                 .await
-                .unwrap();
+                .unwrap_or_else(|| panic!("Object {:?} must exist", obj_ref));
             if object.is_package() {
                 self.discover_entry_functions(object).await;
                 continue;
