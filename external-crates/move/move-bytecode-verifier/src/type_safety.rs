@@ -5,10 +5,8 @@
 //! This module defines the transfer functions for verifying type safety of a procedure body.
 //! It does not utilize control flow, but does check each block independently
 
-use crate::{
-    abstract_stack::AbsStack,
-    meter::{Meter, Scope},
-};
+use crate::meter::{Meter, Scope};
+use move_abstract_stack::AbsStack;
 use move_binary_format::{
     binary_views::{BinaryIndexedView, FunctionView},
     control_flow_graph::ControlFlowGraph,

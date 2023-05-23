@@ -12,6 +12,7 @@
 //! 2. Written into a mutable reference
 //! 3. Added to a vector
 //! 4. Passed to a function cal::;
+use move_abstract_stack::AbsStack;
 use move_binary_format::{
     binary_views::{BinaryIndexedView, FunctionView},
     errors::PartialVMError,
@@ -22,7 +23,6 @@ use move_binary_format::{
 };
 use move_bytecode_verifier::{
     absint::{AbstractDomain, AbstractInterpreter, JoinResult, TransferFunctions},
-    abstract_stack::AbsStack,
     meter::{Meter, Scope},
 };
 use move_core_types::{

@@ -12,13 +12,13 @@ mod abstract_state;
 
 use crate::{
     absint::{AbstractInterpreter, TransferFunctions},
-    abstract_stack::AbsStack,
     meter::{Meter, Scope},
     reference_safety::abstract_state::{
         STEP_BASE_COST, STEP_PER_GRAPH_ITEM_COST, STEP_PER_LOCAL_COST,
     },
 };
 use abstract_state::{AbstractState, AbstractValue};
+use move_abstract_stack::AbsStack;
 use move_binary_format::{
     binary_views::{BinaryIndexedView, FunctionView},
     errors::{PartialVMError, PartialVMResult},

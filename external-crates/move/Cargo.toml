@@ -11,6 +11,7 @@ members = [
     "move-binary-format",
     "move-binary-format/serializer-tests",
     "move-borrow-graph",
+    "move-abstract-stack",
     "move-bytecode-verifier",
     "move-bytecode-verifier/bytecode-verifier-tests",
     "move-bytecode-verifier/fuzz",
