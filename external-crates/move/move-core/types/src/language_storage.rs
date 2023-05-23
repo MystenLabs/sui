@@ -8,6 +8,7 @@ use crate::{
     identifier::{IdentStr, Identifier},
     parser::{parse_struct_tag, parse_type_tag},
 };
+use move_proc_macros::EnumVariantOrder;
 use once_cell::sync::Lazy;
 #[cfg(any(test, feature = "fuzzing"))]
 use proptest_derive::Arbitrary;
@@ -16,7 +17,6 @@ use std::{
     fmt::{Display, Formatter},
     str::FromStr,
 };
-use move_proc_macros::EnumVariantOrder;
 
 pub const CODE_TAG: u8 = 0;
 pub const RESOURCE_TAG: u8 = 1;

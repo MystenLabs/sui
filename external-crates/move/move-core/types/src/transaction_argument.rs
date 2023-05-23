@@ -121,8 +121,8 @@ impl VecBytes {
 
 #[cfg(test)]
 mod tests {
-    use std::convert::{From, TryInto};
     use enum_compat_util::check_enum_compat_order;
+    use std::convert::{From, TryInto};
 
     use crate::{
         account_address::AccountAddress, transaction_argument::TransactionArgument, u256::U256,

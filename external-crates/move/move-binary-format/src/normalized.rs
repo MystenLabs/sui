@@ -18,9 +18,9 @@ use move_core_types::{
     identifier::{IdentStr, Identifier},
     language_storage::{ModuleId, StructTag, TypeTag},
 };
+use move_proc_macros::EnumVariantOrder;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
-use move_proc_macros::EnumVariantOrder;
 
 /// Defines normalized representations of Move types, fields, kinds, structs, functions, and
 /// modules. These representations are useful in situations that require require comparing
