@@ -12,6 +12,7 @@ use consensus::Consensus;
 use crypto::{KeyPair, NetworkKeyPair, PublicKey};
 use executor::{get_restored_consensus_output, ExecutionState, Executor, SubscriberResult};
 use fastcrypto::traits::{KeyPair as _, VerifyingKey};
+use mysten_metrics::metered_channel;
 use mysten_metrics::{RegistryID, RegistryService};
 use network::client::NetworkClient;
 use primary::{Primary, PrimaryChannelMetrics, NUM_SHUTDOWN_RECEIVERS};
@@ -22,9 +23,7 @@ use storage::NodeStorage;
 use tokio::sync::{watch, RwLock};
 use tokio::task::JoinHandle;
 use tracing::{debug, info, instrument};
-use types::{
-    metered_channel, Certificate, ConditionalBroadcastReceiver, PreSubscribedBroadcastSender, Round,
-};
+use types::{Certificate, ConditionalBroadcastReceiver, PreSubscribedBroadcastSender, Round};
 
 struct PrimaryNodeInner {
     // The configuration parameters.

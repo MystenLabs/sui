@@ -267,6 +267,7 @@ impl<T> From<Receiver<T>> for ReceiverStream<T> {
 }
 
 // TODO: facade PollSender
+// TODO: add prom metrics reporting for gauge and migrate all existing use cases.
 
 ////////////////////////////////////////////////////////////////
 /// Constructor

@@ -5898,6 +5898,7 @@ dependencies = [
 name = "mysten-metrics"
 version = "0.7.0"
 dependencies = [
+ "async-trait",
  "dashmap",
  "futures",
  "once_cell",
@@ -6326,6 +6327,7 @@ dependencies = [
  "indexmap",
  "mockall",
  "mysten-common",
+ "mysten-metrics",
  "mysten-network",
  "mysten-util-mem",
  "narwhal-config",

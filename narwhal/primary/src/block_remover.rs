@@ -12,10 +12,10 @@ use std::{collections::HashMap, sync::Arc};
 use storage::{CertificateStore, HeaderStore, PayloadStore};
 use store::rocks::TypedStoreError;
 
+use mysten_metrics::metered_channel::Sender;
 use tracing::{debug, instrument, warn};
 use types::{
-    metered_channel::Sender, BatchDigest, Certificate, CertificateAPI, CertificateDigest,
-    HeaderAPI, HeaderDigest, Round,
+    BatchDigest, Certificate, CertificateAPI, CertificateDigest, HeaderAPI, HeaderDigest, Round,
 };
 
 #[cfg(test)]

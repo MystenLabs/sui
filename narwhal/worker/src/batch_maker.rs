@@ -8,6 +8,7 @@ use config::WorkerId;
 use fastcrypto::hash::Hash;
 use futures::stream::FuturesUnordered;
 use futures::{Future, StreamExt};
+use mysten_metrics::metered_channel::{Receiver, Sender};
 use mysten_metrics::{monitored_scope, spawn_logged_monitored_task};
 use network::{client::NetworkClient, WorkerToPrimaryClient};
 use store::{rocks::DBMap, Map};
@@ -17,10 +18,8 @@ use tokio::{
 };
 use tracing::{error, warn};
 use types::{
-    error::DagError,
-    metered_channel::{Receiver, Sender},
-    now, Batch, BatchAPI, BatchDigest, ConditionalBroadcastReceiver, Transaction, TxResponse,
-    WorkerOurBatchMessage,
+    error::DagError, now, Batch, BatchAPI, BatchDigest, ConditionalBroadcastReceiver, Transaction,
+    TxResponse, WorkerOurBatchMessage,
 };
 
 use crate::metrics::WorkerMetrics;
