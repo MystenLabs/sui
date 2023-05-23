@@ -55,7 +55,7 @@ import {
 } from '../rpc/websocket-client';
 import { requestSuiFromFaucet } from '../rpc/faucet-client';
 import { any, is, array, string } from 'superstruct';
-import { toB64 } from '@mysten/bcs';
+import { fromB58, toB64, toHEX } from '@mysten/bcs';
 import { SerializedSignature } from '../cryptography/signature';
 import { Connection, devnetConnection } from '../rpc/connection';
 import { TransactionBlock } from '../builder';
@@ -843,6 +843,13 @@ export class JsonRpcProvider {
       [],
       ValidatorsApy,
     );
+  }
+
+  // TODO: Migrate this to `sui_getChainIdentifier` once it is widely available.
+  async getChainIdentifier(): Promise<string> {
+    const checkpoint = await this.getCheckpoint({ id: '0' });
+    const bytes = fromB58(checkpoint.digest);
+    return toHEX(bytes.slice(0, 4));
   }
 
   /**
