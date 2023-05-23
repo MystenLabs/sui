@@ -9,6 +9,7 @@ use crate::{
     u256,
 };
 use anyhow::{anyhow, bail, Result as AResult};
+use move_proc_macros::EnumVariantOrder;
 use serde::{
     de::Error as DeError,
     ser::{SerializeMap, SerializeSeq, SerializeStruct, SerializeTuple},
@@ -41,7 +42,7 @@ pub enum MoveStruct {
     },
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone, EnumVariantOrder)]
 pub enum MoveValue {
     U8(u8),
     U64(u64),
@@ -83,7 +84,7 @@ pub enum MoveStructLayout {
     },
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, EnumVariantOrder)]
 pub enum MoveTypeLayout {
     #[serde(rename(serialize = "bool", deserialize = "bool"))]
     Bool,

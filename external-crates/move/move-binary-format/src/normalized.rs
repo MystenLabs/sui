@@ -20,6 +20,7 @@ use move_core_types::{
 };
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
+use move_proc_macros::EnumVariantOrder;
 
 /// Defines normalized representations of Move types, fields, kinds, structs, functions, and
 /// modules. These representations are useful in situations that require require comparing
@@ -31,7 +32,9 @@ use std::collections::BTreeMap;
 /// A normalized version of `SignatureToken`, a type expression appearing in struct or function
 /// declarations. Unlike `SignatureToken`s, `normalized::Type`s from different modules can safely be
 /// compared.
-#[derive(Clone, Debug, Ord, PartialOrd, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(
+    Clone, Debug, Ord, PartialOrd, Eq, PartialEq, Serialize, Deserialize, EnumVariantOrder,
+)]
 pub enum Type {
     #[serde(rename = "bool")]
     Bool,

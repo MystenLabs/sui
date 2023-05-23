@@ -16,6 +16,7 @@ use std::{
     fmt::{Display, Formatter},
     str::FromStr,
 };
+use move_proc_macros::EnumVariantOrder;
 
 pub const CODE_TAG: u8 = 0;
 pub const RESOURCE_TAG: u8 = 1;
@@ -27,7 +28,9 @@ pub const CORE_CODE_ADDRESS: AccountAddress = AccountAddress::ONE;
 pub static TYPETAG_ENUM_ABSTRACT_SIZE: Lazy<AbstractMemorySize> =
     Lazy::new(|| ENUM_BASE_ABSTRACT_SIZE + BOX_ABSTRACT_SIZE);
 
-#[derive(Serialize, Deserialize, Debug, PartialEq, Hash, Eq, Clone, PartialOrd, Ord)]
+#[derive(
+    Serialize, Deserialize, Debug, PartialEq, Hash, Eq, Clone, PartialOrd, Ord, EnumVariantOrder,
+)]
 pub enum TypeTag {
     // alias for compatibility with old json serialized data.
     #[serde(rename = "bool", alias = "Bool")]

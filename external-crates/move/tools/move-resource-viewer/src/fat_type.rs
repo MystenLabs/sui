@@ -14,6 +14,7 @@ use move_core_types::{
     value::{MoveStructLayout, MoveTypeLayout},
     vm_status::StatusCode,
 };
+use move_proc_macros::EnumVariantOrder;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::convert::TryInto;
 
@@ -52,7 +53,7 @@ pub(crate) struct FatStructType {
     pub layout: Vec<FatType>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, EnumVariantOrder)]
 pub(crate) enum FatType {
     Bool,
     U8,
@@ -210,5 +211,23 @@ impl TryInto<MoveTypeLayout> for &FatType {
                 return Err(PartialVMError::new(StatusCode::ABORT_TYPE_MISMATCH_ERROR))
             }
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::fat_type::FatType;
+    use enum_compat_util::check_enum_compat_order;
+
+    #[test]
+    fn enforce_order_test() {
+        let mut path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        path.extend([
+            "src",
+            "unit_tests",
+            "staged_enum_variant_order",
+            "fat_type.yaml",
+        ]);
+        check_enum_compat_order::<FatType>(path);
     }
 }
