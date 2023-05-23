@@ -14,10 +14,10 @@ export const NetworkMetrics = object({
 });
 
 export const AddressMetrics = object({
-  checkpoint: string(),
-  epoch: string(),
-  timestampMs: string(),
-  cumulativeAddresses: string(),
-  cumulativeActiveAddresses: string(),
-  dailyActiveAddresses: string(),
+  checkpoint: number(),
+  epoch: number(),
+  timestampMs: number(),
+  cumulativeAddresses: number(),
+  cumulativeActiveAddresses: number(),
+  dailyActiveAddresses: number(),
 });
