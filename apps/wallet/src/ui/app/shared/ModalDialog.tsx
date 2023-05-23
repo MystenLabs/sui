@@ -48,7 +48,7 @@ export function ModalDialog({
                     leaveFrom="opacity-100"
                     leaveTo="opacity-0"
                 >
-                    <div className="fixed inset-0 bg-gray-95/10 backdrop-blur-lg z-40" />
+                    <div className="fixed inset-0 bg-gray-95/10 backdrop-blur-lg z-[99998]" />
                 </Transition.Child>
                 <Transition.Child
                     as={Fragment}
@@ -59,7 +59,7 @@ export function ModalDialog({
                     leaveFrom="opacity-100 scale-100"
                     leaveTo="opacity-0 scale-95"
                 >
-                    <div className="fixed inset-0 flex flex-col items-center justify-center z-50">
+                    <div className="fixed inset-0 flex flex-col items-center justify-center z-[99999]">
                         <Dialog.Panel className="shadow-wallet-modal bg-white py-6 rounded-xl w-80 max-w-[85vw] max-h-[60vh] overflow-hidden flex flex-col flex-nowrap items-stretch gap-1.5">
                             {title ? (
                                 <div className="px-6 text-center">

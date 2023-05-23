@@ -1090,26 +1090,28 @@ impl DBBatch {
     /// Consume the batch and write its operations to the database
     #[instrument(level = "trace", skip_all, err)]
     pub fn write(self) -> Result<(), TypedStoreError> {
-        let report_metrics = if self.write_sample_interval.sample() {
-            let db_name = self.rocksdb.db_name();
-            let timer = self
-                .db_metrics
-                .op_metrics
-                .rocksdb_batch_commit_latency_seconds
-                .with_label_values(&[&db_name])
-                .start_timer();
-            let size = self.batch.size_in_bytes();
-            Some((db_name, size, timer, RocksDBPerfContext::default()))
+        let db_name = self.rocksdb.db_name();
+        let _timer = self
+            .db_metrics
+            .op_metrics
+            .rocksdb_batch_commit_latency_seconds
+            .with_label_values(&[&db_name])
+            .start_timer();
+        let batch_size = self.batch.size_in_bytes();
+
+        let perf_ctx = if self.write_sample_interval.sample() {
+            Some(RocksDBPerfContext::default())
         } else {
             None
         };
         self.rocksdb.write(self.batch)?;
-        if let Some((db_name, batch_size, _timer, _perf_ctx)) = report_metrics {
-            self.db_metrics
-                .op_metrics
-                .rocksdb_batch_commit_bytes
-                .with_label_values(&[&db_name])
-                .observe(batch_size as f64);
+        self.db_metrics
+            .op_metrics
+            .rocksdb_batch_commit_bytes
+            .with_label_values(&[&db_name])
+            .observe(batch_size as f64);
+
+        if perf_ctx.is_some() {
             self.db_metrics
                 .write_perf_ctx_metrics
                 .report_metrics(&db_name);

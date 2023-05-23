@@ -61,7 +61,7 @@ import { Connection, devnetConnection } from '../rpc/connection';
 import { TransactionBlock } from '../builder';
 import { CheckpointPage } from '../types/checkpoints';
 import { RPCError } from '../utils/errors';
-import { NetworkMetrics } from '../types/metrics';
+import { NetworkMetrics, AddressMetrics } from '../types/metrics';
 import { EpochInfo, EpochPage } from '../types/epochs';
 import { lt } from '@suchipi/femver';
 
@@ -783,6 +783,15 @@ export class JsonRpcProvider {
       NetworkMetrics,
     );
   }
+
+  async getAddressMetrics() {
+    return await this.client.requestWithType(
+      'suix_getLatestAddressMetrics',
+      [],
+      AddressMetrics,
+    );
+  }
+
   /**
    * Return the committee information for the asked epoch
    */

@@ -6,15 +6,13 @@ import Browser from 'webextension-polyfill';
 
 import { API_ENV } from '_src/shared/api-env';
 
-const GROWTHBOOK_API_KEY =
-    process.env.NODE_ENV === 'production'
-        ? 'sdk-lJ5zaQ6WI9uPth6C'
-        : 'sdk-iUMYcob41m3pnAK';
-
 export const growthbook = new GrowthBook({
-    apiHost: 'https://cdn.growthbook.io',
-    clientKey: GROWTHBOOK_API_KEY,
-    enableDevMode: true,
+    // If you want to develop locally, you can set the API host to this:
+    // apiHost: 'http://localhost:3003',
+    apiHost: 'https://apps-backend.sui.io',
+    clientKey:
+        process.env.NODE_ENV === 'development' ? 'development' : 'production',
+    enableDevMode: process.env.NODE_ENV === 'development',
 });
 
 /**

@@ -9,7 +9,7 @@ use fuzz::ReplayFuzzerConfig;
 use fuzz_mutations::base_fuzzers;
 use sui_types::message_envelope::Message;
 use tracing::warn;
-use transaction_provider::TransactionSource;
+use transaction_provider::{FuzzStartPoint, TransactionSource};
 
 use crate::replay::LocalExec;
 use crate::replay::ProtocolVersionSummary;
@@ -80,7 +80,7 @@ pub enum ReplayToolCommand {
     #[clap(name = "fz")]
     Fuzz {
         #[clap(long, short)]
-        start_checkpoint: Option<u64>,
+        start: Option<FuzzStartPoint>,
         #[clap(long, short)]
         num_mutations_per_base: u64,
         #[clap(long, short = 'b', default_value = "18446744073709551614")]
@@ -113,14 +113,14 @@ pub async fn execute_replay_command(
             None
         }
         ReplayToolCommand::Fuzz {
-            start_checkpoint,
+            start,
             num_mutations_per_base,
             num_base_transactions,
         } => {
             let config = ReplayFuzzerConfig {
                 num_mutations_per_base,
                 mutator: Box::new(base_fuzzers(num_mutations_per_base)),
-                tx_source: TransactionSource::TailLatest { start_checkpoint },
+                tx_source: TransactionSource::TailLatest { start },
                 fail_over_on_err: false,
                 expensive_safety_check_config: Default::default(),
             };

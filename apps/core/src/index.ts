@@ -31,3 +31,4 @@ export * from './hooks/useCopyToClipboard';
 export * from './hooks/useGetOriginByteKioskContents';
 export * from './utils/hasDisplayData';
 export * from './hooks/useMultiGetObjects';
+export * from './hooks/useAppsBackend';

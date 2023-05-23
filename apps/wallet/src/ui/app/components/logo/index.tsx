@@ -4,15 +4,7 @@
 import { Sui, SuiLogoTxt } from '@mysten/icons';
 
 import { Text } from '../../shared/text';
-import { API_ENV } from '_src/shared/api-env';
-
-const networkNames: Record<API_ENV, string> = {
-    [API_ENV.local]: 'Local',
-    [API_ENV.testNet]: 'Testnet',
-    [API_ENV.devNet]: 'Devnet',
-    [API_ENV.mainnet]: 'Mainnet',
-    [API_ENV.customRPC]: 'Custom RPC',
-};
+import { type API_ENV, networkNames } from '_src/shared/api-env';
 
 type LogoProps = {
     networkName?: API_ENV;

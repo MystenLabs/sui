@@ -13,7 +13,7 @@ type Props = {
 
 export function TokenList({ title, defaultOpen, children }: Props) {
     return (
-        <div className="flex flex-1 justify-start flex-col w-full mt-6">
+        <div className="flex flex-shrink-0 justify-start flex-col w-full mt-6">
             <Disclosure defaultOpen={defaultOpen}>
                 {({ open }) => (
                     <div className="w-full flex flex-col justify-start gap-2">
@@ -22,7 +22,7 @@ export function TokenList({ title, defaultOpen, children }: Props) {
                                 {title}
                             </div>
                             <div className="h-px bg-gray-45 group-hover:bg-hero flex-1" />
-                            <div className="text-gray-45 group-hover:text-hero">
+                            <div className="text-gray-45 group-hover:text-hero inline-flex">
                                 {open ? <ChevronDown12 /> : <ChevronRight12 />}
                             </div>
                         </Disclosure.Button>

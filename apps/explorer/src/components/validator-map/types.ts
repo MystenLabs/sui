@@ -8,14 +8,6 @@ export interface Feature {
     properties: { name: string; countryCode: string };
 }
 
-export interface NodeLocation {
-    count: number;
-    city: string;
-    region: string;
-    country: string;
-    location: string;
-}
-
 interface ValidatorIpInfo {
     ip: string;
     hostname: string;
@@ -48,9 +40,14 @@ interface ValidatorIpInfo {
     isEU: boolean;
 }
 
-export interface ValidatorMapData {
+export interface ValidatorMapValidator {
     ipInfo?: ValidatorIpInfo;
     suiAddress: string;
     name: string;
     votingPower: string;
+}
+
+export interface ValidatorMapResponse {
+    validators: ValidatorMapValidator[];
+    nodeCount?: number | null;
 }

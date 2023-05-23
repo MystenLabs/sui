@@ -1,9 +1,6 @@
 name: Release Binaries
 
 on:
-  release:
-    types: [published]
-
   workflow_dispatch:
     inputs:
       sui_tag:
@@ -12,7 +9,6 @@ on:
         required: true
 
 env:
-  TAG_NAME: ${{ github.ref_name || inputs.sui_tag }}
   CARGO_TERM_COLOR: always
   # Disable incremental compilation.
   #
@@ -44,7 +40,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
         with:
-          ref: ${{ env.TAG_NAME }}
+          ref: ${{ inputs.sui_tag }}
 
       - name: cargo build (release)
         id: build
@@ -73,7 +69,7 @@ jobs:
       - name: Publish binaries
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: ${{ env.TAG_NAME }}
+          tag_name: ${{ inputs.sui_tag }}
           files: |
             ${{ steps.build.outputs.BIN_SUI }}
             ${{ steps.build.outputs.BIN_SUI_NODE }}

@@ -45,7 +45,6 @@ export function useGetNFTs(address?: SuiAddress | null) {
             .filter(hasDisplayData)
             .map(({ data }) => data as SuiObjectData) || []),
     ];
-
     return {
         data: nfts,
         isInitialLoading,

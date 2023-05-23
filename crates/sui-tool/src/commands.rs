@@ -302,10 +302,10 @@ impl ToolCommand {
                     for (i, val_info) in genesis.validator_set_for_tooling().iter().enumerate() {
                         let metadata = val_info.verified_metadata();
                         println!(
-                            "#{:<2} {:<20} {:?<66} {:?} {}",
+                            "#{:<2} {:<20} {:?} {:?} {}",
                             i,
                             metadata.name,
-                            metadata.protocol_pubkey,
+                            metadata.sui_pubkey_bytes().concise(),
                             metadata.net_address,
                             anemo::PeerId(metadata.network_pubkey.0.to_bytes()),
                         )
