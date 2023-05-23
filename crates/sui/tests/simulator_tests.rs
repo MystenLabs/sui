@@ -136,3 +136,34 @@ async fn test_net_determinism() {
 
     wait_for_tx(digest, node.sui_node.state().clone()).await;
 }
+
+#[sim_test]
+async fn test_instrumented_yield() {
+    let now = Instant::now();
+
+    instrumented_yield!();
+
+    assert!(now.elapsed() > Duration::from_millis(0));
+}
+
+#[sim_test]
+async fn test_instrumented_yield_double() {
+    // Ok because control returns to scheduler each time.
+    instrumented_yield!();
+    instrumented_yield!();
+}
+
+#[sim_test]
+#[should_panic]
+async fn test_instrumented_yield_double_panic() {
+    let make_fut = || async {
+        instrumented_yield!();
+    };
+
+    // Panics because select prevents control from returning to scheduler before the second
+    // instrumented_yield!() is called.
+    tokio::select! {
+        _ = make_fut() => {}
+        _ = make_fut() => {}
+    }
+}

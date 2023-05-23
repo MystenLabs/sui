@@ -143,10 +143,25 @@ macro_rules! fail_point_async {
     ($tag: expr) => {};
 }
 
+#[cfg(msim)]
+#[macro_export]
+macro_rules! instrumented_yield {
+    () => {
+        sui_simulator::task::instrumented_yield().await
+    };
+}
+
+#[cfg(not(msim))]
+#[macro_export]
+macro_rules! instrumented_yield {
+    () => {};
+}
+
 // These tests need to be run in release mode, since debug mode does overflow checks by default!
 #[cfg(test)]
 mod test {
     use super::*;
+    use std::time::Instant;
 
     // Uncomment to test error messages
     // #[with_checked_arithmetic]
