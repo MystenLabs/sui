@@ -37,7 +37,7 @@ pub use struct_defs::RecursiveStructDefChecker;
 pub use verifier::{
     verify_module_unmetered, verify_module_with_config_for_test, verify_module_with_config_metered,
     verify_module_with_config_unmetered, verify_script_unmetered,
-    verify_script_with_config_metered, verify_script_with_config_unmetered, VerifierConfig,
+    verify_script_with_config_metered, verify_script_with_config_unmetered,
 };
 
 mod acquires_list_verifier;

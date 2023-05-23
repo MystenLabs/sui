@@ -4,12 +4,12 @@
 use crate::unit_tests::production_config;
 use move_binary_format::file_format::*;
 use move_bytecode_verifier::{
-    limits::LimitsVerifier, meter::DummyMeter, verifier::DEFAULT_MAX_IDENTIFIER_LENGTH,
-    verify_module_with_config_for_test, VerifierConfig,
+    limits::LimitsVerifier, meter::DummyMeter, verify_module_with_config_for_test,
 };
 use move_core_types::{
     account_address::AccountAddress, identifier::Identifier, vm_status::StatusCode,
 };
+use move_vm_config::verifier::{VerifierConfig, DEFAULT_MAX_IDENTIFIER_LENGTH};
 
 #[test]
 fn test_function_handle_type_instantiation() {

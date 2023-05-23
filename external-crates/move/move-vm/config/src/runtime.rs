@@ -1,8 +1,8 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::verifier::{VerifierConfig, DEFAULT_MAX_CONSTANT_VECTOR_LEN};
 use move_binary_format::file_format_common::VERSION_MAX;
-use move_bytecode_verifier::{verifier::DEFAULT_MAX_CONSTANT_VECTOR_LEN, VerifierConfig};
 
 /// Dynamic config options for the Move VM.
 pub struct VMConfig {
@@ -37,6 +37,7 @@ pub struct VMRuntimeLimitsConfig {
     /// Maximum number of items that can be pushed into a vec
     pub vector_len_max: u64,
 }
+
 impl Default for VMRuntimeLimitsConfig {
     fn default() -> Self {
         Self {

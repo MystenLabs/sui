@@ -5190,6 +5190,7 @@ dependencies = [
  "move-binary-format",
  "move-borrow-graph",
  "move-core-types",
+ "move-vm-config",
  "petgraph 0.5.1",
 ]
 
@@ -5703,6 +5704,7 @@ dependencies = [
  "move-stackless-bytecode-interpreter",
  "move-stdlib",
  "move-symbol-pool",
+ "move-vm-config",
  "move-vm-runtime",
  "move-vm-test-utils",
  "move-vm-types",
@@ -5743,6 +5745,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "move-vm-config"
+version = "0.1.0"
+dependencies = [
+ "move-binary-format",
+]
+
+[[package]]
 name = "move-vm-runtime"
 version = "0.1.0"
 dependencies = [
@@ -5751,6 +5760,7 @@ dependencies = [
  "move-binary-format",
  "move-bytecode-verifier",
  "move-core-types",
+ "move-vm-config",
  "move-vm-types",
  "once_cell",
  "parking_lot 0.11.2",
@@ -9399,6 +9409,7 @@ dependencies = [
  "move-bytecode-verifier",
  "move-core-types",
  "move-package",
+ "move-vm-config",
  "move-vm-runtime",
  "move-vm-types",
  "mysten-metrics",
@@ -10900,6 +10911,7 @@ dependencies = [
  "move-bytecode-utils",
  "move-bytecode-verifier",
  "move-core-types",
+ "move-vm-config",
  "sui-protocol-config",
  "sui-types",
  "workspace-hack",
@@ -13027,6 +13039,7 @@ dependencies = [
  "move-table-extension",
  "move-transactional-test-runner",
  "move-unit-test",
+ "move-vm-config",
  "move-vm-runtime",
  "move-vm-test-utils",
  "move-vm-types",

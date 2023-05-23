@@ -33,6 +33,7 @@ move-ir-types = { path = "../../move-ir/types" }
 move-compiler = { path = "../../move-compiler" }
 move-stdlib = { path = "../../move-stdlib", features = ["testing"] }
 move-symbol-pool = { path = "../../move-symbol-pool" }
+move-vm-config = { path = "../../move-vm/config" }
 move-vm-test-utils = { path = "../../move-vm/test-utils" }
 move-vm-types = { path = "../../move-vm/types" }
 move-vm-runtime = { path = "../../move-vm/runtime" }
