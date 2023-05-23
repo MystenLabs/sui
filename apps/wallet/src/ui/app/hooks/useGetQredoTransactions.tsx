@@ -33,13 +33,13 @@ export function useGetQredoTransactions({
             activeAddress,
             filterStatus,
         ],
-        queryFn: async () =>
-            (
-                await qredoAPI!.getTransactions({
-                    network: networkName!,
-                    address: activeAddress!,
-                })
-            ).list.filter(
+        queryFn: () =>
+            qredoAPI!.getTransactions({
+                network: networkName!,
+                address: activeAddress!,
+            }),
+        select: ({ list }) =>
+            list.filter(
                 ({ status }) =>
                     !filterStatus?.length || filterStatus.includes(status)
             ),
