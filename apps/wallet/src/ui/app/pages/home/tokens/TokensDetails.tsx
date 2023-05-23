@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useAppsBackend } from '@mysten/core';
+import { useAppsBackend, useGetCoinBalance } from '@mysten/core';
 import {
     Info12,
     WalletActionBuy24,
@@ -29,7 +29,11 @@ import { LargeButton } from '_app/shared/LargeButton';
 import { Text } from '_app/shared/text';
 import Alert from '_components/alert';
 import Loading from '_components/loading';
-import { useAppSelector, useGetAllBalances, useGetCoinBalance } from '_hooks';
+import {
+    useAppSelector,
+    useGetAllBalances,
+    useCoinsReFetchingConfig,
+} from '_hooks';
 import { API_ENV } from '_src/shared/api-env';
 import { AccountSelector } from '_src/ui/app/components/AccountSelector';
 import { useLedgerNotification } from '_src/ui/app/hooks/useLedgerNotification';
@@ -178,12 +182,18 @@ function MyTokens() {
 function TokenDetails({ coinType }: TokenDetailsProps) {
     const activeCoinType = coinType || SUI_TYPE_ARG;
     const accountAddress = useActiveAddress();
+    const { staleTime, refetchInterval } = useCoinsReFetchingConfig();
     const {
         data: coinBalance,
         isError,
         isLoading,
         isFetched,
-    } = useGetCoinBalance(activeCoinType, accountAddress);
+    } = useGetCoinBalance(
+        activeCoinType,
+        accountAddress,
+        refetchInterval,
+        staleTime
+    );
     const { apiEnv } = useAppSelector((state) => state.app);
     const { request } = useAppsBackend();
     const { data } = useQuery({

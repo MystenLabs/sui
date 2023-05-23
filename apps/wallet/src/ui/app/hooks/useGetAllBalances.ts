@@ -8,6 +8,7 @@ import { useQuery } from '@tanstack/react-query';
 
 import { FEATURES } from '_src/shared/experimentation/features';
 
+// TODO: use from core. Update core to handle optional select function
 export function useGetAllBalances(address?: SuiAddress | null) {
     const rpc = useRpcClient();
     const refetchInterval = useFeatureValue(

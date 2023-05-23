@@ -2,7 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useFeatureIsOn } from '@growthbook/growthbook-react';
-import { useCoinMetadata, useGetSystemState } from '@mysten/core';
+import {
+    useCoinMetadata,
+    useGetSystemState,
+    useGetCoinBalance,
+} from '@mysten/core';
 import { ArrowLeft16 } from '@mysten/icons';
 import {
     getTransactionDigest,
@@ -41,7 +45,7 @@ import { Collapse } from '_app/shared/collapse';
 import { Text } from '_app/shared/text';
 import Loading from '_components/loading';
 import { parseAmount } from '_helpers';
-import { useSigner, useGetCoinBalance } from '_hooks';
+import { useSigner, useCoinsReFetchingConfig } from '_hooks';
 import { Coin } from '_redux/slices/sui-objects/Coin';
 import { MIN_NUMBER_SUI_TO_STAKE } from '_src/shared/constants';
 import { FEATURES } from '_src/shared/experimentation/features';
@@ -58,8 +62,14 @@ export type FormValues = typeof initialValues;
 function StakingCard() {
     const coinType = SUI_TYPE_ARG;
     const accountAddress = useActiveAddress();
+    const { staleTime, refetchInterval } = useCoinsReFetchingConfig();
     const { data: suiBalance, isLoading: loadingSuiBalances } =
-        useGetCoinBalance(SUI_TYPE_ARG, accountAddress);
+        useGetCoinBalance(
+            SUI_TYPE_ARG,
+            accountAddress,
+            refetchInterval,
+            staleTime
+        );
     const coinBalance = BigInt(suiBalance?.totalBalance || 0);
     const [searchParams] = useSearchParams();
     const validatorAddress = searchParams.get('address');
