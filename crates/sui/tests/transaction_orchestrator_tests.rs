@@ -83,19 +83,23 @@ async fn test_fullnode_wal_log() -> Result<(), anyhow::Error> {
         .build()
         .await?;
 
-    let node = &test_cluster.fullnode_handle.sui_node;
+    let handle = &test_cluster.fullnode_handle.sui_node;
 
     let temp_dir = tempfile::tempdir().unwrap();
-    let reconfig_channel = node.with(|node| node.subscribe_to_epoch_change());
     tokio::task::yield_now().await;
-    let orchestrator = TransactiondOrchestrator::new_with_network_clients(
-        node.state(),
-        reconfig_channel,
-        temp_dir.path(),
-        &Registry::new(),
-    )
-    .await
-    .unwrap();
+    let registry = Registry::new();
+    // Start orchestrator inside container so that it will be properly shutdown.
+    let orchestrator = handle
+        .with_async(|node| {
+            TransactiondOrchestrator::new_with_network_clients(
+                node.state(),
+                node.subscribe_to_epoch_change(),
+                temp_dir.path(),
+                &registry,
+            )
+        })
+        .await
+        .unwrap();
 
     let txn_count = 2;
     let context = &mut test_cluster.wallet;
