@@ -71,10 +71,11 @@ export class QredoSigner extends WalletSigner {
                 (currentTxInfo) =>
                     !currentTxInfo.sig &&
                     [
-                        'pending',
                         'created',
                         'authorized',
+                        'pending',
                         'approved',
+                        'queued',
                         'signed',
                     ].includes(currentTxInfo.status),
                 clientIdentifier
