@@ -117,9 +117,9 @@ export function SendTokenForm({
         activeAddress!
     );
 
-    const suiCoins = suiCoinsData?.length ? suiCoinsData : [];
-    const coins = coinsData?.length ? coinsData : [];
-    const coinBalance = CoinAPI.totalBalance(coins || []);
+    const suiCoins = suiCoinsData;
+    const coins = coinsData;
+    const coinBalance = CoinAPI.totalBalance(coins);
     const suiBalance = CoinAPI.totalBalance(suiCoins);
 
     const coinMetadata = useCoinMetadata(coinType);
