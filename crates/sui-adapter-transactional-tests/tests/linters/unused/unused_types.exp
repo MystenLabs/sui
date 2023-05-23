@@ -1,0 +1,10 @@
+processed 2 tasks
+
+task 1 'publish'. lines 6-30:
+Error: error[E03001]: address with no value
+  ┌─ /var/folders/gw/732jkstx1j3fxgsqnlxg35c80000gn/T/.tmpzT73y1:7:8
+  │
+7 │ module lint_test_pkg::unused_types {
+  │        ^^^^^^^^^^^^^ address 'lint_test_pkg' is not assigned a value. Try assigning it a value when calling the compiler
+
+

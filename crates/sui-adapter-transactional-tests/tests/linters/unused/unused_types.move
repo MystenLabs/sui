@@ -1,12 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+//# init --addresses test=0x0
+
+//# publish --lint
 module lint_test_pkg::unused_types {
     use sui::tx_context::TxContext;
 
     struct UNUSED_TYPES has drop {}
-
-    struct UsedType has drop {}
 
     struct UnusedType has drop {}
 
@@ -18,6 +19,9 @@ module lint_test_pkg::unused_types {
         // we define pack = use
         UsedType {}
     }
+
+    // make sure that defining type after use does not matter
+    struct UsedType has drop {}
 
     // doesn't count as used
     public fun use_no_pack(x: UnusedType): UnusedType {
