@@ -20,6 +20,7 @@ use prometheus::{IntGauge, Registry};
 use std::sync::Arc;
 use std::time::Instant;
 use storage::NodeStorage;
+use sui_protocol_config::ProtocolConfig;
 use tokio::sync::{watch, RwLock};
 use tokio::task::JoinHandle;
 use tracing::{debug, info, instrument};
@@ -46,6 +47,8 @@ struct PrimaryNodeInner {
     tx_shutdown: Option<PreSubscribedBroadcastSender>,
     // Peer ID used for local connections.
     own_peer_id: Option<PeerId>,
+    // The protocol configuration.
+    protocol_config: ProtocolConfig,
 }
 
 impl PrimaryNodeInner {
@@ -102,6 +105,7 @@ impl PrimaryNodeInner {
             self.parameters.clone(),
             self.internal_consensus,
             execution_state,
+            self.protocol_config.clone(),
             &registry,
             &mut tx_shutdown,
         )
@@ -204,6 +208,8 @@ impl PrimaryNodeInner {
         internal_consensus: bool,
         // The state used by the client to execute transactions.
         execution_state: Arc<State>,
+        // The protocol configuration.
+        protocol_config: ProtocolConfig,
         // A prometheus exporter Registry to use for the metrics
         registry: &Registry,
         // The channel to send the shutdown signal
@@ -268,6 +274,7 @@ impl PrimaryNodeInner {
                 tx_committed_certificates.clone(),
                 tx_consensus_round_updates,
                 registry,
+                &protocol_config,
             )
             .await?;
 
@@ -300,6 +307,7 @@ impl PrimaryNodeInner {
             tx_shutdown,
             tx_committed_certificates,
             registry,
+            protocol_config.clone(),
         );
         handles.extend(primary_handles);
 
@@ -320,6 +328,7 @@ impl PrimaryNodeInner {
         tx_committed_certificates: metered_channel::Sender<(Round, Vec<Certificate>)>,
         tx_consensus_round_updates: watch::Sender<ConsensusRound>,
         registry: &Registry,
+        protocol_config: &ProtocolConfig,
     ) -> SubscriberResult<Vec<JoinHandle<()>>>
     where
         PublicKey: VerifyingKey,
@@ -382,6 +391,7 @@ impl PrimaryNodeInner {
             rx_sequence,
             registry,
             restored_consensus_output,
+            protocol_config,
         )?;
 
         Ok(executor_handles
@@ -401,6 +411,7 @@ impl PrimaryNode {
         parameters: Parameters,
         internal_consensus: bool,
         registry_service: RegistryService,
+        protocol_config: ProtocolConfig,
     ) -> PrimaryNode {
         let inner = PrimaryNodeInner {
             parameters,
@@ -411,6 +422,7 @@ impl PrimaryNode {
             client: None,
             tx_shutdown: None,
             own_peer_id: None,
+            protocol_config,
         };
 
         Self {

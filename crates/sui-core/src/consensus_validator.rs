@@ -147,6 +147,7 @@ mod tests {
         consensus_adapter::consensus_tests::{test_certificates, test_gas_objects},
         consensus_validator::{SuiTxValidator, SuiTxValidatorMetrics},
     };
+    use narwhal_test_utils::latest_protocol_version;
     use narwhal_types::Batch;
     use narwhal_worker::TransactionValidator;
     use sui_types::signature::GenericSignature;
@@ -199,7 +200,7 @@ mod tests {
             })
             .collect();
 
-        let batch = Batch::new(transaction_bytes);
+        let batch = Batch::new(transaction_bytes, &latest_protocol_version());
         let res_batch = validator.validate_batch(&batch).await;
         assert!(res_batch.is_ok(), "{res_batch:?}");
 
@@ -215,7 +216,7 @@ mod tests {
             })
             .collect();
 
-        let batch = Batch::new(bogus_transaction_bytes);
+        let batch = Batch::new(bogus_transaction_bytes, &latest_protocol_version());
         let res_batch = validator.validate_batch(&batch).await;
         assert!(res_batch.is_err());
     }

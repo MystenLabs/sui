@@ -9,6 +9,7 @@ use fastcrypto::traits::KeyPair;
 use mysten_metrics::RegistryService;
 use narwhal_config::{Epoch, WorkerCache};
 use narwhal_executor::ExecutionState;
+use narwhal_test_utils::latest_protocol_version;
 use narwhal_types::{BatchAPI, ConsensusOutput, TransactionProto, TransactionsClient};
 use narwhal_worker::TrivialTransactionValidator;
 use prometheus::Registry;
@@ -126,7 +127,8 @@ async fn test_narwhal_manager() {
 
         let metrics = NarwhalManagerMetrics::new(&Registry::new());
 
-        let narwhal_manager = NarwhalManager::new(narwhal_config, metrics);
+        let narwhal_manager =
+            NarwhalManager::new(narwhal_config, metrics, latest_protocol_version());
 
         // start narwhal
         narwhal_manager

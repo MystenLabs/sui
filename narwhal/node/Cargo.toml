@@ -36,6 +36,7 @@ worker = { path = "../worker", package = "narwhal-worker" }
 eyre = "0.6.8"
 sui-keys = { path = "../../crates/sui-keys" }
 sui-types = { path = "../../crates/sui-types" }
+sui-protocol-config = { path = "../../crates/sui-protocol-config" }
 
 mysten-metrics = { path = "../../crates/mysten-metrics" }
 mysten-network.workspace = true

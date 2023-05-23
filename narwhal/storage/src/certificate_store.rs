@@ -689,7 +689,7 @@ mod test {
         reopen,
         rocks::{open_cf, DBMap, ReadWriteOptions},
     };
-    use test_utils::{temp_dir, CommitteeFixture};
+    use test_utils::{latest_protocol_version, temp_dir, CommitteeFixture};
     use types::{Certificate, CertificateAPI, CertificateDigest, HeaderAPI, Round};
 
     fn new_store(path: std::path::PathBuf) -> CertificateStore {
@@ -764,7 +764,7 @@ mod test {
                 .iter()
                 .map(|header| fixture.certificate(header).digest())
                 .collect();
-            (_, current_round) = fixture.headers_round(i, &parents);
+            (_, current_round) = fixture.headers_round(i, &parents, &latest_protocol_version());
 
             result.extend(
                 current_round

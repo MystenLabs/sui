@@ -31,6 +31,7 @@ use std::collections::HashMap;
 use std::time::Duration;
 use std::{net::Ipv4Addr, sync::Arc, thread::sleep};
 use store::rocks::DBMap;
+use sui_protocol_config::ProtocolConfig;
 use tap::TapFallible;
 use tokio::task::JoinHandle;
 use tower::ServiceBuilder;
@@ -65,6 +66,8 @@ pub struct Worker {
     parameters: Parameters,
     /// The persistent storage.
     store: DBMap<BatchDigest, Batch>,
+    // The protocol configuration.
+    protocol_config: ProtocolConfig,
 }
 
 impl Worker {
@@ -80,6 +83,7 @@ impl Worker {
         store: DBMap<BatchDigest, Batch>,
         metrics: Metrics,
         tx_shutdown: &mut PreSubscribedBroadcastSender,
+        protocol_config: ProtocolConfig,
     ) -> Vec<JoinHandle<()>> {
         let worker_name = keypair.public().clone();
         let worker_peer_id = PeerId(worker_name.0.to_bytes());
@@ -94,6 +98,7 @@ impl Worker {
             worker_cache,
             parameters: parameters.clone(),
             store,
+            protocol_config: protocol_config.clone(),
         };
 
         let node_metrics = Arc::new(metrics.worker_metrics.unwrap());
@@ -110,6 +115,7 @@ impl Worker {
             client: client.clone(),
             store: worker.store.clone(),
             validator: validator.clone(),
+            protocol_config: protocol_config.clone(),
         });
         // Apply rate limits from configuration as needed.
         if let Some(limit) = parameters.anemo.report_batch_rate_limit {
@@ -141,6 +147,7 @@ impl Worker {
             network: None,
             batch_fetcher: None,
             validator: validator.clone(),
+            protocol_config: protocol_config.clone(),
         });
 
         // Receive incoming messages from other workers.
@@ -275,6 +282,7 @@ impl Worker {
             network.clone(),
             worker.store.clone(),
             node_metrics.clone(),
+            protocol_config.clone(),
         );
         client.set_primary_to_worker_local_handler(
             worker_peer_id,
@@ -289,6 +297,7 @@ impl Worker {
                 network: Some(network.clone()),
                 batch_fetcher: Some(batch_fetcher),
                 validator: validator.clone(),
+                protocol_config,
             }),
         );
 
@@ -484,6 +493,7 @@ impl Worker {
             node_metrics,
             client,
             self.store.clone(),
+            self.protocol_config.clone(),
         );
 
         // The `QuorumWaiter` waits for 2f authorities to acknowledge reception of the batch. It then forwards

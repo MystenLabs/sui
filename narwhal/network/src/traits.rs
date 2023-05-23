@@ -9,7 +9,8 @@ use types::{
     error::LocalClientError, Batch, BatchDigest, FetchBatchesRequest, FetchBatchesResponse,
     FetchCertificatesRequest, FetchCertificatesResponse, GetCertificatesRequest,
     GetCertificatesResponse, RequestBatchesRequest, RequestBatchesResponse,
-    WorkerOthersBatchMessage, WorkerOurBatchMessage, WorkerSynchronizeMessage,
+    WorkerOthersBatchMessage, WorkerOurBatchMessage, WorkerOurBatchMessageV2,
+    WorkerSynchronizeMessage,
 };
 
 pub trait UnreliableNetwork<Request: Clone + Send + Sync> {
@@ -100,6 +101,11 @@ pub trait WorkerToPrimaryClient {
     async fn report_our_batch(
         &self,
         request: WorkerOurBatchMessage,
+    ) -> Result<(), LocalClientError>;
+
+    async fn report_our_batch_v2(
+        &self,
+        request: WorkerOurBatchMessageV2,
     ) -> Result<(), LocalClientError>;
 
     async fn report_others_batch(
