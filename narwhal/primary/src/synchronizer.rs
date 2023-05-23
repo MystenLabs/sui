@@ -100,8 +100,9 @@ struct Inner {
     metrics: Arc<PrimaryMetrics>,
     /// Background tasks broadcasting newly formed certificates.
     certificate_senders: Mutex<JoinSet<()>>,
-    /// A background task that synchronizes batches
-    tx_batch_tasks: Sender<(Header, u64, bool)>,
+    /// A background task that synchronizes batches. A tuple of a header and the maximum accepted
+    /// age is sent over.
+    tx_batch_tasks: Sender<(Header, u64)>,
     /// Aggregates certificates to use as parents for new headers.
     certificates_aggregators: Mutex<BTreeMap<Round, Box<CertificatesAggregator>>>,
     /// State for tracking suspended certificates and when they can be accepted.
@@ -395,22 +396,22 @@ impl Synchronizer {
                 let mut rx_consensus_round_updates = rx_consensus_round_updates.clone();
                 loop {
                     let Ok(result) = timeout(FETCH_TRIGGER_TIMEOUT, rx_consensus_round_updates.changed()).await else {
-                    // When consensus commit has not happened for 30s, it is possible that no new
-                    // certificate is received by this primary or created in the network, so
-                    // fetching should definitely be started.
-                    // For other reasons of timing out, there is no harm to start fetching either.
-                    let Some(inner) = weak_inner.upgrade() else {
-                        debug!("Synchronizer is shutting down.");
-                        return;
+                        // When consensus commit has not happened for 30s, it is possible that no new
+                        // certificate is received by this primary or created in the network, so
+                        // fetching should definitely be started.
+                        // For other reasons of timing out, there is no harm to start fetching either.
+                        let Some(inner) = weak_inner.upgrade() else {
+                            debug!("Synchronizer is shutting down.");
+                            return;
+                        };
+                        if inner.tx_certificate_fetcher.send(CertificateFetcherCommand::Kick).await.is_err() {
+                            debug!("Synchronizer is shutting down.");
+                            return;
+                        }
+                        inner.metrics.synchronizer_gc_timeout.inc();
+                        warn!("No consensus commit happened for {:?}, triggering certificate fetching.", FETCH_TRIGGER_TIMEOUT);
+                        continue;
                     };
-                    if inner.tx_certificate_fetcher.send(CertificateFetcherCommand::Kick).await.is_err() {
-                        debug!("Synchronizer is shutting down.");
-                        return;
-                    }
-                    inner.metrics.synchronizer_gc_timeout.inc();
-                    warn!("No consensus commit happened for {:?}, triggering certificate fetching.", FETCH_TRIGGER_TIMEOUT);
-                    continue;
-                };
                     if result.is_err() {
                         debug!("Synchronizer is shutting down.");
                         return;
@@ -418,9 +419,9 @@ impl Synchronizer {
                     let _scope = monitored_scope("Synchronizer::gc_iteration");
                     let gc_round = rx_consensus_round_updates.borrow().gc_round;
                     let Some(inner) = weak_inner.upgrade() else {
-                    debug!("Synchronizer is shutting down.");
-                    return;
-                };
+                        debug!("Synchronizer is shutting down.");
+                        return;
+                    };
                     // this is the only task updating gc_round
                     inner.gc_round.store(gc_round, Ordering::Release);
                     inner
@@ -459,13 +460,13 @@ impl Synchronizer {
             async move {
                 loop {
                     let Some((certificate, result_sender, early_suspend)) = rx_certificate_acceptor.recv().await else {
-                    debug!("Synchronizer is shutting down.");
-                    return;
-                };
+                        debug!("Synchronizer is shutting down.");
+                        return;
+                    };
                     let Some(inner) = weak_inner.upgrade() else {
-                    debug!("Synchronizer is shutting down.");
-                    return;
-                };
+                        debug!("Synchronizer is shutting down.");
+                        return;
+                    };
                     // Ignore error if receiver has been dropped.
                     let _ = result_sender.send(
                         Self::process_certificate_with_lock(&inner, certificate, early_suspend)
@@ -481,9 +482,9 @@ impl Synchronizer {
         spawn_logged_monitored_task!(
             async move {
                 let Ok(network) = rx_synchronizer_network.await else {
-                error!("Failed to receive Network!");
-                return;
-            };
+                    error!("Failed to receive Network!");
+                    return;
+                };
                 let mut senders = inner_senders.certificate_senders.lock();
                 for (name, _, network_key) in inner_senders
                     .committee
@@ -515,23 +516,28 @@ impl Synchronizer {
 
                 loop {
                     tokio::select! {
-                        Some((header, max_age, certified)) = rx_batch_tasks.recv() => {
+                        result = rx_batch_tasks.recv() => {
+                            let (header, max_age) = match result {
+                                Some(r) => r,
+                                None => {
+                                    // exit loop if the channel has been closed
+                                    break;
+                                }
+                            };
+
                             let Some(inner) = weak_inner.upgrade() else {
                                 debug!("Synchronizer is shutting down.");
                                 return;
                             };
 
                             batch_tasks.spawn(async move {
-                                Synchronizer::sync_batches_internal(inner.clone(), &header, max_age, certified).await
+                                Synchronizer::sync_batches_internal(inner.clone(), &header, max_age, true).await
                             });
                         },
                         Some(result) = batch_tasks.join_next() => {
                             if let Err(err) = result  {
                                 error!("Error when synchronizing batches: {err:?}")
                             }
-                        },
-                        else => {
-                            break;
                         }
                     }
                 }
@@ -719,7 +725,7 @@ impl Synchronizer {
         let max_age = self.inner.gc_depth.saturating_sub(1);
         self.inner
             .tx_batch_tasks
-            .send((header.clone(), max_age, true))
+            .send((header.clone(), max_age))
             .await
             .map_err(|_| DagError::ShuttingDown)?;
 

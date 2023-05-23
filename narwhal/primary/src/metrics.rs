@@ -81,8 +81,7 @@ pub struct PrimaryChannelMetrics {
     /// An internal synchronizer channel. Occupancy of the channel sending certificates to the internal
     /// task that accepts certificates.
     pub tx_certificate_acceptor: IntGauge,
-    /// An internal synchronizer channel. Occupancy of the channel synchronizing batches for provided
-    /// headers & certificates.
+    /// Occupancy of the channel synchronizing batches for provided headers & certificates.
     pub tx_batch_tasks: IntGauge,
 
     // totals
@@ -106,10 +105,9 @@ pub struct PrimaryChannelMetrics {
     pub tx_new_certificates_total: IntCounter,
     /// total received on the channel signaling own committed headers
     pub tx_committed_own_headers_total: IntCounter,
-    /// An internal synchronizer channel. Total received the channel sending certificates to the internal
-    /// task that accepts certificates.
+    /// Total received by the channel sending certificates to the internal task that accepts certificates.
     pub tx_certificate_acceptor_total: IntCounter,
-    /// An internal synchronizer channel. Total received the channel to synchronize missing batches
+    /// Total received the channel to synchronize missing batches
     pub tx_batch_tasks_total: IntCounter,
 }
 
