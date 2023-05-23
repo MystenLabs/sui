@@ -51,6 +51,7 @@ export default function ValidatorMap({ minHeight }: Props) {
         queryFn: () =>
             request<ValidatorMapResponse>('validator-map', {
                 network: network.toLowerCase(),
+                version: '2',
             }),
     });
 
