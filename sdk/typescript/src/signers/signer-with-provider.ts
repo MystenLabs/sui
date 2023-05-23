@@ -76,26 +76,32 @@ export abstract class SignerWithProvider implements Signer {
     };
   }
 
+  protected async prepareTransactionBlock(
+    transactionBlock: Uint8Array | TransactionBlock,
+  ) {
+    if (TransactionBlock.is(transactionBlock)) {
+      // If the sender has not yet been set on the transaction, then set it.
+      // NOTE: This allows for signing transactions with mis-matched senders, which is important for sponsored transactions.
+      transactionBlock.setSenderIfNotSet(await this.getAddress());
+      return await transactionBlock.build({
+        provider: this.provider,
+      });
+    }
+    if (transactionBlock instanceof Uint8Array) {
+      return transactionBlock;
+    }
+    throw new Error('Unknown transaction format');
+  }
+
   /**
    * Sign a transaction.
    */
   async signTransactionBlock(input: {
     transactionBlock: Uint8Array | TransactionBlock;
   }): Promise<SignedTransaction> {
-    let transactionBlockBytes;
-
-    if (TransactionBlock.is(input.transactionBlock)) {
-      // If the sender has not yet been set on the transaction, then set it.
-      // NOTE: This allows for signing transactions with mis-matched senders, which is important for sponsored transactions.
-      input.transactionBlock.setSenderIfNotSet(await this.getAddress());
-      transactionBlockBytes = await input.transactionBlock.build({
-        provider: this.provider,
-      });
-    } else if (input.transactionBlock instanceof Uint8Array) {
-      transactionBlockBytes = input.transactionBlock;
-    } else {
-      throw new Error('Unknown transaction format');
-    }
+    const transactionBlockBytes = await this.prepareTransactionBlock(
+      input.transactionBlock,
+    );
 
     const intentMessage = messageWithIntent(
       IntentScope.TransactionData,

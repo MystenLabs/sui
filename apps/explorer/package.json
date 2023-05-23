@@ -64,7 +64,6 @@
         "react-router-dom": "^6.10.0",
         "throttle-debounce": "^5.0.0",
         "topojson-client": "^3.1.0",
-        "web-vitals": "^3.3.1",
         "zod": "^3.21.4"
     },
     "devDependencies": {

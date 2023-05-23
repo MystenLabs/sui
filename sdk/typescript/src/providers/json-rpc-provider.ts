@@ -55,13 +55,13 @@ import {
 } from '../rpc/websocket-client';
 import { requestSuiFromFaucet } from '../rpc/faucet-client';
 import { any, is, array, string } from 'superstruct';
-import { toB64 } from '@mysten/bcs';
+import { fromB58, toB64, toHEX } from '@mysten/bcs';
 import { SerializedSignature } from '../cryptography/signature';
 import { Connection, devnetConnection } from '../rpc/connection';
 import { TransactionBlock } from '../builder';
 import { CheckpointPage } from '../types/checkpoints';
 import { RPCError } from '../utils/errors';
-import { NetworkMetrics } from '../types/metrics';
+import { NetworkMetrics, AddressMetrics } from '../types/metrics';
 import { EpochInfo, EpochPage } from '../types/epochs';
 import { lt } from '@suchipi/femver';
 
@@ -783,6 +783,15 @@ export class JsonRpcProvider {
       NetworkMetrics,
     );
   }
+
+  async getAddressMetrics() {
+    return await this.client.requestWithType(
+      'suix_getLatestAddressMetrics',
+      [],
+      AddressMetrics,
+    );
+  }
+
   /**
    * Return the committee information for the asked epoch
    */
@@ -834,6 +843,13 @@ export class JsonRpcProvider {
       [],
       ValidatorsApy,
     );
+  }
+
+  // TODO: Migrate this to `sui_getChainIdentifier` once it is widely available.
+  async getChainIdentifier(): Promise<string> {
+    const checkpoint = await this.getCheckpoint({ id: '0' });
+    const bytes = fromB58(checkpoint.digest);
+    return toHEX(bytes.slice(0, 4));
   }
 
   /**

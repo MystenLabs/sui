@@ -4,6 +4,7 @@
 use crate::metrics::PrimaryMetrics;
 use config::{AuthorityIdentifier, Committee, Epoch, WorkerId};
 use fastcrypto::hash::Hash as _;
+use mysten_metrics::metered_channel::{Receiver, Sender};
 use mysten_metrics::spawn_logged_monitored_task;
 use std::collections::{BTreeMap, VecDeque};
 use std::{cmp::Ordering, sync::Arc};
@@ -17,7 +18,6 @@ use tokio::{
 use tracing::{debug, enabled, error, info, trace};
 use types::{
     error::{DagError, DagResult},
-    metered_channel::{Receiver, Sender},
     BatchDigest, Certificate, CertificateAPI, Header, HeaderAPI, Round, TimestampMs,
 };
 use types::{now, ConditionalBroadcastReceiver};

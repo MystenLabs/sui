@@ -8,6 +8,7 @@ use crypto::{NetworkPublicKey, Signature};
 use fastcrypto::signature_service::SignatureService;
 use futures::stream::FuturesUnordered;
 use futures::StreamExt;
+use mysten_metrics::metered_channel::Receiver;
 use mysten_metrics::{monitored_future, spawn_logged_monitored_task};
 use network::anemo_ext::NetworkExt;
 use std::sync::Arc;
@@ -22,7 +23,6 @@ use tracing::{debug, enabled, error, info, instrument, warn};
 use types::{
     ensure,
     error::{DagError, DagResult},
-    metered_channel::Receiver,
     Certificate, CertificateDigest, ConditionalBroadcastReceiver, Header, HeaderAPI,
     PrimaryToPrimaryClient, RequestVoteRequest, Vote, VoteAPI,
 };

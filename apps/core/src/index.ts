@@ -29,3 +29,4 @@ export * from './hooks/useGetOwnedObjects';
 export * from './hooks/useCopyToClipboard';
 export * from './hooks/useGetOriginByteKioskContents';
 export * from './hooks/useAppsBackend';
+export * from './hooks/useGetCoins';

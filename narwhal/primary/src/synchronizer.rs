@@ -9,6 +9,7 @@ use crypto::NetworkPublicKey;
 use fastcrypto::hash::Hash as _;
 use futures::{stream::FuturesOrdered, StreamExt};
 use mysten_common::sync::notify_once::NotifyOnce;
+use mysten_metrics::metered_channel::Sender;
 use mysten_metrics::{monitored_scope, spawn_monitored_task};
 use network::{
     anemo_ext::{NetworkExt, WaitingPeer},
@@ -36,7 +37,6 @@ use tracing::{debug, error, instrument, trace, warn};
 use types::{
     ensure,
     error::{AcceptNotification, DagError, DagResult},
-    metered_channel::Sender,
     Certificate, CertificateAPI, CertificateDigest, Header, HeaderAPI, PrimaryToPrimaryClient,
     Round, SendCertificateRequest, SendCertificateResponse, WorkerSynchronizeMessage,
 };

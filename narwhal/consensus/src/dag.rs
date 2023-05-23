@@ -4,6 +4,7 @@
 use config::{AuthorityIdentifier, Committee};
 use dag::node_dag::{NodeDag, NodeDagError};
 use fastcrypto::hash::Hash;
+use mysten_metrics::metered_channel;
 use mysten_metrics::spawn_logged_monitored_task;
 use std::{
     borrow::Borrow,
@@ -20,7 +21,7 @@ use tokio::{
     task::JoinHandle,
 };
 use tracing::instrument;
-use types::{metered_channel, Certificate, CertificateDigest, ConditionalBroadcastReceiver, Round};
+use types::{Certificate, CertificateDigest, ConditionalBroadcastReceiver, Round};
 
 use crate::{metrics::ConsensusMetrics, DEFAULT_CHANNEL_SIZE};
 

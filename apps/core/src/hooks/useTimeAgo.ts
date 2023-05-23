@@ -30,37 +30,49 @@ const TIME_LABEL = {
     },
 };
 
-const ONE_SECOND = 1000;
-const ONE_MINUTE = ONE_SECOND * 60;
-const ONE_HOUR = ONE_MINUTE * 60;
-const ONE_DAY = ONE_HOUR * 24;
+export enum TimeUnit {
+    ONE_SECOND = 1000,
+    ONE_MINUTE = TimeUnit.ONE_SECOND * 60,
+    ONE_HOUR = TimeUnit.ONE_MINUTE * 60,
+    ONE_DAY = TimeUnit.ONE_HOUR * 24,
+}
 
 /**
  * Formats a timestamp using `timeAgo`, and automatically updates it when the value is small.
  */
-export function useTimeAgo(
-    timeFrom?: number | null,
-    shortedTimeLabel?: boolean,
-    shouldEnd?: boolean,
-    endLabel?: string
-) {
+
+type TimeAgoOptions = {
+    timeFrom: number | null;
+    shortedTimeLabel: boolean;
+    shouldEnd?: boolean;
+    endLabel?: string;
+    maxTimeUnit?: TimeUnit;
+};
+
+export function useTimeAgo(options: TimeAgoOptions) {
+    const { timeFrom, shortedTimeLabel, shouldEnd, endLabel, maxTimeUnit } =
+        options;
     const [now, setNow] = useState(() => Date.now());
 
     // end interval when the difference between now and timeFrom is less than or equal to 0
     const continueInterval = shouldEnd ? (timeFrom || now) - now >= 0 : true;
     const intervalEnabled =
         !!timeFrom &&
-        Math.abs(now - (timeFrom || now)) < ONE_HOUR &&
+        Math.abs(now - (timeFrom || now)) < TimeUnit.ONE_HOUR &&
         continueInterval;
 
     const formattedTime = useMemo(
-        () => timeAgo(timeFrom, now, shortedTimeLabel, endLabel),
-        [now, timeFrom, shortedTimeLabel, endLabel]
+        () => timeAgo(timeFrom, now, shortedTimeLabel, endLabel, maxTimeUnit),
+        [timeFrom, now, shortedTimeLabel, endLabel, maxTimeUnit]
     );
 
     useEffect(() => {
         if (!timeFrom || !intervalEnabled) return;
-        const timeout = setInterval(() => setNow(Date.now()), ONE_SECOND);
+        console.log('interval enabled');
+        const timeout = setInterval(
+            () => setNow(Date.now()),
+            TimeUnit.ONE_SECOND
+        );
         return () => clearTimeout(timeout);
     }, [intervalEnabled, timeFrom]);
 
@@ -72,7 +84,8 @@ export const timeAgo = (
     epochMilliSecs: number | null | undefined,
     timeNow?: number | null,
     shortenTimeLabel?: boolean,
-    endLabel = `< 1 sec`
+    endLabel = `< 1 sec`,
+    maxTimeUnit = TimeUnit.ONE_DAY
 ): string => {
     if (!epochMilliSecs) return '';
 
@@ -82,20 +95,20 @@ export const timeAgo = (
     let timeUnit: [string, number][];
     let timeCol = Math.abs(timeNow - epochMilliSecs);
 
-    if (timeCol >= ONE_DAY) {
+    if (timeCol >= maxTimeUnit && maxTimeUnit >= TimeUnit.ONE_DAY) {
         timeUnit = [
-            [TIME_LABEL.day[dateKeyType], ONE_DAY],
-            [TIME_LABEL.hour[dateKeyType], ONE_HOUR],
+            [TIME_LABEL.day[dateKeyType], TimeUnit.ONE_DAY],
+            [TIME_LABEL.hour[dateKeyType], TimeUnit.ONE_HOUR],
         ];
-    } else if (timeCol >= ONE_HOUR) {
+    } else if (timeCol >= TimeUnit.ONE_HOUR) {
         timeUnit = [
-            [TIME_LABEL.hour[dateKeyType], ONE_HOUR],
-            [TIME_LABEL.min[dateKeyType], ONE_MINUTE],
+            [TIME_LABEL.hour[dateKeyType], TimeUnit.ONE_HOUR],
+            [TIME_LABEL.min[dateKeyType], TimeUnit.ONE_MINUTE],
         ];
     } else {
         timeUnit = [
-            [TIME_LABEL.min[dateKeyType], ONE_MINUTE],
-            [TIME_LABEL.sec[dateKeyType], ONE_SECOND],
+            [TIME_LABEL.min[dateKeyType], TimeUnit.ONE_MINUTE],
+            [TIME_LABEL.sec[dateKeyType], TimeUnit.ONE_SECOND],
         ];
     }
 
