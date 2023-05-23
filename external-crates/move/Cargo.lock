@@ -596,6 +596,7 @@ dependencies = [
  "move-binary-format",
  "move-bytecode-verifier",
  "move-core-types",
+ "move-vm-config",
  "petgraph 0.5.1",
  "proptest",
 ]
@@ -3604,6 +3605,7 @@ dependencies = [
  "move-core-types",
  "move-stdlib",
  "move-table-extension",
+ "move-vm-config",
  "move-vm-runtime",
  "move-vm-test-utils",
  "move-vm-types",
