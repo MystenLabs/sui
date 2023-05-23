@@ -3,6 +3,7 @@ use clap::Parser;
 use std::collections::HashSet;
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::time::Instant;
 use sui_adapter::execution_engine;
 use sui_adapter::execution_mode;
 use sui_config::{Config, NodeConfig};
@@ -31,6 +32,7 @@ use sui_types::transaction::InputObjectKind;
 use sui_types::transaction::InputObjects;
 use sui_types::transaction::TransactionDataAPI;
 use tokio::sync::watch;
+use tokio::time::Duration;
 use typed_store::rocks::default_db_options;
 
 pub mod syncoexec;
@@ -58,7 +60,7 @@ struct Args {
 #[tokio::main]
 async fn main() {
     let args = Args::parse();
-    let mut config = NodeConfig::load(&args.config_path).unwrap();
+    let config = NodeConfig::load(&args.config_path).unwrap();
     let genesis = config.genesis().expect("Could not load genesis");
     let registry_service = { metrics::start_prometheus_server(config.metrics_address) };
     let prometheus_registry = registry_service.default_registry();
@@ -124,23 +126,34 @@ async fn main() {
         signature_verifier_metrics,
         &config.expensive_safety_check_config,
     );
+    checkpoint_store.insert_genesis_checkpoint(
+        genesis.checkpoint(),
+        genesis.checkpoint_contents().clone(),
+        &epoch_store,
+    );
 
     if let Some(watermark) = args.download {
-        let highest_verified_checkpoint_seq = checkpoint_store
-            .get_highest_verified_checkpoint()
+        let mut highest_synced_checkpoint_seq = 0;
+        if let Some(highest) = checkpoint_store
+            .get_highest_synced_checkpoint_seq_number()
             .expect("Could not get highest checkpoint")
-            .expect("Could not get highest checkpoint")
-            .sequence_number;
-        if highest_verified_checkpoint_seq <= watermark {
+        {
+            highest_synced_checkpoint_seq = highest;
+        }
+        println!(
+            "Requested watermark = {}, current highest checkpoint = {}",
+            watermark, highest_synced_checkpoint_seq
+        );
+        if watermark > highest_synced_checkpoint_seq {
             // we have already downloaded all the checkpoints up to the watermark -> nothing to do
             let state_sync_store = RocksDbStore::new(
                 store.clone(),
                 committee_store.clone(),
                 checkpoint_store.clone(),
             );
-            let (trusted_peer_change_tx, trusted_peer_change_rx) =
+            let (_trusted_peer_change_tx, trusted_peer_change_rx) =
                 watch::channel(Default::default());
-            let (p2p_network, discovery_handle, state_sync_handle) =
+            let (_p2p_network, _discovery_handle, _state_sync_handle) =
                 sui_node::SuiNode::create_p2p_network(
                     &config,
                     state_sync_store,
@@ -148,150 +161,219 @@ async fn main() {
                     &prometheus_registry,
                 )
                 .expect("could not create p2p network");
+
+            while watermark > highest_synced_checkpoint_seq {
+                tokio::time::sleep(Duration::from_secs(1)).await;
+                highest_synced_checkpoint_seq = checkpoint_store
+                    .get_highest_synced_checkpoint_seq_number()
+                    .expect("Could not get highest checkpoint")
+                    .expect("Could not get highest checkpoint");
+            }
+            println!("Done downloading");
         }
     }
 
-    let mut memory_store = MemoryBackedStore::new();
-    for obj in genesis.objects() {
-        memory_store
-            .objects
-            .insert(obj.id(), (obj.compute_object_reference(), obj.clone()));
-    }
-
-    let mut checkpoint_seq = genesis.checkpoint().into_summary_and_sequence().0;
-    let mut epoch = 0;
-    // let mut num_tx : usize = 0;
-    // let mut num_tx_prev = num_tx;
-    // let mut now = Instant::now();
-
-    while let Some(checkpoint_summary) = checkpoint_store
-        .get_checkpoint_by_sequence_number(checkpoint_seq)
-        .expect("Cannot get checkpoint")
-    {
-        if checkpoint_seq % 1000 == 0 {
-            println!("{}", checkpoint_seq);
+    if args.execute {
+        let mut memory_store = MemoryBackedStore::new();
+        for obj in genesis.objects() {
+            memory_store
+                .objects
+                .insert(obj.id(), (obj.compute_object_reference(), obj.clone()));
         }
-        checkpoint_seq += 1;
 
-        let (seq, _summary) = checkpoint_summary.into_summary_and_sequence();
-        let contents = checkpoint_store
-            .get_checkpoint_contents(&_summary.content_digest)
-            .expect("Contents must exist")
-            .expect("Contents must exist");
-        for tx_digest in contents.iter() {
-            // println!("Digest: {:?}", tx_digest);
-            let tx = store
-                .get_transaction_block(&tx_digest.transaction)
-                .expect("Transaction exists")
-                .expect("Transaction exists");
-            let input_object_kinds = tx
-                .data()
-                .intent_message()
-                .value
-                .input_objects()
-                .expect("Cannot get input object kinds");
-            let tx_data = &tx.data().intent_message().value;
+        let genesis_seq = genesis.checkpoint().into_summary_and_sequence().0;
+        // let mut num_tx : usize = 0;
+        // let mut num_tx_prev = num_tx;
+        // let mut now = Instant::now();
 
-            let mut input_object_data = Vec::new();
-            for kind in &input_object_kinds {
-                let obj = match kind {
-                    InputObjectKind::MovePackage(id)
-                    | InputObjectKind::SharedMoveObject { id, .. }
-                    | InputObjectKind::ImmOrOwnedMoveObject((id, _, _)) => {
-                        memory_store.objects.get(&id).expect("Object missing?")
-                    }
-                };
-                input_object_data.push(obj.1.clone());
+        let highest_synced_seq = match checkpoint_store
+            .get_highest_synced_checkpoint_seq_number()
+            .expect("error")
+        {
+            Some(highest) => highest,
+            None => 0,
+        };
+        let highest_executed_seq = match checkpoint_store
+            .get_highest_executed_checkpoint_seq_number()
+            .expect("error")
+        {
+            Some(highest) => highest,
+            None => 0,
+        };
+        println!("Highest synced {}", highest_synced_seq);
+        println!("Highest executed {}", highest_executed_seq);
+        // quick sanity check
+        // while let Some(checkpoint_summary) = checkpoint_store
+        //     .get_checkpoint_by_sequence_number(checkpoint_seq)
+        //     .expect("Cannot get checkpoint")
+        // {
+        //     if checkpoint_seq % 50000 == 0 {
+        //         println!("{}", checkpoint_seq);
+        //     }
+        //     checkpoint_seq += 1;
+
+        //     let (seq, _summary) = checkpoint_summary.into_summary_and_sequence();
+        //     let contents = checkpoint_store
+        //         .get_checkpoint_contents(&_summary.content_digest)
+        //         .expect("Contents must exist");
+        //     if contents == None {
+        //         println!(
+        //             "Reached end of available checkpoints at seq nr {}",
+        //             checkpoint_seq
+        //         );
+        //         return;
+        //     }
+
+        //     let full_contents = checkpoint_store
+        //         .get_full_checkpoint_contents_by_sequence_number(checkpoint_seq)
+        //         .expect("Cannot get full checkpoint contents");
+        //     if full_contents == None {
+        //         print!("reached end of full checkpoints at seq {}", checkpoint_seq);
+        //         return;
+        //     }
+        //     for tx_digest in contents.unwrap().iter() {
+        //         // println!("Digest: {:?}", tx_digest);
+        //         let tx = store
+        //             .get_transaction_block(&tx_digest.transaction)
+        //             .expect("Transaction exists")
+        //             .expect("Transaction exists");
+        //     }
+        // }
+
+        let now = Instant::now();
+        let mut num_tx: usize = 0;
+        for checkpoint_seq in genesis_seq..highest_synced_seq {
+            let checkpoint_summary = checkpoint_store
+                .get_checkpoint_by_sequence_number(checkpoint_seq)
+                .expect("Cannot get checkpoint")
+                .expect("Checkpoint is None");
+
+            if checkpoint_seq % 1000 == 0 {
+                println!("{}", checkpoint_seq);
             }
 
-            let gas_status =
-                get_gas_status(&input_object_data, tx_data.gas(), &epoch_store, &tx_data)
-                    .await
-                    .expect("Could not get gas");
+            let (_seq, summary) = checkpoint_summary.into_summary_and_sequence();
+            let contents = checkpoint_store
+                .get_checkpoint_contents(&summary.content_digest)
+                .expect("Contents must exist")
+                .expect("Contents must exist");
+            num_tx += contents.size();
+            for tx_digest in contents.iter() {
+                let tx = store
+                    .get_transaction_block(&tx_digest.transaction)
+                    .expect("Transaction exists")
+                    .expect("Transaction exists");
+                let tx_data = tx.data().transaction_data();
+                let input_object_kinds = tx_data
+                    .input_objects()
+                    .expect("Cannot get input object kinds");
+                // println!("Digest: {:?}", tx_digest);
 
-            let input_objects = InputObjects::new(
-                input_object_kinds
-                    .into_iter()
-                    .zip(input_object_data.into_iter())
-                    .collect(),
-            );
-            let shared_object_refs = input_objects.filter_shared_objects();
-            let transaction_dependencies = input_objects.transaction_dependencies();
+                let mut input_object_data = Vec::new();
+                for kind in &input_object_kinds {
+                    let obj = match kind {
+                        InputObjectKind::MovePackage(id)
+                        | InputObjectKind::SharedMoveObject { id, .. }
+                        | InputObjectKind::ImmOrOwnedMoveObject((id, _, _)) => {
+                            memory_store.objects.get(&id).expect("Object missing?")
+                        }
+                    };
+                    input_object_data.push(obj.1.clone());
+                }
 
-            let temporary_store = TemporaryStore::new(
-                &memory_store,
-                input_objects,
-                tx_digest.transaction,
-                epoch_store.protocol_config(),
-            );
+                let gas_status =
+                    get_gas_status(&input_object_data, tx_data.gas(), &epoch_store, &tx_data)
+                        .await
+                        .expect("Could not get gas");
 
-            let (kind, signer, gas) = tx_data.execution_parts();
+                let input_objects = InputObjects::new(
+                    input_object_kinds
+                        .into_iter()
+                        .zip(input_object_data.into_iter())
+                        .collect(),
+                );
+                let shared_object_refs = input_objects.filter_shared_objects();
+                let transaction_dependencies = input_objects.transaction_dependencies();
 
-            let (inner_temp_store, effects, _execution_error) =
-                execution_engine::execute_transaction_to_effects::<execution_mode::Normal, _>(
-                    shared_object_refs,
-                    temporary_store,
-                    kind,
-                    signer,
-                    &gas,
-                    tx_digest.transaction,
-                    transaction_dependencies,
-                    epoch_store.move_vm(),
-                    gas_status,
-                    &epoch_store.epoch_start_config().epoch_data(),
+                let temporary_store = TemporaryStore::new(
+                    &memory_store,
+                    input_objects,
+                    *tx.digest(),
                     epoch_store.protocol_config(),
-                    metrics.clone(),
-                    false,
-                    &HashSet::new(),
                 );
 
-            // Critical check: are the effects the same?
-            if effects.digest() != tx_digest.effects {
-                println!("Effects mismatch at checkpoint {}", seq);
-                let old_effects = store
-                    .get_executed_effects(&tx_digest.transaction)
-                    .expect("Effects must exist");
-                println!("Past effects: {:?}", old_effects);
-                println!("New effects: {:?}", effects);
-            }
-            assert!(
-                effects.digest() == tx_digest.effects,
-                "Effects digest mismatch"
-            );
+                let (kind, signer, gas) = tx_data.execution_parts();
 
-            // And now we mutate the store.
-            // First delete:
-            for obj_del in &inner_temp_store.deleted {
-                memory_store.objects.remove(obj_del.0);
-            }
-            for (obj_add_id, (oref, obj, _)) in inner_temp_store.written {
-                memory_store.objects.insert(obj_add_id, (oref, obj));
-            }
-        }
+                let (inner_temp_store, effects, _execution_error) =
+                    execution_engine::execute_transaction_to_effects::<execution_mode::Normal, _>(
+                        shared_object_refs,
+                        temporary_store,
+                        kind,
+                        signer,
+                        &gas,
+                        *tx.digest(),
+                        transaction_dependencies,
+                        epoch_store.move_vm(),
+                        gas_status,
+                        &epoch_store.epoch_start_config().epoch_data(),
+                        epoch_store.protocol_config(),
+                        metrics.clone(),
+                        false,
+                        &HashSet::new(),
+                    );
 
-        if _summary.end_of_epoch_data.is_some() {
-            println!("END OF EPOCH at checkpoint {}", seq);
-            let latest_state = get_sui_system_state(&&memory_store)
-                .expect("Read Sui System State object cannot fail");
-            let new_epoch_start_state = latest_state.into_epoch_start_state();
-            let next_epoch_committee = new_epoch_start_state.get_sui_committee();
-            let next_epoch = next_epoch_committee.epoch();
-            let last_checkpoint = checkpoint_store
-                .get_epoch_last_checkpoint(epoch_store.epoch())
-                .expect("Error loading last checkpoint for current epoch")
-                .expect("Could not load last checkpoint for current epoch");
-            let epoch_start_configuration =
-                EpochStartConfiguration::new(new_epoch_start_state, *last_checkpoint.digest());
-            assert_eq!(epoch_store.epoch() + 1, next_epoch);
-            epoch_store = epoch_store.new_at_next_epoch(
-                config.protocol_public_key(),
-                next_epoch_committee,
-                epoch_start_configuration,
-                store.clone(),
-                &config.expensive_safety_check_config,
-            );
-            println!("New epoch store has epoch {}", epoch_store.epoch());
-            epoch += 1;
-        }
-    }
+                // Critical check: are the effects the same?
+                if effects.digest() != tx_digest.effects {
+                    println!("Effects mismatch at checkpoint {}", checkpoint_seq);
+                    let old_effects = tx_digest.effects;
+                    println!("Past effects: {:?}", old_effects);
+                    println!("New effects: {:?}", effects);
+                }
+                assert!(
+                    effects.digest() == tx_digest.effects,
+                    "Effects digest mismatch"
+                );
+
+                // And now we mutate the store.
+                // First delete:
+                for obj_del in &inner_temp_store.deleted {
+                    memory_store.objects.remove(obj_del.0);
+                }
+                for (obj_add_id, (oref, obj, _)) in inner_temp_store.written {
+                    memory_store.objects.insert(obj_add_id, (oref, obj));
+                }
+            }
+
+            if summary.end_of_epoch_data.is_some() {
+                println!("END OF EPOCH at checkpoint {}", checkpoint_seq);
+                let latest_state = get_sui_system_state(&&memory_store)
+                    .expect("Read Sui System State object cannot fail");
+                let new_epoch_start_state = latest_state.into_epoch_start_state();
+                let next_epoch_committee = new_epoch_start_state.get_sui_committee();
+                let next_epoch = next_epoch_committee.epoch();
+                let last_checkpoint = checkpoint_store
+                    .get_epoch_last_checkpoint(epoch_store.epoch())
+                    .expect("Error loading last checkpoint for current epoch")
+                    .expect("Could not load last checkpoint for current epoch");
+                let epoch_start_configuration =
+                    EpochStartConfiguration::new(new_epoch_start_state, *last_checkpoint.digest());
+                assert_eq!(epoch_store.epoch() + 1, next_epoch);
+                epoch_store = epoch_store.new_at_next_epoch(
+                    config.protocol_public_key(),
+                    next_epoch_committee,
+                    epoch_start_configuration,
+                    store.clone(),
+                    &config.expensive_safety_check_config,
+                );
+                println!("New epoch store has epoch {}", epoch_store.epoch());
+            }
+        } // for loop over checkpoints
+
+        // print TPS
+        let elapsed = now.elapsed();
+        println!(
+            "TPS: {}",
+            1000.0 * num_tx as f64 / elapsed.as_millis() as f64
+        );
+    } // if args.execute
 }
