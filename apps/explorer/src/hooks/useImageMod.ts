@@ -1,6 +1,18 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+
+import { useAppsBackend } from '@mysten/core';
 import { useQuery } from '@tanstack/react-query';
+
+export enum VISIBILITY {
+    PASS = 'PASS',
+    HIDE = 'HIDE',
+    SHOW = 'SHOW',
+}
+
+type ImageMod = {
+    pass: VISIBILITY;
+};
 
 const isURL = (url?: string) => {
     if (!url) return false;
@@ -19,24 +31,18 @@ export function useImageMod({
     url?: string;
     enabled?: boolean;
 }) {
+    const { request } = useAppsBackend();
     return useQuery({
         queryKey: ['image-mod', url, enabled],
         queryFn: async () => {
-            if (!isURL || !enabled) return true;
-            try {
-                const resp = await fetch(`https://imgmod.sui.io/img`, {
-                    method: 'POST',
-                    body: JSON.stringify({ url }),
-                    headers: { 'content-type': 'application/json' },
-                });
-                const allowed = await resp.json();
-                return allowed;
-            } catch (e) {
-                return false;
+            if (!isURL(url)) {
+                return {
+                    pass: 'PASS',
+                } as ImageMod;
             }
+            return request<ImageMod>(`/image${url}`, {});
         },
-        placeholderData: false,
-        staleTime: 24 * 60 * 60 * 1000,
-        cacheTime: Infinity,
+        cacheTime: 24 * 60 * 60 * 1000,
+        staleTime: Infinity,
     });
 }

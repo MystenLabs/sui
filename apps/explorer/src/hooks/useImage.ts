@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 import { useCallback, useLayoutEffect, useRef, useState } from 'react';
 
-import { useImageMod } from './useImageMod';
+import { VISIBILITY, useImageMod } from './useImageMod';
 
 type Status = 'loading' | 'failed' | 'loaded';
 
@@ -45,7 +45,12 @@ export function useImage({ src = '', moderate = true }: UseImageProps) {
         return () => cleanup();
     }, [load]);
 
-    return { nsfw: !allowed, url: formatted, status, ref };
+    return {
+        visibility: allowed?.pass ?? VISIBILITY.PASS,
+        url: formatted,
+        status,
+        ref,
+    };
 }
 
 export default useImage;

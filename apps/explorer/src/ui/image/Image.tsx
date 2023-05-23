@@ -7,6 +7,7 @@ import { cva, cx, type VariantProps } from 'class-variance-authority';
 import { LoadingSpinner } from '../LoadingSpinner';
 
 import useImage from '~/hooks/useImage';
+import { type VISIBILITY } from '~/hooks/useImageMod';
 
 const imageStyles = cva(null, {
     variants: {
@@ -46,7 +47,7 @@ export interface ImageProps
     onClick?: () => void;
     moderate?: boolean;
     src: string;
-    blur?: boolean;
+    blur?: VISIBILITY;
 }
 
 function BaseImage({
@@ -96,6 +97,6 @@ function BaseImage({
 }
 
 export function Image({ src, moderate = true, ...props }: ImageProps) {
-    const { status, url, nsfw } = useImage({ src, moderate });
-    return <BaseImage blur={nsfw} status={status} src={url} {...props} />;
+    const { status, url, visibility } = useImage({ src, moderate });
+    return <BaseImage blur={visibility} status={status} src={url} {...props} />;
 }
