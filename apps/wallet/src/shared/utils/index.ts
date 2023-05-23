@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useGrowthBook } from '@growthbook/growthbook-react';
+import { fromB64, toB64 } from '@mysten/sui.js';
 import { useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import Browser from 'webextension-polyfill';
@@ -60,4 +61,35 @@ export function prepareLinkToCompare(link: string) {
         adjLink += '/';
     }
     return adjLink;
+}
+
+/**
+ * Includes ? when query string is set
+ */
+export function toSearchQueryString(searchParams: URLSearchParams) {
+    const searchQuery = searchParams.toString();
+    if (searchQuery) {
+        return `?${searchQuery}`;
+    }
+    return '';
+}
+
+export function toUtf8OrB64(message: string | Uint8Array) {
+    const messageBytes =
+        typeof message === 'string' ? fromB64(message) : message;
+    let messageToReturn: string =
+        typeof message === 'string' ? message : toB64(message);
+    let type: 'utf8' | 'base64' = 'base64';
+    try {
+        messageToReturn = new TextDecoder('utf8', { fatal: true }).decode(
+            messageBytes
+        );
+        type = 'utf8';
+    } catch (e) {
+        // do nothing
+    }
+    return {
+        message: messageToReturn,
+        type,
+    };
 }

@@ -71,7 +71,7 @@ const App = () => {
                     element={<NftTransferPage />}
                 />
                 <Route
-                    path="transactions"
+                    path="transactions/:status?"
                     element={<TransactionBlocksPage />}
                 />
                 <Route path="send" element={<TransferCoinPage />} />

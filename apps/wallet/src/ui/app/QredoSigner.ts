@@ -28,7 +28,7 @@ const MAX_POLLING_TIMES = Math.ceil((60 * 1000 * 10) / POLLING_INTERVAL);
 function sleep() {
     return new Promise((r) => setTimeout(r, POLLING_INTERVAL));
 }
-const API_ENV_TO_QREDO_NETWORK: Partial<Record<API_ENV, NetworkType>> = {
+export const API_ENV_TO_QREDO_NETWORK: Partial<Record<API_ENV, NetworkType>> = {
     [API_ENV.mainnet]: 'mainnet',
     [API_ENV.testNet]: 'testnet',
     [API_ENV.devNet]: 'devnet',
@@ -71,10 +71,11 @@ export class QredoSigner extends WalletSigner {
                 (currentTxInfo) =>
                     !currentTxInfo.sig &&
                     [
-                        'pending',
                         'created',
                         'authorized',
+                        'pending',
                         'approved',
+                        'queued',
                         'signed',
                     ].includes(currentTxInfo.status),
                 clientIdentifier
