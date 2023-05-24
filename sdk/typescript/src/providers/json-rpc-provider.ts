@@ -1,12 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { ErrorResponse, HttpHeaders, JsonRpcClient } from '../rpc/client';
+import { HttpHeaders, JsonRpcClient } from '../rpc/client';
 import {
   ExecuteTransactionRequestType,
   ObjectId,
   PaginatedTransactionResponse,
-  SubscriptionId,
   SuiAddress,
   SuiEventFilter,
   SuiMoveFunctionArgTypes,
@@ -46,6 +45,9 @@ import {
   ValidatorsApy,
   MoveCallMetrics,
   ObjectRead,
+  TransactionFilter,
+  TransactionEffects,
+  Unsubscribe,
 } from '../types';
 import { DynamicFieldName, DynamicFieldPage } from '../types/dynamic_fields';
 import {
@@ -54,16 +56,14 @@ import {
   WebsocketClientOptions,
 } from '../rpc/websocket-client';
 import { requestSuiFromFaucet } from '../rpc/faucet-client';
-import { any, is, array, string } from 'superstruct';
+import { any, array, string } from 'superstruct';
 import { fromB58, toB64, toHEX } from '@mysten/bcs';
 import { SerializedSignature } from '../cryptography/signature';
 import { Connection, devnetConnection } from '../rpc/connection';
 import { TransactionBlock } from '../builder';
 import { CheckpointPage } from '../types/checkpoints';
-import { RPCError } from '../utils/errors';
 import { NetworkMetrics, AddressMetrics } from '../types/metrics';
 import { EpochInfo, EpochPage } from '../types/epochs';
-import { lt } from '@suchipi/femver';
 
 export interface PaginationArguments<Cursor> {
   /** Optional paging cursor */
@@ -264,17 +264,8 @@ export class JsonRpcProvider {
    * @param method the method to be invoked
    * @param args the arguments to be passed to the RPC request
    */
-  async call(method: string, args: Array<any>): Promise<any> {
-    const response = await this.client.request(method, args);
-    if (is(response, ErrorResponse)) {
-      throw new RPCError({
-        req: { method, args },
-        code: response.error.code,
-        data: response.error.data,
-        cause: new Error(response.error.message),
-      });
-    }
-    return response.result;
+  async call(method: string, params: any[]): Promise<any> {
+    return await this.client.request(method, params);
   }
 
   /**
@@ -608,18 +599,27 @@ export class JsonRpcProvider {
     filter: SuiEventFilter;
     /** function to run when we receive a notification of a new event matching the filter */
     onMessage: (event: SuiEvent) => void;
-  }): Promise<SubscriptionId> {
-    return this.wsClient.subscribeEvent(input.filter, input.onMessage);
+  }): Promise<Unsubscribe> {
+    return this.wsClient.request({
+      method: 'suix_subscribeEvent',
+      unsubscribe: 'suix_unsubscribeEvent',
+      params: [input.filter],
+      onMessage: input.onMessage,
+    });
   }
 
-  /**
-   * Unsubscribe from an event subscription
-   */
-  async unsubscribeEvent(input: {
-    /** subscription id to unsubscribe from (previously received from subscribeEvent)*/
-    id: SubscriptionId;
-  }): Promise<boolean> {
-    return this.wsClient.unsubscribeEvent(input.id);
+  async subscribeTransaction(input: {
+    /** filter describing the subset of events to follow */
+    filter: TransactionFilter;
+    /** function to run when we receive a notification of a new event matching the filter */
+    onMessage: (event: TransactionEffects) => void;
+  }): Promise<Unsubscribe> {
+    return this.wsClient.request({
+      method: 'suix_subscribeTransaction',
+      unsubscribe: 'suix_unsubscribeTransaction',
+      params: [input.filter],
+      onMessage: input.onMessage,
+    });
   }
 
   /**
@@ -749,14 +749,9 @@ export class JsonRpcProvider {
       descendingOrder: boolean;
     } & PaginationArguments<CheckpointPage['nextCursor']>,
   ): Promise<CheckpointPage> {
-    const version = await this.getRpcApiVersion();
     const resp = await this.client.requestWithType(
       'sui_getCheckpoints',
-      [
-        input.cursor,
-        version && lt(version, '0.32.0') ? String(input?.limit) : input?.limit,
-        input.descendingOrder,
-      ],
+      [input.cursor, input?.limit, input.descendingOrder],
       CheckpointPage,
     );
     return resp;
@@ -800,14 +795,9 @@ export class JsonRpcProvider {
       descendingOrder?: boolean;
     } & PaginationArguments<EpochPage['nextCursor']>,
   ): Promise<EpochPage> {
-    const version = await this.getRpcApiVersion();
     return await this.client.requestWithType(
       'suix_getEpochs',
-      [
-        input?.cursor,
-        version && lt(version, '0.32.0') ? String(input?.limit) : input?.limit,
-        input?.descendingOrder,
-      ],
+      [input?.cursor, input?.limit, input?.descendingOrder],
       EpochPage,
     );
   }

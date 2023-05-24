@@ -3,7 +3,6 @@
 
 import {
   object,
-  number,
   string,
   Infer,
   array,
@@ -88,17 +87,6 @@ export const PaginatedEvents = object({
   hasNextPage: boolean(),
 });
 export type PaginatedEvents = Infer<typeof PaginatedEvents>;
-
-export const SubscriptionId = number();
-
-export type SubscriptionId = Infer<typeof SubscriptionId>;
-
-export const SubscriptionEvent = object({
-  subscription: SubscriptionId,
-  result: SuiEvent,
-});
-
-export type SubscriptionEvent = Infer<typeof SubscriptionEvent>;
 
 /* ------------------------------- EventData ------------------------------ */
 
