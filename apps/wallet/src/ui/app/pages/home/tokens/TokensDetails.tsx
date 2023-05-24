@@ -1,7 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useAppsBackend, useGetCoinBalance } from '@mysten/core';
+import {
+    useAppsBackend,
+    useGetCoinBalance,
+    useGetAllBalances,
+} from '@mysten/core';
 import {
     Info12,
     WalletActionBuy24,
@@ -29,11 +33,8 @@ import { LargeButton } from '_app/shared/LargeButton';
 import { Text } from '_app/shared/text';
 import Alert from '_components/alert';
 import Loading from '_components/loading';
-import {
-    useAppSelector,
-    useGetAllBalances,
-    useCoinsReFetchingConfig,
-} from '_hooks';
+import { sortGetAllBalancesToken } from '_helpers';
+import { useAppSelector, useCoinsReFetchingConfig } from '_hooks';
 import { API_ENV } from '_src/shared/api-env';
 import { AccountSelector } from '_src/ui/app/components/AccountSelector';
 import { useLedgerNotification } from '_src/ui/app/hooks/useLedgerNotification';
@@ -72,7 +73,13 @@ function PinButton({
 function MyTokens() {
     const accountAddress = useActiveAddress();
     const apiEnv = useAppSelector(({ app }) => app.apiEnv);
-    const { data, isLoading, isFetched } = useGetAllBalances(accountAddress);
+    const { staleTime, refetchInterval } = useCoinsReFetchingConfig();
+    const { data, isLoading, isFetched } = useGetAllBalances(
+        accountAddress,
+        staleTime,
+        refetchInterval,
+        sortGetAllBalancesToken
+    );
 
     const recognizedPackages = useRecognizedPackages();
     const [pinnedCoinTypes, { pinCoinType, unpinCoinType }] =

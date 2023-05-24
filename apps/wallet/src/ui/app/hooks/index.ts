@@ -15,7 +15,6 @@ export { useTransactionDryRun } from './useTransactionDryRun';
 export { useGetTxnRecipientAddress } from './useGetTxnRecipientAddress';
 export { useQueryTransactionsByAddress } from './useQueryTransactionsByAddress';
 export { useGetTransferAmount } from './useGetTransferAmount';
-export { useGetAllBalances } from './useGetAllBalances';
 export { useOwnedNFT } from './useOwnedNFT';
 export * from './useSigner';
 export * from './useTransactionData';
