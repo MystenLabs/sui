@@ -60,6 +60,10 @@ pub fn latest_protocol_version() -> ProtocolConfig {
     ProtocolConfig::get_for_version(ProtocolVersion::max())
 }
 
+pub fn get_protocol_config(version_number: u64) -> ProtocolConfig {
+    ProtocolConfig::get_for_version(ProtocolVersion::new(version_number))
+}
+
 pub fn temp_dir() -> std::path::PathBuf {
     tempfile::tempdir()
         .expect("Failed to open temporary directory")
@@ -136,11 +140,12 @@ pub fn random_key() -> KeyPair {
 pub fn fixture_payload(
     number_of_batches: u8,
     protocol_config: &ProtocolConfig,
+    epoch: Epoch,
 ) -> IndexMap<BatchDigest, (WorkerId, TimestampMs)> {
     let mut payload: IndexMap<BatchDigest, (WorkerId, TimestampMs)> = IndexMap::new();
 
     for _ in 0..number_of_batches {
-        let batch_digest = batch(protocol_config).digest();
+        let batch_digest = batch(protocol_config, epoch).digest();
 
         payload.insert(batch_digest, (0, 0));
     }
@@ -153,23 +158,25 @@ pub fn fixture_payload(
 pub fn fixture_batch_with_transactions(
     number_of_transactions: u32,
     protocol_config: &ProtocolConfig,
+    epoch: Epoch,
 ) -> Batch {
     let transactions = (0..number_of_transactions)
         .map(|_v| transaction())
         .collect();
 
-    Batch::new(transactions, protocol_config)
+    Batch::new(transactions, protocol_config, epoch)
 }
 
 pub fn fixture_payload_with_rand<R: Rng + ?Sized>(
     number_of_batches: u8,
     rand: &mut R,
     protocol_config: &ProtocolConfig,
+    epoch: Epoch,
 ) -> IndexMap<BatchDigest, (WorkerId, TimestampMs)> {
     let mut payload: IndexMap<BatchDigest, (WorkerId, TimestampMs)> = IndexMap::new();
 
     for _ in 0..number_of_batches {
-        let batch_digest = batch_with_rand(rand, protocol_config).digest();
+        let batch_digest = batch_with_rand(rand, protocol_config, epoch).digest();
 
         payload.insert(batch_digest, (0, 0));
     }
@@ -184,10 +191,15 @@ pub fn transaction_with_rand<R: Rng + ?Sized>(rand: &mut R) -> Transaction {
         .collect()
 }
 
-pub fn batch_with_rand<R: Rng + ?Sized>(rand: &mut R, protocol_config: &ProtocolConfig) -> Batch {
+pub fn batch_with_rand<R: Rng + ?Sized>(
+    rand: &mut R,
+    protocol_config: &ProtocolConfig,
+    epoch: Epoch,
+) -> Batch {
     Batch::new(
         vec![transaction_with_rand(rand), transaction_with_rand(rand)],
         protocol_config,
+        epoch,
     )
 }
 
@@ -376,17 +388,21 @@ impl WorkerToWorker for WorkerToWorkerMockServer {
 ////////////////////////////////////////////////////////////////
 
 // Fixture
-pub fn batch(protocol_config: &ProtocolConfig) -> Batch {
-    Batch::new(vec![transaction(), transaction()], protocol_config)
+pub fn batch(protocol_config: &ProtocolConfig, epoch: Epoch) -> Batch {
+    Batch::new(vec![transaction(), transaction()], protocol_config, epoch)
 }
 
 /// generate multiple fixture batches. The number of generated batches
 /// are dictated by the parameter num_of_batches.
-pub fn batches(num_of_batches: usize, protocol_config: &ProtocolConfig) -> Vec<Batch> {
+pub fn batches(
+    num_of_batches: usize,
+    protocol_config: &ProtocolConfig,
+    epoch: Epoch,
+) -> Vec<Batch> {
     let mut batches = Vec::new();
 
     for i in 1..num_of_batches + 1 {
-        batches.push(batch_with_transactions(i, protocol_config));
+        batches.push(batch_with_transactions(i, protocol_config, epoch));
     }
 
     batches
@@ -395,6 +411,7 @@ pub fn batches(num_of_batches: usize, protocol_config: &ProtocolConfig) -> Vec<B
 pub fn batch_with_transactions(
     num_of_transactions: usize,
     protocol_config: &ProtocolConfig,
+    epoch: Epoch,
 ) -> Batch {
     let mut transactions = Vec::new();
 
@@ -402,7 +419,7 @@ pub fn batch_with_transactions(
         transactions.push(transaction());
     }
 
-    Batch::new(transactions, protocol_config)
+    Batch::new(transactions, protocol_config, epoch)
 }
 
 const BATCHES_CF: &str = "batches";
@@ -697,7 +714,12 @@ pub fn mock_certificate_with_rand<R: RngCore + ?Sized>(
         .round(round)
         .epoch(0)
         .parents(parents)
-        .payload(fixture_payload_with_rand(1, rand, protocol_config))
+        .payload(fixture_payload_with_rand(
+            1,
+            rand,
+            protocol_config,
+            committee.epoch(),
+        ))
         .build()
         .unwrap();
     let certificate = Certificate::new_unsigned(committee, Header::V1(header), Vec::new()).unwrap();
@@ -732,7 +754,7 @@ pub fn mock_certificate_with_epoch(
         .round(round)
         .epoch(epoch)
         .parents(parents)
-        .payload(fixture_payload(1, protocol_config))
+        .payload(fixture_payload(1, protocol_config, epoch))
         .build()
         .unwrap();
     let certificate = Certificate::new_unsigned(committee, Header::V1(header), Vec::new()).unwrap();
@@ -750,7 +772,7 @@ pub fn mock_signed_certificate(
 ) -> (CertificateDigest, Certificate) {
     let header_builder = HeaderV1Builder::default()
         .author(origin)
-        .payload(fixture_payload(1, protocol_config))
+        .payload(fixture_payload(1, protocol_config, committee.epoch()))
         .round(round)
         .epoch(0)
         .parents(parents);
@@ -965,6 +987,7 @@ impl CommitteeFixture {
         prior_round: Round,
         parents: &BTreeSet<CertificateDigest>,
         protocol_config: &ProtocolConfig,
+        epoch: Epoch,
     ) -> (Round, Vec<Header>) {
         let round = prior_round + 1;
         let next_headers = self
@@ -977,7 +1000,11 @@ impl CommitteeFixture {
                     .round(round)
                     .epoch(0)
                     .parents(parents.clone())
-                    .with_payload_batch(fixture_batch_with_transactions(10, protocol_config), 0, 0)
+                    .with_payload_batch(
+                        fixture_batch_with_transactions(10, protocol_config, epoch),
+                        0,
+                        0,
+                    )
                     .build()
                     .unwrap();
                 Header::V1(header)

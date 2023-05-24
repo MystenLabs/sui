@@ -29,6 +29,7 @@ tokio = { workspace = true, features = ["sync", "rt", "macros"] }
 tonic = { version = "0.8.2", features = ["tls"] }
 tracing = "0.1.36"
 
+anyhow = "1.0.65"
 config = { path = "../config", package = "narwhal-config" }
 fastcrypto.workspace = true
 crypto = { path = "../crypto", package = "narwhal-crypto" }

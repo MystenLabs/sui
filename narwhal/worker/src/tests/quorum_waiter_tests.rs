@@ -33,7 +33,7 @@ async fn wait_for_quorum() {
     );
 
     // Make a batch.
-    let batch = batch(&latest_protocol_version());
+    let batch = batch(&latest_protocol_version(), committee.epoch());
     let message = WorkerBatchMessage {
         batch: batch.clone(),
     };
@@ -90,7 +90,7 @@ async fn pipeline_for_quorum() {
     );
 
     // Make a batch.
-    let batch = batch(&latest_protocol_version());
+    let batch = batch(&latest_protocol_version(), committee.epoch());
     let message = WorkerBatchMessage {
         batch: batch.clone(),
     };

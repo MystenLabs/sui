@@ -142,7 +142,7 @@ mod tests {
 
         // run the tests a few times
         let batch: Batch =
-            test_utils::fixture_batch_with_transactions(10, &latest_protocol_version());
+            test_utils::fixture_batch_with_transactions(10, &latest_protocol_version(), 0);
         let id = batch.digest();
         let worker_id = 0;
 

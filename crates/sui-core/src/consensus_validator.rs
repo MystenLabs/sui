@@ -5,11 +5,12 @@ use eyre::WrapErr;
 use mysten_metrics::monitored_scope;
 use prometheus::{register_int_counter_with_registry, IntCounter, Registry};
 use std::sync::Arc;
+use sui_protocol_config::ProtocolConfig;
 
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::transaction_manager::TransactionManager;
 use async_trait::async_trait;
-use narwhal_types::BatchAPI;
+use narwhal_types::{validate_batch_version, BatchAPI};
 use narwhal_worker::TransactionValidator;
 use sui_types::messages_consensus::{ConsensusTransaction, ConsensusTransactionKind};
 use tap::TapFallible;
@@ -56,8 +57,17 @@ impl TransactionValidator for SuiTxValidator {
         Ok(())
     }
 
-    async fn validate_batch(&self, b: &narwhal_types::Batch) -> Result<(), Self::Error> {
+    async fn validate_batch(
+        &self,
+        b: &narwhal_types::Batch,
+        protocol_config: &ProtocolConfig,
+    ) -> Result<(), Self::Error> {
         let _scope = monitored_scope("ValidateBatch");
+
+        // TODO: Remove once we have upgraded to protocol version 12.
+        validate_batch_version(b, protocol_config)
+            .map_err(|err| eyre::eyre!(format!("Invalid Batch: {err}")))?;
+
         let txs = b
             .transactions()
             .iter()
@@ -147,7 +157,7 @@ mod tests {
         consensus_adapter::consensus_tests::{test_certificates, test_gas_objects},
         consensus_validator::{SuiTxValidator, SuiTxValidatorMetrics},
     };
-    use narwhal_test_utils::latest_protocol_version;
+    use narwhal_test_utils::{get_protocol_config, latest_protocol_version};
     use narwhal_types::Batch;
     use narwhal_worker::TransactionValidator;
     use sui_types::signature::GenericSignature;
@@ -164,6 +174,8 @@ mod tests {
         // make a test certificate.
         let mut objects = test_gas_objects();
         objects.push(Object::shared_for_testing());
+
+        let latest_protocol_config = &latest_protocol_version();
 
         let network_config =
             sui_swarm_config::network_config_builder::ConfigBuilder::new_with_temp_dir()
@@ -200,8 +212,14 @@ mod tests {
             })
             .collect();
 
-        let batch = Batch::new(transaction_bytes, &latest_protocol_version());
-        let res_batch = validator.validate_batch(&batch).await;
+        let batch = Batch::new(
+            transaction_bytes,
+            latest_protocol_config,
+            validator.epoch_store.epoch(),
+        );
+        let res_batch = validator
+            .validate_batch(&batch, latest_protocol_config)
+            .await;
         assert!(res_batch.is_ok(), "{res_batch:?}");
 
         let bogus_transaction_bytes: Vec<_> = certificates
@@ -216,8 +234,46 @@ mod tests {
             })
             .collect();
 
-        let batch = Batch::new(bogus_transaction_bytes, &latest_protocol_version());
-        let res_batch = validator.validate_batch(&batch).await;
+        let batch = Batch::new(
+            bogus_transaction_bytes,
+            latest_protocol_config,
+            validator.epoch_store.epoch(),
+        );
+        let res_batch = validator
+            .validate_batch(&batch, latest_protocol_config)
+            .await;
         assert!(res_batch.is_err());
+
+        // TODO: Remove once we have upgraded to protocol version 12.
+        // protocol version 11 should only support BatchV1
+        let protocol_config_v11 = &get_protocol_config(11);
+        let batch_v1 = Batch::new(vec![], protocol_config_v11, validator.epoch_store.epoch());
+
+        // Case #1: Receive BatchV1 and network has not upgraded to 12 so we are okay
+        let res_batch = validator
+            .validate_batch(&batch_v1, protocol_config_v11)
+            .await;
+        assert!(res_batch.is_ok());
+        // Case #2: Receive BatchV1 but network has upgraded to 12 so we fail because we expect BatchV2
+        let res_batch = validator
+            .validate_batch(&batch_v1, latest_protocol_config)
+            .await;
+        assert!(res_batch.is_err());
+
+        let batch_v2 = Batch::new(
+            vec![],
+            latest_protocol_config,
+            validator.epoch_store.epoch(),
+        );
+        // Case #3: Receive BatchV2 but network is still in v11 so we fail because we expect BatchV1
+        let res_batch = validator
+            .validate_batch(&batch_v2, protocol_config_v11)
+            .await;
+        assert!(res_batch.is_err());
+        // Case #4: Receive BatchV2 and network is upgraded to 12 so we are okay
+        let res_batch = validator
+            .validate_batch(&batch_v2, latest_protocol_config)
+            .await;
+        assert!(res_batch.is_ok());
     }
 }

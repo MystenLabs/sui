@@ -40,7 +40,11 @@ impl TransactionValidator for NilTxValidator {
     fn validate(&self, _tx: &[u8]) -> Result<(), Self::Error> {
         eyre::bail!("Invalid transaction");
     }
-    async fn validate_batch(&self, _txs: &Batch) -> Result<(), Self::Error> {
+    async fn validate_batch(
+        &self,
+        _txs: &Batch,
+        _protocol_config: &ProtocolConfig,
+    ) -> Result<(), Self::Error> {
         eyre::bail!("Invalid batch");
     }
 }
@@ -114,7 +118,7 @@ async fn reject_invalid_clients_transactions() {
 
     let worker_pk = worker_cache.worker(&public_key, &worker_id).unwrap().name;
 
-    let batch = batch(&latest_protocol_version());
+    let batch = batch(&latest_protocol_version(), committee.epoch());
     let batch_message = WorkerBatchMessage {
         batch: batch.clone(),
     };
@@ -193,7 +197,7 @@ async fn handle_remote_clients_transactions() {
     let mut peer_networks = Vec::new();
 
     // Create batches
-    let batch = batch(&latest_protocol_version());
+    let batch = batch(&latest_protocol_version(), committee.epoch());
     let batch_digest = batch.digest();
 
     let (tx_await_batch, mut rx_await_batch) = test_utils::test_channel!(CHANNEL_CAPACITY);
@@ -312,7 +316,7 @@ async fn handle_local_clients_transactions() {
     let mut peer_networks = Vec::new();
 
     // Create batches
-    let batch = batch(&latest_protocol_version());
+    let batch = batch(&latest_protocol_version(), committee.epoch());
     let batch_digest = batch.digest();
 
     let (tx_await_batch, mut rx_await_batch) = test_utils::test_channel!(CHANNEL_CAPACITY);

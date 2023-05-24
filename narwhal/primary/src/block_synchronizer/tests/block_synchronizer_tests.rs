@@ -54,8 +54,10 @@ async fn test_successful_headers_synchronization() {
     // TODO: duplicated code in this file.
     // AND generate headers with distributed batches between 2 workers (0 and 1)
     for _ in 0..8 {
-        let batch_1 = fixture_batch_with_transactions(10, &latest_protocol_version());
-        let batch_2 = fixture_batch_with_transactions(10, &latest_protocol_version());
+        let batch_1 =
+            fixture_batch_with_transactions(10, &latest_protocol_version(), committee.epoch());
+        let batch_2 =
+            fixture_batch_with_transactions(10, &latest_protocol_version(), committee.epoch());
 
         let header = Header::V1(
             author
@@ -201,8 +203,10 @@ async fn test_successful_payload_synchronization() {
 
     // AND generate headers with distributed batches between 2 workers (0 and 1)
     for _ in 0..8 {
-        let batch_1 = fixture_batch_with_transactions(10, &latest_protocol_version());
-        let batch_2 = fixture_batch_with_transactions(10, &latest_protocol_version());
+        let batch_1 =
+            fixture_batch_with_transactions(10, &latest_protocol_version(), committee.epoch());
+        let batch_2 =
+            fixture_batch_with_transactions(10, &latest_protocol_version(), committee.epoch());
 
         let header = Header::V1(
             author
@@ -384,7 +388,11 @@ async fn test_timeout_while_waiting_for_certificates() {
                 author
                     .header_builder(&committee)
                     .with_payload_batch(
-                        fixture_batch_with_transactions(10, &latest_protocol_version()),
+                        fixture_batch_with_transactions(
+                            10,
+                            &latest_protocol_version(),
+                            committee.epoch(),
+                        ),
                         0,
                         0,
                     )
@@ -526,7 +534,8 @@ async fn test_reply_with_certificates_already_in_storage() {
 
     // AND storing some certificates
     for i in 1..=8 {
-        let batch = fixture_batch_with_transactions(10, &latest_protocol_version());
+        let batch =
+            fixture_batch_with_transactions(10, &latest_protocol_version(), committee.epoch());
 
         let header = Header::V1(
             author
@@ -630,7 +639,8 @@ async fn test_reply_with_payload_already_in_storage() {
 
     // AND storing some certificates
     for i in 1..=8 {
-        let batch = fixture_batch_with_transactions(10, &latest_protocol_version());
+        let batch =
+            fixture_batch_with_transactions(10, &latest_protocol_version(), committee.epoch());
 
         let header = Header::V1(
             author
@@ -738,7 +748,8 @@ async fn test_reply_with_payload_already_in_storage_for_own_certificates() {
 
     // AND storing some certificates
     for _ in 0..5 {
-        let batch = fixture_batch_with_transactions(10, &latest_protocol_version());
+        let batch =
+            fixture_batch_with_transactions(10, &latest_protocol_version(), committee.epoch());
 
         let header = Header::V1(
             primary

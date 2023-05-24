@@ -14,9 +14,9 @@ use store::{rocks::DBMap, Map};
 use sui_protocol_config::ProtocolConfig;
 use tracing::{debug, trace};
 use types::{
-    now, Batch, BatchAPI, BatchDigest, FetchBatchesRequest, FetchBatchesResponse, MetadataAPI,
-    PrimaryToWorker, RequestBatchRequest, RequestBatchResponse, RequestBatchesRequest,
-    RequestBatchesResponse, WorkerBatchMessage, WorkerDeleteBatchesMessage,
+    now, validate_batch_version, Batch, BatchAPI, BatchDigest, FetchBatchesRequest,
+    FetchBatchesResponse, MetadataAPI, PrimaryToWorker, RequestBatchRequest, RequestBatchResponse,
+    RequestBatchesRequest, RequestBatchesResponse, WorkerBatchMessage, WorkerDeleteBatchesMessage,
     WorkerOthersBatchMessage, WorkerSynchronizeMessage, WorkerToWorker, WorkerToWorkerClient,
 };
 
@@ -43,7 +43,11 @@ impl<V: TransactionValidator> WorkerToWorker for WorkerReceiverHandler<V> {
         request: anemo::Request<WorkerBatchMessage>,
     ) -> Result<anemo::Response<()>, anemo::rpc::Status> {
         let message = request.into_body();
-        if let Err(err) = self.validator.validate_batch(&message.batch).await {
+        if let Err(err) = self
+            .validator
+            .validate_batch(&message.batch, &self.protocol_config)
+            .await
+        {
             return Err(anemo::rpc::Status::new_with_message(
                 StatusCode::BadRequest,
                 format!("Invalid batch: {err}"),
@@ -53,7 +57,7 @@ impl<V: TransactionValidator> WorkerToWorker for WorkerReceiverHandler<V> {
 
         let mut batch = message.batch.clone();
 
-        // TODO: Remove once we have upgraded to protocol version 11.
+        // TODO: Remove once we have upgraded to protocol version 12.
         if self.protocol_config.narwhal_versioned_metadata() {
             // Set received_at timestamp for remote batch.
             batch.versioned_metadata_mut().set_received_at(now());
@@ -220,21 +224,34 @@ impl<V: TransactionValidator> PrimaryToWorker for PrimaryReceiverHandler<V> {
         for batch in response.batches.iter_mut() {
             if !message.is_certified {
                 // This batch is not part of a certificate, so we need to validate it.
-                if let Err(err) = self.validator.validate_batch(&batch).await {
+                if let Err(err) = self
+                    .validator
+                    .validate_batch(batch, &self.protocol_config)
+                    .await
+                {
                     return Err(anemo::rpc::Status::new_with_message(
                         StatusCode::BadRequest,
                         format!("Invalid batch: {err}"),
                     ));
                 }
             }
+
+            // TODO: Remove once we have upgraded to protocol version 12.
+            validate_batch_version(batch, &self.protocol_config).map_err(|err| {
+                anemo::rpc::Status::new_with_message(
+                    StatusCode::BadRequest,
+                    format!("Invalid batch: {err}"),
+                )
+            })?;
+
             let digest = batch.digest();
             if missing.remove(&digest) {
-                // TODO: Remove once we have upgraded to protocol version 11.
+                // TODO: Remove once we have upgraded to protocol version 12.
                 if self.protocol_config.narwhal_versioned_metadata() {
                     // Set received_at timestamp for remote batch.
                     batch.versioned_metadata_mut().set_received_at(now());
                 }
-                self.store.insert(&digest, &batch).map_err(|e| {
+                self.store.insert(&digest, batch).map_err(|e| {
                     anemo::rpc::Status::internal(format!("failed to write to batch store: {e:?}"))
                 })?;
             }

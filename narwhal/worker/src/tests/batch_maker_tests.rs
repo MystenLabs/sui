@@ -43,6 +43,7 @@ async fn make_batch() {
         client,
         store.clone(),
         latest_protocol_version(),
+        0,
     );
 
     // Send enough transactions to seal a batch.
@@ -53,7 +54,7 @@ async fn make_batch() {
     tx_batch_maker.send((tx.clone(), s1)).await.unwrap();
 
     // Ensure the batch is as expected.
-    let expected_batch = Batch::new(vec![tx.clone(), tx.clone()], &latest_protocol_version());
+    let expected_batch = Batch::new(vec![tx.clone(), tx.clone()], &latest_protocol_version(), 0);
     let (batch, resp) = rx_quorum_waiter.recv().await.unwrap();
 
     assert_eq!(batch.transactions(), expected_batch.transactions());
@@ -99,6 +100,7 @@ async fn batch_timeout() {
         client,
         store.clone(),
         latest_protocol_version(),
+        0,
     );
 
     // Do not send enough transactions to seal a batch.
@@ -108,7 +110,7 @@ async fn batch_timeout() {
 
     // Ensure the batch is as expected.
     let (batch, resp) = rx_quorum_waiter.recv().await.unwrap();
-    let expected_batch = Batch::new(vec![tx.clone()], &latest_protocol_version());
+    let expected_batch = Batch::new(vec![tx.clone()], &latest_protocol_version(), 0);
     assert_eq!(batch.transactions(), expected_batch.transactions());
 
     // Eventually deliver message

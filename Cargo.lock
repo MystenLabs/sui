@@ -6060,6 +6060,7 @@ version = "0.1.0"
 dependencies = [
  "anemo",
  "anemo-build",
+ "anyhow",
  "async-trait",
  "base64 0.13.1",
  "bcs",

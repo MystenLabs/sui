@@ -379,7 +379,7 @@ impl Subscriber {
     }
 
     fn record_fetched_batch_metrics(inner: &Inner, batch: &Batch, digest: &BatchDigest) {
-        // TODO: Remove once we have upgraded to protocol version 11.
+        // TODO: Remove once we have upgraded to protocol version 12.
         if inner.protocol_config.narwhal_versioned_metadata() {
             let metadata = batch.versioned_metadata();
             if let Some(received_at) = metadata.received_at() {

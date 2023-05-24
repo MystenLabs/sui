@@ -2,7 +2,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use config::WorkerId;
+use crate::metrics::WorkerMetrics;
+use config::{Epoch, WorkerId};
 use fastcrypto::hash::Hash;
 use futures::future::BoxFuture;
 use futures::stream::FuturesUnordered;
@@ -22,8 +23,6 @@ use types::{
     error::DagError, now, Batch, BatchAPI, BatchDigest, ConditionalBroadcastReceiver, MetadataAPI,
     Transaction, TxResponse, WorkerOurBatchMessage, WorkerOurBatchMessageV2,
 };
-
-use crate::metrics::WorkerMetrics;
 
 #[cfg(feature = "trace_transaction")]
 use byteorder::{BigEndian, ReadBytesExt};
@@ -60,8 +59,8 @@ pub struct BatchMaker {
     client: NetworkClient,
     /// The batch store to store our own batches.
     store: DBMap<BatchDigest, Batch>,
-    // The protocol configuration.
     protocol_config: ProtocolConfig,
+    epoch: Epoch,
 }
 
 impl BatchMaker {
@@ -77,6 +76,7 @@ impl BatchMaker {
         client: NetworkClient,
         store: DBMap<BatchDigest, Batch>,
         protocol_config: ProtocolConfig,
+        epoch: Epoch,
     ) -> JoinHandle<()> {
         spawn_logged_monitored_task!(
             async move {
@@ -92,6 +92,7 @@ impl BatchMaker {
                     client,
                     store,
                     protocol_config,
+                    epoch,
                 }
                 .run()
                 .await;
@@ -105,7 +106,7 @@ impl BatchMaker {
         let timer = sleep(self.max_batch_delay);
         tokio::pin!(timer);
 
-        let mut current_batch = Batch::new(vec![], &self.protocol_config);
+        let mut current_batch = Batch::new(vec![], &self.protocol_config, self.epoch);
         let mut current_responses = Vec::new();
         let mut current_batch_size = 0;
 
@@ -128,7 +129,7 @@ impl BatchMaker {
                         }
                         self.node_metrics.parallel_worker_batches.set(batch_pipeline.len() as i64);
 
-                        current_batch = Batch::new(vec![], &self.protocol_config);
+                        current_batch = Batch::new(vec![], &self.protocol_config, self.epoch);
                         current_responses = Vec::new();
                         current_batch_size = 0;
 
@@ -149,7 +150,7 @@ impl BatchMaker {
                         }
                         self.node_metrics.parallel_worker_batches.set(batch_pipeline.len() as i64);
 
-                        current_batch = Batch::new(vec![], &self.protocol_config);
+                        current_batch = Batch::new(vec![], &self.protocol_config, self.epoch);
                         current_responses = Vec::new();
                         current_batch_size = 0;
                     }
@@ -270,7 +271,7 @@ impl BatchMaker {
         let store = self.store.clone();
         let worker_id = self.id;
 
-        // TODO: Remove once we have upgraded to protocol version 11.
+        // TODO: Remove once we have upgraded to protocol version 12.
         if self.protocol_config.narwhal_versioned_metadata() {
             // The batch has been sealed so we can officially set its creation time
             // for latency calculations.

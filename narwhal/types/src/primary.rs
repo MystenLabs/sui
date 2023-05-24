@@ -148,10 +148,14 @@ pub enum Batch {
 }
 
 impl Batch {
-    pub fn new(transactions: Vec<Transaction>, protocol_config: &ProtocolConfig) -> Self {
-        // TODO: Remove once we have upgraded to protocol version 11.
+    pub fn new(
+        transactions: Vec<Transaction>,
+        protocol_config: &ProtocolConfig,
+        epoch: Epoch,
+    ) -> Self {
+        // TODO: Remove once we have upgraded to protocol version 12.
         if protocol_config.narwhal_versioned_metadata() {
-            Self::V2(BatchV2::new(transactions, protocol_config))
+            Self::V2(BatchV2::new(transactions, protocol_config, epoch))
         } else {
             Self::V1(BatchV1::new(transactions))
         }
@@ -186,6 +190,7 @@ pub trait BatchAPI {
     // BatchV2 APIs
     fn versioned_metadata(&self) -> &VersionedMetadata;
     fn versioned_metadata_mut(&mut self) -> &mut VersionedMetadata;
+    fn epoch(&self) -> &Epoch;
 }
 
 pub type Transaction = Vec<u8>;
@@ -219,6 +224,10 @@ impl BatchAPI for BatchV1 {
     fn versioned_metadata_mut(&mut self) -> &mut VersionedMetadata {
         unimplemented!("BatchV1 does not have a VersionedMetadata field");
     }
+
+    fn epoch(&self) -> &Epoch {
+        unimplemented!("BatchV1 does not have an Epoch field");
+    }
 }
 
 impl BatchV1 {
@@ -238,6 +247,7 @@ impl BatchV1 {
 pub struct BatchV2 {
     pub transactions: Vec<Transaction>,
     pub versioned_metadata: VersionedMetadata,
+    pub epoch: Epoch,
 }
 
 impl BatchAPI for BatchV2 {
@@ -264,19 +274,57 @@ impl BatchAPI for BatchV2 {
     fn versioned_metadata_mut(&mut self) -> &mut VersionedMetadata {
         &mut self.versioned_metadata
     }
+
+    fn epoch(&self) -> &Epoch {
+        &self.epoch
+    }
 }
 
 impl BatchV2 {
-    pub fn new(transactions: Vec<Transaction>, protocol_config: &ProtocolConfig) -> Self {
+    pub fn new(
+        transactions: Vec<Transaction>,
+        protocol_config: &ProtocolConfig,
+        epoch: Epoch,
+    ) -> Self {
         Self {
             transactions,
             versioned_metadata: VersionedMetadata::new(protocol_config),
+            epoch,
         }
     }
 
     pub fn size(&self) -> usize {
         self.transactions.iter().map(|t| t.len()).sum()
     }
+}
+
+// TODO: Remove once we have upgraded to protocol version 12.
+pub fn validate_batch_version(
+    batch: &Batch,
+    protocol_config: &ProtocolConfig,
+) -> anyhow::Result<()> {
+    // If network has advanced to using version 12, which sets narwhal_versioned_metadata
+    // to true, we will start using BatchV2 locally and so we will only accept
+    // BatchV2 from the network. Otherwise BatchV1 is used.
+    match batch {
+        Batch::V1(_) => {
+            if protocol_config.narwhal_versioned_metadata() {
+                return Err(anyhow::anyhow!(format!(
+                    "Received {batch:?} but network is at {:?} and this batch version is no longer supported",
+                    protocol_config.version
+                )));
+            }
+        }
+        Batch::V2(_) => {
+            if !protocol_config.narwhal_versioned_metadata() {
+                return Err(anyhow::anyhow!(format!(
+                    "Received {batch:?} but network is at {:?} and this batch version is not supported yet",
+                    protocol_config.version
+                )));
+            }
+        }
+    };
+    Ok(())
 }
 
 #[derive(
@@ -337,9 +385,12 @@ impl Hash<{ crypto::DIGEST_LENGTH }> for BatchV2 {
     type TypedDigest = BatchDigest;
 
     fn digest(&self) -> Self::TypedDigest {
-        BatchDigest::new(
-            crypto::DefaultHashFunction::digest_iterator(self.transactions.iter()).into(),
-        )
+        let mut hasher = crypto::DefaultHashFunction::new();
+        hasher.update(self.epoch.to_be_bytes());
+        hasher.update(crypto::DefaultHashFunction::digest_iterator(
+            self.transactions.iter(),
+        ));
+        BatchDigest::new(hasher.finalize().into())
     }
 }
 
@@ -1567,16 +1618,44 @@ mod tests {
         Batch, BatchAPI, BatchV1, BatchV2, Metadata, MetadataAPI, MetadataV1, Timestamp,
         VersionedMetadata,
     };
+    use fastcrypto::hash::Hash;
     use std::time::Duration;
     use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
+    use test_utils::latest_protocol_version;
     use tokio::time::sleep;
 
     #[tokio::test]
+    async fn test_batch_digests() {
+        // TODO: Remove once we have upgraded to protocol version 12.
+        // BatchV1
+        let batchv1_1 = Batch::new(
+            vec![],
+            &ProtocolConfig::get_for_version(ProtocolVersion::new(11)),
+            0,
+        );
+        let batchv1_2 = Batch::new(
+            vec![],
+            &ProtocolConfig::get_for_version(ProtocolVersion::new(11)),
+            1,
+        );
+
+        assert_eq!(batchv1_1.digest(), batchv1_2.digest());
+
+        // BatchV2
+        let batchv2_1 = Batch::new(vec![], &latest_protocol_version(), 0);
+        let batchv2_2 = Batch::new(vec![], &latest_protocol_version(), 1);
+
+        assert_ne!(batchv2_1.digest(), batchv2_2.digest());
+    }
+
+    #[tokio::test]
     async fn test_elapsed() {
+        // TODO: Remove once we have upgraded to protocol version 12.
         // BatchV1
         let batch = Batch::new(
             vec![],
-            &ProtocolConfig::get_for_version(ProtocolVersion::new(10)),
+            &ProtocolConfig::get_for_version(ProtocolVersion::new(11)),
+            0,
         );
         assert!(batch.metadata().created_at > 0);
 
@@ -1585,10 +1664,7 @@ mod tests {
         assert!(batch.metadata().created_at.elapsed().as_secs_f64() >= 2.0);
 
         // BatchV2
-        let batch = Batch::new(
-            vec![],
-            &ProtocolConfig::get_for_version(ProtocolVersion::new(11)),
-        );
+        let batch = Batch::new(vec![], &latest_protocol_version(), 0);
 
         assert!(*batch.versioned_metadata().created_at() > 0);
 
@@ -1608,6 +1684,7 @@ mod tests {
 
     #[test]
     fn test_elapsed_when_newer_than_now() {
+        // TODO: Remove once we have upgraded to protocol version 12.
         // BatchV1
         let batch = Batch::V1(BatchV1 {
             transactions: vec![],
@@ -1625,6 +1702,7 @@ mod tests {
                 created_at: 2999309726980, // something in the future - Fri Jan 16 2065 05:35:26
                 received_at: None,
             }),
+            epoch: 0,
         });
 
         assert_eq!(

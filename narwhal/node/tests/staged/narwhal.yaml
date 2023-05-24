@@ -30,6 +30,7 @@ BatchV2:
           SEQ: U8
     - versioned_metadata:
         TYPENAME: VersionedMetadata
+    - epoch: U64
 Certificate:
   ENUM:
     0:
