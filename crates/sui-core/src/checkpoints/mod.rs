@@ -199,7 +199,7 @@ impl CheckpointStore {
 
     pub fn get_latest_certified_checkpoint(&self) -> Option<VerifiedCheckpoint> {
         self.certified_checkpoints
-            .iter()
+            .unbounded_iter()
             .skip_to_last()
             .next()
             .map(|(_, v)| v.into())
@@ -1164,7 +1164,7 @@ impl CheckpointAggregator {
     fn next_checkpoint_to_certify(&self) -> CheckpointSequenceNumber {
         self.tables
             .certified_checkpoints
-            .iter()
+            .unbounded_iter()
             .skip_to_last()
             .next()
             .map(|(seq, _)| seq + 1)

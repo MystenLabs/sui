@@ -1636,7 +1636,9 @@ where
         self.safe_iter().next().is_none()
     }
 
-    fn iter(&'a self) -> Self::Iterator {
+    /// Returns an unbounded iterator visiting each key-value pair in the map.
+    /// This is potentially unsafe as it can perform a full table scan
+    fn unbounded_iter(&'a self) -> Self::Iterator {
         let _timer = self
             .db_metrics
             .op_metrics
