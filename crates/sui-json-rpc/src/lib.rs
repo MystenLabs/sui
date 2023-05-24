@@ -121,9 +121,8 @@ impl JsonRpcServerBuilder {
             ]);
 
         let routing = self.rpc_doc.method_routing.clone();
-
-        self.module
-            .register_method("rpc.discover", move |_, _| Ok(self.rpc_doc.clone()))?;
+        // self.module // TODO: fix
+            // .register_method("rpc.discover", move |_, _| self.rpc_doc.clone())?;
         let methods_names = self.module.method_names().collect::<Vec<_>>();
 
         let max_connection = env::var("RPC_MAX_CONNECTION")
@@ -157,7 +156,7 @@ impl JsonRpcServerBuilder {
             .layer(routing_layer);
 
         let mut builder = ServerBuilder::default()
-            .batch_requests_supported(false)
+            .set_batch_request_config(jsonrpsee::server::BatchRequestConfig::Disabled)
             .max_response_body_size(MAX_REQUEST_SIZE)
             .max_connections(max_connection)
             .set_host_filtering(AllowHosts::Any)

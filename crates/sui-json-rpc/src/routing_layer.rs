@@ -203,37 +203,32 @@ fn process_single_request(
 mod response {
     use jsonrpsee::core::__reexports::serde_json;
     use jsonrpsee::types::error::{reject_too_big_request, ErrorCode};
-    use jsonrpsee::types::{ErrorResponse, Id};
+    use jsonrpsee::types::{ErrorObjectOwned, Id, Response, ResponsePayload};
+
     const JSON: &str = "application/json; charset=utf-8";
 
-    pub(crate) fn too_large(limit: u32) -> hyper::Response<hyper::Body> {
-        let error = serde_json::to_string(&ErrorResponse::borrowed(
-            reject_too_big_request(limit),
-            Id::Null,
-        ))
-        .expect("built from known-good data; qed");
-        from_template(hyper::StatusCode::PAYLOAD_TOO_LARGE, error, JSON)
-    }
+	pub(crate) fn too_large(limit: u32) -> hyper::Response<hyper::Body> {
+		let err = ResponsePayload::error(reject_too_big_request(limit));
+		let rp = Response::new(err, Id::Null);
+		let error = serde_json::to_string(&rp).expect("JSON serialization infallible; qed");
+
+		from_template(hyper::StatusCode::PAYLOAD_TOO_LARGE, error, JSON)
+	}
 
     pub(crate) fn internal_error() -> hyper::Response<hyper::Body> {
-        let error = serde_json::to_string(&ErrorResponse::borrowed(
-            ErrorCode::InternalError.into(),
-            Id::Null,
-        ))
-        .expect("built from known-good data; qed");
+		let err = ResponsePayload::error(ErrorObjectOwned::from(ErrorCode::InternalError));
+		let rp = Response::new(err, Id::Null);
+		let error = serde_json::to_string(&rp).expect("built from known-good data; qed");
 
-        from_template(hyper::StatusCode::INTERNAL_SERVER_ERROR, error, JSON)
-    }
+		from_template(hyper::StatusCode::INTERNAL_SERVER_ERROR, error, JSON)
+	}
 
-    pub(crate) fn malformed() -> hyper::Response<hyper::Body> {
-        let error = serde_json::to_string(&ErrorResponse::borrowed(
-            ErrorCode::ParseError.into(),
-            Id::Null,
-        ))
-        .expect("built from known-good data; qed");
+	pub(crate) fn malformed() -> hyper::Response<hyper::Body> {
+		let rp = Response::new(ErrorCode::ParseError.into(), Id::Null);
+		let error = serde_json::to_string(&rp).expect("JSON serialization infallible; qed");
 
-        from_template(hyper::StatusCode::BAD_REQUEST, error, JSON)
-    }
+		from_template(hyper::StatusCode::BAD_REQUEST, error, JSON)
+	}
 
     fn from_template<S: Into<hyper::Body>>(
         status: hyper::StatusCode,

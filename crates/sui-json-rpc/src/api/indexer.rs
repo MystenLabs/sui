@@ -66,16 +66,16 @@ pub trait IndexerApi {
     ) -> RpcResult<EventPage>;
 
     /// Subscribe to a stream of Sui event
-    #[subscription(name = "subscribeEvent", item = SuiEvent)]
-    fn subscribe_event(
-        &self,
-        /// the filter criteria of the event stream, see the [Sui docs](https://docs.sui.io/build/pubsub#event-filters) for detailed examples.
-        filter: EventFilter,
-    );
+    // #[subscription(name = "subscribeEvent", item = SuiEvent)]
+    // fn subscribe_event(
+    //     &self,
+    //     /// the filter criteria of the event stream, see the [Sui docs](https://docs.sui.io/build/pubsub#event-filters) for detailed examples.
+    //     filter: EventFilter,
+    // );
 
-    /// Subscribe to a stream of Sui transaction effects
-    #[subscription(name = "subscribeTransaction", item = SuiTransactionBlockEffects)]
-    fn subscribe_transaction(&self, filter: TransactionFilter);
+    // /// Subscribe to a stream of Sui transaction effects
+    // #[subscription(name = "subscribeTransaction", item = SuiTransactionBlockEffects)]
+    // fn subscribe_transaction(&self, filter: TransactionFilter);
 
     /// Return the list of dynamic field objects owned by an object.
     #[method(name = "getDynamicFields")]

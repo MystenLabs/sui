@@ -430,7 +430,7 @@ impl ReadApiServer for ReadApi {
                             Ok(rendered_fields) => display_fields = Some(rendered_fields),
                             Err(e) => {
                                 return Ok(SuiObjectResponse::new(
-                                    Some((object_ref, o, layout, options, None).try_into()?),
+                                    Some((object_ref, o, layout, options, None).try_into().map_err(Error::from)?),
                                     Some(SuiObjectResponseError::DisplayError {
                                         error: e.to_string(),
                                     }),
@@ -439,7 +439,7 @@ impl ReadApiServer for ReadApi {
                         }
                     }
                     Ok(SuiObjectResponse::new_with_data(
-                        (object_ref, o, layout, options, display_fields).try_into()?,
+                        (object_ref, o, layout, options, display_fields).try_into().map_err(Error::from)?,
                     ))
                 }
                 ObjectRead::Deleted((object_id, version, digest)) => Ok(
@@ -529,7 +529,7 @@ impl ReadApiServer for ReadApi {
                         None
                     };
                     Ok(SuiPastObjectResponse::VersionFound(
-                        (object_ref, o, layout, options, display_fields).try_into()?,
+                        (object_ref, o, layout, options, display_fields).try_into().map_err(Error::from)?,
                     ))
                 }
                 PastObjectRead::ObjectDeleted(oref) => {
@@ -578,7 +578,7 @@ impl ReadApiServer for ReadApi {
                         .map(|e| e.to_string())
                         .collect::<Vec<String>>()
                         .join("; ");
-                    Err(anyhow!("{error_string}").into()) // Collects errors not related to SuiPastObjectResponse variants
+                    Err(Error::from(anyhow!("{error_string}")).into()) // Collects errors not related to SuiPastObjectResponse variants
                 } else {
                     Ok(success)
                 }
@@ -748,7 +748,7 @@ impl ReadApiServer for ReadApi {
                 }
             }
             let epoch_store = self.state.load_epoch_store_one_call_per_task();
-            convert_to_response(temp_response, &opts, epoch_store.module_cache())
+            Ok(convert_to_response(temp_response, &opts, epoch_store.module_cache())?)
         })
     }
 
@@ -836,7 +836,7 @@ impl ReadApiServer for ReadApi {
         descending_order: bool,
     ) -> RpcResult<CheckpointPage> {
         with_tracing!(async move {
-            let limit = validate_limit(limit, QUERY_MAX_RESULT_LIMIT_CHECKPOINTS)?;
+            let limit = validate_limit(limit, QUERY_MAX_RESULT_LIMIT_CHECKPOINTS).map_err(Error::from)?;
 
             let state = self.state.clone();
 
@@ -942,7 +942,7 @@ impl ReadApiServer for ReadApi {
             let ci = self
                 .state
                 .get_chain_identifier()
-                .ok_or(anyhow!("Chain identifier not found"))?;
+                .ok_or(anyhow!("Chain identifier not found")).map_err(Error::from)?;
             Ok(ci.to_string())
         })
     }
@@ -1252,20 +1252,20 @@ fn convert_to_response(
     cache: IntermediateTransactionResponse,
     opts: &SuiTransactionBlockResponseOptions,
     module_cache: &impl GetModule,
-) -> RpcResult<SuiTransactionBlockResponse> {
+) -> Result<SuiTransactionBlockResponse, Error> {
     let mut response = SuiTransactionBlockResponse::new(cache.digest);
     response.errors = cache.errors;
 
     if opts.show_raw_input && cache.transaction.is_some() {
         let sender_signed_data = cache.transaction.as_ref().unwrap().data();
         let raw_tx = bcs::to_bytes(sender_signed_data)
-            .map_err(|e| anyhow!("Failed to serialize raw transaction with error: {}", e))?; // TODO: is this a client or server error?
+            .map_err(|e| anyhow!("Failed to serialize raw transaction with error: {}", e)).map_err(Error::from)?; // TODO: is this a client or server error?
         response.raw_transaction = raw_tx;
     }
 
     if opts.show_input && cache.transaction.is_some() {
         let tx_block =
-            SuiTransactionBlock::try_from(cache.transaction.unwrap().into_message(), module_cache)?;
+            SuiTransactionBlock::try_from(cache.transaction.unwrap().into_message(), module_cache).map_err(Error::from)?;
         response.transaction = Some(tx_block);
     }
 
@@ -1276,7 +1276,7 @@ fn convert_to_response(
                 "Failed to convert transaction block effects with error: {}",
                 e
             )
-        })?;
+        }).map_err(Error::from)?;
         response.effects = Some(effects);
     }
 

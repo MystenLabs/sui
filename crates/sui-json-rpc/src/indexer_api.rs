@@ -6,9 +6,9 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use futures::Stream;
-use jsonrpsee::core::error::SubscriptionClosed;
+// use jsonrpsee::core::error::SubscriptionClosed;
 use jsonrpsee::core::RpcResult;
-use jsonrpsee::types::SubscriptionResult;
+// use jsonrpsee::types::SubscriptionResult;
 use jsonrpsee::{RpcModule, SubscriptionSink};
 use move_bytecode_utils::layout::TypeLayoutBuilder;
 use move_core_types::account_address::AccountAddress;
@@ -48,24 +48,24 @@ const NAME_SERVICE_TARGET_ADDRESS: &str = "target_address";
 const NAME_SERVICE_DOMAIN_MODULE: &IdentStr = ident_str!("domain");
 const NAME_SERVICE_DOMAIN_STRUCT: &IdentStr = ident_str!("Domain");
 
-pub fn spawn_subscription<S, T>(mut sink: SubscriptionSink, rx: S)
-where
-    S: Stream<Item = T> + Unpin + Send + 'static,
-    T: Serialize,
-{
-    spawn_monitored_task!(async move {
-        match sink.pipe_from_stream(rx).await {
-            SubscriptionClosed::Success => {
-                sink.close(SubscriptionClosed::Success);
-            }
-            SubscriptionClosed::RemotePeerAborted => (),
-            SubscriptionClosed::Failed(err) => {
-                warn!(error = ?err, "Event subscription closed.");
-                sink.close(err);
-            }
-        };
-    });
-}
+// pub fn spawn_subscription<S, T>(mut sink: SubscriptionSink, rx: S)
+// where
+//     S: Stream<Item = T> + Unpin + Send + 'static,
+//     T: Serialize,
+// {
+//     spawn_monitored_task!(async move {
+//         match sink.pipe_from_stream(rx).await {
+//             SubscriptionClosed::Success => {
+//                 sink.close(SubscriptionClosed::Success);
+//             }
+//             SubscriptionClosed::RemotePeerAborted => (),
+//             SubscriptionClosed::Failed(err) => {
+//                 warn!(error = ?err, "Event subscription closed.");
+//                 sink.close(err);
+//             }
+//         };
+//     });
+// }
 pub struct IndexerApi<R> {
     state: Arc<AuthorityState>,
     read_api: R,
@@ -106,7 +106,7 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
         limit: Option<usize>,
     ) -> RpcResult<ObjectsPage> {
         with_tracing!(async move {
-            let limit = validate_limit(limit, *QUERY_MAX_RESULT_LIMIT)?;
+            let limit = validate_limit(limit, *QUERY_MAX_RESULT_LIMIT).map_err(Error::from)?;
             self.metrics.get_owned_objects_limit.report(limit as u64);
             let SuiObjectResponseQuery { filter, options } = query.unwrap_or_default();
             let options = options.unwrap_or_default();
@@ -133,7 +133,7 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
                 false => objects
                     .into_iter()
                     .map(|o_info| SuiObjectResponse::try_from((o_info, options.clone())))
-                    .collect::<Result<Vec<SuiObjectResponse>, _>>()?,
+                    .collect::<Result<Vec<SuiObjectResponse>, _>>().map_err(Error::from)?,
             };
 
             self.metrics
@@ -235,28 +235,28 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
         })
     }
 
-    #[instrument(skip(self))]
-    fn subscribe_event(&self, sink: SubscriptionSink, filter: EventFilter) -> SubscriptionResult {
-        spawn_subscription(
-            sink,
-            self.state.subscription_handler.subscribe_events(filter),
-        );
-        Ok(())
-    }
+    // #[instrument(skip(self))]
+    // fn subscribe_event(&self, sink: SubscriptionSink, filter: EventFilter) -> SubscriptionResult {
+    //     spawn_subscription(
+    //         sink,
+    //         self.state.subscription_handler.subscribe_events(filter),
+    //     );
+    //     Ok(())
+    // }
 
-    fn subscribe_transaction(
-        &self,
-        sink: SubscriptionSink,
-        filter: TransactionFilter,
-    ) -> SubscriptionResult {
-        spawn_subscription(
-            sink,
-            self.state
-                .subscription_handler
-                .subscribe_transactions(filter),
-        );
-        Ok(())
-    }
+    // fn subscribe_transaction(
+    //     &self,
+    //     sink: SubscriptionSink,
+    //     filter: TransactionFilter,
+    // ) -> SubscriptionResult {
+    //     spawn_subscription(
+    //         sink,
+    //         self.state
+    //             .subscription_handler
+    //             .subscribe_transactions(filter),
+    //     );
+    //     Ok(())
+    // }
 
     #[instrument(skip(self))]
     async fn get_dynamic_fields(
@@ -301,9 +301,9 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
                 type_: name_type,
                 value,
             } = name.clone();
-            let layout = TypeLayoutBuilder::build_with_types(&name_type, &self.state.database)?;
-            let sui_json_value = SuiJsonValue::new(value)?;
-            let name_bcs_value = sui_json_value.to_bcs_bytes(&layout)?;
+            let layout = TypeLayoutBuilder::build_with_types(&name_type, &self.state.database).map_err(Error::from)?;
+            let sui_json_value = SuiJsonValue::new(value).map_err(Error::from)?;
+            let name_bcs_value = sui_json_value.to_bcs_bytes(&layout).map_err(Error::from)?;
             let id = self
                 .state
                 .get_dynamic_field_object_id(parent_object_id, name_type, &name_bcs_value)
@@ -363,7 +363,7 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
                             ))
                         })?;
                     let record_parsed_move_object =
-                        SuiParsedMoveObject::try_from_object_read(record_object_read)?;
+                        SuiParsedMoveObject::try_from_object_read(record_object_read).map_err(Error::from)?;
                     // NOTE: "value" is the field name to get the address info
                     let address_info_move_value = record_parsed_move_object
                         .read_dynamic_field_value(NAME_SERVICE_VALUE)
@@ -459,7 +459,7 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
                         ))
                     })?;
                 let addr_parsed_move_object =
-                    SuiParsedMoveObject::try_from_object_read(addr_object_read)?;
+                    SuiParsedMoveObject::try_from_object_read(addr_object_read).map_err(Error::from)?;
                 let address_info_move_value = addr_parsed_move_object
                     .read_dynamic_field_value(NAME_SERVICE_VALUE)
                     .ok_or_else(|| {

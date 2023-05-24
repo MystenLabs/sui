@@ -61,17 +61,14 @@ impl From<Error> for ErrorObjectOwned {
 impl Error {
     pub fn to_rpc_error(self) -> ErrorObjectOwned {
         match self {
-            Error::UserInputError(err) => {
-                ErrorObject::owned(ErrorCode::InvalidParams.code(), err.into(), None)
-            }
-            Error::SuiRpcInputError(err) => {
-                ErrorObject::owned(ErrorCode::InvalidParams.code(), err.into(), None)
-            }
+            Error::UserInputError(_) | Error::SuiRpcInputError(_) => {
+                ErrorObject::owned(ErrorCode::InvalidParams.code(), self.to_string(), None::<()>)
+            },
             Error::SuiError(err) => match err {
-                SuiError::TransactionNotFound { .. } | SuiError::TransactionsNotFound { .. } => {
-                    ErrorObject::owned(ErrorCode::InvalidParams.code(), err.into(), None)
+                SuiError::TransactionNotFound { .. } | SuiError::TransactionsNotFound { .. } | SuiError::UserInputError { .. } => {
+                    ErrorObject::owned(ErrorCode::InvalidParams.code(), err.to_string(), None::<()>)
                 }
-                _ => ErrorObject::owned(CALL_EXECUTION_FAILED_CODE, err.into(), None)
+                _ => ErrorObject::owned(CALL_EXECUTION_FAILED_CODE, err.to_string(), None::<()>)
             },
             Error::QuorumDriverError(err) => match err {
                 QuorumDriverError::NonRecoverableTransactionError { errors } => {
@@ -81,9 +78,9 @@ impl Error {
                         Some(errors),
                     )
                 }
-                _ => ErrorObject::owned(CALL_EXECUTION_FAILED_CODE, err.into(), None)
+                _ => ErrorObject::owned(CALL_EXECUTION_FAILED_CODE, err.to_string(), None::<()>)
             },
-            _ => ErrorObject::owned(CALL_EXECUTION_FAILED_CODE, self.into(), None)
+            _ => ErrorObject::owned(CALL_EXECUTION_FAILED_CODE, self.to_string(), None::<()>)
         }
     }
 }

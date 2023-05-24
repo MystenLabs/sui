@@ -7,7 +7,7 @@ use async_trait::async_trait;
 use cached::proc_macro::cached;
 use cached::SizedCache;
 use jsonrpsee::core::RpcResult;
-use jsonrpsee::RpcModule;
+use jsonrpsee::{RpcModule, IntoResponse};
 use move_core_types::language_storage::{StructTag, TypeTag};
 use tracing::{debug, info, instrument};
 
@@ -156,7 +156,7 @@ impl CoinReadApiServer for CoinReadApi {
     ) -> RpcResult<CoinPage> {
         with_tracing!(async move {
             let coin_type_tag = TypeTag::Struct(Box::new(match coin_type {
-                Some(c) => parse_sui_struct_tag(&c)?,
+                Some(c) => parse_sui_struct_tag(&c).map_err(Error::from)?,
                 None => GAS::type_(),
             }));
 
@@ -232,7 +232,7 @@ impl CoinReadApiServer for CoinReadApi {
     ) -> RpcResult<Balance> {
         with_tracing!(async move {
             let coin_type = TypeTag::Struct(Box::new(match coin_type {
-                Some(c) => parse_sui_struct_tag(&c)?,
+                Some(c) => parse_sui_struct_tag(&c).map_err(Error::from)?,
                 None => GAS::type_(),
             }));
             let balance = self
@@ -288,7 +288,7 @@ impl CoinReadApiServer for CoinReadApi {
     #[instrument(skip(self))]
     async fn get_coin_metadata(&self, coin_type: String) -> RpcResult<Option<SuiCoinMetadata>> {
         with_tracing!(async move {
-            let coin_struct = parse_sui_struct_tag(&coin_type)?;
+            let coin_struct = parse_sui_struct_tag(&coin_type).map_err(Error::from)?;
 
             let metadata_object = self
                 .find_package_object(
@@ -305,7 +305,7 @@ impl CoinReadApiServer for CoinReadApi {
     #[instrument(skip(self))]
     async fn get_total_supply(&self, coin_type: String) -> RpcResult<Supply> {
         with_tracing!(async move {
-            let coin_struct = parse_sui_struct_tag(&coin_type)?;
+            let coin_struct = parse_sui_struct_tag(&coin_type).map_err(Error::from)?;
 
             Ok(if GAS::is_gas(&coin_struct) {
                 Supply { value: 0 }
