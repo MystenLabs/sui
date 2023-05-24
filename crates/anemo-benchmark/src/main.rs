@@ -44,6 +44,14 @@ struct Args {
     /// Frequency for printing statistics.
     #[arg(short, long, default_value_t = 10)]
     tick_secs: u64,
+
+    /// UDP socket send buffer size.
+    #[arg(short, long)]
+    socket_send_buffer_size: Option<usize>,
+
+    /// UDP socket receive buffer size.
+    #[arg(short, long)]
+    socket_receive_buffer_size: Option<usize>,
 }
 
 pub fn random_key() -> [u8; 32] {
@@ -53,12 +61,17 @@ pub fn random_key() -> [u8; 32] {
     bytes
 }
 
-async fn start_server(port: u16, addrs: Vec<String>) -> (anemo::Network, Vec<anemo::Peer>) {
+async fn start_server(
+    config: anemo::Config,
+    port: u16,
+    addrs: Vec<String>,
+) -> (anemo::Network, Vec<anemo::Peer>) {
     let routes = anemo::Router::new().add_rpc_service(BenchmarkServer::new(Server));
     let network = anemo::Network::bind(anemo::types::Address::HostAndPort {
         host: "0.0.0.0".into(),
         port,
     })
+    .config(config)
     .private_key(random_key())
     .server_name("anemo_benchmark")
     .start(routes)
@@ -123,7 +136,13 @@ async fn main() {
         .with_env()
         .init();
 
-    let (_network, peers) = start_server(args.port, args.addrs.clone()).await;
+    let mut config = anemo::Config::default();
+    let mut quic_config = anemo::QuicConfig::default();
+    quic_config.socket_send_buffer_size = args.socket_send_buffer_size;
+    quic_config.socket_receive_buffer_size = args.socket_receive_buffer_size;
+    config.quic = Some(quic_config);
+
+    let (_network, peers) = start_server(config, args.port, args.addrs.clone()).await;
 
     let rng = rand::thread_rng();
     let send_bytes: Vec<_> = rng
@@ -190,11 +209,12 @@ async fn main() {
                 for peer in peers.iter() {
                     let stats = peer.connection_stats();
                     println!(
-                        "peer {peer_id}:\n\trtt {rtt:?} congestion_events {ce:?} lost_packets {lp:?}",
+                        "peer {peer_id}:\n\trtt {rtt:?} congestion_events {ce:?} lost_packets {lp:?} cwnd {cwd:?}",
                         peer_id = peer.peer_id(),
                         rtt = stats.path.rtt,
                         ce = stats.path.congestion_events,
                         lp = stats.path.lost_packets,
+                        cwd = stats.path.cwnd,
                     );
                 }
                 upload_requests = 0;
