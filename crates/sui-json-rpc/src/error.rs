@@ -3,9 +3,8 @@
 
 use fastcrypto::error::FastCryptoError;
 use hyper::header::InvalidHeaderValue;
-use jsonrpsee::core::Error as RpcError;
-use jsonrpsee::types::error::CallError;
-use jsonrpsee::types::ErrorObject;
+use jsonrpsee::types::error::{ErrorCode, CALL_EXECUTION_FAILED_CODE};
+use jsonrpsee::types::{ErrorObject, ErrorObjectOwned};
 use sui_types::error::{SuiError, SuiObjectResponseError, UserInputError};
 use sui_types::quorum_driver_types::QuorumDriverError;
 use thiserror::Error;
@@ -53,39 +52,38 @@ pub enum Error {
     SuiRpcInputError(#[from] SuiRpcInputError),
 }
 
-impl From<Error> for RpcError {
+impl From<Error> for ErrorObjectOwned {
     fn from(e: Error) -> Self {
         e.to_rpc_error()
     }
 }
 
 impl Error {
-    pub fn to_rpc_error(self) -> RpcError {
+    pub fn to_rpc_error(self) -> ErrorObjectOwned {
         match self {
-            Error::UserInputError(user_input_error) => {
-                RpcError::Call(CallError::InvalidParams(user_input_error.into()))
+            Error::UserInputError(err) => {
+                ErrorObject::owned(ErrorCode::InvalidParams.code(), err.into(), None)
             }
-            Error::SuiRpcInputError(sui_json_rpc_input_error) => {
-                RpcError::Call(CallError::InvalidParams(sui_json_rpc_input_error.into()))
+            Error::SuiRpcInputError(err) => {
+                ErrorObject::owned(ErrorCode::InvalidParams.code(), err.into(), None)
             }
-            Error::SuiError(sui_error) => match sui_error {
+            Error::SuiError(err) => match err {
                 SuiError::TransactionNotFound { .. } | SuiError::TransactionsNotFound { .. } => {
-                    RpcError::Call(CallError::InvalidParams(sui_error.into()))
+                    ErrorObject::owned(ErrorCode::InvalidParams.code(), err.into(), None)
                 }
-                _ => RpcError::Call(CallError::Failed(sui_error.into())),
+                _ => ErrorObject::owned(CALL_EXECUTION_FAILED_CODE, err.into(), None)
             },
             Error::QuorumDriverError(err) => match err {
                 QuorumDriverError::NonRecoverableTransactionError { errors } => {
-                    let error_object = ErrorObject::owned(
-                        -32000,
+                    ErrorObject::owned(
+                        CALL_EXECUTION_FAILED_CODE,
                         "Transaction has non recoverable errors from at least 1/3 of validators",
                         Some(errors),
-                    );
-                    RpcError::Call(CallError::Custom(error_object))
+                    )
                 }
-                _ => RpcError::Call(CallError::Failed(err.into())),
+                _ => ErrorObject::owned(CALL_EXECUTION_FAILED_CODE, err.into(), None)
             },
-            _ => RpcError::Call(CallError::Failed(self.into())),
+            _ => ErrorObject::owned(CALL_EXECUTION_FAILED_CODE, self.into(), None)
         }
     }
 }
