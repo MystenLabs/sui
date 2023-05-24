@@ -25,7 +25,7 @@ async-trait = "0.1.61"
 clap = { version = "3.2.17", features = ["derive"] }
 thiserror = "1.0.37"
 eyre = "0.6.8"
-rocksdb = "0.20.1"
+rocksdb = "0.21.0"
 typed-store.workspace = true
 typed-store-derive.workspace = true
 tempfile = "3.3.0"
