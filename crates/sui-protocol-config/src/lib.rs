@@ -142,6 +142,10 @@ struct FeatureFlags {
     // in end of epoch checkpoint proposals
     #[serde(skip_serializing_if = "is_false")]
     commit_root_state_digest: bool,
+    // If true, we are in rollout phase for the above feature,
+    // and thus should not be enabled on mainnet.
+    #[serde(skip_serializing_if = "is_false")]
+    commit_root_state_digest_rollout: bool,
     // Pass epoch start time to advance_epoch safe mode function.
     #[serde(skip_serializing_if = "is_false")]
     advance_epoch_start_time_in_safe_mode: bool,
@@ -661,6 +665,10 @@ impl ProtocolConfig {
         self.feature_flags.commit_root_state_digest
     }
 
+    pub fn check_commit_root_state_digest_rollout(&self) -> bool {
+        self.feature_flags.commit_root_state_digest_rollout
+    }
+
     pub fn get_advance_epoch_start_time_in_safe_mode(&self) -> bool {
         self.feature_flags.advance_epoch_start_time_in_safe_mode
     }
@@ -1149,6 +1157,12 @@ impl ProtocolConfig {
                 cfg.feature_flags.narwhal_versioned_metadata = true;
                 cfg
             }
+            13 => {
+                let mut cfg = Self::get_for_version_impl(version - 1);
+                cfg.feature_flags.commit_root_state_digest = true;
+                cfg.feature_flags.commit_root_state_digest_rollout = true;
+                cfg
+            }
             // Use this template when making changes:
             //
             //     // modify an existing constant.
@@ -1197,6 +1211,12 @@ impl ProtocolConfig {
     pub fn set_advance_to_highest_supported_protocol_version_for_testing(&mut self, val: bool) {
         self.feature_flags
             .advance_to_highest_supported_protocol_version = val
+    }
+    pub fn set_commit_root_state_digest_supported(&mut self, val: bool) {
+        self.feature_flags.commit_root_state_digest = val
+    }
+    pub fn set_commit_root_state_digest_rollout(&mut self, val: bool) {
+        self.feature_flags.commit_root_state_digest_rollout = val
     }
 }
 

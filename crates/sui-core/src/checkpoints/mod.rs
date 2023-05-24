@@ -6,7 +6,7 @@ pub mod checkpoint_executor;
 mod checkpoint_output;
 mod metrics;
 
-use crate::authority::{AuthorityState, EffectsNotifyRead};
+use crate::authority::{AuthorityState, Chain, EffectsNotifyRead};
 use crate::checkpoints::causal_order::CausalOrder;
 use crate::checkpoints::checkpoint_output::{CertifiedCheckpointOutput, CheckpointOutput};
 pub use crate::checkpoints::checkpoint_output::{
@@ -712,6 +712,29 @@ impl CheckpointBuilder {
         Ok(chunks)
     }
 
+    fn should_commit_root_state_digest(&self) -> bool {
+        if self
+            .epoch_store
+            .protocol_config()
+            .check_commit_root_state_digest_supported()
+        {
+            if self
+                .epoch_store
+                .protocol_config()
+                .check_commit_root_state_digest_rollout()
+            {
+                self.state
+                    .get_chain()
+                    .expect("Genesis checkpoint should exist at end of epoch")
+                    != Chain::Mainnet
+            } else {
+                true
+            }
+        } else {
+            false
+        }
+    }
+
     async fn create_checkpoints(
         &self,
         all_effects: Vec<TransactionEffects>,
@@ -848,11 +871,7 @@ impl CheckpointBuilder {
                 self.metrics.highest_accumulated_epoch.set(epoch as i64);
                 info!("Epoch {epoch} root state hash digest: {root_state_digest:?}");
 
-                let epoch_commitments = if self
-                    .epoch_store
-                    .protocol_config()
-                    .check_commit_root_state_digest_supported()
-                {
+                let epoch_commitments = if self.should_commit_root_state_digest() {
                     vec![root_state_digest.into()]
                 } else {
                     vec![]
