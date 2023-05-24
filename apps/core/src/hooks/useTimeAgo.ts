@@ -68,7 +68,6 @@ export function useTimeAgo(options: TimeAgoOptions) {
 
     useEffect(() => {
         if (!timeFrom || !intervalEnabled) return;
-        console.log('interval enabled');
         const timeout = setInterval(
             () => setNow(Date.now()),
             TimeUnit.ONE_SECOND

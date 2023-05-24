@@ -39,12 +39,8 @@ export function CheckpointsTable({
         queryKey: ['checkpoints', 'count'],
         queryFn: () => rpc.getLatestCheckpointSequenceNumber(),
     });
-    // cursor should be the sequence number of the last checkpoint + 1  if we want to query with desc. order
-    const initialCursorPlusOne = Number(initialCursor) + 1;
-    const checkpoints = useGetCheckpoints(
-        initialCursorPlusOne.toString(),
-        limit
-    );
+
+    const checkpoints = useGetCheckpoints(initialCursor, limit);
 
     const { data, isFetching, pagination, isLoading, isError } =
         useCursorPagination(checkpoints);

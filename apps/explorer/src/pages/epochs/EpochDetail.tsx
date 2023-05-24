@@ -81,6 +81,11 @@ export default function EpochDetail() {
         epochData.endOfEpochInfo
     );
 
+    // cursor should be the sequence number of the last checkpoint + 1  if we want to query with desc. order
+    const initialCursorPlusOne = epochData.endOfEpochInfo?.lastCheckpointId
+        ? (Number(epochData.endOfEpochInfo?.lastCheckpointId) + 1).toString()
+        : undefined;
+
     return (
         <div className="flex flex-col space-y-16">
             <div className="grid grid-flow-row gap-4 sm:gap-2 md:flex md:gap-6">
@@ -139,9 +144,7 @@ export default function EpochDetail() {
                 <TabPanels className="mt-4">
                     <TabPanel>
                         <CheckpointsTable
-                            initialCursor={
-                                epochData.endOfEpochInfo?.lastCheckpointId
-                            }
+                            initialCursor={initialCursorPlusOne}
                             maxCursor={epochData.firstCheckpointId}
                             initialLimit={20}
                         />
