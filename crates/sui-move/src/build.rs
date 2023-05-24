@@ -37,7 +37,7 @@ pub struct Build {
     pub generate_struct_layouts: bool,
     /// If `true`, disable all linters
     #[clap(long, global = true)]
-    pub no_lint: bool,
+    pub lint: bool,
     /// If `true`, do not print linter output in color
     #[clap(long, global = true)]
     pub no_color: bool,
@@ -58,7 +58,7 @@ impl Build {
             self.legacy_digest,
             self.dump_bytecode_as_base64,
             self.generate_struct_layouts,
-            !self.no_lint,
+            self.lint,
             !self.no_color,
         )
     }
