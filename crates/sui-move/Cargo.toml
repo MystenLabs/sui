@@ -46,7 +46,7 @@ jemalloc-ctl = "^0.5"
 [dev-dependencies]
 assert_cmd = "2.0.6"
 futures = "0.3.23"
-jsonrpsee = { version = "0.16.2", features = ["jsonrpsee-core"] }
+jsonrpsee = { git="https://github.com/wlmyng/jsonrpsee.git", rev= "b1b300784795f6a64d0fcdf8f03081a9bc38bde8", features = ["jsonrpsee-core"] }
 rand = "0.8.5"
 tempfile = "3.3.0"
 

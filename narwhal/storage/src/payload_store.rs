@@ -133,7 +133,6 @@ mod tests {
     use crate::PayloadStore;
     use fastcrypto::hash::Hash;
     use futures::future::join_all;
-    use test_utils::latest_protocol_version;
     use types::Batch;
 
     #[tokio::test]
@@ -141,8 +140,7 @@ mod tests {
         let store = PayloadStore::new_for_tests();
 
         // run the tests a few times
-        let batch: Batch =
-            test_utils::fixture_batch_with_transactions(10, &latest_protocol_version());
+        let batch: Batch = test_utils::fixture_batch_with_transactions(10);
         let id = batch.digest();
         let worker_id = 0;
 

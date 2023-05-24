@@ -8,10 +8,11 @@ use std::{
 };
 
 use arc_swap::ArcSwap;
+use mysten_metrics::metered_channel::Sender;
 use mysten_network::{multiaddr::Protocol, Multiaddr};
 use thiserror::Error;
 use tracing::info;
-use types::{metered_channel::Sender, Transaction, TxResponse};
+use types::{Transaction, TxResponse};
 
 /// Uses a map to allow running multiple Narwhal instances in the same process.
 /// TODO: after Rust 1.66, use BTreeMap::new() instead of wrapping it in an Option.

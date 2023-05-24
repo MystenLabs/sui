@@ -2,8 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useFeature } from '@growthbook/growthbook-react';
-import { useGetValidatorsApy, useGetSystemState } from '@mysten/core';
+import {
+    useGetValidatorsApy,
+    useGetSystemState,
+    useCoinMetadata,
+} from '@mysten/core';
 import { ArrowLeft16, StakeAdd16, StakeRemove16 } from '@mysten/icons';
+import { SUI_TYPE_ARG } from '@mysten/sui.js';
+import BigNumber from 'bignumber.js';
 import { useMemo } from 'react';
 
 import { useActiveAddress } from '../../hooks/useActiveAddress';
@@ -19,7 +25,11 @@ import { Text } from '_app/shared/text';
 import { IconTooltip } from '_app/shared/tooltip';
 import Alert from '_components/alert';
 import LoadingIndicator from '_components/loading/LoadingIndicator';
+import { useAppSelector, useGetCoinBalance } from '_hooks';
+import { API_ENV } from '_src/shared/api-env';
+import { MIN_NUMBER_SUI_TO_STAKE } from '_src/shared/constants';
 import { FEATURES } from '_src/shared/experimentation/features';
+import FaucetRequestButton from '_src/ui/app/shared/faucet/FaucetRequestButton';
 
 type DelegationDetailCardProps = {
     validatorAddress: string;
@@ -43,6 +53,27 @@ export function DelegationDetailCard({
         isLoading,
         isError,
     } = useGetDelegatedStake(accountAddress || '');
+
+    const apiEnv = useAppSelector(({ app }) => app.apiEnv);
+    const { data: suiCoinBalance } = useGetCoinBalance(
+        SUI_TYPE_ARG,
+        accountAddress
+    );
+    const { data: metadata } = useCoinMetadata(SUI_TYPE_ARG);
+    // set minimum stake amount to 1 SUI
+    const showRequestMoreSuiToken = useMemo(() => {
+        if (
+            !suiCoinBalance?.totalBalance ||
+            !metadata?.decimals ||
+            apiEnv === API_ENV.mainnet
+        )
+            return false;
+        const currentBalance = new BigNumber(suiCoinBalance.totalBalance);
+        const minStakeAmount = new BigNumber(MIN_NUMBER_SUI_TO_STAKE).shiftedBy(
+            metadata.decimals
+        );
+        return currentBalance.lt(minStakeAmount.toString());
+    }, [apiEnv, metadata?.decimals, suiCoinBalance?.totalBalance]);
 
     const { data: rollingAverageApys } = useGetValidatorsApy();
 
@@ -218,7 +249,10 @@ export function DelegationDetailCard({
                                     to={stakeByValidatorAddress}
                                     before={<StakeAdd16 />}
                                     text="Stake SUI"
-                                    disabled={!stakingEnabled}
+                                    disabled={
+                                        !stakingEnabled ||
+                                        showRequestMoreSuiToken
+                                    }
                                 />
                             ) : null}
 
@@ -237,13 +271,31 @@ export function DelegationDetailCard({
                         </div>
                     </div>
                 </Content>
-                <Button
-                    size="tall"
-                    variant="secondary"
-                    to="/stake"
-                    before={<ArrowLeft16 />}
-                    text="Back"
-                />
+
+                {/* show faucet request button on devnet or testnet whenever there is only one coin  */}
+                {showRequestMoreSuiToken ? (
+                    <div className="flex flex-col gap-4 items-center">
+                        <div className="w-8/12 text-center">
+                            <Text
+                                variant="pSubtitle"
+                                weight="medium"
+                                color="steel-darker"
+                            >
+                                You need a minimum of {MIN_NUMBER_SUI_TO_STAKE}{' '}
+                                SUI to continue staking.
+                            </Text>
+                        </div>
+                        <FaucetRequestButton size="tall" />
+                    </div>
+                ) : (
+                    <Button
+                        size="tall"
+                        variant="secondary"
+                        to="/stake"
+                        before={<ArrowLeft16 />}
+                        text="Back"
+                    />
+                )}
             </BottomMenuLayout>
         </div>
     );

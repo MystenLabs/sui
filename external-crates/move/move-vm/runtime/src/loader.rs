@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    config::VMConfig,
     logging::expect_no_verification_errors,
     native_functions::{NativeFunction, NativeFunctions, UnboxedNativeFunction},
     session::LoadedFunctionInstantiation,
@@ -30,6 +29,7 @@ use move_core_types::{
     value::{MoveFieldLayout, MoveStructLayout, MoveTypeLayout},
     vm_status::StatusCode,
 };
+use move_vm_config::runtime::VMConfig;
 use move_vm_types::{
     data_store::DataStore,
     loaded_data::runtime_types::{CachedStructIndex, StructType, Type},

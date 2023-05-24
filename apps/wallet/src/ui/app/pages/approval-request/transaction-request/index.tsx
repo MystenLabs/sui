@@ -18,6 +18,7 @@ import {
 } from '_hooks';
 import { type TransactionApprovalRequest } from '_payloads/transactions/ApprovalRequest';
 import { respondToTransactionRequest } from '_redux/slices/transaction-requests';
+import { useQredoTransaction } from '_src/ui/app/hooks/useQredoTransaction';
 import { PageMainLayoutTitle } from '_src/ui/app/shared/page-main-layout/PageMainLayoutTitle';
 import { TransactionSummary } from '_src/ui/app/shared/transaction-summary';
 
@@ -29,32 +30,30 @@ export function TransactionRequest({ txRequest }: TransactionRequestProps) {
     const addressForTransaction = txRequest.tx.account;
     const signer = useSigner(addressForTransaction);
     const dispatch = useAppDispatch();
-
     const transaction = useMemo(() => {
         const tx = TransactionBlock.from(txRequest.tx.data);
         if (addressForTransaction) {
             tx.setSenderIfNotSet(addressForTransaction);
         }
-
         return tx;
     }, [txRequest.tx.data, addressForTransaction]);
-
     const { isLoading, isError } = useTransactionData(
         addressForTransaction,
         transaction
     );
     const [isConfirmationVisible, setConfirmationVisible] = useState(false);
-
     const { data, isLoading: isDryRunLoading } = useTransactionDryRun(
         addressForTransaction,
         transaction
     );
-
     const summary = useTransactionSummary({
         transaction: data,
         currentAddress: addressForTransaction,
     });
-
+    const { clientIdentifier, notificationModal } = useQredoTransaction();
+    if (!signer) {
+        return null;
+    }
     return (
         <>
             <UserApproveContainer
@@ -75,6 +74,7 @@ export function TransactionRequest({ txRequest }: TransactionRequestProps) {
                             approved,
                             txRequestID: txRequest.id,
                             signer,
+                            clientIdentifier,
                         })
                     );
                 }}
@@ -114,11 +114,13 @@ export function TransactionRequest({ txRequest }: TransactionRequestProps) {
                             approved: isConfirmed,
                             txRequestID: txRequest.id,
                             signer,
+                            clientIdentifier,
                         })
                     );
                     setConfirmationVisible(false);
                 }}
             />
+            {notificationModal}
         </>
     );
 }

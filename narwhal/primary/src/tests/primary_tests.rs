@@ -64,7 +64,7 @@ async fn get_network_peers_from_admin_server() {
     let store = NodeStorage::reopen(temp_dir(), None);
     let client_1 = NetworkClient::new_from_keypair(&authority_1.network_keypair());
 
-    let (tx_new_certificates, rx_new_certificates) = types::metered_channel::channel(
+    let (tx_new_certificates, rx_new_certificates) = mysten_metrics::metered_channel::channel(
         CHANNEL_CAPACITY,
         &prometheus::IntGauge::new(
             PrimaryChannelMetrics::NAME_NEW_CERTS,
@@ -72,7 +72,7 @@ async fn get_network_peers_from_admin_server() {
         )
         .unwrap(),
     );
-    let (tx_feedback, rx_feedback) = types::metered_channel::channel(
+    let (tx_feedback, rx_feedback) = mysten_metrics::metered_channel::channel(
         CHANNEL_CAPACITY,
         &prometheus::IntGauge::new(
             PrimaryChannelMetrics::NAME_COMMITTED_CERTS,
@@ -116,7 +116,6 @@ async fn get_network_peers_from_admin_server() {
         &mut tx_shutdown,
         tx_feedback,
         &Registry::new(),
-        test_utils::latest_protocol_version(),
     );
 
     // Wait for tasks to start
@@ -145,7 +144,6 @@ async fn get_network_peers_from_admin_server() {
         store.batch_store,
         metrics_1,
         &mut tx_shutdown_worker,
-        test_utils::latest_protocol_version(),
     );
 
     // Test getting all known peers for primary 1
@@ -190,7 +188,7 @@ async fn get_network_peers_from_admin_server() {
     };
 
     // TODO: Rework test-utils so that macro can be used for the channels below.
-    let (tx_new_certificates_2, rx_new_certificates_2) = types::metered_channel::channel(
+    let (tx_new_certificates_2, rx_new_certificates_2) = mysten_metrics::metered_channel::channel(
         CHANNEL_CAPACITY,
         &prometheus::IntGauge::new(
             PrimaryChannelMetrics::NAME_NEW_CERTS,
@@ -198,7 +196,7 @@ async fn get_network_peers_from_admin_server() {
         )
         .unwrap(),
     );
-    let (tx_feedback_2, rx_feedback_2) = types::metered_channel::channel(
+    let (tx_feedback_2, rx_feedback_2) = mysten_metrics::metered_channel::channel(
         CHANNEL_CAPACITY,
         &prometheus::IntGauge::new(
             PrimaryChannelMetrics::NAME_COMMITTED_CERTS,
@@ -241,7 +239,6 @@ async fn get_network_peers_from_admin_server() {
         &mut tx_shutdown_2,
         tx_feedback_2,
         &Registry::new(),
-        test_utils::latest_protocol_version(),
     );
 
     // Wait for tasks to start
@@ -307,6 +304,7 @@ async fn test_request_vote_has_missing_parents() {
     let worker_cache = fixture.worker_cache();
     let signature_service = SignatureService::new(target.keypair().copy());
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
+    let primary_channel_metrics = PrimaryChannelMetrics::new(&Registry::new());
     let network = test_utils::test_network(target.network_keypair(), target.address());
     let client = NetworkClient::new_from_keypair(&target.network_keypair());
 
@@ -334,6 +332,7 @@ async fn test_request_vote_has_missing_parents() {
         rx_synchronizer_network,
         None,
         metrics.clone(),
+        &primary_channel_metrics,
     ));
     let handler = PrimaryReceiverHandler {
         authority_id: target_id,
@@ -360,13 +359,8 @@ async fn test_request_vote_has_missing_parents() {
         .authorities()
         .map(|a| (a.id(), a.keypair().copy()))
         .collect();
-    let (certificates, _next_parents) = make_optimal_signed_certificates(
-        1..=3,
-        &genesis,
-        &committee,
-        ids.as_slice(),
-        &test_utils::latest_protocol_version(),
-    );
+    let (certificates, _next_parents) =
+        make_optimal_signed_certificates(1..=3, &genesis, &committee, ids.as_slice());
     let all_certificates = certificates.into_iter().collect_vec();
     let round_2_certs = all_certificates[NUM_PARENTS..(NUM_PARENTS * 2)].to_vec();
     let round_2_parents = round_2_certs[..(NUM_PARENTS / 2)].to_vec();
@@ -379,14 +373,7 @@ async fn test_request_vote_has_missing_parents() {
             .author(author_id)
             .round(3)
             .parents(round_2_certs.iter().map(|c| c.digest()).collect())
-            .with_payload_batch(
-                test_utils::fixture_batch_with_transactions(
-                    10,
-                    &test_utils::latest_protocol_version(),
-                ),
-                0,
-                0,
-            )
+            .with_payload_batch(test_utils::fixture_batch_with_transactions(10), 0, 0)
             .build()
             .unwrap(),
     );
@@ -477,6 +464,7 @@ async fn test_request_vote_accept_missing_parents() {
     let worker_cache = fixture.worker_cache();
     let signature_service = SignatureService::new(target.keypair().copy());
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
+    let primary_channel_metrics = PrimaryChannelMetrics::new(&Registry::new());
     let network = test_utils::test_network(target.network_keypair(), target.address());
     let client = NetworkClient::new_from_keypair(&target.network_keypair());
 
@@ -504,6 +492,7 @@ async fn test_request_vote_accept_missing_parents() {
         rx_synchronizer_network,
         None,
         metrics.clone(),
+        &primary_channel_metrics,
     ));
     let handler = PrimaryReceiverHandler {
         authority_id: target_id,
@@ -530,13 +519,8 @@ async fn test_request_vote_accept_missing_parents() {
         .authorities()
         .map(|a| (a.id(), a.keypair().copy()))
         .collect();
-    let (certificates, _next_parents) = make_optimal_signed_certificates(
-        1..=3,
-        &genesis,
-        &committee,
-        ids.as_slice(),
-        &test_utils::latest_protocol_version(),
-    );
+    let (certificates, _next_parents) =
+        make_optimal_signed_certificates(1..=3, &genesis, &committee, ids.as_slice());
     let all_certificates = certificates.into_iter().collect_vec();
     let round_1_certs = all_certificates[..NUM_PARENTS].to_vec();
     let round_2_certs = all_certificates[NUM_PARENTS..(NUM_PARENTS * 2)].to_vec();
@@ -550,14 +534,7 @@ async fn test_request_vote_accept_missing_parents() {
             .author(author_id)
             .round(3)
             .parents(round_2_certs.iter().map(|c| c.digest()).collect())
-            .with_payload_batch(
-                test_utils::fixture_batch_with_transactions(
-                    10,
-                    &test_utils::latest_protocol_version(),
-                ),
-                0,
-                0,
-            )
+            .with_payload_batch(test_utils::fixture_batch_with_transactions(10), 0, 0)
             .build()
             .unwrap(),
     );
@@ -635,6 +612,7 @@ async fn test_request_vote_missing_batches() {
     let author = fixture.authorities().nth(2).unwrap();
     let signature_service = SignatureService::new(primary.keypair().copy());
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
+    let primary_channel_metrics = PrimaryChannelMetrics::new(&Registry::new());
     let network = test_utils::test_network(primary.network_keypair(), primary.address());
     let client = NetworkClient::new_from_keypair(&primary.network_keypair());
 
@@ -662,6 +640,7 @@ async fn test_request_vote_missing_batches() {
         rx_synchronizer_network,
         None,
         metrics.clone(),
+        &primary_channel_metrics,
     ));
     let handler = PrimaryReceiverHandler {
         authority_id,
@@ -684,14 +663,7 @@ async fn test_request_vote_missing_batches() {
         let header = Header::V1(
             primary
                 .header_builder(&fixture.committee())
-                .with_payload_batch(
-                    test_utils::fixture_batch_with_transactions(
-                        10,
-                        &test_utils::latest_protocol_version(),
-                    ),
-                    0,
-                    0,
-                )
+                .with_payload_batch(test_utils::fixture_batch_with_transactions(10), 0, 0)
                 .build()
                 .unwrap(),
         );
@@ -710,14 +682,7 @@ async fn test_request_vote_missing_batches() {
             .header_builder(&fixture.committee())
             .round(2)
             .parents(certificates.keys().cloned().collect())
-            .with_payload_batch(
-                test_utils::fixture_batch_with_transactions(
-                    10,
-                    &test_utils::latest_protocol_version(),
-                ),
-                1,
-                0,
-            )
+            .with_payload_batch(test_utils::fixture_batch_with_transactions(10), 1, 0)
             .build()
             .unwrap(),
     );
@@ -783,6 +748,7 @@ async fn test_request_vote_already_voted() {
     let author = fixture.authorities().nth(2).unwrap();
     let signature_service = SignatureService::new(primary.keypair().copy());
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
+    let primary_channel_metrics = PrimaryChannelMetrics::new(&Registry::new());
     let network = test_utils::test_network(primary.network_keypair(), primary.address());
     let client = NetworkClient::new_from_keypair(&primary.network_keypair());
 
@@ -810,6 +776,7 @@ async fn test_request_vote_already_voted() {
         rx_synchronizer_network,
         None,
         metrics.clone(),
+        &primary_channel_metrics,
     ));
 
     let handler = PrimaryReceiverHandler {
@@ -833,14 +800,7 @@ async fn test_request_vote_already_voted() {
         let header = Header::V1(
             primary
                 .header_builder(&fixture.committee())
-                .with_payload_batch(
-                    test_utils::fixture_batch_with_transactions(
-                        10,
-                        &test_utils::latest_protocol_version(),
-                    ),
-                    0,
-                    0,
-                )
+                .with_payload_batch(test_utils::fixture_batch_with_transactions(10), 0, 0)
                 .build()
                 .unwrap(),
         );
@@ -880,14 +840,7 @@ async fn test_request_vote_already_voted() {
             .header_builder(&fixture.committee())
             .round(2)
             .parents(certificates.keys().cloned().collect())
-            .with_payload_batch(
-                test_utils::fixture_batch_with_transactions(
-                    10,
-                    &test_utils::latest_protocol_version(),
-                ),
-                1,
-                0,
-            )
+            .with_payload_batch(test_utils::fixture_batch_with_transactions(10), 1, 0)
             .build()
             .unwrap(),
     );
@@ -932,14 +885,7 @@ async fn test_request_vote_already_voted() {
             .header_builder(&fixture.committee())
             .round(2)
             .parents(certificates.keys().cloned().collect())
-            .with_payload_batch(
-                test_utils::fixture_batch_with_transactions(
-                    10,
-                    &test_utils::latest_protocol_version(),
-                ),
-                1,
-                0,
-            )
+            .with_payload_batch(test_utils::fixture_batch_with_transactions(10), 1, 0)
             .build()
             .unwrap(),
     );
@@ -975,6 +921,7 @@ async fn test_fetch_certificates_handler() {
     let primary = fixture.authorities().next().unwrap();
     let signature_service = SignatureService::new(primary.keypair().copy());
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
+    let primary_channel_metrics = PrimaryChannelMetrics::new(&Registry::new());
     let client = NetworkClient::new_from_keypair(&primary.network_keypair());
 
     let (header_store, certificate_store, payload_store) = create_db_stores();
@@ -1001,6 +948,7 @@ async fn test_fetch_certificates_handler() {
         rx_synchronizer_network,
         None,
         metrics.clone(),
+        &primary_channel_metrics,
     ));
     let handler = PrimaryReceiverHandler {
         authority_id: id,
@@ -1028,8 +976,7 @@ async fn test_fetch_certificates_handler() {
             .into_iter()
             .map(|header| fixture.certificate(&header).digest())
             .collect();
-        (_, current_round) =
-            fixture.headers_round(i, &parents, &test_utils::latest_protocol_version());
+        (_, current_round) = fixture.headers_round(i, &parents);
         headers.extend(current_round.clone());
     }
 
@@ -1147,6 +1094,7 @@ async fn test_process_payload_availability_success() {
     let primary = fixture.authorities().next().unwrap();
     let signature_service = SignatureService::new(primary.keypair().copy());
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
+    let primary_channel_metrics = PrimaryChannelMetrics::new(&Registry::new());
     let client = NetworkClient::new_from_keypair(&primary.network_keypair());
 
     let (header_store, certificate_store, payload_store) = create_db_stores();
@@ -1173,6 +1121,7 @@ async fn test_process_payload_availability_success() {
         rx_synchronizer_network,
         None,
         metrics.clone(),
+        &primary_channel_metrics,
     ));
     let handler = PrimaryReceiverHandler {
         authority_id: id,
@@ -1197,14 +1146,7 @@ async fn test_process_payload_availability_success() {
         let header = Header::V1(
             author
                 .header_builder(&fixture.committee())
-                .with_payload_batch(
-                    test_utils::fixture_batch_with_transactions(
-                        10,
-                        &test_utils::latest_protocol_version(),
-                    ),
-                    0,
-                    0,
-                )
+                .with_payload_batch(test_utils::fixture_batch_with_transactions(10), 0, 0)
                 .build()
                 .unwrap(),
         );
@@ -1311,6 +1253,7 @@ async fn test_process_payload_availability_when_failures() {
     let primary = fixture.authorities().next().unwrap();
     let signature_service = SignatureService::new(primary.keypair().copy());
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
+    let primary_channel_metrics = PrimaryChannelMetrics::new(&Registry::new());
     let client = NetworkClient::new_from_keypair(&primary.network_keypair());
 
     let (header_store, _, _) = create_db_stores();
@@ -1337,6 +1280,7 @@ async fn test_process_payload_availability_when_failures() {
         rx_synchronizer_network,
         None,
         metrics.clone(),
+        &primary_channel_metrics,
     ));
     let handler = PrimaryReceiverHandler {
         authority_id: id,
@@ -1359,14 +1303,7 @@ async fn test_process_payload_availability_when_failures() {
         let header = Header::V1(
             author
                 .header_builder(&committee)
-                .with_payload_batch(
-                    test_utils::fixture_batch_with_transactions(
-                        10,
-                        &test_utils::latest_protocol_version(),
-                    ),
-                    0,
-                    0,
-                )
+                .with_payload_batch(test_utils::fixture_batch_with_transactions(10), 0, 0)
                 .build()
                 .unwrap(),
         );
@@ -1421,6 +1358,7 @@ async fn test_request_vote_created_at_in_future() {
     let author = fixture.authorities().nth(2).unwrap();
     let signature_service = SignatureService::new(primary.keypair().copy());
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
+    let primary_channel_metrics = PrimaryChannelMetrics::new(&Registry::new());
     let network = test_utils::test_network(primary.network_keypair(), primary.address());
     let client = NetworkClient::new_from_keypair(&primary.network_keypair());
 
@@ -1448,6 +1386,7 @@ async fn test_request_vote_created_at_in_future() {
         rx_synchronizer_network,
         None,
         metrics.clone(),
+        &primary_channel_metrics,
     ));
     let handler = PrimaryReceiverHandler {
         authority_id: id,
@@ -1470,14 +1409,7 @@ async fn test_request_vote_created_at_in_future() {
         let header = Header::V1(
             primary
                 .header_builder(&fixture.committee())
-                .with_payload_batch(
-                    test_utils::fixture_batch_with_transactions(
-                        10,
-                        &test_utils::latest_protocol_version(),
-                    ),
-                    0,
-                    0,
-                )
+                .with_payload_batch(test_utils::fixture_batch_with_transactions(10), 0, 0)
                 .build()
                 .unwrap(),
         );
@@ -1521,14 +1453,7 @@ async fn test_request_vote_created_at_in_future() {
             .header_builder(&fixture.committee())
             .round(2)
             .parents(certificates.keys().cloned().collect())
-            .with_payload_batch(
-                test_utils::fixture_batch_with_transactions(
-                    10,
-                    &test_utils::latest_protocol_version(),
-                ),
-                1,
-                0,
-            )
+            .with_payload_batch(test_utils::fixture_batch_with_transactions(10), 1, 0)
             .created_at(created_at)
             .build()
             .unwrap(),
@@ -1559,11 +1484,7 @@ async fn test_request_vote_created_at_in_future() {
         .header_builder(&fixture.committee())
         .round(2)
         .parents(certificates.keys().cloned().collect())
-        .with_payload_batch(
-            test_utils::fixture_batch_with_transactions(10, &test_utils::latest_protocol_version()),
-            1,
-            0,
-        )
+        .with_payload_batch(test_utils::fixture_batch_with_transactions(10), 1, 0)
         .created_at(created_at)
         .build()
         .unwrap();

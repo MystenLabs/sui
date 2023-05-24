@@ -8,7 +8,6 @@ mod metrics;
 
 pub use errors::{SubscriberError, SubscriberResult};
 pub use state::ExecutionIndices;
-use sui_protocol_config::ProtocolConfig;
 
 use crate::metrics::ExecutorMetrics;
 use crate::subscriber::spawn_subscriber;
@@ -16,16 +15,14 @@ use crate::subscriber::spawn_subscriber;
 use async_trait::async_trait;
 use config::{AuthorityIdentifier, Committee, WorkerCache};
 use mockall::automock;
+use mysten_metrics::metered_channel;
 use network::client::NetworkClient;
 use prometheus::Registry;
 use std::sync::Arc;
 use storage::{CertificateStore, ConsensusStore};
 use tokio::task::JoinHandle;
 use tracing::info;
-use types::{
-    metered_channel, CertificateDigest, CommittedSubDag, ConditionalBroadcastReceiver,
-    ConsensusOutput,
-};
+use types::{CertificateDigest, CommittedSubDag, ConditionalBroadcastReceiver, ConsensusOutput};
 
 /// Convenience type representing a serialized transaction.
 pub type SerializedTransaction = Vec<u8>;
@@ -59,7 +56,6 @@ impl Executor {
         rx_sequence: metered_channel::Receiver<CommittedSubDag>,
         registry: &Registry,
         restored_consensus_output: Vec<CommittedSubDag>,
-        protocol_config: &ProtocolConfig,
     ) -> SubscriberResult<Vec<JoinHandle<()>>>
     where
         State: ExecutionState + Send + Sync + 'static,
@@ -80,7 +76,6 @@ impl Executor {
             arc_metrics,
             restored_consensus_output,
             execution_state,
-            protocol_config.clone(),
         );
 
         // Return the handle.

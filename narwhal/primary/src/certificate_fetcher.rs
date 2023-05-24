@@ -8,6 +8,7 @@ use consensus::consensus::ConsensusRound;
 use crypto::NetworkPublicKey;
 use futures::{stream::FuturesUnordered, StreamExt};
 use itertools::Itertools;
+use mysten_metrics::metered_channel::Receiver;
 use mysten_metrics::{monitored_future, monitored_scope, spawn_logged_monitored_task};
 use network::PrimaryToPrimaryRpc;
 use rand::{rngs::ThreadRng, seq::SliceRandom};
@@ -26,7 +27,6 @@ use tokio::{
 use tracing::{debug, error, instrument, trace, warn};
 use types::{
     error::{DagError, DagResult},
-    metered_channel::Receiver,
     Certificate, CertificateAPI, ConditionalBroadcastReceiver, FetchCertificatesRequest,
     FetchCertificatesResponse, HeaderAPI, Round,
 };

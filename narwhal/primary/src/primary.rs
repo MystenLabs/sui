@@ -36,6 +36,7 @@ use fastcrypto::{
     signature_service::SignatureService,
     traits::{KeyPair as _, ToFromBytes},
 };
+use mysten_metrics::metered_channel::{channel_with_total, Receiver, Sender};
 use mysten_metrics::{monitored_scope, spawn_monitored_task};
 use mysten_network::{multiaddr::Protocol, Multiaddr};
 use network::{
@@ -55,7 +56,6 @@ use std::{
     time::Duration,
 };
 use storage::{CertificateStore, HeaderStore, PayloadStore, ProposerStore, VoteDigestStore};
-use sui_protocol_config::ProtocolConfig;
 use tokio::{sync::watch, task::JoinHandle};
 use tokio::{
     sync::{mpsc, oneshot},
@@ -66,14 +66,12 @@ use tracing::{debug, error, info, instrument, warn};
 use types::{
     ensure,
     error::{DagError, DagResult},
-    metered_channel::{channel_with_total, Receiver, Sender},
     now, Certificate, CertificateAPI, CertificateDigest, FetchCertificatesRequest,
     FetchCertificatesResponse, GetCertificatesRequest, GetCertificatesResponse, Header, HeaderAPI,
-    MetadataAPI, PayloadAvailabilityRequest, PayloadAvailabilityResponse,
-    PreSubscribedBroadcastSender, PrimaryToPrimary, PrimaryToPrimaryServer, RequestVoteRequest,
-    RequestVoteResponse, Round, SendCertificateRequest, SendCertificateResponse, Vote, VoteInfoAPI,
-    WorkerOthersBatchMessage, WorkerOurBatchMessage, WorkerOurBatchMessageV2, WorkerToPrimary,
-    WorkerToPrimaryServer,
+    PayloadAvailabilityRequest, PayloadAvailabilityResponse, PreSubscribedBroadcastSender,
+    PrimaryToPrimary, PrimaryToPrimaryServer, RequestVoteRequest, RequestVoteResponse, Round,
+    SendCertificateRequest, SendCertificateResponse, Vote, VoteInfoAPI, WorkerOthersBatchMessage,
+    WorkerOurBatchMessage, WorkerToPrimary, WorkerToPrimaryServer,
 };
 
 #[cfg(any(test))]
@@ -114,7 +112,6 @@ impl Primary {
         tx_shutdown: &mut PreSubscribedBroadcastSender,
         tx_committed_certificates: Sender<(Round, Vec<Certificate>)>,
         registry: &Registry,
-        _protocol_config: ProtocolConfig,
     ) -> Vec<JoinHandle<()>> {
         // Write the parameters to the logs.
         parameters.tracing();
@@ -197,6 +194,7 @@ impl Primary {
             rx_synchronizer_network,
             dag.clone(),
             node_metrics.clone(),
+            &primary_channel_metrics,
         ));
 
         let signature_service = SignatureService::new(signer);
@@ -1197,33 +1195,6 @@ impl WorkerToPrimary for WorkerReceiverHandler {
                 digest: message.digest,
                 worker_id: message.worker_id,
                 timestamp: message.metadata.created_at,
-                ack_channel: Some(tx_ack),
-            })
-            .await
-            .map(|_| anemo::Response::new(()))
-            .map_err(|e| anemo::rpc::Status::internal(e.to_string()))?;
-
-        // If we are ok, then wait for the ack
-        rx_ack
-            .await
-            .map_err(|e| anemo::rpc::Status::internal(e.to_string()))?;
-
-        Ok(response)
-    }
-
-    async fn report_our_batch_v2(
-        &self,
-        request: anemo::Request<WorkerOurBatchMessageV2>,
-    ) -> Result<anemo::Response<()>, anemo::rpc::Status> {
-        let message = request.into_body();
-
-        let (tx_ack, rx_ack) = oneshot::channel();
-        let response = self
-            .tx_our_digests
-            .send(OurDigestMessage {
-                digest: message.digest,
-                worker_id: message.worker_id,
-                timestamp: *message.metadata.created_at(),
                 ack_channel: Some(tx_ack),
             })
             .await

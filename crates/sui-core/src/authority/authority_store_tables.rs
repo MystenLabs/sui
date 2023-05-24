@@ -211,7 +211,7 @@ impl AuthorityPerpetualTables {
     ) -> Result<Option<ObjectRef>, SuiError> {
         let mut iterator = self
             .objects
-            .iter()
+            .unbounded_iter()
             .skip_prior_to(&ObjectKey::max_for_id(&object_id))?;
 
         if let Some((object_key, value)) = iterator.next() {
@@ -357,7 +357,7 @@ impl AuthorityPerpetualTables {
     pub fn database_is_empty(&self) -> SuiResult<bool> {
         Ok(self
             .objects
-            .iter()
+            .unbounded_iter()
             .skip_to(&ObjectKey::ZERO)?
             .next()
             .is_none())
@@ -365,7 +365,7 @@ impl AuthorityPerpetualTables {
 
     pub fn iter_live_object_set(&self) -> LiveSetIter<'_> {
         LiveSetIter {
-            iter: self.objects.iter(),
+            iter: self.objects.unbounded_iter(),
             tables: self,
             prev: None,
         }
@@ -416,7 +416,7 @@ impl ObjectStore for AuthorityPerpetualTables {
     fn get_object(&self, object_id: &ObjectID) -> Result<Option<Object>, SuiError> {
         let obj_entry = self
             .objects
-            .iter()
+            .unbounded_iter()
             .skip_prior_to(&ObjectKey::max_for_id(object_id))?
             .next();
 

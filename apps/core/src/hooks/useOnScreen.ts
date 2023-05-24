@@ -11,7 +11,7 @@ export const useOnScreen = (ref: MutableRefObject<Element | null>) => {
         observerRef.current = new IntersectionObserver(
             ([entry]) => setIsIntersecting(entry.isIntersecting),
             {
-                threshold: [1],
+                threshold: [0.01],
             }
         );
     }

@@ -149,7 +149,7 @@ pub fn print_table_metadata(
 
 pub fn duplicate_objects_summary(db_path: PathBuf) -> (usize, usize, usize, usize) {
     let perpetual_tables = AuthorityPerpetualTables::open_readonly(&db_path);
-    let iter = perpetual_tables.objects.iter();
+    let iter = perpetual_tables.objects.unbounded_iter();
     let mut total_count = 0;
     let mut duplicate_count = 0;
     let mut total_bytes = 0;

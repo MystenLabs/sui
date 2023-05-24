@@ -3,10 +3,10 @@
 
 import { useCallback } from 'react';
 
-import { type ValidatorMapData } from './types';
+import { type ValidatorMapValidator } from './types';
 
 interface Props {
-    validator: ValidatorMapData;
+    validator: ValidatorMapValidator;
     projection: (loc: [number, number]) => [number, number] | null;
     onMouseOver(event: React.MouseEvent, countryCode?: string): void;
     onMouseOut(): void;

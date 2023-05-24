@@ -31,8 +31,8 @@ use move_core_types::{
 use move_resource_viewer::MoveValueAnnotator;
 use move_stdlib::move_stdlib_named_addresses;
 use move_symbol_pool::Symbol;
+use move_vm_config::runtime::VMConfig;
 use move_vm_runtime::{
-    config::VMConfig,
     move_vm::MoveVM,
     session::{SerializedReturnValues, Session},
 };

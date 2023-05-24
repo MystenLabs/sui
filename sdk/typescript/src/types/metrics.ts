@@ -12,3 +12,12 @@ export const NetworkMetrics = object({
   totalObjects: string(),
   totalPackages: string(),
 });
+
+export const AddressMetrics = object({
+  checkpoint: number(),
+  epoch: number(),
+  timestampMs: number(),
+  cumulativeAddresses: number(),
+  cumulativeActiveAddresses: number(),
+  dailyActiveAddresses: number(),
+});

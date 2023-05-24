@@ -29,7 +29,7 @@ bcs.registerStructType("Coin", {
 });
 
 // deserialization: BCS bytes into Coin
-let bytes = bcs
+let bcsBytes = bcs
   .ser("Coin", {
     id: "0000000000000000000000000000000000000000000000000000000000000001",
     value: 1000000n,

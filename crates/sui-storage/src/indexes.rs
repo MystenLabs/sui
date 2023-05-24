@@ -268,7 +268,7 @@ impl IndexStore {
         };
         let next_sequence_number = tables
             .transaction_order
-            .iter()
+            .unbounded_iter()
             .skip_to_last()
             .next()
             .map(|(seq, _)| seq + 1)
@@ -671,7 +671,7 @@ impl IndexStore {
                 error: UserInputError::Unsupported(format!("{:?}", filter)),
             }),
             None => {
-                let iter = self.tables.transaction_order.iter();
+                let iter = self.tables.transaction_order.unbounded_iter();
 
                 if reverse {
                     let iter = iter
@@ -728,7 +728,7 @@ impl IndexStore {
     ) -> SuiResult<Vec<TransactionDigest>> {
         Ok(if reverse {
             let iter = index
-                .iter()
+                .unbounded_iter()
                 .skip_prior_to(&(key.clone(), cursor.unwrap_or(TxSequenceNumber::MAX)))?
                 .reverse()
                 // skip one more if exclusive cursor is Some
@@ -742,7 +742,7 @@ impl IndexStore {
             }
         } else {
             let iter = index
-                .iter()
+                .unbounded_iter()
                 .skip_to(&(key.clone(), cursor.unwrap_or(TxSequenceNumber::MIN)))?
                 // skip one more if exclusive cursor is Some
                 .skip(usize::from(cursor.is_some()))
@@ -850,7 +850,7 @@ impl IndexStore {
                 .unwrap_or(if reverse { max_string } else { "".to_string() });
 
         let key = (package, module_val, function_val, cursor_val);
-        let iter = self.tables.transactions_by_move_function.iter();
+        let iter = self.tables.transactions_by_move_function.unbounded_iter();
         Ok(if reverse {
             let iter = iter
                 .skip_prior_to(&key)?
@@ -920,7 +920,7 @@ impl IndexStore {
         Ok(if descending {
             self.tables
                 .event_order
-                .iter()
+                .unbounded_iter()
                 .skip_prior_to(&(tx_seq, event_seq))?
                 .reverse()
                 .take(limit)
@@ -931,7 +931,7 @@ impl IndexStore {
         } else {
             self.tables
                 .event_order
-                .iter()
+                .unbounded_iter()
                 .skip_to(&(tx_seq, event_seq))?
                 .take(limit)
                 .map(|((_, event_seq), (digest, tx_digest, time))| {
@@ -955,7 +955,7 @@ impl IndexStore {
         Ok(if descending {
             self.tables
                 .event_order
-                .iter()
+                .unbounded_iter()
                 .skip_prior_to(&(min(tx_seq, seq), event_seq))?
                 .reverse()
                 .take_while(|((tx, _), _)| tx == &seq)
@@ -967,7 +967,7 @@ impl IndexStore {
         } else {
             self.tables
                 .event_order
-                .iter()
+                .unbounded_iter()
                 .skip_to(&(max(tx_seq, seq), event_seq))?
                 .take_while(|((tx, _), _)| tx == &seq)
                 .take(limit)
@@ -988,7 +988,7 @@ impl IndexStore {
     ) -> SuiResult<Vec<(TransactionEventsDigest, TransactionDigest, usize, u64)>> {
         Ok(if descending {
             index
-                .iter()
+                .unbounded_iter()
                 .skip_prior_to(&(key.clone(), (tx_seq, event_seq)))?
                 .reverse()
                 .take_while(|((m, _), _)| m == key)
@@ -999,7 +999,7 @@ impl IndexStore {
                 .collect()
         } else {
             index
-                .iter()
+                .unbounded_iter()
                 .skip_to(&(key.clone(), (tx_seq, event_seq)))?
                 .take_while(|((m, _), _)| m == key)
                 .take(limit)
@@ -1094,7 +1094,7 @@ impl IndexStore {
         Ok(if descending {
             self.tables
                 .event_by_time
-                .iter()
+                .unbounded_iter()
                 .skip_prior_to(&(end_time, (tx_seq, event_seq)))?
                 .reverse()
                 .take_while(|((m, _), _)| m >= &start_time)
@@ -1106,7 +1106,7 @@ impl IndexStore {
         } else {
             self.tables
                 .event_by_time
-                .iter()
+                .unbounded_iter()
                 .skip_to(&(start_time, (tx_seq, event_seq)))?
                 .take_while(|((m, _), _)| m <= &end_time)
                 .take(limit)
@@ -1215,7 +1215,7 @@ impl IndexStore {
         let starting_coin_type =
             coin_type_tag.unwrap_or_else(|| String::from_utf8([0u8].to_vec()).unwrap());
         Ok(coin_index
-            .iter()
+            .unbounded_iter()
             .skip_to(&(owner, starting_coin_type.clone(), ObjectID::ZERO))?
             .take_while(move |((addr, coin_type, _), _)| {
                 if addr != &owner {
@@ -1240,7 +1240,7 @@ impl IndexStore {
         Ok(self
             .tables
             .coin_index
-            .iter()
+            .unbounded_iter()
             .skip_to(&(owner, starting_coin_type.clone(), starting_object_id))?
             .filter(move |((_, _, obj_id), _)| obj_id != &starting_object_id)
             .enumerate()
@@ -1270,7 +1270,7 @@ impl IndexStore {
         Ok(self
             .tables
             .owner_index
-            .iter()
+            .unbounded_iter()
             // The object id 0 is the smallest possible
             .skip_to(&(owner, starting_object_id))?
             .skip(usize::from(starting_object_id != ObjectID::ZERO))

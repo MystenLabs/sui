@@ -1237,6 +1237,16 @@ module deepbook::clob {
         (base_avail, base_locked, quote_avail, quote_locked)
     }
 
+    /// Query the market price of order book
+    /// returns (best_bid_price, best_ask_price)
+    public fun get_market_price<BaseAsset, QuoteAsset>(
+        pool: &Pool<BaseAsset, QuoteAsset>
+    ): (u64, u64){
+        let (bid_price, _) = critbit::max_leaf(&pool.bids);
+        let (ask_price, _) = critbit::min_leaf(&pool.asks);
+        return (bid_price, ask_price)
+    }
+
     /// Enter a price range and return the level2 order depth of all valid prices within this price range in bid side
     /// returns two vectors of u64
     /// The previous is a list of all valid prices

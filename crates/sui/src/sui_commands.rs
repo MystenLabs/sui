@@ -306,7 +306,7 @@ impl SuiCommand {
     }
 }
 
-pub async fn genesis(
+async fn genesis(
     from_config: Option<PathBuf>,
     write_config: Option<PathBuf>,
     working_dir: Option<PathBuf>,

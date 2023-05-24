@@ -303,7 +303,7 @@ impl StateAccumulator {
             .authority_store
             .perpetual_tables
             .root_state_hash_by_epoch
-            .iter()
+            .unbounded_iter()
             .skip_to_last()
             .next()
             .map(|(epoch, (highest, hash))| {

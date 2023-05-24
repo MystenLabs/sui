@@ -12,7 +12,6 @@ use crate::{
     reference_safety,
     stack_usage_verifier::StackUsageVerifier,
     type_safety,
-    verifier::VerifierConfig,
 };
 use move_binary_format::{
     access::ModuleAccess,
@@ -26,6 +25,7 @@ use move_binary_format::{
     IndexKind,
 };
 use move_core_types::vm_status::StatusCode;
+use move_vm_config::verifier::VerifierConfig;
 use std::collections::HashMap;
 
 pub struct CodeUnitVerifier<'a> {

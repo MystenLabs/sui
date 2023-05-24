@@ -3,26 +3,29 @@
 
 use crate::event_handler::EVENT_DISPATCH_BUFFER_SIZE;
 use futures::Stream;
+use mysten_metrics::metered_channel::Sender;
 use mysten_metrics::spawn_monitored_task;
 use parking_lot::RwLock;
+use prometheus::{IntGauge, Registry};
 use std::collections::BTreeMap;
 use std::fmt::Debug;
 use std::sync::Arc;
 use sui_json_rpc_types::Filter;
 use sui_types::base_types::ObjectID;
 use sui_types::error::SuiError;
+use tap::TapFallible;
 use tokio::sync::mpsc;
-use tokio::sync::mpsc::Sender;
 use tokio_stream::wrappers::ReceiverStream;
 use tracing::{debug, warn};
 
-type Subscribers<T, F> = Arc<RwLock<BTreeMap<String, (Sender<T>, F)>>>;
+type Subscribers<T, F> = Arc<RwLock<BTreeMap<String, (tokio::sync::mpsc::Sender<T>, F)>>>;
 
 /// The Streamer splits a mpsc channel into multiple mpsc channels using the subscriber's `Filter<T>` object.
 /// Data will be sent to the subscribers in parallel and the subscription will be dropped if it received a send error.
 pub struct Streamer<T, S, F: Filter<T>> {
     streamer_queue: Sender<T>,
     subscribers: Subscribers<S, F>,
+    gauge: IntGauge,
 }
 
 impl<T, S, F> Streamer<T, S, F>
@@ -32,16 +35,31 @@ where
     F: Filter<T> + Clone + Send + Sync + 'static + Clone,
 {
     pub fn spawn(buffer: usize) -> Self {
-        let (tx, rx) = mpsc::channel::<T>(buffer);
+        let gauge = if let Some(metrics) = mysten_metrics::get_metrics() {
+            metrics.channels.with_label_values(&["streamer"])
+        } else {
+            // We call init_metrics very early when starting a node. Therefore when this happens,
+            // it's probably in a test.
+            mysten_metrics::init_metrics(&Registry::default());
+            mysten_metrics::get_metrics()
+                .unwrap()
+                .channels
+                .with_label_values(&["streamer"])
+        };
+
+        let (tx, rx) = mysten_metrics::metered_channel::channel(buffer, &gauge);
+        let gague_clone = gauge.clone();
         let streamer = Self {
             streamer_queue: tx,
             subscribers: Default::default(),
+            gauge,
         };
         let mut rx = rx;
         let subscribers = streamer.subscribers.clone();
         spawn_monitored_task!(async move {
             while let Some(data) = rx.recv().await {
                 Self::send_to_all_subscribers(subscribers.clone(), data).await;
+                gague_clone.dec();
             }
         });
         streamer
@@ -81,8 +99,9 @@ where
         self.streamer_queue
             .send(data)
             .await
-            .map_err(|e| SuiError::EventFailedToDispatch {
+            .map_err(|e| SuiError::FailedToDispatchSubscription {
                 error: e.to_string(),
             })
+            .tap_ok(|_| self.gauge.inc())
     }
 }

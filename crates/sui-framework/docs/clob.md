@@ -40,6 +40,7 @@
 -  [Function `batch_cancel_order`](#0xdee9_clob_batch_cancel_order)
 -  [Function `list_open_orders`](#0xdee9_clob_list_open_orders)
 -  [Function `account_balance`](#0xdee9_clob_account_balance)
+-  [Function `get_market_price`](#0xdee9_clob_get_market_price)
 -  [Function `get_level2_book_status_bid_side`](#0xdee9_clob_get_level2_book_status_bid_side)
 -  [Function `get_level2_book_status_ask_side`](#0xdee9_clob_get_level2_book_status_ask_side)
 -  [Function `get_level2_book_status`](#0xdee9_clob_get_level2_book_status)
@@ -2512,6 +2513,36 @@ query user balance inside custodian
     <b>let</b> (base_avail, base_locked) = <a href="custodian.md#0xdee9_custodian_account_balance">custodian::account_balance</a>(&pool.base_custodian, user);
     <b>let</b> (quote_avail, quote_locked) = <a href="custodian.md#0xdee9_custodian_account_balance">custodian::account_balance</a>(&pool.quote_custodian, user);
     (base_avail, base_locked, quote_avail, quote_locked)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0xdee9_clob_get_market_price"></a>
+
+## Function `get_market_price`
+
+Query the market price of order book
+returns (best_bid_price, best_ask_price)
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="clob.md#0xdee9_clob_get_market_price">get_market_price</a>&lt;BaseAsset, QuoteAsset&gt;(pool: &<a href="clob.md#0xdee9_clob_Pool">clob::Pool</a>&lt;BaseAsset, QuoteAsset&gt;): (u64, u64)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="clob.md#0xdee9_clob_get_market_price">get_market_price</a>&lt;BaseAsset, QuoteAsset&gt;(
+    pool: &<a href="clob.md#0xdee9_clob_Pool">Pool</a>&lt;BaseAsset, QuoteAsset&gt;
+): (u64, u64){
+    <b>let</b> (bid_price, _) = <a href="critbit.md#0xdee9_critbit_max_leaf">critbit::max_leaf</a>(&pool.bids);
+    <b>let</b> (ask_price, _) = <a href="critbit.md#0xdee9_critbit_min_leaf">critbit::min_leaf</a>(&pool.asks);
+    <b>return</b> (bid_price, ask_price)
 }
 </code></pre>
 

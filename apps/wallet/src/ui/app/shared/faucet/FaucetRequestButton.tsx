@@ -13,10 +13,12 @@ import { useAppSelector } from '_hooks';
 
 export type FaucetRequestButtonProps = {
     variant?: ButtonProps['variant'];
+    size?: ButtonProps['size'];
 };
 
 function FaucetRequestButton({
     variant = 'primary',
+    size = 'narrow',
 }: FaucetRequestButtonProps) {
     const network = useAppSelector(({ app }) => app.apiEnv);
     const networkName = API_ENV_TO_INFO[network].name.replace(/sui\s*/gi, '');
@@ -32,6 +34,7 @@ function FaucetRequestButton({
     return mutation.enabled ? (
         <Button
             variant={variant}
+            size={size}
             disabled={isRateLimited}
             onClick={() => {
                 toast.promise(mutation.mutateAsync(), {
