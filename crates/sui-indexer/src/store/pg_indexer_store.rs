@@ -219,17 +219,6 @@ impl IndexerStore for PgIndexerStore {
         .context("Failed reading latest checkpoint sequence number from PostgresDB")
     }
 
-    async fn get_latest_object_checkpoint_sequence_number(&self) -> Result<i64, IndexerError> {
-        read_only_blocking!(&self.blocking_cp, |conn| {
-            objects::dsl::objects
-                .select(max(objects::checkpoint))
-                .first::<Option<i64>>(conn)
-                // -1 to differentiate between no checkpoints and the first checkpoint
-                .map(|o| o.unwrap_or(-1))
-        })
-        .context("Failed reading latest object checkpoint sequence number from PostgresDB")
-    }
-
     async fn get_checkpoint(
         &self,
         id: CheckpointId,
@@ -1359,8 +1348,6 @@ WHERE e1.epoch = e2.epoch
                     .iter()
                     .map(|deleted_object| deleted_object.clone().into())
                     .collect();
-                let (mutation_count, deletion_count) =
-                    (mutated_objects.len(), deleted_objects.len());
                 persist_transaction_object_changes(
                     conn,
                     mutated_objects,
@@ -1368,13 +1355,6 @@ WHERE e1.epoch = e2.epoch
                     Some(object_mutation_latency),
                     Some(object_deletion_latency),
                 )?;
-                info!(
-                "Object checkpoint {} committed with {} transaction, {} mutated objects and {} deleted objects.",
-                checkpoint.sequence_number,
-                tx_object_changes.len(),
-                mutation_count,
-                deletion_count
-            );
                 Ok::<(), IndexerError>(())
             }
         })?;

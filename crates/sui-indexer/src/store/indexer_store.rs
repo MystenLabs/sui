@@ -36,7 +36,6 @@ pub trait IndexerStore {
     type ModuleCache;
 
     async fn get_latest_checkpoint_sequence_number(&self) -> Result<i64, IndexerError>;
-    async fn get_latest_object_checkpoint_sequence_number(&self) -> Result<i64, IndexerError>;
     async fn get_checkpoint(&self, id: CheckpointId) -> Result<RpcCheckpoint, IndexerError>;
     async fn get_checkpoint_sequence_number(
         &self,
