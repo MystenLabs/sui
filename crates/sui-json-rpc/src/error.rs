@@ -61,8 +61,14 @@ impl From<Error> for ErrorObjectOwned {
 impl Error {
     pub fn to_rpc_error(self) -> ErrorObjectOwned {
         match self {
-            Error::UserInputError(_) | Error::SuiRpcInputError(_) => {
+            Error::UserInputError(_) => {
                 ErrorObject::owned(ErrorCode::InvalidParams.code(), self.to_string(), None::<()>)
+            },
+            Error::SuiRpcInputError(err) => match err {
+                SuiRpcInputError::ContainsDuplicates => {
+                    ErrorObject::owned(-54321, err.to_string(), None::<()>)
+                }
+                _ => ErrorObject::owned(ErrorCode::InvalidParams.code(), err.to_string(), None::<()>)
             },
             Error::SuiError(err) => match err {
                 SuiError::TransactionNotFound { .. } | SuiError::TransactionsNotFound { .. } | SuiError::UserInputError { .. } => {

@@ -221,6 +221,10 @@ impl Logger for MetricsLogger {
             .observe(req_latency_secs);
 
         if let Some(code) = error_code {
+            println!(
+                "RPC call failed: method={}, code={}, latency={:.3}s",
+                method_name, code, req_latency_secs
+            );
             if code == -32000 {
                 self.metrics
                     .server_errors_by_route
@@ -236,6 +240,11 @@ impl Logger for MetricsLogger {
                 .errors_by_route
                 .with_label_values(&[method_name])
                 .inc();
+        }
+        else {
+            println!("did not find code for: method={},latency={:.3}s",
+            method_name, req_latency_secs
+        );
         }
     }
 
