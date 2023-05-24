@@ -18,7 +18,7 @@ use tracing::{error, info, warn};
 
 use mysten_metrics::spawn_monitored_task;
 use sui_core::event_handler::SubscriptionHandler;
-use sui_json_rpc::api::{GovernanceReadApiClient, ReadApiClient};
+use sui_json_rpc::api::ReadApiClient;
 use sui_json_rpc_types::{
     OwnedObjectRef, SuiGetPastObjectRequest, SuiObjectData, SuiObjectDataOptions, SuiRawData,
     SuiTransactionBlockDataAPI, SuiTransactionBlockEffects, SuiTransactionBlockEffectsAPI,
@@ -28,6 +28,7 @@ use sui_types::base_types::{ObjectID, SequenceNumber};
 use sui_types::committee::EpochId;
 use sui_types::messages_checkpoint::{CheckpointCommitment, CheckpointSequenceNumber};
 use sui_types::sui_system_state::sui_system_state_summary::SuiSystemStateSummary;
+use sui_types::sui_system_state::{get_sui_system_state, SuiSystemStateTrait};
 use sui_types::transaction::SenderSignedData;
 use sui_types::SUI_SYSTEM_ADDRESS;
 
@@ -883,19 +884,9 @@ where
         if index_epoch {
             epoch_index = if checkpoint.epoch == 0 && checkpoint.sequence_number == 0 {
                 // very first epoch
-                // NOTE: tmp. using latest system state to save storage on indexer.
-                // let system_state = get_sui_system_state(data)?;
-                // let system_state: SuiSystemStateSummary = system_state.into_sui_system_state_summary();
-                let system_state: SuiSystemStateSummary = self
-                    .http_client
-                    .get_latest_sui_system_state()
-                    .await
-                    .map_err(|e| {
-                        IndexerError::FullNodeReadingError(format!(
-                            "Failed to get latest system state with error {:?}",
-                            e
-                        ))
-                    })?;
+                let system_state = get_sui_system_state(data)?;
+                let system_state: SuiSystemStateSummary =
+                    system_state.into_sui_system_state_summary();
                 let validators = system_state
                     .active_validators
                     .iter()
@@ -914,21 +905,9 @@ where
                     validators,
                 })
             } else if let Some(end_of_epoch_data) = &checkpoint.end_of_epoch_data {
-                // Find system state object
-                // NOTE: tmp. using latest system state to save storage on indexer.
-                // let system_state = get_sui_system_state(data)?;
-                // let system_state: SuiSystemStateSummary = system_state.into_sui_system_state_summary();
-                let system_state: SuiSystemStateSummary = self
-                    .http_client
-                    .get_latest_sui_system_state()
-                    .await
-                    .map_err(|e| {
-                        IndexerError::FullNodeReadingError(format!(
-                            "Failed to get latest system state with error {:?}",
-                            e
-                        ))
-                    })?;
-
+                let system_state = get_sui_system_state(data)?;
+                let system_state: SuiSystemStateSummary =
+                    system_state.into_sui_system_state_summary();
                 let epoch_event = transactions.iter().find_map(|tx| {
                     tx.events.data.iter().find(|ev| {
                         ev.type_.address == SUI_SYSTEM_ADDRESS
