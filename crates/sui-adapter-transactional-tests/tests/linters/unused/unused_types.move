@@ -4,7 +4,7 @@
 //# init --addresses test=0x0
 
 //# publish --lint
-module lint_test_pkg::unused_types {
+module test::unused_types {
     use sui::tx_context::TxContext;
 
     struct UNUSED_TYPES has drop {}

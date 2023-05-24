@@ -46,7 +46,7 @@ pub fn lint_execute(env: GlobalEnv, published_addr: ObjectID, color: bool) -> St
             // module inits are supposed to be unused
             if func_env.visibility() != Visibility::Public
                 && func_env.get_name_str() != "init"
-                && func_env.get_called_functions().is_empty()
+                && func_env.get_calling_functions().is_empty()
             {
                 env.diag(Severity::Error, &func_env.get_loc(), &format!("Unused private or `friend` function {}. This function should be called or deleted", func_env.get_full_name_str()))
             }

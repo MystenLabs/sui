@@ -7,18 +7,6 @@ error: Unused private or `friend` function unused_functions::unused_private. Thi
 1 │ <unknown>
   │ ^
 
-error: Unused private or `friend` function unused_functions::used_private. This function should be called or deleted
-  ┌─ <unknown>:1:1
-  │
-1 │ <unknown>
-  │ ^
-
-error: Unused private or `friend` function unused_functions::used_friend. This function should be called or deleted
-  ┌─ <unknown>:1:1
-  │
-1 │ <unknown>
-  │ ^
-
 error: Unused private or `friend` function unused_functions::unused_friend. This function should be called or deleted
   ┌─ <unknown>:1:1
   │

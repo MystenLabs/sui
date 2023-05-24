@@ -1,10 +1,12 @@
 processed 2 tasks
 
 task 1 'publish'. lines 6-30:
-Error: error[E03001]: address with no value
-  ┌─ /var/folders/gw/732jkstx1j3fxgsqnlxg35c80000gn/T/.tmpzT73y1:7:8
+error: Unused struct type unused_types::UnusedType. This type should be used or deleted
+  ┌─ <unknown>:1:1
   │
-7 │ module lint_test_pkg::unused_types {
-  │        ^^^^^^^^^^^^^ address 'lint_test_pkg' is not assigned a value. Try assigning it a value when calling the compiler
+1 │ <unknown>
+  │ ^
 
-
+created: object(1,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 6315600,  storage_rebate: 0, non_refundable_storage_fee: 0
