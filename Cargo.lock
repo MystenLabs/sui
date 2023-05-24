@@ -5800,6 +5800,7 @@ source = "git+https://github.com/MystenLabs/mysten-sim.git?rev=d4ce4cf13ce1c2688
 dependencies = [
  "ahash 0.7.6",
  "async-task",
+ "backtrace",
  "bincode",
  "bytes",
  "cc",
