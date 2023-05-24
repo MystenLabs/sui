@@ -57,8 +57,7 @@ use sui_types::transaction::{
     TransactionData, TransactionDataAPI, TransactionKind, VerifiedTransaction,
 };
 use sui_types::DEEPBOOK_PACKAGE_ID;
-use tracing::info;
-use tracing::{error, warn};
+use tracing::{error, info, warn};
 
 // TODO: add persistent cache. But perf is good enough already.
 
