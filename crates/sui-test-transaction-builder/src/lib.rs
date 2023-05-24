@@ -147,8 +147,15 @@ impl TestTransactionBuilder {
     }
 
     pub fn publish_examples(self, subpath: &'static str) -> Self {
-        let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-        path.extend(["..", "..", "sui_programmability", "examples", subpath]);
+        let path = if let Ok(p) = std::env::var("MOVE_EXAMPLES_DIR") {
+            let mut path = PathBuf::from(p);
+            path.extend([subpath]);
+            path
+        } else {
+            let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+            path.extend(["..", "..", "sui_programmability", "examples", subpath]);
+            path
+        };
         self.publish(path)
     }
 
