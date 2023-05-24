@@ -155,6 +155,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "anemo-benchmark"
+version = "0.0.0"
+dependencies = [
+ "anemo",
+ "anemo-build",
+ "anemo-tower",
+ "anyhow",
+ "clap 4.1.4",
+ "mysten-network",
+ "rand 0.8.5",
+ "sui-types",
+ "telemetry-subscribers",
+ "tokio",
+ "tracing",
+ "workspace-hack",
+]
+
+[[package]]
 name = "anemo-build"
 version = "0.0.0"
 source = "git+https://github.com/mystenlabs/anemo.git?rev=baa7cfc3ae841f88c2ff773396c5a803c377d054#baa7cfc3ae841f88c2ff773396c5a803c377d054"
