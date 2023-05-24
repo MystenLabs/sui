@@ -12,6 +12,7 @@ const imageStyles = cva(null, {
     variants: {
         rounded: {
             full: 'rounded-full',
+            '2xl': 'rounded-2xl',
             lg: 'rounded-lg',
             md: 'rounded-md',
             sm: 'rounded-sm',

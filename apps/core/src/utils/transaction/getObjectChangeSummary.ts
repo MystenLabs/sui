@@ -7,12 +7,12 @@ import {
     SuiObjectChangeMutated,
     SuiObjectChangePublished,
     SuiObjectChange,
-    SuiObjectChangeTypes,
     DisplayFieldsResponse,
     SuiObjectChangeDeleted,
     SuiObjectChangeWrapped,
 } from '@mysten/sui.js';
 import { groupByOwner } from './groupByOwner';
+import { SuiObjectChangeTypes } from './types';
 
 export type WithDisplayFields<T> = T & { display?: DisplayFieldsResponse };
 export type SuiObjectChangeWithDisplay = WithDisplayFields<SuiObjectChange>;

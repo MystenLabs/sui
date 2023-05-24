@@ -6,7 +6,6 @@ import {
     isValidSuiAddress,
     type SuiAddress,
 } from '@mysten/sui.js';
-import { useState } from 'react';
 
 import { Text } from '../text';
 import { SummaryCardFooter } from './Card';

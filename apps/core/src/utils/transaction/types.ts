@@ -14,3 +14,11 @@ export type TransactionSummary = {
     gas?: GasSummaryType;
     objectSummary: ObjectChangeSummary | null;
 } | null;
+
+export type SuiObjectChangeTypes =
+    | 'published'
+    | 'transferred'
+    | 'mutated'
+    | 'deleted'
+    | 'wrapped'
+    | 'created';

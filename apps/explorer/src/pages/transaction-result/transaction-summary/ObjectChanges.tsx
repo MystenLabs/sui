@@ -4,19 +4,21 @@
 import { Disclosure } from '@headlessui/react';
 import {
     ObjectChangeLabels,
+    type SuiObjectChangeWithDisplay,
     type ObjectChangesByOwner,
     type ObjectChangeSummary,
+    type SuiObjectChangeTypes,
 } from '@mysten/core';
 import { ChevronRight12 } from '@mysten/icons';
 import {
-    type SuiObjectChangeTypes,
-    type SuiObjectChangeCreated,
-    type SuiObjectChangeMutated,
     type SuiObjectChangePublished,
     type SuiObjectChange,
+    type DisplayFieldsResponse,
 } from '@mysten/sui.js';
 import clsx from 'clsx';
 import { type ReactNode } from 'react';
+
+import { ObjectDisplay } from './ObjectDisplay';
 
 import {
     ExpandableList,
@@ -129,9 +131,11 @@ function ObjectDetailPanel({
 function ObjectDetail({
     objectType,
     objectId,
+    display,
 }: {
     objectType: string;
     objectId: string;
+    display?: DisplayFieldsResponse;
 }) {
     const separator = '::';
     const objectTypeSplit = objectType?.split(separator) || [];
@@ -144,6 +148,9 @@ function ObjectDetail({
         ItemLabels.module,
         ItemLabels.type,
     ];
+
+    if (!!display?.data)
+        return <ObjectDisplay display={display} objectId={objectId} />;
 
     return (
         <ObjectDetailPanel
@@ -168,11 +175,13 @@ function ObjectDetail({
 interface ObjectChangeEntriesProps {
     type: SuiObjectChangeTypes;
     changeEntries: SuiObjectChange[];
+    isDisplay?: boolean;
 }
 
 function ObjectChangeEntries({
     changeEntries,
     type,
+    isDisplay,
 }: ObjectChangeEntriesProps) {
     const title = ObjectChangeLabels[type];
     let expandableItems = [];
@@ -202,15 +211,25 @@ function ObjectChangeEntries({
             )
         );
     } else {
-        expandableItems = (
-            changeEntries as (SuiObjectChangeMutated | SuiObjectChangeCreated)[]
-        ).map(({ objectId, objectType }) => (
-            <ObjectDetail
-                key={objectId}
-                objectId={objectId}
-                objectType={objectType}
-            />
-        ));
+        expandableItems = (changeEntries as SuiObjectChangeWithDisplay[]).map(
+            (change) =>
+                'objectId' in change && change.display ? (
+                    <ObjectDisplay
+                        key={change.objectId}
+                        objectId={change.objectId}
+                        display={change.display}
+                    />
+                ) : (
+                    'objectId' in change && (
+                        <ObjectDetail
+                            key={change.objectId}
+                            objectId={change.objectId}
+                            objectType={change.objectType}
+                            display={change.display}
+                        />
+                    )
+                )
+        );
     }
 
     return (
@@ -233,12 +252,17 @@ function ObjectChangeEntries({
                 defaultItemsToShow={DEFAULT_ITEMS_TO_SHOW}
                 itemsLabel="Objects"
             >
-                <div className="flex max-h-[300px] flex-col gap-3 overflow-y-auto">
+                <div
+                    className={clsx(
+                        'flex max-h-[300px] gap-3 overflow-y-auto',
+                        { 'flex-row': isDisplay, 'flex-col': !isDisplay }
+                    )}
+                >
                     <ExpandableListItems />
                 </div>
 
                 {changeEntries.length > DEFAULT_ITEMS_TO_SHOW && (
-                    <div className="mt-4">
+                    <div className="pt-4">
                         <ExpandableListControl />
                     </div>
                 )}
@@ -300,13 +324,21 @@ export function ObjectChangeEntriesCards({
                             )
                         }
                     >
-                        <ObjectChangeEntries
-                            changeEntries={[
-                                ...changes.changesWithDisplay,
-                                ...changes.changes,
-                            ]}
-                            type={type}
-                        />
+                        <div className="flex flex-col gap-4">
+                            {!!changes.changesWithDisplay.length && (
+                                <ObjectChangeEntries
+                                    changeEntries={changes.changesWithDisplay}
+                                    type={type}
+                                    isDisplay
+                                />
+                            )}
+                            {!!changes.changes.length && (
+                                <ObjectChangeEntries
+                                    changeEntries={changes.changes}
+                                    type={type}
+                                />
+                            )}
+                        </div>
                     </TransactionBlockCard>
                 );
             })}

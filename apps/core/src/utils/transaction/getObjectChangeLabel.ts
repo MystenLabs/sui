@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-import { SuiObjectChangeTypes } from '@mysten/sui.js';
+
+import { SuiObjectChangeTypes } from './types';
 
 export const ObjectChangeLabels = {
     created: 'Create',

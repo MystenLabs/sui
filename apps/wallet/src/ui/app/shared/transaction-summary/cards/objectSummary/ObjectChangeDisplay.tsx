@@ -22,13 +22,12 @@ export function ObjectChangeDisplay({
         <div className="relative w-32 cursor-pointer whitespace-nowrap min-w-min">
             <NftImage
                 size="md"
-                animateHover
                 name={display.name ?? ''}
                 borderRadius="xl"
                 src={display.image_url ?? ''}
             />
             {objectId && (
-                <div className="absolute bottom-2 z-[9000] left-1/2 flex -translate-x-1/2 justify-center rounded-lg bg-white/90 px-2 py-1">
+                <div className="absolute bottom-2 full left-1/2 flex -translate-x-1/2 justify-center rounded-lg bg-white/90 px-2 py-1">
                     <ExplorerLink
                         type={ExplorerLinkType.object}
                         objectID={objectId}

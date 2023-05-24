@@ -311,16 +311,6 @@ export const SuiTransactionBlock = object({
 });
 export type SuiTransactionBlock = Infer<typeof SuiTransactionBlock>;
 
-export const SuiObjectChangeTypes = union([
-  literal('published'),
-  literal('transferred'),
-  literal('mutated'),
-  literal('deleted'),
-  literal('wrapped'),
-  literal('created'),
-]);
-export type SuiObjectChangeTypes = Infer<typeof SuiObjectChangeTypes>;
-
 export const SuiObjectChangePublished = object({
   type: literal('published'),
   packageId: ObjectId,

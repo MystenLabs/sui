@@ -6,13 +6,13 @@ import {
     type ObjectChangesByOwner,
     type ObjectChangeSummary,
     type SuiObjectChangeWithDisplay,
+    type SuiObjectChangeTypes,
 } from '@mysten/core';
 import { ChevronDown12, ChevronRight12 } from '@mysten/icons';
 import {
     SuiObjectChangeTransferred,
     formatAddress,
     is,
-    type SuiObjectChangeTypes,
     SuiObjectChangePublished,
 } from '@mysten/sui.js';
 import cx from 'classnames';
