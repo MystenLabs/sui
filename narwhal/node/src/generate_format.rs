@@ -14,7 +14,7 @@ use structopt::{clap::arg_enum, StructOpt};
 use types::{
     Batch, BatchDigest, Certificate, CertificateDigest, Header, HeaderDigest, HeaderV1Builder,
     Metadata, MetadataV1, VersionedMetadata, WorkerOthersBatchMessage, WorkerOurBatchMessage,
-    WorkerOurBatchMessageV2, WorkerSynchronizeMessage,
+    WorkerOwnBatchMessage, WorkerSynchronizeMessage,
 };
 
 #[allow(clippy::mutable_key_type)]
@@ -116,7 +116,7 @@ fn get_registry() -> Result<Registry> {
         worker_id: 0,
         metadata: Metadata { created_at: 0 },
     };
-    let our_batch_v2 = WorkerOurBatchMessageV2 {
+    let our_batch_v2 = WorkerOwnBatchMessage {
         digest: BatchDigest([0u8; 32]),
         worker_id: 0,
         metadata: VersionedMetadata::V1(MetadataV1 {

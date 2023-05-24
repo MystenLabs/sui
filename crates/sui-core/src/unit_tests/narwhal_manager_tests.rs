@@ -128,7 +128,7 @@ async fn test_narwhal_manager() {
         let metrics = NarwhalManagerMetrics::new(&Registry::new());
 
         let narwhal_manager =
-            NarwhalManager::new(narwhal_config, metrics, latest_protocol_version());
+            NarwhalManager::new(latest_protocol_version(), narwhal_config, metrics);
 
         // start narwhal
         narwhal_manager

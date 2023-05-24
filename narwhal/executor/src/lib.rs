@@ -51,13 +51,13 @@ impl Executor {
         authority_id: AuthorityIdentifier,
         worker_cache: WorkerCache,
         committee: Committee,
+        protocol_config: &ProtocolConfig,
         client: NetworkClient,
         execution_state: State,
         shutdown_receivers: Vec<ConditionalBroadcastReceiver>,
         rx_sequence: metered_channel::Receiver<CommittedSubDag>,
         registry: &Registry,
         restored_consensus_output: Vec<CommittedSubDag>,
-        protocol_config: &ProtocolConfig,
     ) -> SubscriberResult<Vec<JoinHandle<()>>>
     where
         State: ExecutionState + Send + Sync + 'static,
@@ -72,13 +72,13 @@ impl Executor {
             authority_id,
             worker_cache,
             committee,
+            protocol_config.clone(),
             client,
             shutdown_receivers,
             rx_sequence,
             arc_metrics,
             restored_consensus_output,
             execution_state,
-            protocol_config.clone(),
         );
 
         // Return the handle.

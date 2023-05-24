@@ -29,11 +29,11 @@ pub mod handlers_tests;
 /// Defines how the network receiver handles incoming workers messages.
 #[derive(Clone)]
 pub struct WorkerReceiverHandler<V> {
+    pub protocol_config: ProtocolConfig,
     pub id: WorkerId,
     pub client: NetworkClient,
     pub store: DBMap<BatchDigest, Batch>,
     pub validator: V,
-    pub protocol_config: ProtocolConfig,
 }
 
 #[async_trait]
@@ -136,6 +136,7 @@ pub struct PrimaryReceiverHandler<V> {
     pub id: WorkerId,
     // The committee information.
     pub committee: Committee,
+    pub protocol_config: ProtocolConfig,
     // The worker information cache.
     pub worker_cache: WorkerCache,
     // The batch store
@@ -150,8 +151,6 @@ pub struct PrimaryReceiverHandler<V> {
     pub batch_fetcher: Option<BatchFetcher>,
     // Validate incoming batches
     pub validator: V,
-    // The protocol configuration.
-    pub protocol_config: ProtocolConfig,
 }
 
 #[async_trait]

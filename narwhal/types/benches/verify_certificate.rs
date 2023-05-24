@@ -28,10 +28,10 @@ pub fn verify_certificates(c: &mut Criterion) {
             .collect::<BTreeSet<_>>();
         let (certificates, _next_parents) = make_optimal_certificates(
             &committee,
+            &latest_protocol_version(),
             1..=1,
             &genesis,
             &ids,
-            &latest_protocol_version(),
         );
         let certificate = certificates.front().unwrap().clone();
 

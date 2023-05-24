@@ -416,11 +416,11 @@ pub fn make_certificates_with_parameters(
             // Now create the certificate with the provided parents
             let (_, certificate) = mock_certificate_with_rand(
                 committee,
+                &latest_protocol_version(),
                 authority.id(),
                 round,
                 parents_digests.clone(),
                 &mut rand,
-                &latest_protocol_version(),
             );
 
             // group certificates by round for easy access

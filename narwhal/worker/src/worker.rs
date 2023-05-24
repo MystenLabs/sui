@@ -62,12 +62,12 @@ pub struct Worker {
     committee: Committee,
     /// The worker information cache.
     worker_cache: WorkerCache,
+    // The protocol configuration.
+    protocol_config: ProtocolConfig,
     /// The configuration parameters
     parameters: Parameters,
     /// The persistent storage.
     store: DBMap<BatchDigest, Batch>,
-    // The protocol configuration.
-    protocol_config: ProtocolConfig,
 }
 
 impl Worker {
@@ -77,13 +77,13 @@ impl Worker {
         id: WorkerId,
         committee: Committee,
         worker_cache: WorkerCache,
+        protocol_config: ProtocolConfig,
         parameters: Parameters,
         validator: impl TransactionValidator,
         client: NetworkClient,
         store: DBMap<BatchDigest, Batch>,
         metrics: Metrics,
         tx_shutdown: &mut PreSubscribedBroadcastSender,
-        protocol_config: ProtocolConfig,
     ) -> Vec<JoinHandle<()>> {
         let worker_name = keypair.public().clone();
         let worker_peer_id = PeerId(worker_name.0.to_bytes());
@@ -96,9 +96,9 @@ impl Worker {
             id,
             committee: committee.clone(),
             worker_cache,
+            protocol_config: protocol_config.clone(),
             parameters: parameters.clone(),
             store,
-            protocol_config: protocol_config.clone(),
         };
 
         let node_metrics = Arc::new(metrics.worker_metrics.unwrap());
@@ -111,11 +111,11 @@ impl Worker {
         let mut shutdown_receivers = tx_shutdown.subscribe_n(NUM_SHUTDOWN_RECEIVERS);
 
         let mut worker_service = WorkerToWorkerServer::new(WorkerReceiverHandler {
+            protocol_config: protocol_config.clone(),
             id: worker.id,
             client: client.clone(),
             store: worker.store.clone(),
             validator: validator.clone(),
-            protocol_config: protocol_config.clone(),
         });
         // Apply rate limits from configuration as needed.
         if let Some(limit) = parameters.anemo.report_batch_rate_limit {
@@ -140,6 +140,7 @@ impl Worker {
             authority_id: worker.authority.id(),
             id: worker.id,
             committee: worker.committee.clone(),
+            protocol_config: protocol_config.clone(),
             worker_cache: worker.worker_cache.clone(),
             store: worker.store.clone(),
             request_batch_timeout: worker.parameters.sync_retry_delay,
@@ -147,7 +148,6 @@ impl Worker {
             network: None,
             batch_fetcher: None,
             validator: validator.clone(),
-            protocol_config: protocol_config.clone(),
         });
 
         // Receive incoming messages from other workers.
@@ -290,6 +290,7 @@ impl Worker {
                 authority_id: worker.authority.id(),
                 id: worker.id,
                 committee: worker.committee.clone(),
+                protocol_config,
                 worker_cache: worker.worker_cache.clone(),
                 store: worker.store.clone(),
                 request_batch_timeout: worker.parameters.sync_retry_delay,
@@ -297,7 +298,6 @@ impl Worker {
                 network: Some(network.clone()),
                 batch_fetcher: Some(batch_fetcher),
                 validator: validator.clone(),
-                protocol_config,
             }),
         );
 

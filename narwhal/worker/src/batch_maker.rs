@@ -21,7 +21,7 @@ use tokio::{
 use tracing::{error, warn};
 use types::{
     error::DagError, now, Batch, BatchAPI, BatchDigest, ConditionalBroadcastReceiver, MetadataAPI,
-    Transaction, TxResponse, WorkerOurBatchMessage, WorkerOurBatchMessageV2,
+    Transaction, TxResponse, WorkerOurBatchMessage, WorkerOwnBatchMessage,
 };
 
 #[cfg(feature = "trace_transaction")]
@@ -296,12 +296,12 @@ impl BatchMaker {
                 let _ = done_sending.await;
 
                 // Send the batch to the primary.
-                let message = WorkerOurBatchMessageV2 {
+                let message = WorkerOwnBatchMessage {
                     digest,
                     worker_id,
                     metadata,
                 };
-                if let Err(e) = client.report_our_batch_v2(message).await {
+                if let Err(e) = client.report_own_batch(message).await {
                     warn!("Failed to report our batch: {}", e);
                     // Drop all response handers to signal error, since we
                     // cannot ensure the primary has actually signaled the

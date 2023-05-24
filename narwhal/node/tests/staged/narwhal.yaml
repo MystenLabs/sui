@@ -25,12 +25,12 @@ BatchV1:
         TYPENAME: Metadata
 BatchV2:
   STRUCT:
+    - epoch: U64
     - transactions:
         SEQ:
           SEQ: U8
     - versioned_metadata:
         TYPENAME: VersionedMetadata
-    - epoch: U64
 Certificate:
   ENUM:
     0:
@@ -121,7 +121,7 @@ WorkerOurBatchMessage:
     - worker_id: U32
     - metadata:
         TYPENAME: Metadata
-WorkerOurBatchMessageV2:
+WorkerOwnBatchMessage:
   STRUCT:
     - digest:
         TYPENAME: BatchDigest

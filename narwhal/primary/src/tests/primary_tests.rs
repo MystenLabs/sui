@@ -93,6 +93,7 @@ async fn get_network_peers_from_admin_server() {
         authority_1.network_keypair().copy(),
         committee.clone(),
         worker_cache.clone(),
+        test_utils::latest_protocol_version(),
         primary_1_parameters.clone(),
         client_1.clone(),
         store.header_store.clone(),
@@ -116,7 +117,6 @@ async fn get_network_peers_from_admin_server() {
         &mut tx_shutdown,
         tx_feedback,
         &Registry::new(),
-        test_utils::latest_protocol_version(),
     );
 
     // Wait for tasks to start
@@ -139,13 +139,13 @@ async fn get_network_peers_from_admin_server() {
         worker_id,
         committee.clone(),
         worker_cache.clone(),
+        test_utils::latest_protocol_version(),
         worker_1_parameters.clone(),
         TrivialTransactionValidator::default(),
         client_1,
         store.batch_store,
         metrics_1,
         &mut tx_shutdown_worker,
-        test_utils::latest_protocol_version(),
     );
 
     // Test getting all known peers for primary 1
@@ -218,6 +218,7 @@ async fn get_network_peers_from_admin_server() {
         authority_2.network_keypair().copy(),
         committee.clone(),
         worker_cache.clone(),
+        test_utils::latest_protocol_version(),
         primary_2_parameters.clone(),
         client_2.clone(),
         store.header_store.clone(),
@@ -241,7 +242,6 @@ async fn get_network_peers_from_admin_server() {
         &mut tx_shutdown_2,
         tx_feedback_2,
         &Registry::new(),
-        test_utils::latest_protocol_version(),
     );
 
     // Wait for tasks to start
@@ -366,8 +366,8 @@ async fn test_request_vote_has_missing_parents() {
         1..=3,
         &genesis,
         &committee,
-        ids.as_slice(),
         &test_utils::latest_protocol_version(),
+        ids.as_slice(),
     );
     let all_certificates = certificates.into_iter().collect_vec();
     let round_2_certs = all_certificates[NUM_PARENTS..(NUM_PARENTS * 2)].to_vec();
@@ -539,8 +539,8 @@ async fn test_request_vote_accept_missing_parents() {
         1..=3,
         &genesis,
         &committee,
-        ids.as_slice(),
         &test_utils::latest_protocol_version(),
+        ids.as_slice(),
     );
     let all_certificates = certificates.into_iter().collect_vec();
     let round_1_certs = all_certificates[..NUM_PARENTS].to_vec();

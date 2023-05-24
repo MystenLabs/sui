@@ -90,23 +90,23 @@ pub struct NarwhalManager {
 
 impl NarwhalManager {
     pub fn new(
+        protocol_config: ProtocolConfig,
         config: NarwhalConfiguration,
         metrics: NarwhalManagerMetrics,
-        protocol_config: ProtocolConfig,
     ) -> Self {
         // Create the Narwhal Primary with configuration
         let primary_node = PrimaryNode::new(
+            protocol_config.clone(),
             config.parameters.clone(),
             true,
             config.registry_service.clone(),
-            protocol_config.clone(),
         );
 
         // Create Narwhal Workers with configuration
         let worker_nodes = WorkerNodes::new(
             config.registry_service.clone(),
-            config.parameters.clone(),
             protocol_config,
+            config.parameters.clone(),
         );
 
         let store_cache_metrics =

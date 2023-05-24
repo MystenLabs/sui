@@ -116,9 +116,9 @@ pub struct MetadataV1 {
     // timestamp of when the entity created. This is generated
     // by the node which creates the entity.
     pub created_at: TimestampMs,
-    // timestamp of when the entity was received by the node. This will help
+    // timestamp of when the entity was received by an other node. This will help
     // us calculate latencies that are not affected by clock drift or network
-    // delays.
+    // delays. This field is not set for own batches.
     pub received_at: Option<TimestampMs>,
 }
 
@@ -245,9 +245,10 @@ impl BatchV1 {
 
 #[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Eq, Arbitrary)]
 pub struct BatchV2 {
-    pub transactions: Vec<Transaction>,
-    pub versioned_metadata: VersionedMetadata,
     pub epoch: Epoch,
+    pub transactions: Vec<Transaction>,
+    // This field is not included as part of the batch digest
+    pub versioned_metadata: VersionedMetadata,
 }
 
 impl BatchAPI for BatchV2 {
@@ -1528,6 +1529,7 @@ impl fmt::Display for BlockErrorKind {
     }
 }
 
+// TODO: Remove once we have upgraded to protocol version 12.
 /// Used by worker to inform primary it sealed a new batch.
 #[derive(Clone, Serialize, Deserialize, Eq, PartialEq, Debug)]
 pub struct WorkerOurBatchMessage {
@@ -1538,7 +1540,7 @@ pub struct WorkerOurBatchMessage {
 
 /// Used by worker to inform primary it sealed a new batch.
 #[derive(Clone, Serialize, Deserialize, Eq, PartialEq, Debug)]
-pub struct WorkerOurBatchMessageV2 {
+pub struct WorkerOwnBatchMessage {
     pub digest: BatchDigest,
     pub worker_id: WorkerId,
     pub metadata: VersionedMetadata,

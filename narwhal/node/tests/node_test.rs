@@ -44,10 +44,10 @@ async fn simple_primary_worker_node_start_stop() {
 
     // WHEN
     let primary_node = PrimaryNode::new(
+        latest_protocol_version(),
         parameters.clone(),
         true,
         registry_service.clone(),
-        latest_protocol_version(),
     );
     primary_node
         .start(
@@ -65,8 +65,8 @@ async fn simple_primary_worker_node_start_stop() {
     // AND
     let workers = WorkerNodes::new(
         registry_service,
-        parameters.clone(),
         latest_protocol_version(),
+        parameters.clone(),
     );
 
     workers
@@ -135,10 +135,10 @@ async fn primary_node_restart() {
 
     // AND
     let primary_node = PrimaryNode::new(
+        latest_protocol_version(),
         parameters.clone(),
         true,
         registry_service.clone(),
-        latest_protocol_version(),
     );
     primary_node
         .start(

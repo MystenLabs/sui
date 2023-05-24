@@ -72,7 +72,7 @@ use types::{
     MetadataAPI, PayloadAvailabilityRequest, PayloadAvailabilityResponse,
     PreSubscribedBroadcastSender, PrimaryToPrimary, PrimaryToPrimaryServer, RequestVoteRequest,
     RequestVoteResponse, Round, SendCertificateRequest, SendCertificateResponse, Vote, VoteInfoAPI,
-    WorkerOthersBatchMessage, WorkerOurBatchMessage, WorkerOurBatchMessageV2, WorkerToPrimary,
+    WorkerOthersBatchMessage, WorkerOurBatchMessage, WorkerOwnBatchMessage, WorkerToPrimary,
     WorkerToPrimaryServer,
 };
 
@@ -100,6 +100,7 @@ impl Primary {
         network_signer: NetworkKeyPair,
         committee: Committee,
         worker_cache: WorkerCache,
+        _protocol_config: ProtocolConfig,
         parameters: Parameters,
         client: NetworkClient,
         header_store: HeaderStore,
@@ -114,7 +115,6 @@ impl Primary {
         tx_shutdown: &mut PreSubscribedBroadcastSender,
         tx_committed_certificates: Sender<(Round, Vec<Certificate>)>,
         registry: &Registry,
-        _protocol_config: ProtocolConfig,
     ) -> Vec<JoinHandle<()>> {
         // Write the parameters to the logs.
         parameters.tracing();
@@ -1185,6 +1185,7 @@ struct WorkerReceiverHandler {
 
 #[async_trait]
 impl WorkerToPrimary for WorkerReceiverHandler {
+    // TODO: Remove once we have upgraded to protocol version 12.
     async fn report_our_batch(
         &self,
         request: anemo::Request<WorkerOurBatchMessage>,
@@ -1212,9 +1213,9 @@ impl WorkerToPrimary for WorkerReceiverHandler {
         Ok(response)
     }
 
-    async fn report_our_batch_v2(
+    async fn report_own_batch(
         &self,
-        request: anemo::Request<WorkerOurBatchMessageV2>,
+        request: anemo::Request<WorkerOwnBatchMessage>,
     ) -> Result<anemo::Response<()>, anemo::rpc::Status> {
         let message = request.into_body();
 

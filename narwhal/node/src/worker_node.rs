@@ -26,6 +26,7 @@ use worker::{TransactionValidator, Worker, NUM_SHUTDOWN_RECEIVERS};
 pub struct WorkerNodeInner {
     // The worker's id
     id: WorkerId,
+    protocol_config: ProtocolConfig,
     // The configuration parameters.
     parameters: Parameters,
     // A prometheus RegistryService to use for the metrics
@@ -38,8 +39,6 @@ pub struct WorkerNodeInner {
     tx_shutdown: Option<PreSubscribedBroadcastSender>,
     // Peer ID used for local connections.
     own_peer_id: Option<PeerId>,
-    // The protocol configuration.
-    protocol_config: ProtocolConfig,
 }
 
 impl WorkerNodeInner {
@@ -99,13 +98,13 @@ impl WorkerNodeInner {
             self.id,
             committee.clone(),
             worker_cache.clone(),
+            self.protocol_config.clone(),
             self.parameters.clone(),
             tx_validator.clone(),
             client.clone(),
             store.batch_store.clone(),
             metrics,
             &mut tx_shutdown,
-            self.protocol_config.clone(),
         );
 
         // store the registry
@@ -186,19 +185,19 @@ pub struct WorkerNode {
 impl WorkerNode {
     pub fn new(
         id: WorkerId,
+        protocol_config: ProtocolConfig,
         parameters: Parameters,
         registry_service: RegistryService,
-        protocol_config: ProtocolConfig,
     ) -> WorkerNode {
         let inner = WorkerNodeInner {
             id,
+            protocol_config,
             parameters,
             registry_service,
             registry: None,
             handles: FuturesUnordered::new(),
             tx_shutdown: None,
             own_peer_id: None,
-            protocol_config,
         };
 
         Self {
@@ -261,24 +260,24 @@ pub struct WorkerNodes {
     workers: ArcSwap<HashMap<WorkerId, WorkerNode>>,
     registry_service: RegistryService,
     registry_id: ArcSwapOption<RegistryID>,
+    protocol_config: ProtocolConfig,
     parameters: Parameters,
     client: ArcSwapOption<NetworkClient>,
-    protocol_config: ProtocolConfig,
 }
 
 impl WorkerNodes {
     pub fn new(
         registry_service: RegistryService,
-        parameters: Parameters,
         protocol_config: ProtocolConfig,
+        parameters: Parameters,
     ) -> Self {
         Self {
             workers: ArcSwap::from(Arc::new(HashMap::default())),
             registry_service,
             registry_id: ArcSwapOption::empty(),
+            protocol_config,
             parameters,
             client: ArcSwapOption::empty(),
-            protocol_config,
         }
     }
 
@@ -322,9 +321,9 @@ impl WorkerNodes {
         for (worker_id, key_pair) in ids_and_keypairs {
             let worker = WorkerNode::new(
                 worker_id,
+                self.protocol_config.clone(),
                 self.parameters.clone(),
                 self.registry_service.clone(),
-                self.protocol_config.clone(),
             );
 
             worker

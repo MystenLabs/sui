@@ -136,6 +136,7 @@ fn build_anemo_services(out_dir: &Path) {
         .name("WorkerToPrimary")
         .package("narwhal")
         .attributes(automock_attribute.clone())
+        // TODO: Remove once we have upgraded to protocol version 12.
         .method(
             anemo_build::manual::Method::builder()
                 .name("report_our_batch")
@@ -147,9 +148,9 @@ fn build_anemo_services(out_dir: &Path) {
         )
         .method(
             anemo_build::manual::Method::builder()
-                .name("report_our_batch_v2")
-                .route_name("ReportOurBatchV2")
-                .request_type("crate::WorkerOurBatchMessageV2")
+                .name("report_own_batch")
+                .route_name("ReportOwnBatch")
+                .request_type("crate::WorkerOwnBatchMessage")
                 .response_type("()")
                 .codec_path(codec_path)
                 .build(),

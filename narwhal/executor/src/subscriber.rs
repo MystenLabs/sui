@@ -43,22 +43,22 @@ struct Inner {
     authority_id: AuthorityIdentifier,
     worker_cache: WorkerCache,
     committee: Committee,
+    protocol_config: ProtocolConfig,
     client: NetworkClient,
     metrics: Arc<ExecutorMetrics>,
-    protocol_config: ProtocolConfig,
 }
 
 pub fn spawn_subscriber<State: ExecutionState + Send + Sync + 'static>(
     authority_id: AuthorityIdentifier,
     worker_cache: WorkerCache,
     committee: Committee,
+    protocol_config: ProtocolConfig,
     client: NetworkClient,
     mut shutdown_receivers: Vec<ConditionalBroadcastReceiver>,
     rx_sequence: metered_channel::Receiver<CommittedSubDag>,
     metrics: Arc<ExecutorMetrics>,
     restored_consensus_output: Vec<CommittedSubDag>,
     state: State,
-    protocol_config: ProtocolConfig,
 ) -> Vec<JoinHandle<()>> {
     // This is ugly but has to be done this way for now
     // Currently network incorporate both server and client side of RPC interface
@@ -85,13 +85,13 @@ pub fn spawn_subscriber<State: ExecutionState + Send + Sync + 'static>(
                 authority_id,
                 worker_cache,
                 committee,
+                protocol_config.clone(),
                 rx_shutdown_subscriber,
                 rx_sequence,
                 client,
                 metrics,
                 restored_consensus_output,
                 tx_notifier,
-                protocol_config.clone(),
             ),
             "SubscriberTask"
         ),
@@ -121,13 +121,13 @@ async fn create_and_run_subscriber(
     authority_id: AuthorityIdentifier,
     worker_cache: WorkerCache,
     committee: Committee,
+    protocol_config: ProtocolConfig,
     rx_shutdown: ConditionalBroadcastReceiver,
     rx_sequence: metered_channel::Receiver<CommittedSubDag>,
     client: NetworkClient,
     metrics: Arc<ExecutorMetrics>,
     restored_consensus_output: Vec<CommittedSubDag>,
     tx_notifier: metered_channel::Sender<ConsensusOutput>,
-    protocol_config: ProtocolConfig,
 ) {
     info!("Starting subscriber");
     let subscriber = Subscriber {
@@ -136,10 +136,10 @@ async fn create_and_run_subscriber(
         inner: Arc::new(Inner {
             authority_id,
             committee,
+            protocol_config,
             worker_cache,
             client,
             metrics,
-            protocol_config,
         }),
     };
     subscriber
@@ -390,7 +390,7 @@ impl Subscriber {
                 );
                 inner
                     .metrics
-                    .batch_execution_latency_without_network_latency
+                    .batch_execution_local_latency
                     .with_label_values(&["other"])
                     .observe(remote_duration);
             } else {
@@ -405,7 +405,7 @@ impl Subscriber {
                 );
                 inner
                     .metrics
-                    .batch_execution_latency_without_network_latency
+                    .batch_execution_local_latency
                     .with_label_values(&["own"])
                     .observe(local_duration);
             };

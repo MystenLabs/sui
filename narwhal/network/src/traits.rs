@@ -9,7 +9,7 @@ use types::{
     error::LocalClientError, Batch, BatchDigest, FetchBatchesRequest, FetchBatchesResponse,
     FetchCertificatesRequest, FetchCertificatesResponse, GetCertificatesRequest,
     GetCertificatesResponse, RequestBatchesRequest, RequestBatchesResponse,
-    WorkerOthersBatchMessage, WorkerOurBatchMessage, WorkerOurBatchMessageV2,
+    WorkerOthersBatchMessage, WorkerOurBatchMessage, WorkerOwnBatchMessage,
     WorkerSynchronizeMessage,
 };
 
@@ -98,14 +98,15 @@ pub trait PrimaryToWorkerClient {
 
 #[async_trait]
 pub trait WorkerToPrimaryClient {
+    // TODO: Remove once we have upgraded to protocol version 12.
     async fn report_our_batch(
         &self,
         request: WorkerOurBatchMessage,
     ) -> Result<(), LocalClientError>;
 
-    async fn report_our_batch_v2(
+    async fn report_own_batch(
         &self,
-        request: WorkerOurBatchMessageV2,
+        request: WorkerOwnBatchMessage,
     ) -> Result<(), LocalClientError>;
 
     async fn report_others_batch(

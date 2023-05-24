@@ -65,6 +65,7 @@ async fn synchronize() {
         authority_id,
         id,
         committee,
+        protocol_config: latest_protocol_config.clone(),
         worker_cache,
         store: store.clone(),
         request_batch_timeout: Duration::from_secs(999),
@@ -72,7 +73,6 @@ async fn synchronize() {
         network: Some(send_network),
         batch_fetcher: None,
         validator: TrivialTransactionValidator,
-        protocol_config: latest_protocol_config.clone(),
     };
 
     // Verify the batch is not in store
@@ -164,6 +164,7 @@ async fn synchronize_versioned_batches() {
         authority_id,
         id,
         committee: committee.clone(),
+        protocol_config: protocol_config_v11.clone(),
         worker_cache: worker_cache.clone(),
         store: store.clone(),
         request_batch_timeout: Duration::from_secs(999),
@@ -171,13 +172,13 @@ async fn synchronize_versioned_batches() {
         network: Some(send_network.clone()),
         batch_fetcher: None,
         validator: TrivialTransactionValidator,
-        protocol_config: protocol_config_v11.clone(),
     };
 
     let handler_latest_version = PrimaryReceiverHandler {
         authority_id,
         id,
         committee,
+        protocol_config: latest_protocol_config.clone(),
         worker_cache,
         store: store.clone(),
         request_batch_timeout: Duration::from_secs(999),
@@ -185,7 +186,6 @@ async fn synchronize_versioned_batches() {
         network: Some(send_network),
         batch_fetcher: None,
         validator: TrivialTransactionValidator,
-        protocol_config: latest_protocol_config.clone(),
     };
 
     // Case #1: Receive BatchV1 and network has not upgraded to 12 so we are okay
@@ -234,6 +234,7 @@ async fn synchronize_when_batch_exists() {
         authority_id,
         id,
         committee: committee.clone(),
+        protocol_config: latest_protocol_version(),
         worker_cache,
         store: store.clone(),
         request_batch_timeout: Duration::from_secs(999),
@@ -241,7 +242,6 @@ async fn synchronize_when_batch_exists() {
         network: Some(send_network),
         batch_fetcher: None,
         validator: TrivialTransactionValidator,
-        protocol_config: latest_protocol_version(),
     };
 
     // Store the batch.
@@ -285,6 +285,7 @@ async fn delete_batches() {
         authority_id,
         id,
         committee,
+        protocol_config: latest_protocol_version(),
         worker_cache,
         store: store.clone(),
         request_batch_timeout: Duration::from_secs(999),
@@ -292,7 +293,6 @@ async fn delete_batches() {
         network: None,
         batch_fetcher: None,
         validator: TrivialTransactionValidator,
-        protocol_config: latest_protocol_version(),
     };
     let message = WorkerDeleteBatchesMessage {
         digests: vec![digest],

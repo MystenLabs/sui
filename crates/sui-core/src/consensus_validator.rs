@@ -157,6 +157,7 @@ mod tests {
         consensus_adapter::consensus_tests::{test_certificates, test_gas_objects},
         consensus_validator::{SuiTxValidator, SuiTxValidatorMetrics},
     };
+
     use narwhal_test_utils::{get_protocol_config, latest_protocol_version};
     use narwhal_types::Batch;
     use narwhal_worker::TransactionValidator;

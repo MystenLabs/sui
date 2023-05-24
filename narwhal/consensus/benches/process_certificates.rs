@@ -36,10 +36,10 @@ pub fn process_certificates(c: &mut Criterion) {
             .collect::<BTreeSet<_>>();
         let (certificates, _next_parents) = make_optimal_certificates(
             &committee,
+            &latest_protocol_version(),
             1..=rounds,
             &genesis,
             &keys,
-            &latest_protocol_version(),
         );
 
         let store_path = temp_dir();
