@@ -768,6 +768,14 @@ impl Synchronizer {
         early_suspend: bool,
     ) -> DagResult<()> {
         let _scope = monitored_scope("Synchronizer::process_certificate_with_lock");
+        let digest = certificate.digest();
+
+        // We re-check here in case we already have in pipeline the same certificate for processing
+        // more that once.
+        if inner.certificate_store.contains(&digest)? {
+            debug!("Skip processing certificate {:?}", certificate);
+            return Ok(());
+        }
 
         debug!("Processing certificate {:?}", certificate);
 
@@ -777,8 +785,6 @@ impl Synchronizer {
         // and certificates are sent to consensus in causal order.
         // It is possible to reduce the critical section below, but it seems unnecessary for now.
         let mut state = inner.state.lock().await;
-
-        let digest = certificate.digest();
 
         // Ensure parents are checked if !early_suspend.
         // See comments above `try_accept_fetched_certificate()` for details.
