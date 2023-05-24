@@ -1,7 +1,7 @@
 [package]
 name = "anemo-benchmark"
 version = "0.0.0"
-authors = ["Andrew Schran <aschran@mystenlabs.com>"]
+authors = ["Andrew Schran <aschran@mystenlabs.com>", "Mysten Labs <build@mystenlabs.com>"]
 license = "Apache-2.0"
 publish = false
 edition = "2021"

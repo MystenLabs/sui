@@ -167,7 +167,7 @@ async fn main() {
         for peer in peers.iter().cloned() {
             tasks.spawn(download_from_peer(
                 peer,
-                args.size_up,
+                args.size_down,
                 download_notify_tx.clone(),
             ));
         }
