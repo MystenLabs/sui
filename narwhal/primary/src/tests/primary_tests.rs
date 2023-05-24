@@ -304,6 +304,7 @@ async fn test_request_vote_has_missing_parents() {
     let worker_cache = fixture.worker_cache();
     let signature_service = SignatureService::new(target.keypair().copy());
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
+    let primary_channel_metrics = PrimaryChannelMetrics::new(&Registry::new());
     let network = test_utils::test_network(target.network_keypair(), target.address());
     let client = NetworkClient::new_from_keypair(&target.network_keypair());
 
@@ -331,6 +332,7 @@ async fn test_request_vote_has_missing_parents() {
         rx_synchronizer_network,
         None,
         metrics.clone(),
+        &primary_channel_metrics,
     ));
     let handler = PrimaryReceiverHandler {
         authority_id: target_id,
@@ -462,6 +464,7 @@ async fn test_request_vote_accept_missing_parents() {
     let worker_cache = fixture.worker_cache();
     let signature_service = SignatureService::new(target.keypair().copy());
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
+    let primary_channel_metrics = PrimaryChannelMetrics::new(&Registry::new());
     let network = test_utils::test_network(target.network_keypair(), target.address());
     let client = NetworkClient::new_from_keypair(&target.network_keypair());
 
@@ -489,6 +492,7 @@ async fn test_request_vote_accept_missing_parents() {
         rx_synchronizer_network,
         None,
         metrics.clone(),
+        &primary_channel_metrics,
     ));
     let handler = PrimaryReceiverHandler {
         authority_id: target_id,
@@ -608,6 +612,7 @@ async fn test_request_vote_missing_batches() {
     let author = fixture.authorities().nth(2).unwrap();
     let signature_service = SignatureService::new(primary.keypair().copy());
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
+    let primary_channel_metrics = PrimaryChannelMetrics::new(&Registry::new());
     let network = test_utils::test_network(primary.network_keypair(), primary.address());
     let client = NetworkClient::new_from_keypair(&primary.network_keypair());
 
@@ -635,6 +640,7 @@ async fn test_request_vote_missing_batches() {
         rx_synchronizer_network,
         None,
         metrics.clone(),
+        &primary_channel_metrics,
     ));
     let handler = PrimaryReceiverHandler {
         authority_id,
@@ -742,6 +748,7 @@ async fn test_request_vote_already_voted() {
     let author = fixture.authorities().nth(2).unwrap();
     let signature_service = SignatureService::new(primary.keypair().copy());
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
+    let primary_channel_metrics = PrimaryChannelMetrics::new(&Registry::new());
     let network = test_utils::test_network(primary.network_keypair(), primary.address());
     let client = NetworkClient::new_from_keypair(&primary.network_keypair());
 
@@ -769,6 +776,7 @@ async fn test_request_vote_already_voted() {
         rx_synchronizer_network,
         None,
         metrics.clone(),
+        &primary_channel_metrics,
     ));
 
     let handler = PrimaryReceiverHandler {
@@ -913,6 +921,7 @@ async fn test_fetch_certificates_handler() {
     let primary = fixture.authorities().next().unwrap();
     let signature_service = SignatureService::new(primary.keypair().copy());
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
+    let primary_channel_metrics = PrimaryChannelMetrics::new(&Registry::new());
     let client = NetworkClient::new_from_keypair(&primary.network_keypair());
 
     let (header_store, certificate_store, payload_store) = create_db_stores();
@@ -939,6 +948,7 @@ async fn test_fetch_certificates_handler() {
         rx_synchronizer_network,
         None,
         metrics.clone(),
+        &primary_channel_metrics,
     ));
     let handler = PrimaryReceiverHandler {
         authority_id: id,
@@ -1084,6 +1094,7 @@ async fn test_process_payload_availability_success() {
     let primary = fixture.authorities().next().unwrap();
     let signature_service = SignatureService::new(primary.keypair().copy());
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
+    let primary_channel_metrics = PrimaryChannelMetrics::new(&Registry::new());
     let client = NetworkClient::new_from_keypair(&primary.network_keypair());
 
     let (header_store, certificate_store, payload_store) = create_db_stores();
@@ -1110,6 +1121,7 @@ async fn test_process_payload_availability_success() {
         rx_synchronizer_network,
         None,
         metrics.clone(),
+        &primary_channel_metrics,
     ));
     let handler = PrimaryReceiverHandler {
         authority_id: id,
@@ -1241,6 +1253,7 @@ async fn test_process_payload_availability_when_failures() {
     let primary = fixture.authorities().next().unwrap();
     let signature_service = SignatureService::new(primary.keypair().copy());
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
+    let primary_channel_metrics = PrimaryChannelMetrics::new(&Registry::new());
     let client = NetworkClient::new_from_keypair(&primary.network_keypair());
 
     let (header_store, _, _) = create_db_stores();
@@ -1267,6 +1280,7 @@ async fn test_process_payload_availability_when_failures() {
         rx_synchronizer_network,
         None,
         metrics.clone(),
+        &primary_channel_metrics,
     ));
     let handler = PrimaryReceiverHandler {
         authority_id: id,
@@ -1344,6 +1358,7 @@ async fn test_request_vote_created_at_in_future() {
     let author = fixture.authorities().nth(2).unwrap();
     let signature_service = SignatureService::new(primary.keypair().copy());
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
+    let primary_channel_metrics = PrimaryChannelMetrics::new(&Registry::new());
     let network = test_utils::test_network(primary.network_keypair(), primary.address());
     let client = NetworkClient::new_from_keypair(&primary.network_keypair());
 
@@ -1371,6 +1386,7 @@ async fn test_request_vote_created_at_in_future() {
         rx_synchronizer_network,
         None,
         metrics.clone(),
+        &primary_channel_metrics,
     ));
     let handler = PrimaryReceiverHandler {
         authority_id: id,

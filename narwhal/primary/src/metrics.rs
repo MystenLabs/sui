@@ -78,6 +78,11 @@ pub struct PrimaryChannelMetrics {
     pub tx_new_certificates: IntGauge,
     /// occupancy of the channel signaling own committed headers
     pub tx_committed_own_headers: IntGauge,
+    /// An internal synchronizer channel. Occupancy of the channel sending certificates to the internal
+    /// task that accepts certificates.
+    pub tx_certificate_acceptor: IntGauge,
+    /// Occupancy of the channel synchronizing batches for provided headers & certificates.
+    pub tx_batch_tasks: IntGauge,
 
     // totals
     /// total received on channel from the `primary::WorkerReceiverHandler` to the `primary::PayloadReceiver`
@@ -100,6 +105,10 @@ pub struct PrimaryChannelMetrics {
     pub tx_new_certificates_total: IntCounter,
     /// total received on the channel signaling own committed headers
     pub tx_committed_own_headers_total: IntCounter,
+    /// Total received by the channel sending certificates to the internal task that accepts certificates.
+    pub tx_certificate_acceptor_total: IntCounter,
+    /// Total received the channel to synchronize missing batches
+    pub tx_batch_tasks_total: IntCounter,
 }
 
 impl PrimaryChannelMetrics {
@@ -172,6 +181,16 @@ impl PrimaryChannelMetrics {
                 "occupancy of the channel signaling own committed headers.",
                 registry
             ).unwrap(),
+            tx_certificate_acceptor: register_int_gauge_with_registry!(
+                "tx_certificate_acceptor",
+                "occupancy of the internal synchronizer channel that is accepting new certificates.",
+                registry
+            ).unwrap(),
+            tx_batch_tasks: register_int_gauge_with_registry!(
+                "tx_batch_tasks",
+                "Occupancy of the channel synchronizing batches for provided headers & certificates",
+                registry
+            ).unwrap(),
 
             // totals
             tx_others_digests_total: register_int_counter_with_registry!(
@@ -222,6 +241,16 @@ impl PrimaryChannelMetrics {
             tx_committed_own_headers_total: register_int_counter_with_registry!(
                 "tx_committed_own_headers_total",
                 "total received on channel signaling own committed headers.",
+                registry
+            ).unwrap(),
+            tx_certificate_acceptor_total: register_int_counter_with_registry!(
+                "tx_certificate_acceptor_total",
+                "total received on the internal synchronizer channel that is accepting new certificates.",
+                registry
+            ).unwrap(),
+            tx_batch_tasks_total: register_int_counter_with_registry!(
+                "tx_batch_tasks_total",
+                "total received on the channel synchronizing batches for provided headers & certificates",
                 registry
             ).unwrap(),
         }

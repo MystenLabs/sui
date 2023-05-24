@@ -9,8 +9,8 @@ use crypto::NetworkPublicKey;
 use fastcrypto::hash::Hash as _;
 use futures::{stream::FuturesOrdered, StreamExt};
 use mysten_common::sync::notify_once::NotifyOnce;
-use mysten_metrics::metered_channel::Sender;
-use mysten_metrics::{monitored_scope, spawn_monitored_task};
+use mysten_metrics::metered_channel::{channel_with_total, Sender};
+use mysten_metrics::{monitored_scope, spawn_logged_monitored_task};
 use network::{
     anemo_ext::{NetworkExt, WaitingPeer},
     client::NetworkClient,
@@ -29,7 +29,7 @@ use std::{
 };
 use storage::{CertificateStore, PayloadStore};
 use tokio::{
-    sync::{broadcast, mpsc, oneshot, watch, MutexGuard},
+    sync::{broadcast, oneshot, watch, MutexGuard},
     task::JoinSet,
     time::{sleep, timeout},
 };
@@ -43,7 +43,7 @@ use types::{
 
 use crate::{
     aggregators::CertificatesAggregator, certificate_fetcher::CertificateFetcherCommand,
-    metrics::PrimaryMetrics, CHANNEL_CAPACITY,
+    metrics::PrimaryMetrics, PrimaryChannelMetrics, CHANNEL_CAPACITY,
 };
 
 #[cfg(test)]
@@ -82,7 +82,7 @@ struct Inner {
     /// Send certificates to be accepted into a separate task that runs
     /// `process_certificate_with_lock()` in a loop.
     /// See comment above `process_certificate_with_lock()` for why this is necessary.
-    tx_certificate_acceptor: mpsc::Sender<(Certificate, oneshot::Sender<DagResult<()>>, bool)>,
+    tx_certificate_acceptor: Sender<(Certificate, oneshot::Sender<DagResult<()>>, bool)>,
     /// Output all certificates to the consensus layer. Must send certificates in causal order.
     tx_new_certificates: Sender<Certificate>,
     /// Send valid a quorum of certificates' ids to the `Proposer` (along with their round).
@@ -97,10 +97,11 @@ struct Inner {
     dag: Option<Arc<Dag>>,
     /// Contains Synchronizer specific metrics among other Primary metrics.
     metrics: Arc<PrimaryMetrics>,
-    /// Background tasks synchronizing worker batches for processed certificates.
-    batch_tasks: Mutex<JoinSet<DagResult<()>>>,
     /// Background tasks broadcasting newly formed certificates.
     certificate_senders: Mutex<JoinSet<()>>,
+    /// A background task that synchronizes batches. A tuple of a header and the maximum accepted
+    /// age is sent over.
+    tx_batch_tasks: Sender<(Header, u64)>,
     /// Aggregates certificates to use as parents for new headers.
     certificates_aggregators: Mutex<BTreeMap<Round, Box<CertificatesAggregator>>>,
     /// State for tracking suspended certificates and when they can be accepted.
@@ -315,6 +316,7 @@ impl Synchronizer {
         rx_synchronizer_network: oneshot::Receiver<Network>,
         dag: Option<Arc<Dag>>,
         metrics: Arc<PrimaryMetrics>,
+        primary_channel_metrics: &PrimaryChannelMetrics,
     ) -> Self {
         let committee: &Committee = &committee;
         let genesis = Self::make_genesis(committee);
@@ -323,8 +325,18 @@ impl Synchronizer {
         let gc_round = rx_consensus_round_updates.borrow().gc_round;
         let (tx_own_certificate_broadcast, _rx_own_certificate_broadcast) =
             broadcast::channel(CHANNEL_CAPACITY);
-        let (tx_certificate_acceptor, mut rx_certificate_acceptor) =
-            mpsc::channel(CHANNEL_CAPACITY);
+        let (tx_certificate_acceptor, mut rx_certificate_acceptor) = channel_with_total(
+            CHANNEL_CAPACITY,
+            &primary_channel_metrics.tx_certificate_acceptor,
+            &primary_channel_metrics.tx_certificate_acceptor_total,
+        );
+
+        let (tx_batch_tasks, mut rx_batch_tasks) = channel_with_total(
+            CHANNEL_CAPACITY,
+            &primary_channel_metrics.tx_batch_tasks,
+            &primary_channel_metrics.tx_batch_tasks_total,
+        );
+
         let inner = Arc::new(Inner {
             authority_id,
             committee: committee.clone(),
@@ -345,7 +357,7 @@ impl Synchronizer {
             genesis,
             dag,
             metrics,
-            batch_tasks: Mutex::new(JoinSet::new()),
+            tx_batch_tasks,
             certificate_senders: Mutex::new(JoinSet::new()),
             certificates_aggregators: Mutex::new(BTreeMap::new()),
             state: tokio::sync::Mutex::new(State::default()),
@@ -353,130 +365,184 @@ impl Synchronizer {
 
         // Start a task to recover parent certificates for proposer.
         let inner_proposer = inner.clone();
-        spawn_monitored_task!(async move {
-            let last_round_certificates = inner_proposer
-                .certificate_store
-                .last_two_rounds_certs()
-                .expect("Failed recovering certificates in primary core");
-            for certificate in last_round_certificates {
-                if let Err(e) = inner_proposer
-                    .append_certificate_in_aggregator(certificate)
-                    .await
-                {
-                    debug!("Failed to recover certificate, assuming Narwhal is shutting down. {e}");
-                    return;
+        spawn_logged_monitored_task!(
+            async move {
+                let last_round_certificates = inner_proposer
+                    .certificate_store
+                    .last_two_rounds_certs()
+                    .expect("Failed recovering certificates in primary core");
+                for certificate in last_round_certificates {
+                    if let Err(e) = inner_proposer
+                        .append_certificate_in_aggregator(certificate)
+                        .await
+                    {
+                        debug!(
+                            "Failed to recover certificate, assuming Narwhal is shutting down. {e}"
+                        );
+                        return;
+                    }
                 }
-            }
-        });
+            },
+            "SynchronizerCertificateRecovery"
+        );
 
         // Start a task to update gc_round, gc in-memory data, and trigger certificate catchup
         // if no gc / consensus commit happened for 30s.
         let weak_inner = Arc::downgrade(&inner);
-        spawn_monitored_task!(async move {
-            const FETCH_TRIGGER_TIMEOUT: Duration = Duration::from_secs(30);
-            let mut rx_consensus_round_updates = rx_consensus_round_updates.clone();
-            loop {
-                let Ok(result) = timeout(FETCH_TRIGGER_TIMEOUT, rx_consensus_round_updates.changed()).await else {
-                    // When consensus commit has not happened for 30s, it is possible that no new
-                    // certificate is received by this primary or created in the network, so
-                    // fetching should definitely be started.
-                    // For other reasons of timing out, there is no harm to start fetching either.
+        spawn_logged_monitored_task!(
+            async move {
+                const FETCH_TRIGGER_TIMEOUT: Duration = Duration::from_secs(30);
+                let mut rx_consensus_round_updates = rx_consensus_round_updates.clone();
+                loop {
+                    let Ok(result) = timeout(FETCH_TRIGGER_TIMEOUT, rx_consensus_round_updates.changed()).await else {
+                        // When consensus commit has not happened for 30s, it is possible that no new
+                        // certificate is received by this primary or created in the network, so
+                        // fetching should definitely be started.
+                        // For other reasons of timing out, there is no harm to start fetching either.
+                        let Some(inner) = weak_inner.upgrade() else {
+                            debug!("Synchronizer is shutting down.");
+                            return;
+                        };
+                        if inner.tx_certificate_fetcher.send(CertificateFetcherCommand::Kick).await.is_err() {
+                            debug!("Synchronizer is shutting down.");
+                            return;
+                        }
+                        inner.metrics.synchronizer_gc_timeout.inc();
+                        warn!("No consensus commit happened for {:?}, triggering certificate fetching.", FETCH_TRIGGER_TIMEOUT);
+                        continue;
+                    };
+                    if result.is_err() {
+                        debug!("Synchronizer is shutting down.");
+                        return;
+                    }
+                    let _scope = monitored_scope("Synchronizer::gc_iteration");
+                    let gc_round = rx_consensus_round_updates.borrow().gc_round;
                     let Some(inner) = weak_inner.upgrade() else {
                         debug!("Synchronizer is shutting down.");
                         return;
                     };
-                    if inner.tx_certificate_fetcher.send(CertificateFetcherCommand::Kick).await.is_err() {
-                        debug!("Synchronizer is shutting down.");
-                        return;
-                    }
-                    inner.metrics.synchronizer_gc_timeout.inc();
-                    warn!("No consensus commit happened for {:?}, triggering certificate fetching.", FETCH_TRIGGER_TIMEOUT);
-                    continue;
-                };
-                if result.is_err() {
-                    debug!("Synchronizer is shutting down.");
-                    return;
-                }
-                let _scope = monitored_scope("Synchronizer::gc_iteration");
-                let gc_round = rx_consensus_round_updates.borrow().gc_round;
-                let Some(inner) = weak_inner.upgrade() else {
-                    debug!("Synchronizer is shutting down.");
-                    return;
-                };
-                // this is the only task updating gc_round
-                inner.gc_round.store(gc_round, Ordering::Release);
-                inner
-                    .certificates_aggregators
-                    .lock()
-                    .retain(|k, _| k > &gc_round);
-                // Accept certificates at gc round + 1, if there is any.
-                let mut state = inner.state.lock().await;
-                for suspended_cert in state.run_gc(gc_round) {
-                    let suspended_certs = state.accept_children(
-                        suspended_cert.certificate.round(),
-                        suspended_cert.certificate.digest(),
-                    );
-                    // Iteration must be in causal order.
-                    for suspended in iter::once(suspended_cert).chain(suspended_certs.into_iter()) {
-                        match inner.accept_suspended_certificate(&state, suspended).await {
-                            Ok(()) => {}
-                            Err(DagError::ShuttingDown) => return,
-                            Err(e) => {
-                                panic!("Unexpected error accepting certificate during GC! {e}")
+                    // this is the only task updating gc_round
+                    inner.gc_round.store(gc_round, Ordering::Release);
+                    inner
+                        .certificates_aggregators
+                        .lock()
+                        .retain(|k, _| k > &gc_round);
+                    // Accept certificates at gc round + 1, if there is any.
+                    let mut state = inner.state.lock().await;
+                    for suspended_cert in state.run_gc(gc_round) {
+                        let suspended_certs = state.accept_children(
+                            suspended_cert.certificate.round(),
+                            suspended_cert.certificate.digest(),
+                        );
+                        // Iteration must be in causal order.
+                        for suspended in
+                            iter::once(suspended_cert).chain(suspended_certs.into_iter())
+                        {
+                            match inner.accept_suspended_certificate(&state, suspended).await {
+                                Ok(()) => {}
+                                Err(DagError::ShuttingDown) => return,
+                                Err(e) => {
+                                    panic!("Unexpected error accepting certificate during GC! {e}")
+                                }
                             }
                         }
                     }
                 }
-            }
-        });
+            },
+            "SynchronizerGarbageCollection"
+        );
 
         // Start a task to accept certificates. See comment above `process_certificate_with_lock()`
         // for why this task is needed.
         let weak_inner = Arc::downgrade(&inner);
-        spawn_monitored_task!(async move {
-            loop {
-                let Some((certificate, result_sender, early_suspend)) = rx_certificate_acceptor.recv().await else {
-                    debug!("Synchronizer is shutting down.");
-                    return;
-                };
-                let Some(inner) = weak_inner.upgrade() else {
-                    debug!("Synchronizer is shutting down.");
-                    return;
-                };
-                // Ignore error if receiver has been dropped.
-                let _ = result_sender.send(
-                    Self::process_certificate_with_lock(&inner, certificate, early_suspend).await,
-                );
-            }
-        });
+        spawn_logged_monitored_task!(
+            async move {
+                loop {
+                    let Some((certificate, result_sender, early_suspend)) = rx_certificate_acceptor.recv().await else {
+                        debug!("Synchronizer is shutting down.");
+                        return;
+                    };
+                    let Some(inner) = weak_inner.upgrade() else {
+                        debug!("Synchronizer is shutting down.");
+                        return;
+                    };
+                    // Ignore error if receiver has been dropped.
+                    let _ = result_sender.send(
+                        Self::process_certificate_with_lock(&inner, certificate, early_suspend)
+                            .await,
+                    );
+                }
+            },
+            "SynchronizerCertificateAcceptor"
+        );
 
         // Start tasks to broadcast created certificates.
         let inner_senders = inner.clone();
-        spawn_monitored_task!(async move {
-            let Ok(network) = rx_synchronizer_network.await else {
-                error!("Failed to receive Network!");
-                return;
-            };
-            let mut senders = inner_senders.certificate_senders.lock();
-            for (name, _, network_key) in inner_senders
-                .committee
-                .others_primaries_by_id(inner_senders.authority_id)
-                .into_iter()
-            {
-                senders.spawn(Self::push_certificates(
-                    network.clone(),
-                    name,
-                    network_key,
-                    tx_own_certificate_broadcast.subscribe(),
-                ));
-            }
-            if let Some(cert) = highest_created_certificate {
-                // Error can be ignored.
-                if tx_own_certificate_broadcast.send(cert).is_err() {
-                    error!("Failed to populate initial certificate to send to peers!");
+        spawn_logged_monitored_task!(
+            async move {
+                let Ok(network) = rx_synchronizer_network.await else {
+                    error!("Failed to receive Network!");
+                    return;
+                };
+                let mut senders = inner_senders.certificate_senders.lock();
+                for (name, _, network_key) in inner_senders
+                    .committee
+                    .others_primaries_by_id(inner_senders.authority_id)
+                    .into_iter()
+                {
+                    senders.spawn(Self::push_certificates(
+                        network.clone(),
+                        name,
+                        network_key,
+                        tx_own_certificate_broadcast.subscribe(),
+                    ));
                 }
-            }
-        });
+                if let Some(cert) = highest_created_certificate {
+                    // Error can be ignored.
+                    if tx_own_certificate_broadcast.send(cert).is_err() {
+                        error!("Failed to populate initial certificate to send to peers!");
+                    }
+                }
+            },
+            "SynchronizerCertificateBroadcasters"
+        );
+
+        // Start a task to async download batches if needed
+        let weak_inner = Arc::downgrade(&inner);
+        spawn_logged_monitored_task!(
+            async move {
+                let mut batch_tasks: JoinSet<DagResult<()>> = JoinSet::new();
+
+                loop {
+                    tokio::select! {
+                        result = rx_batch_tasks.recv() => {
+                            let (header, max_age) = match result {
+                                Some(r) => r,
+                                None => {
+                                    // exit loop if the channel has been closed
+                                    break;
+                                }
+                            };
+
+                            let Some(inner) = weak_inner.upgrade() else {
+                                debug!("Synchronizer is shutting down.");
+                                return;
+                            };
+
+                            batch_tasks.spawn(async move {
+                                Synchronizer::sync_batches_internal(inner.clone(), &header, max_age, true).await
+                            });
+                        },
+                        Some(result) = batch_tasks.join_next() => {
+                            if let Err(err) = result  {
+                                error!("Error when synchronizing batches: {err:?}")
+                            }
+                        }
+                    }
+                }
+            },
+            "SynchronizerBatchSynchronizer"
+        );
 
         Self { inner }
     }
@@ -654,12 +720,13 @@ impl Synchronizer {
         // Instruct workers to download any missing batches referenced in this certificate.
         // Since this header got certified, we are sure that all the data it refers to (ie. its batches and its parents) are available.
         // We can thus continue the processing of the certificate without blocking on batch synchronization.
-        let inner = self.inner.clone();
         let header = certificate.header().clone();
         let max_age = self.inner.gc_depth.saturating_sub(1);
-        self.inner.batch_tasks.lock().spawn(async move {
-            Synchronizer::sync_batches_internal(inner, &header, max_age, true).await
-        });
+        self.inner
+            .tx_batch_tasks
+            .send((header.clone(), max_age))
+            .await
+            .map_err(|_| DagError::ShuttingDown)?;
 
         let highest_processed_round = self.inner.highest_processed_round.load(Ordering::Acquire);
         if highest_processed_round + NEW_CERTIFICATE_ROUND_LIMIT < certificate.round() {

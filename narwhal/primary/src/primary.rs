@@ -194,6 +194,7 @@ impl Primary {
             rx_synchronizer_network,
             dag.clone(),
             node_metrics.clone(),
+            &primary_channel_metrics,
         ));
 
         let signature_service = SignatureService::new(signer);

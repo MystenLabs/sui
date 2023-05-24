@@ -3,6 +3,7 @@
 use crate::primary::NUM_SHUTDOWN_RECEIVERS;
 use crate::{
     certificate_fetcher::CertificateFetcher, metrics::PrimaryMetrics, synchronizer::Synchronizer,
+    PrimaryChannelMetrics,
 };
 use anemo::async_trait;
 use anyhow::Result;
@@ -146,6 +147,7 @@ async fn fetch_certificates_basic() {
     let id = primary.id();
     let fake_primary = fixture.authorities().nth(1).unwrap();
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
+    let primary_channel_metrics = PrimaryChannelMetrics::new(&Registry::new());
     let gc_depth: Round = 50;
 
     // kept empty
@@ -185,6 +187,7 @@ async fn fetch_certificates_basic() {
         rx_synchronizer_network,
         None,
         metrics.clone(),
+        &primary_channel_metrics,
     ));
 
     let fake_primary_addr = fake_primary.address().to_anemo_address().unwrap();
