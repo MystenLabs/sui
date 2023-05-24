@@ -35,7 +35,8 @@ export function useGetAllCoins(coinType: string, address?: SuiAddress | null) {
 
             return allData;
         },
-        enabled: !!address,
+        enabled: !!address && !!coinType,
+        staleTime: 5000,
         initialData: [],
     });
 }
