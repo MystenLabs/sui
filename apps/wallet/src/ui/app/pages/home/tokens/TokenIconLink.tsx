@@ -61,7 +61,7 @@ export function TokenIconLink({
                 <div>
                     {totalActivePendingStake
                         ? 'Currently Staked'
-                        : 'Stake & Earn SUI'}
+                        : 'Stake and Earn SUI'}
                 </div>
                 {!!totalActivePendingStake && (
                     <div>
