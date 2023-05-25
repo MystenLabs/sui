@@ -499,6 +499,7 @@ mod test {
         let adversarial_weight = 0;
 
         let shared_counter_hotness_factor = 50;
+        let shared_counter_max_tip = 0;
 
         let workloads = WorkloadConfiguration::build_workloads(
             num_workers,
@@ -511,6 +512,7 @@ mod test {
             adversarial_cfg,
             batch_payment_size,
             shared_counter_hotness_factor,
+            shared_counter_max_tip,
             target_qps,
             in_flight_ratio,
             bank,

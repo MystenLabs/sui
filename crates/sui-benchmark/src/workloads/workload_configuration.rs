@@ -36,6 +36,7 @@ impl WorkloadConfiguration {
                 adversarial_cfg,
                 batch_payment_size,
                 shared_counter_hotness_factor,
+                shared_counter_max_tip,
                 ..
             } => {
                 Self::build_workloads(
@@ -49,6 +50,7 @@ impl WorkloadConfiguration {
                     AdversarialPayloadCfg::from_str(&adversarial_cfg).unwrap(),
                     batch_payment_size,
                     shared_counter_hotness_factor,
+                    shared_counter_max_tip,
                     target_qps,
                     in_flight_ratio,
                     bank,
@@ -71,6 +73,7 @@ impl WorkloadConfiguration {
         adversarial_cfg: AdversarialPayloadCfg,
         batch_payment_size: u32,
         shared_counter_hotness_factor: u32,
+        shared_counter_max_tip: u64,
         target_qps: u64,
         in_flight_ratio: u64,
         mut bank: BenchmarkBank,
@@ -82,6 +85,7 @@ impl WorkloadConfiguration {
             + delegation_weight
             + batch_payment_weight
             + adversarial_weight;
+        let reference_gas_price = system_state_observer.state.borrow().reference_gas_price;
         let mut workload_builders = vec![];
         let shared_workload = SharedCounterWorkloadBuilder::from(
             shared_counter_weight as f32 / total_weight as f32,
@@ -89,6 +93,8 @@ impl WorkloadConfiguration {
             num_workers,
             in_flight_ratio,
             shared_counter_hotness_factor,
+            shared_counter_max_tip,
+            reference_gas_price,
         );
         workload_builders.push(shared_workload);
         let transfer_workload = TransferObjectWorkloadBuilder::from(
@@ -127,7 +133,6 @@ impl WorkloadConfiguration {
             .flatten()
             .map(|x| (x.workload_params, x.workload_builder))
             .unzip();
-        let reference_gas_price = system_state_observer.state.borrow().reference_gas_price;
         let mut workloads = bank
             .generate(workload_builders, reference_gas_price, chunk_size)
             .await?;
