@@ -29,7 +29,8 @@
     "build:types": "tsc --build",
     "test": "echo \"Error: no test specified\"",
     "lint": "eslint --max-warnings=0 ./src/**/**",
-    "prettier:fix": "prettier --write ."
+    "prettier:fix": "prettier --write .",
+    "pre-commit": "pnpm prettier:fix && pnpm lint && pnpm build"
   },
   "dependencies": {
     "@mysten/sui.js": "workspace:*"

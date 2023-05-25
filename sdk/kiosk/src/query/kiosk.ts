@@ -7,7 +7,7 @@ import {
   SuiAddress,
   SuiObjectDataOptions,
   SuiObjectResponse,
-  bcs,
+  getObjectFields,
 } from '@mysten/sui.js';
 import { extractKioskData, getKioskObject, getObjects } from '../utils';
 import { Kiosk } from '../bcs';
@@ -28,6 +28,7 @@ export type KioskListing = {
   isExclusive: boolean;
   /** The ID of the listing */
   listingId: string;
+  price?: string;
 };
 
 /**
@@ -99,7 +100,10 @@ export async function fetchKiosk(
       ? getObjects(provider, kioskData.itemIds, itemOptions)
       : Promise.resolve([]),
     withListingPrices
-      ? getObjects(provider, kioskData.listingIds, { showBcs: true })
+      ? getObjects(provider, kioskData.listingIds, {
+          showBcs: true,
+          showContent: true,
+        })
       : Promise.resolve([]),
   ]);
 
@@ -107,8 +111,11 @@ export async function fetchKiosk(
   if (includeItems) kioskData.items = itemObjects;
   if (withListingPrices)
     kioskData.listings.map((l, i) => {
+      const fields = getObjectFields(listingObjects[i]);
       // @ts-ignore // until type definitions are updated in TS SDK;
-      l.price = bcs.de('u64', listingObjects[i].data?.bcs.bcsBytes, 'base64');
+      // l.price = bcs.de('u64', listingObjects[i].data?.bcs.bcsBytes, 'base64');
+      // TODO: Figure out a way to do this with BCS to avoid querying content.
+      l.price = fields?.value;
       return l;
     });
 

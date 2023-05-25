@@ -15,7 +15,8 @@ export const TRANSFER_POLICY_CREATED_EVENT = `0x2::transfer_policy::TransferPoli
 export async function queryTransferPolicy(
   provider: JsonRpcProvider,
   type: string,
-) {
+): Promise<TransferPolicy[]> {
+  // console.log('event type: %s', `${TRANSFER_POLICY_CREATED_EVENT}<${type}>`);
   const { data } = await provider.queryEvents({
     query: {
       MoveEventType: `${TRANSFER_POLICY_CREATED_EVENT}<${type}>`,
@@ -43,17 +44,18 @@ export async function queryTransferPolicy(
     .map((policy) => {
       let parsed = bcs.de(
         'TransferPolicy',
-        //@ts-ignore // ignoring because no definition found.
-        policy?.bcs.bcsBytes,
+        // @ts-ignore // this structure is not expected (expects UInt8Array, not number[])
+        policy?.bcs.bcsBytes!,
         'base64',
       ) as TransferPolicy;
 
       return {
         // ...policy, // @ts-ignore // until bcs definition is fixed
+        id: policy?.objectId,
         type: `0x2::transfer_policy::TransferPolicy<${type}>`,
         owner: policy?.owner,
         rules: parsed.rules,
         balance: parsed.balance,
-      };
+      } as TransferPolicy;
     });
 }
