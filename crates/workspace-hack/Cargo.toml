@@ -68,8 +68,8 @@ aws-config = { version = "0.55" }
 aws-credential-types = { version = "0.55", default-features = false }
 aws-endpoint = { version = "0.55", default-features = false }
 aws-http = { version = "0.55", default-features = false }
-aws-sdk-sso = { version = "0.27", default-features = false }
-aws-sdk-sts = { version = "0.27", default-features = false }
+aws-sdk-sso = { version = "0.28", default-features = false }
+aws-sdk-sts = { version = "0.28", default-features = false }
 aws-sig-auth = { version = "0.55", default-features = false }
 aws-sigv4 = { version = "0.55" }
 aws-smithy-async = { version = "0.55", default-features = false, features = ["rt-tokio"] }
@@ -327,14 +327,14 @@ is-terminal = { version = "0.4", default-features = false }
 itertools = { version = "0.10" }
 itoa = { version = "1", default-features = false }
 js-sys = { version = "0.3", default-features = false }
-jsonrpsee = { git = "https://github.com/wlmyng/jsonrpsee.git", rev = "66ce27cc207d5f193e007a743c2497477bae6fec", default-features = false, features = ["full"] }
-jsonrpsee-client-transport = { git = "https://github.com/wlmyng/jsonrpsee.git", rev = "66ce27cc207d5f193e007a743c2497477bae6fec", default-features = false, features = ["native-tls", "web", "webpki-tls", "ws"] }
-jsonrpsee-core = { git = "https://github.com/wlmyng/jsonrpsee.git", rev = "66ce27cc207d5f193e007a743c2497477bae6fec", features = ["async-client", "async-wasm-client", "http-helpers", "server", "soketto"] }
-jsonrpsee-http-client = { git = "https://github.com/wlmyng/jsonrpsee.git", rev = "66ce27cc207d5f193e007a743c2497477bae6fec" }
-jsonrpsee-server = { git = "https://github.com/wlmyng/jsonrpsee.git", rev = "66ce27cc207d5f193e007a743c2497477bae6fec", default-features = false }
-jsonrpsee-types = { git = "https://github.com/wlmyng/jsonrpsee.git", rev = "66ce27cc207d5f193e007a743c2497477bae6fec", default-features = false }
-jsonrpsee-wasm-client = { git = "https://github.com/wlmyng/jsonrpsee.git", rev = "66ce27cc207d5f193e007a743c2497477bae6fec", default-features = false }
-jsonrpsee-ws-client = { git = "https://github.com/wlmyng/jsonrpsee.git", rev = "66ce27cc207d5f193e007a743c2497477bae6fec" }
+jsonrpsee = { git = "https://github.com/wlmyng/jsonrpsee.git", rev = "56e8b4e6d618cc8cc5c4b1f6ce14a2628a57ddc2", default-features = false, features = ["full"] }
+jsonrpsee-client-transport = { git = "https://github.com/wlmyng/jsonrpsee.git", rev = "56e8b4e6d618cc8cc5c4b1f6ce14a2628a57ddc2", default-features = false, features = ["native-tls", "web", "webpki-tls", "ws"] }
+jsonrpsee-core = { git = "https://github.com/wlmyng/jsonrpsee.git", rev = "56e8b4e6d618cc8cc5c4b1f6ce14a2628a57ddc2", features = ["async-client", "async-wasm-client", "http-helpers", "server", "soketto"] }
+jsonrpsee-http-client = { git = "https://github.com/wlmyng/jsonrpsee.git", rev = "56e8b4e6d618cc8cc5c4b1f6ce14a2628a57ddc2" }
+jsonrpsee-server = { git = "https://github.com/wlmyng/jsonrpsee.git", rev = "56e8b4e6d618cc8cc5c4b1f6ce14a2628a57ddc2", default-features = false }
+jsonrpsee-types = { git = "https://github.com/wlmyng/jsonrpsee.git", rev = "56e8b4e6d618cc8cc5c4b1f6ce14a2628a57ddc2", default-features = false }
+jsonrpsee-wasm-client = { git = "https://github.com/wlmyng/jsonrpsee.git", rev = "56e8b4e6d618cc8cc5c4b1f6ce14a2628a57ddc2", default-features = false }
+jsonrpsee-ws-client = { git = "https://github.com/wlmyng/jsonrpsee.git", rev = "56e8b4e6d618cc8cc5c4b1f6ce14a2628a57ddc2" }
 k256 = { version = "0.11", default-features = false, features = ["ecdsa", "keccak256"] }
 keccak = { version = "0.1", default-features = false }
 lazy_static-6f8ce4dd05d13bba = { package = "lazy_static", version = "0.2", default-features = false }
@@ -789,8 +789,8 @@ aws-config = { version = "0.55" }
 aws-credential-types = { version = "0.55", default-features = false }
 aws-endpoint = { version = "0.55", default-features = false }
 aws-http = { version = "0.55", default-features = false }
-aws-sdk-sso = { version = "0.27", default-features = false }
-aws-sdk-sts = { version = "0.27", default-features = false }
+aws-sdk-sso = { version = "0.28", default-features = false }
+aws-sdk-sts = { version = "0.28", default-features = false }
 aws-sig-auth = { version = "0.55", default-features = false }
 aws-sigv4 = { version = "0.55" }
 aws-smithy-async = { version = "0.55", default-features = false, features = ["rt-tokio"] }
@@ -1088,15 +1088,15 @@ itertools = { version = "0.10" }
 itoa = { version = "1", default-features = false }
 jobserver = { version = "0.1", default-features = false }
 js-sys = { version = "0.3", default-features = false }
-jsonrpsee = { git = "https://github.com/wlmyng/jsonrpsee.git", rev = "66ce27cc207d5f193e007a743c2497477bae6fec", default-features = false, features = ["full"] }
-jsonrpsee-client-transport = { git = "https://github.com/wlmyng/jsonrpsee.git", rev = "66ce27cc207d5f193e007a743c2497477bae6fec", default-features = false, features = ["native-tls", "web", "webpki-tls", "ws"] }
-jsonrpsee-core = { git = "https://github.com/wlmyng/jsonrpsee.git", rev = "66ce27cc207d5f193e007a743c2497477bae6fec", features = ["async-client", "async-wasm-client", "http-helpers", "server", "soketto"] }
-jsonrpsee-http-client = { git = "https://github.com/wlmyng/jsonrpsee.git", rev = "66ce27cc207d5f193e007a743c2497477bae6fec" }
-jsonrpsee-proc-macros = { git = "https://github.com/wlmyng/jsonrpsee.git", rev = "66ce27cc207d5f193e007a743c2497477bae6fec", default-features = false }
-jsonrpsee-server = { git = "https://github.com/wlmyng/jsonrpsee.git", rev = "66ce27cc207d5f193e007a743c2497477bae6fec", default-features = false }
-jsonrpsee-types = { git = "https://github.com/wlmyng/jsonrpsee.git", rev = "66ce27cc207d5f193e007a743c2497477bae6fec", default-features = false }
-jsonrpsee-wasm-client = { git = "https://github.com/wlmyng/jsonrpsee.git", rev = "66ce27cc207d5f193e007a743c2497477bae6fec", default-features = false }
-jsonrpsee-ws-client = { git = "https://github.com/wlmyng/jsonrpsee.git", rev = "66ce27cc207d5f193e007a743c2497477bae6fec" }
+jsonrpsee = { git = "https://github.com/wlmyng/jsonrpsee.git", rev = "56e8b4e6d618cc8cc5c4b1f6ce14a2628a57ddc2", default-features = false, features = ["full"] }
+jsonrpsee-client-transport = { git = "https://github.com/wlmyng/jsonrpsee.git", rev = "56e8b4e6d618cc8cc5c4b1f6ce14a2628a57ddc2", default-features = false, features = ["native-tls", "web", "webpki-tls", "ws"] }
+jsonrpsee-core = { git = "https://github.com/wlmyng/jsonrpsee.git", rev = "56e8b4e6d618cc8cc5c4b1f6ce14a2628a57ddc2", features = ["async-client", "async-wasm-client", "http-helpers", "server", "soketto"] }
+jsonrpsee-http-client = { git = "https://github.com/wlmyng/jsonrpsee.git", rev = "56e8b4e6d618cc8cc5c4b1f6ce14a2628a57ddc2" }
+jsonrpsee-proc-macros = { git = "https://github.com/wlmyng/jsonrpsee.git", rev = "56e8b4e6d618cc8cc5c4b1f6ce14a2628a57ddc2", default-features = false }
+jsonrpsee-server = { git = "https://github.com/wlmyng/jsonrpsee.git", rev = "56e8b4e6d618cc8cc5c4b1f6ce14a2628a57ddc2", default-features = false }
+jsonrpsee-types = { git = "https://github.com/wlmyng/jsonrpsee.git", rev = "56e8b4e6d618cc8cc5c4b1f6ce14a2628a57ddc2", default-features = false }
+jsonrpsee-wasm-client = { git = "https://github.com/wlmyng/jsonrpsee.git", rev = "56e8b4e6d618cc8cc5c4b1f6ce14a2628a57ddc2", default-features = false }
+jsonrpsee-ws-client = { git = "https://github.com/wlmyng/jsonrpsee.git", rev = "56e8b4e6d618cc8cc5c4b1f6ce14a2628a57ddc2" }
 k256 = { version = "0.11", default-features = false, features = ["ecdsa", "keccak256"] }
 keccak = { version = "0.1", default-features = false }
 lazy_static-6f8ce4dd05d13bba = { package = "lazy_static", version = "0.2", default-features = false }

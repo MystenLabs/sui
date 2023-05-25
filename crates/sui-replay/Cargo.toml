@@ -11,7 +11,7 @@ anyhow = { version = "1.0.64", features = ["backtrace"] }
 bcs = "0.1.4"
 prometheus = "0.13.3"
 async-trait = "0.1.61"
-jsonrpsee = { git="https://github.com/wlmyng/jsonrpsee.git", rev= "66ce27cc207d5f193e007a743c2497477bae6fec", features = ["http-client"] }
+jsonrpsee = { git="https://github.com/wlmyng/jsonrpsee.git", rev= "56e8b4e6d618cc8cc5c4b1f6ce14a2628a57ddc2", features = ["http-client"] }
 async-recursion = "1.0.4"
 clap = { version = "4.1.4", features = ["derive"] }
 colored = "2.0.0"

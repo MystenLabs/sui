@@ -204,7 +204,7 @@ impl Logger for MetricsLogger {
     fn on_result(
         &self,
         method_name: &str,
-        _success: bool,
+        success: bool,
         error_code: Option<i32>,
         started_at: Self::Instant,
         _transport: TransportProtocol,
@@ -242,13 +242,14 @@ impl Logger for MetricsLogger {
                 .inc();
         }
         else {
-            println!("did not find code for: method={},latency={:.3}s",
-            method_name, req_latency_secs
+            println!("did not find code for: method={},latency={:.3}s, success={}",
+            method_name, req_latency_secs, success
         );
         }
     }
 
     fn on_response(&self, result: &str, _started_at: Self::Instant, t: TransportProtocol) {
+        println!("result: {}", result);
         self.metrics
             .rpc_response_size
             .with_label_values(&[&t.to_string()])
