@@ -406,7 +406,7 @@ export class JsonRpcProvider {
     options?: SuiObjectDataOptions;
   }): Promise<SuiObjectResponse[]> {
     if (input.ids.length === 0) {
-      return []
+      return [];
     }
 
     input.ids.forEach((id) => {
