@@ -2,12 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::cmp::Ordering;
+use std::hash::Hash;
 use std::ops::Not;
 use std::sync::Arc;
 use std::{iter, mem, thread};
 
 use either::Either;
-use fastcrypto::hash::MultisetHash;
+use fastcrypto::hash::{HashFunction, MultisetHash, Sha3_256};
 use futures::stream::FuturesUnordered;
 use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::resolver::ModuleResolver;
@@ -31,7 +32,7 @@ use sui_types::storage::{
 };
 use sui_types::sui_system_state::get_sui_system_state;
 use sui_types::{base_types::SequenceNumber, fp_bail, fp_ensure, storage::ParentSync};
-use typed_store::rocks::{DBBatch, TypedStoreError};
+use typed_store::rocks::{DBBatch, DBMap, TypedStoreError};
 use typed_store::traits::Map;
 
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
@@ -823,6 +824,61 @@ impl AuthorityStore {
         Ok(())
     }
 
+    pub async fn bulk_insert_live_objects(
+        perpetual_db: &AuthorityPerpetualTables,
+        live_objects: impl Iterator<Item = LiveObject>,
+        indirect_objects_threshold: usize,
+        expected_sha3_digest: &[u8; 32],
+    ) -> SuiResult<()> {
+        let mut hasher = Sha3_256::default();
+        let mut batch = perpetual_db.objects.batch();
+        for object in live_objects {
+            hasher.update(object.object_reference().2.inner());
+            match object {
+                LiveObject::Normal(object) => {
+                    let StoreObjectPair(store_object_wrapper, indirect_object) =
+                        get_store_object_pair(object.clone(), indirect_objects_threshold);
+                    batch.insert_batch(
+                        &perpetual_db.objects,
+                        std::iter::once((
+                            ObjectKey::from(object.compute_object_reference()),
+                            store_object_wrapper,
+                        )),
+                    )?;
+                    if let Some(indirect_object) = indirect_object {
+                        batch.merge_batch(
+                            &perpetual_db.indirect_move_objects,
+                            iter::once((indirect_object.inner().digest(), indirect_object)),
+                        )?;
+                    }
+                    if !object.is_child_object() {
+                        Self::initialize_locks(
+                            &perpetual_db.owned_object_transaction_locks,
+                            &mut batch,
+                            &[object.compute_object_reference()],
+                            false, // is_force_reset
+                        )?;
+                    }
+                }
+                LiveObject::Wrapped(object_key) => {
+                    batch.insert_batch(
+                        &perpetual_db.objects,
+                        std::iter::once::<(ObjectKey, StoreObjectWrapper)>((
+                            object_key,
+                            StoreObject::Wrapped.into(),
+                        )),
+                    )?;
+                }
+            }
+        }
+        let sha3_digest = hasher.finalize().digest;
+        if *expected_sha3_digest != sha3_digest {
+            return Err(SuiError::from("Sha does not match"));
+        }
+        batch.write()?;
+        Ok(())
+    }
+
     pub async fn set_epoch_start_configuration(
         &self,
         epoch_start_configuration: &EpochStartConfiguration,
@@ -1219,11 +1275,23 @@ impl AuthorityStore {
         is_force_reset: bool,
     ) -> SuiResult {
         trace!(?objects, "initialize_locks");
+        AuthorityStore::initialize_locks(
+            &self.perpetual_tables.owned_object_transaction_locks,
+            write_batch,
+            objects,
+            is_force_reset,
+        )
+    }
 
-        let locks = self
-            .perpetual_tables
-            .owned_object_transaction_locks
-            .multi_get(objects)?;
+    pub fn initialize_locks(
+        locks_table: &DBMap<ObjectRef, Option<LockDetailsWrapper>>,
+        write_batch: &mut DBBatch,
+        objects: &[ObjectRef],
+        is_force_reset: bool,
+    ) -> SuiResult {
+        trace!(?objects, "initialize_locks");
+
+        let locks = locks_table.multi_get(objects)?;
 
         if !is_force_reset {
             // If any locks exist and are not None, return errors for them
@@ -1245,10 +1313,7 @@ impl AuthorityStore {
             }
         }
 
-        write_batch.insert_batch(
-            &self.perpetual_tables.owned_object_transaction_locks,
-            objects.iter().map(|obj_ref| (obj_ref, None)),
-        )?;
+        write_batch.insert_batch(locks_table, objects.iter().map(|obj_ref| (obj_ref, None)))?;
         Ok(())
     }
 
