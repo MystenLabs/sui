@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useFeature } from '@growthbook/growthbook-react';
 import { Popover, Transition } from '@headlessui/react';
 import { ChevronDown12, Copy12 } from '@mysten/icons';
 import { formatAddress } from '@mysten/sui.js';
@@ -13,12 +12,10 @@ import { useCopyToClipboard } from '../hooks/useCopyToClipboard';
 import { ButtonConnectedTo } from '../shared/ButtonConnectedTo';
 import { Text } from '../shared/text';
 import { AccountList } from './AccountList';
-import { FEATURES } from '_src/shared/experimentation/features';
 
 export function AccountSelector() {
     const allAccounts = useAccounts();
     const activeAddress = useActiveAddress();
-    const multiAccountsEnabled = useFeature(FEATURES.WALLET_MULTI_ACCOUNTS).on;
     const copyToAddress = useCopyToClipboard(activeAddress || '', {
         copySuccessMessage: 'Address copied',
     });
@@ -31,7 +28,7 @@ export function AccountSelector() {
             {activeAddress ? formatAddress(activeAddress) : ''}
         </Text>
     );
-    if (!multiAccountsEnabled || allAccounts.length === 1) {
+    if (allAccounts.length === 1) {
         return (
             <ButtonConnectedTo
                 text={buttonText}
