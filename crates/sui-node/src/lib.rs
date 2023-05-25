@@ -20,8 +20,10 @@ use arc_swap::ArcSwap;
 use futures::TryFutureExt;
 use mysten_common::sync::async_once_cell::AsyncOnceCell;
 use prometheus::Registry;
+use sui_core::authority::CHAIN_IDENTIFIER;
 use sui_core::consensus_adapter::LazyNarwhalClient;
 use sui_json_rpc::api::JsonRpcMetrics;
+use sui_types::digests::ChainIdentifier;
 use sui_types::sui_system_state::SuiSystemState;
 use tap::tap::TapFallible;
 use tokio::runtime::Handle;
@@ -302,6 +304,10 @@ impl SuiNode {
             None
         };
 
+        let chain_identifier = ChainIdentifier::from(*genesis.checkpoint().digest());
+        // It's ok if the value is already set due to data races.
+        let _ = CHAIN_IDENTIFIER.set(chain_identifier);
+
         // Create network
         // TODO only configure validators as seed/preferred peers for validators and not for
         // fullnodes once we've had a chance to re-work fullnode configuration generation.
@@ -309,6 +315,7 @@ impl SuiNode {
         let (p2p_network, discovery_handle, state_sync_handle) = Self::create_p2p_network(
             &config,
             state_sync_store,
+            chain_identifier,
             trusted_peer_change_rx,
             &prometheus_registry,
         )?;
@@ -567,6 +574,7 @@ impl SuiNode {
     fn create_p2p_network(
         config: &NodeConfig,
         state_sync_store: RocksDbStore,
+        chain_identifier: ChainIdentifier,
         trusted_peer_change_rx: watch::Receiver<TrustedPeerChangeEvent>,
         prometheus_registry: &Registry,
     ) -> Result<(Network, discovery::Handle, state_sync::Handle)> {
@@ -619,13 +627,22 @@ impl SuiNode {
             // staking events in the epoch change txn.
             anemo_config.max_frame_size = Some(2 << 30);
 
+            let server_name = format!("sui-{}", chain_identifier);
+            let alt_server_name = "sui";
             let network = Network::bind(config.p2p_config.listen_address)
-                .server_name("sui")
+                .server_name(&server_name)
+                // TODO remove alternate_server_name once transition stabilizes
+                .alternate_server_name(alt_server_name)
                 .private_key(config.network_key_pair().copy().private().0.to_bytes())
                 .config(anemo_config)
                 .outbound_request_layer(outbound_layer)
                 .start(service)?;
-            info!("P2p network started on {}", network.local_addr());
+            info!(
+                server_name = server_name,
+                alt_server_name = alt_server_name,
+                "P2p network started on {}",
+                network.local_addr()
+            );
 
             network
         };

@@ -163,7 +163,7 @@ pub mod test_authority_builder;
 pub(crate) mod authority_notify_read;
 pub(crate) mod authority_store;
 
-static CHAIN_IDENTIFIER: OnceCell<ChainIdentifier> = OnceCell::new();
+pub static CHAIN_IDENTIFIER: OnceCell<ChainIdentifier> = OnceCell::new();
 
 pub type ReconfigConsensusMessage = (
     AuthorityKeyPair,
