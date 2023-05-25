@@ -102,6 +102,7 @@ async fn test_batch_verify() {
             r.as_ref().unwrap();
         }
     }
+    // todo: add a zk login tx in here
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 8)]
@@ -130,9 +131,9 @@ async fn test_async_verifier() {
                 for mut c in certs.into_iter() {
                     if thread_rng().gen_range(0..20) == 0 {
                         *c.auth_sig_mut_for_testing() = other_cert.auth_sig().clone();
-                        verifier.verify_cert(c).await.unwrap_err();
+                        verifier.verify_cert(c, vec![]).await.unwrap_err();
                     } else {
-                        verifier.verify_cert(c).await.unwrap();
+                        verifier.verify_cert(c, vec![]).await.unwrap();
                     }
                 }
             })
@@ -140,4 +141,5 @@ async fn test_async_verifier() {
         .collect();
 
     join_all(tasks).await;
+    // todo: add a zk login tx in here
 }

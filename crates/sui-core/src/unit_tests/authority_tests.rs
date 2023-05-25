@@ -5469,3 +5469,11 @@ async fn test_publish_not_a_package_dependency() {
         failure,
     )
 }
+
+#[tokio::test]
+async fn test_jwk_updater() {
+    telemetry_subscribers::init_for_testing();
+    let authority_state = TestAuthorityBuilder::new().build().await;
+    let res = authority_state.update_google_jwk().await;
+    assert!(res.is_ok());
+}

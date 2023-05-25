@@ -257,6 +257,7 @@ impl<'a> TestAuthorityBuilder<'a> {
                 .await
                 .unwrap();
         };
+        state.clone().start_jwk_updater();
         state
     }
 }

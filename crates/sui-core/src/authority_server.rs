@@ -332,7 +332,7 @@ impl ValidatorService {
         let tx_verif_metrics_guard = metrics.tx_verification_latency.start_timer();
         let transaction = epoch_store
             .signature_verifier
-            .verify_tx(transaction.data())
+            .verify_tx(transaction.data(), Some(state.get_google_jwk_as_bytes()))
             .map(|_| VerifiedTransaction::new_from_verified(transaction))
             .tap_err(|_| {
                 metrics.signature_errors.inc();
@@ -429,7 +429,7 @@ impl ValidatorService {
                 let _timer = metrics.cert_verification_latency.start_timer();
                 epoch_store
                     .signature_verifier
-                    .verify_cert(certificate)
+                    .verify_cert(certificate, state.get_google_jwk_as_bytes())
                     .await?
             };
 

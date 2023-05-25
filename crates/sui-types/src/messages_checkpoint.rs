@@ -12,7 +12,7 @@ use crate::effects::TransactionEffectsAPI;
 use crate::error::SuiResult;
 use crate::gas::GasCostSummary;
 use crate::message_envelope::{Envelope, Message, TrustedEnvelope, VerifiedEnvelope};
-use crate::signature::GenericSignature;
+use crate::signature::{AuxVerifyData, GenericSignature};
 use crate::storage::ReadStore;
 use crate::sui_serde::AsProtocolVersion;
 use crate::sui_serde::BigInt;
@@ -156,9 +156,9 @@ impl Message for CheckpointSummary {
         CheckpointDigest::new(default_hash(self))
     }
 
-    fn verify(&self, sig_epoch: Option<EpochId>) -> SuiResult {
+    fn verify(&self, aux_verify_data: AuxVerifyData) -> SuiResult {
         // Signatures over CheckpointSummaries from other epochs are not valid.
-        if let Some(sig_epoch) = sig_epoch {
+        if let Some(sig_epoch) = aux_verify_data.epoch {
             fp_ensure!(
                 self.epoch == sig_epoch,
                 SuiError::from("Epoch in the summary doesn't match with the signature")
@@ -564,13 +564,15 @@ impl VerifiedCheckpointContents {
 }
 
 #[cfg(test)]
+#[cfg(feature = "test-utils")]
 mod tests {
     use fastcrypto::traits::KeyPair;
     use rand::prelude::StdRng;
     use rand::SeedableRng;
 
-    use super::*;
     use crate::utils::make_committee_key;
+
+    use super::*;
 
     // TODO use the file name as a seed
     const RNG_SEED: [u8; 32] = [
