@@ -9590,7 +9590,7 @@ dependencies = [
 
 [[package]]
 name = "sui-core"
-version = "1.3.0"
+version = "0.1.0"
 dependencies = [
  "anyhow",
  "arc-swap",
@@ -10195,7 +10195,7 @@ dependencies = [
 
 [[package]]
 name = "sui-open-rpc"
-version = "0.0.0"
+version = "1.3.0"
 dependencies = [
  "anyhow",
  "bcs",
@@ -10716,7 +10716,7 @@ dependencies = [
 
 [[package]]
 name = "sui-test-transaction-builder"
-version = "1.3.0"
+version = "0.1.0"
 dependencies = [
  "bcs",
  "move-core-types",
@@ -10864,7 +10864,7 @@ dependencies = [
 
 [[package]]
 name = "sui-types"
-version = "1.3.0"
+version = "0.1.0"
 dependencies = [
  "anemo",
  "anyhow",
