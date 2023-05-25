@@ -7,7 +7,10 @@ import {
   TransactionBlock,
 } from '@mysten/sui.js';
 
-import { ObjectArgument, objArg } from '../utils';
+import { ObjectArgument, getTypeWithoutPackageAddress, objArg } from '../utils';
+import { KioskListing } from '../query/kiosk';
+import { TransferPolicy } from '../bcs';
+import { confirmRequest, resolveRoyaltyRule } from './transfer-policy';
 
 /** The Kiosk module. */
 export const KIOSK_MODULE = '0x2::kiosk';
@@ -326,4 +329,61 @@ export function returnValue(
     typeArguments: [itemType],
     arguments: [objArg(tx, kiosk), item, promise],
   });
+}
+
+/**
+ * Completes the full purchase flow that includes:
+ * 1. Purchasing the item.
+ * 2. Resolving all the transfer policies (if any).
+ * 3. Returns the PurchasedItem OR places the item in the user's kiosk (if there's a kiosk lock policy).
+ */
+export function purchaseAndResolvePolicies(
+  tx: TransactionBlock,
+  itemType: string,
+  listing: KioskListing,
+  kioskId: string,
+  itemId: string,
+  policy: TransferPolicy,
+): TransactionArgument | null {
+  // if we don't pass the listing or the listing doens't have a price, return.
+  if (!listing || listing?.price === undefined) return null;
+
+  // Split the coin for the amount of the listing.
+  const coin = tx.splitCoins(tx.gas, [tx.pure(listing.price)]);
+
+  // initialize the purchase `kiosk::purchase`
+  const [purchasedItem, transferRequest] = purchase(
+    tx,
+    itemType,
+    kioskId,
+    itemId,
+    coin,
+  );
+
+  // Start resolving rules.
+  // For now, we only support royalty rule.
+  // Will need some tweaking to make it function properly with the other
+  // ruleset.
+  for (let rule of policy.rules) {
+    const ruleWithoutAddr = getTypeWithoutPackageAddress(rule);
+
+    switch (ruleWithoutAddr) {
+      case 'royalty_rule::Rule':
+        resolveRoyaltyRule(
+          tx,
+          itemType,
+          listing.price,
+          policy.id,
+          transferRequest,
+        );
+        break;
+      default:
+        break;
+    }
+  }
+
+  // confirm the Transfer Policy request.
+  confirmRequest(tx, itemType, policy.id, transferRequest);
+
+  return purchasedItem;
 }

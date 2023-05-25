@@ -54,8 +54,10 @@ bcs.registerStructType('TransferPolicyCreated', {
 /** The `TransferPolicy` object */
 export type TransferPolicy = {
   id: string;
+  type: string;
   balance: string;
   rules: string[];
+  owner?: string;
 };
 
 bcs.registerStructType('TransferPolicy', {

@@ -7,6 +7,11 @@ import { ObjectArgument, objArg } from '../utils';
 /** The Transfer Policy module. */
 export const TRANSFER_POLICY_MODULE = '0x2::transfer_policy';
 
+/** The Transer Policy Rules package address */
+// TODO: Figure out how we serve this for both testnet & mainnet (different package)
+export const TRANSFER_POLICY_RULES_PACKAGE_ADDRESS =
+  'bd8fc1947cf119350184107a3087e2dc27efefa0dd82e25a1f699069fe81a585';
+
 /**
  * Call the `transfer_policy::new` function to create a new transfer policy.
  * Returns `transferPolicyCap`
@@ -87,5 +92,36 @@ export function removeTransferPolicyRule(
     target: `${TRANSFER_POLICY_MODULE}::remove_rule`,
     typeArguments: [itemType, ruleType, configType],
     arguments: [objArg(tx, policy), policyCap],
+  });
+}
+
+/**
+ * Calculates the amount to be paid for the royalty rule to be resolved,
+ * splits the coin to pass the exact amount,
+ * then calls the `royalty_rule::pay` function to resolve the royalty rule.
+ */
+export function resolveRoyaltyRule(
+  tx: TransactionBlock,
+  itemType: string,
+  price: string,
+  policyId: string,
+  transferRequest: TransactionArgument,
+) {
+  const policyObj = objArg(tx, policyId);
+  // calculates the amount
+  const [amount] = tx.moveCall({
+    target: `${TRANSFER_POLICY_RULES_PACKAGE_ADDRESS}::royalty_rule::fee_amount`,
+    typeArguments: [itemType],
+    arguments: [policyObj, objArg(tx, price)],
+  });
+
+  // splits the coin.
+  const feeCoin = tx.splitCoins(tx.gas, [amount]);
+
+  // pays the policy
+  tx.moveCall({
+    target: `${TRANSFER_POLICY_RULES_PACKAGE_ADDRESS}::royalty_rule::pay`,
+    typeArguments: [itemType],
+    arguments: [policyObj, transferRequest, feeCoin],
   });
 }
