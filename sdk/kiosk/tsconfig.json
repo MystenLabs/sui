@@ -22,7 +22,5 @@
     "resolveJsonModule": true,
     "composite": true
   },
-  "references": [
-    { "path": "../typescript" }
-  ]
+  "references": [{ "path": "../typescript" }]
 }

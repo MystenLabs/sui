@@ -80,7 +80,6 @@ export async function fetchKiosk(
     itemOptions = { showDisplay: true, showType: true },
   }: FetchKioskOptions,
 ): Promise<PagedKioskData> {
-  provider.multiGetObjects;
   const { data, nextCursor, hasNextPage } = await provider.getDynamicFields({
     parentId: kioskId,
     ...pagination,
@@ -106,10 +105,12 @@ export async function fetchKiosk(
 
   if (includeKioskFields) kioskData.kiosk = kiosk;
   if (includeItems) kioskData.items = itemObjects;
-  if (withListingPrices) kioskData.listings.map((l, i) => {
-    // @ts-ignore // until type definitions are updated in TS SDK;
-    l.price = bcs.de('u64', listingObjects[i].data?.bcs.bcsBytes, 'base64');
-  });
+  if (withListingPrices)
+    kioskData.listings.map((l, i) => {
+      // @ts-ignore // until type definitions are updated in TS SDK;
+      l.price = bcs.de('u64', listingObjects[i].data?.bcs.bcsBytes, 'base64');
+      return l;
+    });
 
   return {
     data: kioskData,
