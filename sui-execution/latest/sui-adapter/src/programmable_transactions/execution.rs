@@ -33,8 +33,12 @@ use sui_types::{
         RESOLVED_STD_OPTION, RESOLVED_UTF8_STR, TX_CONTEXT_MODULE_NAME, TX_CONTEXT_STRUCT_NAME,
     },
     coin::Coin,
-    error::{ExecutionError, ExecutionErrorKind},
+    error::{command_argument_error, ExecutionError, ExecutionErrorKind},
     event::Event,
+    execution::{
+        CommandKind, ExecutionResults, ObjectContents, ObjectValue, RawValueType, SuiResolver,
+        Value,
+    },
     gas::{SuiGasStatus, SuiGasStatusAPI},
     id::{RESOLVED_SUI_ID, UID},
     metrics::LimitsMetrics,
@@ -42,10 +46,12 @@ use sui_types::{
         normalize_deserialized_modules, MovePackage, TypeOrigin, UpgradeCap, UpgradePolicy,
         UpgradeReceipt, UpgradeTicket,
     },
+    storage::StorageView,
     transaction::{Argument, Command, ProgrammableMoveCall, ProgrammableTransaction},
     Identifier, SUI_FRAMEWORK_ADDRESS,
 };
 use sui_types::{
+    execution_mode::ExecutionMode,
     execution_status::{CommandArgumentError, PackageUpgradeError},
     storage::BackingPackageStore,
 };
@@ -54,9 +60,8 @@ use sui_verifier::{
     INIT_FN_NAME,
 };
 
-use crate::{adapter::substitute_package_id, execution_mode::ExecutionMode};
-
-use super::{context::*, types::*};
+use super::context::*;
+use crate::adapter::substitute_package_id;
 
 sui_macros::checked_arithmetic! {
 
@@ -452,7 +457,7 @@ where
         ValueKind::Object {
             type_,
             has_public_transfer,
-        } => Value::Object(ObjectValue::new(
+        } => Value::Object(make_object_value(
             context.vm,
             &mut context.session,
             type_,
@@ -540,7 +545,7 @@ where
         vec![]
     } else {
         let cap = &UpgradeCap::new(context.fresh_id()?, storage_id);
-        vec![Value::Object(ObjectValue::new(
+        vec![Value::Object(make_object_value(
             context.vm,
             &mut context.session,
             UpgradeCap::type_().into(),

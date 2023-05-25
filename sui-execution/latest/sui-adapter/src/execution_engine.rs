@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::execution_mode::{self, ExecutionMode};
 use move_binary_format::CompiledModule;
 use move_bytecode_utils::module_cache::GetModule;
 use move_vm_runtime::move_vm::MoveVM;
@@ -15,6 +14,7 @@ use sui_types::balance::{
     BALANCE_MODULE_NAME,
 };
 use sui_types::base_types::ObjectID;
+use sui_types::execution_mode::{self, ExecutionMode};
 use sui_types::gas_coin::GAS;
 use sui_types::metrics::LimitsMetrics;
 use sui_types::object::OBJECT_START_VERSION;

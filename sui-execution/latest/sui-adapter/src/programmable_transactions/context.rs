@@ -19,27 +19,33 @@ use move_vm_runtime::{move_vm::MoveVM, session::Session};
 use move_vm_types::loaded_data::runtime_types::Type;
 use sui_move_natives::object_runtime::{max_event_error, ObjectRuntime, RuntimeResults};
 use sui_protocol_config::ProtocolConfig;
-use sui_types::execution_status::CommandArgumentError;
 use sui_types::{
     balance::Balance,
-    base_types::{ObjectID, SequenceNumber, SuiAddress, TxContext},
+    base_types::{MoveObjectType, ObjectID, SequenceNumber, SuiAddress, TxContext},
     coin::Coin,
     error::{ExecutionError, ExecutionErrorKind},
+    execution::{
+        ExecutionResults, InputObjectMetadata, InputValue, ObjectValue, RawValueType, ResultValue,
+        SuiResolver, UsageKind,
+    },
     gas::{SuiGasStatus, SuiGasStatusAPI},
     metrics::LimitsMetrics,
     move_package::MovePackage,
-    object::{MoveObject, Object, Owner},
-    storage::{ObjectChange, WriteKind},
+    object::{Data, MoveObject, Object, Owner},
+    storage::{ObjectChange, StorageView, WriteKind},
     transaction::{Argument, CallArg, ObjectArg},
+    type_resolver::TypeTagResolver,
+};
+use sui_types::{
+    error::command_argument_error,
+    execution::{CommandKind, ObjectContents, TryFromValue, Value},
+    execution_mode::ExecutionMode,
+    execution_status::CommandArgumentError,
 };
 
-use crate::{
-    adapter::{missing_unwrapped_msg, new_native_extensions},
-    execution_mode::ExecutionMode,
-};
+use crate::adapter::{missing_unwrapped_msg, new_native_extensions};
 
 use super::linkage_view::{LinkageInfo, LinkageView, SavedLinkage};
-use super::types::*;
 
 sui_macros::checked_arithmetic! {
 
@@ -737,7 +743,10 @@ where
         for (id, delete_kind) in deletions {
             let version = match input_object_metadata.get(&id) {
                 Some(metadata) => {
-                    assert_invariant!(!matches!(metadata.owner, Owner::Immutable), "Attempting to delete immutable object {id} via delete kind {delete_kind}");
+                    assert_invariant!(
+                        !matches!(metadata.owner, Owner::Immutable),
+                        "Attempting to delete immutable object {id} via delete kind {delete_kind}"
+                    );
                     metadata.version
                 }
                 None => match state_view.get_latest_parent_entry_ref(id) {
@@ -852,6 +861,15 @@ where
             result_value.last_usage_kind = Some(usage);
         }
         Ok((metadata, &mut result_value.value))
+    }
+}
+
+impl<'vm, 'state, 'a, S: StorageView> TypeTagResolver for ExecutionContext<'vm, 'state, 'a, S>
+where
+    &'state S: SuiResolver,
+{
+    fn get_type_tag(&self, type_: &Type) -> Result<TypeTag, ExecutionError> {
+        self.session.get_type_tag(type_).map_err(|e| self.convert_vm_error(e))
     }
 }
 
@@ -1009,6 +1027,60 @@ pub fn load_type<S: SuiResolver>(
     })
 }
 
+pub(crate) fn make_object_value<'vm, 'state, S: StorageView>(
+    vm: &'vm MoveVM,
+    session: &mut Session<'state, 'vm, LinkageView<&'state S>>,
+    type_: MoveObjectType,
+    has_public_transfer: bool,
+    used_in_non_entry_move_call: bool,
+    contents: &[u8],
+) -> Result<ObjectValue, ExecutionError>
+where
+    &'state S: SuiResolver,
+{
+    let contents = if type_.is_coin() {
+        let Ok(coin) = Coin::from_bcs_bytes(contents) else {
+            invariant_violation!("Could not deserialize a coin")
+        };
+        ObjectContents::Coin(coin)
+    } else {
+        ObjectContents::Raw(contents.to_vec())
+    };
+
+    let tag: StructTag = type_.into();
+    let type_ = load_type(session, &TypeTag::Struct(Box::new(tag)))
+        .map_err(|e| crate::error::convert_vm_error(e, vm, session.get_resolver()))?;
+    Ok(ObjectValue {
+        type_,
+        has_public_transfer,
+        used_in_non_entry_move_call,
+        contents,
+    })
+}
+
+pub(crate) fn value_from_object<'vm, 'state, S: StorageView>(
+    vm: &'vm MoveVM,
+    session: &mut Session<'state, 'vm, LinkageView<&'state S>>,
+    object: &Object,
+) -> Result<ObjectValue, ExecutionError>
+where
+    &'state S: SuiResolver,
+{
+    let Object { data: Data::Move(object), .. } = object else {
+        invariant_violation!("Expected a Move object");
+    };
+
+    let used_in_non_entry_move_call = false;
+    make_object_value(
+        vm,
+        session,
+        object.type_().clone(),
+        object.has_public_transfer(),
+        used_in_non_entry_move_call,
+        object.contents(),
+    )
+}
+
 /// Load an input object from the state_view
 fn load_object<'vm, 'state, S: StorageView>(
     vm: &'vm MoveVM,
@@ -1048,7 +1120,7 @@ where
     let prev = object_owner_map.insert(id, obj.owner);
     // protected by transaction input checker
     assert_invariant!(prev.is_none(), "Duplicate input object {}", id);
-    let obj_value = ObjectValue::from_object(vm, session, obj)?;
+    let obj_value = value_from_object(vm, session, obj)?;
     Ok(InputValue::new_object(object_metadata, obj_value))
 }
 

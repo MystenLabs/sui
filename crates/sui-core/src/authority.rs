@@ -41,9 +41,9 @@ use narwhal_config::{
 };
 use once_cell::sync::OnceCell;
 use shared_crypto::intent::{Intent, IntentScope};
+use sui_adapter::adapter;
 use sui_adapter::execution_engine;
 use sui_adapter::type_layout_resolver::TypeLayoutResolver;
-use sui_adapter::{adapter, execution_mode};
 use sui_config::certificate_deny_config::CertificateDenyConfig;
 use sui_config::genesis::Genesis;
 use sui_config::node::{
@@ -75,8 +75,8 @@ use sui_types::effects::{
 use sui_types::error::{ExecutionError, UserInputError};
 use sui_types::event::{Event, EventID};
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
+use sui_types::execution_mode;
 use sui_types::gas::{GasCostSummary, SuiGasStatus};
-use sui_types::layout_resolver::LayoutResolver;
 use sui_types::message_envelope::Message;
 use sui_types::messages_checkpoint::{
     CheckpointCommitment, CheckpointContents, CheckpointContentsDigest, CheckpointDigest,
@@ -98,6 +98,7 @@ pub use sui_types::temporary_store::TemporaryStore;
 use sui_types::temporary_store::{
     InnerTemporaryStore, ObjectMap, TemporaryModuleResolver, TxCoins, WrittenObjects,
 };
+use sui_types::type_resolver::LayoutResolver;
 use sui_types::{
     base_types::*,
     committee::Committee,
