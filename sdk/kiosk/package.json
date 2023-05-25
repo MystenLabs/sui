@@ -27,12 +27,16 @@
     "build": "pnpm build:types && pnpm build:tsup",
     "build:tsup": "tsup ./src/index.ts --format esm,cjs --sourcemap",
     "build:types": "tsc --build",
-    "test": "echo \"Error: no test specified\""
+    "test": "echo \"Error: no test specified\"",
+    "lint": "eslint --max-warnings=0 ./src/**/**",
+    "prettier:fix": "prettier --write ."
   },
   "dependencies": {
     "@mysten/sui.js": "workspace:*"
   },
   "devDependencies": {
+    "eslint": "^8.38.0",
+    "prettier": "^2.8.7",
     "tsup": "^6.7.0",
     "typescript": "^5.0.4"
   },
