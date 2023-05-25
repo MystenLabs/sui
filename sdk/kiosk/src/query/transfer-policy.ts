@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { JsonRpcProvider } from '@mysten/sui.js';
-import { bcs } from '../bcs';
+import { TransferPolicy, bcs } from '../bcs';
 
 /** Name of the event emitted when a TransferPolicy for T is created. */
 export const TRANSFER_POLICY_CREATED_EVENT = `0x2::transfer_policy::TransferPolicyCreated`;
@@ -41,10 +41,10 @@ export async function queryTransferPolicy(
   return policies
     .filter((policy) => policy !== null)
     .map((policy) => {
-      // @ts-ignore // until bcs definition is fixed
       let parsed = bcs.de(
         'TransferPolicy',
-        policy?.bcs.bcsBytes!,
+        //@ts-ignore // ignoring because no definition found.
+        policy?.bcs.bcsBytes,
         'base64',
       ) as TransferPolicy;
 
