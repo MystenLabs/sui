@@ -146,6 +146,7 @@ export function validatorsTableData(
             {
                 header: 'APY',
                 accessorKey: 'apy',
+                enableSorting: true,
                 cell: (props: any) => {
                     const apy = props.getValue();
                     return (
@@ -158,6 +159,7 @@ export function validatorsTableData(
             {
                 header: 'Commission',
                 accessorKey: 'commission',
+                enableSorting: true,
                 cell: (props: any) => {
                     const commissionRate = props.getValue();
                     return (
@@ -170,6 +172,7 @@ export function validatorsTableData(
             {
                 header: 'Last Epoch Rewards',
                 accessorKey: 'lastReward',
+                enableSorting: true,
                 cell: (props: any) => {
                     const lastReward = props.getValue();
                     return lastReward !== null ? (
@@ -184,6 +187,7 @@ export function validatorsTableData(
             {
                 header: 'Voting Power',
                 accessorKey: 'votingPower',
+                enableSorting: true,
                 cell: (props: any) => {
                     const votingPower = props.getValue();
                     return (
