@@ -16,7 +16,6 @@ pub mod pg_integration_test {
     use std::str::FromStr;
     use tokio::task::JoinHandle;
 
-    use sui_config::SUI_KEYSTORE_FILENAME;
     use sui_indexer::errors::IndexerError;
     use sui_indexer::models::objects::{
         compose_object_bulk_insert_query, compose_object_bulk_insert_update_query,
@@ -36,7 +35,6 @@ pub mod pg_integration_test {
         SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
         SuiTransactionBlockResponseQuery, TransactionBlockBytes, TransactionFilter,
     };
-    use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
     use sui_types::base_types::{ObjectID, SuiAddress};
     use sui_types::digests::{ObjectDigest, TransactionDigest};
     use sui_types::error::SuiObjectResponseError;
@@ -44,7 +42,6 @@ pub mod pg_integration_test {
     use sui_types::object::ObjectFormatOptions;
     use sui_types::quorum_driver_types::ExecuteTransactionRequestType;
     use sui_types::transaction::TEST_ONLY_GAS_UNIT_FOR_TRANSFER;
-    use sui_types::utils::to_sender_signed_transaction;
     use test_utils::network::{TestCluster, TestClusterBuilder};
 
     const WAIT_UNTIL_TIME_LIMIT: u64 = 60;
@@ -81,12 +78,10 @@ pub mod pg_integration_test {
         test_cluster: &TestCluster,
         indexer_rpc_client: &HttpClient,
         transaction_bytes: TransactionBlockBytes,
-        sender: &SuiAddress,
     ) -> Result<SuiTransactionBlockResponse, anyhow::Error> {
-        let keystore_path = test_cluster.swarm.dir().join(SUI_KEYSTORE_FILENAME);
-        let keystore = Keystore::from(FileBasedKeystore::new(&keystore_path)?);
-        let tx =
-            to_sender_signed_transaction(transaction_bytes.to_data()?, keystore.get_key(sender)?);
+        let tx = test_cluster
+            .wallet
+            .sign_transaction(&transaction_bytes.to_data()?);
         let (tx_bytes, signatures) = tx.to_tx_bytes_and_signatures();
         let tx_response = indexer_rpc_client
             .execute_transaction_block(
@@ -103,28 +98,24 @@ pub mod pg_integration_test {
     async fn sign_and_transfer_object(
         test_cluster: &TestCluster,
         indexer_rpc_client: &HttpClient,
-        sender: &SuiAddress,
-        recipient: &SuiAddress,
+        sender: SuiAddress,
+        recipient: SuiAddress,
         object_id: ObjectID,
         gas: Option<ObjectID>,
     ) -> Result<SuiTransactionBlockResponse, anyhow::Error> {
         let rgp = test_cluster.get_reference_gas_price().await;
         let transaction_bytes: TransactionBlockBytes = indexer_rpc_client
             .transfer_object(
-                *sender,
+                sender,
                 object_id,
                 gas,
                 (rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER).into(),
-                *recipient,
+                recipient,
             )
             .await?;
-        let tx_response = sign_and_execute_transaction_block(
-            test_cluster,
-            indexer_rpc_client,
-            transaction_bytes,
-            sender,
-        )
-        .await?;
+        let tx_response =
+            sign_and_execute_transaction_block(test_cluster, indexer_rpc_client, transaction_bytes)
+                .await?;
         Ok(tx_response)
     }
 
@@ -141,14 +132,14 @@ pub mod pg_integration_test {
         ),
         anyhow::Error,
     > {
-        let sender = test_cluster.accounts.first().unwrap();
-        let recipient = test_cluster.accounts.last().unwrap();
+        let sender = test_cluster.get_address_0();
+        let recipient = test_cluster.get_address_1();
         // TODO(gegaowp): today indexer's get_owned_objects only supports filter
         // by owner address, will revert this when the feature is complete.
         let gas_objects: Vec<ObjectID> = test_cluster
             .rpc_client()
             .get_owned_objects(
-                *sender,
+                sender,
                 Some(SuiObjectResponseQuery::new_with_filter(
                     SuiObjectDataFilter::gas_coin(),
                 )),
@@ -177,7 +168,7 @@ pub mod pg_integration_test {
         )
         .await?;
 
-        Ok((tx_response, *sender, *recipient, gas_objects))
+        Ok((tx_response, sender, recipient, gas_objects))
     }
 
     #[tokio::test]
@@ -612,8 +603,8 @@ pub mod pg_integration_test {
         let tx_response = sign_and_transfer_object(
             &test_cluster,
             &indexer_rpc_client,
-            &test_cluster.get_address_0(),
-            &test_cluster.get_address_1(),
+            test_cluster.get_address_0(),
+            test_cluster.get_address_1(),
             source_object_id,
             None,
         )
@@ -745,7 +736,6 @@ pub mod pg_integration_test {
             &test_cluster,
             &indexer_rpc_client,
             transaction_bytes,
-            &test_cluster.get_address_1(),
         )
         .await?;
         wait_until_transaction_synced_in_checkpoint(
@@ -909,7 +899,7 @@ pub mod pg_integration_test {
         let (test_cluster, indexer_rpc_client, store, _handle) = start_test_cluster(None).await;
         // Allow indexer to sync genesis
         wait_until_next_checkpoint(&store).await;
-        let address = test_cluster.accounts[0];
+        let address = test_cluster.get_address_0();
         let fullnode_client = test_cluster.rpc_client();
 
         let object_from_fullnode = fullnode_client
