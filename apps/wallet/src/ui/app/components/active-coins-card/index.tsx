@@ -1,13 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { useGetAllBalances } from '@mysten/core';
 import { SUI_TYPE_ARG } from '@mysten/sui.js';
 import { Link } from 'react-router-dom';
 
 import { CoinItem } from './CoinItem';
 import { useActiveAddress } from '_app/hooks/useActiveAddress';
 import Loading from '_components/loading';
-import { useGetAllBalances } from '_hooks';
+import { sortGetAllBalancesToken } from '_helpers';
+import { useCoinsReFetchingConfig } from '_hooks';
 
 export function ActiveCoinsCard({
     activeCoinType = SUI_TYPE_ARG,
@@ -17,7 +19,14 @@ export function ActiveCoinsCard({
     showActiveCoin?: boolean;
 }) {
     const selectedAddress = useActiveAddress();
-    const { data: coins, isLoading } = useGetAllBalances(selectedAddress!);
+
+    const { staleTime, refetchInterval } = useCoinsReFetchingConfig();
+    const { data: coins, isLoading } = useGetAllBalances(
+        selectedAddress!,
+        refetchInterval,
+        staleTime,
+        sortGetAllBalancesToken
+    );
 
     const activeCoin = coins?.find(
         ({ coinType }) => coinType === activeCoinType
