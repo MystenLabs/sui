@@ -139,6 +139,7 @@ impl RpcExampleProvider {
             self.suix_query_events(),
             self.suix_get_latest_sui_system_state(),
             self.get_protocol_config(),
+            self.sui_try_multi_get_past_objects(),
         ]
         .into_iter()
         .map(|example| (example.function_name, example.examples))
@@ -1378,6 +1379,25 @@ impl RpcExampleProvider {
             "suix_getLatestSuiSystemState",
             vec![ExamplePairing::new(
                 "Gets objects owned by the address in the request.",
+                vec![],
+                json!(result),
+            )],
+        )
+    }
+
+    fn sui_try_multi_get_past_objects(&mut self) -> Examples {
+        let result = "";
+        
+        let objects = (0..3)
+        .map(|_| {
+            objectId: ObjectID::new(self.rng.gen()),
+            version: Default::default(),
+        }).collect();
+
+        Examples::new(
+            "sui_tryMultiGetPastObjects",
+            vec![ExamplePairing::new(
+                "Get past object data for multiple objects provided in the request.",
                 vec![],
                 json!(result),
             )],
