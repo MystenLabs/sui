@@ -90,7 +90,7 @@ export const SuiRawMoveObject = object({
   type: string(),
   hasPublicTransfer: boolean(),
   version: SequenceNumber,
-  bcsBytes: array(number()),
+  bcsBytes: string(),
 });
 export type SuiRawMoveObject = Infer<typeof SuiRawMoveObject>;
 

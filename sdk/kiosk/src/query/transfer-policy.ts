@@ -8,6 +8,10 @@ import { TransferPolicy, bcs } from '../bcs';
 export const TRANSFER_POLICY_CREATED_EVENT = `0x2::transfer_policy::TransferPolicyCreated`;
 
 /**
+ * Searches the `TransferPolicy`-s for the given type. The seach is performed via
+ * the `TransferPolicyCreated` event. The policy can either be owned or shared,
+ * and the caller needs to filter the results accordingly (ie single owner can not
+ * be accessed by anyone but the owner).
  *
  * @param provider
  * @param type
@@ -24,36 +28,32 @@ export async function queryTransferPolicy(
   });
 
   const search = data.map((event) => event.parsedJson as { id: string });
-  const policies = await Promise.all(
-    search.map(async (policy) => {
-      const search = await provider.getObject({
-        id: policy.id,
-        options: { showBcs: true, showOwner: true },
-      });
-
-      if ('err' in data || !('data' in search)) {
-        return null;
-      }
-
-      return search.data;
-    }),
-  );
+  const policies = await provider.multiGetObjects({
+    ids: search.map((policy) => policy.id),
+    options: { showBcs: true, showOwner: true },
+  });
 
   return policies
-    .filter((policy) => policy !== null)
-    .map((policy) => {
+    .filter((policy) => !!policy && 'data' in policy)
+    .map(({ data: policy }) => {
+      // should never happen; policies are objects and fetched via an event.
+      // policies are filtered for null and undefined above.
+      if (!policy || !policy.bcs || !('bcsBytes' in policy.bcs)) {
+        throw new Error(
+          `Invalid policy: ${policy?.objectId}, expected object, got package`,
+        );
+      }
+
       let parsed = bcs.de(
         'TransferPolicy',
-        // @ts-ignore // this structure is not expected (expects UInt8Array, not number[])
-        policy?.bcs.bcsBytes!,
+        policy.bcs.bcsBytes,
         'base64',
-      ) as TransferPolicy;
+      );
 
       return {
-        // ...policy, // @ts-ignore // until bcs definition is fixed
         id: policy?.objectId,
         type: `0x2::transfer_policy::TransferPolicy<${type}>`,
-        owner: policy?.owner,
+        owner: policy?.owner!,
         rules: parsed.rules,
         balance: parsed.balance,
       } as TransferPolicy;

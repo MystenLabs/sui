@@ -62,7 +62,10 @@ export async function getKioskObject(
     throw new Error(`Kiosk ${id} not found; ${queryRes.error}`);
   }
 
-  // @ts-ignore // needs a fix in TS SDK types
+  if (!queryRes.data.bcs || !('bcsBytes' in queryRes.data.bcs)) {
+    throw new Error(`Invalid kiosk query: ${id}, expected object, got package`);
+  }
+
   return bcs.de('Kiosk', queryRes.data.bcs!.bcsBytes, 'base64');
 }
 
