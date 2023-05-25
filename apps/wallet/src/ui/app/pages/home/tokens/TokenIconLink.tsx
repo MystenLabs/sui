@@ -55,10 +55,11 @@ export function TokenIconLink({
             loading={isLoading || queryResult.isLoading}
             disabled={!stakingEnabled}
             before={<WalletActionStake24 />}
+            center
             after={
-                stakingEnabled && (
+                totalActivePendingStake && stakingEnabled ? (
                     <DelegatedAPY stakedValidators={stakedValidators} />
-                )
+                ) : null
             }
         >
             <div className="flex flex-col gap-1.25">
