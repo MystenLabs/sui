@@ -15,7 +15,7 @@ export type Kiosk = {
 };
 
 // Register the `Kiosk` struct for faster queries.
-bcs.registerStructType('Kiosk', {
+bcs.registerStructType('0x2::kiosk::Kiosk', {
   id: 'address',
   profits: 'u64',
   owner: 'address',
@@ -34,7 +34,7 @@ export type PurchaseCap = {
 };
 
 // Register the `PurchaseCap` for faster queries.
-bcs.registerStructType('PurchaseCap', {
+bcs.registerStructType('0x2::kiosk::PurchaseCap', {
   id: 'address',
   kioskId: 'address',
   itemId: 'address',
@@ -47,7 +47,7 @@ export type TransferPolicyCreated = {
 };
 
 // Register the `TransferPolicyCreated` event data.
-bcs.registerStructType('TransferPolicyCreated', {
+bcs.registerStructType('0x2::transfer_policy::TransferPolicyCreated', {
   id: 'address',
 });
 
@@ -60,7 +60,7 @@ export type TransferPolicy = {
   owner: ObjectOwner;
 };
 
-bcs.registerStructType('TransferPolicy', {
+bcs.registerStructType('0x2::transfer_policy::TransferPolicy', {
   id: 'address',
   balance: 'u64',
   rules: ['vector', 'string'],

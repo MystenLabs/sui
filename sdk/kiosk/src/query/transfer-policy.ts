@@ -45,7 +45,7 @@ export async function queryTransferPolicy(
       }
 
       let parsed = bcs.de(
-        'TransferPolicy',
+        '0x2::transfer_policy::TransferPolicy',
         policy.bcs.bcsBytes,
         'base64',
       );

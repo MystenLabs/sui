@@ -66,7 +66,7 @@ export async function getKioskObject(
     throw new Error(`Invalid kiosk query: ${id}, expected object, got package`);
   }
 
-  return bcs.de('Kiosk', queryRes.data.bcs!.bcsBytes, 'base64');
+  return bcs.de('0x2::kiosk::Kiosk', queryRes.data.bcs!.bcsBytes, 'base64');
 }
 
 // helper to extract kiosk data from dynamic fields.
