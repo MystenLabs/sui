@@ -105,7 +105,7 @@ export function getObjects(
   options: SuiObjectDataOptions,
 ) {
   if (ids.length === 0) {
-    return [];
+    return Promise.resolve([]);
   }
 
   return provider.multiGetObjects({ ids, options });
