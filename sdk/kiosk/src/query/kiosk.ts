@@ -9,7 +9,7 @@ import {
   SuiObjectResponse,
   getObjectFields,
 } from '@mysten/sui.js';
-import { extractKioskData, getKioskObject, getObjects } from '../utils';
+import { extractKioskData, getKioskObject } from '../utils';
 import { Kiosk } from '../bcs';
 
 /**
@@ -64,7 +64,6 @@ export type FetchKioskOptions = {
   includeItems?: boolean;
   itemOptions?: SuiObjectDataOptions;
   withListingPrices?: boolean;
-  listingOptions?: SuiObjectDataOptions;
 };
 
 /**
@@ -97,12 +96,18 @@ export async function fetchKiosk(
       ? getKioskObject(provider, kioskId)
       : Promise.resolve(undefined),
     includeItems
-      ? getObjects(provider, kioskData.itemIds, itemOptions)
+      ? provider.multiGetObjects({
+          ids: kioskData.itemIds,
+          options: itemOptions,
+        })
       : Promise.resolve([]),
     withListingPrices
-      ? getObjects(provider, kioskData.listingIds, {
-          showBcs: true,
-          showContent: true,
+      ? provider.multiGetObjects({
+          ids: kioskData.listingIds,
+          options: {
+            showBcs: true,
+            showContent: true,
+          },
         })
       : Promise.resolve([]),
   ]);

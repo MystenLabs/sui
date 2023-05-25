@@ -405,6 +405,10 @@ export class JsonRpcProvider {
     ids: ObjectId[];
     options?: SuiObjectDataOptions;
   }): Promise<SuiObjectResponse[]> {
+    if (input.ids.length === 0) {
+      return []
+    }
+
     input.ids.forEach((id) => {
       if (!id || !isValidSuiObjectId(normalizeSuiObjectId(id))) {
         throw new Error(`Invalid Sui Object id ${id}`);

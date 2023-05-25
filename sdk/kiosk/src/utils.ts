@@ -4,7 +4,6 @@
 import {
   JsonRpcProvider,
   SharedObjectRef,
-  SuiObjectDataOptions,
   SuiObjectRef,
   TransactionArgument,
   TransactionBlock,
@@ -96,19 +95,6 @@ export function extractKioskData(data: DynamicFieldInfo[]): KioskData {
     },
     { listings: [], items: [], itemIds: [], listingIds: [] },
   );
-}
-
-// simple multiGetObjects wrapper to simplify cases on functions.
-export function getObjects(
-  provider: JsonRpcProvider,
-  ids: string[],
-  options: SuiObjectDataOptions,
-) {
-  if (ids.length === 0) {
-    return Promise.resolve([]);
-  }
-
-  return provider.multiGetObjects({ ids, options });
 }
 
 // e.g. 0x2::kiosk::Item -> kiosk::Item
