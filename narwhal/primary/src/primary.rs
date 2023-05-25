@@ -36,6 +36,7 @@ use fastcrypto::{
     signature_service::SignatureService,
     traits::{KeyPair as _, ToFromBytes},
 };
+use mysten_metrics::metered_channel::{channel_with_total, Receiver, Sender};
 use mysten_metrics::{monitored_scope, spawn_monitored_task};
 use mysten_network::{multiaddr::Protocol, Multiaddr};
 use network::{
@@ -65,7 +66,6 @@ use tracing::{debug, error, info, instrument, warn};
 use types::{
     ensure,
     error::{DagError, DagResult},
-    metered_channel::{channel_with_total, Receiver, Sender},
     now, Certificate, CertificateAPI, CertificateDigest, FetchCertificatesRequest,
     FetchCertificatesResponse, GetCertificatesRequest, GetCertificatesResponse, Header, HeaderAPI,
     PayloadAvailabilityRequest, PayloadAvailabilityResponse, PreSubscribedBroadcastSender,
@@ -86,12 +86,6 @@ pub const NUM_SHUTDOWN_RECEIVERS: u64 = 27;
 
 /// Maximum duration to fetch certificates from local storage.
 const FETCH_CERTIFICATES_MAX_HANDLER_TIME: Duration = Duration::from_secs(10);
-
-/// The network model in which the primary operates.
-pub enum NetworkModel {
-    PartiallySynchronous,
-    Asynchronous,
-}
 
 pub struct Primary;
 
@@ -115,7 +109,6 @@ impl Primary {
         rx_committed_certificates: Receiver<(Round, Vec<Certificate>)>,
         rx_consensus_round_updates: watch::Receiver<ConsensusRound>,
         dag: Option<Arc<Dag>>,
-        network_model: NetworkModel,
         tx_shutdown: &mut PreSubscribedBroadcastSender,
         tx_committed_certificates: Sender<(Round, Vec<Certificate>)>,
         registry: &Registry,
@@ -201,6 +194,7 @@ impl Primary {
             rx_synchronizer_network,
             dag.clone(),
             node_metrics.clone(),
+            &primary_channel_metrics,
         ));
 
         let signature_service = SignatureService::new(signer);
@@ -494,7 +488,6 @@ impl Primary {
             parameters.max_header_delay,
             parameters.min_header_delay,
             None,
-            network_model,
             tx_shutdown.subscribe(),
             rx_parents,
             rx_our_digests,

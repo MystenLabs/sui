@@ -18,7 +18,9 @@ import BottomMenuLayout, {
 import { Text } from '_app/shared/text';
 import { AddressInput } from '_components/address-input';
 import { useSigner } from '_hooks';
+import { QredoActionIgnoredByUser } from '_src/ui/app/QredoSigner';
 import { getSignerOperationErrorMessage } from '_src/ui/app/helpers/errorMessages';
+import { useQredoTransaction } from '_src/ui/app/hooks/useQredoTransaction';
 
 export function TransferNFTForm({ objectId }: { objectId: string }) {
     const activeAddress = useActiveAddress();
@@ -29,6 +31,7 @@ export function TransferNFTForm({ objectId }: { objectId: string }) {
     const signer = useSigner();
     const queryClient = useQueryClient();
     const navigate = useNavigate();
+    const { clientIdentifier, notificationModal } = useQredoTransaction();
     const transferNFT = useMutation({
         mutationFn: async (to: string) => {
             if (!to || !signer) {
@@ -37,14 +40,17 @@ export function TransferNFTForm({ objectId }: { objectId: string }) {
             const tx = new TransactionBlock();
             tx.transferObjects([tx.object(objectId)], tx.pure(to));
 
-            return signer.signAndExecuteTransactionBlock({
-                transactionBlock: tx,
-                options: {
-                    showInput: true,
-                    showEffects: true,
-                    showEvents: true,
+            return signer.signAndExecuteTransactionBlock(
+                {
+                    transactionBlock: tx,
+                    options: {
+                        showInput: true,
+                        showEffects: true,
+                        showEvents: true,
+                    },
                 },
-            });
+                clientIdentifier
+            );
         },
         onSuccess: (response) => {
             queryClient.invalidateQueries(['object', objectId]);
@@ -57,13 +63,17 @@ export function TransferNFTForm({ objectId }: { objectId: string }) {
             );
         },
         onError: (error) => {
-            toast.error(
-                <div className="max-w-xs overflow-hidden flex flex-col">
-                    <small className="text-ellipsis overflow-hidden">
-                        {getSignerOperationErrorMessage(error)}
-                    </small>
-                </div>
-            );
+            if (error instanceof QredoActionIgnoredByUser) {
+                navigate('/');
+            } else {
+                toast.error(
+                    <div className="max-w-xs overflow-hidden flex flex-col">
+                        <small className="text-ellipsis overflow-hidden">
+                            {getSignerOperationErrorMessage(error)}
+                        </small>
+                    </div>
+                );
+            }
         },
     });
 
@@ -115,6 +125,7 @@ export function TransferNFTForm({ objectId }: { objectId: string }) {
                             />
                         </Menu>
                     </BottomMenuLayout>
+                    {notificationModal}
                 </Form>
             )}
         </Formik>

@@ -6,7 +6,8 @@ use move_binary_format::{
     file_format_common::VERSION_MAX,
 };
 use move_core_types::{account_address::AccountAddress, vm_status::StatusCode};
-use move_vm_runtime::{config::VMConfig, move_vm::MoveVM};
+use move_vm_config::runtime::VMConfig;
+use move_vm_runtime::move_vm::MoveVM;
 use move_vm_test_utils::InMemoryStorage;
 use move_vm_types::gas::UnmeteredGasMeter;
 

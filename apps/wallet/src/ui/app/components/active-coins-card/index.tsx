@@ -1,13 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { useGetAllBalances } from '@mysten/core';
 import { SUI_TYPE_ARG } from '@mysten/sui.js';
 import { Link } from 'react-router-dom';
 
 import { CoinItem } from './CoinItem';
 import { useActiveAddress } from '_app/hooks/useActiveAddress';
 import Loading from '_components/loading';
-import { useGetAllBalances } from '_hooks';
+import { sortGetAllBalancesToken } from '_helpers';
+import { useCoinsReFetchingConfig } from '_hooks';
 
 export function ActiveCoinsCard({
     activeCoinType = SUI_TYPE_ARG,
@@ -17,7 +19,14 @@ export function ActiveCoinsCard({
     showActiveCoin?: boolean;
 }) {
     const selectedAddress = useActiveAddress();
-    const { data: coins, isLoading } = useGetAllBalances(selectedAddress!);
+
+    const { staleTime, refetchInterval } = useCoinsReFetchingConfig();
+    const { data: coins, isLoading } = useGetAllBalances(
+        selectedAddress!,
+        refetchInterval,
+        staleTime,
+        sortGetAllBalancesToken
+    );
 
     const activeCoin = coins?.find(
         ({ coinType }) => coinType === activeCoinType
@@ -32,7 +41,7 @@ export function ActiveCoinsCard({
                             to={`/send/select?${new URLSearchParams({
                                 type: activeCoin.coinType,
                             }).toString()}`}
-                            className="border-solid border border-gray-45 rounded-2lg py-2.5 px-3 no-underline flex gap-2 items-center w-full"
+                            className="border-solid border border-gray-45 rounded-2lg no-underline flex gap-2 items-center w-full overflow-hidden"
                         >
                             <CoinItem
                                 coinType={activeCoin.coinType}
@@ -50,7 +59,7 @@ export function ActiveCoinsCard({
                                         type: coinType,
                                     }).toString()}`}
                                     key={coinType}
-                                    className="py-3.75 px-1.5 no-underline flex gap-2 items-center w-full hover:bg-sui/10 group"
+                                    className="no-underline w-full"
                                 >
                                     <CoinItem
                                         coinType={coinType}

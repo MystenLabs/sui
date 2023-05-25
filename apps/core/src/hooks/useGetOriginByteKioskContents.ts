@@ -66,6 +66,6 @@ export function useGetOriginByteKioskContents(
 
             return kioskContent;
         },
-        enabled: !!obKioskIds.length && !disable && !!address,
+        enabled: !disable && !!address,
     });
 }

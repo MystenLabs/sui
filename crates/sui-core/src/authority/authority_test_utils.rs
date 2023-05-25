@@ -187,6 +187,24 @@ pub async fn init_state_with_object_id(
     init_state_with_ids(std::iter::once((address, object))).await
 }
 
+pub async fn init_state_with_ids_and_expensive_checks<
+    I: IntoIterator<Item = (SuiAddress, ObjectID)>,
+>(
+    objects: I,
+    config: ExpensiveSafetyCheckConfig,
+) -> Arc<AuthorityState> {
+    let state = TestAuthorityBuilder::new()
+        .with_expensive_safety_checks(config)
+        .build()
+        .await;
+    for (address, object_id) in objects {
+        let obj = Object::with_id_owner_for_testing(object_id, address);
+        // TODO: Make this part of genesis initialization instead of explicit insert.
+        state.insert_genesis_object(obj).await;
+    }
+    state
+}
+
 pub fn init_transfer_transaction(
     sender: SuiAddress,
     secret: &AccountKeyPair,

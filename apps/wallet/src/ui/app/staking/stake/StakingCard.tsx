@@ -2,7 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useFeatureIsOn } from '@growthbook/growthbook-react';
-import { useCoinMetadata, useGetSystemState } from '@mysten/core';
+import {
+    useCoinMetadata,
+    useGetSystemState,
+    useGetCoinBalance,
+} from '@mysten/core';
 import { ArrowLeft16 } from '@mysten/icons';
 import {
     getTransactionDigest,
@@ -16,8 +20,10 @@ import { useCallback, useMemo } from 'react';
 import { toast } from 'react-hot-toast';
 import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 
+import { QredoActionIgnoredByUser } from '../../QredoSigner';
 import Alert from '../../components/alert';
 import { getSignerOperationErrorMessage } from '../../helpers/errorMessages';
+import { useQredoTransaction } from '../../hooks/useQredoTransaction';
 import { getDelegationDataByStakeId } from '../getDelegationByStakeId';
 import { getStakeSuiBySuiId } from '../getStakeSuiBySuiId';
 import { useGetDelegatedStake } from '../useGetDelegatedStake';
@@ -39,8 +45,9 @@ import { Collapse } from '_app/shared/collapse';
 import { Text } from '_app/shared/text';
 import Loading from '_components/loading';
 import { parseAmount } from '_helpers';
-import { useSigner, useGetCoinBalance } from '_hooks';
+import { useSigner, useCoinsReFetchingConfig } from '_hooks';
 import { Coin } from '_redux/slices/sui-objects/Coin';
+import { MIN_NUMBER_SUI_TO_STAKE } from '_src/shared/constants';
 import { FEATURES } from '_src/shared/experimentation/features';
 import { trackEvent } from '_src/shared/plausible';
 
@@ -55,8 +62,14 @@ export type FormValues = typeof initialValues;
 function StakingCard() {
     const coinType = SUI_TYPE_ARG;
     const accountAddress = useActiveAddress();
+    const { staleTime, refetchInterval } = useCoinsReFetchingConfig();
     const { data: suiBalance, isLoading: loadingSuiBalances } =
-        useGetCoinBalance(SUI_TYPE_ARG, accountAddress);
+        useGetCoinBalance(
+            SUI_TYPE_ARG,
+            accountAddress,
+            refetchInterval,
+            staleTime
+        );
     const coinBalance = BigInt(suiBalance?.totalBalance || 0);
     const [searchParams] = useSearchParams();
     const validatorAddress = searchParams.get('address');
@@ -94,7 +107,10 @@ function StakingCard() {
     const { data: metadata } = useCoinMetadata(coinType);
     const coinDecimals = metadata?.decimals ?? 0;
     // set minimum stake amount to 1 SUI
-    const minimumStake = parseAmount('1', coinDecimals);
+    const minimumStake = parseAmount(
+        MIN_NUMBER_SUI_TO_STAKE.toString(),
+        coinDecimals
+    );
 
     const validationSchema = useMemo(
         () =>
@@ -116,6 +132,7 @@ function StakingCard() {
 
     const navigate = useNavigate();
     const signer = useSigner();
+    const { clientIdentifier, notificationModal } = useQredoTransaction();
 
     const stakeToken = useMutation({
         mutationFn: async ({
@@ -141,17 +158,20 @@ function StakingCard() {
                     amount,
                     validatorAddress
                 );
-                return await signer.signAndExecuteTransactionBlock({
-                    transactionBlock,
-                    requestType: effectsOnlySharedTransactions
-                        ? 'WaitForEffectsCert'
-                        : 'WaitForLocalExecution',
-                    options: {
-                        showInput: true,
-                        showEffects: true,
-                        showEvents: true,
+                return await signer.signAndExecuteTransactionBlock(
+                    {
+                        transactionBlock,
+                        requestType: effectsOnlySharedTransactions
+                            ? 'WaitForEffectsCert'
+                            : 'WaitForLocalExecution',
+                        options: {
+                            showInput: true,
+                            showEffects: true,
+                            showEvents: true,
+                        },
                     },
-                });
+                    clientIdentifier
+                );
             } finally {
                 sentryTransaction.finish();
             }
@@ -171,17 +191,20 @@ function StakingCard() {
             });
             try {
                 const transactionBlock = createUnstakeTransaction(stakedSuiId);
-                return await signer.signAndExecuteTransactionBlock({
-                    transactionBlock,
-                    requestType: effectsOnlySharedTransactions
-                        ? 'WaitForEffectsCert'
-                        : 'WaitForLocalExecution',
-                    options: {
-                        showInput: true,
-                        showEffects: true,
-                        showEvents: true,
+                return await signer.signAndExecuteTransactionBlock(
+                    {
+                        transactionBlock,
+                        requestType: effectsOnlySharedTransactions
+                            ? 'WaitForEffectsCert'
+                            : 'WaitForLocalExecution',
+                        options: {
+                            showInput: true,
+                            showEffects: true,
+                            showEvents: true,
+                        },
                     },
-                });
+                    clientIdentifier
+                );
             } finally {
                 sentryTransaction.finish();
             }
@@ -239,17 +262,29 @@ function StakingCard() {
                         txdigest: txDigest,
                         from: 'tokens',
                     }).toString()}`,
-                    { state: { response } }
+                    response?.transaction
+                        ? {
+                              state: {
+                                  response,
+                              },
+                          }
+                        : undefined
                 );
             } catch (error) {
-                toast.error(
-                    <div className="max-w-xs overflow-hidden flex flex-col">
-                        <strong>{unstake ? 'Unstake' : 'Stake'} failed</strong>
-                        <small className="text-ellipsis overflow-hidden">
-                            {getSignerOperationErrorMessage(error)}
-                        </small>
-                    </div>
-                );
+                if (error instanceof QredoActionIgnoredByUser) {
+                    navigate('/');
+                } else {
+                    toast.error(
+                        <div className="max-w-xs overflow-hidden flex flex-col">
+                            <strong>
+                                {unstake ? 'Unstake' : 'Stake'} failed
+                            </strong>
+                            <small className="text-ellipsis overflow-hidden">
+                                {getSignerOperationErrorMessage(error)}
+                            </small>
+                        </div>
+                    );
+                }
             }
         },
         [
@@ -375,6 +410,7 @@ function StakingCard() {
                     )}
                 </Formik>
             </Loading>
+            {notificationModal}
         </div>
     );
 }

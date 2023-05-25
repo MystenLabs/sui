@@ -575,14 +575,18 @@ mod sim_only_tests {
         });
 
         let test_cluster = TestClusterBuilder::new()
-            .with_epoch_duration_ms(20000)
             .with_supported_protocol_versions(SupportedProtocolVersions::new_for_testing(
                 START, FINISH,
             ))
+            .with_epoch_duration_ms(40000)
             .build()
             .await
             .unwrap();
 
+        // We must stop the validators before overriding the system modules, otherwise the validators
+        // may start running before the override and hence send capabilities indicating that they
+        // only support the genesis system modules.
+        test_cluster.stop_all_validators().await;
         let first = test_cluster.swarm.validators().next().unwrap();
         let first_name = first.name();
         override_sui_system_modules_cb(Box::new(move |name| {
@@ -593,6 +597,7 @@ mod sim_only_tests {
                 Some(sui_system_modules("compatible"))
             }
         }));
+        test_cluster.start_all_validator().await;
 
         expect_upgrade_succeeded(&test_cluster).await;
 
@@ -623,7 +628,7 @@ mod sim_only_tests {
         });
 
         let test_cluster = TestClusterBuilder::new()
-            .with_epoch_duration_ms(20000)
+            .with_epoch_duration_ms(40000)
             .with_supported_protocol_versions(SupportedProtocolVersions::new_for_testing(
                 START, FINISH,
             ))
@@ -631,6 +636,7 @@ mod sim_only_tests {
             .await
             .unwrap();
 
+        test_cluster.stop_all_validators().await;
         let mut validators = test_cluster.swarm.validators();
         let first = validators.next().unwrap().name();
         let second = validators.next().unwrap().name();
@@ -641,6 +647,7 @@ mod sim_only_tests {
                 None
             }
         }));
+        test_cluster.start_all_validator().await;
 
         expect_upgrade_failed(&test_cluster).await;
     }
@@ -711,6 +718,8 @@ mod sim_only_tests {
 
     #[sim_test]
     async fn sui_system_state_shallow_upgrade_test() {
+        override_sui_system_modules("mock_sui_systems/shallow_upgrade");
+
         let test_cluster = TestClusterBuilder::new()
             .with_epoch_duration_ms(20000)
             .with_supported_protocol_versions(SupportedProtocolVersions::new_for_testing(
@@ -720,7 +729,6 @@ mod sim_only_tests {
             .build()
             .await
             .unwrap();
-        override_sui_system_modules("mock_sui_systems/shallow_upgrade");
         // Wait for the upgrade to finish. After the upgrade, the new framework will be installed,
         // but the system state object hasn't been upgraded yet.
         let system_state = test_cluster.wait_for_epoch(Some(1)).await;
@@ -743,6 +751,8 @@ mod sim_only_tests {
 
     #[sim_test]
     async fn sui_system_state_deep_upgrade_test() {
+        override_sui_system_modules("mock_sui_systems/deep_upgrade");
+
         let test_cluster = TestClusterBuilder::new()
             .with_epoch_duration_ms(20000)
             .with_supported_protocol_versions(SupportedProtocolVersions::new_for_testing(
@@ -752,7 +762,6 @@ mod sim_only_tests {
             .build()
             .await
             .unwrap();
-        override_sui_system_modules("mock_sui_systems/deep_upgrade");
         // Wait for the upgrade to finish. After the upgrade, the new framework will be installed,
         // but the system state object hasn't been upgraded yet.
         let system_state = test_cluster.wait_for_epoch(Some(1)).await;

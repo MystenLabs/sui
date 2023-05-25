@@ -348,7 +348,7 @@ impl AuthorityEpochTables {
 
     pub fn get_all_pending_consensus_transactions(&self) -> Vec<ConsensusTransaction> {
         self.pending_consensus_transactions
-            .iter()
+            .unbounded_iter()
             .map(|(_k, v)| v)
             .collect()
     }
@@ -373,7 +373,7 @@ impl AuthorityPerEpochStore {
         let epoch_id = committee.epoch;
         let tables = AuthorityEpochTables::open(epoch_id, parent_path, db_options.clone());
         let end_of_publish =
-            StakeAggregator::from_iter(committee.clone(), tables.end_of_publish.iter());
+            StakeAggregator::from_iter(committee.clone(), tables.end_of_publish.unbounded_iter());
         let reconfig_state = tables
             .load_reconfig_state()
             .expect("Load reconfig state at initialization cannot fail");
@@ -646,7 +646,7 @@ impl AuthorityPerEpochStore {
         Ok(self
             .tables
             .state_hash_by_checkpoint
-            .iter()
+            .unbounded_iter()
             .skip_to(&from_checkpoint)?
             .take_while(|(checkpoint, _)| *checkpoint <= to_checkpoint)
             .collect())
@@ -690,7 +690,7 @@ impl AuthorityPerEpochStore {
         Ok(self
             .tables
             .pending_execution
-            .iter()
+            .unbounded_iter()
             .map(|(_, cert)| cert.into())
             .collect())
     }
@@ -1625,7 +1625,7 @@ impl AuthorityPerEpochStore {
         &self,
         last: Option<CheckpointCommitHeight>,
     ) -> Vec<(CheckpointCommitHeight, PendingCheckpoint)> {
-        let mut iter = self.tables.pending_checkpoints.iter();
+        let mut iter = self.tables.pending_checkpoints.unbounded_iter();
         if let Some(last_processed_height) = last {
             iter = iter
                 .skip_to(&(last_processed_height + 1))
@@ -1711,7 +1711,7 @@ impl AuthorityPerEpochStore {
     pub fn last_built_checkpoint_commit_height(&self) -> Option<CheckpointCommitHeight> {
         self.tables
             .builder_checkpoint_summary_v2
-            .iter()
+            .unbounded_iter()
             .skip_to_last()
             .next()
             .and_then(|(_, b)| b.commit_height)
@@ -1723,7 +1723,7 @@ impl AuthorityPerEpochStore {
         Ok(self
             .tables
             .builder_checkpoint_summary_v2
-            .iter()
+            .unbounded_iter()
             .skip_to_last()
             .next()
             .map(|(seq, s)| (seq, s.summary)))
@@ -1761,14 +1761,14 @@ impl AuthorityPerEpochStore {
         debug!("Scanning pending checkpoint signatures from {:?}", key);
         self.tables
             .pending_checkpoint_signatures
-            .iter()
+            .unbounded_iter()
             .skip_to(&key)
     }
 
     pub fn get_last_checkpoint_signature_index(&self) -> u64 {
         self.tables
             .pending_checkpoint_signatures
-            .iter()
+            .unbounded_iter()
             .skip_to_last()
             .next()
             .map(|((_, index), _)| index)

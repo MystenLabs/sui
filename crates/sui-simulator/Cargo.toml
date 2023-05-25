@@ -26,4 +26,4 @@ tower = "0.4.13"
 lru = "0.10"
 
 [target.'cfg(msim)'.dependencies]
-msim = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "48ed7409b8b8cc413fae4d9d9638a849282f81c7", package = "msim" }
+msim = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "5fdd0c5547fa656143eab43fa570893b88d3620f", package = "msim" }

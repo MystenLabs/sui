@@ -11,6 +11,7 @@ use move_core_types::parser::parse_struct_tag;
 use move_core_types::value::MoveStructLayout;
 use mysten_metrics::RegistryService;
 use prometheus::Registry;
+use rand::rngs::OsRng;
 use serde_json::json;
 use sui::client_commands::{SuiClientCommandResult, SuiClientCommands};
 use sui_json_rpc_types::{
@@ -20,7 +21,7 @@ use sui_json_rpc_types::{
 use sui_json_rpc_types::{EventFilter, TransactionFilter};
 use sui_keys::keystore::AccountKeystore;
 use sui_macros::*;
-use sui_node::SuiNode;
+use sui_node::{SuiNode, SuiNodeHandle};
 use sui_sdk::wallet_context::WalletContext;
 use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_tool::restore_from_db_checkpoint;
@@ -45,7 +46,7 @@ use sui_types::utils::{
 };
 use sui_types::SUI_CLOCK_OBJECT_ID;
 use test_utils::authority::test_and_configure_authority_configs;
-use test_utils::network::{start_fullnode_from_config, TestClusterBuilder};
+use test_utils::network::TestClusterBuilder;
 use test_utils::transaction::{wait_for_all_txes, wait_for_tx};
 use tokio::sync::Mutex;
 use tokio::time::timeout;
@@ -55,7 +56,7 @@ use tracing::info;
 #[sim_test]
 async fn test_full_node_follows_txes() -> Result<(), anyhow::Error> {
     let mut test_cluster = TestClusterBuilder::new().build().await?;
-    let node = test_cluster.start_fullnode().await?.sui_node;
+    let fullnode = test_cluster.start_fullnode().await.sui_node;
 
     let context = &mut test_cluster.wallet;
 
@@ -65,19 +66,19 @@ async fn test_full_node_follows_txes() -> Result<(), anyhow::Error> {
 
     let (transferred_object, _, receiver, digest, _) = transfer_coin(context).await?;
 
-    wait_for_tx(digest, node.state().clone()).await;
+    wait_for_tx(digest, fullnode.state()).await;
 
     // A small delay is needed for post processing operations following the transaction to finish.
     sleep(Duration::from_secs(1)).await;
 
     // verify that the node has seen the transfer
-    let object_read = node.state().get_object_read(&transferred_object)?;
+    let object_read = fullnode.state().get_object_read(&transferred_object)?;
     let object = object_read.into_object()?;
 
     assert_eq!(object.owner.get_owner_address().unwrap(), receiver);
 
     // timestamp is recorded
-    let ts = node.state().get_timestamp_ms(&digest).await?;
+    let ts = fullnode.state().get_timestamp_ms(&digest).await?;
     assert!(ts.is_some());
 
     Ok(())
@@ -86,7 +87,7 @@ async fn test_full_node_follows_txes() -> Result<(), anyhow::Error> {
 #[sim_test]
 async fn test_full_node_shared_objects() -> Result<(), anyhow::Error> {
     let mut test_cluster = TestClusterBuilder::new().build().await?;
-    let node = test_cluster.start_fullnode().await?.sui_node;
+    let handle = test_cluster.start_fullnode().await;
 
     let context = &mut test_cluster.wallet;
 
@@ -97,7 +98,7 @@ async fn test_full_node_shared_objects() -> Result<(), anyhow::Error> {
         .increment_counter(sender, None, package_ref.0, counter_ref.0, counter_ref.1)
         .await;
     let digest = response.digest;
-    wait_for_tx(digest, node.state().clone()).await;
+    wait_for_tx(digest, handle.sui_node.state()).await;
 
     Ok(())
 }
@@ -170,7 +171,7 @@ async fn test_full_node_move_function_index() -> Result<(), anyhow::Error> {
         .await;
     let digest = response.digest;
 
-    wait_for_tx(digest, node.state().clone()).await;
+    wait_for_tx(digest, node.state()).await;
     let txes = node.state().get_transactions(
         Some(TransactionFilter::MoveFunction {
             package: package_ref.0,
@@ -442,11 +443,11 @@ async fn test_full_node_cold_sync() -> Result<(), anyhow::Error> {
     sleep(Duration::from_millis(1000)).await;
 
     // Start a new fullnode that is not on the write path
-    let node = test_cluster.start_fullnode().await.unwrap().sui_node;
+    let fullnode = test_cluster.start_fullnode().await.sui_node;
 
-    wait_for_tx(digest, node.state().clone()).await;
+    wait_for_tx(digest, fullnode.state()).await;
 
-    let info = node
+    let info = fullnode
         .state()
         .handle_transaction_info_request(TransactionInfoRequest {
             transaction_digest: digest,
@@ -460,10 +461,10 @@ async fn test_full_node_cold_sync() -> Result<(), anyhow::Error> {
 
 #[sim_test]
 async fn test_full_node_sync_flood() -> Result<(), anyhow::Error> {
-    let test_cluster = TestClusterBuilder::new().build().await?;
+    let mut test_cluster = TestClusterBuilder::new().build().await?;
 
     // Start a new fullnode that is not on the write path
-    let node = test_cluster.start_fullnode().await.unwrap().sui_node;
+    let fullnode = test_cluster.start_fullnode().await.sui_node;
 
     let context = test_cluster.wallet;
 
@@ -543,7 +544,7 @@ async fn test_full_node_sync_flood() -> Result<(), anyhow::Error> {
         .map(|r| r.clone().unwrap())
         .flat_map(|(a, b)| std::iter::once(a).chain(std::iter::once(b)))
         .collect();
-    wait_for_all_txes(digests, node.state().clone()).await;
+    wait_for_all_txes(digests, fullnode.state()).await;
 
     Ok(())
 }
@@ -556,15 +557,7 @@ async fn test_full_node_sub_and_query_move_event_ok() -> Result<(), anyhow::Erro
         .await?;
 
     // Start a new fullnode that is not on the write path
-    let fullnode = start_fullnode_from_config(
-        test_cluster
-            .fullnode_config_builder()
-            .with_event_store()
-            .build()
-            .unwrap(),
-    )
-    .await
-    .unwrap();
+    let fullnode = test_cluster.start_fullnode().await;
 
     let node = fullnode.sui_node;
     let ws_client = fullnode.ws_client;
@@ -657,7 +650,7 @@ async fn test_full_node_sub_and_query_move_event_ok() -> Result<(), anyhow::Erro
 #[sim_test]
 async fn test_full_node_event_read_api_ok() {
     let mut test_cluster = TestClusterBuilder::new()
-        .set_fullnode_rpc_port(50000)
+        .with_fullnode_rpc_port(50000)
         .enable_fullnode_events()
         .build()
         .await
@@ -753,15 +746,17 @@ async fn test_full_node_event_query_by_module_ok() {
 #[sim_test]
 async fn test_full_node_transaction_orchestrator_basic() -> Result<(), anyhow::Error> {
     let mut test_cluster = TestClusterBuilder::new().build().await?;
-    let node = test_cluster.start_fullnode().await?.sui_node;
+    let fullnode = test_cluster.start_fullnode().await.sui_node;
 
     let context = &mut test_cluster.wallet;
-    let transaction_orchestrator = node
-        .transaction_orchestrator()
-        .expect("Fullnode should have transaction orchestrator toggled on.");
-    let mut rx = node
-        .subscribe_to_transaction_orchestrator_effects()
-        .expect("Fullnode should have transaction orchestrator toggled on.");
+    let transaction_orchestrator = fullnode.with(|node| {
+        node.transaction_orchestrator()
+            .expect("Fullnode should have transaction orchestrator toggled on.")
+    });
+    let mut rx = fullnode.with(|node| {
+        node.subscribe_to_transaction_orchestrator_effects()
+            .expect("Fullnode should have transaction orchestrator toggled on.")
+    });
 
     let txn_count = 4;
     let mut txns = context.batch_make_transfer_transactions(txn_count).await;
@@ -797,7 +792,7 @@ async fn test_full_node_transaction_orchestrator_basic() -> Result<(), anyhow::E
     assert!(is_executed_locally);
     assert_eq!(events.digest(), txn_events.digest());
     // verify that the node has sequenced and executed the txn
-    node.state().get_executed_transaction_and_effects(digest).await
+    fullnode.state().get_executed_transaction_and_effects(digest).await
         .unwrap_or_else(|e| panic!("Fullnode does not know about the txn {:?} that was executed with WaitForLocalExecution: {:?}", digest, e));
 
     // Test WaitForEffectsCert
@@ -825,8 +820,8 @@ async fn test_full_node_transaction_orchestrator_basic() -> Result<(), anyhow::E
     assert_eq!(cte.effects.digest(), *certified_txn_effects.digest());
     assert_eq!(txn_events.digest(), events.digest());
     assert!(!is_executed_locally);
-    wait_for_tx(digest, node.state().clone()).await;
-    node.state().get_executed_transaction_and_effects(digest).await
+    wait_for_tx(digest, fullnode.state()).await;
+    fullnode.state().get_executed_transaction_and_effects(digest).await
         .unwrap_or_else(|e| panic!("Fullnode does not know about the txn {:?} that was executed with WaitForEffectsCert: {:?}", digest, e));
 
     Ok(())
@@ -957,7 +952,7 @@ async fn test_full_node_transaction_orchestrator_rpc_ok() -> Result<(), anyhow::
 }
 
 async fn get_obj_read_from_node(
-    node: &SuiNode,
+    node: &SuiNodeHandle,
     object_id: ObjectID,
 ) -> Result<(ObjectRef, Object, Option<MoveStructLayout>), anyhow::Error> {
     if let ObjectRead::Exists(obj_ref, object, layout) = node.state().get_object_read(&object_id)? {
@@ -968,7 +963,7 @@ async fn get_obj_read_from_node(
 }
 
 async fn get_past_obj_read_from_node(
-    node: &SuiNode,
+    node: &SuiNodeHandle,
     object_id: ObjectID,
     seq_num: SequenceNumber,
 ) -> Result<(ObjectRef, Object, Option<MoveStructLayout>), anyhow::Error> {
@@ -986,7 +981,7 @@ async fn test_get_objects_read() -> Result<(), anyhow::Error> {
     telemetry_subscribers::init_for_testing();
     let mut test_cluster = TestClusterBuilder::new().build().await?;
     let rgp = test_cluster.get_reference_gas_price().await;
-    let node = test_cluster.fullnode_handle.sui_node.clone();
+    let node = &test_cluster.fullnode_handle.sui_node;
     let context = &mut test_cluster.wallet;
     let package_id = context.publish_nfts_package().await.0;
 
@@ -997,7 +992,7 @@ async fn test_get_objects_read() -> Result<(), anyhow::Error> {
     let recipient = context.config.keystore.addresses().get(1).cloned().unwrap();
     assert_ne!(sender, recipient);
 
-    let (object_ref_v1, object_v1, _) = get_obj_read_from_node(&node, object_id).await?;
+    let (object_ref_v1, object_v1, _) = get_obj_read_from_node(node, object_id).await?;
 
     // Transfer the object from sender to recipient
     let gas_ref = context
@@ -1016,7 +1011,7 @@ async fn test_get_objects_read() -> Result<(), anyhow::Error> {
         .unwrap();
     sleep(Duration::from_secs(1)).await;
 
-    let (object_ref_v2, object_v2, _) = get_obj_read_from_node(&node, object_id).await?;
+    let (object_ref_v2, object_v2, _) = get_obj_read_from_node(node, object_id).await?;
     assert_ne!(object_ref_v2, object_ref_v1);
 
     // Transfer some SUI to recipient
@@ -1050,13 +1045,13 @@ async fn test_get_objects_read() -> Result<(), anyhow::Error> {
     assert_eq!(object_ref_v3, read_ref_v3);
 
     let (read_ref_v2, read_obj_v2, _) =
-        get_past_obj_read_from_node(&node, object_id, object_ref_v2.1).await?;
+        get_past_obj_read_from_node(node, object_id, object_ref_v2.1).await?;
     assert_eq!(read_ref_v2, object_ref_v2);
     assert_eq!(read_obj_v2, object_v2);
     assert_eq!(read_obj_v2.owner, Owner::AddressOwner(recipient));
 
     let (read_ref_v1, read_obj_v1, _) =
-        get_past_obj_read_from_node(&node, object_id, object_ref_v1.1).await?;
+        get_past_obj_read_from_node(node, object_id, object_ref_v1.1).await?;
     assert_eq!(read_ref_v1, object_ref_v1);
     assert_eq!(read_obj_v1, object_v1);
     assert_eq!(read_obj_v1.owner, Owner::AddressOwner(sender));
@@ -1094,14 +1089,17 @@ async fn test_full_node_bootstrap_from_snapshot() -> Result<(), anyhow::Error> {
         .with_enable_db_checkpoints_fullnodes()
         .build()
         .await?;
-    let checkpoint_path = test_cluster.fullnode_handle.sui_node.db_checkpoint_path();
-    let config = test_cluster.fullnode_config_builder().build()?;
+    let checkpoint_path = test_cluster
+        .fullnode_handle
+        .sui_node
+        .with(|node| node.db_checkpoint_path());
+    let config = test_cluster
+        .fullnode_config_builder()
+        .build(&mut OsRng, test_cluster.swarm.config());
     let epoch_0_db_path = config.db_path().join("store").join("epoch_0");
-    let context = &mut test_cluster.wallet;
-    let _fullnode = test_cluster.fullnode_handle.sui_node.clone();
-    let _ = transfer_coin(context).await?;
-    let _ = transfer_coin(context).await?;
-    let (_transferred_object, _, _, digest, ..) = transfer_coin(context).await?;
+    let _ = transfer_coin(&test_cluster.wallet).await?;
+    let _ = transfer_coin(&test_cluster.wallet).await?;
+    let (_transferred_object, _, _, digest, ..) = transfer_coin(&test_cluster.wallet).await?;
 
     // Skip the first epoch change from epoch 0 to epoch 1, but wait for the second
     // epoch change from epoch 1 to epoch 2 at which point during reconfiguration we will take
@@ -1115,13 +1113,16 @@ async fn test_full_node_bootstrap_from_snapshot() -> Result<(), anyhow::Error> {
 
     // Spin up a new full node restored from the snapshot taken at the end of epoch 1
     restore_from_db_checkpoint(&config, &checkpoint_path.join("epoch_1")).await?;
-    let node = start_fullnode_from_config(config).await?.sui_node;
+    let node = test_cluster
+        .start_fullnode_from_config(config)
+        .await
+        .sui_node;
 
     wait_for_tx(digest, node.state().clone()).await;
 
     loop {
         // Ensure this full node is able to transition to the next epoch
-        if node.current_epoch_for_testing() >= 2 {
+        if node.with(|node| node.current_epoch_for_testing()) >= 2 {
             break;
         }
         sleep(Duration::from_millis(500)).await;
@@ -1131,7 +1132,8 @@ async fn test_full_node_bootstrap_from_snapshot() -> Result<(), anyhow::Error> {
     // doesn't exist
     assert!(!epoch_0_db_path.exists());
 
-    let (_transferred_object, _, _, digest_after_restore, ..) = transfer_coin(context).await?;
+    let (_transferred_object, _, _, digest_after_restore, ..) =
+        transfer_coin(&test_cluster.wallet).await?;
     wait_for_tx(digest_after_restore, node.state().clone()).await;
     Ok(())
 }
@@ -1140,7 +1142,7 @@ async fn test_full_node_bootstrap_from_snapshot() -> Result<(), anyhow::Error> {
 async fn test_pass_back_clock_object() -> Result<(), anyhow::Error> {
     let mut test_cluster = TestClusterBuilder::new().build().await?;
     let rgp = test_cluster.get_reference_gas_price().await;
-    let node = test_cluster.start_fullnode().await?.sui_node;
+    let fullnode = test_cluster.start_fullnode().await.sui_node;
 
     let context = &mut test_cluster.wallet;
 
@@ -1155,12 +1157,14 @@ async fn test_pass_back_clock_object() -> Result<(), anyhow::Error> {
         .unwrap()
         .unwrap();
 
-    let transaction_orchestrator = node
-        .transaction_orchestrator()
-        .expect("Fullnode should have transaction orchestrator toggled on.");
-    let mut rx = node
-        .subscribe_to_transaction_orchestrator_effects()
-        .expect("Fullnode should have transaction orchestrator toggled on.");
+    let transaction_orchestrator = fullnode.with(|node| {
+        node.transaction_orchestrator()
+            .expect("Fullnode should have transaction orchestrator toggled on.")
+    });
+    let mut rx = fullnode.with(|node| {
+        node.subscribe_to_transaction_orchestrator_effects()
+            .expect("Fullnode should have transaction orchestrator toggled on.")
+    });
 
     let tx_data = TransactionData::new_move_call(
         sender,
@@ -1200,7 +1204,7 @@ async fn test_pass_back_clock_object() -> Result<(), anyhow::Error> {
 }
 
 async fn transfer_coin(
-    context: &mut WalletContext,
+    context: &WalletContext,
 ) -> Result<
     (
         ObjectID,

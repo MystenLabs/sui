@@ -38,6 +38,7 @@ use apis::{
 use errors::IndexerError;
 use handlers::checkpoint_handler::CheckpointHandler;
 use mysten_metrics::{spawn_monitored_task, RegistryService};
+use processors::processor_orchestrator::ProcessorOrchestrator;
 use store::IndexerStore;
 use sui_core::event_handler::SubscriptionHandler;
 use sui_json_rpc::{JsonRpcServerBuilder, ServerHandle, CLIENT_SDK_TYPE_HEADER};
@@ -196,6 +197,7 @@ impl Indexer {
 
         if config.rpc_server_worker && config.fullnode_sync_worker {
             info!("Starting indexer with both fullnode sync and RPC server");
+            // let JSON RPC server run forever.
             let handle = build_json_rpc_server(
                 registry,
                 store.clone(),
@@ -205,8 +207,11 @@ impl Indexer {
             )
             .await
             .expect("Json rpc server should not run into errors upon start.");
-            // let JSON RPC server run forever.
             spawn_monitored_task!(handle.stopped());
+
+            // let async processor run forever.
+            let mut processor_orchestrator = ProcessorOrchestrator::new(store.clone(), registry);
+            spawn_monitored_task!(processor_orchestrator.run_forever());
 
             backoff::future::retry(ExponentialBackoff::default(), || async {
                 let event_handler_clone = event_handler.clone();
@@ -240,6 +245,9 @@ impl Indexer {
             Ok(())
         } else if config.fullnode_sync_worker {
             info!("Starting indexer with only fullnode sync");
+            let mut processor_orchestrator = ProcessorOrchestrator::new(store.clone(), registry);
+            spawn_monitored_task!(processor_orchestrator.run_forever());
+
             backoff::future::retry(ExponentialBackoff::default(), || async {
                 let event_handler_clone = event_handler.clone();
                 let metrics_clone = metrics.clone();

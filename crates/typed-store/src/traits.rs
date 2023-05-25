@@ -55,8 +55,9 @@ where
     /// Returns true if the map is empty, otherwise false.
     fn is_empty(&self) -> bool;
 
-    /// Returns an iterator visiting each key-value pair in the map.
-    fn iter(&'a self) -> Self::Iterator;
+    /// Returns an unbounded iterator visiting each key-value pair in the map.
+    /// This is potentially unsafe as it can perform a full table scan
+    fn unbounded_iter(&'a self) -> Self::Iterator;
 
     /// Returns an iterator visiting each key-value pair in the map.
     fn iter_with_bounds(&'a self, lower_bound: Option<K>, upper_bound: Option<K>)

@@ -36,6 +36,7 @@ pub struct Domain {
     labels: Vec<String>,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
 pub struct DomainParseError;
 
 impl FromStr for Domain {

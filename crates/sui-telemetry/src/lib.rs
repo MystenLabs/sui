@@ -8,9 +8,6 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use sui_core::authority::AuthorityState;
 use tracing::trace;
 
-use fastcrypto::encoding::Encoding;
-use fastcrypto::encoding::Hex;
-
 pub(crate) const GA_API_SECRET: &str = "zeq-aYEzS0aGdRJ8kNZTEg";
 pub(crate) const GA_EVENT_NAME: &str = "node_telemetry_event";
 pub(crate) const GA_MEASUREMENT_ID: &str = "G-96DM59YK2F";
@@ -45,8 +42,7 @@ pub async fn send_telemetry_event(state: Arc<AuthorityState>, is_validator: bool
     let git_rev = env!("CARGO_PKG_VERSION").to_string();
     let ip_address = get_ip().await;
     let chain_identifier = match state.get_chain_identifier() {
-        // Unwrap safe: Checkpoint Digest is 32 bytes long
-        Some(chain_identifier) => Hex::encode(chain_identifier.into_inner().get(0..4).unwrap()),
+        Some(chain_identifier) => chain_identifier.to_string(),
         None => "Unknown".to_string(),
     };
     let since_the_epoch = SystemTime::now()

@@ -14,7 +14,6 @@ use crate::{
     transaction_provider::{TransactionProvider, TransactionSource},
     types::ReplayEngineError,
 };
-use rand::seq::SliceRandom;
 
 // Step 1: Get a transaction T from the network
 // Step 2: Create the sandbox and verify the TX does not fork locally
@@ -138,12 +137,12 @@ impl ReplayFuzzer {
     }
 
     pub async fn run(mut self, mut num_base_tx: u64) -> Result<(), ReplayFuzzError> {
-        let mut tx_kind = self.sandbox_state.transaction_info.kind.clone();
-
         while num_base_tx > 0 {
+            let mut tx_kind = self.sandbox_state.transaction_info.kind.clone();
+
             info!(
-                "Starting fuzz with new base TX {}",
-                self.sandbox_state.transaction_info.tx_digest
+                "Starting fuzz with new base TX {}, with at most {} mutations",
+                self.sandbox_state.transaction_info.tx_digest, self.config.num_mutations_per_base
             );
             while let Some(mutation) = self.next_mutation(&tx_kind) {
                 info!(
@@ -168,7 +167,11 @@ impl ReplayFuzzer {
                 "Ended fuzz with for base TX {}\n",
                 self.sandbox_state.transaction_info.tx_digest
             );
-            self = self.re_init().await.unwrap();
+            self = self
+                .re_init()
+                .await
+                .map_err(ReplayEngineError::from)
+                .map_err(ReplayFuzzError::from)?;
             num_base_tx -= 1;
         }
 
@@ -201,35 +204,5 @@ pub enum ReplayFuzzError {
 impl From<ReplayEngineError> for ReplayFuzzError {
     fn from(err: ReplayEngineError) -> Self {
         ReplayFuzzError::LocalExecError { err }
-    }
-}
-
-pub struct ShuffleMutator {
-    pub rng: rand::rngs::StdRng,
-    pub num_mutations_per_base_left: u64,
-}
-
-impl TransactionKindMutator for ShuffleMutator {
-    fn mutate(&mut self, transaction_kind: &TransactionKind) -> Option<TransactionKind> {
-        if self.num_mutations_per_base_left == 0 {
-            // Nothing else to do
-            return None;
-        }
-
-        self.num_mutations_per_base_left -= 1;
-        if let TransactionKind::ProgrammableTransaction(mut p) = transaction_kind.clone() {
-            // Simple command and arg shuffle mutation
-            // TODO: do more complicated mutations
-            p.commands.shuffle(&mut self.rng);
-            p.inputs.shuffle(&mut self.rng);
-            Some(TransactionKind::ProgrammableTransaction(p))
-        } else {
-            // Other types not supported yet
-            None
-        }
-    }
-
-    fn reset(&mut self, mutations_per_base: u64) {
-        self.num_mutations_per_base_left = mutations_per_base;
     }
 }

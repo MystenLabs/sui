@@ -1,7 +1,6 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::VerifierConfig;
 use move_binary_format::{
     binary_views::BinaryIndexedView,
     errors::{verification_error, Location, PartialVMError, PartialVMResult, VMResult},
@@ -11,6 +10,7 @@ use move_binary_format::{
     IndexKind,
 };
 use move_core_types::{value::MoveValue, vm_status::StatusCode};
+use move_vm_config::verifier::VerifierConfig;
 
 pub struct LimitsVerifier<'a> {
     resolver: BinaryIndexedView<'a>,

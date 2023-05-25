@@ -1,0 +1,171 @@
+name: External crates
+
+on:
+  push:
+    branches: [main, extensions, devnet]
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+env:
+  CARGO_TERM_COLOR: always
+  # Disable incremental compilation.
+  #
+  # Incremental compilation is useful as part of an edit-build-test-edit cycle,
+  # as it lets the compiler avoid recompiling code that hasn't changed. However,
+  # on CI, we're not making small edits; we're almost always building the entire
+  # project from scratch. Thus, incremental compilation on CI actually
+  # introduces *additional* overhead to support making future builds
+  # faster...but no future builds will ever occur in any given CI environment.
+  #
+  # See https://matklad.github.io/2021/09/04/fast-rust-builds.html#ci-workflow
+  # for details.
+  CARGO_INCREMENTAL: 0
+  # Allow more retries for network requests in cargo (downloading crates) and
+  # rustup (installing toolchains). This should help to reduce flaky CI failures
+  # from transient network timeouts or other issues.
+  CARGO_NET_RETRY: 10
+  RUSTUP_MAX_RETRIES: 10
+  # Don't emit giant backtraces in the CI logs.
+  RUST_BACKTRACE: short
+  # RUSTFLAGS: -D warnings
+  RUSTDOCFLAGS: -D warnings
+
+jobs:
+  diff:
+    runs-on: [ubuntu-latest]
+    outputs:
+      isRust: ${{ steps.diff.outputs.isRust }} 
+      isMove: ${{ steps.diff.outputs.isMove }}
+    steps:
+      - uses: actions/checkout@v3
+      - name: Detect Changes
+        uses: "./.github/actions/diffs"
+        id: diff
+
+  external-crates-test:
+    needs: diff
+    if: needs.diff.outputs.isRust == 'true'
+    timeout-minutes: 45
+    env:
+      # Tests written with #[sim_test] are often flaky if run as #[tokio::test] - this var
+      # causes #[sim_test] to only run under the deterministic `simtest` job, and not the
+      # non-deterministic `test` job.
+      SUI_SKIP_SIMTESTS: 1
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os:
+          - [ubuntu-ghcloud]
+      fail-fast: false
+    steps:
+      - uses: actions/checkout@v3
+      - uses: taiki-e/install-action@nextest
+      - name: Set Swap Space
+        uses: pierotofy/set-swap-space@master
+        with:
+          swap-size-gb: 256
+      - name: Install python dependencies
+        run: |
+          pip install pyopenssl --upgrade
+      - name: External crates tests
+        run: |
+          cargo xtest
+
+  move-prover:
+    name: move-prover
+    needs: diff
+    timeout-minutes: 20
+    if: needs.diff.outputs.isMove == 'true'
+    runs-on: [ubuntu-ghcloud]
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Prover Setup
+        run: |
+          crates/sui-move/scripts/prover_setup.sh
+      - name: Build
+        uses: actions-rs/cargo@v1
+        with:
+          command: build
+
+      - name: Prover Run
+        working-directory: crates/sui-framework/packages
+        run: |
+          set -o pipefail
+          DOTNET_ROOT="$HOME/.dotnet"
+          BIN_DIR="$HOME/bin"
+          export DOTNET_ROOT="${DOTNET_ROOT}"
+          export PATH="${DOTNET_ROOT}/tools:\$PATH"
+          export Z3_EXE="${BIN_DIR}/z3"
+          export CVC5_EXE="${BIN_DIR}/cvc5"
+          export BOOGIE_EXE="${DOTNET_ROOT}/tools/boogie"
+          ../../../target/debug/sui move prove -p sui-framework
+          ../../../target/debug/sui move prove -p sui-system
+
+
+  # This is a no-op job that allows the resulting action names to line up when
+  # there are no rust changes in a given PR/commit. This ensures that we can
+  # continue to block on the rust tests passing in the case of rust changes and
+  # otherwise not block pushes to main.
+  external-crates-test-notrust:
+    name: external-crates-test
+    needs: diff
+    if: needs.diff.outputs.isRust == 'false'
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os:
+          - [ubuntu-ghcloud]
+          - [windows-ghcloud]
+      fail-fast: false
+    steps:
+      - run: 'echo "No build required" '
+
+  clippy:
+    needs: diff
+    if: needs.diff.outputs.isRust == 'true'
+    runs-on: [ubuntu-ghcloud]
+    steps:
+      - uses: arduino/setup-protoc@v1
+        # this avoids rate-limiting
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/checkout@v3
+      - run: rustup component add clippy
+      # TODO(bradh): debug and re-enable this; the caching is breaking the clippy build
+      # Enable caching of the 'librocksdb-sys' crate by additionally caching the
+      # 'librocksdb-sys' src directory which is managed by cargo
+      # - uses: bmwill/rust-cache@v1 # Fork of 'Swatinem/rust-cache' which allows caching additional paths
+      #   with:
+      #     path: ~/.cargo/registry/src/**/librocksdb-sys-*
+
+      # See '.cargo/config' for list of enabled/disappled clippy lints
+      - name: cargo clippy
+        run: cargo xclippy -D warnings
+
+  rustfmt:
+    needs: diff
+    if: needs.diff.outputs.isRust == 'true'
+    runs-on: [ubuntu-latest]
+    steps:
+      - uses: actions/checkout@v3
+      - run: rustup component add rustfmt
+      - name: rustfmt
+        uses: actions-rs/cargo@v1
+        with:
+          command: fmt
+          args: --all --check
+
+  cargo-deny:
+    name: cargo-deny (advisories, licenses, bans, ...)
+    needs: diff
+    if: needs.diff.outputs.isRust == 'true'
+    runs-on: [ubuntu-latest]
+    steps:
+      - uses: actions/checkout@v3
+      - uses: mystenlabs/cargo-deny-action@main

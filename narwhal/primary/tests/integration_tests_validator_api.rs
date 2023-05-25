@@ -9,7 +9,7 @@ use indexmap::IndexMap;
 use narwhal_primary as primary;
 use narwhal_primary::NUM_SHUTDOWN_RECEIVERS;
 use network::client::NetworkClient;
-use primary::{NetworkModel, Primary, CHANNEL_CAPACITY};
+use primary::{Primary, CHANNEL_CAPACITY};
 use prometheus::Registry;
 use std::{
     collections::{BTreeSet, HashMap},
@@ -130,7 +130,6 @@ async fn test_get_collections() {
             )
             .1,
         )),
-        NetworkModel::Asynchronous,
         &mut tx_shutdown,
         tx_feedback,
         &Registry::new(),
@@ -329,7 +328,6 @@ async fn test_remove_collections() {
         rx_feedback,
         rx_consensus_round_updates,
         /* dag */ Some(dag.clone()),
-        NetworkModel::Asynchronous,
         &mut tx_shutdown,
         tx_feedback,
         &Registry::new(),
@@ -582,7 +580,6 @@ async fn test_read_causal_signed_certificates() {
         rx_feedback,
         rx_consensus_round_updates,
         /* dag */ Some(dag.clone()),
-        NetworkModel::Asynchronous,
         &mut tx_shutdown,
         tx_feedback,
         &Registry::new(),
@@ -631,7 +628,6 @@ async fn test_read_causal_signed_certificates() {
             )
             .1,
         )),
-        NetworkModel::Asynchronous,
         &mut tx_shutdown_2,
         tx_feedback_2,
         &Registry::new(),
@@ -810,7 +806,6 @@ async fn test_read_causal_unsigned_certificates() {
         rx_feedback,
         rx_consensus_round_updates,
         /* dag */ Some(dag.clone()),
-        NetworkModel::Asynchronous,
         &mut tx_shutdown,
         tx_feedback,
         &Registry::new(),
@@ -853,7 +848,6 @@ async fn test_read_causal_unsigned_certificates() {
             )
             .1,
         )),
-        NetworkModel::Asynchronous,
         &mut tx_shutdown_2,
         tx_feedback_2,
         &Registry::new(),
@@ -1033,7 +1027,6 @@ async fn test_get_collections_with_missing_certificates() {
             )
             .1,
         )),
-        NetworkModel::Asynchronous,
         &mut tx_shutdown,
         tx_feedback_1,
         &Registry::new(),
@@ -1097,7 +1090,6 @@ async fn test_get_collections_with_missing_certificates() {
         rx_consensus_round_updates,
         /* external_consensus */
         None,
-        NetworkModel::Asynchronous,
         &mut tx_shutdown_2,
         tx_feedback_2,
         &Registry::new(),

@@ -168,11 +168,13 @@ pub enum ToolCommand {
     #[clap(name = "replay")]
     Replay {
         #[clap(long = "rpc")]
-        rpc_url: String,
+        rpc_url: Option<String>,
         #[clap(long = "safety-checks")]
         safety_checks: bool,
         #[clap(long = "authority")]
         use_authority: bool,
+        #[clap(long = "cfg-path", short)]
+        cfg_path: Option<PathBuf>,
         #[clap(subcommand)]
         cmd: ReplayToolCommand,
     },
@@ -300,10 +302,10 @@ impl ToolCommand {
                     for (i, val_info) in genesis.validator_set_for_tooling().iter().enumerate() {
                         let metadata = val_info.verified_metadata();
                         println!(
-                            "#{:<2} {:<20} {:?<66} {:?} {}",
+                            "#{:<2} {:<20} {:?} {:?} {}",
                             i,
                             metadata.name,
-                            metadata.protocol_pubkey,
+                            metadata.sui_pubkey_bytes().concise(),
                             metadata.net_address,
                             anemo::PeerId(metadata.network_pubkey.0.to_bytes()),
                         )
@@ -354,8 +356,10 @@ impl ToolCommand {
                 safety_checks,
                 cmd,
                 use_authority,
+                cfg_path,
             } => {
-                execute_replay_command(rpc_url, safety_checks, use_authority, cmd).await?;
+                execute_replay_command(rpc_url, safety_checks, use_authority, cfg_path, cmd)
+                    .await?;
             }
             ToolCommand::SignTransaction {
                 genesis,

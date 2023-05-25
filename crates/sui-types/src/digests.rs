@@ -111,6 +111,28 @@ impl fmt::UpperHex for Digest {
     }
 }
 
+/// Representation of a network's identifier by the genesis checkpoint's digest
+#[derive(
+    Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, JsonSchema,
+)]
+pub struct ChainIdentifier(CheckpointDigest);
+
+impl fmt::Display for ChainIdentifier {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        for byte in self.0 .0 .0[0..4].iter() {
+            write!(f, "{:02x}", byte)?;
+        }
+
+        Ok(())
+    }
+}
+
+impl From<CheckpointDigest> for ChainIdentifier {
+    fn from(digest: CheckpointDigest) -> Self {
+        Self(digest)
+    }
+}
+
 /// Representation of a Checkpoint's digest
 #[derive(
     Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, JsonSchema,

@@ -2,10 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::block_synchronizer::{BlockHeader, BlockSynchronizeResult, Command};
 use fastcrypto::hash::Hash;
+use mysten_metrics::metered_channel;
 use prometheus::IntGauge;
 use std::collections::HashMap;
 use tokio::sync::oneshot;
-use types::{metered_channel, CertificateDigest};
+use types::CertificateDigest;
 
 #[derive(Debug)]
 enum Core {

@@ -78,11 +78,11 @@ Select key scheme to generate keypair (0 for ed25519, 1 for secp256k1, 2 for sec
 
 Press **0**, **1**, or **2** to select a key scheme and the press **Enter**.
 
-Sui returns a message similar to the following (depending on the key scheme you selected) that includes the address and 24-word recovery phrase for the address:
+Sui returns a message similar to the following (depending on the key scheme you selected) that includes the address and 12-word recovery phrase for the address:
 
 ```
 Generated new keypair for address with scheme "ed25519" [0xb9c83a8b40d3263c9ba40d551514fbac1f8c12e98a4005a0dac072d3549c2442]
-Secret Recovery Phrase : [cap wheat many line human lazy few solid bored proud speed grocery raise erode there idea inform culture cousin shed sniff author spare carpet]
+Secret Recovery Phrase : [cap wheat many line human lazy few solid bored proud speed grocery]
 ```
 
 ### Connect to a custom RPC endpoint

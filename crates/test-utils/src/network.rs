@@ -2,28 +2,20 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use futures::future::join_all;
+use std::net::SocketAddr;
 use std::num::NonZeroUsize;
-use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
 use jsonrpsee::http_client::{HttpClient, HttpClientBuilder};
 use jsonrpsee::ws_client::WsClient;
 use jsonrpsee::ws_client::WsClientBuilder;
-use prometheus::Registry;
 use rand::{distributions::*, rngs::OsRng, seq::SliceRandom};
-use tokio::time::{timeout, Instant};
-use tokio::{task::JoinHandle, time::sleep};
-use tracing::info;
-
-use mysten_metrics::RegistryService;
-
 use sui_config::node::DBCheckpointConfig;
-use sui_config::{sui_cluster_test_config_dir, Config, SUI_CLIENT_CONFIG, SUI_NETWORK_CONFIG};
+use sui_config::{Config, SUI_CLIENT_CONFIG, SUI_NETWORK_CONFIG};
 use sui_config::{NodeConfig, PersistedConfig, SUI_KEYSTORE_FILENAME};
 use sui_json_rpc_types::{SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions};
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
-use sui_node::SuiNode;
 use sui_node::SuiNodeHandle;
 use sui_protocol_config::{ProtocolVersion, SupportedProtocolVersions};
 use sui_sdk::error::SuiRpcResult;
@@ -32,10 +24,10 @@ use sui_sdk::wallet_context::WalletContext;
 use sui_sdk::{SuiClient, SuiClientBuilder};
 use sui_swarm::memory::{Swarm, SwarmBuilder};
 use sui_swarm_config::genesis_config::{AccountConfig, GenesisConfig};
-use sui_swarm_config::network_config::NetworkConfig;
 use sui_swarm_config::network_config_builder::{
-    FullnodeConfigBuilder, ProtocolVersionsConfig, SupportedProtocolVersionsCallback,
+    ProtocolVersionsConfig, SupportedProtocolVersionsCallback,
 };
+use sui_swarm_config::node_config_builder::FullnodeConfigBuilder;
 use sui_types::base_types::{AuthorityName, ObjectID, SuiAddress};
 use sui_types::committee::EpochId;
 use sui_types::crypto::KeypairTraits;
@@ -45,16 +37,43 @@ use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemS
 use sui_types::sui_system_state::SuiSystemState;
 use sui_types::sui_system_state::SuiSystemStateTrait;
 use sui_types::transaction::VerifiedTransaction;
+use tokio::time::{timeout, Instant};
+use tokio::{task::JoinHandle, time::sleep};
+use tracing::info;
 
 const NUM_VALIDAOTR: usize = 4;
 
 pub struct FullNodeHandle {
-    pub sui_node: Arc<SuiNode>,
+    pub sui_node: SuiNodeHandle,
     pub sui_client: SuiClient,
     pub rpc_client: HttpClient,
     pub rpc_url: String,
     pub ws_client: WsClient,
     pub ws_url: String,
+}
+
+impl FullNodeHandle {
+    pub async fn new(sui_node: SuiNodeHandle, json_rpc_address: SocketAddr) -> Self {
+        let rpc_url = format!("http://{}", json_rpc_address);
+        let rpc_client = HttpClientBuilder::default().build(&rpc_url).unwrap();
+
+        let ws_url = format!("ws://{}", json_rpc_address);
+        let ws_client = WsClientBuilder::default().build(&ws_url).await.unwrap();
+        let sui_client = SuiClientBuilder::default()
+            .ws_url(&ws_url)
+            .build(&rpc_url)
+            .await
+            .unwrap();
+
+        Self {
+            sui_node,
+            sui_client,
+            rpc_client,
+            rpc_url,
+            ws_client,
+            ws_url,
+        }
+    }
 }
 
 pub struct TestCluster {
@@ -115,22 +134,29 @@ impl TestCluster {
     }
 
     pub fn fullnode_config_builder(&self) -> FullnodeConfigBuilder {
-        FullnodeConfigBuilder::new(self.swarm.config())
+        self.swarm.get_fullnode_config_builder()
     }
 
     /// Convenience method to start a new fullnode in the test cluster.
-    pub async fn start_fullnode(&self) -> Result<FullNodeHandle, anyhow::Error> {
-        let config = self.fullnode_config_builder().build().unwrap();
-        start_fullnode_from_config(config).await
+    pub async fn start_fullnode(&mut self) -> FullNodeHandle {
+        self.start_fullnode_from_config(
+            self.fullnode_config_builder()
+                .build(&mut OsRng, self.swarm.config()),
+        )
+        .await
+    }
+
+    pub async fn start_fullnode_from_config(&mut self, config: NodeConfig) -> FullNodeHandle {
+        let json_rpc_address = config.json_rpc_address;
+        let node = self.swarm.spawn_new_fullnode(config).await;
+        FullNodeHandle::new(node, json_rpc_address).await
     }
 
     pub fn all_node_handles(&self) -> impl Iterator<Item = SuiNodeHandle> {
         self.swarm
             .validator_node_handles()
             .into_iter()
-            .chain(std::iter::once(SuiNodeHandle::new(
-                self.fullnode_handle.sui_node.clone(),
-            )))
+            .chain(std::iter::once(self.fullnode_handle.sui_node.clone()))
     }
 
     pub fn get_validator_addresses(&self) -> Vec<AuthorityName> {
@@ -139,6 +165,20 @@ impl TestCluster {
 
     pub fn stop_validator(&self, name: AuthorityName) {
         self.swarm.validator(name).unwrap().stop();
+    }
+
+    pub async fn stop_all_validators(&self) {
+        info!("Stopping all validators in the cluster");
+        self.swarm.validators().for_each(|v| v.stop());
+        tokio::time::sleep(Duration::from_secs(3)).await;
+    }
+
+    pub async fn start_all_validator(&self) {
+        info!("Starting all validators in the cluster");
+        for v in self.swarm.validators() {
+            v.start().await.unwrap();
+        }
+        tokio::time::sleep(Duration::from_secs(3)).await;
     }
 
     pub async fn start_validator(&self, name: AuthorityName) {
@@ -164,10 +204,8 @@ impl TestCluster {
     pub async fn get_object_from_fullnode_store(&self, object_id: &ObjectID) -> Option<Object> {
         self.fullnode_handle
             .sui_node
-            .state()
-            .get_object(object_id)
+            .with_async(|node| async { node.state().get_object(object_id).await.unwrap() })
             .await
-            .unwrap()
     }
 
     /// To detect whether the network has reached such state, we use the fullnode as the
@@ -186,7 +224,10 @@ impl TestCluster {
         target_epoch: Option<EpochId>,
         timeout_dur: Duration,
     ) -> SuiSystemState {
-        let mut epoch_rx = self.fullnode_handle.sui_node.subscribe_to_epoch_change();
+        let mut epoch_rx = self
+            .fullnode_handle
+            .sui_node
+            .with(|node| node.subscribe_to_epoch_change());
         timeout(timeout_dur, async move {
             while let Ok(system_state) = epoch_rx.recv().await {
                 info!("received epoch {}", system_state.epoch());
@@ -216,8 +257,7 @@ impl TestCluster {
         let cur_committee = self
             .fullnode_handle
             .sui_node
-            .state()
-            .clone_committee_for_testing();
+            .with(|node| node.state().clone_committee_for_testing());
         let mut cur_stake = 0;
         for handle in self.swarm.validator_node_handles() {
             handle
@@ -408,7 +448,7 @@ impl TestClusterBuilder {
         }
     }
 
-    pub fn set_fullnode_rpc_port(mut self, rpc_port: u16) -> Self {
+    pub fn with_fullnode_rpc_port(mut self, rpc_port: u16) -> Self {
         self.fullnode_rpc_port = Some(rpc_port);
         self
     }
@@ -505,49 +545,23 @@ impl TestClusterBuilder {
     }
 
     pub async fn build(self) -> anyhow::Result<TestCluster> {
-        let cluster = self.start_test_network_with_customized_ports(None).await?;
-        Ok(cluster)
-    }
-
-    pub async fn build_with_network_config(
-        self,
-        config: Option<PathBuf>,
-    ) -> anyhow::Result<TestCluster> {
-        let cluster = self
-            .start_test_network_with_customized_ports(config)
-            .await?;
+        let cluster = self.start_test_network_with_customized_ports().await?;
         Ok(cluster)
     }
 
     async fn start_test_network_with_customized_ports(
         mut self,
-        config: Option<PathBuf>,
     ) -> Result<TestCluster, anyhow::Error> {
-        let swarm = if let Some(config) = config {
-            info!("Building swarm from previous network config");
-            self.start_swarm_with_network_config(config).await?
-        } else {
-            self.start_swarm().await?
-        };
-
+        let swarm = self.start_swarm().await?;
         let working_dir = swarm.dir();
 
         let mut wallet_conf: SuiClientConfig =
             PersistedConfig::read(&working_dir.join(SUI_CLIENT_CONFIG))?;
 
-        let fullnode_config = FullnodeConfigBuilder::new(swarm.config())
-            .with_supported_protocol_versions_config(
-                self.fullnode_supported_protocol_versions_config
-                    .clone()
-                    .unwrap_or_else(|| self.validator_supported_protocol_versions_config.clone()),
-            )
-            .with_db_checkpoint_config(self.db_checkpoint_config_fullnodes)
-            .set_event_store(self.enable_fullnode_events)
-            .set_rpc_port(self.fullnode_rpc_port)
-            .build()
-            .unwrap();
-
-        let fullnode_handle = start_fullnode_from_config(fullnode_config).await?;
+        let fullnode = swarm.fullnodes().next().unwrap();
+        let json_rpc_address = fullnode.config.json_rpc_address;
+        let fullnode_handle =
+            FullNodeHandle::new(fullnode.get_node_handle().unwrap(), json_rpc_address).await;
 
         wallet_conf.envs.push(SuiEnv {
             alias: "localnet".to_string(),
@@ -573,62 +587,6 @@ impl TestClusterBuilder {
         })
     }
 
-    /// Start a swarm from a network config and set up WalletConfig
-    async fn start_swarm_with_network_config(
-        &mut self,
-        network_config_path: std::path::PathBuf,
-    ) -> Result<Swarm, anyhow::Error> {
-        let mut builder: SwarmBuilder = Swarm::builder()
-            .committee_size(
-                NonZeroUsize::new(self.num_validators.unwrap_or(NUM_VALIDAOTR)).unwrap(),
-            )
-            .with_objects(self.additional_objects.clone())
-            .with_db_checkpoint_config(self.db_checkpoint_config_validators.clone())
-            .with_supported_protocol_versions_config(
-                self.validator_supported_protocol_versions_config.clone(),
-            );
-
-        if let Some(genesis_config) = self.genesis_config.take() {
-            builder = builder.with_genesis_config(genesis_config);
-        }
-
-        // Load the config of the Sui authority.
-        let network_config: NetworkConfig =
-            PersistedConfig::read(&network_config_path).map_err(|err| {
-                err.context(format!(
-                    "Cannot open Sui network config file at {:?}",
-                    network_config_path
-                ))
-            })?;
-        let mut swarm = builder.from_network_config(sui_cluster_test_config_dir()?, network_config);
-        swarm.launch().await?;
-
-        let dir = swarm.dir();
-
-        // This uses the sui config directory provided and stores the wallet path in the SUI_CLUSTER_CONFIG_DIR
-        let network_path = dir.join(SUI_NETWORK_CONFIG);
-        let wallet_path = dir.join(SUI_CLIENT_CONFIG);
-        let keystore_path = dir.join(SUI_KEYSTORE_FILENAME);
-        swarm.config().save(network_path)?;
-
-        // We don't need to add keystore since we have local keystore for this.
-        // Add a key from the keystore for wallet.
-        let keystore = Keystore::from(FileBasedKeystore::new(&keystore_path)?);
-        let active_address = keystore.addresses().first().cloned();
-
-        // Create wallet config with stated authorities port
-        SuiClientConfig {
-            keystore: Keystore::from(FileBasedKeystore::new(&keystore_path)?),
-            envs: Default::default(),
-            active_address,
-            active_env: Default::default(),
-        }
-        .save(wallet_path)?;
-
-        // Return network handle
-        Ok(swarm)
-    }
-
     /// Start a Swarm and set up WalletConfig
     async fn start_swarm(&mut self) -> Result<Swarm, anyhow::Error> {
         let mut builder: SwarmBuilder = Swarm::builder()
@@ -639,10 +597,20 @@ impl TestClusterBuilder {
             .with_db_checkpoint_config(self.db_checkpoint_config_validators.clone())
             .with_supported_protocol_versions_config(
                 self.validator_supported_protocol_versions_config.clone(),
-            );
+            )
+            .with_fullnode_count(1)
+            .with_fullnode_supported_protocol_versions_config(
+                self.fullnode_supported_protocol_versions_config
+                    .clone()
+                    .unwrap_or(self.validator_supported_protocol_versions_config.clone()),
+            )
+            .with_db_checkpoint_config(self.db_checkpoint_config_fullnodes.clone());
 
         if let Some(genesis_config) = self.genesis_config.take() {
             builder = builder.with_genesis_config(genesis_config);
+        }
+        if let Some(fullnode_rpc_port) = self.fullnode_rpc_port {
+            builder = builder.with_fullnode_rpc_port(fullnode_rpc_port);
         }
 
         let mut swarm = builder.build();
@@ -687,32 +655,6 @@ impl Default for TestClusterBuilder {
     fn default() -> Self {
         Self::new()
     }
-}
-
-pub async fn start_fullnode_from_config(
-    config: NodeConfig,
-) -> Result<FullNodeHandle, anyhow::Error> {
-    let registry_service = RegistryService::new(Registry::new());
-    let sui_node = SuiNode::start(&config, registry_service, None).await?;
-
-    let rpc_url = format!("http://{}", config.json_rpc_address);
-    let rpc_client = HttpClientBuilder::default().build(&rpc_url)?;
-
-    let ws_url = format!("ws://{}", config.json_rpc_address);
-    let ws_client = WsClientBuilder::default().build(&ws_url).await?;
-    let sui_client = SuiClientBuilder::default()
-        .ws_url(&ws_url)
-        .build(&rpc_url)
-        .await?;
-
-    Ok(FullNodeHandle {
-        sui_node,
-        sui_client,
-        rpc_client,
-        rpc_url,
-        ws_client,
-        ws_url,
-    })
 }
 
 // TODO: Merge the following functions with the ones inside TestCluster.

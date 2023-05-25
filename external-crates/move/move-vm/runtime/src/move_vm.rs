@@ -5,7 +5,7 @@
 use std::sync::Arc;
 
 use crate::{
-    config::VMConfig, data_cache::TransactionDataCache, native_extensions::NativeContextExtensions,
+    data_cache::TransactionDataCache, native_extensions::NativeContextExtensions,
     native_functions::NativeFunction, runtime::VMRuntime, session::Session,
 };
 use move_binary_format::{
@@ -16,6 +16,7 @@ use move_core_types::{
     account_address::AccountAddress, identifier::Identifier, language_storage::ModuleId,
     metadata::Metadata, resolver::MoveResolver,
 };
+use move_vm_config::runtime::VMConfig;
 
 pub struct MoveVM {
     runtime: VMRuntime,

@@ -20,7 +20,7 @@ import { AddressInput } from '_components/address-input';
 import Alert from '_components/alert';
 import Loading from '_components/loading';
 import { parseAmount } from '_helpers';
-import { useTransactionGasBudget, useGetCoins } from '_hooks';
+import { useTransactionGasBudget, useGetAllCoins } from '_hooks';
 import { GAS_SYMBOL } from '_src/ui/app/redux/slices/sui-objects/Coin';
 import { InputWithAction } from '_src/ui/app/shared/InputWithAction';
 
@@ -107,39 +107,32 @@ export function SendTokenForm({
 }: SendTokenFormProps) {
     const activeAddress = useActiveAddress();
     // Get all coins of the type
-    const { data: coinsData, isLoading: coinsIsLoading } = useGetCoins(
+    const { data: coinsData, isLoading: coinsIsLoading } = useGetAllCoins(
         coinType,
         activeAddress!
     );
 
-    const { data: suiCoinsData, isLoading: suiCoinsIsLoading } = useGetCoins(
+    const { data: suiCoinsData, isLoading: suiCoinsIsLoading } = useGetAllCoins(
         SUI_TYPE_ARG,
         activeAddress!
     );
 
     const suiCoins = suiCoinsData;
     const coins = coinsData;
-    const coinBalance = CoinAPI.totalBalance(coins || []);
-    const suiBalance = CoinAPI.totalBalance(suiCoinsData || []);
+    const coinBalance = CoinAPI.totalBalance(coins);
+    const suiBalance = CoinAPI.totalBalance(suiCoins);
 
-    const coinSymbol = (coinType && CoinAPI.getCoinSymbol(coinType)) || '';
     const coinMetadata = useCoinMetadata(coinType);
     const coinDecimals = coinMetadata.data?.decimals ?? 0;
-
-    const validationSchemaStepOne = useMemo(
-        () =>
-            createValidationSchemaStepOne(
-                coinBalance,
-                coinSymbol,
-                coinDecimals
-            ),
-        [coinBalance, coinSymbol, coinDecimals]
-    );
 
     const [tokenBalance, symbol, queryResult] = useFormatCoin(
         coinBalance,
         coinType,
         CoinFormat.FULL
+    );
+    const validationSchemaStepOne = useMemo(
+        () => createValidationSchemaStepOne(coinBalance, symbol, coinDecimals),
+        [coinBalance, symbol, coinDecimals]
     );
 
     // remove the comma from the token balance

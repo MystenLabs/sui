@@ -11,7 +11,7 @@ anyhow = "1.0.64"
 async-trait = "0.1.61"
 clap = { version = "3.2.17", features = ["derive"] }
 colored = "2.0.0"
-jsonrpsee = { version = "0.16.2", features = ["http-client"] }
+jsonrpsee = { git="https://github.com/wlmyng/jsonrpsee.git", rev= "b1b300784795f6a64d0fcdf8f03081a9bc38bde8", features = ["http-client"] }
 serde = { version = "1.0.144", features = ["derive"] }
 serde_with = { version = "2.1.0", features = ["hex"] }
 serde_json = "1.0.88"

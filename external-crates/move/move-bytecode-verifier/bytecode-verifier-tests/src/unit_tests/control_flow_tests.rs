@@ -8,8 +8,9 @@ use move_binary_format::{
     errors::PartialVMResult,
     file_format::{Bytecode, CompiledModule, FunctionDefinitionIndex, TableIndex},
 };
-use move_bytecode_verifier::{control_flow, meter::DummyMeter, VerifierConfig};
+use move_bytecode_verifier::{control_flow, meter::DummyMeter};
 use move_core_types::vm_status::StatusCode;
+use move_vm_config::verifier::VerifierConfig;
 
 fn verify_module(verifier_config: &VerifierConfig, module: &CompiledModule) -> PartialVMResult<()> {
     for (idx, function_definition) in module

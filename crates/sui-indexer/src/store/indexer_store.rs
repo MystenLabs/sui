@@ -20,7 +20,7 @@ use sui_types::storage::ObjectStore;
 
 use crate::errors::IndexerError;
 use crate::metrics::IndexerMetrics;
-use crate::models::addresses::{ActiveAddress, Address};
+use crate::models::addresses::{ActiveAddress, Address, AddressStats};
 use crate::models::checkpoints::Checkpoint;
 use crate::models::epoch::DBEpochInfo;
 use crate::models::events::Event;
@@ -36,7 +36,6 @@ pub trait IndexerStore {
     type ModuleCache;
 
     async fn get_latest_checkpoint_sequence_number(&self) -> Result<i64, IndexerError>;
-    async fn get_latest_object_checkpoint_sequence_number(&self) -> Result<i64, IndexerError>;
     async fn get_checkpoint(&self, id: CheckpointId) -> Result<RpcCheckpoint, IndexerError>;
     async fn get_checkpoint_sequence_number(
         &self,
@@ -235,6 +234,16 @@ pub trait IndexerStore {
     fn module_cache(&self) -> &Self::ModuleCache;
 
     fn indexer_metrics(&self) -> &IndexerMetrics;
+
+    /// methods for address stats
+    async fn get_last_address_processed_checkpoint(&self) -> Result<i64, IndexerError>;
+    async fn calculate_address_stats(&self, checkpoint: i64) -> Result<AddressStats, IndexerError>;
+    async fn persist_address_stats(&self, addr_stats: &AddressStats) -> Result<(), IndexerError>;
+    async fn get_latest_address_stats(&self) -> Result<AddressStats, IndexerError>;
+    async fn get_checkpoint_address_stats(
+        &self,
+        checkpoint: i64,
+    ) -> Result<AddressStats, IndexerError>;
 }
 
 #[derive(Clone, Debug)]

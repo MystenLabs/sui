@@ -20,7 +20,7 @@ use std::usize;
 use sui_keys::keypair_file::{read_authority_keypair_from_file, read_keypair_from_file};
 use sui_protocol_config::SupportedProtocolVersions;
 use sui_storage::object_store::ObjectStoreConfig;
-use sui_types::base_types::ObjectID;
+use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::crypto::AuthorityPublicKeyBytes;
 use sui_types::crypto::KeypairTraits;
 use sui_types::crypto::NetworkKeyPair;
@@ -32,7 +32,7 @@ use sui_types::multiaddr::Multiaddr;
 pub const DEFAULT_GRPC_CONCURRENCY_LIMIT: usize = 20000000000;
 
 /// Default gas price of 100 Mist
-pub const DEFAULT_VALIDATOR_GAS_PRICE: u64 = 1000;
+pub const DEFAULT_VALIDATOR_GAS_PRICE: u64 = sui_types::transaction::DEFAULT_VALIDATOR_GAS_PRICE;
 
 /// Default commission rate of 2%
 pub const DEFAULT_COMMISSION_RATE: u64 = 200;
@@ -113,7 +113,13 @@ pub struct NodeConfig {
     pub expensive_safety_check_config: ExpensiveSafetyCheckConfig,
 
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub name_service_resolver_object_id: Option<ObjectID>,
+    pub name_service_package_address: Option<SuiAddress>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub name_service_registry_id: Option<ObjectID>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub name_service_reverse_registry_id: Option<ObjectID>,
 
     #[serde(default)]
     pub transaction_deny_config: TransactionDenyConfig,
@@ -345,6 +351,17 @@ impl ExpensiveSafetyCheckConfig {
             enable_state_consistency_check: true,
             force_disable_state_consistency_check: false,
             enable_move_vm_paranoid_checks: true,
+        }
+    }
+
+    pub fn new_disable_all() -> Self {
+        Self {
+            enable_epoch_sui_conservation_check: false,
+            enable_deep_per_tx_sui_conservation_check: false,
+            force_disable_epoch_sui_conservation_check: true,
+            enable_state_consistency_check: false,
+            force_disable_state_consistency_check: true,
+            enable_move_vm_paranoid_checks: false,
         }
     }
 

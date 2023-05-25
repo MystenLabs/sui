@@ -11,7 +11,7 @@ async-trait = "0.1.61"
 futures = "0.3.23"
 serde = { version = "1.0.144", features = ["derive"] }
 tokio = { workspace = true, features = ["full", "tracing"] }
-rocksdb = "0.20.1"
+rocksdb = "0.21.0"
 tracing = "0.1.36"
 anyhow = "1.0.64"
 tempfile = "3.3.0"

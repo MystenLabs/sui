@@ -7,13 +7,13 @@
 //! - All forward jumps do not enter into the middle of a loop
 //! - All "breaks" (forward, loop-exiting jumps) go to the "end" of the loop
 //! - All "continues" (back jumps in a loop) are only to the current loop
-use crate::verifier::VerifierConfig;
 use move_binary_format::{
     errors::{PartialVMError, PartialVMResult},
     file_format::{Bytecode, CodeOffset, CodeUnit, FunctionDefinitionIndex},
     safe_unwrap,
 };
 use move_core_types::vm_status::StatusCode;
+use move_vm_config::verifier::VerifierConfig;
 use std::{collections::HashSet, convert::TryInto};
 
 pub fn verify(

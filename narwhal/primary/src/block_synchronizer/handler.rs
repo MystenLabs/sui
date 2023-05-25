@@ -12,6 +12,7 @@ use fastcrypto::hash::Hash;
 use futures::future::join_all;
 #[cfg(test)]
 use mockall::*;
+use mysten_metrics::metered_channel;
 use std::time::Duration;
 use storage::CertificateStore;
 use thiserror::Error;
@@ -20,7 +21,7 @@ use tokio::{
     time::timeout,
 };
 use tracing::{debug, error, instrument, trace};
-use types::{metered_channel, Certificate, CertificateDigest};
+use types::{Certificate, CertificateDigest};
 
 #[cfg(test)]
 #[path = "tests/handler_tests.rs"]

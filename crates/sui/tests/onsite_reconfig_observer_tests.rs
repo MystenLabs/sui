@@ -22,17 +22,18 @@ async fn test_onsite_reconfig_observer_basic() {
 
     let fullnode = &test_cluster.fullnode_handle.sui_node;
 
-    let qd = fullnode
-        .transaction_orchestrator()
-        .unwrap()
-        .clone_quorum_driver();
+    let qd = fullnode.with(|node| {
+        node.transaction_orchestrator()
+            .unwrap()
+            .clone_quorum_driver()
+    });
     assert_eq!(qd.current_epoch(), 0);
-    let rx = fullnode.subscribe_to_epoch_change();
+    let rx = fullnode.with(|node| node.subscribe_to_epoch_change());
     let registry = Registry::new();
     let mut observer = OnsiteReconfigObserver::new(
         rx,
-        fullnode.clone_authority_store(),
-        fullnode.clone_committee_store(),
+        fullnode.with(|node| node.clone_authority_store()),
+        fullnode.with(|node| node.clone_committee_store()),
         SafeClientMetricsBase::new(&registry),
         AuthAggMetrics::new(&registry),
     );
@@ -45,17 +46,14 @@ async fn test_onsite_reconfig_observer_basic() {
 
     // Give it some time for the update to happen
     tokio::time::sleep(tokio::time::Duration::from_secs(3)).await;
-    let qd = fullnode
-        .transaction_orchestrator()
-        .unwrap()
-        .clone_quorum_driver();
+    let qd = fullnode.with(|node| {
+        node.transaction_orchestrator()
+            .unwrap()
+            .clone_quorum_driver()
+    });
     assert_eq!(qd.current_epoch(), 1);
     assert_eq!(
-        fullnode
-            .clone_authority_aggregator()
-            .unwrap()
-            .committee
-            .epoch,
+        fullnode.with(|node| node.clone_authority_aggregator().unwrap().committee.epoch),
         1
     );
 }

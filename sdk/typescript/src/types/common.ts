@@ -86,6 +86,57 @@ export function isValidSuiObjectId(value: string): boolean {
   return isValidSuiAddress(value);
 }
 
+type StructTag = {
+  address: string;
+  module: string;
+  name: string;
+  typeParams: (string | StructTag)[];
+};
+
+function parseTypeTag(type: string): string | StructTag {
+  if (!type.includes('::')) return type;
+
+  return parseStructTag(type);
+}
+
+export function parseStructTag(type: string): StructTag {
+  const [address, module] = type.split('::');
+
+  const rest = type.slice(address.length + module.length + 4);
+  const name = rest.includes('<') ? rest.slice(0, rest.indexOf('<')) : rest;
+  const typeParams = rest.includes('<')
+    ? rest
+        .slice(rest.indexOf('<') + 1, rest.lastIndexOf('>'))
+        .split(',')
+        .map((typeParam) => parseTypeTag(typeParam.trim()))
+    : [];
+
+  return {
+    address: normalizeSuiAddress(address),
+    module,
+    name,
+    typeParams,
+  };
+}
+
+export function normalizeStructTag(type: string | StructTag): string {
+  const { address, module, name, typeParams } =
+    typeof type === 'string' ? parseStructTag(type) : type;
+
+  const formattedTypeParams =
+    typeParams.length > 0
+      ? `<${typeParams
+          .map((typeParam) =>
+            typeof typeParam === 'string'
+              ? typeParam
+              : normalizeStructTag(typeParam),
+          )
+          .join(',')}>`
+      : '';
+
+  return `${address}::${module}::${name}${formattedTypeParams}`;
+}
+
 /**
  * Perform the following operations:
  * 1. Make the address lower case

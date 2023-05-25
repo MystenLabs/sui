@@ -6,12 +6,13 @@ use crate::batch_maker::MAX_PARALLEL_BATCH;
 use config::{Authority, Committee, Stake, WorkerCache, WorkerId};
 use fastcrypto::hash::Hash;
 use futures::stream::{futures_unordered::FuturesUnordered, StreamExt as _};
+use mysten_metrics::metered_channel::Receiver;
 use mysten_metrics::{monitored_future, spawn_logged_monitored_task};
 use network::{CancelOnDropHandler, ReliableNetwork};
 use std::time::Duration;
 use tokio::{task::JoinHandle, time::timeout};
 use tracing::{trace, warn};
-use types::{metered_channel::Receiver, Batch, ConditionalBroadcastReceiver, WorkerBatchMessage};
+use types::{Batch, ConditionalBroadcastReceiver, WorkerBatchMessage};
 
 #[cfg(test)]
 #[path = "tests/quorum_waiter_tests.rs"]

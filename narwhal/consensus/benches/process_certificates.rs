@@ -1,11 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use consensus::{
-    bullshark::Bullshark,
-    consensus::{ConsensusProtocol, ConsensusState},
-    metrics::ConsensusMetrics,
-};
+use consensus::{bullshark::Bullshark, consensus::ConsensusState, metrics::ConsensusMetrics};
 use criterion::{
     criterion_group, criterion_main, BenchmarkId, Criterion, SamplingMode, Throughput,
 };

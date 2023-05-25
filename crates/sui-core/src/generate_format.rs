@@ -193,7 +193,7 @@ fn main() {
         }
         Action::Test => {
             let reference = std::fs::read_to_string(FILE_PATH).unwrap();
-            let content = serde_yaml::to_string(&registry).unwrap() + "\n";
+            let content: String = serde_yaml::to_string(&registry).unwrap() + "\n";
             assert_str_eq!(&reference, &content);
         }
     }

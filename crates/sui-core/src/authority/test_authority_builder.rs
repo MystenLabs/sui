@@ -45,6 +45,7 @@ pub struct TestAuthorityBuilder<'a> {
     node_keypair: Option<&'a AuthorityKeyPair>,
     genesis: Option<&'a Genesis>,
     starting_objects: Option<&'a [Object]>,
+    expensive_safety_checks: Option<ExpensiveSafetyCheckConfig>,
 }
 
 impl<'a> TestAuthorityBuilder<'a> {
@@ -116,6 +117,11 @@ impl<'a> TestAuthorityBuilder<'a> {
         )
     }
 
+    pub fn with_expensive_safety_checks(mut self, config: ExpensiveSafetyCheckConfig) -> Self {
+        assert!(self.expensive_safety_checks.replace(config).is_none());
+        self
+    }
+
     pub async fn side_load_objects(
         authority_state: Arc<AuthorityState>,
         objects: &'a [Object],
@@ -129,8 +135,7 @@ impl<'a> TestAuthorityBuilder<'a> {
     pub async fn build(self) -> Arc<AuthorityState> {
         let local_network_config =
             sui_swarm_config::network_config_builder::ConfigBuilder::new_with_temp_dir()
-                // TODO: change the default to 1000 instead after fixing tests.
-                .with_reference_gas_price(self.reference_gas_price.unwrap_or(1))
+                .with_reference_gas_price(self.reference_gas_price.unwrap_or(500))
                 .build();
         let genesis = &self.genesis.unwrap_or(&local_network_config.genesis);
         let genesis_committee = genesis.committee().unwrap();
@@ -173,6 +178,10 @@ impl<'a> TestAuthorityBuilder<'a> {
             genesis.sui_system_object().into_epoch_start_state(),
             *genesis.checkpoint().digest(),
         );
+        let expensive_safety_checks = match self.expensive_safety_checks {
+            None => ExpensiveSafetyCheckConfig::default(),
+            Some(config) => config,
+        };
         let epoch_store = AuthorityPerEpochStore::new(
             name,
             Arc::new(genesis_committee.clone()),
@@ -183,7 +192,7 @@ impl<'a> TestAuthorityBuilder<'a> {
             authority_store.clone(),
             cache_metrics,
             signature_verifier_metrics,
-            &ExpensiveSafetyCheckConfig::default(),
+            &expensive_safety_checks,
         );
 
         let committee_store = Arc::new(CommitteeStore::new(

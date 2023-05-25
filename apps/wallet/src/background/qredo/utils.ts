@@ -7,6 +7,7 @@ import {
     type QredoConnectIdentity,
     type QredoConnection,
     type QredoConnectPendingRequest,
+    type UIQredoPendingRequest,
 } from './types';
 import { type QredoConnectInput } from '_src/dapp-interface/WalletStandardInterface';
 
@@ -45,6 +46,21 @@ export function validateInputOrThrow(input: QredoConnectInput) {
         service,
         apiUrl: apiUrl.toString(),
         token,
+    };
+}
+
+const UI_TOKEN_MAX_LENGTH = 8;
+
+export function toUIQredoPendingRequest(
+    stored: QredoConnectPendingRequest
+): UIQredoPendingRequest {
+    return {
+        id: stored.id,
+        service: stored.service,
+        apiUrl: stored.apiUrl,
+        origin: stored.origin,
+        originFavIcon: stored.originFavIcon,
+        partialToken: `…${stored.token.slice(-UI_TOKEN_MAX_LENGTH)}`,
     };
 }
 

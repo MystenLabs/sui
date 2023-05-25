@@ -43,6 +43,7 @@ be used to implement application-specific transfer rules.
 -  [Struct `ItemPurchased`](#0x2_kiosk_ItemPurchased)
 -  [Struct `ItemDelisted`](#0x2_kiosk_ItemDelisted)
 -  [Constants](#@Constants_0)
+-  [Function `default`](#0x2_kiosk_default)
 -  [Function `new`](#0x2_kiosk_new)
 -  [Function `close_and_withdraw`](#0x2_kiosk_close_and_withdraw)
 -  [Function `set_owner`](#0x2_kiosk_set_owner)
@@ -89,6 +90,7 @@ be used to implement application-specific transfer rules.
 <b>use</b> <a href="event.md#0x2_event">0x2::event</a>;
 <b>use</b> <a href="object.md#0x2_object">0x2::object</a>;
 <b>use</b> <a href="sui.md#0x2_sui">0x2::sui</a>;
+<b>use</b> <a href="transfer.md#0x2_transfer">0x2::transfer</a>;
 <b>use</b> <a href="transfer_policy.md#0x2_transfer_policy">0x2::transfer_policy</a>;
 <b>use</b> <a href="tx_context.md#0x2_tx_context">0x2::tx_context</a>;
 </code></pre>
@@ -629,6 +631,34 @@ Delisting an item that is not listed.
 </code></pre>
 
 
+
+<a name="0x2_kiosk_default"></a>
+
+## Function `default`
+
+Creates a new Kiosk in a default configuration: sender receives the
+<code><a href="kiosk.md#0x2_kiosk_KioskOwnerCap">KioskOwnerCap</a></code> and becomes the Owner, the <code><a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a></code> is shared.
+
+
+<pre><code>entry <b>fun</b> <a href="kiosk.md#0x2_kiosk_default">default</a>(ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code>entry <b>fun</b> <a href="kiosk.md#0x2_kiosk_default">default</a>(ctx: &<b>mut</b> TxContext) {
+    <b>let</b> (<a href="kiosk.md#0x2_kiosk">kiosk</a>, cap) = <a href="kiosk.md#0x2_kiosk_new">new</a>(ctx);
+    sui::transfer::transfer(cap, sender(ctx));
+    sui::transfer::share_object(<a href="kiosk.md#0x2_kiosk">kiosk</a>);
+}
+</code></pre>
+
+
+
+</details>
 
 <a name="0x2_kiosk_new"></a>
 
