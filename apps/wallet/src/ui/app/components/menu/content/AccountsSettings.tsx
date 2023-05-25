@@ -7,6 +7,7 @@ import Browser from 'webextension-polyfill';
 
 import { Account } from './Account';
 import { MenuLayout } from './MenuLayout';
+import { Link } from '_app/shared/Link';
 import { useNextMenuUrl } from '_components/menu/hooks';
 import { AppType } from '_redux/slices/app/AppType';
 import { useAppSelector } from '_src/ui/app/hooks';
@@ -25,6 +26,7 @@ export function AccountsSettings() {
         true,
         '/accounts/connect-ledger-modal'
     );
+
     return (
         <MenuLayout title="Accounts" back={backUrl}>
             <div className="flex flex-col gap-3">

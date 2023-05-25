@@ -25,6 +25,7 @@ import {
     useMenuUrl,
     useNextMenuUrl,
 } from '_components/menu/hooks';
+import { RecoveryPassphrase } from '_components/recovery-passphrase/RecoveryPassphrase';
 import { useOnKeyboardEvent } from '_hooks';
 
 import type { MouseEvent } from 'react';
@@ -86,6 +87,10 @@ function MenuContent() {
                         <Route
                             path="/import-ledger-accounts"
                             element={<ImportLedgerAccounts />}
+                        />
+                        <Route
+                            path="/recovery-passphrase"
+                            element={<RecoveryPassphrase />}
                         />
                     </Routes>
                 </MainLocationContext.Provider>

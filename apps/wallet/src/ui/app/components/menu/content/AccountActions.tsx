@@ -18,6 +18,7 @@ export type AccountActionsProps = {
 
 export function AccountActions({ account }: AccountActionsProps) {
     const exportAccountUrl = useNextMenuUrl(true, `/export/${account.address}`);
+    const recoveryPassphraseUrl = useNextMenuUrl(true, '/recovery-passphrase');
 
     let actionContent: ReactNode | null = null;
     switch (account.type) {
@@ -58,6 +59,12 @@ export function AccountActions({ account }: AccountActionsProps) {
     return (
         <div className="flex flex-row items-center flex-1 gap-1">
             {actionContent}
+            <Link
+                to={recoveryPassphraseUrl}
+                color="heroDark"
+                weight="medium"
+                text="Export Passphrase"
+            />
         </div>
     );
 }
