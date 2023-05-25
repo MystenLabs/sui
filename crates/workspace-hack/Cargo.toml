@@ -334,7 +334,7 @@ leb128 = { version = "0.2", default-features = false }
 lexical-core = { version = "0.7" }
 libc = { version = "0.2" }
 libm = { version = "0.2" }
-librocksdb-sys = { version = "0.10", features = ["bzip2", "lz4", "snappy", "zlib", "zstd"] }
+librocksdb-sys = { version = "0.11", features = ["bzip2", "lz4", "snappy", "zlib", "zstd"] }
 libtest-mimic = { version = "0.5", default-features = false }
 libz-sys = { version = "1", default-features = false, features = ["static"] }
 linked-hash-map = { version = "0.5", default-features = false }
@@ -516,7 +516,7 @@ rfc6979-9fbad63c4bcf4a8f = { package = "rfc6979", version = "0.4", default-featu
 ring = { version = "0.16" }
 ripemd = { version = "0.1", default-features = false }
 roaring = { version = "0.10", default-features = false }
-rocksdb = { version = "0.20", features = ["multi-threaded-cf"] }
+rocksdb = { version = "0.21", features = ["multi-threaded-cf"] }
 ron = { version = "0.8" }
 rsa = { version = "0.8", features = ["sha2"] }
 rstest = { version = "0.16" }
@@ -802,7 +802,7 @@ better_any = { version = "0.1", default-features = false }
 better_typeid_derive = { version = "0.1", default-features = false }
 bimap = { version = "0.6" }
 bincode = { version = "1", default-features = false }
-bindgen = { version = "0.64", default-features = false, features = ["runtime"] }
+bindgen = { version = "0.65", default-features = false, features = ["runtime"] }
 bip32 = { version = "0.4" }
 bit-set = { version = "0.5" }
 bit-vec = { version = "0.6", default-features = false, features = ["std"] }
@@ -1081,7 +1081,7 @@ lexical-core = { version = "0.7" }
 libc = { version = "0.2" }
 libloading = { version = "0.7", default-features = false }
 libm = { version = "0.2" }
-librocksdb-sys = { version = "0.10", features = ["bzip2", "lz4", "snappy", "zlib", "zstd"] }
+librocksdb-sys = { version = "0.11", features = ["bzip2", "lz4", "snappy", "zlib", "zstd"] }
 libtest-mimic = { version = "0.5", default-features = false }
 libz-sys = { version = "1", default-features = false, features = ["static"] }
 linked-hash-map = { version = "0.5", default-features = false }
@@ -1240,7 +1240,8 @@ predicates-core = { version = "1", default-features = false }
 predicates-tree = { version = "1", default-features = false }
 pretty = { version = "0.10", default-features = false }
 pretty_assertions = { version = "1" }
-prettyplease = { version = "0.1", default-features = false }
+prettyplease-6f8ce4dd05d13bba = { package = "prettyplease", version = "0.2", default-features = false }
+prettyplease-c65f7effa3be6d31 = { package = "prettyplease", version = "0.1", default-features = false }
 prettytable-rs = { version = "0.10" }
 primeorder = { version = "0.13", default-features = false }
 primitive-types = { version = "0.10", features = ["impl-serde"] }
@@ -1295,7 +1296,7 @@ rfc6979-9fbad63c4bcf4a8f = { package = "rfc6979", version = "0.4", default-featu
 ring = { version = "0.16" }
 ripemd = { version = "0.1", default-features = false }
 roaring = { version = "0.10", default-features = false }
-rocksdb = { version = "0.20", features = ["multi-threaded-cf"] }
+rocksdb = { version = "0.21", features = ["multi-threaded-cf"] }
 ron = { version = "0.8" }
 rsa = { version = "0.8", features = ["sha2"] }
 rstest = { version = "0.16" }
