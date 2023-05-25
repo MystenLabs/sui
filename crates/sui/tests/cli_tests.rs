@@ -45,7 +45,7 @@ use sui_types::error::SuiObjectResponseError;
 use sui_types::{base_types::ObjectID, crypto::get_key_pair, gas_coin::GasCoin};
 use test_utils::network::TestClusterBuilder;
 
-const TEST_DATA_DIR: &str = "src/unit_tests/data/";
+const TEST_DATA_DIR: &str = "tests/data/";
 
 #[sim_test]
 async fn test_genesis() -> Result<(), anyhow::Error> {
