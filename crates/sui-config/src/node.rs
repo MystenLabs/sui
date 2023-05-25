@@ -354,6 +354,17 @@ impl ExpensiveSafetyCheckConfig {
         }
     }
 
+    pub fn new_disable_all() -> Self {
+        Self {
+            enable_epoch_sui_conservation_check: false,
+            enable_deep_per_tx_sui_conservation_check: false,
+            force_disable_epoch_sui_conservation_check: true,
+            enable_state_consistency_check: false,
+            force_disable_state_consistency_check: true,
+            enable_move_vm_paranoid_checks: false,
+        }
+    }
+
     pub fn enable_paranoid_checks(&mut self) {
         self.enable_move_vm_paranoid_checks = true
     }

@@ -45,8 +45,10 @@
 use super::SuiNode;
 use std::future::Future;
 use std::sync::Arc;
+use sui_core::authority::AuthorityState;
 
 /// Wrap SuiNode to allow correct access to SuiNode in simulator tests.
+#[derive(Clone)]
 pub struct SuiNodeHandle(Option<Arc<SuiNode>>);
 
 impl SuiNodeHandle {
@@ -61,6 +63,10 @@ impl SuiNodeHandle {
     pub fn with<T>(&self, cb: impl FnOnce(&SuiNode) -> T) -> T {
         let _guard = self.guard();
         cb(self.inner())
+    }
+
+    pub fn state(&self) -> Arc<AuthorityState> {
+        self.with(|sui_node| sui_node.state())
     }
 }
 

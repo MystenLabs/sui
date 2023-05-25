@@ -246,7 +246,7 @@ pub async fn compare_system_package<S: ObjectStore>(
         };
 
         if let Err(e) = compatibility.check(&cur_module, &new_module) {
-            error!("Compatibility check failed, for new version of {id}: {e:?}");
+            error!("Compatibility check failed, for new version of {id}::{name}: {e:?}");
             return None;
         }
     }

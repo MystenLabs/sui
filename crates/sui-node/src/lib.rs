@@ -1187,6 +1187,11 @@ impl SuiNode {
         );
         new_epoch_store
     }
+
+    #[cfg(msim)]
+    pub fn get_sim_node_id(&self) -> sui_simulator::task::NodeId {
+        self.sim_node.id()
+    }
 }
 
 /// Notify state-sync that a new list of trusted peers are now available.

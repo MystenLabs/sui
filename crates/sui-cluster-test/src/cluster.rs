@@ -186,7 +186,7 @@ impl Cluster for LocalNewCluster {
             cluster_builder = cluster_builder.with_epoch_duration_ms(epoch_duration_ms);
         }
         if let Some(rpc_port) = fullnode_port {
-            cluster_builder = cluster_builder.set_fullnode_rpc_port(rpc_port);
+            cluster_builder = cluster_builder.with_fullnode_rpc_port(rpc_port);
         }
 
         let mut test_cluster = cluster_builder.build().await?;
