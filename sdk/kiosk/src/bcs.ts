@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { bcs } from '@mysten/sui.js';
+import { ObjectOwner, bcs } from '@mysten/sui.js';
 
 /**
  * The Kiosk object fields (for BCS queries).
@@ -57,7 +57,7 @@ export type TransferPolicy = {
   type: string;
   balance: string;
   rules: string[];
-  owner?: string;
+  owner: ObjectOwner;
 };
 
 bcs.registerStructType('TransferPolicy', {
