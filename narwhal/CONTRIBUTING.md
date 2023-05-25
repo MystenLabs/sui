@@ -1,4 +1,4 @@
-# Contributing to Narwhal / Bullshark / Tusk
+# Contributing to Narwhal / Bullshark
 We want to make contributions as easy and transparent as possible.
 
 ## Pull Requests

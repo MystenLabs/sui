@@ -505,7 +505,7 @@ impl Primary {
         ];
         handles.extend(admin_handles);
 
-        // If a DAG component is present then we are not using the internal consensus (Bullshark/Tusk)
+        // If a DAG component is present then we are not using the internal consensus (Bullshark)
         // but rather an external one and we are leveraging a pure DAG structure, and more components
         // need to get initialised.
         if dag.is_some() {

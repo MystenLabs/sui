@@ -43,7 +43,7 @@ use worker::TrivialTransactionValidator;
 async fn main() -> Result<(), eyre::Report> {
     let matches = App::new(crate_name!())
         .version(crate_version!())
-        .about("A research implementation of Narwhal and Tusk.")
+        .about("A production implementation of Narwhal and Bullshark.")
         .args_from_usage("-v... 'Sets the level of verbosity'")
         .subcommand(
             SubCommand::with_name("generate_keys")
@@ -72,7 +72,7 @@ async fn main() -> Result<(), eyre::Report> {
                 .args_from_usage("--store=<PATH> 'The path where to create the data store'")
                 .subcommand(SubCommand::with_name("primary")
                     .about("Run a single primary")
-                    .args_from_usage("-d, --consensus-disabled 'Provide this flag to run a primary node without Tusk'")
+                    .args_from_usage("-d, --consensus-disabled 'Provide this flag to run a primary node without Bullshark'")
                 )
                 .subcommand(
                     SubCommand::with_name("worker")
