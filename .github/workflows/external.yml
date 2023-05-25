@@ -113,7 +113,7 @@ jobs:
   # continue to block on the rust tests passing in the case of rust changes and
   # otherwise not block pushes to main.
   external-crates-test-notrust:
-    name: test
+    name: external-crates-test
     needs: diff
     if: needs.diff.outputs.isRust == 'false'
     runs-on: ${{ matrix.os }}
