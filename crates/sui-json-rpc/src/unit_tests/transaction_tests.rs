@@ -1,18 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use sui_config::SUI_KEYSTORE_FILENAME;
 use sui_json_rpc_types::SuiTransactionBlockResponseQuery;
 use sui_json_rpc_types::TransactionFilter;
 use sui_json_rpc_types::{
     SuiObjectDataOptions, SuiObjectResponseQuery, SuiTransactionBlockResponse,
     SuiTransactionBlockResponseOptions, TransactionBlockBytes,
 };
-use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_macros::sim_test;
 use sui_types::quorum_driver_types::ExecuteTransactionRequestType;
 use sui_types::transaction::SenderSignedData;
-use sui_types::utils::to_sender_signed_transaction;
 use test_utils::network::TestClusterBuilder;
 
 use crate::api::{IndexerApiClient, TransactionBuilderClient, WriteApiClient};
@@ -21,11 +18,11 @@ use crate::api::{IndexerApiClient, TransactionBuilderClient, WriteApiClient};
 async fn test_get_transaction_block() -> Result<(), anyhow::Error> {
     let cluster = TestClusterBuilder::new().build().await?;
     let http_client = cluster.rpc_client();
-    let address = cluster.accounts.first().unwrap();
+    let address = cluster.get_address_0();
 
     let objects = http_client
         .get_owned_objects(
-            *address,
+            address,
             Some(SuiObjectResponseQuery::new_with_options(
                 SuiObjectDataOptions::new()
                     .with_type()
@@ -45,17 +42,16 @@ async fn test_get_transaction_block() -> Result<(), anyhow::Error> {
         let oref = obj.object().unwrap();
         let transaction_bytes: TransactionBlockBytes = http_client
             .transfer_object(
-                *address,
+                address,
                 oref.object_id,
                 Some(gas_id),
                 100_000.into(),
-                *address,
+                address,
             )
             .await?;
-        let keystore_path = cluster.swarm.dir().join(SUI_KEYSTORE_FILENAME);
-        let keystore = Keystore::from(FileBasedKeystore::new(&keystore_path)?);
-        let tx =
-            to_sender_signed_transaction(transaction_bytes.to_data()?, keystore.get_key(address)?);
+        let tx = cluster
+            .wallet
+            .sign_transaction(&transaction_bytes.to_data()?);
 
         let (tx_bytes, signatures) = tx.to_tx_bytes_and_signatures();
 
@@ -108,11 +104,11 @@ async fn test_get_transaction_block() -> Result<(), anyhow::Error> {
 async fn test_get_raw_transaction() -> Result<(), anyhow::Error> {
     let cluster = TestClusterBuilder::new().build().await?;
     let http_client = cluster.rpc_client();
-    let address = cluster.accounts.first().unwrap();
+    let address = cluster.get_address_0();
 
     let objects = http_client
         .get_owned_objects(
-            *address,
+            address,
             Some(SuiObjectResponseQuery::new_with_options(
                 SuiObjectDataOptions::new(),
             )),
@@ -125,11 +121,11 @@ async fn test_get_raw_transaction() -> Result<(), anyhow::Error> {
 
     // Make a transfer transactions
     let transaction_bytes: TransactionBlockBytes = http_client
-        .transfer_object(*address, object_to_transfer, None, 10_000.into(), *address)
+        .transfer_object(address, object_to_transfer, None, 10_000.into(), address)
         .await?;
-    let keystore_path = cluster.swarm.dir().join(SUI_KEYSTORE_FILENAME);
-    let keystore = Keystore::from(FileBasedKeystore::new(&keystore_path)?);
-    let tx = to_sender_signed_transaction(transaction_bytes.to_data()?, keystore.get_key(address)?);
+    let tx = cluster
+        .wallet
+        .sign_transaction(&transaction_bytes.to_data()?);
     let original_sender_signed_data = tx.data().clone();
 
     let (tx_bytes, signatures) = tx.to_tx_bytes_and_signatures();
@@ -154,21 +150,19 @@ async fn test_get_raw_transaction() -> Result<(), anyhow::Error> {
 
 #[sim_test]
 async fn test_get_fullnode_transaction() -> Result<(), anyhow::Error> {
-    let mut cluster = TestClusterBuilder::new().build().await.unwrap();
+    let cluster = TestClusterBuilder::new().build().await.unwrap();
 
-    let context = &mut cluster.wallet;
+    let context = &cluster.wallet;
 
-    let keystore_path = cluster.swarm.dir().join(SUI_KEYSTORE_FILENAME);
-    let keystore = Keystore::from(FileBasedKeystore::new(&keystore_path).unwrap());
     let mut tx_responses: Vec<SuiTransactionBlockResponse> = Vec::new();
 
     let client = context.get_client().await.unwrap();
 
-    for address in cluster.accounts.iter() {
+    for address in cluster.get_addresses() {
         let objects = client
             .read_api()
             .get_owned_objects(
-                *address,
+                address,
                 Some(SuiObjectResponseQuery::new_with_options(
                     SuiObjectDataOptions::new()
                         .with_type()
@@ -187,9 +181,9 @@ async fn test_get_fullnode_transaction() -> Result<(), anyhow::Error> {
             let oref = obj.object().unwrap();
             let data = client
                 .transaction_builder()
-                .transfer_object(*address, oref.object_id, Some(gas_id), 100_000, *address)
+                .transfer_object(address, oref.object_id, Some(gas_id), 100_000, address)
                 .await?;
-            let tx = to_sender_signed_transaction(data, keystore.get_key(address).unwrap());
+            let tx = cluster.wallet.sign_transaction(&data);
 
             let response = client
                 .quorum_driver_api()
@@ -271,7 +265,7 @@ async fn test_get_fullnode_transaction() -> Result<(), anyhow::Error> {
         .read_api()
         .query_transaction_blocks(
             SuiTransactionBlockResponseQuery::new_with_filter(TransactionFilter::FromAddress(
-                cluster.accounts[0],
+                cluster.get_address_0(),
             )),
             None,
             None,
@@ -286,7 +280,7 @@ async fn test_get_fullnode_transaction() -> Result<(), anyhow::Error> {
         .read_api()
         .query_transaction_blocks(
             SuiTransactionBlockResponseQuery::new_with_filter(TransactionFilter::FromAddress(
-                cluster.accounts[0],
+                cluster.get_address_0(),
             )),
             None,
             None,
