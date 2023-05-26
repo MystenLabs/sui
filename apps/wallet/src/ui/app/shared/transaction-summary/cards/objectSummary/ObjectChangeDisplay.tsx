@@ -19,7 +19,7 @@ export function ObjectChangeDisplay({
 
     if (!display) return null;
     return (
-        <div className="relative w-32 cursor-pointer whitespace-nowrap min-w-min">
+        <div className="relative group w-32 cursor-pointer whitespace-nowrap min-w-min">
             <NftImage
                 size="md"
                 name={display.name ?? ''}
@@ -27,7 +27,7 @@ export function ObjectChangeDisplay({
                 src={display.image_url ?? ''}
             />
             {objectId && (
-                <div className="absolute bottom-2 full left-1/2 flex -translate-x-1/2 justify-center rounded-lg bg-white/90 px-2 py-1">
+                <div className="absolute bottom-2 full left-1/2 transition-opacity group-hover:opacity-100 opacity-0 -translate-x-1/2 justify-center rounded-lg bg-white/90 px-2 py-1">
                     <ExplorerLink
                         type={ExplorerLinkType.object}
                         objectID={objectId}

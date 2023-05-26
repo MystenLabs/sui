@@ -19,7 +19,7 @@ export function ObjectDisplay({
     if (!display.data) return null;
     const { description, name, image_url: imageUrl } = display.data ?? {};
     return (
-        <div className="relative w-32">
+        <div className="group relative w-32">
             <ImageModal
                 open={open}
                 onClose={() => handleOpen(false)}
@@ -36,7 +36,7 @@ export function ObjectDisplay({
                     alt={description}
                     onClick={() => handleOpen(true)}
                 />
-                <div className="absolute bottom-2 left-1/2 flex -translate-x-1/2 justify-center rounded-lg bg-white px-2 py-1">
+                <div className="absolute bottom-2 left-1/2 flex -translate-x-1/2 justify-center rounded-lg bg-white px-2 py-1 opacity-0 transition-opacity group-hover:opacity-100">
                     <ObjectLink objectId={objectId} />
                 </div>
             </div>
