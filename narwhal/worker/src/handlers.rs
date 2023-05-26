@@ -42,7 +42,6 @@ impl<V: TransactionValidator> WorkerToWorker for WorkerReceiverHandler<V> {
     ) -> Result<anemo::Response<()>, anemo::rpc::Status> {
         let message = request.into_body();
         if let Err(err) = self.validator.validate_batch(&message.batch).await {
-            // The batch is invalid, we don't want to process it.
             return Err(anemo::rpc::Status::new_with_message(
                 StatusCode::BadRequest,
                 format!("Invalid batch: {err}"),
@@ -200,10 +199,7 @@ impl<V: TransactionValidator> PrimaryToWorker for PrimaryReceiverHandler<V> {
         let request = RequestBatchesRequest {
             batch_digests: missing.iter().cloned().collect(),
         };
-        debug!(
-            "Sending RequestBatchesRequest to {worker_name}: {:?}",
-            request
-        );
+        debug!("Sending RequestBatchesRequest to {worker_name}: {request:?}");
         let response = client
             .request_batches(anemo::Request::new(request).with_timeout(self.request_batch_timeout))
             .await?
@@ -212,7 +208,6 @@ impl<V: TransactionValidator> PrimaryToWorker for PrimaryReceiverHandler<V> {
             if !message.is_certified {
                 // This batch is not part of a certificate, so we need to validate it.
                 if let Err(err) = self.validator.validate_batch(&batch).await {
-                    // The batch is invalid, we don't want to process it.
                     return Err(anemo::rpc::Status::new_with_message(
                         StatusCode::BadRequest,
                         format!("Invalid batch: {err}"),
@@ -230,7 +225,9 @@ impl<V: TransactionValidator> PrimaryToWorker for PrimaryReceiverHandler<V> {
         if missing.is_empty() {
             return Ok(anemo::Response::new(()));
         }
-        Err(anemo::rpc::Status::internal("failed to fetch payloads"))
+        Err(anemo::rpc::Status::internal(
+            "failed to synchronize batches!",
+        ))
     }
 
     async fn fetch_batches(
