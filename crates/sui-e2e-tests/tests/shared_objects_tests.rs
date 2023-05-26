@@ -308,7 +308,11 @@ async fn access_clock_object_test() {
         let checkpoint = handles
             .get(0)
             .unwrap()
-            .with_async(|node| async { node.state().get_transaction_checkpoint(&digest).unwrap() })
+            .with_async(|node| async {
+                node.state()
+                    .get_transaction_checkpoint(&digest, &node.state().epoch_store_for_testing())
+                    .unwrap()
+            })
             .await;
         let Some(checkpoint) = checkpoint else {
             attempt += 1;

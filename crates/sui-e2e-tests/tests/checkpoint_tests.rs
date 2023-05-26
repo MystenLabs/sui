@@ -21,7 +21,12 @@ async fn basic_checkpoints_integration_test() {
             .validator_node_handles()
             .into_iter()
             .all(|handle| {
-                handle.with(|node| node.is_transaction_executed_in_checkpoint(&digest).unwrap())
+                handle.with(|node| {
+                    node.state()
+                        .epoch_store_for_testing()
+                        .is_transaction_executed_in_checkpoint(&digest)
+                        .unwrap()
+                })
             });
         if all_included {
             // success
