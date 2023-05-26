@@ -81,6 +81,12 @@ export function getProvider(): JsonRpcProvider {
   );
 }
 
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
 export async function setup() {
   const keypair = Ed25519Keypair.generate();
   const address = keypair.getPublicKey().toSuiAddress();
@@ -93,8 +99,16 @@ export async function setup() {
     retryIf: (error: any) => !(error instanceof FaucetRateLimitError),
     logger: (msg) => console.warn('Retrying requesting from faucet: ' + msg),
   });
+  // Wait until faucet sends this account some gas
+  const toolbox = new TestToolbox(keypair, provider);
+  let coins = await toolbox.getGasObjectsOwnedByAddress();
+  while (coins.length === 0) {
+    sleep(5000);
+    coins = await toolbox.getGasObjectsOwnedByAddress();
+  }
+
   assert(resp, FaucetResponse);
-  return new TestToolbox(keypair, provider);
+  return toolbox;
 }
 
 export async function publishPackage(
