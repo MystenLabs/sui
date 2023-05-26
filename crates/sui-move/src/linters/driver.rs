@@ -14,7 +14,7 @@ use move_stackless_bytecode::{
 
 use sui_types::base_types::ObjectID;
 
-use super::self_transfer::SelfTransferAnalysis;
+use super::{self_transfer::SelfTransferAnalysis, share_owned::ShareOwnedAnalysis};
 
 fn has_no_lint_attr(env: &GlobalEnv, attributes: &[Attribute]) -> bool {
     attributes.iter().any(|attr| {
@@ -82,6 +82,7 @@ pub fn lint_execute(env: GlobalEnv, published_addr: ObjectID, color: bool) -> St
             let cfg = StacklessControlFlowGraph::new_forward(&fun_data.code);
             // warn on calls of `public_transfer(.., tx_context::sender())`
             SelfTransferAnalysis::analyze(&func_env, &fun_data, &cfg);
+            ShareOwnedAnalysis::analyze(&func_env, &fun_data, &cfg);
             // calls to additional linters should go here
         }
         // check for unused types
