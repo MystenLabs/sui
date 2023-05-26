@@ -18,13 +18,13 @@ use prometheus::{register_int_gauge_with_registry, IntGauge, Registry};
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Instant;
-use sui_protocol_config::ProtocolConfig;
+use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
 use sui_types::crypto::{AuthorityKeyPair, NetworkKeyPair};
 use tokio::sync::Mutex;
 
 #[derive(PartialEq)]
 enum Running {
-    True(Epoch),
+    True(Epoch, ProtocolVersion),
     False,
 }
 
@@ -89,25 +89,17 @@ pub struct NarwhalManager {
 }
 
 impl NarwhalManager {
-    pub fn new(
-        protocol_config: ProtocolConfig,
-        config: NarwhalConfiguration,
-        metrics: NarwhalManagerMetrics,
-    ) -> Self {
+    pub fn new(config: NarwhalConfiguration, metrics: NarwhalManagerMetrics) -> Self {
         // Create the Narwhal Primary with configuration
         let primary_node = PrimaryNode::new(
-            protocol_config.clone(),
             config.parameters.clone(),
             true,
             config.registry_service.clone(),
         );
 
         // Create Narwhal Workers with configuration
-        let worker_nodes = WorkerNodes::new(
-            config.registry_service.clone(),
-            protocol_config,
-            config.parameters.clone(),
-        );
+        let worker_nodes =
+            WorkerNodes::new(config.registry_service.clone(), config.parameters.clone());
 
         let store_cache_metrics =
             CertificateStoreCacheMetrics::new(&config.registry_service.default_registry());
@@ -126,9 +118,15 @@ impl NarwhalManager {
     }
 
     // Starts the Narwhal (primary & worker(s)) - if not already running.
+    // Note: After a binary is updated with the new protocol version and the node
+    // is restarted, the protocol config does not take effect until we have a quorum
+    // of validators have updated the binary. Because of this the protocol upgrade
+    // will happen in the following epoch after quorum is reached. In this case NarwhalManager
+    // is not recreated which is why we pass protocol config in at start and not at creation.
     pub async fn start<State, TxValidator: TransactionValidator>(
         &self,
         committee: Committee,
+        protocol_config: ProtocolConfig,
         worker_cache: WorkerCache,
         execution_state: Arc<State>,
         tx_validator: TxValidator,
@@ -137,10 +135,9 @@ impl NarwhalManager {
     {
         let mut running = self.running.lock().await;
 
-        if let Running::True(epoch) = *running {
+        if let Running::True(epoch, version) = *running {
             tracing::warn!(
-                "Narwhal node is already Running at epoch {:?} - shutdown first before starting",
-                epoch
+                "Narwhal node is already Running for epoch {epoch:?} & version {version:?} - shutdown first before starting",
             );
             return;
         }
@@ -156,7 +153,11 @@ impl NarwhalManager {
 
         let name = self.primary_keypair.public().clone();
 
-        tracing::info!("Starting up Narwhal for epoch {}", committee.epoch());
+        tracing::info!(
+            "Starting up Narwhal for epoch {} & version {:?}",
+            committee.epoch(),
+            protocol_config.version
+        );
 
         // start primary
         const MAX_PRIMARY_RETRIES: u32 = 2;
@@ -168,6 +169,7 @@ impl NarwhalManager {
                     self.primary_keypair.copy(),
                     self.network_keypair.copy(),
                     committee.clone(),
+                    protocol_config.clone(),
                     worker_cache.clone(),
                     network_client.clone(),
                     &store,
@@ -206,6 +208,7 @@ impl NarwhalManager {
                     name.clone(),
                     id_keypair_copy,
                     committee.clone(),
+                    protocol_config.clone(),
                     worker_cache.clone(),
                     network_client.clone(),
                     &store,
@@ -228,8 +231,9 @@ impl NarwhalManager {
         }
 
         tracing::info!(
-            "Starting up Narwhal for epoch {} is complete - took {} seconds",
+            "Starting up Narwhal for epoch {} & version {:?} is complete - took {} seconds",
             committee.epoch(),
+            protocol_config.version,
             now.elapsed().as_secs_f64()
         );
 
@@ -242,7 +246,7 @@ impl NarwhalManager {
             .set(primary_retries as i64);
         self.metrics.start_worker_retries.set(worker_retries as i64);
 
-        *running = Running::True(committee.epoch());
+        *running = Running::True(committee.epoch(), protocol_config.version);
     }
 
     // Shuts down whole Narwhal (primary & worker(s)) and waits until nodes
@@ -251,16 +255,15 @@ impl NarwhalManager {
         let mut running = self.running.lock().await;
 
         match *running {
-            Running::True(epoch) => {
+            Running::True(epoch, version) => {
                 let now = Instant::now();
-                tracing::info!("Shutting down Narwhal epoch {:?}", epoch);
+                tracing::info!("Shutting down Narwhal for epoch {epoch:?} & version {version:?}");
 
                 self.primary_node.shutdown().await;
                 self.worker_nodes.shutdown().await;
 
                 tracing::info!(
-                    "Narwhal shutdown for epoch {:?} is complete - took {} seconds",
-                    epoch,
+                    "Narwhal shutdown for epoch {epoch:?} & version {version:?} is complete - took {} seconds",
                     now.elapsed().as_secs_f64()
                 );
 

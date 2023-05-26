@@ -282,7 +282,6 @@ async fn run(
         // Spawn the primary and consensus core.
         ("primary", Some(sub_matches)) => {
             let primary = PrimaryNode::new(
-                ProtocolConfig::get_for_version(ProtocolVersion::max()),
                 parameters.clone(),
                 !sub_matches.is_present("consensus-disabled"),
                 registry_service,
@@ -293,6 +292,7 @@ async fn run(
                     primary_keypair,
                     primary_network_keypair,
                     committee,
+                    ProtocolConfig::get_for_version(ProtocolVersion::max()),
                     worker_cache,
                     client.clone(),
                     &store,

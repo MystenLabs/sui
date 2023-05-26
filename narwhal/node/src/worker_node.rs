@@ -260,22 +260,16 @@ pub struct WorkerNodes {
     workers: ArcSwap<HashMap<WorkerId, WorkerNode>>,
     registry_service: RegistryService,
     registry_id: ArcSwapOption<RegistryID>,
-    protocol_config: ProtocolConfig,
     parameters: Parameters,
     client: ArcSwapOption<NetworkClient>,
 }
 
 impl WorkerNodes {
-    pub fn new(
-        registry_service: RegistryService,
-        protocol_config: ProtocolConfig,
-        parameters: Parameters,
-    ) -> Self {
+    pub fn new(registry_service: RegistryService, parameters: Parameters) -> Self {
         Self {
             workers: ArcSwap::from(Arc::new(HashMap::default())),
             registry_service,
             registry_id: ArcSwapOption::empty(),
-            protocol_config,
             parameters,
             client: ArcSwapOption::empty(),
         }
@@ -290,6 +284,7 @@ impl WorkerNodes {
         ids_and_keypairs: Vec<(WorkerId, NetworkKeyPair)>,
         // The committee information.
         committee: Committee,
+        protocol_config: ProtocolConfig,
         // The worker information cache.
         worker_cache: WorkerCache,
         // Client for communications.
@@ -321,7 +316,7 @@ impl WorkerNodes {
         for (worker_id, key_pair) in ids_and_keypairs {
             let worker = WorkerNode::new(
                 worker_id,
-                self.protocol_config.clone(),
+                protocol_config.clone(),
                 self.parameters.clone(),
                 self.registry_service.clone(),
             );

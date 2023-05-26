@@ -764,8 +764,7 @@ mod test {
                 .iter()
                 .map(|header| fixture.certificate(header).digest())
                 .collect();
-            (_, current_round) =
-                fixture.headers_round(i, &parents, &latest_protocol_version(), committee.epoch());
+            (_, current_round) = fixture.headers_round(i, &parents, &latest_protocol_version());
 
             result.extend(
                 current_round

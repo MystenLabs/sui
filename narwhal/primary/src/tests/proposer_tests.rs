@@ -121,11 +121,8 @@ async fn propose_payload_and_repropose_after_n_seconds() {
     assert!(header.validate(&committee, &worker_cache).is_ok());
 
     // WHEN available batches are more than the maximum ones
-    let batches: IndexMap<BatchDigest, (WorkerId, TimestampMs)> = fixture_payload(
-        (max_num_of_batches * 2) as u8,
-        &latest_protocol_version(),
-        committee.epoch(),
-    );
+    let batches: IndexMap<BatchDigest, (WorkerId, TimestampMs)> =
+        fixture_payload((max_num_of_batches * 2) as u8, &latest_protocol_version());
 
     let mut ack_list = vec![];
     for (batch_id, (worker_id, created_at)) in batches {

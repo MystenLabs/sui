@@ -59,8 +59,7 @@ async fn test_get_collections() {
 
     // Generate headers
     for n in 0..5 {
-        let batch =
-            fixture_batch_with_transactions(10, &latest_protocol_version(), committee.epoch());
+        let batch = fixture_batch_with_transactions(10, &latest_protocol_version());
 
         let header = Header::V1(
             author
@@ -275,8 +274,7 @@ async fn test_remove_collections() {
 
     // Generate headers
     for n in 0..5 {
-        let batch =
-            fixture_batch_with_transactions(10, &latest_protocol_version(), committee.epoch());
+        let batch = fixture_batch_with_transactions(10, &latest_protocol_version());
 
         let header = Header::V1(
             author
@@ -1206,7 +1204,7 @@ async fn fixture_certificate(
     payload_store: PayloadStore,
     batch_store: DBMap<BatchDigest, Batch>,
 ) -> (Certificate, Batch) {
-    let batch = fixture_batch_with_transactions(10, &latest_protocol_version(), committee.epoch());
+    let batch = fixture_batch_with_transactions(10, &latest_protocol_version());
     let worker_id = 0;
 
     let batch_digest = batch.digest();

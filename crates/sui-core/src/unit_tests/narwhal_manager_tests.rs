@@ -127,13 +127,13 @@ async fn test_narwhal_manager() {
 
         let metrics = NarwhalManagerMetrics::new(&Registry::new());
 
-        let narwhal_manager =
-            NarwhalManager::new(latest_protocol_version(), narwhal_config, metrics);
+        let narwhal_manager = NarwhalManager::new(narwhal_config, metrics);
 
         // start narwhal
         narwhal_manager
             .start(
                 narwhal_committee.clone(),
+                latest_protocol_version(),
                 worker_cache.clone(),
                 Arc::new(execution_state.clone()),
                 TrivialTransactionValidator::default(),
@@ -195,6 +195,7 @@ async fn test_narwhal_manager() {
         narwhal_manager
             .start(
                 narwhal_committee.clone(),
+                latest_protocol_version(),
                 worker_cache.clone(),
                 Arc::new(execution_state.clone()),
                 TrivialTransactionValidator::default(),

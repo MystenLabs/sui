@@ -68,16 +68,8 @@ async fn test_successful_blocks_delete() {
 
     // AND generate headers with distributed batches between 2 workers (0 and 1)
     for _headers in 0..5 {
-        let batch_1 = test_utils::fixture_batch_with_transactions(
-            10,
-            &latest_protocol_version(),
-            committee.epoch(),
-        );
-        let batch_2 = test_utils::fixture_batch_with_transactions(
-            10,
-            &latest_protocol_version(),
-            committee.epoch(),
-        );
+        let batch_1 = test_utils::fixture_batch_with_transactions(10, &latest_protocol_version());
+        let batch_2 = test_utils::fixture_batch_with_transactions(10, &latest_protocol_version());
 
         let header = Header::V1(
             author
@@ -245,16 +237,8 @@ async fn test_failed_blocks_delete() {
 
     // AND generate headers with distributed batches between 2 workers (0 and 1)
     for _headers in 0..5 {
-        let batch_1 = test_utils::fixture_batch_with_transactions(
-            10,
-            &latest_protocol_version(),
-            committee.epoch(),
-        );
-        let batch_2 = test_utils::fixture_batch_with_transactions(
-            10,
-            &latest_protocol_version(),
-            committee.epoch(),
-        );
+        let batch_1 = test_utils::fixture_batch_with_transactions(10, &latest_protocol_version());
+        let batch_2 = test_utils::fixture_batch_with_transactions(10, &latest_protocol_version());
 
         let header = Header::V1(
             author

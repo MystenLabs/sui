@@ -71,11 +71,7 @@ mod test {
             .epoch(fixture.committee().epoch())
             .parents([CertificateDigest::default()].iter().cloned().collect())
             .with_payload_batch(
-                fixture_batch_with_transactions(
-                    10,
-                    &latest_protocol_version(),
-                    fixture.committee().epoch(),
-                ),
+                fixture_batch_with_transactions(10, &latest_protocol_version()),
                 0,
                 0,
             )

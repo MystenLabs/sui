@@ -494,7 +494,6 @@ impl Worker {
             client,
             self.store.clone(),
             self.protocol_config.clone(),
-            self.committee.epoch(),
         );
 
         // The `QuorumWaiter` waits for 2f authorities to acknowledge reception of the batch. It then forwards

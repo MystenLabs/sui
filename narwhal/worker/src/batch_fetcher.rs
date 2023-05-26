@@ -361,8 +361,8 @@ mod tests {
         let mut network = TestRequestBatchesNetwork::new();
         let batch_store = test_utils::create_batch_store();
         let v11_protocol_config = get_protocol_config(11);
-        let batchv1_1 = Batch::new(vec![vec![1]], &v11_protocol_config, 0);
-        let batchv1_2 = Batch::new(vec![vec![2]], &v11_protocol_config, 0);
+        let batchv1_1 = Batch::new(vec![vec![1]], &v11_protocol_config);
+        let batchv1_2 = Batch::new(vec![vec![2]], &v11_protocol_config);
         let (digests, known_workers) = (
             HashSet::from_iter(vec![batchv1_1.digest(), batchv1_2.digest()]),
             HashSet::from_iter(test_pks(&[1, 2])),
@@ -409,8 +409,8 @@ mod tests {
         let batch_store = test_utils::create_batch_store();
         let latest_protocol_config = latest_protocol_version();
         let v11_protocol_config = &get_protocol_config(11);
-        let batchv1_1 = Batch::new(vec![vec![1]], v11_protocol_config, 0);
-        let batchv1_2 = Batch::new(vec![vec![2]], v11_protocol_config, 0);
+        let batchv1_1 = Batch::new(vec![vec![1]], v11_protocol_config);
+        let batchv1_2 = Batch::new(vec![vec![2]], v11_protocol_config);
         let (digests, known_workers) = (
             HashSet::from_iter(vec![batchv1_1.digest(), batchv1_2.digest()]),
             HashSet::from_iter(test_pks(&[1, 2])),
@@ -441,8 +441,8 @@ mod tests {
         let batch_store = test_utils::create_batch_store();
         let latest_protocol_config = &latest_protocol_version();
         let v11_protocol_config = get_protocol_config(11);
-        let batchv2_1 = Batch::new(vec![vec![1]], latest_protocol_config, 0);
-        let batchv2_2 = Batch::new(vec![vec![2]], latest_protocol_config, 0);
+        let batchv2_1 = Batch::new(vec![vec![1]], latest_protocol_config);
+        let batchv2_2 = Batch::new(vec![vec![2]], latest_protocol_config);
         let (digests, known_workers) = (
             HashSet::from_iter(vec![batchv2_1.digest(), batchv2_2.digest()]),
             HashSet::from_iter(test_pks(&[1, 2])),
@@ -471,8 +471,8 @@ mod tests {
         let mut network = TestRequestBatchesNetwork::new();
         let batch_store = test_utils::create_batch_store();
         let latest_protocol_config = &latest_protocol_version();
-        let batchv2_1 = Batch::new(vec![vec![1]], latest_protocol_config, 0);
-        let batchv2_2 = Batch::new(vec![vec![2]], latest_protocol_config, 0);
+        let batchv2_1 = Batch::new(vec![vec![1]], latest_protocol_config);
+        let batchv2_2 = Batch::new(vec![vec![2]], latest_protocol_config);
         let (digests, known_workers) = (
             HashSet::from_iter(vec![batchv2_1.digest(), batchv2_2.digest()]),
             HashSet::from_iter(test_pks(&[1, 2])),
@@ -523,8 +523,8 @@ mod tests {
     pub async fn test_fetcher() {
         let mut network = TestRequestBatchesNetwork::new();
         let batch_store = test_utils::create_batch_store();
-        let batch1 = Batch::new(vec![vec![1]], &latest_protocol_version(), 0);
-        let batch2 = Batch::new(vec![vec![2]], &latest_protocol_version(), 0);
+        let batch1 = Batch::new(vec![vec![1]], &latest_protocol_version());
+        let batch2 = Batch::new(vec![vec![2]], &latest_protocol_version());
         let (digests, known_workers) = (
             HashSet::from_iter(vec![batch1.digest(), batch2.digest()]),
             HashSet::from_iter(test_pks(&[1, 2])),
@@ -569,9 +569,9 @@ mod tests {
         // and ensure another request is sent to get the remaining batches.
         let mut network = TestRequestBatchesNetwork::new();
         let batch_store = test_utils::create_batch_store();
-        let batch1 = Batch::new(vec![vec![1]], &latest_protocol_version(), 0);
-        let batch2 = Batch::new(vec![vec![2]], &latest_protocol_version(), 0);
-        let batch3 = Batch::new(vec![vec![3]], &latest_protocol_version(), 0);
+        let batch1 = Batch::new(vec![vec![1]], &latest_protocol_version());
+        let batch2 = Batch::new(vec![vec![2]], &latest_protocol_version());
+        let batch3 = Batch::new(vec![vec![3]], &latest_protocol_version());
         let (digests, known_workers) = (
             HashSet::from_iter(vec![batch1.digest(), batch2.digest(), batch3.digest()]),
             HashSet::from_iter(test_pks(&[1, 2, 3])),
@@ -604,9 +604,9 @@ mod tests {
         // and ensure another request is sent to get the remaining batches.
         let mut network = TestRequestBatchesNetwork::new();
         let batch_store = test_utils::create_batch_store();
-        let batch1 = Batch::new(vec![vec![1]], &latest_protocol_version(), 0);
-        let batch2 = Batch::new(vec![vec![2]], &latest_protocol_version(), 0);
-        let batch3 = Batch::new(vec![vec![3]], &latest_protocol_version(), 0);
+        let batch1 = Batch::new(vec![vec![1]], &latest_protocol_version());
+        let batch2 = Batch::new(vec![vec![2]], &latest_protocol_version());
+        let batch3 = Batch::new(vec![vec![3]], &latest_protocol_version());
         let (digests, known_workers) = (
             HashSet::from_iter(vec![batch1.digest(), batch2.digest(), batch3.digest()]),
             HashSet::from_iter(test_pks(&[2, 3, 4])),
@@ -645,9 +645,9 @@ mod tests {
     pub async fn test_fetcher_local_and_remote() {
         let mut network = TestRequestBatchesNetwork::new();
         let batch_store = test_utils::create_batch_store();
-        let batch1 = Batch::new(vec![vec![1]], &latest_protocol_version(), 0);
-        let batch2 = Batch::new(vec![vec![2]], &latest_protocol_version(), 0);
-        let batch3 = Batch::new(vec![vec![3]], &latest_protocol_version(), 0);
+        let batch1 = Batch::new(vec![vec![1]], &latest_protocol_version());
+        let batch2 = Batch::new(vec![vec![2]], &latest_protocol_version());
+        let batch3 = Batch::new(vec![vec![3]], &latest_protocol_version());
         let (digests, known_workers) = (
             HashSet::from_iter(vec![batch1.digest(), batch2.digest(), batch3.digest()]),
             HashSet::from_iter(test_pks(&[1, 2, 3, 4])),
@@ -696,7 +696,7 @@ mod tests {
         let mut local_digests = Vec::new();
         // 6 batches available locally with response size limit of 2
         for i in 0..num_digests / 2 {
-            let batch = Batch::new(vec![vec![i]], &latest_protocol_version(), 0);
+            let batch = Batch::new(vec![vec![i]], &latest_protocol_version());
             local_digests.push(batch.digest());
             batch_store.insert(&batch.digest(), &batch).unwrap();
             network.put(&[1, 2, 3], batch.clone());
@@ -704,7 +704,7 @@ mod tests {
         }
         // 6 batches available remotely with response size limit of 2
         for i in (num_digests / 2)..num_digests {
-            let batch = Batch::new(vec![vec![i]], &latest_protocol_version(), 0);
+            let batch = Batch::new(vec![vec![i]], &latest_protocol_version());
             network.put(&[1, 2, 3], batch.clone());
             expected_batches.push(batch);
         }

@@ -24,7 +24,6 @@ pub fn batch_digest(c: &mut Criterion) {
         let batch = Batch::new(
             (0..size).map(|_| tx_gen()).collect::<Vec<_>>(),
             &latest_protocol_version(),
-            0,
         );
         digest_group.throughput(Throughput::Bytes(512 * size as u64));
         digest_group.bench_with_input(BenchmarkId::new("batch digest", size), &batch, |b, i| {

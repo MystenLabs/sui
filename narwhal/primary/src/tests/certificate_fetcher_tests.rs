@@ -239,12 +239,7 @@ async fn fetch_certificates_basic() {
             .into_iter()
             .map(|header| fixture.certificate(&header).digest())
             .collect();
-        (_, current_round) = fixture.headers_round(
-            i,
-            &parents,
-            &latest_protocol_version(),
-            fixture.committee().epoch(),
-        );
+        (_, current_round) = fixture.headers_round(i, &parents, &latest_protocol_version());
         headers.extend(current_round.clone());
     }
 

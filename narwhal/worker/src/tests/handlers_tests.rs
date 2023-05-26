@@ -26,7 +26,7 @@ async fn synchronize() {
 
     // Create network with mock behavior to respond to RequestBatches request.
     let target_primary = fixture.authorities().nth(1).unwrap();
-    let batch = test_utils::batch(&latest_protocol_config, committee.epoch());
+    let batch = test_utils::batch(&latest_protocol_config);
     let digest = batch.digest();
     let message = WorkerSynchronizeMessage {
         digests: vec![digest],
@@ -105,7 +105,7 @@ async fn synchronize_versioned_batches() {
 
     // Create network with mock behavior to respond to RequestBatch request.
     let target_primary = fixture.authorities().nth(1).unwrap();
-    let batch_v1 = test_utils::batch(protocol_config_v11, committee.epoch());
+    let batch_v1 = test_utils::batch(protocol_config_v11);
     let digest_v1 = batch_v1.digest();
     let message_v1 = WorkerSynchronizeMessage {
         digests: vec![digest_v1],
@@ -113,7 +113,7 @@ async fn synchronize_versioned_batches() {
         is_certified: false,
     };
 
-    let batch_v2 = test_utils::batch(latest_protocol_config, committee.epoch());
+    let batch_v2 = test_utils::batch(latest_protocol_config);
     let digest_v2 = batch_v2.digest();
     let message_v2 = WorkerSynchronizeMessage {
         digests: vec![digest_v2],
@@ -245,7 +245,7 @@ async fn synchronize_when_batch_exists() {
     };
 
     // Store the batch.
-    let batch = test_utils::batch(&latest_protocol_version(), committee.epoch());
+    let batch = test_utils::batch(&latest_protocol_version());
     let batch_id = batch.digest();
     let missing = vec![batch_id];
     store.insert(&batch_id, &batch).unwrap();
@@ -276,7 +276,7 @@ async fn delete_batches() {
 
     // Create a new test store.
     let store = test_utils::create_batch_store();
-    let batch = test_utils::batch(&latest_protocol_version(), committee.epoch());
+    let batch = test_utils::batch(&latest_protocol_version());
     let digest = batch.digest();
     store.insert(&digest, &batch).unwrap();
 

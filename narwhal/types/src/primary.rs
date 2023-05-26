@@ -148,14 +148,10 @@ pub enum Batch {
 }
 
 impl Batch {
-    pub fn new(
-        transactions: Vec<Transaction>,
-        protocol_config: &ProtocolConfig,
-        epoch: Epoch,
-    ) -> Self {
+    pub fn new(transactions: Vec<Transaction>, protocol_config: &ProtocolConfig) -> Self {
         // TODO: Remove once we have upgraded to protocol version 12.
         if protocol_config.narwhal_versioned_metadata() {
-            Self::V2(BatchV2::new(transactions, protocol_config, epoch))
+            Self::V2(BatchV2::new(transactions, protocol_config))
         } else {
             Self::V1(BatchV1::new(transactions))
         }
@@ -190,7 +186,6 @@ pub trait BatchAPI {
     // BatchV2 APIs
     fn versioned_metadata(&self) -> &VersionedMetadata;
     fn versioned_metadata_mut(&mut self) -> &mut VersionedMetadata;
-    fn epoch(&self) -> &Epoch;
 }
 
 pub type Transaction = Vec<u8>;
@@ -224,10 +219,6 @@ impl BatchAPI for BatchV1 {
     fn versioned_metadata_mut(&mut self) -> &mut VersionedMetadata {
         unimplemented!("BatchV1 does not have a VersionedMetadata field");
     }
-
-    fn epoch(&self) -> &Epoch {
-        unimplemented!("BatchV1 does not have an Epoch field");
-    }
 }
 
 impl BatchV1 {
@@ -245,7 +236,6 @@ impl BatchV1 {
 
 #[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Eq, Arbitrary)]
 pub struct BatchV2 {
-    pub epoch: Epoch,
     pub transactions: Vec<Transaction>,
     // This field is not included as part of the batch digest
     pub versioned_metadata: VersionedMetadata,
@@ -275,22 +265,13 @@ impl BatchAPI for BatchV2 {
     fn versioned_metadata_mut(&mut self) -> &mut VersionedMetadata {
         &mut self.versioned_metadata
     }
-
-    fn epoch(&self) -> &Epoch {
-        &self.epoch
-    }
 }
 
 impl BatchV2 {
-    pub fn new(
-        transactions: Vec<Transaction>,
-        protocol_config: &ProtocolConfig,
-        epoch: Epoch,
-    ) -> Self {
+    pub fn new(transactions: Vec<Transaction>, protocol_config: &ProtocolConfig) -> Self {
         Self {
             transactions,
             versioned_metadata: VersionedMetadata::new(protocol_config),
-            epoch,
         }
     }
 
@@ -386,12 +367,9 @@ impl Hash<{ crypto::DIGEST_LENGTH }> for BatchV2 {
     type TypedDigest = BatchDigest;
 
     fn digest(&self) -> Self::TypedDigest {
-        let mut hasher = crypto::DefaultHashFunction::new();
-        hasher.update(self.epoch.to_be_bytes());
-        hasher.update(crypto::DefaultHashFunction::digest_iterator(
-            self.transactions.iter(),
-        ));
-        BatchDigest::new(hasher.finalize().into())
+        BatchDigest::new(
+            crypto::DefaultHashFunction::digest_iterator(self.transactions.iter()).into(),
+        )
     }
 }
 
@@ -1620,35 +1598,10 @@ mod tests {
         Batch, BatchAPI, BatchV1, BatchV2, Metadata, MetadataAPI, MetadataV1, Timestamp,
         VersionedMetadata,
     };
-    use fastcrypto::hash::Hash;
     use std::time::Duration;
     use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
     use test_utils::latest_protocol_version;
     use tokio::time::sleep;
-
-    #[tokio::test]
-    async fn test_batch_digests() {
-        // TODO: Remove once we have upgraded to protocol version 12.
-        // BatchV1
-        let batchv1_1 = Batch::new(
-            vec![],
-            &ProtocolConfig::get_for_version(ProtocolVersion::new(11)),
-            0,
-        );
-        let batchv1_2 = Batch::new(
-            vec![],
-            &ProtocolConfig::get_for_version(ProtocolVersion::new(11)),
-            1,
-        );
-
-        assert_eq!(batchv1_1.digest(), batchv1_2.digest());
-
-        // BatchV2
-        let batchv2_1 = Batch::new(vec![], &latest_protocol_version(), 0);
-        let batchv2_2 = Batch::new(vec![], &latest_protocol_version(), 1);
-
-        assert_ne!(batchv2_1.digest(), batchv2_2.digest());
-    }
 
     #[tokio::test]
     async fn test_elapsed() {
@@ -1657,7 +1610,6 @@ mod tests {
         let batch = Batch::new(
             vec![],
             &ProtocolConfig::get_for_version(ProtocolVersion::new(11)),
-            0,
         );
         assert!(batch.metadata().created_at > 0);
 
@@ -1666,7 +1618,7 @@ mod tests {
         assert!(batch.metadata().created_at.elapsed().as_secs_f64() >= 2.0);
 
         // BatchV2
-        let batch = Batch::new(vec![], &latest_protocol_version(), 0);
+        let batch = Batch::new(vec![], &latest_protocol_version());
 
         assert!(*batch.versioned_metadata().created_at() > 0);
 
@@ -1704,7 +1656,6 @@ mod tests {
                 created_at: 2999309726980, // something in the future - Fri Jan 16 2065 05:35:26
                 received_at: None,
             }),
-            epoch: 0,
         });
 
         assert_eq!(

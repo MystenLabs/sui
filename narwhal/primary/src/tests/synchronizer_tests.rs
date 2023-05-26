@@ -892,11 +892,7 @@ async fn sync_batches_drops_old() {
             author
                 .header_builder(&fixture.committee())
                 .with_payload_batch(
-                    test_utils::fixture_batch_with_transactions(
-                        10,
-                        &latest_protocol_version(),
-                        fixture.committee().epoch(),
-                    ),
+                    test_utils::fixture_batch_with_transactions(10, &latest_protocol_version()),
                     0,
                     0,
                 )
@@ -919,11 +915,7 @@ async fn sync_batches_drops_old() {
             .round(2)
             .parents(certificates.keys().cloned().collect())
             .with_payload_batch(
-                test_utils::fixture_batch_with_transactions(
-                    10,
-                    &latest_protocol_version(),
-                    fixture.committee().epoch(),
-                ),
+                test_utils::fixture_batch_with_transactions(10, &latest_protocol_version()),
                 1,
                 0,
             )

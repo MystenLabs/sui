@@ -213,11 +213,7 @@ mod tests {
             })
             .collect();
 
-        let batch = Batch::new(
-            transaction_bytes,
-            latest_protocol_config,
-            validator.epoch_store.epoch(),
-        );
+        let batch = Batch::new(transaction_bytes, latest_protocol_config);
         let res_batch = validator
             .validate_batch(&batch, latest_protocol_config)
             .await;
@@ -235,11 +231,7 @@ mod tests {
             })
             .collect();
 
-        let batch = Batch::new(
-            bogus_transaction_bytes,
-            latest_protocol_config,
-            validator.epoch_store.epoch(),
-        );
+        let batch = Batch::new(bogus_transaction_bytes, latest_protocol_config);
         let res_batch = validator
             .validate_batch(&batch, latest_protocol_config)
             .await;
@@ -248,7 +240,7 @@ mod tests {
         // TODO: Remove once we have upgraded to protocol version 12.
         // protocol version 11 should only support BatchV1
         let protocol_config_v11 = &get_protocol_config(11);
-        let batch_v1 = Batch::new(vec![], protocol_config_v11, validator.epoch_store.epoch());
+        let batch_v1 = Batch::new(vec![], protocol_config_v11);
 
         // Case #1: Receive BatchV1 and network has not upgraded to 12 so we are okay
         let res_batch = validator
@@ -261,11 +253,7 @@ mod tests {
             .await;
         assert!(res_batch.is_err());
 
-        let batch_v2 = Batch::new(
-            vec![],
-            latest_protocol_config,
-            validator.epoch_store.epoch(),
-        );
+        let batch_v2 = Batch::new(vec![], latest_protocol_config);
         // Case #3: Receive BatchV2 but network is still in v11 so we fail because we expect BatchV1
         let res_batch = validator
             .validate_batch(&batch_v2, protocol_config_v11)

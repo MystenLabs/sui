@@ -27,7 +27,6 @@ use tracing::{debug, info, instrument};
 use types::{Certificate, ConditionalBroadcastReceiver, PreSubscribedBroadcastSender, Round};
 
 struct PrimaryNodeInner {
-    protocol_config: ProtocolConfig,
     // The configuration parameters.
     parameters: Parameters,
     // Whether to run consensus (and an executor client) or not.
@@ -68,6 +67,7 @@ impl PrimaryNodeInner {
         network_keypair: NetworkKeyPair,
         // The committee information.
         committee: Committee,
+        protocol_config: ProtocolConfig,
         // The worker information cache.
         worker_cache: WorkerCache,
         // Client for communications.
@@ -101,7 +101,7 @@ impl PrimaryNodeInner {
             worker_cache,
             client,
             store,
-            self.protocol_config.clone(),
+            protocol_config.clone(),
             self.parameters.clone(),
             self.internal_consensus,
             execution_state,
@@ -406,13 +406,11 @@ pub struct PrimaryNode {
 
 impl PrimaryNode {
     pub fn new(
-        protocol_config: ProtocolConfig,
         parameters: Parameters,
         internal_consensus: bool,
         registry_service: RegistryService,
     ) -> PrimaryNode {
         let inner = PrimaryNodeInner {
-            protocol_config,
             parameters,
             internal_consensus,
             registry_service,
@@ -435,6 +433,7 @@ impl PrimaryNode {
         network_keypair: NetworkKeyPair,
         // The committee information.
         committee: Committee,
+        protocol_config: ProtocolConfig,
         // The worker information cache.
         worker_cache: WorkerCache,
         // Client for communications.
@@ -455,6 +454,7 @@ impl PrimaryNode {
                 keypair,
                 network_keypair,
                 committee,
+                protocol_config,
                 worker_cache,
                 client,
                 store,

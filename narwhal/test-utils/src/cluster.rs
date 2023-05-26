@@ -304,7 +304,6 @@ impl PrimaryNodeDetails {
         let registry_service = RegistryService::new(Registry::new());
 
         let node = PrimaryNode::new(
-            latest_protocol_version(),
             parameters.clone(),
             internal_consensus_enabled,
             registry_service,
@@ -365,6 +364,7 @@ impl PrimaryNodeDetails {
                 self.key_pair.copy(),
                 self.network_key_pair.copy(),
                 self.committee.clone(),
+                latest_protocol_version(),
                 self.worker_cache.clone(),
                 client,
                 &primary_store,

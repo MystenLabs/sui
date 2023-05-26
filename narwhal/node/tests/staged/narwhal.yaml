@@ -25,7 +25,6 @@ BatchV1:
         TYPENAME: Metadata
 BatchV2:
   STRUCT:
-    - epoch: U64
     - transactions:
         SEQ:
           SEQ: U8
