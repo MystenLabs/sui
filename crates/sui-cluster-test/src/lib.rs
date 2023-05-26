@@ -63,27 +63,25 @@ impl TestContext {
         // Sleep from for faucet to batch transfer
         thread::sleep(Duration::from_secs(10));
 
-        // Get the coins and check that faucet transferred.
-        let gas_coins: Vec<GasCoin> = self
-            .client
-            .get_wallet()
-            .gas_objects(addr)
-            .await
-            .unwrap()
-            .iter()
-            // Ok to unwrap() since `get_gas_objects` guarantees gas
-            .map(|(_val, object)| GasCoin::try_from(object).unwrap())
-            .collect();
+        loop {
+            let gas_coins: Vec<GasCoin> = self
+                .client
+                .get_wallet()
+                .gas_objects(addr)
+                .await
+                .unwrap()
+                .iter()
+                .map(|(_val, object)| GasCoin::try_from(object).unwrap())
+                .collect();
 
-        let minimum_coins = minimum_coins.unwrap_or(1);
-        if gas_coins.len() < minimum_coins {
-            panic!(
-                "Expect to get at least {minimum_coins} Sui Coins for address {addr}, but only got {}",
-                gas_coins.len()
-            )
+            let minimum_coins = minimum_coins.unwrap_or(1);
+            if gas_coins.len() >= minimum_coins {
+                return gas_coins; // Break the loop and return the gas coins
+            }
+
+            // Sleep before retrying
+            thread::sleep(Duration::from_secs(5));
         }
-
-        gas_coins
     }
 
     async fn get_unique_gas_object(&self, in_use: Vec<GasCoin>) -> Vec<GasCoin> {
