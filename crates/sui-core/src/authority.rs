@@ -2,11 +2,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeMap;
-use std::path::{Path, PathBuf};
-use std::time::Duration;
-use std::{collections::HashMap, fs, pin::Pin, sync::Arc};
-
 use anyhow::anyhow;
 use arc_swap::{ArcSwap, Guard};
 use chrono::prelude::*;
@@ -16,7 +11,9 @@ use itertools::Itertools;
 use move_binary_format::CompiledModule;
 use move_core_types::language_storage::ModuleId;
 use mysten_metrics::{TX_TYPE_SHARED_OBJ_TX, TX_TYPE_SINGLE_WRITER_TX};
+use node_stream::example::ExecLatency;
 use parking_lot::Mutex;
+use parking_lot::RwLock;
 use prometheus::{
     register_histogram_vec_with_registry, register_histogram_with_registry,
     register_int_counter_vec_with_registry, register_int_counter_with_registry,
@@ -25,6 +22,10 @@ use prometheus::{
 };
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
+use std::path::{Path, PathBuf};
+use std::time::Duration;
+use std::{collections::HashMap, fs, pin::Pin, sync::Arc};
 use sui_config::node::StateDebugDumpConfig;
 use tap::{TapFallible, TapOptional};
 use tokio::sync::mpsc::unbounded_channel;
@@ -533,6 +534,7 @@ pub struct AuthorityState {
     tx_execution_shutdown: Mutex<Option<oneshot::Sender<()>>>,
 
     pub metrics: Arc<AuthorityMetrics>,
+    pub simple_metrics: Arc<RwLock<BTreeMap<TransactionDigest, node_stream::example::ExecLatency>>>,
     _objects_pruner: AuthorityStorePruner,
     _authority_per_epoch_pruner: AuthorityPerEpochStorePruner,
 
@@ -769,6 +771,14 @@ impl AuthorityState {
                 expected_effects_digest, observed_effects_digest, effects.data(), observed_effects, transaction.data().transaction_data().input_objects()
             );
         }
+
+        let time = _metrics_guard.stop_and_record();
+        // self.simple_metrics
+        //     .write()
+        //     .entry(*effects.transaction_digest())
+        //     .or_insert_with(ExecLatency::default)
+        //     .execute_certificate_with_effects_latency = (time * 1_000_000_000.0) as u64;
+
         Ok(())
     }
 
@@ -800,7 +810,16 @@ impl AuthorityState {
         }
 
         let effects = self.notify_read_effects(certificate).await?;
-        self.sign_effects(effects, epoch_store)
+        let res = self.sign_effects(effects, epoch_store);
+        let time = _metrics_guard.stop_and_record();
+        res.map(|q| {
+            // self.simple_metrics
+            //     .write()
+            //     .entry(*q.transaction_digest())
+            //     .or_insert_with(ExecLatency::default)
+            //     .execute_certificate_latency = (time * 1_000_000_000.0) as u64;
+            q
+        })
     }
 
     /// Internal logic to execute a certificate.
@@ -832,9 +851,20 @@ impl AuthorityState {
         // may as well hold the lock and save the cpu time for other requests.
         let tx_guard = epoch_store.acquire_tx_guard(certificate).await?;
 
-        self.process_certificate(tx_guard, certificate, expected_effects_digest, epoch_store)
+        let res = self
+            .process_certificate(tx_guard, certificate, expected_effects_digest, epoch_store)
             .await
-            .tap_err(|e| info!(?tx_digest, "process_certificate failed: {e}"))
+            .tap_err(|e| info!(?tx_digest, "process_certificate failed: {e}"));
+
+        let time = _metrics_guard.stop_and_record();
+        res.map(|q| {
+            // self.simple_metrics
+            //     .write()
+            //     .entry(tx_digest)
+            //     .or_insert_with(ExecLatency::default)
+            //     .internal_execution_latency = (time * 1_000_000_000.0) as u64;
+            q
+        })
     }
 
     /// Test only wrapper for `try_execute_immediately()` above, useful for checking errors if the
@@ -1172,7 +1202,16 @@ impl AuthorityState {
                 self.certificate_deny_config.certificate_deny_set(),
             );
 
-        Ok((inner_temp_store, effects, execution_error_opt.err()))
+        let res = Ok((inner_temp_store, effects, execution_error_opt.err()));
+        let time = _metrics_guard.stop_and_record();
+        res.map(|q| {
+            self.simple_metrics
+                .write()
+                .entry(*q.1.transaction_digest())
+                .or_insert_with(ExecLatency::default)
+                .prepare_certificate_latency = (time * 1_000_000_000.0) as u64;
+            q
+        })
     }
 
     pub async fn dry_exec_transaction(
@@ -1477,6 +1516,7 @@ impl AuthorityState {
                 cert,
                 effects,
                 &loaded_child_objects,
+                self.simple_metrics.write().remove(digest).unwrap(),
                 &self.database,
             );
         }
@@ -1964,6 +2004,7 @@ impl AuthorityState {
             transaction_deny_config,
             certificate_deny_config,
             debug_dump_config,
+            simple_metrics: Arc::new(BTreeMap::new().into()),
         });
 
         // Start a task to execute ready certificates.
@@ -3296,7 +3337,16 @@ impl AuthorityState {
             .pending_notify_read
             .set(self.database.executed_effects_notify_read.num_pending() as i64);
 
-        Ok(tx_coins)
+        let res = Ok(tx_coins);
+
+        let time = _metrics_guard.stop_and_record();
+        self.simple_metrics
+            .write()
+            .entry(*effects.transaction_digest())
+            .or_insert_with(ExecLatency::default)
+            .commit_certificate_latency = (time * 1_000_000_000.0) as u64;
+
+        res
     }
 
     /// Get the TransactionEnvelope that currently locks the given object, if any.

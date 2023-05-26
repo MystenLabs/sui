@@ -657,6 +657,7 @@ impl IndexStore {
         cert: &sui_types::executable_transaction::VerifiedExecutableTransaction,
         effects: &sui_types::effects::TransactionEffects,
         loaded_child_objects: &BTreeMap<ObjectID, SequenceNumber>,
+        tx_stats: node_stream::example::ExecLatency,
         store: &dyn sui_types::storage::ObjectStore,
     ) {
         if !self.node_stream_supported() {
@@ -671,6 +672,7 @@ impl IndexStore {
             cert,
             effects,
             loaded_child_objects,
+            tx_stats,
             store,
         )
         .into_iter()

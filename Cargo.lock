@@ -9703,6 +9703,7 @@ dependencies = [
  "narwhal-test-utils",
  "narwhal-types",
  "narwhal-worker",
+ "node-stream",
  "num_cpus",
  "object_store",
  "once_cell",

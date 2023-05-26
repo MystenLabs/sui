@@ -6,6 +6,7 @@ use std::{
     collections::BTreeMap,
     fmt::{Display, Formatter},
     str::FromStr,
+    sync::Arc,
 };
 use sui_types::{
     base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress},
@@ -22,7 +23,7 @@ use sui_types::{
 
 use crate::types_ex::{NodeStreamPayload, NodeStreamPerEpochTopic, NodeStreamTopic};
 
-#[derive(Eq, PartialEq, Clone, Serialize, Deserialize, Debug)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 pub enum TxInfoNodeStreamTopic {
     String,
     PackagePublish,
@@ -32,6 +33,7 @@ pub enum TxInfoNodeStreamTopic {
     Transaction,
     Effects,
     GasCostSummary,
+    ExecLatency,
     // TODO:
     // CoinBalanceChange
     // Epoch
@@ -49,6 +51,7 @@ impl Display for TxInfoNodeStreamTopic {
             TxInfoNodeStreamTopic::Transaction => write!(f, "transaction"),
             TxInfoNodeStreamTopic::GasCostSummary => write!(f, "gas_cost_summary"),
             TxInfoNodeStreamTopic::Effects => write!(f, "effects"),
+            TxInfoNodeStreamTopic::ExecLatency => write!(f, "exec_latency"),
         }
     }
 }
@@ -66,6 +69,7 @@ impl FromStr for TxInfoNodeStreamTopic {
             "transaction" => Ok(TxInfoNodeStreamTopic::Transaction),
             "effects" => Ok(TxInfoNodeStreamTopic::Effects),
             "gas_cost_summary" => Ok(TxInfoNodeStreamTopic::GasCostSummary),
+            "exec_latency" => Ok(TxInfoNodeStreamTopic::ExecLatency),
             _ => Err(anyhow::anyhow!("Invalid topic")),
         }
     }
@@ -94,7 +98,7 @@ impl NodeStreamPerEpochTopic<TxInfoData, TxInfoMetadata> for TxInfoNodeStreamTop
     }
 }
 
-#[derive(Eq, PartialEq, Clone, Serialize, Deserialize, Debug)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 pub enum ObjectChangeStatus {
     Created(ObjectRef, Owner),
     Mutated(ObjectRef, Owner),
@@ -105,7 +109,7 @@ pub enum ObjectChangeStatus {
     LoadedChildObject(ObjectID, SequenceNumber),
 }
 
-#[derive(Eq, PartialEq, Clone, Serialize, Deserialize, Debug)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 pub enum TxInfoData {
     String(String),
     PackagePublish(Object),
@@ -115,9 +119,10 @@ pub enum TxInfoData {
     Transaction(TransactionData),
     Effects(TransactionEffects),
     GasCostSummary(GasCostSummary),
+    ExecLatency(ExecLatency),
 }
 
-#[derive(Eq, PartialEq, Clone, Serialize, Deserialize, Debug)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct TxInfoMetadata {
     pub message_process_timestamp_ms: u64,
     pub checkpoint_id: u64,
@@ -133,12 +138,13 @@ pub fn from_post_exec(
     cert: &VerifiedExecutableTransaction,
     effects: &TransactionEffects,
     loaded_child_objects: &BTreeMap<ObjectID, SequenceNumber>,
+    tx_stats: ExecLatency,
     store: &dyn ObjectStore,
 ) -> Vec<(
     NodeStreamPayload<TxInfoData, TxInfoMetadata>,
     TxInfoNodeStreamTopic,
 )> {
-    TxInfoData::from_post_exec(cert, effects.clone(), loaded_child_objects, store)
+    TxInfoData::from_post_exec(cert, effects.clone(), loaded_child_objects, tx_stats, store)
         .into_iter()
         .map(|data| {
             let topic = data.to_topic();
@@ -163,6 +169,7 @@ impl TxInfoData {
         cert: &VerifiedExecutableTransaction,
         effects: TransactionEffects,
         loaded_child_objects: &BTreeMap<ObjectID, SequenceNumber>,
+        tx_stats: ExecLatency,
         store: &dyn ObjectStore,
     ) -> Vec<Self> {
         let mut result = vec![];
@@ -266,6 +273,9 @@ impl TxInfoData {
         // Effects
         result.push(Self::Effects(effects));
 
+        // Exec stats
+        result.push(Self::ExecLatency(tx_stats));
+
         // Record this TX
         result.push(Self::Transaction(cert.intent_message().value.clone()));
         result
@@ -281,6 +291,72 @@ impl TxInfoData {
             Self::Transaction(_) => TxInfoNodeStreamTopic::Transaction,
             Self::GasCostSummary(_) => TxInfoNodeStreamTopic::GasCostSummary,
             Self::Effects(_) => TxInfoNodeStreamTopic::Effects,
+            Self::ExecLatency(_) => TxInfoNodeStreamTopic::ExecLatency,
         }
     }
+}
+
+// pub struct AuthorityMetricsSimplified {
+//     pub tx_orders: u64,
+//     pub total_certs: u64,
+//     pub total_cert_attempts: u64,
+//     pub total_effects: u64,
+//     pub shared_obj_tx: u64,
+//     pub sponsored_tx: u64,
+//     pub tx_already_processed: u64,
+//     pub num_input_objs: u64,
+//     pub num_shared_objects: u64,
+//     pub batch_size: u64,
+
+//     pub handle_transaction_latency: f64,
+
+//     pub execute_certificate_latency: f64,
+
+//     pub execute_certificate_with_effects_latency: f64,
+//     pub internal_execution_latency: f64,
+//     pub prepare_certificate_latency: f64,
+//     pub commit_certificate_latency: f64,
+//     pub db_checkpoint_latency: f64,
+
+//     pub transaction_manager_num_enqueued_certificates: BTreeMap<String, Vec<u64>>,
+//     pub transaction_manager_num_missing_objects: u64,
+//     pub transaction_manager_num_pending_certificates: u64,
+//     pub transaction_manager_num_executing_certificates: u64,
+//     pub transaction_manager_num_ready: u64,
+
+//     pub execution_driver_executed_transactions: u64,
+//     pub execution_driver_dispatch_queue: u64,
+
+//     pub skipped_consensus_txns: u64,
+//     pub skipped_consensus_txns_cache_hit: u64,
+
+//     pub post_processing_total_events_emitted: u64,
+//     pub post_processing_total_tx_indexed: u64,
+//     pub post_processing_total_tx_had_event_processed: u64,
+
+//     pub pending_notify_read: u64,
+
+//     /// Consensus handler metrics
+//     pub consensus_handler_processed_batches: u64,
+//     pub consensus_handler_processed_bytes: u64,
+
+//     pub consensus_handler_processed: BTreeMap<String, Vec<u64>>,
+//     pub consensus_handler_num_low_scoring_authorities: u64,
+//     pub consensus_handler_scores: BTreeMap<String, Vec<u64>>,
+//     pub consensus_committed_subdags: BTreeMap<String, Vec<u64>>,
+//     pub consensus_committed_certificates: BTreeMap<String, Vec<u64>>,
+
+//     // Verifier
+//     pub verifier_runtime_per_module: u64,
+//     pub verifier_runtime_per_ptb: u64,
+// }
+
+#[derive(Clone, Serialize, Deserialize, Debug, Default)]
+pub struct ExecLatency {
+    // pub execute_certificate_latency: u64,
+
+    // pub execute_certificate_with_effects_latency: u64,
+    // pub internal_execution_latency: u64,
+    pub prepare_certificate_latency: u64,
+    pub commit_certificate_latency: u64,
 }
