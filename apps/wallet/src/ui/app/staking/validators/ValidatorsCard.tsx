@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useFeature } from '@growthbook/growthbook-react';
 import { useGetSystemState } from '@mysten/core';
 import { Plus12 } from '@mysten/icons';
 import { useMemo } from 'react';
@@ -20,7 +19,6 @@ import { Card, CardItem } from '_app/shared/card';
 import { Text } from '_app/shared/text';
 import Alert from '_components/alert';
 import LoadingIndicator from '_components/loading/LoadingIndicator';
-import { FEATURES } from '_src/shared/experimentation/features';
 
 export function ValidatorsCard() {
     const accountAddress = useActiveAddress();
@@ -77,8 +75,6 @@ export function ValidatorsCard() {
     }, [delegatedStake, activeValidators]);
 
     const numberOfValidators = delegatedStake?.length || 0;
-
-    const stakingEnabled = useFeature(FEATURES.STAKING_ENABLED).on;
 
     if (isLoading) {
         return (
@@ -184,7 +180,6 @@ export function ValidatorsCard() {
                         size="tall"
                         variant="secondary"
                         to="new"
-                        disabled={!stakingEnabled}
                         before={<Plus12 />}
                         text="Stake SUI"
                     />

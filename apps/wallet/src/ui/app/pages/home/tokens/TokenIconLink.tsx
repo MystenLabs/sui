@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useFeature } from '@growthbook/growthbook-react';
 import { useFormatCoin } from '@mysten/core';
 import { WalletActionStake24 } from '@mysten/icons';
 import { SUI_TYPE_ARG, type SuiAddress } from '@mysten/sui.js';
@@ -10,7 +9,6 @@ import { useMemo } from 'react';
 import { LargeButton } from '_app/shared/LargeButton';
 import { DelegatedAPY } from '_app/shared/delegated-apy';
 import { useGetDelegatedStake } from '_app/staking/useGetDelegatedStake';
-import { FEATURES } from '_src/shared/experimentation/features';
 import { trackEvent } from '_src/shared/plausible';
 
 export function TokenIconLink({
@@ -18,7 +16,6 @@ export function TokenIconLink({
 }: {
     accountAddress: SuiAddress;
 }) {
-    const stakingEnabled = useFeature(FEATURES.STAKING_ENABLED).on;
     const { data: delegatedStake, isLoading } =
         useGetDelegatedStake(accountAddress);
 
@@ -51,21 +48,20 @@ export function TokenIconLink({
             onClick={() => {
                 trackEvent('StakingFromHome');
             }}
-            tabIndex={!stakingEnabled ? -1 : undefined}
             loading={isLoading || queryResult.isLoading}
-            disabled={!stakingEnabled}
             before={<WalletActionStake24 />}
+            center
             after={
-                stakingEnabled && (
+                totalActivePendingStake ? (
                     <DelegatedAPY stakedValidators={stakedValidators} />
-                )
+                ) : null
             }
         >
             <div className="flex flex-col gap-1.25">
                 <div>
                     {totalActivePendingStake
                         ? 'Currently Staked'
-                        : 'Stake & Earn SUI'}
+                        : 'Stake and Earn SUI'}
                 </div>
                 {!!totalActivePendingStake && (
                     <div>
