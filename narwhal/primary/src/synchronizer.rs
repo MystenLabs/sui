@@ -383,7 +383,7 @@ impl Synchronizer {
                     }
                 }
             },
-            "SynchronizerCertificateRecovery"
+            "Synchronizer::RecoverCertificates"
         );
 
         // Start a task to update gc_round, gc in-memory data, and trigger certificate catchup
@@ -449,7 +449,7 @@ impl Synchronizer {
                     }
                 }
             },
-            "SynchronizerGarbageCollection"
+            "Synchronizer::GarbageCollection"
         );
 
         // Start a task to accept certificates. See comment above `process_certificate_with_lock()`
@@ -473,7 +473,7 @@ impl Synchronizer {
                     );
                 }
             },
-            "SynchronizerCertificateAcceptor"
+            "Synchronizer::AcceptCertificates"
         );
 
         // Start tasks to broadcast created certificates.
@@ -504,7 +504,7 @@ impl Synchronizer {
                     }
                 }
             },
-            "SynchronizerCertificateBroadcasters"
+            "Synchronizer::BroadcastCertificates"
         );
 
         // Start a task to async download batches if needed
@@ -541,7 +541,7 @@ impl Synchronizer {
                     }
                 }
             },
-            "SynchronizerBatchSynchronizer"
+            "Synchronizer::SyncrhonizeBatches"
         );
 
         Self { inner }
@@ -1004,10 +1004,7 @@ impl Synchronizer {
                 .expect("Author of valid header is not in the worker cache")
                 .name;
             let client = inner.client.clone();
-            let retry_config = RetryConfig {
-                retrying_max_elapsed_time: None, // Retry forever.
-                ..Default::default()
-            };
+            let retry_config = RetryConfig::default(); // 30s timeout
             let handle = retry_config.retry(move || {
                 let digests = digests.clone();
                 let message = WorkerSynchronizeMessage {
