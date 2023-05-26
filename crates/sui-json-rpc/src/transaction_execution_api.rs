@@ -10,7 +10,8 @@ use jsonrpsee::core::RpcResult;
 use jsonrpsee::RpcModule;
 
 use mysten_metrics::spawn_monitored_task;
-use shared_crypto::intent::Intent;
+use shared_crypto::intent::{AppId, Intent, IntentMessage, IntentScope, IntentVersion};
+
 use sui_core::authority::AuthorityState;
 use sui_core::authority_client::NetworkAuthorityClient;
 use sui_core::transaction_orchestrator::TransactiondOrchestrator;
@@ -20,6 +21,7 @@ use sui_json_rpc_types::{
 };
 use sui_open_rpc::Module;
 use sui_types::base_types::SuiAddress;
+use sui_types::digests::TransactionDigest;
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::quorum_driver_types::{
     ExecuteTransactionRequest, ExecuteTransactionRequestType, ExecuteTransactionResponse,
@@ -27,24 +29,55 @@ use sui_types::quorum_driver_types::{
 use sui_types::signature::GenericSignature;
 use sui_types::sui_serde::BigInt;
 use sui_types::transaction::{Transaction, TransactionData, TransactionDataAPI, TransactionKind};
+use sui_types::crypto::default_hash;
 use tracing::instrument;
 
 use crate::api::JsonRpcMetrics;
 use crate::api::WriteApiServer;
-use crate::error::{Error, SuiRpcInputError};
-use crate::read_api::get_transaction_data_and_digest;
+use crate::error::{Error, SuiRpcInputError, SuiRpcServerResult};
 use crate::{
     get_balance_changes_from_effect, get_object_changes, with_tracing, ObjectProviderCache,
     SuiRpcModule,
 };
 
-pub struct TransactionExecutionApi {
+#[cfg(test)]
+use mockall::automock;
+
+#[cfg_attr(test, automock)]
+#[async_trait]
+pub trait TransactionExecutionInternalTrait {
+
+    fn get_transaction_data_and_digest(&self, tx_bytes: Base64) -> SuiRpcServerResult<(TransactionData, TransactionDigest)>;
+
+    async fn execute_transaction_block(
+        &self,
+        tx_bytes: Base64,
+        signatures: Vec<Base64>,
+        opts: Option<SuiTransactionBlockResponseOptions>,
+        request_type: Option<ExecuteTransactionRequestType>,
+    ) -> SuiRpcServerResult<SuiTransactionBlockResponse>;
+
+    async fn dev_inspect_transaction_block(
+        &self,
+        sender_address: SuiAddress,
+        tx_bytes: Base64,
+        gas_price: Option<BigInt<u64>>,
+        _epoch: Option<BigInt<u64>>,
+    ) -> SuiRpcServerResult<DevInspectResults>;
+
+    async fn dry_run_transaction_block(
+        &self,
+        tx_bytes: Base64,
+    ) -> SuiRpcServerResult<DryRunTransactionBlockResponse>;
+}
+
+pub struct TransactionExecutionInternal {
     state: Arc<AuthorityState>,
     transaction_orchestrator: Arc<TransactiondOrchestrator<NetworkAuthorityClient>>,
     metrics: Arc<JsonRpcMetrics>,
 }
 
-impl TransactionExecutionApi {
+impl TransactionExecutionInternal {
     pub fn new(
         state: Arc<AuthorityState>,
         transaction_orchestrator: Arc<TransactiondOrchestrator<NetworkAuthorityClient>>,
@@ -56,14 +89,17 @@ impl TransactionExecutionApi {
             metrics,
         }
     }
+}
 
+#[async_trait]
+impl TransactionExecutionInternalTrait for TransactionExecutionInternal {
     async fn execute_transaction_block(
         &self,
         tx_bytes: Base64,
         signatures: Vec<Base64>,
         opts: Option<SuiTransactionBlockResponseOptions>,
         request_type: Option<ExecuteTransactionRequestType>,
-    ) -> Result<SuiTransactionBlockResponse, Error> {
+    ) -> SuiRpcServerResult<SuiTransactionBlockResponse> {
         let opts = opts.unwrap_or_default();
 
         let request_type = match (request_type, opts.require_local_execution()) {
@@ -168,11 +204,27 @@ impl TransactionExecutionApi {
         })
     }
 
+
+    async fn dev_inspect_transaction_block(
+        &self,
+        sender_address: SuiAddress,
+        tx_bytes: Base64,
+        gas_price: Option<BigInt<u64>>,
+        _epoch: Option<BigInt<u64>>,
+    ) -> SuiRpcServerResult<DevInspectResults> {
+        let tx_kind: TransactionKind =
+            bcs::from_bytes(&tx_bytes.to_vec()?)?;
+        Ok(self
+            .state
+            .dev_inspect_transaction_block(sender_address, tx_kind, gas_price.map(|i| *i))
+            .await?)
+    }
+
     async fn dry_run_transaction_block(
         &self,
         tx_bytes: Base64,
-    ) -> Result<DryRunTransactionBlockResponse, Error> {
-        let (txn_data, txn_digest) = get_transaction_data_and_digest(tx_bytes)?;
+    ) -> SuiRpcServerResult<DryRunTransactionBlockResponse> {
+        let (txn_data, txn_digest) = self.get_transaction_data_and_digest(tx_bytes)?;
         let input_objs = txn_data.input_objects()?;
         let sender = txn_data.sender();
         let (resp, written_objects, transaction_effects, mock_gas) = self
@@ -204,6 +256,37 @@ impl TransactionExecutionApi {
             input: resp.input,
         })
     }
+
+    fn get_transaction_data_and_digest(
+        &self,
+        tx_bytes: Base64,
+    ) -> SuiRpcServerResult<(TransactionData, TransactionDigest)> {
+        let tx_data =
+            bcs::from_bytes(&tx_bytes.to_vec()?)?;
+        let intent_msg = IntentMessage::new(
+            Intent {
+                version: IntentVersion::V0,
+                scope: IntentScope::TransactionData,
+                app_id: AppId::Sui,
+            },
+            tx_data,
+        );
+        let txn_digest = TransactionDigest::new(default_hash(&intent_msg.value));
+        Ok((intent_msg.value, txn_digest))
+    }
+}
+
+
+pub struct TransactionExecutionApi {
+    internal: Arc<dyn TransactionExecutionInternalTrait + Send + Sync>,
+}
+
+impl TransactionExecutionApi {
+    pub fn new(state: Arc<AuthorityState>, transaction_orchestrator: Arc<TransactiondOrchestrator<NetworkAuthorityClient>>, metrics: Arc<JsonRpcMetrics>) -> Self {
+        Self {
+            internal: Arc::new(TransactionExecutionInternal::new(state, transaction_orchestrator, metrics)),
+        }
+    }
 }
 
 #[async_trait]
@@ -217,7 +300,7 @@ impl WriteApiServer for TransactionExecutionApi {
         request_type: Option<ExecuteTransactionRequestType>,
     ) -> RpcResult<SuiTransactionBlockResponse> {
         with_tracing!(async move {
-            Ok(self
+            Ok(self.internal
                 .execute_transaction_block(tx_bytes, signatures, opts, request_type)
                 .await?)
         })
@@ -232,13 +315,9 @@ impl WriteApiServer for TransactionExecutionApi {
         _epoch: Option<BigInt<u64>>,
     ) -> RpcResult<DevInspectResults> {
         with_tracing!(async move {
-            let tx_kind: TransactionKind =
-                bcs::from_bytes(&tx_bytes.to_vec().map_err(Error::from)?).map_err(Error::from)?;
-            Ok(self
-                .state
-                .dev_inspect_transaction_block(sender_address, tx_kind, gas_price.map(|i| *i))
-                .await
-                .map_err(Error::from)?)
+            Ok(self.internal
+                .dev_inspect_transaction_block(sender_address, tx_bytes, gas_price, _epoch)
+                .await?)
         })
     }
 
@@ -247,7 +326,7 @@ impl WriteApiServer for TransactionExecutionApi {
         &self,
         tx_bytes: Base64,
     ) -> RpcResult<DryRunTransactionBlockResponse> {
-        with_tracing!(async move { Ok(self.dry_run_transaction_block(tx_bytes).await?) })
+        with_tracing!(async move { Ok(self.internal.dry_run_transaction_block(tx_bytes).await?) })
     }
 }
 

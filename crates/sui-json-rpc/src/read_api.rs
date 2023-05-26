@@ -6,7 +6,6 @@ use std::sync::Arc;
 
 use anyhow::anyhow;
 use async_trait::async_trait;
-use fastcrypto::encoding::Base64;
 use futures::future::join_all;
 use itertools::Itertools;
 use jsonrpsee::core::RpcResult;
@@ -20,7 +19,6 @@ use tap::TapFallible;
 use tracing::{debug, error, info, instrument, warn};
 
 use mysten_metrics::spawn_monitored_task;
-use shared_crypto::intent::{AppId, Intent, IntentMessage, IntentScope, IntentVersion};
 use sui_core::authority::AuthorityState;
 use sui_json_rpc_types::{
     BalanceChange, Checkpoint, CheckpointId, CheckpointPage, DisplayFieldsResponse, EventFilter,
@@ -34,7 +32,6 @@ use sui_open_rpc::Module;
 use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
 use sui_types::base_types::{ObjectID, SequenceNumber, TransactionDigest};
 use sui_types::collection_types::VecMap;
-use sui_types::crypto::default_hash;
 use sui_types::digests::TransactionEventsDigest;
 use sui_types::display::DisplayVersionUpdatedEvent;
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI, TransactionEvents};
@@ -1095,23 +1092,6 @@ pub async fn get_move_modules_by_package(
             format!("Package object does not exist with ID {}", package),
         ))),
     }
-}
-
-pub fn get_transaction_data_and_digest(
-    tx_bytes: Base64,
-) -> Result<(TransactionData, TransactionDigest), Error> {
-    let tx_data =
-        bcs::from_bytes(&tx_bytes.to_vec().map_err(|e| anyhow!(e))?).map_err(Error::from)?; // TODO: is this a client or server error? Only used by dry_run_transaction_block
-    let intent_msg = IntentMessage::new(
-        Intent {
-            version: IntentVersion::V0,
-            scope: IntentScope::TransactionData,
-            app_id: AppId::Sui,
-        },
-        tx_data,
-    );
-    let txn_digest = TransactionDigest::new(default_hash(&intent_msg.value));
-    Ok((intent_msg.value, txn_digest))
 }
 
 pub fn get_rendered_fields(
