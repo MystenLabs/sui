@@ -665,7 +665,6 @@ impl TransactionManager {
     /// Notifies TransactionManager that the given objects are available in the objects table.
     /// Useful when transactions associated with the objects are not known, e.g. after checking
     /// object availability from storage, or for testing.
-    #[cfg(test)]
     pub(crate) fn objects_available(
         &self,
         input_keys: Vec<InputKey>,
