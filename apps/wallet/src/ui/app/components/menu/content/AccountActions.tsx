@@ -33,7 +33,6 @@ export function AccountActions({ account }: AccountActionsProps) {
             );
             break;
         case AccountType.IMPORTED:
-        case AccountType.DERIVED:
             actionContent = (
                 <div>
                     <Link
@@ -43,6 +42,28 @@ export function AccountActions({ account }: AccountActionsProps) {
                         weight="medium"
                     />
                 </div>
+            );
+            break;
+        case AccountType.DERIVED:
+            actionContent = (
+                <>
+                    <div>
+                        <Link
+                            text="Export Private Key"
+                            to={exportAccountUrl}
+                            color="heroDark"
+                            weight="medium"
+                        />
+                    </div>
+                    <div>
+                        <Link
+                            to={recoveryPassphraseUrl}
+                            color="heroDark"
+                            weight="medium"
+                            text="Export Passphrase"
+                        />
+                    </div>
+                </>
             );
             break;
         case AccountType.QREDO:
@@ -57,14 +78,8 @@ export function AccountActions({ account }: AccountActionsProps) {
     }
 
     return (
-        <div className="flex flex-row items-center flex-1 gap-1">
+        <div className="flex items-center flex-1 gap-4 pb-1 overflow-x-auto">
             {actionContent}
-            <Link
-                to={recoveryPassphraseUrl}
-                color="heroDark"
-                weight="medium"
-                text="Export Passphrase"
-            />
         </div>
     );
 }
