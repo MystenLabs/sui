@@ -892,8 +892,6 @@ importers:
         specifier: ^0.30.1
         version: 0.30.1(@vitest/ui@0.30.1)(happy-dom@9.5.0)(playwright@1.32.3)
 
-  sdk/move-binary-format/pkg: {}
-
   sdk/typescript:
     dependencies:
       '@mysten/bcs':
@@ -1105,10 +1103,10 @@ importers:
         version: 13.3.0(react-dom@18.2.0)(react@18.2.0)
       nextra:
         specifier: latest
-        version: 2.6.1(next@13.3.0)(react-dom@18.2.0)(react@18.2.0)
+        version: 2.2.18(next@13.3.0)(react-dom@18.2.0)(react@18.2.0)
       nextra-theme-docs:
         specifier: latest
-        version: 2.6.1(next@13.3.0)(nextra@2.6.1)(react-dom@18.2.0)(react@18.2.0)
+        version: 2.2.18(next@13.3.0)(nextra@2.2.18)(react-dom@18.2.0)(react@18.2.0)
       react:
         specifier: ^18.2.0
         version: 18.2.0
@@ -14190,8 +14188,8 @@ packages:
       - supports-color
     dev: false
 
-  /next-seo@6.0.0(next@13.3.0)(react-dom@18.2.0)(react@18.2.0):
-    resolution: {integrity: sha512-jKKt1p1z4otMA28AyeoAONixVjdYmgFCWwpEFtu+DwRHQDllVX3RjtyXbuCQiUZEfQ9rFPBpAI90vDeLZlMBdg==}
+  /next-seo@5.15.0(next@13.3.0)(react-dom@18.2.0)(react@18.2.0):
+    resolution: {integrity: sha512-LGbcY91yDKGMb7YI+28n3g+RuChUkt6pXNpa8FkfKkEmNiJkeRDEXTnnjVtwT9FmMhG6NH8qwHTelGrlYm9rgg==}
     peerDependencies:
       next: ^8.1.1-canary.54 || >=9.0.0
       react: '>=16.0.0'
@@ -14258,11 +14256,11 @@ packages:
       - babel-plugin-macros
     dev: false
 
-  /nextra-theme-docs@2.6.1(next@13.3.0)(nextra@2.6.1)(react-dom@18.2.0)(react@18.2.0):
-    resolution: {integrity: sha512-25Va2D5bzFRIE7uIZ75QfmvsdurXI+xzoWBNMQTnG+ONv9yiQSWRYjfw/Yep1OXF6ahDaaNqbCb8HmRoX7sqRg==}
+  /nextra-theme-docs@2.2.18(next@13.3.0)(nextra@2.2.18)(react-dom@18.2.0)(react@18.2.0):
+    resolution: {integrity: sha512-gW9P2fOuV0w414vmHyJY9k1XSoPsFLOXIDWyW177v8xPJcNF3DrYCOIaVgZt7UwxlBNmZlBDg+glPPogXw1qHQ==}
     peerDependencies:
       next: '>=9.5.3'
-      nextra: 2.6.1
+      nextra: 2.2.18
       react: '>=16.13.1'
       react-dom: '>=16.13.1'
     dependencies:
@@ -14275,18 +14273,17 @@ packages:
       intersection-observer: 0.12.2
       match-sorter: 6.3.1
       next: 13.3.0(react-dom@18.2.0)(react@18.2.0)
-      next-seo: 6.0.0(next@13.3.0)(react-dom@18.2.0)(react@18.2.0)
+      next-seo: 5.15.0(next@13.3.0)(react-dom@18.2.0)(react@18.2.0)
       next-themes: 0.2.1(next@13.3.0)(react-dom@18.2.0)(react@18.2.0)
-      nextra: 2.6.1(next@13.3.0)(react-dom@18.2.0)(react@18.2.0)
+      nextra: 2.2.18(next@13.3.0)(react-dom@18.2.0)(react@18.2.0)
       react: 18.2.0
       react-dom: 18.2.0(react@18.2.0)
       scroll-into-view-if-needed: 3.0.10
       zod: 3.21.4
     dev: false
 
-  /nextra@2.6.1(next@13.3.0)(react-dom@18.2.0)(react@18.2.0):
-    resolution: {integrity: sha512-5NN+aTFzW17/42AWp3qAvBTlgZvSQVpHOUb2MdHI6gnslpjik6z7DS1gZJ9zJ/I8veVxdLhdE70TfksAZ9tgxQ==}
-    engines: {node: '>=16'}
+  /nextra@2.2.18(next@13.3.0)(react-dom@18.2.0)(react@18.2.0):
+    resolution: {integrity: sha512-45fXVzSOOhjMs+bTcq/jsW4BT8bOeTZjceHEubDTFEdelqTv5rUtwVsHqt0iwzmj/braNdZWTITygY25rE65tA==}
     peerDependencies:
       next: '>=9.5.3'
       react: '>=16.13.1'
@@ -14295,7 +14292,6 @@ packages:
       '@mdx-js/mdx': 2.3.0
       '@mdx-js/react': 2.3.0(react@18.2.0)
       '@napi-rs/simple-git': 0.1.8
-      clsx: 1.2.1
       github-slugger: 2.0.0
       graceful-fs: 4.2.11
       gray-matter: 4.0.3
@@ -14307,7 +14303,7 @@ packages:
       react: 18.2.0
       react-dom: 18.2.0(react@18.2.0)
       rehype-katex: 6.0.3
-      rehype-pretty-code: 0.9.4(shiki@0.14.2)
+      rehype-pretty-code: 0.9.3(shiki@0.14.2)
       remark-gfm: 3.0.1
       remark-math: 5.1.1
       remark-reading-time: 2.0.1
@@ -14316,7 +14312,6 @@ packages:
       title: 3.5.3
       unist-util-remove: 3.1.1
       unist-util-visit: 4.1.2
-      zod: 3.21.4
     transitivePeerDependencies:
       - supports-color
     dev: false
@@ -16430,8 +16425,8 @@ packages:
       unist-util-visit: 4.1.2
     dev: false
 
-  /rehype-pretty-code@0.9.4(shiki@0.14.2):
-    resolution: {integrity: sha512-3m4aQT15n8C+UizcZL0enaahoZwCDm5K1qKQ3DGgHE7U8l/DEEEJ/hm+uDe9yyK4sxVOSfZcRIMHrpJwLQi+Rg==}
+  /rehype-pretty-code@0.9.3(shiki@0.14.2):
+    resolution: {integrity: sha512-57i+ifrttqpeQxub0NZ2pRw0aiUPYeBpr234NLWfZ4BfbEaP+29+iCXB1rUMkzoPi6IBC4w4I93mUPgw36IajQ==}
     engines: {node: ^12.16.0 || >=13.2.0}
     peerDependencies:
       shiki: '*'
