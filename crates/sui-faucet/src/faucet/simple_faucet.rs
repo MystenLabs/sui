@@ -610,12 +610,12 @@ impl Faucet for SimpleFaucet {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
     use sui::client_commands::{SuiClientCommandResult, SuiClientCommands};
     use sui_json_rpc_types::SuiExecutionStatus;
+    use sui_json_rpc_types::SuiTransactionBlockEffectsAPI;
     use sui_sdk::wallet_context::WalletContext;
     use test_utils::network::TestClusterBuilder;
-
-    use super::*;
 
     #[tokio::test]
     async fn simple_faucet_basic_interface_should_work() {
