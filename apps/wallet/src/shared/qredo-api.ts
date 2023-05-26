@@ -41,6 +41,8 @@ export type Wallet = {
     walletID: string;
     address: string;
     network: string;
+    // the key schema is always ED25519 and qredo is not planning to change it
+    publicKey: string;
     labels: {
         key: string;
         name: string;
