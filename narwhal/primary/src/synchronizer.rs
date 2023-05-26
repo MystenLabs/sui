@@ -152,7 +152,7 @@ impl Inner {
     ) -> DagResult<()> {
         let _scope = monitored_scope("Synchronizer::accept_certificate_internal");
 
-        debug!("Processing certificate {:?}", certificate);
+        debug!("Accepting certificate {:?}", certificate);
 
         let digest = certificate.digest();
 
@@ -777,7 +777,7 @@ impl Synchronizer {
             return Ok(());
         }
 
-        debug!("Processing certificate {:?}", certificate);
+        debug!("Processing certificate {:?} with lock", certificate);
 
         // The state lock must be held for the rest of the function, to ensure updating state,
         // writing certificates into storage and sending certificates to consensus are atomic.

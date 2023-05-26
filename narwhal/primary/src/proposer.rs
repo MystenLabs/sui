@@ -333,25 +333,28 @@ impl Proposer {
         }
     }
 
-    /// Update the last leader certificate. This is only relevant in partial synchrony.
+    /// Update the last leader certificate.
     fn update_leader(&mut self) -> bool {
         let leader = self.committee.leader(self.round);
         self.last_leader = self
             .last_parents
             .iter()
-            .find(|x| x.origin() == leader.id())
+            .find(|x| {
+                if x.origin() == leader.id() {
+                    debug!("Got leader {:?} for round {}", x, self.round);
+                    true
+                } else {
+                    false
+                }
+            })
             .cloned();
-
-        if let Some(leader) = self.last_leader.as_ref() {
-            debug!("Got leader {} for round {}", leader.origin(), self.round);
-        }
 
         self.last_leader.is_some()
     }
 
     /// Check whether if this validator is the leader of the round, or if we have
     /// (i) f+1 votes for the leader, (ii) 2f+1 nodes not voting for the leader,
-    /// (iii) there is no leader to vote for. This is only relevant in partial synchrony.
+    /// (iii) there is no leader to vote for.
     fn enough_votes(&self) -> bool {
         if self.committee.leader(self.round + 1).id() == self.authority_id {
             return true;
@@ -374,15 +377,6 @@ impl Proposer {
         }
 
         let mut enough_votes = votes_for_leader >= self.committee.validity_threshold();
-        if enough_votes {
-            if let Some(leader) = self.last_leader.as_ref() {
-                debug!(
-                    "Got enough support for leader {} at round {}",
-                    leader.origin(),
-                    self.round
-                );
-            }
-        }
         enough_votes |= no_votes >= self.committee.quorum_threshold();
         enough_votes
     }
@@ -423,8 +417,8 @@ impl Proposer {
             // and one of the following conditions is met:
             // (i) the timer expired (we timed out on the leader or gave up gather votes for the leader),
             // (ii) we have enough digests (header_num_of_batches_threshold) and we are on the happy path (we can vote for
-            // the leader or the leader has enough votes to enable a commit). The latter condition only matters
-            // in partially synchrony. We guarantee that no more than max_header_num_of_batches are included in
+            // the leader or the leader has enough votes to enable a commit).
+            // We guarantee that no more than max_header_num_of_batches are included.
             let enough_parents = !self.last_parents.is_empty();
             let enough_digests = self.digests.len() >= self.header_num_of_batches_threshold;
             let max_delay_timed_out = max_delay_timer.is_elapsed();
@@ -615,7 +609,17 @@ impl Proposer {
 
                     // Check whether we can advance to the next round. Note that if we timeout,
                     // we ignore this check and advance anyway.
-                    advance = self.ready();
+                    advance = if self.ready() {
+                        if !advance {
+                            debug!(
+                                "Ready to advance from round {}",
+                                self.round,
+                            );
+                        }
+                        true
+                    } else {
+                        false
+                    };
 
                     let round_type = if self.round % 2 == 0 {
                         "even"
