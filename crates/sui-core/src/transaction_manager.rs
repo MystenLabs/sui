@@ -102,36 +102,43 @@ struct CacheInner {
     // don't want to evict packages in favor of mutable objects.
     unversioned_cache: LruCache<ObjectID, ()>,
 
+    max_size: usize,
     metrics: Arc<AuthorityMetrics>,
 }
 
 impl CacheInner {
-    fn bounded(size: usize, metrics: Arc<AuthorityMetrics>) -> Self {
-        Self {
-            versioned_cache: LruCache::new(size.try_into().unwrap()),
-            unversioned_cache: LruCache::new(size.try_into().unwrap()),
-            metrics,
-        }
-    }
-
-    fn unbounded(metrics: Arc<AuthorityMetrics>) -> Self {
+    fn new(max_size: usize, metrics: Arc<AuthorityMetrics>) -> Self {
         Self {
             versioned_cache: LruCache::unbounded(),
             unversioned_cache: LruCache::unbounded(),
+            max_size,
             metrics,
         }
     }
 }
 
 impl CacheInner {
+    fn shrink(&mut self) {
+        while self.versioned_cache.len() > self.max_size {
+            self.versioned_cache.pop_lru();
+            self.metrics
+                .transaction_manager_object_cache_evictions
+                .inc();
+        }
+        while self.unversioned_cache.len() > self.max_size {
+            self.unversioned_cache.pop_lru();
+            self.metrics
+                .transaction_manager_object_cache_evictions
+                .inc();
+        }
+    }
+
     fn insert(&mut self, object: &InputKey) {
         if let Some(version) = object.1 {
             if let Some((previous_id, previous_version)) =
                 self.versioned_cache.push(object.0, version)
             {
-                if previous_id == object.0
-                    && previous_version > object.1.unwrap_or(SequenceNumber::MIN)
-                {
+                if previous_id == object.0 && previous_version > version {
                     // do not allow highest known version to decrease
                     self.versioned_cache.put(object.0, previous_version);
                 } else {
@@ -171,56 +178,36 @@ impl CacheInner {
 }
 
 struct AvailableObjectsCache {
-    bounded_cache: CacheInner,
-    unbounded_cache: Option<CacheInner>,
-
+    cache: CacheInner,
     unbounded_cache_enabled: usize,
-    metrics: Arc<AuthorityMetrics>,
 }
 
 impl AvailableObjectsCache {
     fn new(metrics: Arc<AuthorityMetrics>) -> Self {
         Self {
-            bounded_cache: CacheInner::bounded(100000, metrics.clone()),
-            unbounded_cache: None,
+            cache: CacheInner::new(100000, metrics),
             unbounded_cache_enabled: 0,
-            metrics,
         }
     }
 
     fn enable_unbounded_cache(&mut self) {
-        if self.unbounded_cache_enabled == 0 {
-            assert!(self.unbounded_cache.is_none());
-            self.unbounded_cache = Some(CacheInner::unbounded(self.metrics.clone()));
-        }
         self.unbounded_cache_enabled += 1;
     }
 
     fn disable_unbounded_cache(&mut self) {
         assert!(self.unbounded_cache_enabled > 0);
-        assert!(self.unbounded_cache.is_some());
         self.unbounded_cache_enabled -= 1;
-        if self.unbounded_cache_enabled == 0 {
-            self.unbounded_cache = None;
-        }
     }
 
     fn insert(&mut self, object: &InputKey) {
-        if let Some(unbounded_cache) = &mut self.unbounded_cache {
-            unbounded_cache.insert(object);
+        self.cache.insert(object);
+        if self.unbounded_cache_enabled == 0 {
+            self.cache.shrink();
         }
-
-        self.bounded_cache.insert(object);
     }
 
     fn is_object_available(&mut self, object: &InputKey) -> Option<bool> {
-        if let Some(unbounded_cache) = &mut self.unbounded_cache {
-            if let Some(true) = unbounded_cache.is_object_available(object) {
-                return Some(true);
-            }
-        }
-
-        self.bounded_cache.is_object_available(object)
+        self.cache.is_object_available(object)
     }
 }
 
@@ -483,7 +470,7 @@ impl TransactionManager {
         // So missing objects' availability are checked again after releasing the TM lock.
         let cache_miss_availibility = self
             .authority_store
-            .input_object_multi_exists(input_object_cache_misses.iter().cloned())
+            .multi_input_objects_exist(input_object_cache_misses.iter().cloned())
             .expect("Checking object existence cannot fail!")
             .into_iter()
             .zip(input_object_cache_misses.into_iter());

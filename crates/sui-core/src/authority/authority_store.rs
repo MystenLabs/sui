@@ -605,22 +605,7 @@ impl AuthorityStore {
 
     /// Checks if the input object identified by the InputKey exists, with support for non-system
     /// packages i.e. when version is None.
-    pub fn input_object_exists(&self, key: &InputKey) -> Result<bool, SuiError> {
-        match key.1 {
-            Some(version) => Ok(self
-                .perpetual_tables
-                .objects
-                .contains_key(&ObjectKey(key.0, version))?),
-            None => match self.get_object_or_tombstone(key.0)? {
-                None => Ok(false),
-                Some(entry) => Ok(entry.2.is_alive()),
-            },
-        }
-    }
-
-    /// Checks if the input object identified by the InputKey exists, with support for non-system
-    /// packages i.e. when version is None.
-    pub fn input_object_multi_exists(
+    pub fn multi_input_objects_exist(
         &self,
         keys: impl Iterator<Item = InputKey> + Clone,
     ) -> Result<Vec<bool>, SuiError> {
