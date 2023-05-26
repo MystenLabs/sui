@@ -1,12 +1,15 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use super::*;
 
-use crate::TrivialTransactionValidator;
+use std::vec;
+
 use fastcrypto::hash::Hash;
 use test_utils::CommitteeFixture;
 use types::{MockWorkerToWorker, WorkerToWorkerServer};
+
+use super::*;
+use crate::TrivialTransactionValidator;
 
 #[tokio::test]
 async fn synchronize() {
@@ -21,7 +24,7 @@ async fn synchronize() {
     // Create a new test store.
     let store = test_utils::create_batch_store();
 
-    // Create network with mock behavior to respond to RequestBatch request.
+    // Create network with mock behavior to respond to RequestBatches request.
     let target_primary = fixture.authorities().nth(1).unwrap();
     let batch = test_utils::batch();
     let digest = batch.digest();
@@ -34,11 +37,12 @@ async fn synchronize() {
     let mut mock_server = MockWorkerToWorker::new();
     let mock_batch_response = batch.clone();
     mock_server
-        .expect_request_batch()
-        .withf(move |request| request.body().batch == digest)
+        .expect_request_batches()
+        .withf(move |request| request.body().batch_digests == vec![digest])
         .return_once(move |_| {
-            Ok(anemo::Response::new(RequestBatchResponse {
-                batch: Some(mock_batch_response),
+            Ok(anemo::Response::new(RequestBatchesResponse {
+                batches: vec![mock_batch_response],
+                is_size_limit_reached: false,
             }))
         });
     let routes = anemo::Router::new().add_rpc_service(WorkerToWorkerServer::new(mock_server));
