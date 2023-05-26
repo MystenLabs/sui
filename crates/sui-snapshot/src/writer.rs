@@ -223,8 +223,8 @@ pub struct StateSnapshotWriterV1 {
 impl StateSnapshotWriterV1 {
     pub async fn new(
         epoch: u64,
-        local_store_config: ObjectStoreConfig,
-        remote_store_config: ObjectStoreConfig,
+        local_store_config: &ObjectStoreConfig,
+        remote_store_config: &ObjectStoreConfig,
         file_compression: FileCompression,
         concurrency: NonZeroUsize,
     ) -> Result<Self> {
@@ -241,7 +241,11 @@ impl StateSnapshotWriterV1 {
         let local_object_store = local_store_config.make()?;
         let local_staging_dir_root = local_store_config
             .directory
-            .context("No local directory specified")?;
+            .as_ref()
+            .context("No local directory specified")?
+            .clone();
+
+        // Delete local epoch dir if it exists
         let local_epoch_dir_path = local_staging_dir_root.join(&epoch_dir);
         if local_epoch_dir_path.exists() {
             return Err(anyhow!(
@@ -375,7 +379,7 @@ impl StateSnapshotWriterV1 {
     fn write_manifest(&mut self, file_metadata: Vec<FileMetadata>) -> Result<()> {
         let (f, manifest_file_path) = self.manifest_file()?;
         let mut wbuf = BufWriter::new(f);
-        let manifest = Manifest::V1(ManifestV1 {
+        let manifest: Manifest = Manifest::V1(ManifestV1 {
             snapshot_version: 1,
             address_length: ObjectID::LENGTH as u64,
             file_metadata,

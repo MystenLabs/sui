@@ -459,7 +459,7 @@ mod sim_only_tests {
 
     async fn dev_inspect_call(cluster: &TestCluster, call: ProgrammableMoveCall) -> u64 {
         let client = cluster.rpc_client();
-        let sender = cluster.accounts.first().cloned().unwrap();
+        let sender = cluster.get_address_0();
 
         let pt = {
             let mut builder = ProgrammableTransactionBuilder::new();

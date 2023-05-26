@@ -42,8 +42,8 @@ export const DefaultRpcClient = (network: Network | string) => {
 
     const provider = new JsonRpcProvider(connection, {
         rpcClient:
-            // If the network is a known network, and not localnet, attach the sentry RPC client for instrumentation:
-            network in Network && network !== Network.LOCAL
+            // Only instrument mainnet:
+            network in Network && network === Network.MAINNET
                 ? new SentryRpcClient(connection.fullnode)
                 : undefined,
     });

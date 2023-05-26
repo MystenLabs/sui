@@ -1,0 +1,57 @@
+[package]
+name = "sui-e2e-tests"
+authors = ["Mysten Labs <build@mystenlabs.com>"]
+license = "Apache-2.0"
+publish = false
+edition = "2021"
+version = "0.1.0"
+
+[dependencies]
+
+[dev-dependencies]
+tempfile = "3.3.0"
+futures = "0.3.23"
+prometheus = "0.13.3"
+fs_extra = "1.3.0"
+indexmap = "1.9.2"
+insta = { version = "1.21.1", features = ["json"] }
+jsonrpsee = { git="https://github.com/wlmyng/jsonrpsee.git", rev= "b1b300784795f6a64d0fcdf8f03081a9bc38bde8", features = ["jsonrpsee-core"] }
+test-utils = { path = "../test-utils" }
+rand = "0.8.5"
+expect-test = "1.4.0"
+tokio = { version = "1", features = ["full"] }
+tracing = "0.1.36"
+assert_cmd = "2.0.6"
+serde = { version = "1.0.144", features = ["derive"] }
+bcs = "0.1.4"
+anyhow = { version = "1.0.64", features = ["backtrace"] }
+async-trait = "0.1.61"
+clap = { version = "3.2.17", features = ["derive"] }
+serde_json = "1.0.88"
+
+move-binary-format.workspace = true
+move-package.workspace = true
+telemetry-subscribers.workspace = true
+fastcrypto.workspace = true
+move-core-types.workspace = true
+
+sui-core = { path = "../sui-core" }
+sui-framework = { path = "../sui-framework" }
+sui-json-rpc = { path = "../sui-json-rpc" }
+sui-node = { path = "../sui-node" }
+sui-macros = { path = "../sui-macros" }
+sui-simulator = { path = "../sui-simulator" }
+mysten-metrics = { path = "../mysten-metrics" }
+sui-tool = { path = "../sui-tool" }
+sui-protocol-config = { path = "../sui-protocol-config" }
+sui-types = { path = "../sui-types" }
+sui-move-build = { path = "../sui-move-build" }
+sui-swarm-config = { path = "../sui-swarm-config" }
+sui-test-transaction-builder = { path = "../sui-test-transaction-builder" }
+sui-config = { path = "../sui-config" }
+sui-json-rpc-types = { path = "../sui-json-rpc-types" }
+sui-adapter = { path = "../../sui-execution/latest/sui-adapter", package = "sui-adapter-latest" }
+sui = { path = "../sui" }
+sui-sdk = { path = "../sui-sdk" }
+sui-keys = { path = "../sui-keys" }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }

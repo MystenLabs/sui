@@ -10,7 +10,6 @@ use sui_types::accumulator::Accumulator;
 use sui_types::base_types::SequenceNumber;
 use sui_types::digests::TransactionEventsDigest;
 use sui_types::effects::TransactionEffects;
-use sui_types::storage::ObjectStore;
 use typed_store::metrics::SamplingInterval;
 use typed_store::rocks::util::{empty_compaction_filter, reference_count_merge_operator};
 use typed_store::rocks::{
@@ -354,6 +353,14 @@ impl AuthorityPerpetualTables {
         Ok(object_ref)
     }
 
+    pub fn set_highest_pruned_checkpoint_without_wb(
+        &self,
+        checkpoint_number: CheckpointSequenceNumber,
+    ) -> SuiResult {
+        let mut wb = self.pruned_checkpoint.batch();
+        self.set_highest_pruned_checkpoint(&mut wb, checkpoint_number)
+    }
+
     pub fn database_is_empty(&self) -> SuiResult<bool> {
         Ok(self
             .objects
@@ -395,6 +402,17 @@ impl AuthorityPerpetualTables {
             .rocksdb
             .flush()
             .map_err(SuiError::StorageError)?;
+        Ok(())
+    }
+
+    pub fn insert_root_state_hash(
+        &self,
+        epoch: EpochId,
+        last_checkpoint_of_epoch: CheckpointSequenceNumber,
+        accumulator: Accumulator,
+    ) -> SuiResult {
+        self.root_state_hash_by_epoch
+            .insert(&epoch, &(last_checkpoint_of_epoch, accumulator))?;
         Ok(())
     }
 

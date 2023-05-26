@@ -7,6 +7,7 @@ export * from './hooks/useFormatCoin';
 export * from './hooks/useTimeAgo';
 export * from './hooks/useGetValidatorsEvents';
 export * from './hooks/useGetValidatorsApy';
+export * from './hooks/nameService';
 export * from './utils/formatAmount';
 export * from './utils/roundFloat';
 export * from './utils/calculateStakeShare';

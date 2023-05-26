@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { isSuiNSName, useRpcClient, useSuiNSEnabled } from '@mysten/core';
 import { ArrowRight16 } from '@mysten/icons';
 import { getTransactionDigest, TransactionBlock } from '@mysten/sui.js';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
@@ -24,7 +25,11 @@ import { useQredoTransaction } from '_src/ui/app/hooks/useQredoTransaction';
 
 export function TransferNFTForm({ objectId }: { objectId: string }) {
     const activeAddress = useActiveAddress();
+    const rpc = useRpcClient();
+    const suiNSEnabled = useSuiNSEnabled();
     const validationSchema = createValidationSchema(
+        rpc,
+        suiNSEnabled,
         activeAddress || '',
         objectId
     );
@@ -37,6 +42,17 @@ export function TransferNFTForm({ objectId }: { objectId: string }) {
             if (!to || !signer) {
                 throw new Error('Missing data');
             }
+
+            if (suiNSEnabled && isSuiNSName(to)) {
+                const address = await rpc.resolveNameServiceAddress({
+                    name: to,
+                });
+                if (!address) {
+                    throw new Error('SuiNS name not found.');
+                }
+                to = address;
+            }
+
             const tx = new TransactionBlock();
             tx.transferObjects([tx.object(objectId)], tx.pure(to));
 

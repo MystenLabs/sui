@@ -5,9 +5,11 @@
 #[cfg(test)]
 mod tests;
 
+mod reader;
 mod writer;
 
 use anyhow::Result;
+use bytes::{Buf, Bytes};
 use fastcrypto::hash::{HashFunction, Sha3_256};
 use integer_encoding::VarInt;
 use num_enum::IntoPrimitive;
@@ -18,8 +20,18 @@ use serde::{Deserialize, Serialize};
 use std::fs::File;
 use std::io::{BufReader, BufWriter, Read, Write};
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::{fs, io};
+use sui_core::authority::authority_store_tables::AuthorityPerpetualTables;
+use sui_core::authority::epoch_start_configuration::EpochStartConfiguration;
+use sui_core::checkpoints::CheckpointStore;
+use sui_core::epoch::committee_store::CommitteeStore;
+use sui_storage::object_store::util::path_to_filesystem;
+use sui_types::accumulator::Accumulator;
 use sui_types::base_types::ObjectID;
+use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
+use sui_types::sui_system_state::get_sui_system_state;
+use sui_types::sui_system_state::SuiSystemStateTrait;
 
 /// The following describes the format of an object file (*.obj) used for persisting live sui objects.
 /// The maximum size per .obj file is 128MB. State snapshot will be taken at the end of every epoch.
@@ -31,13 +43,11 @@ use sui_types::base_types::ObjectID;
 /// current one reaches the max size i.e. 128MB. Partitions allow a single hash bucket to be consumed
 /// in parallel. Partition files are optionally compressed with the zstd compression format. Partition
 /// filenames follows the format <bucket_number>_<partition_number>.obj. Object references for hash
-/// buckets are stored in ref files, the filename for which follows the format REFERENCE-<bucket_num>.
 /// There is one single ref file per hash bucket. Object references are written in an append-only manner
 /// as well. Finally, the MANIFEST file contains per file metadata of every file in the snapshot directory.
-///
-/// State Snapshot Directory Layout
-///  - snapshot/
-///     - epoch_0/
+/// current one reaches the max size i.e. 64MB. Partitions allow a single hash bucket to be consumed
+/// in parallel. Partition files are compressed with the zstd compression format which can be read as
+/// a decompressed stream (when reading snapshot from a remote cloud object store this doesn't require
 ///        - 1_1.obj
 ///        - 1_2.obj
 ///        - 1_3.obj
@@ -167,6 +177,13 @@ impl FileCompression {
         };
         Ok(res)
     }
+    pub fn stream_decompress(&self, bytes: Bytes) -> Result<Box<dyn Read>> {
+        let res: Box<dyn Read> = match self {
+            FileCompression::Zstd => Box::new(zstd::stream::Decoder::new(bytes.reader())?),
+            FileCompression::None => Box::new(BufReader::new(bytes.reader())),
+        };
+        Ok(res)
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
@@ -186,6 +203,9 @@ impl FileMetadata {
             }
             FileType::Reference => dir_path.child(&*format!("REFERENCE-{}", self.bucket_num)),
         }
+    }
+    pub fn local_file_path(&self, root_path: &std::path::Path, dir_path: &Path) -> Result<PathBuf> {
+        path_to_filesystem(root_path.to_path_buf(), &self.file_path(dir_path))
     }
 }
 
@@ -216,6 +236,11 @@ impl Manifest {
     pub fn file_metadata(&self) -> &Vec<FileMetadata> {
         match self {
             Self::V1(manifest) => &manifest.file_metadata,
+        }
+    }
+    pub fn epoch(&self) -> u64 {
+        match self {
+            Self::V1(manifest) => manifest.epoch,
         }
     }
 }
@@ -289,4 +314,33 @@ pub fn create_file_metadata(
         sha3_digest,
     };
     Ok(file_metadata)
+}
+
+pub async fn setup_db_state(
+    epoch: u64,
+    accumulator: Accumulator,
+    perpetual_db: Arc<AuthorityPerpetualTables>,
+    checkpoint_store: Arc<CheckpointStore>,
+    committee_store: Arc<CommitteeStore>,
+) -> Result<()> {
+    // This function should be called once state accumulator based hash verification
+    // is complete and live object set state is downloaded to local store
+    let system_state_object = get_sui_system_state(&perpetual_db)?;
+    let new_epoch_start_state = system_state_object.into_epoch_start_state();
+    let next_epoch_committee = new_epoch_start_state.get_sui_committee();
+    let last_checkpoint = checkpoint_store
+        .get_epoch_last_checkpoint(epoch)
+        .expect("Error loading last checkpoint for current epoch")
+        .expect("Could not load last checkpoint for current epoch");
+    let epoch_start_configuration =
+        EpochStartConfiguration::new(new_epoch_start_state, *last_checkpoint.digest());
+    perpetual_db
+        .set_epoch_start_configuration(&epoch_start_configuration)
+        .await?;
+    perpetual_db.insert_root_state_hash(epoch, last_checkpoint.sequence_number, accumulator)?;
+    perpetual_db.set_highest_pruned_checkpoint_without_wb(last_checkpoint.sequence_number)?;
+    committee_store.insert_new_committee(&next_epoch_committee)?;
+    checkpoint_store.update_highest_executed_checkpoint(&last_checkpoint)?;
+
+    Ok(())
 }

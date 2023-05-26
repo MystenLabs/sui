@@ -3,7 +3,7 @@ name = "Examples"
 version = "0.0.1"
 
 [dependencies]
-Sui = { local = "../../../../../sui-framework/packages/sui-framework" }
+Sui = { local = "../../../../sui-framework/packages/sui-framework" }
 Nonexistent = { local = "../module_dependency_nonexistent" }
 
 [addresses]

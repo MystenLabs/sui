@@ -250,7 +250,10 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
                     className="flex flex-col h-full flex-1 flex-grow items-center overflow-y-auto"
                     data-testid="coin-page"
                 >
-                    {!coinType && <AccountSelector />}
+                    <div className="max-w-full">
+                        {!coinType && <AccountSelector />}
+                    </div>
+
                     <div className="mt-1.5">
                         <CoinBalance
                             balance={BigInt(tokenBalance)}
