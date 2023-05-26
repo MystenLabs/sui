@@ -118,7 +118,7 @@ export const SuiObjectResponseError = object({
   code: string(),
   error: optional(string()),
   object_id: optional(ObjectId),
-  version: optional(SequenceNumber),
+  version: optional(number()),
   digest: optional(ObjectDigest),
 });
 export type SuiObjectResponseError = Infer<typeof SuiObjectResponseError>;

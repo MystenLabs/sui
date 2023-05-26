@@ -3,9 +3,10 @@
 import { ArrowUpRight12 } from '@mysten/icons';
 import { useEffect, useState } from 'react';
 
+import { Text } from '../../text';
 import { Card } from '../Card';
-import ExplorerLink from '_src/ui/app/components/explorer-link';
 import { ExplorerLinkType } from '_src/ui/app/components/explorer-link/ExplorerLinkType';
+import { useExplorerLink } from '_src/ui/app/hooks/useExplorerLink';
 
 const TIME_TO_WAIT_FOR_EXPLORER = 60 * 1000;
 
@@ -33,19 +34,17 @@ export function ExplorerLinkCard({
     timestamp?: string;
 }) {
     const shouldShowExplorerLink = useShouldShowExplorerLink(timestamp, digest);
+    const explorerHref = useExplorerLink({
+        type: ExplorerLinkType.transaction,
+        transactionID: digest!,
+    });
     if (!shouldShowExplorerLink) return null;
     return (
-        <Card>
-            <div className="flex items-center justify-center gap-1">
-                <ExplorerLink
-                    type={ExplorerLinkType.transaction}
-                    transactionID={digest!}
-                    title="View on Sui Explorer"
-                    className="text-sui-dark text-pSubtitleSmall font-semibold no-underline uppercase tracking-wider"
-                    showIcon={false}
-                >
+        <Card as="a" href={explorerHref!} target="_blank">
+            <div className="flex items-center justify-center gap-1 tracking-wider w-full">
+                <Text variant="captionSmall" weight="semibold">
                     View on Explorer
-                </ExplorerLink>
+                </Text>
                 <ArrowUpRight12 className="text-steel text-pSubtitle" />
             </div>
         </Card>

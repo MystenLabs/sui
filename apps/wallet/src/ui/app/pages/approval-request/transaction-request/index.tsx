@@ -42,10 +42,13 @@ export function TransactionRequest({ txRequest }: TransactionRequestProps) {
         transaction
     );
     const [isConfirmationVisible, setConfirmationVisible] = useState(false);
-    const { data, isLoading: isDryRunLoading } = useTransactionDryRun(
-        addressForTransaction,
-        transaction
-    );
+
+    const {
+        data,
+        isError: isDryRunError,
+        isLoading: isDryRunLoading,
+    } = useTransactionDryRun(addressForTransaction, transaction);
+
     const summary = useTransactionSummary({
         transaction: data,
         currentAddress: addressForTransaction,
@@ -82,9 +85,12 @@ export function TransactionRequest({ txRequest }: TransactionRequestProps) {
                 approveLoading={isLoading || isConfirmationVisible}
             >
                 <PageMainLayoutTitle title="Approve Transaction" />
-                <div>
+
+                <div className="flex flex-col gap-4">
                     <TransactionSummary
+                        isDryRun
                         isLoading={isDryRunLoading}
+                        isError={isDryRunError}
                         showGasSummary={false}
                         summary={summary}
                     />

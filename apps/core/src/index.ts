@@ -33,3 +33,5 @@ export * from './hooks/useAppsBackend';
 export * from './hooks/useGetCoins';
 export * from './hooks/useGetAllBalances';
 export * from './hooks/useGetCoinBalance';
+export * from './utils/hasDisplayData';
+export * from './hooks/useMultiGetObjects';

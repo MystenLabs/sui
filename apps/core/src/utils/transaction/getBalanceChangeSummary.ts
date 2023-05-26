@@ -1,17 +1,34 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 import {
+    ObjectOwner,
     type DryRunTransactionBlockResponse,
     type SuiAddress,
     type SuiTransactionBlockResponse,
 } from '@mysten/sui.js';
 
-export type BalanceChangeSummary = {
+export type BalanceChange = {
     coinType: string;
     amount: string;
     recipient?: SuiAddress;
     owner?: SuiAddress;
 };
+
+export type BalanceChangeByOwner = Record<string, BalanceChange[]>;
+export type BalanceChangeSummary = BalanceChangeByOwner | null;
+
+function getOwnerAddress(owner: ObjectOwner): SuiAddress | string {
+    if (typeof owner === 'object') {
+        if ('AddressOwner' in owner) {
+            return owner.AddressOwner;
+        } else if ('ObjectOwner' in owner) {
+            return owner.ObjectOwner;
+        } else if ('Shared' in owner) {
+            return 'Shared';
+        }
+    }
+    return '';
+}
 
 export const getBalanceChangeSummary = (
     transaction: DryRunTransactionBlockResponse | SuiTransactionBlockResponse
@@ -19,64 +36,29 @@ export const getBalanceChangeSummary = (
     const { balanceChanges, effects } = transaction;
     if (!balanceChanges || !effects) return null;
 
-    const negative = balanceChanges
-        .filter(
-            (balanceChange) =>
-                typeof balanceChange.owner === 'object' &&
-                'AddressOwner' in balanceChange.owner &&
-                BigInt(balanceChange.amount) < 0n
-        )
-        .map((balanceChange) => {
-            const amount = BigInt(balanceChange.amount);
+    const balanceChangeByOwner = {};
+    return balanceChanges.reduce((acc, balanceChange) => {
+        const amount = BigInt(balanceChange.amount);
+        const owner = getOwnerAddress(balanceChange.owner);
 
-            // get address owner
-            const owner =
-                (typeof balanceChange.owner === 'object' &&
-                    'AddressOwner' in balanceChange.owner &&
-                    balanceChange.owner.AddressOwner) ||
-                undefined;
+        const recipient = balanceChanges.find(
+            (bc) =>
+                balanceChange.coinType === bc.coinType &&
+                amount === BigInt(bc.amount) * -1n
+        );
 
-            // find equivalent positive balance change
-            const recipient = balanceChanges.find(
-                (bc) =>
-                    balanceChange.coinType === bc.coinType &&
-                    BigInt(balanceChange.amount) === BigInt(bc.amount) * -1n
-            );
+        const recipientAddress = recipient?.owner
+            ? getOwnerAddress(recipient?.owner)
+            : undefined;
 
-            // find recipient address
-            const recipientAddress =
-                (recipient &&
-                    typeof recipient.owner === 'object' &&
-                    'AddressOwner' in recipient.owner &&
-                    recipient.owner.AddressOwner &&
-                    recipient.owner.AddressOwner) ||
-                undefined;
+        const summary = {
+            coinType: balanceChange.coinType,
+            amount: amount.toString(),
+            recipient: recipientAddress,
+            owner,
+        };
 
-            return {
-                coinType: balanceChange.coinType,
-                amount: amount.toString(),
-                recipient: recipientAddress,
-                owner,
-            };
-        });
-
-    const positive = balanceChanges
-        .filter(
-            (balanceChange) =>
-                typeof balanceChange.owner === 'object' &&
-                'AddressOwner' in balanceChange.owner &&
-                BigInt(balanceChange.amount) > 0n
-        )
-        .map((bc) => ({
-            coinType: bc.coinType,
-            amount: bc.amount.toString(),
-            owner:
-                (typeof bc.owner === 'object' &&
-                    'AddressOwner' in bc.owner &&
-                    bc.owner.AddressOwner &&
-                    bc.owner.AddressOwner) ||
-                undefined,
-        }));
-
-    return [...positive, ...negative];
+        acc[owner] = (acc[owner] ?? []).concat(summary);
+        return acc;
+    }, balanceChangeByOwner as BalanceChangeByOwner);
 };
