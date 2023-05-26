@@ -29,7 +29,6 @@ function sleep() {
     return new Promise((r) => setTimeout(r, POLLING_INTERVAL));
 }
 export const API_ENV_TO_QREDO_NETWORK: Partial<Record<API_ENV, NetworkType>> = {
-    [API_ENV.mainnet]: 'mainnet',
     [API_ENV.testNet]: 'testnet',
     [API_ENV.devNet]: 'devnet',
 };

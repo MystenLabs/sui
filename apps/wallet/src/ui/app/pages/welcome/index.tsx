@@ -79,7 +79,7 @@ const WelcomePage = () => {
 
                             <div className="flex sticky pb-10 m-auto w-[300px] -bottom-px bg-sui-lightest">
                                 <Button
-                                    to="/initialize/select"
+                                    to="/initialize/zk-init"
                                     size="tall"
                                     text="Get Started"
                                     after={<ArrowRight16 />}

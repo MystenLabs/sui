@@ -34,8 +34,7 @@ import { Text } from '_app/shared/text';
 import Alert from '_components/alert';
 import Loading from '_components/loading';
 import { filterAndSortTokenBalances } from '_helpers';
-import { useAppSelector, useCoinsReFetchingConfig } from '_hooks';
-import { API_ENV } from '_src/shared/api-env';
+import { useCoinsReFetchingConfig } from '_hooks';
 import { AccountSelector } from '_src/ui/app/components/AccountSelector';
 import { useLedgerNotification } from '_src/ui/app/hooks/useLedgerNotification';
 import { usePinnedCoinTypes } from '_src/ui/app/hooks/usePinnedCoinTypes';
@@ -72,7 +71,6 @@ function PinButton({
 
 function MyTokens() {
     const accountAddress = useActiveAddress();
-    const apiEnv = useAppSelector(({ app }) => app.apiEnv);
     const { staleTime, refetchInterval } = useCoinsReFetchingConfig();
     const { data, isLoading, isFetched } = useGetAllBalances(
         accountAddress,
@@ -155,7 +153,7 @@ function MyTokens() {
                             ? `${unrecognized.length} Unrecognized Coin`
                             : `${unrecognized.length} Unrecognized Coins`
                     }
-                    defaultOpen={apiEnv !== API_ENV.mainnet}
+                    defaultOpen
                 >
                     {unrecognized.map((coinBalance) => (
                         <TokenLink
@@ -201,7 +199,6 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
         refetchInterval,
         staleTime
     );
-    const { apiEnv } = useAppSelector((state) => state.app);
     const { request } = useAppsBackend();
     const { data } = useQuery({
         queryKey: ['apps-backend', 'monitor-network'],
@@ -212,7 +209,7 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
         // Keep cached for 2 minutes:
         staleTime: 2 * 60 * 1000,
         retry: false,
-        enabled: apiEnv === API_ENV.mainnet,
+        enabled: false,
     });
 
     useLedgerNotification();
@@ -230,7 +227,7 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
 
     return (
         <>
-            {apiEnv === API_ENV.mainnet && data?.degraded && (
+            {false && data?.degraded && (
                 <div className="rounded-2xl bg-warning-light border border-solid border-warning-dark/20 text-warning-dark flex items-center py-2 px-3 mb-4">
                     <Info12 className="shrink-0" />
                     <div className="ml-2">

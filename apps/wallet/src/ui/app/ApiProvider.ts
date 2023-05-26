@@ -26,7 +26,6 @@ export const API_ENV_TO_INFO: Record<API_ENV, EnvInfo> = {
     [API_ENV.devNet]: { name: 'Sui Devnet', env: API_ENV.devNet },
     [API_ENV.customRPC]: { name: 'Custom RPC URL', env: API_ENV.customRPC },
     [API_ENV.testNet]: { name: 'Sui Testnet', env: API_ENV.testNet },
-    [API_ENV.mainnet]: { name: 'Sui Mainnet', env: API_ENV.mainnet },
 };
 
 export const ENV_TO_API: Record<API_ENV, Connection | null> = {
@@ -42,9 +41,6 @@ export const ENV_TO_API: Record<API_ENV, Connection | null> = {
     [API_ENV.testNet]: new Connection({
         fullnode: process.env.API_ENDPOINT_TEST_NET_FULLNODE || '',
         faucet: process.env.API_ENDPOINT_TEST_NET_FAUCET || '',
-    }),
-    [API_ENV.mainnet]: new Connection({
-        fullnode: process.env.API_ENDPOINT_MAINNET_FULLNODE || '',
     }),
 };
 
@@ -69,7 +65,7 @@ function getDefaultAPI(env: API_ENV) {
 }
 
 export const DEFAULT_API_ENV = getDefaultApiEnv();
-const SENTRY_MONITORED_ENVS = [API_ENV.mainnet];
+const SENTRY_MONITORED_ENVS: API_ENV[] = [];
 
 type NetworkTypes = keyof typeof API_ENV;
 

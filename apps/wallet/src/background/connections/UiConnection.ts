@@ -10,6 +10,7 @@ import {
     getUIQredoPendingRequest,
     rejectQredoConnection,
 } from '../qredo';
+import { createZkAccount } from '../zk-login';
 import { Connection } from './Connection';
 import { createMessage } from '_messages';
 import { type ErrorPayload, isBasePayload } from '_payloads';
@@ -26,6 +27,7 @@ import Tabs from '_src/background/Tabs';
 import Transactions from '_src/background/Transactions';
 import Keyring from '_src/background/keyring';
 import { growthbook } from '_src/shared/experimentation/features';
+import { isMethodPayload } from '_src/shared/messaging/messages/payloads/MethodPayload';
 import {
     type QredoConnectPayload,
     isQredoConnectPayload,
@@ -193,6 +195,9 @@ export class UiConnection extends Connection {
                 isQredoConnectPayload(payload, 'rejectQredoConnection')
             ) {
                 await rejectQredoConnection(payload.args);
+                this.send(createMessage({ type: 'done' }, id));
+            } else if (isMethodPayload(payload, 'zkCreateAccount')) {
+                await createZkAccount(payload.args.currentEpoch);
                 this.send(createMessage({ type: 'done' }, id));
             }
         } catch (e) {

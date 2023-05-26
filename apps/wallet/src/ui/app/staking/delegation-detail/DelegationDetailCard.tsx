@@ -25,8 +25,7 @@ import { Text } from '_app/shared/text';
 import { IconTooltip } from '_app/shared/tooltip';
 import Alert from '_components/alert';
 import LoadingIndicator from '_components/loading/LoadingIndicator';
-import { useAppSelector, useCoinsReFetchingConfig } from '_hooks';
-import { API_ENV } from '_src/shared/api-env';
+import { useCoinsReFetchingConfig } from '_hooks';
 import { MIN_NUMBER_SUI_TO_STAKE } from '_src/shared/constants';
 import FaucetRequestButton from '_src/ui/app/shared/faucet/FaucetRequestButton';
 
@@ -53,7 +52,6 @@ export function DelegationDetailCard({
         isError,
     } = useGetDelegatedStake(accountAddress || '');
 
-    const apiEnv = useAppSelector(({ app }) => app.apiEnv);
     const { staleTime, refetchInterval } = useCoinsReFetchingConfig();
     const { data: suiCoinBalance } = useGetCoinBalance(
         SUI_TYPE_ARG,
@@ -64,18 +62,13 @@ export function DelegationDetailCard({
     const { data: metadata } = useCoinMetadata(SUI_TYPE_ARG);
     // set minimum stake amount to 1 SUI
     const showRequestMoreSuiToken = useMemo(() => {
-        if (
-            !suiCoinBalance?.totalBalance ||
-            !metadata?.decimals ||
-            apiEnv === API_ENV.mainnet
-        )
-            return false;
+        if (!suiCoinBalance?.totalBalance || !metadata?.decimals) return false;
         const currentBalance = new BigNumber(suiCoinBalance.totalBalance);
         const minStakeAmount = new BigNumber(MIN_NUMBER_SUI_TO_STAKE).shiftedBy(
             metadata.decimals
         );
         return currentBalance.lt(minStakeAmount.toString());
-    }, [apiEnv, metadata?.decimals, suiCoinBalance?.totalBalance]);
+    }, [metadata?.decimals, suiCoinBalance?.totalBalance]);
 
     const { data: rollingAverageApys } = useGetValidatorsApy();
 

@@ -8,8 +8,6 @@ import {
 } from '@mysten/core';
 import { type SuiObjectData, type SuiAddress } from '@mysten/sui.js';
 
-import useAppSelector from './useAppSelector';
-
 export function useGetNFTs(address?: SuiAddress | null) {
     const {
         data,
@@ -27,9 +25,7 @@ export function useGetNFTs(address?: SuiAddress | null) {
         },
         50
     );
-    const { apiEnv } = useAppSelector((state) => state.app);
-
-    const shouldFetchKioskContents = apiEnv === 'mainnet';
+    const shouldFetchKioskContents = false;
     const { data: obKioskContents, isLoading: areKioskContentsLoading } =
         useGetOriginByteKioskContents(address, !shouldFetchKioskContents);
 

@@ -4,6 +4,7 @@
 import { useEffect } from 'react';
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 
+import { ZkPage } from './pages/initialize/zk-page';
 import { QredoConnectInfoPage } from './pages/qredo-connect/QredoConnectInfoPage';
 import { SelectQredoAccountsPage } from './pages/qredo-connect/SelectQredoAccountsPage';
 import { RestrictedPage } from './pages/restricted';
@@ -26,10 +27,6 @@ import HomePage, {
     OnrampPage,
 } from '_pages/home';
 import InitializePage from '_pages/initialize';
-import BackupPage from '_pages/initialize/backup';
-import CreatePage from '_pages/initialize/create';
-import { ImportPage } from '_pages/initialize/import';
-import SelectPage from '_pages/initialize/select';
 import SiteConnectPage from '_pages/site-connect';
 import WelcomePage from '_pages/welcome';
 import { setNavVisibility } from '_redux/slices/app';
@@ -106,14 +103,7 @@ const App = () => {
 
             <Route path="welcome" element={<WelcomePage />} />
             <Route path="/initialize" element={<InitializePage />}>
-                <Route path="select" element={<SelectPage />} />
-                <Route path="create" element={<CreatePage />} />
-                <Route path="import" element={<ImportPage />} />
-                <Route path="backup" element={<BackupPage />} />
-                <Route
-                    path="backup-imported"
-                    element={<BackupPage mode="imported" />}
-                />
+                <Route path="zk-init" element={<ZkPage />} />
             </Route>
             <Route path="locked" element={<LockedPage />} />
             <Route path="forgot-password" element={<ForgotPasswordPage />} />

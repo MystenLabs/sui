@@ -25,6 +25,7 @@ import { setActiveOrigin, changeActiveNetwork } from '_redux/slices/app';
 import { setPermissions } from '_redux/slices/permissions';
 import { setTransactionRequests } from '_redux/slices/transaction-requests';
 import { type SerializedLedgerAccount } from '_src/background/keyring/LedgerAccount';
+import { type MethodPayload } from '_src/shared/messaging/messages/payloads/MethodPayload';
 import {
     isQredoConnectPayload,
     type QredoConnectPayload,
@@ -442,6 +443,30 @@ export class BackgroundClient {
                     type: 'qredo-connect',
                     method: 'rejectQredoConnection',
                     args,
+                })
+            ).pipe(take(1))
+        );
+    }
+
+    public createZkAccount(currentEpoch: number) {
+        return lastValueFrom(
+            this.sendMessage(
+                createMessage<MethodPayload<'zkCreateAccount'>>({
+                    type: 'method-payload',
+                    method: 'zkCreateAccount',
+                    args: { currentEpoch },
+                })
+            ).pipe(take(1))
+        );
+    }
+
+    public zkLogin() {
+        return lastValueFrom(
+            this.sendMessage(
+                createMessage<MethodPayload<'zkLogin'>>({
+                    type: 'method-payload',
+                    method: 'zkLogin',
+                    args: undefined,
                 })
             ).pipe(take(1))
         );
