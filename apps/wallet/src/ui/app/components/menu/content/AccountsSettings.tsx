@@ -25,6 +25,7 @@ export function AccountsSettings() {
         true,
         '/accounts/connect-ledger-modal'
     );
+
     return (
         <MenuLayout title="Accounts" back={backUrl}>
             <div className="flex flex-col gap-3">

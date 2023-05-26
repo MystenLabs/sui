@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { ArrowRight16 } from '@mysten/icons';
+import { ArrowLeft16, ArrowRight16 } from '@mysten/icons';
 import classNames from 'classnames';
 import { Formik, Form, ErrorMessage } from 'formik';
 import { toast } from 'react-hot-toast';
@@ -11,7 +11,6 @@ import { object, string as YupString } from 'yup';
 import Alert from '../../alert';
 import { useBackgroundClient } from '_src/ui/app/hooks/useBackgroundClient';
 import { Button } from '_src/ui/app/shared/ButtonUI';
-import { Link } from '_src/ui/app/shared/Link';
 import FieldLabel from '_src/ui/app/shared/field-label';
 import { Heading } from '_src/ui/app/shared/heading';
 import { PasswordInputField } from '_src/ui/app/shared/input/password';
@@ -98,19 +97,13 @@ export function PasswordInputDialog({
                             </Text>
                         </div>
                     </div>
-                    <div className="flex flex-col flex-nowrap gap-3.75 self-stretch">
+                    <div className="flex flex-nowrap gap-3.75 self-stretch">
                         <Button
-                            type="submit"
-                            variant="primary"
-                            size="tall"
-                            text={continueLabel}
-                            loading={isSubmitting}
-                            disabled={!isValid}
-                            after={showArrowIcon ? <ArrowRight16 /> : null}
-                        />
-                        <Link
-                            text="Go Back"
+                            text="Back"
                             color="heroDark"
+                            size="tall"
+                            variant="outline"
+                            before={<ArrowLeft16 />}
                             onClick={() => {
                                 if (typeof onBackClicked === 'function') {
                                     onBackClicked();
@@ -119,6 +112,15 @@ export function PasswordInputDialog({
                                 }
                             }}
                             disabled={isSubmitting}
+                        />
+                        <Button
+                            type="submit"
+                            variant="primary"
+                            size="tall"
+                            text={continueLabel}
+                            loading={isSubmitting}
+                            disabled={!isValid}
+                            after={showArrowIcon ? <ArrowRight16 /> : null}
                         />
                     </div>
                 </Form>

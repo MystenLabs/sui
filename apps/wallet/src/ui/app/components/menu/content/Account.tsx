@@ -29,7 +29,7 @@ export function Account({ account }: AccountProps) {
             {({ open }) => (
                 <div
                     className={cx(
-                        'transition flex flex-col flex-nowrap border border-solid rounded-2xl',
+                        'transition flex flex-col flex-nowrap border border-solid rounded-2xl hover:bg-gray-40',
                         open
                             ? 'bg-gray-40 border-transparent'
                             : 'hover:border-steel border-gray-60'
