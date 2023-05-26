@@ -1,11 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+
 import { type EpochPage } from '@mysten/sui.js/src/types/epochs';
 
 import { SuiAmount } from '../Table/SuiAmount';
-import { TxTableCol } from '../transactions/TxCardUtils';
 import { TxTimeType } from '../tx-time/TxTimeType';
 
+import { HighlightedTableCol } from '~/components/Table/HighlightedTableCol';
 import { CheckpointSequenceLink, EpochLink } from '~/ui/InternalLink';
 import { Text } from '~/ui/Text';
 import { getEpochStorageFundFlow } from '~/utils/getStorageFundFlow';
@@ -14,23 +15,19 @@ import { getEpochStorageFundFlow } from '~/utils/getStorageFundFlow';
 export const genTableDataFromEpochsData = (results: EpochPage) => ({
     data: results?.data.map((epoch) => ({
         epoch: (
-            <TxTableCol isHighlightedOnHover>
+            <HighlightedTableCol first>
                 <EpochLink epoch={epoch.epoch.toString()} />
-            </TxTableCol>
+            </HighlightedTableCol>
         ),
         transactions: (
-            <TxTableCol>
-                <Text variant="bodySmall/medium">
-                    {epoch.epochTotalTransactions}
-                </Text>
-            </TxTableCol>
+            <Text variant="bodySmall/medium">
+                {epoch.epochTotalTransactions}
+            </Text>
         ),
         stakeRewards: (
-            <TxTableCol>
-                <SuiAmount
-                    amount={epoch.endOfEpochInfo?.totalStakeRewardsDistributed}
-                />
-            </TxTableCol>
+            <SuiAmount
+                amount={epoch.endOfEpochInfo?.totalStakeRewardsDistributed}
+            />
         ),
         checkpointSet: (
             <div>
@@ -46,22 +43,18 @@ export const genTableDataFromEpochsData = (results: EpochPage) => ({
             </div>
         ),
         storageNetInflow: (
-            <TxTableCol>
+            <div className="pl-3">
                 <SuiAmount
                     amount={
                         getEpochStorageFundFlow(epoch.endOfEpochInfo).netInflow
                     }
                 />
-            </TxTableCol>
+            </div>
         ),
         time: (
-            <TxTableCol>
-                <TxTimeType
-                    timestamp={Number(
-                        epoch.endOfEpochInfo?.epochEndTimestamp ?? 0
-                    )}
-                />
-            </TxTableCol>
+            <TxTimeType
+                timestamp={Number(epoch.endOfEpochInfo?.epochEndTimestamp ?? 0)}
+            />
         ),
     })),
     columns: [

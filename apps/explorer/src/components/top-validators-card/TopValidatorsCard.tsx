@@ -8,9 +8,10 @@ import { useMemo } from 'react';
 
 import { StakeColumn } from './StakeColumn';
 
+import { HighlightedTableCol } from '~/components/Table/HighlightedTableCol';
 import { Banner } from '~/ui/Banner';
 import { ImageIcon } from '~/ui/ImageIcon';
-import { ValidatorLink } from '~/ui/InternalLink';
+import { AddressLink, ValidatorLink } from '~/ui/InternalLink';
 import { Link } from '~/ui/Link';
 import { PlaceholderTable } from '~/ui/PlaceholderTable';
 import { TableCard } from '~/ui/TableCard';
@@ -41,21 +42,21 @@ const validatorsTable = (
     return {
         data: validatorsItems.map(({ name, stake, address, logo }) => ({
             name: (
-                <div className="flex items-center gap-2.5">
-                    {showIcon && (
-                        <ImageIcon
-                            src={logo}
-                            size="sm"
-                            fallback={name}
-                            label={name}
-                            circle
-                        />
-                    )}
+                <HighlightedTableCol first>
+                    <div className="flex items-center gap-2.5">
+                        {showIcon && (
+                            <ImageIcon
+                                src={logo}
+                                size="sm"
+                                fallback={name}
+                                label={name}
+                                circle
+                            />
+                        )}
 
-                    <Link to={`/validator/${encodeURIComponent(address)}`}>
-                        {name}
-                    </Link>
-                </div>
+                        <ValidatorLink address={address} />
+                    </div>
+                </HighlightedTableCol>
             ),
             stake: <StakeColumn stake={stake} />,
             delegation: (
@@ -63,7 +64,11 @@ const validatorsTable = (
                     {stake.toString()}
                 </Text>
             ),
-            address: <ValidatorLink address={address} noTruncate={!limit} />,
+            address: (
+                <HighlightedTableCol>
+                    <AddressLink address={address} noTruncate={!limit} />
+                </HighlightedTableCol>
+            ),
         })),
         columns: [
             {
