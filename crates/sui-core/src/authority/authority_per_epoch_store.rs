@@ -783,14 +783,6 @@ impl AuthorityPerEpochStore {
                 return Ok(izip!(ids, next_versions.into_iter().map(|v| v.unwrap())).collect());
             }
 
-            // if the object has never been used before (in any epoch) the initial version comes
-            // from objects_to_init.
-            //let initial_versions: HashMap<_, _> = tx_data
-            //   .shared_input_objects()
-            //  .into_iter()
-            // .map(SharedInputObject::into_id_and_version)
-            //.collect();
-
             let versions_to_write: Vec<_> = uninitialized_objects
                 .iter()
                 .map(|(id, initial_version)| {
