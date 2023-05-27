@@ -62,7 +62,7 @@ impl TestContext {
 
         // Sleep from for faucet to batch transfer
         thread::sleep(Duration::from_secs(10));
-
+        let mut counter = 0;
         loop {
             let gas_coins: Vec<GasCoin> = self
                 .client
@@ -79,6 +79,11 @@ impl TestContext {
                 return gas_coins; // Break the loop and return the gas coins
             }
 
+            if counter > 5 {
+                panic!("Too many tries to get gas coins.");
+            }
+
+            counter += 1;
             // Sleep before retrying
             thread::sleep(Duration::from_secs(5));
         }
