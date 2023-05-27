@@ -85,7 +85,7 @@ impl TestContext {
 
             counter += 1;
             // Sleep before retrying
-            thread::sleep(Duration::from_secs(5));
+            thread::sleep(Duration::from_secs(5 * (counter + 1)));
         }
     }
 
