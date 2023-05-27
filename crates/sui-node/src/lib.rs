@@ -1295,7 +1295,7 @@ impl SuiNode {
 
     #[cfg(msim)]
     pub fn get_sim_node_id(&self) -> sui_simulator::task::NodeId {
-        self.sim_node.id()
+        self.sim_state.sim_node.id()
     }
 
     pub fn get_config(&self) -> &NodeConfig {
