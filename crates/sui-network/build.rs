@@ -155,6 +155,15 @@ fn build_anemo_services(out_dir: &Path) {
                 .codec_path(codec_path)
                 .build(),
         )
+        .method(
+            anemo_build::manual::Method::builder()
+                .name("get_peer_latest_checkpoint_info")
+                .route_name("GetPeerLatestCheckpointInfo")
+                .request_type("()")
+                .response_type("crate::state_sync::GetPeerLatestCheckpointInfoResponse")
+                .codec_path(codec_path)
+                .build(),
+        )
         .build();
 
     anemo_build::manual::Builder::new()

@@ -79,7 +79,7 @@ impl CommitteeFixture {
         &self.committee
     }
 
-    fn create_root_checkpoint(&self) -> VerifiedCheckpoint {
+    fn create_root_checkpoint(&self) -> (VerifiedCheckpoint, VerifiedCheckpointContents) {
         assert_eq!(self.epoch, 0, "root checkpoint must be epoch 0");
         let checkpoint = CheckpointSummary {
             epoch: 0,
@@ -97,7 +97,10 @@ impl CommitteeFixture {
             checkpoint_commitments: Default::default(),
         };
 
-        self.create_certified_checkpoint(checkpoint)
+        (
+            self.create_certified_checkpoint(checkpoint),
+            empty_contents(),
+        )
     }
 
     fn create_certified_checkpoint(&self, checkpoint: CheckpointSummary) -> VerifiedCheckpoint {
@@ -126,43 +129,57 @@ impl CommitteeFixture {
         checkpoint
     }
 
+    #[allow(clippy::type_complexity)]
     pub fn make_checkpoints(
         &self,
         number_of_checkpoints: usize,
         previous_checkpoint: Option<VerifiedCheckpoint>,
+        random_content: bool,
     ) -> (
         Vec<VerifiedCheckpoint>,
+        Vec<VerifiedCheckpointContents>,
         HashMap<CheckpointSequenceNumber, CheckpointDigest>,
         HashMap<CheckpointDigest, VerifiedCheckpoint>,
     ) {
         // Only skip the first one if it was supplied
         let skip = previous_checkpoint.is_some() as usize;
-        let first = previous_checkpoint.unwrap_or_else(|| self.create_root_checkpoint());
+        let first = previous_checkpoint
+            .map(|c| (c, empty_contents()))
+            .unwrap_or_else(|| self.create_root_checkpoint());
 
-        let ordered_checkpoints = std::iter::successors(Some(first), |prev| {
-            let summary = CheckpointSummary {
-                epoch: self.epoch,
-                sequence_number: prev.sequence_number + 1,
-                network_total_transactions: 0,
-                content_digest: *empty_contents()
+        let (ordered_checkpoints, contents): (Vec<_>, Vec<_>) =
+            std::iter::successors(Some(first), |prev| {
+                let contents = if random_content {
+                    random_contents()
+                } else {
+                    empty_contents()
+                };
+                let contents_digest = *contents
+                    .clone()
                     .into_inner()
                     .into_checkpoint_contents()
-                    .digest(),
-                previous_digest: Some(*prev.digest()),
-                epoch_rolling_gas_cost_summary: Default::default(),
-                end_of_epoch_data: None,
-                timestamp_ms: 0,
-                version_specific_data: Vec::new(),
-                checkpoint_commitments: Default::default(),
-            };
+                    .digest();
+                let summary = CheckpointSummary {
+                    epoch: self.epoch,
+                    sequence_number: prev.0.sequence_number + 1,
+                    network_total_transactions: prev.0.network_total_transactions
+                        + contents.num_of_transactions() as u64,
+                    content_digest: contents_digest,
+                    previous_digest: Some(*prev.0.digest()),
+                    epoch_rolling_gas_cost_summary: Default::default(),
+                    end_of_epoch_data: None,
+                    timestamp_ms: 0,
+                    version_specific_data: Vec::new(),
+                    checkpoint_commitments: Default::default(),
+                };
 
-            let checkpoint = self.create_certified_checkpoint(summary);
+                let checkpoint = self.create_certified_checkpoint(summary);
 
-            Some(checkpoint)
-        })
-        .skip(skip)
-        .take(number_of_checkpoints)
-        .collect::<Vec<_>>();
+                Some((checkpoint, contents))
+            })
+            .skip(skip)
+            .take(number_of_checkpoints)
+            .unzip();
 
         let (sequence_number_to_digest, checkpoints) = ordered_checkpoints
             .iter()
@@ -173,7 +190,12 @@ impl CommitteeFixture {
             })
             .unzip();
 
-        (ordered_checkpoints, sequence_number_to_digest, checkpoints)
+        (
+            ordered_checkpoints,
+            contents,
+            sequence_number_to_digest,
+            checkpoints,
+        )
     }
 
     pub fn make_end_of_epoch_checkpoint(
@@ -211,4 +233,8 @@ pub fn empty_contents() -> VerifiedCheckpointContents {
     VerifiedCheckpointContents::new_unchecked(
         FullCheckpointContents::new_with_causally_ordered_transactions(std::iter::empty()),
     )
+}
+
+pub fn random_contents() -> VerifiedCheckpointContents {
+    VerifiedCheckpointContents::new_unchecked(FullCheckpointContents::random_for_testing())
 }

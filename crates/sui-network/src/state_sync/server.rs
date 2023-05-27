@@ -26,6 +26,12 @@ pub enum GetCheckpointSummaryRequest {
     BySequenceNumber(CheckpointSequenceNumber),
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct GetPeerLatestCheckpointInfoResponse {
+    pub(crate) highest_synced_checkpoint: Checkpoint,
+    pub(crate) lowest_available_checkpoint: CheckpointSequenceNumber,
+}
+
 pub(super) struct Server<S> {
     pub(super) store: S,
     pub(super) peer_heights: Arc<RwLock<PeerHeights>>,
@@ -48,12 +54,11 @@ where
             .ok_or_else(|| Status::internal("unable to query sender's PeerId"))?;
 
         let checkpoint = request.into_inner();
-
         if !self
             .peer_heights
             .write()
             .unwrap()
-            .update_peer_info(peer_id, checkpoint.clone())
+            .update_peer_info(peer_id, checkpoint.clone(), None)
         {
             return Ok(Response::new(()));
         }
@@ -94,6 +99,26 @@ where
         .map(VerifiedCheckpoint::into_inner);
 
         Ok(Response::new(checkpoint))
+    }
+
+    async fn get_peer_latest_checkpoint_info(
+        &self,
+        _request: Request<()>,
+    ) -> Result<Response<GetPeerLatestCheckpointInfoResponse>, Status> {
+        let highest_synced = self
+            .store
+            .get_highest_synced_checkpoint()
+            .map_err(|e| Status::internal(e.to_string()))
+            .map(VerifiedCheckpoint::into_inner)?;
+        let lowest_available = self
+            .store
+            .get_lowest_available_checkpoint()
+            .map_err(|e| Status::internal(e.to_string()))?;
+
+        Ok(Response::new(GetPeerLatestCheckpointInfoResponse {
+            highest_synced_checkpoint: highest_synced,
+            lowest_available_checkpoint: lowest_available,
+        }))
     }
 
     async fn get_checkpoint_contents(
