@@ -157,8 +157,8 @@ export function SendTokenForm({
 
     const suiCoins = suiCoinsData;
     const coins = coinsData;
-    const coinBalance = CoinAPI.totalBalance(coins);
-    const suiBalance = CoinAPI.totalBalance(suiCoins);
+    const coinBalance = CoinAPI.totalBalance(coins || []);
+    const suiBalance = CoinAPI.totalBalance(suiCoins || []);
 
     const coinMetadata = useCoinMetadata(coinType);
     const coinDecimals = coinMetadata.data?.decimals ?? 0;
