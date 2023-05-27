@@ -123,6 +123,8 @@ impl NarwhalManager {
     // of validators have updated the binary. Because of this the protocol upgrade
     // will happen in the following epoch after quorum is reached. In this case NarwhalManager
     // is not recreated which is why we pass protocol config in at start and not at creation.
+    // To ensure correct behavior an updated protocol config must be passed in at the
+    // start of EACH epoch.
     pub async fn start<State, TxValidator: TransactionValidator>(
         &self,
         committee: Committee,
@@ -137,7 +139,7 @@ impl NarwhalManager {
 
         if let Running::True(epoch, version) = *running {
             tracing::warn!(
-                "Narwhal node is already Running for epoch {epoch:?} & version {version:?} - shutdown first before starting",
+                "Narwhal node is already Running for epoch {epoch:?} & protocol version {version:?} - shutdown first before starting",
             );
             return;
         }
@@ -154,7 +156,7 @@ impl NarwhalManager {
         let name = self.primary_keypair.public().clone();
 
         tracing::info!(
-            "Starting up Narwhal for epoch {} & version {:?}",
+            "Starting up Narwhal for epoch {} & protocol version {:?}",
             committee.epoch(),
             protocol_config.version
         );
@@ -231,7 +233,7 @@ impl NarwhalManager {
         }
 
         tracing::info!(
-            "Starting up Narwhal for epoch {} & version {:?} is complete - took {} seconds",
+            "Starting up Narwhal for epoch {} & protocol version {:?} is complete - took {} seconds",
             committee.epoch(),
             protocol_config.version,
             now.elapsed().as_secs_f64()
@@ -257,13 +259,15 @@ impl NarwhalManager {
         match *running {
             Running::True(epoch, version) => {
                 let now = Instant::now();
-                tracing::info!("Shutting down Narwhal for epoch {epoch:?} & version {version:?}");
+                tracing::info!(
+                    "Shutting down Narwhal for epoch {epoch:?} & protocol version {version:?}"
+                );
 
                 self.primary_node.shutdown().await;
                 self.worker_nodes.shutdown().await;
 
                 tracing::info!(
-                    "Narwhal shutdown for epoch {epoch:?} & version {version:?} is complete - took {} seconds",
+                    "Narwhal shutdown for epoch {epoch:?} & protocol version {version:?} is complete - took {} seconds",
                     now.elapsed().as_secs_f64()
                 );
 
