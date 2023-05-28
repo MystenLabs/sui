@@ -3,7 +3,7 @@
 
 //# init --addresses test=0x0
 
-//# publish --lint
+//# lint
 module test::unused_types {
     use sui::tx_context::TxContext;
 

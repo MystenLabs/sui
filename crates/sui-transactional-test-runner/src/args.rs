@@ -48,8 +48,6 @@ pub struct SuiPublishArgs {
         multiple_occurrences(false)
     )]
     pub dependencies: Vec<String>,
-    #[clap(long = "lint")]
-    pub lint: bool,
 }
 
 #[derive(Debug, clap::Parser)]
@@ -144,6 +142,9 @@ pub struct SetAddressCommand {
 }
 
 #[derive(Debug, clap::Parser)]
+pub struct LintCommand {}
+
+#[derive(Debug, clap::Parser)]
 pub enum SuiSubcommand {
     #[clap(name = "view-object")]
     ViewObject(ViewObjectCommand),
@@ -159,6 +160,8 @@ pub enum SuiSubcommand {
     StagePackage(StagePackageCommand),
     #[clap(name = "set-address")]
     SetAddress(SetAddressCommand),
+    #[clap(name = "lint")]
+    Lint(LintCommand),
 }
 
 #[derive(Debug)]

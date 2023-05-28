@@ -1,18 +1,16 @@
 processed 2 tasks
 
-task 1 'publish'. lines 6-29:
-error: Unused private or `friend` function unused_functions::unused_private. This function should be called or deleted
-  ┌─ <unknown>:1:1
-  │
-1 │ <unknown>
-  │ ^
-
+task 1 'lint'. lines 6-29:
 error: Unused private or `friend` function unused_functions::unused_friend. This function should be called or deleted
-  ┌─ <unknown>:1:1
-  │
-1 │ <unknown>
-  │ ^
+   ┌─ temp_test_file:16:5
+   │
+16 │     public(friend) fun unused_friend() {}
+   │     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-created: object(1,0)
-mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 5844400,  storage_rebate: 0, non_refundable_storage_fee: 0
+error: Unused private or `friend` function unused_functions::unused_private. This function should be called or deleted
+   ┌─ temp_test_file:13:5
+   │
+13 │     fun unused_private() {}
+   │     ^^^^^^^^^^^^^^^^^^^^^^^
+
+

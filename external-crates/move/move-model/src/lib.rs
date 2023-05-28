@@ -29,10 +29,14 @@ use move_binary_format::{
 };
 use move_compiler::{
     self,
+    command_line::compiler::SteppedCompiler,
     compiled_unit::{self, AnnotatedCompiledScript, AnnotatedCompiledUnit},
-    diagnostics::Diagnostics,
+    diagnostics::{Diagnostics, FilesSourceText},
     expansion::ast::{self as E, Address, ModuleDefinition, ModuleIdent, ModuleIdent_},
-    parser::ast::{self as P, ModuleName as ParserModuleName},
+    parser::{
+        ast::{self as P, ModuleName as ParserModuleName},
+        comments::CommentMap,
+    },
     shared::{parse_named_address, unique_map::UniqueMap, NumericalAddress, PackagePaths},
     Compiler, Flags, PASS_COMPILATION, PASS_EXPANSION, PASS_PARSER,
 };
@@ -108,13 +112,24 @@ pub fn run_model_builder_with_options_and_compilation_flags<
     options: ModelBuilderOptions,
     flags: Flags,
 ) -> anyhow::Result<GlobalEnv> {
-    let mut env = GlobalEnv::new();
-    env.set_extension(options);
-
-    // Step 1: parse the program to get comments and a separation of targets and dependencies.
     let (files, comments_and_compiler_res) = Compiler::from_package_paths(move_sources, deps)
         .set_flags(flags)
         .run::<PASS_PARSER>()?;
+
+    run_model_builder_with_parsed_files(files, comments_and_compiler_res, options)
+}
+
+pub fn run_model_builder_with_parsed_files(
+    files: FilesSourceText,
+    comments_and_compiler_res: Result<(CommentMap, SteppedCompiler<PASS_PARSER>), Diagnostics>,
+    options: ModelBuilderOptions,
+) -> anyhow::Result<GlobalEnv> {
+    // Step 1: parse the program to get comments and a separation of targets and dependencies
+    // (parsing has already happened in the caller)
+
+    let mut env = GlobalEnv::new();
+    env.set_extension(options);
+
     let (comment_map, compiler) = match comments_and_compiler_res {
         Err(diags) => {
             // Add source files so that the env knows how to translate locations of parse errors

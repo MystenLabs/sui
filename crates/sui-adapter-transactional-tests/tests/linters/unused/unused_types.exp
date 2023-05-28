@@ -1,12 +1,10 @@
 processed 2 tasks
 
-task 1 'publish'. lines 6-30:
+task 1 'lint'. lines 6-30:
 error: Unused struct type unused_types::UnusedType. This type should be used or deleted
-  ┌─ <unknown>:1:1
-  │
-1 │ <unknown>
-  │ ^
+   ┌─ temp_test_file:10:5
+   │
+10 │     struct UnusedType has drop {}
+   │     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-created: object(1,0)
-mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 6315600,  storage_rebate: 0, non_refundable_storage_fee: 0
+

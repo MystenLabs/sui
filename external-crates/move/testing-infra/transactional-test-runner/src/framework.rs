@@ -492,6 +492,10 @@ impl<'a> CompiledState<'a> {
         self.pre_compiled_ids.contains(&(addr, name))
     }
 
+    pub fn precompiled_deps(&self) -> Option<&FullyCompiledProgram> {
+        return self.pre_compiled_deps;
+    }
+
     fn check_not_precompiled(&self, id: &ModuleId) {
         assert!(
             !self.is_precompiled_dep(id),

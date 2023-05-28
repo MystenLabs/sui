@@ -1,34 +1,32 @@
 processed 2 tasks
 
-task 1 'publish'. lines 6-53:
-warning: Instead of transferring object of type `self_transfer::S1` to `tx_context::sender()`, consider returning it from `self_transfer::public_transfer_bad`.
-            This allows a caller to use the object, and enables composability via programmable transactions
-  ┌─ <unknown>:1:1
-  │
-1 │ <unknown>
-  │ ^
-
+task 1 'lint'. lines 6-53:
 warning: Instead of transferring object of type `self_transfer::S1` to `tx_context::sender()`, consider returning it from `self_transfer::private_transfer_bad`.
             This allows a caller to use the object, and enables composability via programmable transactions
-  ┌─ <unknown>:1:1
-  │
-1 │ <unknown>
-  │ ^
+   ┌─ temp_test_file:25:9
+   │
+25 │         transfer::transfer(S1 { id: object::new(ctx), }, tx_context::sender(ctx))
+   │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 warning: Instead of transferring object of type `self_transfer::S2` to `tx_context::sender()`, consider returning it from `self_transfer::private_transfer_no_store_bad`.
             This allows a caller to use the object, and enables composability via programmable transactions
-  ┌─ <unknown>:1:1
-  │
-1 │ <unknown>
-  │ ^
+   ┌─ temp_test_file:28:9
+   │
+28 │         transfer::transfer(S2 { id: object::new(ctx), }, tx_context::sender(ctx))
+   │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: Instead of transferring object of type `self_transfer::S1` to `tx_context::sender()`, consider returning it from `self_transfer::public_transfer_bad`.
+            This allows a caller to use the object, and enables composability via programmable transactions
+   ┌─ temp_test_file:22:9
+   │
+22 │         transfer::public_transfer(S1 { id: object::new(ctx), }, tx_context::sender(ctx))
+   │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 warning: Instead of transferring object of type `self_transfer::S1` to `tx_context::sender()`, consider returning it from `self_transfer::transfer_through_assigns_bad`.
             This allows a caller to use the object, and enables composability via programmable transactions
-  ┌─ <unknown>:1:1
-  │
-1 │ <unknown>
-  │ ^
+   ┌─ temp_test_file:33:9
+   │
+33 │         transfer::public_transfer(S1 { id: object::new(ctx), }, another_sender)
+   │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-created: object(1,0), object(1,1), object(1,2)
-mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 11316400,  storage_rebate: 0, non_refundable_storage_fee: 0
+

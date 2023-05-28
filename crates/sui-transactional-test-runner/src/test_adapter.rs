@@ -8,13 +8,14 @@ use anyhow::bail;
 use bimap::btree::BiBTreeMap;
 use fastcrypto::hash::MultisetHash;
 use move_binary_format::{file_format::CompiledScript, CompiledModule};
-use move_bytecode_utils::{module_cache::GetModule, Modules};
+use move_bytecode_utils::module_cache::GetModule;
 use move_command_line_common::{
     address::ParsedAddress, files::verify_and_create_named_address_mapping,
 };
 use move_compiler::{
+    command_line::compiler::PASS_PARSER,
     shared::{NumberFormat, NumericalAddress, PackagePaths},
-    Flags, FullyCompiledProgram,
+    Compiler, Flags, FullyCompiledProgram,
 };
 use move_core_types::ident_str;
 use move_core_types::{
@@ -23,7 +24,7 @@ use move_core_types::{
     language_storage::{ModuleId, TypeTag},
     value::MoveStruct,
 };
-use move_model::run_bytecode_model_builder;
+use move_model::{options::ModelBuilderOptions, run_model_builder_with_parsed_files};
 use move_symbol_pool::Symbol;
 use move_transactional_test_runner::{
     framework::{compile_any, store_modules, CompiledState, MoveTestAdapter},
@@ -391,23 +392,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
             sender,
             upgradeable,
             dependencies,
-            lint,
         } = extra;
-
-        let mut lint_output = "".to_string();
-        if lint {
-            // linting (before modules get their IDs reassigned)
-            let modules_map = Modules::new(
-                modules
-                    .iter()
-                    .map(|(_, compiled_module)| compiled_module)
-                    .chain(GENESIS.modules.iter().flatten()),
-            );
-            let graph = modules_map.compute_dependency_graph();
-            let dep_sorted_modules = graph.compute_topological_order().unwrap();
-            let env = run_bytecode_model_builder(dep_sorted_modules)?;
-            lint_output = lint_execute(env, ObjectID::ZERO, false);
-        }
 
         let named_addr_opt = modules.first().unwrap().0;
         let first_module_name = modules.first().unwrap().1.self_id().name().to_string();
@@ -478,7 +463,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                 _ => (),
             }
         }
-        let object_summary_output = self.object_summary_output(&summary);
+        let output = self.object_summary_output(&summary);
         let published_modules = self
             .storage
             .get_object(&created_package)
@@ -495,14 +480,6 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                 )
             })
             .collect();
-        let output = if lint_output.is_empty() {
-            object_summary_output
-        } else {
-            if let Some(o) = object_summary_output {
-                lint_output.push_str(o.as_str());
-            }
-            Some(lint_output)
-        };
         Ok((output, published_modules))
     }
 
@@ -957,6 +934,48 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                 }
 
                 Ok(None)
+            }
+            SuiSubcommand::Lint(LintCommand { .. }) => {
+                let data = match data {
+                    Some(f) => f,
+                    None => panic!(
+                        "Expected a module text block following 'lint' starting on lines {}-{}",
+                        start_line, command_lines_stop
+                    ),
+                };
+                let state = self.compiled_state();
+                let mut deps = state.source_files().cloned().collect::<Vec<_>>();
+                deps.extend(
+                    state
+                        .precompiled_deps()
+                        .unwrap()
+                        .files
+                        .iter()
+                        .map(|f| f.1 .0.as_str().to_string()),
+                );
+                let named_address_mapping = state.named_address_mapping.clone();
+                let (files, comments_and_compiler_res) = Compiler::from_files(
+                    vec![data.path().to_str().unwrap().to_owned()],
+                    deps.clone(),
+                    named_address_mapping,
+                )
+                .set_flags(Flags::verification().set_sources_shadow_deps(true))
+                .run::<PASS_PARSER>()?;
+
+                let env = run_model_builder_with_parsed_files(
+                    files,
+                    comments_and_compiler_res,
+                    ModelBuilderOptions::default(),
+                )?;
+                let lint_output = lint_execute(env, ObjectID::ZERO, false);
+                let output = if !lint_output.is_empty() {
+                    // TODO: we need to "normalize" temp file names in the output for test output to
+                    // be deterministic but perhaps there is there a better file name to use?
+                    Some(lint_output.replace(data.path().to_str().unwrap(), "temp_test_file"))
+                } else {
+                    None
+                };
+                Ok(output)
             }
         }
     }

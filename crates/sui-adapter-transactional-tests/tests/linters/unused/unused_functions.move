@@ -3,7 +3,7 @@
 
 //# init --addresses test=0x0
 
-//# publish --lint
+//# lint
 module test::unused_functions {
     friend test::unused_functions_friend;
 

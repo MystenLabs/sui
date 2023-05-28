@@ -3,8 +3,7 @@
 
 //# init --addresses test1=0x0 test2=0x0 test3=0x0
 
-
-//# publish --lint
+//# lint
 module test1::share_pack {
     use sui::transfer;
     use sui::object::{Self, UID};
@@ -20,12 +19,12 @@ module test1::share_pack {
     }
 }
 
-//# publish --lint
+//# lint
 module test2::share_arg {
     use sui::transfer;
-    use sui::object::{Self, UID};
-    use sui::tx_context::TxContext;
+    use sui::object::UID;
 
+    #[no_lint]
     struct Obj has key, store {
         id: UID
     }
@@ -34,23 +33,19 @@ module test2::share_arg {
         let arg = o;
         transfer::public_share_object(arg);
     }
-
-    // to avoid unused Obj
-    public fun obj(ctx: &mut TxContext): Obj {
-        Obj { id: object::new(ctx) }
-    }
 }
 
-//# publish --lint
+//# lint
 module test3::share_unpack {
     use sui::transfer;
     use sui::object::{Self, UID};
-    use sui::tx_context::TxContext;
 
+    #[no_lint]
     struct Obj has key, store {
         id: UID
     }
 
+    #[no_lint]
     struct Wrapper has key, store {
         id: UID,
         o: Obj,
@@ -61,11 +56,4 @@ module test3::share_unpack {
         transfer::public_share_object(o);
         object::delete(id);
     }
-
-    // to avoid unused Wrapper
-    public fun wrapper(ctx: &mut TxContext): Wrapper {
-        Wrapper { id: object::new(ctx), o: Obj { id: object::new(ctx) } }
-    }
-
-
 }
