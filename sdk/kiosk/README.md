@@ -3,7 +3,6 @@
 > **This package is still in active development. Use at your own risk**.
 > Currently, the only supported environment is **Sui Testnet**.
 
-
 This Kiosk SDK library provides different utilities to interact/create/manage a [Kiosk](https://github.com/MystenLabs/sui/tree/main/kiosk).
 
 ## Installation
@@ -38,9 +37,14 @@ const getKiosk = async () => {
     data: res,
     nextCursor,
     hasNextPage,
-  } = await fetchKiosk(provider, kioskAddress, { limit: 100 }); // could also add `cursor` for pagination
+  } = await fetchKiosk(
+    provider,
+    kioskAddress,
+    { limit: 100 },
+    { withListingPrices: true, includeKioskFields: true },
+  ); // could also add `cursor` for pagination
 
-  console.log(res); // { listings: [], items: [],  itemIds: [],  listingIds: [] }
+  console.log(res); // { items: [],  itemIds: [],  listingIds: [], kiosk: {...} }
   console.log(nextCursor); // null
   console.log(hasNextPage); // false
 };

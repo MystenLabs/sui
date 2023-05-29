@@ -4,12 +4,13 @@
 import {
   JsonRpcProvider,
   SharedObjectRef,
-  SuiObjectDataOptions,
   SuiObjectRef,
+  SuiObjectResponse,
   TransactionArgument,
   TransactionBlock,
+  getObjectFields,
 } from '@mysten/sui.js';
-import { KioskData } from './query/kiosk';
+import { KioskData, KioskListing } from './query/kiosk';
 import { DynamicFieldInfo } from '@mysten/sui.js/dist/types/dynamic_fields';
 import { bcs, Kiosk } from './bcs';
 
@@ -70,7 +71,11 @@ export async function getKioskObject(
 }
 
 // helper to extract kiosk data from dynamic fields.
-export function extractKioskData(data: DynamicFieldInfo[]): KioskData {
+export function extractKioskData(
+  data: DynamicFieldInfo[],
+  listings: KioskListing[],
+  lockedItemIds: string[],
+): KioskData {
   return data.reduce<KioskData>(
     (acc: KioskData, val: DynamicFieldInfo) => {
       const type = getTypeWithoutPackageAddress(val.name.type);
@@ -81,37 +86,73 @@ export function extractKioskData(data: DynamicFieldInfo[]): KioskData {
           acc.items.push({
             itemId: val.objectId,
             itemType: val.objectType,
+            isLocked: false,
           });
           break;
         case 'kiosk::Listing':
           acc.listingIds.push(val.objectId);
-          acc.listings.push({
+          listings.push({
             itemId: val.name.value.id,
             listingId: val.objectId,
             isExclusive: val.name.value.is_exclusive,
           });
           break;
+        case 'kiosk::Lock':
+          lockedItemIds?.push(val.name.value.id);
+          break;
       }
       return acc;
     },
-    { listings: [], items: [], itemIds: [], listingIds: [] },
+    { items: [], itemIds: [], listingIds: [], extensions: [] },
   );
-}
-
-// simple multiGetObjects wrapper to simplify cases on functions.
-export function getObjects(
-  provider: JsonRpcProvider,
-  ids: string[],
-  options: SuiObjectDataOptions,
-) {
-  if (ids.length === 0) {
-    return Promise.resolve([]);
-  }
-
-  return provider.multiGetObjects({ ids, options });
 }
 
 // e.g. 0x2::kiosk::Item -> kiosk::Item
 export const getTypeWithoutPackageAddress = (type: string) => {
   return type.split('::').slice(-2).join('::');
+};
+
+/**
+ * A helper that attaches the listing prices to kiosk listings.
+ */
+export const attachListingPrices = (
+  kioskData: KioskData,
+  listings: KioskListing[],
+  listingObjects: SuiObjectResponse[],
+) => {
+  const itemListings = listings.reduce<Record<string, KioskListing>>(
+    (acc: Record<string, KioskListing>, item, idx) => {
+      const data = getObjectFields(listingObjects[idx]);
+      if (!data) return acc;
+
+      acc[item.itemId] = { ...item, price: data.value };
+      return acc;
+    },
+    {},
+  );
+
+  kioskData.items.map((item) => {
+    item.listing = itemListings[item.itemId] || undefined;
+  });
+};
+
+/**
+ * A Helper to attach locked state to items in Kiosk Data.
+ */
+export const attachLockedItems = (
+  kioskData: KioskData,
+  lockedItemIds: string[],
+) => {
+  const lockedStatuses = lockedItemIds.reduce<Record<string, boolean>>(
+    (acc: Record<string, boolean>, item: string) => {
+      acc[item] = true;
+      return acc;
+    },
+    {},
+  );
+
+  // parse lockedItemIds and attach their locked status.
+  for (let item of kioskData.items) {
+    item.isLocked = lockedStatuses[item.itemId] || false;
+  }
 };
