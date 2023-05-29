@@ -76,6 +76,13 @@ module sui::kiosk {
     const ENotListed: u64 = 12;
     /// Attempt to use the Extensions API without authorization.
     const EExtensionDisabled: u64 = 13;
+    /// Attempt to remove an Extension when the storage is not empty.
+    const EExtensionStorageNotEmpty: u64 = 14;
+    /// Attempt to uninstall an Extension when it's not disabled.
+    const EExtensionNotDisabled: u64 = 15;
+    /// Attempt to access an Extension that is not installed.
+    const EExtensionNotFound: u64 = 16;
+
 
     /// An object which allows selling collectibles within "kiosk" ecosystem.
     /// By default gives the functionality to list an item openly - for anyone
@@ -422,6 +429,32 @@ module sui::kiosk {
 
     // === Kiosk Extensions API ===
 
+    // Extensions API (mainly) allows extending the trading functionality of the
+    // Kiosk while keeping the data in the same Kiosk storage. By default, the
+    // Kiosk storage (mutable UID) is closed to protect owners from malicious
+    // and spammy data.
+    //
+    // Not only extensions get access to the Kiosk storage but also can get
+    // certain permissions. Currently, the permission set is very limited, and
+    // an extension authorized by the Kiosk Owner can "place" and "lock" items
+    // in the Kiosk. Later the permission set will be extended to allow more
+    // complex functionality as long as this functionality is secure and tested.
+    //
+    // Extensions API focuses on:
+    // - Keeping the Kiosk trading functionality within a user Kiosk (saves
+    // discovery time and allows to use the same Kiosk for different purposes).
+    // - Providing permissioned access to third party modules so that they can
+    // call the methods otherwise unavailable to them.
+    // - Following the security-first approach and making sure that the Kiosk
+    // Owner and their assets are protected from malicious activity.
+    // - Making sure that the Kiosk Owner can disable any extension at any time
+    // and that the extension cannot hide its data from the Owner.
+    //
+    // Extension states:
+    // - Enabled: the extension is enabled by the owner and can be used.
+    // - Disabled: the extension is disabled. No methods can be called on it.
+    // - Removed: the extension is completely removed from the Kiosk.
+
     /// Add an extension to the `Kiosk`. Can only be performed by the Kiosk Owner,
     /// the visibility is intentionally made `entry` so that the call cannot be
     /// hidden and called arbitrarily.
@@ -439,30 +472,64 @@ module sui::kiosk {
         });
     }
 
+    /// Re-enables a disabled extension of the `Kiosk`. Can only be performed by the Kiosk Owner.
+    public fun enable_extension<Ext: drop>(self: &mut Kiosk, cap: &KioskOwnerCap) {
+        assert!(object::id(self) == cap.for, ENotOwner);
+        assert!(df::exists_(&self.id, ExtensionKey<Ext> { enabled: false }), EExtensionNotFound);
+
+        let ext: Extension = df::remove(&mut self.id, ExtensionKey<Ext> { enabled: false });
+        df::add(&mut self.id, ExtensionKey<Ext> { enabled: true }, ext);
+    }
+
     /// Disables an extension of the `Kiosk`. Can only be performed by the Kiosk Owner.
     public fun disable_extension<Ext: drop>(self: &mut Kiosk, cap: &KioskOwnerCap) {
         assert!(object::id(self) == cap.for, ENotOwner);
+        assert!(df::exists_(&self.id, ExtensionKey<Ext> { enabled: true }), EExtensionNotFound);
+
         let ext: Extension = df::remove(&mut self.id, ExtensionKey<Ext> { enabled: true });
         df::add(&mut self.id, ExtensionKey<Ext> { enabled: false }, ext);
     }
 
-    public fun has_extension<Ext: drop>(self: &Kiosk): bool {
-        df::exists_(&self.id, ExtensionKey<Ext> { enabled: true})
+    /// Uninstalls a disabled extension of the `Kiosk`. Can only be performed by the Kiosk Owner.
+    public fun uninstall_extension<Ext: drop>(self: &mut Kiosk, cap: &KioskOwnerCap) {
+        let key = ExtensionKey<Ext> { enabled: false };
+
+        assert!(object::id(self) == cap.for, ENotOwner);
+        assert!(df::exists_(&self.id, key), EExtensionNotDisabled);
+
+        let Extension {
+            storage,
+            permissions: _,
+            types: _,
+        } = df::remove(&mut self.id, key);
+
+        assert!(bag::is_empty(&storage), EExtensionStorageNotEmpty);
+        bag::destroy_empty(storage);
     }
 
-    /// Get the immutable reference to the `Kiosk` extension storage.
+    /// Check whether an extension with the type `Ext` is installed.
+    public fun has_extension<Ext: drop>(self: &Kiosk): bool {
+        df::exists_(&self.id, ExtensionKey<Ext> { enabled: true })
+        || df::exists_(&self.id, ExtensionKey<Ext> { enabled: false })
+    }
+
+    /// Get the immutable reference to the `Kiosk` extension storage. Can only
+    /// be accessed by an extension, so it is overall save to store data
+    /// sensitive to the extension (eg Authorization / Configuration etc).
     public fun ext_storage<Ext: drop>(_: Ext, self: &Kiosk): &Bag {
         let ext: &Extension = df::borrow(&self.id, ExtensionKey<Ext> { enabled: true });
         &ext.storage
     }
 
-    /// Get the mutable reference to the `Kiosk` extension storage.
+    /// Get the mutable reference to the `Kiosk` extension storage. Can only
+    /// be accessed by the extension.
     public fun ext_storage_mut<Ext: drop>(_: Ext, self: &mut Kiosk): &mut Bag {
         let ext: &mut Extension = df::borrow_mut(&mut self.id, ExtensionKey<Ext> { enabled: true });
         &mut ext.storage
     }
 
     /// Extension API: Places the `item` in the `Kiosk`.
+    /// Can only be performed by an extension if it is authorized to perform this action.
     public fun ext_place<Ext: drop, T: key + store>(
         _: Ext, self: &mut Kiosk, item: T
     ) {
@@ -471,6 +538,7 @@ module sui::kiosk {
     }
 
     /// Extension API: Locks the `item` in the `Kiosk` so that it cannot be taken by anyone else.
+    /// Can only be performed by an extension if it is authorized to perform this action.
     public fun ext_lock<Ext: drop, T: key + store>(
         _: Ext, self: &mut Kiosk, _policy: &TransferPolicy<T>, item: T
     ) {
