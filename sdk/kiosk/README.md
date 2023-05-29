@@ -80,20 +80,21 @@ const purchaseItem = async (item, kioskId) => {
 
   // fetch the policy of the item (could be an array, if there's more than one transfer policy)
   const policies = await queryTransferPolicy(provider, item.itemType);
-
   // selecting the first one for simplicity.
   const policyId = policy[0]?.id;
   // initialize tx block.
   const tx = new TransactionBlock();
 
   // Purchases the item. Right now it also resolves a royalty rule, if one exists.
-  // There will be some rework to support further rules & custom ones soon.
+  // There will be some additional work to support further rules & custom ones soon.
   const purchasedItem = purchaseAndResolvePolicies(tx, item.itemType, item.listing, kioskId, item.itemId, policy[0]);
 
-  // now we need to decide what to do with the item (if we can decide)
-  // ... e.g. place() // places the item to the user's kiosk
+  // now we need to decide what to do with the item
+  // ... e.g. place() // places the item to the user's kiosk.
+  // (NOT YET SUPPORTED BUT WORTH MENTIONING if the item has the `kiosk_lock` rule, the resolver will place it in the kiosk automatically.
+  // For now, to support this rule, we need to manually resolve the `kiosk_lock` rule and place it in our owned kiosk.)
 
-  // and finally, sign PTB & execute it.
+  // ...finally, sign PTB & execute it.
 
 };
 ```
