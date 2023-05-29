@@ -7,9 +7,9 @@ import { useRpcClient } from '../api/RpcClientContext';
 import { useGetOwnedObjects } from './useGetOwnedObjects';
 
 // OriginByte contract address for mainnet (we only support mainnet)
-const ORIGINBYTE_KIOSK_MODULE =
+export const ORIGINBYTE_KIOSK_MODULE =
     '0x95a441d389b07437d00dd07e0b6f05f513d7659b13fd7c5d3923c7d9d847199b::ob_kiosk';
-const ORIGINBYTE_KIOSK_OWNER_TOKEN = `${ORIGINBYTE_KIOSK_MODULE}::OwnerToken`;
+export const ORIGINBYTE_KIOSK_OWNER_TOKEN = `${ORIGINBYTE_KIOSK_MODULE}::OwnerToken`;
 
 export function useGetOriginByteKioskContents(
     address?: SuiAddress | null,
