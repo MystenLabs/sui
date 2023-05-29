@@ -115,17 +115,23 @@ export const getTypeWithoutPackageAddress = (type: string) => {
 /**
  * A helper that attaches the listing prices to kiosk listings.
  */
-export const attachListingPrices = (
+export const attachListingsAndPrices = (
   kioskData: KioskData,
   listings: KioskListing[],
   listingObjects: SuiObjectResponse[],
 ) => {
   const itemListings = listings.reduce<Record<string, KioskListing>>(
     (acc: Record<string, KioskListing>, item, idx) => {
+      acc[item.itemId] = { ...item };
+
+      // return in case we don't have any listing objects.
+      // that's the case when we don't have the `listingPrices` included.
+      if (listingObjects.length === 0) return acc;
+
       const data = getObjectFields(listingObjects[idx]);
       if (!data) return acc;
 
-      acc[item.itemId] = { ...item, price: data.value };
+      acc[item.itemId].price = data.value;
       return acc;
     },
     {},

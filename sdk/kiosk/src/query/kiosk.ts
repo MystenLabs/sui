@@ -7,7 +7,7 @@ import {
   SuiAddress,
 } from '@mysten/sui.js';
 import {
-  attachListingPrices,
+  attachListingsAndPrices,
   attachLockedItems,
   extractKioskData,
   getKioskObject,
@@ -105,8 +105,8 @@ export async function fetchKiosk(
   ]);
 
   if (options.includeKioskFields) kioskData.kiosk = kiosk;
-  if (options.withListingPrices)
-    attachListingPrices(kioskData, listings, listingObjects);
+  // attach items listings. IF we have `options.withListingPrices === true`, it will also attach the prices.
+  attachListingsAndPrices(kioskData, listings, listingObjects);
   // add `locked` status to items that are locked.
   attachLockedItems(kioskData, lockedItemIds);
 
