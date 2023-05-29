@@ -120,6 +120,8 @@ export const attachListingsAndPrices = (
   listings: KioskListing[],
   listingObjects: SuiObjectResponse[],
 ) => {
+  // map item listings as {item_id: KioskListing}
+  // for easier mapping on the nex
   const itemListings = listings.reduce<Record<string, KioskListing>>(
     (acc: Record<string, KioskListing>, item, idx) => {
       acc[item.itemId] = { ...item };
@@ -149,6 +151,7 @@ export const attachLockedItems = (
   kioskData: KioskData,
   lockedItemIds: string[],
 ) => {
+  // map lock status in an array of type { item_id: true }
   const lockedStatuses = lockedItemIds.reduce<Record<string, boolean>>(
     (acc: Record<string, boolean>, item: string) => {
       acc[item] = true;
@@ -158,7 +161,7 @@ export const attachLockedItems = (
   );
 
   // parse lockedItemIds and attach their locked status.
-  for (let item of kioskData.items) {
+  kioskData.items.map((item) => {
     item.isLocked = lockedStatuses[item.itemId] || false;
-  }
+  });
 };
