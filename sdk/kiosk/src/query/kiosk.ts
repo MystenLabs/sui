@@ -3,13 +3,17 @@
 
 import {
   JsonRpcProvider,
+  ObjectId,
+  ObjectType,
   PaginationArguments,
   SuiAddress,
-  SuiObjectDataOptions,
-  SuiObjectResponse,
-  getObjectFields,
 } from '@mysten/sui.js';
-import { extractKioskData, getKioskObject, getObjects } from '../utils';
+import {
+  attachListingsAndPrices,
+  attachLockedItems,
+  extractKioskData,
+  getKioskObject,
+} from '../utils';
 import { Kiosk } from '../bcs';
 
 /**
@@ -18,7 +22,7 @@ import { Kiosk } from '../bcs';
  */
 export type KioskListing = {
   /** The ID of the Item */
-  itemId: string;
+  objectId: ObjectId;
   /**
    * Whether or not there's a `PurchaseCap` issued. `true` means that
    * the listing is controlled by some logic and can't be purchased directly.
@@ -27,7 +31,7 @@ export type KioskListing = {
    */
   isExclusive: boolean;
   /** The ID of the listing */
-  listingId: string;
+  listingId: ObjectId;
   price?: string;
 };
 
@@ -37,20 +41,23 @@ export type KioskListing = {
  */
 export type KioskItem = {
   /** The ID of the Item */
-  itemId: string;
+  objectId: ObjectId;
   /** The type of the Item */
-  itemType: string;
+  type: ObjectType;
+  /** Whether the item is Locked (there must be a `Lock` Dynamic Field) */
+  isLocked: boolean;
+  /** Optional listing */
+  listing?: KioskListing;
 };
-
 /**
  * Aggregated data from the Kiosk.
  */
 export type KioskData = {
-  items: KioskItem[] | SuiObjectResponse[];
-  listings: KioskListing[];
-  itemIds: string[];
-  listingIds: string[];
+  items: KioskItem[];
+  itemIds: ObjectId[];
+  listingIds: ObjectId[];
   kiosk?: Kiosk;
+  extensions: any[]; // type will be defined on later versions of the SDK.
 };
 
 export type PagedKioskData = {
@@ -60,63 +67,49 @@ export type PagedKioskData = {
 };
 
 export type FetchKioskOptions = {
-  includeKioskFields?: boolean;
-  includeItems?: boolean;
-  itemOptions?: SuiObjectDataOptions;
+  withKioskFields?: boolean;
   withListingPrices?: boolean;
-  listingOptions?: SuiObjectDataOptions;
 };
 
-/**
- *
- */
 export async function fetchKiosk(
   provider: JsonRpcProvider,
   kioskId: SuiAddress,
   pagination: PaginationArguments<string>,
-  {
-    includeKioskFields = false,
-    includeItems = false,
-    withListingPrices = false,
-    itemOptions = { showDisplay: true, showType: true },
-  }: FetchKioskOptions,
+  options: FetchKioskOptions,
 ): Promise<PagedKioskData> {
   const { data, nextCursor, hasNextPage } = await provider.getDynamicFields({
     parentId: kioskId,
     ...pagination,
   });
 
+  const listings: KioskListing[] = [];
+  const lockedItemIds: ObjectId[] = [];
+
   // extracted kiosk data.
-  const kioskData = extractKioskData(data);
+  const kioskData = extractKioskData(data, listings, lockedItemIds);
 
   // split the fetching in two queries as we are most likely passing different options for each kind.
   // For items, we usually seek the Display.
   // For listings we usually seek the DF value (price) / exclusivity.
-  const [kiosk, itemObjects, listingObjects] = await Promise.all([
-    includeKioskFields
+  const [kiosk, listingObjects] = await Promise.all([
+    options.withKioskFields
       ? getKioskObject(provider, kioskId)
       : Promise.resolve(undefined),
-    includeItems
-      ? getObjects(provider, kioskData.itemIds, itemOptions)
-      : Promise.resolve([]),
-    withListingPrices
-      ? getObjects(provider, kioskData.listingIds, {
-          showBcs: true,
-          showContent: true,
+    options.withListingPrices
+      ? provider.multiGetObjects({
+          ids: kioskData.listingIds,
+          options: {
+            showContent: true,
+          },
         })
       : Promise.resolve([]),
   ]);
 
-  if (includeKioskFields) kioskData.kiosk = kiosk;
-  if (includeItems) kioskData.items = itemObjects;
-  if (withListingPrices)
-    kioskData.listings.map((l, i) => {
-      const fields = getObjectFields(listingObjects[i]);
-      // l.price = bcs.de('u64', listingObjects[i].data?.bcs.bcsBytes, 'base64');
-      // TODO: Figure out a way to do this with BCS to avoid querying content.
-      l.price = fields?.value;
-      return l;
-    });
+  if (options.withKioskFields) kioskData.kiosk = kiosk;
+  // attach items listings. IF we have `options.withListingPrices === true`, it will also attach the prices.
+  attachListingsAndPrices(kioskData, listings, listingObjects);
+  // add `locked` status to items that are locked.
+  attachLockedItems(kioskData, lockedItemIds);
 
   return {
     data: kioskData,
