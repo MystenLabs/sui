@@ -19,6 +19,8 @@ export async function initAmplitude() {
         client: {
             configuration: {
                 cookieStorage: persistableStorage,
+                // This prevents Amplitude from setting its initial
+                // cookies upon initialization of the SDK
                 disableCookies: true,
                 trackingOptions: {
                     ipAddress: false,
