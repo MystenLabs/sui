@@ -1,14 +1,64 @@
-import { Ed25519Keypair } from '@mysten/sui.js';
-import { randomBytes } from '@noble/hashes/utils';
+import { BCS } from '@mysten/bcs';
+import {
+    Ed25519Keypair,
+    SUI_ADDRESS_LENGTH,
+    bcs,
+    normalizeSuiAddress,
+} from '@mysten/sui.js';
+import { blake2b } from '@noble/hashes/blake2b';
+import { bytesToHex, randomBytes } from '@noble/hashes/utils';
 import { toBufferBE, toBigIntBE } from 'bigint-buffer';
 import { base64url, decodeJwt } from 'jose';
-import { poseidon4 } from 'poseidon-lite';
 import Browser from 'webextension-polyfill';
+
+import { getAddressSeed, poseidonHash } from './utils';
+
+bcs.registerStructType('AddressParams', {
+    iss: BCS.STRING,
+    key_claim_name: BCS.STRING,
+});
 
 const clientID =
     '946731352276-pk5glcg8cqo38ndb39h7j093fpsphusu.apps.googleusercontent.com';
 const redirectUri = 'https://ainifalglpinojmobpmeblikiopckbbm.chromiumapp.org/'; // TODO: use Browser.identity.getRedirectURL() for prod
 const nonceLen = Math.ceil(256 / 6);
+
+type WalletInputs = {
+    ephemeralPublicKey: bigint;
+    jwt: string;
+    jwtRandom: bigint;
+    maxEpoch: number;
+    userPin: bigint;
+};
+
+async function createZKProofs({
+    ephemeralPublicKey,
+    jwt,
+    jwtRandom,
+    maxEpoch,
+    userPin,
+}: WalletInputs) {
+    const response = await fetch('http://185.209.177.123:8000/zkp', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            eph_public_key: ephemeralPublicKey.toString(),
+            jwt,
+            jwt_rand: jwtRandom.toString(),
+            key_claim_name: 'sub',
+            max_epoch: maxEpoch,
+            user_pin: userPin.toString(),
+        }),
+    });
+    if (!response.ok) {
+        throw new Error(
+            `Failed to fetch proofs, ${response.status} (${response.statusText})`
+        );
+    }
+    return response.json();
+}
 
 function generateNonce(
     ephemeralPublicKey: bigint,
@@ -17,7 +67,7 @@ function generateNonce(
 ) {
     const eph_public_key_0 = ephemeralPublicKey / 2n ** 128n;
     const eph_public_key_1 = ephemeralPublicKey % 2n ** 128n;
-    const bignum = poseidon4([
+    const bignum = poseidonHash([
         eph_public_key_0,
         eph_public_key_1,
         maxEpoch,
@@ -33,20 +83,75 @@ function generateNonce(
     return nonce;
 }
 
-export async function createZkAccount(currentEpoch: number) {
+function prepareZKLogin(maxEpoch: number) {
     const ephemeralKeypair = new Ed25519Keypair();
     const randomness = toBigIntBE(Buffer.from(randomBytes(16)));
     const nonce = generateNonce(
         toBigIntBE(Buffer.from(ephemeralKeypair.getPublicKey().toBytes())),
-        currentEpoch + 2,
+        maxEpoch,
         randomness
     );
-    console.log(
-        currentEpoch,
-        ephemeralKeypair.getPublicKey().toSuiAddress(),
-        nonce
+    return {
+        ephemeralKeypair,
+        randomness,
+        nonce,
+    };
+}
+
+const zkLoginFlag = 0x5;
+
+async function getAddress({
+    value,
+    userPin,
+    iss,
+}: {
+    value: string;
+    userPin: bigint;
+    iss: string;
+}) {
+    const addressSeedBytes = toBufferBE(
+        await getAddressSeed(value, userPin),
+        32
     );
-    await zkLogin(nonce);
+    console.log('addressSeed', toBigIntBE(addressSeedBytes).toString());
+    const addressParamBytes = bcs
+        .ser('AddressParams', { iss, key_claim_name: 'sub' })
+        .toBytes();
+    const tmp = new Uint8Array(
+        1 + addressSeedBytes.length + addressParamBytes.length
+    );
+    tmp.set([zkLoginFlag]);
+    tmp.set(addressParamBytes, 1);
+    tmp.set(addressSeedBytes, 1 + addressParamBytes.length);
+    return normalizeSuiAddress(
+        bytesToHex(blake2b(tmp, { dkLen: 32 })).slice(0, SUI_ADDRESS_LENGTH * 2)
+    );
+}
+
+export async function createZkAccount(currentEpoch: number) {
+    const maxEpoch = currentEpoch + 2;
+    const { nonce, ephemeralKeypair, randomness } = prepareZKLogin(maxEpoch);
+    const jwt = await zkLogin(nonce);
+    const decodedJwt = decodeJwt(jwt);
+    const userPin = toBigIntBE(Buffer.from(randomBytes(16)));
+    const proofs = await createZKProofs({
+        ephemeralPublicKey: toBigIntBE(
+            Buffer.from(ephemeralKeypair.getPublicKey().toBytes())
+        ),
+        jwt,
+        jwtRandom: randomness,
+        maxEpoch,
+        userPin,
+    });
+    if (!decodedJwt.sub || !decodedJwt.iss) {
+        throw new Error('Missing jtw data');
+    }
+    const address = await getAddress({
+        value: decodedJwt.sub,
+        iss: decodedJwt.iss,
+        userPin,
+    });
+    console.log({ decodedJwt, proofs, address });
 }
 
 export async function zkLogin(nonce: string, loginAccount?: string) {
@@ -71,6 +176,9 @@ export async function zkLogin(nonce: string, loginAccount?: string) {
     const responseParams = new URLSearchParams(
         responseURL.hash.replace('#', '')
     );
-    const decodedJWT = decodeJwt(responseParams.get('id_token') || '');
-    console.log(url, decodedJWT, responseParams);
+    const jwt = responseParams.get('id_token');
+    if (!jwt) {
+        throw new Error('JWT is missing');
+    }
+    return jwt;
 }

@@ -70,7 +70,7 @@ const SENTRY_MONITORED_ENVS: API_ENV[] = [];
 type NetworkTypes = keyof typeof API_ENV;
 
 export const generateActiveNetworkList = (): NetworkTypes[] => {
-    return Object.values(API_ENV);
+    return ['local', 'devNet'];
 };
 
 export default class ApiProvider {
