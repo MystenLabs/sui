@@ -12,7 +12,6 @@ import { toB64 } from '@mysten/bcs';
 import { SignatureScheme } from './signature';
 import { bytesToHex } from '@noble/hashes/utils';
 import { blake2b } from '@noble/hashes/blake2b';
-import { expect } from 'vitest';
 
 export const DEFAULT_SECP256R1_DERIVATION_PATH = "m/74'/784'/0'/0/0";
 
