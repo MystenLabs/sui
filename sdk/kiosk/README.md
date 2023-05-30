@@ -41,7 +41,7 @@ const getKiosk = async () => {
     provider,
     kioskAddress,
     { limit: 100 },
-    { withListingPrices: true, includeKioskFields: true },
+    { withListingPrices: true, withKioskFields: true },
   ); // could also add `cursor` for pagination
 
   console.log(res); // { items: [],  itemIds: [],  listingIds: [], kiosk: {...} }

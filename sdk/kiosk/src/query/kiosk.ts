@@ -67,7 +67,7 @@ export type PagedKioskData = {
 };
 
 export type FetchKioskOptions = {
-  includeKioskFields?: boolean;
+  withKioskFields?: boolean;
   withListingPrices?: boolean;
 };
 
@@ -92,7 +92,7 @@ export async function fetchKiosk(
   // For items, we usually seek the Display.
   // For listings we usually seek the DF value (price) / exclusivity.
   const [kiosk, listingObjects] = await Promise.all([
-    options.includeKioskFields
+    options.withKioskFields
       ? getKioskObject(provider, kioskId)
       : Promise.resolve(undefined),
     options.withListingPrices
@@ -105,7 +105,7 @@ export async function fetchKiosk(
       : Promise.resolve([]),
   ]);
 
-  if (options.includeKioskFields) kioskData.kiosk = kiosk;
+  if (options.withKioskFields) kioskData.kiosk = kiosk;
   // attach items listings. IF we have `options.withListingPrices === true`, it will also attach the prices.
   attachListingsAndPrices(kioskData, listings, listingObjects);
   // add `locked` status to items that are locked.
