@@ -47,6 +47,7 @@ module sui::kiosk {
     use sui::bag::{Self, Bag};
     use sui::sui::SUI;
     use sui::event;
+    use sui::kiosk_permissions as permissions;
 
     /// Trying to withdraw profits and sender is not owner.
     const ENotOwner: u64 = 0;
@@ -82,6 +83,10 @@ module sui::kiosk {
     const EExtensionNotDisabled: u64 = 15;
     /// Attempt to access an Extension that is not installed.
     const EExtensionNotFound: u64 = 16;
+    /// Trying to authorize an extension with excessive permissions.
+    const EIncorrectPermissions: u64 = 17;
+    /// Trying to access a method which is not permitted for the extension
+    const EExtensionNotPermitted: u64 = 18;
 
 
     /// An object which allows selling collectibles within "kiosk" ecosystem.
@@ -465,11 +470,16 @@ module sui::kiosk {
         ctx: &mut TxContext
     ) {
         assert!(object::id(self) == cap.for, ENotOwner);
+        assert!(permissions <= permissions::max_permissions(), EIncorrectPermissions);
         df::add(&mut self.id, ExtensionKey<Ext> { enabled: true }, Extension {
             storage: bag::new(ctx),
             permissions,
             types: vector[]
         });
+    }
+
+    public fun revoke_permissions<Ext: drop>(self: &mut Kiosk, cap: &KioskOwnerCap) {
+
     }
 
     /// Re-enables a disabled extension of the `Kiosk`. Can only be performed by the Kiosk Owner.
@@ -513,6 +523,12 @@ module sui::kiosk {
         || df::exists_(&self.id, ExtensionKey<Ext> { enabled: false })
     }
 
+    /// Get the permissions of the `Kiosk` extension.
+    public fun ext_permissions<Ext: drop>(self: &Kiosk): u32 {
+        let ext: &Extension = df::borrow(&self.id, ExtensionKey<Ext> { enabled: true });
+        ext.permissions
+    }
+
     /// Get the immutable reference to the `Kiosk` extension storage. Can only
     /// be accessed by an extension, so it is overall save to store data
     /// sensitive to the extension (eg Authorization / Configuration etc).
@@ -534,6 +550,9 @@ module sui::kiosk {
         _: Ext, self: &mut Kiosk, item: T
     ) {
         assert!(df::exists_(&self.id, ExtensionKey<Ext> { enabled: true }), EExtensionDisabled);
+        let ext: &Extension = df::borrow(&self.id, ExtensionKey<Ext> { enabled: true });
+        assert!(permissions::can_place(&ext.permissions), EExtensionNotPermitted);
+
         place_internal(self, item)
     }
 
@@ -543,6 +562,9 @@ module sui::kiosk {
         _: Ext, self: &mut Kiosk, _policy: &TransferPolicy<T>, item: T
     ) {
         assert!(df::exists_(&self.id, ExtensionKey<Ext> { enabled: true }), EExtensionDisabled);
+        let ext: &Extension = df::borrow(&self.id, ExtensionKey<Ext> { enabled: true });
+        assert!(permissions::can_place(&ext.permissions), EExtensionNotPermitted);
+
         df::add(&mut self.id, Lock { id: object::id(&item) }, true);
         place_internal(self, item)
     }
