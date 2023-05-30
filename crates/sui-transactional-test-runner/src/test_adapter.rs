@@ -326,7 +326,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                 )
                 .unwrap(),
             ),
-            storage: Arc::new(InMemoryStorage::new(objects)),
+            storage: InMemoryStorage::new(objects),
             compiled_state: CompiledState::new(
                 named_address_mapping,
                 pre_compiled_deps,
@@ -1138,7 +1138,8 @@ impl<'a> SuiTestAdapter<'a> {
             .value
             .clone();
         let (kind, signer, gas) = transaction_data.execution_parts();
-
+        // TODO: Support different epochs in transactional tests.
+        let epoch_data = EpochData::new_test();
         let (
             inner,
             effects,
@@ -1157,7 +1158,7 @@ impl<'a> SuiTestAdapter<'a> {
             },
             */
             execution_error,
-        ) = execution_engine::execute_transaction_to_effects::<execution_mode::Normal, _>(
+        ) = execution_engine::execute_transaction_to_effects::<execution_mode::Normal>(
             shared_object_refs,
             temporary_store,
             kind,
@@ -1167,8 +1168,8 @@ impl<'a> SuiTestAdapter<'a> {
             transaction_dependencies,
             &self.vm,
             gas_status,
-            // TODO: Support different epochs in transactional tests.
-            &EpochData::new_test(),
+            &epoch_data.epoch_id(),
+            epoch_data.epoch_start_timestamp(),
             &self.protocol_config,
             self.metrics.clone(),
             false, // enable_expensive_checks

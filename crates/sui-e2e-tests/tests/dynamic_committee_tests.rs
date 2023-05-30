@@ -20,7 +20,6 @@ use sui_core::{
 };
 use sui_node::SuiNodeHandle;
 
-use sui_adapter::type_layout_resolver::TypeLayoutResolver;
 use sui_core::authority::AuthorityState;
 use sui_types::effects::{CertifiedTransactionEffects, TransactionEffects, TransactionEffectsAPI};
 use sui_types::{
@@ -249,8 +248,9 @@ impl StressTestRunner {
         self.nodes[0].with(|node| {
             let state = node.state();
             let epoch_store = state.load_epoch_store_one_call_per_task();
-            let move_vm = epoch_store.move_vm();
-            let mut layout_resolver = TypeLayoutResolver::new(move_vm, state.database.as_ref());
+            let mut layout_resolver = epoch_store
+                .executor()
+                .type_layout_resolver(Box::new(state.database.as_ref()));
             for (obj_ref, _) in &effects.created {
                 let object_opt = state
                     .database
@@ -259,7 +259,7 @@ impl StressTestRunner {
                 let Some(object) = object_opt else { continue };
                 let struct_tag = object.struct_tag().unwrap();
                 let total_sui =
-                    object.get_total_sui(&mut layout_resolver).unwrap() - object.storage_rebate;
+                    object.get_total_sui(layout_resolver.as_mut()).unwrap() - object.storage_rebate;
                 println!(">> {struct_tag} TOTAL_SUI: {total_sui}");
             }
 
@@ -272,7 +272,7 @@ impl StressTestRunner {
                     .unwrap();
                 let struct_tag = object.struct_tag().unwrap();
                 let total_sui =
-                    object.get_total_sui(&mut layout_resolver).unwrap() - object.storage_rebate;
+                    object.get_total_sui(layout_resolver.as_mut()).unwrap() - object.storage_rebate;
                 println!(">> {struct_tag} TOTAL_SUI: {total_sui}");
             }
 
@@ -285,7 +285,7 @@ impl StressTestRunner {
                     .unwrap();
                 let struct_tag = object.struct_tag().unwrap();
                 let total_sui =
-                    object.get_total_sui(&mut layout_resolver).unwrap() - object.storage_rebate;
+                    object.get_total_sui(layout_resolver.as_mut()).unwrap() - object.storage_rebate;
                 println!(">> {struct_tag} TOTAL_SUI: {total_sui}");
             }
         })
@@ -417,10 +417,11 @@ mod add_stake {
             let store = runner.db().await;
             let state = runner.state().await;
             let epoch_store = state.load_epoch_store_one_call_per_task();
-            let move_vm = epoch_store.move_vm();
-            let mut layout_resolver = TypeLayoutResolver::new(move_vm, store.as_ref());
+            let mut layout_resolver = epoch_store
+                .executor()
+                .type_layout_resolver(Box::new(store.as_ref()));
             let staked_amount =
-                object.get_total_sui(&mut layout_resolver).unwrap() - object.storage_rebate;
+                object.get_total_sui(layout_resolver.as_mut()).unwrap() - object.storage_rebate;
             assert_eq!(staked_amount, self.stake_amount);
             assert_eq!(object.owner.get_owner_address().unwrap(), self.sender);
             runner.display_effects(effects);

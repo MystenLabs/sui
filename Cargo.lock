@@ -9307,7 +9307,6 @@ dependencies = [
  "move-core-types",
  "move-package",
  "move-symbol-pool",
- "move-vm-runtime",
  "mysten-common",
  "mysten-metrics",
  "mysten-network",
@@ -9338,12 +9337,12 @@ dependencies = [
  "signature 1.6.4",
  "sui-adapter-latest",
  "sui-config",
+ "sui-execution",
  "sui-framework",
  "sui-genesis-builder",
  "sui-json-rpc-types",
  "sui-macros",
  "sui-move-build",
- "sui-move-natives-latest",
  "sui-network",
  "sui-protocol-config",
  "sui-simulator",
@@ -9463,6 +9462,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "sui-execution"
+version = "0.1.0"
+dependencies = [
+ "move-bytecode-utils",
+ "move-core-types",
+ "move-vm-runtime",
+ "sui-adapter-latest",
+ "sui-move-natives-latest",
+ "sui-protocol-config",
+ "sui-types",
+ "sui-verifier-latest",
+]
+
+[[package]]
 name = "sui-faucet"
 version = "1.3.0"
 dependencies = [
@@ -9561,7 +9574,6 @@ dependencies = [
  "insta",
  "move-binary-format",
  "move-core-types",
- "move-vm-runtime",
  "narwhal-config",
  "once_cell",
  "prometheus",
@@ -9570,11 +9582,10 @@ dependencies = [
  "serde_with",
  "serde_yaml",
  "shared-crypto",
- "sui-adapter-latest",
  "sui-config",
+ "sui-execution",
  "sui-framework",
  "sui-keys",
- "sui-move-natives-latest",
  "sui-protocol-config",
  "sui-simulator",
  "sui-storage",
@@ -10072,14 +10083,13 @@ dependencies = [
  "serde_yaml",
  "shellexpand",
  "similar",
- "sui-adapter-latest",
  "sui-config",
  "sui-core",
+ "sui-execution",
  "sui-framework",
  "sui-json-rpc",
  "sui-json-rpc-types",
  "sui-macros",
- "sui-move-natives-latest",
  "sui-protocol-config",
  "sui-sdk",
  "sui-storage",
@@ -10418,7 +10428,6 @@ dependencies = [
  "insta",
  "move-binary-format",
  "move-core-types",
- "move-vm-runtime",
  "narwhal-config",
  "once_cell",
  "prometheus",
@@ -10427,12 +10436,11 @@ dependencies = [
  "serde_with",
  "serde_yaml",
  "shared-crypto",
- "sui-adapter-latest",
  "sui-config",
+ "sui-execution",
  "sui-framework",
  "sui-genesis-builder",
  "sui-keys",
- "sui-move-natives-latest",
  "sui-protocol-config",
  "sui-simulator",
  "sui-storage",

@@ -136,13 +136,36 @@ where
     }
 }
 
-pub struct TemporaryStore<S> {
+pub trait BackingStore:
+    BackingPackageStore
+    + ChildObjectResolver
+    + GetModule<Error = SuiError, Item = CompiledModule>
+    + ObjectStore
+    + ParentSync
+{
+    fn as_object_store(&self) -> &dyn ObjectStore;
+}
+
+impl<T> BackingStore for T
+where
+    T: BackingPackageStore,
+    T: ChildObjectResolver,
+    T: GetModule<Error = SuiError, Item = CompiledModule>,
+    T: ObjectStore,
+    T: ParentSync,
+{
+    fn as_object_store(&self) -> &dyn ObjectStore {
+        self
+    }
+}
+
+pub struct TemporaryStore<'backing> {
     // The backing store for retrieving Move packages onchain.
     // When executing a Move call, the dependent packages are not going to be
     // in the input objects. They will be fetched from the backing store.
     // Also used for fetching the backing parent_sync to get the last known version for wrapped
     // objects
-    store: S,
+    store: Arc<dyn BackingStore + Send + Sync + 'backing>,
     tx_digest: TransactionDigest,
     input_objects: BTreeMap<ObjectID, Object>,
     /// The version to assign to all objects written by the transaction using this store.
@@ -167,11 +190,11 @@ pub struct TemporaryStore<S> {
     runtime_read_objects: RwLock<BTreeMap<ObjectID, Object>>,
 }
 
-impl<S> TemporaryStore<S> {
+impl<'backing> TemporaryStore<'backing> {
     /// Creates a new store associated with an authority store, and populates it with
     /// initial objects.
     pub fn new(
-        store: S,
+        store: Arc<dyn BackingStore + Send + Sync + 'backing>,
         input_objects: InputObjects,
         tx_digest: TransactionDigest,
         protocol_config: &ProtocolConfig,
@@ -203,7 +226,7 @@ impl<S> TemporaryStore<S> {
     /// version for any object used in the transaction (preventing internal assertions or
     /// invariant violations from being triggered)
     pub fn new_for_mock_transaction(
-        store: S,
+        store: Arc<dyn BackingStore + Send + Sync + 'backing>,
         input_objects: InputObjects,
         tx_digest: TransactionDigest,
         protocol_config: &ProtocolConfig,
@@ -632,7 +655,7 @@ impl<S> TemporaryStore<S> {
     }
 }
 
-impl<S: ObjectStore> TemporaryStore<S> {
+impl<'backing> TemporaryStore<'backing> {
     /// returns lists of (objects whose owner we must authenticate, objects whose owner has already been authenticated)
     fn get_objects_to_authenticate(
         &self,
@@ -783,7 +806,7 @@ impl<S: ObjectStore> TemporaryStore<S> {
 // This is the original gas charging code, all code between comment
 // "Charge gas legacy - start/end" is exclusively for legacy gas
 //==============================================================================
-impl<S: ObjectStore> TemporaryStore<S> {
+impl<'backing> TemporaryStore<'backing> {
     /// 1. Compute tx storage gas costs and tx storage rebates, update storage_rebate field of mutated objects
     /// 2. Deduct computation gas costs and storage costs to `gas_object_id`, credit storage rebates to `gas_object_id`.
     /// gas_object_id can be None if this is a system transaction.
@@ -973,7 +996,7 @@ impl<S: ObjectStore> TemporaryStore<S> {
 // This is the new/current/latest gas charging code, all code between comment
 // "Charge gas current - start/end" is exclusively for latest gas
 //==============================================================================
-impl<S: ObjectStore> TemporaryStore<S> {
+impl<'backing> TemporaryStore<'backing> {
     /// 1. Compute tx storage gas costs and tx storage rebates, update storage_rebate field of mutated objects
     /// 2. Deduct computation gas costs and storage costs to `gas_object_id`, credit storage rebates to `gas_object_id`.
     // The happy path of this function follows (1) + (2) and is fairly simple. Most of the complexity is in the unhappy paths:
@@ -1219,20 +1242,21 @@ impl<S: ObjectStore> TemporaryStore<S> {
 // Charge gas current - end
 //==============================================================================
 
-impl<S: ObjectStore> TemporaryStore<S> {
+impl<'backing> TemporaryStore<'backing> {
     pub fn advance_epoch_safe_mode(
         &mut self,
         params: &AdvanceEpochParams,
         protocol_config: &ProtocolConfig,
     ) {
-        let wrapper = get_sui_system_state_wrapper(&self.store)
+        let wrapper = get_sui_system_state_wrapper(self.store.as_object_store())
             .expect("System state wrapper object must exist");
-        let new_object = wrapper.advance_epoch_safe_mode(params, &self.store, protocol_config);
+        let new_object =
+            wrapper.advance_epoch_safe_mode(params, self.store.as_object_store(), protocol_config);
         self.write_object(new_object, WriteKind::Mutate);
     }
 }
 
-impl<S: GetModule + ObjectStore + BackingPackageStore> TemporaryStore<S> {
+impl<'backing> TemporaryStore<'backing> {
     fn get_input_sui(
         &self,
         id: &ObjectID,
@@ -1492,7 +1516,7 @@ impl<S: GetModule + ObjectStore + BackingPackageStore> TemporaryStore<S> {
     }
 }
 
-impl<S: ChildObjectResolver> ChildObjectResolver for TemporaryStore<S> {
+impl<'backing> ChildObjectResolver for TemporaryStore<'backing> {
     fn read_child_object(&self, parent: &ObjectID, child: &ObjectID) -> SuiResult<Option<Object>> {
         // there should be no read after delete
         debug_assert!(self.deleted.get(child).is_none());
@@ -1505,7 +1529,7 @@ impl<S: ChildObjectResolver> ChildObjectResolver for TemporaryStore<S> {
     }
 }
 
-impl<S: ChildObjectResolver> Storage for TemporaryStore<S> {
+impl<'backing> Storage for TemporaryStore<'backing> {
     fn reset(&mut self) {
         self.written.clear();
         self.deleted.clear();
@@ -1532,7 +1556,7 @@ impl<S: ChildObjectResolver> Storage for TemporaryStore<S> {
     }
 }
 
-impl<S: BackingPackageStore> BackingPackageStore for &TemporaryStore<S> {
+impl<'backing> BackingPackageStore for TemporaryStore<'backing> {
     fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<Object>> {
         if let Some((obj, _)) = self.written.get(package_id) {
             Ok(Some(obj.clone()))
@@ -1549,7 +1573,7 @@ impl<S: BackingPackageStore> BackingPackageStore for &TemporaryStore<S> {
     }
 }
 
-impl<S: BackingPackageStore> ModuleResolver for &TemporaryStore<S> {
+impl<'backing> ModuleResolver for TemporaryStore<'backing> {
     type Error = SuiError;
     fn get_module(&self, module_id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
         let package_id = &ObjectID::from(*module_id.address());
@@ -1578,7 +1602,7 @@ impl<S: BackingPackageStore> ModuleResolver for &TemporaryStore<S> {
     }
 }
 
-impl<S> ResourceResolver for &TemporaryStore<S> {
+impl<'backing> ResourceResolver for TemporaryStore<'backing> {
     type Error = SuiError;
 
     fn get_resource(
@@ -1616,13 +1640,13 @@ impl<S> ResourceResolver for &TemporaryStore<S> {
     }
 }
 
-impl<S: ParentSync> ParentSync for TemporaryStore<S> {
+impl<'backing> ParentSync for TemporaryStore<'backing> {
     fn get_latest_parent_entry_ref(&self, object_id: ObjectID) -> SuiResult<Option<ObjectRef>> {
         self.store.get_latest_parent_entry_ref(object_id)
     }
 }
 
-impl<S: GetModule<Error = SuiError, Item = CompiledModule>> GetModule for TemporaryStore<S> {
+impl<'backing> GetModule for TemporaryStore<'backing> {
     type Error = SuiError;
     type Item = CompiledModule;
 
@@ -1643,26 +1667,4 @@ impl<S: GetModule<Error = SuiError, Item = CompiledModule>> GetModule for Tempor
             self.store.get_module_by_id(module_id)
         }
     }
-}
-
-/// Create an empty `TemporaryStore` with no backing storage for module resolution.
-/// For testing purposes only.
-pub fn empty_for_testing() -> TemporaryStore<()> {
-    TemporaryStore::new(
-        (),
-        InputObjects::new(Vec::new()),
-        TransactionDigest::genesis(),
-        &ProtocolConfig::get_for_min_version(),
-    )
-}
-
-/// Create a `TemporaryStore` with the given inputs and no backing storage for module resolution.
-/// For testing purposes only.
-pub fn with_input_objects_for_testing(input_objects: InputObjects) -> TemporaryStore<()> {
-    TemporaryStore::new(
-        (),
-        input_objects,
-        TransactionDigest::genesis(),
-        &ProtocolConfig::get_for_min_version(),
-    )
 }

@@ -166,8 +166,8 @@ impl TreasuryCap {
     }
 }
 
-pub fn transfer_coin<S>(
-    temporary_store: &mut TemporaryStore<S>,
+pub fn transfer_coin(
+    temporary_store: &mut TemporaryStore<'_>,
     coin: &Coin,
     recipient: SuiAddress,
     coin_type: MoveObjectType,

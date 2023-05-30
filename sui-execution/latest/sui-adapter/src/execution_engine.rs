@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use move_binary_format::CompiledModule;
-use move_bytecode_utils::module_cache::GetModule;
 use move_vm_runtime::move_vm::MoveVM;
 use once_cell::sync::Lazy;
 use std::{
@@ -29,12 +28,11 @@ use sui_protocol_config::{check_limit_by_meter, LimitThresholdCrossed, ProtocolC
 use sui_types::clock::{CLOCK_MODULE_NAME, CONSENSUS_COMMIT_PROLOGUE_FUNCTION_NAME};
 use sui_types::committee::EpochId;
 use sui_types::effects::TransactionEffects;
-use sui_types::epoch_data::EpochData;
 use sui_types::error::{ExecutionError, ExecutionErrorKind};
 use sui_types::execution_status::ExecutionStatus;
 use sui_types::gas::{GasCostSummary, SuiGasStatusAPI};
 use sui_types::messages_consensus::ConsensusCommitPrologue;
-use sui_types::storage::{ChildObjectResolver, ObjectStore, ParentSync, WriteKind};
+use sui_types::storage::WriteKind;
 #[cfg(msim)]
 use sui_types::sui_system_state::advance_epoch_result_injection::maybe_modify_result;
 use sui_types::sui_system_state::{AdvanceEpochParams, ADVANCE_EPOCH_SAFE_MODE_FUNCTION_NAME};
@@ -48,7 +46,6 @@ use sui_types::{
     base_types::{ObjectRef, SuiAddress, TransactionDigest, TxContext},
     gas::SuiGasStatus,
     object::Object,
-    storage::BackingPackageStore,
     sui_system_state::{ADVANCE_EPOCH_FUNCTION_NAME, SUI_SYSTEM_MODULE_NAME},
     SUI_FRAMEWORK_ADDRESS,
 };
@@ -87,56 +84,9 @@ fn is_certificate_denied(
 checked_arithmetic! {
 
 #[instrument(name = "tx_execute_to_effects", level = "debug", skip_all)]
-pub fn execute_transaction_to_effects<
-    Mode: ExecutionMode,
-    S: BackingPackageStore + ParentSync + ChildObjectResolver + ObjectStore + GetModule,
->(
+pub fn execute_transaction_to_effects<Mode: ExecutionMode>(
     shared_object_refs: Vec<ObjectRef>,
-    temporary_store: TemporaryStore<S>,
-    transaction_kind: TransactionKind,
-    transaction_signer: SuiAddress,
-    gas: &[ObjectRef],
-    transaction_digest: TransactionDigest,
-    transaction_dependencies: BTreeSet<TransactionDigest>,
-    move_vm: &Arc<MoveVM>,
-    gas_status: SuiGasStatus,
-    epoch_data: &EpochData,
-    protocol_config: &ProtocolConfig,
-    metrics: Arc<LimitsMetrics>,
-    enable_expensive_checks: bool,
-    certificate_deny_set: &HashSet<TransactionDigest>,
-) -> (
-    InnerTemporaryStore,
-    TransactionEffects,
-    Result<Mode::ExecutionResults, ExecutionError>,
-) {
-    // Separating out impl so we can call this from other context
-    execute_transaction_to_effects_impl::<Mode, S>(
-        shared_object_refs,
-        temporary_store,
-        transaction_kind,
-        transaction_signer,
-        gas,
-        transaction_digest,
-        transaction_dependencies,
-        move_vm,
-        gas_status,
-        &epoch_data.epoch_id(),
-        epoch_data.epoch_start_timestamp(),
-        protocol_config,
-        metrics,
-        enable_expensive_checks,
-        certificate_deny_set,
-    )
-}
-
-/// Separating out impl so we can call this from other context
-pub fn execute_transaction_to_effects_impl<
-    Mode: ExecutionMode,
-    S: BackingPackageStore + ParentSync + ChildObjectResolver + ObjectStore + GetModule,
->(
-    shared_object_refs: Vec<ObjectRef>,
-    mut temporary_store: TemporaryStore<S>,
+    mut temporary_store: TemporaryStore<'_>,
     transaction_kind: TransactionKind,
     transaction_signer: SuiAddress,
     gas: &[ObjectRef],
@@ -165,7 +115,7 @@ pub fn execute_transaction_to_effects_impl<
     let is_epoch_change = matches!(transaction_kind, TransactionKind::ChangeEpoch(_));
 
     let deny_cert = is_certificate_denied(&transaction_digest, certificate_deny_set);
-    let (gas_cost_summary, execution_result) = execute_transaction::<Mode, _>(
+    let (gas_cost_summary, execution_result) = execute_transaction::<Mode>(
         &mut temporary_store,
         transaction_kind,
         gas,
@@ -252,8 +202,8 @@ pub fn execute_transaction_to_effects_impl<
     (inner, effects, execution_result)
 }
 
-fn charge_gas_for_object_read<S>(
-    temporary_store: &TemporaryStore<S>,
+fn charge_gas_for_object_read(
+    temporary_store: &TemporaryStore<'_>,
     gas_status: &mut SuiGasStatus,
 ) -> Result<(), ExecutionError> {
     // Charge gas for reading all objects from the DB.
@@ -268,11 +218,8 @@ fn charge_gas_for_object_read<S>(
 }
 
 #[instrument(name = "tx_execute", level = "debug", skip_all)]
-fn execute_transaction<
-    Mode: ExecutionMode,
-    S: BackingPackageStore + ParentSync + ChildObjectResolver + ObjectStore + GetModule,
->(
-    temporary_store: &mut TemporaryStore<S>,
+fn execute_transaction<Mode: ExecutionMode>(
+    temporary_store: &mut TemporaryStore<'_>,
     transaction_kind: TransactionKind,
     gas: &[ObjectRef],
     tx_ctx: &mut TxContext,
@@ -311,7 +258,7 @@ fn execute_transaction<
                 None,
             ))
         } else {
-            execution_loop::<Mode, _>(
+            execution_loop::<Mode>(
                 temporary_store,
                 transaction_kind,
                 gas_object_ref.0,
@@ -415,7 +362,7 @@ fn execute_transaction<
         if !is_genesis_tx && !Mode::allow_arbitrary_values() {
             // ensure that this transaction did not create or destroy SUI, try to recover if the check fails
             let conservation_result = {
-                let mut layout_resolver = TypeLayoutResolver::new(move_vm, &*temporary_store);
+                let mut layout_resolver = TypeLayoutResolver::new(move_vm, Box::new(&*temporary_store));
                 temporary_store.check_sui_conserved(advance_epoch_gas_summary, &mut layout_resolver, enable_expensive_checks)
             };
             if let Err(conservation_err) = conservation_result {
@@ -425,7 +372,7 @@ fn execute_transaction<
                 temporary_store.reset(gas, &mut gas_status);
                 temporary_store.charge_gas(gas_object_id, &mut gas_status, &mut result, gas);
                 // check conservation once more more
-                let mut layout_resolver = TypeLayoutResolver::new(move_vm, &*temporary_store);
+                let mut layout_resolver = TypeLayoutResolver::new(move_vm, Box::new(&*temporary_store));
                 if let Err(recovery_err) = temporary_store.check_sui_conserved(advance_epoch_gas_summary, &mut layout_resolver, enable_expensive_checks) {
                     // if we still fail, it's a problem with gas
                     // charging that happens even in the "aborted" case--no other option but panic.
@@ -452,11 +399,8 @@ fn execute_transaction<
     }
 }
 
-fn execution_loop<
-    Mode: ExecutionMode,
-    S: BackingPackageStore + ParentSync + ChildObjectResolver + ObjectStore + GetModule,
->(
-    temporary_store: &mut TemporaryStore<S>,
+fn execution_loop<Mode: ExecutionMode>(
+    temporary_store: &mut TemporaryStore<'_>,
     transaction_kind: TransactionKind,
     gas_object_id: ObjectID,
     tx_ctx: &mut TxContext,
@@ -512,7 +456,7 @@ fn execution_loop<
             Ok(Mode::empty_results())
         }
         TransactionKind::ProgrammableTransaction(pt) => {
-            programmable_transactions::execution::execute::<_, Mode>(
+            programmable_transactions::execution::execute::<Mode>(
                 protocol_config,
                 metrics,
                 move_vm,
@@ -661,9 +605,9 @@ pub fn construct_advance_epoch_safe_mode_pt(
     Ok(builder.finish())
 }
 
-fn advance_epoch<S: ObjectStore + BackingPackageStore + ParentSync + ChildObjectResolver>(
+fn advance_epoch(
     change_epoch: ChangeEpoch,
-    temporary_store: &mut TemporaryStore<S>,
+    temporary_store: &mut TemporaryStore<'_>,
     tx_ctx: &mut TxContext,
     move_vm: &Arc<MoveVM>,
     gas_status: &mut SuiGasStatus,
@@ -682,7 +626,7 @@ fn advance_epoch<S: ObjectStore + BackingPackageStore + ParentSync + ChildObject
         epoch_start_timestamp_ms: change_epoch.epoch_start_timestamp_ms,
     };
     let advance_epoch_pt = construct_advance_epoch_pt(&params)?;
-    let result = programmable_transactions::execution::execute::<_, execution_mode::System>(
+    let result = programmable_transactions::execution::execute::<execution_mode::System>(
         protocol_config,
         metrics.clone(),
         move_vm,
@@ -712,7 +656,7 @@ fn advance_epoch<S: ObjectStore + BackingPackageStore + ParentSync + ChildObject
         } else {
             let advance_epoch_safe_mode_pt =
                 construct_advance_epoch_safe_mode_pt(&params, protocol_config)?;
-            programmable_transactions::execution::execute::<_, execution_mode::System>(
+            programmable_transactions::execution::execute::<execution_mode::System>(
                 protocol_config,
                 metrics.clone(),
                 move_vm,
@@ -750,7 +694,7 @@ fn advance_epoch<S: ObjectStore + BackingPackageStore + ParentSync + ChildObject
                 b.finish()
             };
 
-            programmable_transactions::execution::execute::<_, execution_mode::System>(
+            programmable_transactions::execution::execute::<execution_mode::System>(
                 protocol_config,
                 metrics.clone(),
                 move_vm,
@@ -794,9 +738,9 @@ fn advance_epoch<S: ObjectStore + BackingPackageStore + ParentSync + ChildObject
 ///
 /// - Set the timestamp for the `Clock` shared object from the timestamp in the header from
 ///   consensus.
-fn setup_consensus_commit<S: BackingPackageStore + ParentSync + ChildObjectResolver>(
+fn setup_consensus_commit(
     prologue: ConsensusCommitPrologue,
-    temporary_store: &mut TemporaryStore<S>,
+    temporary_store: &mut TemporaryStore<'_>,
     tx_ctx: &mut TxContext,
     move_vm: &Arc<MoveVM>,
     gas_status: &mut SuiGasStatus,
@@ -821,7 +765,7 @@ fn setup_consensus_commit<S: BackingPackageStore + ParentSync + ChildObjectResol
         );
         builder.finish()
     };
-    programmable_transactions::execution::execute::<_, execution_mode::System>(
+    programmable_transactions::execution::execute::<execution_mode::System>(
         protocol_config,
         metrics,
         move_vm,
