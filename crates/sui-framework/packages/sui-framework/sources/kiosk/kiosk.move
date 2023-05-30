@@ -173,6 +173,14 @@ module sui::kiosk {
 
     // === Kiosk packing and unpacking ===
 
+    /// Creates a new Kiosk in a default configuration: sender receives the
+    /// `KioskOwnerCap` and becomes the Owner, the `Kiosk` is shared.
+    entry fun default(ctx: &mut TxContext) {
+        let (kiosk, cap) = new(ctx);
+        sui::transfer::transfer(cap, sender(ctx));
+        sui::transfer::share_object(kiosk);
+    }
+
     /// Creates a new `Kiosk` with a matching `KioskOwnerCap`.
     public fun new(ctx: &mut TxContext): (Kiosk, KioskOwnerCap) {
         let kiosk = Kiosk {

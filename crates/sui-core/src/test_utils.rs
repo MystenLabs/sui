@@ -17,8 +17,9 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 use sui_config::genesis::Genesis;
-use sui_config::ValidatorInfo;
+use sui_config::local_ip_utils;
 use sui_framework::BuiltInFramework;
+use sui_genesis_builder::validator_info::ValidatorInfo;
 use sui_move_build::{BuildConfig, CompiledPackage, SuiPackageHooks};
 use sui_protocol_config::ProtocolConfig;
 use sui_types::base_types::{random_object_ref, ObjectID};
@@ -101,7 +102,7 @@ where
     R: rand::CryptoRng + rand::RngCore,
 {
     let dir = tempfile::TempDir::new().unwrap();
-    let network_config = sui_config::builder::ConfigBuilder::new(&dir)
+    let network_config = sui_swarm_config::network_config_builder::ConfigBuilder::new(&dir)
         .rng(rng)
         .build();
     let genesis = network_config.genesis;
@@ -216,7 +217,7 @@ async fn init_genesis(
     let pkg_id = pkg.id();
     genesis_objects.push(pkg);
 
-    let mut builder = sui_config::genesis::Builder::new().add_objects(genesis_objects);
+    let mut builder = sui_genesis_builder::Builder::new().add_objects(genesis_objects);
     let mut key_pairs = Vec::new();
     for i in 0..committee_size {
         let key_pair: AuthorityKeyPair = get_key_pair().1;
@@ -233,10 +234,10 @@ async fn init_genesis(
             network_key: network_key_pair.public().clone(),
             gas_price: 1,
             commission_rate: 0,
-            network_address: sui_config::utils::new_tcp_network_address(),
-            p2p_address: sui_config::utils::new_udp_network_address(),
-            narwhal_primary_address: sui_config::utils::new_udp_network_address(),
-            narwhal_worker_address: sui_config::utils::new_udp_network_address(),
+            network_address: local_ip_utils::new_local_tcp_address_for_testing(),
+            p2p_address: local_ip_utils::new_local_udp_address_for_testing(),
+            narwhal_primary_address: local_ip_utils::new_local_udp_address_for_testing(),
+            narwhal_worker_address: local_ip_utils::new_local_udp_address_for_testing(),
             description: String::new(),
             image_url: String::new(),
             project_url: String::new(),
@@ -351,7 +352,7 @@ pub fn make_transfer_object_transaction(
         object_ref,
         sender,
         gas_object,
-        gas_price * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
+        gas_price * TEST_ONLY_GAS_UNIT_FOR_TRANSFER * 10,
         gas_price,
     );
     to_sender_signed_transaction(data, keypair)

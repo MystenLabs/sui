@@ -4,6 +4,7 @@
 import { SentryRpcClient } from '@mysten/core';
 import { Connection, JsonRpcProvider } from '@mysten/sui.js';
 
+import { type WalletSigner } from './WalletSigner';
 import { BackgroundServiceSigner } from './background-client/BackgroundServiceSigner';
 import { queryClient } from './helpers/queryClient';
 import {
@@ -68,11 +69,7 @@ function getDefaultAPI(env: API_ENV) {
 }
 
 export const DEFAULT_API_ENV = getDefaultApiEnv();
-const SENTRY_MONITORED_ENVS = [
-    API_ENV.mainnet,
-    API_ENV.devNet,
-    API_ENV.testNet,
-];
+const SENTRY_MONITORED_ENVS = [API_ENV.mainnet];
 
 type NetworkTypes = keyof typeof API_ENV;
 
@@ -152,7 +149,7 @@ export default class ApiProvider {
     public getBackgroundSignerInstance(
         address: SuiAddress,
         backgroundClient: BackgroundClient
-    ): SignerWithProvider {
+    ): WalletSigner {
         if (!this._signerByAddress.has(address)) {
             this._signerByAddress.set(
                 address,

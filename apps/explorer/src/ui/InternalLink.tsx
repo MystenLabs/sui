@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { isSuiNSName } from '@mysten/core';
 import { formatAddress, formatDigest } from '@mysten/sui.js';
 
 import { Link, type LinkProps } from '~/ui/Link';
@@ -13,7 +14,7 @@ interface BaseInternalLinkProps extends LinkProps {
 function createInternalLink<T extends string>(
     base: string,
     propName: T,
-    formatter = formatAddress
+    formatter: (id: string) => string = (id) => id
 ) {
     return ({
         [propName]: id,
@@ -30,18 +31,38 @@ function createInternalLink<T extends string>(
     };
 }
 
-export const EpochLink = createInternalLink('epoch', 'epoch', (epoch) => epoch);
-export const CheckpointLink = createInternalLink('checkpoint', 'digest');
+export const EpochLink = createInternalLink('epoch', 'epoch');
+export const CheckpointLink = createInternalLink(
+    'checkpoint',
+    'digest',
+    formatAddress
+);
 export const CheckpointSequenceLink = createInternalLink(
     'checkpoint',
-    'sequence',
-    (sequence: string) => sequence
+    'sequence'
 );
-export const AddressLink = createInternalLink('address', 'address');
-export const ObjectLink = createInternalLink('object', 'objectId');
+export const AddressLink = createInternalLink(
+    'address',
+    'address',
+    (addressOrNs) => {
+        if (isSuiNSName(addressOrNs)) {
+            return addressOrNs;
+        }
+        return formatAddress(addressOrNs);
+    }
+);
+export const ObjectLink = createInternalLink(
+    'object',
+    'objectId',
+    formatAddress
+);
 export const TransactionLink = createInternalLink(
     'txblock',
     'digest',
     formatDigest
 );
-export const ValidatorLink = createInternalLink('validator', 'address');
+export const ValidatorLink = createInternalLink(
+    'validator',
+    'address',
+    formatAddress
+);

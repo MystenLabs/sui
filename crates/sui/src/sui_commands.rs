@@ -1,41 +1,40 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::io::{stderr, stdout, Write};
-use std::num::NonZeroUsize;
-use std::path::{Path, PathBuf};
-use std::{fs, io};
-
-use anyhow::{anyhow, bail};
-use clap::*;
-use fastcrypto::traits::KeyPair;
-use move_package::BuildConfig;
-use sui_config::genesis_config::DEFAULT_NUMBER_OF_AUTHORITIES;
-use sui_move_build::SuiPackageHooks;
-use tracing::info;
-
-use sui_config::{
-    builder::ConfigBuilder, NetworkConfig, SUI_BENCHMARK_GENESIS_GAS_KEYSTORE_FILENAME,
-    SUI_KEYSTORE_FILENAME,
-};
-use sui_config::{genesis_config::GenesisConfig, SUI_GENESIS_FILENAME};
-use sui_config::{
-    sui_config_dir, Config, PersistedConfig, FULL_NODE_DB_PATH, SUI_CLIENT_CONFIG,
-    SUI_FULLNODE_CONFIG, SUI_NETWORK_CONFIG,
-};
-use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
-use sui_swarm::memory::Swarm;
-use sui_types::crypto::{SignatureScheme, SuiKeyPair};
-
 use crate::client_commands::SuiClientCommands;
 use crate::console::start_console;
 use crate::fire_drill::{run_fire_drill, FireDrill};
 use crate::genesis_ceremony::{run, Ceremony};
 use crate::keytool::KeyToolCommand;
 use crate::validator_commands::SuiValidatorCommand;
+use anyhow::{anyhow, bail};
+use clap::*;
+use fastcrypto::traits::KeyPair;
+use move_package::BuildConfig;
+use rand::rngs::OsRng;
+use std::io::{stderr, stdout, Write};
+use std::num::NonZeroUsize;
+use std::path::{Path, PathBuf};
+use std::{fs, io};
+use sui_config::{
+    sui_config_dir, Config, PersistedConfig, FULL_NODE_DB_PATH, SUI_CLIENT_CONFIG,
+    SUI_FULLNODE_CONFIG, SUI_NETWORK_CONFIG,
+};
+use sui_config::{
+    SUI_BENCHMARK_GENESIS_GAS_KEYSTORE_FILENAME, SUI_GENESIS_FILENAME, SUI_KEYSTORE_FILENAME,
+};
+use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_move::{self, execute_move_command};
+use sui_move_build::SuiPackageHooks;
 use sui_sdk::sui_client_config::{SuiClientConfig, SuiEnv};
 use sui_sdk::wallet_context::WalletContext;
+use sui_swarm::memory::Swarm;
+use sui_swarm_config::genesis_config::{GenesisConfig, DEFAULT_NUMBER_OF_AUTHORITIES};
+use sui_swarm_config::network_config::NetworkConfig;
+use sui_swarm_config::network_config_builder::ConfigBuilder;
+use sui_swarm_config::node_config_builder::FullnodeConfigBuilder;
+use sui_types::crypto::{SignatureScheme, SuiKeyPair};
+use tracing::info;
 
 #[allow(clippy::large_enum_variant)]
 #[derive(Parser)]
@@ -173,16 +172,17 @@ impl SuiCommand {
                             network_config_path
                         ))
                     })?;
-
-                let mut swarm = if no_full_node {
-                    Swarm::builder()
+                let mut swarm_builder = Swarm::builder()
+                    .dir(sui_config_dir()?)
+                    .with_network_config(network_config);
+                if no_full_node {
+                    swarm_builder = swarm_builder.with_fullnode_count(0);
                 } else {
-                    Swarm::builder()
-                        .with_fullnode_rpc_addr(sui_config::node::default_json_rpc_address())
-                        .with_event_store()
+                    swarm_builder = swarm_builder
+                        .with_fullnode_count(1)
+                        .with_fullnode_rpc_addr(sui_config::node::default_json_rpc_address());
                 }
-                .from_network_config(sui_config_dir()?, network_config);
-
+                let mut swarm = swarm_builder.build();
                 swarm.launch().await?;
 
                 let mut interval = tokio::time::interval(std::time::Duration::from_secs(3));
@@ -308,7 +308,7 @@ impl SuiCommand {
     }
 }
 
-pub async fn genesis(
+async fn genesis(
     from_config: Option<PathBuf>,
     write_config: Option<PathBuf>,
     working_dir: Option<PathBuf>,
@@ -441,13 +441,11 @@ pub async fn genesis(
 
     info!("Client keystore is stored in {:?}.", keystore_path);
 
-    let mut fullnode_config = network_config
-        .fullnode_config_builder()
-        .with_event_store()
-        .with_dir(FULL_NODE_DB_PATH.into())
-        .build()?;
+    let fullnode_config = FullnodeConfigBuilder::new()
+        .with_config_directory(FULL_NODE_DB_PATH.into())
+        .with_rpc_addr(sui_config::node::default_json_rpc_address())
+        .build(&mut OsRng, &network_config);
 
-    fullnode_config.json_rpc_address = sui_config::node::default_json_rpc_address();
     fullnode_config.save(sui_config_dir.join(SUI_FULLNODE_CONFIG))?;
 
     for (i, validator) in network_config

@@ -3,8 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    config::VMRuntimeLimitsConfig, interpreter::Interpreter, loader::Resolver,
-    native_extensions::NativeContextExtensions,
+    interpreter::Interpreter, loader::Resolver, native_extensions::NativeContextExtensions,
 };
 use move_binary_format::errors::{ExecutionState, PartialVMError, PartialVMResult};
 use move_core_types::{
@@ -15,6 +14,7 @@ use move_core_types::{
     value::MoveTypeLayout,
     vm_status::{StatusCode, StatusType},
 };
+use move_vm_config::runtime::VMRuntimeLimitsConfig;
 use move_vm_types::{
     data_store::DataStore, loaded_data::runtime_types::Type, natives::function::NativeResult,
     values::Value,
@@ -151,6 +151,10 @@ impl<'a, 'b> NativeContext<'a, 'b> {
 
     pub fn type_to_type_tag(&self, ty: &Type) -> PartialVMResult<TypeTag> {
         self.resolver.loader().type_to_type_tag(ty)
+    }
+
+    pub fn type_to_runtime_type_tag(&self, ty: &Type) -> PartialVMResult<TypeTag> {
+        self.resolver.loader().type_to_runtime_type_tag(ty)
     }
 
     pub fn type_to_type_layout(&self, ty: &Type) -> PartialVMResult<Option<MoveTypeLayout>> {

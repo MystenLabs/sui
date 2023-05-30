@@ -41,9 +41,11 @@ git fetch upstream devnet && git reset --hard upstream/devnet
 3. Start indexer binary, under `sui/crates/sui-indexer` run:
 ```sh
 # Change the RPC_CLIENT_URL to http://0.0.0.0:9000 to run indexer against local validator & fullnode
-cargo run --bin sui-indexer -- --db-url "<DATABASE_URL>" --rpc-client-url "https://fullnode.devnet.sui.io:443"
+cargo run --bin sui-indexer -- --db-url "<DATABASE_URL>" --rpc-client-url "https://fullnode.devnet.sui.io:443" --reset-db --fullnode-sync-worker
 ```
-### DB reset in case of restarting indexer
+Note that `sui-indexer` can run as a `fullnode-sync-worker`, which pulls data from fullnode and writes data to DB; `sui-indexer` can also run as a RPC server with flag `--rpc-server-worker`, more flags info can be found in this [file](https://github.com/MystenLabs/sui/blob/main/crates/sui-indexer/src/lib.rs#L83-L123).
+### DB reset
+Run this command under `sui/crates/sui-indexer`, which will wipe DB; In case of schema changes in `.sql` files, this will also update corresponding `schema.rs` file.
 ```sh
 diesel database reset --database-url="<DATABASE_URL>"
 ```

@@ -34,6 +34,7 @@ exclude = [
     "external-crates/move/move-prover/test-utils",
     "external-crates/move/move-stdlib",
     "external-crates/move/move-symbol-pool",
+    "external-crates/move/move-vm/config",
     "external-crates/move/move-vm/integration-tests",
     "external-crates/move/move-vm/paranoid-tests",
     "external-crates/move/move-vm/runtime",
@@ -58,6 +59,7 @@ exclude = [
 ]
 
 members = [
+    "crates/anemo-benchmark",
     "crates/mysten-common",
     "crates/mysten-metrics",
     "crates/mysten-network",
@@ -73,10 +75,13 @@ members = [
     "crates/sui-core",
     "crates/sui-cost",
     "crates/sui-cost-tables",
+    "crates/sui-e2e-tests",
+    "crates/sui-enum-compat-util",
     "crates/sui-faucet",
     "crates/sui-framework",
     "crates/sui-framework-snapshot",
     "crates/sui-framework-tests",
+    "crates/sui-genesis-builder",
     "crates/sui-indexer",
     "crates/sui-json",
     "crates/sui-json-rpc",
@@ -98,10 +103,12 @@ members = [
     "crates/sui-rpc-loadgen",
     "crates/sui-sdk",
     "crates/sui-simulator",
+    "crates/sui-snapshot",
     "crates/sui-source-validation",
     "crates/sui-storage",
     "crates/sui-surfer",
     "crates/sui-swarm",
+    "crates/sui-swarm-config",
     "crates/sui-telemetry",
     "crates/sui-test-transaction-builder",
     "crates/sui-test-validator",
@@ -139,7 +146,7 @@ members = [
 
 [workspace.package]
 # This version string will be inherited by sui-core, sui-faucet, sui-node, sui-tools, sui-sdk, and sui crates.
-version = "1.2.0"
+version = "1.3.0"
 
 [profile.release]
 # debug = 1 means line charts only, which is minimum needed for good stack traces
@@ -193,6 +200,7 @@ move-package = { path = "external-crates/move/tools/move-package" }
 move-stdlib = { path = "external-crates/move/move-stdlib" }
 move-vm-runtime =  { path = "external-crates/move/move-vm/runtime" }
 move-unit-test = { path = "external-crates/move/tools/move-unit-test" }
+move-vm-config = { path = "external-crates/move/move-vm/config" }
 move-vm-test-utils = { path = "external-crates/move/move-vm/test-utils" }
 move-vm-types = { path = "external-crates/move/move-vm/types" }
 move-command-line-common = { path = "external-crates/move/move-command-line-common" }
@@ -207,10 +215,10 @@ fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "c27e87fb
 fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "c27e87fb539c88b6fe1eac7dd82561254bb1e07a", package = "fastcrypto-zkp" }
 
 # anemo dependencies
-anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "77f225832e361d068318073a6e06ec0310a16891" }
-anemo-build = { git = "https://github.com/mystenlabs/anemo.git", rev = "77f225832e361d068318073a6e06ec0310a16891" }
-anemo-cli = { git = "https://github.com/mystenlabs/anemo.git", rev = "77f225832e361d068318073a6e06ec0310a16891"}
-anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "77f225832e361d068318073a6e06ec0310a16891"}
+anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "cf95fa2268b6b273ee1b3e9180c8adf525ed80b7" }
+anemo-build = { git = "https://github.com/mystenlabs/anemo.git", rev = "cf95fa2268b6b273ee1b3e9180c8adf525ed80b7" }
+anemo-cli = { git = "https://github.com/mystenlabs/anemo.git", rev = "cf95fa2268b6b273ee1b3e9180c8adf525ed80b7"}
+anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "cf95fa2268b6b273ee1b3e9180c8adf525ed80b7"}
 
 # Use the same workspace-hack across crates.
 workspace-hack = { path = "crates/workspace-hack" }

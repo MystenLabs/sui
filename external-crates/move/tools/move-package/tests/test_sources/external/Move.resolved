@@ -11,12 +11,12 @@ ResolvedGraph {
             ],
             "A": [
                 (
-                    "Root",
-                    Incoming,
-                ),
-                (
                     "ADep",
                     Outgoing,
+                ),
+                (
+                    "Root",
+                    Incoming,
                 ),
             ],
             "ADep": [

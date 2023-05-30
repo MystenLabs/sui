@@ -4,6 +4,7 @@
 #[cfg(msim)]
 mod test {
     use rand::{distributions::uniform::SampleRange, thread_rng, Rng};
+    use std::collections::HashSet;
     use std::path::PathBuf;
     use std::str::FromStr;
     use std::sync::atomic::{AtomicBool, Ordering};
@@ -102,16 +103,35 @@ mod test {
         test_simulated_load(TestInitData::new(&test_cluster).await, 120).await;
     }
 
+    /// Get a list of nodes that we don't want to kill in the crash recovery tests.
+    /// This includes the client node which is the node that is running the test, as well as
+    /// rpc fullnode which are needed to run the benchmark.
+    fn get_keep_alive_nodes(cluster: &TestCluster) -> HashSet<sui_simulator::task::NodeId> {
+        let mut keep_alive_nodes = HashSet::new();
+        // The first fullnode in the swarm ins the rpc fullnode.
+        keep_alive_nodes.insert(
+            cluster
+                .swarm
+                .fullnodes()
+                .next()
+                .unwrap()
+                .get_node_handle()
+                .unwrap()
+                .with(|n| n.get_sim_node_id()),
+        );
+        keep_alive_nodes.insert(sui_simulator::current_simnode_id());
+        keep_alive_nodes
+    }
+
     fn handle_failpoint(
         dead_validator: Arc<Mutex<Option<DeadValidator>>>,
-        client_node: sui_simulator::task::NodeId,
+        keep_alive_nodes: HashSet<sui_simulator::task::NodeId>,
         probability: f64,
     ) {
         let mut dead_validator = dead_validator.lock().unwrap();
         let cur_node = sui_simulator::current_simnode_id();
 
-        // never kill the client node (which is running the test)
-        if cur_node == client_node {
+        if keep_alive_nodes.contains(&cur_node) {
             return;
         }
 
@@ -167,7 +187,8 @@ mod test {
         let dead_validator_orig: Arc<Mutex<Option<DeadValidator>>> = Default::default();
 
         let dead_validator = dead_validator_orig.clone();
-        let client_node = sui_simulator::current_simnode_id();
+        let keep_alive_nodes = get_keep_alive_nodes(&test_cluster);
+        let keep_alive_nodes_clone = keep_alive_nodes.clone();
         register_fail_points(
             &[
                 "batch-write-before",
@@ -180,20 +201,23 @@ mod test {
                 "highest-executed-checkpoint",
             ],
             move || {
-                handle_failpoint(dead_validator.clone(), client_node, 0.02);
+                handle_failpoint(dead_validator.clone(), keep_alive_nodes_clone.clone(), 0.02);
             },
         );
 
         let dead_validator = dead_validator_orig.clone();
+        let keep_alive_nodes_clone = keep_alive_nodes.clone();
         register_fail_point_async("crash", move || {
             let dead_validator = dead_validator.clone();
+            let keep_alive_nodes_clone = keep_alive_nodes_clone.clone();
             async move {
-                handle_failpoint(dead_validator.clone(), client_node, 0.01);
+                handle_failpoint(dead_validator.clone(), keep_alive_nodes_clone.clone(), 0.01);
             }
         });
 
         // Narwhal fail points.
         let dead_validator = dead_validator_orig.clone();
+        let keep_alive_nodes_clone = keep_alive_nodes.clone();
         register_fail_points(
             &[
                 "narwhal-rpc-response",
@@ -201,7 +225,11 @@ mod test {
                 "narwhal-store-after-write",
             ],
             move || {
-                handle_failpoint(dead_validator.clone(), client_node, 0.001);
+                handle_failpoint(
+                    dead_validator.clone(),
+                    keep_alive_nodes_clone.clone(),
+                    0.001,
+                );
             },
         );
         register_fail_point_async("narwhal-delay", || delay_failpoint(10..20, 0.001));
@@ -215,9 +243,9 @@ mod test {
         let test_cluster = build_test_cluster(4, 10000).await;
 
         let dead_validator: Arc<Mutex<Option<DeadValidator>>> = Default::default();
-        let client_node = sui_simulator::current_simnode_id();
+        let keep_alive_nodes = get_keep_alive_nodes(&test_cluster);
         register_fail_points(&["before-open-new-epoch-store"], move || {
-            handle_failpoint(dead_validator.clone(), client_node, 1.0);
+            handle_failpoint(dead_validator.clone(), keep_alive_nodes.clone(), 1.0);
         });
         test_simulated_load(TestInitData::new(&test_cluster).await, 120).await;
     }

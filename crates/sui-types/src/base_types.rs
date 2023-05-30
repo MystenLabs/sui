@@ -91,6 +91,10 @@ impl SequenceNumber {
             Some(SequenceNumber(self.0 - 1))
         }
     }
+
+    pub fn next(&self) -> SequenceNumber {
+        SequenceNumber(self.0 + 1)
+    }
 }
 
 pub type TxSequenceNumber = u64;

@@ -7,7 +7,7 @@ import { useField, useFormikContext } from 'formik';
 import { useCallback, useMemo } from 'react';
 import TextareaAutosize from 'react-textarea-autosize';
 
-import { SUI_ADDRESS_VALIDATION } from './validation';
+import { useSuiAddressValidation } from './validation';
 import { Text } from '_app/shared/text';
 import Alert from '_src/ui/app/components/alert';
 
@@ -27,19 +27,20 @@ export function AddressInput({
     const [field, meta] = useField(name);
 
     const { isSubmitting, setFieldValue } = useFormikContext();
+    const suiAddressValidation = useSuiAddressValidation();
 
     const disabled =
         forcedDisabled !== undefined ? forcedDisabled : isSubmitting;
     const handleOnChange = useCallback<ChangeEventHandler<HTMLTextAreaElement>>(
         (e) => {
             const address = e.currentTarget.value;
-            setFieldValue(name, SUI_ADDRESS_VALIDATION.cast(address));
+            setFieldValue(name, suiAddressValidation.cast(address));
         },
-        [setFieldValue, name]
+        [setFieldValue, name, suiAddressValidation]
     );
     const formattedValue = useMemo(
-        () => SUI_ADDRESS_VALIDATION.cast(field?.value),
-        [field?.value]
+        () => suiAddressValidation.cast(field?.value),
+        [field?.value, suiAddressValidation]
     );
 
     const clearAddress = useCallback(() => {

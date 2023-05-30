@@ -15,6 +15,8 @@ serde_json = "1.0.88"
 serde_yaml = "0.8.26"
 tracing = "0.1.36"
 prometheus = "0.13.3"
+git-version = "0.3.5"
+const-str = "0.5.3"
 
 fastcrypto.workspace = true
 move-binary-format.workspace = true
@@ -44,7 +46,7 @@ jemalloc-ctl = "^0.5"
 [dev-dependencies]
 assert_cmd = "2.0.6"
 futures = "0.3.23"
-jsonrpsee = { version = "0.16.2", features = ["jsonrpsee-core"] }
+jsonrpsee = { git="https://github.com/wlmyng/jsonrpsee.git", rev= "b1b300784795f6a64d0fcdf8f03081a9bc38bde8", features = ["jsonrpsee-core"] }
 rand = "0.8.5"
 tempfile = "3.3.0"
 
@@ -55,7 +57,6 @@ sui-core = { path = "../sui-core" }
 sui-macros = { path = "../sui-macros" }
 sui-node = { path = "../sui-node" }
 sui-simulator = { path = "../sui-simulator" }
-test-utils = { path = "../test-utils" }
 
 [package.metadata.cargo-udeps.ignore]
 normal = ["jemalloc-ctl"]

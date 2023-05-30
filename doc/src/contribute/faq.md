@@ -17,15 +17,15 @@ Additional resources:
  * [Sui Compared to Other Blockchains](../learn/sui-compared.md)
  * [Narwhal and Bullshark, Sui's Consensus Engine](../learn/architecture/consensus.md)
 
-## Can I buy Sui tokens?
+## Can I buy SUI tokens?
 
-SUI will be listed on public exchanges after the Mainnet launch.
+SUI is listed on public exchanges following the Mainnet launch.
 
 ## How can I join the Sui network? How do I participate in the Sui project?
 
 Join our [Discord](https://discord.gg/sui) and follow our [Twitter](https://twitter.com/SuiNetwork) for the latest updates and announcements.
 
-You can also join the [Move](https://discord.gg/8prNjUqyFj) and [Sui](https://discord.gg/CVcnUzKYCB) developer channels in Discord.
+You can also join the [Move](https://discord.com/channels/916379725201563759/925108748551323649) and [Sui](https://discord.com/channels/916379725201563759/955861929346355290) developer channels in Discord.
 
 ## Are you looking for partners?
 

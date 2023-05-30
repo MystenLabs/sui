@@ -18,9 +18,8 @@ use move_binary_format::{
 use move_core_types::{
     account_address::AccountAddress, identifier::Identifier, vm_status::StatusCode,
 };
+use move_vm_config::verifier::VerifierConfig;
 use std::str::FromStr;
-
-use crate::VerifierConfig;
 
 #[test]
 fn unbalanced_stack_crash() {

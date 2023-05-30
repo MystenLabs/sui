@@ -23,7 +23,7 @@ export function SuiTokenCard() {
         : '--';
 
     return (
-        <Card bg="lightBlue" spacing="lg">
+        <Card bg="lightBlue" spacing="lg" height="full">
             <div className="md:max-lg:max-w-[336px]">
                 <div className="flex items-center gap-2">
                     <div className="h-4.5 w-4.5 rounded-full bg-sui p-1">

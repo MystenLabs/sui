@@ -17,9 +17,10 @@ use sui_json_rpc_types::{
 };
 use sui_keys::keystore::AccountKeystore;
 use sui_test_transaction_builder::TestTransactionBuilder;
-use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress, TransactionDigest};
+use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest};
 use sui_types::crypto::{get_key_pair, AccountKeyPair};
 use sui_types::gas_coin::GasCoin;
+use sui_types::object::Owner;
 use sui_types::transaction::{
     Transaction, TransactionData, TransactionDataAPI, VerifiedTransaction,
     TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
@@ -411,7 +412,7 @@ impl WalletContext {
         )
     }
 
-    /// Executed a transaction to publish the `basics` package and returns the package object ref.
+    /// Executes a transaction to publish the `basics` package and returns the package object ref.
     pub async fn publish_basics_package(&self) -> ObjectRef {
         let (sender, gas_object) = self.get_one_gas_object().await.unwrap().unwrap();
         let gas_price = self.get_reference_gas_price().await.unwrap();
@@ -422,6 +423,60 @@ impl WalletContext {
         );
         let resp = self.execute_transaction_block(txn).await.unwrap();
         get_new_package_obj_from_response(&resp).unwrap()
+    }
+
+    /// Executes a transaction to publish the `basics` package and another one to create a counter.
+    /// Returns the package object ref and the counter object ref.
+    pub async fn publish_basics_package_and_make_counter(&self) -> (ObjectRef, ObjectRef) {
+        let package_ref = self.publish_basics_package().await;
+        let (sender, gas_object) = self.get_one_gas_object().await.unwrap().unwrap();
+        let gas_price = self.get_reference_gas_price().await.unwrap();
+        let counter_creation_txn = self.sign_transaction(
+            &TestTransactionBuilder::new(sender, gas_object, gas_price)
+                .call_counter_create(package_ref.0)
+                .build(),
+        );
+        let resp = self
+            .execute_transaction_block(counter_creation_txn)
+            .await
+            .unwrap();
+        let counter_ref = resp
+            .effects
+            .unwrap()
+            .created()
+            .iter()
+            .find(|obj_ref| matches!(obj_ref.owner, Owner::Shared { .. }))
+            .unwrap()
+            .reference
+            .to_object_ref();
+        (package_ref, counter_ref)
+    }
+
+    /// Executes a transaction to increment a counter object.
+    /// Must be called after calling `publish_basics_package_and_make_counter`.
+    pub async fn increment_counter(
+        &self,
+        sender: SuiAddress,
+        gas_object_id: Option<ObjectID>,
+        package_id: ObjectID,
+        counter_id: ObjectID,
+        initial_shared_version: SequenceNumber,
+    ) -> SuiTransactionBlockResponse {
+        let gas_object = if let Some(gas_object_id) = gas_object_id {
+            self.get_object_ref(gas_object_id).await.unwrap()
+        } else {
+            self.get_one_gas_object_owned_by_address(sender)
+                .await
+                .unwrap()
+                .unwrap()
+        };
+        let rgp = self.get_reference_gas_price().await.unwrap();
+        let txn = self.sign_transaction(
+            &TestTransactionBuilder::new(sender, gas_object, rgp)
+                .call_counter_increment(package_id, counter_id, initial_shared_version)
+                .build(),
+        );
+        self.execute_transaction_block(txn).await.unwrap()
     }
 
     /// Executes a transaction to publish the `nfts` package and returns the package id, id of the gas object used, and the digest of the transaction.
@@ -470,7 +525,7 @@ impl WalletContext {
 
     /// Executes a transaction to delete the given NFT.
     pub async fn delete_devnet_nft(
-        &mut self,
+        &self,
         sender: SuiAddress,
         package_id: ObjectID,
         nft_to_delete: ObjectRef,

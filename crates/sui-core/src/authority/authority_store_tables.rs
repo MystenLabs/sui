@@ -4,12 +4,12 @@
 use super::*;
 use crate::authority::authority_store::LockDetailsWrapper;
 use rocksdb::Options;
+use serde::{Deserialize, Serialize};
 use std::path::Path;
 use sui_types::accumulator::Accumulator;
 use sui_types::base_types::SequenceNumber;
 use sui_types::digests::TransactionEventsDigest;
 use sui_types::effects::TransactionEffects;
-use sui_types::storage::ObjectStore;
 use typed_store::metrics::SamplingInterval;
 use typed_store::rocks::util::{empty_compaction_filter, reference_count_merge_operator};
 use typed_store::rocks::{
@@ -18,8 +18,8 @@ use typed_store::rocks::{
 use typed_store::traits::{Map, TableSummary, TypedStoreDebug};
 
 use crate::authority::authority_store_types::{
-    try_construct_object, ObjectContentDigest, StoreData, StoreMoveObjectWrapper, StoreObject,
-    StoreObjectValue, StoreObjectWrapper,
+    get_store_object_pair, try_construct_object, ObjectContentDigest, StoreData,
+    StoreMoveObjectWrapper, StoreObject, StoreObjectPair, StoreObjectValue, StoreObjectWrapper,
 };
 use crate::authority::epoch_start_configuration::EpochStartConfiguration;
 use typed_store_derive::DBMapUtils;
@@ -146,7 +146,7 @@ impl AuthorityPerpetualTables {
         version: SequenceNumber,
     ) -> Option<Object> {
         let Ok(iter) = self.objects
-            .iter()
+            .range_iter(ObjectKey::min_for_id(&object_id)..=ObjectKey::max_for_id(&object_id))
             .skip_prior_to(&ObjectKey(object_id, version))else {
             return None
         };
@@ -210,7 +210,7 @@ impl AuthorityPerpetualTables {
     ) -> Result<Option<ObjectRef>, SuiError> {
         let mut iterator = self
             .objects
-            .iter()
+            .unbounded_iter()
             .skip_prior_to(&ObjectKey::max_for_id(&object_id))?;
 
         if let Some((object_key, value)) = iterator.next() {
@@ -256,10 +256,115 @@ impl AuthorityPerpetualTables {
         Ok(())
     }
 
+    pub fn get_transaction(
+        &self,
+        digest: &TransactionDigest,
+    ) -> SuiResult<Option<TrustedTransaction>> {
+        let Some(transaction) = self.transactions.get(digest)? else {
+            return Ok(None);
+        };
+        Ok(Some(transaction))
+    }
+
+    pub fn get_effects(&self, digest: &TransactionDigest) -> SuiResult<Option<TransactionEffects>> {
+        let Some(effect_digest) = self.executed_effects.get(digest)? else {
+            return Ok(None);
+        };
+        Ok(self.effects.get(&effect_digest)?)
+    }
+
+    pub fn get_checkpoint_sequence_number(
+        &self,
+        digest: &TransactionDigest,
+    ) -> SuiResult<Option<(EpochId, CheckpointSequenceNumber)>> {
+        Ok(self.executed_transactions_to_checkpoint.get(digest)?)
+    }
+
+    pub fn get_newer_object_keys(
+        &self,
+        object: &(ObjectID, SequenceNumber),
+    ) -> SuiResult<Vec<ObjectKey>> {
+        let mut objects = vec![];
+        for (key, _value) in self.objects.iter_with_bounds(
+            Some(ObjectKey(object.0, object.1.next())),
+            Some(ObjectKey(object.0, VersionNumber::MAX)),
+        ) {
+            objects.push(key);
+        }
+        Ok(objects)
+    }
+
+    /// Removes executed effects and outputs for a transaction,
+    /// and tries to ensure the transaction is replayable.
+    ///
+    /// WARNING: This method is very subtle and can corrupt the database if used incorrectly.
+    /// It should only be used in one-off cases or tests after fully understanding the risk.
+    pub fn remove_executed_effects_and_outputs_subtle(
+        &self,
+        digest: &TransactionDigest,
+        objects: &[ObjectKey],
+    ) -> SuiResult {
+        let mut wb = self.objects.batch();
+        for object in objects {
+            wb.delete_batch(&self.objects, [object])?;
+            if self.has_object_lock(object) {
+                self.remove_object_lock_batch(&mut wb, object)?;
+            }
+        }
+        wb.delete_batch(&self.executed_transactions_to_checkpoint, [digest])?;
+        wb.delete_batch(&self.executed_effects, [digest])?;
+        wb.write()?;
+        Ok(())
+    }
+
+    pub fn has_object_lock(&self, object: &ObjectKey) -> bool {
+        self.owned_object_transaction_locks
+            .iter_with_bounds(
+                Some((object.0, object.1, ObjectDigest::MIN)),
+                Some((object.0, object.1, ObjectDigest::MAX)),
+            )
+            .next()
+            .is_some()
+    }
+
+    /// Removes owned object locks and set the lock to the previous version of the object.
+    ///
+    /// WARNING: This method is very subtle and can corrupt the database if used incorrectly.
+    /// It should only be used in one-off cases or tests after fully understanding the risk.
+    pub fn remove_object_lock_subtle(&self, object: &ObjectKey) -> SuiResult<ObjectRef> {
+        let mut wb = self.objects.batch();
+        let object_ref = self.remove_object_lock_batch(&mut wb, object)?;
+        wb.write()?;
+        Ok(object_ref)
+    }
+
+    fn remove_object_lock_batch(
+        &self,
+        wb: &mut DBBatch,
+        object: &ObjectKey,
+    ) -> SuiResult<ObjectRef> {
+        wb.delete_range(
+            &self.owned_object_transaction_locks,
+            &(object.0, object.1, ObjectDigest::MIN),
+            &(object.0, object.1, ObjectDigest::MAX),
+        )?;
+        let object_ref = self.get_object_or_tombstone(object.0)?.unwrap();
+        wb.insert_batch(&self.owned_object_transaction_locks, [(object_ref, None)])?;
+        Ok(object_ref)
+    }
+
+    pub fn set_highest_pruned_checkpoint_without_wb(
+        &self,
+        checkpoint_number: CheckpointSequenceNumber,
+    ) -> SuiResult {
+        let mut wb = self.pruned_checkpoint.batch();
+        self.set_highest_pruned_checkpoint(&mut wb, checkpoint_number)
+    }
+
     pub fn database_is_empty(&self) -> SuiResult<bool> {
         Ok(self
             .objects
-            .iter()
+            .unbounded_iter()
             .skip_to(&ObjectKey::ZERO)?
             .next()
             .is_none())
@@ -267,7 +372,7 @@ impl AuthorityPerpetualTables {
 
     pub fn iter_live_object_set(&self) -> LiveSetIter<'_> {
         LiveSetIter {
-            iter: self.objects.iter(),
+            iter: self.objects.unbounded_iter(),
             tables: self,
             prev: None,
         }
@@ -299,6 +404,29 @@ impl AuthorityPerpetualTables {
             .map_err(SuiError::StorageError)?;
         Ok(())
     }
+
+    pub fn insert_root_state_hash(
+        &self,
+        epoch: EpochId,
+        last_checkpoint_of_epoch: CheckpointSequenceNumber,
+        accumulator: Accumulator,
+    ) -> SuiResult {
+        self.root_state_hash_by_epoch
+            .insert(&epoch, &(last_checkpoint_of_epoch, accumulator))?;
+        Ok(())
+    }
+
+    pub fn insert_object_test_only(&self, object: Object) -> SuiResult {
+        let object_reference = object.compute_object_reference();
+        let StoreObjectPair(wrapper, _indirect_object) = get_store_object_pair(object, usize::MAX);
+        let mut wb = self.objects.batch();
+        wb.insert_batch(
+            &self.objects,
+            std::iter::once((ObjectKey::from(object_reference), wrapper)),
+        )?;
+        wb.write()?;
+        Ok(())
+    }
 }
 
 impl ObjectStore for AuthorityPerpetualTables {
@@ -306,7 +434,7 @@ impl ObjectStore for AuthorityPerpetualTables {
     fn get_object(&self, object_id: &ObjectID) -> Result<Option<Object>, SuiError> {
         let obj_entry = self
             .objects
-            .iter()
+            .unbounded_iter()
             .skip_prior_to(&ObjectKey::max_for_id(object_id))?
             .next();
 
@@ -339,6 +467,7 @@ pub struct LiveSetIter<'a> {
     prev: Option<(ObjectKey, StoreObjectWrapper)>,
 }
 
+#[derive(Eq, PartialEq, Debug, Clone, Deserialize, Serialize, Hash)]
 pub enum LiveObject {
     Normal(Object),
     Wrapped(ObjectKey),
@@ -356,6 +485,13 @@ impl LiveObject {
         match self {
             LiveObject::Normal(obj) => obj.version(),
             LiveObject::Wrapped(key) => key.1,
+        }
+    }
+
+    pub fn object_reference(&self) -> ObjectRef {
+        match self {
+            LiveObject::Normal(obj) => obj.compute_object_reference(),
+            LiveObject::Wrapped(key) => (key.0, key.1, ObjectDigest::OBJECT_DIGEST_WRAPPED),
         }
     }
 }

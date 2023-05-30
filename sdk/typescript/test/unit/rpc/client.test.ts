@@ -46,7 +46,7 @@ const server = setupServer(
       ctx.status(200),
       ctx.json({
         jsonrpc: '2.0',
-        id: '',
+        id: body.id,
         result:
           body.params[0] === '0xfail'
             ? [OBJECT_WITH_WRONG_SCHEMA]

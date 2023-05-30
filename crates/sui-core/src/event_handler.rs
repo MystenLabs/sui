@@ -44,7 +44,7 @@ impl SubscriptionHandler {
         trace!(
             num_events = events.data.len(),
             tx_digest =? effects.transaction_digest(),
-            "Finished writing events to event store"
+            "Processing tx/event subscription"
         );
 
         if let Err(e) = self

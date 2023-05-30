@@ -16,6 +16,7 @@ import {
   union,
   is,
   nullable,
+  tuple,
 } from 'superstruct';
 import {
   ObjectId,
@@ -88,8 +89,8 @@ export const SuiRawMoveObject = object({
   /** Move type (e.g., "0x2::coin::Coin<0x2::sui::SUI>") */
   type: string(),
   hasPublicTransfer: boolean(),
-  version: SequenceNumber,
-  bcsBytes: array(number()),
+  version: number(),
+  bcsBytes: string(),
 });
 export type SuiRawMoveObject = Infer<typeof SuiRawMoveObject>;
 
@@ -102,7 +103,7 @@ export type SuiRawMovePackage = Infer<typeof SuiRawMovePackage>;
 
 // TODO(chris): consolidate SuiRawParsedData and SuiRawObject using generics
 export const SuiRawData = union([
-  assign(SuiMoveObject, object({ dataType: literal('moveObject') })),
+  assign(SuiRawMoveObject, object({ dataType: literal('moveObject') })),
   assign(SuiRawMovePackage, object({ dataType: literal('package') })),
 ]);
 export type SuiRawData = Infer<typeof SuiRawData>;
@@ -117,7 +118,7 @@ export const SuiObjectResponseError = object({
   code: string(),
   error: optional(string()),
   object_id: optional(ObjectId),
-  version: optional(SequenceNumber),
+  version: optional(number()),
   digest: optional(ObjectDigest),
 });
 export type SuiObjectResponseError = Infer<typeof SuiObjectResponseError>;
@@ -474,3 +475,31 @@ export type SuiObjectResponseQuery = {
   filter?: SuiObjectDataFilter;
   options?: SuiObjectDataOptions;
 };
+
+export const ObjectRead = union([
+  object({
+    details: SuiObjectData,
+    status: literal('VersionFound'),
+  }),
+  object({
+    details: ObjectId,
+    status: literal('ObjectNotExists'),
+  }),
+  object({
+    details: SuiObjectRef,
+    status: literal('ObjectDeleted'),
+  }),
+  object({
+    details: tuple([ObjectId, number()]),
+    status: literal('VersionNotFound'),
+  }),
+  object({
+    details: object({
+      asked_version: number(),
+      latest_version: number(),
+      object_id: ObjectId,
+    }),
+    status: literal('VersionTooHigh'),
+  }),
+]);
+export type ObjectRead = Infer<typeof ObjectRead>;

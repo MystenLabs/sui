@@ -1,0 +1,51 @@
+{
+  "name": "@mysten/kiosk",
+  "author": "Mysten Labs <build@mystenlabs.com>",
+  "description": "Sui Kiosk library",
+  "version": "1.0.0",
+  "license": "Apache-2.0",
+  "main": "./dist/index.js",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist",
+    "src",
+    "CHANGELOG.md"
+  ],
+  "engines": {
+    "node": ">=16"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "source": "./src/index.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "pnpm build:types && pnpm build:tsup",
+    "build:tsup": "tsup ./src/index.ts --format esm,cjs --sourcemap",
+    "build:types": "tsc --build",
+    "test": "echo \"Error: no test specified\"",
+    "lint": "eslint --max-warnings=0 ./src/**/**",
+    "prettier:fix": "prettier --write .",
+    "pre-commit": "pnpm prettier:fix && pnpm lint && pnpm build",
+    "prepublishOnly": "pnpm build"
+  },
+  "dependencies": {
+    "@mysten/sui.js": "workspace:*"
+  },
+  "devDependencies": {
+    "eslint": "^8.38.0",
+    "prettier": "^2.8.7",
+    "tsup": "^6.7.0",
+    "typescript": "^5.0.4"
+  },
+  "prettier": {
+    "printWidth": 80,
+    "semi": true,
+    "singleQuote": true,
+    "trailingComma": "all"
+  }
+}

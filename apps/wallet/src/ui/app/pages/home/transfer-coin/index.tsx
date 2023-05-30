@@ -22,9 +22,11 @@ import { Text } from '_app/shared/text';
 import { ActiveCoinsCard } from '_components/active-coins-card';
 import Overlay from '_components/overlay';
 import { trackEvent } from '_src/shared/plausible';
+import { QredoActionIgnoredByUser } from '_src/ui/app/QredoSigner';
 import { getSignerOperationErrorMessage } from '_src/ui/app/helpers/errorMessages';
 import { useSigner } from '_src/ui/app/hooks';
 import { useActiveAddress } from '_src/ui/app/hooks/useActiveAddress';
+import { useQredoTransaction } from '_src/ui/app/hooks/useQredoTransaction';
 
 import type { SubmitProps } from './SendTokenForm';
 
@@ -39,6 +41,7 @@ function TransferCoinPage() {
     const signer = useSigner();
     const address = useActiveAddress();
     const queryClient = useQueryClient();
+    const { clientIdentifier, notificationModal } = useQredoTransaction();
 
     const transaction = useMemo(() => {
         if (!coinType || !signer || !formData || !address) return null;
@@ -64,16 +67,21 @@ function TransferCoinPage() {
                     props: { coinType: coinType! },
                 });
 
-                return signer.signAndExecuteTransactionBlock({
-                    transactionBlock: transaction,
-                    options: {
-                        showInput: true,
-                        showEffects: true,
-                        showEvents: true,
+                return signer.signAndExecuteTransactionBlock(
+                    {
+                        transactionBlock: transaction,
+                        options: {
+                            showInput: true,
+                            showEffects: true,
+                            showEvents: true,
+                        },
                     },
-                });
+                    clientIdentifier
+                );
             } catch (error) {
-                sentryTransaction.setTag('failure', true);
+                if (!(error instanceof QredoActionIgnoredByUser)) {
+                    sentryTransaction.setTag('failure', true);
+                }
                 throw error;
             } finally {
                 sentryTransaction.finish();
@@ -88,13 +96,17 @@ function TransferCoinPage() {
             return navigate(receiptUrl);
         },
         onError: (error) => {
-            toast.error(
-                <div className="max-w-xs overflow-hidden flex flex-col">
-                    <small className="text-ellipsis overflow-hidden">
-                        {getSignerOperationErrorMessage(error)}
-                    </small>
-                </div>
-            );
+            if (error instanceof QredoActionIgnoredByUser) {
+                navigate('/');
+            } else {
+                toast.error(
+                    <div className="max-w-xs overflow-hidden flex flex-col">
+                        <small className="text-ellipsis overflow-hidden">
+                            {getSignerOperationErrorMessage(error)}
+                        </small>
+                    </div>
+                );
+            }
         },
     });
 
@@ -170,6 +182,7 @@ function TransferCoinPage() {
                     </>
                 )}
             </div>
+            {notificationModal}
         </Overlay>
     );
 }

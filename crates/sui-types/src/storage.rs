@@ -705,6 +705,10 @@ impl ObjectKey {
     pub fn max_for_id(id: &ObjectID) -> Self {
         Self(*id, VersionNumber::MAX)
     }
+
+    pub fn min_for_id(id: &ObjectID) -> Self {
+        Self(*id, VersionNumber::MIN)
+    }
 }
 
 impl From<ObjectRef> for ObjectKey {

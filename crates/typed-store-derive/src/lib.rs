@@ -423,7 +423,7 @@ pub fn derive_dbmap_utils_general(input: TokenStream) -> TokenStream {
                         _ => typed_store::rocks::open_cf_opts(path, global_db_options_override, metric_conf, &opt_cfs)
                     };
                     db.map(|d| (d, rwopt_cfs))
-                }.expect("Cannot open DB.");
+                }.expect(&format!("Cannot open DB at {:?}", path));
                 let (
                         #(
                             #field_names
@@ -550,7 +550,7 @@ pub fn derive_dbmap_utils_general(input: TokenStream) -> TokenStream {
                     #(
                         stringify!(#field_names) => {
                             typed_store::traits::Map::try_catch_up_with_primary(&self.#field_names)?;
-                            typed_store::traits::Map::iter(&self.#field_names)
+                            typed_store::traits::Map::unbounded_iter(&self.#field_names)
                                 .skip((page_number * (page_size) as usize))
                                 .take(page_size as usize)
                                 .map(|(k, v)| (format!("{:?}", k), format!("{:?}", v)))
@@ -587,7 +587,7 @@ pub fn derive_dbmap_utils_general(input: TokenStream) -> TokenStream {
                     #(
                         stringify!(#field_names) => {
                             typed_store::traits::Map::try_catch_up_with_primary(&self.#field_names)?;
-                            typed_store::traits::Map::iter(&self.#field_names).count()
+                            typed_store::traits::Map::unbounded_iter(&self.#field_names).count()
                         }
                     )*
 
@@ -795,7 +795,7 @@ pub fn derive_sallydb_general(input: TokenStream) -> TokenStream {
                                 _ => typed_store::rocks::open_cf_opts(path, global_db_options_override, metric_conf, &opt_cfs)
                             };
                             db.map(|d| (d, rwopt_cfs))
-                        }.expect("Cannot open DB.");
+                        }.expect(&format!("Cannot open DB at {:?}", path));
                         let (
                             #(
                                 #field_names
@@ -908,7 +908,7 @@ pub fn derive_sallydb_general(input: TokenStream) -> TokenStream {
                             match &self.#field_names {
                                 SallyColumn::RocksDB((db_map, typed_store::sally::SallyConfig { mode: typed_store::sally::SallyRunMode::FallbackToDB })) => {
                                     typed_store::traits::Map::try_catch_up_with_primary(db_map)?;
-                                    typed_store::traits::Map::iter(db_map)
+                                    typed_store::traits::Map::unbounded_iter(db_map)
                                         .skip((page_number * (page_size) as usize))
                                         .take(page_size as usize)
                                         .map(|(k, v)| (format!("{:?}", k), format!("{:?}", v)))
@@ -952,7 +952,7 @@ pub fn derive_sallydb_general(input: TokenStream) -> TokenStream {
                             match &self.#field_names {
                                 SallyColumn::RocksDB((db_map, typed_store::sally::SallyConfig { mode: typed_store::sally::SallyRunMode::FallbackToDB })) => {
                                     typed_store::traits::Map::try_catch_up_with_primary(db_map)?;
-                                    typed_store::traits::Map::iter(db_map).count()
+                                    typed_store::traits::Map::unbounded_iter(db_map).count()
                                 }
                                 _ => unimplemented!(),
                             }

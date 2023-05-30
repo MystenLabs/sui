@@ -20,6 +20,7 @@ use anemo_tower::{
 use anemo_tower::{rate_limit, set_header::SetResponseHeaderLayer};
 use config::{Authority, AuthorityIdentifier, Committee, Parameters, WorkerCache, WorkerId};
 use crypto::{traits::KeyPair as _, NetworkKeyPair, NetworkPublicKey};
+use mysten_metrics::metered_channel::channel_with_total;
 use mysten_metrics::spawn_logged_monitored_task;
 use mysten_network::{multiaddr::Protocol, Multiaddr};
 use network::client::NetworkClient;
@@ -35,8 +36,8 @@ use tokio::task::JoinHandle;
 use tower::ServiceBuilder;
 use tracing::{error, info};
 use types::{
-    metered_channel::channel_with_total, Batch, BatchDigest, ConditionalBroadcastReceiver,
-    PreSubscribedBroadcastSender, PrimaryToWorkerServer, WorkerToWorkerServer,
+    Batch, BatchDigest, ConditionalBroadcastReceiver, PreSubscribedBroadcastSender,
+    PrimaryToWorkerServer, WorkerToWorkerServer,
 };
 
 #[cfg(test)]

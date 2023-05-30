@@ -5,7 +5,6 @@ use std::cmp::max;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
-use anyhow::anyhow;
 use async_trait::async_trait;
 use cached::proc_macro::cached;
 use cached::SizedCache;
@@ -32,7 +31,7 @@ use sui_types::sui_system_state::SuiSystemStateTrait;
 use sui_types::sui_system_state::{get_validator_from_table, SuiSystemState};
 
 use crate::api::{GovernanceReadApiServer, JsonRpcMetrics};
-use crate::error::Error;
+use crate::error::{Error, SuiRpcInputError};
 use crate::{with_tracing, ObjectProvider, SuiRpcModule};
 
 #[derive(Clone)]
@@ -157,9 +156,11 @@ impl GovernanceReadApi {
         let mut delegated_stakes = vec![];
         for (pool_id, stakes) in pools {
             // Rate table and rate can be null when the pool is not active
-            let rate_table = rates
-                .get(&pool_id)
-                .ok_or_else(|| anyhow!("Cannot find rates for staking pool {pool_id}"))?;
+            let rate_table = rates.get(&pool_id).ok_or_else(|| {
+                SuiRpcInputError::GenericNotFound(
+                    "Cannot find rates for staking pool {pool_id}".to_string(),
+                )
+            })?;
             let current_rate = rate_table.rates.first().map(|(_, rate)| rate);
 
             let mut delegations = vec![];
@@ -219,22 +220,17 @@ impl GovernanceReadApiServer for GovernanceReadApi {
         &self,
         staked_sui_ids: Vec<ObjectID>,
     ) -> RpcResult<Vec<DelegatedStake>> {
-        with_tracing!("get_stakes_by_ids", async move {
-            Ok(self.get_stakes_by_ids(staked_sui_ids).await?)
-        })
+        with_tracing!(async move { Ok(self.get_stakes_by_ids(staked_sui_ids).await?) })
     }
 
     #[instrument(skip(self))]
     async fn get_stakes(&self, owner: SuiAddress) -> RpcResult<Vec<DelegatedStake>> {
-        with_tracing!(
-            "get_stakes",
-            async move { Ok(self.get_stakes(owner).await?) }
-        )
+        with_tracing!(async move { Ok(self.get_stakes(owner).await?) })
     }
 
     #[instrument(skip(self))]
     async fn get_committee_info(&self, epoch: Option<BigInt<u64>>) -> RpcResult<SuiCommittee> {
-        with_tracing!("get_committee_info", async move {
+        with_tracing!(async move {
             Ok(self
                 .state
                 .committee_store()
@@ -246,7 +242,7 @@ impl GovernanceReadApiServer for GovernanceReadApi {
 
     #[instrument(skip(self))]
     async fn get_latest_sui_system_state(&self) -> RpcResult<SuiSystemStateSummary> {
-        with_tracing!("get_latest_sui_system_state", async move {
+        with_tracing!(async move {
             Ok(self
                 .state
                 .database
@@ -258,7 +254,7 @@ impl GovernanceReadApiServer for GovernanceReadApi {
 
     #[instrument(skip(self))]
     async fn get_reference_gas_price(&self) -> RpcResult<BigInt<u64>> {
-        with_tracing!("get_reference_gas_price", async move {
+        with_tracing!(async move {
             let epoch_store = self.state.load_epoch_store_one_call_per_task();
             Ok(epoch_store.reference_gas_price().into())
         })

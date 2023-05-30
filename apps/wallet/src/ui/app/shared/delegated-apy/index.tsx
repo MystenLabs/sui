@@ -44,6 +44,9 @@ export function DelegatedAPY({ stakedValidators }: DelegatedAPYProps) {
             </div>
         );
     }
+
+    if (!averageNetworkAPY) return null;
+
     return (
         <div className="flex gap-0.5 items-center">
             {averageNetworkAPY !== null ? (

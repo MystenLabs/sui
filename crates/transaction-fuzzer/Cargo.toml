@@ -31,4 +31,3 @@ sui-move-build = { path = "../sui-move-build" }
 sui-core = { path = "../sui-core", features = ["test-utils"] }
 sui-protocol-config = { path = "../sui-protocol-config" }
 sui-types = { path = "../sui-types", features = ["test-utils"] }
-sui-replay = { path = "../sui-replay" }

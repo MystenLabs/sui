@@ -92,7 +92,7 @@ function TotalGasAmount({ amount }: GasProps) {
 
 function GasPaymentLinks({ objectIds }: { objectIds: string[] }) {
     return (
-        <div className="flex flex-wrap items-center gap-x-4">
+        <div className="flex max-h-20 min-h-[20px] flex-wrap items-center gap-x-4 gap-y-2 overflow-y-auto">
             {objectIds.map((objectId, index) => (
                 <div key={index} className="flex items-center gap-x-1.5">
                     <ObjectLink objectId={objectId} />
@@ -147,12 +147,12 @@ export function GasBreakdown({ summary }: GasBreakdownProps) {
                 <div className="flex flex-col gap-3">
                     <Divider />
 
-                    <DescriptionItem
-                        align="start"
-                        title={
-                            <Text variant="pBody/semibold">Gas Payment</Text>
-                        }
-                    >
+                    <div className="flex flex-col gap-2 md:flex-row md:gap-10">
+                        <div className="w-full flex-shrink-0 md:w-40">
+                            <Text variant="pBody/semibold" color="steel-darker">
+                                Gas Payment
+                            </Text>
+                        </div>
                         {gasPayment?.length ? (
                             <GasPaymentLinks
                                 objectIds={gasPayment.map(
@@ -160,7 +160,7 @@ export function GasBreakdown({ summary }: GasBreakdownProps) {
                                 )}
                             />
                         ) : null}
-                    </DescriptionItem>
+                    </div>
 
                     <DescriptionItem
                         align="start"

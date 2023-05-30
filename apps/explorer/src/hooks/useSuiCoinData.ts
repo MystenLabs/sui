@@ -1,9 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { useAppsBackend } from '@mysten/core';
 import { useQuery } from '@tanstack/react-query';
-
-import { useAppsBackend } from './useAppsBackend';
 
 // TODO: We should consider using tRPC or something for apps-backend
 type CoinData = {
@@ -16,13 +15,11 @@ type CoinData = {
 };
 
 export function useSuiCoinData() {
-    const makeAppsBackendRequest = useAppsBackend();
-    return useQuery(
-        ['sui-coin-data'],
-        () => makeAppsBackendRequest<CoinData>('coins/sui', {}),
-        {
-            cacheTime: 24 * 60 * 60 * 1000,
-            staleTime: Infinity,
-        }
-    );
+    const { request } = useAppsBackend();
+    return useQuery({
+        queryKey: ['sui-coin-data'],
+        queryFn: () => request<CoinData>('coins/sui', {}),
+        cacheTime: 24 * 60 * 60 * 1000,
+        staleTime: Infinity,
+    });
 }

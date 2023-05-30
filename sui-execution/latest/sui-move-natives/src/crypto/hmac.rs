@@ -25,6 +25,15 @@ pub struct HmacHmacSha3256CostParams {
     ///  Cost per block of `msg` and `key`, with block size = 136
     pub hmac_hmac_sha3_256_input_cost_per_block: InternalGas,
 }
+/***************************************************************************************************
+ * native fun ed25519_verify
+ * Implementation of the Move native function `hmac_sha3_256(key: &vector<u8>, msg: &vector<u8>): vector<u8>;`
+ *   gas cost: hmac_hmac_sha3_256_cost_base                          | base cost for function call and fixed opers
+ *              + hmac_hmac_sha3_256_input_cost_per_byte * msg.len()   | cost depends on length of message
+ *              + hmac_hmac_sha3_256_input_cost_per_block * num_blocks(msg) | cost depends on number of blocks in message
+ * Note: each block is of size `HMAC_SHA3_256_BLOCK_SIZE` bytes, and we round up.
+ *       `key` is fixed size, so the cost is included in the base cost.
+ **************************************************************************************************/
 pub fn hmac_sha3_256(
     context: &mut NativeContext,
     ty_args: Vec<Type>,

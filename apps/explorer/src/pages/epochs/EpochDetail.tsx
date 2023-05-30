@@ -40,13 +40,15 @@ export default function EpochDetail() {
     const { id } = useParams();
     const enhancedRpc = useEnhancedRpcClient();
     const { data: systemState } = useGetSystemState();
-    const { data, isLoading, isError } = useQuery(['epoch', id], async () =>
-        enhancedRpc.getEpochs({
-            // todo: endpoint returns no data for epoch 0
-            cursor: id === '0' ? undefined : (Number(id!) - 1).toString(),
-            limit: 1,
-        })
-    );
+    const { data, isLoading, isError } = useQuery({
+        queryKey: ['epoch', id],
+        queryFn: async () =>
+            enhancedRpc.getEpochs({
+                // todo: endpoint returns no data for epoch 0
+                cursor: id === '0' ? undefined : (Number(id!) - 1).toString(),
+                limit: 1,
+            }),
+    });
 
     const [epochData] = data?.data ?? [];
     const isCurrentEpoch = useMemo(
@@ -78,6 +80,11 @@ export default function EpochDetail() {
     const { fundInflow, fundOutflow, netInflow } = getEpochStorageFundFlow(
         epochData.endOfEpochInfo
     );
+
+    // cursor should be the sequence number of the last checkpoint + 1  if we want to query with desc. order
+    const initialCursorPlusOne = epochData.endOfEpochInfo?.lastCheckpointId
+        ? (Number(epochData.endOfEpochInfo?.lastCheckpointId) + 1).toString()
+        : undefined;
 
     return (
         <div className="flex flex-col space-y-16">
@@ -137,9 +144,7 @@ export default function EpochDetail() {
                 <TabPanels className="mt-4">
                     <TabPanel>
                         <CheckpointsTable
-                            initialCursor={
-                                epochData.endOfEpochInfo?.lastCheckpointId
-                            }
+                            initialCursor={initialCursorPlusOne}
                             maxCursor={epochData.firstCheckpointId}
                             initialLimit={20}
                         />

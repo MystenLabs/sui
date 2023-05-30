@@ -1,42 +1,30 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { fromB64 } from '@mysten/sui.js';
 import { useMemo } from 'react';
 
 import { UserApproveContainer } from '../../components/user-approve-container';
 import { useAppDispatch, useSigner } from '../../hooks';
+import { useQredoTransaction } from '../../hooks/useQredoTransaction';
 import { respondToTransactionRequest } from '../../redux/slices/transaction-requests';
 import { Heading } from '../../shared/heading';
 import { PageMainLayoutTitle } from '../../shared/page-main-layout/PageMainLayoutTitle';
 import { Text } from '../../shared/text';
 import { type SignMessageApprovalRequest } from '_payloads/transactions/ApprovalRequest';
+import { toUtf8OrB64 } from '_src/shared/utils';
 
 export type SignMessageRequestProps = {
     request: SignMessageApprovalRequest;
 };
 
 export function SignMessageRequest({ request }: SignMessageRequestProps) {
-    const { message, type } = useMemo(() => {
-        const messageBytes = fromB64(request.tx.message);
-        let message: string = request.tx.message;
-        let type: 'utf8' | 'base64' = 'base64';
-        try {
-            message = new TextDecoder('utf8', { fatal: true }).decode(
-                messageBytes
-            );
-            type = 'utf8';
-        } catch (e) {
-            // do nothing
-        }
-        return {
-            message,
-            type,
-        };
-    }, [request.tx.message]);
-
+    const { message, type } = useMemo(
+        () => toUtf8OrB64(request.tx.message),
+        [request.tx.message]
+    );
     const signer = useSigner(request.tx.accountAddress);
     const dispatch = useAppDispatch();
+    const { clientIdentifier, notificationModal } = useQredoTransaction();
 
     return (
         <UserApproveContainer
@@ -44,12 +32,17 @@ export function SignMessageRequest({ request }: SignMessageRequestProps) {
             originFavIcon={request.originFavIcon}
             approveTitle="Sign"
             rejectTitle="Reject"
+            approveDisabled={!signer}
             onSubmit={async (approved) => {
+                if (!signer) {
+                    return;
+                }
                 await dispatch(
                     respondToTransactionRequest({
                         txRequestID: request.id,
                         approved,
                         signer,
+                        clientIdentifier,
                     })
                 );
             }}
@@ -79,6 +72,7 @@ export function SignMessageRequest({ request }: SignMessageRequestProps) {
                     </Text>
                 </div>
             </div>
+            {notificationModal}
         </UserApproveContainer>
     );
 }

@@ -1,9 +1,10 @@
 // Copyright(C) Facebook, Inc. and its affiliates.
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::{metrics::PrimaryMetrics, NetworkModel};
+use crate::metrics::PrimaryMetrics;
 use config::{AuthorityIdentifier, Committee, Epoch, WorkerId};
 use fastcrypto::hash::Hash as _;
+use mysten_metrics::metered_channel::{Receiver, Sender};
 use mysten_metrics::spawn_logged_monitored_task;
 use std::collections::{BTreeMap, VecDeque};
 use std::{cmp::Ordering, sync::Arc};
@@ -17,7 +18,6 @@ use tokio::{
 use tracing::{debug, enabled, error, info, trace};
 use types::{
     error::{DagError, DagResult},
-    metered_channel::{Receiver, Sender},
     BatchDigest, Certificate, CertificateAPI, Header, HeaderAPI, Round, TimestampMs,
 };
 use types::{now, ConditionalBroadcastReceiver};
@@ -59,8 +59,6 @@ pub struct Proposer {
     /// hasn't proposed anything new since then. If None is provided then the
     /// default value will be used instead.
     header_resend_timeout: Option<Duration>,
-    /// The network model in which the node operates.
-    network_model: NetworkModel,
 
     /// Receiver for shutdown.
     rx_shutdown: ConditionalBroadcastReceiver,
@@ -110,7 +108,6 @@ impl Proposer {
         max_header_delay: Duration,
         min_header_delay: Duration,
         header_resend_timeout: Option<Duration>,
-        network_model: NetworkModel,
         rx_shutdown: ConditionalBroadcastReceiver,
         rx_parents: Receiver<(Vec<Certificate>, Round, Epoch)>,
         rx_our_digests: Receiver<OurDigestMessage>,
@@ -130,7 +127,7 @@ impl Proposer {
                     max_header_delay,
                     min_header_delay,
                     header_resend_timeout,
-                    network_model,
+
                     rx_shutdown,
                     rx_parents,
                     rx_our_digests,
@@ -314,57 +311,50 @@ impl Proposer {
     }
 
     fn max_delay(&self) -> Duration {
-        match self.network_model {
-            // In partial synchrony, if this node is going to be the leader of the next
-            // round, we set a lower max timeout value to increase its chance of committing
-            // the leader.
-            NetworkModel::PartiallySynchronous
-                if self.committee.leader(self.round + 1).id() == self.authority_id =>
-            {
-                self.max_header_delay / 2
-            }
-
-            // Otherwise we keep the default timeout value.
-            _ => self.max_header_delay,
+        // If this node is going to be the leader of the next round, we set a lower max
+        // timeout value to increase its chance of being included in the dag.
+        if self.committee.leader(self.round + 1).id() == self.authority_id {
+            self.max_header_delay / 2
+        } else {
+            self.max_header_delay
         }
     }
 
     fn min_delay(&self) -> Duration {
-        match self.network_model {
-            // In partial synchrony, if this node is going to be the leader of the next
-            // round and there are more than 1 primary in the committee, we use a lower
-            // min delay value to increase the chance of committing the leader.
-            NetworkModel::PartiallySynchronous
-                if self.committee.size() > 1
-                    && self.committee.leader(self.round + 1).id() == self.authority_id =>
-            {
-                Duration::ZERO
-            }
-
-            // Otherwise we keep the default timeout value.
-            _ => self.min_header_delay,
+        // If this node is going to be the leader of the next round and there are more than
+        // 1 primary in the committee, we use a lower min delay value to increase the chance
+        // of committing the leader.
+        if self.committee.size() > 1
+            && self.committee.leader(self.round + 1).id() == self.authority_id
+        {
+            Duration::ZERO
+        } else {
+            self.min_header_delay
         }
     }
 
-    /// Update the last leader certificate. This is only relevant in partial synchrony.
+    /// Update the last leader certificate.
     fn update_leader(&mut self) -> bool {
         let leader = self.committee.leader(self.round);
         self.last_leader = self
             .last_parents
             .iter()
-            .find(|x| x.origin() == leader.id())
+            .find(|x| {
+                if x.origin() == leader.id() {
+                    debug!("Got leader {:?} for round {}", x, self.round);
+                    true
+                } else {
+                    false
+                }
+            })
             .cloned();
-
-        if let Some(leader) = self.last_leader.as_ref() {
-            debug!("Got leader {} for round {}", leader.origin(), self.round);
-        }
 
         self.last_leader.is_some()
     }
 
     /// Check whether if this validator is the leader of the round, or if we have
     /// (i) f+1 votes for the leader, (ii) 2f+1 nodes not voting for the leader,
-    /// (iii) there is no leader to vote for. This is only relevant in partial synchrony.
+    /// (iii) there is no leader to vote for.
     fn enough_votes(&self) -> bool {
         if self.committee.leader(self.round + 1).id() == self.authority_id {
             return true;
@@ -387,31 +377,16 @@ impl Proposer {
         }
 
         let mut enough_votes = votes_for_leader >= self.committee.validity_threshold();
-        if enough_votes {
-            if let Some(leader) = self.last_leader.as_ref() {
-                debug!(
-                    "Got enough support for leader {} at round {}",
-                    leader.origin(),
-                    self.round
-                );
-            }
-        }
         enough_votes |= no_votes >= self.committee.quorum_threshold();
         enough_votes
     }
 
-    /// Whether we can advance the DAG or need to wait for the leader/more votes. This is only relevant in
-    /// partial synchrony. Note that if we timeout, we ignore this check and advance anyway.
+    /// Whether we can advance the DAG or need to wait for the leader/more votes.
+    /// Note that if we timeout, we ignore this check and advance anyway.
     fn ready(&mut self) -> bool {
-        match self.network_model {
-            // In asynchrony we advance immediately.
-            NetworkModel::Asynchronous => true,
-
-            // In partial synchrony, we need to wait for the leader or for enough votes.
-            NetworkModel::PartiallySynchronous => match self.round % 2 {
-                0 => self.update_leader(),
-                _ => self.enough_votes(),
-            },
+        match self.round % 2 {
+            0 => self.update_leader(),
+            _ => self.enough_votes(),
         }
     }
 
@@ -442,8 +417,8 @@ impl Proposer {
             // and one of the following conditions is met:
             // (i) the timer expired (we timed out on the leader or gave up gather votes for the leader),
             // (ii) we have enough digests (header_num_of_batches_threshold) and we are on the happy path (we can vote for
-            // the leader or the leader has enough votes to enable a commit). The latter condition only matters
-            // in partially synchrony. We guarantee that no more than max_header_num_of_batches are included in
+            // the leader or the leader has enough votes to enable a commit).
+            // We guarantee that no more than max_header_num_of_batches are included.
             let enough_parents = !self.last_parents.is_empty();
             let enough_digests = self.digests.len() >= self.header_num_of_batches_threshold;
             let max_delay_timed_out = max_delay_timer.is_elapsed();
@@ -452,9 +427,7 @@ impl Proposer {
             if (max_delay_timed_out || ((enough_digests || min_delay_timed_out) && advance))
                 && enough_parents
             {
-                if max_delay_timed_out
-                    && matches!(self.network_model, NetworkModel::PartiallySynchronous)
-                {
+                if max_delay_timed_out {
                     // It is expected that this timer expires from time to time. If it expires too often, it
                     // either means some validators are Byzantine or that the network is experiencing periods
                     // of asynchrony. In practice, the latter scenario means we misconfigured the parameter
@@ -636,7 +609,17 @@ impl Proposer {
 
                     // Check whether we can advance to the next round. Note that if we timeout,
                     // we ignore this check and advance anyway.
-                    advance = self.ready();
+                    advance = if self.ready() {
+                        if !advance {
+                            debug!(
+                                "Ready to advance from round {}",
+                                self.round,
+                            );
+                        }
+                        true
+                    } else {
+                        false
+                    };
 
                     let round_type = if self.round % 2 == 0 {
                         "even"

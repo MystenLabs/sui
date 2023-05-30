@@ -18,6 +18,7 @@ use futures::{
     stream::FuturesUnordered,
     FutureExt, StreamExt,
 };
+use mysten_metrics::metered_channel;
 use mysten_metrics::{monitored_future, spawn_logged_monitored_task};
 use network::anemo_ext::NetworkExt;
 use network::UnreliableNetwork;
@@ -31,9 +32,9 @@ use thiserror::Error;
 use tokio::{sync::mpsc::Sender, task::JoinHandle, time::timeout};
 use tracing::{debug, error, info, instrument, trace, warn};
 use types::{
-    metered_channel, BatchDigest, Certificate, CertificateAPI, CertificateDigest,
-    ConditionalBroadcastReceiver, GetCertificatesRequest, HeaderAPI, PayloadAvailabilityRequest,
-    PrimaryToPrimaryClient, WorkerSynchronizeMessage,
+    BatchDigest, Certificate, CertificateAPI, CertificateDigest, ConditionalBroadcastReceiver,
+    GetCertificatesRequest, HeaderAPI, PayloadAvailabilityRequest, PrimaryToPrimaryClient,
+    WorkerSynchronizeMessage,
 };
 
 #[cfg(test)]

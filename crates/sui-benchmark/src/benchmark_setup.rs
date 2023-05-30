@@ -1,24 +1,28 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+
 use crate::bank::BenchmarkBank;
 use crate::options::Opts;
 use crate::util::get_ed25519_keypair_from_keystore;
 use crate::{FullNodeProxy, LocalValidatorAggregatorProxy, ValidatorProxy};
 use anyhow::{anyhow, bail, Context, Result};
 use prometheus::Registry;
+use rand::rngs::OsRng;
 use rand::seq::SliceRandom;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::thread::JoinHandle;
 use std::time::Duration;
-use sui_config::utils;
+use sui_config::local_ip_utils;
+use sui_config::node::ExpensiveSafetyCheckConfig;
+use sui_swarm_config::node_config_builder::FullnodeConfigBuilder;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::SuiAddress;
 use sui_types::crypto::{deterministic_random_account_key, AccountKeyPair};
 use sui_types::object::generate_max_test_gas_objects_with_owner;
 use sui_types::object::Owner;
+use test_utils::authority::spawn_test_authorities;
 use test_utils::authority::test_and_configure_authority_configs_with_objects;
-use test_utils::authority::{spawn_fullnode, spawn_test_authorities};
 use tokio::runtime::Builder;
 use tokio::sync::{oneshot, Barrier};
 use tokio::time::sleep;
@@ -112,8 +116,8 @@ impl Env {
             .clone();
         // Make the client runtime wait until we are done creating genesis objects
         let cloned_config = config.clone();
-        let fullnode_ip = format!("{}", utils::get_local_ip_for_tests());
-        let fullnode_rpc_port = utils::get_available_port(&fullnode_ip);
+        let fullnode_ip = local_ip_utils::localhost_for_testing();
+        let fullnode_rpc_port = local_ip_utils::get_available_port(&fullnode_ip);
         let fullnode_barrier = Arc::new(Barrier::new(2));
         let fullnode_barrier_clone = fullnode_barrier.clone();
         // spawn a thread to spin up sui nodes on the multi-threaded server runtime.
@@ -130,7 +134,17 @@ impl Env {
             server_runtime.block_on(async move {
                 // Setup the network
                 let _validators: Vec<_> = spawn_test_authorities(&cloned_config).await;
-                let _fullnode = spawn_fullnode(&cloned_config, Some(fullnode_rpc_port)).await;
+
+                let node_config = FullnodeConfigBuilder::new()
+                    .with_rpc_port(fullnode_rpc_port)
+                    .with_expensive_safety_check_config(
+                        ExpensiveSafetyCheckConfig::new_disable_all(),
+                    )
+                    .build(&mut OsRng, &cloned_config);
+                let node = sui_swarm::memory::Node::new(node_config);
+                node.start().await.unwrap();
+                let _fullnode = node.get_node_handle().unwrap();
+
                 fullnode_barrier_clone.wait().await;
                 barrier.wait().await;
                 recv.await.expect("Unable to wait for terminate signal");

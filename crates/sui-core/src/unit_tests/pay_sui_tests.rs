@@ -118,18 +118,18 @@ async fn test_pay_sui_failure_insufficient_gas_balance_multiple_input_coins() {
 #[tokio::test]
 async fn test_pay_sui_failure_insufficient_total_balance_multiple_input_coins() {
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
-    let coin1 = Object::with_id_owner_gas_for_testing(ObjectID::random(), sender, 1400);
-    let coin2 = Object::with_id_owner_gas_for_testing(ObjectID::random(), sender, 1300);
+    let coin1 = Object::with_id_owner_gas_for_testing(ObjectID::random(), sender, 14000);
+    let coin2 = Object::with_id_owner_gas_for_testing(ObjectID::random(), sender, 13000);
     let recipient1 = dbg_addr(1);
     let recipient2 = dbg_addr(2);
 
     let res = execute_pay_sui(
         vec![coin1, coin2],
         vec![recipient1, recipient2],
-        vec![400, 400],
+        vec![4000, 4000],
         sender,
         sender_key,
-        2000,
+        20000,
     )
     .await;
     assert_eq!(
@@ -145,7 +145,8 @@ async fn test_pay_sui_failure_insufficient_total_balance_multiple_input_coins() 
 async fn test_pay_sui_success_one_input_coin() -> anyhow::Result<()> {
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let object_id = ObjectID::random();
-    let coin_obj = Object::with_id_owner_gas_for_testing(object_id, sender, 5000000);
+    let coin_amount = 50000000;
+    let coin_obj = Object::with_id_owner_gas_for_testing(object_id, sender, 50000000);
     let recipient1 = dbg_addr(1);
     let recipient2 = dbg_addr(2);
     let recipient3 = dbg_addr(3);
@@ -157,7 +158,7 @@ async fn test_pay_sui_success_one_input_coin() -> anyhow::Result<()> {
         vec![100, 200, 300],
         sender,
         sender_key,
-        4000000,
+        coin_amount - 300 - 200 - 100,
     )
     .await;
 
@@ -211,7 +212,7 @@ async fn test_pay_sui_success_one_input_coin() -> anyhow::Result<()> {
     let gas_object = res.authority_state.get_object(&object_id).await?.unwrap();
     assert_eq!(
         GasCoin::try_from(&gas_object)?.value(),
-        5000000 - 100 - 200 - 300 - gas_used,
+        coin_amount - 100 - 200 - 300 - gas_used,
     );
 
     Ok(())
@@ -400,11 +401,12 @@ async fn execute_pay_sui(
         .map(|obj| authority_state.insert_genesis_object(obj))
         .collect();
     join_all(handles).await;
+    let rgp = authority_state.reference_gas_price_for_testing().unwrap();
 
     let mut builder = ProgrammableTransactionBuilder::new();
     builder.pay_sui(recipients, amounts).unwrap();
     let pt = builder.finish();
-    let data = TransactionData::new_programmable(sender, input_coin_refs, pt, gas_budget, 1);
+    let data = TransactionData::new_programmable(sender, input_coin_refs, pt, gas_budget, rgp);
     let tx = to_sender_signed_transaction(data, &sender_key);
     let txn_result = send_and_confirm_transaction(&authority_state, tx)
         .await
@@ -424,9 +426,8 @@ async fn execute_pay_all_sui(
     gas_budget: u64,
 ) -> PaySuiTransactionBlockExecutionResult {
     let dir = tempfile::TempDir::new().unwrap();
-    let network_config = sui_config::builder::ConfigBuilder::new(&dir)
-        // TODO: fix numbers in tests to not depend on rgp being 1
-        .with_reference_gas_price(1)
+    let network_config = sui_swarm_config::network_config_builder::ConfigBuilder::new(&dir)
+        .with_reference_gas_price(700)
         .with_objects(
             input_coin_objects
                 .clone()
@@ -438,6 +439,7 @@ async fn execute_pay_all_sui(
     let keypair = network_config.validator_configs[0].protocol_key_pair();
 
     let authority_state = init_state_with_committee(&genesis, keypair).await;
+    let rgp = authority_state.reference_gas_price_for_testing().unwrap();
 
     let mut input_coins = Vec::new();
     for coin in input_coin_objects {
@@ -454,7 +456,7 @@ async fn execute_pay_all_sui(
     let mut builder = ProgrammableTransactionBuilder::new();
     builder.pay_all_sui(recipient);
     let pt = builder.finish();
-    let data = TransactionData::new_programmable(sender, input_coins, pt, gas_budget, 1);
+    let data = TransactionData::new_programmable(sender, input_coins, pt, gas_budget, rgp);
     let tx = to_sender_signed_transaction(data, &sender_key);
     let txn_result = send_and_confirm_transaction(&authority_state, tx)
         .await

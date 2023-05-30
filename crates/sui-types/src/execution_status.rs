@@ -6,7 +6,12 @@ use move_binary_format::file_format::{CodeOffset, TypeParameterIndex};
 use move_core_types::language_storage::ModuleId;
 use serde::{Deserialize, Serialize};
 use std::fmt::{Display, Formatter};
+use sui_macros::EnumVariantOrder;
 use thiserror::Error;
+
+#[cfg(test)]
+#[path = "unit_tests/execution_status_tests.rs"]
+mod execution_status_tests;
 
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
 pub enum ExecutionStatus {
@@ -20,7 +25,7 @@ pub enum ExecutionStatus {
     },
 }
 
-#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, Error)]
+#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, Error, EnumVariantOrder)]
 pub enum ExecutionFailureStatus {
     //
     // General transaction errors
@@ -171,6 +176,12 @@ pub enum ExecutionFailureStatus {
 
     #[error("Certificate is on the deny list")]
     CertificateDenied,
+
+    #[error(
+        "Sui Move Bytecode Verification Timeout. \
+        Please run the Sui Move Verifier for more information."
+    )]
+    SuiMoveVerificationTimedout,
     // NOTE: if you want to add a new enum,
     // please add it at the end for Rust SDK backward compatibility.
 }

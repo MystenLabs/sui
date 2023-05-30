@@ -19,9 +19,11 @@ use thiserror::Error;
 use tokio::time::Duration;
 use tracing::error;
 
+use crate::config::ReplayableNetworkConfigSet;
+
 // TODO: make these configurable
 pub(crate) const RPC_TIMEOUT_ERR_SLEEP_RETRY_PERIOD: Duration = Duration::from_millis(10_000);
-pub(crate) const RPC_TIMEOUT_ERR_NUM_RETRIES: u32 = 3;
+pub(crate) const RPC_TIMEOUT_ERR_NUM_RETRIES: u32 = 2;
 pub(crate) const MAX_CONCURRENT_REQUESTS: usize = 1_000;
 
 // Struct tag used in system epoch change events
@@ -52,7 +54,7 @@ pub struct OnChainTransactionInfo {
 
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug, Error, Clone)]
-pub enum LocalExecError {
+pub enum ReplayEngineError {
     #[error("SuiError: {:#?}", err)]
     SuiError { err: SuiError },
 
@@ -153,61 +155,79 @@ pub enum LocalExecError {
 
     #[error("Error getting dynamic fields loaded objects: {}", rpc_err)]
     UnableToGetDynamicFieldLoadedObjects { rpc_err: String },
+
+    #[error("Unsupported epoch in replay engine: {epoch}")]
+    EpochNotSupported { epoch: u64 },
+
+    #[error("Unable to open yaml cfg file at {}: {}", path, err)]
+    UnableToOpenYamlFile { path: String, err: String },
+
+    #[error("Unable to write yaml file at {}: {}", path, err)]
+    UnableToWriteYamlFile { path: String, err: String },
+
+    #[error("Unable to convert string {} to URL {}", url, err)]
+    InvalidUrl { url: String, err: String },
+
+    #[error(
+        "Unable to execute transaction with existing network configs {:#?}",
+        cfgs
+    )]
+    UnableToExecuteWithNetworkConfigs { cfgs: ReplayableNetworkConfigSet },
 }
 
-impl From<SuiObjectResponseError> for LocalExecError {
+impl From<SuiObjectResponseError> for ReplayEngineError {
     fn from(err: SuiObjectResponseError) -> Self {
         match err {
             SuiObjectResponseError::NotExists { object_id } => {
-                LocalExecError::ObjectNotExist { id: object_id }
+                ReplayEngineError::ObjectNotExist { id: object_id }
             }
             SuiObjectResponseError::Deleted {
                 object_id,
                 digest,
                 version,
-            } => LocalExecError::ObjectDeleted {
+            } => ReplayEngineError::ObjectDeleted {
                 id: object_id,
                 version,
                 digest,
             },
-            _ => LocalExecError::SuiObjectResponseError { err },
+            _ => ReplayEngineError::SuiObjectResponseError { err },
         }
     }
 }
 
-impl From<LocalExecError> for SuiError {
-    fn from(err: LocalExecError) -> Self {
+impl From<ReplayEngineError> for SuiError {
+    fn from(err: ReplayEngineError) -> Self {
         SuiError::Unknown(format!("{:#?}", err))
     }
 }
 
-impl From<SuiError> for LocalExecError {
+impl From<SuiError> for ReplayEngineError {
     fn from(err: SuiError) -> Self {
-        LocalExecError::SuiError { err }
+        ReplayEngineError::SuiError { err }
     }
 }
-impl From<SuiRpcError> for LocalExecError {
+impl From<SuiRpcError> for ReplayEngineError {
     fn from(err: SuiRpcError) -> Self {
         match err {
             SuiRpcError::RpcError(JsonRpseeError::RequestTimeout) => {
-                LocalExecError::SuiRpcRequestTimeout
+                ReplayEngineError::SuiRpcRequestTimeout
             }
-            _ => LocalExecError::SuiRpcError {
+            _ => ReplayEngineError::SuiRpcError {
                 err: format!("{:?}", err),
             },
         }
     }
 }
 
-impl From<UserInputError> for LocalExecError {
+impl From<UserInputError> for ReplayEngineError {
     fn from(err: UserInputError) -> Self {
-        LocalExecError::UserInputError { err }
+        ReplayEngineError::UserInputError { err }
     }
 }
 
-impl From<anyhow::Error> for LocalExecError {
+impl From<anyhow::Error> for ReplayEngineError {
     fn from(err: anyhow::Error) -> Self {
-        LocalExecError::GeneralError {
+        ReplayEngineError::GeneralError {
             err: format!("{:#?}", err),
         }
     }
@@ -232,11 +252,11 @@ pub enum ExecutionStoreEvent {
     ResourceResolverGetResource {
         address: AccountAddress,
         typ: StructTag,
-        result: Result<Option<Vec<u8>>, LocalExecError>,
+        result: Result<Option<Vec<u8>>, ReplayEngineError>,
     },
     ModuleResolverGetModule {
         module_id: ModuleId,
-        result: Result<Option<Vec<u8>>, LocalExecError>,
+        result: Result<Option<Vec<u8>>, ReplayEngineError>,
     },
     ObjectStoreGetObject {
         object_id: ObjectID,
@@ -249,6 +269,6 @@ pub enum ExecutionStoreEvent {
     },
     GetModuleGetModuleByModuleId {
         id: ModuleId,
-        result: Result<Option<CompiledModule>, LocalExecError>,
+        result: Result<Option<CompiledModule>, ReplayEngineError>,
     },
 }

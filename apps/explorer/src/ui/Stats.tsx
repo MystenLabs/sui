@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import clsx from 'clsx';
+
 import { ReactComponent as InfoSvg } from './icons/info_10x10.svg';
 
 import type { ReactNode } from 'react';
@@ -16,6 +18,7 @@ export type StatsProps = {
     tooltip?: string;
     unavailable?: boolean;
     postfix?: ReactNode;
+    orientation?: 'horizontal' | 'vertical';
 };
 
 export function Stats({
@@ -25,9 +28,15 @@ export function Stats({
     unavailable,
     postfix,
     size = 'md',
+    orientation = 'vertical',
 }: StatsProps) {
     return (
-        <div className="flex max-w-full flex-col flex-nowrap gap-1.5">
+        <div
+            className={clsx(
+                'flex max-w-full flex-nowrap justify-between gap-1.5',
+                orientation === 'horizontal' ? '' : 'flex-col'
+            )}
+        >
             <div className="flex items-center justify-start gap-1 text-caption text-steel-dark hover:text-steel">
                 <div className="flex-shrink-0">
                     <Text variant="caption/semibold" color="steel-dark">

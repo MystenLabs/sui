@@ -10,7 +10,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 10;
+const MAX_PROTOCOL_VERSION: u64 = 12;
 
 // Record history of protocol version allocations here:
 //
@@ -36,6 +36,8 @@ const MAX_PROTOCOL_VERSION: u64 = 10;
 // Version 10:increase bytecode verifier `max_verifier_meter_ticks_per_function` and
 //            `max_meter_ticks_per_module` limits each from 6_000_000 to 16_000_000. sui-system
 //            framework changes.
+// Version 11: Introduce `std::type_name::get_with_original_ids` to the system frameworks.
+// Version 12: Changes to deepbook in framework to add API for querying marketplace.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -153,9 +155,12 @@ struct FeatureFlags {
     // f low scoring authorities, but it will simply flag as low scoring only up to f authorities.
     #[serde(skip_serializing_if = "is_false")]
     scoring_decision_with_validity_cutoff: bool,
-    // Re-order end of epoch messages to the end of the commit
+
+    // DEPRECATED: this was an ephemeral feature flag only used by consensus handler, which has now
+    // been deployed everywhere.
     #[serde(skip_serializing_if = "is_false")]
     consensus_order_end_of_epoch_last: bool,
+
     // Disallow adding abilities to types during package upgrades.
     #[serde(skip_serializing_if = "is_false")]
     disallow_adding_abilities_on_upgrade: bool,
@@ -703,27 +708,6 @@ impl ProtocolConfig {
     }
 }
 
-// Special getters
-impl ProtocolConfig {
-    /// We don't want to use the default getter which unwraps and could panic.
-    /// Instead we want to be able to selectively fetch this value
-    pub fn max_size_written_objects_as_option(&self) -> Option<u64> {
-        self.max_size_written_objects
-    }
-
-    /// We don't want to use the default getter which unwraps and could panic.
-    /// Instead we want to be able to selectively fetch this value
-    pub fn max_size_written_objects_system_tx_as_option(&self) -> Option<u64> {
-        self.max_size_written_objects_system_tx
-    }
-
-    /// We don't want to use the default getter which unwraps and could panic.
-    /// Instead we want to be able to selectively fetch this value
-    pub fn max_move_identifier_len_as_option(&self) -> Option<u64> {
-        self.max_move_identifier_len
-    }
-}
-
 #[cfg(not(msim))]
 static POISON_VERSION_METHODS: AtomicBool = AtomicBool::new(false);
 
@@ -1150,6 +1134,8 @@ impl ProtocolConfig {
                 cfg.max_meter_ticks_per_module = Some(16_000_000);
                 cfg
             }
+            11 => Self::get_for_version_impl(version - 1),
+            12 => Self::get_for_version_impl(version - 1),
             // Use this template when making changes:
             //
             //     // modify an existing constant.
@@ -1308,6 +1294,15 @@ mod test {
                 ProtocolConfig::get_for_version(cur)
             );
         }
+    }
+
+    #[test]
+    fn test_getters() {
+        let prot: ProtocolConfig = ProtocolConfig::get_for_version(ProtocolVersion::new(1));
+        assert_eq!(
+            prot.max_arguments(),
+            prot.max_arguments_as_option().unwrap()
+        );
     }
 
     #[test]

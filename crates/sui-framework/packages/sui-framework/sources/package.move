@@ -93,7 +93,7 @@ module sui::package {
     public fun claim<OTW: drop>(otw: OTW, ctx: &mut TxContext): Publisher {
         assert!(types::is_one_time_witness(&otw), ENotOneTimeWitness);
 
-        let type = type_name::get<OTW>();
+        let type = type_name::get_with_original_ids<OTW>();
 
         Publisher {
             id: object::new(ctx),
@@ -118,14 +118,14 @@ module sui::package {
 
     /// Check whether type belongs to the same package as the publisher object.
     public fun from_package<T>(self: &Publisher): bool {
-        let type = type_name::get<T>();
+        let type = type_name::get_with_original_ids<T>();
 
         (type_name::get_address(&type) == self.package)
     }
 
     /// Check whether a type belongs to the same module as the publisher object.
     public fun from_module<T>(self: &Publisher): bool {
-        let type = type_name::get<T>();
+        let type = type_name::get_with_original_ids<T>();
 
         (type_name::get_address(&type) == self.package)
             && (type_name::get_module(&type) == self.module_name)
@@ -271,7 +271,7 @@ module sui::package {
     #[test_only]
     /// Test-only function to claim a Publisher object bypassing OTW check.
     public fun test_claim<OTW: drop>(_: OTW, ctx: &mut TxContext): Publisher {
-        let type = type_name::get<OTW>();
+        let type = type_name::get_with_original_ids<OTW>();
 
         Publisher {
             id: object::new(ctx),

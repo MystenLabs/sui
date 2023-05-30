@@ -20,7 +20,7 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
 eyre = "0.6.8"
-rocksdb = { version = "0.20.1", features = ["snappy", "lz4", "zstd", "zlib", "multi-threaded-cf"], default-features = false }
+rocksdb = { version = "0.21.0", features = ["snappy", "lz4", "zstd", "zlib", "multi-threaded-cf"], default-features = false }
 tempfile = "3.3.0"
 tokio = { workspace = true, features = ["test-util"] }
 typed-store = { path = "../typed-store" }

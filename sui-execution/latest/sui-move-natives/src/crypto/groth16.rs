@@ -29,6 +29,14 @@ pub struct Groth16PrepareVerifyingKeyCostParams {
     pub groth16_prepare_verifying_key_bls12381_cost_base: InternalGas,
     pub groth16_prepare_verifying_key_bn254_cost_base: InternalGas,
 }
+/***************************************************************************************************
+ * native fun prepare_verifying_key_internal
+ * Implementation of the Move native function `prepare_verifying_key_internal(curve: u8, verifying_key: &vector<u8>): PreparedVerifyingKey`
+ * This function has two cost modes depending on the curve being set to `BLS12381` or `BN254`. The core formula is same but constants differ.
+ * If curve = 0, we use the `bls12381` cost constants, otherwise we use the `bn254` cost constants.
+ *   gas cost: groth16_prepare_verifying_key_cost_base                    | covers various fixed costs in the oper
+ * Note: `curve` and `verifying_key` are fixed size, so their costs are included in the base cost.
+ **************************************************************************************************/
 pub fn prepare_verifying_key_internal(
     context: &mut NativeContext,
     ty_args: Vec<Type>,
@@ -102,6 +110,21 @@ pub struct Groth16VerifyGroth16ProofInternalCostParams {
 
     pub groth16_verify_groth16_proof_internal_public_input_cost_per_byte: InternalGas,
 }
+/***************************************************************************************************
+ * native fun verify_groth16_proof_internal
+ * Implementation of the Move native function `verify_groth16_proof_internal(curve: u8, vk_gamma_abc_g1_bytes: &vector<u8>,
+ *                          alpha_g1_beta_g2_bytes: &vector<u8>, gamma_g2_neg_pc_bytes: &vector<u8>, delta_g2_neg_pc_bytes: &vector<u8>,
+ *                          public_proof_inputs: &vector<u8>, proof_points: &vector<u8>): bool`
+ *
+ * This function has two cost modes depending on the curve being set to `BLS12381` or `BN254`. The core formula is same but constants differ.
+ * If curve = 0, we use the `bls12381` cost constants, otherwise we use the `bn254` cost constants.
+ *   gas cost: groth16_prepare_verifying_key_cost_base                    | covers various fixed costs in the oper
+ *              + groth16_verify_groth16_proof_internal_public_input_cost_per_byte
+ *                                                   * size_of(public_proof_inputs) | covers the cost of verifying each public input per byte
+ *              + groth16_verify_groth16_proof_internal_cost_per_public_input
+ *                                                   * num_public_inputs) | covers the cost of verifying each public input per input
+ * Note: every other arg is fixed size, so their costs are included in the base cost.
+ **************************************************************************************************/
 pub fn verify_groth16_proof_internal(
     context: &mut NativeContext,
     ty_args: Vec<Type>,

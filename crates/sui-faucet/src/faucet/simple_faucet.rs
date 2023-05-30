@@ -3,6 +3,7 @@
 
 use crate::faucet::write_ahead_log;
 use crate::metrics::FaucetMetrics;
+use async_recursion::async_recursion;
 use async_trait::async_trait;
 use prometheus::Registry;
 use tap::tap::TapFallible;
@@ -93,6 +94,7 @@ impl SimpleFaucet {
                 recipient,
                 tx,
                 retry_count: _,
+                in_flight: _,
             }) = wal.reclaim(coin_id).map_err(FaucetError::internal)?
             {
                 let uuid = Uuid::from_bytes(uuid);
@@ -235,14 +237,19 @@ impl SimpleFaucet {
             // Safe unwrap as we are the only ones that ever add to the WAL.
             let (coin_id, entry) = item.unwrap();
             let uuid = Uuid::from_bytes(entry.uuid);
-            pending.push((uuid, entry.recipient, coin_id, entry.tx));
+            if !entry.in_flight {
+                pending.push((uuid, entry.recipient, coin_id, entry.tx));
+            }
         }
 
         for (_, _, coin_id, _) in &pending {
             wal.increment_retry_count(*coin_id)
                 .map_err(FaucetError::internal)?;
+            wal.set_in_flight(*coin_id, true)
+                .map_err(FaucetError::internal)?;
         }
 
+        info!("Retrying WAL of length: {:?}", pending.len());
         // Drops the lock early because sign_and_execute_txn requires the lock.
         drop(wal);
 
@@ -295,6 +302,19 @@ impl SimpleFaucet {
                     "Failed to execute PaySui transactions in faucet after {elapsed}. Coin will \
                      not be reused."
                 );
+
+                // We set the inflight status to false so that the async thread that
+                // retries this transactions will attempt to try again.
+                if let Err(err) = self.wal.lock().await.set_in_flight(coin_id, false) {
+                    error!(
+                        ?recipient,
+                        ?coin_id,
+                        ?uuid,
+                        "Failed to set coin in flight status in WAL: {:?}",
+                        err
+                    );
+                }
+
                 Err(FaucetError::Transfer(
                     "could not complete transfer within timeout".into(),
                 ))
@@ -319,6 +339,7 @@ impl SimpleFaucet {
         }
     }
 
+    #[async_recursion]
     async fn transfer_gases(
         &self,
         amounts: &[u64],
@@ -362,9 +383,7 @@ impl SimpleFaucet {
             GasCoinResponse::GasCoinWithInsufficientBalance(coin_id) => {
                 warn!(?uuid, ?coin_id, "Insufficient balance, removing from pool");
                 self.metrics.total_discarded_coins.inc();
-                Err(FaucetError::GasCoinWithInsufficientBalance(
-                    coin_id.to_hex_uncompressed(),
-                ))
+                self.transfer_gases(amounts, recipient, uuid).await
             }
 
             GasCoinResponse::InvalidGasCoin(coin_id) => {
@@ -552,6 +571,11 @@ impl SimpleFaucet {
     #[cfg(test)]
     pub fn wallet_mut(&mut self) -> &mut WalletContext {
         &mut self.wallet
+    }
+
+    #[cfg(test)]
+    pub fn teardown(self) -> WalletContext {
+        self.wallet
     }
 }
 
@@ -797,35 +821,40 @@ mod tests {
         let recipient = SuiAddress::random_for_testing_only();
         let faucet_address = faucet.wallet_mut().active_address().unwrap();
         let uuid = Uuid::new_v4();
-        let coin_response = faucet.prepare_gas_coin(100, uuid).await;
 
-        match coin_response {
-            GasCoinResponse::ValidGasCoin(gas) => {
-                let tx_data = faucet
-                    .build_pay_sui_txn(gas, faucet_address, recipient, &[100], 200_000_000)
-                    .await
-                    .map_err(FaucetError::internal)
-                    .unwrap();
+        let GasCoinResponse::ValidGasCoin(coin_id) = faucet.prepare_gas_coin(100, uuid).await else {
+            panic!("prepare_gas_coin did not give a valid coin.")
+        };
 
-                let mut wal = faucet.wal.lock().await;
-                // Check no wal
-                assert!(wal.log.is_empty());
-                wal.reserve(Uuid::new_v4(), gas, recipient, tx_data)
-                    .map_err(FaucetError::internal)
-                    .ok();
-                // Check the wal has one entry
-                assert!(!wal.log.is_empty());
-                drop(wal);
-            }
-            _ => {
-                panic!("prepare_gas_coin_did not give a valid function.");
-            }
-        }
+        let tx_data = faucet
+            .build_pay_sui_txn(coin_id, faucet_address, recipient, &[100], 200_000_000)
+            .await
+            .map_err(FaucetError::internal)
+            .unwrap();
+
+        let mut wal = faucet.wal.lock().await;
+
+        // Check no WAL
+        assert!(wal.log.is_empty());
+        wal.reserve(Uuid::new_v4(), coin_id, recipient, tx_data)
+            .map_err(FaucetError::internal)
+            .ok();
+        drop(wal);
+
+        // Check WAL is not empty but will not clear because txn is in_flight
+        faucet.retry_wal_coins().await.ok();
+        let mut wal = faucet.wal.lock().await;
+        assert!(!wal.log.is_empty());
+
+        // Set in flight to false so WAL will clear
+        wal.set_in_flight(coin_id, false)
+            .expect("Unable to set in flight status to false.");
+        drop(wal);
 
         faucet.retry_wal_coins().await.ok();
+        let wal = faucet.wal.lock().await;
+        assert!(wal.log.is_empty());
 
-        let wal_2 = faucet.wal.lock().await;
-        assert!(wal_2.log.is_empty());
         let total_coins = faucet.metrics.total_available_coins.get();
         let discarded_coins = faucet.metrics.total_discarded_coins.get();
         assert_eq!(total_coins, original_available);
@@ -872,7 +901,6 @@ mod tests {
             .unwrap()
             .value();
         assert_eq!(tiny_amount, tiny_value);
-        println!("gas list: {gases:?}");
 
         let gases: HashSet<ObjectID> = HashSet::from_iter(gases.into_iter().map(|gas| *gas.id()));
 
@@ -912,6 +940,208 @@ mod tests {
         let candidates = faucet.drain_gas_queue(gases.len() - 1).await;
         assert_eq!(discarded, 1);
         assert!(candidates.get(&tiny_coin_id).is_none());
+    }
+
+    #[tokio::test]
+    async fn test_insufficient_balance_will_retry_success() {
+        let test_cluster = TestClusterBuilder::new().build().await.unwrap();
+        let address = test_cluster.get_address_0();
+        let mut context = test_cluster.wallet;
+        let gases = get_current_gases(address, &mut context).await;
+        let config = FaucetConfig::default();
+
+        let reasonable_value = (config.num_coins as u64 * config.amount) * 10;
+        SuiClientCommands::SplitCoin {
+            coin_id: *gases[0].id(),
+            amounts: Some(vec![reasonable_value]),
+            gas_budget: 50000000,
+            gas: None,
+            count: None,
+            serialize_unsigned_transaction: false,
+            serialize_signed_transaction: false,
+        }
+        .execute(&mut context)
+        .await
+        .expect("split failed");
+
+        let destination_address = SuiAddress::random_for_testing_only();
+        // Transfer all valid gases away except for 1
+        for gas in gases.iter().take(gases.len() - 1) {
+            SuiClientCommands::TransferSui {
+                to: destination_address,
+                sui_coin_object_id: *gas.id(),
+                gas_budget: 50000000,
+                amount: None,
+                serialize_unsigned_transaction: false,
+                serialize_signed_transaction: false,
+            }
+            .execute(&mut context)
+            .await
+            .expect("transfer failed");
+        }
+
+        // Assert that the coins were transferred away successfully to destination address
+        let gases = get_current_gases(destination_address, &mut context).await;
+        assert!(!gases.is_empty());
+
+        let tmp = tempfile::tempdir().unwrap();
+        let prom_registry = Registry::new();
+        let config = FaucetConfig::default();
+        let faucet = SimpleFaucet::new(
+            context,
+            &prom_registry,
+            &tmp.path().join("faucet.wal"),
+            config,
+        )
+        .await
+        .unwrap();
+
+        // We traverse the the list twice, which must trigger the transferred gas to be kicked out
+        futures::future::join_all((0..2).map(|_| {
+            faucet.send(
+                Uuid::new_v4(),
+                SuiAddress::random_for_testing_only(),
+                &[30000000000],
+            )
+        }))
+        .await;
+
+        // Check that the gas was discarded for being too small
+        let discarded = faucet.metrics.total_discarded_coins.get();
+        assert_eq!(discarded, 1);
+
+        // Check that the WAL is empty so we don't retry bad requests
+        let wal = faucet.wal.lock().await;
+        assert!(wal.log.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_faucet_no_loop_forever() {
+        let test_cluster = TestClusterBuilder::new().build().await.unwrap();
+        let address = test_cluster.get_address_0();
+        let mut context = test_cluster.wallet;
+        let gases = get_current_gases(address, &mut context).await;
+        let config = FaucetConfig::default();
+
+        let tiny_value = (config.num_coins as u64 * config.amount) + 1;
+        let _res = SuiClientCommands::SplitCoin {
+            coin_id: *gases[0].id(),
+            amounts: Some(vec![tiny_value]),
+            gas_budget: 50000000,
+            gas: None,
+            count: None,
+            serialize_unsigned_transaction: false,
+            serialize_signed_transaction: false,
+        }
+        .execute(&mut context)
+        .await;
+
+        let destination_address = SuiAddress::random_for_testing_only();
+
+        // Transfer all valid gases away
+        for gas in gases {
+            SuiClientCommands::TransferSui {
+                to: destination_address,
+                sui_coin_object_id: *gas.id(),
+                gas_budget: 50000000,
+                amount: None,
+                serialize_unsigned_transaction: false,
+                serialize_signed_transaction: false,
+            }
+            .execute(&mut context)
+            .await
+            .expect("transfer failed");
+        }
+
+        // Assert that the coins were transferred away successfully to destination address
+        let gases = get_current_gases(destination_address, &mut context).await;
+        assert!(!gases.is_empty());
+
+        let tmp = tempfile::tempdir().unwrap();
+        let prom_registry = Registry::new();
+        let faucet = SimpleFaucet::new(
+            context,
+            &prom_registry,
+            &tmp.path().join("faucet.wal"),
+            config,
+        )
+        .await
+        .unwrap();
+
+        let destination_address = SuiAddress::random_for_testing_only();
+        // Assert that faucet will discard and also terminate
+        let res = faucet
+            .send(Uuid::new_v4(), destination_address, &[30000000000])
+            .await;
+
+        // Assert that the result is an Error
+        assert!(matches!(res, Err(FaucetError::NoGasCoinAvailable)));
+    }
+
+    #[tokio::test]
+    async fn test_faucet_restart_clears_wal() {
+        let test_cluster = TestClusterBuilder::new().build().await.unwrap();
+        let context = test_cluster.wallet;
+        let tmp = tempfile::tempdir().unwrap();
+        let prom_registry = Registry::new();
+        let config = FaucetConfig::default();
+
+        let mut faucet = SimpleFaucet::new(
+            context,
+            &prom_registry,
+            &tmp.path().join("faucet.wal"),
+            config,
+        )
+        .await
+        .unwrap();
+
+        let recipient = SuiAddress::random_for_testing_only();
+        let faucet_address = faucet.wallet_mut().active_address().unwrap();
+        let uuid = Uuid::new_v4();
+
+        let GasCoinResponse::ValidGasCoin(coin_id) = faucet.prepare_gas_coin(100, uuid).await else {
+            panic!("prepare_gas_coin did not give a valid coin.")
+        };
+
+        let tx_data = faucet
+            .build_pay_sui_txn(coin_id, faucet_address, recipient, &[100], 200_000_000)
+            .await
+            .map_err(FaucetError::internal)
+            .unwrap();
+
+        let mut wal = faucet.wal.lock().await;
+
+        // Check no WAL
+        assert!(wal.log.is_empty());
+        wal.reserve(Uuid::new_v4(), coin_id, recipient, tx_data)
+            .map_err(FaucetError::internal)
+            .ok();
+        drop(wal);
+
+        // Check WAL is not empty but will not clear because txn is in_flight
+        let mut wal = faucet.wal.lock().await;
+        assert!(!wal.log.is_empty());
+
+        // Set in flight to false so WAL will clear
+        wal.set_in_flight(coin_id, false)
+            .expect("Unable to set in flight status to false.");
+        drop(wal);
+
+        let kept_context = faucet.teardown();
+        // Simulate a faucet restart and check that it clears the WAL
+        let prom_registry_new = Registry::new();
+
+        let faucet_restarted = SimpleFaucet::new(
+            kept_context,
+            &prom_registry_new,
+            &tmp.path().join("faucet.wal"),
+            FaucetConfig::default(),
+        )
+        .await
+        .unwrap();
+
+        let restarted_wal = faucet_restarted.wal.lock().await;
+        assert!(restarted_wal.log.is_empty())
     }
 
     async fn test_basic_interface(faucet: &impl Faucet) {

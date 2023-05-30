@@ -15,7 +15,10 @@ use syn::{parse_macro_input, Data, DeriveInput, Fields, Type};
 ///     pub fn new_constant(&self) -> u64 {
 ///         self.new_constant.expect(Self::CONSTANT_ERR_MSG)
 ///     }
-///
+///     /// Returns the value of the field if exists at the given version, otherise None.
+///     pub fn new_constant_as_option(&self) -> Option<u64> {
+///         self.new_constant
+///     }
 ///     // We auto derive an enum such that the variants are all the types of the fields
 ///     pub enum ProtocolConfigValue {
 ///        u32(u32),
@@ -76,10 +79,18 @@ pub fn getters_macro(input: TokenStream) -> TokenStream {
                             panic!("Expected angle bracketed arguments.");
                         };
 
+                        let as_option_name = format!("{field_name}_as_option");
+                        let as_option_name: proc_macro2::TokenStream =
+                        as_option_name.parse().unwrap();
+
                         let getter = quote! {
                             // Derive the getter
                             pub fn #field_name(&self) -> #inner_type {
                                 self.#field_name.expect(Self::CONSTANT_ERR_MSG)
+                            }
+
+                            pub fn #as_option_name(&self) -> #field_type {
+                                self.#field_name
                             }
                         };
 

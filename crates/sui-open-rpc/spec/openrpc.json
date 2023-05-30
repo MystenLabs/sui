@@ -12,7 +12,7 @@
       "name": "Apache-2.0",
       "url": "https://raw.githubusercontent.com/MystenLabs/sui/main/LICENSE"
     },
-    "version": "1.2.0"
+    "version": "1.3.0"
   },
   "methods": [
     {
@@ -494,6 +494,23 @@
           }
         }
       ]
+    },
+    {
+      "name": "sui_getChainIdentifier",
+      "tags": [
+        {
+          "name": "Read API"
+        }
+      ],
+      "description": "Return the chain's identifier",
+      "params": [],
+      "result": {
+        "name": "String",
+        "required": true,
+        "schema": {
+          "type": "string"
+        }
+      }
     },
     {
       "name": "sui_getCheckpoint",
@@ -1320,7 +1337,7 @@
             "name": "Result",
             "value": {
               "minSupportedProtocolVersion": "1",
-              "maxSupportedProtocolVersion": "10",
+              "maxSupportedProtocolVersion": "12",
               "protocolVersion": "6",
               "featureFlags": {
                 "advance_epoch_start_time_in_safe_mode": true,

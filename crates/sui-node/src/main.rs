@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use clap::Parser;
-use fastcrypto::encoding::{Encoding, Hex};
 use mysten_common::sync::async_once_cell::AsyncOnceCell;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -13,9 +12,25 @@ use sui_node::metrics;
 use sui_protocol_config::SupportedProtocolVersions;
 use sui_telemetry::send_telemetry_event;
 use sui_types::multiaddr::Multiaddr;
-use sui_types::software_version::VERSION;
 use tokio::time::sleep;
 use tracing::{error, info};
+
+const GIT_REVISION: &str = {
+    if let Some(revision) = option_env!("GIT_REVISION") {
+        revision
+    } else {
+        let version = git_version::git_version!(
+            args = ["--always", "--dirty", "--exclude", "*"],
+            fallback = ""
+        );
+
+        if version.is_empty() {
+            panic!("unable to query git revision");
+        }
+        version
+    }
+};
+const VERSION: &str = const_str::concat!(env!("CARGO_PKG_VERSION"), "-", GIT_REVISION);
 
 #[derive(Parser)]
 #[clap(rename_all = "kebab-case")]
@@ -110,8 +125,7 @@ fn main() {
     runtimes.metrics.spawn(async move {
         let node = node_once_cell_clone.get().await;
         let chain_identifier = match node.state().get_chain_identifier() {
-            // Unwrap safe: Checkpoint Digest is 32 bytes long
-            Some(chain_identifier) => Hex::encode(chain_identifier.into_inner().get(0..4).unwrap()),
+            Some(chain_identifier) => chain_identifier.to_string(),
             None => "Unknown".to_string(),
         };
 

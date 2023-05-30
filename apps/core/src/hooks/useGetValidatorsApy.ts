@@ -26,32 +26,27 @@ const MINIMUM_THRESHOLD = 0.001;
 export function useGetValidatorsApy() {
     const rpc = useRpcClient();
     const { data: systemStateResponse, isFetched } = useGetSystemState();
-    return useQuery(
-        ['get-rolling-average-apys'],
-        async () => {
-            const apy = await rpc.getValidatorsApy();
+    return useQuery({
+        queryKey: ['get-rolling-average-apys'],
+        queryFn: () => rpc.getValidatorsApy(),
+        enabled: isFetched,
+        select: (validatorApys) => {
             // check if stakeSubsidyStartEpoch is greater than current epoch, flag for UI to show ~0% instead of 0%
             const currentEpoch = Number(systemStateResponse?.epoch);
             const stakeSubsidyStartEpoch = Number(
                 systemStateResponse?.stakeSubsidyStartEpoch
             );
-            return {
-                validatorApys: apy,
-                isStakeSubsidyStarted: currentEpoch > stakeSubsidyStartEpoch,
-            };
+
+            const isStakeSubsidyStarted = currentEpoch > stakeSubsidyStartEpoch;
+
+            return validatorApys?.apys.reduce((acc, { apy, address }) => {
+                acc[address] = {
+                    apy: roundFloat(apy * 100, DEFAULT_APY_DECIMALS),
+                    isApyApproxZero:
+                        !isStakeSubsidyStarted || apy < MINIMUM_THRESHOLD,
+                };
+                return acc;
+            }, {} as ApyByValidator);
         },
-        {
-            enabled: isFetched,
-            select: ({ validatorApys, isStakeSubsidyStarted }) => {
-                return validatorApys?.apys.reduce((acc, { apy, address }) => {
-                    acc[address] = {
-                        apy: roundFloat(apy * 100, DEFAULT_APY_DECIMALS),
-                        isApyApproxZero:
-                            !isStakeSubsidyStarted || apy < MINIMUM_THRESHOLD,
-                    };
-                    return acc;
-                }, {} as ApyByValidator);
-            },
-        }
-    );
+    });
 }

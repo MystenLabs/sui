@@ -16,7 +16,7 @@ use fastcrypto::{
     encoding::{Base64, Encoding},
     traits::ToFromBytes,
 };
-use move_bytecode_verifier::meter::BoundMeter;
+use move_bytecode_verifier::meter::Scope;
 use move_core_types::language_storage::TypeTag;
 use move_package::BuildConfig as MoveBuildConfig;
 use prettytable::Table;
@@ -30,6 +30,7 @@ use sui_protocol_config::ProtocolConfig;
 use sui_source_validation::{BytecodeSourceVerifier, SourceMode};
 use sui_types::error::SuiError;
 use sui_types::{digests::TransactionDigest, metrics::BytecodeVerifierMetrics};
+use sui_verifier::meter::SuiVerifierMeter;
 
 use shared_crypto::intent::Intent;
 use sui_json::SuiJsonValue;
@@ -201,8 +202,8 @@ pub enum SuiClientCommands {
     },
 
     /// Run the bytecode verifer on the package
-    #[clap(name = "verify-bytecode")]
-    VerifyBytecode {
+    #[clap(name = "verify-bytecode-meter")]
+    VerifyBytecodeMeter {
         /// Path to directory containing a Move package
         #[clap(
             name = "package_path",
@@ -612,6 +613,10 @@ pub enum SuiClientCommands {
         #[clap(long)]
         signatures: Vec<String>,
     },
+
+    /// Query the chain identifier from the rpc endpoint.
+    #[clap(name = "chain-identifier")]
+    ChainIdentifier,
 }
 
 impl SuiClientCommands {
@@ -749,7 +754,7 @@ impl SuiClientCommands {
                 )
             }
 
-            SuiClientCommands::VerifyBytecode {
+            SuiClientCommands::VerifyBytecodeMeter {
                 package_path,
                 build_config,
             } => {
@@ -759,9 +764,17 @@ impl SuiClientCommands {
 
                 let package = compile_package_simple(build_config, package_path)?;
                 let modules: Vec<_> = package.get_modules().cloned().collect();
-                let metered_verifier_config =
+                let mut metered_verifier_config =
                     default_verifier_config(&protocol_config, true /* enable metering */);
-                let mut meter = BoundMeter::new(&metered_verifier_config);
+                // These are the actual system limits
+                let fun_limits = metered_verifier_config.max_per_fun_meter_units.unwrap();
+                let mod_limits = metered_verifier_config.max_per_mod_meter_units.unwrap();
+                // We want the test to run unmetered so we can know the true limit
+                // Unset the limits
+                metered_verifier_config.max_per_fun_meter_units = None;
+                metered_verifier_config.max_per_mod_meter_units = None;
+                let mut meter = SuiVerifierMeter::new(&metered_verifier_config);
+                println!("Running bytecode verifier for {} modules", modules.len());
                 run_metered_move_bytecode_verifier_impl(
                     &modules,
                     &protocol_config,
@@ -769,7 +782,16 @@ impl SuiClientCommands {
                     &mut meter,
                     &bytecode_verifier_metrics,
                 )?;
-                SuiClientCommandResult::VerifyBytecode
+                // Get the actual meter ticks used
+                let function = meter.get_usage(Scope::Function);
+                let module = meter.get_usage(Scope::Module);
+
+                SuiClientCommandResult::VerifyBytecodeMeter {
+                    max_module_ticks: mod_limits,
+                    max_function_ticks: fun_limits,
+                    used_function_ticks: function,
+                    used_module_ticks: module,
+                }
             }
 
             SuiClientCommands::Object { id, bcs } => {
@@ -1050,6 +1072,15 @@ impl SuiClientCommands {
                     .map(|(_val, object)| GasCoin::try_from(object).unwrap())
                     .collect();
                 SuiClientCommandResult::Gas(coins)
+            }
+            SuiClientCommands::ChainIdentifier => {
+                let ci = context
+                    .get_client()
+                    .await?
+                    .read_api()
+                    .get_chain_identifier()
+                    .await?;
+                SuiClientCommandResult::ChainIdentifier(ci)
             }
             SuiClientCommands::SplitCoin {
                 coin_id,
@@ -1483,6 +1514,9 @@ impl Display for SuiClientCommandResult {
                     writeln!(writer, " {0: ^66} | {1: ^11}", gas.id(), gas.value())?;
                 }
             }
+            SuiClientCommandResult::ChainIdentifier(ci) => {
+                writeln!(writer, "{}", ci)?;
+            }
             SuiClientCommandResult::SplitCoin(response) => {
                 write!(writer, "{}", write_transaction_response(response)?)?;
             }
@@ -1519,8 +1553,36 @@ impl Display for SuiClientCommandResult {
             SuiClientCommandResult::VerifySource => {
                 writeln!(writer, "Source verification succeeded!")?;
             }
-            SuiClientCommandResult::VerifyBytecode => {
-                writeln!(writer, "Bytecode verification succeeded!")?;
+            SuiClientCommandResult::VerifyBytecodeMeter {
+                max_module_ticks,
+                max_function_ticks,
+                used_function_ticks,
+                used_module_ticks,
+            } => {
+                writeln!(
+                    writer,
+                    "{0: ^15} | {1: ^15} | {2: ^15}",
+                    "", "Module", "Function"
+                )?;
+                writeln!(writer, "------------------------------------------------")?;
+                writeln!(
+                    writer,
+                    "{0: ^15} | {1: ^15} | {2: ^15}",
+                    "Max", max_module_ticks, max_function_ticks,
+                )?;
+                writeln!(
+                    writer,
+                    "{0: ^15} | {1: ^15} | {2: ^15}",
+                    "Used", used_module_ticks, used_function_ticks,
+                )?;
+
+                if (used_module_ticks > max_module_ticks)
+                    || (used_function_ticks > max_function_ticks)
+                {
+                    writeln!(writer, "Module will NOT pass metering check!")?;
+                } else {
+                    writeln!(writer, "Module will pass metering check!")?;
+                }
             }
         }
         write!(f, "{}", writer.trim_end_matches('\n'))
@@ -1676,7 +1738,12 @@ impl SuiClientCommandResult {
 pub enum SuiClientCommandResult {
     Upgrade(SuiTransactionBlockResponse),
     Publish(SuiTransactionBlockResponse),
-    VerifyBytecode,
+    VerifyBytecodeMeter {
+        max_module_ticks: u128,
+        max_function_ticks: u128,
+        used_function_ticks: u128,
+        used_module_ticks: u128,
+    },
     VerifySource,
     Object(SuiObjectResponse),
     RawObject(SuiObjectResponse),
@@ -1695,6 +1762,7 @@ pub enum SuiClientCommandResult {
     SyncClientState,
     NewAddress((SuiAddress, String, SignatureScheme)),
     Gas(Vec<GasCoin>),
+    ChainIdentifier(String),
     SplitCoin(SuiTransactionBlockResponse),
     MergeCoin(SuiTransactionBlockResponse),
     Switch(SwitchResponse),

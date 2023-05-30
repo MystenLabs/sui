@@ -83,6 +83,22 @@ const SUI_WALLET_NAME = "Sui Wallet";
 
 const RECENT_WALLET_STORAGE = "wallet-kit:last-wallet";
 
+function waitToBeVisible() {
+  if (!document || document.visibilityState === "visible") {
+    return Promise.resolve();
+  }
+  let promiseResolve: (() => void) | null = null;
+  const promise = new Promise<void>((r) => (promiseResolve = r));
+  const callback = () => {
+    if (promiseResolve && document.visibilityState === "visible") {
+      promiseResolve();
+      document.removeEventListener("visibilitychange", callback);
+    }
+  };
+  document.addEventListener("visibilitychange", callback);
+  return promise;
+}
+
 function sortWallets(wallets: WalletAdapter[], preferredWallets: string[]) {
   return [
     // Preferred wallets, in order:
@@ -167,7 +183,7 @@ export function createWalletKitCore({
   const walletKit: WalletKitCore = {
     async autoconnect() {
       if (state.currentWallet) return;
-
+      await waitToBeVisible();
       try {
         const lastWalletName = await storageAdapter.get(storageKey);
         if (lastWalletName) {

@@ -9,7 +9,6 @@ use crypto::{traits::KeyPair, NetworkKeyPair, NetworkPublicKey};
 use mysten_common::sync::notify_once::NotifyOnce;
 use parking_lot::RwLock;
 use tokio::{select, time::sleep};
-use tracing::debug;
 use types::{
     error::LocalClientError, FetchBatchesRequest, FetchBatchesResponse, PrimaryToWorker,
     WorkerOthersBatchMessage, WorkerOurBatchMessage, WorkerSynchronizeMessage, WorkerToPrimary,
@@ -117,7 +116,6 @@ impl NetworkClient {
                     return Err(LocalClientError::ShuttingDown);
                 }
                 if let Some(handler) = &inner.worker_to_primary_handler {
-                    debug!("Found primary {}", inner.primary_peer_id);
                     return Ok(handler.clone());
                 }
             }
