@@ -38,7 +38,7 @@ async fn test_onsite_reconfig_observer_basic() {
         AuthAggMetrics::new(&registry),
     );
     let qd_clone = qd.clone_quorum_driver();
-    let _observer_handle = tokio::task::spawn(async move { observer.run(qd_clone).await });
+    let observer_handle = tokio::task::spawn(async move { observer.run(qd_clone).await });
 
     // Wait for all nodes to reach the next epoch.
     info!("Waiting for nodes to advance to epoch 1");
@@ -56,4 +56,7 @@ async fn test_onsite_reconfig_observer_basic() {
         fullnode.with(|node| node.clone_authority_aggregator().unwrap().committee.epoch),
         1
     );
+    // The observer thread is not managed by simtest, and hence we must abort it manually to make sure
+    // it stops running first. Otherwise it may lead to unexpected channel close issue.
+    observer_handle.abort();
 }
