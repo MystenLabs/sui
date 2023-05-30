@@ -122,6 +122,7 @@ impl TransactionExecutionInternalTrait for TransactionExecutionInternal {
         } else {
             vec![]
         };
+        // put the following in internal?
         let transaction = if opts.show_input {
             let epoch_store = self.state.load_epoch_store_one_call_per_task();
             Some(SuiTransactionBlock::try_from(
@@ -340,4 +341,178 @@ fn get_transaction_data_and_digest(
     );
     let txn_digest = TransactionDigest::new(default_hash(&intent_msg.value));
     Ok((intent_msg.value, txn_digest))
+}
+
+#[cfg(test)]
+mod tests {
+    mod execute_transaction_block_tests {
+        use super::super::*;
+        use jsonrpsee::types::ErrorObjectOwned;
+        use move_core_types::{language_storage::ModuleId, resolver::ModuleResolver};
+        use rand::rngs::StdRng;
+        use rand::{Rng, SeedableRng};
+        use sui_json_rpc_types::{
+            ObjectChange, OwnedObjectRef, SuiExecutionStatus, SuiObjectRef,
+            SuiTransactionBlockData, SuiTransactionBlockEffects, SuiTransactionBlockEffectsV1,
+            TransactionBlockBytes,
+        };
+        use sui_types::{
+            base_types::{ObjectID, SequenceNumber},
+            crypto::{get_key_pair_from_rng, AccountKeyPair},
+            digests::{ObjectDigest, TransactionEventsDigest},
+            gas::GasCostSummary,
+            object::Owner,
+            parse_sui_struct_tag,
+            transaction::TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
+            utils::to_sender_signed_transaction,
+        };
+
+        fn mock_transaction_data() -> (
+            TransactionBlockBytes,
+            TransactionData,
+            Vec<GenericSignature>,
+            SuiAddress,
+            ObjectID,
+            SuiTransactionBlockResponse,
+        ) {
+            let mut rng = StdRng::from_seed([0; 32]);
+            let (signer, kp): (_, AccountKeyPair) = get_key_pair_from_rng(&mut rng);
+            let recipient = SuiAddress::from(ObjectID::new(rng.gen()));
+            let obj_id = ObjectID::new(rng.gen());
+            let gas_ref = (
+                ObjectID::new(rng.gen()),
+                SequenceNumber::from_u64(2),
+                ObjectDigest::new(rng.gen()),
+            );
+            let object_ref = (
+                obj_id,
+                SequenceNumber::from_u64(2),
+                ObjectDigest::new(rng.gen()),
+            );
+
+            let data = TransactionData::new_transfer(
+                recipient,
+                object_ref,
+                signer,
+                gas_ref,
+                TEST_ONLY_GAS_UNIT_FOR_TRANSFER * 10,
+                10,
+            );
+            let data1 = data.clone();
+            let data2 = data.clone();
+            let data3 = data.clone();
+
+            let tx = to_sender_signed_transaction(data, &kp);
+            let tx1 = tx.clone();
+            let signatures = tx.into_inner().tx_signatures().to_vec();
+            let raw_transaction = bcs::to_bytes(tx1.data()).unwrap();
+
+            let tx_digest = tx1.digest();
+            let object_change = ObjectChange::Transferred {
+                sender: signer,
+                recipient: Owner::AddressOwner(recipient),
+                object_type: parse_sui_struct_tag("0x2::example::Object").unwrap(),
+                object_id: object_ref.0,
+                version: object_ref.1,
+                digest: ObjectDigest::new(rng.gen()),
+            };
+            struct NoOpsModuleResolver;
+            impl ModuleResolver for NoOpsModuleResolver {
+                type Error = Error;
+                fn get_module(&self, _id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
+                    Ok(None)
+                }
+            }
+            let result = SuiTransactionBlockResponse {
+                digest: *tx_digest,
+                effects: Some(SuiTransactionBlockEffects::V1(
+                    SuiTransactionBlockEffectsV1 {
+                        status: SuiExecutionStatus::Success,
+                        executed_epoch: 0,
+                        modified_at_versions: vec![],
+                        gas_used: GasCostSummary {
+                            computation_cost: 100,
+                            storage_cost: 100,
+                            storage_rebate: 10,
+                            non_refundable_storage_fee: 0,
+                        },
+                        shared_objects: vec![],
+                        transaction_digest: TransactionDigest::new(rng.gen()),
+                        created: vec![],
+                        mutated: vec![
+                            OwnedObjectRef {
+                                owner: Owner::AddressOwner(signer),
+                                reference: gas_ref.into(),
+                            },
+                            OwnedObjectRef {
+                                owner: Owner::AddressOwner(recipient),
+                                reference: object_ref.into(),
+                            },
+                        ],
+                        unwrapped: vec![],
+                        deleted: vec![],
+                        unwrapped_then_deleted: vec![],
+                        wrapped: vec![],
+                        gas_object: OwnedObjectRef {
+                            owner: Owner::ObjectOwner(signer),
+                            reference: SuiObjectRef::from(gas_ref),
+                        },
+                        events_digest: Some(TransactionEventsDigest::new(rng.gen())),
+                        dependencies: vec![],
+                    },
+                )),
+                events: None,
+                object_changes: Some(vec![object_change]),
+                balance_changes: None,
+                timestamp_ms: None,
+                transaction: Some(SuiTransactionBlock {
+                    data: SuiTransactionBlockData::try_from(data1, &&mut NoOpsModuleResolver)
+                        .unwrap(),
+                    tx_signatures: signatures.clone(),
+                }),
+                raw_transaction,
+                confirmed_local_execution: None,
+                checkpoint: None,
+                errors: vec![],
+            };
+            let tx_bytes = TransactionBlockBytes::from_data(data3).unwrap();
+
+            (tx_bytes, data2, signatures, recipient, obj_id, result)
+        }
+
+        #[tokio::test]
+        async fn test_invalid_execute_transaction_request_type() {
+            let (tx_bytes, _, signatures, _, _, _) = mock_transaction_data();
+            let mut mock_internal = MockTransactionExecutionInternalTrait::new();
+            let opts = SuiTransactionBlockResponseOptions::new().with_balance_changes();
+            let request_type = ExecuteTransactionRequestType::WaitForEffectsCert;
+            mock_internal
+                .expect_execute_transaction_block()
+                .return_once(|_, _, _, _| {
+                    Err(Error::SuiRpcInputError(
+                        SuiRpcInputError::InvalidExecuteTransactionRequestType,
+                    ))
+                });
+            let transaction_execution_api = TransactionExecutionApi {
+                internal: Arc::new(mock_internal),
+            };
+
+            let response = transaction_execution_api
+                .execute_transaction_block(
+                    tx_bytes.tx_bytes,
+                    signatures
+                        .into_iter()
+                        .map(|s| Base64::from_bytes(s.as_ref()))
+                        .collect(),
+                    Some(opts),
+                    Some(request_type),
+                )
+                .await;
+            let error_result = response.unwrap_err();
+            let error_object: ErrorObjectOwned = error_result.into();
+
+            assert_eq!(error_object.code(), -32602);
+            assert_eq!(error_object.message(), "request_type` must set to `None` or `WaitForLocalExecution` if effects is required in the response");
+        }
+    }
 }
