@@ -293,6 +293,19 @@ impl<T: ParentSync + Send + Sync> ExecutionState for ConsensusHandler<T> {
             }
         }
 
+        // TODO: make the reordering algorithm richer and depend on object hotness as well.
+        // Reorder transactions based on their gas prices. System transactions without gas price
+        // are put to the end of the transaction vector.
+        // We reorder starting from the second transaction, since the commit consensus prologue
+        // should stay the first transaction.
+        if let Some(1) = self
+            .epoch_store
+            .protocol_config()
+            .consensus_user_transaction_reordering_version_as_option()
+        {
+            reorder_by_gas_price(&mut sequenced_transactions[1..]);
+        }
+
         // (!) Should not add new transactions to sequenced_transactions beyond this point
 
         self.metrics
@@ -355,6 +368,22 @@ impl<T: ParentSync + Send + Sync> ExecutionState for ConsensusHandler<T> {
 
         index_with_hash.index.sub_dag_index
     }
+}
+
+fn reorder_by_gas_price(sequenced_transactions: &mut [VerifiedSequencedConsensusTransaction]) {
+    sequenced_transactions.sort_by_key(|txn| {
+        // Reverse order, so that transactions with higher gas price are put to the beginning.
+        std::cmp::Reverse({
+            match &txn.0.transaction {
+                SequencedConsensusTransactionKind::External(ConsensusTransaction {
+                    tracking_id: _,
+                    kind: ConsensusTransactionKind::UserTransaction(cert),
+                }) => cert.gas_price(),
+                // Non-user transactions are considered to have gas price of zero and are put to the end.
+                _ => 0,
+            }
+        })
+    });
 }
 
 struct AsyncTransactionScheduler {
@@ -545,6 +574,16 @@ impl SequencedConsensusTransaction {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use shared_crypto::intent::Intent;
+    use sui_protocol_config::SupportedProtocolVersions;
+    use sui_types::base_types::{random_object_ref, AuthorityName, SuiAddress};
+    use sui_types::committee::Committee;
+    use sui_types::messages_consensus::{
+        AuthorityCapabilities, ConsensusTransaction, ConsensusTransactionKind,
+    };
+    use sui_types::transaction::{
+        CertifiedTransaction, SenderSignedData, TransactionData, TransactionDataAPI,
+    };
 
     #[test]
     pub fn test_update_hash() {
@@ -574,5 +613,130 @@ mod tests {
         assert!(update_hash(&last_seen, index0, tx).is_none());
         assert!(update_hash(&last_seen, index1, tx).is_none());
         assert!(update_hash(&last_seen, index2, tx).is_some());
+    }
+
+    #[test]
+    fn test_reorder_by_gas_price() {
+        let mut v = vec![cap_txn(10), user_txn(42), user_txn(100), cap_txn(1)];
+        reorder_by_gas_price(&mut v);
+        assert_eq!(
+            extract(v),
+            vec![
+                "user(100)".to_string(),
+                "user(42)".to_string(),
+                "cap(10)".to_string(),
+                "cap(1)".to_string()
+            ]
+        );
+
+        let mut v = vec![
+            user_txn(1200),
+            cap_txn(10),
+            user_txn(12),
+            user_txn(1000),
+            user_txn(42),
+            user_txn(100),
+            cap_txn(1),
+            user_txn(1000),
+        ];
+        reorder_by_gas_price(&mut v);
+        assert_eq!(
+            extract(v),
+            vec![
+                "user(1200)".to_string(),
+                "user(1000)".to_string(),
+                "user(1000)".to_string(),
+                "user(100)".to_string(),
+                "user(42)".to_string(),
+                "user(12)".to_string(),
+                "cap(10)".to_string(),
+                "cap(1)".to_string()
+            ]
+        );
+
+        // If there are no user transactions, the order should be preserved.
+        let mut v = vec![
+            cap_txn(10),
+            eop_txn(12),
+            eop_txn(10),
+            cap_txn(1),
+            eop_txn(11),
+        ];
+        reorder_by_gas_price(&mut v);
+        assert_eq!(
+            extract(v),
+            vec![
+                "cap(10)".to_string(),
+                "eop(12)".to_string(),
+                "eop(10)".to_string(),
+                "cap(1)".to_string(),
+                "eop(11)".to_string(),
+            ]
+        );
+    }
+
+    fn extract(v: Vec<VerifiedSequencedConsensusTransaction>) -> Vec<String> {
+        v.into_iter().map(extract_one).collect()
+    }
+
+    fn extract_one(t: VerifiedSequencedConsensusTransaction) -> String {
+        match t.0.transaction {
+            SequencedConsensusTransactionKind::External(ext) => match ext.kind {
+                ConsensusTransactionKind::EndOfPublish(authority) => {
+                    format!("eop({})", authority.0[0])
+                }
+                ConsensusTransactionKind::CapabilityNotification(cap) => {
+                    format!("cap({})", cap.generation)
+                }
+                ConsensusTransactionKind::UserTransaction(txn) => {
+                    format!("user({})", txn.transaction_data().gas_price())
+                }
+                _ => unreachable!(),
+            },
+            SequencedConsensusTransactionKind::System(_) => unreachable!(),
+        }
+    }
+
+    fn eop_txn(a: u8) -> VerifiedSequencedConsensusTransaction {
+        let mut authority = AuthorityName::default();
+        authority.0[0] = a;
+        txn(ConsensusTransactionKind::EndOfPublish(authority))
+    }
+
+    fn cap_txn(generation: u64) -> VerifiedSequencedConsensusTransaction {
+        txn(ConsensusTransactionKind::CapabilityNotification(
+            AuthorityCapabilities {
+                authority: Default::default(),
+                generation,
+                supported_protocol_versions: SupportedProtocolVersions::SYSTEM_DEFAULT,
+                available_system_packages: vec![],
+            },
+        ))
+    }
+
+    fn user_txn(gas_price: u64) -> VerifiedSequencedConsensusTransaction {
+        let (committee, keypairs) = Committee::new_simple_test_committee();
+        let data = SenderSignedData::new(
+            TransactionData::new_transfer(
+                SuiAddress::default(),
+                random_object_ref(),
+                SuiAddress::default(),
+                random_object_ref(),
+                1000 * gas_price,
+                gas_price,
+            ),
+            Intent::sui_transaction(),
+            vec![],
+        );
+        txn(ConsensusTransactionKind::UserTransaction(Box::new(
+            CertifiedTransaction::new_from_keypairs_for_testing(data, &keypairs, &committee),
+        )))
+    }
+
+    fn txn(kind: ConsensusTransactionKind) -> VerifiedSequencedConsensusTransaction {
+        VerifiedSequencedConsensusTransaction::new_test(ConsensusTransaction {
+            kind,
+            tracking_id: Default::default(),
+        })
     }
 }

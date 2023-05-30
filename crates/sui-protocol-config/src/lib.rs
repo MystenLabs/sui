@@ -43,6 +43,7 @@ const MAX_PROTOCOL_VERSION: u64 = 13;
 // Version 13: Introduce a config variable to allow charging of computation to be either
 //             bucket base or rounding up. The presence of `gas_rounding_step` (or `None`)
 //             decides whether rounding is applied or not.
+//             Add reordering of user transactions by gas price after consensus.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -490,6 +491,10 @@ pub struct ProtocolConfig {
     /// can happen automatically. 10000bps would indicate that complete unanimity is required (all
     /// 3f+1 must vote), while 0bps would indicate that 2f+1 is sufficient.
     buffer_stake_for_protocol_upgrade_bps: Option<u64>,
+
+    /// What version of reordering algorithm we are using for user transactions included in a Narwhal
+    /// commit in consensus handler.
+    consensus_user_transaction_reordering_version: Option<u64>,
 
     // === Native Function Costs ===
 
@@ -1095,6 +1100,8 @@ impl ProtocolConfig {
                 max_move_value_depth: None,
 
                 gas_rounding_step: None,
+                // At the beginning, we don't reorder user transactions.
+                consensus_user_transaction_reordering_version: None,
 
                 // When adding a new constant, set it to None in the earliest version, like this:
                 // new_constant: None,
@@ -1196,6 +1203,7 @@ impl ProtocolConfig {
             13 => {
                 let mut cfg = Self::get_for_version_impl(version - 1, chain);
                 cfg.gas_rounding_step = Some(1_000);
+                cfg.consensus_user_transaction_reordering_version = Some(1);
                 cfg
             }
             // Use this template when making changes:
