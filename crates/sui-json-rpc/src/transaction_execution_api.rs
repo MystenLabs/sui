@@ -16,20 +16,23 @@ use sui_core::authority::AuthorityState;
 use sui_core::authority_client::NetworkAuthorityClient;
 use sui_core::transaction_orchestrator::TransactiondOrchestrator;
 use sui_json_rpc_types::{
-    DevInspectResults, DryRunTransactionBlockResponse, SuiTransactionBlock,
-    SuiTransactionBlockEvents, SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
+    BalanceChange, DevInspectResults, DryRunTransactionBlockResponse, ObjectChange,
+    SuiTransactionBlock, SuiTransactionBlockEvents, SuiTransactionBlockResponse,
+    SuiTransactionBlockResponseOptions,
 };
 use sui_open_rpc::Module;
 use sui_types::base_types::SuiAddress;
 use sui_types::crypto::default_hash;
 use sui_types::digests::TransactionDigest;
-use sui_types::effects::TransactionEffectsAPI;
+use sui_types::effects::{TransactionEffects, TransactionEffectsAPI, TransactionEvents};
 use sui_types::quorum_driver_types::{
     ExecuteTransactionRequest, ExecuteTransactionRequestType, ExecuteTransactionResponse,
 };
 use sui_types::signature::GenericSignature;
 use sui_types::sui_serde::BigInt;
-use sui_types::transaction::{Transaction, TransactionData, TransactionDataAPI, TransactionKind};
+use sui_types::transaction::{
+    InputObjectKind, Transaction, TransactionData, TransactionDataAPI, TransactionKind,
+};
 use tracing::instrument;
 
 use crate::api::JsonRpcMetrics;
@@ -48,11 +51,27 @@ use mockall::automock;
 pub trait TransactionExecutionInternalTrait {
     async fn execute_transaction_block(
         &self,
-        tx_bytes: Base64,
-        signatures: Vec<Base64>,
-        opts: Option<SuiTransactionBlockResponseOptions>,
-        request_type: Option<ExecuteTransactionRequestType>,
-    ) -> SuiRpcServerResult<SuiTransactionBlockResponse>;
+        tx: Transaction,
+        request_type: ExecuteTransactionRequestType,
+    ) -> SuiRpcServerResult<ExecuteTransactionResponse>;
+    fn show_transaction_details(&self, tx: &Transaction)
+        -> SuiRpcServerResult<SuiTransactionBlock>;
+    fn show_transaction_events(
+        &self,
+        tx_digest: TransactionDigest,
+        tx_events: TransactionEvents,
+    ) -> SuiRpcServerResult<SuiTransactionBlockEvents>;
+    async fn get_object_changes(
+        &self,
+        sender: SuiAddress,
+        effects: &TransactionEffects,
+    ) -> SuiRpcServerResult<Vec<ObjectChange>>;
+    async fn get_balance_changes(
+        &self,
+        effects: &TransactionEffects,
+        input_objs: Vec<InputObjectKind>,
+    ) -> SuiRpcServerResult<Vec<BalanceChange>>;
+    fn get_metrics(&self) -> Arc<JsonRpcMetrics>;
 
     async fn dev_inspect_transaction_block(
         &self,
@@ -90,116 +109,81 @@ impl TransactionExecutionInternal {
 
 #[async_trait]
 impl TransactionExecutionInternalTrait for TransactionExecutionInternal {
+    fn get_metrics(&self) -> Arc<JsonRpcMetrics> {
+        self.metrics.clone()
+    }
+
+    fn show_transaction_details(
+        &self,
+        tx: &Transaction,
+    ) -> SuiRpcServerResult<SuiTransactionBlock> {
+        let epoch_store = self.state.load_epoch_store_one_call_per_task(); // internal
+        Ok(SuiTransactionBlock::try_from(
+            tx.data().clone(),
+            epoch_store.module_cache(),
+        )?)
+    }
+
+    fn show_transaction_events(
+        &self,
+        tx_digest: TransactionDigest,
+        tx_events: TransactionEvents,
+    ) -> SuiRpcServerResult<SuiTransactionBlockEvents> {
+        let module_cache = self
+            .state
+            .load_epoch_store_one_call_per_task()
+            .module_cache()
+            .clone();
+        Ok(SuiTransactionBlockEvents::try_from(
+            tx_events,
+            tx_digest,
+            None,
+            module_cache.as_ref(),
+        )?)
+    }
+
+    async fn get_balance_changes(
+        &self,
+        effects: &TransactionEffects,
+        input_objs: Vec<InputObjectKind>,
+    ) -> SuiRpcServerResult<Vec<BalanceChange>> {
+        let object_cache = ObjectProviderCache::new(self.state.clone());
+        Ok(get_balance_changes_from_effect(&object_cache, effects, input_objs, None).await?)
+    }
+
+    async fn get_object_changes(
+        &self,
+        sender: SuiAddress,
+        effects: &TransactionEffects,
+    ) -> SuiRpcServerResult<Vec<ObjectChange>> {
+        let object_cache = ObjectProviderCache::new(self.state.clone());
+        Ok(get_object_changes(
+            &object_cache,
+            sender,
+            effects.modified_at_versions(),
+            effects.all_changed_objects(),
+            effects.all_deleted(),
+        )
+        .await?)
+    }
+
     async fn execute_transaction_block(
         &self,
-        tx_bytes: Base64,
-        signatures: Vec<Base64>,
-        opts: Option<SuiTransactionBlockResponseOptions>,
-        request_type: Option<ExecuteTransactionRequestType>,
-    ) -> SuiRpcServerResult<SuiTransactionBlockResponse> {
-        let opts = opts.unwrap_or_default();
-
-        let request_type = match (request_type, opts.require_local_execution()) {
-            (Some(ExecuteTransactionRequestType::WaitForEffectsCert), true) => {
-                return Err(Error::SuiRpcInputError(
-                    SuiRpcInputError::InvalidExecuteTransactionRequestType,
-                ));
-            }
-            (t, _) => t.unwrap_or_else(|| opts.default_execution_request_type()),
-        };
-        let tx_data: TransactionData = bcs::from_bytes(&tx_bytes.to_vec()?)?;
-        let sender = tx_data.sender();
-        let input_objs = tx_data.input_objects().unwrap_or_default();
-
-        let mut sigs = Vec::new();
-        for sig in signatures {
-            sigs.push(GenericSignature::from_bytes(&sig.to_vec()?)?);
-        }
-        let txn = Transaction::from_generic_sig_data(tx_data, Intent::sui_transaction(), sigs);
-        let digest = *txn.digest();
-        let raw_transaction = if opts.show_raw_input {
-            bcs::to_bytes(txn.data())?
-        } else {
-            vec![]
-        };
-        // put the following in internal?
-        let transaction = if opts.show_input {
-            let epoch_store = self.state.load_epoch_store_one_call_per_task();
-            Some(SuiTransactionBlock::try_from(
-                txn.data().clone(),
-                epoch_store.module_cache(),
-            )?)
-        } else {
-            None
-        };
-
-        let transaction_orchestrator = self.transaction_orchestrator.clone();
-        let orch_timer = self.metrics.orchestrator_latency_ms.start_timer();
+        tx: Transaction,
+        request_type: ExecuteTransactionRequestType,
+    ) -> SuiRpcServerResult<ExecuteTransactionResponse> {
+        let transaction_orchestrator = self.transaction_orchestrator.clone(); // internal
+        let orch_timer = self.metrics.orchestrator_latency_ms.start_timer(); // internal
         let response = spawn_monitored_task!(transaction_orchestrator.execute_transaction_block(
             ExecuteTransactionRequest {
-                transaction: txn,
+                transaction: tx,
                 request_type,
             }
         ))
         .await?
         .map_err(Error::from)?;
         drop(orch_timer);
-
-        let _post_orch_timer = self.metrics.post_orchestrator_latency_ms.start_timer();
-        let ExecuteTransactionResponse::EffectsCert(cert) = response;
-        let (effects, transaction_events, is_executed_locally) = *cert;
-        let mut events: Option<SuiTransactionBlockEvents> = None;
-        if opts.show_events {
-            let module_cache = self
-                .state
-                .load_epoch_store_one_call_per_task()
-                .module_cache()
-                .clone();
-            events = Some(SuiTransactionBlockEvents::try_from(
-                transaction_events,
-                digest,
-                None,
-                module_cache.as_ref(),
-            )?);
-        }
-
-        let object_cache = ObjectProviderCache::new(self.state.clone());
-        let balance_changes = if opts.show_balance_changes && is_executed_locally {
-            Some(
-                get_balance_changes_from_effect(&object_cache, &effects.effects, input_objs, None)
-                    .await?,
-            )
-        } else {
-            None
-        };
-        let object_changes = if opts.show_object_changes && is_executed_locally {
-            Some(
-                get_object_changes(
-                    &object_cache,
-                    sender,
-                    effects.effects.modified_at_versions(),
-                    effects.effects.all_changed_objects(),
-                    effects.effects.all_deleted(),
-                )
-                .await?,
-            )
-        } else {
-            None
-        };
-
-        Ok(SuiTransactionBlockResponse {
-            digest,
-            transaction,
-            raw_transaction,
-            effects: opts.show_effects.then_some(effects.effects.try_into()?),
-            events,
-            object_changes,
-            balance_changes,
-            timestamp_ms: None,
-            confirmed_local_execution: Some(is_executed_locally),
-            checkpoint: None,
-            errors: vec![],
-        })
+        Ok(response)
     }
 
     async fn dev_inspect_transaction_block(
@@ -227,7 +211,7 @@ impl TransactionExecutionInternalTrait for TransactionExecutionInternal {
             .state
             .dry_exec_transaction(txn_data.clone(), txn_digest)
             .await?;
-        let object_cache = ObjectProviderCache::new_with_cache(self.state.clone(), written_objects);
+        let object_cache = ObjectProviderCache::new_with_cache(self.state.clone(), written_objects); // internal
         let balance_changes = get_balance_changes_from_effect(
             &object_cache,
             &transaction_effects,
@@ -272,6 +256,95 @@ impl TransactionExecutionApi {
             )),
         }
     }
+
+    async fn execute_transaction_block_internal(
+        &self,
+        tx_bytes: Base64,
+        signatures: Vec<Base64>,
+        opts: Option<SuiTransactionBlockResponseOptions>,
+        request_type: Option<ExecuteTransactionRequestType>,
+    ) -> SuiRpcServerResult<SuiTransactionBlockResponse> {
+        let opts = opts.unwrap_or_default();
+        let request_type = match (request_type, opts.require_local_execution()) {
+            (Some(ExecuteTransactionRequestType::WaitForEffectsCert), true) => {
+                return Err(Error::SuiRpcInputError(
+                    SuiRpcInputError::InvalidExecuteTransactionRequestType,
+                ));
+            }
+            (t, _) => t.unwrap_or_else(|| opts.default_execution_request_type()),
+        };
+        let tx_data: TransactionData = bcs::from_bytes(&tx_bytes.to_vec()?)?;
+        let sender = tx_data.sender();
+        let input_objs = tx_data.input_objects().unwrap_or_default();
+
+        let mut sigs = Vec::new();
+        for sig in signatures {
+            sigs.push(GenericSignature::from_bytes(&sig.to_vec()?)?);
+        }
+        let tx = Transaction::from_generic_sig_data(tx_data, Intent::sui_transaction(), sigs);
+        let digest = *tx.digest();
+        let raw_transaction = if opts.show_raw_input {
+            bcs::to_bytes(tx.data())?
+        } else {
+            vec![]
+        };
+
+        // Needs to be before the actual execution, as tx does not implement copy
+        let transaction = opts
+            .show_input
+            .then_some(self.internal.show_transaction_details(&tx)?);
+
+        let response = self
+            .internal
+            .execute_transaction_block(tx, request_type)
+            .await?;
+
+        // build per the transaction options
+        let ExecuteTransactionResponse::EffectsCert(cert) = response;
+        let (effects, transaction_events, is_executed_locally) = *cert;
+
+        let metrics = self.internal.get_metrics();
+        let _post_orch_timer = metrics.post_orchestrator_latency_ms.start_timer();
+
+        let events = opts.show_events.then_some(
+            self.internal
+                .show_transaction_events(digest, transaction_events)?,
+        );
+
+        // balance and object changes
+        let balance_changes = if opts.show_balance_changes && is_executed_locally {
+            Some(
+                self.internal
+                    .get_balance_changes(&effects.effects, input_objs)
+                    .await?,
+            )
+        } else {
+            None
+        };
+        let object_changes = if opts.show_object_changes && is_executed_locally {
+            Some(
+                self.internal
+                    .get_object_changes(sender, &effects.effects)
+                    .await?,
+            )
+        } else {
+            None
+        };
+
+        Ok(SuiTransactionBlockResponse {
+            digest,
+            transaction,
+            raw_transaction,
+            effects: opts.show_effects.then_some(effects.effects.try_into()?),
+            events,
+            object_changes,
+            balance_changes,
+            timestamp_ms: None,
+            confirmed_local_execution: Some(is_executed_locally),
+            checkpoint: None,
+            errors: vec![],
+        })
+    }
 }
 
 #[async_trait]
@@ -286,8 +359,7 @@ impl WriteApiServer for TransactionExecutionApi {
     ) -> RpcResult<SuiTransactionBlockResponse> {
         with_tracing!(async move {
             Ok(self
-                .internal
-                .execute_transaction_block(tx_bytes, signatures, opts, request_type)
+                .execute_transaction_block_internal(tx_bytes, signatures, opts, request_type)
                 .await?)
         })
     }
@@ -483,16 +555,9 @@ mod tests {
         #[tokio::test]
         async fn test_invalid_execute_transaction_request_type() {
             let (tx_bytes, _, signatures, _, _, _) = mock_transaction_data();
-            let mut mock_internal = MockTransactionExecutionInternalTrait::new();
+            let mock_internal = MockTransactionExecutionInternalTrait::new();
             let opts = SuiTransactionBlockResponseOptions::new().with_balance_changes();
             let request_type = ExecuteTransactionRequestType::WaitForEffectsCert;
-            mock_internal
-                .expect_execute_transaction_block()
-                .return_once(|_, _, _, _| {
-                    Err(Error::SuiRpcInputError(
-                        SuiRpcInputError::InvalidExecuteTransactionRequestType,
-                    ))
-                });
             let transaction_execution_api = TransactionExecutionApi {
                 internal: Arc::new(mock_internal),
             };
