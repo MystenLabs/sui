@@ -41,6 +41,7 @@ store = { path = "../../crates/typed-store", package = "typed-store" }
 sui-macros = { path = "../../crates/sui-macros" }
 mysten-network.workspace = true
 workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
+sui-protocol-config = { path = "../../crates/sui-protocol-config" }
 
 mysten-common.workspace = true
 mysten-metrics = { path = "../../crates/mysten-metrics" }

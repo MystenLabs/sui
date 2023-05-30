@@ -8,6 +8,7 @@ mod metrics;
 
 pub use errors::{SubscriberError, SubscriberResult};
 pub use state::ExecutionIndices;
+use sui_protocol_config::ProtocolConfig;
 
 use crate::metrics::ExecutorMetrics;
 use crate::subscriber::spawn_subscriber;
@@ -50,6 +51,7 @@ impl Executor {
         authority_id: AuthorityIdentifier,
         worker_cache: WorkerCache,
         committee: Committee,
+        protocol_config: &ProtocolConfig,
         client: NetworkClient,
         execution_state: State,
         shutdown_receivers: Vec<ConditionalBroadcastReceiver>,
@@ -70,6 +72,7 @@ impl Executor {
             authority_id,
             worker_cache,
             committee,
+            protocol_config.clone(),
             client,
             shutdown_receivers,
             rx_sequence,

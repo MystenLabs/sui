@@ -32,6 +32,7 @@ use std::{
 use store::rocks::DBMap;
 use store::rocks::MetricConf;
 use store::rocks::ReadWriteOptions;
+use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
 use tokio::sync::mpsc::{channel, Receiver, Sender};
 use tracing::info;
 use types::{
@@ -54,6 +55,14 @@ pub const CERTIFICATES_CF: &str = "certificates";
 pub const CERTIFICATE_DIGEST_BY_ROUND_CF: &str = "certificate_digest_by_round";
 pub const CERTIFICATE_DIGEST_BY_ORIGIN_CF: &str = "certificate_digest_by_origin";
 pub const PAYLOAD_CF: &str = "payload";
+
+pub fn latest_protocol_version() -> ProtocolConfig {
+    ProtocolConfig::get_for_version(ProtocolVersion::max())
+}
+
+pub fn get_protocol_config(version_number: u64) -> ProtocolConfig {
+    ProtocolConfig::get_for_version(ProtocolVersion::new(version_number))
+}
 
 pub fn temp_dir() -> std::path::PathBuf {
     tempfile::tempdir()
@@ -128,11 +137,14 @@ pub fn random_key() -> KeyPair {
 ////////////////////////////////////////////////////////////////
 /// Headers, Votes, Certificates
 ////////////////////////////////////////////////////////////////
-pub fn fixture_payload(number_of_batches: u8) -> IndexMap<BatchDigest, (WorkerId, TimestampMs)> {
+pub fn fixture_payload(
+    number_of_batches: u8,
+    protocol_config: &ProtocolConfig,
+) -> IndexMap<BatchDigest, (WorkerId, TimestampMs)> {
     let mut payload: IndexMap<BatchDigest, (WorkerId, TimestampMs)> = IndexMap::new();
 
     for _ in 0..number_of_batches {
-        let batch_digest = batch().digest();
+        let batch_digest = batch(protocol_config).digest();
 
         payload.insert(batch_digest, (0, 0));
     }
@@ -142,22 +154,26 @@ pub fn fixture_payload(number_of_batches: u8) -> IndexMap<BatchDigest, (WorkerId
 
 // will create a batch with randomly formed transactions
 // dictated by the parameter number_of_transactions
-pub fn fixture_batch_with_transactions(number_of_transactions: u32) -> Batch {
+pub fn fixture_batch_with_transactions(
+    number_of_transactions: u32,
+    protocol_config: &ProtocolConfig,
+) -> Batch {
     let transactions = (0..number_of_transactions)
         .map(|_v| transaction())
         .collect();
 
-    Batch::new(transactions)
+    Batch::new(transactions, protocol_config)
 }
 
 pub fn fixture_payload_with_rand<R: Rng + ?Sized>(
     number_of_batches: u8,
     rand: &mut R,
+    protocol_config: &ProtocolConfig,
 ) -> IndexMap<BatchDigest, (WorkerId, TimestampMs)> {
     let mut payload: IndexMap<BatchDigest, (WorkerId, TimestampMs)> = IndexMap::new();
 
     for _ in 0..number_of_batches {
-        let batch_digest = batch_with_rand(rand).digest();
+        let batch_digest = batch_with_rand(rand, protocol_config).digest();
 
         payload.insert(batch_digest, (0, 0));
     }
@@ -172,11 +188,11 @@ pub fn transaction_with_rand<R: Rng + ?Sized>(rand: &mut R) -> Transaction {
         .collect()
 }
 
-pub fn batch_with_rand<R: Rng + ?Sized>(rand: &mut R) -> Batch {
-    Batch::new(vec![
-        transaction_with_rand(rand),
-        transaction_with_rand(rand),
-    ])
+pub fn batch_with_rand<R: Rng + ?Sized>(rand: &mut R, protocol_config: &ProtocolConfig) -> Batch {
+    Batch::new(
+        vec![transaction_with_rand(rand), transaction_with_rand(rand)],
+        protocol_config,
+    )
 }
 
 // Fixture
@@ -364,30 +380,33 @@ impl WorkerToWorker for WorkerToWorkerMockServer {
 ////////////////////////////////////////////////////////////////
 
 // Fixture
-pub fn batch() -> Batch {
-    Batch::new(vec![transaction(), transaction()])
+pub fn batch(protocol_config: &ProtocolConfig) -> Batch {
+    Batch::new(vec![transaction(), transaction()], protocol_config)
 }
 
 /// generate multiple fixture batches. The number of generated batches
 /// are dictated by the parameter num_of_batches.
-pub fn batches(num_of_batches: usize) -> Vec<Batch> {
+pub fn batches(num_of_batches: usize, protocol_config: &ProtocolConfig) -> Vec<Batch> {
     let mut batches = Vec::new();
 
     for i in 1..num_of_batches + 1 {
-        batches.push(batch_with_transactions(i));
+        batches.push(batch_with_transactions(i, protocol_config));
     }
 
     batches
 }
 
-pub fn batch_with_transactions(num_of_transactions: usize) -> Batch {
+pub fn batch_with_transactions(
+    num_of_transactions: usize,
+    protocol_config: &ProtocolConfig,
+) -> Batch {
     let mut transactions = Vec::new();
 
     for _ in 0..num_of_transactions {
         transactions.push(transaction());
     }
 
-    Batch::new(transactions)
+    Batch::new(transactions, protocol_config)
 }
 
 const BATCHES_CF: &str = "batches";
@@ -409,11 +428,12 @@ pub fn create_batch_store() -> DBMap<BatchDigest, Batch> {
 // Note : the certificates are unsigned
 pub fn make_optimal_certificates(
     committee: &Committee,
+    protocol_config: &ProtocolConfig,
     range: RangeInclusive<Round>,
     initial_parents: &BTreeSet<CertificateDigest>,
     ids: &[AuthorityIdentifier],
 ) -> (VecDeque<Certificate>, BTreeSet<CertificateDigest>) {
-    make_certificates(committee, range, initial_parents, ids, 0.0)
+    make_certificates(committee, protocol_config, range, initial_parents, ids, 0.0)
 }
 
 // Outputs rounds worth of certificates with optimal parents, signed
@@ -421,9 +441,17 @@ pub fn make_optimal_signed_certificates(
     range: RangeInclusive<Round>,
     initial_parents: &BTreeSet<CertificateDigest>,
     committee: &Committee,
+    protocol_config: &ProtocolConfig,
     keys: &[(AuthorityIdentifier, KeyPair)],
 ) -> (VecDeque<Certificate>, BTreeSet<CertificateDigest>) {
-    make_signed_certificates(range, initial_parents, committee, keys, 0.0)
+    make_signed_certificates(
+        range,
+        initial_parents,
+        committee,
+        protocol_config,
+        keys,
+        0.0,
+    )
 }
 
 // Bernoulli-samples from a set of ancestors passed as a argument,
@@ -475,12 +503,14 @@ fn rounds_of_certificates(
 // make rounds worth of unsigned certificates with the sampled number of parents
 pub fn make_certificates(
     committee: &Committee,
+    protocol_config: &ProtocolConfig,
     range: RangeInclusive<Round>,
     initial_parents: &BTreeSet<CertificateDigest>,
     ids: &[AuthorityIdentifier],
     failure_probability: f64,
 ) -> (VecDeque<Certificate>, BTreeSet<CertificateDigest>) {
-    let generator = |pk, round, parents| mock_certificate(committee, pk, round, parents);
+    let generator =
+        |pk, round, parents| mock_certificate(committee, protocol_config, pk, round, parents);
 
     rounds_of_certificates(range, initial_parents, ids, failure_probability, generator)
 }
@@ -495,6 +525,7 @@ pub fn make_certificates(
 // produced.
 pub fn make_certificates_with_slow_nodes(
     committee: &Committee,
+    protocol_config: &ProtocolConfig,
     range: RangeInclusive<Round>,
     initial_parents: Vec<Certificate>,
     names: &[AuthorityIdentifier],
@@ -525,7 +556,8 @@ pub fn make_certificates_with_slow_nodes(
                 committee,
             );
 
-            let (_, certificate) = mock_certificate(committee, *name, round, this_cert_parents);
+            let (_, certificate) =
+                mock_certificate(committee, protocol_config, *name, round, this_cert_parents);
             certificates.push_back(certificate.clone());
             next_parents.push(certificate);
         }
@@ -600,6 +632,7 @@ pub fn this_cert_parents_with_slow_nodes(
 // make rounds worth of unsigned certificates with the sampled number of parents
 pub fn make_certificates_with_epoch(
     committee: &Committee,
+    protocol_config: &ProtocolConfig,
     range: RangeInclusive<Round>,
     epoch: Epoch,
     initial_parents: &BTreeSet<CertificateDigest>,
@@ -612,8 +645,14 @@ pub fn make_certificates_with_epoch(
     for round in range {
         next_parents.clear();
         for name in keys {
-            let (digest, certificate) =
-                mock_certificate_with_epoch(committee, *name, round, epoch, parents.clone());
+            let (digest, certificate) = mock_certificate_with_epoch(
+                committee,
+                protocol_config,
+                *name,
+                round,
+                epoch,
+                parents.clone(),
+            );
             certificates.push_back(certificate);
             next_parents.insert(digest);
         }
@@ -627,6 +666,7 @@ pub fn make_signed_certificates(
     range: RangeInclusive<Round>,
     initial_parents: &BTreeSet<CertificateDigest>,
     committee: &Committee,
+    protocol_config: &ProtocolConfig,
     keys: &[(AuthorityIdentifier, KeyPair)],
     failure_probability: f64,
 ) -> (VecDeque<Certificate>, BTreeSet<CertificateDigest>) {
@@ -634,8 +674,9 @@ pub fn make_signed_certificates(
         .iter()
         .map(|(authority, _)| *authority)
         .collect::<Vec<_>>();
-    let generator =
-        |pk, round, parents| mock_signed_certificate(keys, pk, round, parents, committee);
+    let generator = |pk, round, parents| {
+        mock_signed_certificate(keys, pk, round, parents, committee, protocol_config)
+    };
 
     rounds_of_certificates(
         range,
@@ -648,6 +689,7 @@ pub fn make_signed_certificates(
 
 pub fn mock_certificate_with_rand<R: RngCore + ?Sized>(
     committee: &Committee,
+    protocol_config: &ProtocolConfig,
     origin: AuthorityIdentifier,
     round: Round,
     parents: BTreeSet<CertificateDigest>,
@@ -659,7 +701,7 @@ pub fn mock_certificate_with_rand<R: RngCore + ?Sized>(
         .round(round)
         .epoch(0)
         .parents(parents)
-        .payload(fixture_payload_with_rand(1, rand))
+        .payload(fixture_payload_with_rand(1, rand, protocol_config))
         .build()
         .unwrap();
     let certificate = Certificate::new_unsigned(committee, Header::V1(header), Vec::new()).unwrap();
@@ -670,17 +712,19 @@ pub fn mock_certificate_with_rand<R: RngCore + ?Sized>(
 // Note: the certificate is signed by a random key rather than its author
 pub fn mock_certificate(
     committee: &Committee,
+    protocol_config: &ProtocolConfig,
     origin: AuthorityIdentifier,
     round: Round,
     parents: BTreeSet<CertificateDigest>,
 ) -> (CertificateDigest, Certificate) {
-    mock_certificate_with_epoch(committee, origin, round, 0, parents)
+    mock_certificate_with_epoch(committee, protocol_config, origin, round, 0, parents)
 }
 
 // Creates a badly signed certificate from its given round, epoch, origin, and parents,
 // Note: the certificate is signed by a random key rather than its author
 pub fn mock_certificate_with_epoch(
     committee: &Committee,
+    protocol_config: &ProtocolConfig,
     origin: AuthorityIdentifier,
     round: Round,
     epoch: Epoch,
@@ -692,7 +736,7 @@ pub fn mock_certificate_with_epoch(
         .round(round)
         .epoch(epoch)
         .parents(parents)
-        .payload(fixture_payload(1))
+        .payload(fixture_payload(1, protocol_config))
         .build()
         .unwrap();
     let certificate = Certificate::new_unsigned(committee, Header::V1(header), Vec::new()).unwrap();
@@ -706,10 +750,11 @@ pub fn mock_signed_certificate(
     round: Round,
     parents: BTreeSet<CertificateDigest>,
     committee: &Committee,
+    protocol_config: &ProtocolConfig,
 ) -> (CertificateDigest, Certificate) {
     let header_builder = HeaderV1Builder::default()
         .author(origin)
-        .payload(fixture_payload(1))
+        .payload(fixture_payload(1, protocol_config))
         .round(round)
         .epoch(0)
         .parents(parents);
@@ -734,6 +779,7 @@ pub struct Builder<R = OsRng> {
     number_of_workers: NonZeroUsize,
     randomize_ports: bool,
     epoch: Epoch,
+    protocol_version: ProtocolVersion,
     stake: VecDeque<Stake>,
 }
 
@@ -747,6 +793,7 @@ impl Builder {
     pub fn new() -> Self {
         Self {
             epoch: Epoch::default(),
+            protocol_version: ProtocolVersion::max(),
             rng: OsRng,
             committee_size: NonZeroUsize::new(4).unwrap(),
             number_of_workers: NonZeroUsize::new(4).unwrap(),
@@ -777,6 +824,11 @@ impl<R> Builder<R> {
         self
     }
 
+    pub fn protocol_version(mut self, protocol_version: ProtocolVersion) -> Self {
+        self.protocol_version = protocol_version;
+        self
+    }
+
     pub fn stake_distribution(mut self, stake: VecDeque<Stake>) -> Self {
         self.stake = stake;
         self
@@ -786,6 +838,7 @@ impl<R> Builder<R> {
         Builder {
             rng,
             epoch: self.epoch,
+            protocol_version: self.protocol_version,
             committee_size: self.committee_size,
             number_of_workers: self.number_of_workers,
             randomize_ports: self.randomize_ports,
@@ -915,6 +968,7 @@ impl CommitteeFixture {
         &self,
         prior_round: Round,
         parents: &BTreeSet<CertificateDigest>,
+        protocol_config: &ProtocolConfig,
     ) -> (Round, Vec<Header>) {
         let round = prior_round + 1;
         let next_headers = self
@@ -927,7 +981,7 @@ impl CommitteeFixture {
                     .round(round)
                     .epoch(0)
                     .parents(parents.clone())
-                    .with_payload_batch(fixture_batch_with_transactions(10), 0, 0)
+                    .with_payload_batch(fixture_batch_with_transactions(10, protocol_config), 0, 0)
                     .build()
                     .unwrap();
                 Header::V1(header)

@@ -11,12 +11,13 @@ use itertools::Itertools;
 use network::{client::NetworkClient, WorkerToPrimaryClient};
 use std::{collections::HashSet, time::Duration};
 use store::{rocks::DBMap, Map};
+use sui_protocol_config::ProtocolConfig;
 use tracing::{debug, trace};
 use types::{
-    Batch, BatchDigest, FetchBatchesRequest, FetchBatchesResponse, PrimaryToWorker,
-    RequestBatchRequest, RequestBatchResponse, RequestBatchesRequest, RequestBatchesResponse,
-    WorkerBatchMessage, WorkerDeleteBatchesMessage, WorkerOthersBatchMessage,
-    WorkerSynchronizeMessage, WorkerToWorker, WorkerToWorkerClient,
+    now, validate_batch_version, Batch, BatchAPI, BatchDigest, FetchBatchesRequest,
+    FetchBatchesResponse, MetadataAPI, PrimaryToWorker, RequestBatchRequest, RequestBatchResponse,
+    RequestBatchesRequest, RequestBatchesResponse, WorkerBatchMessage, WorkerDeleteBatchesMessage,
+    WorkerOthersBatchMessage, WorkerSynchronizeMessage, WorkerToWorker, WorkerToWorkerClient,
 };
 
 use crate::{batch_fetcher::BatchFetcher, TransactionValidator};
@@ -28,6 +29,7 @@ pub mod handlers_tests;
 /// Defines how the network receiver handles incoming workers messages.
 #[derive(Clone)]
 pub struct WorkerReceiverHandler<V> {
+    pub protocol_config: ProtocolConfig,
     pub id: WorkerId,
     pub client: NetworkClient,
     pub store: DBMap<BatchDigest, Batch>,
@@ -41,14 +43,26 @@ impl<V: TransactionValidator> WorkerToWorker for WorkerReceiverHandler<V> {
         request: anemo::Request<WorkerBatchMessage>,
     ) -> Result<anemo::Response<()>, anemo::rpc::Status> {
         let message = request.into_body();
-        if let Err(err) = self.validator.validate_batch(&message.batch).await {
+        if let Err(err) = self
+            .validator
+            .validate_batch(&message.batch, &self.protocol_config)
+            .await
+        {
             return Err(anemo::rpc::Status::new_with_message(
                 StatusCode::BadRequest,
                 format!("Invalid batch: {err}"),
             ));
         }
         let digest = message.batch.digest();
-        self.store.insert(&digest, &message.batch).map_err(|e| {
+
+        let mut batch = message.batch.clone();
+
+        // TODO: Remove once we have upgraded to protocol version 12.
+        if self.protocol_config.narwhal_versioned_metadata() {
+            // Set received_at timestamp for remote batch.
+            batch.versioned_metadata_mut().set_received_at(now());
+        }
+        self.store.insert(&digest, &batch).map_err(|e| {
             anemo::rpc::Status::internal(format!("failed to write to batch store: {e:?}"))
         })?;
         self.client
@@ -122,6 +136,7 @@ pub struct PrimaryReceiverHandler<V> {
     pub id: WorkerId,
     // The committee information.
     pub committee: Committee,
+    pub protocol_config: ProtocolConfig,
     // The worker information cache.
     pub worker_cache: WorkerCache,
     // The batch store
@@ -200,23 +215,42 @@ impl<V: TransactionValidator> PrimaryToWorker for PrimaryReceiverHandler<V> {
             batch_digests: missing.iter().cloned().collect(),
         };
         debug!("Sending RequestBatchesRequest to {worker_name}: {request:?}");
-        let response = client
+
+        let mut response = client
             .request_batches(anemo::Request::new(request).with_timeout(self.request_batch_timeout))
             .await?
             .into_inner();
-        for batch in response.batches {
+        for batch in response.batches.iter_mut() {
             if !message.is_certified {
                 // This batch is not part of a certificate, so we need to validate it.
-                if let Err(err) = self.validator.validate_batch(&batch).await {
+                if let Err(err) = self
+                    .validator
+                    .validate_batch(batch, &self.protocol_config)
+                    .await
+                {
                     return Err(anemo::rpc::Status::new_with_message(
                         StatusCode::BadRequest,
                         format!("Invalid batch: {err}"),
                     ));
                 }
             }
+
+            // TODO: Remove once we have upgraded to protocol version 12.
+            validate_batch_version(batch, &self.protocol_config).map_err(|err| {
+                anemo::rpc::Status::new_with_message(
+                    StatusCode::BadRequest,
+                    format!("Invalid batch: {err}"),
+                )
+            })?;
+
             let digest = batch.digest();
             if missing.remove(&digest) {
-                self.store.insert(&digest, &batch).map_err(|e| {
+                // TODO: Remove once we have upgraded to protocol version 12.
+                if self.protocol_config.narwhal_versioned_metadata() {
+                    // Set received_at timestamp for remote batch.
+                    batch.versioned_metadata_mut().set_received_at(now());
+                }
+                self.store.insert(&digest, batch).map_err(|e| {
                     anemo::rpc::Status::internal(format!("failed to write to batch store: {e:?}"))
                 })?;
             }

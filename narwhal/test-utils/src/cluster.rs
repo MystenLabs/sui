@@ -1,6 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::{temp_dir, CommitteeFixture};
+use crate::{latest_protocol_version, temp_dir, CommitteeFixture};
 use config::{AuthorityIdentifier, Committee, Parameters, WorkerCache, WorkerId};
 use crypto::{KeyPair, NetworkKeyPair, PublicKey};
 use executor::SerializedTransaction;
@@ -364,6 +364,7 @@ impl PrimaryNodeDetails {
                 self.key_pair.copy(),
                 self.network_key_pair.copy(),
                 self.committee.clone(),
+                latest_protocol_version(),
                 self.worker_cache.clone(),
                 client,
                 &primary_store,
@@ -429,7 +430,7 @@ impl WorkerNodeDetails {
         worker_cache: WorkerCache,
     ) -> Self {
         let registry_service = RegistryService::new(Registry::new());
-        let node = WorkerNode::new(id, parameters, registry_service);
+        let node = WorkerNode::new(id, latest_protocol_version(), parameters, registry_service);
 
         Self {
             id,

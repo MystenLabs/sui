@@ -24,6 +24,7 @@ tracing = "0.1.36"
 itertools = "0.10.5"
 prometheus = "0.13.3"
 storage = { path = "../storage", package = "narwhal-storage" }
+sui-protocol-config = { path = "../../crates/sui-protocol-config" }
 
 types = { path = "../types", package = "narwhal-types" }
 network = { path = "../network", package = "narwhal-network" }
