@@ -6,6 +6,7 @@ import { Link } from 'react-router-dom';
 
 import { Heading } from '_app/shared/heading';
 import { Text } from '_app/shared/text';
+import { ampli } from '_src/shared/analytics/ampli';
 
 const selections = [
     {
@@ -13,6 +14,7 @@ const selections = [
         desc: 'This creates a new wallet and a 12-word recovery phrase.',
         url: '../create',
         action: 'Create a New Wallet',
+        onClick: () => ampli.createANewWallet(),
         icon: <Add16 className="font-semibold" />,
     },
     {
@@ -51,6 +53,7 @@ const SelectPage = () => {
                         </Text>
 
                         <Link
+                            onClick={aSelection.onClick}
                             to={aSelection.url}
                             className={
                                 'mt-3.5 flex flex-nowrap items-center justify-center bg-hero-dark text-white !rounded-xl py-3.75 px-5 w-full gap-2.5 no-underline font-semibold text-body hover:bg-hero'

@@ -17,6 +17,7 @@ import { useAppSelector } from './app/hooks';
 import { ErrorBoundary } from '_components/error-boundary';
 import { initAppType } from '_redux/slices/app';
 import { getFromLocationSearch } from '_redux/slices/app/AppType';
+import { initAmplitude } from '_src/shared/analytics/amplitude';
 import { setAttributes } from '_src/shared/experimentation/features';
 import initSentry from '_src/shared/sentry';
 import store from '_store';
@@ -69,13 +70,7 @@ function AppWrapper() {
                     <Fragment key={network}>
                         <PersistQueryClientProvider
                             client={queryClient}
-                            persistOptions={{
-                                persister,
-                                dehydrateOptions: {
-                                    shouldDehydrateQuery: ({ meta }) =>
-                                        !meta?.skipPersistedCache,
-                                },
-                            }}
+                            persistOptions={{ persister }}
                         >
                             <RpcClientContext.Provider
                                 value={api.instance.fullNode}
@@ -95,5 +90,6 @@ function AppWrapper() {
 (async () => {
     await init();
     initSentry();
+    initAmplitude();
     renderApp();
 })();
