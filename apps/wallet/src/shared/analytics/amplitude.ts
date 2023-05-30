@@ -22,9 +22,6 @@ export async function initAmplitude() {
                 // This prevents Amplitude from setting its initial
                 // cookies upon initialization of the SDK
                 disableCookies: true,
-                trackingOptions: {
-                    ipAddress: false,
-                },
                 logLevel: IS_PROD_ENV
                     ? amplitude.Types.LogLevel.Warn
                     : amplitude.Types.LogLevel.Debug,

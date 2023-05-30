@@ -151,8 +151,8 @@ amplitudePersistenceMiddleware.startListening({
         if (payload.isInitialized) {
             // The user has accepted our terms of service after their primary
             // account has been initialized (either by creating a new wallet
-            // or importing a previous account). This means we can switch to
-            // persist our Amplitude storage to cookies
+            // or importing a previous account). This means we've gained
+            // consent and can persist device data to cookie storage
             persistableStorage.persist();
             listenerApi.unsubscribe();
         }
