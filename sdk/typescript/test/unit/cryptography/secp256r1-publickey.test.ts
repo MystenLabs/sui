@@ -22,7 +22,7 @@ let SECP_TEST_CASES = new Map<string, string>([
 describe('Secp256r1PublicKey', () => {
   it('invalid', () => {
     expect(() => {
-      new Secp256r1PublicKey(INVALID_SECP256R_PUBLIC_KEY);
+      new Secp256r1PublicKey(INVALID_SECP256R1_PUBLIC_KEY);
     }).toThrow();
 
     expect(() => {
