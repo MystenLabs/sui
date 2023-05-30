@@ -89,7 +89,7 @@ export const SuiRawMoveObject = object({
   /** Move type (e.g., "0x2::coin::Coin<0x2::sui::SUI>") */
   type: string(),
   hasPublicTransfer: boolean(),
-  version: SequenceNumber,
+  version: number(),
   bcsBytes: string(),
 });
 export type SuiRawMoveObject = Infer<typeof SuiRawMoveObject>;
