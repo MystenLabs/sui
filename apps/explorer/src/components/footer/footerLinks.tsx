@@ -28,7 +28,7 @@ export const footerLinks = [
     },
     {
         title: 'Docs',
-        href: 'https://github.com/MystenLabs/mysten-app-docs/blob/main/mysten-sui-explorer.md',
+        href: 'https://docs.mystenlabs.com/explorer',
     },
     {
         title: 'GitHub',
