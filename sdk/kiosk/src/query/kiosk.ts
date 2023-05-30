@@ -3,6 +3,8 @@
 
 import {
   JsonRpcProvider,
+  ObjectId,
+  ObjectType,
   PaginationArguments,
   SuiAddress,
 } from '@mysten/sui.js';
@@ -20,7 +22,7 @@ import { Kiosk } from '../bcs';
  */
 export type KioskListing = {
   /** The ID of the Item */
-  itemId: string;
+  itemId: ObjectId;
   /**
    * Whether or not there's a `PurchaseCap` issued. `true` means that
    * the listing is controlled by some logic and can't be purchased directly.
@@ -29,7 +31,7 @@ export type KioskListing = {
    */
   isExclusive: boolean;
   /** The ID of the listing */
-  listingId: string;
+  listingId: ObjectId;
   price?: string;
 };
 
@@ -39,9 +41,9 @@ export type KioskListing = {
  */
 export type KioskItem = {
   /** The ID of the Item */
-  itemId: string;
+  itemId: ObjectId;
   /** The type of the Item */
-  itemType: string;
+  itemType: ObjectType;
   /** Whether the item is Locked (there must be a `Lock` Dynamic Field) */
   isLocked: boolean;
   /** Optional listing */
@@ -52,10 +54,10 @@ export type KioskItem = {
  */
 export type KioskData = {
   items: KioskItem[];
-  itemIds: string[];
-  listingIds: string[];
+  itemIds: ObjectId[];
+  listingIds: ObjectId[];
   kiosk?: Kiosk;
-  extensions: string[];
+  extensions: any[]; // type will be defined on later versions of the SDK.
 };
 
 export type PagedKioskData = {
@@ -81,7 +83,7 @@ export async function fetchKiosk(
   });
 
   const listings: KioskListing[] = [];
-  const lockedItemIds: string[] = [];
+  const lockedItemIds: ObjectId[] = [];
 
   // extracted kiosk data.
   const kioskData = extractKioskData(data, listings, lockedItemIds);
@@ -97,7 +99,6 @@ export async function fetchKiosk(
       ? provider.multiGetObjects({
           ids: kioskData.listingIds,
           options: {
-            showBcs: true,
             showContent: true,
           },
         })

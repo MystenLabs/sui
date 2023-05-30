@@ -3,6 +3,7 @@
 
 import {
   JsonRpcProvider,
+  ObjectId,
   SharedObjectRef,
   SuiObjectRef,
   SuiObjectResponse,
@@ -122,8 +123,8 @@ export const attachListingsAndPrices = (
 ) => {
   // map item listings as {item_id: KioskListing}
   // for easier mapping on the nex
-  const itemListings = listings.reduce<Record<string, KioskListing>>(
-    (acc: Record<string, KioskListing>, item, idx) => {
+  const itemListings = listings.reduce<Record<ObjectId, KioskListing>>(
+    (acc: Record<ObjectId, KioskListing>, item, idx) => {
       acc[item.itemId] = { ...item };
 
       // return in case we don't have any listing objects.
@@ -149,11 +150,11 @@ export const attachListingsAndPrices = (
  */
 export const attachLockedItems = (
   kioskData: KioskData,
-  lockedItemIds: string[],
+  lockedItemIds: ObjectId[],
 ) => {
   // map lock status in an array of type { item_id: true }
-  const lockedStatuses = lockedItemIds.reduce<Record<string, boolean>>(
-    (acc: Record<string, boolean>, item: string) => {
+  const lockedStatuses = lockedItemIds.reduce<Record<ObjectId, boolean>>(
+    (acc: Record<ObjectId, boolean>, item: string) => {
       acc[item] = true;
       return acc;
     },
