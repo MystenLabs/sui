@@ -1,5 +1,5 @@
 use crate::syncoexec::MemoryBackedStore;
-use clap::Parser;
+use clap::*;
 use std::collections::HashSet;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -8,7 +8,6 @@ use sui_adapter::execution_engine;
 use sui_adapter::execution_mode;
 use sui_config::{Config, NodeConfig};
 use sui_core::authority::authority_per_epoch_store::AuthorityPerEpochStore;
-use sui_core::authority::authority_store_tables::AuthorityPerpetualTables;
 use sui_core::authority::epoch_start_configuration::EpochStartConfiguration;
 use sui_core::authority::AuthorityStore;
 use sui_core::checkpoints::CheckpointStore;
@@ -21,21 +20,37 @@ use sui_core::transaction_input_checker::get_gas_status;
 use sui_node;
 use sui_node::metrics;
 use sui_types::message_envelope::Message;
+use sui_types::messages::InputObjectKind;
+use sui_types::messages::InputObjects;
+use sui_types::messages::TransactionDataAPI;
 use sui_types::metrics::LimitsMetrics;
 use sui_types::multiaddr::Multiaddr;
-use sui_types::software_version::VERSION;
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
 use sui_types::sui_system_state::get_sui_system_state;
 use sui_types::sui_system_state::SuiSystemStateTrait;
 use sui_types::temporary_store::TemporaryStore;
-use sui_types::transaction::InputObjectKind;
-use sui_types::transaction::InputObjects;
-use sui_types::transaction::TransactionDataAPI;
 use tokio::sync::watch;
 use tokio::time::Duration;
 use typed_store::rocks::default_db_options;
 
 pub mod syncoexec;
+
+const GIT_REVISION: &str = {
+    if let Some(revision) = option_env!("GIT_REVISION") {
+        revision
+    } else {
+        let version = git_version::git_version!(
+            args = ["--always", "--dirty", "--exclude", "*"],
+            fallback = ""
+        );
+
+        if version.is_empty() {
+            panic!("unable to query git revision");
+        }
+        version
+    }
+};
+const VERSION: &str = const_str::concat!(env!("CARGO_PKG_VERSION"), "-", GIT_REVISION);
 
 #[derive(Parser)]
 #[clap(rename_all = "kebab-case")]
@@ -75,26 +90,15 @@ async fn main() {
         &genesis_committee,
         None,
     ));
-    // checkpoint store
     // authority store
     let perpetual_options = default_db_options().optimize_db_for_write_throughput(4);
-    let perpetual_tables = Arc::new(AuthorityPerpetualTables::open(
+    // let perpetual_tables = Arc::new(AuthorityPerpetualTables::open(
+    //     &config.db_path().join("store"),
+    //     Some(perpetual_options.options),
+    // ));
+    let store = AuthorityStore::open(
         &config.db_path().join("store"),
         Some(perpetual_options.options),
-    ));
-    let epoch_start_configuration = {
-        let epoch_start_configuration = EpochStartConfiguration::new(
-            genesis.sui_system_object().into_epoch_start_state(),
-            *genesis.checkpoint().digest(),
-        );
-        perpetual_tables
-            .set_epoch_start_configuration(&epoch_start_configuration)
-            .await
-            .expect("Could not set epoch start configuration");
-        epoch_start_configuration
-    };
-    let store = AuthorityStore::open(
-        perpetual_tables,
         genesis,
         &committee_store,
         config.indirect_objects_threshold,
@@ -105,6 +109,17 @@ async fn main() {
     )
     .await
     .expect("Could not create AuthorityStore");
+    let epoch_start_configuration = {
+        let epoch_start_configuration = EpochStartConfiguration::new(
+            genesis.sui_system_object().into_epoch_start_state(),
+            *genesis.checkpoint().digest(),
+        );
+        store
+            .set_epoch_start_configuration(&epoch_start_configuration)
+            .await
+            .expect("Could not set epoch start configuration");
+        epoch_start_configuration
+    };
     // epoch store
     let cur_epoch = 0; // always start from epoch 0
     let committee = committee_store
