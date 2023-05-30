@@ -1,3 +1,6 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 import { CookieStorage } from '@amplitude/analytics-client-common';
 import { MemoryStorage } from '@amplitude/analytics-core';
 import { type Storage } from '@amplitude/analytics-types';

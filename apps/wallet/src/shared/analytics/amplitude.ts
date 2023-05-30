@@ -14,16 +14,18 @@ export const persistableStorage = new PersistableStorage<UserSession>();
 export async function initAmplitude() {
     ampli.load({
         environment: process.env.NODE_ENV ?? 'development',
+        // Flip this if you'd like to test Amplitude locally
+        disabled: !IS_PROD_ENV,
         client: {
             configuration: {
-                logLevel: IS_PROD_ENV
-                    ? amplitude.Types.LogLevel.Warn
-                    : amplitude.Types.LogLevel.Debug,
-                disableCookies: true,
                 cookieStorage: persistableStorage,
+                disableCookies: true,
                 trackingOptions: {
                     ipAddress: false,
                 },
+                logLevel: IS_PROD_ENV
+                    ? amplitude.Types.LogLevel.Warn
+                    : amplitude.Types.LogLevel.Debug,
             },
         },
     });
