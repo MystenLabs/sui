@@ -19,9 +19,6 @@ export async function initAmplitude() {
         client: {
             configuration: {
                 cookieStorage: persistableStorage,
-                // This prevents Amplitude from setting its initial
-                // cookies upon initialization of the SDK
-                disableCookies: true,
                 logLevel: IS_PROD_ENV
                     ? amplitude.Types.LogLevel.Warn
                     : amplitude.Types.LogLevel.Debug,
