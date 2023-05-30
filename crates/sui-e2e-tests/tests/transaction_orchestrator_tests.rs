@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use prometheus::Registry;
+use std::time::Duration;
 use sui_core::authority_client::NetworkAuthorityClient;
 use sui_core::transaction_orchestrator::TransactiondOrchestrator;
 use sui_macros::sim_test;
@@ -12,6 +13,7 @@ use sui_types::quorum_driver_types::{
 use sui_types::transaction::VerifiedTransaction;
 use test_utils::network::TestClusterBuilder;
 use test_utils::transaction::wait_for_tx;
+use tokio::time::timeout;
 use tracing::info;
 
 #[sim_test]
@@ -181,13 +183,25 @@ async fn test_transaction_orchestrator_reconfig() {
 
     test_cluster.trigger_reconfiguration().await;
 
-    let epoch = test_cluster.fullnode_handle.sui_node.with(|node| {
-        node.transaction_orchestrator()
-            .unwrap()
-            .quorum_driver()
-            .current_epoch()
-    });
-    assert_eq!(epoch, 1);
+    // After epoch change on a fullnode, there could be a delay before the transaction orchestrator
+    // updates its committee (happens asynchronously after receiving a reconfig message). Use a timeout
+    // to make the test more reliable.
+    timeout(Duration::from_secs(5), async {
+        loop {
+            let epoch = test_cluster.fullnode_handle.sui_node.with(|node| {
+                node.transaction_orchestrator()
+                    .unwrap()
+                    .quorum_driver()
+                    .current_epoch()
+            });
+            if epoch == 1 {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(100)).await;
+        }
+    })
+    .await
+    .unwrap();
 
     assert_eq!(
         test_cluster.fullnode_handle.sui_node.with(|node| node
