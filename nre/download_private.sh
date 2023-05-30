@@ -19,8 +19,8 @@ curl $url/sui-indexer -o sui-indexer
 curl $url/sui-node -o sui-node
 curl $url/sui-tool -o sui-tool
 
-echo "[+] Verifying sui docker artifacts for $commit_sha ..."
+echo "[+] Verifying sui binaries for $commit_sha ..."
 cosign verify-blob --insecure-ignore-tlog --key $pub_key --signature $url/sui.sig sui
 cosign verify-blob --insecure-ignore-tlog --key $pub_key --signature $url/sui-indexer.sig sui-indexer
 cosign verify-blob --insecure-ignore-tlog --key $pub_key --signature $url/sui-node.sig sui-node
-
+cosign verify-blob --insecure-ignore-tlog --key $pub_key --signature $url/sui-tool.sig sui-tool
