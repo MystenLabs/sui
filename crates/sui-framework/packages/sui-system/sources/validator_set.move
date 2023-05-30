@@ -308,19 +308,18 @@ module sui_system::validator_set {
         self: &mut ValidatorSet,
         staked_sui: StakedSui,
         ctx: &mut TxContext,
-    ) {
+    ) : Balance<SUI> {
         let staking_pool_id = pool_id(&staked_sui);
-        // This is an active validator.
-        if (table::contains(&self.staking_pool_mappings, staking_pool_id)) {
-            let validator_address = *table::borrow(&self.staking_pool_mappings, pool_id(&staked_sui));
-            let validator = get_candidate_or_active_validator_mut(self, validator_address);
-            validator::request_withdraw_stake(validator, staked_sui, ctx);
-        } else { // This is an inactive pool.
-            assert!(table::contains(&self.inactive_validators, staking_pool_id), ENoPoolFound);
-            let wrapper = table::borrow_mut(&mut self.inactive_validators, staking_pool_id);
-            let validator = validator_wrapper::load_validator_maybe_upgrade(wrapper);
-            validator::request_withdraw_stake(validator, staked_sui, ctx);
-        }
+        let validator =
+            if (table::contains(&self.staking_pool_mappings, staking_pool_id)) { // This is an active validator.
+                let validator_address = *table::borrow(&self.staking_pool_mappings, pool_id(&staked_sui));
+                get_candidate_or_active_validator_mut(self, validator_address)
+            } else { // This is an inactive pool.
+                assert!(table::contains(&self.inactive_validators, staking_pool_id), ENoPoolFound);
+                let wrapper = table::borrow_mut(&mut self.inactive_validators, staking_pool_id);
+                validator_wrapper::load_validator_maybe_upgrade(wrapper)
+            };
+        validator::request_withdraw_stake(validator, staked_sui, ctx)
     }
 
     // ==== validator config setting functions ====

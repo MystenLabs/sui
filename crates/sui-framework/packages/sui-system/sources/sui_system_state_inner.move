@@ -533,14 +533,14 @@ module sui_system::sui_system_state_inner {
         self: &mut SuiSystemStateInnerV2,
         staked_sui: StakedSui,
         ctx: &mut TxContext,
-    ) {
+    ) : Balance<SUI> {
         assert!(
             stake_activation_epoch(&staked_sui) <= tx_context::epoch(ctx),
             EStakeWithdrawBeforeActivation
         );
         validator_set::request_withdraw_stake(
             &mut self.validators, staked_sui, ctx,
-        );
+        )
     }
 
     /// Report a validator as a bad or non-performant actor in the system.
