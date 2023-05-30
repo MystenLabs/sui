@@ -26,7 +26,9 @@ export function isValidHardenedPath(path: string): boolean {
  * @param path path string (e.g. `m/54'/784'/0'/0/0`).
  */
 export function isValidBIP32Path(path: string): boolean {
-  if (!new RegExp("^m\\/(54|74)'\\/784'\\/[0-9]+'\\/[0-9]+\\/[0-9]+$").test(path)) {
+  if (
+    !new RegExp("^m\\/(54|74)'\\/784'\\/[0-9]+'\\/[0-9]+\\/[0-9]+$").test(path)
+  ) {
     return false;
   }
   return true;

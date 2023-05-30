@@ -5,7 +5,7 @@ import { fromB64, toB64 } from '@mysten/bcs';
 import { Ed25519PublicKey } from './ed25519-publickey';
 import { PublicKey } from './publickey';
 import { Secp256k1PublicKey } from './secp256k1-publickey';
-import {Secp256r1PublicKey} from "./secp256r1-publickey";
+import { Secp256r1PublicKey } from './secp256r1-publickey';
 
 /**
  * A keypair used for signing transactions.
