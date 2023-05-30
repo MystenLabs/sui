@@ -1568,6 +1568,18 @@ where
     }
 
     #[instrument(level = "trace", skip_all, err)]
+    fn multi_contains_keys<J>(
+        &self,
+        keys: impl IntoIterator<Item = J>,
+    ) -> Result<Vec<bool>, Self::Error>
+    where
+        J: Borrow<K>,
+    {
+        let values = self.multi_get_pinned(keys)?;
+        Ok(values.into_iter().map(|v| v.is_some()).collect())
+    }
+
+    #[instrument(level = "trace", skip_all, err)]
     fn get(&self, key: &K) -> Result<Option<V>, TypedStoreError> {
         let _timer = self
             .db_metrics
