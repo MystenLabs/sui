@@ -1,5 +1,21 @@
 # @mysten/sui.js
 
+## 0.35.0
+
+### Minor Changes
+
+- 470c27af50: Added network address metrics
+- 671faefe3c: Add `getChainIdentifier` method
+- 9ce7e051b4: Update internal client to use `@open-rpc/client-js` instead of `jayson` and `rpc-websockets`. This results in a more consistent experience and better error messaging.
+
+### Patch Changes
+
+- 4ea96d909a: the event BCS data is a base64 string
+- bcbb178c44: Fixes BCS definition so it matches the RPC one
+- 03828224c9: Previously, effects had an unwrapped_then_deleted field on ts-sdk. This is an issue since jsonrpc returns the field as unwrappedThenDeleted. Update the transaction type definition to use camelcase.
+- 9ce7e051b4: Add `subscribeTransaction` method.
+- bb50698551: Fixes BCS type definition in the type layout
+
 ## 0.34.1
 
 ### Patch Changes
