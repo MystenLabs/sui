@@ -18,6 +18,11 @@ pub struct FaucetReceipt {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct BatchFaucetReceipt {
+    pub task: String,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct CoinInfo {
     pub amount: u64,
@@ -34,6 +39,14 @@ pub trait Faucet {
         recipient: SuiAddress,
         amounts: &[u64],
     ) -> Result<FaucetReceipt, FaucetError>;
+
+    /// Send `Coin<SUI>` of the specified amount to the recipient in a batch request
+    async fn batch_send(
+        &self,
+        id: Uuid,
+        recipient: SuiAddress,
+        amounts: &[u64],
+    ) -> Result<BatchFaucetReceipt, FaucetError>;
 }
 
 pub const DEFAULT_AMOUNT: u64 = 1_000_000_000;
@@ -72,6 +85,12 @@ pub struct FaucetConfig {
 
     #[clap(long, default_value_t = 300)]
     pub wal_retry_interval: u64,
+
+    #[clap(long, default_value_t = 10000)]
+    pub max_request_queue_length: u64,
+
+    #[clap(long, default_value_t = 500)]
+    pub batch_request_size: u64,
 }
 
 impl Default for FaucetConfig {
@@ -86,6 +105,8 @@ impl Default for FaucetConfig {
             wallet_client_timeout_secs: 60,
             write_ahead_log: Default::default(),
             wal_retry_interval: 300,
+            max_request_queue_length: 10000,
+            batch_request_size: 500,
         }
     }
 }

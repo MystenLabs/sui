@@ -6,6 +6,7 @@ use crate::metrics::FaucetMetrics;
 use async_recursion::async_recursion;
 use async_trait::async_trait;
 use prometheus::Registry;
+use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use tap::tap::TapFallible;
 
 use shared_crypto::intent::Intent;
@@ -31,12 +32,12 @@ use tokio::sync::{
     mpsc::{self, Receiver, Sender},
     Mutex,
 };
-use tokio::time::{timeout, Duration};
+use tokio::time::{timeout, Duration, Instant};
 use tracing::{error, info, warn};
 use uuid::Uuid;
 
 use super::write_ahead_log::WriteAheadLog;
-use crate::{CoinInfo, Faucet, FaucetConfig, FaucetError, FaucetReceipt};
+use crate::{BatchFaucetReceipt, CoinInfo, Faucet, FaucetConfig, FaucetError, FaucetReceipt};
 
 pub struct SimpleFaucet {
     wallet: WalletContext,
@@ -45,6 +46,9 @@ pub struct SimpleFaucet {
     consumer: Mutex<Receiver<ObjectID>>,
     pub metrics: FaucetMetrics,
     wal: Mutex<WriteAheadLog>,
+    request_producer: Mutex<Sender<(Uuid, SuiAddress, Vec<u64>)>>,
+    request_consumer: Mutex<Receiver<(Uuid, SuiAddress, Vec<u64>)>>,
+    batch_request_size: u64,
 }
 
 enum GasCoinResponse {
@@ -59,6 +63,7 @@ enum GasCoinResponse {
 const DEFAULT_GAS_COMPUTATION_BUCKET: u64 = 10_000_000;
 const LOCK_TIMEOUT: Duration = Duration::from_secs(10);
 const RECV_TIMEOUT: Duration = Duration::from_secs(5);
+const BATCH_TIMEOUT: Duration = Duration::from_secs(15);
 
 impl SimpleFaucet {
     pub async fn new(
@@ -87,6 +92,9 @@ impl SimpleFaucet {
         let mut pending = vec![];
 
         let (producer, consumer) = mpsc::channel(coins.len());
+        let (sender, receiver) =
+            mpsc::channel::<(Uuid, SuiAddress, Vec<u64>)>(config.max_request_queue_length as usize);
+
         for coin in &coins {
             let coin_id = *coin.id();
             if let Some(write_ahead_log::Entry {
@@ -120,6 +128,9 @@ impl SimpleFaucet {
             consumer: Mutex::new(consumer),
             metrics,
             wal: Mutex::new(wal),
+            request_producer: Mutex::new(sender),
+            request_consumer: Mutex::new(receiver),
+            batch_request_size: config.batch_request_size,
         };
 
         // Retrying all the pending transactions from the WAL, before continuing.  Ignore return
@@ -369,6 +380,7 @@ impl SimpleFaucet {
                 let response = self
                     .sign_and_execute_txn(uuid, recipient, coin_id, tx_data)
                     .await?;
+                self.metrics.total_coin_requests_succeeded.inc();
                 self.check_and_map_transfer_gas_result(response, number_of_coins, recipient)
                     .await
             }
@@ -390,7 +402,7 @@ impl SimpleFaucet {
                 // The coin does not exist, or does not belong to the current active address.
                 warn!(?uuid, ?coin_id, "Invalid, removing from pool");
                 self.metrics.total_discarded_coins.inc();
-                Err(FaucetError::InvalidGasCoin(coin_id.to_hex_uncompressed()))
+                self.transfer_gases(amounts, recipient, uuid).await
             }
 
             GasCoinResponse::NoGasCoinAvailable => Err(FaucetError::NoGasCoinAvailable),
@@ -548,6 +560,152 @@ impl SimpleFaucet {
         Ok((res.digest, coin_ids))
     }
 
+    async fn build_batch_pay_sui_txn(
+        &self,
+        coin_id: ObjectID,
+        batch_requests: Vec<(Uuid, SuiAddress, Vec<u64>)>,
+        signer: SuiAddress,
+        budget: u64,
+    ) -> Result<TransactionData, anyhow::Error> {
+        let gas_payment = self.wallet.get_object_ref(coin_id).await?;
+        let gas_price = self.wallet.get_reference_gas_price().await?;
+        let pt = {
+            let mut builder = ProgrammableTransactionBuilder::new();
+            for (_uuid, recipient, amounts) in batch_requests {
+                let recipients: Vec<SuiAddress> =
+                    std::iter::repeat(recipient).take(amounts.len()).collect();
+                builder.pay_sui(recipients, amounts)?;
+            }
+            builder.finish()
+        };
+
+        Ok(TransactionData::new_programmable(
+            signer,
+            vec![gas_payment],
+            pt,
+            budget,
+            gas_price,
+        ))
+    }
+
+    // Function to process the batch send of the mcsp queue
+    pub async fn batch_transfer_gases(&self) -> Result<TransactionDigest, FaucetError> {
+        let Ok(mut req_consumer) = tokio::time::timeout(LOCK_TIMEOUT, self.request_consumer.lock()).await else {
+                error!("Timeout when getting request consumer lock");
+                return Err(FaucetError::Internal("Unable to get request queue lock.".to_string()));
+            };
+
+        let mut requests = Vec::new();
+        let mut counter = 0;
+
+        // First request we just wait for without timeout
+        let first_req = req_consumer.recv().await;
+        match first_req {
+            Some((uuid, address, amounts)) => {
+                requests.push((uuid, address, amounts));
+                counter += 1;
+            }
+            None => {
+                return Err(FaucetError::Internal(
+                    "Request consumer queue has corrupted data.".to_string(),
+                ));
+            }
+        }
+
+        let start_time = Instant::now();
+
+        // We take the first 500 items off the queue or when [BATCH_TIMEOUT] passes.
+        while counter < self.batch_request_size - 1 || start_time.elapsed() < BATCH_TIMEOUT {
+            // We do need a timeout here or else it waits forever and gets stuck in this loop
+            match timeout(RECV_TIMEOUT, req_consumer.recv()).await {
+                Ok(Some((uuid, address, amounts))) => {
+                    requests.push((uuid, address, amounts));
+                    counter += 1;
+                }
+
+                _ => {
+                    info!("Out of requests in queue.");
+                    break;
+                }
+            };
+        }
+
+        // Early exiting this function if there is nothing to batch.
+        if requests.is_empty() {
+            return Ok(TransactionDigest::ZERO);
+        }
+        let total_requests = requests.len();
+
+        let gas_cost = self.get_gas_cost().await?;
+        // The UUID here is for the batched request
+        let uuid = Uuid::new_v4();
+        info!(
+            ?uuid,
+            "Batch transfer attemped of size: {:?}", total_requests
+        );
+
+        // This loop is utilized to grab a coin that is large enough for the request
+        loop {
+            let gas_coin_response = self
+                .prepare_gas_coin(requests.len() as u64 + gas_cost, uuid)
+                .await;
+
+            match gas_coin_response {
+                GasCoinResponse::ValidGasCoin(coin_id) => {
+                    let tx_data = self
+                        .build_batch_pay_sui_txn(coin_id, requests, self.active_address, gas_cost)
+                        .await
+                        .map_err(FaucetError::internal)?;
+
+                    // Because we are batching transactions to faucet, we will just not use a real recipient for
+                    // sui address, and instead just fill it with the ZERO address.
+                    let recipient = SuiAddress::ZERO;
+                    {
+                        // Register the intention to send this transaction before we send it, so that if
+                        // faucet fails or we give up before we get a definite response, we have a
+                        // chance to retry later.
+                        let mut wal = self.wal.lock().await;
+                        wal.reserve(uuid, coin_id, recipient, tx_data.clone())
+                            .map_err(FaucetError::internal)?;
+                    }
+                    let response = self
+                        .sign_and_execute_txn(uuid, recipient, coin_id, tx_data)
+                        .await?;
+
+                    self.metrics
+                        .total_coin_requests_succeeded
+                        .add(total_requests as i64);
+                    // TODO (jian): add a check on the reqs and the coins sent
+                    return Ok(response.digest);
+                }
+
+                GasCoinResponse::UnknownGasCoin(coin_id) => {
+                    self.recycle_gas_coin(coin_id, uuid).await;
+                    return Err(FaucetError::FullnodeReadingError(format!(
+                        "unknown gas coin {coin_id:?}"
+                    )));
+                }
+
+                GasCoinResponse::GasCoinWithInsufficientBalance(coin_id) => {
+                    warn!(?uuid, ?coin_id, "Insufficient balance, removing from pool");
+                    self.metrics.total_discarded_coins.inc();
+                    // Continue the loop to retry preparing the gas coin
+                    continue;
+                }
+
+                GasCoinResponse::InvalidGasCoin(coin_id) => {
+                    // The coin does not exist, or does not belong to the current active address.
+                    warn!(?uuid, ?coin_id, "Invalid, removing from pool");
+                    self.metrics.total_discarded_coins.inc();
+                    // Continue the loop to retry preparing the gas coin
+                    continue;
+                }
+
+                GasCoinResponse::NoGasCoinAvailable => return Err(FaucetError::NoGasCoinAvailable),
+            }
+        }
+    }
+
     #[cfg(test)]
     async fn drain_gas_queue(&mut self, expected_gas_count: usize) -> HashSet<ObjectID> {
         use tokio::sync::mpsc::error::TryRecvError;
@@ -615,6 +773,22 @@ impl Faucet for SimpleFaucet {
             });
         }
         Ok(FaucetReceipt { sent })
+    }
+
+    async fn batch_send(
+        &self,
+        id: Uuid,
+        recipient: SuiAddress,
+        amounts: &[u64],
+    ) -> Result<BatchFaucetReceipt, FaucetError> {
+        info!(?recipient, uuid = ?id, "Getting faucet request");
+        let request_producer = self.request_producer.lock().await;
+        request_producer
+            .try_send((id, recipient, amounts.to_vec()))
+            .expect("producer queue is full");
+        Ok(BatchFaucetReceipt {
+            task: id.to_string(),
+        })
     }
 }
 

@@ -20,7 +20,8 @@ use std::{
 };
 use sui_config::{sui_config_dir, SUI_CLIENT_CONFIG};
 use sui_faucet::{
-    Faucet, FaucetConfig, FaucetRequest, FaucetResponse, RequestMetricsLayer, SimpleFaucet,
+    BatchFaucetResponse, Faucet, FaucetConfig, FaucetRequest, FaucetResponse, RequestMetricsLayer,
+    SimpleFaucet,
 };
 use sui_sdk::wallet_context::WalletContext;
 use tower::{limit::RateLimitLayer, ServiceBuilder};
@@ -33,7 +34,6 @@ const CONCURRENCY_LIMIT: usize = 30;
 struct AppState<F = SimpleFaucet> {
     faucet: F,
     config: FaucetConfig,
-    // TODO: add counter
 }
 
 const PROM_PORT_ADDR: &str = "0.0.0.0:9184";
@@ -69,7 +69,6 @@ async fn main() -> Result<(), anyhow::Error> {
     info!("Starting Prometheus HTTP endpoint at {}", prom_binding);
     let registry_service = sui_node::metrics::start_prometheus_server(prom_binding);
     let prometheus_registry = registry_service.default_registry();
-
     let app_state = Arc::new(AppState {
         faucet: SimpleFaucet::new(
             context,
@@ -82,6 +81,8 @@ async fn main() -> Result<(), anyhow::Error> {
         config,
     });
 
+    let batching_thread_app_state = Arc::clone(&app_state);
+
     // TODO: restrict access if needed
     let cors = CorsLayer::new()
         .allow_methods(vec![Method::GET, Method::POST])
@@ -91,6 +92,7 @@ async fn main() -> Result<(), anyhow::Error> {
     let app = Router::new()
         .route("/", get(health))
         .route("/gas", post(request_gas))
+        .route("/v1/gas", post(batch_request_gas))
         .layer(
             ServiceBuilder::new()
                 .layer(HandleErrorLayer::new(handle_error))
@@ -116,6 +118,17 @@ async fn main() -> Result<(), anyhow::Error> {
         }
     });
 
+    spawn_monitored_task!(async move {
+        info!("Starting task to handle batch faucet requests.");
+        loop {
+            batching_thread_app_state
+                .faucet
+                .batch_transfer_gases()
+                .await
+                .unwrap();
+        }
+    });
+
     let addr = SocketAddr::new(IpAddr::V4(host_ip), port);
     info!("listening on {}", addr);
     axum::Server::bind(&addr)
@@ -129,6 +142,47 @@ async fn health() -> &'static str {
     "OK"
 }
 
+/// handler for batch_request_gas reqesuts
+async fn batch_request_gas(
+    Extension(state): Extension<Arc<AppState>>,
+    Json(payload): Json<FaucetRequest>,
+) -> impl IntoResponse {
+    // ID for traceability
+    let id = Uuid::new_v4();
+    info!(uuid = ?id, "Got new gas request.");
+    let result = match payload {
+        FaucetRequest::FixedAmountRequest(requests) => {
+            // We spawn a tokio task for this such that connection drop will not interrupt
+            // it and impact the recycling of coins
+            spawn_monitored_task!(async move {
+                state
+                    .faucet
+                    .batch_send(
+                        id,
+                        requests.recipient,
+                        &vec![state.config.amount; state.config.num_coins],
+                    )
+                    .await
+            })
+            .await
+            .unwrap()
+        }
+    };
+    match result {
+        Ok(v) => {
+            info!(uuid =?id, "Request is successfully served");
+            (StatusCode::ACCEPTED, Json(BatchFaucetResponse::from(v)))
+        }
+        Err(v) => {
+            warn!(uuid =?id, "Failed to request gas: {:?}", v);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(BatchFaucetResponse::from(v)),
+            )
+        }
+    }
+}
+
 /// handler for all the request_gas requests
 async fn request_gas(
     Extension(state): Extension<Arc<AppState>>,
@@ -140,7 +194,7 @@ async fn request_gas(
     let result = match payload {
         FaucetRequest::FixedAmountRequest(requests) => {
             // We spawn a tokio task for this such that connection drop will not interrupt
-            // it and impact the reclycing of coins
+            // it and impact the recycling of coins
             spawn_monitored_task!(async move {
                 state
                     .faucet

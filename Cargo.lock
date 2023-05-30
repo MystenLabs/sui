@@ -9218,6 +9218,7 @@ dependencies = [
  "futures",
  "jsonrpsee",
  "move-core-types",
+ "mysten-metrics",
  "prometheus",
  "reqwest",
  "serde 1.0.152",

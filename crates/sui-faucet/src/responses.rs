@@ -28,3 +28,29 @@ impl From<FaucetReceipt> for FaucetResponse {
         }
     }
 }
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct BatchFaucetResponse {
+    // This string is the Uuid for the req
+    pub task: Option<String>,
+    pub error: Option<String>,
+}
+
+impl From<FaucetError> for BatchFaucetResponse {
+    fn from(e: FaucetError) -> Self {
+        Self {
+            error: Some(e.to_string()),
+            task: None,
+        }
+    }
+}
+
+impl From<BatchFaucetReceipt> for BatchFaucetResponse {
+    fn from(v: BatchFaucetReceipt) -> Self {
+        Self {
+            task: Some(v.task),
+            error: None,
+        }
+    }
+}
