@@ -493,10 +493,17 @@ where
             // Ensure that if consensus sends us a checkpoint that we expect to be the next one,
             // that it isn't on a fork
             if *checkpoint.sequence_number() == next_sequence_number {
-                assert_eq!(checkpoint.previous_digest, Some(previous_digest));
+                panic!(
+                    "consensus sent a forked checkpoint with different previous_digest, seq_num: {}, expected_previous_digest: {:?}, actual_previous_digest: {:?}",
+                    next_sequence_number, Some(previous_digest), checkpoint.previous_digest
+                );
             }
 
-            debug!("consensus sent too new of a checkpoint");
+            debug!(
+                "consensus sent too new of a checkpoint, expecting: {}, got: {}",
+                next_sequence_number,
+                checkpoint.sequence_number()
+            );
 
             // See if the missing checkpoints are already in our store and quickly update our
             // watermarks
@@ -507,9 +514,6 @@ where
                         .expect("store operation should not fail")
                 });
             while let Some(Some(checkpoint)) = checkpoints_from_storage.next() {
-                self.store
-                    .insert_checkpoint(checkpoint.clone())
-                    .expect("store operation should not fail");
                 self.store
                     .update_highest_synced_checkpoint(&checkpoint)
                     .expect("store operation should not fail");
