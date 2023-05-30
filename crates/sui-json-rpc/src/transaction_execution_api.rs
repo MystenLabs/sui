@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use async_trait::async_trait;
@@ -11,7 +12,6 @@ use jsonrpsee::RpcModule;
 
 use mysten_metrics::spawn_monitored_task;
 use shared_crypto::intent::{AppId, Intent, IntentMessage, IntentScope, IntentVersion};
-
 use sui_core::authority::AuthorityState;
 use sui_core::authority_client::NetworkAuthorityClient;
 use sui_core::transaction_orchestrator::TransactiondOrchestrator;
@@ -21,14 +21,17 @@ use sui_json_rpc_types::{
     SuiTransactionBlockResponseOptions,
 };
 use sui_open_rpc::Module;
-use sui_types::base_types::SuiAddress;
+use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress};
 use sui_types::crypto::default_hash;
 use sui_types::digests::TransactionDigest;
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI, TransactionEvents};
+use sui_types::gas_coin;
+use sui_types::object::Object;
 use sui_types::quorum_driver_types::{
     ExecuteTransactionRequest, ExecuteTransactionRequestType, ExecuteTransactionResponse,
 };
 use sui_types::signature::GenericSignature;
+use sui_types::storage::WriteKind;
 use sui_types::sui_serde::BigInt;
 use sui_types::transaction::{
     InputObjectKind, Transaction, TransactionData, TransactionDataAPI, TransactionKind,
@@ -61,15 +64,22 @@ pub trait TransactionExecutionInternalTrait {
         tx_digest: TransactionDigest,
         tx_events: TransactionEvents,
     ) -> SuiRpcServerResult<SuiTransactionBlockEvents>;
+    fn get_object_cache(
+        &self,
+        cache: Option<BTreeMap<ObjectID, (ObjectRef, Object, WriteKind)>>,
+    ) -> ObjectProviderCache<Arc<AuthorityState>>;
     async fn get_object_changes(
         &self,
+        object_cache: &ObjectProviderCache<Arc<AuthorityState>>,
         sender: SuiAddress,
         effects: &TransactionEffects,
     ) -> SuiRpcServerResult<Vec<ObjectChange>>;
     async fn get_balance_changes(
         &self,
+        object_cache: &ObjectProviderCache<Arc<AuthorityState>>,
         effects: &TransactionEffects,
         input_objs: Vec<InputObjectKind>,
+        gas_coin: Option<ObjectID>,
     ) -> SuiRpcServerResult<Vec<BalanceChange>>;
     fn get_metrics(&self) -> Arc<JsonRpcMetrics>;
 
@@ -113,6 +123,18 @@ impl TransactionExecutionInternalTrait for TransactionExecutionInternal {
         self.metrics.clone()
     }
 
+    fn get_object_cache(
+        &self,
+        cache: Option<BTreeMap<ObjectID, (ObjectRef, Object, WriteKind)>>,
+    ) -> ObjectProviderCache<Arc<AuthorityState>> {
+        match cache {
+            Some(cache_value) => {
+                ObjectProviderCache::new_with_cache(self.state.clone(), cache_value)
+            }
+            None => ObjectProviderCache::new(self.state.clone()),
+        }
+    }
+
     fn show_transaction_details(
         &self,
         tx: &Transaction,
@@ -144,21 +166,22 @@ impl TransactionExecutionInternalTrait for TransactionExecutionInternal {
 
     async fn get_balance_changes(
         &self,
+        object_cache: &ObjectProviderCache<Arc<AuthorityState>>,
         effects: &TransactionEffects,
         input_objs: Vec<InputObjectKind>,
+        gas_coin: Option<ObjectID>,
     ) -> SuiRpcServerResult<Vec<BalanceChange>> {
-        let object_cache = ObjectProviderCache::new(self.state.clone());
-        Ok(get_balance_changes_from_effect(&object_cache, effects, input_objs, None).await?)
+        Ok(get_balance_changes_from_effect(object_cache, effects, input_objs, gas_coin).await?)
     }
 
     async fn get_object_changes(
         &self,
+        object_cache: &ObjectProviderCache<Arc<AuthorityState>>,
         sender: SuiAddress,
         effects: &TransactionEffects,
     ) -> SuiRpcServerResult<Vec<ObjectChange>> {
-        let object_cache = ObjectProviderCache::new(self.state.clone());
         Ok(get_object_changes(
-            &object_cache,
+            object_cache,
             sender,
             effects.modified_at_versions(),
             effects.all_changed_objects(),
@@ -211,22 +234,13 @@ impl TransactionExecutionInternalTrait for TransactionExecutionInternal {
             .state
             .dry_exec_transaction(txn_data.clone(), txn_digest)
             .await?;
-        let object_cache = ObjectProviderCache::new_with_cache(self.state.clone(), written_objects); // internal
-        let balance_changes = get_balance_changes_from_effect(
-            &object_cache,
-            &transaction_effects,
-            input_objs,
-            mock_gas,
-        )
-        .await?;
-        let object_changes = get_object_changes(
-            &object_cache,
-            sender,
-            transaction_effects.modified_at_versions(),
-            transaction_effects.all_changed_objects(),
-            transaction_effects.all_deleted(),
-        )
-        .await?;
+        let object_cache = self.get_object_cache(Some(written_objects));
+        let balance_changes = self
+            .get_balance_changes(&object_cache, &transaction_effects, input_objs, mock_gas)
+            .await?;
+        let object_changes = self
+            .get_object_changes(&object_cache, sender, &transaction_effects)
+            .await?;
 
         Ok(DryRunTransactionBlockResponse {
             effects: resp.effects,
@@ -312,10 +326,12 @@ impl TransactionExecutionApi {
         );
 
         // balance and object changes
+        let object_cache = self.internal.get_object_cache(None);
+
         let balance_changes = if opts.show_balance_changes && is_executed_locally {
             Some(
                 self.internal
-                    .get_balance_changes(&effects.effects, input_objs)
+                    .get_balance_changes(&object_cache, &effects.effects, input_objs, None)
                     .await?,
             )
         } else {
@@ -324,7 +340,7 @@ impl TransactionExecutionApi {
         let object_changes = if opts.show_object_changes && is_executed_locally {
             Some(
                 self.internal
-                    .get_object_changes(sender, &effects.effects)
+                    .get_object_changes(&object_cache, sender, &effects.effects)
                     .await?,
             )
         } else {
