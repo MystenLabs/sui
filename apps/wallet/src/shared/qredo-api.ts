@@ -165,7 +165,7 @@ export class QredoAPI {
         if (grantType) {
             params.append('grant_type', grantType);
         }
-        return this.#request(`${this.baseURL}connect/sui/token`, {
+        return this.#request(`${this.baseURL}token`, {
             method: 'post',
             body: params,
         });
@@ -179,16 +179,14 @@ export class QredoAPI {
             searchParams.append('address', filters.address);
         }
         return this.#request(
-            `${this.baseURL}connect/sui/wallets${toSearchQueryString(
-                searchParams
-            )}`
+            `${this.baseURL}wallets${toSearchQueryString(searchParams)}`
         );
     }
 
     public createTransaction(
         params: PostTransactionParams
     ): Promise<TransactionInfoResponse> {
-        return this.#request(`${this.baseURL}connect/sui/transactions`, {
+        return this.#request(`${this.baseURL}transactions`, {
             method: 'post',
             body: JSON.stringify(params),
             headers: {
@@ -200,16 +198,14 @@ export class QredoAPI {
     public getTransaction(
         transactionID: string
     ): Promise<TransactionInfoResponse> {
-        return this.#request(
-            `${this.baseURL}connect/sui/transactions/${transactionID}`
-        );
+        return this.#request(`${this.baseURL}transactions/${transactionID}`);
     }
 
     public getTransactions(
         params: GetTransactionsParams
     ): Promise<GetTransactionsResponse> {
         return this.#request(
-            `${this.baseURL}connect/sui/transactions${toSearchQueryString(
+            `${this.baseURL}transactions${toSearchQueryString(
                 new URLSearchParams(params)
             )}`
         );
