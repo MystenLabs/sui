@@ -22,6 +22,7 @@ CREATE TABLE recipients (
     recipient                   address         NOT NULL
 );
 CREATE INDEX recipients_transaction_digest ON recipients (transaction_digest);
+CREATE INDEX recipients_sender ON recipients (sender);
 CREATE INDEX recipients_recipient ON recipients (recipient);
 
 CREATE TABLE input_objects (

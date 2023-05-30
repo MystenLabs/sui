@@ -186,7 +186,7 @@ impl<S: IndexerStore> IndexerApi<S> {
                     .get_recipient_sequence_by_digest(cursor_str, is_descending)
                     .await?;
                 self.state
-                    .get_transaction_page_by_sender_recipient_address(
+                    .get_transaction_page_by_recipient_address(
                         /* from */ None,
                         recipient_address,
                         recipient_seq_number,
@@ -201,13 +201,22 @@ impl<S: IndexerStore> IndexerApi<S> {
                     .get_recipient_sequence_by_digest(cursor_str, is_descending)
                     .await?;
                 self.state
-                    .get_transaction_page_by_sender_recipient_address(
+                    .get_transaction_page_by_recipient_address(
                         Some(from),
                         to,
                         recipient_seq_number,
                         limit + 1,
                         is_descending,
                     )
+                    .await
+            }
+            Some(TransactionFilter::FromOrToAddress { addr }) => {
+                let start_sequence = self
+                    .state
+                    .get_recipient_sequence_by_digest(cursor_str, is_descending)
+                    .await?;
+                self.state
+                    .get_transaction_page_by_address(addr, start_sequence, limit, is_descending)
                     .await
             }
             Some(TransactionFilter::TransactionKind(tx_kind_name)) => {
