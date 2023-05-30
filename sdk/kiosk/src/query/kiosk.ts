@@ -22,7 +22,7 @@ import { Kiosk } from '../bcs';
  */
 export type KioskListing = {
   /** The ID of the Item */
-  itemId: ObjectId;
+  objectId: ObjectId;
   /**
    * Whether or not there's a `PurchaseCap` issued. `true` means that
    * the listing is controlled by some logic and can't be purchased directly.
@@ -41,9 +41,9 @@ export type KioskListing = {
  */
 export type KioskItem = {
   /** The ID of the Item */
-  itemId: ObjectId;
+  objectId: ObjectId;
   /** The type of the Item */
-  itemType: ObjectType;
+  type: ObjectType;
   /** Whether the item is Locked (there must be a `Lock` Dynamic Field) */
   isLocked: boolean;
   /** Optional listing */

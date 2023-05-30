@@ -85,15 +85,15 @@ export function extractKioskData(
         case 'kiosk::Item':
           acc.itemIds.push(val.objectId);
           acc.items.push({
-            itemId: val.objectId,
-            itemType: val.objectType,
+            objectId: val.objectId,
+            type: val.objectType,
             isLocked: false,
           });
           break;
         case 'kiosk::Listing':
           acc.listingIds.push(val.objectId);
           listings.push({
-            itemId: val.name.value.id,
+            objectId: val.name.value.id,
             listingId: val.objectId,
             isExclusive: val.name.value.is_exclusive,
           });
@@ -125,7 +125,7 @@ export const attachListingsAndPrices = (
   // for easier mapping on the nex
   const itemListings = listings.reduce<Record<ObjectId, KioskListing>>(
     (acc: Record<ObjectId, KioskListing>, item, idx) => {
-      acc[item.itemId] = { ...item };
+      acc[item.objectId] = { ...item };
 
       // return in case we don't have any listing objects.
       // that's the case when we don't have the `listingPrices` included.
@@ -134,14 +134,14 @@ export const attachListingsAndPrices = (
       const data = getObjectFields(listingObjects[idx]);
       if (!data) return acc;
 
-      acc[item.itemId].price = data.value;
+      acc[item.objectId].price = data.value;
       return acc;
     },
     {},
   );
 
   kioskData.items.map((item) => {
-    item.listing = itemListings[item.itemId] || undefined;
+    item.listing = itemListings[item.objectId] || undefined;
   });
 };
 
@@ -163,6 +163,6 @@ export const attachLockedItems = (
 
   // parse lockedItemIds and attach their locked status.
   kioskData.items.map((item) => {
-    item.isLocked = lockedStatuses[item.itemId] || false;
+    item.isLocked = lockedStatuses[item.objectId] || false;
   });
 };
