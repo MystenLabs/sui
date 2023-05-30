@@ -404,20 +404,17 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
                             address_info_move_struct
                         ))
                     })?;
-                let addr = match &address_str_move_value {
+                let addr_opt = match &address_str_move_value {
                     SuiMoveValue::Option(boxed_addr) => match **boxed_addr {
-                        Some(SuiMoveValue::Address(ref addr)) => Ok(*addr),
-                        _ => Err(Error::UnexpectedError(format!(
-                            "No SuiAddress found in option: {:?}",
-                            address_str_move_value
-                        ))),
+                        Some(SuiMoveValue::Address(ref addr)) => Ok(Some(*addr)),
+                        _ => Ok(None),
                     },
                     _ => Err(Error::UnexpectedError(format!(
                         "No SuiAddress found in: {:?}",
                         address_str_move_value
                     ))),
                 }?;
-                return Ok(Some(addr));
+                return Ok(addr_opt);
             }
             Ok(None)
         })
@@ -449,7 +446,7 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
                 )))
             })?;
 
-            let addr_object_id = self
+            let addr_object_id_opt = self
                 .state
                 .get_dynamic_field_object_id(reverse_registry_id, name_type_tag, &addr_bcs_value)
                 .map_err(|e| {
@@ -457,65 +454,81 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
                         "Read name service reverse dynamic field table failed with error: {:?}",
                         e
                     ))
-                })?
-                .ok_or_else(|| {
-                    Error::UnexpectedError(format!("Record not found for address: {:?}", address))
                 })?;
-            let addr_object_read = self.state.get_object_read(&addr_object_id).map_err(|e| {
-                warn!(
-                    "Failed to get object read of address {:?} with error: {:?}",
-                    addr_object_id, e
-                );
-                Error::UnexpectedError(format!(
-                    "Failed to get object read of address with err: {:?}",
-                    e
-                ))
-            })?;
-            let addr_parsed_move_object =
-                SuiParsedMoveObject::try_from_object_read(addr_object_read)?;
-            let address_info_move_value = addr_parsed_move_object
-                .read_dynamic_field_value(NAME_SERVICE_VALUE)
-                .ok_or_else(|| {
-                    Error::UnexpectedError(
-                        "Cannot find value field in record Move struct".to_string(),
-                    )
-                })?;
-            let domain_info_move_struct = match address_info_move_value {
-                SuiMoveValue::Struct(a) => Ok(a),
-                _ => Err(Error::UnexpectedError(
-                    "value field is not found.".to_string(),
-                )),
-            }?;
-            let labels_move_value = domain_info_move_struct
-                .read_dynamic_field_value("labels")
-                .ok_or_else(|| {
-                    Error::UnexpectedError(format!(
-                        "Cannot find labels field in address info Move struct: {:?}",
-                        domain_info_move_struct
-                    ))
-                })?;
-            let primary_domain = match labels_move_value {
-                SuiMoveValue::Vector(labels) => {
-                    let label_strs: Vec<String> = labels
-                        .iter()
-                        .rev()
-                        .filter_map(|label| match label {
-                            SuiMoveValue::String(label_str) => Some(label_str.clone()),
-                            _ => None,
+
+            if let Some(addr_object_id) = addr_object_id_opt {
+                let addr_object_read =
+                    self.state.get_object_read(&addr_object_id).map_err(|e| {
+                        warn!(
+                            "Failed to get object read of address {:?} with error: {:?}",
+                            addr_object_id, e
+                        );
+                        Error::UnexpectedError(format!(
+                            "Failed to get object read of address with err: {:?}",
+                            e
+                        ))
+                    })?;
+                let addr_parsed_move_object =
+                    SuiParsedMoveObject::try_from_object_read(addr_object_read)?;
+                let address_info_move_value = addr_parsed_move_object
+                    .read_dynamic_field_value(NAME_SERVICE_VALUE)
+                    .ok_or_else(|| {
+                        Error::UnexpectedError(
+                            "Cannot find value field in record Move struct".to_string(),
+                        )
+                    })?;
+                let domain_info_move_struct = match address_info_move_value {
+                    SuiMoveValue::Struct(a) => Ok(a),
+                    _ => Err(Error::UnexpectedError(
+                        "value field is not found.".to_string(),
+                    )),
+                }?;
+                let labels_move_value = domain_info_move_struct
+                    .read_dynamic_field_value("labels")
+                    .ok_or_else(|| {
+                        Error::UnexpectedError(format!(
+                            "Cannot find labels field in address info Move struct: {:?}",
+                            domain_info_move_struct
+                        ))
+                    })?;
+                let primary_domain_opt = match labels_move_value {
+                    SuiMoveValue::Vector(labels) => {
+                        let label_strs: Vec<String> = labels
+                            .iter()
+                            .rev()
+                            .filter_map(|label| match label {
+                                SuiMoveValue::String(label_str) => Some(label_str.clone()),
+                                _ => None,
+                            })
+                            .collect();
+                        Ok(if label_strs.is_empty() {
+                            None
+                        } else {
+                            Some(label_strs.join("."))
                         })
-                        .collect();
-                    Ok(label_strs.join("."))
-                }
-                _ => Err(Error::UnexpectedError(format!(
-                    "No string field for primary name is found in {:?}",
-                    labels_move_value
-                ))),
-            }?;
-            Ok(Page {
-                data: vec![primary_domain],
-                next_cursor: Some(addr_object_id),
-                has_next_page: false,
-            })
+                    }
+                    _ => Err(Error::UnexpectedError(format!(
+                        "No string field for primary name is found in {:?}",
+                        labels_move_value
+                    ))),
+                }?;
+
+                Ok(Page {
+                    data: if let Some(primary_domain) = primary_domain_opt {
+                        vec![primary_domain]
+                    } else {
+                        vec![]
+                    },
+                    next_cursor: Some(addr_object_id),
+                    has_next_page: false,
+                })
+            } else {
+                Ok(Page {
+                    data: vec![],
+                    next_cursor: None,
+                    has_next_page: false,
+                })
+            }
         })
     }
 }
