@@ -271,11 +271,17 @@ impl CheckpointTransactionBlockResponse {
             .collect()
     }
 
-    pub fn get_from_and_to_addresses(&self, epoch: u64, checkpoint: u64) -> Vec<AddressData> {
-        let mut addresses = self
-            .get_recipients(epoch, checkpoint)
-            .into_iter()
-            .map(|r| r.recipient)
+    pub fn get_from_and_to_addresses(&self) -> Vec<AddressData> {
+        let created = self.effects.created().iter();
+        let mutated = self.effects.mutated().iter();
+        let unwrapped = self.effects.unwrapped().iter();
+        let mut addresses = created
+            .chain(mutated)
+            .chain(unwrapped)
+            .filter_map(|obj_ref| match obj_ref.owner {
+                Owner::AddressOwner(address) => Some(address.to_string()),
+                _ => None,
+            })
             .collect::<Vec<String>>();
         addresses.push(self.transaction.data.sender().to_string());
         addresses
