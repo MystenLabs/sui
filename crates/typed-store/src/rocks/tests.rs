@@ -84,6 +84,36 @@ async fn test_contains_key(#[values(true, false)] is_transactional: bool) {
 
 #[rstest]
 #[tokio::test]
+async fn test_multi_contain(#[values(true, false)] is_transactional: bool) {
+    let db = open_map(temp_dir(), None, is_transactional);
+
+    db.insert(&123, &"123".to_string())
+        .expect("Failed to insert");
+    db.insert(&456, &"456".to_string())
+        .expect("Failed to insert");
+    db.insert(&789, &"789".to_string())
+        .expect("Failed to insert");
+
+    let result = db
+        .multi_contains_keys([123, 456])
+        .expect("Failed to check multi keys existence");
+
+    assert_eq!(result.len(), 2);
+    assert!(result[0]);
+    assert!(result[1]);
+
+    let result = db
+        .multi_contains_keys([123, 987, 789])
+        .expect("Failed to check multi keys existence");
+
+    assert_eq!(result.len(), 3);
+    assert!(result[0]);
+    assert!(!result[1]);
+    assert!(result[2]);
+}
+
+#[rstest]
+#[tokio::test]
 async fn test_get(#[values(true, false)] is_transactional: bool) {
     let db = open_map(temp_dir(), None, is_transactional);
 
