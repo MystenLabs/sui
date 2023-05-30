@@ -41,7 +41,7 @@ use sui_types::move_package::normalize_modules;
 use sui_types::object::{Data, Object, ObjectRead, PastObjectRead};
 use sui_types::sui_serde::BigInt;
 use sui_types::transaction::TransactionDataAPI;
-use sui_types::transaction::{TransactionData, VerifiedTransaction};
+use sui_types::transaction::VerifiedTransaction;
 
 use crate::api::JsonRpcMetrics;
 use crate::api::{validate_limit, ReadApiServer};
