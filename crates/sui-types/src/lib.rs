@@ -64,6 +64,8 @@ pub mod sui_system_state;
 pub mod temporary_store;
 pub mod transaction;
 pub mod versioned;
+pub mod zk_login_authenticator;
+pub mod zk_login_util;
 
 pub mod epoch_data;
 

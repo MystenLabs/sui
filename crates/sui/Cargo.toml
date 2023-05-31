@@ -32,6 +32,7 @@ git-version = "0.3.5"
 const-str = "0.5.3"
 
 sui-adapter = { path = "../../sui-execution/latest/sui-adapter", package = "sui-adapter-latest" }
+num-bigint = "0.4.3"
 
 sui-config = { path = "../sui-config" }
 sui-swarm-config = { path = "../sui-swarm-config" }
@@ -50,6 +51,7 @@ sui-verifier = { path = "../../sui-execution/latest/sui-verifier", package = "su
 shared-crypto = { path = "../shared-crypto" }
 
 fastcrypto.workspace = true
+fastcrypto-zkp.workspace = true
 
 rustyline = "9.1.2"
 rustyline-derive = "0.7.0"

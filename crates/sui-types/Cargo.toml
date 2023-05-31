@@ -54,6 +54,7 @@ sui-macros = { path = "../sui-macros" }
 sui-enum-compat-util = { path = "../sui-enum-compat-util" }
 
 fastcrypto = { workspace = true, features = ["copy_key"] }
+fastcrypto-zkp.workspace = true
 
 typed-store.workspace = true
 workspace-hack = { version = "0.1", path = "../workspace-hack" }

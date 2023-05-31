@@ -1,9 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::crypto::Signer;
+use crate::crypto::{Signer, SuiKeyPair};
 use crate::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use crate::transaction::TEST_ONLY_GAS_UNIT_FOR_TRANSFER;
+use crate::SuiAddress;
 use crate::{
     base_types::{dbg_addr, ExecutionDigests, ObjectID},
     committee::Committee,
@@ -19,6 +20,8 @@ use crate::{
     transaction::{Transaction, TransactionData, VerifiedTransaction},
 };
 use fastcrypto::traits::KeyPair as KeypairTraits;
+use rand::rngs::StdRng;
+use rand::SeedableRng;
 use shared_crypto::intent::Intent;
 use std::collections::BTreeMap;
 
@@ -69,6 +72,28 @@ pub fn create_fake_transaction() -> VerifiedTransaction {
         1,
     );
     to_sender_signed_transaction(data, &sender_key)
+}
+
+/// Make a user signed transaction with the given sender and its keypair. This
+/// is not verified or signed by authority.
+pub fn make_transaction(sender: SuiAddress, kp: &SuiKeyPair, intent: Intent) -> Transaction {
+    let object = Object::immutable_with_id_for_testing(ObjectID::random_from_rng(
+        &mut StdRng::from_seed([0; 32]),
+    ));
+    let pt = {
+        let mut builder = ProgrammableTransactionBuilder::new();
+        builder.transfer_sui(dbg_addr(2), None);
+        builder.finish()
+    };
+    let data = TransactionData::new_programmable(
+        sender,
+        vec![object.compute_object_reference()],
+        pt,
+        TEST_ONLY_GAS_UNIT_FOR_TRANSFER, // gas price is 1
+        1,
+    );
+
+    Transaction::from_data_and_signer(data, intent, vec![kp])
 }
 
 // This is used to sign transaction with signer using default Intent.
