@@ -11,7 +11,6 @@ use super::KeyToolCommand;
 use anyhow::Ok;
 use fastcrypto::encoding::Base64;
 use fastcrypto::encoding::Encoding;
-use fastcrypto::secp256r1::Secp256r1KeyPair;
 use rand::rngs::StdRng;
 use rand::SeedableRng;
 use shared_crypto::intent::Intent;
@@ -30,7 +29,6 @@ use sui_types::crypto::Secp256k1SuiSignature;
 use sui_types::crypto::Secp256r1SuiSignature;
 use sui_types::crypto::Signature;
 use sui_types::crypto::SignatureScheme;
-use sui_types::crypto::SignatureScheme::Secp256r1;
 use sui_types::crypto::SuiKeyPair;
 use sui_types::crypto::SuiSignatureInner;
 use sui_types::transaction::TransactionData;
@@ -275,7 +273,6 @@ async fn test_mnemonics_secp256r1() -> Result<(), anyhow::Error> {
         }
         .execute(&mut keystore)
         .await?;
-
 
         let kp = SuiKeyPair::decode_base64(t[1]).unwrap();
         println!("{:?}", kp.public().encode_base64());

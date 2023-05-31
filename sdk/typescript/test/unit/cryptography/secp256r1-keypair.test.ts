@@ -5,7 +5,6 @@ import {
   DEFAULT_SECP256R1_DERIVATION_PATH,
   PRIVATE_KEY_SIZE,
   Secp256r1Keypair,
-  Secp256r1PublicKey,
 } from '../../../src';
 import { describe, it, expect } from 'vitest';
 import { secp256r1 } from '@noble/curves/p256';
