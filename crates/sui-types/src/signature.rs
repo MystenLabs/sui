@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::committee::EpochId;
 use crate::crypto::{SignatureScheme, SuiSignature};
 use crate::{base_types::SuiAddress, crypto::Signature, error::SuiError, multisig::MultiSig};
 pub use enum_dispatch::enum_dispatch;
@@ -12,7 +13,20 @@ use schemars::JsonSchema;
 use serde::Serialize;
 use shared_crypto::intent::IntentMessage;
 use std::hash::Hash;
+#[derive(Default, Debug, Clone)]
+pub struct AuxVerifyData {
+    pub epoch: Option<EpochId>,
+    pub google_jwk_as_bytes: Option<Vec<u8>>,
+}
 
+impl AuxVerifyData {
+    pub fn new(epoch: Option<EpochId>, google_jwk_as_bytes: Option<Vec<u8>>) -> Self {
+        Self {
+            epoch,
+            google_jwk_as_bytes,
+        }
+    }
+}
 /// A lightweight trait that all members of [enum GenericSignature] implement.
 #[enum_dispatch]
 pub trait AuthenticatorTrait {
@@ -20,6 +34,7 @@ pub trait AuthenticatorTrait {
         &self,
         value: &IntentMessage<T>,
         author: SuiAddress,
+        aux_verify_data: AuxVerifyData,
     ) -> Result<(), SuiError>
     where
         T: Serialize;
@@ -110,6 +125,7 @@ impl AuthenticatorTrait for Signature {
         &self,
         value: &IntentMessage<T>,
         author: SuiAddress,
+        _aux_verify_data: AuxVerifyData,
     ) -> Result<(), SuiError>
     where
         T: Serialize,

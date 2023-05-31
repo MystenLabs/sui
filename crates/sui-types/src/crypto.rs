@@ -55,6 +55,7 @@ use tracing::warn;
 mod crypto_tests;
 
 #[cfg(test)]
+#[cfg(feature = "test-utils")]
 #[path = "unit_tests/intent_tests.rs"]
 mod intent_tests;
 

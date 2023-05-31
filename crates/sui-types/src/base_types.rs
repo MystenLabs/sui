@@ -63,6 +63,7 @@ use std::fmt;
 use std::str::FromStr;
 
 #[cfg(test)]
+#[cfg(feature = "test-utils")]
 #[path = "unit_tests/base_types_tests.rs"]
 mod base_types_tests;
 
