@@ -171,7 +171,7 @@ fn test_certificates() {
     sigs.push(v2.auth_sig().clone());
     let c =
         CertifiedTransaction::new(transaction.clone().into_message(), sigs, &committee).unwrap();
-    assert!(c.verify_signature(&committee).is_ok());
+    assert!(c.verify_signature(&committee, None).is_ok());
 
     let sigs = vec![v1.auth_sig().clone(), v3.auth_sig().clone()];
 
@@ -1293,7 +1293,7 @@ fn test_certificate_digest() {
 
         let cert = CertifiedTransaction::new(transaction.clone().into_message(), sigs, &committee)
             .unwrap();
-        cert.verify_signature(&committee).unwrap();
+        cert.verify_signature(&committee, None).unwrap();
         cert
     };
 

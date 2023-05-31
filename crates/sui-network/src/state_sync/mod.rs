@@ -1015,7 +1015,7 @@ where
         .expect("store operation should not fail")
         .expect("BUG: should have a committee for an epoch before we try to verify checkpoints from an epoch");
 
-    checkpoint.verify_signature(&committee).map_err(|e| {
+    checkpoint.verify_signature(&committee, None).map_err(|e| {
         debug!("error verifying checkpoint: {e}");
         checkpoint.clone()
     })?;

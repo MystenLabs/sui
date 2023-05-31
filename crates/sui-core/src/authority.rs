@@ -613,7 +613,7 @@ impl AuthorityState {
                 // Update the JWK value in the authority server
                 let res = self.update_google_jwk().await;
                 if let Err(e) = res {
-                    debug!("Error when fetching JWK {:?}", e);
+                    warn!("Error when fetching JWK {:?}", e);
                 }
                 // Sleep for 1 hour
                 tokio::time::sleep(Duration::from_secs(3600)).await;

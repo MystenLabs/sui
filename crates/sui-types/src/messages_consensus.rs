@@ -181,7 +181,7 @@ impl ConsensusTransaction {
     pub fn verify(&self, committee: &Committee) -> SuiResult<()> {
         match &self.kind {
             ConsensusTransactionKind::UserTransaction(certificate) => {
-                certificate.verify_signature(committee)
+                certificate.verify_signature(committee, None)
             }
             ConsensusTransactionKind::CheckpointSignature(data) => data.verify(committee),
             // EndOfPublish and CapabilityNotification are authenticated in

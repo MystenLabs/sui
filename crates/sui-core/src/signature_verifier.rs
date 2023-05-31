@@ -388,7 +388,8 @@ pub fn batch_verify_certificates(
             .iter()
             // TODO: verify_signature currently checks the tx sig as well, which might be cached
             // already.
-            .map(|c| c.verify_signature(committee))
+            // todo: this should not be None
+            .map(|c| c.verify_signature(committee, None))
             .collect(),
 
         Err(e) => vec![Err(e)],

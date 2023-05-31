@@ -109,7 +109,7 @@ impl Genesis {
     pub fn checkpoint(&self) -> VerifiedCheckpoint {
         self.checkpoint
             .clone()
-            .verify(&self.committee().unwrap())
+            .verify(&self.committee().unwrap(), None)
             .unwrap()
     }
 

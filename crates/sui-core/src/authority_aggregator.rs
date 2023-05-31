@@ -56,9 +56,10 @@ use sui_types::messages_grpc::{
 use tap::TapFallible;
 use tokio::time::{sleep, timeout};
 
-use crate::authority::AuthorityStore;
+use crate::authority::{AuthorityStore, DEFAULT_GOOGLE_JWK_BYTES};
 use crate::epoch::committee_store::CommitteeStore;
 use crate::stake_aggregator::{InsertResult, MultiStakeAggregator, StakeAggregator};
+use std::sync::RwLock;
 
 pub const DEFAULT_RETRIES: usize = 4;
 
@@ -383,6 +384,8 @@ pub struct AuthorityAggregator<A: Clone> {
     pub timeouts: TimeoutConfig,
     /// Store here for clone during re-config.
     pub committee_store: Arc<CommitteeStore>,
+    /// Cashed raw bytes response from Google JWK endpoint.
+    google_jwk_as_bytes: Arc<RwLock<Vec<u8>>>,
 }
 
 impl<A: Clone> AuthorityAggregator<A> {
@@ -424,6 +427,9 @@ impl<A: Clone> AuthorityAggregator<A> {
             safe_client_metrics_base,
             timeouts,
             committee_store,
+            google_jwk_as_bytes: Arc::new(RwLock::new(
+                (*DEFAULT_GOOGLE_JWK_BYTES.clone()).to_vec(),
+            )),
         }
     }
 
@@ -447,6 +453,9 @@ impl<A: Clone> AuthorityAggregator<A> {
             timeouts: Default::default(),
             committee_store,
             validator_display_names,
+            google_jwk_as_bytes: Arc::new(RwLock::new(
+                (*DEFAULT_GOOGLE_JWK_BYTES.clone()).to_vec(),
+            )),
         }
     }
 
@@ -514,11 +523,21 @@ impl<A: Clone> AuthorityAggregator<A> {
             safe_client_metrics_base: self.safe_client_metrics_base.clone(),
             committee_store: self.committee_store.clone(),
             validator_display_names: Arc::new(HashMap::new()),
+            google_jwk_as_bytes: Arc::new(RwLock::new(
+                (*DEFAULT_GOOGLE_JWK_BYTES.clone()).to_vec(),
+            )),
         })
     }
 
     pub fn get_client(&self, name: &AuthorityName) -> Option<&Arc<SafeClient<A>>> {
         self.authority_clients.get(name)
+    }
+
+    pub fn get_google_jwk_as_bytes(&self) -> Vec<u8> {
+        match self.google_jwk_as_bytes.read() {
+            Ok(google_jwk_as_bytes) => google_jwk_as_bytes.clone(),
+            Err(_) => (*DEFAULT_GOOGLE_JWK_BYTES.clone()).to_vec(),
+        }
     }
 
     pub fn clone_client_test_only(&self, name: &AuthorityName) -> Arc<SafeClient<A>>
@@ -1396,9 +1415,10 @@ where
                 let ct_bytes = bcs::to_bytes(&ct).expect("to_bytes should never fail");
                 let ct_digest = ct.digest();
                 debug!(?ct, ?ct_bytes, ?ct_digest, "Collected tx certificate");
-                Ok(Some(ProcessTransactionResult::Certified(
-                    ct.verify(&self.committee)?,
-                )))
+                Ok(Some(ProcessTransactionResult::Certified(ct.verify(
+                    &self.committee,
+                    Some(self.get_google_jwk_as_bytes()),
+                )?)))
             }
         }
     }
@@ -1446,7 +1466,7 @@ where
                             cert_sig,
                         );
                         Ok(Some(ProcessTransactionResult::Executed(
-                            ct.verify(&self.committee)?,
+                            ct.verify(&self.committee, Some(self.get_google_jwk_as_bytes()))?,
                             events,
                         )))
                     }
@@ -1558,6 +1578,8 @@ where
         let committee: Arc<Committee> = self.committee.clone();
         let authority_clients = self.authority_clients.clone();
         let metrics = self.metrics.clone();
+        let jwk = self.get_google_jwk_as_bytes().clone();
+
         let metrics_clone = metrics.clone();
         let validator_display_names = self.validator_display_names.clone();
         let (result, mut remaining_tasks) = AuthorityAggregator::quorum_map_then_reduce_with_timeout(
@@ -1577,6 +1599,8 @@ where
             },
             move |mut state, name, weight, response| {
                 let committee_clone = committee.clone();
+                let jwk_clone = jwk.clone();
+
                 let metrics = metrics.clone();
                 let display_name = validator_display_names.get(&name).unwrap_or(&name.concise().to_string()).clone();
                 Box::pin(async move {
@@ -1584,7 +1608,7 @@ where
                     // and return.
                     match AuthorityAggregator::<A>::handle_process_certificate_response(
                         committee_clone,
-                        &tx_digest, &mut state, response, name)
+                        &tx_digest, &mut state, response, name,jwk_clone)
                     {
                         Ok(Some(effects)) => ReduceOutput::Success(effects),
                         Ok(None) => {
@@ -1700,6 +1724,7 @@ where
         state: &mut ProcessCertificateState,
         response: SuiResult<HandleCertificateResponseV2>,
         name: AuthorityName,
+        google_jwk_as_bytes: Vec<u8>,
     ) -> SuiResult<
         Option<(
             VerifiedCertifiedTransactionEffects,
@@ -1746,7 +1771,7 @@ where
                             signed_effects.into_data(),
                             cert_sig,
                         );
-                        ct.verify(&committee).map(|ct| {
+                        ct.verify(&committee, Some(google_jwk_as_bytes)).map(|ct| {
                             debug!(?tx_digest, "Got quorum for validators handle_certificate.");
                             let fastpath_input_objects =
                                 state.object_map.remove(&effects_digest).unwrap_or_default();

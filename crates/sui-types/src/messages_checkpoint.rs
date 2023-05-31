@@ -258,7 +258,7 @@ impl CertifiedCheckpointSummary {
         committee: &Committee,
         contents: Option<&CheckpointContents>,
     ) -> SuiResult {
-        self.verify_signature(committee)?;
+        self.verify_signature(committee, None)?;
 
         if let Some(contents) = contents {
             let content_digest = *contents.digest();
@@ -695,9 +695,9 @@ mod tests {
             .map(|v| v.into_sig())
             .collect();
         assert!(
-            CertifiedCheckpointSummary::new(summary, sign_infos, &committee)
+            CertifiedCheckpointSummary::new(summary, sign_infos, &committee,)
                 .unwrap()
-                .verify_signature(&committee)
+                .verify_signature(&committee, None)
                 .is_err()
         )
     }

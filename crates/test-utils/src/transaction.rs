@@ -76,7 +76,7 @@ pub async fn submit_single_owner_transaction(
         &key_pairs,
         &committee,
     )
-    .verify(&committee)
+    .verify(&committee, None)
     .unwrap();
     let mut responses = Vec::new();
     for addr in net_addresses {
@@ -121,7 +121,7 @@ async fn submit_shared_object_transaction_with_committee(
         key_pairs,
         committee,
     )
-    .verify(committee)
+    .verify(committee, None)
     .unwrap();
 
     let replies = loop {

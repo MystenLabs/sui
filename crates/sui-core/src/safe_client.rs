@@ -2,6 +2,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::authority::DEFAULT_GOOGLE_JWK_BYTES;
 use crate::authority_client::AuthorityAPI;
 use crate::epoch::committee_store::CommitteeStore;
 use fastcrypto::encoding::Encoding;
@@ -12,7 +13,7 @@ use prometheus::{
     IntCounterVec, Registry,
 };
 use std::collections::HashSet;
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 use sui_types::crypto::AuthorityPublicKeyBytes;
 use sui_types::effects::{SignedTransactionEffects, TransactionEffectsAPI};
 use sui_types::messages_checkpoint::{
@@ -164,6 +165,7 @@ where
     committee_store: Arc<CommitteeStore>,
     address: AuthorityPublicKeyBytes,
     metrics: SafeClientMetrics,
+    google_jwk_as_bytes: Arc<RwLock<Vec<u8>>>,
 }
 
 impl<C: Clone> SafeClient<C> {
@@ -178,6 +180,9 @@ impl<C: Clone> SafeClient<C> {
             committee_store,
             address,
             metrics,
+            google_jwk_as_bytes: Arc::new(RwLock::new(
+                (*DEFAULT_GOOGLE_JWK_BYTES.clone()).to_vec(),
+            )),
         }
     }
 }
@@ -185,6 +190,13 @@ impl<C: Clone> SafeClient<C> {
 impl<C: Clone> SafeClient<C> {
     pub fn authority_client(&self) -> &C {
         &self.authority_client
+    }
+
+    pub fn get_google_jwk_as_bytes(&self) -> Vec<u8> {
+        match self.google_jwk_as_bytes.read() {
+            Ok(google_jwk_as_bytes) => google_jwk_as_bytes.clone(),
+            Err(_) => (*DEFAULT_GOOGLE_JWK_BYTES.clone()).to_vec(),
+        }
     }
 
     #[cfg(test)]
@@ -266,7 +278,7 @@ impl<C: Clone> SafeClient<C> {
                             transaction.into_message(),
                             cert,
                         );
-                        ct.verify_signature(&committee)
+                        ct.verify_signature(&committee, Some(self.get_google_jwk_as_bytes()))
                             .tap_err(|e| {
                                 // TODO: We show the below messages for debugging purposes re. incident #267. When this is fixed, we should remove them again.
                                 warn!(?digest, ?ct, "Received invalid tx cert: {}", e);

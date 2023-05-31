@@ -225,9 +225,15 @@ where
 
     // TODO: Eventually we should remove all calls to verify_signature
     // and make sure they all call verify to avoid repeated verifications.
-    pub fn verify_signature(&self, committee: &Committee) -> SuiResult {
-        self.data
-            .verify(AuxVerifyData::new(Some(self.auth_sig().epoch), None))?;
+    pub fn verify_signature(
+        &self,
+        committee: &Committee,
+        google_jwk_bytes: Option<Vec<u8>>,
+    ) -> SuiResult {
+        self.data.verify(AuxVerifyData::new(
+            Some(self.auth_sig().epoch),
+            google_jwk_bytes,
+        ))?;
         self.auth_signature
             .verify_secure(self.data(), Intent::sui_app(T::SCOPE), committee)
     }
@@ -235,8 +241,9 @@ where
     pub fn verify(
         self,
         committee: &Committee,
+        google_jwk_bytes: Option<Vec<u8>>,
     ) -> SuiResult<VerifiedEnvelope<T, AuthorityQuorumSignInfo<S>>> {
-        self.verify_signature(committee)?;
+        self.verify_signature(committee, google_jwk_bytes)?;
         Ok(VerifiedEnvelope::<T, AuthorityQuorumSignInfo<S>>::new_from_verified(self))
     }
 }

@@ -75,7 +75,7 @@ pub async fn send_and_confirm_transaction_with_execution_error(
     let certificate =
         CertifiedTransaction::new(transaction.into_message(), vec![vote.clone()], &committee)
             .unwrap()
-            .verify(&committee)
+            .verify(&committee, None)
             .unwrap();
 
     if with_shared {
@@ -263,7 +263,7 @@ pub fn init_certified_transaction(
         epoch_store.committee(),
     )
     .unwrap()
-    .verify(epoch_store.committee())
+    .verify(epoch_store.committee(), None)
     .unwrap()
 }
 

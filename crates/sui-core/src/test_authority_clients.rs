@@ -7,10 +7,11 @@ use std::{
     time::Duration,
 };
 
-use crate::authority::test_authority_builder::TestAuthorityBuilder;
+use crate::authority::{test_authority_builder::TestAuthorityBuilder, DEFAULT_GOOGLE_JWK_BYTES};
 use crate::{authority::AuthorityState, authority_client::AuthorityAPI};
 use async_trait::async_trait;
 use mysten_metrics::spawn_monitored_task;
+use std::sync::RwLock;
 use sui_config::genesis::Genesis;
 use sui_types::effects::{TransactionEffectsAPI, TransactionEvents};
 use sui_types::error::SuiResult;
@@ -26,7 +27,6 @@ use sui_types::{
     messages_checkpoint::{CheckpointRequest, CheckpointResponse},
     transaction::{CertifiedTransaction, Transaction},
 };
-
 #[derive(Clone, Copy, Default)]
 pub struct LocalAuthorityClientFaultConfig {
     pub fail_before_handle_transaction: bool,
@@ -45,6 +45,7 @@ impl LocalAuthorityClientFaultConfig {
 pub struct LocalAuthorityClient {
     pub state: Arc<AuthorityState>,
     pub fault_config: LocalAuthorityClientFaultConfig,
+    google_jwk_as_bytes: Arc<RwLock<Vec<u8>>>,
 }
 
 #[async_trait]
@@ -131,6 +132,9 @@ impl LocalAuthorityClient {
         Self {
             state,
             fault_config: LocalAuthorityClientFaultConfig::default(),
+            google_jwk_as_bytes: Arc::new(RwLock::new(
+                (*DEFAULT_GOOGLE_JWK_BYTES.clone()).to_vec(),
+            )),
         }
     }
 
@@ -138,6 +142,9 @@ impl LocalAuthorityClient {
         Self {
             state,
             fault_config: LocalAuthorityClientFaultConfig::default(),
+            google_jwk_as_bytes: Arc::new(RwLock::new(
+                (*DEFAULT_GOOGLE_JWK_BYTES.clone()).to_vec(),
+            )),
         }
     }
 
@@ -159,7 +166,7 @@ impl LocalAuthorityClient {
             match state.get_signed_effects_and_maybe_resign(&tx_digest, &epoch_store) {
                 Ok(Some(effects)) => effects,
                 _ => {
-                    let certificate = certificate.verify(epoch_store.committee())?;
+                    let certificate = certificate.verify(epoch_store.committee(), None)?;
                     state.try_execute_for_test(&certificate).await?.0
                 }
             }
