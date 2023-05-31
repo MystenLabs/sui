@@ -35,9 +35,19 @@ export const INVALID_SECP256R1_PUBLIC_KEY = Uint8Array.from(
 // Test case generated against rust keytool cli. See https://github.com/MystenLabs/sui/blob/edd2cd31e0b05d336b1b03b6e79a67d8dd00d06b/crates/sui/src/unit_tests/keytool_tests.rs#L165
 const TEST_CASES = [
   [
-    'open genre century trouble allow pioneer love task chat salt drive income',
-    'AgNbPsIqEtYdkvpBRIcgfxNev/J8Suohc3b3O5a5T/X7DA==',
-    '0x5101291b764de08656e5b3fdf132d4cda20d604446681b166826bdb4996962e8',
+    'act wing dilemma glory episode region allow mad tourist humble muffin oblige',
+    'AiWmZXUcFpUF75H082F2RVJAABS5kcrvb8o09IPH9yUw',
+    '0x4a822457f1970468d38dae8e63fb60eefdaa497d74d781f581ea2d137ec36f3a',
+  ],
+  [
+    'flag rebel cabbage captain minimum purpose long already valley horn enrich salt',
+    'AjaB6aLp4fQabx4NglfGz2Bf01TGKArV80NEOnqDwqNN',
+    '0xcd43ecb9dd32249ff5748f5e4d51855b01c9b1b8bbe7f8638bb8ab4cb463b920',
+  ],
+  [
+    'area renew bar language pudding trial small host remind supreme cabbage era',
+    'AtSIEzVpJv+bJH3XptEq63vsuK+te1KRSY7JsiuJfcdK',
+    '0x0d9047b7e7b698cc09c955ea97b0c68c2be7fb3aebeb59edcc84b1fb87e0f28e',
   ],
 ];
 
@@ -128,13 +138,14 @@ describe('secp256r1-keypair', () => {
 
       // Keypair derived from 32-byte secret key
       const raw = fromB64(t[1]);
-
       expect(raw.length).toEqual(PRIVATE_KEY_SIZE + 1);
+      expect(keypair.export().privateKey).toEqual(toB64(raw.slice(1)));
 
       // The secp256r1 flag is 0x02. See more at [enum SignatureScheme].
       if (raw[0] !== 2 || raw.length !== PRIVATE_KEY_SIZE + 1) {
         throw new Error('invalid key');
       }
+
       const imported = Secp256r1Keypair.fromSecretKey(raw.slice(1));
       expect(imported.getPublicKey().toSuiAddress()).toEqual(t[2]);
 

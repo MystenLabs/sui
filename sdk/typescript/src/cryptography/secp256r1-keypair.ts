@@ -122,8 +122,8 @@ export class Secp256r1Keypair implements Keypair {
    * Derive Secp256r1 keypair from mnemonics and path. The mnemonics must be normalized
    * and validated against the english wordlist.
    *
-   * If path is none, it will default to m/54'/784'/0'/0/0, otherwise the path must
-   * be compliant to BIP-32 in form m/54'/784'/{account_index}'/{change_index}/{address_index}.
+   * If path is none, it will default to m/74'/784'/0'/0/0, otherwise the path must
+   * be compliant to BIP-32 in form m/74'/784'/{account_index}'/{change_index}/{address_index}.
    */
   static deriveKeypair(mnemonics: string, path?: string): Secp256r1Keypair {
     if (path == null) {

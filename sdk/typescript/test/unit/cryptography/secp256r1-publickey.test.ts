@@ -15,8 +15,9 @@ import {
 // ../sui/target/debug/sui keytool list
 let SECP_TEST_CASES = new Map<string, string>([
   [
-    'AgNbPsIqEtYdkvpBRIcgfxNev/J8Suohc3b3O5a5T/X7DA==',
-    '0xd135b77e2c949a104142969b2ab7f1866a1fc6882e045c0377b7f13b4532069',
+    // TODO: Keytool seems to prepent a 0x02 flag which has been removed here
+    'A8Ju2r5X3EZ3aYuZzH+Ofs6cd1j2WOwY7lhoJQenulBl',
+    '0xafd0f5a4f41c5770c201879518740b83743164ed2445016fbba9ae98e04af8a5',
   ],
 ]);
 describe('Secp256r1PublicKey', () => {
