@@ -11,6 +11,7 @@ import {
     type SerializedAccount,
 } from '_src/background/keyring/Account';
 import { Link } from '_src/ui/app/shared/Link';
+import { Text } from '_src/ui/app/shared/text';
 
 export type AccountActionsProps = {
     account: SerializedAccount;
@@ -72,6 +73,13 @@ export function AccountActions({ account }: AccountActionsProps) {
                       <BadgeLabel label={value} key={name} />
                   ))
                 : null;
+            break;
+        case AccountType.ZK:
+            actionContent = (
+                <Text>
+                    Pin:<Text mono>{account.pin}</Text>
+                </Text>
+            );
             break;
         default:
             throw new Error(`Encountered unknown account type`);

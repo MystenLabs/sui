@@ -11,6 +11,8 @@ import { toBufferBE, toBigIntBE } from 'bigint-buffer';
 import { base64url, decodeJwt } from 'jose';
 import Browser from 'webextension-polyfill';
 
+import keyring from '../keyring';
+import { storeZkLoginAccount } from './storage';
 import { getAddressSeed, poseidonHash } from './utils';
 
 bcs.registerStructType('AddressParams', {
@@ -166,7 +168,7 @@ export async function createZkAccount(currentEpoch: number) {
         maxEpoch,
         userPin,
     });
-    if (!decodedJwt.sub || !decodedJwt.iss) {
+    if (!decodedJwt.sub || !decodedJwt.iss || !decodedJwt.email) {
         throw new Error('Missing jtw data');
     }
     const address = await getAddress({
@@ -174,7 +176,17 @@ export async function createZkAccount(currentEpoch: number) {
         iss: decodedJwt.iss,
         userPin,
     });
+    const account = {
+        address,
+        email: decodedJwt.email as string,
+        sub: decodedJwt.sub,
+        pin: userPin.toString(),
+    };
+    await storeZkLoginAccount(account);
+    keyring.importZkAccount(account);
     console.log({ decodedJwt, proofs, address });
+    // TODO: store ephemeral key etc in memory
+    return { pin: account.pin, address };
 }
 
 export async function zkLogin(nonce: string, loginAccount?: string) {

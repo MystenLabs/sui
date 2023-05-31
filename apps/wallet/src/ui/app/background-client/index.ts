@@ -70,7 +70,7 @@ export class BackgroundClient {
             this.getWalletStatus(),
             this.loadFeatures(),
             this.getNetwork(),
-        ]).then(() => undefined);
+        ]).then(() => console.log('wallet initialized'));
     }
 
     public sendPermissionResponse(

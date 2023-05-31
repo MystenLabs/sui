@@ -27,7 +27,7 @@ export class KeepAliveConnection {
         }
         Keyring.on('lockedStatusUpdate', this.onKeyringLockedStatusUpdate);
         this.port.onDisconnect.addListener(this.onPortDisconnected);
-        this.onKeyringLockedStatusUpdate(Keyring.isLocked);
+        this.onKeyringLockedStatusUpdate(false);
     }
 
     public get onDisconnect() {

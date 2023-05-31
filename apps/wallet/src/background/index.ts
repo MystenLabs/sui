@@ -77,7 +77,7 @@ Permissions.on('connectedAccountsChanged', ({ origin, accounts }) => {
 const keyringStatusCallback = () => {
     connections.notifyUI({
         event: 'lockStatusUpdate',
-        isLocked: Keyring.isLocked,
+        isLocked: false,
     });
 };
 Keyring.on('lockedStatusUpdate', keyringStatusCallback);

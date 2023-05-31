@@ -16,19 +16,22 @@ import {
     type SerializedLedgerAccount,
 } from './LedgerAccount';
 import { type QredoAccount, type SerializedQredoAccount } from './QredoAccount';
+import { type SerializedZKAccount } from './ZKAccount';
 
 export enum AccountType {
     IMPORTED = 'IMPORTED',
     DERIVED = 'DERIVED',
     LEDGER = 'LEDGER',
     QREDO = 'QREDO',
+    ZK = 'ZK',
 }
 
 export type SerializedAccount =
     | SerializedImportedAccount
     | SerializedDerivedAccount
     | SerializedLedgerAccount
-    | SerializedQredoAccount;
+    | SerializedQredoAccount
+    | SerializedZKAccount;
 
 export interface Account {
     readonly type: AccountType;

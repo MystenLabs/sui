@@ -3,10 +3,13 @@
 
 import { Ed25519Keypair, fromB64 } from '@mysten/sui.js';
 import mitt from 'mitt';
-import { throttle } from 'throttle-debounce';
 
 import { getAllQredoConnections } from '../qredo/storage';
 import { getFromLocalStorage, setToLocalStorage } from '../storage-utils';
+import {
+    type StoredZkLoginAccount,
+    getStoredZkLoginAccount,
+} from '../zk-login/storage';
 import {
     type Account,
     isImportedOrDerivedAccount,
@@ -17,15 +20,10 @@ import { ImportedAccount } from './ImportedAccount';
 import { LedgerAccount, type SerializedLedgerAccount } from './LedgerAccount';
 import { QredoAccount } from './QredoAccount';
 import { VaultStorage } from './VaultStorage';
+import { ZKAccount } from './ZKAccount';
 import { createMessage } from '_messages';
 import { isKeyringPayload } from '_payloads/keyring';
 import { entropyToSerialized } from '_shared/utils/bip39';
-import Alarms from '_src/background/Alarms';
-import {
-    AUTO_LOCK_TIMER_MAX_MINUTES,
-    AUTO_LOCK_TIMER_MIN_MINUTES,
-    AUTO_LOCK_TIMER_STORAGE_KEY,
-} from '_src/shared/constants';
 import { type Wallet } from '_src/shared/qredo-api';
 
 import type { UiConnection } from '../connections/UiConnection';
@@ -49,8 +47,6 @@ type KeyringEvents = {
 // exported to make testing easier the default export should be used
 export class Keyring {
     #events = mitt<KeyringEvents>();
-    #locked = true;
-    #mainDerivedAccount: SuiAddress | null = null;
     #accountsMap: Map<SuiAddress, Account> = new Map();
     public readonly reviveDone: Promise<void>;
 
@@ -59,6 +55,7 @@ export class Keyring {
             // if for some reason decrypting the vault fails or anything else catch
             // the error to allow the user to login using the password
         });
+        this.unlocked();
     }
 
     /**
@@ -72,12 +69,7 @@ export class Keyring {
     }
 
     public async lock() {
-        this.#accountsMap.clear();
-        this.#mainDerivedAccount = null;
-        this.#locked = true;
-        await VaultStorage.lock();
-        await Alarms.clearLockAlarm();
-        this.notifyLockedStatusUpdate(this.#locked);
+        // this.#accountsMap.clear();
     }
 
     public async unlock(password: string) {
@@ -87,15 +79,12 @@ export class Keyring {
 
     public async clearVault() {
         this.lock();
+        this.#accountsMap.clear();
         await VaultStorage.clear();
     }
 
     public async isWalletInitialized() {
-        return await VaultStorage.isWalletInitialized();
-    }
-
-    public get isLocked() {
-        return this.#locked;
+        return this.#accountsMap.size > 0;
     }
 
     public on = this.#events.on;
@@ -103,25 +92,17 @@ export class Keyring {
     public off = this.#events.off;
 
     public async getActiveAccount() {
-        if (this.isLocked) {
-            return null;
-        }
-        const address = await getFromLocalStorage(
+        const address = await getFromLocalStorage<string | null>(
             STORAGE_ACTIVE_ACCOUNT,
-            this.#mainDerivedAccount
+            null
         );
         return (
             (address && this.#accountsMap.get(address)) ||
-            (this.#mainDerivedAccount &&
-                this.#accountsMap.get(this.#mainDerivedAccount)) ||
-            null
+            Array.from(this.#accountsMap.values())[0]
         );
     }
 
     public async deriveNextAccount() {
-        if (this.isLocked) {
-            return null;
-        }
         const mnemonic = VaultStorage.getMnemonic();
         if (!mnemonic) {
             return null;
@@ -137,12 +118,7 @@ export class Keyring {
     public async importLedgerAccounts(
         ledgerAccounts: SerializedLedgerAccount[]
     ) {
-        if (this.isLocked) {
-            return null;
-        }
-
         await this.storeLedgerAccounts(ledgerAccounts);
-
         for (const ledgerAccount of ledgerAccounts) {
             const account = new LedgerAccount({
                 derivationPath: ledgerAccount.derivationPath,
@@ -154,14 +130,11 @@ export class Keyring {
     }
 
     public getAccounts() {
-        if (this.isLocked) {
-            return null;
-        }
         return Array.from(this.#accountsMap.values());
     }
 
     public async changeActiveAccount(address: SuiAddress) {
-        if (!this.isLocked && this.#accountsMap.has(address)) {
+        if (this.#accountsMap.has(address)) {
             await this.storeActiveAccount(address);
             this.#events.emit('activeAccountChanged', address);
             return true;
@@ -179,9 +152,6 @@ export class Keyring {
      * @throws if wrong password is provided
      */
     public async exportAccountKeypair(address: SuiAddress, password: string) {
-        if (this.isLocked) {
-            return null;
-        }
         if (await VaultStorage.verifyPassword(password)) {
             const account = this.#accountsMap.get(address);
             if (!account || !isImportedOrDerivedAccount(account)) {
@@ -198,11 +168,6 @@ export class Keyring {
         password: string
     ) {
         const currentAccounts = this.getAccounts();
-        if (this.isLocked || !currentAccounts) {
-            // this function is expected to be called from UI when unlocked
-            // so this shouldn't happen
-            throw new Error('Wallet is locked');
-        }
         const passwordCorrect = await VaultStorage.verifyPassword(password);
         if (!passwordCorrect) {
             // we need to make sure that the password is the same with the one of the current vault because we will
@@ -234,9 +199,6 @@ export class Keyring {
         password: string,
         newAccounts: Wallet[]
     ) {
-        if (this.isLocked) {
-            throw new Error('Wallet is locked');
-        }
         await VaultStorage.storeQredoToken(qredoID, refreshToken, password);
         this.#accountsMap.forEach((anAccount) => {
             if (
@@ -259,10 +221,12 @@ export class Keyring {
     }
 
     public getQredoRefreshToken(qredoID: string) {
-        if (this.isLocked) {
-            throw new Error('Wallet is locked');
-        }
         return VaultStorage.getQredoToken(qredoID);
+    }
+
+    public importZkAccount(account: StoredZkLoginAccount) {
+        this.#accountsMap.set(account.address, new ZKAccount(account));
+        this.notifyAccountsChanged();
     }
 
     public async handleUiMessage(msg: Message, uiConnection: UiConnection) {
@@ -276,9 +240,6 @@ export class Keyring {
                 await this.createVault(password, importedEntropy);
                 uiConnection.send(createMessage({ type: 'done' }, id));
             } else if (isKeyringPayload(payload, 'getEntropy')) {
-                if (this.#locked) {
-                    throw new Error('Keyring is locked. Unlock it first.');
-                }
                 if (!VaultStorage.entropy) {
                     throw new Error('Error vault is empty');
                 }
@@ -299,27 +260,14 @@ export class Keyring {
                 // wait to avoid ui showing locked and then unlocked screen
                 // ui waits until it receives this status to render
                 await this.reviveDone;
-                uiConnection.sendLockedStatusUpdate(this.isLocked, id);
+                uiConnection.sendLockedStatusUpdate(false, id);
             } else if (isKeyringPayload(payload, 'lock')) {
                 this.lock();
                 uiConnection.send(createMessage({ type: 'done' }, id));
             } else if (isKeyringPayload(payload, 'clear')) {
                 await this.clearVault();
                 uiConnection.send(createMessage({ type: 'done' }, id));
-            } else if (isKeyringPayload(payload, 'appStatusUpdate')) {
-                const appActive = payload.args?.active;
-                if (appActive) {
-                    this.postponeLock();
-                }
-            } else if (isKeyringPayload(payload, 'setLockTimeout')) {
-                if (payload.args) {
-                    await this.setLockTimeout(payload.args.timeout);
-                }
-                uiConnection.send(createMessage({ type: 'done' }, id));
             } else if (isKeyringPayload(payload, 'signData')) {
-                if (this.#locked) {
-                    throw new Error('Keyring is locked. Unlock it first.');
-                }
                 if (!payload.args) {
                     throw new Error('Missing parameters.');
                 }
@@ -351,9 +299,6 @@ export class Keyring {
                     );
                 }
             } else if (isKeyringPayload(payload, 'switchAccount')) {
-                if (this.#locked) {
-                    throw new Error('Keyring is locked. Unlock it first.');
-                }
                 if (!payload.args) {
                     throw new Error('Missing parameters.');
                 }
@@ -441,33 +386,6 @@ export class Keyring {
         }
     }
 
-    private notifyLockedStatusUpdate(isLocked: boolean) {
-        this.#events.emit('lockedStatusUpdate', isLocked);
-    }
-
-    private postponeLock = throttle(
-        1000,
-        async () => {
-            if (!this.isLocked) {
-                await Alarms.setLockAlarm();
-            }
-        },
-        { noLeading: false }
-    );
-
-    private async setLockTimeout(timeout: number) {
-        if (
-            timeout > AUTO_LOCK_TIMER_MAX_MINUTES ||
-            timeout < AUTO_LOCK_TIMER_MIN_MINUTES
-        ) {
-            return;
-        }
-        await setToLocalStorage(AUTO_LOCK_TIMER_STORAGE_KEY, timeout);
-        if (!this.isLocked) {
-            await Alarms.setLockAlarm();
-        }
-    }
-
     private async revive() {
         const unlocked = await VaultStorage.revive();
         if (unlocked) {
@@ -476,19 +394,6 @@ export class Keyring {
     }
 
     private async unlocked() {
-        let mnemonic = VaultStorage.getMnemonic();
-        if (!mnemonic) {
-            return;
-        }
-        Alarms.setLockAlarm();
-        const lastAccountIndex = await this.getLastDerivedIndex();
-        for (let i = 0; i <= lastAccountIndex; i++) {
-            const account = this.deriveAccount(i, mnemonic);
-            this.#accountsMap.set(account.address, account);
-            if (i === 0) {
-                this.#mainDerivedAccount = account.address;
-            }
-        }
         const savedLedgerAccounts = await this.getSavedLedgerAccounts();
         for (const savedLedgerAccount of savedLedgerAccounts) {
             this.#accountsMap.set(
@@ -512,19 +417,12 @@ export class Keyring {
                 }
             );
         }
-        VaultStorage.getImportedKeys()?.forEach((anImportedKey) => {
-            const account = new ImportedAccount({
-                keypair: anImportedKey,
-            });
-            // there is a case where we can import a private key of an account that can be derived from the mnemonic but not yet derived
-            // if later we derive it skip overriding the derived account with the imported one (convert the imported as derived in a way)
-            if (!this.#accountsMap.has(account.address)) {
-                this.#accountsMap.set(account.address, account);
-            }
-        });
-        mnemonic = null;
-        this.#locked = false;
-        this.notifyLockedStatusUpdate(this.#locked);
+        const zk = await getStoredZkLoginAccount();
+        if (zk) {
+            const account = new ZKAccount(zk);
+            this.#accountsMap.set(account.address, account);
+        }
+        this.notifyAccountsChanged();
     }
 
     private deriveAccount(accountIndex: number, mnemonic: string) {

@@ -13,6 +13,7 @@ const TYPE_TO_TEXT: Record<AccountType, string | null> = {
     [AccountType.IMPORTED]: 'Imported',
     [AccountType.QREDO]: 'Qredo',
     [AccountType.DERIVED]: null,
+    [AccountType.ZK]: 'ZK-login',
 };
 
 export function AccountBadge({ accountType }: AccountBadgeProps) {
