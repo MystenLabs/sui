@@ -201,8 +201,12 @@ struct AvailableObjectsCache {
 
 impl AvailableObjectsCache {
     fn new(metrics: Arc<AuthorityMetrics>) -> Self {
+        Self::new_with_size(metrics, 100000)
+    }
+
+    fn new_with_size(metrics: Arc<AuthorityMetrics>, size: usize) -> Self {
         Self {
-            cache: CacheInner::new(100000, metrics),
+            cache: CacheInner::new(size, metrics),
             unbounded_cache_enabled: 0,
         }
     }
@@ -875,5 +879,67 @@ where
         if self.len() > MIN_HASHMAP_CAPACITY && self.len() < self.capacity() / 4 {
             self.shrink_to(max(self.capacity() / 2, MIN_HASHMAP_CAPACITY))
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use prometheus::Registry;
+
+    #[test]
+    fn test_available_objects_cache() {
+        let metrics = Arc::new(AuthorityMetrics::new(&Registry::default()));
+        let mut cache = AvailableObjectsCache::new_with_size(metrics, 5);
+
+        // insert 10 unique unversioned objects
+        for i in 0..10 {
+            let object = ObjectID::new([i; 32]);
+            let input_key = InputKey(object, None);
+            assert_eq!(cache.is_object_available(&input_key), None);
+            cache.insert(&input_key);
+            assert_eq!(cache.is_object_available(&input_key), Some(true));
+        }
+
+        // first 5 have been evicted
+        for i in 0..5 {
+            let object = ObjectID::new([i; 32]);
+            let input_key = InputKey(object, None);
+            assert_eq!(cache.is_object_available(&input_key), None);
+        }
+
+        // insert 10 unique versioned objects
+        for i in 0..10 {
+            let object = ObjectID::new([i; 32]);
+            let input_key = InputKey(object, Some((i as u64).into()));
+            assert_eq!(cache.is_object_available(&input_key), None);
+            cache.insert(&input_key);
+            assert_eq!(cache.is_object_available(&input_key), Some(true));
+        }
+
+        // first 5 versioned objects have been evicted
+        for i in 0..5 {
+            let object = ObjectID::new([i; 32]);
+            let input_key = InputKey(object, Some((i as u64).into()));
+            assert_eq!(cache.is_object_available(&input_key), None);
+        }
+
+        // but versioned objects do not cause evictions of unversioned objects
+        for i in 5..10 {
+            let object = ObjectID::new([i; 32]);
+            let input_key = InputKey(object, None);
+            assert_eq!(cache.is_object_available(&input_key), Some(true));
+        }
+
+        // object 9 is available at version 9
+        let object = ObjectID::new([9; 32]);
+        let input_key = InputKey(object, Some(9.into()));
+        assert_eq!(cache.is_object_available(&input_key), Some(true));
+        // but not at version 10
+        let input_key = InputKey(object, Some(10.into()));
+        assert_eq!(cache.is_object_available(&input_key), Some(false));
+        // it is available at version 8 (this case can be used by readonly shared objects)
+        let input_key = InputKey(object, Some(8.into()));
+        assert_eq!(cache.is_object_available(&input_key), Some(true));
     }
 }
