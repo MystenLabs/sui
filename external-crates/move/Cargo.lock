@@ -596,6 +596,7 @@ dependencies = [
  "move-binary-format",
  "move-bytecode-verifier",
  "move-core-types",
+ "move-vm-config",
  "petgraph 0.5.1",
  "proptest",
 ]
@@ -2896,6 +2897,7 @@ dependencies = [
  "move-binary-format",
  "move-borrow-graph",
  "move-core-types",
+ "move-vm-config",
  "petgraph 0.5.1",
 ]
 
@@ -3560,6 +3562,7 @@ dependencies = [
  "move-stackless-bytecode-interpreter",
  "move-stdlib",
  "move-symbol-pool",
+ "move-vm-config",
  "move-vm-runtime",
  "move-vm-test-utils",
  "move-vm-types",
@@ -3606,6 +3609,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "move-vm-config"
+version = "0.1.0"
+dependencies = [
+ "move-binary-format",
+]
+
+[[package]]
 name = "move-vm-integration-tests"
 version = "0.1.0"
 dependencies = [
@@ -3618,6 +3628,7 @@ dependencies = [
  "move-core-types",
  "move-stdlib",
  "move-table-extension",
+ "move-vm-config",
  "move-vm-runtime",
  "move-vm-test-utils",
  "move-vm-types",
@@ -3646,6 +3657,7 @@ dependencies = [
  "move-compiler",
  "move-core-types",
  "move-ir-compiler",
+ "move-vm-config",
  "move-vm-types",
  "once_cell",
  "parking_lot 0.11.2",

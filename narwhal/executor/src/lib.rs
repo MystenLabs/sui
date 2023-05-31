@@ -8,6 +8,7 @@ mod metrics;
 
 pub use errors::{SubscriberError, SubscriberResult};
 pub use state::ExecutionIndices;
+use sui_protocol_config::ProtocolConfig;
 
 use crate::metrics::ExecutorMetrics;
 use crate::subscriber::spawn_subscriber;
@@ -15,16 +16,14 @@ use crate::subscriber::spawn_subscriber;
 use async_trait::async_trait;
 use config::{AuthorityIdentifier, Committee, WorkerCache};
 use mockall::automock;
+use mysten_metrics::metered_channel;
 use network::client::NetworkClient;
 use prometheus::Registry;
 use std::sync::Arc;
 use storage::{CertificateStore, ConsensusStore};
 use tokio::task::JoinHandle;
 use tracing::info;
-use types::{
-    metered_channel, CertificateDigest, CommittedSubDag, ConditionalBroadcastReceiver,
-    ConsensusOutput,
-};
+use types::{CertificateDigest, CommittedSubDag, ConditionalBroadcastReceiver, ConsensusOutput};
 
 /// Convenience type representing a serialized transaction.
 pub type SerializedTransaction = Vec<u8>;
@@ -52,6 +51,7 @@ impl Executor {
         authority_id: AuthorityIdentifier,
         worker_cache: WorkerCache,
         committee: Committee,
+        protocol_config: &ProtocolConfig,
         client: NetworkClient,
         execution_state: State,
         shutdown_receivers: Vec<ConditionalBroadcastReceiver>,
@@ -72,6 +72,7 @@ impl Executor {
             authority_id,
             worker_cache,
             committee,
+            protocol_config.clone(),
             client,
             shutdown_receivers,
             rx_sequence,

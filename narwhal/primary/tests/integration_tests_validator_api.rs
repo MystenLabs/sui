@@ -20,8 +20,8 @@ use storage::{CertificateStore, HeaderStore};
 use storage::{NodeStorage, PayloadStore};
 use store::{rocks::DBMap, Map};
 use test_utils::{
-    fixture_batch_with_transactions, make_optimal_certificates, make_optimal_signed_certificates,
-    temp_dir, AuthorityFixture, CommitteeFixture,
+    fixture_batch_with_transactions, latest_protocol_version, make_optimal_certificates,
+    make_optimal_signed_certificates, temp_dir, AuthorityFixture, CommitteeFixture,
 };
 use tokio::sync::watch;
 use tonic::transport::Channel;
@@ -59,7 +59,7 @@ async fn test_get_collections() {
 
     // Generate headers
     for n in 0..5 {
-        let batch = fixture_batch_with_transactions(10);
+        let batch = fixture_batch_with_transactions(10, &latest_protocol_version());
 
         let header = Header::V1(
             author
@@ -110,6 +110,7 @@ async fn test_get_collections() {
         author.network_keypair().copy(),
         committee.clone(),
         worker_cache.clone(),
+        latest_protocol_version(),
         parameters.clone(),
         client.clone(),
         store.header_store.clone(),
@@ -146,6 +147,7 @@ async fn test_get_collections() {
         worker_id,
         committee.clone(),
         worker_cache.clone(),
+        latest_protocol_version(),
         parameters.clone(),
         TrivialTransactionValidator::default(),
         client,
@@ -272,7 +274,7 @@ async fn test_remove_collections() {
 
     // Generate headers
     for n in 0..5 {
-        let batch = fixture_batch_with_transactions(10);
+        let batch = fixture_batch_with_transactions(10, &latest_protocol_version());
 
         let header = Header::V1(
             author
@@ -317,6 +319,7 @@ async fn test_remove_collections() {
         author.network_keypair().copy(),
         committee.clone(),
         worker_cache.clone(),
+        latest_protocol_version(),
         parameters.clone(),
         network_client.clone(),
         store.header_store.clone(),
@@ -375,6 +378,7 @@ async fn test_remove_collections() {
         worker_id,
         committee.clone(),
         worker_cache.clone(),
+        latest_protocol_version(),
         parameters.clone(),
         TrivialTransactionValidator::default(),
         network_client,
@@ -523,8 +527,13 @@ async fn test_read_causal_signed_certificates() {
         .authorities()
         .map(|a| (a.id(), a.keypair().copy()))
         .collect::<Vec<_>>();
-    let (certificates, _next_parents) =
-        make_optimal_signed_certificates(1..=4, &genesis, &committee, &keys);
+    let (certificates, _next_parents) = make_optimal_signed_certificates(
+        1..=4,
+        &genesis,
+        &committee,
+        &latest_protocol_version(),
+        &keys,
+    );
 
     collection_digests.extend(
         certificates
@@ -569,6 +578,7 @@ async fn test_read_causal_signed_certificates() {
         authority_1.network_keypair().copy(),
         committee.clone(),
         worker_cache.clone(),
+        latest_protocol_version(),
         primary_1_parameters.clone(),
         client_1,
         primary_store_1.header_store.clone(),
@@ -608,6 +618,7 @@ async fn test_read_causal_signed_certificates() {
         authority_2.network_keypair().copy(),
         committee.clone(),
         worker_cache.clone(),
+        latest_protocol_version(),
         primary_2_parameters.clone(),
         client_2,
         primary_store_2.header_store,
@@ -750,6 +761,7 @@ async fn test_read_causal_unsigned_certificates() {
 
     let (certificates, _next_parents) = make_optimal_certificates(
         &committee,
+        &latest_protocol_version(),
         1..=4,
         &genesis,
         &committee
@@ -795,6 +807,7 @@ async fn test_read_causal_unsigned_certificates() {
         authority_1.network_keypair().copy(),
         committee.clone(),
         worker_cache.clone(),
+        latest_protocol_version(),
         primary_1_parameters.clone(),
         client_1,
         primary_store_1.header_store.clone(),
@@ -828,6 +841,7 @@ async fn test_read_causal_unsigned_certificates() {
         network_keypair_2,
         committee.clone(),
         worker_cache.clone(),
+        latest_protocol_version(),
         primary_2_parameters.clone(),
         client_2,
         primary_store_2.header_store,
@@ -1007,6 +1021,7 @@ async fn test_get_collections_with_missing_certificates() {
         authority_1.network_keypair().copy(),
         committee.clone(),
         worker_cache.clone(),
+        latest_protocol_version(),
         parameters_1.clone(),
         client_1.clone(),
         store_primary_1.header_store,
@@ -1043,6 +1058,7 @@ async fn test_get_collections_with_missing_certificates() {
         worker_id,
         committee.clone(),
         worker_cache.clone(),
+        latest_protocol_version(),
         parameters_1.clone(),
         TrivialTransactionValidator::default(),
         client_1,
@@ -1078,6 +1094,7 @@ async fn test_get_collections_with_missing_certificates() {
         authority_2.network_keypair().copy(),
         committee.clone(),
         worker_cache.clone(),
+        latest_protocol_version(),
         parameters_2.clone(),
         client_2.clone(),
         store_primary_2.header_store,
@@ -1106,6 +1123,7 @@ async fn test_get_collections_with_missing_certificates() {
         worker_id,
         committee.clone(),
         worker_cache.clone(),
+        latest_protocol_version(),
         parameters_2.clone(),
         TrivialTransactionValidator::default(),
         client_2,
@@ -1186,7 +1204,7 @@ async fn fixture_certificate(
     payload_store: PayloadStore,
     batch_store: DBMap<BatchDigest, Batch>,
 ) -> (Certificate, Batch) {
-    let batch = fixture_batch_with_transactions(10);
+    let batch = fixture_batch_with_transactions(10, &latest_protocol_version());
     let worker_id = 0;
 
     let batch_digest = batch.digest();

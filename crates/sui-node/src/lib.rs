@@ -20,8 +20,10 @@ use arc_swap::ArcSwap;
 use futures::TryFutureExt;
 use mysten_common::sync::async_once_cell::AsyncOnceCell;
 use prometheus::Registry;
+use sui_core::authority::CHAIN_IDENTIFIER;
 use sui_core::consensus_adapter::LazyNarwhalClient;
 use sui_json_rpc::api::JsonRpcMetrics;
+use sui_types::digests::ChainIdentifier;
 use sui_types::sui_system_state::SuiSystemState;
 use tap::tap::TapFallible;
 use tokio::runtime::Handle;
@@ -39,6 +41,7 @@ use mysten_metrics::{spawn_monitored_task, RegistryService};
 use mysten_network::server::ServerBuilder;
 use narwhal_network::metrics::MetricsMakeCallbackHandler;
 use narwhal_network::metrics::{NetworkConnectionMetrics, NetworkMetrics};
+use sui_archival::writer::ArchiveWriterV1;
 use sui_config::node::DBCheckpointConfig;
 use sui_config::node_config_metrics::NodeConfigMetrics;
 use sui_config::{ConsensusConfig, NodeConfig};
@@ -87,7 +90,8 @@ use sui_network::discovery;
 use sui_network::discovery::TrustedPeerChangeEvent;
 use sui_network::state_sync;
 use sui_protocol_config::{ProtocolConfig, SupportedProtocolVersions};
-use sui_storage::IndexStore;
+use sui_storage::object_store::{ObjectStoreConfig, ObjectStoreType};
+use sui_storage::{FileCompression, IndexStore};
 use sui_types::base_types::{AuthorityName, EpochId, TransactionDigest};
 use sui_types::committee::Committee;
 use sui_types::crypto::KeypairTraits;
@@ -146,6 +150,8 @@ pub struct SuiNode {
 
     #[cfg(msim)]
     sim_safe_mode_expected: AtomicBool,
+
+    _state_archive_handle: Option<broadcast::Sender<()>>,
 }
 
 impl fmt::Debug for SuiNode {
@@ -302,13 +308,18 @@ impl SuiNode {
             None
         };
 
+        let chain_identifier = ChainIdentifier::from(*genesis.checkpoint().digest());
+        // It's ok if the value is already set due to data races.
+        let _ = CHAIN_IDENTIFIER.set(chain_identifier);
+
         // Create network
         // TODO only configure validators as seed/preferred peers for validators and not for
         // fullnodes once we've had a chance to re-work fullnode configuration generation.
         let (trusted_peer_change_tx, trusted_peer_change_rx) = watch::channel(Default::default());
         let (p2p_network, discovery_handle, state_sync_handle) = Self::create_p2p_network(
             &config,
-            state_sync_store,
+            state_sync_store.clone(),
+            chain_identifier,
             trusted_peer_change_rx,
             &prometheus_registry,
         )?;
@@ -320,7 +331,26 @@ impl SuiNode {
             epoch_store.epoch_start_state(),
         )
         .expect("Initial trusted peers must be set");
-
+        let state_archive_handle =
+            if let Some(remote_store_config) = &config.state_archive_config.object_store_config {
+                let local_store_config = ObjectStoreConfig {
+                    object_store: Some(ObjectStoreType::File),
+                    directory: Some(config.archive_path()),
+                    ..Default::default()
+                };
+                let archive_writer = ArchiveWriterV1::new(
+                    local_store_config,
+                    remote_store_config.clone(),
+                    FileCompression::Zstd,
+                    Duration::from_secs(600),
+                    1024 * 1024 * 1024,
+                    &prometheus_registry,
+                )
+                .await?;
+                Some(archive_writer.start(state_sync_store)?)
+            } else {
+                None
+            };
         let db_checkpoint_config = if config.db_checkpoint_config.checkpoint_path.is_none() {
             DBCheckpointConfig {
                 checkpoint_path: Some(config.db_checkpoint_path()),
@@ -489,6 +519,7 @@ impl SuiNode {
             sim_node: sui_simulator::runtime::NodeHandle::current(),
             #[cfg(msim)]
             sim_safe_mode_expected: AtomicBool::new(false),
+            _state_archive_handle: state_archive_handle,
         };
 
         info!("SuiNode started!");
@@ -567,6 +598,7 @@ impl SuiNode {
     fn create_p2p_network(
         config: &NodeConfig,
         state_sync_store: RocksDbStore,
+        chain_identifier: ChainIdentifier,
         trusted_peer_change_rx: watch::Receiver<TrustedPeerChangeEvent>,
         prometheus_registry: &Registry,
     ) -> Result<(Network, discovery::Handle, state_sync::Handle)> {
@@ -619,13 +651,22 @@ impl SuiNode {
             // staking events in the epoch change txn.
             anemo_config.max_frame_size = Some(2 << 30);
 
+            let server_name = format!("sui-{}", chain_identifier);
+            let alt_server_name = "sui";
             let network = Network::bind(config.p2p_config.listen_address)
-                .server_name("sui")
+                .server_name(&server_name)
+                // TODO remove alternate_server_name once transition stabilizes
+                .alternate_server_name(alt_server_name)
                 .private_key(config.network_key_pair().copy().private().0.to_bytes())
                 .config(anemo_config)
                 .outbound_request_layer(outbound_layer)
                 .start(service)?;
-            info!("P2p network started on {}", network.local_addr());
+            info!(
+                server_name = server_name,
+                alt_server_name = alt_server_name,
+                "P2p network started on {}",
+                network.local_addr()
+            );
 
             network
         };
@@ -755,6 +796,7 @@ impl SuiNode {
         narwhal_manager
             .start(
                 new_epoch_start_state.get_narwhal_committee(),
+                epoch_store.protocol_config().clone(),
                 worker_cache,
                 consensus_handler,
                 SuiTxValidator::new(
@@ -1169,6 +1211,11 @@ impl SuiNode {
             new_epoch_store.epoch_start_config().flags(),
         );
         new_epoch_store
+    }
+
+    #[cfg(msim)]
+    pub fn get_sim_node_id(&self) -> sui_simulator::task::NodeId {
+        self.sim_node.id()
     }
 }
 

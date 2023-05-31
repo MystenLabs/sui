@@ -107,6 +107,10 @@ impl ReadStore for RocksDbStore {
         }
 
         // Otherwise gather it from the individual components.
+        // Note we can't insert the constructed contents into `full_checkpoint_content`,
+        // because it needs to be inserted along with `checkpoint_sequence_by_contents_digest`
+        // and `checkpoint_content`. However at this point it's likely we don't know the
+        // corresponding sequence number yet.
         self.checkpoint_store
             .get_checkpoint_contents(digest)?
             .map(|contents| FullCheckpointContents::from_checkpoint_contents(&self, contents))

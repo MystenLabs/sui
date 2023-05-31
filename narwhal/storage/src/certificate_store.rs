@@ -489,7 +489,7 @@ impl<T: Cache> CertificateStore<T> {
     pub fn after_round(&self, round: Round) -> StoreResult<Vec<Certificate>> {
         // Skip to a row at or before the requested round.
         // TODO: Add a more efficient seek method to typed store.
-        let mut iter = self.certificate_id_by_round.iter();
+        let mut iter = self.certificate_id_by_round.unbounded_iter();
         if round > 0 {
             iter = iter.skip_to(&(round - 1, AuthorityIdentifier::default()))?;
         }
@@ -528,7 +528,7 @@ impl<T: Cache> CertificateStore<T> {
     ) -> StoreResult<BTreeMap<Round, Vec<AuthorityIdentifier>>> {
         // Skip to a row at or before the requested round.
         // TODO: Add a more efficient seek method to typed store.
-        let mut iter = self.certificate_id_by_round.iter();
+        let mut iter = self.certificate_id_by_round.unbounded_iter();
         if round > 0 {
             iter = iter.skip_to(&(round - 1, AuthorityIdentifier::default()))?;
         }
@@ -547,7 +547,11 @@ impl<T: Cache> CertificateStore<T> {
     pub fn last_two_rounds_certs(&self) -> StoreResult<Vec<Certificate>> {
         // starting from the last element - hence the last round - move backwards until
         // we find certificates of different round.
-        let certificates_reverse = self.certificate_id_by_round.iter().skip_to_last().reverse();
+        let certificates_reverse = self
+            .certificate_id_by_round
+            .unbounded_iter()
+            .skip_to_last()
+            .reverse();
 
         let mut round = 0;
         let mut certificates = Vec::new();
@@ -584,7 +588,7 @@ impl<T: Cache> CertificateStore<T> {
         let key = (origin, Round::MAX);
         if let Some(((name, _round), digest)) = self
             .certificate_id_by_origin
-            .iter()
+            .unbounded_iter()
             .skip_prior_to(&key)?
             .next()
         {
@@ -600,7 +604,7 @@ impl<T: Cache> CertificateStore<T> {
     pub fn highest_round_number(&self) -> Round {
         if let Some(((round, _), _)) = self
             .certificate_id_by_round
-            .iter()
+            .unbounded_iter()
             .skip_to_last()
             .reverse()
             .next()
@@ -617,7 +621,7 @@ impl<T: Cache> CertificateStore<T> {
         let key = (origin, Round::MAX);
         if let Some(((name, round), _)) = self
             .certificate_id_by_origin
-            .iter()
+            .unbounded_iter()
             .skip_prior_to(&key)?
             .next()
         {
@@ -636,7 +640,11 @@ impl<T: Cache> CertificateStore<T> {
         round: Round,
     ) -> StoreResult<Option<Round>> {
         let key = (origin, round + 1);
-        if let Some(((name, round), _)) = self.certificate_id_by_origin.iter().skip_to(&key)?.next()
+        if let Some(((name, round), _)) = self
+            .certificate_id_by_origin
+            .unbounded_iter()
+            .skip_to(&key)?
+            .next()
         {
             if name == origin {
                 return Ok(Some(round));
@@ -681,7 +689,7 @@ mod test {
         reopen,
         rocks::{open_cf, DBMap, ReadWriteOptions},
     };
-    use test_utils::{temp_dir, CommitteeFixture};
+    use test_utils::{latest_protocol_version, temp_dir, CommitteeFixture};
     use types::{Certificate, CertificateAPI, CertificateDigest, HeaderAPI, Round};
 
     fn new_store(path: std::path::PathBuf) -> CertificateStore {
@@ -756,7 +764,7 @@ mod test {
                 .iter()
                 .map(|header| fixture.certificate(header).digest())
                 .collect();
-            (_, current_round) = fixture.headers_round(i, &parents);
+            (_, current_round) = fixture.headers_round(i, &parents, &latest_protocol_version());
 
             result.extend(
                 current_round

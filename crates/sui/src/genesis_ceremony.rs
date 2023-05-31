@@ -262,7 +262,7 @@ fn check_protocol_version(builder: &Builder, protocol_version: ProtocolVersion) 
 mod test {
     use super::*;
     use anyhow::Result;
-    use sui_config::utils;
+    use sui_config::local_ip_utils;
     use sui_genesis_builder::validator_info::ValidatorInfo;
     use sui_keys::keypair_file::{write_authority_keypair_to_file, write_keypair_to_file};
     use sui_types::crypto::{get_key_pair_from_rng, AccountKeyPair, AuthorityKeyPair, SuiKeyPair};
@@ -289,10 +289,10 @@ mod test {
                     network_key: network_keypair.public().clone(),
                     gas_price: sui_config::node::DEFAULT_VALIDATOR_GAS_PRICE,
                     commission_rate: sui_config::node::DEFAULT_COMMISSION_RATE,
-                    network_address: utils::new_tcp_network_address(),
-                    p2p_address: utils::new_udp_network_address(),
-                    narwhal_primary_address: utils::new_udp_network_address(),
-                    narwhal_worker_address: utils::new_udp_network_address(),
+                    network_address: local_ip_utils::new_local_tcp_address_for_testing(),
+                    p2p_address: local_ip_utils::new_local_udp_address_for_testing(),
+                    narwhal_primary_address: local_ip_utils::new_local_udp_address_for_testing(),
+                    narwhal_worker_address: local_ip_utils::new_local_udp_address_for_testing(),
                     description: String::new(),
                     image_url: String::new(),
                     project_url: String::new(),

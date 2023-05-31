@@ -3,6 +3,7 @@
 use crate::primary::NUM_SHUTDOWN_RECEIVERS;
 use crate::{
     certificate_fetcher::CertificateFetcher, metrics::PrimaryMetrics, synchronizer::Synchronizer,
+    PrimaryChannelMetrics,
 };
 use anemo::async_trait;
 use anyhow::Result;
@@ -19,7 +20,7 @@ use storage::NodeStorage;
 use tokio::sync::oneshot;
 
 use consensus::consensus::ConsensusRound;
-use test_utils::{temp_dir, CommitteeFixture};
+use test_utils::{latest_protocol_version, temp_dir, CommitteeFixture};
 use tokio::{
     sync::{
         mpsc::{self, error::TryRecvError, Receiver, Sender},
@@ -146,6 +147,7 @@ async fn fetch_certificates_basic() {
     let id = primary.id();
     let fake_primary = fixture.authorities().nth(1).unwrap();
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
+    let primary_channel_metrics = PrimaryChannelMetrics::new(&Registry::new());
     let gc_depth: Round = 50;
 
     // kept empty
@@ -185,6 +187,7 @@ async fn fetch_certificates_basic() {
         rx_synchronizer_network,
         None,
         metrics.clone(),
+        &primary_channel_metrics,
     ));
 
     let fake_primary_addr = fake_primary.address().to_anemo_address().unwrap();
@@ -236,7 +239,7 @@ async fn fetch_certificates_basic() {
             .into_iter()
             .map(|header| fixture.certificate(&header).digest())
             .collect();
-        (_, current_round) = fixture.headers_round(i, &parents);
+        (_, current_round) = fixture.headers_round(i, &parents, &latest_protocol_version());
         headers.extend(current_round.clone());
     }
 

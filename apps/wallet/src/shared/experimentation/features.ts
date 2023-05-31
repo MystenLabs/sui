@@ -21,9 +21,7 @@ export const growthbook = new GrowthBook({
  */
 export enum FEATURES {
     USE_LOCAL_TXN_SERIALIZER = 'use-local-txn-serializer',
-    STAKING_ENABLED = 'wallet-staking-enabled',
     WALLET_DAPPS = 'wallet-dapps',
-    WALLET_MULTI_ACCOUNTS = 'wallet-multi-accounts',
     WALLET_BALANCE_REFETCH_INTERVAL = 'wallet-balance-refetch-interval',
     WALLET_ACTIVITY_REFETCH_INTERVAL = 'wallet-activity-refetch-interval',
     WALLET_EFFECTS_ONLY_SHARED_TRANSACTION = 'wallet-effects-only-shared-transaction',

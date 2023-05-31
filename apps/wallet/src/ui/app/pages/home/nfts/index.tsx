@@ -41,7 +41,6 @@ function NftsPage() {
         hasNextPage,
         isFetchingNextPage,
     ]);
-
     if (isInitialLoading) {
         return (
             <div className="mt-1 flex w-full justify-center">

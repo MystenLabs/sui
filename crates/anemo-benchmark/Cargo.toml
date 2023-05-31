@@ -1,0 +1,27 @@
+[package]
+name = "anemo-benchmark"
+version = "0.0.0"
+authors = ["Andrew Schran <aschran@mystenlabs.com>", "Mysten Labs <build@mystenlabs.com>"]
+license = "Apache-2.0"
+publish = false
+edition = "2021"
+
+[dependencies]
+anemo.workspace = true
+anemo-tower.workspace = true
+anyhow = "1.0.65"
+clap = { version = "4.1.4", features = ["derive"] }
+mysten-network.workspace = true
+rand = "0.8.5"
+sui-types = { path = "../sui-types" }
+telemetry-subscribers.workspace = true
+tokio = { workspace = true, features = ["full"] }
+tracing = "0.1.37"
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+[build-dependencies]
+anemo-build.workspace = true
+
+[dev-dependencies]
+telemetry-subscribers.workspace = true
+tokio = { workspace = true, features = ["test-util"] }

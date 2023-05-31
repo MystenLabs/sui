@@ -96,7 +96,7 @@ export function ConnectButton({
 
           <MenuItems>
             {accounts.map((account) => (
-              <Menu.Item>
+              <Menu.Item key={account.address}>
                 <Account
                   active={account.address === currentAccount.address}
                   onClick={() => selectAccount(account)}

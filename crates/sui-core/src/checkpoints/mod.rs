@@ -199,7 +199,7 @@ impl CheckpointStore {
 
     pub fn get_latest_certified_checkpoint(&self) -> Option<VerifiedCheckpoint> {
         self.certified_checkpoints
-            .iter()
+            .unbounded_iter()
             .skip_to_last()
             .next()
             .map(|(_, v)| v.into())
@@ -400,11 +400,12 @@ impl CheckpointStore {
         checkpoint: &VerifiedCheckpoint,
         full_contents: VerifiedCheckpointContents,
     ) -> Result<(), TypedStoreError> {
-        self.checkpoint_sequence_by_contents_digest
-            .insert(&checkpoint.content_digest, checkpoint.sequence_number())?;
-        let full_contents = full_contents.into_inner();
-
         let mut batch = self.full_checkpoint_content.batch();
+        batch.insert_batch(
+            &self.checkpoint_sequence_by_contents_digest,
+            [(&checkpoint.content_digest, checkpoint.sequence_number())],
+        )?;
+        let full_contents = full_contents.into_inner();
         batch.insert_batch(
             &self.full_checkpoint_content,
             [(checkpoint.sequence_number(), &full_contents)],
@@ -1164,7 +1165,7 @@ impl CheckpointAggregator {
     fn next_checkpoint_to_certify(&self) -> CheckpointSequenceNumber {
         self.tables
             .certified_checkpoints
-            .iter()
+            .unbounded_iter()
             .skip_to_last()
             .next()
             .map(|(seq, _)| seq + 1)

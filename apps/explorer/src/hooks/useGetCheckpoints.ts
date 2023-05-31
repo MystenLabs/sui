@@ -14,7 +14,7 @@ export function useGetCheckpoints(
     const rpc = useRpcClient();
 
     return useInfiniteQuery(
-        ['get-checkpoints', limit],
+        ['get-checkpoints', limit, cursor],
         async ({ pageParam }) =>
             await rpc.getCheckpoints({
                 descendingOrder: true,

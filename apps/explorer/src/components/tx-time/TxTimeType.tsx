@@ -8,7 +8,10 @@ type Prop = {
 };
 
 export function TxTimeType({ timestamp }: Prop) {
-    const timeAgo = useTimeAgo(timestamp, true);
+    const timeAgo = useTimeAgo({
+        timeFrom: timestamp || null,
+        shortedTimeLabel: true,
+    });
 
     return (
         <section>

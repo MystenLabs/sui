@@ -444,8 +444,8 @@ pub enum SuiError {
     #[error("Authority Error: {error:?}")]
     GenericAuthorityError { error: String },
 
-    #[error("Failed to dispatch event: {error:?}")]
-    EventFailedToDispatch { error: String },
+    #[error("Failed to dispatch subscription: {error:?}")]
+    FailedToDispatchSubscription { error: String },
 
     #[error("Failed to serialize Owner: {error:?}")]
     OwnerFailedToSerialize { error: String },

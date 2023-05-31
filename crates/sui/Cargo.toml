@@ -27,15 +27,12 @@ tap = "1.0"
 inquire = "0.6.0"
 rusoto_core = { version = "0.48.0", default_features=false, features=["rustls"] }
 rusoto_kms = { version = "0.48.0", default_features=false, features=["rustls"] }
-aws-config = "0.55.1"
 prometheus = "0.13.3"
 git-version = "0.3.5"
 const-str = "0.5.3"
 
 sui-adapter = { path = "../../sui-execution/latest/sui-adapter", package = "sui-adapter-latest" }
 
-sui-core = { path = "../sui-core" }
-sui-framework-snapshot = { path = "../sui-framework-snapshot" }
 sui-config = { path = "../sui-config" }
 sui-swarm-config = { path = "../sui-swarm-config" }
 sui-genesis-builder = { path = "../sui-genesis-builder" }
@@ -49,7 +46,6 @@ sui-source-validation = { path = "../sui-source-validation" }
 sui-move = { path = "../sui-move", features = ["all"] }
 sui-move-build = { path = "../sui-move-build" }
 sui-protocol-config = { path = "../sui-protocol-config" }
-sui-test-transaction-builder = { path = "../sui-test-transaction-builder" }
 sui-verifier = { path = "../../sui-execution/latest/sui-verifier", package = "sui-verifier-latest" }
 shared-crypto = { path = "../shared-crypto" }
 
@@ -60,7 +56,7 @@ rustyline-derive = "0.7.0"
 colored = "2.0.0"
 unescape = "0.1.0"
 shell-words = "1.1.0"
-rocksdb = "0.20.1"
+rocksdb = "0.21.0"
 
 tempfile = "3.3.0"
 telemetry-subscribers.workspace = true
@@ -75,34 +71,17 @@ csv = "1.2.1"
 jemalloc-ctl = "^0.5"
 
 [dev-dependencies]
-tempfile = "3.3.0"
-futures = "0.3.23"
 prometheus = "0.13.3"
 fs_extra = "1.3.0"
-indexmap = "1.9.2"
-insta = { version = "1.21.1", features = ["json"] }
-jsonrpsee = { git="https://github.com/wlmyng/jsonrpsee.git", rev= "b1b300784795f6a64d0fcdf8f03081a9bc38bde8", features = ["jsonrpsee-core"] }
-test-utils = { path = "../test-utils" }
-rand = "0.8.5"
 expect-test = "1.4.0"
-move-binary-format.workspace = true
-move-package.workspace = true
+assert_cmd = "2.0.6"
 
-sui-core = { path = "../sui-core" }
-sui-framework = { path = "../sui-framework" }
-sui-json-rpc = { path = "../sui-json-rpc" }
-sui-node = { path = "../sui-node" }
+test-utils = { path = "../test-utils" }
 sui-macros = { path = "../sui-macros" }
 sui-simulator = { path = "../sui-simulator" }
-mysten-metrics = { path = "../mysten-metrics" }
-sui-tool = { path = "../sui-tool" }
-tokio = { version = "1", features = ["full"] }
-
-assert_cmd = "2.0.6"
 
 [package.metadata.cargo-udeps.ignore]
 normal = ["jemalloc-ctl"]
-
 
 [[example]]
 name = "generate-genesis-checkpoint"

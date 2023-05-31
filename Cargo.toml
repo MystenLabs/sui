@@ -34,6 +34,7 @@ exclude = [
     "external-crates/move/move-prover/test-utils",
     "external-crates/move/move-stdlib",
     "external-crates/move/move-symbol-pool",
+    "external-crates/move/move-vm/config",
     "external-crates/move/move-vm/integration-tests",
     "external-crates/move/move-vm/paranoid-tests",
     "external-crates/move/move-vm/runtime",
@@ -60,6 +61,7 @@ exclude = [
 ]
 
 members = [
+    "crates/anemo-benchmark",
     "crates/mysten-common",
     "crates/mysten-metrics",
     "crates/mysten-network",
@@ -69,12 +71,14 @@ members = [
     "crates/shared-crypto",
     "crates/sui",
     "crates/sui-adapter-transactional-tests",
+    "crates/sui-archival",
     "crates/sui-benchmark",
     "crates/sui-cluster-test",
     "crates/sui-config",
     "crates/sui-core",
     "crates/sui-cost",
     "crates/sui-cost-tables",
+    "crates/sui-e2e-tests",
     "crates/sui-enum-compat-util",
     "crates/sui-faucet",
     "crates/sui-framework",
@@ -199,6 +203,7 @@ move-package = { path = "external-crates/move/tools/move-package" }
 move-stdlib = { path = "external-crates/move/move-stdlib" }
 move-vm-runtime =  { path = "external-crates/move/move-vm/runtime" }
 move-unit-test = { path = "external-crates/move/tools/move-unit-test" }
+move-vm-config = { path = "external-crates/move/move-vm/config" }
 move-vm-test-utils = { path = "external-crates/move/move-vm/test-utils" }
 move-vm-types = { path = "external-crates/move/move-vm/types" }
 move-command-line-common = { path = "external-crates/move/move-command-line-common" }
@@ -213,10 +218,10 @@ fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "c27e87fb
 fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "c27e87fb539c88b6fe1eac7dd82561254bb1e07a", package = "fastcrypto-zkp" }
 
 # anemo dependencies
-anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "baa7cfc3ae841f88c2ff773396c5a803c377d054" }
-anemo-build = { git = "https://github.com/mystenlabs/anemo.git", rev = "baa7cfc3ae841f88c2ff773396c5a803c377d054" }
-anemo-cli = { git = "https://github.com/mystenlabs/anemo.git", rev = "baa7cfc3ae841f88c2ff773396c5a803c377d054"}
-anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "baa7cfc3ae841f88c2ff773396c5a803c377d054"}
+anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "cf95fa2268b6b273ee1b3e9180c8adf525ed80b7" }
+anemo-build = { git = "https://github.com/mystenlabs/anemo.git", rev = "cf95fa2268b6b273ee1b3e9180c8adf525ed80b7" }
+anemo-cli = { git = "https://github.com/mystenlabs/anemo.git", rev = "cf95fa2268b6b273ee1b3e9180c8adf525ed80b7"}
+anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "cf95fa2268b6b273ee1b3e9180c8adf525ed80b7"}
 
 # Use the same workspace-hack across crates.
 workspace-hack = { path = "crates/workspace-hack" }

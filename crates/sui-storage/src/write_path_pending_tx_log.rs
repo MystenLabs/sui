@@ -85,7 +85,7 @@ impl WritePathPendingTransactionLog {
     pub fn load_all_pending_transactions(&self) -> Vec<VerifiedTransaction> {
         self.pending_transactions
             .logs
-            .iter()
+            .unbounded_iter()
             .map(|(_tx_digest, tx)| VerifiedTransaction::from(tx))
             .collect()
     }

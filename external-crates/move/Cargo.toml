@@ -48,6 +48,7 @@ members = [
     "move-prover/tools/spec-flatten",
     "move-stdlib",
     "move-symbol-pool",
+    "move-vm/config",
     "move-vm/integration-tests",
     "move-vm/paranoid-tests",
     "move-vm/runtime",

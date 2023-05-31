@@ -1,7 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useAppsBackend } from '@mysten/core';
+import {
+    useAppsBackend,
+    useGetCoinBalance,
+    useGetAllBalances,
+} from '@mysten/core';
 import {
     Info12,
     WalletActionBuy24,
@@ -29,7 +33,8 @@ import { LargeButton } from '_app/shared/LargeButton';
 import { Text } from '_app/shared/text';
 import Alert from '_components/alert';
 import Loading from '_components/loading';
-import { useAppSelector, useGetAllBalances, useGetCoinBalance } from '_hooks';
+import { sortGetAllBalancesToken } from '_helpers';
+import { useAppSelector, useCoinsReFetchingConfig } from '_hooks';
 import { API_ENV } from '_src/shared/api-env';
 import { AccountSelector } from '_src/ui/app/components/AccountSelector';
 import { useLedgerNotification } from '_src/ui/app/hooks/useLedgerNotification';
@@ -68,7 +73,13 @@ function PinButton({
 function MyTokens() {
     const accountAddress = useActiveAddress();
     const apiEnv = useAppSelector(({ app }) => app.apiEnv);
-    const { data, isLoading, isFetched } = useGetAllBalances(accountAddress);
+    const { staleTime, refetchInterval } = useCoinsReFetchingConfig();
+    const { data, isLoading, isFetched } = useGetAllBalances(
+        accountAddress,
+        staleTime,
+        refetchInterval,
+        sortGetAllBalancesToken
+    );
 
     const recognizedPackages = useRecognizedPackages();
     const [pinnedCoinTypes, { pinCoinType, unpinCoinType }] =
@@ -178,12 +189,18 @@ function MyTokens() {
 function TokenDetails({ coinType }: TokenDetailsProps) {
     const activeCoinType = coinType || SUI_TYPE_ARG;
     const accountAddress = useActiveAddress();
+    const { staleTime, refetchInterval } = useCoinsReFetchingConfig();
     const {
         data: coinBalance,
         isError,
         isLoading,
         isFetched,
-    } = useGetCoinBalance(activeCoinType, accountAddress);
+    } = useGetCoinBalance(
+        activeCoinType,
+        accountAddress,
+        refetchInterval,
+        staleTime
+    );
     const { apiEnv } = useAppSelector((state) => state.app);
     const { request } = useAppsBackend();
     const { data } = useQuery({
@@ -233,7 +250,10 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
                     className="flex flex-col h-full flex-1 flex-grow items-center overflow-y-auto"
                     data-testid="coin-page"
                 >
-                    {!coinType && <AccountSelector />}
+                    <div className="max-w-full">
+                        {!coinType && <AccountSelector />}
+                    </div>
+
                     <div className="mt-1.5">
                         <CoinBalance
                             balance={BigInt(tokenBalance)}

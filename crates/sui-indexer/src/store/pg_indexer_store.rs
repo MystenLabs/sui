@@ -219,17 +219,6 @@ impl IndexerStore for PgIndexerStore {
         .context("Failed reading latest checkpoint sequence number from PostgresDB")
     }
 
-    async fn get_latest_object_checkpoint_sequence_number(&self) -> Result<i64, IndexerError> {
-        read_only_blocking!(&self.blocking_cp, |conn| {
-            objects::dsl::objects
-                .select(max(objects::checkpoint))
-                .first::<Option<i64>>(conn)
-                // -1 to differentiate between no checkpoints and the first checkpoint
-                .map(|o| o.unwrap_or(-1))
-        })
-        .context("Failed reading latest object checkpoint sequence number from PostgresDB")
-    }
-
     async fn get_checkpoint(
         &self,
         id: CheckpointId,
@@ -301,10 +290,39 @@ impl IndexerStore for PgIndexerStore {
             };
             cp.into_rpc(end_of_epoch_data)
         })
+        .context(format!("Failed reading checkpoint {:?} from PostgresDB", id).as_str())
+    }
+
+    async fn get_checkpoints(
+        &self,
+        cursor: Option<CheckpointId>,
+        limit: usize,
+    ) -> Result<Vec<sui_json_rpc_types::Checkpoint>, IndexerError> {
+        read_only_blocking!(&self.blocking_cp, |conn| {
+            let cp_vec: Vec<Checkpoint> = match cursor {
+                Some(CheckpointId::SequenceNumber(seq)) => checkpoints::dsl::checkpoints
+                    .filter(checkpoints::sequence_number.gt(seq as i64))
+                    .order_by(checkpoints::sequence_number)
+                    .limit(limit as i64)
+                    .load::<Checkpoint>(conn)?,
+                Some(CheckpointId::Digest(digest)) => Err(anyhow!(
+                    "CheckpointId::Digest: {} is not supported as cursor in get_checkpoints.",
+                    digest
+                ))?,
+                None => checkpoints::dsl::checkpoints
+                    .order_by(checkpoints::sequence_number)
+                    .limit(limit as i64)
+                    .load::<Checkpoint>(conn)?,
+            };
+            cp_vec
+                .into_iter()
+                .map(|cp| cp.into_rpc(None))
+                .collect::<Result<Vec<_>, _>>()
+        })
         .context(
             format!(
-                "Failed reading previous checkpoint {:?} from PostgresDB",
-                id
+                "Failed reading checkpoints with cursor: {:?} and limit: {} from PostgresDB",
+                cursor, limit
             )
             .as_str(),
         )
@@ -1146,8 +1164,6 @@ impl IndexerStore for PgIndexerStore {
             transactions,
             events,
             object_changes: tx_object_changes,
-            addresses,
-            active_addresses,
             packages,
             input_objects,
             move_calls,
@@ -1199,49 +1215,6 @@ impl IndexerStore for PgIndexerStore {
             persist_transaction_object_changes(conn, mutated_objects, deleted_objects, None, None)?;
 
             // TODO(gegaowp): refactor to consolidate commit blocks
-            // Commit indexed addresses & active addresses
-            for address_chunk in addresses.chunks(PG_COMMIT_CHUNK_SIZE) {
-                diesel::insert_into(addresses::table)
-                    .values(address_chunk)
-                    .on_conflict(addresses::account_address)
-                    .do_update()
-                    .set((
-                        addresses::last_appearance_time
-                            .eq(excluded(addresses::last_appearance_time)),
-                        addresses::last_appearance_tx.eq(excluded(addresses::last_appearance_tx)),
-                    ))
-                    .execute(conn)
-                    .map_err(IndexerError::from)
-                    .context(
-                        format!(
-                            "Failed writing addresses to PostgresDB with tx {}",
-                            address_chunk[0].last_appearance_tx
-                        )
-                        .as_str(),
-                    )?;
-            }
-            for active_address_chunk in active_addresses.chunks(PG_COMMIT_CHUNK_SIZE) {
-                diesel::insert_into(active_addresses::table)
-                    .values(active_address_chunk)
-                    .on_conflict(active_addresses::account_address)
-                    .do_update()
-                    .set((
-                        active_addresses::last_appearance_time
-                            .eq(excluded(active_addresses::last_appearance_time)),
-                        active_addresses::last_appearance_tx
-                            .eq(excluded(active_addresses::last_appearance_tx)),
-                    ))
-                    .execute(conn)
-                    .map_err(IndexerError::from)
-                    .context(
-                        format!(
-                            "Failed writing active addresses to PostgresDB with tx {}",
-                            active_address_chunk[0].last_appearance_tx
-                        )
-                        .as_str(),
-                    )?;
-            }
-
             // Commit indexed packages
             for packages_chunk in packages.chunks(PG_COMMIT_CHUNK_SIZE) {
                 diesel::insert_into(packages::table)
@@ -1359,8 +1332,6 @@ WHERE e1.epoch = e2.epoch
                     .iter()
                     .map(|deleted_object| deleted_object.clone().into())
                     .collect();
-                let (mutation_count, deletion_count) =
-                    (mutated_objects.len(), deleted_objects.len());
                 persist_transaction_object_changes(
                     conn,
                     mutated_objects,
@@ -1368,13 +1339,6 @@ WHERE e1.epoch = e2.epoch
                     Some(object_mutation_latency),
                     Some(object_deletion_latency),
                 )?;
-                info!(
-                "Object checkpoint {} committed with {} transaction, {} mutated objects and {} deleted objects.",
-                checkpoint.sequence_number,
-                tx_object_changes.len(),
-                mutation_count,
-                deletion_count
-            );
                 Ok::<(), IndexerError>(())
             }
         })?;

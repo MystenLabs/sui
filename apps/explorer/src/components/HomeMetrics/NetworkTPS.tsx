@@ -11,7 +11,7 @@ export function NetworkTPS() {
     const { data: networkMetrics } = useGetNetworkMetrics();
 
     return (
-        <Card bg="lightBlue" spacing="lg">
+        <Card bg="lightBlue" spacing="lg" height="full">
             <Heading color="steel-darker" variant="heading4/semibold">
                 Network TPS
             </Heading>

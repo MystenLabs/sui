@@ -12,6 +12,7 @@ use consensus::Consensus;
 use crypto::{KeyPair, NetworkKeyPair, PublicKey};
 use executor::{get_restored_consensus_output, ExecutionState, Executor, SubscriberResult};
 use fastcrypto::traits::{KeyPair as _, VerifyingKey};
+use mysten_metrics::metered_channel;
 use mysten_metrics::{RegistryID, RegistryService};
 use network::client::NetworkClient;
 use primary::{Primary, PrimaryChannelMetrics, NUM_SHUTDOWN_RECEIVERS};
@@ -19,12 +20,11 @@ use prometheus::{IntGauge, Registry};
 use std::sync::Arc;
 use std::time::Instant;
 use storage::NodeStorage;
+use sui_protocol_config::ProtocolConfig;
 use tokio::sync::{watch, RwLock};
 use tokio::task::JoinHandle;
 use tracing::{debug, info, instrument};
-use types::{
-    metered_channel, Certificate, ConditionalBroadcastReceiver, PreSubscribedBroadcastSender, Round,
-};
+use types::{Certificate, ConditionalBroadcastReceiver, PreSubscribedBroadcastSender, Round};
 
 struct PrimaryNodeInner {
     // The configuration parameters.
@@ -67,6 +67,7 @@ impl PrimaryNodeInner {
         network_keypair: NetworkKeyPair,
         // The committee information.
         committee: Committee,
+        protocol_config: ProtocolConfig,
         // The worker information cache.
         worker_cache: WorkerCache,
         // Client for communications.
@@ -100,6 +101,7 @@ impl PrimaryNodeInner {
             worker_cache,
             client,
             store,
+            protocol_config.clone(),
             self.parameters.clone(),
             self.internal_consensus,
             execution_state,
@@ -195,6 +197,7 @@ impl PrimaryNodeInner {
         client: NetworkClient,
         // The node's storage.
         store: &NodeStorage,
+        protocol_config: ProtocolConfig,
         // The configuration parameters.
         parameters: Parameters,
         // Whether to run consensus (and an executor client) or not.
@@ -262,6 +265,7 @@ impl PrimaryNodeInner {
                 committee.clone(),
                 client.clone(),
                 store,
+                &protocol_config,
                 parameters.clone(),
                 execution_state,
                 tx_shutdown.subscribe_n(3),
@@ -287,6 +291,7 @@ impl PrimaryNodeInner {
             network_keypair,
             committee.clone(),
             worker_cache.clone(),
+            protocol_config.clone(),
             parameters.clone(),
             client,
             store.header_store.clone(),
@@ -314,6 +319,7 @@ impl PrimaryNodeInner {
         committee: Committee,
         client: NetworkClient,
         store: &NodeStorage,
+        protocol_config: &ProtocolConfig,
         parameters: Parameters,
         execution_state: State,
         mut shutdown_receivers: Vec<ConditionalBroadcastReceiver>,
@@ -377,6 +383,7 @@ impl PrimaryNodeInner {
             authority_id,
             worker_cache,
             committee.clone(),
+            protocol_config,
             client,
             execution_state,
             shutdown_receivers,
@@ -426,6 +433,7 @@ impl PrimaryNode {
         network_keypair: NetworkKeyPair,
         // The committee information.
         committee: Committee,
+        protocol_config: ProtocolConfig,
         // The worker information cache.
         worker_cache: WorkerCache,
         // Client for communications.
@@ -446,6 +454,7 @@ impl PrimaryNode {
                 keypair,
                 network_keypair,
                 committee,
+                protocol_config,
                 worker_cache,
                 client,
                 store,

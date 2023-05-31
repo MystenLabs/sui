@@ -2,14 +2,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use config::AuthorityIdentifier;
+use mysten_metrics::metered_channel::{Receiver, Sender};
 use mysten_metrics::spawn_logged_monitored_task;
 use tap::TapFallible;
 use tokio::task::JoinHandle;
 use tracing::{debug, error, info, warn};
-use types::{
-    metered_channel::{Receiver, Sender},
-    Certificate, CertificateAPI, ConditionalBroadcastReceiver, HeaderAPI, Round,
-};
+use types::{Certificate, CertificateAPI, ConditionalBroadcastReceiver, HeaderAPI, Round};
 
 /// Receives the highest round reached by consensus and update it for all tasks.
 pub struct StateHandler {

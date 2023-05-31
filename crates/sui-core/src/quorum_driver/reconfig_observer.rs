@@ -113,7 +113,9 @@ impl ReconfigObserver<NetworkAuthorityClient> for OnsiteReconfigObserver {
                 Err(RecvError::Lagged(_)) => {
                     continue;
                 }
-                Err(RecvError::Closed) => panic!("Do not expect the channel to be closed"),
+                Err(RecvError::Closed) => {
+                    panic!("Do not expect the channel to be closed")
+                }
             }
         }
     }

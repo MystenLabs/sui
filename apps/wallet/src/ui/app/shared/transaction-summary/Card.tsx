@@ -1,37 +1,66 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-import { type ReactNode } from 'react';
+import { cva, type VariantProps } from 'class-variance-authority';
+import {
+    type AnchorHTMLAttributes,
+    type ElementType,
+    type ReactNode,
+} from 'react';
 
 import { Heading } from '_src/ui/app/shared/heading';
 
-interface CardProps {
+const cardStyles = cva(
+    [
+        'bg-white relative flex flex-col p-4.5 w-full shadow-summary-card rounded-2xl',
+    ],
+    {
+        variants: {
+            as: {
+                div: '',
+                a: 'no-underline text-hero-dark hover:text-hero visited:text-hero-dark',
+            },
+        },
+    }
+);
+
+interface Props extends VariantProps<typeof cardStyles> {
     heading?: string;
     after?: ReactNode;
     children: ReactNode;
     footer?: ReactNode;
 }
 
+type CardProps = Props & AnchorHTMLAttributes<HTMLAnchorElement>;
+
 export const SummaryCardFooter = ({ children }: { children: ReactNode }) => {
     return (
-        <div className="p-3 -m-4.5 rounded-b-2xl flex justify-between items-center bg-sui/10 ">
+        <div className="-mb-4.5 -mx-4.5 px-4 py-2 rounded-b-2xl flex justify-between items-center bg-sui/10 ">
             {children}
         </div>
     );
 };
 
-export function Card({ heading, children, after, footer = null }: CardProps) {
+export function Card({
+    as = 'div',
+    heading,
+    children,
+    after,
+    footer = null,
+    ...props
+}: CardProps) {
+    const Component = as as ElementType;
     return (
-        <div className="bg-white relative flex flex-col p-4.5 shadow-summary-card rounded-2xl">
+        <Component className={cardStyles({ as })} {...props}>
             {heading && (
-                <div className="flex items-center justify-between mb-4.5 last-of-type:mb-0">
+                <div className="flex items-center justify-between mb-4 last-of-type:mb-0">
                     <Heading variant="heading6" color="steel-darker">
                         {heading}
                     </Heading>
                     {after && <div>{after}</div>}
                 </div>
             )}
-            <div>{children}</div>
+            {children}
             {footer}
-        </div>
+        </Component>
     );
 }

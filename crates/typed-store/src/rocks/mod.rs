@@ -1636,7 +1636,9 @@ where
         self.safe_iter().next().is_none()
     }
 
-    fn iter(&'a self) -> Self::Iterator {
+    /// Returns an unbounded iterator visiting each key-value pair in the map.
+    /// This is potentially unsafe as it can perform a full table scan
+    fn unbounded_iter(&'a self) -> Self::Iterator {
         let _timer = self
             .db_metrics
             .op_metrics
@@ -2240,7 +2242,7 @@ fn get_block_options(block_cache_size_mb: usize) -> BlockBasedOptions {
     // https://github.com/EighteenZi/rocksdb_wiki/blob/master/Memory-usage-in-RocksDB.md#indexes-and-filter-blocks
     block_options.set_block_size(16 * 1024);
     // Configure a block cache.
-    block_options.set_block_cache(&Cache::new_lru_cache(block_cache_size_mb << 20).unwrap());
+    block_options.set_block_cache(&Cache::new_lru_cache(block_cache_size_mb << 20));
     // Set a bloomfilter with 1% false positive rate.
     block_options.set_bloom_filter(10.0, false);
     // From https://github.com/EighteenZi/rocksdb_wiki/blob/master/Block-Cache.md#caching-index-and-filter-blocks

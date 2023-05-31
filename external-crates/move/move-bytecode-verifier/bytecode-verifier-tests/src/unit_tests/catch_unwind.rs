@@ -2,11 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 use fail::FailScenario;
 use move_binary_format::file_format::empty_module;
-use move_bytecode_verifier::VerifierConfig;
 use move_core_types::{
     state::{self, VMState},
     vm_status::StatusCode,
 };
+use move_vm_config::verifier::VerifierConfig;
 use std::panic::{self, PanicInfo};
 
 #[ignore]

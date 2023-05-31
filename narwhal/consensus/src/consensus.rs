@@ -9,6 +9,7 @@ use crate::utils::gc_round;
 use crate::{metrics::ConsensusMetrics, ConsensusError, SequenceNumber};
 use config::{AuthorityIdentifier, Committee};
 use fastcrypto::hash::Hash;
+use mysten_metrics::metered_channel;
 use mysten_metrics::spawn_logged_monitored_task;
 use std::{
     cmp::{max, Ordering},
@@ -19,8 +20,8 @@ use storage::{CertificateStore, ConsensusStore};
 use tokio::{sync::watch, task::JoinHandle};
 use tracing::{debug, info, instrument};
 use types::{
-    metered_channel, Certificate, CertificateAPI, CertificateDigest, CommittedSubDag,
-    ConditionalBroadcastReceiver, ConsensusCommit, HeaderAPI, Round, Timestamp,
+    Certificate, CertificateAPI, CertificateDigest, CommittedSubDag, ConditionalBroadcastReceiver,
+    ConsensusCommit, HeaderAPI, Round, Timestamp,
 };
 
 #[cfg(test)]

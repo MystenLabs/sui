@@ -431,7 +431,16 @@ impl FullCheckpointContents {
             user_signatures,
         }
     }
-
+    pub fn from_contents_and_execution_data(
+        contents: CheckpointContents,
+        execution_data: impl Iterator<Item = ExecutionData>,
+    ) -> Self {
+        let transactions: Vec<_> = execution_data.collect();
+        Self {
+            transactions,
+            user_signatures: contents.into_v1().user_signatures,
+        }
+    }
     pub fn from_checkpoint_contents<S>(
         store: S,
         contents: CheckpointContents,
