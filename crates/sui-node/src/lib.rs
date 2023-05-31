@@ -20,10 +20,12 @@ use arc_swap::ArcSwap;
 use futures::TryFutureExt;
 use mysten_common::sync::async_once_cell::AsyncOnceCell;
 use prometheus::Registry;
+use reqwest::Client;
 use sui_core::authority::CHAIN_IDENTIFIER;
 use sui_core::consensus_adapter::LazyNarwhalClient;
 use sui_json_rpc::api::JsonRpcMetrics;
 use sui_types::digests::ChainIdentifier;
+use sui_types::message_envelope::get_google_jwk_bytes;
 use sui_types::sui_system_state::SuiSystemState;
 use tap::tap::TapFallible;
 use tokio::runtime::Handle;
@@ -179,6 +181,46 @@ impl SuiNode {
         Ok(node_one_cell.get().await)
     }
 
+    fn start_jwk_updater() {
+        info!("Starting JWK updater thread for authority");
+        tokio::task::spawn(async move {
+            loop {
+                // Update the JWK value in the authority server
+                let res = Self::update_google_jwk().await;
+                if let Err(e) = res {
+                    warn!("Error when fetching JWK {:?}", e);
+                }
+                // Sleep for 1 hour
+                tokio::time::sleep(Duration::from_secs(3600)).await;
+            }
+        });
+    }
+
+    async fn update_google_jwk() -> Result<(), SuiError> {
+        if cfg!(msim) {
+            return Ok(());
+        }
+
+        let client = Client::new();
+        let response = client
+            .get("https://www.googleapis.com/oauth2/v2/certs")
+            .send()
+            .await
+            .map_err(|_| SuiError::JWKRetrievalError)?;
+        let bytes = response
+            .bytes()
+            .await
+            .map_err(|_| SuiError::JWKRetrievalError)?;
+        let jwk = get_google_jwk_bytes();
+        if let Ok(mut jwk) = jwk.write() {
+            if jwk.to_vec() != bytes.to_vec() {
+                *jwk = bytes.to_vec();
+                info!("New JWK value updated");
+            }
+        }
+        Ok(())
+    }
+
     pub async fn start_async(
         config: &NodeConfig,
         registry_service: RegistryService,
@@ -186,7 +228,7 @@ impl SuiNode {
         custom_rpc_runtime: Option<Handle>,
     ) -> Result<()> {
         NodeConfigMetrics::new(&registry_service.default_registry()).record_metrics(config);
-
+        Self::start_jwk_updater();
         let mut config = config.clone();
         if config.supported_protocol_versions.is_none() {
             info!(
@@ -983,6 +1025,13 @@ impl SuiNode {
         &self,
     ) -> Option<Arc<TransactiondOrchestrator<NetworkAuthorityClient>>> {
         self.transaction_orchestrator.clone()
+    }
+
+    pub fn get_google_jwk_bytes(&self) -> Result<Vec<u8>, SuiError> {
+        Ok(get_google_jwk_bytes()
+            .read()
+            .map_err(|_| SuiError::JWKRetrievalError)?
+            .to_vec())
     }
 
     pub fn subscribe_to_transaction_orchestrator_effects(

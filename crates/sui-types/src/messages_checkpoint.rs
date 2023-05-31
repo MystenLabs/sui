@@ -564,6 +564,7 @@ impl VerifiedCheckpointContents {
 }
 
 #[cfg(test)]
+#[cfg(feature = "test-utils")]
 mod tests {
     use fastcrypto::traits::KeyPair;
     use rand::prelude::StdRng;
