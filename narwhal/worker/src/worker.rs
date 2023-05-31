@@ -493,7 +493,7 @@ impl Worker {
             shutdown_receivers.pop().unwrap(),
             rx_batch_maker,
             tx_quorum_waiter,
-            node_metrics,
+            node_metrics.clone(),
             client,
             self.store.clone(),
             self.protocol_config.clone(),
@@ -509,6 +509,7 @@ impl Worker {
             shutdown_receivers.pop().unwrap(),
             rx_quorum_waiter,
             network,
+            node_metrics,
         );
 
         info!(
