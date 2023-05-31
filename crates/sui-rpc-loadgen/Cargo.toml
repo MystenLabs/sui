@@ -30,7 +30,7 @@ dashmap = "5.4.0"
 itertools = "0.10.4"
 
 eyre = "0.6.8"
-rocksdb = "0.20.1"
+rocksdb = "0.21.0"
 tempfile = "3.3.0"
 shellexpand = "3.0.0"
 

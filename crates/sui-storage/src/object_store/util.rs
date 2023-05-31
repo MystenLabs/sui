@@ -39,13 +39,19 @@ pub async fn copy_file(
     from: Arc<DynObjectStore>,
     to: Arc<DynObjectStore>,
 ) -> Result<(), object_store::Error> {
-    let bytes = from.get(&path_in).await?.bytes().await?;
-    if !bytes.is_empty() {
-        to.put(&path_out, bytes).await
-    } else {
-        warn!("Not copying empty file: {:?}", path_in);
-        Ok(())
-    }
+    let backoff = backoff::ExponentialBackoff::default();
+    retry(backoff, || async {
+        let bytes = from.get(&path_in).await?.bytes().await?;
+        if !bytes.is_empty() {
+            to.put(&path_out, bytes)
+                .await
+                .map_err(backoff::Error::transient)
+        } else {
+            warn!("Not copying empty file: {:?}", path_in);
+            Ok(())
+        }
+    })
+    .await
 }
 
 pub async fn copy_files(

@@ -31,6 +31,7 @@ use std::collections::HashMap;
 use std::time::Duration;
 use std::{net::Ipv4Addr, sync::Arc, thread::sleep};
 use store::rocks::DBMap;
+use sui_protocol_config::ProtocolConfig;
 use tap::TapFallible;
 use tokio::task::JoinHandle;
 use tower::ServiceBuilder;
@@ -61,6 +62,8 @@ pub struct Worker {
     committee: Committee,
     /// The worker information cache.
     worker_cache: WorkerCache,
+    // The protocol configuration.
+    protocol_config: ProtocolConfig,
     /// The configuration parameters
     parameters: Parameters,
     /// The persistent storage.
@@ -74,6 +77,7 @@ impl Worker {
         id: WorkerId,
         committee: Committee,
         worker_cache: WorkerCache,
+        protocol_config: ProtocolConfig,
         parameters: Parameters,
         validator: impl TransactionValidator,
         client: NetworkClient,
@@ -92,6 +96,7 @@ impl Worker {
             id,
             committee: committee.clone(),
             worker_cache,
+            protocol_config: protocol_config.clone(),
             parameters: parameters.clone(),
             store,
         };
@@ -106,6 +111,7 @@ impl Worker {
         let mut shutdown_receivers = tx_shutdown.subscribe_n(NUM_SHUTDOWN_RECEIVERS);
 
         let mut worker_service = WorkerToWorkerServer::new(WorkerReceiverHandler {
+            protocol_config: protocol_config.clone(),
             id: worker.id,
             client: client.clone(),
             store: worker.store.clone(),
@@ -134,6 +140,7 @@ impl Worker {
             authority_id: worker.authority.id(),
             id: worker.id,
             committee: worker.committee.clone(),
+            protocol_config: protocol_config.clone(),
             worker_cache: worker.worker_cache.clone(),
             store: worker.store.clone(),
             request_batch_timeout: worker.parameters.sync_retry_delay,
@@ -275,6 +282,7 @@ impl Worker {
             network.clone(),
             worker.store.clone(),
             node_metrics.clone(),
+            protocol_config.clone(),
         );
         client.set_primary_to_worker_local_handler(
             worker_peer_id,
@@ -282,6 +290,7 @@ impl Worker {
                 authority_id: worker.authority.id(),
                 id: worker.id,
                 committee: worker.committee.clone(),
+                protocol_config,
                 worker_cache: worker.worker_cache.clone(),
                 store: worker.store.clone(),
                 request_batch_timeout: worker.parameters.sync_retry_delay,
@@ -484,6 +493,7 @@ impl Worker {
             node_metrics,
             client,
             self.store.clone(),
+            self.protocol_config.clone(),
         );
 
         // The `QuorumWaiter` waits for 2f authorities to acknowledge reception of the batch. It then forwards

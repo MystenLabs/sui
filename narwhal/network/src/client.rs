@@ -9,10 +9,10 @@ use crypto::{traits::KeyPair, NetworkKeyPair, NetworkPublicKey};
 use mysten_common::sync::notify_once::NotifyOnce;
 use parking_lot::RwLock;
 use tokio::{select, time::sleep};
-use tracing::debug;
 use types::{
     error::LocalClientError, FetchBatchesRequest, FetchBatchesResponse, PrimaryToWorker,
-    WorkerOthersBatchMessage, WorkerOurBatchMessage, WorkerSynchronizeMessage, WorkerToPrimary,
+    WorkerOthersBatchMessage, WorkerOurBatchMessage, WorkerOwnBatchMessage,
+    WorkerSynchronizeMessage, WorkerToPrimary,
 };
 
 use crate::traits::{PrimaryToWorkerClient, WorkerToPrimaryClient};
@@ -117,7 +117,6 @@ impl NetworkClient {
                     return Err(LocalClientError::ShuttingDown);
                 }
                 if let Some(handler) = &inner.worker_to_primary_handler {
-                    debug!("Found primary {}", inner.primary_peer_id);
                     return Ok(handler.clone());
                 }
             }
@@ -173,6 +172,7 @@ impl PrimaryToWorkerClient for NetworkClient {
 
 #[async_trait]
 impl WorkerToPrimaryClient for NetworkClient {
+    // TODO: Remove once we have upgraded to protocol version 12.
     async fn report_our_batch(
         &self,
         request: WorkerOurBatchMessage,
@@ -180,6 +180,21 @@ impl WorkerToPrimaryClient for NetworkClient {
         let c = self.get_worker_to_primary_handler().await?;
         select! {
             resp = c.report_our_batch(Request::new(request)) => {
+                resp.map_err(|e| LocalClientError::Internal(format!("{e:?}")))?;
+                Ok(())
+            },
+            () = self.shutdown_notify.wait() => {
+                Err(LocalClientError::ShuttingDown)
+            },
+        }
+    }
+    async fn report_own_batch(
+        &self,
+        request: WorkerOwnBatchMessage,
+    ) -> Result<(), LocalClientError> {
+        let c = self.get_worker_to_primary_handler().await?;
+        select! {
+            resp = c.report_own_batch(Request::new(request)) => {
                 resp.map_err(|e| LocalClientError::Internal(format!("{e:?}")))?;
                 Ok(())
             },

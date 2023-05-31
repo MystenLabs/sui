@@ -34,7 +34,7 @@ impl SurferTask {
         let shared_objects: SharedObjects = Arc::new(RwLock::new(HashMap::new()));
 
         let mut accounts: HashMap<SuiAddress, (Option<ObjectRef>, OwnedObjects)> = cluster
-            .accounts
+            .get_addresses()
             .iter()
             .map(|address| (*address, (None, HashMap::new())))
             .collect();

@@ -25,7 +25,7 @@ scopeguard = "1.1"
 tap = "1.0"
 
 eyre = "0.6.8"
-rocksdb = "0.20.1"
+rocksdb = "0.21.0"
 tempfile = "3.3.0"
 
 sui = { path = "../sui" }

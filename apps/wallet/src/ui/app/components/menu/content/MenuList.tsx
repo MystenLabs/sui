@@ -1,14 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useFeature } from '@growthbook/growthbook-react';
-import {
-    Account24,
-    ArrowUpRight12,
-    Copy16,
-    Domain24,
-    Version24,
-} from '@mysten/icons';
+import { useResolveSuiNSName } from '@mysten/core';
+import { Account24, ArrowUpRight12, Domain24, Version24 } from '@mysten/icons';
 import { formatAddress } from '@mysten/sui.js';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -23,10 +17,8 @@ import { lockWallet } from '_app/wallet/actions';
 import { useNextMenuUrl } from '_components/menu/hooks';
 import { useAppDispatch, useAppSelector } from '_hooks';
 import { ToS_LINK } from '_src/shared/constants';
-import { FEATURES } from '_src/shared/experimentation/features';
 import { useActiveAddress } from '_src/ui/app/hooks/useActiveAddress';
 import { useAutoLockInterval } from '_src/ui/app/hooks/useAutoLockInterval';
-import { useCopyToClipboard } from '_src/ui/app/hooks/useCopyToClipboard';
 import { logout } from '_src/ui/app/redux/slices/account';
 import { ConfirmationModal } from '_src/ui/app/shared/ConfirmationModal';
 import { Link } from '_src/ui/app/shared/Link';
@@ -38,6 +30,7 @@ function MenuList() {
     const networkUrl = useNextMenuUrl(true, '/network');
     const autoLockUrl = useNextMenuUrl(true, '/auto-lock');
     const address = useActiveAddress();
+    const { data: domainName } = useResolveSuiNSName(address);
     const apiEnv = useAppSelector((state) => state.app.apiEnv);
     const networkName = API_ENV_TO_INFO[apiEnv].name;
     const autoLockInterval = useAutoLockInterval();
@@ -45,29 +38,18 @@ function MenuList() {
     const dispatch = useAppDispatch();
     const navigate = useNavigate();
     const [logoutInProgress, setLogoutInProgress] = useState(false);
-    const copyAddressCallback = useCopyToClipboard(address || '', {
-        copySuccessMessage: 'Address copied',
-    });
-    const isMultiAccountsEnabled = useFeature(
-        FEATURES.WALLET_MULTI_ACCOUNTS
-    ).on;
     const [isLogoutDialogOpen, setIsLogoutDialogOpen] = useState(false);
     return (
         <>
             <MenuLayout title="Wallet Settings">
                 <div className="flex flex-col divide-y divide-x-0 divide-solid divide-gray-45">
                     <MenuListItem
-                        to={isMultiAccountsEnabled ? accountUrl : undefined}
+                        to={accountUrl}
                         icon={<Account24 />}
-                        title={isMultiAccountsEnabled ? 'Accounts' : 'Account'}
-                        subtitle={address ? formatAddress(address) : ''}
-                        onClick={
-                            isMultiAccountsEnabled
-                                ? undefined
-                                : copyAddressCallback
-                        }
-                        iconAfter={
-                            isMultiAccountsEnabled ? undefined : <Copy16 />
+                        title={'Accounts'}
+                        subtitle={
+                            domainName ??
+                            (address ? formatAddress(address) : '')
                         }
                     />
                     <MenuListItem

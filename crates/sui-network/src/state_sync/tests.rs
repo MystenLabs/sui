@@ -3,7 +3,6 @@
 
 use crate::{
     state_sync::{
-        test_utils::{empty_contents, CommitteeFixture},
         Builder, GetCheckpointSummaryRequest, PeerStateSyncInfo, StateSync, StateSyncMessage,
         UnstartedStateSync,
     },
@@ -11,6 +10,7 @@ use crate::{
 };
 use anemo::{PeerId, Request};
 use std::{collections::HashMap, time::Duration};
+use sui_swarm_config::test_utils::{empty_contents, CommitteeFixture};
 use sui_types::{
     messages_checkpoint::CheckpointDigest,
     storage::{ReadStore, SharedInMemoryStore, WriteStore},

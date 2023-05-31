@@ -4,17 +4,11 @@
 import {
     useGetOwnedObjects,
     useGetOriginByteKioskContents,
+    hasDisplayData,
 } from '@mysten/core';
-import {
-    getObjectDisplay,
-    type SuiObjectData,
-    type SuiAddress,
-    type SuiObjectResponse,
-} from '@mysten/sui.js';
+import { type SuiObjectData, type SuiAddress } from '@mysten/sui.js';
 
 import useAppSelector from './useAppSelector';
-
-const hasDisplayData = (obj: SuiObjectResponse) => !!getObjectDisplay(obj).data;
 
 export function useGetNFTs(address?: SuiAddress | null) {
     const {

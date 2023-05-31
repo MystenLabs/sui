@@ -37,6 +37,11 @@ pub trait IndexerStore {
 
     async fn get_latest_checkpoint_sequence_number(&self) -> Result<i64, IndexerError>;
     async fn get_checkpoint(&self, id: CheckpointId) -> Result<RpcCheckpoint, IndexerError>;
+    async fn get_checkpoints(
+        &self,
+        cursor: Option<CheckpointId>,
+        limit: usize,
+    ) -> Result<Vec<RpcCheckpoint>, IndexerError>;
     async fn get_checkpoint_sequence_number(
         &self,
         digest: CheckpointDigest,
@@ -294,8 +299,6 @@ pub struct TemporaryCheckpointStore {
     pub transactions: Vec<Transaction>,
     pub events: Vec<Event>,
     pub object_changes: Vec<TransactionObjectChanges>,
-    pub addresses: Vec<Address>,
-    pub active_addresses: Vec<ActiveAddress>,
     pub packages: Vec<Package>,
     pub input_objects: Vec<InputObject>,
     pub move_calls: Vec<MoveCall>,
