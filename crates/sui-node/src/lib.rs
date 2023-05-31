@@ -651,6 +651,18 @@ impl SuiNode {
             // staking events in the epoch change txn.
             anemo_config.max_frame_size = Some(2 << 30);
 
+            // Set a higher default value for socket send/receive buffers if not already
+            // configured.
+            let mut quic_config = anemo_config.quic.unwrap_or_default();
+            if quic_config.socket_send_buffer_size.is_none() {
+                quic_config.socket_send_buffer_size = Some(20 << 20);
+            }
+            if quic_config.socket_receive_buffer_size.is_none() {
+                quic_config.socket_receive_buffer_size = Some(20 << 20);
+            }
+            quic_config.allow_failed_socket_buffer_size_setting = true;
+            anemo_config.quic = Some(quic_config);
+
             let server_name = format!("sui-{}", chain_identifier);
             let alt_server_name = "sui";
             let network = Network::bind(config.p2p_config.listen_address)
