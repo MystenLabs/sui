@@ -23,12 +23,35 @@ const clientID =
 const redirectUri = 'https://ainifalglpinojmobpmeblikiopckbbm.chromiumapp.org/'; // TODO: use Browser.identity.getRedirectURL() for prod
 const nonceLen = Math.ceil(256 / 6);
 
-type WalletInputs = {
+export type ZkProofsParams = {
     ephemeralPublicKey: bigint;
     jwt: string;
     jwtRandom: bigint;
     maxEpoch: number;
     userPin: bigint;
+};
+export type AuxInputs = {
+    addr_seed: string;
+    eph_public_key: string[];
+    jwt_sha2_hash: string[];
+    jwt_signature: string;
+    key_claim_name: 'sub';
+    masked_content: number[];
+    max_epoch: number;
+    num_sha2_blocks: number;
+    payload_len: number;
+    payload_start_index: number;
+};
+export type ProofPoints = {
+    pi_a: string[];
+    pi_b: string[][];
+    pi_c: string[];
+};
+export type PublicInputs = string[];
+export type ZkProofsResponse = {
+    aux_inputs: AuxInputs;
+    proof_points: ProofPoints;
+    public_inputs: PublicInputs;
 };
 
 async function createZKProofs({
@@ -37,7 +60,7 @@ async function createZKProofs({
     jwtRandom,
     maxEpoch,
     userPin,
-}: WalletInputs) {
+}: ZkProofsParams): Promise<ZkProofsResponse> {
     const response = await fetch('http://185.209.177.123:8000/zkp', {
         method: 'POST',
         headers: {

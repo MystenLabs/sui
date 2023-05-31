@@ -94,7 +94,7 @@ export function poseidonHash(inputs: (string | number | bigint)[]): bigint {
     } else if (inputs.length <= 30) {
         const hash1 = poseidonHash(inputs.slice(0, 15));
         const hash2 = poseidonHash(inputs.slice(15));
-        return poseidonHash([poseidonHash([hash1, hash2])]);
+        return poseidonHash([hash1, hash2]);
     } else {
         throw new Error(
             `Yet to implement: Unable to hash a vector of length ${inputs.length}`
