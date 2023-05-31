@@ -164,21 +164,6 @@ pub(crate) mod authority_notify_read;
 pub(crate) mod authority_store;
 
 pub static CHAIN_IDENTIFIER: OnceCell<ChainIdentifier> = OnceCell::new();
-pub static MAINNET_CHAIN_IDENTIFIER: OnceCell<ChainIdentifier> = OnceCell::new();
-pub static TESTNET_CHAIN_IDENTIFIER: OnceCell<ChainIdentifier> = OnceCell::new();
-
-#[derive(Clone, Serialize, Debug, PartialEq)]
-pub enum Chain {
-    Mainnet,
-    Testnet,
-    Unknown,
-}
-
-impl Default for Chain {
-    fn default() -> Self {
-        Self::Unknown
-    }
-}
 
 pub type ReconfigConsensusMessage = (
     AuthorityKeyPair,
@@ -2113,7 +2098,7 @@ impl AuthorityState {
 
         if let Err(err) = self
             .database
-            .expensive_check_sui_conservation(cur_epoch_store.move_vm())
+            .expensive_check_sui_conservation(cur_epoch_store)
         {
             if cfg!(debug_assertions) {
                 panic!("{}", err);
@@ -2326,47 +2311,6 @@ impl AuthorityState {
         // It's ok if the value is already set due to data races.
         let _ = CHAIN_IDENTIFIER.set(ChainIdentifier::from(*checkpoint.digest()));
         Some(ChainIdentifier::from(*checkpoint.digest()))
-    }
-
-    pub fn get_mainnet_chain_identifier(&self) -> ChainIdentifier {
-        if let Some(digest) = MAINNET_CHAIN_IDENTIFIER.get() {
-            return *digest;
-        }
-
-        let digest = CheckpointDigest::new(
-            Base58::decode("4btiuiMPvEENsttpZC7CZ53DruC3MAgfznDbASZ7DR6S")
-                .expect("mainnet genesis checkpoint digest literal is invalid")
-                .try_into()
-                .expect("Mainnet genesis checkpoint digest literal has incorrect length"),
-        );
-        let _ = MAINNET_CHAIN_IDENTIFIER.set(ChainIdentifier::from(digest));
-        ChainIdentifier::from(digest)
-    }
-
-    pub fn get_testnet_chain_identifier(&self) -> ChainIdentifier {
-        if let Some(digest) = TESTNET_CHAIN_IDENTIFIER.get() {
-            return *digest;
-        }
-
-        let digest = CheckpointDigest::new(
-            Base58::decode("69WiPg3DAQiwdxfncX6wYQ2siKwAe6L9BZthQea3JNMD")
-                .expect("testnet genesis checkpoint digest literal is invalid")
-                .try_into()
-                .expect("Testnet genesis checkpoint digest literal has incorrect length"),
-        );
-        let _ = TESTNET_CHAIN_IDENTIFIER.set(ChainIdentifier::from(digest));
-        ChainIdentifier::from(digest)
-    }
-
-    pub fn get_chain(&self) -> Option<Chain> {
-        let mainnet_id = self.get_mainnet_chain_identifier();
-        let testnet_id = self.get_testnet_chain_identifier();
-
-        match self.get_chain_identifier()? {
-            id if id == mainnet_id => Some(Chain::Mainnet),
-            id if id == testnet_id => Some(Chain::Testnet),
-            _ => Some(Chain::Unknown),
-        }
     }
 
     pub fn get_move_object<T>(&self, object_id: &ObjectID) -> SuiResult<T>
@@ -3870,6 +3814,7 @@ impl AuthorityState {
             epoch_start_configuration,
             self.db(),
             expensive_safety_check_config,
+            cur_epoch_store.get_chain_identifier(),
         );
         self.epoch_store.store(new_epoch_store.clone());
         cur_epoch_store.epoch_terminated().await;

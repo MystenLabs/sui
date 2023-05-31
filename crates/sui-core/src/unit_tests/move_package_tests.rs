@@ -12,7 +12,7 @@ use sui_adapter::adapter::{
 };
 use sui_framework::BuiltInFramework;
 use sui_move_build::{BuildConfig, CompiledPackage, SuiPackageHooks};
-use sui_protocol_config::ProtocolConfig;
+use sui_protocol_config::{Chain, ProtocolConfig};
 use sui_types::{
     base_types::{random_object_ref, ObjectID},
     crypto::{get_key_pair, AccountKeyPair},
@@ -438,7 +438,7 @@ fn test_fail_on_upgrade_missing_type() {
         .new_upgraded(
             c_id2,
             &build_test_modules("Cv1"),
-            &ProtocolConfig::get_for_version(4.into()),
+            &ProtocolConfig::get_for_version(4.into(), Chain::Unknown),
             [],
         )
         .unwrap_err();

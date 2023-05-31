@@ -29,7 +29,7 @@ use sui_keys::keypair_file::{
     read_authority_keypair_from_file, read_network_keypair_from_file,
     write_authority_keypair_to_file, write_keypair_to_file,
 };
-use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
+use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
 use sui_types::crypto::{get_key_pair_from_rng, AuthorityKeyPair, SuiKeyPair};
 use telemetry_subscribers::TelemetryGuards;
 use tokio::sync::mpsc::channel;
@@ -292,7 +292,7 @@ async fn run(
                     primary_keypair,
                     primary_network_keypair,
                     committee,
-                    ProtocolConfig::get_for_version(ProtocolVersion::max()),
+                    ProtocolConfig::get_for_version(ProtocolVersion::max(), Chain::Unknown),
                     worker_cache,
                     client.clone(),
                     &store,
@@ -313,7 +313,7 @@ async fn run(
 
             let worker = WorkerNode::new(
                 id,
-                ProtocolConfig::get_for_version(ProtocolVersion::max()),
+                ProtocolConfig::get_for_version(ProtocolVersion::max(), Chain::Unknown),
                 parameters.clone(),
                 registry_service,
             );

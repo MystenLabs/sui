@@ -19,6 +19,7 @@ use sui_types::accumulator::Accumulator;
 use sui_types::base_types::{AuthorityName, EpochId, ObjectID, SequenceNumber, TransactionDigest};
 use sui_types::committee::Committee;
 use sui_types::crypto::{AuthoritySignInfo, AuthorityStrongQuorumSignInfo};
+use sui_types::digests::ChainIdentifier;
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::signature::GenericSignature;
 use sui_types::transaction::{
@@ -172,6 +173,9 @@ pub struct AuthorityPerEpochStore {
 
     /// Execution state that has to restart at each epoch change
     execution_component: ExecutionComponents,
+
+    /// Chain identifier
+    chain_identifier: ChainIdentifier,
 }
 
 /// AuthorityEpochTables contains tables that contain data that is only valid within an epoch.
@@ -373,6 +377,7 @@ impl AuthorityPerEpochStore {
         cache_metrics: Arc<ResolverMetrics>,
         signature_verifier_metrics: Arc<SignatureVerifierMetrics>,
         expensive_safety_check_config: &ExpensiveSafetyCheckConfig,
+        chain_identifier: ChainIdentifier,
     ) -> Arc<Self> {
         let current_time = Instant::now();
         let epoch_id = committee.epoch;
@@ -406,7 +411,8 @@ impl AuthorityPerEpochStore {
         let protocol_version = epoch_start_configuration
             .epoch_start_state()
             .protocol_version();
-        let protocol_config = ProtocolConfig::get_for_version(protocol_version);
+        let protocol_config =
+            ProtocolConfig::get_for_version(protocol_version, chain_identifier.chain());
 
         let execution_component = ExecutionComponents::new(
             &protocol_config,
@@ -443,6 +449,7 @@ impl AuthorityPerEpochStore {
             metrics,
             epoch_start_configuration,
             execution_component,
+            chain_identifier,
         });
         s.update_buffer_stake_metric();
         s
@@ -462,6 +469,10 @@ impl AuthorityPerEpochStore {
         self.epoch_start_configuration.epoch_start_state()
     }
 
+    pub fn get_chain_identifier(&self) -> ChainIdentifier {
+        self.chain_identifier
+    }
+
     pub fn new_at_next_epoch(
         &self,
         name: AuthorityName,
@@ -469,6 +480,7 @@ impl AuthorityPerEpochStore {
         epoch_start_configuration: EpochStartConfiguration,
         store: Arc<AuthorityStore>,
         expensive_safety_check_config: &ExpensiveSafetyCheckConfig,
+        chain_identifier: ChainIdentifier,
     ) -> Arc<Self> {
         assert_eq!(self.epoch() + 1, new_committee.epoch);
         self.record_reconfig_halt_duration_metric();
@@ -484,6 +496,7 @@ impl AuthorityPerEpochStore {
             self.execution_component.metrics(),
             self.signature_verifier.metrics.clone(),
             expensive_safety_check_config,
+            chain_identifier,
         )
     }
 

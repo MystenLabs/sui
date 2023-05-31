@@ -129,6 +129,19 @@ impl SupportedProtocolVersions {
     }
 }
 
+#[derive(Clone, Serialize, Debug, PartialEq, Copy)]
+pub enum Chain {
+    Mainnet,
+    Testnet,
+    Unknown,
+}
+
+impl Default for Chain {
+    fn default() -> Self {
+        Self::Unknown
+    }
+}
+
 pub struct Error(pub String);
 
 /// Records on/off feature flags that may vary at each protocol version.
@@ -142,10 +155,6 @@ struct FeatureFlags {
     // in end of epoch checkpoint proposals
     #[serde(skip_serializing_if = "is_false")]
     commit_root_state_digest: bool,
-    // If true, we are in rollout phase for the above feature,
-    // and thus should not be enabled on mainnet.
-    #[serde(skip_serializing_if = "is_false")]
-    commit_root_state_digest_rollout: bool,
     // Pass epoch start time to advance_epoch safe mode function.
     #[serde(skip_serializing_if = "is_false")]
     advance_epoch_start_time_in_safe_mode: bool,
@@ -665,10 +674,6 @@ impl ProtocolConfig {
         self.feature_flags.commit_root_state_digest
     }
 
-    pub fn check_commit_root_state_digest_rollout(&self) -> bool {
-        self.feature_flags.commit_root_state_digest_rollout
-    }
-
     pub fn get_advance_epoch_start_time_in_safe_mode(&self) -> bool {
         self.feature_flags.advance_epoch_start_time_in_safe_mode
     }
@@ -737,12 +742,12 @@ thread_local! {
 // Instantiations for each protocol version.
 impl ProtocolConfig {
     /// Get the value ProtocolConfig that are in effect during the given protocol version.
-    pub fn get_for_version(version: ProtocolVersion) -> Self {
+    pub fn get_for_version(version: ProtocolVersion, chain: Chain) -> Self {
         // ProtocolVersion can be deserialized so we need to check it here as well.
         assert!(version.0 >= ProtocolVersion::MIN.0, "{:?}", version);
         assert!(version.0 <= ProtocolVersion::MAX_ALLOWED.0, "{:?}", version);
 
-        let mut ret = Self::get_for_version_impl(version);
+        let mut ret = Self::get_for_version_impl(version, chain);
         ret.version = version;
 
         CONFIG_OVERRIDE.with(|ovr| {
@@ -759,9 +764,9 @@ impl ProtocolConfig {
 
     /// Get the value ProtocolConfig that are in effect during the given protocol version.
     /// Or none if the version is not supported.
-    pub fn get_for_version_if_supported(version: ProtocolVersion) -> Option<Self> {
+    pub fn get_for_version_if_supported(version: ProtocolVersion, chain: Chain) -> Option<Self> {
         if version.0 >= ProtocolVersion::MIN.0 && version.0 <= ProtocolVersion::MAX_ALLOWED.0 {
-            let mut ret = Self::get_for_version_impl(version);
+            let mut ret = Self::get_for_version_impl(version, chain);
             ret.version = version;
             Some(ret)
         } else {
@@ -795,7 +800,7 @@ impl ProtocolConfig {
         if Self::load_poison_get_for_min_version() {
             panic!("get_for_min_version called on validator");
         }
-        ProtocolConfig::get_for_version(ProtocolVersion::MIN)
+        ProtocolConfig::get_for_version(ProtocolVersion::MIN, Chain::Unknown)
     }
 
     /// Convenience to get the constants at the current maximum supported version.
@@ -804,15 +809,15 @@ impl ProtocolConfig {
         if Self::load_poison_get_for_min_version() {
             panic!("get_for_max_version called on validator");
         }
-        ProtocolConfig::get_for_version(ProtocolVersion::MAX)
+        ProtocolConfig::get_for_version(ProtocolVersion::MAX, Chain::Unknown)
     }
 
-    fn get_for_version_impl(version: ProtocolVersion) -> Self {
+    fn get_for_version_impl(version: ProtocolVersion, _chain: Chain) -> Self {
         #[cfg(msim)]
         {
             // populate the fake simulator version # with a different base tx cost.
             if version == ProtocolVersion::MAX_ALLOWED {
-                let mut config = Self::get_for_version_impl(version - 1);
+                let mut config = Self::get_for_version_impl(version - 1, Chain::Unknown);
                 config.base_tx_cost_fixed = Some(config.base_tx_cost_fixed() + 1000);
                 return config;
             }
@@ -1075,12 +1080,12 @@ impl ProtocolConfig {
                 // new_constant: None,
             },
             2 => {
-                let mut cfg = Self::get_for_version_impl(version - 1);
+                let mut cfg = Self::get_for_version_impl(version - 1, _chain);
                 cfg.feature_flags.advance_epoch_start_time_in_safe_mode = true;
                 cfg
             }
             3 => {
-                let mut cfg = Self::get_for_version_impl(version - 1);
+                let mut cfg = Self::get_for_version_impl(version - 1, _chain);
                 // changes for gas model
                 cfg.gas_model_version = Some(2);
                 // max gas budget is in MIST and an absolute value 50SUI
@@ -1098,7 +1103,7 @@ impl ProtocolConfig {
                 cfg
             }
             4 => {
-                let mut cfg = Self::get_for_version_impl(version - 1);
+                let mut cfg = Self::get_for_version_impl(version - 1, _chain);
                 // Change reward slashing rate to 100%.
                 cfg.reward_slashing_rate = Some(10000);
                 // protect old and new lookup for object version
@@ -1106,7 +1111,7 @@ impl ProtocolConfig {
                 cfg
             }
             5 => {
-                let mut cfg = Self::get_for_version_impl(version - 1);
+                let mut cfg = Self::get_for_version_impl(version - 1, _chain);
                 cfg.feature_flags.missing_type_is_compatibility_error = true;
                 cfg.gas_model_version = Some(4);
                 cfg.feature_flags.scoring_decision_with_validity_cutoff = true;
@@ -1115,14 +1120,14 @@ impl ProtocolConfig {
                 cfg
             }
             6 => {
-                let mut cfg = Self::get_for_version_impl(version - 1);
+                let mut cfg = Self::get_for_version_impl(version - 1, _chain);
                 cfg.gas_model_version = Some(5);
                 cfg.buffer_stake_for_protocol_upgrade_bps = Some(5000);
                 cfg.feature_flags.consensus_order_end_of_epoch_last = true;
                 cfg
             }
             7 => {
-                let mut cfg = Self::get_for_version_impl(version - 1);
+                let mut cfg = Self::get_for_version_impl(version - 1, _chain);
                 cfg.feature_flags.disallow_adding_abilities_on_upgrade = true;
                 cfg.feature_flags
                     .disable_invariant_violation_check_in_swap_loc = true;
@@ -1131,13 +1136,13 @@ impl ProtocolConfig {
                 cfg
             }
             8 => {
-                let mut cfg = Self::get_for_version_impl(version - 1);
+                let mut cfg = Self::get_for_version_impl(version - 1, _chain);
                 cfg.feature_flags
                     .disallow_change_struct_type_params_on_upgrade = true;
                 cfg
             }
             9 => {
-                let mut cfg = Self::get_for_version_impl(version - 1);
+                let mut cfg = Self::get_for_version_impl(version - 1, _chain);
                 // Limits the length of a Move identifier
                 cfg.max_move_identifier_len = Some(128);
                 cfg.feature_flags.no_extraneous_module_bytes = true;
@@ -1146,21 +1151,15 @@ impl ProtocolConfig {
                 cfg
             }
             10 => {
-                let mut cfg = Self::get_for_version_impl(version - 1);
+                let mut cfg = Self::get_for_version_impl(version - 1, _chain);
                 cfg.max_verifier_meter_ticks_per_function = Some(16_000_000);
                 cfg.max_meter_ticks_per_module = Some(16_000_000);
                 cfg
             }
-            11 => Self::get_for_version_impl(version - 1),
+            11 => Self::get_for_version_impl(version - 1, _chain),
             12 => {
-                let mut cfg = Self::get_for_version_impl(version - 1);
+                let mut cfg = Self::get_for_version_impl(version - 1, _chain);
                 cfg.feature_flags.narwhal_versioned_metadata = true;
-                cfg
-            }
-            13 => {
-                let mut cfg = Self::get_for_version_impl(version - 1);
-                cfg.feature_flags.commit_root_state_digest = true;
-                cfg.feature_flags.commit_root_state_digest_rollout = true;
                 cfg
             }
             // Use this template when making changes:
@@ -1214,9 +1213,6 @@ impl ProtocolConfig {
     }
     pub fn set_commit_root_state_digest_supported(&mut self, val: bool) {
         self.feature_flags.commit_root_state_digest = val
-    }
-    pub fn set_commit_root_state_digest_rollout(&mut self, val: bool) {
-        self.feature_flags.commit_root_state_digest_rollout = val
     }
 }
 
@@ -1324,14 +1320,15 @@ mod test {
             let cur = ProtocolVersion::new(i);
             assert_yaml_snapshot!(
                 format!("version_{}", cur.as_u64()),
-                ProtocolConfig::get_for_version(cur)
+                ProtocolConfig::get_for_version(cur, Chain::Unknown)
             );
         }
     }
 
     #[test]
     fn test_getters() {
-        let prot: ProtocolConfig = ProtocolConfig::get_for_version(ProtocolVersion::new(1));
+        let prot: ProtocolConfig =
+            ProtocolConfig::get_for_version(ProtocolVersion::new(1), Chain::Unknown);
         assert_eq!(
             prot.max_arguments(),
             prot.max_arguments_as_option().unwrap()
@@ -1340,7 +1337,8 @@ mod test {
 
     #[test]
     fn lookup_by_string_test() {
-        let prot: ProtocolConfig = ProtocolConfig::get_for_version(ProtocolVersion::new(1));
+        let prot: ProtocolConfig =
+            ProtocolConfig::get_for_version(ProtocolVersion::new(1), Chain::Unknown);
         // Does not exist
         assert!(prot.lookup_attr("some random string".to_string()).is_none());
 
@@ -1355,13 +1353,15 @@ mod test {
             .is_none());
 
         // But we did in version 9
-        let prot: ProtocolConfig = ProtocolConfig::get_for_version(ProtocolVersion::new(9));
+        let prot: ProtocolConfig =
+            ProtocolConfig::get_for_version(ProtocolVersion::new(9), Chain::Unknown);
         assert!(
             prot.lookup_attr("max_move_identifier_len".to_string())
                 == Some(ProtocolConfigValue::u64(prot.max_move_identifier_len()))
         );
 
-        let prot: ProtocolConfig = ProtocolConfig::get_for_version(ProtocolVersion::new(1));
+        let prot: ProtocolConfig =
+            ProtocolConfig::get_for_version(ProtocolVersion::new(1), Chain::Unknown);
         // We didnt have this in version 1
         assert!(prot
             .attr_map()
@@ -1375,7 +1375,8 @@ mod test {
         );
 
         // Check feature flags
-        let prot: ProtocolConfig = ProtocolConfig::get_for_version(ProtocolVersion::new(1));
+        let prot: ProtocolConfig =
+            ProtocolConfig::get_for_version(ProtocolVersion::new(1), Chain::Unknown);
         // Does not exist
         assert!(prot
             .feature_flags
@@ -1400,7 +1401,8 @@ mod test {
                 .unwrap()
                 == &false
         );
-        let prot: ProtocolConfig = ProtocolConfig::get_for_version(ProtocolVersion::new(4));
+        let prot: ProtocolConfig =
+            ProtocolConfig::get_for_version(ProtocolVersion::new(4), Chain::Unknown);
         // Was true from v3 and up
         assert!(
             prot.feature_flags

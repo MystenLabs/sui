@@ -348,7 +348,7 @@ mod test {
     use std::sync::Arc;
     use sui_adapter::execution_mode;
     use sui_config::genesis::Genesis;
-    use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
+    use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
     use sui_types::epoch_data::EpochData;
     use sui_types::gas::SuiGasStatus;
     use sui_types::metrics::LimitsMetrics;
@@ -375,7 +375,7 @@ mod test {
         let network_config = builder.build();
         let genesis = network_config.genesis;
         let protocol_version = ProtocolVersion::new(genesis.sui_system_object().protocol_version());
-        let protocol_config = ProtocolConfig::get_for_version(protocol_version);
+        let protocol_config = ProtocolConfig::get_for_version(protocol_version, Chain::Unknown);
 
         let genesis_transaction = genesis.transaction().clone();
 

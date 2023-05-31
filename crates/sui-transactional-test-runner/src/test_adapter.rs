@@ -46,7 +46,7 @@ use sui_core::{
 };
 use sui_framework::BuiltInFramework;
 use sui_framework::DEFAULT_FRAMEWORK_PATH;
-use sui_protocol_config::ProtocolConfig;
+use sui_protocol_config::{Chain, ProtocolConfig};
 use sui_types::accumulator::Accumulator;
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::execution_status::ExecutionStatus;
@@ -255,7 +255,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                     .map(|v| v.into_iter().collect::<BTreeSet<_>>())
                     .unwrap_or_default();
                 let protocol_config = if let Some(protocol_version) = protocol_version {
-                    ProtocolConfig::get_for_version(protocol_version.into())
+                    ProtocolConfig::get_for_version(protocol_version.into(), Chain::Unknown)
                 } else {
                     ProtocolConfig::get_for_max_version()
                 };
@@ -520,13 +520,15 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
         let default_protocol_version = self.protocol_config.version;
         if let Some(protocol_version) = protocol_version {
             // override protocol version, just for this call
-            self.protocol_config = ProtocolConfig::get_for_version(protocol_version.into())
+            self.protocol_config =
+                ProtocolConfig::get_for_version(protocol_version.into(), Chain::Unknown)
         }
         let summary = self.execute_txn(transaction, gas_budget, uncharged)?;
         let output = self.object_summary_output(&summary);
         // restore old protocol version (if needed)
         if protocol_version.is_some() {
-            self.protocol_config = ProtocolConfig::get_for_version(default_protocol_version)
+            self.protocol_config =
+                ProtocolConfig::get_for_version(default_protocol_version, Chain::Unknown)
         }
         let empty = SerializedReturnValues {
             mutable_reference_outputs: vec![],
