@@ -93,6 +93,7 @@ export function TransferNFTForm({
         },
         onSuccess: (response) => {
             queryClient.invalidateQueries(['object', objectId]);
+            queryClient.invalidateQueries(['originbyte-kiosk-contents']);
             queryClient.invalidateQueries(['get-owned-objects']);
             return navigate(
                 `/receipt?${new URLSearchParams({
