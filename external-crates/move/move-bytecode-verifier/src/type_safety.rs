@@ -5,6 +5,8 @@
 //! This module defines the transfer functions for verifying type safety of a procedure body.
 //! It does not utilize control flow, but does check each block independently
 
+use std::num::NonZeroU64;
+
 use crate::meter::{Meter, Scope};
 use move_abstract_stack::AbsStack;
 use move_binary_format::{
@@ -85,7 +87,7 @@ impl<'a> TypeSafetyChecker<'a> {
 
     fn push(&mut self, meter: &mut impl Meter, ty: SignatureToken) -> PartialVMResult<()> {
         self.charge_ty(meter, &ty)?;
-        self.stack.push(ty);
+        safe_unwrap_err!(self.stack.push(ty));
         Ok(())
     }
 
@@ -96,7 +98,7 @@ impl<'a> TypeSafetyChecker<'a> {
         n: u64,
     ) -> PartialVMResult<()> {
         self.charge_ty(meter, &ty)?;
-        self.stack.push_n(ty, n);
+        safe_unwrap_err!(self.stack.push_n(ty, n));
         Ok(())
     }
 
@@ -821,8 +823,15 @@ fn verify_instr(
 
         Bytecode::VecPack(idx, num) => {
             let element_type = &verifier.resolver.signature_at(*idx).0[0];
-            if verifier.stack.pop_n(Some(element_type), *num).is_err() {
-                return Err(verifier.error(StatusCode::TYPE_MISMATCH, offset));
+            if let Some(num_to_pop) = NonZeroU64::new(*num) {
+                let is_mismatched = verifier
+                    .stack
+                    .pop_eq_n(num_to_pop)
+                    .map(|t| element_type != &t)
+                    .unwrap_or(false);
+                if is_mismatched {
+                    return Err(verifier.error(StatusCode::TYPE_MISMATCH, offset));
+                }
             }
             verifier.push(meter, ST::Vector(Box::new(element_type.clone())))?;
         }

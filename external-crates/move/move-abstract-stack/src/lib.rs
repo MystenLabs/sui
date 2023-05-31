@@ -3,52 +3,65 @@
 
 //! This module defines an abstract stack used by various verifier passes
 
-use std::cmp::Ordering;
-use std::fmt;
+#[cfg(test)]
+mod unit_tests;
 
-#[derive(Default)]
+use std::cmp::Ordering;
+use std::fmt::{self, Debug};
+use std::num::NonZeroU64;
+
+#[derive(Default, Debug)]
 /// An abstract value that compresses runs of the same value to reduce space usage
 pub struct AbsStack<T> {
     values: Vec<(u64, T)>,
+    len: u64,
 }
 
-impl<T: Eq + Clone> AbsStack<T> {
+impl<T: Eq + Clone + Debug> AbsStack<T> {
     /// Creates an empty stack
     pub fn new() -> Self {
-        Self { values: vec![] }
+        Self {
+            values: vec![],
+            len: 0,
+        }
     }
 
     /// Returns true iff the stack is empty
     pub fn is_empty(&self) -> bool {
+        // empty ==> len is 0
+        debug_assert!(!self.values.is_empty() || self.len == 0);
+        // !empty ==> last element len <= len
+        debug_assert!(self.values.is_empty() || self.values.last().unwrap().0 <= self.len);
         self.values.is_empty()
     }
 
+    /// Returns the logical length of the stack as if there was no space
+    /// compression
+    pub fn len(&self) -> u64 {
+        // len is 0 ==> empty
+        debug_assert!(self.len != 0 || self.values.is_empty());
+        // len not 0 ==> !empty and last element len <= len
+        debug_assert!(
+            self.len == 0 || (!self.values.is_empty() && self.values.last().unwrap().0 <= self.len)
+        );
+        self.len
+    }
+
     /// Pushes a single value on the stack
-    pub fn push(&mut self, item: T) {
+    pub fn push(&mut self, item: T) -> Result<(), AbsStackError> {
         self.push_n(item, 1)
     }
 
-    /// Pops a single value off the stack, erroring if empty
-    pub fn pop(&mut self) -> Result<T, AbsStackError> {
-        let Some((count, last)) = self.values.last_mut() else {
-            return Err(AbsStackError::EmptyStack)
-        };
-        debug_assert!(*count > 0);
-        Ok(if *count <= 1 {
-            let (_, last) = self.values.pop().unwrap();
-            last
-        } else {
-            *count -= 1;
-            last.clone()
-        })
-    }
-
     /// Push n copies of an item on the stack
-    pub fn push_n(&mut self, item: T, n: u64) {
+    pub fn push_n(&mut self, item: T, n: u64) -> Result<(), AbsStackError> {
         if n == 0 {
-            return;
+            return Ok(());
         }
 
+        let Some(new_len) = self.len.checked_add(n) else {
+            return Err(AbsStackError::Overflow);
+        };
+        self.len = new_len;
         match self.values.last_mut() {
             Some((count, last_item)) if &item == last_item => {
                 debug_assert!(*count > 0);
@@ -56,32 +69,68 @@ impl<T: Eq + Clone> AbsStack<T> {
             }
             _ => self.values.push((n, item)),
         }
+        Ok(())
     }
 
-    /// Pop n items off the stack
-    /// If check_eq is Some, all popped elements must be equal to the specified item
-    pub fn pop_n(&mut self, check_eq: Option<&T>, mut n: u64) -> Result<(), AbsStackError> {
-        while n > 0 {
-            let Some((count, last)) = self.values.last_mut() else {
+    /// Pops a single value off the stack
+    pub fn pop(&mut self) -> Result<T, AbsStackError> {
+        self.pop_eq_n(NonZeroU64::new(1).unwrap())
+    }
+
+    /// Pops n values single value off the stack, erroring if non enough items or if the n items are
+    /// not equal
+    pub fn pop_eq_n(&mut self, n: NonZeroU64) -> Result<T, AbsStackError> {
+        let n: u64 = n.get();
+        if self.is_empty() {
+            return Err(AbsStackError::EmptyStack);
+        }
+        if n > self.len {
+            return Err(AbsStackError::NotEnoughValues);
+        }
+        let (count, last) = self.values.last_mut().unwrap();
+        debug_assert!(*count > 0);
+        let ret = match (*count).cmp(&n) {
+            Ordering::Less => return Err(AbsStackError::ElementNotEqual),
+            Ordering::Equal => {
+                let (_, last) = self.values.pop().unwrap();
+                last
+            }
+            Ordering::Greater => {
+                *count -= n;
+                last.clone()
+            }
+        };
+        self.len -= n;
+        Ok(ret)
+    }
+
+    /// Pop any n items off the stack. Unlike `pop_n`, items do not have to be equal
+    pub fn pop_any_n(&mut self, n: NonZeroU64) -> Result<(), AbsStackError> {
+        let n: u64 = n.get();
+        if self.is_empty() {
+            return Err(AbsStackError::EmptyStack);
+        }
+        if n > self.len {
+            return Err(AbsStackError::NotEnoughValues);
+        }
+        let mut rem: u64 = n;
+        while rem > 0 {
+            let Some((count, _last)) = self.values.last_mut() else {
                 return Err(AbsStackError::EmptyStack)
             };
             debug_assert!(*count > 0);
-            if let Some(check_eq_item) = check_eq {
-                if last != check_eq_item {
-                    return Err(AbsStackError::ElementNotEqual);
-                }
-            }
-            match (*count).cmp(&n) {
+            match (*count).cmp(&rem) {
                 Ordering::Less | Ordering::Equal => {
-                    n -= *count;
+                    rem -= *count;
                     self.values.pop().unwrap();
                 }
                 Ordering::Greater => {
-                    *count -= n;
-                    n = 0;
+                    *count -= rem;
+                    rem = 0;
                 }
             }
         }
+        self.len -= n;
         Ok(())
     }
 }
@@ -90,6 +139,8 @@ impl<T: Eq + Clone> AbsStack<T> {
 pub enum AbsStackError {
     ElementNotEqual,
     EmptyStack,
+    NotEnoughValues,
+    Overflow,
 }
 
 impl fmt::Display for AbsStackError {
@@ -100,6 +151,12 @@ impl fmt::Display for AbsStackError {
             }
             AbsStackError::EmptyStack => {
                 write!(f, "Unexpected empty stack")
+            }
+            AbsStackError::NotEnoughValues => {
+                write!(f, "Popped more values than are on the stack")
+            }
+            AbsStackError::Overflow => {
+                write!(f, "Too many elements on the stack")
             }
         }
     }
