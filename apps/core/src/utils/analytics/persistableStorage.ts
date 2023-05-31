@@ -18,7 +18,12 @@ export class PersistableStorage<T> implements Storage<T> {
     #isPersisted: boolean;
 
     constructor(options?: CookieStorageOptions) {
-        this.#cookieStorage = new CookieStorage<T>(options);
+        this.#cookieStorage = new CookieStorage<T>({
+            // These are the default options that the Amplitude SDK uses under the hood
+            expirationDays: 365,
+            sameSite: 'Lax',
+            ...options,
+        });
         this.#memoryStorage = new MemoryStorage<T>();
         this.#isPersisted = false;
     }
