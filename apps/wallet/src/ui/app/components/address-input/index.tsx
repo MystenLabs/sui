@@ -59,6 +59,7 @@ export function AddressInput({
             >
                 <div className="min-h-[42px] w-full flex items-center pl-3 py-1">
                     <TextareaAutosize
+                        data-testid="address-input"
                         maxRows={3}
                         minRows={1}
                         disabled={disabled}

@@ -42,6 +42,7 @@ const NetworkSelector = () => {
                 {netWorks.map((apiEnv) => (
                     <li className={st.networkItem} key={apiEnv.networkName}>
                         <button
+                            data-testid={apiEnv.env}
                             type="button"
                             onClick={async () => {
                                 if (activeApiEnv === apiEnv.env) {

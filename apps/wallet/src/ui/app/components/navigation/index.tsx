@@ -30,7 +30,12 @@ function Navigation({ className }: NavigationProps) {
             <div id="sui-apps-filters"></div>
 
             <div className={st.navMenu}>
-                <NavLink to="./tokens" className={makeLinkCls} title="Tokens">
+                <NavLink
+                    data-testid="nav-tokens"
+                    to="./tokens"
+                    className={makeLinkCls}
+                    title="Tokens"
+                >
                     <Tokens32 className="w-8 h-8" />
                     <span className={st.title}>Coins</span>
                 </NavLink>
@@ -43,6 +48,7 @@ function Navigation({ className }: NavigationProps) {
                     <span className={st.title}>Apps</span>
                 </NavLink>
                 <NavLink
+                    data-testid="nav-activity"
                     to="./transactions"
                     className={makeLinkCls}
                     title="Transactions"

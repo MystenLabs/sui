@@ -49,7 +49,10 @@ function Overlay({
             >
                 {title && (
                     <div className="bg-gray-40 h-12 w-full">
-                        <div className="text-steel-darker bg-gray-40 flex justify-center h-12 items-center text-heading4 font-semibold">
+                        <div
+                            data-testid="overlay-title"
+                            className="text-steel-darker bg-gray-40 flex justify-center h-12 items-center text-heading4 font-semibold"
+                        >
                             {title}
                         </div>
                     </div>
@@ -64,7 +67,11 @@ function Overlay({
                 >
                     {children}
                 </div>
-                <button className={st.closeOverlay} onClick={closeModal}>
+                <button
+                    data-testid="close-icon"
+                    className={st.closeOverlay}
+                    onClick={closeModal}
+                >
                     {closeIcon}
                 </button>
             </div>

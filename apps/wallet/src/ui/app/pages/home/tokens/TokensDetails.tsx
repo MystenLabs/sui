@@ -254,7 +254,7 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
                         {!coinType && <AccountSelector />}
                     </div>
 
-                    <div className="mt-1.5">
+                    <div data-testid="coin-balance" className="mt-1.5">
                         <CoinBalance
                             balance={BigInt(tokenBalance)}
                             type={activeCoinType}
@@ -283,6 +283,7 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
 
                         <LargeButton
                             center
+                            data-testid="send-coin-button"
                             to={`/send${
                                 coinBalance?.coinType
                                     ? `?${new URLSearchParams({
