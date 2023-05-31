@@ -4,6 +4,7 @@
 import { useRpcClient } from '../api/RpcClientContext';
 import { type SuiAddress, CoinBalance } from '@mysten/sui.js';
 import { useQuery } from '@tanstack/react-query';
+import { filterOutZeroBalances } from '../utils/filterOutZeroBalances';
 
 export function useGetAllBalances<TResult = CoinBalance[]>(
     address?: SuiAddress | null,
@@ -14,7 +15,10 @@ export function useGetAllBalances<TResult = CoinBalance[]>(
     const rpc = useRpcClient();
     return useQuery({
         queryKey: ['get-all-balance', address],
-        queryFn: () => rpc.getAllBalances({ owner: address! }),
+        queryFn: async () => {
+            const balances = await rpc.getAllBalances({ owner: address! });
+            return filterOutZeroBalances(balances);
+        },
         enabled: !!address,
         refetchInterval,
         staleTime,
