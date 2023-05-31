@@ -449,19 +449,19 @@ where
         Ok(())
     }
 
-    async fn resolve_name_service_address(&self, _name: String) -> RpcResult<Option<SuiAddress>> {
-        // TODO(gegaowp): implement name service resolver in indexer
-        todo!()
+    async fn resolve_name_service_address(&self, name: String) -> RpcResult<Option<SuiAddress>> {
+        self.fullnode.resolve_name_service_address(name).await
     }
 
     async fn resolve_name_service_names(
         &self,
-        _address: SuiAddress,
-        _cursor: Option<ObjectID>,
-        _limit: Option<usize>,
+        address: SuiAddress,
+        cursor: Option<ObjectID>,
+        limit: Option<usize>,
     ) -> RpcResult<Page<String, ObjectID>> {
-        // TODO(gegaowp): implement name service resolver in indexer
-        todo!()
+        self.fullnode
+            .resolve_name_service_names(address, cursor, limit)
+            .await
     }
 }
 
