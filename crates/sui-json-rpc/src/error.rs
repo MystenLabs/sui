@@ -11,6 +11,8 @@ use sui_types::quorum_driver_types::QuorumDriverError;
 use thiserror::Error;
 use tokio::task::JoinError;
 
+pub type SuiApiResult<T = ()> = Result<T, Error>;
+
 #[derive(Debug, Error)]
 pub enum Error {
     #[error(transparent)]
@@ -85,6 +87,9 @@ impl Error {
                 }
                 _ => RpcError::Call(CallError::Failed(err.into())),
             },
+            // such as with JoinError, perhaps this should just be a generic, "Internal server error"
+            // but only after we've mapped out everything
+            // so joinerror should explicitly be mapped for now
             _ => RpcError::Call(CallError::Failed(self.into())),
         }
     }
@@ -112,4 +117,7 @@ pub enum SuiRpcInputError {
 
     #[error("Unable to serialize: {0}")]
     CannotSerialize(#[from] bcs::Error),
+
+    #[error("Invalid struct type: {0}")]
+    CannotParseSuiStructTag(String),
 }
