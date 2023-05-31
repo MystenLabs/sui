@@ -41,6 +41,7 @@ use mysten_metrics::{spawn_monitored_task, RegistryService};
 use mysten_network::server::ServerBuilder;
 use narwhal_network::metrics::MetricsMakeCallbackHandler;
 use narwhal_network::metrics::{NetworkConnectionMetrics, NetworkMetrics};
+use sui_archival::writer::ArchiveWriterV1;
 use sui_config::node::DBCheckpointConfig;
 use sui_config::node_config_metrics::NodeConfigMetrics;
 use sui_config::{ConsensusConfig, NodeConfig};
@@ -89,7 +90,8 @@ use sui_network::discovery;
 use sui_network::discovery::TrustedPeerChangeEvent;
 use sui_network::state_sync;
 use sui_protocol_config::{ProtocolConfig, SupportedProtocolVersions};
-use sui_storage::IndexStore;
+use sui_storage::object_store::{ObjectStoreConfig, ObjectStoreType};
+use sui_storage::{FileCompression, IndexStore};
 use sui_types::base_types::{AuthorityName, EpochId, TransactionDigest};
 use sui_types::committee::Committee;
 use sui_types::crypto::KeypairTraits;
@@ -148,6 +150,8 @@ pub struct SuiNode {
 
     #[cfg(msim)]
     sim_safe_mode_expected: AtomicBool,
+
+    _state_archive_handle: Option<broadcast::Sender<()>>,
 }
 
 impl fmt::Debug for SuiNode {
@@ -314,7 +318,7 @@ impl SuiNode {
         let (trusted_peer_change_tx, trusted_peer_change_rx) = watch::channel(Default::default());
         let (p2p_network, discovery_handle, state_sync_handle) = Self::create_p2p_network(
             &config,
-            state_sync_store,
+            state_sync_store.clone(),
             chain_identifier,
             trusted_peer_change_rx,
             &prometheus_registry,
@@ -327,7 +331,26 @@ impl SuiNode {
             epoch_store.epoch_start_state(),
         )
         .expect("Initial trusted peers must be set");
-
+        let state_archive_handle =
+            if let Some(remote_store_config) = &config.state_archive_config.object_store_config {
+                let local_store_config = ObjectStoreConfig {
+                    object_store: Some(ObjectStoreType::File),
+                    directory: Some(config.archive_path()),
+                    ..Default::default()
+                };
+                let archive_writer = ArchiveWriterV1::new(
+                    local_store_config,
+                    remote_store_config.clone(),
+                    FileCompression::Zstd,
+                    Duration::from_secs(600),
+                    1024 * 1024 * 1024,
+                    &prometheus_registry,
+                )
+                .await?;
+                Some(archive_writer.start(state_sync_store)?)
+            } else {
+                None
+            };
         let db_checkpoint_config = if config.db_checkpoint_config.checkpoint_path.is_none() {
             DBCheckpointConfig {
                 checkpoint_path: Some(config.db_checkpoint_path()),
@@ -496,6 +519,7 @@ impl SuiNode {
             sim_node: sui_simulator::runtime::NodeHandle::current(),
             #[cfg(msim)]
             sim_safe_mode_expected: AtomicBool::new(false),
+            _state_archive_handle: state_archive_handle,
         };
 
         info!("SuiNode started!");

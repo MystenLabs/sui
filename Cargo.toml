@@ -69,6 +69,7 @@ members = [
     "crates/shared-crypto",
     "crates/sui",
     "crates/sui-adapter-transactional-tests",
+    "crates/sui-archival",
     "crates/sui-benchmark",
     "crates/sui-cluster-test",
     "crates/sui-config",

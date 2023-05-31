@@ -1,9 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::network_config::NetworkConfig;
 use shared_crypto::intent::{Intent, IntentMessage, IntentScope};
 use std::collections::HashMap;
-use sui_swarm_config::network_config::NetworkConfig;
 use sui_types::{
     base_types::AuthorityName,
     committee::{Committee, EpochId, StakeUnit},
@@ -16,6 +16,7 @@ use sui_types::{
         EndOfEpochData, FullCheckpointContents, VerifiedCheckpoint, VerifiedCheckpointContents,
     },
 };
+
 pub struct CommitteeFixture {
     epoch: EpochId,
     validators: HashMap<AuthorityName, (AuthorityKeyPair, StakeUnit)>,

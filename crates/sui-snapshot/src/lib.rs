@@ -9,24 +9,18 @@ mod reader;
 mod writer;
 
 use anyhow::Result;
-use bytes::{Buf, Bytes};
-use fastcrypto::hash::{HashFunction, Sha3_256};
-use integer_encoding::VarInt;
 use num_enum::IntoPrimitive;
 use num_enum::TryFromPrimitive;
 use object_store::path::Path;
-use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
-use std::fs::File;
-use std::io::{BufReader, BufWriter, Read, Write};
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::{fs, io};
 use sui_core::authority::authority_store_tables::AuthorityPerpetualTables;
 use sui_core::authority::epoch_start_configuration::EpochStartConfiguration;
 use sui_core::checkpoints::CheckpointStore;
 use sui_core::epoch::committee_store::CommitteeStore;
 use sui_storage::object_store::util::path_to_filesystem;
+use sui_storage::{compute_sha3_checksum, FileCompression, SHA3_BYTES};
 use sui_types::accumulator::Accumulator;
 use sui_types::base_types::ObjectID;
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
@@ -46,8 +40,10 @@ use sui_types::sui_system_state::SuiSystemStateTrait;
 /// There is one single ref file per hash bucket. Object references are written in an append-only manner
 /// as well. Finally, the MANIFEST file contains per file metadata of every file in the snapshot directory.
 /// current one reaches the max size i.e. 64MB. Partitions allow a single hash bucket to be consumed
-/// in parallel. Partition files are compressed with the zstd compression format which can be read as
-/// a decompressed stream (when reading snapshot from a remote cloud object store this doesn't require
+/// in parallel. Partition files are compressed with the zstd compression format.
+/// State Snapshot Directory Layout
+///  - snapshot/
+///     - epoch_0/
 ///        - 1_1.obj
 ///        - 1_2.obj
 ///        - 1_3.obj
@@ -114,17 +110,14 @@ const PADDING_BYTES: usize = 3;
 const MANIFEST_FILE_HEADER_BYTES: usize =
     MAGIC_BYTES + SNAPSHOT_VERSION_BYTES + ADDRESS_LENGTH_BYTES + PADDING_BYTES;
 const FILE_MAX_BYTES: usize = 128 * 1024 * 1024 * 1024;
-const BLOB_ENCODING_BYTES: usize = 1;
 const OBJECT_ID_BYTES: usize = ObjectID::LENGTH;
 const SEQUENCE_NUM_BYTES: usize = 8;
 const OBJECT_DIGEST_BYTES: usize = 32;
 const OBJECT_REF_BYTES: usize = OBJECT_ID_BYTES + SEQUENCE_NUM_BYTES + OBJECT_DIGEST_BYTES;
-const MAX_VARINT_LENGTH: usize = 5;
 const FILE_TYPE_BYTES: usize = 1;
 const BUCKET_BYTES: usize = 4;
 const BUCKET_PARTITION_BYTES: usize = 4;
 const COMPRESSION_TYPE_BYTES: usize = 1;
-const SHA3_BYTES: usize = 32;
 const FILE_METADATA_BYTES: usize =
     FILE_TYPE_BYTES + BUCKET_BYTES + BUCKET_PARTITION_BYTES + COMPRESSION_TYPE_BYTES + SHA3_BYTES;
 
@@ -135,55 +128,6 @@ const FILE_METADATA_BYTES: usize =
 pub enum FileType {
     Object = 0,
     Reference,
-}
-
-#[derive(
-    Copy, Clone, Debug, Eq, PartialEq, Serialize, Deserialize, TryFromPrimitive, IntoPrimitive,
-)]
-#[repr(u8)]
-pub enum FileCompression {
-    None = 0,
-    Zstd,
-}
-
-impl FileCompression {
-    fn zstd_compress(source: &std::path::Path) -> io::Result<()> {
-        let mut file = File::open(source)?;
-        let tmp_file_name = source.with_extension("obj.tmp");
-        let mut encoder = {
-            let target = File::create(&tmp_file_name)?;
-            // TODO: Add zstd compression level as function argument
-            zstd::Encoder::new(target, 1)?
-        };
-        io::copy(&mut file, &mut encoder)?;
-        encoder.finish()?;
-        fs::rename(tmp_file_name, source)?;
-        Ok(())
-    }
-    pub fn compress(&self, source: &std::path::Path) -> io::Result<()> {
-        match self {
-            FileCompression::Zstd => {
-                Self::zstd_compress(source)?;
-            }
-            FileCompression::None => {}
-        }
-        Ok(())
-    }
-    pub fn decompress(&self, source: &PathBuf) -> Result<Box<dyn Read>> {
-        let file = File::open(source)?;
-        let res: Box<dyn Read> = match self {
-            FileCompression::Zstd => Box::new(zstd::stream::Decoder::new(file)?),
-            FileCompression::None => Box::new(BufReader::new(file)),
-        };
-        Ok(res)
-    }
-    pub fn stream_decompress(&self, bytes: Bytes) -> Result<Box<dyn Read>> {
-        let res: Box<dyn Read> = match self {
-            FileCompression::Zstd => Box::new(zstd::stream::Decoder::new(bytes.reader())?),
-            FileCompression::None => Box::new(BufReader::new(bytes.reader())),
-        };
-        Ok(res)
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
@@ -243,58 +187,6 @@ impl Manifest {
             Self::V1(manifest) => manifest.epoch,
         }
     }
-}
-
-#[derive(Copy, Clone, Debug, Eq, PartialEq, TryFromPrimitive, IntoPrimitive)]
-#[repr(u8)]
-pub enum Encoding {
-    Bcs = 1,
-}
-
-pub struct Blob {
-    pub data: Vec<u8>,
-    pub encoding: Encoding,
-}
-
-impl Blob {
-    pub fn encode<T: Serialize>(value: &T, encoding: Encoding) -> Result<Self> {
-        let value_buf = bcs::to_bytes(value)?;
-        let (data, encoding) = match encoding {
-            Encoding::Bcs => (value_buf, encoding),
-        };
-        Ok(Blob { data, encoding })
-    }
-    pub fn decode<T: DeserializeOwned>(self) -> Result<T> {
-        let data = match &self.encoding {
-            Encoding::Bcs => self.data,
-        };
-        let res = bcs::from_bytes(&data)?;
-        Ok(res)
-    }
-    pub fn append_to_file(&self, wbuf: &mut BufWriter<File>) -> Result<usize> {
-        let mut buf = [0u8; MAX_VARINT_LENGTH];
-        let mut counter = 0;
-        let n = (self.data.len() as u64).encode_var(&mut buf);
-        wbuf.write_all(&buf[0..n])?;
-        counter += n;
-        buf[0] = self.encoding.into();
-        wbuf.write_all(&buf[0..BLOB_ENCODING_BYTES])?;
-        counter += 1;
-        wbuf.write_all(&self.data)?;
-        counter += self.data.len();
-        Ok(counter)
-    }
-}
-
-pub fn compute_sha3_checksum_for_file(file: &mut File) -> Result<[u8; 32]> {
-    let mut hasher = Sha3_256::default();
-    io::copy(file, &mut hasher)?;
-    Ok(hasher.finalize().digest)
-}
-
-pub fn compute_sha3_checksum(source: &std::path::Path) -> Result<[u8; 32]> {
-    let mut file = fs::File::open(source)?;
-    compute_sha3_checksum_for_file(&mut file)
 }
 
 pub fn create_file_metadata(
