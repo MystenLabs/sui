@@ -131,6 +131,12 @@ impl CacheInner {
                 .transaction_manager_object_cache_evictions
                 .inc();
         }
+        self.metrics
+            .transaction_manager_object_cache_size
+            .set(self.versioned_cache.len() as i64);
+        self.metrics
+            .transaction_manager_package_cache_size
+            .set(self.unversioned_cache.len() as i64);
     }
 
     fn insert(&mut self, object: &InputKey) {
@@ -140,6 +146,8 @@ impl CacheInner {
             {
                 if previous_id == object.0 && previous_version > version {
                     // do not allow highest known version to decrease
+                    // This should not be possible unless bugs are introduced elsewhere in this
+                    // module.
                     self.versioned_cache.put(object.0, previous_version);
                 } else {
                     self.metrics
@@ -147,12 +155,21 @@ impl CacheInner {
                         .inc();
                 }
             }
+            self.metrics
+                .transaction_manager_object_cache_size
+                .set(self.versioned_cache.len() as i64);
         } else if let Some((previous_id, _)) = self.unversioned_cache.push(object.0, ()) {
+            // lru_cache will does not check if the value being evicted is the same as the value
+            // being inserted, so we do need to check if the id is different before counting this
+            // as an eviction.
             if previous_id != object.0 {
                 self.metrics
                     .transaction_manager_package_cache_evictions
                     .inc();
             }
+            self.metrics
+                .transaction_manager_package_cache_size
+                .set(self.unversioned_cache.len() as i64);
         }
     }
 
@@ -241,9 +258,9 @@ impl Inner {
     fn new(epoch: EpochId, metrics: Arc<AuthorityMetrics>) -> Inner {
         Inner {
             epoch,
-            available_objects_cache: AvailableObjectsCache::new(metrics),
             lock_waiters: HashMap::with_capacity(MIN_HASHMAP_CAPACITY),
             input_objects: HashMap::with_capacity(MIN_HASHMAP_CAPACITY),
+            available_objects_cache: AvailableObjectsCache::new(metrics),
             pending_certificates: HashMap::with_capacity(MIN_HASHMAP_CAPACITY),
             executing_certificates: HashMap::with_capacity(MIN_HASHMAP_CAPACITY),
         }
@@ -253,9 +270,9 @@ impl Inner {
     // update transactions that can acquire the lock.
     // Must ensure input_key is available in storage before calling this function.
     fn try_acquire_lock(&mut self, input_key: InputKey) -> Vec<PendingCertificate> {
-        let mut ready_certificates = Vec::new();
-
         self.available_objects_cache.insert(&input_key);
+
+        let mut ready_certificates = Vec::new();
 
         let Some(lock_queue) = self.lock_waiters.get_mut(&input_key) else {
             // No transaction is waiting on the object yet.
@@ -485,7 +502,10 @@ impl TransactionManager {
 
         for (available, key) in cache_miss_availibility {
             if available && key.1.is_none() {
-                // Only cache packages here - mutable objects will be cached by objects_available.
+                // Mutable objects obtained from cache_miss_availability usually will not be read
+                // again, so we do not want to evict other objects in order to insert them into the
+                // cache. However, packages will likely be read often, so we do want to insert them
+                // even if they cause evictions.
                 inner.available_objects_cache.insert(&key);
             }
             object_availability
@@ -493,8 +513,9 @@ impl TransactionManager {
                 .expect("entry must already exist");
         }
 
-        // Now recheck the cache for anything that became available. This is guaranteed to be
-        // complete.
+        // Now recheck the cache for anything that became available (via notify_commit) since we
+        // read cache_miss_availibility - because the cache is unbounded mode it is guaranteed to
+        // contain all notifications that arrived since we released the lock on self.inner.
         for (key, value) in object_availability.iter_mut() {
             if !value.expect("all objects must have been checked by now") {
                 if let Some(true) = inner.available_objects_cache.is_object_available(key) {
