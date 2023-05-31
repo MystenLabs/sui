@@ -8,7 +8,6 @@ import { NavLink } from 'react-router-dom';
 
 import { useAppSelector } from '_hooks';
 import { getNavIsVisible } from '_redux/slices/app';
-import { ampli } from '_src/shared/analytics/ampli';
 
 import st from './Navigation.module.scss';
 
@@ -35,12 +34,7 @@ function Navigation({ className }: NavigationProps) {
                     <Tokens32 className="w-8 h-8" />
                     <span className={st.title}>Coins</span>
                 </NavLink>
-                <NavLink
-                    to="./nfts"
-                    className={makeLinkCls}
-                    title="NFTs"
-                    onClick={() => ampli.viewCollectibles()}
-                >
+                <NavLink to="./nfts" className={makeLinkCls} title="NFTs">
                     <Nft132 className="w-8 h-8" />
                     <span className={st.title}>NFTs</span>
                 </NavLink>

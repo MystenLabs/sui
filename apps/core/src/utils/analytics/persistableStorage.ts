@@ -3,7 +3,7 @@
 
 import { CookieStorage } from '@amplitude/analytics-client-common';
 import { MemoryStorage } from '@amplitude/analytics-core';
-import { type Storage } from '@amplitude/analytics-types';
+import { CookieStorageOptions, type Storage } from '@amplitude/analytics-types';
 
 /**
  * A custom storage mechanism for Amplitude that stores device
@@ -13,9 +13,15 @@ import { type Storage } from '@amplitude/analytics-types';
  * tracking cookies :)
  */
 export class PersistableStorage<T> implements Storage<T> {
-    #memoryStorage = new MemoryStorage<T>();
-    #cookieStorage = new CookieStorage<T>();
-    #isPersisted = false;
+    #cookieStorage: CookieStorage<T>;
+    #memoryStorage: MemoryStorage<T>;
+    #isPersisted: boolean;
+
+    constructor(options?: CookieStorageOptions) {
+        this.#cookieStorage = new CookieStorage<T>(options);
+        this.#memoryStorage = new MemoryStorage<T>();
+        this.#isPersisted = false;
+    }
 
     async isEnabled(): Promise<boolean> {
         return this.#getActiveStorage().isEnabled();

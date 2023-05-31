@@ -66,14 +66,6 @@ export type LoadOptions =
     | LoadOptionsWithApiKey
     | LoadOptionsWithClientInstance;
 
-export class CreateANewWallet implements BaseEvent {
-    event_type = 'Create a new wallet';
-}
-
-export class ViewCollectibles implements BaseEvent {
-    event_type = 'View collectibles ';
-}
-
 export type PromiseResult<T> = { promise: Promise<T | void> };
 
 const getVoidPromiseResult = () => ({ promise: Promise.resolve() });
@@ -172,35 +164,6 @@ export class Ampli {
     return this.amplitude!.track(event, undefined, options);
   }
 
-  /**
-   * Create a new wallet
-   *
-   * [View in Tracking Plan](https://data.amplitude.com/mystenlabs/Sui%20Wallet/events/main/latest/Create%20a%20new%20wallet)
-   *
-   * Owner: William Robertson
-   *
-   * @param options Amplitude event options.
-   */
-  createANewWallet(
-    options?: EventOptions,
-  ) {
-    return this.track(new CreateANewWallet(), options);
-  }
-
-  /**
-   * View collectibles 
-   *
-   * [View in Tracking Plan](https://data.amplitude.com/mystenlabs/Sui%20Wallet/events/main/latest/View%20collectibles%20)
-   *
-   * Owner: William Robertson
-   *
-   * @param options Amplitude event options.
-   */
-  viewCollectibles(
-    options?: EventOptions,
-  ) {
-    return this.track(new ViewCollectibles(), options);
-  }
 }
 
 export const ampli = new Ampli();
