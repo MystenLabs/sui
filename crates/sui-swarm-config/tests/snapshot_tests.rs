@@ -116,6 +116,7 @@ fn network_config_snapshot_matches() {
     let mut network_config = ConfigBuilder::new(temp_dir)
         .committee_size(NonZeroUsize::new(committee_size).unwrap())
         .rng(rng)
+        .for_local_deploy()
         .build();
     // TODO: Inject static temp path and port numbers, instead of clearing them.
     for mut validator_config in &mut network_config.validator_configs {

@@ -416,11 +416,13 @@ async fn genesis(
         builder
             .with_genesis_config(genesis_conf)
             .with_validators(validators)
+            .for_local_deploy()
             .build()
     } else {
         builder
             .committee_size(NonZeroUsize::new(DEFAULT_NUMBER_OF_AUTHORITIES).unwrap())
             .with_genesis_config(genesis_conf)
+            .for_local_deploy()
             .build()
     };
 
