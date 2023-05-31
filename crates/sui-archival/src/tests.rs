@@ -49,7 +49,7 @@ async fn write_new_checkpoints_to_store(
         );
     }
     for checkpoint in ordered_checkpoints.iter() {
-        store.inner_mut().insert_checkpoint(checkpoint.clone());
+        store.inner_mut().insert_checkpoint(checkpoint);
     }
     Ok(ordered_checkpoints.last().cloned())
 }

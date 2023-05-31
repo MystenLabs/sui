@@ -145,7 +145,7 @@ impl ReadStore for RocksDbStore {
 }
 
 impl WriteStore for RocksDbStore {
-    fn insert_checkpoint(&self, checkpoint: VerifiedCheckpoint) -> Result<(), Self::Error> {
+    fn insert_checkpoint(&self, checkpoint: &VerifiedCheckpoint) -> Result<(), Self::Error> {
         if let Some(EndOfEpochData {
             next_epoch_committee,
             ..
@@ -165,6 +165,14 @@ impl WriteStore for RocksDbStore {
     ) -> Result<(), Self::Error> {
         self.checkpoint_store
             .update_highest_synced_checkpoint(checkpoint)
+    }
+
+    fn update_highest_verified_checkpoint(
+        &self,
+        checkpoint: &VerifiedCheckpoint,
+    ) -> Result<(), Self::Error> {
+        self.checkpoint_store
+            .update_highest_verified_checkpoint(checkpoint)
     }
 
     fn insert_checkpoint_contents(

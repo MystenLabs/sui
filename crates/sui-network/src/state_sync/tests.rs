@@ -129,7 +129,7 @@ async fn server_get_checkpoint() {
 
     // Populate the node's store with some checkpoints
     for checkpoint in ordered_checkpoints.clone() {
-        builder.store.inner_mut().insert_checkpoint(checkpoint)
+        builder.store.inner_mut().insert_checkpoint(&checkpoint)
     }
     let latest = ordered_checkpoints.last().unwrap().clone();
     builder
@@ -201,7 +201,7 @@ async fn isolated_sync_job() {
     {
         let mut store = event_loop_2.store.inner_mut();
         for checkpoint in ordered_checkpoints.clone() {
-            store.insert_checkpoint(checkpoint);
+            store.insert_checkpoint(&checkpoint);
         }
     }
 
@@ -307,6 +307,7 @@ async fn sync_with_checkpoints_being_inserted() {
     store_1
         .insert_checkpoint_contents(&checkpoint, empty_contents())
         .unwrap();
+    store_1.insert_certified_checkpoint(&checkpoint);
     handle_1.send_checkpoint(checkpoint).await;
 
     timeout(Duration::from_secs(1), async {
@@ -314,6 +315,7 @@ async fn sync_with_checkpoints_being_inserted() {
             subscriber_1.recv().await.unwrap().data(),
             ordered_checkpoints[1].data(),
         );
+        println!("hi");
         assert_eq!(
             subscriber_2.recv().await.unwrap().data(),
             ordered_checkpoints[1].data()
@@ -321,9 +323,11 @@ async fn sync_with_checkpoints_being_inserted() {
     })
     .await
     .unwrap();
+    println!("hi2");
 
     // Inject all the checkpoints
     for checkpoint in checkpoint_iter {
+        store_1.insert_certified_checkpoint(&checkpoint);
         handle_1.send_checkpoint(checkpoint).await;
     }
 
