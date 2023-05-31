@@ -169,10 +169,14 @@ fn exp_list_item(state: &mut LivenessState, item: &ExpListItem) {
 
 pub fn last_usage(
     compilation_env: &mut CompilationEnv,
-    locals: &UniqueMap<Var, SingleType>,
+    context: &super::CFGContext,
     cfg: &mut BlockCFG,
-    infinite_loop_starts: &BTreeSet<Label>,
 ) {
+    let super::CFGContext {
+        locals,
+        infinite_loop_starts,
+        ..
+    } = context;
     let (final_invariants, per_command_states) = analyze(cfg, infinite_loop_starts);
     for (lbl, block) in cfg.blocks_mut() {
         let final_invariant = final_invariants
@@ -408,11 +412,15 @@ mod last_usage {
 /// satisfies (1) and (2)
 
 pub fn release_dead_refs(
+    context: &super::CFGContext,
     locals_pre_states: &BTreeMap<Label, locals::state::LocalStates>,
-    locals: &UniqueMap<Var, SingleType>,
     cfg: &mut BlockCFG,
-    infinite_loop_starts: &BTreeSet<Label>,
 ) {
+    let super::CFGContext {
+        locals,
+        infinite_loop_starts,
+        ..
+    } = context;
     let (liveness_pre_states, _per_command_states) = analyze(cfg, infinite_loop_starts);
     let forward_intersections = build_forward_intersections(cfg, &liveness_pre_states);
     for (lbl, block) in cfg.blocks_mut() {

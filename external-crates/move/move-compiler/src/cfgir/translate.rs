@@ -195,8 +195,8 @@ fn module(
     } = mdef;
 
     context.env.add_warning_filter_scope(warning_filter.clone());
-    let constants = hconstants.map(|name, c| constant(context, name, c));
-    let functions = hfunctions.map(|name, f| function(context, name, f));
+    let constants = hconstants.map(|name, c| constant(context, Some(module_ident), name, c));
+    let functions = hfunctions.map(|name, f| function(context, Some(module_ident), name, f));
     context.env.pop_warning_filter_scope();
     (
         module_ident,
@@ -235,7 +235,7 @@ fn script(context: &mut Context, hscript: H::Script) -> G::Script {
         function: hfunction,
     } = hscript;
     context.env.add_warning_filter_scope(warning_filter.clone());
-    let constants = hconstants.map(|name, c| constant(context, name, c));
+    let constants = hconstants.map(|name, c| constant(context, None, name, c));
     let function = function(context, function_name, hfunction);
     context.env.pop_warning_filter_scope();
     G::Script {
@@ -253,7 +253,12 @@ fn script(context: &mut Context, hscript: H::Script) -> G::Script {
 // Functions
 //**************************************************************************************************
 
-fn constant(context: &mut Context, _name: ConstantName, c: H::Constant) -> G::Constant {
+fn constant(
+    context: &mut Context,
+    module: Option<ModuleIdent>,
+    name: ConstantName,
+    c: H::Constant,
+) -> G::Constant {
     let H::Constant {
         warning_filter,
         index,
@@ -264,7 +269,7 @@ fn constant(context: &mut Context, _name: ConstantName, c: H::Constant) -> G::Co
     } = c;
 
     context.env.add_warning_filter_scope(warning_filter.clone());
-    let final_value = constant_(context, loc, signature.clone(), locals, block);
+    let final_value = constant_(context, module, name, loc, signature.clone(), locals, block);
     let value = final_value.and_then(move_value_from_exp);
 
     context.env.pop_warning_filter_scope();
@@ -283,6 +288,8 @@ const CANNOT_FOLD: &str =
 
 fn constant_(
     context: &mut Context,
+    module: Option<ModuleIdent>,
+    name: ConstantName,
     full_loc: Loc,
     signature: H::BaseType,
     locals: UniqueMap<Var, H::SingleType>,
@@ -306,15 +313,16 @@ fn constant_(
     };
     let fake_acquires = BTreeMap::new();
     let fake_infinite_loop_starts = BTreeSet::new();
-    cfgir::refine_inference_and_verify(
-        context.env,
-        &context.struct_declared_abilities,
-        &fake_signature,
-        &fake_acquires,
-        &locals,
-        &mut cfg,
-        &fake_infinite_loop_starts,
-    );
+    let function_context = super::CFGContext {
+        module,
+        member: cfgir::MemberName::Constant(name.0),
+        struct_declared_abilities: &context.struct_declared_abilities,
+        signature: &fake_signature,
+        acquires: &fake_acquires,
+        locals: &locals,
+        infinite_loop_starts: &fake_infinite_loop_starts,
+    };
+    cfgir::refine_inference_and_verify(context.env, &function_context, &mut cfg);
     assert!(
         num_previous_errors == context.env.count_diags(),
         "{}",
@@ -396,7 +404,12 @@ pub(crate) fn move_value_from_value_(v_: Value_) -> MoveValue {
 // Functions
 //**************************************************************************************************
 
-fn function(context: &mut Context, _name: FunctionName, f: H::Function) -> G::Function {
+fn function(
+    context: &mut Context,
+    module: Option<ModuleIdent>,
+    name: FunctionName,
+    f: H::Function,
+) -> G::Function {
     let H::Function {
         warning_filter,
         index,
@@ -408,7 +421,7 @@ fn function(context: &mut Context, _name: FunctionName, f: H::Function) -> G::Fu
         body,
     } = f;
     context.env.add_warning_filter_scope(warning_filter.clone());
-    let body = function_body(context, &signature, &acquires, body);
+    let body = function_body(context, module, name, &signature, &acquires, body);
     context.env.pop_warning_filter_scope();
     G::Function {
         warning_filter,
@@ -424,6 +437,8 @@ fn function(context: &mut Context, _name: FunctionName, f: H::Function) -> G::Fu
 
 fn function_body(
     context: &mut Context,
+    module: Option<ModuleIdent>,
+    name: FunctionName,
     signature: &H::FunctionSignature,
     acquires: &BTreeMap<StructName, Loc>,
     sp!(loc, tb_): H::FunctionBody,
@@ -448,15 +463,16 @@ fn function_body(
                 BlockCFG::new(start, &mut blocks, &block_info);
             context.env.add_diags(diags);
 
-            cfgir::refine_inference_and_verify(
-                context.env,
-                &context.struct_declared_abilities,
+            let function_context = super::CFGContext {
+                module,
+                member: cfgir::MemberName::Function(name.0),
+                struct_declared_abilities: &context.struct_declared_abilities,
                 signature,
                 acquires,
-                &locals,
-                &mut cfg,
-                &infinite_loop_starts,
-            );
+                locals: &locals,
+                infinite_loop_starts: &infinite_loop_starts,
+            };
+            cfgir::refine_inference_and_verify(context.env, &function_context, &mut cfg);
             // do not optimize if there are errors, warnings are okay
             if !context.env.has_errors() {
                 cfgir::optimize(signature, &locals, &mut cfg);

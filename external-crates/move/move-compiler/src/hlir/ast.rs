@@ -5,8 +5,8 @@
 use crate::{
     diagnostics::WarningFilters,
     expansion::ast::{
-        ability_modifiers_ast_debug, AbilitySet, Attributes, Friend, ModuleIdent, SpecId,
-        Visibility,
+        ability_modifiers_ast_debug, AbilitySet, Address, Attributes, Friend, ModuleIdent,
+        ModuleIdent_, SpecId, Visibility,
     },
     naming::ast::{BuiltinTypeName, BuiltinTypeName_, StructTypeParameter, TParam},
     parser::ast::{BinOp, ConstantName, Field, FunctionName, StructName, UnaryOp, ENTRY_MODIFIER},
@@ -654,6 +654,29 @@ impl TName for Var {
 
     fn borrow(&self) -> (&Loc, &Symbol) {
         (&self.0.loc, &self.0.value)
+    }
+}
+
+impl ModuleCall {
+    pub fn is(
+        &self,
+        address: Address,
+        module: impl Into<Symbol>,
+        function: impl Into<Symbol>,
+    ) -> bool {
+        let Self {
+            module:
+                sp!(
+                    _,
+                    ModuleIdent_ {
+                        address: a,
+                        module: m,
+                    }
+                ),
+            name: f,
+            ..
+        } = self;
+        a == &address && m.0.value == module.into() && f.0.value == function.into()
     }
 }
 
