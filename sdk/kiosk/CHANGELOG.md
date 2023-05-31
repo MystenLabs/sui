@@ -1,5 +1,11 @@
 # @mysten/kiosk
 
+## 0.2.0
+
+### Minor Changes
+
+- c322a230da: Fix fetchKiosk consistency/naming, include locked state in items
+
 ## 1.0.0
 
 ### Major Changes
