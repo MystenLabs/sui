@@ -136,7 +136,8 @@ export class Secp256r1Keypair implements Keypair {
     if (key.publicKey == null || key.privateKey == null) {
       throw new Error('Invalid key');
     }
-    // TODO: If we use the key.publicKey, the results in the tests does not match the test vectors.
+    // Since the HDKey is made for secp256k1 it won't work it we use the key.publicKey here,
+    // but it works if we only use the secret key and derive the public key from that.
     return Secp256r1Keypair.fromSecretKey(key.privateKey);
   }
 
