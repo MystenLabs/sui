@@ -38,13 +38,13 @@ module 0xA::type_name_tests {
     // Note: these tests assume a 32 byte address length
     #[test]
     fun test_get_struct() {
-      assert!(get_struct(&get<TestStruct>()) == string(b"TestStruct"), 0);
-      assert!(get_struct(&get<std::ascii::String>()) == string(b"String"), 0);
-      assert!(get_struct(&get<std::option::Option<u64>>()) == string(b"Option<u64>"), 0);
-      assert!(get_struct(&get<std::string::String>()) == string(b"String"), 0);
+        assert!(get_struct(&get<TestStruct>()) == string(b"TestStruct"), 0);
+        assert!(get_struct(&get<std::ascii::String>()) == string(b"String"), 0);
+        assert!(get_struct(&get<std::option::Option<u64>>()) == string(b"Option<u64>"), 0);
+        assert!(get_struct(&get<std::string::String>()) == string(b"String"), 0);
     }
 
-    // Note: these tests assume a 32 byte address length
+    // Note: these tesqts assume a 32 byte address length
     #[test]
     fun test_generics() {
         assert!(into_string(get<TestGenerics<std::string::String>>()) == string(b"000000000000000000000000000000000000000000000000000000000000000a::type_name_tests::TestGenerics<0000000000000000000000000000000000000000000000000000000000000001::string::String>"), 0);

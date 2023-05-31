@@ -96,9 +96,9 @@ module std::type_name {
         let struct_name = vector[];
 
         while (i < total_len) {
-          let char = vector::borrow(str_bytes, i);
-          vector::push_back(&mut struct_name, *char);
-          i = i + 1;
+            let char = vector::borrow(str_bytes, i);
+            vector::push_back(&mut struct_name, *char);
+            i = i + 1;
         };
 
         ascii::string(struct_name)
