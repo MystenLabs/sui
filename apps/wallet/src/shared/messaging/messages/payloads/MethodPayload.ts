@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { type SuiAddress } from '@mysten/sui.js';
+
 import { isBasePayload } from './BasePayload';
 
 import type { Payload } from './Payload';
@@ -9,7 +11,7 @@ type MethodPayloads = {
     zkCreateAccount: {
         currentEpoch: number;
     };
-    zkLogin: void;
+    ensureZKAccountUnlocked: { currentEpoch: number; address: SuiAddress };
 };
 
 type Methods = keyof MethodPayloads;

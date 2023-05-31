@@ -28,11 +28,11 @@ const VAULT_KEY = 'vault';
 export const EPHEMERAL_PASSWORD_KEY = '244e4b24e667ebf';
 export const EPHEMERAL_VAULT_KEY = 'a8e451b8ae8a1b4';
 
-function getRandomPassword() {
+export function getRandomPassword() {
     return Buffer.from(randomBytes(64)).toString('hex');
 }
 
-function makeEphemeraPassword(rndPass: string) {
+export function makeEphemeraPassword(rndPass: string) {
     return `${PASSWORD}${rndPass}`;
 }
 

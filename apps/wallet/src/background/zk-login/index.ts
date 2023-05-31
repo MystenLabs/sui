@@ -2,6 +2,7 @@ import { BCS } from '@mysten/bcs';
 import {
     Ed25519Keypair,
     SUI_ADDRESS_LENGTH,
+    type SuiAddress,
     bcs,
     normalizeSuiAddress,
 } from '@mysten/sui.js';
@@ -12,7 +13,8 @@ import { base64url, decodeJwt } from 'jose';
 import Browser from 'webextension-polyfill';
 
 import keyring from '../keyring';
-import { storeZkLoginAccount } from './storage';
+import { cacheAccountCredentials } from './keys-vault';
+import { getStoredZkLoginAccount, storeZkLoginAccount } from './storage';
 import { getAddressSeed, poseidonHash } from './utils';
 
 bcs.registerStructType('AddressParams', {
@@ -24,6 +26,7 @@ const clientID =
     '946731352276-pk5glcg8cqo38ndb39h7j093fpsphusu.apps.googleusercontent.com';
 const redirectUri = 'https://ainifalglpinojmobpmeblikiopckbbm.chromiumapp.org/'; // TODO: use Browser.identity.getRedirectURL() for prod
 const nonceLen = Math.ceil(256 / 6);
+const zkLoginFlag = 0x5;
 
 export type ZkProofsParams = {
     ephemeralPublicKey: bigint;
@@ -85,6 +88,10 @@ async function createZKProofs({
     return response.json();
 }
 
+function getMaxEpoch(currentEpoch: number) {
+    return currentEpoch + 2;
+}
+
 function generateNonce(
     ephemeralPublicKey: bigint,
     maxEpoch: number,
@@ -109,21 +116,19 @@ function generateNonce(
 }
 
 function prepareZKLogin(maxEpoch: number) {
-    const ephemeralKeypair = new Ed25519Keypair();
+    const ephemeralKeyPair = new Ed25519Keypair();
     const randomness = toBigIntBE(Buffer.from(randomBytes(16)));
     const nonce = generateNonce(
-        toBigIntBE(Buffer.from(ephemeralKeypair.getPublicKey().toBytes())),
+        toBigIntBE(Buffer.from(ephemeralKeyPair.getPublicKey().toBytes())),
         maxEpoch,
         randomness
     );
     return {
-        ephemeralKeypair,
+        ephemeralKeyPair,
         randomness,
         nonce,
     };
 }
-
-const zkLoginFlag = 0x5;
 
 async function getAddress({
     value,
@@ -138,7 +143,6 @@ async function getAddress({
         await getAddressSeed(value, userPin),
         32
     );
-    console.log('addressSeed', toBigIntBE(addressSeedBytes).toString());
     const addressParamBytes = bcs
         .ser('AddressParams', { iss, key_claim_name: 'sub' })
         .toBytes();
@@ -154,14 +158,14 @@ async function getAddress({
 }
 
 export async function createZkAccount(currentEpoch: number) {
-    const maxEpoch = currentEpoch + 2;
-    const { nonce, ephemeralKeypair, randomness } = prepareZKLogin(maxEpoch);
+    const maxEpoch = getMaxEpoch(currentEpoch);
+    const { nonce, ephemeralKeyPair, randomness } = prepareZKLogin(maxEpoch);
     const jwt = await zkLogin(nonce);
     const decodedJwt = decodeJwt(jwt);
     const userPin = toBigIntBE(Buffer.from(randomBytes(16)));
     const proofs = await createZKProofs({
         ephemeralPublicKey: toBigIntBE(
-            Buffer.from(ephemeralKeypair.getPublicKey().toBytes())
+            Buffer.from(ephemeralKeyPair.getPublicKey().toBytes())
         ),
         jwt,
         jwtRandom: randomness,
@@ -184,8 +188,7 @@ export async function createZkAccount(currentEpoch: number) {
     };
     await storeZkLoginAccount(account);
     keyring.importZkAccount(account);
-    console.log({ decodedJwt, proofs, address });
-    // TODO: store ephemeral key etc in memory
+    await cacheAccountCredentials({ address, ephemeralKeyPair, proofs });
     return { pin: account.pin, address };
 }
 
@@ -199,7 +202,7 @@ export async function zkLogin(nonce: string, loginAccount?: string) {
     // This can be used for logins after the user has already connected a google account
     // and we need to make sure that the user logged in with the correct account
     if (loginAccount) {
-        params.append('login_hint', 'test@mystenlabs.com');
+        params.append('login_hint', loginAccount);
     }
     const url = `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
     const responseURL = new URL(
@@ -216,4 +219,44 @@ export async function zkLogin(nonce: string, loginAccount?: string) {
         throw new Error('JWT is missing');
     }
     return jwt;
+}
+
+export async function authenticateAccount(
+    address: SuiAddress,
+    currentEpoch: number
+) {
+    const account = await getStoredZkLoginAccount();
+    if (!account || account.address !== address) {
+        throw new Error(`ZK-login account ${address} not found`);
+    }
+    const { email, pin, sub } = account;
+    const maxEpoch = getMaxEpoch(currentEpoch);
+    const { nonce, ephemeralKeyPair, randomness } = prepareZKLogin(maxEpoch);
+    const jwt = await zkLogin(nonce, email);
+    const decodedJwt = decodeJwt(jwt);
+    const userPin = BigInt(pin);
+    const proofs = await createZKProofs({
+        ephemeralPublicKey: toBigIntBE(
+            Buffer.from(ephemeralKeyPair.getPublicKey().toBytes())
+        ),
+        jwt,
+        jwtRandom: randomness,
+        maxEpoch,
+        userPin,
+    });
+    if (!decodedJwt.sub || !decodedJwt.iss || !decodedJwt.email) {
+        throw new Error('Missing jtw data');
+    }
+    if (decodedJwt.sub !== sub || decodedJwt.email !== email) {
+        throw new Error(
+            "Authenticated google account doesn't match the current account data"
+        );
+    }
+    const sameNewAddress = await getAddress({
+        value: decodedJwt.sub,
+        iss: decodedJwt.iss,
+        userPin,
+    });
+    console.log({ address, sameNewAddress });
+    await cacheAccountCredentials({ address, ephemeralKeyPair, proofs });
 }

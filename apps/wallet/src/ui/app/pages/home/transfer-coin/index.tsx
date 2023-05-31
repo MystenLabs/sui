@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useCoinMetadata } from '@mysten/core';
+import { useCoinMetadata, useGetSystemState } from '@mysten/core';
 import { ArrowRight16, ArrowLeft16 } from '@mysten/icons';
 import { getTransactionDigest } from '@mysten/sui.js';
 import * as Sentry from '@sentry/react';
@@ -26,6 +26,7 @@ import { QredoActionIgnoredByUser } from '_src/ui/app/QredoSigner';
 import { getSignerOperationErrorMessage } from '_src/ui/app/helpers/errorMessages';
 import { useSigner } from '_src/ui/app/hooks';
 import { useActiveAddress } from '_src/ui/app/hooks/useActiveAddress';
+import { useBackgroundClient } from '_src/ui/app/hooks/useBackgroundClient';
 import { useQredoTransaction } from '_src/ui/app/hooks/useQredoTransaction';
 
 import type { SubmitProps } from './SendTokenForm';
@@ -52,10 +53,12 @@ function TransferCoinPage() {
             ...formData,
         });
     }, [formData, signer, coinType, address, coinMetadata?.decimals]);
-
+    const backgroundClient = useBackgroundClient();
+    const { data: systemData } = useGetSystemState();
+    const currentEpoch = systemData?.epoch;
     const executeTransfer = useMutation({
         mutationFn: async () => {
-            if (!transaction || !signer) {
+            if (!transaction || !signer || !address || !currentEpoch) {
                 throw new Error('Missing data');
             }
 
@@ -66,7 +69,14 @@ function TransferCoinPage() {
                 trackEvent('TransferCoins', {
                     props: { coinType: coinType! },
                 });
-
+                try {
+                    await backgroundClient.ensureZKAccountUnlocked(
+                        Number(currentEpoch),
+                        address
+                    );
+                } catch (e) {
+                    //do nothing should be fine for now
+                }
                 return signer.signAndExecuteTransactionBlock(
                     {
                         transactionBlock: transaction,

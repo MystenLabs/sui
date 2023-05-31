@@ -2,10 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // import { Transaction } from '@mysten/sui.js';
-import { useTransactionSummary } from '@mysten/core';
+import { useGetSystemState, useTransactionSummary } from '@mysten/core';
 import { TransactionBlock } from '@mysten/sui.js';
 import { useMemo, useState } from 'react';
 
+import { useBackgroundClient } from '../../../hooks/useBackgroundClient';
 import { ConfirmationModal } from '../../../shared/ConfirmationModal';
 import { GasFees } from './GasFees';
 import { TransactionDetails } from './TransactionDetails';
@@ -54,7 +55,10 @@ export function TransactionRequest({ txRequest }: TransactionRequestProps) {
         currentAddress: addressForTransaction,
     });
     const { clientIdentifier, notificationModal } = useQredoTransaction();
-    if (!signer) {
+    const backgroundClient = useBackgroundClient();
+    const { data: systemData } = useGetSystemState();
+    const currentEpoch = systemData?.epoch;
+    if (!signer || !currentEpoch) {
         return null;
     }
     return (
@@ -68,9 +72,19 @@ export function TransactionRequest({ txRequest }: TransactionRequestProps) {
                     if (isLoading) {
                         return;
                     }
-                    if (isError) {
+                    if (approved && isError) {
                         setConfirmationVisible(true);
                         return;
+                    }
+                    if (approved) {
+                        try {
+                            await backgroundClient.ensureZKAccountUnlocked(
+                                Number(currentEpoch),
+                                addressForTransaction
+                            );
+                        } catch (e) {
+                            //do nothing should be fine for now
+                        }
                     }
                     await dispatch(
                         respondToTransactionRequest({
@@ -115,6 +129,16 @@ export function TransactionRequest({ txRequest }: TransactionRequestProps) {
                 cancelText="Reject"
                 cancelStyle="warning"
                 onResponse={async (isConfirmed) => {
+                    if (isConfirmed) {
+                        try {
+                            await backgroundClient.ensureZKAccountUnlocked(
+                                Number(currentEpoch),
+                                addressForTransaction
+                            );
+                        } catch (e) {
+                            //do nothing should be fine for now
+                        }
+                    }
                     await dispatch(
                         respondToTransactionRequest({
                             approved: isConfirmed,

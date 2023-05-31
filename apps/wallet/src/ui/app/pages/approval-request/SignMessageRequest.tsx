@@ -1,10 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { useGetSystemState } from '@mysten/core';
 import { useMemo } from 'react';
 
 import { UserApproveContainer } from '../../components/user-approve-container';
 import { useAppDispatch, useSigner } from '../../hooks';
+import { useBackgroundClient } from '../../hooks/useBackgroundClient';
 import { useQredoTransaction } from '../../hooks/useQredoTransaction';
 import { respondToTransactionRequest } from '../../redux/slices/transaction-requests';
 import { Heading } from '../../shared/heading';
@@ -25,17 +27,29 @@ export function SignMessageRequest({ request }: SignMessageRequestProps) {
     const signer = useSigner(request.tx.accountAddress);
     const dispatch = useAppDispatch();
     const { clientIdentifier, notificationModal } = useQredoTransaction();
-
+    const backgroundClient = useBackgroundClient();
+    const { data } = useGetSystemState();
+    const currentEpoch = data?.epoch;
     return (
         <UserApproveContainer
             origin={request.origin}
             originFavIcon={request.originFavIcon}
             approveTitle="Sign"
             rejectTitle="Reject"
-            approveDisabled={!signer}
+            approveDisabled={!signer || !currentEpoch}
             onSubmit={async (approved) => {
-                if (!signer) {
+                if (!signer || !currentEpoch) {
                     return;
+                }
+                if (approved) {
+                    try {
+                        await backgroundClient.ensureZKAccountUnlocked(
+                            Number(currentEpoch),
+                            request.tx.accountAddress
+                        );
+                    } catch (e) {
+                        //do nothing should be fine for now
+                    }
                 }
                 await dispatch(
                     respondToTransactionRequest({

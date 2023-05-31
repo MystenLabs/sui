@@ -16,7 +16,7 @@ import {
     type SerializedLedgerAccount,
 } from './LedgerAccount';
 import { type QredoAccount, type SerializedQredoAccount } from './QredoAccount';
-import { type SerializedZKAccount } from './ZKAccount';
+import { type ZKAccount, type SerializedZKAccount } from './ZKAccount';
 
 export enum AccountType {
     IMPORTED = 'IMPORTED',
@@ -60,4 +60,7 @@ export function isLedgerAccount(account: Account): account is LedgerAccount {
 }
 export function isQredoAccount(account: Account): account is QredoAccount {
     return account.type === AccountType.QREDO;
+}
+export function isZKAccount(account: Account): account is ZKAccount {
+    return account.type === AccountType.ZK;
 }

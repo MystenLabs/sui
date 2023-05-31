@@ -460,13 +460,13 @@ export class BackgroundClient {
         );
     }
 
-    public zkLogin() {
+    public ensureZKAccountUnlocked(currentEpoch: number, address: SuiAddress) {
         return lastValueFrom(
             this.sendMessage(
-                createMessage<MethodPayload<'zkLogin'>>({
+                createMessage<MethodPayload<'ensureZKAccountUnlocked'>>({
                     type: 'method-payload',
-                    method: 'zkLogin',
-                    args: undefined,
+                    method: 'ensureZKAccountUnlocked',
+                    args: { currentEpoch, address },
                 })
             ).pipe(take(1))
         );

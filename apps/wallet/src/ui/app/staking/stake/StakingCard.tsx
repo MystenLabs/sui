@@ -23,6 +23,7 @@ import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 import { QredoActionIgnoredByUser } from '../../QredoSigner';
 import Alert from '../../components/alert';
 import { getSignerOperationErrorMessage } from '../../helpers/errorMessages';
+import { useBackgroundClient } from '../../hooks/useBackgroundClient';
 import { useQredoTransaction } from '../../hooks/useQredoTransaction';
 import { getDelegationDataByStakeId } from '../getDelegationByStakeId';
 import { getStakeSuiBySuiId } from '../getStakeSuiBySuiId';
@@ -144,7 +145,14 @@ function StakingCard() {
             amount: bigint;
             validatorAddress: SuiAddress;
         }) => {
-            if (!validatorAddress || !amount || !tokenTypeArg || !signer) {
+            if (
+                !validatorAddress ||
+                !amount ||
+                !tokenTypeArg ||
+                !signer ||
+                !accountAddress ||
+                !currentEpoch
+            ) {
                 throw new Error('Failed, missing required field');
             }
             trackEvent('Stake', {
@@ -153,6 +161,15 @@ function StakingCard() {
             const sentryTransaction = Sentry.startTransaction({
                 name: 'stake',
             });
+
+            try {
+                await backgroundClient.ensureZKAccountUnlocked(
+                    Number(currentEpoch),
+                    accountAddress
+                );
+            } catch (e) {
+                //do nothing should be fine for now
+            }
             try {
                 const transactionBlock = createStakeTransaction(
                     amount,
@@ -177,10 +194,13 @@ function StakingCard() {
             }
         },
     });
+    const backgroundClient = useBackgroundClient();
+    const { data: systemData } = useGetSystemState();
+    const currentEpoch = systemData?.epoch;
 
     const unStakeToken = useMutation({
         mutationFn: async ({ stakedSuiId }: { stakedSuiId: string }) => {
-            if (!stakedSuiId || !signer) {
+            if (!stakedSuiId || !signer || !accountAddress || !currentEpoch) {
                 throw new Error('Failed, missing required field.');
             }
 
@@ -189,6 +209,14 @@ function StakingCard() {
             const sentryTransaction = Sentry.startTransaction({
                 name: 'stake',
             });
+            try {
+                await backgroundClient.ensureZKAccountUnlocked(
+                    Number(currentEpoch),
+                    accountAddress
+                );
+            } catch (e) {
+                //do nothing should be fine for now
+            }
             try {
                 const transactionBlock = createUnstakeTransaction(stakedSuiId);
                 return await signer.signAndExecuteTransactionBlock(

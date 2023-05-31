@@ -6,6 +6,7 @@ import {
     isSuiNSName,
     useRpcClient,
     useSuiNSEnabled,
+    useGetSystemState,
 } from '@mysten/core';
 import { ArrowRight16 } from '@mysten/icons';
 import { getTransactionDigest, TransactionBlock } from '@mysten/sui.js';
@@ -27,6 +28,7 @@ import { AddressInput } from '_components/address-input';
 import { useSigner } from '_hooks';
 import { QredoActionIgnoredByUser } from '_src/ui/app/QredoSigner';
 import { getSignerOperationErrorMessage } from '_src/ui/app/helpers/errorMessages';
+import { useBackgroundClient } from '_src/ui/app/hooks/useBackgroundClient';
 import { useQredoTransaction } from '_src/ui/app/hooks/useQredoTransaction';
 
 export function TransferNFTForm({
@@ -55,10 +57,13 @@ export function TransferNFTForm({
     const isContainedInKiosk = kioskContents?.data?.some(
         (kioskItem) => kioskItem.data?.objectId === objectId
     );
+    const backgroundClient = useBackgroundClient();
+    const { data: systemData } = useGetSystemState();
+    const currentEpoch = systemData?.epoch;
 
     const transferNFT = useMutation({
         mutationFn: async (to: string) => {
-            if (!to || !signer) {
+            if (!to || !signer || !activeAddress || !currentEpoch) {
                 throw new Error('Missing data');
             }
 
@@ -78,6 +83,14 @@ export function TransferNFTForm({
 
             const tx = new TransactionBlock();
             tx.transferObjects([tx.object(objectId)], tx.pure(to));
+            try {
+                await backgroundClient.ensureZKAccountUnlocked(
+                    Number(currentEpoch),
+                    activeAddress
+                );
+            } catch (e) {
+                //do nothing should be fine for now
+            }
 
             return signer.signAndExecuteTransactionBlock(
                 {

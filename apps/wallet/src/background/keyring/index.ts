@@ -14,6 +14,7 @@ import {
     type Account,
     isImportedOrDerivedAccount,
     isQredoAccount,
+    isZKAccount,
 } from './Account';
 import { DerivedAccount } from './DerivedAccount';
 import { ImportedAccount } from './ImportedAccount';
@@ -24,6 +25,7 @@ import { ZKAccount } from './ZKAccount';
 import { createMessage } from '_messages';
 import { isKeyringPayload } from '_payloads/keyring';
 import { entropyToSerialized } from '_shared/utils/bip39';
+import { isMethodPayload } from '_src/shared/messaging/messages/payloads/MethodPayload';
 import { type Wallet } from '_src/shared/qredo-api';
 
 import type { UiConnection } from '../connections/UiConnection';
@@ -293,6 +295,18 @@ export class Keyring {
                             id
                         )
                     );
+                } else if (isZKAccount(account)) {
+                    const signature = await account.signData(fromB64(data));
+                    uiConnection.send(
+                        createMessage<KeyringPayload<'signData'>>(
+                            {
+                                type: 'keyring',
+                                method: 'signData',
+                                return: signature,
+                            },
+                            id
+                        )
+                    );
                 } else {
                     throw new Error(
                         `Unable to sign message for account with type ${account.type}`
@@ -374,6 +388,18 @@ export class Keyring {
                 if (!imported) {
                     throw new Error('Duplicate account not imported');
                 }
+                uiConnection.send(createMessage({ type: 'done' }, id));
+            } else if (isMethodPayload(payload, 'ensureZKAccountUnlocked')) {
+                const account = this.#accountsMap.get(payload.args.address);
+                if (!account) {
+                    throw new Error(
+                        `Account ${payload.args.address} not found`
+                    );
+                }
+                if (!isZKAccount(account)) {
+                    throw new Error(`Wrong account type ${account.type}`);
+                }
+                await account.ensureUnlocked(payload.args.currentEpoch);
                 uiConnection.send(createMessage({ type: 'done' }, id));
             }
         } catch (e) {

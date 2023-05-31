@@ -119,6 +119,7 @@ export default class ApiProvider {
         switch (account.type) {
             case AccountType.DERIVED:
             case AccountType.IMPORTED:
+            case AccountType.ZK:
                 return this.getBackgroundSignerInstance(
                     account.address,
                     backgroundClient

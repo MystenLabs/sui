@@ -120,7 +120,10 @@ export class UiConnection extends Connection {
                     payload.specificAccounts
                 );
                 this.send(createMessage({ type: 'done' }, id));
-            } else if (isBasePayload(payload) && payload.type === 'keyring') {
+            } else if (
+                (isBasePayload(payload) && payload.type === 'keyring') ||
+                isMethodPayload(payload, 'ensureZKAccountUnlocked')
+            ) {
                 await Keyring.handleUiMessage(msg, this);
             } else if (
                 isBasePayload(payload) &&

@@ -5,12 +5,14 @@ import {
     ORIGINBYTE_KIOSK_MODULE,
     ORIGINBYTE_KIOSK_OWNER_TOKEN,
     useGetOwnedObjects,
+    useGetSystemState,
     useRpcClient,
 } from '@mysten/core';
 import { type SuiAddress, TransactionBlock } from '@mysten/sui.js';
 import { useMutation } from '@tanstack/react-query';
 
 import { useActiveAddress, useSigner } from '_src/ui/app/hooks';
+import { useBackgroundClient } from '_src/ui/app/hooks/useBackgroundClient';
 
 export function useTransferKioskItem({
     objectId,
@@ -34,10 +36,13 @@ export function useTransferKioskItem({
                 'fields' in obj.data.content &&
                 obj.data.content.fields.kiosk
         );
+    const backgroundClient = useBackgroundClient();
+    const { data: systemData } = useGetSystemState();
+    const currentEpoch = systemData?.epoch;
 
     return useMutation({
         mutationFn: async (to: SuiAddress) => {
-            if (!to || !signer || !objectType) {
+            if (!to || !signer || !objectType || !address || !currentEpoch) {
                 throw new Error('Missing data');
             }
 
@@ -96,6 +101,14 @@ export function useTransferKioskItem({
                         tx.pure(objectId),
                     ],
                 });
+            }
+            try {
+                await backgroundClient.ensureZKAccountUnlocked(
+                    Number(currentEpoch),
+                    address
+                );
+            } catch (e) {
+                //do nothing should be fine for now
             }
 
             return signer.signAndExecuteTransactionBlock({
