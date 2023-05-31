@@ -5,6 +5,7 @@ import {
   DEFAULT_SECP256R1_DERIVATION_PATH,
   PRIVATE_KEY_SIZE,
   Secp256r1Keypair,
+  Secp256r1PublicKey,
 } from '../../../src';
 import { describe, it, expect } from 'vitest';
 import { secp256r1 } from '@noble/curves/p256';
@@ -38,16 +39,19 @@ const TEST_CASES = [
     'act wing dilemma glory episode region allow mad tourist humble muffin oblige',
     'AiWmZXUcFpUF75H082F2RVJAABS5kcrvb8o09IPH9yUw',
     '0x4a822457f1970468d38dae8e63fb60eefdaa497d74d781f581ea2d137ec36f3a',
+    'AgLL1StURWGAemn/8rFn3FsRDVfO/Ssf+bbFaugGBtd70w==',
   ],
   [
     'flag rebel cabbage captain minimum purpose long already valley horn enrich salt',
     'AjaB6aLp4fQabx4NglfGz2Bf01TGKArV80NEOnqDwqNN',
     '0xcd43ecb9dd32249ff5748f5e4d51855b01c9b1b8bbe7f8638bb8ab4cb463b920',
+    'AgM2aZKpmTrKs8HuyvOZQ2TCQ0s7ql5Agf4giTcu6FtPHA==',
   ],
   [
     'area renew bar language pudding trial small host remind supreme cabbage era',
     'AtSIEzVpJv+bJH3XptEq63vsuK+te1KRSY7JsiuJfcdK',
     '0x0d9047b7e7b698cc09c955ea97b0c68c2be7fb3aebeb59edcc84b1fb87e0f28e',
+    'AgJ0BrsxGK2gI3pl7m6L67IXusKo99w4tMDDZCwXhnUm/Q==',
   ],
 ];
 

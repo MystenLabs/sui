@@ -82,7 +82,7 @@ export class Secp256r1Keypair implements Keypair {
       const encoder = new TextEncoder();
       const signData = encoder.encode('sui validation');
       const msgHash = bytesToHex(blake2b(signData, { dkLen: 32 }));
-      const signature = secp256r1.sign(msgHash, secretKey);
+      const signature = secp256r1.sign(msgHash, secretKey, { lowS: true });
       if (!secp256r1.verify(signature, msgHash, publicKey, { lowS: true })) {
         throw new Error('Provided secretKey is invalid');
       }
@@ -136,10 +136,8 @@ export class Secp256r1Keypair implements Keypair {
     if (key.publicKey == null || key.privateKey == null) {
       throw new Error('Invalid key');
     }
-    return new Secp256r1Keypair({
-      publicKey: key.publicKey,
-      secretKey: key.privateKey,
-    });
+    // TODO: If we use the key.publicKey, the results in the tests does not match the test vectors.
+    return Secp256r1Keypair.fromSecretKey(key.privateKey);
   }
 
   export(): ExportedKeypair {

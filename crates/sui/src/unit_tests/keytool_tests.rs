@@ -276,7 +276,9 @@ async fn test_mnemonics_secp256r1() -> Result<(), anyhow::Error> {
         .execute(&mut keystore)
         .await?;
 
+
         let kp = SuiKeyPair::decode_base64(t[1]).unwrap();
+        println!("{:?}", kp.public().encode_base64());
         let addr = SuiAddress::from_str(t[2]).unwrap();
         assert_eq!(SuiAddress::from(&kp.public()), addr);
         assert!(keystore.addresses().contains(&addr));

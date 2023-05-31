@@ -15,7 +15,6 @@ import {
 // ../sui/target/debug/sui keytool list
 let SECP_TEST_CASES = new Map<string, string>([
   [
-    // TODO: Keytool seems to prepent a 0x02 flag which has been removed here
     'A8Ju2r5X3EZ3aYuZzH+Ofs6cd1j2WOwY7lhoJQenulBl',
     '0xafd0f5a4f41c5770c201879518740b83743164ed2445016fbba9ae98e04af8a5',
   ],
