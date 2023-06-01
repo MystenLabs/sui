@@ -471,7 +471,7 @@ fn sync_checkpoint(
     sender: &Sender<VerifiedCheckpoint>,
 ) {
     checkpoint_store
-        .insert_verified_checkpoint(checkpoint.clone())
+        .insert_verified_checkpoint(checkpoint)
         .unwrap();
     checkpoint_store
         .insert_checkpoint_contents(empty_contents().into_inner().into_checkpoint_contents())
