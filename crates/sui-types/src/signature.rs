@@ -53,6 +53,12 @@ pub enum GenericSignature {
     ZkLoginAuthenticator,
 }
 
+impl GenericSignature {
+    pub fn is_zklogin(&self) -> bool {
+        matches!(self, GenericSignature::ZkLoginAuthenticator(_))
+    }
+}
+
 /// GenericSignature encodes a single signature [enum Signature] as is `flag || signature || pubkey`.
 /// It encodes [struct MultiSig] as the MultiSig flag (0x03) concat with the bcs serializedbytes
 /// of [struct MultiSig] i.e. `flag || bcs_bytes(MultiSig)`.

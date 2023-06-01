@@ -303,6 +303,13 @@ impl ValidatorService {
         let transaction = request.into_inner();
         let epoch_store = state.load_epoch_store_one_call_per_task();
 
+        if !epoch_store.protocol_config().zklogin_auth() && transaction.has_zklogin_sig() {
+            return Err(SuiError::UnsupportedFeatureError {
+                error: "zklogin is not enabled on this network".to_string(),
+            }
+            .into());
+        }
+
         // Enforce overall transaction size limit.
         let tx_size = bcs::serialized_size(&transaction).map_err(|e| {
             SuiError::TransactionSerializationError {
