@@ -12,7 +12,6 @@ use axum::{extract::Extension, http::StatusCode, routing::get, Router};
 use backoff::ExponentialBackoff;
 use clap::Parser;
 use diesel::pg::PgConnection;
-// use diesel::prelude::*;
 use diesel::r2d2::ConnectionManager;
 use jsonrpsee::http_client::{HeaderMap, HeaderValue, HttpClient, HttpClientBuilder};
 use metrics::IndexerMetrics;
