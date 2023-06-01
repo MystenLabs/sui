@@ -647,6 +647,8 @@ impl TransactionManager {
                 continue;
             }
 
+            trace!(locks = ?pending_cert.acquiring_locks, ?digest, "certificate waiting on objects");
+
             assert!(
                 inner
                     .pending_certificates

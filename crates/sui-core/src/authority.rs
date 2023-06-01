@@ -30,7 +30,7 @@ use tap::{TapFallible, TapOptional};
 use tokio::sync::mpsc::unbounded_channel;
 use tokio::sync::oneshot;
 use tokio_retry::strategy::{jitter, ExponentialBackoff};
-use tracing::{debug, error, info, instrument, trace, warn, Instrument};
+use tracing::{debug, error, error_span, info, instrument, trace, warn, Instrument};
 
 pub use authority_notify_read::EffectsNotifyRead;
 pub use authority_store::{AuthorityStore, ResolverWrapper, UpdateType};
@@ -162,6 +162,11 @@ pub mod test_authority_builder;
 
 pub(crate) mod authority_notify_read;
 pub(crate) mod authority_store;
+
+#[inline(never)]
+fn breakbreak() {
+    println!("break here");
+}
 
 pub static CHAIN_IDENTIFIER: OnceCell<ChainIdentifier> = OnceCell::new();
 
@@ -906,6 +911,7 @@ impl AuthorityState {
                 None,
                 &epoch_store,
             )
+            .instrument(error_span!("try_execute_for_test", tx_digest = ?certificate.digest()))
             .await?;
         let signed_effects = self.sign_effects(effects, &epoch_store)?;
         Ok((signed_effects, execution_error_opt))
@@ -3324,6 +3330,7 @@ impl AuthorityState {
             .await
             .tap_ok(|_| {
                 debug!("commit_certificate finished");
+                breakbreak();
             })?;
 
         // todo - ideally move this metric in NotifyRead once we have metrics in AuthorityStore

@@ -33,6 +33,7 @@ use sui_types::object::Object;
 use sui_types::sui_system_state::SuiSystemStateTrait;
 use sui_types::transaction::VerifiedTransaction;
 use tempfile::tempdir;
+use tracing::{error_span, Instrument};
 
 #[derive(Default)]
 pub struct TestAuthorityBuilder<'a> {
@@ -246,6 +247,9 @@ impl<'a> TestAuthorityBuilder<'a> {
                 ),
                 None,
                 &state.epoch_store_for_testing(),
+            )
+            .instrument(
+                error_span!("test_authority_builder", tx_digest = ?genesis.transaction().digest()),
             )
             .await
             .unwrap();

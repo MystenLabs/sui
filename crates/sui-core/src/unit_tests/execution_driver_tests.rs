@@ -16,6 +16,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use itertools::Itertools;
+use sui_macros::sim_test;
 use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::base_types::TransactionDigest;
 use sui_types::committee::Committee;
@@ -273,11 +274,12 @@ async fn execute_shared_on_first_three_authorities(
     (cert, effects)
 }
 
-#[tokio::test(flavor = "current_thread", start_paused = true)]
+#[sim_test]
 async fn test_execution_with_dependencies() {
     telemetry_subscribers::init_for_testing();
 
     // ---- Initialize a network with three accounts, each with 10 gas objects.
+    dbg!("HAY");
 
     const NUM_ACCOUNTS: usize = 3;
     let accounts: Vec<(_, AccountKeyPair)> =
@@ -305,6 +307,7 @@ async fn test_execution_with_dependencies() {
         .reference_gas_price_for_testing()
         .unwrap();
 
+    dbg!("HAY");
     // ---- Create an owned object and a shared counter.
 
     let mut executed_owned_certs = Vec::new();
@@ -342,6 +345,7 @@ async fn test_execution_with_dependencies() {
         panic!("Not a shared object! {:?} {:?}", shared_counter_ref, owner);
     };
 
+    dbg!("HAY");
     // ---- Execute transactions with dependencies on first 3 nodes in the dependency order.
 
     // In each iteration, creates an owned and a shared transaction that depends on previous input
@@ -365,6 +369,7 @@ async fn test_execution_with_dependencies() {
             gas_ref,
             rgp,
         );
+        tracing::debug!(digest = ?owned_tx.digest(), "OWNED TEST");
         let (cert, effects) = execute_owned_on_first_three_authorities(
             &authority_clients,
             &aggregator.committee,
@@ -386,6 +391,7 @@ async fn test_execution_with_dependencies() {
                 shared_counter_initial_version,
             )
             .build_and_sign(source_key);
+        tracing::debug!(digest = ?shared_tx.digest(), "SHARED TEST");
         let (cert, effects) = execute_shared_on_first_three_authorities(
             &authority_clients,
             &aggregator.committee,
@@ -398,6 +404,7 @@ async fn test_execution_with_dependencies() {
 
     // ---- Execute transactions in reverse dependency order on the last authority.
 
+    dbg!("HAY");
     // Sets shared object locks in the executed order.
     for cert in executed_shared_certs.iter() {
         send_consensus_no_execution(&authorities[3], cert).await;
@@ -421,12 +428,14 @@ async fn test_execution_with_dependencies() {
             .unwrap();
     }
 
+    dbg!("HAY");
     // All certs should get executed eventually.
     let digests = executed_shared_certs
         .iter()
         .chain(executed_owned_certs.iter())
         .map(|cert| *cert.digest())
         .collect();
+    dbg!("HAY");
     authorities[3]
         .database
         .notify_read_executed_effects(digests)
