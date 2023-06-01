@@ -69,7 +69,7 @@ use crate::store::query::DBFilter;
 use crate::store::TransactionObjectChanges;
 use crate::store::{IndexerStore, TemporaryEpochStore};
 use crate::utils::{get_balance_changes_from_effect, get_object_changes};
-use crate::{AsyncPgConnectionPool, PgConnectionPool};
+use crate::PgConnectionPool;
 
 const MAX_EVENT_PAGE_SIZE: usize = 1000;
 const PG_COMMIT_CHUNK_SIZE: usize = 1000;
@@ -94,8 +94,6 @@ struct TempDigestTable {
 
 #[derive(Clone)]
 pub struct PgIndexerStore {
-    #[allow(dead_code)]
-    cp: AsyncPgConnectionPool,
     blocking_cp: PgConnectionPool,
     // MUSTFIX(gegaowp): temporarily disable partition management.
     #[allow(dead_code)]
@@ -105,16 +103,11 @@ pub struct PgIndexerStore {
 }
 
 impl PgIndexerStore {
-    pub async fn new(
-        cp: AsyncPgConnectionPool,
-        blocking_cp: PgConnectionPool,
-        metrics: IndexerMetrics,
-    ) -> Self {
+    pub async fn new(blocking_cp: PgConnectionPool, metrics: IndexerMetrics) -> Self {
         let module_cache = Arc::new(SyncModuleCache::new(IndexerModuleResolver::new(
             blocking_cp.clone(),
         )));
         PgIndexerStore {
-            cp: cp.clone(),
             blocking_cp: blocking_cp.clone(),
             partition_manager: PartitionManager::new(blocking_cp).await.unwrap(),
             module_cache,
