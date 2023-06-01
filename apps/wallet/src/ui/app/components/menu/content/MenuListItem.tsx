@@ -25,7 +25,7 @@ function MenuListItem({
     href = '',
     onClick,
 }: ItemProps) {
-    const Component = to || href ? Link : 'div';
+    const Component = to ? Link : 'div';
 
     const MenuItemContent = (
         <>
