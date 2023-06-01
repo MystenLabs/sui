@@ -1047,7 +1047,7 @@ impl IndexerStore for PgIndexerStore {
         self.multi_get_transactions_by_digests(&tx_digests).await
     }
 
-    async fn get_transaction_page_by_sender_recipient_address(
+    async fn get_transaction_page_by_recipient_address(
         &self,
         from: Option<SuiAddress>,
         to: SuiAddress,
@@ -1082,6 +1082,43 @@ impl IndexerStore for PgIndexerStore {
         );
         let tx_digests: Vec<String> = read_only_blocking!(&self.blocking_cp, |conn| diesel::sql_query(sql_query).load(conn))
                 .context(&format!("Failed reading transaction digests by recipient address {to} with start_sequence {start_sequence:?} and limit {limit}"))?
+                .into_iter()
+                .map(|table: TempDigestTable| table.digest_name)
+                .collect();
+        self.multi_get_transactions_by_digests(&tx_digests).await
+    }
+
+    async fn get_transaction_page_by_address(
+        &self,
+        address: SuiAddress,
+        start_sequence: Option<i64>,
+        limit: usize,
+        is_descending: bool,
+    ) -> Result<Vec<Transaction>, IndexerError> {
+        let sql_query = format!(
+            "SELECT transaction_digest as digest_name FROM (
+                SELECT transaction_digest, max(id) AS max_id
+                FROM recipients
+                WHERE recipient = '{}' OR sender = '{}'
+                {} GROUP BY transaction_digest
+                ORDER BY max_id {} LIMIT {}
+            ) AS t",
+            address,
+            address,
+            if let Some(start_sequence) = start_sequence {
+                if is_descending {
+                    format!("AND id < {}", start_sequence)
+                } else {
+                    format!("AND id > {}", start_sequence)
+                }
+            } else {
+                "".to_string()
+            },
+            if is_descending { "DESC" } else { "ASC" },
+            limit
+        );
+        let tx_digests: Vec<String> = read_only_blocking!(&self.blocking_cp, |conn| diesel::sql_query(sql_query).load(conn))
+                .context(&format!("Failed reading transaction digests by address {address} with start_sequence {start_sequence:?} and limit {limit}"))?
                 .into_iter()
                 .map(|table: TempDigestTable| table.digest_name)
                 .collect();

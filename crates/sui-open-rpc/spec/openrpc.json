@@ -9984,6 +9984,27 @@
             "additionalProperties": false
           },
           {
+            "description": "Query txs that have a given address as sender or recipient.",
+            "type": "object",
+            "required": [
+              "FromOrToAddress"
+            ],
+            "properties": {
+              "FromOrToAddress": {
+                "type": "object",
+                "required": [
+                  "addr"
+                ],
+                "properties": {
+                  "addr": {
+                    "$ref": "#/components/schemas/SuiAddress"
+                  }
+                }
+              }
+            },
+            "additionalProperties": false
+          },
+          {
             "description": "Query by transaction kind",
             "type": "object",
             "required": [
