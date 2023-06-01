@@ -40,7 +40,7 @@ use std::{
 use strum::IntoStaticStr;
 use sui_protocol_config::{ProtocolConfig, SupportedProtocolVersions};
 use tap::Pipe;
-use tracing::trace;
+use tracing::{trace, info};
 
 // TODO: The following constants appear to be very large.
 // We should revisit them.
@@ -1781,7 +1781,11 @@ impl Message for SenderSignedData {
                     Some(get_google_jwk_bytes().read().unwrap().clone()),
                 ),
             )?;
+            info!("~~sig verified!!!!! {:?}", signer);
+            println!("~~sig verified!!!!! {:?}", signer);
         }
+        info!("out: sig verified!!!!!");
+        println!("out: sig verified!!!!!");
         Ok(())
     }
 }

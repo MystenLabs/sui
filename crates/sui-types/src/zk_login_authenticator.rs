@@ -130,7 +130,6 @@ impl AuthenticatorTrait for ZkLoginAuthenticator {
         .map_err(|_| SuiError::InvalidSignature {
             error: "Invalid JWT signature".to_string(),
         })?;
-
         // Parse the JWK content for the given provider from the bytes.
         let selected = find_jwk_by_kid(
             aux_inputs.get_kid(),
@@ -194,7 +193,11 @@ impl AuthenticatorTrait for ZkLoginAuthenticator {
 
         // Finally, verify the Groth16 proof against public inputs and proof points.
         // Verifying key is pinned in fastcrypto.
-        match verify_zk_login_proof_with_fixed_vk(&self.proof, &self.public_inputs) {
+        println!("&self.proof={:?}", &self.proof);
+
+        let res = verify_zk_login_proof_with_fixed_vk(&self.proof, &self.public_inputs);
+        println!("res={:?}", res);
+        match res {
             Ok(true) => Ok(()),
             Ok(false) | Err(_) => Err(SuiError::InvalidSignature {
                 error: "Groth16 proof verify failed".to_string(),
