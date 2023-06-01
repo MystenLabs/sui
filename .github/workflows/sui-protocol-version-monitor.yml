@@ -52,6 +52,7 @@ jobs:
 
     - name: Update framework/${{ inputs.environment }}
       if: ${{ env.saved_protocol_version != '' && env.current_protocol_version > env.saved_protocol_version }}
+      continue-on-error: true
       uses: LucasRuy/sync-branch-action@v1.1.1
       with:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
