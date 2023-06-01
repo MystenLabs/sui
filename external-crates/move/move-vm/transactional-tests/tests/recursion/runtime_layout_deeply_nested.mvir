@@ -9,6 +9,7 @@ module 0x42.M {
     struct Box31<T> has store { x: Self.Box15<Self.Box15<T>> }
     struct Box63<T> has store { x: Self.Box31<Self.Box31<T>> }
     struct Box127<T> has key, store { x: Self.Box63<Self.Box63<T>> }
+    struct Box128<T> has key, store { x: Self.Box127<T> }
     struct Box255<T> has key, store { x: Self.Box127<Self.Box127<T>> }
 
     public box3<T>(x: T): Self.Box3<T> {
@@ -41,6 +42,11 @@ module 0x42.M {
         return Box127<T> { x: Self.box63<Self.Box63<T>>(Self.box63<T>(move(x))) };
     }
 
+    public box128<T>(x: T): Self.Box128<T> {
+    label b0:
+        return Box128<T> { x: Self.box127<T>(move(x)) };
+    }
+
     public box255<T>(x: T): Self.Box255<T> {
     label b0:
         return Box255<T> { x: Self.box127<Self.Box127<T>>(Self.box127<T>(move(x))) };
@@ -48,7 +54,7 @@ module 0x42.M {
 
     public publish_128(account: &signer) {
     label b0:
-        move_to<Box127<bool>>(move(account), Self.box127<bool>(true));
+        move_to<Box128<bool>>(move(account), Self.box128<bool>(true));
         return;
     }
 
@@ -71,10 +77,10 @@ import 0x42.M;
 
 main(account: signer) {
 label b0:
+    // hits VM_MAX_VALUE_DEPTH_REACHED
     M.publish_128(&account);
     return;
 }
-
 
 //# run --args @0x2
 import 0x42.M;

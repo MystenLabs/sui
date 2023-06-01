@@ -37,6 +37,7 @@ const MAX_PROTOCOL_VERSION: u64 = 11;
 //            `max_meter_ticks_per_module` limits each from 6_000_000 to 16_000_000. sui-system
 //            framework changes.
 // Version 11: Introduce `std::type_name::get_with_original_ids` to the system frameworks.
+//             Bound max depth of values within the VM.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -342,6 +343,9 @@ pub struct ProtocolConfig {
 
     /// Maximum length of an `Identifier` in Move. Enforced by the bytecode verifier at signing.
     max_move_identifier_len: Option<u64>,
+
+    /// Maximum depth of a Move value within the VM.
+    max_move_value_depth: Option<u64>,
 
     /// Maximum number of back edges in Move function. Enforced by the bytecode verifier at signing.
     max_back_edges_per_function: Option<u64>,
@@ -1049,6 +1053,7 @@ impl ProtocolConfig {
 
                 // Limits the length of a Move identifier
                 max_move_identifier_len: None,
+                max_move_value_depth: None,
 
                 // When adding a new constant, set it to None in the earliest version, like this:
                 // new_constant: None,
@@ -1130,7 +1135,11 @@ impl ProtocolConfig {
                 cfg.max_meter_ticks_per_module = Some(16_000_000);
                 cfg
             }
-            11 => Self::get_for_version_impl(version - 1),
+            11 => {
+                let mut cfg = Self::get_for_version_impl(version - 1);
+                cfg.max_move_value_depth = Some(128);
+                cfg
+            }
             // Use this template when making changes:
             //
             //     // modify an existing constant.
