@@ -110,7 +110,7 @@ export function resolveRoyaltyRule(
   const policyObj = objArg(tx, policyId);
   // calculates the amount
   const [amount] = tx.moveCall({
-    target: `${TESTNET_TRANSFER_POLICY_RULES_PACKAGE_ADDRESS}::royalty_rule::fee_amount`,
+    target: `${getRulePackageAddress(environment)}::royalty_rule::fee_amount`,
     typeArguments: [itemType],
     arguments: [policyObj, objArg(tx, price)],
   });
