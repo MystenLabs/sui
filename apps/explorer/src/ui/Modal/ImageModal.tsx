@@ -30,7 +30,9 @@ export function ImageModal({
     return (
         <Modal open={open} onClose={onClose}>
             <div className="flex flex-col gap-5">
-                <Image alt={alt} src={src} rounded="none" moderate={false} />
+                {/* Moderation is disabled inside the modal so if a user clicks to open 
+                    an unblurred image the experience is consistent */}
+                <Image alt={alt} src={src} rounded="none" moderate={moderate} />
                 <Heading variant="heading2/semibold" color="sui-light" truncate>
                     {title}
                 </Heading>
