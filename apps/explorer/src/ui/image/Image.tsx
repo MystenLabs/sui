@@ -82,7 +82,7 @@ function BaseImage({
                 'relative flex items-center justify-center bg-gray-40 text-gray-65'
             )}
         >
-            {status === 'loading' ? <LoadingSpinner /> : <div>
+            {status === 'loading' ? <LoadingSpinner /> : <div className='relative'>
                 {isBlurred &&
                     <div className={clsx('absolute z-20 flex h-full w-full items-center justify-center rounded-md bg-gray-100/30 text-center text-white backdrop-blur-md',
                         visibility === VISIBILITY.HIDE && 'cursor-not-allowed pointer-events-none')}
@@ -109,5 +109,5 @@ function BaseImage({
 
 export function Image({ src, moderate = true, ...props }: ImageProps) {
     const { status, url, moderation } = useImage({ src, moderate });
-    return <BaseImage visibility={moderation?.visibility} status={status} src={url} {...props} />;
+    return <BaseImage visibility={'BLUR'} status={status} src={url} {...props} />;
 }
