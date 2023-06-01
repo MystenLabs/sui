@@ -91,6 +91,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "aho-corasick"
+version = "1.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "67fc08ce920c31afb70f013dcce1bfc3a3195de6a228474e45e1f145b36f8d04"
+dependencies = [
+ "memchr",
+]
+
+[[package]]
 name = "aliasable"
 version = "0.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -961,9 +970,9 @@ dependencies = [
 
 [[package]]
 name = "axum"
-version = "0.6.6"
+version = "0.6.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4e246206a63c9830e118d12c894f56a82033da1a2361f5544deeee3df85c99d9"
+checksum = "f8175979259124331c1d7bf6586ee7e0da434155e4b2d48ec2c8386281d8df39"
 dependencies = [
  "async-trait",
  "axum-core",
@@ -988,7 +997,6 @@ dependencies = [
  "sync_wrapper",
  "tokio",
  "tower",
- "tower-http 0.3.5",
  "tower-layer",
  "tower-service",
 ]
@@ -3075,7 +3083,7 @@ checksum = "4443176a9f2c162692bd3d352d745ef9413eec5782a80d8fd6f8a1ac692a07f7"
 [[package]]
 name = "fastcrypto"
 version = "0.1.5"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=c27e87fb539c88b6fe1eac7dd82561254bb1e07a#c27e87fb539c88b6fe1eac7dd82561254bb1e07a"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=6d4da5715a15a47ff215c230f0edc48c2f34e065#6d4da5715a15a47ff215c230f0edc48c2f34e065"
 dependencies = [
  "aes",
  "aes-gcm",
@@ -3104,6 +3112,7 @@ dependencies = [
  "generic-array",
  "hex",
  "hkdf",
+ "lazy_static 1.4.0",
  "merlin",
  "once_cell",
  "p256",
@@ -3128,8 +3137,8 @@ dependencies = [
 
 [[package]]
 name = "fastcrypto-derive"
-version = "0.1.2"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=c27e87fb539c88b6fe1eac7dd82561254bb1e07a#c27e87fb539c88b6fe1eac7dd82561254bb1e07a"
+version = "0.1.3"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=6d4da5715a15a47ff215c230f0edc48c2f34e065#6d4da5715a15a47ff215c230f0edc48c2f34e065"
 dependencies = [
  "convert_case 0.6.0",
  "proc-macro2 1.0.58",
@@ -3140,7 +3149,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto-zkp"
 version = "0.1.1"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=c27e87fb539c88b6fe1eac7dd82561254bb1e07a#c27e87fb539c88b6fe1eac7dd82561254bb1e07a"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=6d4da5715a15a47ff215c230f0edc48c2f34e065#6d4da5715a15a47ff215c230f0edc48c2f34e065"
 dependencies = [
  "ark-bls12-381",
  "ark-bn254",
@@ -3154,6 +3163,13 @@ dependencies = [
  "byte-slice-cast",
  "derive_more",
  "fastcrypto",
+ "light-poseidon",
+ "num-bigint",
+ "once_cell",
+ "regex",
+ "schemars",
+ "serde 1.0.152",
+ "serde_json",
 ]
 
 [[package]]
@@ -3497,7 +3513,7 @@ version = "0.4.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "029d74589adefde59de1a0c4f4732695c32805624aec7b68d91503d4dba79afc"
 dependencies = [
- "aho-corasick",
+ "aho-corasick 0.7.20",
  "bstr",
  "fnv",
  "log",
@@ -4566,6 +4582,17 @@ dependencies = [
  "cc",
  "pkg-config",
  "vcpkg",
+]
+
+[[package]]
+name = "light-poseidon"
+version = "0.0.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "12aa484fae158f9b31772661f5e404f0c02073deffa50ff6da51c178ba579634"
+dependencies = [
+ "ark-bn254",
+ "ark-ff",
+ "thiserror",
 ]
 
 [[package]]
@@ -6348,6 +6375,7 @@ dependencies = [
  "autocfg",
  "num-integer",
  "num-traits 0.2.15",
+ "rand 0.8.5",
 ]
 
 [[package]]
@@ -7290,7 +7318,7 @@ dependencies = [
  "rand 0.8.5",
  "rand_chacha 0.3.1",
  "rand_xorshift",
- "regex-syntax",
+ "regex-syntax 0.6.28",
  "rusty-fork",
  "tempfile",
  "unarray",
@@ -7772,13 +7800,13 @@ dependencies = [
 
 [[package]]
 name = "regex"
-version = "1.7.1"
+version = "1.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "48aaa5748ba571fb95cd2c85c09f629215d3a6ece942baa100950af03a34f733"
+checksum = "81ca098a9821bd52d6b24fd8b10bd081f47d39c22778cafaa75a2857a62c6390"
 dependencies = [
- "aho-corasick",
+ "aho-corasick 1.0.1",
  "memchr",
- "regex-syntax",
+ "regex-syntax 0.7.2",
 ]
 
 [[package]]
@@ -7787,7 +7815,7 @@ version = "0.1.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6c230d73fb8d8c1b9c0b3135c5142a8acee3a0558fb8db5cf1cb65f8d7862132"
 dependencies = [
- "regex-syntax",
+ "regex-syntax 0.6.28",
 ]
 
 [[package]]
@@ -7795,6 +7823,12 @@ name = "regex-syntax"
 version = "0.6.28"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "456c603be3e8d448b072f410900c09faf164fbce2d480456f50eea6e25f9c848"
+
+[[package]]
+name = "regex-syntax"
+version = "0.7.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "436b050e76ed2903236f032a59761c1eb99e1b0aead2c257922771dab1fc8c78"
 
 [[package]]
 name = "reqwest"
@@ -9091,6 +9125,7 @@ dependencies = [
  "csv",
  "expect-test",
  "fastcrypto",
+ "fastcrypto-zkp",
  "fs_extra",
  "git-version",
  "inquire",
@@ -9098,6 +9133,7 @@ dependencies = [
  "move-bytecode-verifier",
  "move-core-types",
  "move-package",
+ "num-bigint",
  "prettytable-rs",
  "prometheus",
  "rand 0.8.5",
@@ -9358,6 +9394,7 @@ dependencies = [
  "expect-test",
  "eyre",
  "fastcrypto",
+ "fastcrypto-zkp",
  "fs_extra",
  "futures",
  "itertools",
@@ -10684,6 +10721,7 @@ dependencies = [
  "enum_dispatch",
  "eyre",
  "fastcrypto",
+ "fastcrypto-zkp",
  "indexmap",
  "itertools",
  "move-binary-format",
@@ -12429,7 +12467,8 @@ dependencies = [
  "aes-gcm",
  "ahash 0.7.6",
  "ahash 0.8.2",
- "aho-corasick",
+ "aho-corasick 0.7.20",
+ "aho-corasick 1.0.1",
  "aliasable",
  "alloc-no-stdlib",
  "alloc-stdlib",
@@ -12796,6 +12835,7 @@ dependencies = [
  "librocksdb-sys",
  "libtest-mimic",
  "libz-sys",
+ "light-poseidon",
  "linked-hash-map",
  "linux-raw-sys 0.1.4",
  "linux-raw-sys 0.3.1",
@@ -13016,7 +13056,8 @@ dependencies = [
  "ref-cast-impl",
  "regex",
  "regex-automata",
- "regex-syntax",
+ "regex-syntax 0.6.28",
+ "regex-syntax 0.7.2",
  "reqwest",
  "retain_mut",
  "rfc6979 0.3.1",

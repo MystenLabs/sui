@@ -3,15 +3,26 @@
 use anyhow::anyhow;
 use bip32::DerivationPath;
 use clap::*;
+use fastcrypto::ed25519::Ed25519KeyPair;
 use fastcrypto::encoding::{decode_bytes_hex, Base64, Encoding, Hex};
 use fastcrypto::hash::HashFunction;
 use fastcrypto::secp256k1::recoverable::Secp256k1Sig;
 use fastcrypto::traits::KeyPair;
+use fastcrypto_zkp::bn254::api::Bn254Fr;
+use fastcrypto_zkp::bn254::poseidon::PoseidonWrapper;
+use fastcrypto_zkp::bn254::zk_login::OAuthProvider;
+use fastcrypto_zkp::bn254::zk_login::{
+    big_int_str_to_bytes, AuxInputs, PublicInputs, SupportedKeyClaim, ZkLoginProof,
+};
+use num_bigint::{BigInt, Sign};
+use rand::rngs::StdRng;
+use rand::SeedableRng;
 use rusoto_core::Region;
 use rusoto_kms::{Kms, KmsClient, SignRequest};
 use shared_crypto::intent::{Intent, IntentMessage};
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::str::FromStr;
 use sui_keys::key_derive::generate_new_key;
 use sui_keys::keypair_file::{
     read_authority_keypair_from_file, read_keypair_from_file, write_authority_keypair_to_file,
@@ -19,11 +30,15 @@ use sui_keys::keypair_file::{
 };
 use sui_keys::keystore::{AccountKeystore, Keystore};
 use sui_types::base_types::SuiAddress;
-use sui_types::crypto::{get_authority_key_pair, EncodeDecodeBase64, SignatureScheme, SuiKeyPair};
+use sui_types::crypto::{
+    get_authority_key_pair, get_key_pair_from_rng, EncodeDecodeBase64, SignatureScheme, SuiKeyPair,
+};
 use sui_types::crypto::{DefaultHash, PublicKey, Signature};
 use sui_types::multisig::{MultiSig, MultiSigPublicKey, ThresholdUnit, WeightUnit};
 use sui_types::signature::GenericSignature;
 use sui_types::transaction::TransactionData;
+use sui_types::zk_login_authenticator::ZkLoginAuthenticator;
+use sui_types::zk_login_util::AddressParams;
 use tracing::info;
 
 #[cfg(test)]
@@ -186,6 +201,34 @@ pub enum KeyToolCommand {
     /// Encodes an array of bytes to its Base64 string representation.
     BytesToBase64 {
         bytes: Vec<u8>,
+    },
+
+    /// Input the max epoch and generate a nonce with max_epoch,
+    /// ephemeral_pubkey and a randomoness.
+    ZkLogInPrepare {
+        #[clap(long)]
+        max_epoch: String,
+    },
+
+    /// Input the address seed and show the address based on iss,
+    /// key_claim_name and address_sed.
+    GenerateZkLoginAddress {
+        #[clap(long)]
+        address_seed: String,
+    },
+
+    /// Given the proof in string, public inputs in string, aux inputs in
+    /// string and base64 encoded string user signature, serialize into
+    /// a GenericSignature::ZkLoginAuthenticator.
+    SerializeZkLoginAuthenticator {
+        #[clap(long)]
+        proof_str: String,
+        #[clap(long)]
+        public_inputs_str: String,
+        #[clap(long)]
+        aux_inputs_str: String,
+        #[clap(long)]
+        user_signature: String,
     },
 }
 
@@ -527,6 +570,65 @@ impl KeyToolCommand {
                     .map_err(|e| anyhow!("Invalid base64 key: {:?}", e))?;
                 let tx_data: TransactionData = bcs::from_bytes(&tx_bytes)?;
                 println!("Transaction data: {:?}", tx_data);
+            }
+
+            KeyToolCommand::ZkLogInPrepare { max_epoch } => {
+                // todo: unhardcode keypair and jwt_randomness and max_epoch.
+                let kp: Ed25519KeyPair = get_key_pair_from_rng(&mut StdRng::from_seed([0; 32])).1;
+                let skp = SuiKeyPair::Ed25519(kp.copy());
+                println!("Ephemeral pubkey: {:?}", skp.public().encode_base64());
+                println!("Ephemeral keypair: {:?}", skp.encode_base64());
+
+                // Nonce is defined as the base64Url encoded of the poseidon hash of 4 inputs:
+                // first half of eph_pubkey bytes in BigInt, second half, max_epoch, randomness.
+                let bytes = kp.public().as_ref();
+                let (first_half, second_half) = bytes.split_at(bytes.len() / 2);
+                let first_bigint = BigInt::from_bytes_be(Sign::Plus, first_half);
+                let second_bigint = BigInt::from_bytes_be(Sign::Plus, second_half);
+
+                let mut poseidon = PoseidonWrapper::new(4);
+                let first = Bn254Fr::from_str(&first_bigint.to_string()).unwrap();
+                let second = Bn254Fr::from_str(&second_bigint.to_string()).unwrap();
+                let max_epoch = Bn254Fr::from_str(max_epoch.as_str()).unwrap();
+                let jwt_randomness = Bn254Fr::from_str(
+                    "50683480294434968413708503290439057629605340925620961559740848568164438166",
+                )
+                .unwrap();
+                let hash = poseidon.hash(&[first, second, max_epoch, jwt_randomness]);
+                println!("Nonce: {:?}", hash.to_string());
+            }
+
+            KeyToolCommand::GenerateZkLoginAddress { address_seed } => {
+                let mut hasher = DefaultHash::default();
+                hasher.update([SignatureScheme::ZkLoginAuthenticator.flag()]);
+                let address_params = AddressParams::new(
+                    OAuthProvider::Google.get_config().0.to_owned(),
+                    SupportedKeyClaim::Sub.to_string(),
+                );
+                println!("Address params: {:?}", address_params);
+                hasher.update(bcs::to_bytes(&address_params).unwrap());
+                hasher.update(big_int_str_to_bytes(&address_seed));
+                let user_address = SuiAddress::from_bytes(hasher.finalize().digest)?;
+                println!("Sui Address: {:?}", user_address);
+            }
+
+            KeyToolCommand::SerializeZkLoginAuthenticator {
+                proof_str,
+                public_inputs_str,
+                aux_inputs_str,
+                user_signature,
+            } => {
+                let authenticator = ZkLoginAuthenticator::new(
+                    ZkLoginProof::from_json(&proof_str)?,
+                    PublicInputs::from_json(&public_inputs_str)?,
+                    AuxInputs::from_json(&aux_inputs_str)?,
+                    Signature::from_str(&user_signature).map_err(|e| anyhow!(e))?,
+                );
+                let sig = GenericSignature::from(authenticator);
+                println!(
+                    "ZkLogin Authenticator Signature Serialized: {:?}",
+                    sig.encode_base64()
+                );
             }
         }
         Ok(())

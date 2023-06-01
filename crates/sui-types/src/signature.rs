@@ -3,6 +3,7 @@
 
 use crate::committee::EpochId;
 use crate::crypto::{SignatureScheme, SuiSignature};
+use crate::zk_login_authenticator::ZkLoginAuthenticator;
 use crate::{base_types::SuiAddress, crypto::Signature, error::SuiError, multisig::MultiSig};
 pub use enum_dispatch::enum_dispatch;
 use fastcrypto::{
@@ -49,6 +50,7 @@ pub trait AuthenticatorTrait {
 pub enum GenericSignature {
     MultiSig,
     Signature,
+    ZkLoginAuthenticator,
 }
 
 /// GenericSignature encodes a single signature [enum Signature] as is `flag || signature || pubkey`.
@@ -69,6 +71,10 @@ impl ToFromBytes for GenericSignature {
                     let multisig = MultiSig::from_bytes(bytes)?;
                     Ok(GenericSignature::MultiSig(multisig))
                 }
+                SignatureScheme::ZkLoginAuthenticator => {
+                    let zk_login = ZkLoginAuthenticator::from_bytes(bytes)?;
+                    Ok(GenericSignature::ZkLoginAuthenticator(zk_login))
+                }
                 _ => Err(FastCryptoError::InvalidInput),
             },
             Err(_) => Err(FastCryptoError::InvalidInput),
@@ -82,6 +88,7 @@ impl AsRef<[u8]> for GenericSignature {
         match self {
             GenericSignature::MultiSig(s) => s.as_ref(),
             GenericSignature::Signature(s) => s.as_ref(),
+            GenericSignature::ZkLoginAuthenticator(s) => s.as_ref(),
         }
     }
 }
@@ -130,6 +137,6 @@ impl AuthenticatorTrait for Signature {
     where
         T: Serialize,
     {
-        self.verify_secure(value, author)
+        self.verify_secure(value, author, self.scheme())
     }
 }

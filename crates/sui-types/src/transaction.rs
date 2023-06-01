@@ -1720,7 +1720,9 @@ impl VersionedProtocolMessage for SenderSignedData {
         // SuiError::WrongMessageVersion
         for sig in &self.inner().tx_signatures {
             match sig {
-                GenericSignature::MultiSig(_) | GenericSignature::Signature(_) => (),
+                GenericSignature::Signature(_)
+                | GenericSignature::MultiSig(_)
+                | GenericSignature::ZkLoginAuthenticator(_) => (),
             }
         }
 

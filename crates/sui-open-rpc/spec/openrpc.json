@@ -4915,6 +4915,73 @@
           }
         ]
       },
+      "AuxInputs": {
+        "description": "A parsed result of all aux inputs.",
+        "type": "object",
+        "required": [
+          "addr_seed",
+          "eph_public_key",
+          "jwt_sha2_hash",
+          "jwt_signature",
+          "key_claim_name",
+          "masked_content",
+          "max_epoch",
+          "num_sha2_blocks",
+          "payload_len",
+          "payload_start_index"
+        ],
+        "properties": {
+          "addr_seed": {
+            "type": "string"
+          },
+          "eph_public_key": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "jwt_sha2_hash": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "jwt_signature": {
+            "type": "string"
+          },
+          "key_claim_name": {
+            "type": "string"
+          },
+          "masked_content": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0.0
+            }
+          },
+          "max_epoch": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "num_sha2_blocks": {
+            "type": "integer",
+            "format": "uint8",
+            "minimum": 0.0
+          },
+          "payload_len": {
+            "type": "integer",
+            "format": "uint16",
+            "minimum": 0.0
+          },
+          "payload_start_index": {
+            "type": "integer",
+            "format": "uint16",
+            "minimum": 0.0
+          }
+        }
+      },
       "Balance": {
         "type": "object",
         "required": [
@@ -6006,6 +6073,18 @@
             "properties": {
               "Signature": {
                 "$ref": "#/components/schemas/Signature"
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": [
+              "ZkLoginAuthenticator"
+            ],
+            "properties": {
+              "ZkLoginAuthenticator": {
+                "$ref": "#/components/schemas/ZkLoginAuthenticator"
               }
             },
             "additionalProperties": false
@@ -7369,6 +7448,21 @@
       },
       "ProtocolVersion": {
         "$ref": "#/components/schemas/BigInt_for_uint64"
+      },
+      "PublicInputs": {
+        "description": "The public inputs containing an array of string that is the all inputs hash.",
+        "type": "object",
+        "required": [
+          "inputs"
+        ],
+        "properties": {
+          "inputs": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
       },
       "PublicKey": {
         "oneOf": [
@@ -9999,6 +10093,66 @@
           },
           "epoch": {
             "$ref": "#/components/schemas/BigInt_for_uint64"
+          }
+        }
+      },
+      "ZkLoginAuthenticator": {
+        "description": "An zk login authenticator with all the necessary fields.",
+        "type": "object",
+        "required": [
+          "aux_inputs",
+          "proof",
+          "public_inputs",
+          "user_signature"
+        ],
+        "properties": {
+          "aux_inputs": {
+            "$ref": "#/components/schemas/AuxInputs"
+          },
+          "proof": {
+            "$ref": "#/components/schemas/ZkLoginProof"
+          },
+          "public_inputs": {
+            "$ref": "#/components/schemas/PublicInputs"
+          },
+          "user_signature": {
+            "$ref": "#/components/schemas/Signature"
+          }
+        }
+      },
+      "ZkLoginProof": {
+        "description": "The zk login proof.",
+        "type": "object",
+        "required": [
+          "pi_a",
+          "pi_b",
+          "pi_c",
+          "protocol"
+        ],
+        "properties": {
+          "pi_a": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "pi_b": {
+            "type": "array",
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "pi_c": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "protocol": {
+            "type": "string"
           }
         }
       }
