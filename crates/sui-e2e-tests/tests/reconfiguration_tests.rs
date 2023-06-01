@@ -157,7 +157,7 @@ async fn reconfig_with_revert_end_to_end_test() {
             .transfer_sui(None, sender)
             .build(),
     );
-    let effects1 = test_cluster.execute_transaction(tx).await.unwrap();
+    let effects1 = test_cluster.execute_transaction(tx).await;
     assert_eq!(0, effects1.effects.unwrap().executed_epoch());
 
     // gas2 transaction is (most likely) reverted
@@ -430,10 +430,8 @@ async fn test_validator_resign_effects() {
         .make_transfer_sui_transaction(None, None)
         .await;
     let effects0 = test_cluster
-        .wallet
-        .execute_transaction_block(tx.clone())
+        .execute_transaction(tx.clone())
         .await
-        .unwrap()
         .effects
         .unwrap();
     assert_eq!(effects0.executed_epoch(), 0);
@@ -1134,11 +1132,7 @@ async fn safe_mode_reconfig_test() {
         .wallet
         .make_staking_transaction(validator_address)
         .await;
-    let response = test_cluster
-        .execute_transaction(txn)
-        .await
-        .expect("Staking txn failed");
-    assert!(response.status_ok().unwrap());
+    let response = test_cluster.execute_transaction(txn).await;
 
     // Now remove the override and check that in the next epoch we are no longer in safe mode.
     test_cluster.set_safe_mode_expected(false);
