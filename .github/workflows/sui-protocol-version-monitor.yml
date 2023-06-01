@@ -15,7 +15,7 @@ on:
         description: 'Environment'
         required: true
         type: choice
-        default: "devnet"
+        default: 'devnet'
         options:
         - devnet
         - testnet
@@ -55,8 +55,8 @@ jobs:
       uses: devvspaces/merge-branches@v1
       with:
         token: ${{ secrets.GITHUB_TOKEN }}
-        from_branch: ${{ inputs.environment }}
-        to_branch: framework/${{ inputs.environment }}
+        from_branch: origin/${{ inputs.environment }}
+        to_branch: origin/framework/${{ inputs.environment }}
 
     - name: Upload an artifact for current ${{ inputs.environment }} protocol version
       if: ${{ env.current_protocol_version > env.saved_protocol_version }}
