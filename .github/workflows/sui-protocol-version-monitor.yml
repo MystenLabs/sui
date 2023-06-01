@@ -52,11 +52,11 @@ jobs:
 
     - name: Update framework/${{ inputs.environment }}
       if: ${{ env.current_protocol_version > env.saved_protocol_version }}
-      uses: devvspaces/merge-branches@v1
+      uses: LucasRuy/sync-branch-action@v1.1.1
       with:
-        token: ${{ secrets.GITHUB_TOKEN }}
-        from_branch: origin/${{ inputs.environment }}
-        to_branch: origin/framework/${{ inputs.environment }}
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        SOURCE_BRANCH: ${{ inputs.environment }}
+        DESTINATION_BRANCH: framework/${{ inputs.environment }}
 
     - name: Upload an artifact for current ${{ inputs.environment }} protocol version
       if: ${{ env.current_protocol_version > env.saved_protocol_version }}
