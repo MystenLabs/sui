@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { TransactionArgument } from '@mysten/sui.js';
+import { ObjectArgument } from '.';
 
 /** The Kiosk module. */
 export const KIOSK_MODULE = '0x2::kiosk';
@@ -52,4 +53,14 @@ export type PurchaseCap = {
 export type PurchaseAndResolvePoliciesResponse = {
   item: TransactionArgument;
   canTransfer: boolean;
+};
+
+/**
+ * Optional parameters for `purchaseAndResolvePolicies` flow.
+ * This gives us the chance to extend the function in further releases
+ * without introducing more breaking changes.
+ */
+export type PurchaseOptionalParams = {
+  ownedKiosk?: ObjectArgument;
+  ownedKioskCap?: ObjectArgument;
 };

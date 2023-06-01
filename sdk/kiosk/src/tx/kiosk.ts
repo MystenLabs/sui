@@ -19,6 +19,7 @@ import {
   KIOSK_TYPE,
   ObjectArgument,
   PurchaseAndResolvePoliciesResponse,
+  PurchaseOptionalParams,
   RulesEnvironmentParam,
   TransferPolicy,
 } from '../types';
@@ -346,8 +347,7 @@ export function purchaseAndResolvePolicies(
   item: ObjectArgument,
   policy: TransferPolicy,
   environment: RulesEnvironmentParam,
-  ownedKiosk?: string,
-  ownedKioskCap?: string,
+  extraParams?: PurchaseOptionalParams,
 ): PurchaseAndResolvePoliciesResponse {
   // if we don't pass the listing or the listing doens't have a price, return.
   if (!listing || listing?.price === undefined)
@@ -386,7 +386,7 @@ export function purchaseAndResolvePolicies(
         );
         break;
       case 'kiosk_lock_rule::Rule':
-        if (!ownedKiosk || !ownedKioskCap)
+        if (!extraParams?.ownedKiosk || !extraParams?.ownedKioskCap)
           throw new Error(
             `This item type ${itemType} has a 'kiosk_lock_rule', but function call is missing user's kiosk and kioskCap params`,
           );
@@ -395,8 +395,8 @@ export function purchaseAndResolvePolicies(
           tx,
           itemType,
           purchasedItem,
-          ownedKiosk,
-          ownedKioskCap,
+          extraParams.ownedKiosk,
+          extraParams.ownedKioskCap,
           policy.id,
           transferRequest,
           environment,

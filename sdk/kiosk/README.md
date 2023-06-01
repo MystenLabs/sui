@@ -91,15 +91,22 @@ const purchaseItem = async (item, kioskId) => {
   // Select the environment. Right now only `testnet` or `custom` is supported.
   //  For custom, you need to supply the `address` of the rules' package.
   const environment = { env: 'testnet', address?: '' }
+
+  // Both are required if you there is a `kiosk_lock_rule`.
+  // Optional otherwise. Function will throw an error if there's a kiosk_lock_rule and these are missing.
+  const extraParams = {
+    ownedKiosk,
+    ownedKioskCap
+  }
+  // Extra params. Optional, but required if the user tries to resolve a `kiosk_lock_rule`.
   // Purchases the item. Supports `kiosk_lock_rule`, `royalty_rule` (accepts combination too).
-  // ownedKiosk & ownedKioskCap are optional, they are necessary only if the transfer policy includes a `kiosk_lock_rule`.
-  const result = purchaseAndResolvePolicies(tx, item.type, item.listing, kioskId, item.objectId, policy[0], environment, ownedKiosk, ownedKioskCap);
+  const result = purchaseAndResolvePolicies(tx, item.type, item.listing, kioskId, item.objectId, policy[0], environment, extraParams);
 
   // result = {item: <the_purchased_item>, canTransfer: true/false // depending on whether there was a kiosk lock rule }
-  // if the item didn't have a kiosk_lock_rule, we need to do something with it. 
+  // if the item didn't have a kiosk_lock_rule, we need to do something with it.
   // for e..g place it in our own kiosk. (demonstrated below)
   if(result.canTransfer) place(tx, item.type, ownedKiosk, ownedKioskCap , result.item);
-  
+
   // ...finally, sign PTB & execute it.
 
 };
