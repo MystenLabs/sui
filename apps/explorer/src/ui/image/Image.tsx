@@ -109,5 +109,5 @@ function BaseImage({
 
 export function Image({ src, moderate = true, ...props }: ImageProps) {
     const { status, url, moderation } = useImage({ src, moderate });
-    return <BaseImage visibility={'BLUR'} status={status} src={url} {...props} />;
+    return <BaseImage visibility={moderation?.visibility} status={status} src={url} {...props} />;
 }
