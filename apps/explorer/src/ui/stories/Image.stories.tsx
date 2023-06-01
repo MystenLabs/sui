@@ -9,8 +9,8 @@ import { Image, type ImageProps } from '../image/Image';
 
 import type { Meta, StoryObj } from '@storybook/react';
 
-import { DefaultRpcClient, Network } from '~/utils/api/DefaultRpcClient';
 import { VISIBILITY } from '~/hooks/useImageMod';
+import { DefaultRpcClient, Network } from '~/utils/api/DefaultRpcClient';
 
 export default {
     component: Image,
@@ -71,6 +71,6 @@ export const ModeratedBlurred: StoryObj<ImageProps> = {
         src: 'https://upload.wikimedia.org/wikipedia/commons/4/4f/SIG_Pro_by_Augustas_Didzgalvis.jpg',
         size: 'lg',
         rounded: 'lg',
-        visibility: VISIBILITY.BLUR
+        visibility: VISIBILITY.BLUR,
     },
 };
