@@ -27,6 +27,9 @@ jobs:
     runs-on: [self-hosted, self-hosted-arc]
 
     steps:
+    - name: Checkout sui source
+      uses: actions/checkout@7dd9e2a3dc350cf687eb1b2a4fadfee8c8e49675 # pin@v3
+
     - name: Download an artifact for the last saved ${{ inputs.environment }} protocol version
       continue-on-error: true
       uses: actions/download-artifact@v3
@@ -45,10 +48,6 @@ jobs:
       run: | 
         curl -s https://fullnode.${{ inputs.environment }}.sui.io:443 -H 'Content-Type: application/json' -d '{"jsonrpc":"2.0", "method":"suix_getLatestSuiSystemState", "params":[], "id":1}' | jq -r '.result.protocolVersion' > /tmp/${{ inputs.environment }}_current_protocol_version.txt
         echo "current_protocol_version=`cat /tmp/${{ inputs.environment }}_current_protocol_version.txt`" >> $GITHUB_ENV
-
-    - name: Checkout sui source
-      if: ${{ env.saved_protocol_version != '' && env.current_protocol_version > env.saved_protocol_version }}
-      uses: actions/checkout@7dd9e2a3dc350cf687eb1b2a4fadfee8c8e49675 # pin@v3
 
     - name: Update framework/${{ inputs.environment }}
       if: ${{ env.saved_protocol_version != '' && env.current_protocol_version > env.saved_protocol_version }}
