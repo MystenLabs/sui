@@ -10,8 +10,22 @@ use object_store::DynObjectStore;
 use std::num::NonZeroUsize;
 use std::path::PathBuf;
 use std::sync::Arc;
-use tracing::warn;
+use tracing::{error, warn};
 use url::Url;
+
+pub async fn get(location: &Path, from: Arc<DynObjectStore>) -> Result<Bytes, object_store::Error> {
+    let backoff = backoff::ExponentialBackoff::default();
+    let bytes = retry(backoff, || async {
+        from.get(location).await.map_err(|e| {
+            error!("Failed to read file from object store with error: {:?}", &e);
+            backoff::Error::transient(e)
+        })
+    })
+    .await?
+    .bytes()
+    .await?;
+    Ok(bytes)
+}
 
 pub async fn put(
     location: &Path,
@@ -21,9 +35,10 @@ pub async fn put(
     let backoff = backoff::ExponentialBackoff::default();
     retry(backoff, || async {
         if !bytes.is_empty() {
-            to.put(location, bytes.clone())
-                .await
-                .map_err(backoff::Error::transient)
+            to.put(location, bytes.clone()).await.map_err(|e| {
+                error!("Failed to write file to object store with error: {:?}", &e);
+                backoff::Error::transient(e)
+            })
         } else {
             warn!("Not copying empty file: {:?}", location);
             Ok(())
@@ -39,19 +54,13 @@ pub async fn copy_file(
     from: Arc<DynObjectStore>,
     to: Arc<DynObjectStore>,
 ) -> Result<(), object_store::Error> {
-    let backoff = backoff::ExponentialBackoff::default();
-    retry(backoff, || async {
-        let bytes = from.get(&path_in).await?.bytes().await?;
-        if !bytes.is_empty() {
-            to.put(&path_out, bytes)
-                .await
-                .map_err(backoff::Error::transient)
-        } else {
-            warn!("Not copying empty file: {:?}", path_in);
-            Ok(())
-        }
-    })
-    .await
+    let bytes = from.get(&path_in).await?.bytes().await?;
+    if !bytes.is_empty() {
+        put(&path_out, bytes, to).await
+    } else {
+        warn!("Not copying empty file: {:?}", path_in);
+        Ok(())
+    }
 }
 
 pub async fn copy_files(
@@ -64,12 +73,7 @@ pub async fn copy_files(
     let results: Vec<Result<(), object_store::Error>> =
         futures::stream::iter(files_in.iter().zip(files_out.iter()))
             .map(|(path_in, path_out)| {
-                let backoff = backoff::ExponentialBackoff::default();
-                retry(backoff, || async {
-                    copy_file(path_in.clone(), path_out.clone(), from.clone(), to.clone())
-                        .await
-                        .map_err(backoff::Error::transient)
-                })
+                copy_file(path_in.clone(), path_out.clone(), from.clone(), to.clone())
             })
             .boxed()
             .buffer_unordered(concurrency.get())
@@ -114,11 +118,10 @@ pub async fn delete_files(
         .map(|f| {
             let backoff = backoff::ExponentialBackoff::default();
             retry(backoff, || async {
-                store
-                    .clone()
-                    .delete(f)
-                    .await
-                    .map_err(backoff::Error::transient)
+                store.clone().delete(f).await.map_err(|e| {
+                    error!("Failed to delete file on object store with error: {:?}", &e);
+                    backoff::Error::transient(e)
+                })
             })
         })
         .boxed()

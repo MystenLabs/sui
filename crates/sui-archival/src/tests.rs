@@ -2,7 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::writer::ArchiveWriterV1;
-use crate::{read_manifest, FileCompression, StorageFormat, EPOCH_DIR_PREFIX};
+use crate::{
+    read_manifest, write_manifest, FileCompression, Manifest, StorageFormat, EPOCH_DIR_PREFIX,
+};
+use anyhow::Result;
 use object_store::path::Path;
 use object_store::DynObjectStore;
 use prometheus::Registry;
@@ -100,13 +103,7 @@ async fn insert_checkpoints_and_verify_manifest(
     let mut num_verified_iterations = 0;
     loop {
         if test_state.remote_path.join("MANIFEST").exists() {
-            if let Ok(manifest) = read_manifest(
-                test_state.local_path.clone(),
-                test_state.local_store.clone(),
-                test_state.remote_store.clone(),
-            )
-            .await
-            {
+            if let Ok(manifest) = read_manifest(test_state.remote_store.clone()).await {
                 for file in manifest.files().into_iter() {
                     let dir_prefix = Path::from(format!("{}{}", EPOCH_DIR_PREFIX, file.epoch_num));
                     let file_path = path_to_filesystem(
@@ -162,5 +159,20 @@ async fn test_archive_resumes() -> Result<(), anyhow::Error> {
     let _kill = test_state.archive_writer.start(test_store.clone())?;
     insert_checkpoints_and_verify_manifest(&test_state, test_store, prev_checkpoint).await?;
 
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_manifest_serde() -> Result<()> {
+    let original_manifest = Manifest::new(0, 100);
+    let remote_store = ObjectStoreConfig {
+        object_store: Some(ObjectStoreType::File),
+        directory: Some(temp_dir()),
+        ..Default::default()
+    }
+    .make()?;
+    write_manifest(original_manifest.clone(), remote_store.clone()).await?;
+    let downloaded_manifest = read_manifest(remote_store).await?;
+    assert_eq!(downloaded_manifest, original_manifest);
     Ok(())
 }

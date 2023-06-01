@@ -12,7 +12,7 @@ use num_enum::{IntoPrimitive, TryFromPrimitive};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use std::fs::File;
-use std::io::{BufReader, BufWriter, Read, Write};
+use std::io::{BufReader, Read, Write};
 use std::path::PathBuf;
 use std::{fs, io};
 use sui_simulator::fastcrypto::hash::{HashFunction, Sha3_256};
@@ -102,7 +102,7 @@ impl Blob {
         let res = bcs::from_bytes(&data)?;
         Ok(res)
     }
-    pub fn read<R: Read>(rbuf: &mut BufReader<R>) -> Result<Blob> {
+    pub fn read<R: Read>(rbuf: &mut R) -> Result<Blob> {
         let len = rbuf.read_varint::<u64>()? as usize;
         if len == 0 {
             return Err(anyhow!("Invalid object length of 0 in file"));
@@ -116,7 +116,7 @@ impl Blob {
         };
         Ok(blob)
     }
-    pub fn write<W: Write>(&self, wbuf: &mut BufWriter<W>) -> Result<usize> {
+    pub fn write<W: Write>(&self, wbuf: &mut W) -> Result<usize> {
         let mut buf = [0u8; MAX_VARINT_LENGTH];
         let mut counter = 0;
         let n = (self.data.len() as u64).encode_var(&mut buf);
