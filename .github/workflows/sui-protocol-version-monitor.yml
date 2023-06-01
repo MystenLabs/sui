@@ -48,11 +48,11 @@ jobs:
 
     - name: Update framework/${{ inputs.environment }}
       if: ${{ env.current_protocol_version > env.saved_protocol_version && github.ref ==  'refs/heads/master' }}
-      uses: Embraser01/update-git-branch-action@v1.0.0
+      uses: devvspaces/merge-branches@v1
       with:
-        branch: framework//${{ inputs.environment }}
-        force: 1 # To push-force to the branch
-        githubToken: ${{ secrets.GITHUB_TOKEN }} # Github Token
+        token: ${{ secrets.GITHUB_TOKEN }}
+        from_branch: ${{ inputs.environment }}
+        to_branch: framework/${{ inputs.environment }}
 
     - name: Upload current ${{ inputs.environment }} protocol version
       if: ${{ env.current_protocol_version > env.saved_protocol_version }}
