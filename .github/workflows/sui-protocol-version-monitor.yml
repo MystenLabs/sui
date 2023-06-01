@@ -54,7 +54,7 @@ jobs:
         curl -s https://fullnode.${{ inputs.environment }}.sui.io:443 -H 'Content-Type: application/json' -d '{"jsonrpc":"2.0", "method":"suix_getLatestSuiSystemState", "params":[], "id":1}' | jq -r '.result.protocolVersion' > /tmp/${{ inputs.environment }}_protocol.txt
         echo "current_protocol_version=`cat /tmp/${{ inputs.environment }}_protocol.txt`" >> $GITHUB_ENV
 
-    - name: Update framework/${{ inputs.environment }}
+    - name: Update framework/${{ inputs.environment }} branch
       if: ${{ env.saved_protocol_version != '' && env.current_protocol_version > env.saved_protocol_version }}
       continue-on-error: true
       uses: LucasRuy/sync-branch-action@v1.1.1
