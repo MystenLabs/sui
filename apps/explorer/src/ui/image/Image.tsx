@@ -4,9 +4,13 @@
 import { EyeClose16, NftTypeImage24 } from '@mysten/icons';
 import { cva, cx, type VariantProps } from 'class-variance-authority';
 
+import clsx from 'clsx';
+
 import { LoadingSpinner } from '../LoadingSpinner';
 
 import useImage from '~/hooks/useImage';
+import { VISIBILITY } from '~/hooks/useImageMod';
+import { useEffect, useState } from 'react';
 
 const imageStyles = cva(null, {
     variants: {
@@ -41,13 +45,14 @@ const imageStyles = cva(null, {
 
 type ImageStyleProps = VariantProps<typeof imageStyles>;
 
+
 export interface ImageProps
     extends ImageStyleProps,
-        React.ImgHTMLAttributes<HTMLImageElement> {
+    React.ImgHTMLAttributes<HTMLImageElement> {
     onClick?: () => void;
     moderate?: boolean;
     src: string;
-    blur?: boolean;
+    visibility?: VISIBILITY
 }
 
 function BaseImage({
@@ -58,10 +63,18 @@ function BaseImage({
     src,
     srcSet,
     fit,
-    blur,
+    visibility,
     onClick,
     ...imgProps
 }: ImageProps & { status: string }) {
+    const [isBlurred, setIsBlurred] = useState(false);
+
+    useEffect(() => {
+        if (visibility && visibility !== VISIBILITY.PASS) {
+            setIsBlurred(true);
+        }
+    }, [visibility]);
+
     return (
         <div
             className={cx(
@@ -69,16 +82,13 @@ function BaseImage({
                 'relative flex items-center justify-center bg-gray-40 text-gray-65'
             )}
         >
-            {status === 'loading' ? (
-                <LoadingSpinner />
-            ) : blur && status === 'loaded' ? (
-                <div className="absolute z-20 flex h-full w-full cursor-not-allowed items-center justify-center rounded-md bg-gray-100/30 text-center text-white backdrop-blur-md">
-                    <EyeClose16 />
-                </div>
-            ) : status === 'failed' ? (
-                <NftTypeImage24 />
-            ) : null}
-            {status === 'loaded' && (
+            {status === 'loading' ? <LoadingSpinner /> : <div>
+                {isBlurred &&
+                    <div className={clsx('absolute z-20 flex h-full w-full items-center justify-center rounded-md bg-gray-100/30 text-center text-white backdrop-blur-md',
+                        visibility === VISIBILITY.HIDE && 'cursor-not-allowed pointer-events-none')}
+                        onClick={() => setIsBlurred(!isBlurred)}>
+                        <EyeClose16 />
+                    </div>}
                 <img
                     alt={alt}
                     src={src}
@@ -91,12 +101,13 @@ function BaseImage({
                     onClick={onClick}
                     {...imgProps}
                 />
-            )}
+            </div>}
+            {status === 'failed' && <NftTypeImage24 />}
         </div>
     );
 }
 
 export function Image({ src, moderate = true, ...props }: ImageProps) {
-    const { status, url, nsfw } = useImage({ src, moderate });
-    return <BaseImage blur={nsfw} status={status} src={url} {...props} />;
+    const { status, url, moderation } = useImage({ src, moderate });
+    return <BaseImage visibility={moderation?.visibility} status={status} src={url} {...props} />;
 }
