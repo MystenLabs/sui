@@ -17,11 +17,11 @@ use tracing::trace;
 use crate::committee::EpochId;
 use crate::effects::{TransactionEffects, TransactionEvents};
 use crate::execution_status::ExecutionStatus;
-use crate::layout_resolver::LayoutResolver;
 use crate::storage::ObjectStore;
 use crate::sui_system_state::{
     get_sui_system_state, get_sui_system_state_wrapper, AdvanceEpochParams, SuiSystemState,
 };
+use crate::type_resolver::LayoutResolver;
 use crate::{
     base_types::{
         ObjectDigest, ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest,

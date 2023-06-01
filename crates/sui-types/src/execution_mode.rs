@@ -2,11 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use move_core_types::language_storage::TypeTag;
-use sui_types::{error::ExecutionError, transaction::Argument};
 
-use crate::programmable_transactions::{
-    context::ExecutionContext,
-    types::{RawValueType, StorageView, SuiResolver, Value},
+use crate::{
+    error::ExecutionError,
+    execution::{RawValueType, Value},
+    transaction::Argument,
+    type_resolver::TypeTagResolver,
 };
 
 pub type TransactionIndex = usize;
@@ -32,23 +33,19 @@ pub trait ExecutionMode {
 
     fn empty_results() -> Self::ExecutionResults;
 
-    fn add_argument_update<'vm, 'state, 'a, S: StorageView>(
-        context: &mut ExecutionContext<'vm, 'state, 'a, S>,
+    fn add_argument_update(
+        resolver: &impl TypeTagResolver,
         acc: &mut Self::ArgumentUpdates,
         arg: Argument,
         _new_value: &Value,
-    ) -> Result<(), ExecutionError>
-    where
-        &'state S: SuiResolver;
+    ) -> Result<(), ExecutionError>;
 
-    fn finish_command<'vm, 'state, 'a, S: StorageView>(
-        context: &mut ExecutionContext<'vm, 'state, 'a, S>,
+    fn finish_command(
+        resolver: &impl TypeTagResolver,
         acc: &mut Self::ExecutionResults,
         argument_updates: Self::ArgumentUpdates,
         command_result: &[Value],
-    ) -> Result<(), ExecutionError>
-    where
-        &'state S: SuiResolver;
+    ) -> Result<(), ExecutionError>;
 }
 
 #[derive(Copy, Clone)]
@@ -74,27 +71,21 @@ impl ExecutionMode for Normal {
 
     fn empty_results() -> Self::ExecutionResults {}
 
-    fn add_argument_update<'vm, 'state, 'a, S: StorageView>(
-        _context: &mut ExecutionContext<'vm, 'state, 'a, S>,
+    fn add_argument_update(
+        _resolver: &impl TypeTagResolver,
         _acc: &mut Self::ArgumentUpdates,
         _arg: Argument,
         _new_value: &Value,
-    ) -> Result<(), ExecutionError>
-    where
-        &'state S: SuiResolver,
-    {
+    ) -> Result<(), ExecutionError> {
         Ok(())
     }
 
-    fn finish_command<'vm, 'state, 'a, S: StorageView>(
-        _context: &mut ExecutionContext<'vm, 'state, 'a, S>,
+    fn finish_command(
+        _resolver: &impl TypeTagResolver,
         _acc: &mut Self::ExecutionResults,
         _argument_updates: Self::ArgumentUpdates,
         _command_result: &[Value],
-    ) -> Result<(), ExecutionError>
-    where
-        &'state S: SuiResolver,
-    {
+    ) -> Result<(), ExecutionError> {
         Ok(())
     }
 }
@@ -122,27 +113,21 @@ impl ExecutionMode for Genesis {
 
     fn empty_results() -> Self::ExecutionResults {}
 
-    fn add_argument_update<'vm, 'state, 'a, S: StorageView>(
-        _context: &mut ExecutionContext<'vm, 'state, 'a, S>,
+    fn add_argument_update(
+        _resolver: &impl TypeTagResolver,
         _acc: &mut Self::ArgumentUpdates,
         _arg: Argument,
         _new_value: &Value,
-    ) -> Result<(), ExecutionError>
-    where
-        &'state S: SuiResolver,
-    {
+    ) -> Result<(), ExecutionError> {
         Ok(())
     }
 
-    fn finish_command<'vm, 'state, 'a, S: StorageView>(
-        _context: &mut ExecutionContext<'vm, 'state, 'a, S>,
+    fn finish_command(
+        _resolver: &impl TypeTagResolver,
         _acc: &mut Self::ExecutionResults,
         _argument_updates: Self::ArgumentUpdates,
         _command_result: &[Value],
-    ) -> Result<(), ExecutionError>
-    where
-        &'state S: SuiResolver,
-    {
+    ) -> Result<(), ExecutionError> {
         Ok(())
     }
 }
@@ -173,27 +158,21 @@ impl ExecutionMode for System {
 
     fn empty_results() -> Self::ExecutionResults {}
 
-    fn add_argument_update<'vm, 'state, 'a, S: StorageView>(
-        _context: &mut ExecutionContext<'vm, 'state, 'a, S>,
+    fn add_argument_update(
+        _resolver: &impl TypeTagResolver,
         _acc: &mut Self::ArgumentUpdates,
         _arg: Argument,
         _new_value: &Value,
-    ) -> Result<(), ExecutionError>
-    where
-        &'state S: SuiResolver,
-    {
+    ) -> Result<(), ExecutionError> {
         Ok(())
     }
 
-    fn finish_command<'vm, 'state, 'a, S: StorageView>(
-        _context: &mut ExecutionContext<'vm, 'state, 'a, S>,
+    fn finish_command(
+        _resolver: &impl TypeTagResolver,
         _acc: &mut Self::ExecutionResults,
         _argument_updates: Self::ArgumentUpdates,
         _command_result: &[Value],
-    ) -> Result<(), ExecutionError>
-    where
-        &'state S: SuiResolver,
-    {
+    ) -> Result<(), ExecutionError> {
         Ok(())
     }
 }
@@ -232,51 +211,39 @@ impl ExecutionMode for DevInspect {
         vec![]
     }
 
-    fn add_argument_update<'vm, 'state, 'a, S: StorageView>(
-        context: &mut ExecutionContext<'vm, 'state, 'a, S>,
+    fn add_argument_update(
+        resolver: &impl TypeTagResolver,
         acc: &mut Self::ArgumentUpdates,
         arg: Argument,
         new_value: &Value,
-    ) -> Result<(), ExecutionError>
-    where
-        &'state S: SuiResolver,
-    {
-        let (bytes, type_tag) = value_to_bytes_and_tag(context, new_value)?;
+    ) -> Result<(), ExecutionError> {
+        let (bytes, type_tag) = value_to_bytes_and_tag(resolver, new_value)?;
         acc.push((arg, bytes, type_tag));
         Ok(())
     }
 
-    fn finish_command<'vm, 'state, 'a, S: StorageView>(
-        context: &mut ExecutionContext<'vm, 'state, 'a, S>,
+    fn finish_command(
+        resolver: &impl TypeTagResolver,
         acc: &mut Self::ExecutionResults,
         argument_updates: Self::ArgumentUpdates,
         command_result: &[Value],
-    ) -> Result<(), ExecutionError>
-    where
-        &'state S: SuiResolver,
-    {
+    ) -> Result<(), ExecutionError> {
         let command_bytes = command_result
             .iter()
-            .map(|value| value_to_bytes_and_tag(context, value))
+            .map(|value| value_to_bytes_and_tag(resolver, value))
             .collect::<Result<_, _>>()?;
         acc.push((argument_updates, command_bytes));
         Ok(())
     }
 }
 
-fn value_to_bytes_and_tag<'vm, 'state, 'a, S: StorageView>(
-    context: &mut ExecutionContext<'vm, 'state, 'a, S>,
+fn value_to_bytes_and_tag(
+    resolver: &impl TypeTagResolver,
     value: &Value,
-) -> Result<(Vec<u8>, TypeTag), ExecutionError>
-where
-    &'state S: SuiResolver,
-{
+) -> Result<(Vec<u8>, TypeTag), ExecutionError> {
     let (type_tag, bytes) = match value {
         Value::Object(obj) => {
-            let tag = context
-                .session
-                .get_type_tag(&obj.type_)
-                .map_err(|e| context.convert_vm_error(e))?;
+            let tag = resolver.get_type_tag(&obj.type_)?;
             let mut bytes = vec![];
             obj.write_bcs_bytes(&mut bytes);
             (tag, bytes)
@@ -286,10 +253,7 @@ where
             (TypeTag::Vector(Box::new(TypeTag::U8)), bytes.clone())
         }
         Value::Raw(RawValueType::Loaded { ty, .. }, bytes) => {
-            let tag = context
-                .session
-                .get_type_tag(ty)
-                .map_err(|e| context.convert_vm_error(e))?;
+            let tag = resolver.get_type_tag(ty)?;
             (tag, bytes.clone())
         }
     };

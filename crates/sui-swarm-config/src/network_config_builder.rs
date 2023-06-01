@@ -346,10 +346,10 @@ mod tests {
 mod test {
     use std::collections::HashSet;
     use std::sync::Arc;
-    use sui_adapter::execution_mode;
     use sui_config::genesis::Genesis;
     use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
     use sui_types::epoch_data::EpochData;
+    use sui_types::execution_mode;
     use sui_types::gas::SuiGasStatus;
     use sui_types::metrics::LimitsMetrics;
     use sui_types::sui_system_state::SuiSystemStateTrait;

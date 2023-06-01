@@ -38,8 +38,8 @@ use std::{
     path::Path,
     sync::Arc,
 };
+use sui_adapter::adapter::new_move_vm;
 use sui_adapter::execution_engine;
-use sui_adapter::{adapter::new_move_vm, execution_mode};
 use sui_core::{
     state_accumulator::{accumulate_effects, WrappedObject},
     transaction_input_checker::check_objects,
@@ -49,6 +49,7 @@ use sui_framework::DEFAULT_FRAMEWORK_PATH;
 use sui_protocol_config::{Chain, ProtocolConfig};
 use sui_types::accumulator::Accumulator;
 use sui_types::effects::TransactionEffectsAPI;
+use sui_types::execution_mode;
 use sui_types::execution_status::ExecutionStatus;
 use sui_types::MOVE_STDLIB_PACKAGE_ID;
 use sui_types::{

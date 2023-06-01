@@ -6,6 +6,7 @@ use crate::{
     base_types::*,
     committee::{Committee, EpochId, StakeUnit},
     digests::CheckpointContentsDigest,
+    execution_status::CommandArgumentError,
     messages_checkpoint::CheckpointSequenceNumber,
     object::Owner,
 };
@@ -73,7 +74,7 @@ macro_rules! invariant_violation {
 
 #[macro_export]
 macro_rules! assert_invariant {
-    ($cond:expr, $($args:expr),*) => {{
+    ($cond:expr, $($args:expr),* $(,)?) => {{
         if !$cond {
             invariant_violation!($($args),*)
         }
@@ -828,4 +829,11 @@ impl From<ExecutionErrorKind> for ExecutionError {
     fn from(kind: ExecutionErrorKind) -> Self {
         Self::from_kind(kind)
     }
+}
+
+pub fn command_argument_error(e: CommandArgumentError, arg_idx: usize) -> ExecutionError {
+    ExecutionError::from_kind(ExecutionErrorKind::command_argument_error(
+        e,
+        arg_idx as u16,
+    ))
 }

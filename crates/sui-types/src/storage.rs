@@ -59,6 +59,9 @@ pub enum ObjectChange {
     Delete(SequenceNumber, DeleteKind),
 }
 
+pub trait StorageView: Storage + ParentSync + ChildObjectResolver {}
+impl<T: Storage + ParentSync + ChildObjectResolver> StorageView for T {}
+
 /// An abstraction of the (possibly distributed) store for objects. This
 /// API only allows for the retrieval of objects, not any state changes
 pub trait ChildObjectResolver {

@@ -13,7 +13,7 @@ use std::collections::{BTreeMap, HashSet};
 use std::fs;
 use std::path::Path;
 use std::sync::Arc;
-use sui_adapter::{adapter, execution_mode, programmable_transactions};
+use sui_adapter::{adapter, programmable_transactions};
 use sui_config::genesis::{
     Genesis, GenesisCeremonyParameters, GenesisChainParameters, TokenDistributionSchedule,
     UnsignedGenesis,
@@ -30,6 +30,7 @@ use sui_types::crypto::{
 };
 use sui_types::effects::{TransactionEffects, TransactionEvents};
 use sui_types::epoch_data::EpochData;
+use sui_types::execution_mode;
 use sui_types::gas::SuiGasStatus;
 use sui_types::gas_coin::GasCoin;
 use sui_types::governance::StakedSui;
