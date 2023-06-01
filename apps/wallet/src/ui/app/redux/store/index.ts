@@ -3,6 +3,7 @@
 
 import { configureStore } from '@reduxjs/toolkit';
 
+import { amplitudePersistenceMiddleware } from '../slices/account';
 import { thunkExtras } from './thunk-extras';
 import rootReducer from '_redux/RootReducer';
 
@@ -13,7 +14,7 @@ const store = configureStore({
             thunk: {
                 extraArgument: thunkExtras,
             },
-        }),
+        }).prepend(amplitudePersistenceMiddleware.middleware),
 });
 
 export default store;

@@ -25,6 +25,8 @@
         "storybook": "storybook dev -p 6007",
         "build-storybook": "storybook build",
         "preview-storybook": "pnpm dlx serve ./storybook-static -l 6007",
+        "ampli": "ampli",
+        "pull-amplitude": "ampli pull web && node prependLicense.mjs && prettier -w ampli.json src/shared/analytics/ampli/index.ts",
         "demoApp:dev": "pnpm vite -c ./tests/demo-app/vite.config.ts ./tests/demo-app/ --port 5181"
     },
     "repository": {
@@ -41,6 +43,8 @@
     "author": "Mysten Labs <build@mystenlabs.com>",
     "license": "Apache-2.0",
     "devDependencies": {
+        "@amplitude/ampli": "^1.31.5",
+        "@amplitude/analytics-types": "^0.20.0",
         "@babel/core": "^7.21.4",
         "@babel/preset-env": "^7.21.4",
         "@babel/preset-typescript": "^7.21.4",
@@ -112,6 +116,7 @@
         "webpack-merge": "^5.8.0"
     },
     "dependencies": {
+        "@amplitude/analytics-browser": "^1.10.3",
         "@floating-ui/react": "^0.23.0",
         "@fontsource/inter": "^4.5.15",
         "@fontsource/red-hat-mono": "^4.5.12",
