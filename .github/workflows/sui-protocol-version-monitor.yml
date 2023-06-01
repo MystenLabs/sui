@@ -38,29 +38,33 @@ jobs:
       continue-on-error: true
       shell: bash
       run: |
-        echo "saved_protocol_version=`cat /tmp/${{ inputs.environment }}_saved_protocol_version.txt`" >> $GITHUB_ENV
+        echo "saved_protocol_version=`cat /tmp/${{ inputs.environment }}_saved_protocol_version.txt || ''`" >> $GITHUB_ENV
 
     - name: Read live protocol version in ${{ inputs.environment }}
-      working-directory: ./
+      shell: bash
       run: | 
         curl -s https://fullnode.${{ inputs.environment }}.sui.io:443 -H 'Content-Type: application/json' -d '{"jsonrpc":"2.0", "method":"suix_getLatestSuiSystemState", "params":[], "id":1}' | jq -r '.result.protocolVersion' > /tmp/${{ inputs.environment }}_current_protocol_version.txt
         echo "current_protocol_version=`cat /tmp/${{ inputs.environment }}_current_protocol_version.txt`" >> $GITHUB_ENV
 
     - name: Checkout sui source
-      if: ${{ env.current_protocol_version > env.saved_protocol_version }}
+      if: ${{ env.saved_protocol_version != '' && env.current_protocol_version > env.saved_protocol_version }}
       uses: actions/checkout@7dd9e2a3dc350cf687eb1b2a4fadfee8c8e49675 # pin@v3
 
     - name: Update framework/${{ inputs.environment }}
-      if: ${{ env.current_protocol_version > env.saved_protocol_version }}
+      if: ${{ env.saved_protocol_version != '' && env.current_protocol_version > env.saved_protocol_version }}
       uses: LucasRuy/sync-branch-action@v1.1.1
       with:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         SOURCE_BRANCH: ${{ inputs.environment }}
         DESTINATION_BRANCH: framework/${{ inputs.environment }}
 
+    - name: Save current protocol version for ${{ inputs.environment }} to artifact
+      shell: bash
+      run: |
+        echo ${{ env.current_protocol_version }} > /tmp/${{ inputs.environment }}_saved_protocol_version.txt
+
     - name: Upload an artifact for current ${{ inputs.environment }} protocol version
-      if: ${{ env.current_protocol_version > env.saved_protocol_version }}
       uses: actions/upload-artifact@v3
       with:
         name: ${{ inputs.environment }}-protocol-version
-        path: /tmp/${{ inputs.environment }}_current_protocol_version.txt
+        path: /tmp/${{ inputs.environment }}_saved_protocol_version.txt
