@@ -5,9 +5,11 @@ use std::fmt;
 
 use crate::sui_serde::Readable;
 use fastcrypto::encoding::{Base58, Encoding};
+use once_cell::sync::OnceCell;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_with::{serde_as, Bytes};
+use sui_protocol_config::Chain;
 
 /// A representation of a 32 byte digest
 #[serde_as]
@@ -116,6 +118,48 @@ impl fmt::UpperHex for Digest {
     Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, JsonSchema,
 )]
 pub struct ChainIdentifier(CheckpointDigest);
+
+pub static MAINNET_CHAIN_IDENTIFIER: OnceCell<ChainIdentifier> = OnceCell::new();
+pub static TESTNET_CHAIN_IDENTIFIER: OnceCell<ChainIdentifier> = OnceCell::new();
+
+impl ChainIdentifier {
+    pub fn chain(&self) -> Chain {
+        let mainnet_id = get_mainnet_chain_identifier();
+        let testnet_id = get_testnet_chain_identifier();
+
+        match self {
+            id if *id == mainnet_id => Chain::Mainnet,
+            id if *id == testnet_id => Chain::Testnet,
+            _ => Chain::Unknown,
+        }
+    }
+}
+
+pub fn get_mainnet_chain_identifier() -> ChainIdentifier {
+    let digest = MAINNET_CHAIN_IDENTIFIER.get_or_init(|| {
+        let digest = CheckpointDigest::new(
+            Base58::decode("4btiuiMPvEENsttpZC7CZ53DruC3MAgfznDbASZ7DR6S")
+                .expect("mainnet genesis checkpoint digest literal is invalid")
+                .try_into()
+                .expect("Mainnet genesis checkpoint digest literal has incorrect length"),
+        );
+        ChainIdentifier::from(digest)
+    });
+    *digest
+}
+
+pub fn get_testnet_chain_identifier() -> ChainIdentifier {
+    let digest = TESTNET_CHAIN_IDENTIFIER.get_or_init(|| {
+        let digest = CheckpointDigest::new(
+            Base58::decode("69WiPg3DAQiwdxfncX6wYQ2siKwAe6L9BZthQea3JNMD")
+                .expect("testnet genesis checkpoint digest literal is invalid")
+                .try_into()
+                .expect("Testnet genesis checkpoint digest literal has incorrect length"),
+        );
+        ChainIdentifier::from(digest)
+    });
+    *digest
+}
 
 impl fmt::Display for ChainIdentifier {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

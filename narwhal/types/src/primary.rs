@@ -1599,7 +1599,7 @@ mod tests {
         VersionedMetadata,
     };
     use std::time::Duration;
-    use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
+    use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
     use test_utils::latest_protocol_version;
     use tokio::time::sleep;
 
@@ -1609,7 +1609,7 @@ mod tests {
         // BatchV1
         let batch = Batch::new(
             vec![],
-            &ProtocolConfig::get_for_version(ProtocolVersion::new(11)),
+            &ProtocolConfig::get_for_version(ProtocolVersion::new(11), Chain::Unknown),
         );
         assert!(batch.metadata().created_at > 0);
 

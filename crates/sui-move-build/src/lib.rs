@@ -40,7 +40,7 @@ use move_package::{
 };
 use move_symbol_pool::Symbol;
 use serde_reflection::Registry;
-use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
+use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
 use sui_types::{
     base_types::ObjectID,
     error::{SuiError, SuiResult},
@@ -202,7 +202,7 @@ pub fn build_from_resolution_graph(
             })?;
             // TODO make this configurable
             sui_bytecode_verifier::sui_verify_module_unmetered(
-                &ProtocolConfig::get_for_version(ProtocolVersion::MAX),
+                &ProtocolConfig::get_for_version(ProtocolVersion::MAX, Chain::Unknown),
                 m,
                 &fn_info,
             )?;

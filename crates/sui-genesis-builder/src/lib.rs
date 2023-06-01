@@ -19,7 +19,7 @@ use sui_config::genesis::{
     UnsignedGenesis,
 };
 use sui_framework::BuiltInFramework;
-use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
+use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
 use sui_types::base_types::{
     ExecutionDigests, ObjectID, SequenceNumber, SuiAddress, TransactionDigest, TxContext,
 };
@@ -720,7 +720,13 @@ fn build_unsigned_genesis_data(
         metrics.clone(),
     );
 
-    let protocol_config = ProtocolConfig::get_for_version(parameters.protocol_version);
+    // We have a circular dependency here. Protocol config depends on chain ID, which
+    // depends on genesis checkpoint (digest), which depends on genesis transaction, which
+    // depends on protocol config.
+    // However since we know there are no chain specific protocol config options in genesis,
+    // we use Chain::Unknown here.
+    let protocol_config =
+        ProtocolConfig::get_for_version(parameters.protocol_version, Chain::Unknown);
 
     let (genesis_transaction, genesis_effects, genesis_events, objects) =
         create_genesis_transaction(objects, &protocol_config, metrics, &epoch_data);
@@ -870,8 +876,13 @@ fn create_genesis_objects(
     metrics: Arc<LimitsMetrics>,
 ) -> Vec<Object> {
     let mut store = InMemoryStorage::new(Vec::new());
-    let protocol_config =
-        ProtocolConfig::get_for_version(ProtocolVersion::new(parameters.protocol_version));
+    // We don't know the chain ID here since we haven't yet created the genesis checkpoint.
+    // However since we know there are no chain specific protool config options in genesis,
+    // we use Chain::Unknown here.
+    let protocol_config = ProtocolConfig::get_for_version(
+        ProtocolVersion::new(parameters.protocol_version),
+        Chain::Unknown,
+    );
 
     let native_functions = sui_move_natives::all_natives(/* silent */ true);
     // paranoid checks are a last line of defense for malicious code, no need to run them in genesis
@@ -1006,9 +1017,13 @@ pub fn generate_genesis_system_object(
     metrics: Arc<LimitsMetrics>,
 ) -> anyhow::Result<()> {
     let genesis_digest = genesis_ctx.digest();
-    let protocol_config = ProtocolConfig::get_for_version(ProtocolVersion::new(
-        genesis_chain_parameters.protocol_version,
-    ));
+    // We don't know the chain ID here since we haven't yet created the genesis checkpoint.
+    // However since we know there are no chain specific protocol config options in genesis,
+    // we use Chain::Unknown here.
+    let protocol_config = ProtocolConfig::get_for_version(
+        ProtocolVersion::new(genesis_chain_parameters.protocol_version),
+        sui_protocol_config::Chain::Unknown,
+    );
     let mut temporary_store = TemporaryStore::new(
         &*store,
         InputObjects::new(vec![]),

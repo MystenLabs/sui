@@ -32,7 +32,7 @@ use std::{
 use store::rocks::DBMap;
 use store::rocks::MetricConf;
 use store::rocks::ReadWriteOptions;
-use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
+use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
 use tokio::sync::mpsc::{channel, Receiver, Sender};
 use tracing::info;
 use types::{
@@ -57,11 +57,11 @@ pub const CERTIFICATE_DIGEST_BY_ORIGIN_CF: &str = "certificate_digest_by_origin"
 pub const PAYLOAD_CF: &str = "payload";
 
 pub fn latest_protocol_version() -> ProtocolConfig {
-    ProtocolConfig::get_for_version(ProtocolVersion::max())
+    ProtocolConfig::get_for_version(ProtocolVersion::max(), Chain::Unknown)
 }
 
 pub fn get_protocol_config(version_number: u64) -> ProtocolConfig {
-    ProtocolConfig::get_for_version(ProtocolVersion::new(version_number))
+    ProtocolConfig::get_for_version(ProtocolVersion::new(version_number), Chain::Unknown)
 }
 
 pub fn temp_dir() -> std::path::PathBuf {

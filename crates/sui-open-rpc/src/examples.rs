@@ -39,6 +39,7 @@ use sui_json_rpc_types::{
 };
 use sui_json_rpc_types::{SuiTypeTag, ValidatorApy, ValidatorApys};
 use sui_open_rpc::ExamplePairing;
+use sui_protocol_config::Chain;
 use sui_protocol_config::ProtocolConfig;
 use sui_types::balance::Supply;
 use sui_types::base_types::random_object_ref;
@@ -650,7 +651,7 @@ impl RpcExampleProvider {
         ProtocolConfigResponse::from(
             version
                 .map(|v| {
-                    ProtocolConfig::get_for_version_if_supported(v.into())
+                    ProtocolConfig::get_for_version_if_supported(v.into(), Chain::Unknown)
                         .unwrap_or(ProtocolConfig::get_for_min_version())
                 })
                 .unwrap_or(ProtocolConfig::get_for_min_version()),

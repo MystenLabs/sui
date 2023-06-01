@@ -12,7 +12,6 @@ use fastcrypto::hash::{HashFunction, MultisetHash, Sha3_256};
 use futures::stream::FuturesUnordered;
 use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::resolver::ModuleResolver;
-use move_vm_runtime::move_vm::MoveVM;
 use once_cell::sync::OnceCell;
 use serde::{Deserialize, Serialize};
 use sui_types::messages_checkpoint::ECMHLiveObjectSetDigest;
@@ -1575,16 +1574,24 @@ impl AuthorityStore {
         self.perpetual_tables.iter_live_object_set()
     }
 
-    pub fn expensive_check_sui_conservation(self: &Arc<Self>, move_vm: &Arc<MoveVM>) -> SuiResult {
+    pub fn expensive_check_sui_conservation(
+        self: &Arc<Self>,
+        old_epoch_store: &AuthorityPerEpochStore,
+    ) -> SuiResult {
         if !self.enable_epoch_sui_conservation_check {
             return Ok(());
         }
+
+        let move_vm = old_epoch_store.move_vm();
+        let chain_identifier = old_epoch_store.get_chain_identifier();
+
         let protocol_version = ProtocolVersion::new(
             self.get_sui_system_state_object()
                 .expect("Read sui system state object cannot fail")
                 .protocol_version(),
         );
-        let protocol_config = ProtocolConfig::get_for_version(protocol_version);
+        let protocol_config =
+            ProtocolConfig::get_for_version(protocol_version, chain_identifier.chain());
         // Prior to gas model v2, SUI conservation is not guaranteed.
         if protocol_config.gas_model_version() <= 1 {
             return Ok(());

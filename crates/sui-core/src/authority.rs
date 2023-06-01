@@ -2098,7 +2098,7 @@ impl AuthorityState {
 
         if let Err(err) = self
             .database
-            .expensive_check_sui_conservation(cur_epoch_store.move_vm())
+            .expensive_check_sui_conservation(cur_epoch_store)
         {
             if cfg!(debug_assertions) {
                 panic!("{}", err);
@@ -3814,6 +3814,7 @@ impl AuthorityState {
             epoch_start_configuration,
             self.db(),
             expensive_safety_check_config,
+            cur_epoch_store.get_chain_identifier(),
         );
         self.epoch_store.store(new_epoch_store.clone());
         cur_epoch_store.epoch_terminated().await;
