@@ -15,7 +15,7 @@ on:
         description: 'Environment'
         required: true
         type: choice
-        default: "testnet"
+        default: "devnet"
         options:
         - devnet
         - testnet
