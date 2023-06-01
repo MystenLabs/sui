@@ -16,7 +16,7 @@ use move_binary_format::{
         FieldHandleIndex, FieldInstantiationIndex, FunctionDefinition, FunctionDefinitionIndex,
         FunctionHandleIndex, FunctionInstantiationIndex, Signature, SignatureIndex, SignatureToken,
         StructDefInstantiationIndex, StructDefinitionIndex, StructFieldInformation, TableIndex,
-        Visibility,
+        TypeParameterIndex, Visibility,
     },
     IndexKind,
 };
@@ -32,7 +32,7 @@ use move_core_types::{
 use move_vm_config::runtime::VMConfig;
 use move_vm_types::{
     data_store::DataStore,
-    loaded_data::runtime_types::{CachedStructIndex, StructType, Type},
+    loaded_data::runtime_types::{CachedStructIndex, DepthFormula, StructType, Type},
 };
 use parking_lot::RwLock;
 use sha3::{Digest, Sha3_256};
@@ -297,6 +297,7 @@ impl ModuleCache {
                     defining_id,
                     runtime_id: runtime_id.clone(),
                     struct_def: StructDefinitionIndex(idx as u16),
+                    depth: None,
                 },
             )?;
 
@@ -319,6 +320,8 @@ impl ModuleCache {
             field_types.push(tys);
         }
 
+        let field_types_len = field_types.len();
+
         // Add the field types to the newly added structs, processing them in reverse, to line them
         // up with the structs we added at the end of the global cache.
         for (fields, struct_type) in field_types
@@ -338,6 +341,27 @@ impl ModuleCache {
                     let mut struct_copy = (**struct_type).clone();
                     struct_copy.fields = fields;
                     *struct_type = Arc::new(struct_copy);
+                }
+            }
+        }
+
+        let mut depth_cache = BTreeMap::new();
+        for struct_type in self.structs.binaries.iter().rev().take(field_types_len) {
+            self.calculate_depth_of_struct(&struct_type, &mut depth_cache)?;
+        }
+
+        debug_assert!(depth_cache.len() == field_types_len);
+        for (cache_idx, depth) in depth_cache {
+            match Arc::get_mut(self.structs.binaries.get_mut(cache_idx.0).unwrap()) {
+                Some(struct_type) => struct_type.depth = Some(depth),
+                None => {
+                    // we have pending references to the `Arc` which is impossible,
+                    // given the code that adds the `Arc` is above and no reference to
+                    // it should exist.
+                    // So in the spirit of not crashing we log the issue and move on leaving the
+                    // structs depth as `None` -- if we try to access it later we will treat this
+                    // as too deep.
+                    error!("Arc<StructType> cannot have any live reference while publishing");
                 }
             }
         }
@@ -366,9 +390,9 @@ impl ModuleCache {
             self.functions.push(Arc::new(function));
         }
 
-        let module = LoadedModule::new(cursor, link_context, storage_id, module, self)?;
+        let loaded_module = LoadedModule::new(cursor, link_context, storage_id, module, self)?;
         self.loaded_modules
-            .insert((link_context, runtime_id), module)
+            .insert((link_context, runtime_id), loaded_module)
     }
 
     // `make_type` is the entry point to "translate" a `SignatureToken` to a `Type`
@@ -383,7 +407,7 @@ impl ModuleCache {
             SignatureToken::U256 => Type::U256,
             SignatureToken::Address => Type::Address,
             SignatureToken::Signer => Type::Signer,
-            SignatureToken::TypeParameter(idx) => Type::TyParam(*idx as usize),
+            SignatureToken::TypeParameter(idx) => Type::TyParam(*idx),
             SignatureToken::Vector(inner_tok) => {
                 Type::Vector(Box::new(self.make_type(module, inner_tok)?))
             }
@@ -421,6 +445,87 @@ impl ModuleCache {
             }
         };
         Ok(res)
+    }
+
+    fn calculate_depth_of_struct(
+        &self,
+        struct_type: &StructType,
+        depth_cache: &mut BTreeMap<CachedStructIndex, DepthFormula>,
+    ) -> PartialVMResult<DepthFormula> {
+        let def_idx = self
+            .resolve_struct_by_name(&struct_type.name, &struct_type.runtime_id)?
+            .0;
+
+        // If we've already computed this structs depth, no more work remains to be done.
+        if let Some(form) = &struct_type.depth {
+            return Ok(form.clone());
+        }
+        if let Some(form) = depth_cache.get(&def_idx) {
+            return Ok(form.clone());
+        }
+
+        let formulas = struct_type
+            .fields
+            .iter()
+            .map(|field_type| self.calculate_depth_of_type(field_type, depth_cache))
+            .collect::<PartialVMResult<Vec<_>>>()?;
+        let mut formula = DepthFormula::normalize(formulas);
+        // add 1 for the struct itself
+        formula.add(1);
+        let prev = depth_cache.insert(def_idx, formula.clone());
+        if prev.is_some() {
+            return Err(
+                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                    .with_message("Recursive type?".to_owned()),
+            );
+        }
+        Ok(formula)
+    }
+
+    fn calculate_depth_of_type(
+        &self,
+        ty: &Type,
+        depth_cache: &mut BTreeMap<CachedStructIndex, DepthFormula>,
+    ) -> PartialVMResult<DepthFormula> {
+        Ok(match ty {
+            Type::Bool
+            | Type::U8
+            | Type::U64
+            | Type::U128
+            | Type::Address
+            | Type::Signer
+            | Type::U16
+            | Type::U32
+            | Type::U256 => DepthFormula::constant(1),
+            // we should not see the reference here, we could instead give an invariant violation
+            Type::Vector(ty) | Type::Reference(ty) | Type::MutableReference(ty) => {
+                let mut inner = self.calculate_depth_of_type(ty, depth_cache)?;
+                // add 1 for the vector itself
+                inner.add(1);
+                inner
+            }
+            Type::TyParam(ty_idx) => DepthFormula::type_parameter(*ty_idx),
+            Type::Struct(cache_idx) => {
+                let struct_type = self.struct_at(*cache_idx);
+                let struct_formula = self.calculate_depth_of_struct(&struct_type, depth_cache)?;
+                debug_assert!(struct_formula.terms.is_empty());
+                struct_formula
+            }
+            Type::StructInstantiation(cache_idx, ty_args) => {
+                let struct_type = self.struct_at(*cache_idx);
+                let ty_arg_map = ty_args
+                    .iter()
+                    .enumerate()
+                    .map(|(idx, ty)| {
+                        let var = idx as TypeParameterIndex;
+                        Ok((var, self.calculate_depth_of_type(ty, depth_cache)?))
+                    })
+                    .collect::<PartialVMResult<BTreeMap<_, _>>>()?;
+                let struct_formula = self.calculate_depth_of_struct(&struct_type, depth_cache)?;
+                let subst_struct_formula = struct_formula.subst(ty_arg_map)?;
+                subst_struct_formula
+            }
+        })
     }
 
     // Given a ModuleId::struct_name, retrieve the `StructType` and the index associated.
@@ -1179,7 +1284,7 @@ impl Loader {
         // If that number is larger than MAX_TYPE_INSTANTIATION_NODES, refuse to construct this type.
         // This prevents constructing larger and lager types via struct instantiation.
         if let Type::StructInstantiation(_, struct_inst) = ty {
-            let mut sum_nodes: usize = 1;
+            let mut sum_nodes = 1u64;
             for ty in ty_args.iter().chain(struct_inst.iter()) {
                 sum_nodes = sum_nodes.saturating_add(self.count_type_nodes(ty));
                 if sum_nodes > MAX_TYPE_INSTANTIATION_NODES {
@@ -1384,7 +1489,7 @@ impl<'a> Resolver<'a> {
         }
         // Check if the function instantiation over all generics is larger
         // than MAX_TYPE_INSTANTIATION_NODES.
-        let mut sum_nodes: usize = 1;
+        let mut sum_nodes = 1u64;
         for ty in type_params.iter().chain(instantiation.iter()) {
             sum_nodes = sum_nodes.saturating_add(self.loader.count_type_nodes(ty));
             if sum_nodes > MAX_TYPE_INSTANTIATION_NODES {
@@ -1428,8 +1533,8 @@ impl<'a> Resolver<'a> {
         // Before instantiating the type, count the # of nodes of all type arguments plus
         // existing type instantiation.
         // If that number is larger than MAX_TYPE_INSTANTIATION_NODES, refuse to construct this type.
-        // This prevents constructing larger and lager types via struct instantiation.
-        let mut sum_nodes: usize = 1;
+        // This prevents constructing larger and larger types via struct instantiation.
+        let mut sum_nodes = 1u64;
         for ty in ty_args.iter().chain(struct_inst.instantiation.iter()) {
             sum_nodes = sum_nodes.saturating_add(self.loader.count_type_nodes(ty));
             if sum_nodes > MAX_TYPE_INSTANTIATION_NODES {
@@ -2349,8 +2454,8 @@ struct StructInfo {
     defining_struct_tag: Option<StructTag>,
     struct_layout: Option<MoveStructLayout>,
     annotated_struct_layout: Option<MoveStructLayout>,
-    node_count: Option<usize>,
-    annotated_node_count: Option<usize>,
+    node_count: Option<u64>,
+    annotated_node_count: Option<u64>,
 }
 
 #[derive(Copy, Clone, PartialEq, Eq)]
@@ -2385,15 +2490,15 @@ impl TypeCache {
 }
 
 /// Maximal depth of a value in terms of type depth.
-const VALUE_DEPTH_MAX: usize = 128;
+pub const VALUE_DEPTH_MAX: u64 = 128;
 
 /// Maximal nodes which are allowed when converting to layout. This includes the the types of
 /// fields for struct types.
-const MAX_TYPE_TO_LAYOUT_NODES: usize = 256;
+const MAX_TYPE_TO_LAYOUT_NODES: u64 = 256;
 
 /// Maximal nodes which are all allowed when instantiating a generic type. This does not include
 /// field types of structs.
-const MAX_TYPE_INSTANTIATION_NODES: usize = 128;
+const MAX_TYPE_INSTANTIATION_NODES: u64 = 128;
 
 impl Loader {
     fn read_cached_struct_tag(
@@ -2498,7 +2603,7 @@ impl Loader {
         })
     }
 
-    fn count_type_nodes(&self, ty: &Type) -> usize {
+    fn count_type_nodes(&self, ty: &Type) -> u64 {
         let mut todo = vec![ty];
         let mut result = 0;
         while let Some(ty) = todo.pop() {
@@ -2523,8 +2628,8 @@ impl Loader {
         &self,
         gidx: CachedStructIndex,
         ty_args: &[Type],
-        count: &mut usize,
-        depth: usize,
+        count: &mut u64,
+        depth: u64,
     ) -> PartialVMResult<MoveStructLayout> {
         if let Some(struct_map) = self.type_cache.read().structs.get(&gidx) {
             if let Some(struct_info) = struct_map.get(ty_args) {
@@ -2568,8 +2673,8 @@ impl Loader {
     fn type_to_type_layout_impl(
         &self,
         ty: &Type,
-        count: &mut usize,
-        depth: usize,
+        count: &mut u64,
+        depth: u64,
     ) -> PartialVMResult<MoveTypeLayout> {
         if *count > MAX_TYPE_TO_LAYOUT_NODES {
             return Err(PartialVMError::new(StatusCode::TOO_MANY_TYPE_NODES));
@@ -2612,8 +2717,8 @@ impl Loader {
         &self,
         gidx: CachedStructIndex,
         ty_args: &[Type],
-        count: &mut usize,
-        depth: usize,
+        count: &mut u64,
+        depth: u64,
     ) -> PartialVMResult<MoveStructLayout> {
         if let Some(struct_map) = self.type_cache.read().structs.get(&gidx) {
             if let Some(struct_info) = struct_map.get(ty_args) {
@@ -2666,8 +2771,8 @@ impl Loader {
     fn type_to_fully_annotated_layout_impl(
         &self,
         ty: &Type,
-        count: &mut usize,
-        depth: usize,
+        count: &mut u64,
+        depth: u64,
     ) -> PartialVMResult<MoveTypeLayout> {
         if *count > MAX_TYPE_TO_LAYOUT_NODES {
             return Err(PartialVMError::new(StatusCode::TOO_MANY_TYPE_NODES));

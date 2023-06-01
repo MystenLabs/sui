@@ -105,6 +105,11 @@ debug = true
 [profile.dev]
 debug = true
 
+[profile.test.package.move-vm-integration-tests]
+# opt-level 2 for move-compiler reduces the size of some of its
+# (recursive) stack frames by up to 10x, avoiding stack overflows.
+opt-level = 3
+
 # use release settings to reduce memory pressure in the linking step in CI
 [profile.ci]
 inherits = "test"

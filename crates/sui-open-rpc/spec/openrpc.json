@@ -1667,6 +1667,7 @@
                 "max_move_package_size": {
                   "u64": "102400"
                 },
+                "max_move_value_depth": null,
                 "max_move_vector_len": {
                   "u64": "262144"
                 },
