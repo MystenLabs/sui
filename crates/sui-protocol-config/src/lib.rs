@@ -36,7 +36,7 @@ const MAX_PROTOCOL_VERSION: u64 = 12;
 // Version 10:increase bytecode verifier `max_verifier_meter_ticks_per_function` and
 //            `max_meter_ticks_per_module` limits each from 6_000_000 to 16_000_000. sui-system
 //            framework changes.
-// Version 11: Introduce `std::type_name::get_with_original_ids` to the system frameworks.
+// Version 11: Introduce `std::type_name::get_with_original_ids` to the system frameworks. Bound max depth of values within the VM.
 // Version 12: Changes to deepbook in framework to add API for querying marketplace.
 //             Change NW Batch to use versioned metadata field.
 //             Changes to sui-system package to add PTB-friendly unstake function.
@@ -364,6 +364,9 @@ pub struct ProtocolConfig {
 
     /// Maximum length of an `Identifier` in Move. Enforced by the bytecode verifier at signing.
     max_move_identifier_len: Option<u64>,
+
+    /// Maximum depth of a Move value within the VM.
+    max_move_value_depth: Option<u64>,
 
     /// Maximum number of back edges in Move function. Enforced by the bytecode verifier at signing.
     max_back_edges_per_function: Option<u64>,
@@ -1075,6 +1078,7 @@ impl ProtocolConfig {
 
                 // Limits the length of a Move identifier
                 max_move_identifier_len: None,
+                max_move_value_depth: None,
 
                 // When adding a new constant, set it to None in the earliest version, like this:
                 // new_constant: None,
@@ -1156,7 +1160,11 @@ impl ProtocolConfig {
                 cfg.max_meter_ticks_per_module = Some(16_000_000);
                 cfg
             }
-            11 => Self::get_for_version_impl(version - 1, chain),
+            11 => {
+                let mut cfg = Self::get_for_version_impl(version - 1, chain);
+                cfg.max_move_value_depth = Some(128);
+                cfg
+            }
             12 => {
                 let mut cfg = Self::get_for_version_impl(version - 1, chain);
                 cfg.feature_flags.narwhal_versioned_metadata = true;
