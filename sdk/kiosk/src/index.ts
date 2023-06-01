@@ -7,3 +7,4 @@ export * from './query/kiosk';
 export * from './bcs';
 export * from './utils';
 export * from './query/transfer-policy';
+export * from './types';

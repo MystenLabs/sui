@@ -14,7 +14,7 @@ import {
   extractKioskData,
   getKioskObject,
 } from '../utils';
-import { Kiosk } from '../bcs';
+import { Kiosk } from '../types';
 
 /**
  * A dynamic field `Listing { ID, isExclusive }` attached to the Kiosk.

@@ -6,9 +6,9 @@
 
 - c322a230da: Fix fetchKiosk consistency/naming, include locked state in items
 
-## 1.0.0
+## 0.1.0
 
-### Major Changes
+### Minor Changes
 
 - 4ea96d909a: Kiosk SDK for managing, querying and interacting with Kiosk and TransferPolicy objects
 
