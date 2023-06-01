@@ -1404,7 +1404,6 @@
                 "buffer_stake_for_protocol_upgrade_bps": {
                   "u64": "5000"
                 },
-                "consensus_user_transaction_reordering_version": null,
                 "crypto_invalid_arguments_cost": {
                   "u64": "100"
                 },

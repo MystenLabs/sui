@@ -27,6 +27,7 @@ use std::collections::{BTreeSet, HashMap, HashSet};
 use std::hash::{Hash, Hasher};
 use std::num::NonZeroUsize;
 use std::sync::Arc;
+use sui_protocol_config::ConsensusTransactionOrdering;
 use sui_types::base_types::{AuthorityName, EpochId, TransactionDigest};
 use sui_types::storage::ParentSync;
 use sui_types::transaction::{SenderSignedData, VerifiedTransaction};
@@ -294,16 +295,16 @@ impl<T: ParentSync + Send + Sync> ExecutionState for ConsensusHandler<T> {
         }
 
         // TODO: make the reordering algorithm richer and depend on object hotness as well.
-        // Reorder transactions based on their gas prices. System transactions without gas price
-        // are put to the end of the transaction vector.
-        // We reorder starting from the second transaction, since the commit consensus prologue
-        // should stay the first transaction.
-        if let Some(1) = self
-            .epoch_store
-            .protocol_config()
-            .consensus_user_transaction_reordering_version_as_option()
-        {
-            reorder_by_gas_price(&mut sequenced_transactions[1..]);
+        // Order transactions based on their gas prices. System transactions without gas price
+        // are put to the beginning of the sequenced_transactions vector.
+        if matches!(
+            self.epoch_store
+                .protocol_config()
+                .consensus_transaction_ordering(),
+            ConsensusTransactionOrdering::ByGasPrice
+        ) {
+            let _scope = monitored_scope("HandleConsensusOutput::order_by_gas_price");
+            order_by_gas_price(&mut sequenced_transactions);
         }
 
         // (!) Should not add new transactions to sequenced_transactions beyond this point
@@ -370,7 +371,7 @@ impl<T: ParentSync + Send + Sync> ExecutionState for ConsensusHandler<T> {
     }
 }
 
-fn reorder_by_gas_price(sequenced_transactions: &mut [VerifiedSequencedConsensusTransaction]) {
+fn order_by_gas_price(sequenced_transactions: &mut [VerifiedSequencedConsensusTransaction]) {
     sequenced_transactions.sort_by_key(|txn| {
         // Reverse order, so that transactions with higher gas price are put to the beginning.
         std::cmp::Reverse({
@@ -379,8 +380,9 @@ fn reorder_by_gas_price(sequenced_transactions: &mut [VerifiedSequencedConsensus
                     tracking_id: _,
                     kind: ConsensusTransactionKind::UserTransaction(cert),
                 }) => cert.gas_price(),
-                // Non-user transactions are considered to have gas price of zero and are put to the end.
-                _ => 0,
+                // Non-user transactions are considered to have gas price of MAX u64 and are put to the beginning.
+                // This way consensus commit prologue transactions will stay at the beginning.
+                _ => u64::MAX,
             }
         })
     });
@@ -616,16 +618,16 @@ mod tests {
     }
 
     #[test]
-    fn test_reorder_by_gas_price() {
+    fn test_order_by_gas_price() {
         let mut v = vec![cap_txn(10), user_txn(42), user_txn(100), cap_txn(1)];
-        reorder_by_gas_price(&mut v);
+        order_by_gas_price(&mut v);
         assert_eq!(
             extract(v),
             vec![
+                "cap(10)".to_string(),
+                "cap(1)".to_string(),
                 "user(100)".to_string(),
                 "user(42)".to_string(),
-                "cap(10)".to_string(),
-                "cap(1)".to_string()
             ]
         );
 
@@ -639,18 +641,18 @@ mod tests {
             cap_txn(1),
             user_txn(1000),
         ];
-        reorder_by_gas_price(&mut v);
+        order_by_gas_price(&mut v);
         assert_eq!(
             extract(v),
             vec![
+                "cap(10)".to_string(),
+                "cap(1)".to_string(),
                 "user(1200)".to_string(),
                 "user(1000)".to_string(),
                 "user(1000)".to_string(),
                 "user(100)".to_string(),
                 "user(42)".to_string(),
                 "user(12)".to_string(),
-                "cap(10)".to_string(),
-                "cap(1)".to_string()
             ]
         );
 
@@ -662,7 +664,7 @@ mod tests {
             cap_txn(1),
             eop_txn(11),
         ];
-        reorder_by_gas_price(&mut v);
+        order_by_gas_price(&mut v);
         assert_eq!(
             extract(v),
             vec![
