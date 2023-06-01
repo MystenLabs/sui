@@ -36,3 +36,4 @@ export * from './hooks/useGetCoinBalance';
 export * from './utils/hasDisplayData';
 export * from './hooks/useMultiGetObjects';
 export * from './utils/persistableStorage';
+export * from './hooks/useGetBinaryVersion';
