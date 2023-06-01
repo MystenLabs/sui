@@ -242,6 +242,10 @@ impl NodeConfig {
     pub fn genesis(&self) -> Result<&genesis::Genesis> {
         self.genesis.genesis()
     }
+
+    pub fn sui_address(&self) -> SuiAddress {
+        (&self.account_key_pair.keypair().public()).into()
+    }
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]

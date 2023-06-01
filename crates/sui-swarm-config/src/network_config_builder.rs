@@ -12,7 +12,7 @@ use sui_config::genesis::{TokenAllocation, TokenDistributionScheduleBuilder};
 use sui_protocol_config::SupportedProtocolVersions;
 use sui_types::base_types::{AuthorityName, SuiAddress};
 use sui_types::committee::{Committee, ProtocolVersion};
-use sui_types::crypto::{generate_proof_of_possession, AccountKeyPair, KeypairTraits, PublicKey};
+use sui_types::crypto::{AccountKeyPair, KeypairTraits, PublicKey};
 use sui_types::object::Object;
 
 pub enum CommitteeConfig {
@@ -250,11 +250,8 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
             for (i, validator) in validators.iter().enumerate() {
                 let name = format!("validator-{i}");
                 let validator_info = validator.to_validator_info(name);
-                let pop = generate_proof_of_possession(
-                    &validator.key_pair,
-                    (&validator.account_key_pair.public()).into(),
-                );
-                builder = builder.add_validator(validator_info, pop);
+                builder =
+                    builder.add_validator(validator_info.info, validator_info.proof_of_possession);
             }
 
             builder = builder.with_token_distribution_schedule(token_distribution_schedule);
@@ -270,7 +267,8 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
             .into_iter()
             .enumerate()
             .map(|(idx, validator)| {
-                let mut builder = ValidatorConfigBuilder::new(self.config_directory.clone());
+                let mut builder = ValidatorConfigBuilder::new()
+                    .with_config_directory(self.config_directory.clone());
                 if let Some(spvc) = &self.supported_protocol_versions_config {
                     let supported_versions = match spvc {
                         ProtocolVersionsConfig::Default => {
