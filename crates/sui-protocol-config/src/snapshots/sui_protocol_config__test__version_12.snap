@@ -1,10 +1,11 @@
 ---
 source: crates/sui-protocol-config/src/lib.rs
-expression: "ProtocolConfig::get_for_version(cur)"
+expression: "ProtocolConfig::get_for_version(cur, Chain::Unknown)"
 ---
 version: 12
 feature_flags:
   package_upgrades: true
+  commit_root_state_digest: true
   advance_epoch_start_time_in_safe_mode: true
   loaded_child_objects_fixed: true
   missing_type_is_compatibility_error: true

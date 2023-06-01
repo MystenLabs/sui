@@ -812,7 +812,7 @@ impl ProtocolConfig {
         ProtocolConfig::get_for_version(ProtocolVersion::MAX, Chain::Unknown)
     }
 
-    fn get_for_version_impl(version: ProtocolVersion, _chain: Chain) -> Self {
+    fn get_for_version_impl(version: ProtocolVersion, chain: Chain) -> Self {
         #[cfg(msim)]
         {
             // populate the fake simulator version # with a different base tx cost.
@@ -1080,12 +1080,12 @@ impl ProtocolConfig {
                 // new_constant: None,
             },
             2 => {
-                let mut cfg = Self::get_for_version_impl(version - 1, _chain);
+                let mut cfg = Self::get_for_version_impl(version - 1, chain);
                 cfg.feature_flags.advance_epoch_start_time_in_safe_mode = true;
                 cfg
             }
             3 => {
-                let mut cfg = Self::get_for_version_impl(version - 1, _chain);
+                let mut cfg = Self::get_for_version_impl(version - 1, chain);
                 // changes for gas model
                 cfg.gas_model_version = Some(2);
                 // max gas budget is in MIST and an absolute value 50SUI
@@ -1103,7 +1103,7 @@ impl ProtocolConfig {
                 cfg
             }
             4 => {
-                let mut cfg = Self::get_for_version_impl(version - 1, _chain);
+                let mut cfg = Self::get_for_version_impl(version - 1, chain);
                 // Change reward slashing rate to 100%.
                 cfg.reward_slashing_rate = Some(10000);
                 // protect old and new lookup for object version
@@ -1111,7 +1111,7 @@ impl ProtocolConfig {
                 cfg
             }
             5 => {
-                let mut cfg = Self::get_for_version_impl(version - 1, _chain);
+                let mut cfg = Self::get_for_version_impl(version - 1, chain);
                 cfg.feature_flags.missing_type_is_compatibility_error = true;
                 cfg.gas_model_version = Some(4);
                 cfg.feature_flags.scoring_decision_with_validity_cutoff = true;
@@ -1120,14 +1120,14 @@ impl ProtocolConfig {
                 cfg
             }
             6 => {
-                let mut cfg = Self::get_for_version_impl(version - 1, _chain);
+                let mut cfg = Self::get_for_version_impl(version - 1, chain);
                 cfg.gas_model_version = Some(5);
                 cfg.buffer_stake_for_protocol_upgrade_bps = Some(5000);
                 cfg.feature_flags.consensus_order_end_of_epoch_last = true;
                 cfg
             }
             7 => {
-                let mut cfg = Self::get_for_version_impl(version - 1, _chain);
+                let mut cfg = Self::get_for_version_impl(version - 1, chain);
                 cfg.feature_flags.disallow_adding_abilities_on_upgrade = true;
                 cfg.feature_flags
                     .disable_invariant_violation_check_in_swap_loc = true;
@@ -1136,13 +1136,13 @@ impl ProtocolConfig {
                 cfg
             }
             8 => {
-                let mut cfg = Self::get_for_version_impl(version - 1, _chain);
+                let mut cfg = Self::get_for_version_impl(version - 1, chain);
                 cfg.feature_flags
                     .disallow_change_struct_type_params_on_upgrade = true;
                 cfg
             }
             9 => {
-                let mut cfg = Self::get_for_version_impl(version - 1, _chain);
+                let mut cfg = Self::get_for_version_impl(version - 1, chain);
                 // Limits the length of a Move identifier
                 cfg.max_move_identifier_len = Some(128);
                 cfg.feature_flags.no_extraneous_module_bytes = true;
@@ -1151,15 +1151,18 @@ impl ProtocolConfig {
                 cfg
             }
             10 => {
-                let mut cfg = Self::get_for_version_impl(version - 1, _chain);
+                let mut cfg = Self::get_for_version_impl(version - 1, chain);
                 cfg.max_verifier_meter_ticks_per_function = Some(16_000_000);
                 cfg.max_meter_ticks_per_module = Some(16_000_000);
                 cfg
             }
-            11 => Self::get_for_version_impl(version - 1, _chain),
+            11 => Self::get_for_version_impl(version - 1, chain),
             12 => {
-                let mut cfg = Self::get_for_version_impl(version - 1, _chain);
+                let mut cfg = Self::get_for_version_impl(version - 1, chain);
                 cfg.feature_flags.narwhal_versioned_metadata = true;
+                if chain != Chain::Mainnet {
+                    cfg.feature_flags.commit_root_state_digest = true;
+                }
                 cfg
             }
             // Use this template when making changes:
