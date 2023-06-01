@@ -201,6 +201,10 @@ struct FeatureFlags {
     // If true, then use the versioned metadata format in narwhal entities.
     #[serde(skip_serializing_if = "is_false")]
     narwhal_versioned_metadata: bool,
+
+    // Enable zklogin auth
+    #[serde(skip_serializing_if = "is_false")]
+    zklogin_auth: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -731,6 +735,10 @@ impl ProtocolConfig {
     pub fn no_extraneous_module_bytes(&self) -> bool {
         self.feature_flags.no_extraneous_module_bytes
     }
+
+    pub fn zklogin_auth(&self) -> bool {
+        self.feature_flags.zklogin_auth
+    }
 }
 
 #[cfg(not(msim))]
@@ -1170,6 +1178,7 @@ impl ProtocolConfig {
                 cfg.feature_flags.narwhal_versioned_metadata = true;
                 if chain != Chain::Mainnet {
                     cfg.feature_flags.commit_root_state_digest = true;
+                    cfg.feature_flags.zklogin_auth = true;
                 }
                 cfg
             }
@@ -1224,6 +1233,9 @@ impl ProtocolConfig {
     }
     pub fn set_commit_root_state_digest_supported(&mut self, val: bool) {
         self.feature_flags.commit_root_state_digest = val
+    }
+    pub fn set_zklogin_auth(&mut self, val: bool) {
+        self.feature_flags.zklogin_auth = val
     }
 }
 
