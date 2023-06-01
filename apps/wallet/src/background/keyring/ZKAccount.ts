@@ -1,13 +1,39 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { type SuiAddress } from '@mysten/sui.js';
+import { type SuiAddress, bcs, SIGNATURE_SCHEME_TO_FLAG } from '@mysten/sui.js';
+import { BCS, fromB64, toB64 } from '@mysten/bcs';
 
 import { authenticateAccount } from '../zk-login';
 import { getCachedAccountCredentials } from '../zk-login/keys-vault';
 import { type StoredZkLoginAccount } from '../zk-login/storage';
 import { type Account, AccountType } from './Account';
 import { AccountKeypair } from './AccountKeypair';
+
+bcs.registerStructType('ZKLoginSignature', {
+    proof: {
+        pi_a: [BCS.VECTOR, BCS.STRING],
+        pi_b: [BCS.VECTOR, [BCS.VECTOR, BCS.STRING]],
+        pi_c: [BCS.VECTOR, BCS.STRING],
+        protocol: BCS.STRING,
+    },
+    public_inputs: {
+        inputs: [BCS.VECTOR, BCS.STRING],
+    },
+    aux_inputs: {
+        addr_seed: BCS.STRING,
+        eph_public_key: [BCS.VECTOR, BCS.STRING],
+        jwt_sha2_hash: [BCS.VECTOR, BCS.STRING],
+        jwt_signature: BCS.STRING,
+        key_claim_name: BCS.STRING,
+        masked_content: [BCS.VECTOR, BCS.U8],
+        max_epoch: BCS.U64,
+        num_sha2_blocks: BCS.U8,
+        payload_len: BCS.U16,
+        payload_start_index: BCS.U16,
+    },
+    user_signature: [BCS.VECTOR, BCS.U8],
+});
 
 export type SerializedZKAccount = {
     type: AccountType.ZK;
@@ -40,9 +66,22 @@ export class ZKAccount implements Account {
         }
         const { ephemeralKeyPair, proofs } = credentials;
         const accountKeyPair = new AccountKeypair(ephemeralKeyPair);
-        const signature = await accountKeyPair.sign(data);
-        // TODO: create the actual zk signature
-        return signature;
+        const userSignature = await accountKeyPair.sign(data);
+        const ZKLoginSignatureData = {
+            proof: { ...proofs.proof_points, protocol: 'groth16' },
+            public_inputs: { inputs: proofs.public_inputs },
+            aux_inputs: proofs.aux_inputs,
+            user_signature: fromB64(userSignature),
+        };
+        console.log(ZKLoginSignatureData);
+        const bytes = bcs
+            .ser('ZKLoginSignature', ZKLoginSignatureData)
+            .toBytes();
+        console.log('bcs bytes size', bytes.length);
+        const signatureBytes = new Uint8Array(bytes.length + 1);
+        signatureBytes.set([SIGNATURE_SCHEME_TO_FLAG['zkLoginFlag']]);
+        signatureBytes.set(bytes, 1);
+        return toB64(signatureBytes);
     }
 
     async ensureUnlocked(currentEpoch: number) {

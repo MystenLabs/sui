@@ -5,6 +5,7 @@ import {
     type SuiAddress,
     bcs,
     normalizeSuiAddress,
+    SIGNATURE_SCHEME_TO_FLAG,
 } from '@mysten/sui.js';
 import { blake2b } from '@noble/hashes/blake2b';
 import { bytesToHex, randomBytes } from '@noble/hashes/utils';
@@ -26,7 +27,6 @@ const clientID =
     '946731352276-pk5glcg8cqo38ndb39h7j093fpsphusu.apps.googleusercontent.com';
 const redirectUri = 'https://ainifalglpinojmobpmeblikiopckbbm.chromiumapp.org/'; // TODO: use Browser.identity.getRedirectURL() for prod
 const nonceLen = Math.ceil(256 / 6);
-const zkLoginFlag = 0x5;
 
 export type ZkProofsParams = {
     ephemeralPublicKey: bigint;
@@ -149,7 +149,7 @@ async function getAddress({
     const tmp = new Uint8Array(
         1 + addressSeedBytes.length + addressParamBytes.length
     );
-    tmp.set([zkLoginFlag]);
+    tmp.set([SIGNATURE_SCHEME_TO_FLAG['zkLoginFlag']]);
     tmp.set(addressParamBytes, 1);
     tmp.set(addressSeedBytes, 1 + addressParamBytes.length);
     return normalizeSuiAddress(
@@ -232,6 +232,10 @@ export async function authenticateAccount(
     const { email, pin, sub } = account;
     const maxEpoch = getMaxEpoch(currentEpoch);
     const { nonce, ephemeralKeyPair, randomness } = prepareZKLogin(maxEpoch);
+    console.log(
+        'ephemeralKeyPair address',
+        ephemeralKeyPair.getPublicKey().toSuiAddress()
+    );
     const jwt = await zkLogin(nonce, email);
     const decodedJwt = decodeJwt(jwt);
     const userPin = BigInt(pin);

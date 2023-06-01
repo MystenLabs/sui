@@ -234,7 +234,7 @@ export class BcsWriter {
   private allocateSize: number;
 
   constructor({
-    size = 1024,
+    size = 4096,
     maxSize,
     allocateSize = 1024,
   }: BcsWriterOptions = {}) {

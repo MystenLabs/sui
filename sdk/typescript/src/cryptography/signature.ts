@@ -31,6 +31,7 @@ export type SerializedSignature = string;
 export const SIGNATURE_SCHEME_TO_FLAG = {
   ED25519: 0x00,
   Secp256k1: 0x01,
+  zkLoginFlag: 0x5,
 };
 
 export const SIGNATURE_FLAG_TO_SCHEME = {
