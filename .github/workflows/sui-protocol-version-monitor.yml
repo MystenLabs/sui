@@ -31,11 +31,16 @@ jobs:
       uses: actions/checkout@7dd9e2a3dc350cf687eb1b2a4fadfee8c8e49675 # pin@v3
 
     - name: Download an artifact for the last saved ${{ inputs.environment }} protocol version
-      continue-on-error: true
-      uses: actions/download-artifact@v3
+      id: download-artifact
+      uses: dawidd6/action-download-artifact@v2
       with:
+        github_token: ${{secrets.GITHUB_TOKEN}}
+        workflow: sui-protocol-version-monitor.yml
+        workflow_conclusion: success
         name: ${{ inputs.environment }}-protocol-version
+        check_artifacts: true
         path: /tmp/${{ inputs.environment }}_saved_protocol_version.txt
+        if_no_artifact_found: warn
 
     - name: Read last saved protocol version for ${{ inputs.environment }}
       continue-on-error: true
