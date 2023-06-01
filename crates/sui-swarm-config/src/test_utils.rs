@@ -23,6 +23,13 @@ pub struct CommitteeFixture {
     committee: Committee,
 }
 
+type MakeCheckpointResults = (
+    Vec<VerifiedCheckpoint>,
+    Vec<VerifiedCheckpointContents>,
+    HashMap<CheckpointSequenceNumber, CheckpointDigest>,
+    HashMap<CheckpointDigest, VerifiedCheckpoint>,
+);
+
 impl CommitteeFixture {
     pub fn generate<R: ::rand::RngCore + ::rand::CryptoRng>(
         mut rng: R,
@@ -129,18 +136,28 @@ impl CommitteeFixture {
         checkpoint
     }
 
-    #[allow(clippy::type_complexity)]
-    pub fn make_checkpoints(
+    pub fn make_random_checkpoints(
         &self,
         number_of_checkpoints: usize,
         previous_checkpoint: Option<VerifiedCheckpoint>,
-        random_content: bool,
-    ) -> (
-        Vec<VerifiedCheckpoint>,
-        Vec<VerifiedCheckpointContents>,
-        HashMap<CheckpointSequenceNumber, CheckpointDigest>,
-        HashMap<CheckpointDigest, VerifiedCheckpoint>,
-    ) {
+    ) -> MakeCheckpointResults {
+        self.make_checkpoints(number_of_checkpoints, previous_checkpoint, random_contents)
+    }
+
+    pub fn make_empty_checkpoints(
+        &self,
+        number_of_checkpoints: usize,
+        previous_checkpoint: Option<VerifiedCheckpoint>,
+    ) -> MakeCheckpointResults {
+        self.make_checkpoints(number_of_checkpoints, previous_checkpoint, empty_contents)
+    }
+
+    fn make_checkpoints<F: Fn() -> VerifiedCheckpointContents>(
+        &self,
+        number_of_checkpoints: usize,
+        previous_checkpoint: Option<VerifiedCheckpoint>,
+        content_generator: F,
+    ) -> MakeCheckpointResults {
         // Only skip the first one if it was supplied
         let skip = previous_checkpoint.is_some() as usize;
         let first = previous_checkpoint
@@ -149,11 +166,7 @@ impl CommitteeFixture {
 
         let (ordered_checkpoints, contents): (Vec<_>, Vec<_>) =
             std::iter::successors(Some(first), |prev| {
-                let contents = if random_content {
-                    random_contents()
-                } else {
-                    empty_contents()
-                };
+                let contents = content_generator();
                 let contents_digest = *contents
                     .clone()
                     .into_inner()

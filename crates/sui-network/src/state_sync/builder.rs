@@ -135,7 +135,7 @@ where
             peers: HashMap::new(),
             unprocessed_checkpoints: HashMap::new(),
             sequence_number_to_digest: HashMap::new(),
-            no_peer_to_sync_content_wait_internal: Duration::from_secs(10),
+            wait_interval_when_no_peer_to_sync_content: Duration::from_secs(10),
         }
         .pipe(RwLock::new)
         .pipe(Arc::new);

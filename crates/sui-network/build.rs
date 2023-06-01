@@ -157,10 +157,10 @@ fn build_anemo_services(out_dir: &Path) {
         )
         .method(
             anemo_build::manual::Method::builder()
-                .name("get_peer_latest_checkpoint_info")
-                .route_name("GetPeerLatestCheckpointInfo")
+                .name("get_checkpoint_availability")
+                .route_name("GetCheckpointAvailability")
                 .request_type("()")
-                .response_type("crate::state_sync::GetPeerLatestCheckpointInfoResponse")
+                .response_type("crate::state_sync::GetCheckpointAvailabilityResponse")
                 .codec_path(codec_path)
                 .build(),
         )

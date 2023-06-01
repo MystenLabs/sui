@@ -426,7 +426,7 @@ fn sync_new_checkpoints(
     committee: &CommitteeFixture,
 ) -> Vec<VerifiedCheckpoint> {
     let (ordered_checkpoints, _, _sequence_number_to_digest, _checkpoints) =
-        committee.make_checkpoints(number_of_checkpoints, previous_checkpoint, false);
+        committee.make_empty_checkpoints(number_of_checkpoints, previous_checkpoint);
 
     for checkpoint in ordered_checkpoints.iter() {
         sync_checkpoint(checkpoint, checkpoint_store, sender);

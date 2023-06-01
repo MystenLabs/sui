@@ -21,7 +21,7 @@ use tokio::time::timeout;
 async fn server_push_checkpoint() {
     let committee = CommitteeFixture::generate(rand::rngs::OsRng, 0, 4);
     let (ordered_checkpoints, _, _sequence_number_to_digest, _checkpoints) =
-        committee.make_checkpoints(2, None, false);
+        committee.make_empty_checkpoints(2, None);
     let store = SharedInMemoryStore::default();
     store.inner_mut().insert_genesis_state(
         ordered_checkpoints.first().cloned().unwrap(),
@@ -92,7 +92,7 @@ async fn server_push_checkpoint() {
 async fn server_get_checkpoint() {
     let committee = CommitteeFixture::generate(rand::rngs::OsRng, 0, 4);
     let (ordered_checkpoints, _, _sequence_number_to_digest, _checkpoints) =
-        committee.make_checkpoints(3, None, false);
+        committee.make_empty_checkpoints(3, None);
 
     let (builder, server) = Builder::new()
         .store(SharedInMemoryStore::default())
@@ -176,7 +176,7 @@ async fn isolated_sync_job() {
     let committee = CommitteeFixture::generate(rand::rngs::OsRng, 0, 4);
     // build mock data
     let (ordered_checkpoints, _, sequence_number_to_digest, checkpoints) =
-        committee.make_checkpoints(100, None, false);
+        committee.make_empty_checkpoints(100, None);
 
     // Build and connect two nodes
     let (builder, server) = Builder::new().store(SharedInMemoryStore::default()).build();
@@ -262,7 +262,7 @@ async fn sync_with_checkpoints_being_inserted() {
     let committee = CommitteeFixture::generate(rand::rngs::OsRng, 0, 4);
     // build mock data
     let (ordered_checkpoints, _contents, sequence_number_to_digest, checkpoints) =
-        committee.make_checkpoints(4, None, false);
+        committee.make_empty_checkpoints(4, None);
 
     // Build and connect two nodes
     let (builder, server) = Builder::new().store(SharedInMemoryStore::default()).build();
@@ -392,7 +392,7 @@ async fn sync_with_checkpoints_watermark() {
     let committee = CommitteeFixture::generate(rand::rngs::OsRng, 0, 4);
     // build mock data
     let (ordered_checkpoints, contents, _sequence_number_to_digest, _checkpoints) =
-        committee.make_checkpoints(4, None, true);
+        committee.make_random_checkpoints(4, None);
     let last_checkpoint_seq = *ordered_checkpoints
         .last()
         .cloned()
@@ -429,11 +429,11 @@ async fn sync_with_checkpoints_watermark() {
     peer_heights_1
         .write()
         .unwrap()
-        .set_no_peer_to_sync_content_wait_internal(Duration::from_secs(1));
+        .set_wait_interval_when_no_peer_to_sync_content(Duration::from_secs(1));
     peer_heights_2
         .write()
         .unwrap()
-        .set_no_peer_to_sync_content_wait_internal(Duration::from_secs(1));
+        .set_wait_interval_when_no_peer_to_sync_content(Duration::from_secs(1));
 
     // Start both event loops
     tokio::spawn(event_loop_1.start());
@@ -578,7 +578,7 @@ async fn sync_with_checkpoints_watermark() {
     peer_heights_3
         .write()
         .unwrap()
-        .set_no_peer_to_sync_content_wait_internal(Duration::from_secs(1));
+        .set_wait_interval_when_no_peer_to_sync_content(Duration::from_secs(1));
     event_loop_3.store.inner_mut().insert_genesis_state(
         ordered_checkpoints.first().cloned().unwrap(),
         genesis_checkpoint_content.clone(),
@@ -621,7 +621,7 @@ async fn sync_with_checkpoints_watermark() {
     // Now set Peer 1's low watermark back to 0
     store_1.inner_mut().set_lowest_available_checkpoint(0);
 
-    // Peer 2 and Peer 3 will know about this change by `get_peer_latest_checkpoint_info`
+    // Peer 2 and Peer 3 will know about this change by `get_checkpoint_availability`
     // Soon we expect them to have all checkpoints's content.
     timeout(Duration::from_secs(6), async {
         for (checkpoint, contents) in ordered_checkpoints[2..]
@@ -692,7 +692,7 @@ async fn sync_with_checkpoints_watermark() {
     peer_heights_4
         .write()
         .unwrap()
-        .set_no_peer_to_sync_content_wait_internal(Duration::from_secs(1));
+        .set_wait_interval_when_no_peer_to_sync_content(Duration::from_secs(1));
     event_loop_4.store.inner_mut().insert_genesis_state(
         ordered_checkpoints.first().cloned().unwrap(),
         genesis_checkpoint_content,

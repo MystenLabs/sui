@@ -27,7 +27,7 @@ pub enum GetCheckpointSummaryRequest {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct GetPeerLatestCheckpointInfoResponse {
+pub struct GetCheckpointAvailabilityResponse {
     pub(crate) highest_synced_checkpoint: Checkpoint,
     pub(crate) lowest_available_checkpoint: CheckpointSequenceNumber,
 }
@@ -101,23 +101,23 @@ where
         Ok(Response::new(checkpoint))
     }
 
-    async fn get_peer_latest_checkpoint_info(
+    async fn get_checkpoint_availability(
         &self,
         _request: Request<()>,
-    ) -> Result<Response<GetPeerLatestCheckpointInfoResponse>, Status> {
-        let highest_synced = self
+    ) -> Result<Response<GetCheckpointAvailabilityResponse>, Status> {
+        let highest_synced_checkpoint = self
             .store
             .get_highest_synced_checkpoint()
             .map_err(|e| Status::internal(e.to_string()))
             .map(VerifiedCheckpoint::into_inner)?;
-        let lowest_available = self
+        let lowest_available_checkpoint = self
             .store
             .get_lowest_available_checkpoint()
             .map_err(|e| Status::internal(e.to_string()))?;
 
-        Ok(Response::new(GetPeerLatestCheckpointInfoResponse {
-            highest_synced_checkpoint: highest_synced,
-            lowest_available_checkpoint: lowest_available,
+        Ok(Response::new(GetCheckpointAvailabilityResponse {
+            highest_synced_checkpoint,
+            lowest_available_checkpoint,
         }))
     }
 

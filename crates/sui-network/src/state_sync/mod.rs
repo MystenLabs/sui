@@ -87,8 +87,8 @@ pub use generated::{
     state_sync_client::StateSyncClient,
     state_sync_server::{StateSync, StateSyncServer},
 };
+pub use server::GetCheckpointAvailabilityResponse;
 pub use server::GetCheckpointSummaryRequest;
-pub use server::GetPeerLatestCheckpointInfoResponse;
 
 use self::{metrics::Metrics, server::CheckpointContentsDownloadLimitLayer};
 
@@ -130,7 +130,8 @@ struct PeerHeights {
     unprocessed_checkpoints: HashMap<CheckpointDigest, Checkpoint>,
     sequence_number_to_digest: HashMap<CheckpointSequenceNumber, CheckpointDigest>,
 
-    no_peer_to_sync_content_wait_internal: Duration,
+    // The amount of time to wait before retry if there are no peers to sync content from.
+    wait_interval_when_no_peer_to_sync_content: Duration,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -253,12 +254,12 @@ impl PeerHeights {
     }
 
     #[cfg(test)]
-    pub fn set_no_peer_to_sync_content_wait_internal(&mut self, duration: Duration) {
-        self.no_peer_to_sync_content_wait_internal = duration;
+    pub fn set_wait_interval_when_no_peer_to_sync_content(&mut self, duration: Duration) {
+        self.wait_interval_when_no_peer_to_sync_content = duration;
     }
 
-    pub fn no_peer_to_sync_content_wait_internal(&self) -> Duration {
-        self.no_peer_to_sync_content_wait_internal
+    pub fn wait_interval_when_no_peer_to_sync_content(&self) -> Duration {
+        self.wait_interval_when_no_peer_to_sync_content
     }
 }
 
@@ -315,8 +316,8 @@ impl Iterator for PeerBalancer {
                 rand::thread_rng().gen_range(0..std::cmp::min(SELECTION_WINDOW, self.peers.len()));
             let (peer, info) = self.peers.remove(idx).unwrap();
             let requested_checkpoint = self.requested_checkpoint.unwrap_or(0);
-            // Summary will never be pruned
             match &self.request_type {
+                // Summary will never be pruned
                 PeerCheckpointRequestType::Summary if info.height >= requested_checkpoint => {
                     return Some(StateSyncClient::new(peer));
                 }
@@ -824,11 +825,11 @@ async fn query_peer_for_latest_info(
 ) -> Option<(Checkpoint, Option<CheckpointSequenceNumber>)> {
     let request = Request::new(()).with_timeout(timeout);
     let response = client
-        .get_peer_latest_checkpoint_info(request)
+        .get_checkpoint_availability(request)
         .await
         .map(Response::into_inner);
     match response {
-        Ok(GetPeerLatestCheckpointInfoResponse {
+        Ok(GetCheckpointAvailabilityResponse {
             highest_synced_checkpoint,
             lowest_available_checkpoint,
         }) => {
@@ -837,7 +838,7 @@ async fn query_peer_for_latest_info(
         Err(status) => {
             // If peer hasn't upgraded they would return 404 NotFound error
             if status.status() != anemo::types::response::StatusCode::NotFound {
-                trace!("get_peer_latest_checkpoint_info request failed: {status:?}");
+                trace!("get_checkpoint_availability request failed: {status:?}");
                 return None;
             }
         }
@@ -973,9 +974,8 @@ where
                     {
                         // peer didn't give us a checkpoint with the height that we requested
                         if *checkpoint.sequence_number() != next {
-                            tracing::error!(
-                                "peer returned checkpoint with wrong sequence number: expected {}, got {}",
-                                next,
+                            tracing::debug!(
+                                "peer returned checkpoint with wrong sequence number: expected {next}, got {}",
                                 checkpoint.sequence_number()
                             );
                             continue;
@@ -1001,7 +1001,7 @@ where
         // Verify the checkpoint
         let checkpoint = {
             let checkpoint = maybe_checkpoint.ok_or_else(|| {
-                anyhow::anyhow!("no peers were able to help sync checkpoint {}", next)
+                anyhow::anyhow!("no peers were able to help sync checkpoint {next}")
             })?;
             match verify_checkpoint(&current, &store, checkpoint) {
                 Ok(verified_checkpoint) => verified_checkpoint,
@@ -1253,8 +1253,7 @@ where
     .with_checkpoint(*checkpoint.sequence_number());
     let Some(contents) = get_full_checkpoint_contents(peers, &store, &checkpoint, timeout).await else {
         // Delay completion in case of error so we don't hammer the network with retries.
-        // TODO: we might want to connect to better peers here.
-        let duration = peer_heights.read().unwrap().no_peer_to_sync_content_wait_internal();
+        let duration = peer_heights.read().unwrap().wait_interval_when_no_peer_to_sync_content();
         tokio::time::sleep(duration).await;
         return Err(checkpoint);
     };
