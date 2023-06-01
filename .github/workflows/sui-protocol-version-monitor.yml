@@ -46,7 +46,6 @@ jobs:
       if: ${{ env.current_protocol_version > env.saved_protocol_version }}
       uses: actions/checkout@7dd9e2a3dc350cf687eb1b2a4fadfee8c8e49675 # pin@v3
 
-
     - name: Update framework/${{ inputs.environment }}
       if: ${{ env.current_protocol_version > env.saved_protocol_version && github.ref ==  'refs/heads/master' }}
       uses: Embraser01/update-git-branch-action@v1.0.0
