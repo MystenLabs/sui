@@ -1354,7 +1354,8 @@
                 "no_extraneous_module_bytes": false,
                 "package_digest_hash_module": false,
                 "package_upgrades": true,
-                "scoring_decision_with_validity_cutoff": true
+                "scoring_decision_with_validity_cutoff": true,
+                "zklogin_auth": false
               },
               "attributes": {
                 "address_from_bytes_cost_base": {
