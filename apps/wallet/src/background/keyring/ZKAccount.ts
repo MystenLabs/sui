@@ -73,7 +73,6 @@ export class ZKAccount implements Account {
             aux_inputs: proofs.aux_inputs,
             user_signature: fromB64(userSignature),
         };
-        console.log(ZKLoginSignatureData);
         const bytes = bcs
             .ser('ZKLoginSignature', ZKLoginSignatureData)
             .toBytes();

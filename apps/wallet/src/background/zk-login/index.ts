@@ -25,7 +25,7 @@ bcs.registerStructType('AddressParams', {
 
 const clientID =
     '946731352276-pk5glcg8cqo38ndb39h7j093fpsphusu.apps.googleusercontent.com';
-const redirectUri = 'https://ainifalglpinojmobpmeblikiopckbbm.chromiumapp.org/'; // TODO: use Browser.identity.getRedirectURL() for prod
+const redirectUri = Browser.identity.getRedirectURL();
 const nonceLen = Math.ceil(256 / 6);
 
 export type ZkProofsParams = {
@@ -232,10 +232,6 @@ export async function authenticateAccount(
     const { email, pin, sub } = account;
     const maxEpoch = getMaxEpoch(currentEpoch);
     const { nonce, ephemeralKeyPair, randomness } = prepareZKLogin(maxEpoch);
-    console.log(
-        'ephemeralKeyPair address',
-        ephemeralKeyPair.getPublicKey().toSuiAddress()
-    );
     const jwt = await zkLogin(nonce, email);
     const decodedJwt = decodeJwt(jwt);
     const userPin = BigInt(pin);
