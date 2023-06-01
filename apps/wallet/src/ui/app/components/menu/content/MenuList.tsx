@@ -80,7 +80,7 @@ function MenuList() {
                         icon={<CopyArchiveDoNotUse24 />}
                         title={
                             <div className="flex gap-1.5 items-center">
-                                FAQ{' '}
+                                FAQ
                                 <ArrowUpRight12 className="text-steel w-3 h-3" />
                             </div>
                         }
