@@ -195,7 +195,10 @@ impl AuthenticatorTrait for ZkLoginAuthenticator {
         // Finally, verify the Groth16 proof against public inputs and proof points.
         // Verifying key is pinned in fastcrypto.
         match verify_zk_login_proof_with_fixed_vk(&self.proof, &self.public_inputs) {
-            Ok(true) => Ok(()),
+            Ok(true) => {
+                println!("verify secure ok ");
+                Ok(())
+            },
             Ok(false) | Err(_) => Err(SuiError::InvalidSignature {
                 error: "Groth16 proof verify failed".to_string(),
             }),
