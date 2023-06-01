@@ -149,7 +149,7 @@ function NetworkVersion({
     binaryVersion: string;
 }) {
     return (
-        <div className="flex justify-between px-4 py-2 flex-col">
+        <div className="flex flex-col justify-between px-4 py-2">
             <Text variant="subtitle/normal" color="steel">
                 Sui {label}
             </Text>

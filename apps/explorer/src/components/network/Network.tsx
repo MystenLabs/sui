@@ -12,7 +12,7 @@ import { NetworkSelect, type NetworkOption } from '~/ui/header/NetworkSelect';
 export default function WrappedNetworkSelect() {
     const [network, setNetwork] = useContext(NetworkContext);
     const { data } = useGetSystemState();
-    const { data:binaryVersion } = useGetBinaryVersion();
+    const { data: binaryVersion } = useGetBinaryVersion();
 
     const networks = [
         { id: Network.MAINNET, label: 'Mainnet' },
