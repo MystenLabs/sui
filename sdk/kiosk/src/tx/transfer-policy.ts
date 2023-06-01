@@ -7,7 +7,6 @@ import { lock } from './kiosk';
 import {
   ObjectArgument,
   RulesEnvironmentParam,
-  TESTNET_TRANSFER_POLICY_RULES_PACKAGE_ADDRESS,
   TRANSFER_POLICY_MODULE,
 } from '../types';
 
