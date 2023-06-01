@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-import { useQuery } from '@tanstack/react-query';
 import { useAppsBackend } from '@mysten/core';
+import { useQuery } from '@tanstack/react-query';
 
 export enum VISIBILITY {
     PASS = 'PASS',
@@ -10,12 +10,12 @@ export enum VISIBILITY {
 }
 
 type ImageModeration = {
-    visibility?: VISIBILITY
-}
+    visibility?: VISIBILITY;
+};
 
-const placeholderData = { 
-    visibility: VISIBILITY.PASS
-}
+const placeholderData = {
+    visibility: VISIBILITY.PASS,
+};
 
 const isURL = (url?: string) => {
     if (!url) return false;
@@ -42,8 +42,8 @@ export function useImageMod({
             if (!isURL || !enabled) return placeholderData;
 
             return request<ImageModeration>('image', {
-                url
-            })
+                url,
+            });
         },
         placeholderData,
         staleTime: 24 * 60 * 60 * 1000,

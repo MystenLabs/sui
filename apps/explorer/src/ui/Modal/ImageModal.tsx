@@ -14,7 +14,7 @@ export interface ImageModalProps extends Omit<ModalProps, 'children'> {
     subtitle: string;
     alt: string;
     src: string;
-    moderate?: boolean
+    moderate?: boolean;
 }
 
 export function ImageModal({
@@ -25,7 +25,7 @@ export function ImageModal({
     subtitle,
     src,
     // NOTE: Leave false only if ImageModal is paired with an Image component
-    moderate = false
+    moderate = false,
 }: ImageModalProps) {
     return (
         <Modal open={open} onClose={onClose}>
