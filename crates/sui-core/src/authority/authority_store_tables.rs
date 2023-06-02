@@ -559,9 +559,7 @@ fn objects_table_default_config() -> DBOptions {
                 read_size_from_env(ENV_VAR_OBJECTS_BLOCK_CACHE_SIZE).unwrap_or(5 * 1024),
             )
             .options,
-        rw_options: ReadWriteOptions {
-            ignore_range_deletions: true,
-        },
+        rw_options: ReadWriteOptions::default().set_ignore_range_deletions(true),
     }
 }
 
