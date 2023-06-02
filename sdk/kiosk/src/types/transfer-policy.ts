@@ -12,6 +12,12 @@ export const TRANSFER_POLICY_CREATED_EVENT = `${TRANSFER_POLICY_MODULE}::Transfe
 /** The Transfer Policy Type */
 export const TRANSFER_POLICY_TYPE = `${TRANSFER_POLICY_MODULE}::TransferPolicy`;
 
+/** The Kiosk Lock Rule */
+export const KIOSK_LOCK_RULE = 'kiosk_lock_rule::Rule';
+
+/** The Royalty rule */
+export const ROYALTY_RULE = 'royalty_rule::Rule';
+
 /** The `TransferPolicy` object */
 export type TransferPolicy = {
   id: string;

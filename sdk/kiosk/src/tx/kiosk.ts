@@ -14,11 +14,13 @@ import {
   resolveRoyaltyRule,
 } from './transfer-policy';
 import {
+  KIOSK_LOCK_RULE,
   KIOSK_MODULE,
   KIOSK_TYPE,
   ObjectArgument,
   PurchaseAndResolvePoliciesResponse,
   PurchaseOptionalParams,
+  ROYALTY_RULE,
   RulesEnvironmentParam,
   TransferPolicy,
 } from '../types';
@@ -377,7 +379,7 @@ export function purchaseAndResolvePolicies(
     const ruleWithoutAddr = getTypeWithoutPackageAddress(rule);
 
     switch (ruleWithoutAddr) {
-      case 'royalty_rule::Rule':
+      case ROYALTY_RULE:
         resolveRoyaltyRule(
           tx,
           itemType,
@@ -387,7 +389,7 @@ export function purchaseAndResolvePolicies(
           environment,
         );
         break;
-      case 'kiosk_lock_rule::Rule':
+      case KIOSK_LOCK_RULE:
         if (!extraParams?.ownedKiosk || !extraParams?.ownedKioskCap)
           throw new Error(
             `This item type ${itemType} has a 'kiosk_lock_rule', but function call is missing user's kiosk and kioskCap params`,
