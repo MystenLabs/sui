@@ -27,9 +27,9 @@ aho-corasick-dff4ba8e3ae991db = { package = "aho-corasick", version = "1" }
 aliasable = { version = "0.1" }
 alloc-no-stdlib = { version = "2", default-features = false }
 alloc-stdlib = { version = "0.2", default-features = false }
-anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "88dd6f93a81871657f177384eeeff1268b58083b", default-features = false }
-anemo-cli = { git = "https://github.com/mystenlabs/anemo.git", rev = "88dd6f93a81871657f177384eeeff1268b58083b", default-features = false }
-anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "88dd6f93a81871657f177384eeeff1268b58083b", default-features = false }
+anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "cf95fa2268b6b273ee1b3e9180c8adf525ed80b7", default-features = false }
+anemo-cli = { git = "https://github.com/mystenlabs/anemo.git", rev = "cf95fa2268b6b273ee1b3e9180c8adf525ed80b7", default-features = false }
+anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "cf95fa2268b6b273ee1b3e9180c8adf525ed80b7", default-features = false }
 anes = { version = "0.1" }
 ansi_term = { version = "0.12", default-features = false }
 anyhow = { version = "1", features = ["backtrace"] }
@@ -205,8 +205,8 @@ event-listener = { version = "2", default-features = false }
 expect-test = { version = "1", default-features = false }
 eyre = { version = "0.6" }
 fail = { version = "0.4", default-features = false }
-fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "6d4da5715a15a47ff215c230f0edc48c2f34e065", features = ["copy_key"] }
-fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "6d4da5715a15a47ff215c230f0edc48c2f34e065", default-features = false }
+fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "d23c3d806b7be25c39a105432d93e95cc5ede14c", features = ["copy_key"] }
+fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "d23c3d806b7be25c39a105432d93e95cc5ede14c", default-features = false }
 fastrand = { version = "1", default-features = false }
 fd-lock = { version = "3", default-features = false }
 fdlimit = { version = "0.2", default-features = false }
@@ -693,10 +693,10 @@ aho-corasick-dff4ba8e3ae991db = { package = "aho-corasick", version = "1" }
 aliasable = { version = "0.1" }
 alloc-no-stdlib = { version = "2", default-features = false }
 alloc-stdlib = { version = "0.2", default-features = false }
-anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "88dd6f93a81871657f177384eeeff1268b58083b", default-features = false }
-anemo-build = { git = "https://github.com/mystenlabs/anemo.git", rev = "88dd6f93a81871657f177384eeeff1268b58083b", default-features = false }
-anemo-cli = { git = "https://github.com/mystenlabs/anemo.git", rev = "88dd6f93a81871657f177384eeeff1268b58083b", default-features = false }
-anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "88dd6f93a81871657f177384eeeff1268b58083b", default-features = false }
+anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "cf95fa2268b6b273ee1b3e9180c8adf525ed80b7", default-features = false }
+anemo-build = { git = "https://github.com/mystenlabs/anemo.git", rev = "cf95fa2268b6b273ee1b3e9180c8adf525ed80b7", default-features = false }
+anemo-cli = { git = "https://github.com/mystenlabs/anemo.git", rev = "cf95fa2268b6b273ee1b3e9180c8adf525ed80b7", default-features = false }
+anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "cf95fa2268b6b273ee1b3e9180c8adf525ed80b7", default-features = false }
 anes = { version = "0.1" }
 ansi_term = { version = "0.12", default-features = false }
 anyhow = { version = "1", features = ["backtrace"] }
@@ -907,9 +907,9 @@ event-listener = { version = "2", default-features = false }
 expect-test = { version = "1", default-features = false }
 eyre = { version = "0.6" }
 fail = { version = "0.4", default-features = false }
-fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "6d4da5715a15a47ff215c230f0edc48c2f34e065", features = ["copy_key"] }
-fastcrypto-derive = { git = "https://github.com/MystenLabs/fastcrypto", rev = "6d4da5715a15a47ff215c230f0edc48c2f34e065", default-features = false }
-fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "6d4da5715a15a47ff215c230f0edc48c2f34e065", default-features = false }
+fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "d23c3d806b7be25c39a105432d93e95cc5ede14c", features = ["copy_key"] }
+fastcrypto-derive = { git = "https://github.com/MystenLabs/fastcrypto", rev = "d23c3d806b7be25c39a105432d93e95cc5ede14c", default-features = false }
+fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "d23c3d806b7be25c39a105432d93e95cc5ede14c", default-features = false }
 fastrand = { version = "1", default-features = false }
 fd-lock = { version = "3", default-features = false }
 fdlimit = { version = "0.2", default-features = false }

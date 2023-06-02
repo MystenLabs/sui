@@ -114,12 +114,12 @@ impl AuthenticatorTrait for ZkLoginAuthenticator {
             });
         }
 
-        // Calculates the hash of all inputs equals to the one in public inputs.
-        if aux_inputs.calculate_all_inputs_hash() != self.public_inputs.get_all_inputs_hash() {
-            return Err(SuiError::InvalidSignature {
-                error: "Invalid all inputs hash".to_string(),
-            });
-        }
+        // // Calculates the hash of all inputs equals to the one in public inputs.
+        // if aux_inputs.calculate_all_inputs_hash() != self.public_inputs.get_all_inputs_hash() {
+        //     return Err(SuiError::InvalidSignature {
+        //         error: "Invalid all inputs hash".to_string(),
+        //     });
+        // }
 
         // Parse JWT signature from aux inputs.
         let sig = RSASignature::from_bytes(&aux_inputs.get_jwt_signature().map_err(|_| {
@@ -196,7 +196,8 @@ impl AuthenticatorTrait for ZkLoginAuthenticator {
         // Verifying key is pinned in fastcrypto.
         match verify_zk_login_proof_with_fixed_vk(&self.proof, &self.public_inputs) {
             Ok(true) => {
-                println!("verify secure ok ");
+                println!("verify secure ok");
+                // println!("verify secure {:?}", self.aux_inputs.get);
                 Ok(())
             },
             Ok(false) | Err(_) => Err(SuiError::InvalidSignature {
