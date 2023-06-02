@@ -189,7 +189,7 @@ export async function createZkAccount(currentEpoch: number) {
     await storeZkLoginAccount(account);
     keyring.importZkAccount(account);
     await cacheAccountCredentials({ address, ephemeralKeyPair, proofs });
-    return { pin: account.pin, address };
+    return { pin: account.pin, address, email: account.email };
 }
 
 export async function zkLogin(nonce: string, loginAccount?: string) {

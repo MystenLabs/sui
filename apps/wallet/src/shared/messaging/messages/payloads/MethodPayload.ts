@@ -11,6 +11,11 @@ type MethodPayloads = {
     zkCreateAccount: {
         currentEpoch: number;
     };
+    zkAccountCreated: {
+        pin: string;
+        email: string;
+        address: string;
+    };
     ensureZKAccountUnlocked: { currentEpoch: number; address: SuiAddress };
 };
 

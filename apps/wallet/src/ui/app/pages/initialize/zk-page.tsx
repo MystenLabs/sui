@@ -1,5 +1,7 @@
 import { Popover } from '@headlessui/react';
 import { useGetSystemState } from '@mysten/core';
+import { X12 } from '@mysten/icons';
+import { formatAddress } from '@mysten/sui.js';
 import { useMutation } from '@tanstack/react-query';
 import { toast } from 'react-hot-toast';
 
@@ -23,16 +25,46 @@ export function ZkPage() {
     const currentEpoch = data ? Number(data.epoch) : null;
     const createAccountMutation = useMutation({
         mutationKey: ['create', 'zk', 'account'],
-        mutationFn: async () => {
+        mutationFn: () => {
             if (currentEpoch === null) {
                 throw new Error('Missing current epoch');
             }
-            await backgroundClient.createZkAccount(currentEpoch);
+            return backgroundClient.createZkAccount(currentEpoch);
         },
         onError: (e) =>
             toast.error((e as Error)?.message || 'Error creating account'),
-        // TODO: show account pin and only close on user action
-        onSuccess: () => toast.success('Welcome aboard!'),
+        onSuccess: ({ address, email, pin }) =>
+            toast.success(
+                (t) => (
+                    <div className="flex flex-col gap-1 relative">
+                        <X12
+                            className="absolute top-0 right-0 cursor-pointer"
+                            onClick={() => toast.dismiss(t.id)}
+                        />
+                        <div className="mb-1">
+                            <Heading variant="heading6">
+                                Welcome aboard!
+                            </Heading>
+                        </div>
+                        <Text>
+                            Account{' '}
+                            <span className="font-semibold font-mono">
+                                {formatAddress(address)}
+                            </span>{' '}
+                            was added to your wallet.
+                        </Text>
+                        <Text variant="bodySmall">
+                            To recover your account use your google account{' '}
+                            <span className="font-semibold">{email}</span> and
+                            the following pin{' '}
+                            <span className="font-semibold font-mono">
+                                {pin}
+                            </span>
+                        </Text>
+                    </div>
+                ),
+                { duration: Infinity }
+            ),
     });
     return (
         <CardLayout>

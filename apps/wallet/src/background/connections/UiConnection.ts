@@ -27,7 +27,10 @@ import Tabs from '_src/background/Tabs';
 import Transactions from '_src/background/Transactions';
 import Keyring from '_src/background/keyring';
 import { growthbook } from '_src/shared/experimentation/features';
-import { isMethodPayload } from '_src/shared/messaging/messages/payloads/MethodPayload';
+import {
+    type MethodPayload,
+    isMethodPayload,
+} from '_src/shared/messaging/messages/payloads/MethodPayload';
 import {
     type QredoConnectPayload,
     isQredoConnectPayload,
@@ -200,8 +203,18 @@ export class UiConnection extends Connection {
                 await rejectQredoConnection(payload.args);
                 this.send(createMessage({ type: 'done' }, id));
             } else if (isMethodPayload(payload, 'zkCreateAccount')) {
-                await createZkAccount(payload.args.currentEpoch);
-                this.send(createMessage({ type: 'done' }, id));
+                this.send(
+                    createMessage<MethodPayload<'zkAccountCreated'>>(
+                        {
+                            type: 'method-payload',
+                            method: 'zkAccountCreated',
+                            args: await createZkAccount(
+                                payload.args.currentEpoch
+                            ),
+                        },
+                        id
+                    )
+                );
             }
         } catch (e) {
             this.send(

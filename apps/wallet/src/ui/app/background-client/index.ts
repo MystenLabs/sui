@@ -25,7 +25,10 @@ import { setActiveOrigin, changeActiveNetwork } from '_redux/slices/app';
 import { setPermissions } from '_redux/slices/permissions';
 import { setTransactionRequests } from '_redux/slices/transaction-requests';
 import { type SerializedLedgerAccount } from '_src/background/keyring/LedgerAccount';
-import { type MethodPayload } from '_src/shared/messaging/messages/payloads/MethodPayload';
+import {
+    isMethodPayload,
+    type MethodPayload,
+} from '_src/shared/messaging/messages/payloads/MethodPayload';
 import {
     isQredoConnectPayload,
     type QredoConnectPayload,
@@ -456,7 +459,17 @@ export class BackgroundClient {
                     method: 'zkCreateAccount',
                     args: { currentEpoch },
                 })
-            ).pipe(take(1))
+            ).pipe(
+                take(1),
+                map(({ payload }) => {
+                    if (isMethodPayload(payload, 'zkAccountCreated')) {
+                        return payload.args;
+                    }
+                    throw new Error(
+                        'Error unknown response for create ZK account'
+                    );
+                })
+            )
         );
     }
 
