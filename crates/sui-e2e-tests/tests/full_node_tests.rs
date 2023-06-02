@@ -106,22 +106,20 @@ async fn test_full_node_shared_objects() -> Result<(), anyhow::Error> {
 #[sim_test]
 async fn test_sponsored_transaction() -> Result<(), anyhow::Error> {
     telemetry_subscribers::init_for_testing();
-    let mut test_cluster = TestClusterBuilder::new().build().await?;
+    let test_cluster = TestClusterBuilder::new().build().await?;
     let rgp = test_cluster.get_reference_gas_price().await;
     let sender = test_cluster.get_address_0();
     let sponsor = test_cluster.get_address_1();
     let another_addr = test_cluster.get_address_2();
 
-    let context = &mut test_cluster.wallet;
-
     // This makes sender send one coin to sponsor.
     // The sent coin is used as sponsor gas in the following sponsored tx.
-    let (sent_coin, sender_, receiver, _, object_ref) = transfer_coin(context).await.unwrap();
+    let (sent_coin, sender_, receiver, _, object_ref) =
+        transfer_coin(&test_cluster.wallet).await.unwrap();
     assert_eq!(sender, sender_);
     assert_eq!(sponsor, receiver);
-    let context: &WalletContext = &test_cluster.wallet;
-    let object_ref = context.get_object_ref(object_ref.0).await?;
-    let gas_obj = context.get_object_ref(sent_coin).await?;
+    let object_ref = test_cluster.wallet.get_object_ref(object_ref.0).await?;
+    let gas_obj = test_cluster.wallet.get_object_ref(sent_coin).await?;
     info!("updated obj ref: {:?}", object_ref);
     info!("updated gas ref: {:?}", gas_obj);
 
@@ -146,14 +144,31 @@ async fn test_sponsored_transaction() -> Result<(), anyhow::Error> {
     let tx = to_sender_signed_transaction_with_multi_signers(
         tx_data,
         vec![
-            context.config.keystore.get_key(&sender).unwrap(),
-            context.config.keystore.get_key(&sponsor).unwrap(),
+            test_cluster
+                .wallet
+                .config
+                .keystore
+                .get_key(&sender)
+                .unwrap(),
+            test_cluster
+                .wallet
+                .config
+                .keystore
+                .get_key(&sponsor)
+                .unwrap(),
         ],
     );
 
-    context.execute_transaction_block(tx).await.unwrap();
+    test_cluster.execute_transaction(tx).await;
 
-    assert_eq!(sponsor, context.get_object_owner(&sent_coin).await.unwrap(),);
+    assert_eq!(
+        sponsor,
+        test_cluster
+            .wallet
+            .get_object_owner(&sent_coin)
+            .await
+            .unwrap(),
+    );
     Ok(())
 }
 
@@ -980,48 +995,45 @@ async fn get_past_obj_read_from_node(
 #[sim_test]
 async fn test_get_objects_read() -> Result<(), anyhow::Error> {
     telemetry_subscribers::init_for_testing();
-    let mut test_cluster = TestClusterBuilder::new().build().await?;
+    let test_cluster = TestClusterBuilder::new().build().await?;
     let rgp = test_cluster.get_reference_gas_price().await;
     let node = &test_cluster.fullnode_handle.sui_node;
-    let context = &mut test_cluster.wallet;
-    let package_id = context.publish_nfts_package().await.0;
+    let package_id = test_cluster.wallet.publish_nfts_package().await.0;
 
     // Create the object
-    let (sender, object_id, _) = context.create_devnet_nft(package_id).await;
-    sleep(Duration::from_secs(3)).await;
+    let (sender, object_id, _) = test_cluster.wallet.create_devnet_nft(package_id).await;
 
-    let recipient = context.config.keystore.addresses().get(1).cloned().unwrap();
+    let recipient = test_cluster.get_address_1();
     assert_ne!(sender, recipient);
 
     let (object_ref_v1, object_v1, _) = get_obj_read_from_node(node, object_id).await?;
 
     // Transfer the object from sender to recipient
-    let gas_ref = context
+    let gas_ref = test_cluster
+        .wallet
         .get_one_gas_object_owned_by_address(sender)
         .await
         .unwrap()
         .unwrap();
-    let nft_transfer_tx = context.sign_transaction(
+    let nft_transfer_tx = test_cluster.wallet.sign_transaction(
         &TestTransactionBuilder::new(sender, gas_ref, rgp)
             .transfer(object_ref_v1, recipient)
             .build(),
     );
-    context
-        .execute_transaction_block(nft_transfer_tx)
-        .await
-        .unwrap();
+    test_cluster.execute_transaction(nft_transfer_tx).await;
     sleep(Duration::from_secs(1)).await;
 
     let (object_ref_v2, object_v2, _) = get_obj_read_from_node(node, object_id).await?;
     assert_ne!(object_ref_v2, object_ref_v1);
 
     // Transfer some SUI to recipient
-    transfer_coin(context)
+    transfer_coin(&test_cluster.wallet)
         .await
         .expect("Failed to transfer coins to recipient");
 
     // Delete the object
-    let response = context
+    let response = test_cluster
+        .wallet
         .delete_devnet_nft(recipient, package_id, object_ref_v2)
         .await;
     assert_eq!(
@@ -1227,6 +1239,6 @@ async fn transfer_coin(
             .transfer(object_to_send, receiver)
             .build(),
     );
-    let resp = context.execute_transaction_block(txn).await?;
+    let resp = context.execute_transaction_must_succeed(txn).await;
     Ok((object_to_send.0, sender, receiver, resp.digest, gas_object))
 }
