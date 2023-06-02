@@ -738,6 +738,9 @@ impl TransactionManager {
                 warn!("Ignoring committed certificate from wrong epoch. Expected={} Actual={} CertificateDigest={:?}", inner.epoch, epoch_store.epoch(), digest);
                 return;
             }
+
+            self.objects_available_locked(&mut inner, epoch_store, output_object_keys);
+
             let Some(acquired_locks) = inner.executing_certificates.remove(digest) else {
                 trace!("{:?} not found in executing certificates, likely because it is a system transaction", digest);
                 return;
@@ -761,8 +764,6 @@ impl TransactionManager {
             self.metrics
                 .transaction_manager_num_executing_certificates
                 .set(inner.executing_certificates.len() as i64);
-
-            self.objects_available_locked(&mut inner, epoch_store, output_object_keys);
 
             inner.maybe_shrink_capacity();
         }
