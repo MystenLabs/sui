@@ -37,7 +37,7 @@ export function useImageMod({
     const { request } = useAppsBackend();
 
     return useQuery({
-        queryKey: ['image', url, enabled],
+        queryKey: ['image-mod', url, enabled],
         queryFn: async () => {
             if (!isURL || !enabled) return placeholderData;
 
