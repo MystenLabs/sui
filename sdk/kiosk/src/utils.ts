@@ -17,15 +17,16 @@ import { bcs } from './bcs';
 import {
   KIOSK_TYPE,
   Kiosk,
+  MAINNET_RULES_PACKAGE_ADDRESS,
   RulesEnvironmentParam,
-  TESTNET_TRANSFER_POLICY_RULES_PACKAGE_ADDRESS,
+  TESTNET_RULES_PACKAGE_ADDRESS,
 } from './types';
 
 /* A simple map to the rule package addresses */
 // TODO: Supply the mainnet and devnet addresses.
 export const rulesPackageAddresses = {
-  mainnet: '',
-  testnet: TESTNET_TRANSFER_POLICY_RULES_PACKAGE_ADDRESS,
+  mainnet: MAINNET_RULES_PACKAGE_ADDRESS,
+  testnet: TESTNET_RULES_PACKAGE_ADDRESS,
   devnet: '',
   custom: null,
 };
