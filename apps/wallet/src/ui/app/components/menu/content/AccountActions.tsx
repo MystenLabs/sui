@@ -1,7 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { type ReactNode } from 'react';
+import { useCopyToClipboard } from '@mysten/core';
+import { Copy12, X12 } from '@mysten/icons';
+import { useState, type ReactNode } from 'react';
+import { toast } from 'react-hot-toast';
 
 import { BadgeLabel } from '../../BadgeLabel';
 import { useNextMenuUrl } from '../hooks';
@@ -20,6 +23,8 @@ export type AccountActionsProps = {
 export function AccountActions({ account }: AccountActionsProps) {
     const exportAccountUrl = useNextMenuUrl(true, `/export/${account.address}`);
     const recoveryPassphraseUrl = useNextMenuUrl(true, '/recovery-passphrase');
+    const [pinToastID, setPinToastID] = useState<string | null>(null);
+    const copyToClipboard = useCopyToClipboard();
 
     let actionContent: ReactNode | null = null;
     switch (account.type) {
@@ -76,9 +81,61 @@ export function AccountActions({ account }: AccountActionsProps) {
             break;
         case AccountType.ZK:
             actionContent = (
-                <Text>
-                    Pin:<Text mono>{account.pin}</Text>
-                </Text>
+                <div>
+                    <Link
+                        disabled={!!pinToastID}
+                        onClick={(t) => {
+                            if (!pinToastID) {
+                                const tID = toast(
+                                    (t) => (
+                                        <div className="relative flex flex-col gap-4">
+                                            <X12
+                                                className="absolute top-0 right-0 cursor-pointer"
+                                                onClick={() => {
+                                                    toast.dismiss(t.id);
+                                                    setPinToastID(null);
+                                                }}
+                                            />
+                                            <Text
+                                                variant="captionSmall"
+                                                weight="semibold"
+                                            >
+                                                Your account pin is
+                                            </Text>
+                                            <Text
+                                                variant="pSubtitleSmall"
+                                                mono
+                                                weight="bold"
+                                            >
+                                                {account.pin}{' '}
+                                                <Copy12
+                                                    className="cursor-pointer"
+                                                    onClick={async () => {
+                                                        await copyToClipboard(
+                                                            account.pin
+                                                        );
+                                                        setPinToastID(null);
+                                                        toast.dismiss(t.id);
+                                                        toast.success(
+                                                            'Address pin copied'
+                                                        );
+                                                    }}
+                                                />
+                                            </Text>
+                                        </div>
+                                    ),
+                                    {
+                                        duration: Infinity,
+                                    }
+                                );
+                                setPinToastID(tID);
+                            }
+                        }}
+                        text="Show Pin"
+                        color="heroDark"
+                        weight="medium"
+                    />
+                </div>
             );
             break;
         default:
