@@ -184,7 +184,7 @@ fn render_diagnostic(
     let mut diag = csr::diagnostic::Diagnostic::new(info.severity().into_codespan_severity());
     let (code, message) = info.render();
     diag = diag.with_code(code);
-    diag = diag.with_message(message);
+    diag = diag.with_message(message.to_string());
     diag = diag.with_labels(vec![mk_lbl(LabelStyle::Primary, primary_label)]);
     diag = diag.with_labels(
         secondary_labels
@@ -254,7 +254,7 @@ impl Diagnostics {
         self,
     ) -> Vec<(
         codespan_reporting::diagnostic::Severity,
-        &'static str,
+        Symbol,
         (Loc, String),
         Vec<(Loc, String)>,
         Vec<String>,
@@ -282,13 +282,13 @@ impl Diagnostics {
 
 impl Diagnostic {
     pub fn new(
-        code: impl DiagnosticCode,
+        code: impl Into<DiagnosticInfo>,
         (loc, label): (Loc, impl ToString),
         secondary_labels: impl IntoIterator<Item = (Loc, impl ToString)>,
         notes: impl IntoIterator<Item = impl ToString>,
     ) -> Self {
         Diagnostic {
-            info: code.into_info(),
+            info: code.into(),
             primary_label: (loc, label.to_string()),
             secondary_labels: secondary_labels
                 .into_iter()
@@ -298,8 +298,8 @@ impl Diagnostic {
         }
     }
 
-    pub fn set_code(mut self, code: impl DiagnosticCode) -> Self {
-        self.info = code.into_info();
+    pub fn set_code(mut self, code: impl Into<DiagnosticInfo>) -> Self {
+        self.info = code.into();
         self
     }
 
@@ -493,5 +493,11 @@ impl AstDebug for WarningFilters {
             }
             WarningFilters::Empty => (),
         }
+    }
+}
+
+impl<C: DiagnosticCode> From<C> for DiagnosticInfo {
+    fn from(value: C) -> Self {
+        value.into_info()
     }
 }

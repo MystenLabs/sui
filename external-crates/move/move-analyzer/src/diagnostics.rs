@@ -14,7 +14,7 @@ use url::Url;
 pub fn lsp_diagnostics(
     diagnostics: &Vec<(
         codespan_reporting::diagnostic::Severity,
-        &'static str,
+        Symbol,
         (Loc, String),
         Vec<(Loc, String)>,
         Vec<String>,

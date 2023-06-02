@@ -6,6 +6,8 @@
 // Main types
 //**************************************************************************************************
 
+use move_symbol_pool::Symbol;
+
 #[derive(PartialEq, Eq, Clone, Copy, Debug, Hash, PartialOrd, Ord)]
 pub enum Severity {
     Warning = 0,
@@ -17,27 +19,29 @@ pub enum Severity {
 #[derive(PartialEq, Eq, Clone, Debug, Hash)]
 pub struct DiagnosticInfo {
     severity: Severity,
-    category: Category,
+    category: u8,
     code: u8,
-    message: &'static str,
+    message: Symbol,
+    external_prefix: Option<Symbol>,
 }
 
-pub trait DiagnosticCode: Copy {
+pub(crate) trait DiagnosticCode: Copy {
     const CATEGORY: Category;
 
-    fn severity(self) -> Severity;
+    fn severity(&self) -> Severity;
 
-    fn code_and_message(self) -> (u8, &'static str);
+    fn code_and_message(&self) -> (u8, Symbol);
 
     fn into_info(self) -> DiagnosticInfo {
         let severity = self.severity();
-        let category = Self::CATEGORY;
+        let category = Self::CATEGORY as u8;
         let (code, message) = self.code_and_message();
         DiagnosticInfo {
             severity,
             category,
             code,
             message,
+            external_prefix: None,
         }
     }
 }
@@ -59,6 +63,27 @@ pub const WARNING_FILTER_ATTR: &str = "allow";
 //**************************************************************************************************
 // Categories and Codes
 //**************************************************************************************************
+
+/// A custom DiagnosticInfo.
+/// The diagnostic will get rendered as
+/// `"[{external_prefix}{severity}{category}{code}] {message}"`.
+/// Note, this will will panic if `category > 99`
+pub fn custom(
+    external_prefix: impl Into<Symbol>,
+    severity: Severity,
+    category: u8,
+    code: u8,
+    message: Symbol,
+) -> DiagnosticInfo {
+    assert!(category <= 99);
+    DiagnosticInfo {
+        severity,
+        category,
+        code,
+        message,
+        external_prefix: Some(external_prefix.into()),
+    }
+}
 
 macro_rules! codes {
     ($($cat:ident: [
@@ -86,7 +111,7 @@ macro_rules! codes {
                     Category::$cat
                 };
 
-                fn severity(self) -> Severity {
+                fn severity(&self) -> Severity {
                     match self {
                         Self::DontStartAtZeroPlaceholder =>
                             panic!("ICE do not use placeholder error code"),
@@ -94,13 +119,13 @@ macro_rules! codes {
                     }
                 }
 
-                fn code_and_message(self) -> (u8, &'static str) {
-                    let code = self as u8;
+                fn code_and_message(&self) -> (u8, Symbol) {
+                    let code = *self as u8;
                     debug_assert!(code > 0);
                     match self {
                         Self::DontStartAtZeroPlaceholder =>
                             panic!("ICE do not use placeholder error code"),
-                        $(Self::$code => (code, $code_msg),)*
+                        $(Self::$code => (code, Symbol::from($code_msg)),)*
                     }
                 }
             }
@@ -308,26 +333,26 @@ warning_filter!(
 //**************************************************************************************************
 
 impl DiagnosticInfo {
-    pub fn render(self) -> (/* code */ String, /* message */ &'static str) {
+    pub fn render(self) -> (/* code */ String, /* message */ Symbol) {
         let Self {
             severity,
             category,
             code,
             message,
+            external_prefix,
         } = self;
         let sev_prefix = match severity {
             Severity::BlockingError | Severity::NonblockingError => "E",
             Severity::Warning => "W",
             Severity::Bug => "ICE",
         };
-        let cat_prefix: u8 = category as u8;
-        debug_assert!(cat_prefix <= 99);
-        let string_code = format!("{}{:02}{:03}", sev_prefix, cat_prefix, code);
+        debug_assert!(category <= 99);
+        let string_code = if let Some(ext) = external_prefix {
+            format!("{ext}{sev_prefix}{category:02}{code:03}")
+        } else {
+            format!("{sev_prefix}{category:02}{code:03}")
+        };
         (string_code, message)
-    }
-
-    pub fn message(&self) -> &'static str {
-        self.message
     }
 
     pub fn severity(&self) -> Severity {
@@ -340,6 +365,10 @@ impl DiagnosticInfo {
 
     pub fn code(&self) -> u8 {
         self.code
+    }
+
+    pub fn message(&self) -> Symbol {
+        self.message
     }
 }
 
