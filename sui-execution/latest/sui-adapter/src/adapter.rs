@@ -174,7 +174,7 @@ pub fn run_metered_move_bytecode_verifier(
     protocol_config: &ProtocolConfig,
     metered_verifier_config: &VerifierConfig,
     meter: &mut impl Meter,
-    metrics: &Arc<BytecodeVerifierMetrics>
+    metrics: &Arc<BytecodeVerifierMetrics>,
 ) -> Result<(), SuiError> {
     let modules_stat = module_bytes
         .iter()
@@ -208,32 +208,61 @@ pub fn run_metered_move_bytecode_verifier_impl(
     protocol_config: &ProtocolConfig,
     verifier_config: &VerifierConfig,
     meter: &mut impl Meter,
-    metrics: &Arc<BytecodeVerifierMetrics>
+    metrics: &Arc<BytecodeVerifierMetrics>,
 ) -> Result<(), SuiError> {
     // run the Move verifier
     for module in modules.iter() {
-        let per_module_meter_verifier_timer = metrics.verifier_runtime_per_module_success_latency.start_timer();
+        let per_module_meter_verifier_timer = metrics
+            .verifier_runtime_per_module_success_latency
+            .start_timer();
 
         if let Err(e) = verify_module_with_config_metered(verifier_config, module, meter) {
             // Check that the status indicates mtering timeout
             if check_for_verifier_timeout(&e.major_status()) {
                 // Discard success timer, but record timeout/failure timer
-                metrics.verifier_runtime_per_module_timeout_latency.observe(per_module_meter_verifier_timer.stop_and_discard());
-                metrics.verifier_timeout_metrics.with_label_values(&[BytecodeVerifierMetrics::MOVE_VERIFIER_TAG, BytecodeVerifierMetrics::TIMEOUT_TAG]).inc();
+                metrics
+                    .verifier_runtime_per_module_timeout_latency
+                    .observe(per_module_meter_verifier_timer.stop_and_discard());
+                metrics
+                    .verifier_timeout_metrics
+                    .with_label_values(&[
+                        BytecodeVerifierMetrics::MOVE_VERIFIER_TAG,
+                        BytecodeVerifierMetrics::TIMEOUT_TAG,
+                    ])
+                    .inc();
                 return Err(SuiError::ModuleVerificationFailure {
                     error: format!("Verification timedout: {}", e),
                 });
             };
-        } else if let Err(err) = sui_verify_module_metered_check_timeout_only(protocol_config, module, &BTreeMap::new(), meter) {
+        } else if let Err(err) = sui_verify_module_metered_check_timeout_only(
+            protocol_config,
+            module,
+            &BTreeMap::new(),
+            meter,
+        ) {
             // We only checked that the failure was due to timeout
             // Discard success timer, but record timeout/failure timer
-            metrics.verifier_runtime_per_module_timeout_latency.observe(per_module_meter_verifier_timer.stop_and_discard());
-            metrics.verifier_timeout_metrics.with_label_values(&[ BytecodeVerifierMetrics::SUI_VERIFIER_TAG, BytecodeVerifierMetrics::TIMEOUT_TAG]).inc();
+            metrics
+                .verifier_runtime_per_module_timeout_latency
+                .observe(per_module_meter_verifier_timer.stop_and_discard());
+            metrics
+                .verifier_timeout_metrics
+                .with_label_values(&[
+                    BytecodeVerifierMetrics::SUI_VERIFIER_TAG,
+                    BytecodeVerifierMetrics::TIMEOUT_TAG,
+                ])
+                .inc();
             return Err(err.into());
         }
         // Save the success timer
         per_module_meter_verifier_timer.stop_and_record();
-        metrics.verifier_timeout_metrics.with_label_values(&[BytecodeVerifierMetrics::OVERALL_TAG, BytecodeVerifierMetrics::SUCCESS_TAG]).inc();
+        metrics
+            .verifier_timeout_metrics
+            .with_label_values(&[
+                BytecodeVerifierMetrics::OVERALL_TAG,
+                BytecodeVerifierMetrics::SUCCESS_TAG,
+            ])
+            .inc();
     }
     Ok(())
 }

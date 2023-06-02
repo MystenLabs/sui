@@ -66,7 +66,7 @@ pub async fn check_transaction_input(
     epoch_store: &AuthorityPerEpochStore,
     transaction: &TransactionData,
     transaction_deny_config: &TransactionDenyConfig,
-    metrics: &Arc<BytecodeVerifierMetrics>
+    metrics: &Arc<BytecodeVerifierMetrics>,
 ) -> SuiResult<(SuiGasStatus, InputObjects)> {
     transaction.check_version_supported(epoch_store.protocol_config())?;
     transaction.validity_check(epoch_store.protocol_config())?;
@@ -92,7 +92,7 @@ pub async fn check_transaction_input_with_given_gas(
     epoch_store: &AuthorityPerEpochStore,
     transaction: &TransactionData,
     gas_object: Object,
-    metrics: &Arc<BytecodeVerifierMetrics>
+    metrics: &Arc<BytecodeVerifierMetrics>,
 ) -> SuiResult<(SuiGasStatus, InputObjects)> {
     transaction.check_version_supported(epoch_store.protocol_config())?;
     transaction.validity_check_no_gas_check(epoch_store.protocol_config())?;
@@ -124,7 +124,11 @@ pub(crate) async fn check_dev_inspect_input(
         TransactionKind::ChangeEpoch(_)
         | TransactionKind::Genesis(_)
         | TransactionKind::ConsensusCommitPrologue(_) => {
-            return Err(UserInputError::Unsupported(format!("Transaction kind {} is not supported in dev-inspect", kind)).into())
+            return Err(UserInputError::Unsupported(format!(
+                "Transaction kind {} is not supported in dev-inspect",
+                kind
+            ))
+            .into())
         }
     }
     let mut input_objects = kind.input_objects()?;
@@ -205,7 +209,8 @@ async fn check_gas(
             }
             .into());
         }
-        if protocol_config.gas_model_version() >= 4 && gas_price >= protocol_config.max_gas_price() {
+        if protocol_config.gas_model_version() >= 4 && gas_price >= protocol_config.max_gas_price()
+        {
             return Err(UserInputError::GasPriceTooHigh {
                 max_gas_price: protocol_config.max_gas_price(),
             }
@@ -410,7 +415,7 @@ fn check_one_object(
 pub fn check_non_system_packages_to_be_published(
     transaction: &TransactionData,
     protocol_config: &ProtocolConfig,
-    metrics: &Arc<BytecodeVerifierMetrics>
+    metrics: &Arc<BytecodeVerifierMetrics>,
 ) -> UserInputResult<()> {
     // Only meter non-system TXes
     if !transaction.is_system_tx() {
