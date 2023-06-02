@@ -66,13 +66,11 @@ function BaseImage({
     ...imgProps
 }: ImageProps & { status: string }) {
     const [isBlurred, setIsBlurred] = useState(false);
-
     useEffect(() => {
         if (visibility && visibility !== VISIBILITY.PASS) {
             setIsBlurred(true);
         }
     }, [visibility]);
-
     return (
         <div
             className={cx(
@@ -82,35 +80,36 @@ function BaseImage({
         >
             {status === 'loading' ? (
                 <LoadingSpinner />
-            ) : (
-                <div className="relative">
-                    {isBlurred && (
-                        <div
-                            className={clsx(
-                                'absolute z-20 flex h-full w-full items-center justify-center rounded-md bg-gray-100/30 text-center text-white backdrop-blur-md',
-                                visibility === VISIBILITY.HIDE &&
-                                    'pointer-events-none cursor-not-allowed'
-                            )}
-                            onClick={() => setIsBlurred(!isBlurred)}
-                        >
-                            <EyeClose16 />
-                        </div>
-                    )}
-                    <img
-                        alt={alt}
-                        src={src}
-                        srcSet={srcSet}
-                        className={imageStyles({
-                            rounded,
-                            fit,
-                            size,
-                        })}
-                        onClick={onClick}
-                        {...imgProps}
-                    />
-                </div>
+            ) : status === 'loaded' ? (
+                isBlurred && (
+                    <div
+                        className={clsx(
+                            'absolute z-20 flex h-full w-full items-center justify-center rounded-md bg-gray-100/30 text-center text-white backdrop-blur-md',
+                            visibility === VISIBILITY.HIDE &&
+                                'pointer-events-none cursor-not-allowed'
+                        )}
+                        onClick={() => setIsBlurred(!isBlurred)}
+                    >
+                        <EyeClose16 />
+                    </div>
+                )
+            ) : status === 'failed' ? (
+                <NftTypeImage24 />
+            ) : null}
+            {status === 'loaded' && (
+                <img
+                    alt={alt}
+                    src={src}
+                    srcSet={srcSet}
+                    className={imageStyles({
+                        rounded,
+                        fit,
+                        size,
+                    })}
+                    onClick={onClick}
+                    {...imgProps}
+                />
             )}
-            {status === 'failed' && <NftTypeImage24 />}
         </div>
     );
 }
