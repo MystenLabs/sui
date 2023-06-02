@@ -100,6 +100,7 @@ async fn test_rounds_errors() {
                 authority.stake(),
                 authority.primary_address(),
                 authority.network_key(),
+                authority.id().to_string(),
             );
         }
     }
