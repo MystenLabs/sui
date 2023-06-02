@@ -10,6 +10,7 @@ import type { Payload } from './Payload';
 type MethodPayloads = {
     zkCreateAccount: {
         currentEpoch: number;
+        accountPin?: string;
     };
     zkAccountCreated: {
         pin: string;

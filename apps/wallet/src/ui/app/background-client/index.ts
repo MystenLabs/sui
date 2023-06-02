@@ -451,13 +451,13 @@ export class BackgroundClient {
         );
     }
 
-    public createZkAccount(currentEpoch: number) {
+    public createZkAccount(currentEpoch: number, accountPin?: string) {
         return lastValueFrom(
             this.sendMessage(
                 createMessage<MethodPayload<'zkCreateAccount'>>({
                     type: 'method-payload',
                     method: 'zkCreateAccount',
-                    args: { currentEpoch },
+                    args: { currentEpoch, accountPin },
                 })
             ).pipe(
                 take(1),

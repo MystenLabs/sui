@@ -157,12 +157,17 @@ async function getAddress({
     );
 }
 
-export async function createZkAccount(currentEpoch: number) {
+export async function createZkAccount(
+    currentEpoch: number,
+    accountPin?: string
+) {
     const maxEpoch = getMaxEpoch(currentEpoch);
     const { nonce, ephemeralKeyPair, randomness } = prepareZKLogin(maxEpoch);
     const jwt = await zkLogin(nonce);
     const decodedJwt = decodeJwt(jwt);
-    const userPin = toBigIntBE(Buffer.from(randomBytes(16)));
+    const userPin = accountPin
+        ? BigInt(accountPin)
+        : toBigIntBE(Buffer.from(randomBytes(16)));
     const proofs = await createZKProofs({
         ephemeralPublicKey: toBigIntBE(
             Buffer.from(ephemeralKeyPair.getPublicKey().toBytes())

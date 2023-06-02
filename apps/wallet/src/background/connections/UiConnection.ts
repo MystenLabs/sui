@@ -209,7 +209,8 @@ export class UiConnection extends Connection {
                             type: 'method-payload',
                             method: 'zkAccountCreated',
                             args: await createZkAccount(
-                                payload.args.currentEpoch
+                                payload.args.currentEpoch,
+                                payload.args.accountPin
                             ),
                         },
                         id
