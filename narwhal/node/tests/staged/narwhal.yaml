@@ -7,6 +7,10 @@ Batch:
       V1:
         NEWTYPE:
           TYPENAME: BatchV1
+    1:
+      V2:
+        NEWTYPE:
+          TYPENAME: BatchV2
 BatchDigest:
   NEWTYPESTRUCT:
     TUPLEARRAY:
@@ -19,6 +23,13 @@ BatchV1:
           SEQ: U8
     - metadata:
         TYPENAME: Metadata
+BatchV2:
+  STRUCT:
+    - transactions:
+        SEQ:
+          SEQ: U8
+    - versioned_metadata:
+        TYPENAME: VersionedMetadata
 Certificate:
   ENUM:
     0:
@@ -72,6 +83,17 @@ HeaderV1:
 Metadata:
   STRUCT:
     - created_at: U64
+MetadataV1:
+  STRUCT:
+    - created_at: U64
+    - received_at:
+        OPTION: U64
+VersionedMetadata:
+  ENUM:
+    0:
+      V1:
+        NEWTYPE:
+          TYPENAME: MetadataV1
 WorkerIndex:
   NEWTYPESTRUCT:
     MAP:
@@ -98,6 +120,13 @@ WorkerOurBatchMessage:
     - worker_id: U32
     - metadata:
         TYPENAME: Metadata
+WorkerOwnBatchMessage:
+  STRUCT:
+    - digest:
+        TYPENAME: BatchDigest
+    - worker_id: U32
+    - metadata:
+        TYPENAME: VersionedMetadata
 WorkerSynchronizeMessage:
   STRUCT:
     - digests:

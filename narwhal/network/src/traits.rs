@@ -9,7 +9,8 @@ use types::{
     error::LocalClientError, Batch, BatchDigest, FetchBatchesRequest, FetchBatchesResponse,
     FetchCertificatesRequest, FetchCertificatesResponse, GetCertificatesRequest,
     GetCertificatesResponse, RequestBatchesRequest, RequestBatchesResponse,
-    WorkerOthersBatchMessage, WorkerOurBatchMessage, WorkerSynchronizeMessage,
+    WorkerOthersBatchMessage, WorkerOurBatchMessage, WorkerOwnBatchMessage,
+    WorkerSynchronizeMessage,
 };
 
 pub trait UnreliableNetwork<Request: Clone + Send + Sync> {
@@ -97,9 +98,15 @@ pub trait PrimaryToWorkerClient {
 
 #[async_trait]
 pub trait WorkerToPrimaryClient {
+    // TODO: Remove once we have upgraded to protocol version 12.
     async fn report_our_batch(
         &self,
         request: WorkerOurBatchMessage,
+    ) -> Result<(), LocalClientError>;
+
+    async fn report_own_batch(
+        &self,
+        request: WorkerOwnBatchMessage,
     ) -> Result<(), LocalClientError>;
 
     async fn report_others_batch(

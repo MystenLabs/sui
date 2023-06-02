@@ -2,7 +2,7 @@
   "name": "@mysten/kiosk",
   "author": "Mysten Labs <build@mystenlabs.com>",
   "description": "Sui Kiosk library",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "license": "Apache-2.0",
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
@@ -30,7 +30,8 @@
     "test": "echo \"Error: no test specified\"",
     "lint": "eslint --max-warnings=0 ./src/**/**",
     "prettier:fix": "prettier --write .",
-    "pre-commit": "pnpm prettier:fix && pnpm lint && pnpm build"
+    "pre-commit": "pnpm prettier:fix && pnpm lint && pnpm build",
+    "prepublishOnly": "pnpm build"
   },
   "dependencies": {
     "@mysten/sui.js": "workspace:*"

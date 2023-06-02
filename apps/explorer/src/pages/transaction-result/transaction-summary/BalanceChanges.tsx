@@ -5,6 +5,7 @@ import {
     type BalanceChangeSummary,
     CoinFormat,
     useFormatCoin,
+    type BalanceChange,
 } from '@mysten/core';
 
 import { CoinsStack } from '~/ui/CoinsStack';
@@ -17,10 +18,10 @@ import {
 } from '~/ui/TransactionBlockCard';
 
 interface BalanceChangesProps {
-    changes: BalanceChangeSummary[] | null;
+    changes: BalanceChangeSummary;
 }
 
-function BalanceChangeEntry({ change }: { change: BalanceChangeSummary }) {
+function BalanceChangeEntry({ change }: { change: BalanceChange }) {
     const { amount, coinType, recipient } = change;
 
     const [formatted, symbol] = useFormatCoin(
@@ -70,7 +71,7 @@ function BalanceChangeCard({
     changes,
     owner,
 }: {
-    changes: BalanceChangeSummary[];
+    changes: BalanceChange[];
     owner: string;
 }) {
     const coinTypesSet = new Set(changes.map((change) => change.coinType));
@@ -113,20 +114,11 @@ function BalanceChangeCard({
 }
 
 export function BalanceChanges({ changes }: BalanceChangesProps) {
-    if (!changes?.length) return null;
-
-    const changesByOwner = changes.reduce((acc, change) => {
-        const owner = change.owner ?? '';
-
-        acc[owner] = acc[owner] ?? [];
-        acc[owner].push(change);
-
-        return acc;
-    }, {} as Record<string, BalanceChangeSummary[]>);
+    if (!changes) return null;
 
     return (
         <>
-            {Object.entries(changesByOwner).map(([owner, changes]) => (
+            {Object.entries(changes).map(([owner, changes]) => (
                 <BalanceChangeCard
                     key={owner}
                     changes={changes}

@@ -15,7 +15,7 @@ const LATENCY_SEC_BUCKETS: &[f64] = &[
 
 #[derive(Clone)]
 pub struct ConsensusMetrics {
-    /// The number of rounds for which the Dag holds certificates (for Tusk or Bullshark)
+    /// The number of rounds for which the Dag holds certificates
     pub consensus_dag_rounds: IntGaugeVec,
     /// The last committed round from consensus
     pub last_committed_round: IntGaugeVec,

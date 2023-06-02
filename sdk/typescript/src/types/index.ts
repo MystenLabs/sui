@@ -14,4 +14,5 @@ export * from './coin';
 export * from './epochs';
 export * from './transactions';
 export * from './subscriptions';
+export * from './name-service';
 export { GasCostSummary, CheckpointDigest, Checkpoint } from './checkpoints';

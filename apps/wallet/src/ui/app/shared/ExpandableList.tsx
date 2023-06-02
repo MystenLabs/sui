@@ -33,7 +33,7 @@ export function ExpandableList({
                 <div key={index}>{item}</div>
             ))}
             {items.length > defaultItemsToShow && (
-                <div className="flex cursor-pointer items-center">
+                <div className="flex cursor-pointer items-center w-full">
                     <Link
                         onClick={handleShowAllClick}
                         after={

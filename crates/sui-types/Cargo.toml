@@ -1,6 +1,6 @@
 [package]
 name = "sui-types"
-version.workspace = true
+version = "0.1.0"
 authors = ["Mysten Labs <build@mystenlabs.com>"]
 license = "Apache-2.0"
 publish = false
@@ -42,6 +42,7 @@ move-command-line-common.workspace = true
 move-core-types.workspace = true
 move-disassembler.workspace = true
 move-ir-types.workspace = true
+move-vm-types.workspace = true
 
 narwhal-config = { path = "../../narwhal/config" }
 narwhal-crypto = { path = "../../narwhal/crypto" }
@@ -54,6 +55,7 @@ sui-macros = { path = "../sui-macros" }
 sui-enum-compat-util = { path = "../sui-enum-compat-util" }
 
 fastcrypto = { workspace = true, features = ["copy_key"] }
+fastcrypto-zkp.workspace = true
 
 typed-store.workspace = true
 workspace-hack = { version = "0.1", path = "../workspace-hack" }

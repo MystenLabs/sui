@@ -33,7 +33,7 @@ import { LargeButton } from '_app/shared/LargeButton';
 import { Text } from '_app/shared/text';
 import Alert from '_components/alert';
 import Loading from '_components/loading';
-import { sortGetAllBalancesToken } from '_helpers';
+import { filterAndSortTokenBalances } from '_helpers';
 import { useAppSelector, useCoinsReFetchingConfig } from '_hooks';
 import { API_ENV } from '_src/shared/api-env';
 import { AccountSelector } from '_src/ui/app/components/AccountSelector';
@@ -78,7 +78,7 @@ function MyTokens() {
         accountAddress,
         staleTime,
         refetchInterval,
-        sortGetAllBalancesToken
+        filterAndSortTokenBalances
     );
 
     const recognizedPackages = useRecognizedPackages();
@@ -250,7 +250,10 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
                     className="flex flex-col h-full flex-1 flex-grow items-center overflow-y-auto"
                     data-testid="coin-page"
                 >
-                    {!coinType && <AccountSelector />}
+                    <div className="max-w-full">
+                        {!coinType && <AccountSelector />}
+                    </div>
+
                     <div className="mt-1.5">
                         <CoinBalance
                             balance={BigInt(tokenBalance)}

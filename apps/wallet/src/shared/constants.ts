@@ -4,6 +4,7 @@
 export const ToS_LINK = 'https://mystenlabs.com/legal?content=wallet-terms';
 export const PRIVACY_POLICY_LINK =
     'https://mystenlabs.com/legal?content=privacy';
+export const FAQ_LINK = 'https://docs.mystenlabs.com/wallet/faq';
 
 export const AUTO_LOCK_TIMER_STORAGE_KEY = 'auto-lock-timer-interval';
 export const AUTO_LOCK_TIMER_DEFAULT_INTERVAL_MINUTES = 5;

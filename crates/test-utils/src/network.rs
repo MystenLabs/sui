@@ -14,11 +14,10 @@ use rand::{distributions::*, rngs::OsRng, seq::SliceRandom};
 use sui_config::node::DBCheckpointConfig;
 use sui_config::{Config, SUI_CLIENT_CONFIG, SUI_NETWORK_CONFIG};
 use sui_config::{NodeConfig, PersistedConfig, SUI_KEYSTORE_FILENAME};
-use sui_json_rpc_types::{SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions};
+use sui_json_rpc_types::SuiTransactionBlockResponse;
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_node::SuiNodeHandle;
 use sui_protocol_config::{ProtocolVersion, SupportedProtocolVersions};
-use sui_sdk::error::SuiRpcResult;
 use sui_sdk::sui_client_config::{SuiClientConfig, SuiEnv};
 use sui_sdk::wallet_context::WalletContext;
 use sui_sdk::{SuiClient, SuiClientBuilder};
@@ -78,7 +77,6 @@ impl FullNodeHandle {
 
 pub struct TestCluster {
     pub swarm: Swarm,
-    pub accounts: Vec<SuiAddress>,
     pub wallet: WalletContext,
     pub fullnode_handle: FullNodeHandle,
 }
@@ -100,37 +98,23 @@ impl TestCluster {
         &mut self.wallet
     }
 
+    pub fn get_addresses(&self) -> Vec<SuiAddress> {
+        self.wallet.get_addresses()
+    }
+
     // Helper function to get the 0th address in WalletContext
     pub fn get_address_0(&self) -> SuiAddress {
-        self.wallet
-            .config
-            .keystore
-            .addresses()
-            .get(0)
-            .cloned()
-            .unwrap()
+        self.get_addresses()[0]
     }
 
     // Helper function to get the 1st address in WalletContext
     pub fn get_address_1(&self) -> SuiAddress {
-        self.wallet
-            .config
-            .keystore
-            .addresses()
-            .get(1)
-            .cloned()
-            .unwrap()
+        self.get_addresses()[1]
     }
 
     // Helper function to get the 2nd address in WalletContext
     pub fn get_address_2(&self) -> SuiAddress {
-        self.wallet
-            .config
-            .keystore
-            .addresses()
-            .get(2)
-            .cloned()
-            .unwrap()
+        self.get_addresses()[2]
     }
 
     pub fn fullnode_config_builder(&self) -> FullnodeConfigBuilder {
@@ -344,19 +328,13 @@ impl TestCluster {
         }
     }
 
+    /// Execute a transaction on the network and wait for it to be executed on the rpc fullnode.
+    /// Also expects the effects status to be ExecutionStatus::Success.
     pub async fn execute_transaction(
         &self,
-        transaction: VerifiedTransaction,
-    ) -> SuiRpcResult<SuiTransactionBlockResponse> {
-        self.fullnode_handle
-            .sui_client
-            .quorum_driver_api()
-            .execute_transaction_block(
-                transaction,
-                SuiTransactionBlockResponseOptions::new().with_effects(),
-                None,
-            )
-            .await
+        tx: VerifiedTransaction,
+    ) -> SuiTransactionBlockResponse {
+        self.wallet.execute_transaction_must_succeed(tx).await
     }
 
     #[cfg(msim)]
@@ -570,8 +548,6 @@ impl TestClusterBuilder {
         });
         wallet_conf.active_env = Some("localnet".to_string());
 
-        let accounts = wallet_conf.keystore.addresses();
-
         wallet_conf
             .persisted(&working_dir.join(SUI_CLIENT_CONFIG))
             .save()?;
@@ -581,7 +557,6 @@ impl TestClusterBuilder {
 
         Ok(TestCluster {
             swarm,
-            accounts,
             wallet,
             fullnode_handle,
         })

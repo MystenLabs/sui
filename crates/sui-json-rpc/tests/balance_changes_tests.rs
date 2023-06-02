@@ -10,10 +10,10 @@ use test_utils::network::TestClusterBuilder;
 
 #[tokio::test]
 async fn test_dry_run_publish_with_mocked_coin() -> Result<(), anyhow::Error> {
-    let mut cluster = TestClusterBuilder::new().build().await.unwrap();
-    let context = &mut cluster.wallet;
+    let cluster = TestClusterBuilder::new().build().await.unwrap();
+    let context = &cluster.wallet;
 
-    let address = &cluster.accounts[0];
+    let address = cluster.get_address_0();
     let client: SuiClient = context.get_client().await.unwrap();
 
     // Publish test coin package
@@ -32,7 +32,7 @@ async fn test_dry_run_publish_with_mocked_coin() -> Result<(), anyhow::Error> {
 
     let publish = TransactionKind::programmable(builder.finish());
     let transaction_bytes =
-        TransactionData::new_with_gas_coins(publish, *address, vec![], 100000000, 1000);
+        TransactionData::new_with_gas_coins(publish, address, vec![], 100000000, 1000);
 
     let result = client
         .read_api()

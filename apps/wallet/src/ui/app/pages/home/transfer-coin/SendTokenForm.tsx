@@ -1,9 +1,17 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useCoinMetadata, useFormatCoin, CoinFormat } from '@mysten/core';
+import {
+    useCoinMetadata,
+    useFormatCoin,
+    CoinFormat,
+    useRpcClient,
+    isSuiNSName,
+    useSuiNSEnabled,
+} from '@mysten/core';
 import { ArrowRight16 } from '@mysten/icons';
 import { SUI_TYPE_ARG, Coin as CoinAPI, type CoinStruct } from '@mysten/sui.js';
+import { useQuery } from '@tanstack/react-query';
 import { Field, Form, useFormikContext, Formik } from 'formik';
 import { useMemo, useEffect } from 'react';
 
@@ -20,7 +28,7 @@ import { AddressInput } from '_components/address-input';
 import Alert from '_components/alert';
 import Loading from '_components/loading';
 import { parseAmount } from '_helpers';
-import { useTransactionGasBudget, useGetAllCoins } from '_hooks';
+import { useGetAllCoins } from '_hooks';
 import { GAS_SYMBOL } from '_src/ui/app/redux/slices/sui-objects/Coin';
 import { InputWithAction } from '_src/ui/app/shared/InputWithAction';
 
@@ -58,29 +66,58 @@ function GasBudgetEstimation({
 }) {
     const activeAddress = useActiveAddress();
     const { values, setFieldValue } = useFormikContext<FormValues>();
+    const suiNSEnabled = useSuiNSEnabled();
 
-    const transaction = useMemo(() => {
-        if (!values.amount || !values.to || !coins) return null;
+    const rpc = useRpcClient();
+    const { data: gasBudget } = useQuery({
+        // eslint-disable-next-line @tanstack/query/exhaustive-deps
+        queryKey: [
+            'transaction-gas-budget-estimate',
+            {
+                to: values.to,
+                amount: values.amount,
+                coins,
+                activeAddress,
+                coinDecimals,
+            },
+        ],
+        queryFn: async () => {
+            if (!values.amount || !values.to || !coins || !activeAddress) {
+                return null;
+            }
 
-        return createTokenTransferTransaction({
-            to: values.to,
-            amount: values.amount,
-            coinType: SUI_TYPE_ARG,
-            coinDecimals,
-            isPayAllSui: values.isPayAllSui,
-            coins,
-        });
-    }, [coinDecimals, coins, values.amount, values.isPayAllSui, values.to]);
+            let to = values.to;
+            if (suiNSEnabled && isSuiNSName(values.to)) {
+                const address = await rpc.resolveNameServiceAddress({
+                    name: values.to,
+                });
+                if (!address) {
+                    throw new Error('SuiNS name not found.');
+                }
+                to = address;
+            }
 
-    const { data: gasBudget } = useTransactionGasBudget(
-        activeAddress,
-        transaction
-    );
+            const tx = createTokenTransferTransaction({
+                to,
+                amount: values.amount,
+                coinType: SUI_TYPE_ARG,
+                coinDecimals,
+                isPayAllSui: values.isPayAllSui,
+                coins,
+            });
+
+            tx.setSender(activeAddress);
+            await tx.build({ provider: rpc });
+            return tx.blockData.gasConfig.budget;
+        },
+    });
+
+    const [formattedGas] = useFormatCoin(gasBudget, SUI_TYPE_ARG);
 
     // gasBudgetEstimation should change when the amount above changes
     useEffect(() => {
-        setFieldValue('gasBudgetEst', gasBudget, true);
-    }, [gasBudget, setFieldValue, values.amount]);
+        setFieldValue('gasBudgetEst', formattedGas, true);
+    }, [formattedGas, setFieldValue, values.amount]);
 
     return (
         <div className="px-2 my-2 flex w-full gap-2 justify-between">
@@ -90,7 +127,7 @@ function GasBudgetEstimation({
                 </Text>
             </div>
             <Text variant="body" color="gray-90" weight="medium">
-                {gasBudget ? gasBudget + ' ' + GAS_SYMBOL : '--'}
+                {formattedGas ? formattedGas + ' ' + GAS_SYMBOL : '--'}
             </Text>
         </div>
     );
@@ -105,6 +142,7 @@ export function SendTokenForm({
     initialAmount = '',
     initialTo = '',
 }: SendTokenFormProps) {
+    const rpc = useRpcClient();
     const activeAddress = useActiveAddress();
     // Get all coins of the type
     const { data: coinsData, isLoading: coinsIsLoading } = useGetAllCoins(
@@ -119,8 +157,8 @@ export function SendTokenForm({
 
     const suiCoins = suiCoinsData;
     const coins = coinsData;
-    const coinBalance = CoinAPI.totalBalance(coins);
-    const suiBalance = CoinAPI.totalBalance(suiCoins);
+    const coinBalance = CoinAPI.totalBalance(coins || []);
+    const suiBalance = CoinAPI.totalBalance(suiCoins || []);
 
     const coinMetadata = useCoinMetadata(coinType);
     const coinDecimals = coinMetadata.data?.decimals ?? 0;
@@ -130,9 +168,18 @@ export function SendTokenForm({
         coinType,
         CoinFormat.FULL
     );
+    const suiNSEnabled = useSuiNSEnabled();
+
     const validationSchemaStepOne = useMemo(
-        () => createValidationSchemaStepOne(coinBalance, symbol, coinDecimals),
-        [coinBalance, symbol, coinDecimals]
+        () =>
+            createValidationSchemaStepOne(
+                rpc,
+                suiNSEnabled,
+                coinBalance,
+                symbol,
+                coinDecimals
+            ),
+        [rpc, coinBalance, symbol, coinDecimals, suiNSEnabled]
     );
 
     // remove the comma from the token balance
@@ -162,7 +209,7 @@ export function SendTokenForm({
                 enableReinitialize
                 validateOnMount
                 validateOnChange
-                onSubmit={({
+                onSubmit={async ({
                     to,
                     amount,
                     isPayAllSui,
@@ -172,6 +219,16 @@ export function SendTokenForm({
                     const coinsIDs = [...coins]
                         .sort((a, b) => Number(b.balance) - Number(a.balance))
                         .map(({ coinObjectId }) => coinObjectId);
+
+                    if (suiNSEnabled && isSuiNSName(to)) {
+                        const address = await rpc.resolveNameServiceAddress({
+                            name: to,
+                        });
+                        if (!address) {
+                            throw new Error('SuiNS name not found.');
+                        }
+                        to = address;
+                    }
 
                     const data = {
                         to,

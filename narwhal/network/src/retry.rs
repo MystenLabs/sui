@@ -9,7 +9,6 @@ use std::{future::Future, time::Duration};
 pub struct RetryConfig {
     /// The initial retry interval.
     ///
-    /// This is the first delay before a retry, for establishing connections and sending messages.
     /// The subsequent delay will be decided by the `retry_delay_multiplier`.
     pub initial_retry_interval: Duration,
 

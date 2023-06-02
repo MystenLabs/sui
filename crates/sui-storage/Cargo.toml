@@ -7,12 +7,15 @@ publish = false
 edition = "2021"
 
 [dependencies]
+integer-encoding = "3.0.1"
 async-trait = "0.1.61"
 futures = "0.3.23"
+num_enum = "0.6.1"
 serde = { version = "1.0.144", features = ["derive"] }
 tokio = { workspace = true, features = ["full", "tracing"] }
 rocksdb = "0.21.0"
 tracing = "0.1.36"
+byteorder = "1.4.3"
 anyhow = "1.0.64"
 tempfile = "3.3.0"
 tap = "1.0.1"
@@ -23,6 +26,7 @@ parking_lot = "0.12.1"
 bcs = "0.1.4"
 prometheus = "0.13.3"
 itertools = "0.10.5"
+zstd = "0.12.3"
 url = "2.3.1"
 
 sui-simulator = { path = "../sui-simulator" }

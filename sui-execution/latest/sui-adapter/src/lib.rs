@@ -7,6 +7,5 @@ extern crate sui_types;
 pub mod adapter;
 pub mod error;
 pub mod execution_engine;
-pub mod execution_mode;
 pub mod programmable_transactions;
 pub mod type_layout_resolver;

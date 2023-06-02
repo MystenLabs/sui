@@ -17,7 +17,7 @@ use test_utils::network::TestClusterBuilder;
 async fn test_subscribe_transaction() -> Result<(), anyhow::Error> {
     let cluster = TestClusterBuilder::new().build().await.unwrap();
 
-    let address = &cluster.accounts[0];
+    let address = &cluster.get_address_0();
     let wallet = cluster.wallet;
 
     let ws_client = cluster.fullnode_handle.ws_client;

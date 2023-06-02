@@ -8,10 +8,6 @@ use sui::sui_commands::SuiCommand;
 use sui_types::exit_main;
 use tracing::debug;
 
-#[cfg(test)]
-#[path = "unit_tests/cli_tests.rs"]
-mod cli_tests;
-
 const SUI_CLI_LOG_FILE_ENABLE: &str = "SUI_CLI_LOG_FILE_ENABLE";
 
 const GIT_REVISION: &str = {

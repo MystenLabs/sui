@@ -6,6 +6,7 @@ use bytes::Bytes;
 use dashmap::try_result::TryResult;
 use dashmap::DashMap;
 use futures::future::{select, Either};
+use futures::pin_mut;
 use futures::FutureExt;
 use itertools::Itertools;
 use mysten_network::Multiaddr;
@@ -620,19 +621,29 @@ impl ConsensusAdapter {
             .consensus_message_processed_notify(transaction_key)
             .boxed();
 
+        pin_mut!(processed_waiter);
+
         let (await_submit, position, positions_moved, preceding_disconnected) =
             self.await_submit_delay(epoch_store.committee(), &transaction);
         let mut guard = InflightDropGuard::acquire(&self, tx_type.to_string());
 
-        // We need to wait for some delay until we submit transaction to the consensus
-        // However, if transaction is received by consensus while we wait, we don't need to wait
-        let processed_waiter = match select(processed_waiter, await_submit.boxed()).await {
-            Either::Left((processed, _await_submit)) => {
+        let processed_waiter = tokio::select! {
+            // We need to wait for some delay until we submit transaction to the consensus
+            _ = await_submit => Some(processed_waiter),
+
+            // If epoch ends, don't wait for submit delay
+            _ = epoch_store.user_certs_closed_notify() => {
+                warn!(epoch = ?epoch_store.epoch(), "Epoch ended, skipping submission delay");
+                Some(processed_waiter)
+            }
+
+            // If transaction is received by consensus while we wait, we are done.
+            processed = &mut processed_waiter => {
                 processed.expect("Storage error when waiting for consensus message processed");
                 None
             }
-            Either::Right(((), processed_waiter)) => Some(processed_waiter),
         };
+
         let transaction_key = transaction.key();
         // Log warnings for capability or end of publish transactions that fail to get sequenced
         let _monitor = if matches!(

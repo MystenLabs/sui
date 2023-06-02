@@ -920,12 +920,19 @@ impl ReadApiServer for ReadApi {
         with_tracing!(async move {
             Ok(version
                 .map(|v| {
-                    ProtocolConfig::get_for_version_if_supported((*v).into()).ok_or(
-                        Error::SuiRpcInputError(SuiRpcInputError::ProtocolVersionUnsupported(
+                    ProtocolConfig::get_for_version_if_supported(
+                        (*v).into(),
+                        self.state
+                            .get_chain_identifier()
+                            .ok_or(anyhow!("Chain identifier not found"))?
+                            .chain(),
+                    )
+                    .ok_or(Error::SuiRpcInputError(
+                        SuiRpcInputError::ProtocolVersionUnsupported(
                             ProtocolVersion::MIN.as_u64(),
                             ProtocolVersion::MAX.as_u64(),
-                        )),
-                    )
+                        ),
+                    ))
                 })
                 .unwrap_or(Ok(self
                     .state

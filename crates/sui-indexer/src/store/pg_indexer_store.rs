@@ -69,7 +69,7 @@ use crate::store::query::DBFilter;
 use crate::store::TransactionObjectChanges;
 use crate::store::{IndexerStore, TemporaryEpochStore};
 use crate::utils::{get_balance_changes_from_effect, get_object_changes};
-use crate::{AsyncPgConnectionPool, PgConnectionPool};
+use crate::PgConnectionPool;
 
 const MAX_EVENT_PAGE_SIZE: usize = 1000;
 const PG_COMMIT_CHUNK_SIZE: usize = 1000;
@@ -94,8 +94,6 @@ struct TempDigestTable {
 
 #[derive(Clone)]
 pub struct PgIndexerStore {
-    #[allow(dead_code)]
-    cp: AsyncPgConnectionPool,
     blocking_cp: PgConnectionPool,
     // MUSTFIX(gegaowp): temporarily disable partition management.
     #[allow(dead_code)]
@@ -105,16 +103,11 @@ pub struct PgIndexerStore {
 }
 
 impl PgIndexerStore {
-    pub async fn new(
-        cp: AsyncPgConnectionPool,
-        blocking_cp: PgConnectionPool,
-        metrics: IndexerMetrics,
-    ) -> Self {
+    pub async fn new(blocking_cp: PgConnectionPool, metrics: IndexerMetrics) -> Self {
         let module_cache = Arc::new(SyncModuleCache::new(IndexerModuleResolver::new(
             blocking_cp.clone(),
         )));
         PgIndexerStore {
-            cp: cp.clone(),
             blocking_cp: blocking_cp.clone(),
             partition_manager: PartitionManager::new(blocking_cp).await.unwrap(),
             module_cache,
@@ -290,10 +283,39 @@ impl IndexerStore for PgIndexerStore {
             };
             cp.into_rpc(end_of_epoch_data)
         })
+        .context(format!("Failed reading checkpoint {:?} from PostgresDB", id).as_str())
+    }
+
+    async fn get_checkpoints(
+        &self,
+        cursor: Option<CheckpointId>,
+        limit: usize,
+    ) -> Result<Vec<sui_json_rpc_types::Checkpoint>, IndexerError> {
+        read_only_blocking!(&self.blocking_cp, |conn| {
+            let cp_vec: Vec<Checkpoint> = match cursor {
+                Some(CheckpointId::SequenceNumber(seq)) => checkpoints::dsl::checkpoints
+                    .filter(checkpoints::sequence_number.gt(seq as i64))
+                    .order_by(checkpoints::sequence_number)
+                    .limit(limit as i64)
+                    .load::<Checkpoint>(conn)?,
+                Some(CheckpointId::Digest(digest)) => Err(anyhow!(
+                    "CheckpointId::Digest: {} is not supported as cursor in get_checkpoints.",
+                    digest
+                ))?,
+                None => checkpoints::dsl::checkpoints
+                    .order_by(checkpoints::sequence_number)
+                    .limit(limit as i64)
+                    .load::<Checkpoint>(conn)?,
+            };
+            cp_vec
+                .into_iter()
+                .map(|cp| cp.into_rpc(None))
+                .collect::<Result<Vec<_>, _>>()
+        })
         .context(
             format!(
-                "Failed reading previous checkpoint {:?} from PostgresDB",
-                id
+                "Failed reading checkpoints with cursor: {:?} and limit: {} from PostgresDB",
+                cursor, limit
             )
             .as_str(),
         )
@@ -1018,7 +1040,7 @@ impl IndexerStore for PgIndexerStore {
         self.multi_get_transactions_by_digests(&tx_digests).await
     }
 
-    async fn get_transaction_page_by_sender_recipient_address(
+    async fn get_transaction_page_by_recipient_address(
         &self,
         from: Option<SuiAddress>,
         to: SuiAddress,
@@ -1053,6 +1075,43 @@ impl IndexerStore for PgIndexerStore {
         );
         let tx_digests: Vec<String> = read_only_blocking!(&self.blocking_cp, |conn| diesel::sql_query(sql_query).load(conn))
                 .context(&format!("Failed reading transaction digests by recipient address {to} with start_sequence {start_sequence:?} and limit {limit}"))?
+                .into_iter()
+                .map(|table: TempDigestTable| table.digest_name)
+                .collect();
+        self.multi_get_transactions_by_digests(&tx_digests).await
+    }
+
+    async fn get_transaction_page_by_address(
+        &self,
+        address: SuiAddress,
+        start_sequence: Option<i64>,
+        limit: usize,
+        is_descending: bool,
+    ) -> Result<Vec<Transaction>, IndexerError> {
+        let sql_query = format!(
+            "SELECT transaction_digest as digest_name FROM (
+                SELECT transaction_digest, max(id) AS max_id
+                FROM recipients
+                WHERE recipient = '{}' OR sender = '{}'
+                {} GROUP BY transaction_digest
+                ORDER BY max_id {} LIMIT {}
+            ) AS t",
+            address,
+            address,
+            if let Some(start_sequence) = start_sequence {
+                if is_descending {
+                    format!("AND id < {}", start_sequence)
+                } else {
+                    format!("AND id > {}", start_sequence)
+                }
+            } else {
+                "".to_string()
+            },
+            if is_descending { "DESC" } else { "ASC" },
+            limit
+        );
+        let tx_digests: Vec<String> = read_only_blocking!(&self.blocking_cp, |conn| diesel::sql_query(sql_query).load(conn))
+                .context(&format!("Failed reading transaction digests by address {address} with start_sequence {start_sequence:?} and limit {limit}"))?
                 .into_iter()
                 .map(|table: TempDigestTable| table.digest_name)
                 .collect();
@@ -1135,8 +1194,6 @@ impl IndexerStore for PgIndexerStore {
             transactions,
             events,
             object_changes: tx_object_changes,
-            addresses,
-            active_addresses,
             packages,
             input_objects,
             move_calls,
@@ -1188,49 +1245,6 @@ impl IndexerStore for PgIndexerStore {
             persist_transaction_object_changes(conn, mutated_objects, deleted_objects, None, None)?;
 
             // TODO(gegaowp): refactor to consolidate commit blocks
-            // Commit indexed addresses & active addresses
-            for address_chunk in addresses.chunks(PG_COMMIT_CHUNK_SIZE) {
-                diesel::insert_into(addresses::table)
-                    .values(address_chunk)
-                    .on_conflict(addresses::account_address)
-                    .do_update()
-                    .set((
-                        addresses::last_appearance_time
-                            .eq(excluded(addresses::last_appearance_time)),
-                        addresses::last_appearance_tx.eq(excluded(addresses::last_appearance_tx)),
-                    ))
-                    .execute(conn)
-                    .map_err(IndexerError::from)
-                    .context(
-                        format!(
-                            "Failed writing addresses to PostgresDB with tx {}",
-                            address_chunk[0].last_appearance_tx
-                        )
-                        .as_str(),
-                    )?;
-            }
-            for active_address_chunk in active_addresses.chunks(PG_COMMIT_CHUNK_SIZE) {
-                diesel::insert_into(active_addresses::table)
-                    .values(active_address_chunk)
-                    .on_conflict(active_addresses::account_address)
-                    .do_update()
-                    .set((
-                        active_addresses::last_appearance_time
-                            .eq(excluded(active_addresses::last_appearance_time)),
-                        active_addresses::last_appearance_tx
-                            .eq(excluded(active_addresses::last_appearance_tx)),
-                    ))
-                    .execute(conn)
-                    .map_err(IndexerError::from)
-                    .context(
-                        format!(
-                            "Failed writing active addresses to PostgresDB with tx {}",
-                            active_address_chunk[0].last_appearance_tx
-                        )
-                        .as_str(),
-                    )?;
-            }
-
             // Commit indexed packages
             for packages_chunk in packages.chunks(PG_COMMIT_CHUNK_SIZE) {
                 diesel::insert_into(packages::table)

@@ -12,6 +12,7 @@ export type ItemProps = {
     subtitle?: ReactNode;
     iconAfter?: ReactNode;
     to?: string;
+    href?: string;
     onClick?: MouseEventHandler<Element>;
 };
 
@@ -21,15 +22,13 @@ function MenuListItem({
     subtitle,
     iconAfter,
     to = '',
+    href = '',
     onClick,
 }: ItemProps) {
     const Component = to ? Link : 'div';
-    return (
-        <Component
-            className="flex flex-nowrap items-center px-1 py-4.5 first:pt-3 last:pb-3 gap-5 no-underline overflow-hidden group cursor-pointer"
-            to={to}
-            onClick={onClick}
-        >
+
+    const MenuItemContent = (
+        <>
             <div className="flex flex-nowrap flex-1 gap-2 items-center overflow-hidden basis-3/5">
                 <div className="flex text-steel text-2xl flex-none">{icon}</div>
                 <div className="flex-1 text-gray-90 text-body font-semibold truncate">
@@ -46,6 +45,28 @@ function MenuListItem({
                     {iconAfter || (to && <ChevronRight16 />) || null}
                 </div>
             </div>
+        </>
+    );
+
+    if (href) {
+        return (
+            <a
+                href={href}
+                target="_blank"
+                rel="noreferrer noopener"
+                className="flex flex-nowrap items-center px-1 py-4.5 first:pt-3 last:pb-3 gap-5 no-underline overflow-hidden group cursor-pointer"
+            >
+                {MenuItemContent}
+            </a>
+        );
+    }
+    return (
+        <Component
+            className="flex flex-nowrap items-center px-1 py-4.5 first:pt-3 last:pb-3 gap-5 no-underline overflow-hidden group cursor-pointer"
+            to={to}
+            onClick={onClick}
+        >
+            {MenuItemContent}
         </Component>
     );
 }

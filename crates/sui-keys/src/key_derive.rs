@@ -61,11 +61,11 @@ pub fn derive_key_pair_from_path(
             );
             Ok((kp.public().into(), SuiKeyPair::Secp256r1(kp)))
         }
-        SignatureScheme::BLS12381 | SignatureScheme::MultiSig => {
-            Err(SuiError::UnsupportedFeatureError {
-                error: format!("key derivation not supported {:?}", key_scheme),
-            })
-        }
+        SignatureScheme::BLS12381
+        | SignatureScheme::MultiSig
+        | SignatureScheme::ZkLoginAuthenticator => Err(SuiError::UnsupportedFeatureError {
+            error: format!("key derivation not supported {:?}", key_scheme),
+        }),
     }
 }
 
@@ -158,11 +158,11 @@ pub fn validate_path(
                 .map_err(|_| SuiError::SignatureKeyGenError("Cannot parse path".to_string()))?),
             }
         }
-        SignatureScheme::BLS12381 | SignatureScheme::MultiSig => {
-            Err(SuiError::UnsupportedFeatureError {
-                error: format!("key derivation not supported {:?}", key_scheme),
-            })
-        }
+        SignatureScheme::BLS12381
+        | SignatureScheme::MultiSig
+        | SignatureScheme::ZkLoginAuthenticator => Err(SuiError::UnsupportedFeatureError {
+            error: format!("key derivation not supported {:?}", key_scheme),
+        }),
     }
 }
 

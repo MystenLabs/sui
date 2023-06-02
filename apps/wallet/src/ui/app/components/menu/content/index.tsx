@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useFeature } from '@growthbook/growthbook-react';
 import { useCallback } from 'react';
 import {
     Navigate,
@@ -26,8 +25,8 @@ import {
     useMenuUrl,
     useNextMenuUrl,
 } from '_components/menu/hooks';
+import { RecoveryPassphrase } from '_components/recovery-passphrase/RecoveryPassphrase';
 import { useOnKeyboardEvent } from '_hooks';
-import { FEATURES } from '_src/shared/experimentation/features';
 
 import type { MouseEvent } from 'react';
 
@@ -50,11 +49,6 @@ function MenuContent() {
         [isOpen, navigate, closeMenuUrl]
     );
     useOnKeyboardEvent('keydown', CLOSE_KEY_CODES, handleOnCloseMenu, isOpen);
-
-    const isMultiAccountsEnabled = useFeature(
-        FEATURES.WALLET_MULTI_ACCOUNTS
-    ).on;
-
     if (!isOpen) {
         return null;
     }
@@ -65,29 +59,20 @@ function MenuContent() {
                 <MainLocationContext.Provider value={mainLocation}>
                     <Routes location={menuUrl || ''}>
                         <Route path="/" element={<MenuList />} />
-                        {isMultiAccountsEnabled ? (
-                            <>
-                                <Route
-                                    path="/accounts"
-                                    element={<AccountsSettings />}
-                                >
-                                    <Route
-                                        path="connect-ledger-modal"
-                                        element={
-                                            <ConnectLedgerModalContainer />
-                                        }
-                                    />
-                                </Route>
-                                <Route
-                                    path="/export/:account"
-                                    element={<ExportAccount />}
-                                />
-                                <Route
-                                    path="/import-private-key"
-                                    element={<ImportPrivateKey />}
-                                />
-                            </>
-                        ) : null}
+                        <Route path="/accounts" element={<AccountsSettings />}>
+                            <Route
+                                path="connect-ledger-modal"
+                                element={<ConnectLedgerModalContainer />}
+                            />
+                        </Route>
+                        <Route
+                            path="/export/:account"
+                            element={<ExportAccount />}
+                        />
+                        <Route
+                            path="/import-private-key"
+                            element={<ImportPrivateKey />}
+                        />
                         <Route path="/network" element={<NetworkSettings />} />
                         <Route
                             path="/auto-lock"
@@ -102,6 +87,10 @@ function MenuContent() {
                         <Route
                             path="/import-ledger-accounts"
                             element={<ImportLedgerAccounts />}
+                        />
+                        <Route
+                            path="/recovery-passphrase"
+                            element={<RecoveryPassphrase />}
                         />
                     </Routes>
                 </MainLocationContext.Provider>

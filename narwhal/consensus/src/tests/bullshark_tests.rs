@@ -14,7 +14,7 @@ use fastcrypto::traits::KeyPair;
 use prometheus::Registry;
 #[cfg(test)]
 use std::collections::{BTreeSet, VecDeque};
-use test_utils::CommitteeFixture;
+use test_utils::{latest_protocol_version, CommitteeFixture};
 #[allow(unused_imports)]
 use tokio::sync::mpsc::channel;
 use tokio::sync::watch;
@@ -33,14 +33,30 @@ async fn commit_one() {
         .iter()
         .map(|x| x.digest())
         .collect::<BTreeSet<_>>();
-    let (mut certificates, next_parents) =
-        test_utils::make_optimal_certificates(&committee, 1..=2, &genesis, &ids);
+    let (mut certificates, next_parents) = test_utils::make_optimal_certificates(
+        &committee,
+        &latest_protocol_version(),
+        1..=2,
+        &genesis,
+        &ids,
+    );
 
     // Make two certificate (f+1) with round 3 to trigger the commits.
-    let (_, certificate) =
-        test_utils::mock_certificate(&committee, ids[0], 3, next_parents.clone());
+    let (_, certificate) = test_utils::mock_certificate(
+        &committee,
+        &latest_protocol_version(),
+        ids[0],
+        3,
+        next_parents.clone(),
+    );
     certificates.push_back(certificate);
-    let (_, certificate) = test_utils::mock_certificate(&committee, ids[1], 3, next_parents);
+    let (_, certificate) = test_utils::mock_certificate(
+        &committee,
+        &latest_protocol_version(),
+        ids[1],
+        3,
+        next_parents,
+    );
     certificates.push_back(certificate);
 
     // Spawn the consensus engine and sink the primary channel.
@@ -120,8 +136,13 @@ async fn dead_node() {
         .map(|x| x.digest())
         .collect::<BTreeSet<_>>();
 
-    let (mut certificates, _) =
-        test_utils::make_optimal_certificates(&committee, 1..=11, &genesis, &ids);
+    let (mut certificates, _) = test_utils::make_optimal_certificates(
+        &committee,
+        &latest_protocol_version(),
+        1..=11,
+        &genesis,
+        &ids,
+    );
 
     // Spawn the consensus engine and sink the primary channel.
     let (tx_new_certificates, rx_new_certificates) = test_utils::test_channel!(1);
@@ -228,36 +249,70 @@ async fn not_enough_support() {
 
     // Round 1: Fully connected graph.
     let nodes: Vec<_> = ids.iter().take(3).cloned().collect();
-    let (out, parents) = test_utils::make_optimal_certificates(&committee, 1..=1, &genesis, &nodes);
+    let (out, parents) = test_utils::make_optimal_certificates(
+        &committee,
+        &latest_protocol_version(),
+        1..=1,
+        &genesis,
+        &nodes,
+    );
     certificates.extend(out);
 
     // Round 2: Fully connect graph. But remember the digest of the leader. Note that this
     // round is the only one with 4 certificates.
-    let (leader_2_digest, certificate) =
-        test_utils::mock_certificate(&committee, ids[0], 2, parents.clone());
+    let (leader_2_digest, certificate) = test_utils::mock_certificate(
+        &committee,
+        &latest_protocol_version(),
+        ids[0],
+        2,
+        parents.clone(),
+    );
     certificates.push_back(certificate);
 
     let nodes: Vec<_> = ids.iter().skip(1).cloned().collect();
-    let (out, mut parents) =
-        test_utils::make_optimal_certificates(&committee, 2..=2, &parents, &nodes);
+    let (out, mut parents) = test_utils::make_optimal_certificates(
+        &committee,
+        &latest_protocol_version(),
+        2..=2,
+        &parents,
+        &nodes,
+    );
     certificates.extend(out);
 
     // Round 3: Only node 0 links to the leader of round 2.
     let mut next_parents = BTreeSet::new();
 
     let name = ids[1];
-    let (digest, certificate) = test_utils::mock_certificate(&committee, name, 3, parents.clone());
+    let (digest, certificate) = test_utils::mock_certificate(
+        &committee,
+        &latest_protocol_version(),
+        name,
+        3,
+        parents.clone(),
+    );
     certificates.push_back(certificate);
     next_parents.insert(digest);
 
     let name = ids[2];
-    let (digest, certificate) = test_utils::mock_certificate(&committee, name, 3, parents.clone());
+    let (digest, certificate) = test_utils::mock_certificate(
+        &committee,
+        &latest_protocol_version(),
+        name,
+        3,
+        parents.clone(),
+    );
     certificates.push_back(certificate);
     next_parents.insert(digest);
 
     let name = ids[0];
     parents.insert(leader_2_digest);
-    let (digest, certificate) = test_utils::mock_certificate(&committee, name, 3, parents.clone());
+    let (digest, certificate) = test_utils::mock_certificate(
+        &committee,
+        &latest_protocol_version(),
+        name,
+        3,
+        parents.clone(),
+    );
     certificates.push_back(certificate);
     next_parents.insert(digest);
 
@@ -265,13 +320,26 @@ async fn not_enough_support() {
 
     // Rounds 4: Fully connected graph. This is the where we "boost" the leader.
     let nodes: Vec<_> = ids.to_vec();
-    let (out, parents) = test_utils::make_optimal_certificates(&committee, 4..=4, &parents, &nodes);
+    let (out, parents) = test_utils::make_optimal_certificates(
+        &committee,
+        &latest_protocol_version(),
+        4..=4,
+        &parents,
+        &nodes,
+    );
     certificates.extend(out);
 
     // Round 5: Send f+1 certificates to trigger the commit of leader 4.
-    let (_, certificate) = test_utils::mock_certificate(&committee, ids[0], 5, parents.clone());
+    let (_, certificate) = test_utils::mock_certificate(
+        &committee,
+        &latest_protocol_version(),
+        ids[0],
+        5,
+        parents.clone(),
+    );
     certificates.push_back(certificate);
-    let (_, certificate) = test_utils::mock_certificate(&committee, ids[1], 5, parents);
+    let (_, certificate) =
+        test_utils::mock_certificate(&committee, &latest_protocol_version(), ids[1], 5, parents);
     certificates.push_back(certificate);
 
     // Spawn the consensus engine and sink the primary channel.
@@ -379,17 +447,36 @@ async fn missing_leader() {
 
     // Remove the leader for rounds 1 and 2.
     let nodes: Vec<_> = ids.iter().skip(1).cloned().collect();
-    let (out, parents) = test_utils::make_optimal_certificates(&committee, 1..=2, &genesis, &nodes);
+    let (out, parents) = test_utils::make_optimal_certificates(
+        &committee,
+        &latest_protocol_version(),
+        1..=2,
+        &genesis,
+        &nodes,
+    );
     certificates.extend(out);
 
     // Add back the leader for rounds 3 and 4.
-    let (out, parents) = test_utils::make_optimal_certificates(&committee, 3..=4, &parents, &ids);
+    let (out, parents) = test_utils::make_optimal_certificates(
+        &committee,
+        &latest_protocol_version(),
+        3..=4,
+        &parents,
+        &ids,
+    );
     certificates.extend(out);
 
     // Add f+1 certificates of round 5 to commit the leader of round 4.
-    let (_, certificate) = test_utils::mock_certificate(&committee, ids[0], 5, parents.clone());
+    let (_, certificate) = test_utils::mock_certificate(
+        &committee,
+        &latest_protocol_version(),
+        ids[0],
+        5,
+        parents.clone(),
+    );
     certificates.push_back(certificate);
-    let (_, certificate) = test_utils::mock_certificate(&committee, ids[1], 5, parents);
+    let (_, certificate) =
+        test_utils::mock_certificate(&committee, &latest_protocol_version(), ids[1], 5, parents);
     certificates.push_back(certificate);
 
     // Spawn the consensus engine and sink the primary channel.
@@ -469,8 +556,14 @@ async fn committed_round_after_restart() {
         .iter()
         .map(|x| x.digest())
         .collect::<BTreeSet<_>>();
-    let (certificates, _) =
-        test_utils::make_certificates_with_epoch(&committee, 1..=11, epoch, &genesis, &ids);
+    let (certificates, _) = test_utils::make_certificates_with_epoch(
+        &committee,
+        &latest_protocol_version(),
+        1..=11,
+        epoch,
+        &genesis,
+        &ids,
+    );
 
     let store = make_consensus_store(&test_utils::temp_dir());
     let cert_store = make_certificate_store(&test_utils::temp_dir());
@@ -568,8 +661,14 @@ async fn delayed_certificates_are_rejected() {
         .map(|x| x.digest())
         .collect::<BTreeSet<_>>();
     let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
-    let (certificates, _) =
-        test_utils::make_certificates_with_epoch(&committee, 1..=5, epoch, &genesis, &ids);
+    let (certificates, _) = test_utils::make_certificates_with_epoch(
+        &committee,
+        &latest_protocol_version(),
+        1..=5,
+        epoch,
+        &genesis,
+        &ids,
+    );
 
     let store = make_consensus_store(&test_utils::temp_dir());
     let mut state = ConsensusState::new(metrics.clone(), gc_depth);
@@ -614,8 +713,14 @@ async fn submitting_equivocating_certificate_should_error() {
         .map(|x| x.digest())
         .collect::<BTreeSet<_>>();
     let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
-    let (certificates, _) =
-        test_utils::make_certificates_with_epoch(&committee, 1..=1, epoch, &genesis, &ids);
+    let (certificates, _) = test_utils::make_certificates_with_epoch(
+        &committee,
+        &latest_protocol_version(),
+        1..=1,
+        epoch,
+        &genesis,
+        &ids,
+    );
 
     let store = make_consensus_store(&test_utils::temp_dir());
     let mut state = ConsensusState::new(metrics.clone(), gc_depth);
@@ -638,8 +743,14 @@ async fn submitting_equivocating_certificate_should_error() {
 
     // Try to submit certificates for same rounds but equivocating certificates (we just create
     // them with different epoch as a way to trigger the difference)
-    let (certificates, _) =
-        test_utils::make_certificates_with_epoch(&committee, 1..=1, 100, &genesis, &ids);
+    let (certificates, _) = test_utils::make_certificates_with_epoch(
+        &committee,
+        &latest_protocol_version(),
+        1..=1,
+        100,
+        &genesis,
+        &ids,
+    );
     assert_eq!(certificates.len(), 4);
 
     for certificate in certificates {
@@ -672,8 +783,14 @@ async fn reset_consensus_scores_on_every_schedule_change() {
         .map(|x| x.digest())
         .collect::<BTreeSet<_>>();
     let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
-    let (certificates, _) =
-        test_utils::make_certificates_with_epoch(&committee, 1..=50, epoch, &genesis, &ids);
+    let (certificates, _) = test_utils::make_certificates_with_epoch(
+        &committee,
+        &latest_protocol_version(),
+        1..=50,
+        epoch,
+        &genesis,
+        &ids,
+    );
 
     let store = make_consensus_store(&test_utils::temp_dir());
     let mut state = ConsensusState::new(metrics.clone(), gc_depth);
@@ -770,20 +887,33 @@ async fn restart_with_new_committee() {
             .iter()
             .map(|x| x.digest())
             .collect::<BTreeSet<_>>();
-        let (mut certificates, next_parents) =
-            test_utils::make_certificates_with_epoch(&committee, 1..=2, epoch, &genesis, &ids);
+        let (mut certificates, next_parents) = test_utils::make_certificates_with_epoch(
+            &committee,
+            &latest_protocol_version(),
+            1..=2,
+            epoch,
+            &genesis,
+            &ids,
+        );
 
         // Make two certificate (f+1) with round 3 to trigger the commits.
         let (_, certificate) = test_utils::mock_certificate_with_epoch(
             &committee,
+            &latest_protocol_version(),
             ids[0],
             3,
             epoch,
             next_parents.clone(),
         );
         certificates.push_back(certificate);
-        let (_, certificate) =
-            test_utils::mock_certificate_with_epoch(&committee, ids[1], 3, epoch, next_parents);
+        let (_, certificate) = test_utils::mock_certificate_with_epoch(
+            &committee,
+            &latest_protocol_version(),
+            ids[1],
+            3,
+            epoch,
+            next_parents,
+        );
         certificates.push_back(certificate);
 
         // Feed all certificates to the consensus. Only the last certificate should trigger
@@ -843,6 +973,7 @@ async fn garbage_collection_basic() {
     let slow_nodes = vec![(slow_node, 0.0_f64)];
     let (certificates, _round_5_certificates) = test_utils::make_certificates_with_slow_nodes(
         &committee,
+        &latest_protocol_version(),
         1..=7,
         genesis,
         &ids,
@@ -931,6 +1062,7 @@ async fn slow_node() {
     let slow_nodes = vec![(slow_node, 0.0_f64)];
     let (certificates, round_8_certificates) = test_utils::make_certificates_with_slow_nodes(
         &committee,
+        &latest_protocol_version(),
         1..=8,
         genesis,
         &ids,
@@ -990,6 +1122,7 @@ async fn slow_node() {
     // know the leader of each round.
     let (certificates, _) = test_utils::make_certificates_with_slow_nodes(
         &committee,
+        &latest_protocol_version(),
         9..=9,
         round_8_certificates,
         &ids,
@@ -1062,6 +1195,7 @@ async fn not_enough_support_and_missing_leaders_and_gc() {
 
     let (mut certificates, round_2_certificates) = test_utils::make_certificates_with_slow_nodes(
         &committee,
+        &latest_protocol_version(),
         1..=2,
         genesis,
         &keys_with_dead_node,
@@ -1078,7 +1212,13 @@ async fn not_enough_support_and_missing_leaders_and_gc() {
                 .iter()
                 .map(|cert| cert.digest())
                 .collect::<BTreeSet<_>>();
-            let (_, certificate) = test_utils::mock_certificate(&committee, *id, 3, parents);
+            let (_, certificate) = test_utils::mock_certificate(
+                &committee,
+                &latest_protocol_version(),
+                *id,
+                3,
+                parents,
+            );
             round_3_certificates.push(certificate);
         } else {
             // we filter out the round 2 leader
@@ -1087,7 +1227,13 @@ async fn not_enough_support_and_missing_leaders_and_gc() {
                 .filter(|cert| cert.origin() != *first_node)
                 .map(|cert| cert.digest())
                 .collect::<BTreeSet<_>>();
-            let (_, certificate) = test_utils::mock_certificate(&committee, *id, 3, parents);
+            let (_, certificate) = test_utils::mock_certificate(
+                &committee,
+                &latest_protocol_version(),
+                *id,
+                3,
+                parents,
+            );
             round_3_certificates.push(certificate);
         }
     }
@@ -1100,7 +1246,8 @@ async fn not_enough_support_and_missing_leaders_and_gc() {
             .iter()
             .map(|cert| cert.digest())
             .collect::<BTreeSet<_>>();
-        let (_, certificate) = test_utils::mock_certificate(&committee, *id, 4, parents);
+        let (_, certificate) =
+            test_utils::mock_certificate(&committee, &latest_protocol_version(), *id, 4, parents);
         round_4_certificates.push(certificate);
     }
 
@@ -1112,6 +1259,7 @@ async fn not_enough_support_and_missing_leaders_and_gc() {
     let (certificates_5_to_7, _round_7_certificates) =
         test_utils::make_certificates_with_slow_nodes(
             &committee,
+            &latest_protocol_version(),
             5..=7,
             round_4_certificates.clone(),
             &ids,

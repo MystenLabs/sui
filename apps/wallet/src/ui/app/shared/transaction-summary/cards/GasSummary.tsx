@@ -4,7 +4,6 @@ import { type GasSummaryType, useFormatCoin } from '@mysten/core';
 import { formatAddress } from '@mysten/sui.js';
 
 import { Text } from '../../text';
-import { Card } from '../Card';
 import ExplorerLink from '_src/ui/app/components/explorer-link';
 import { ExplorerLinkType } from '_src/ui/app/components/explorer-link/ExplorerLinkType';
 import { GAS_TYPE_ARG } from '_src/ui/app/redux/slices/sui-objects/Coin';
@@ -15,10 +14,19 @@ export function GasSummary({ gasSummary }: { gasSummary?: GasSummaryType }) {
     if (!gasSummary) return null;
 
     return (
-        <Card heading="Gas Fees">
-            <div className="flex flex-col items-center gap-1 w-full">
-                <div className="flex w-full justify-between">
-                    <Text color="steel-dark" variant="bodySmall">
+        <div className="bg-white relative flex flex-col shadow-summary-card rounded-2xl">
+            <div className="bg-gray-40 rounded-t-2xl py-2.5 px-4">
+                <Text
+                    color="steel-darker"
+                    variant="captionSmall"
+                    weight="semibold"
+                >
+                    Gas Fees
+                </Text>
+            </div>
+            <div className="flex flex-col items-center gap-1 w-full px-4 py-3">
+                <div className="flex w-full items-center justify-between">
+                    <Text color="steel-dark" variant="pBody" weight="medium">
                         You Paid
                     </Text>
                     <Text color="steel-darker" variant="pBody" weight="medium">
@@ -56,6 +64,6 @@ export function GasSummary({ gasSummary }: { gasSummary?: GasSummaryType }) {
                     </>
                 )}
             </div>
-        </Card>
+        </div>
     );
 }

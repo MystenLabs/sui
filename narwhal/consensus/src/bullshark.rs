@@ -268,7 +268,6 @@ impl Bullshark {
         let mut committed_sub_dags = Vec::new();
         let mut total_committed_certificates = 0;
 
-        // TODO: duplicated in tusk.rs
         for leader in utils::order_leaders(&self.committee, leader, state, Self::leader)
             .iter()
             .rev()

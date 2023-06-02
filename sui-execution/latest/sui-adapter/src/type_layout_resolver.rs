@@ -17,8 +17,8 @@ use sui_types::object::Object;
 use sui_types::storage::BackingPackageStore;
 use sui_types::{
     error::SuiError,
-    layout_resolver::LayoutResolver,
     object::{MoveObject, ObjectFormatOptions},
+    type_resolver::LayoutResolver,
 };
 
 /// Retrieve a `MoveStructLayout` from a `Type`.

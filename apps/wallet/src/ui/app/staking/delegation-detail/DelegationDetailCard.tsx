@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useFeature } from '@growthbook/growthbook-react';
 import {
     useGetValidatorsApy,
     useGetSystemState,
@@ -29,7 +28,6 @@ import LoadingIndicator from '_components/loading/LoadingIndicator';
 import { useAppSelector, useCoinsReFetchingConfig } from '_hooks';
 import { API_ENV } from '_src/shared/api-env';
 import { MIN_NUMBER_SUI_TO_STAKE } from '_src/shared/constants';
-import { FEATURES } from '_src/shared/experimentation/features';
 import FaucetRequestButton from '_src/ui/app/shared/faucet/FaucetRequestButton';
 
 type DelegationDetailCardProps = {
@@ -117,7 +115,6 @@ export function DelegationDetailCard({
     const commission = validatorData
         ? Number(validatorData.commissionRate) / 100
         : 0;
-    const stakingEnabled = useFeature(FEATURES.STAKING_ENABLED).on;
 
     if (isLoading || loadingValidators) {
         return (
@@ -253,10 +250,7 @@ export function DelegationDetailCard({
                                     to={stakeByValidatorAddress}
                                     before={<StakeAdd16 />}
                                     text="Stake SUI"
-                                    disabled={
-                                        !stakingEnabled ||
-                                        showRequestMoreSuiToken
-                                    }
+                                    disabled={showRequestMoreSuiToken}
                                 />
                             ) : null}
 

@@ -7,4 +7,4 @@ export { parseAmount } from './parseAmount';
 // export { getEventsSummary } from './getEventsSummary';
 export { getAmount } from './getAmount';
 export { checkStakingTxn } from './checkStakingTxn';
-export { sortGetAllBalancesToken } from './sortGetAllBalancesToken';
+export { filterAndSortTokenBalances } from './filterAndSortTokenBalances';

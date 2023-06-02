@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { isSuiNSName } from '@mysten/core';
 import { formatAddress } from '@mysten/sui.js';
 
 import ExplorerLink from '_components/explorer-link';
@@ -18,7 +19,7 @@ export function TxnAddressLink({ address }: TxnAddressLinkProps) {
             title="View on Sui Explorer"
             showIcon={false}
         >
-            {formatAddress(address)}
+            {isSuiNSName(address) ? address : formatAddress(address)}
         </ExplorerLink>
     );
 }

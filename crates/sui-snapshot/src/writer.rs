@@ -3,10 +3,9 @@
 #![allow(dead_code)]
 
 use crate::{
-    compute_sha3_checksum, create_file_metadata, Blob, Encoding, FileCompression, FileMetadata,
-    FileType, Manifest, ManifestV1, BLOB_ENCODING_BYTES, FILE_MAX_BYTES, MAGIC_BYTES,
-    MANIFEST_FILE_MAGIC, OBJECT_FILE_MAGIC, OBJECT_REF_BYTES, REFERENCE_FILE_MAGIC,
-    SEQUENCE_NUM_BYTES,
+    compute_sha3_checksum, create_file_metadata, FileCompression, FileMetadata, FileType, Manifest,
+    ManifestV1, FILE_MAX_BYTES, MAGIC_BYTES, MANIFEST_FILE_MAGIC, OBJECT_FILE_MAGIC,
+    OBJECT_REF_BYTES, REFERENCE_FILE_MAGIC, SEQUENCE_NUM_BYTES,
 };
 use anyhow::{anyhow, Context, Result};
 use backoff::future::retry;
@@ -26,6 +25,7 @@ use std::sync::Arc;
 use sui_core::authority::authority_store_tables::{AuthorityPerpetualTables, LiveObject};
 use sui_storage::object_store::util::{copy_file, delete_recursively, path_to_filesystem};
 use sui_storage::object_store::ObjectStoreConfig;
+use sui_storage::{Blob, Encoding, BLOB_ENCODING_BYTES};
 use sui_types::base_types::{ObjectID, ObjectRef};
 use tokio::sync::mpsc;
 use tokio::sync::mpsc::{Receiver, Sender};
@@ -191,7 +191,7 @@ impl LiveObjectSetWriterV1 {
         if cut_new_part_file {
             self.cut().await?;
         }
-        self.n += blob.append_to_file(&mut self.wbuf)?;
+        self.n += blob.write(&mut self.wbuf)?;
         Ok(())
     }
     async fn write_object_ref(&mut self, object_ref: &ObjectRef) -> Result<()> {
@@ -223,8 +223,8 @@ pub struct StateSnapshotWriterV1 {
 impl StateSnapshotWriterV1 {
     pub async fn new(
         epoch: u64,
-        local_store_config: ObjectStoreConfig,
-        remote_store_config: ObjectStoreConfig,
+        local_store_config: &ObjectStoreConfig,
+        remote_store_config: &ObjectStoreConfig,
         file_compression: FileCompression,
         concurrency: NonZeroUsize,
     ) -> Result<Self> {
@@ -241,7 +241,11 @@ impl StateSnapshotWriterV1 {
         let local_object_store = local_store_config.make()?;
         let local_staging_dir_root = local_store_config
             .directory
-            .context("No local directory specified")?;
+            .as_ref()
+            .context("No local directory specified")?
+            .clone();
+
+        // Delete local epoch dir if it exists
         let local_epoch_dir_path = local_staging_dir_root.join(&epoch_dir);
         if local_epoch_dir_path.exists() {
             return Err(anyhow!(
@@ -375,7 +379,7 @@ impl StateSnapshotWriterV1 {
     fn write_manifest(&mut self, file_metadata: Vec<FileMetadata>) -> Result<()> {
         let (f, manifest_file_path) = self.manifest_file()?;
         let mut wbuf = BufWriter::new(f);
-        let manifest = Manifest::V1(ManifestV1 {
+        let manifest: Manifest = Manifest::V1(ManifestV1 {
             snapshot_version: 1,
             address_length: ObjectID::LENGTH as u64,
             file_metadata,

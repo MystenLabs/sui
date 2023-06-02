@@ -1,6 +1,6 @@
 [package]
 name = "sui-core"
-version.workspace = true
+version = "0.1.0"
 authors = ["Mysten Labs <build@mystenlabs.com>"]
 license = "Apache-2.0"
 publish = false
@@ -41,6 +41,7 @@ tokio-stream = { version = "0.1.8", features = ["sync", "net"] }
 tracing = "0.1.36"
 
 fastcrypto.workspace = true
+fastcrypto-zkp.workspace = true
 move-binary-format.workspace = true
 move-bytecode-verifier.workspace = true
 move-bytecode-utils.workspace = true

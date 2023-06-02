@@ -1,7 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::committee::EpochId;
 use crate::crypto::{SignatureScheme, SuiSignature};
+use crate::zk_login_authenticator::ZkLoginAuthenticator;
 use crate::{base_types::SuiAddress, crypto::Signature, error::SuiError, multisig::MultiSig};
 pub use enum_dispatch::enum_dispatch;
 use fastcrypto::{
@@ -12,7 +14,20 @@ use schemars::JsonSchema;
 use serde::Serialize;
 use shared_crypto::intent::IntentMessage;
 use std::hash::Hash;
+#[derive(Default, Debug, Clone)]
+pub struct AuxVerifyData {
+    pub epoch: Option<EpochId>,
+    pub google_jwk_as_bytes: Option<Vec<u8>>,
+}
 
+impl AuxVerifyData {
+    pub fn new(epoch: Option<EpochId>, google_jwk_as_bytes: Option<Vec<u8>>) -> Self {
+        Self {
+            epoch,
+            google_jwk_as_bytes,
+        }
+    }
+}
 /// A lightweight trait that all members of [enum GenericSignature] implement.
 #[enum_dispatch]
 pub trait AuthenticatorTrait {
@@ -20,6 +35,7 @@ pub trait AuthenticatorTrait {
         &self,
         value: &IntentMessage<T>,
         author: SuiAddress,
+        aux_verify_data: AuxVerifyData,
     ) -> Result<(), SuiError>
     where
         T: Serialize;
@@ -34,6 +50,13 @@ pub trait AuthenticatorTrait {
 pub enum GenericSignature {
     MultiSig,
     Signature,
+    ZkLoginAuthenticator,
+}
+
+impl GenericSignature {
+    pub fn is_zklogin(&self) -> bool {
+        matches!(self, GenericSignature::ZkLoginAuthenticator(_))
+    }
 }
 
 /// GenericSignature encodes a single signature [enum Signature] as is `flag || signature || pubkey`.
@@ -54,6 +77,10 @@ impl ToFromBytes for GenericSignature {
                     let multisig = MultiSig::from_bytes(bytes)?;
                     Ok(GenericSignature::MultiSig(multisig))
                 }
+                SignatureScheme::ZkLoginAuthenticator => {
+                    let zk_login = ZkLoginAuthenticator::from_bytes(bytes)?;
+                    Ok(GenericSignature::ZkLoginAuthenticator(zk_login))
+                }
                 _ => Err(FastCryptoError::InvalidInput),
             },
             Err(_) => Err(FastCryptoError::InvalidInput),
@@ -67,6 +94,7 @@ impl AsRef<[u8]> for GenericSignature {
         match self {
             GenericSignature::MultiSig(s) => s.as_ref(),
             GenericSignature::Signature(s) => s.as_ref(),
+            GenericSignature::ZkLoginAuthenticator(s) => s.as_ref(),
         }
     }
 }
@@ -110,10 +138,11 @@ impl AuthenticatorTrait for Signature {
         &self,
         value: &IntentMessage<T>,
         author: SuiAddress,
+        _aux_verify_data: AuxVerifyData,
     ) -> Result<(), SuiError>
     where
         T: Serialize,
     {
-        self.verify_secure(value, author)
+        self.verify_secure(value, author, self.scheme())
     }
 }

@@ -1,7 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useFormatCoin, useGetCoinBalance } from '@mysten/core';
+import {
+    useFormatCoin,
+    useGetCoinBalance,
+    useResolveSuiNSName,
+} from '@mysten/core';
 import { CheckFill16 } from '@mysten/icons';
 import { formatAddress, type SuiAddress, SUI_TYPE_ARG } from '@mysten/sui.js';
 import cl from 'classnames';
@@ -25,6 +29,7 @@ export function LedgerAccountRow({
         refetchInterval,
         staleTime
     );
+    const { data: domainName } = useResolveSuiNSName(address);
     const [totalAmount, totalAmountSymbol] = useFormatCoin(
         coinBalance?.totalBalance ?? 0,
         SUI_TYPE_ARG
@@ -44,7 +49,7 @@ export function LedgerAccountRow({
                 weight="semibold"
                 color={isSelected ? 'steel-darker' : 'steel-dark'}
             >
-                {formatAddress(address)}
+                {domainName ?? formatAddress(address)}
             </Text>
             <div className="ml-auto">
                 <Text variant="bodySmall" color="steel" weight="semibold" mono>
