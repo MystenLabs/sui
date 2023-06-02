@@ -3,7 +3,7 @@ title: Sui Kiosk
 ---
 
 Sui Kiosk is a primitive, or building block (a module in the Sui Framework), you can use to build a trading platform for digital assets. Sui Kiosk supports adding digital assets that you can store and list for sale to other users. You can also define rules for the kiosk as part of a transfer policy that controls how purchasers can use the asset after purchase. 
-To add digital assets to your kiosk to list for sale, you must first create and publish a package to Sui as part of a programmable transaction block. The package must define a type (T) and include a transfer policy (a `TransferPolicy` object), that determines whether, and how, users can interact with the assets in your kiosk. You can specify different requirements for each asset and transaction. To learn more about transfer policies, see [Transfer Policy](link-to-topic).
+To add digital assets to your kiosk to list for sale, you must first create and publish a package to Sui as part of a programmable transaction block. The package must define a type (T). You can then create a transfer policy (`TransferPolicy`) using the `Publisher` object. The transfer policy which determines the conditions that must be met for the purchase to succeed. You can specify different requirements for each asset and transaction. To learn more about transfer policies, see [Transfer Policy](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/docs/transfer_policy.md). To learn more about using the Publisher object, see [Publisher](https://examples.sui.io/basics/publisher.html) in Sui by Example.
 
 To extend and customize Kiosk functionality, Sui Kiosk also supports building extensions that take full advantage of the highly accessible, composable, and dynamic nature of objects on Sui.
 
@@ -114,7 +114,8 @@ kiosk::take(Kiosk, KioskOwnerCap, ID): Item
 
 ## Purchase an item from a kiosk
 
-To purchase a listed item from a kiosk, use the [`kiosk::purchase`](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/docs/kiosk.md#function-purchase) function. When your purchase transaction completes, the asset  transfers to your address and you become the asset owner.
+To purchase a listed item from a kiosk, use the [`kiosk::purchase`](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/docs/kiosk.md#function-purchase) function. The asset becomes available to the purchaser when the TransferRequest for the purchase resolves. If there is a policy that enforces locking, such a kiosk lock rule, he asset must be placed into the purchaser's kiosk.
+
 To purchase an item listed on a kiosk:
 
 ```rust
