@@ -53,10 +53,10 @@ const getKiosk = async () => {
 </details>
 
 <details>
-<summary>Purchasing an item (currently supports royalty rule deployed on testnet or no rules)</summary>
+<summary>Purchasing an item (currently supports royalty rule, kiosk_lock_rule, no rules, (combination works too))</summary>
 
 ```typescript
-import { fetchKiosk } from '@mysten/kiosk';
+import { queryTransferPolicy, purchaseAndResolvePolicies, place, testnetEnvironment } from '@mysten/kiosk';
 import { Connection, JsonRpcProvider } from '@mysten/sui.js';
 
 const provider = new JsonRpcProvider(
@@ -88,16 +88,17 @@ const purchaseItem = async (item, kioskId) => {
   // initialize tx block.
   const tx = new TransactionBlock();
 
-  // Select the environment. Right now only `testnet` or `custom` is supported.
-  //  For custom, you need to supply the `address` of the rules' package.
-  const environment = { env: 'testnet', address?: '' }
-
   // Both are required if you there is a `kiosk_lock_rule`.
   // Optional otherwise. Function will throw an error if there's a kiosk_lock_rule and these are missing.
   const extraParams = {
     ownedKiosk,
     ownedKioskCap
   }
+  // Define the environment.
+  // To use a custom package address for rules, you could call:
+  // const environment = customEnvironment('<PackageAddress>');
+  const environment = testnetEnvironment;
+
   // Extra params. Optional, but required if the user tries to resolve a `kiosk_lock_rule`.
   // Purchases the item. Supports `kiosk_lock_rule`, `royalty_rule` (accepts combination too).
   const result = purchaseAndResolvePolicies(tx, item.type, item.listing.price, kioskId, item.objectId, policy[0], environment, extraParams);
