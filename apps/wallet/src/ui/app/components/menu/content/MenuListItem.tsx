@@ -51,7 +51,6 @@ function MenuListItem({
     if (href) {
         return (
             <a
-                data-testid={title}
                 href={href}
                 target="_blank"
                 rel="noreferrer noopener"

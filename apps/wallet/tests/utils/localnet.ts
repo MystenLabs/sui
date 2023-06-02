@@ -3,7 +3,11 @@
 
 // eslint-disable-next-line import/order
 import 'tsconfig-paths/register';
-import { Ed25519Keypair, type Keypair } from '@mysten/sui.js';
+import {
+    Ed25519Keypair,
+    JsonRpcProvider,
+    localnetConnection,
+} from '@mysten/sui.js';
 import * as bip39 from '@scure/bip39';
 import { wordlist } from '@scure/bip39/wordlists/english';
 
@@ -17,6 +21,7 @@ export async function generateKeypair() {
     return { mnemonic, keypair };
 }
 
-export function generateAddress(keypair: Keypair) {
-    return keypair.getPublicKey().toSuiAddress();
+export async function requestingSuiFromFaucet(address: string) {
+    const provider = new JsonRpcProvider(localnetConnection);
+    await provider.requestSuiFromFaucet(address);
 }

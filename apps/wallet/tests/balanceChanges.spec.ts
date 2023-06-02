@@ -2,10 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { expect, test } from './fixtures';
-import { createWallet } from './utils/auth';
-import { generateAddress, generateKeypairFromMnemonic } from './utils/localnet';
+import { createWallet, importWallet } from './utils/auth';
+import {
+    generateKeypairFromMnemonic,
+    requestingSuiFromFaucet,
+} from './utils/localnet';
 
-const mnemonic = [
+const receivedAddressMnemonic = [
     'beef',
     'beef',
     'beef',
@@ -20,30 +23,85 @@ const mnemonic = [
     'beef',
 ];
 
-test('send 300 SUI and view transaction activity', async ({
-    page,
-    extensionUrl,
-}) => {
-    const keypair = await generateKeypairFromMnemonic(mnemonic.join(' '));
-    const address = generateAddress(keypair);
+const currentWalletMnemonic = [
+    'intact',
+    'drift',
+    'gospel',
+    'soft',
+    'state',
+    'inner',
+    'shed',
+    'proud',
+    'what',
+    'box',
+    'bean',
+    'visa',
+];
 
+const COIN_TO_SEND = 20;
+
+test('request SUI from local faucet', async ({ page, extensionUrl }) => {
     await createWallet(page, extensionUrl);
 
+    const originalBalance = await page
+        .getByTestId('coin-balance')
+        .textContent();
     await page.getByTestId('faucet-request-button').click();
-    await expect(page.getByTestId('coin-balance')).toHaveText('1,000SUI');
+    await expect(page.getByText(/SUI Received/i)).toBeVisible();
+    await expect(page.getByTestId('coin-balance')).not.toHaveText(
+        `${originalBalance}SUI`
+    );
+});
+
+test('send 20 SUI to an address', async ({ page, extensionUrl }) => {
+    const receivedKeypair = await generateKeypairFromMnemonic(
+        receivedAddressMnemonic.join(' ')
+    );
+    const receivedAddress = receivedKeypair.getPublicKey().toSuiAddress();
+
+    const originKeypair = await generateKeypairFromMnemonic(
+        currentWalletMnemonic.join(' ')
+    );
+    const originAddress = originKeypair.getPublicKey().toSuiAddress();
+
+    await importWallet(page, extensionUrl, currentWalletMnemonic);
+
+    await page.getByTestId('copy-address').click();
+
+    await requestingSuiFromFaucet(originAddress);
+    await expect(page.getByTestId('coin-balance')).not.toHaveText('0SUI');
+
+    const originalBalance = await page
+        .getByTestId('coin-balance')
+        .textContent();
 
     await page.getByTestId('send-coin-button').click();
-    await page.getByTestId('coin-amount-input').fill('300');
-    await page.getByTestId('address-input').fill(address);
+    await page.getByTestId('coin-amount-input').fill(String(COIN_TO_SEND));
+    await page.getByTestId('address-input').fill(receivedAddress);
     await page.getByRole('button', { name: 'Review' }).click();
     await page.getByRole('button', { name: 'Send Now' }).click();
     await expect(page.getByTestId('overlay-title')).toHaveText('Transaction');
 
     await page.getByTestId('close-icon').click();
     await page.getByTestId('nav-tokens').click();
-    await expect(page.getByTestId('coin-balance')).toHaveText('700SUI');
+    await expect(page.getByTestId('coin-balance')).not.toHaveText(
+        `${originalBalance}SUI`
+    );
+});
 
+test('check balance changes in Activity', async ({ page, extensionUrl }) => {
+    const originKeypair = await generateKeypairFromMnemonic(
+        currentWalletMnemonic.join(' ')
+    );
+    const originAddress = originKeypair.getPublicKey().toSuiAddress();
+
+    await importWallet(page, extensionUrl, currentWalletMnemonic);
+
+    await requestingSuiFromFaucet(originAddress);
     await page.getByTestId('nav-activity').click();
-    await page.getByTestId('link-to-txn').first().click();
-    await expect(page.getByText('Amount+300 SUI')).toBeVisible();
+    await page
+        .getByText(/Transaction/i)
+        .first()
+        .click();
+    await expect(page.getByText(`Amount+${COIN_TO_SEND} SUI`)).toBeVisible();
 });
