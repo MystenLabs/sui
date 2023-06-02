@@ -1132,7 +1132,7 @@ async fn safe_mode_reconfig_test() {
         .wallet
         .make_staking_transaction(validator_address)
         .await;
-    let response = test_cluster.execute_transaction(txn).await;
+    test_cluster.execute_transaction(txn).await;
 
     // Now remove the override and check that in the next epoch we are no longer in safe mode.
     test_cluster.set_safe_mode_expected(false);
