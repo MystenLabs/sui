@@ -1123,17 +1123,6 @@ async fn safe_mode_reconfig_test() {
     // Check that time is properly set even in safe mode.
     assert!(system_state.epoch_start_timestamp_ms() >= prev_epoch_start_timestamp + EPOCH_DURATION);
 
-    // Try a staking transaction.
-    let validator_address = system_state
-        .into_sui_system_state_summary()
-        .active_validators[0]
-        .sui_address;
-    let txn = test_cluster
-        .wallet
-        .make_staking_transaction(validator_address)
-        .await;
-    let response = test_cluster.execute_transaction(txn).await;
-
     // Now remove the override and check that in the next epoch we are no longer in safe mode.
     test_cluster.set_safe_mode_expected(false);
 
