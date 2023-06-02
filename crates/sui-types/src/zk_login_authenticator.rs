@@ -115,7 +115,13 @@ impl AuthenticatorTrait for ZkLoginAuthenticator {
         }
 
         // Calculates the hash of all inputs equals to the one in public inputs.
-        if aux_inputs.calculate_all_inputs_hash() != self.public_inputs.get_all_inputs_hash() {
+        if aux_inputs
+            .calculate_all_inputs_hash()
+            .map_err(|_| SuiError::InvalidSignature {
+                error: "Fail to caculate hash".to_string(),
+            })?
+            != self.public_inputs.get_all_inputs_hash()
+        {
             return Err(SuiError::InvalidSignature {
                 error: "Invalid all inputs hash".to_string(),
             });
