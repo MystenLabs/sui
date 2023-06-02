@@ -188,7 +188,7 @@ impl SuiCommand {
                 let mut interval = tokio::time::interval(std::time::Duration::from_secs(3));
                 let mut unhealthy_cnt = 0;
                 loop {
-                    for node in swarm.validators() {
+                    for node in swarm.validator_nodes() {
                         if let Err(err) = node.health_check(true).await {
                             unhealthy_cnt += 1;
                             if unhealthy_cnt > 3 {

@@ -301,7 +301,7 @@ async fn test_passive_reconfig() {
 
     test_cluster
         .swarm
-        .validators()
+        .validator_nodes()
         .next()
         .unwrap()
         .get_node_handle()

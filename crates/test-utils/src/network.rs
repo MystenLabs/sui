@@ -122,7 +122,7 @@ impl TestCluster {
     }
 
     /// Convenience method to start a new fullnode in the test cluster.
-    pub async fn start_fullnode(&mut self) -> FullNodeHandle {
+    pub async fn spawn_new_fullnode(&mut self) -> FullNodeHandle {
         self.start_fullnode_from_config(
             self.fullnode_config_builder()
                 .build(&mut OsRng, self.swarm.config()),
@@ -136,37 +136,40 @@ impl TestCluster {
         FullNodeHandle::new(node, json_rpc_address).await
     }
 
-    pub fn all_node_handles(&self) -> impl Iterator<Item = SuiNodeHandle> {
+    pub fn all_node_handles(&self) -> Vec<SuiNodeHandle> {
         self.swarm
-            .validator_node_handles()
-            .into_iter()
-            .chain(std::iter::once(self.fullnode_handle.sui_node.clone()))
+            .all_nodes()
+            .map(|n| n.get_node_handle().unwrap())
+            .collect()
     }
 
-    pub fn get_validator_addresses(&self) -> Vec<AuthorityName> {
-        self.swarm.validators().map(|v| v.name()).collect()
+    pub fn get_validator_pubkeys(&self) -> Vec<AuthorityName> {
+        self.swarm.validator_nodes().map(|v| v.name()).collect()
     }
 
-    pub fn stop_validator(&self, name: AuthorityName) {
-        self.swarm.validator(name).unwrap().stop();
+    pub fn stop_node(&self, name: &AuthorityName) {
+        self.swarm.node(name).unwrap().stop();
     }
 
     pub async fn stop_all_validators(&self) {
         info!("Stopping all validators in the cluster");
-        self.swarm.validators().for_each(|v| v.stop());
+        self.swarm.active_validators().for_each(|v| v.stop());
         tokio::time::sleep(Duration::from_secs(3)).await;
     }
 
-    pub async fn start_all_validator(&self) {
+    pub async fn start_all_validators(&self) {
         info!("Starting all validators in the cluster");
-        for v in self.swarm.validators() {
+        for v in self.swarm.validator_nodes() {
+            if v.is_running() {
+                continue;
+            }
             v.start().await.unwrap();
         }
         tokio::time::sleep(Duration::from_secs(3)).await;
     }
 
-    pub async fn start_validator(&self, name: AuthorityName) {
-        let node = self.swarm.validator(name).unwrap();
+    pub async fn start_node(&self, name: &AuthorityName) {
+        let node = self.swarm.node(name).unwrap();
         if node.is_running() {
             return;
         }
@@ -243,8 +246,9 @@ impl TestCluster {
             .sui_node
             .with(|node| node.state().clone_committee_for_testing());
         let mut cur_stake = 0;
-        for handle in self.swarm.validator_node_handles() {
-            handle
+        for node in self.swarm.active_validators() {
+            node.get_node_handle()
+                .unwrap()
                 .with_async(|node| async {
                     node.close_epoch_for_testing().await.unwrap();
                     cur_stake += cur_committee.weight(&node.state().name);
@@ -296,15 +300,15 @@ impl TestCluster {
         &mut self,
         new_supported_versions: SupportedProtocolVersions,
     ) {
-        for authority in self.get_validator_addresses().into_iter() {
-            self.stop_validator(authority);
+        for authority in self.get_validator_pubkeys() {
+            self.stop_node(&authority);
             tokio::time::sleep(Duration::from_millis(1000)).await;
             self.swarm
-                .validator_mut(authority)
+                .node_mut(&authority)
                 .unwrap()
                 .config
                 .supported_protocol_versions = Some(new_supported_versions);
-            self.start_validator(authority).await;
+            self.start_node(&authority).await;
             info!("Restarted validator {}", authority);
         }
     }
@@ -377,7 +381,7 @@ impl RandomNodeRestarter {
         let test_cluster = self.test_cluster.clone();
         let kill_interval = self.kill_interval;
         let restart_delay = self.restart_delay;
-        let validators = self.test_cluster.get_validator_addresses();
+        let validators = self.test_cluster.get_validator_pubkeys();
         tokio::task::spawn(async move {
             loop {
                 let delay = kill_interval.sample(&mut OsRng);
@@ -386,13 +390,13 @@ impl RandomNodeRestarter {
 
                 let validator = validators.choose(&mut OsRng).unwrap();
                 info!("Killing validator {:?}", validator.concise());
-                test_cluster.stop_validator(*validator);
+                test_cluster.stop_node(validator);
 
                 let delay = restart_delay.sample(&mut OsRng);
                 info!("Sleeping {delay:?} before restarting");
                 sleep(delay).await;
                 info!("Starting validator {:?}", validator.concise());
-                test_cluster.start_validator(*validator).await;
+                test_cluster.start_node(validator).await;
             }
         })
     }
