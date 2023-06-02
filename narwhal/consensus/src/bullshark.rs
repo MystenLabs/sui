@@ -204,7 +204,6 @@ impl Bullshark {
                 .unwrap_or_default();
 
             if !last_election_round.leader_found {
-
                 self.metrics
                     .leader_election
                     .with_label_values(&["not_found", &hostname])
@@ -339,9 +338,16 @@ impl Bullshark {
 
         self.last_successful_leader_election_timestamp = Instant::now();
 
+        let hostname = self
+            .last_leader_election
+            .leader
+            .as_ref()
+            .map(|authority| authority.hostname())
+            .unwrap_or_default();
+
         self.metrics
             .leader_election
-            .with_label_values(&["elected"])
+            .with_label_values(&["elected", &hostname])
             .inc();
 
         // The total leader_commits are expected to grow the same amount on validators,
