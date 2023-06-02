@@ -118,7 +118,7 @@ function MenuList() {
                 confirmText="Logout"
                 confirmStyle="outlineWarning"
                 title="Are you sure you want to Logout?"
-                hint="You will need account pin to log back in."
+                hint="You will need your account pin to log back in."
                 onResponse={async (confirmed) => {
                     setIsLogoutDialogOpen(false);
                     if (confirmed) {
