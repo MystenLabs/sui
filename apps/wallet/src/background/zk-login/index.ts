@@ -252,11 +252,5 @@ export async function authenticateAccount(
             "Authenticated google account doesn't match the current account data"
         );
     }
-    const sameNewAddress = await getAddress({
-        value: decodedJwt.sub,
-        iss: decodedJwt.iss,
-        userPin,
-    });
-    console.log({ address, sameNewAddress });
     await cacheAccountCredentials({ address, ephemeralKeyPair, proofs });
 }

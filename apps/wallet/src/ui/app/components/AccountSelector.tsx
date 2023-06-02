@@ -13,6 +13,7 @@ import { useCopyToClipboard } from '../hooks/useCopyToClipboard';
 import { ButtonConnectedTo } from '../shared/ButtonConnectedTo';
 import { Text } from '../shared/text';
 import { AccountList } from './AccountList';
+import GoogleIcon from '_assets/images/google.svg';
 
 export function AccountSelector() {
     const allAccounts = useAccounts();
@@ -39,6 +40,7 @@ export function AccountSelector() {
                 onClick={copyToAddress}
                 iconAfter={<Copy12 />}
                 bgOnHover="grey"
+                iconBefore={<GoogleIcon />}
             />
         );
     }

@@ -59,6 +59,12 @@ const styles = cva(
                     'active:text-steel-darker/70',
                     'disabled:text-steel-dark/50',
                 ],
+                twitch: [
+                    'bg-[#6441A5] text-white border-none',
+                    'visited:text-white',
+                    'active:text-white',
+                    'disabled:bg-[#6441A5]/60',
+                ],
             },
             size: {
                 tall: ['h-11 px-5 rounded-xl'],
@@ -86,6 +92,7 @@ const iconStyles = cva('flex', {
                 'group-active:text-steel-dark',
                 'group-disabled:text-gray-45',
             ],
+            twitch: [],
             outlineWarning: [
                 'text-issue-dark/80',
                 'group-hover:text-issue-dark group-focus:text-issue-dark',

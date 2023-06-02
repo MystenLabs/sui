@@ -1,8 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { type SuiAddress, bcs, SIGNATURE_SCHEME_TO_FLAG } from '@mysten/sui.js';
 import { BCS, fromB64, toB64 } from '@mysten/bcs';
+import { type SuiAddress, bcs, SIGNATURE_SCHEME_TO_FLAG } from '@mysten/sui.js';
 
 import { authenticateAccount } from '../zk-login';
 import { getCachedAccountCredentials } from '../zk-login/keys-vault';
@@ -76,7 +76,6 @@ export class ZKAccount implements Account {
         const bytes = bcs
             .ser('ZKLoginSignature', ZKLoginSignatureData)
             .toBytes();
-        console.log('bcs bytes size', bytes.length);
         const signatureBytes = new Uint8Array(bytes.length + 1);
         signatureBytes.set([SIGNATURE_SCHEME_TO_FLAG['zkLoginFlag']]);
         signatureBytes.set(bytes, 1);

@@ -44,7 +44,8 @@ export function useLedgerNotification() {
             HAS_ACKNOWLEDGED_LEDGER_NOTIFICATION_KEY
         );
         const hasAcknowledged =
-            hasAcknowledgedVal === HAS_ACKNOWLEDGED_LEDGER_NOTIFICATION_VALUE;
+            hasAcknowledgedVal === HAS_ACKNOWLEDGED_LEDGER_NOTIFICATION_VALUE ||
+            true;
 
         if (isLedgerNotificationEnabled && !hasAcknowledged && !isMenuOpen) {
             // If we don't have a timeout, the toast doesn't get rendered after initial render.

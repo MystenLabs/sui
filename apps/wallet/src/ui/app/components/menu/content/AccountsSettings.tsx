@@ -38,18 +38,21 @@ export function AccountsSettings() {
                     text="Create New Account"
                     loading={createAccountMutation.isLoading}
                     onClick={() => createAccountMutation.mutate()}
+                    disabled
                 />
                 <Button
                     variant="outline"
                     size="tall"
                     text="Import Private Key"
                     to={importPrivateKeyUrl}
+                    disabled
                 />
                 <Button
                     variant="outline"
                     size="tall"
                     text="Connect Ledger Wallet"
                     before={<LockedLockIcon />}
+                    disabled
                     onClick={async () => {
                         if (appType === AppType.popup) {
                             const { origin, pathname } = window.location;

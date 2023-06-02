@@ -56,6 +56,7 @@ export default function AutoLockTimerSelector() {
                         actionDisabled="auto"
                         actionText="Save"
                         placeholder="Auto lock minutes"
+                        disabled
                     />
                 </Form>
             </Formik>

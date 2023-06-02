@@ -297,7 +297,6 @@ export class Keyring {
                     );
                 } else if (isZKAccount(account)) {
                     const signature = await account.signData(fromB64(data));
-                    console.log(signature);
                     uiConnection.send(
                         createMessage<KeyringPayload<'signData'>>(
                             {

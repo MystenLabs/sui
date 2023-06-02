@@ -5,8 +5,6 @@ import { cx } from 'class-variance-authority';
 import { useMemo, useState } from 'react';
 
 import { useAccounts } from '../hooks/useAccounts';
-import { useDeriveNextAccountMutation } from '../hooks/useDeriveNextAccountMutation';
-import { Link } from '../shared/Link';
 import { SummaryCard } from './SummaryCard';
 import {
     WalletListSelectItem,
@@ -30,7 +28,7 @@ export function WalletListSelect({
     disabled = false,
     onChange,
 }: WalletListSelectProps) {
-    const [newAccounts, setNewAccounts] = useState<string[]>([]);
+    const [newAccounts] = useState<string[]>([]);
     const accounts = useAccounts();
     const filteredAccounts = useMemo(() => {
         if (visibleValues) {
@@ -40,7 +38,6 @@ export function WalletListSelect({
         }
         return accounts;
     }, [accounts, visibleValues]);
-    const deriveNextAccount = useDeriveNextAccountMutation();
     return (
         <SummaryCard
             header={title}
@@ -83,57 +80,6 @@ export function WalletListSelect({
                         </li>
                     ))}
                 </ul>
-            }
-            footer={
-                mode === 'select' ? (
-                    <div className="flex flex-row flex-nowrap self-stretch justify-between">
-                        <div>
-                            {filteredAccounts.length > 1 ? (
-                                <Link
-                                    color="heroDark"
-                                    weight="medium"
-                                    text="Select all"
-                                    disabled={disabled}
-                                    onClick={() =>
-                                        onChange(
-                                            filteredAccounts.map(
-                                                ({ address }) => address
-                                            )
-                                        )
-                                    }
-                                />
-                            ) : null}
-                        </div>
-                        <div>
-                            <Link
-                                color="heroDark"
-                                weight="medium"
-                                text="New account"
-                                disabled={disabled}
-                                loading={deriveNextAccount.isLoading}
-                                onClick={async () => {
-                                    const newAccountAddress =
-                                        await deriveNextAccount.mutateAsync();
-                                    setNewAccounts([
-                                        ...newAccounts,
-                                        newAccountAddress,
-                                    ]);
-                                    if (
-                                        !visibleValues ||
-                                        visibleValues.includes(
-                                            newAccountAddress
-                                        )
-                                    ) {
-                                        onChange([
-                                            ...values,
-                                            newAccountAddress,
-                                        ]);
-                                    }
-                                }}
-                            />
-                        </div>
-                    </div>
-                ) : null
             }
             minimalPadding
         />

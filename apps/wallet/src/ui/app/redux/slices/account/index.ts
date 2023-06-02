@@ -122,7 +122,6 @@ const accountSlice = createSlice({
                 Required<KeyringPayload<'walletStatusUpdate'>>['return']
             >
         ) => {
-            console.log('setKeyringStatus', payload);
             state.isLocked = payload.isLocked;
             state.isInitialized = payload.isInitialized;
             state.address = payload.activeAddress; // is already normalized

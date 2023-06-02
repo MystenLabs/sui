@@ -9,6 +9,7 @@ import { cx } from 'class-variance-authority';
 
 import { AccountBadge } from '../../AccountBadge';
 import { AccountActions } from './AccountActions';
+import GoogleIcon from '_assets/images/google.svg';
 import { type SerializedAccount } from '_src/background/keyring/Account';
 import { useCopyToClipboard } from '_src/ui/app/hooks/useCopyToClipboard';
 import { Text } from '_src/ui/app/shared/text';
@@ -40,6 +41,7 @@ export function Account({ account }: AccountProps) {
                         className="flex flex-nowrap items-center px-5 py-3 self-stretch cursor-pointer gap-3 group"
                     >
                         <div className="transition flex flex-1 gap-3 justify-start items-center text-steel-dark group-hover:text-steel-darker ui-open:text-steel-darker min-w-0">
+                            <GoogleIcon />
                             <div className="overflow-hidden flex flex-col gap-1">
                                 {domainName && (
                                     <Text

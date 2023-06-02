@@ -11,7 +11,6 @@ import {
 } from '@mysten/icons';
 import { formatAddress } from '@mysten/sui.js';
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import Browser from 'webextension-polyfill';
 
 import LoadingIndicator from '../../loading/LoadingIndicator';
@@ -19,7 +18,6 @@ import { MenuLayout } from './MenuLayout';
 import MenuListItem from './MenuListItem';
 import { API_ENV_TO_INFO } from '_app/ApiProvider';
 import { Button } from '_app/shared/ButtonUI';
-import { lockWallet } from '_app/wallet/actions';
 import { useNextMenuUrl } from '_components/menu/hooks';
 import { useAppDispatch, useAppSelector } from '_hooks';
 import { ToS_LINK, FAQ_LINK } from '_src/shared/constants';
@@ -42,7 +40,6 @@ function MenuList() {
     const autoLockInterval = useAutoLockInterval();
     const version = Browser.runtime.getManifest().version;
     const dispatch = useAppDispatch();
-    const navigate = useNavigate();
     const [logoutInProgress, setLogoutInProgress] = useState(false);
     const [isLogoutDialogOpen, setIsLogoutDialogOpen] = useState(false);
     return (
@@ -94,19 +91,6 @@ function MenuList() {
                 <div className="flex flex-nowrap flex-row items-stretch gap-3 mt-2.5">
                     <Button
                         variant="outline"
-                        size="narrow"
-                        onClick={async () => {
-                            try {
-                                await dispatch(lockWallet()).unwrap();
-                                navigate('/locked', { replace: true });
-                            } catch (e) {
-                                // Do nothing
-                            }
-                        }}
-                        text="Lock Wallet"
-                    />
-                    <Button
-                        variant="outline"
                         text="Logout"
                         size="narrow"
                         loading={logoutInProgress}
@@ -134,7 +118,7 @@ function MenuList() {
                 confirmText="Logout"
                 confirmStyle="outlineWarning"
                 title="Are you sure you want to Logout?"
-                hint="You will need the 12-word Recovery Passphrase that was created when you first set up the wallet to log back in."
+                hint="You will need account pin to log back in."
                 onResponse={async (confirmed) => {
                     setIsLogoutDialogOpen(false);
                     if (confirmed) {
