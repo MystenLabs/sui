@@ -2,7 +2,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-mod absint;
+pub mod absint;
 pub mod ast;
 mod borrows;
 pub(crate) mod cfg;

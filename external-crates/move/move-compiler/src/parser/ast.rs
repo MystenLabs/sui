@@ -33,6 +33,12 @@ macro_rules! new_name {
             }
         }
 
+        impl PartialEq<str> for $n {
+            fn eq(&self, s: &str) -> bool {
+                self.0.value.as_str() == s
+            }
+        }
+
         impl Identifier for $n {
             fn value(&self) -> Symbol {
                 self.0.value

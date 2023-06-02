@@ -19,6 +19,7 @@ pub mod ir_translation;
 pub mod naming;
 pub mod parser;
 pub mod shared;
+pub mod sui_mode;
 mod to_bytecode;
 pub mod typing;
 pub mod unit_test;

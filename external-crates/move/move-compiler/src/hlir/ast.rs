@@ -5,8 +5,8 @@
 use crate::{
     diagnostics::WarningFilters,
     expansion::ast::{
-        ability_modifiers_ast_debug, AbilitySet, Address, Attributes, Friend, ModuleIdent,
-        ModuleIdent_, SpecId, Visibility,
+        ability_modifiers_ast_debug, AbilitySet, Attributes, Friend, ModuleIdent, SpecId,
+        Visibility,
     },
     naming::ast::{BuiltinTypeName, BuiltinTypeName_, StructTypeParameter, TParam},
     parser::ast::{BinOp, ConstantName, Field, FunctionName, StructName, UnaryOp, ENTRY_MODIFIER},
@@ -463,6 +463,22 @@ impl UnannotatedExp_ {
     }
 }
 
+impl TypeName_ {
+    pub fn is(
+        &self,
+        address: impl AsRef<str>,
+        module: impl AsRef<str>,
+        name: impl AsRef<str>,
+    ) -> bool {
+        match self {
+            TypeName_::Builtin(_) => false,
+            TypeName_::ModuleType(mident, n) => {
+                mident.value.is(address, module) && n == name.as_ref()
+            }
+        }
+    }
+}
+
 impl BaseType_ {
     pub fn builtin(loc: Loc, b_: BuiltinTypeName_, ty_args: Vec<BaseType>) -> BaseType {
         use BuiltinTypeName_::*;
@@ -528,6 +544,18 @@ impl BaseType_ {
     pub fn u256(loc: Loc) -> BaseType {
         Self::builtin(loc, BuiltinTypeName_::U256, vec![])
     }
+
+    pub fn is_apply(
+        &self,
+        address: impl AsRef<str>,
+        module: impl AsRef<str>,
+        name: impl AsRef<str>,
+    ) -> Option<(&AbilitySet, &TypeName, &[BaseType])> {
+        match self {
+            Self::Apply(abs, n, tys) if n.value.is(address, module, name) => Some((abs, n, tys)),
+            _ => None,
+        }
+    }
 }
 
 impl SingleType_ {
@@ -571,6 +599,17 @@ impl SingleType_ {
         match self {
             SingleType_::Ref(_, _) => AbilitySet::references(loc),
             SingleType_::Base(b) => b.value.abilities(loc),
+        }
+    }
+
+    pub fn is_apply(
+        &self,
+        address: impl AsRef<str>,
+        module: impl AsRef<str>,
+        name: impl AsRef<str>,
+    ) -> Option<(&AbilitySet, &TypeName, &[BaseType])> {
+        match self {
+            Self::Ref(_, b) | Self::Base(b) => b.value.is_apply(address, module, name),
         }
     }
 }
@@ -638,6 +677,19 @@ impl Type_ {
         };
         sp(loc, t_)
     }
+
+    pub fn is_apply(
+        &self,
+        address: impl AsRef<str>,
+        module: impl AsRef<str>,
+        name: impl AsRef<str>,
+    ) -> Option<(&AbilitySet, &TypeName, &[BaseType])> {
+        match self {
+            Type_::Unit => None,
+            Type_::Single(t) => t.value.is_apply(address, module, name),
+            Type_::Multiple(_) => None,
+        }
+    }
 }
 
 impl TName for Var {
@@ -660,23 +712,16 @@ impl TName for Var {
 impl ModuleCall {
     pub fn is(
         &self,
-        address: Address,
-        module: impl Into<Symbol>,
-        function: impl Into<Symbol>,
+        address: impl AsRef<str>,
+        module: impl AsRef<str>,
+        function: impl AsRef<str>,
     ) -> bool {
         let Self {
-            module:
-                sp!(
-                    _,
-                    ModuleIdent_ {
-                        address: a,
-                        module: m,
-                    }
-                ),
+            module: sp!(_, mident),
             name: f,
             ..
         } = self;
-        a == &address && m.0.value == module.into() && f.0.value == function.into()
+        mident.is(address, module) && f == function.as_ref()
     }
 }
 

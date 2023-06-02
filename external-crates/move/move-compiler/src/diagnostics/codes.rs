@@ -6,8 +6,6 @@
 // Main types
 //**************************************************************************************************
 
-use move_symbol_pool::Symbol;
-
 #[derive(PartialEq, Eq, Clone, Copy, Debug, Hash, PartialOrd, Ord)]
 pub enum Severity {
     Warning = 0,
@@ -21,8 +19,8 @@ pub struct DiagnosticInfo {
     severity: Severity,
     category: u8,
     code: u8,
-    message: Symbol,
-    external_prefix: Option<Symbol>,
+    message: &'static str,
+    external_prefix: Option<&'static str>,
 }
 
 pub(crate) trait DiagnosticCode: Copy {
@@ -30,7 +28,7 @@ pub(crate) trait DiagnosticCode: Copy {
 
     fn severity(&self) -> Severity;
 
-    fn code_and_message(&self) -> (u8, Symbol);
+    fn code_and_message(&self) -> (u8, &'static str);
 
     fn into_info(self) -> DiagnosticInfo {
         let severity = self.severity();
@@ -68,12 +66,12 @@ pub const WARNING_FILTER_ATTR: &str = "allow";
 /// The diagnostic will get rendered as
 /// `"[{external_prefix}{severity}{category}{code}] {message}"`.
 /// Note, this will will panic if `category > 99`
-pub fn custom(
-    external_prefix: impl Into<Symbol>,
+pub const fn custom(
+    external_prefix: &'static str,
     severity: Severity,
     category: u8,
     code: u8,
-    message: Symbol,
+    message: &'static str,
 ) -> DiagnosticInfo {
     assert!(category <= 99);
     DiagnosticInfo {
@@ -81,7 +79,7 @@ pub fn custom(
         category,
         code,
         message,
-        external_prefix: Some(external_prefix.into()),
+        external_prefix: Some(external_prefix),
     }
 }
 
@@ -119,13 +117,13 @@ macro_rules! codes {
                     }
                 }
 
-                fn code_and_message(&self) -> (u8, Symbol) {
+                fn code_and_message(&self) -> (u8, &'static str) {
                     let code = *self as u8;
                     debug_assert!(code > 0);
                     match self {
                         Self::DontStartAtZeroPlaceholder =>
                             panic!("ICE do not use placeholder error code"),
-                        $(Self::$code => (code, Symbol::from($code_msg)),)*
+                        $(Self::$code => (code, $code_msg),)*
                     }
                 }
             }
@@ -333,7 +331,7 @@ warning_filter!(
 //**************************************************************************************************
 
 impl DiagnosticInfo {
-    pub fn render(self) -> (/* code */ String, /* message */ Symbol) {
+    pub fn render(self) -> (/* code */ String, /* message */ &'static str) {
         let Self {
             severity,
             category,
@@ -367,7 +365,7 @@ impl DiagnosticInfo {
         self.code
     }
 
-    pub fn message(&self) -> Symbol {
+    pub fn message(&self) -> &'static str {
         self.message
     }
 }

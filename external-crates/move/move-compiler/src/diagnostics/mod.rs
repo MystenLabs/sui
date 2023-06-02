@@ -254,7 +254,7 @@ impl Diagnostics {
         self,
     ) -> Vec<(
         codespan_reporting::diagnostic::Severity,
-        Symbol,
+        &'static str,
         (Loc, String),
         Vec<(Loc, String)>,
         Vec<String>,
