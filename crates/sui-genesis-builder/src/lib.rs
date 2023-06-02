@@ -13,13 +13,13 @@ use std::collections::{BTreeMap, HashSet};
 use std::fs;
 use std::path::Path;
 use std::sync::Arc;
-use sui_adapter::{adapter, execution_mode, programmable_transactions};
+use sui_adapter::{adapter, programmable_transactions};
 use sui_config::genesis::{
     Genesis, GenesisCeremonyParameters, GenesisChainParameters, TokenDistributionSchedule,
     UnsignedGenesis,
 };
 use sui_framework::BuiltInFramework;
-use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
+use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
 use sui_types::base_types::{
     ExecutionDigests, ObjectID, SequenceNumber, SuiAddress, TransactionDigest, TxContext,
 };
@@ -30,6 +30,7 @@ use sui_types::crypto::{
 };
 use sui_types::effects::{TransactionEffects, TransactionEvents};
 use sui_types::epoch_data::EpochData;
+use sui_types::execution_mode;
 use sui_types::gas::SuiGasStatus;
 use sui_types::gas_coin::GasCoin;
 use sui_types::governance::StakedSui;
@@ -720,7 +721,13 @@ fn build_unsigned_genesis_data(
         metrics.clone(),
     );
 
-    let protocol_config = ProtocolConfig::get_for_version(parameters.protocol_version);
+    // We have a circular dependency here. Protocol config depends on chain ID, which
+    // depends on genesis checkpoint (digest), which depends on genesis transaction, which
+    // depends on protocol config.
+    // However since we know there are no chain specific protocol config options in genesis,
+    // we use Chain::Unknown here.
+    let protocol_config =
+        ProtocolConfig::get_for_version(parameters.protocol_version, Chain::Unknown);
 
     let (genesis_transaction, genesis_effects, genesis_events, objects) =
         create_genesis_transaction(objects, &protocol_config, metrics, &epoch_data);
@@ -870,8 +877,13 @@ fn create_genesis_objects(
     metrics: Arc<LimitsMetrics>,
 ) -> Vec<Object> {
     let mut store = InMemoryStorage::new(Vec::new());
-    let protocol_config =
-        ProtocolConfig::get_for_version(ProtocolVersion::new(parameters.protocol_version));
+    // We don't know the chain ID here since we haven't yet created the genesis checkpoint.
+    // However since we know there are no chain specific protool config options in genesis,
+    // we use Chain::Unknown here.
+    let protocol_config = ProtocolConfig::get_for_version(
+        ProtocolVersion::new(parameters.protocol_version),
+        Chain::Unknown,
+    );
 
     let native_functions = sui_move_natives::all_natives(/* silent */ true);
     // paranoid checks are a last line of defense for malicious code, no need to run them in genesis
@@ -1006,9 +1018,13 @@ pub fn generate_genesis_system_object(
     metrics: Arc<LimitsMetrics>,
 ) -> anyhow::Result<()> {
     let genesis_digest = genesis_ctx.digest();
-    let protocol_config = ProtocolConfig::get_for_version(ProtocolVersion::new(
-        genesis_chain_parameters.protocol_version,
-    ));
+    // We don't know the chain ID here since we haven't yet created the genesis checkpoint.
+    // However since we know there are no chain specific protocol config options in genesis,
+    // we use Chain::Unknown here.
+    let protocol_config = ProtocolConfig::get_for_version(
+        ProtocolVersion::new(genesis_chain_parameters.protocol_version),
+        sui_protocol_config::Chain::Unknown,
+    );
     let mut temporary_store = TemporaryStore::new(
         &*store,
         InputObjects::new(vec![]),
@@ -1093,9 +1109,9 @@ mod test {
     use crate::Builder;
     use fastcrypto::traits::KeyPair;
     use sui_config::genesis::*;
+    use sui_config::local_ip_utils;
     use sui_config::node::DEFAULT_COMMISSION_RATE;
     use sui_config::node::DEFAULT_VALIDATOR_GAS_PRICE;
-    use sui_config::utils;
     use sui_types::base_types::SuiAddress;
     use sui_types::crypto::{
         generate_proof_of_possession, get_key_pair_from_rng, AccountKeyPair, AuthorityKeyPair,
@@ -1136,10 +1152,10 @@ mod test {
             network_key: network_key.public().clone(),
             gas_price: DEFAULT_VALIDATOR_GAS_PRICE,
             commission_rate: DEFAULT_COMMISSION_RATE,
-            network_address: utils::new_tcp_network_address(),
-            p2p_address: utils::new_udp_network_address(),
-            narwhal_primary_address: utils::new_udp_network_address(),
-            narwhal_worker_address: utils::new_udp_network_address(),
+            network_address: local_ip_utils::new_local_tcp_address_for_testing(),
+            p2p_address: local_ip_utils::new_local_udp_address_for_testing(),
+            narwhal_primary_address: local_ip_utils::new_local_udp_address_for_testing(),
+            narwhal_worker_address: local_ip_utils::new_local_udp_address_for_testing(),
             description: String::new(),
             image_url: String::new(),
             project_url: String::new(),

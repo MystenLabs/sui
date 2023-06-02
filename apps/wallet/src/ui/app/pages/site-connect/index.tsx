@@ -1,8 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useFeature } from '@growthbook/growthbook-react';
-import { formatAddress, type SuiAddress } from '@mysten/sui.js';
+import { type SuiAddress } from '@mysten/sui.js';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 
@@ -11,7 +10,6 @@ import { SummaryCard } from '../../components/SummaryCard';
 import { WalletListSelect } from '../../components/WalletListSelect';
 import { useActiveAddress } from '../../hooks/useActiveAddress';
 import { PageMainLayoutTitle } from '../../shared/page-main-layout/PageMainLayoutTitle';
-import { Text } from '../../shared/text';
 import Loading from '_components/loading';
 import { UserApproveContainer } from '_components/user-approve-container';
 import { useAppDispatch, useAppSelector } from '_hooks';
@@ -19,7 +17,6 @@ import {
     permissionsSelectors,
     respondToPermissionRequest,
 } from '_redux/slices/permissions';
-import { FEATURES } from '_src/shared/experimentation/features';
 
 import type { RootState } from '_redux/RootReducer';
 
@@ -41,7 +38,6 @@ function SiteConnectPage() {
     const dispatch = useAppDispatch();
     const permissionRequest = useAppSelector(permissionSelector);
     const activeAddress = useActiveAddress();
-    const isMultiAccountEnabled = useFeature(FEATURES.WALLET_MULTI_ACCOUNTS).on;
     const [accountsToConnect, setAccountsToConnect] = useState<SuiAddress[]>(
         () => (activeAddress ? [activeAddress] : [])
     );
@@ -139,29 +135,11 @@ function SiteConnectPage() {
                                 />
                             }
                         />
-                        {isMultiAccountEnabled ? (
-                            <WalletListSelect
-                                title="Connect Accounts"
-                                values={accountsToConnect}
-                                onChange={setAccountsToConnect}
-                            />
-                        ) : (
-                            <SummaryCard
-                                header="Connect To Account"
-                                body={
-                                    <Text
-                                        mono
-                                        color="steel-dark"
-                                        variant="body"
-                                        weight="semibold"
-                                    >
-                                        {activeAddress
-                                            ? formatAddress(activeAddress)
-                                            : null}
-                                    </Text>
-                                }
-                            />
-                        )}
+                        <WalletListSelect
+                            title="Connect Accounts"
+                            values={accountsToConnect}
+                            onChange={setAccountsToConnect}
+                        />
                     </UserApproveContainer>
                 ))}
         </Loading>

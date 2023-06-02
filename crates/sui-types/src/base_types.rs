@@ -33,6 +33,7 @@ use crate::sui_serde::Readable;
 use crate::sui_serde::{to_sui_struct_tag_string, HexAccountAddress};
 use crate::transaction::Transaction;
 use crate::transaction::VerifiedTransaction;
+use crate::zk_login_authenticator::ZkLoginAuthenticator;
 use crate::MOVE_STDLIB_ADDRESS;
 use crate::SUI_CLOCK_OBJECT_ID;
 use crate::SUI_FRAMEWORK_ADDRESS;
@@ -42,6 +43,7 @@ use fastcrypto::encoding::decode_bytes_hex;
 use fastcrypto::encoding::{Encoding, Hex};
 use fastcrypto::hash::HashFunction;
 use fastcrypto::traits::AllowedRng;
+use fastcrypto_zkp::bn254::zk_login::big_int_str_to_bytes;
 use move_binary_format::binary_views::BinaryIndexedView;
 use move_binary_format::file_format::SignatureToken;
 use move_bytecode_utils::resolve_struct;
@@ -63,6 +65,7 @@ use std::fmt;
 use std::str::FromStr;
 
 #[cfg(test)]
+#[cfg(feature = "test-utils")]
 #[path = "unit_tests/base_types_tests.rs"]
 mod base_types_tests;
 
@@ -580,6 +583,20 @@ impl From<&MultiSigPublicKey> for SuiAddress {
     }
 }
 
+/// Sui address for [struct ZkLoginAuthenticator] is defined as the black2b hash of
+/// [zklogin_flag || bcs bytes of AddressParams || address seed in bytes] where
+/// AddressParams contains iss and key_claim_name.
+impl From<&ZkLoginAuthenticator> for SuiAddress {
+    fn from(authenticator: &ZkLoginAuthenticator) -> Self {
+        let mut hasher = DefaultHash::default();
+        hasher.update([SignatureScheme::ZkLoginAuthenticator.flag()]);
+        // unwrap is safe here
+        hasher.update(bcs::to_bytes(&authenticator.get_address_params()).unwrap());
+        hasher.update(big_int_str_to_bytes(authenticator.get_address_seed()));
+        SuiAddress(hasher.finalize().digest)
+    }
+}
+
 impl TryFrom<&GenericSignature> for SuiAddress {
     type Error = SuiError;
     /// Derive a SuiAddress from a serialized signature in Sui [GenericSignature].
@@ -596,6 +613,7 @@ impl TryFrom<&GenericSignature> for SuiAddress {
                 SuiAddress::from(&pub_key)
             }
             GenericSignature::MultiSig(ms) => ms.get_pk().into(),
+            GenericSignature::ZkLoginAuthenticator(zklogin) => zklogin.into(),
         })
     }
 }

@@ -10,7 +10,6 @@ use sui_types::accumulator::Accumulator;
 use sui_types::base_types::SequenceNumber;
 use sui_types::digests::TransactionEventsDigest;
 use sui_types::effects::TransactionEffects;
-use sui_types::storage::ObjectStore;
 use typed_store::metrics::SamplingInterval;
 use typed_store::rocks::util::{empty_compaction_filter, reference_count_merge_operator};
 use typed_store::rocks::{
@@ -211,7 +210,7 @@ impl AuthorityPerpetualTables {
     ) -> Result<Option<ObjectRef>, SuiError> {
         let mut iterator = self
             .objects
-            .iter()
+            .unbounded_iter()
             .skip_prior_to(&ObjectKey::max_for_id(&object_id))?;
 
         if let Some((object_key, value)) = iterator.next() {
@@ -354,10 +353,18 @@ impl AuthorityPerpetualTables {
         Ok(object_ref)
     }
 
+    pub fn set_highest_pruned_checkpoint_without_wb(
+        &self,
+        checkpoint_number: CheckpointSequenceNumber,
+    ) -> SuiResult {
+        let mut wb = self.pruned_checkpoint.batch();
+        self.set_highest_pruned_checkpoint(&mut wb, checkpoint_number)
+    }
+
     pub fn database_is_empty(&self) -> SuiResult<bool> {
         Ok(self
             .objects
-            .iter()
+            .unbounded_iter()
             .skip_to(&ObjectKey::ZERO)?
             .next()
             .is_none())
@@ -365,7 +372,7 @@ impl AuthorityPerpetualTables {
 
     pub fn iter_live_object_set(&self) -> LiveSetIter<'_> {
         LiveSetIter {
-            iter: self.objects.iter(),
+            iter: self.objects.unbounded_iter(),
             tables: self,
             prev: None,
         }
@@ -398,6 +405,17 @@ impl AuthorityPerpetualTables {
         Ok(())
     }
 
+    pub fn insert_root_state_hash(
+        &self,
+        epoch: EpochId,
+        last_checkpoint_of_epoch: CheckpointSequenceNumber,
+        accumulator: Accumulator,
+    ) -> SuiResult {
+        self.root_state_hash_by_epoch
+            .insert(&epoch, &(last_checkpoint_of_epoch, accumulator))?;
+        Ok(())
+    }
+
     pub fn insert_object_test_only(&self, object: Object) -> SuiResult {
         let object_reference = object.compute_object_reference();
         let StoreObjectPair(wrapper, _indirect_object) = get_store_object_pair(object, usize::MAX);
@@ -416,7 +434,7 @@ impl ObjectStore for AuthorityPerpetualTables {
     fn get_object(&self, object_id: &ObjectID) -> Result<Option<Object>, SuiError> {
         let obj_entry = self
             .objects
-            .iter()
+            .unbounded_iter()
             .skip_prior_to(&ObjectKey::max_for_id(object_id))?
             .next();
 

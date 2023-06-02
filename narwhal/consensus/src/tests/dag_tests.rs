@@ -25,10 +25,10 @@ async fn inner_dag_insert_one() {
         .collect::<BTreeSet<_>>();
     let (mut certificates, _next_parents) = make_optimal_certificates(
         &committee,
+        &latest_protocol_version(),
         1..=4,
         &genesis,
         &ids,
-        &latest_protocol_version(),
     );
     let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
 
@@ -55,10 +55,10 @@ async fn test_dag_read_notify() {
         .collect::<BTreeSet<_>>();
     let (mut certificates, _next_parents) = make_optimal_certificates(
         &committee,
+        &latest_protocol_version(),
         1..=4,
         &genesis,
         &ids,
-        &latest_protocol_version(),
     );
     let certs = certificates.clone().into_iter().map(|c| (c.digest(), c));
     // set up a Dag
@@ -114,10 +114,10 @@ async fn test_dag_new_has_genesis_and_its_not_live() {
     // But the genesis does not come out in read_causal, as is is compressed the moment we add more nodes
     let (certificates, _next_parents) = make_optimal_certificates(
         &committee,
+        &latest_protocol_version(),
         1..=1,
         &genesis,
         &ids,
-        &latest_protocol_version(),
     );
     let mut certs_to_insert = certificates.clone();
 
@@ -167,10 +167,10 @@ async fn test_dag_compresses_empty_blocks() {
     // insert one round of empty certificates
     let (mut certificates, next_parents) = make_optimal_certificates(
         &committee,
+        &latest_protocol_version(),
         1..=1,
         &genesis.clone(),
         &ids,
-        &latest_protocol_version(),
     );
     // make those empty
     for cert in certificates.iter_mut() {
@@ -191,10 +191,10 @@ async fn test_dag_compresses_empty_blocks() {
     // Add one round of non-empty certificates
     let (additional_certificates, _next_parents) = make_optimal_certificates(
         &committee,
+        &latest_protocol_version(),
         2..=2,
         &next_parents,
         &ids,
-        &latest_protocol_version(),
     );
     // Feed the additional certificates to the Dag
     let mut additional_certs_to_insert = additional_certificates.clone();
@@ -245,10 +245,10 @@ async fn test_dag_rounds_after_compression() {
     // insert one round of empty certificates
     let (mut certificates, next_parents) = make_optimal_certificates(
         &committee,
+        &latest_protocol_version(),
         1..=1,
         &genesis.clone(),
         &ids,
-        &latest_protocol_version(),
     );
     // make those empty
     for cert in certificates.iter_mut() {
@@ -264,10 +264,10 @@ async fn test_dag_rounds_after_compression() {
     // Add one round of non-empty certificates
     let (additional_certificates, _next_parents) = make_optimal_certificates(
         &committee,
+        &latest_protocol_version(),
         2..=2,
         &next_parents,
         &ids,
-        &latest_protocol_version(),
     );
     // Feed the additional certificates to the Dag
     let mut additional_certs_to_insert = additional_certificates.clone();
@@ -295,10 +295,10 @@ async fn dag_mutation_failures() {
         .collect::<BTreeSet<_>>();
     let (certificates, _next_parents) = make_optimal_certificates(
         &committee,
+        &latest_protocol_version(),
         1..=4,
         &genesis,
         &ids,
-        &latest_protocol_version(),
     );
 
     // set up a Dag
@@ -370,10 +370,10 @@ async fn dag_insert_one_and_rounds_node_read() {
         .collect::<BTreeSet<_>>();
     let (certificates, _next_parents) = make_optimal_certificates(
         &committee,
+        &latest_protocol_version(),
         1..=4,
         &genesis,
         &ids,
-        &latest_protocol_version(),
     );
     let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
 
@@ -423,10 +423,10 @@ async fn dag_insert_and_remove_reads() {
         .collect::<BTreeSet<_>>();
     let (mut certificates, _next_parents) = make_optimal_certificates(
         &committee,
+        &latest_protocol_version(),
         1..=4,
         &genesis,
         &ids,
-        &latest_protocol_version(),
     );
     let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
 

@@ -1,6 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-import { formatDate } from '@mysten/core';
+import { formatDate, useResolveSuiNSName } from '@mysten/core';
 import { type ReactNode } from 'react';
 
 import { useBreakpoint } from '~/hooks/useBreakpoint';
@@ -49,6 +49,8 @@ export function TransactionDetailCard({
     timestamp,
 }: TransactionDetailsProps) {
     const md = useBreakpoint('md');
+    const { data: domainName } = useResolveSuiNSName(sender);
+
     return (
         <TransactionBlockCard size={md ? 'md' : 'sm'}>
             <TransactionBlockCardSection>
@@ -62,7 +64,11 @@ export function TransactionDetailCard({
                         {sender && (
                             <TransactionDetail
                                 label="Sender"
-                                value={<AddressLink address={sender} />}
+                                value={
+                                    <AddressLink
+                                        address={domainName ?? sender}
+                                    />
+                                }
                             />
                         )}
                         {checkpoint && (

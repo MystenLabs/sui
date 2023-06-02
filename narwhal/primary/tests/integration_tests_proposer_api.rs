@@ -114,6 +114,7 @@ async fn test_rounds_errors() {
         network_keypair,
         committee.clone(),
         worker_cache,
+        latest_protocol_version(),
         parameters.clone(),
         client,
         store_primary.header_store,
@@ -137,7 +138,6 @@ async fn test_rounds_errors() {
         &mut tx_shutdown,
         tx_feedback,
         &Registry::new(),
-        latest_protocol_version(),
     );
 
     // AND Wait for tasks to start
@@ -217,6 +217,7 @@ async fn test_rounds_return_successful_response() {
         author.network_keypair().copy(),
         committee.clone(),
         worker_cache,
+        latest_protocol_version(),
         parameters.clone(),
         client,
         store_primary.header_store,
@@ -231,7 +232,6 @@ async fn test_rounds_return_successful_response() {
         &mut tx_shutdown,
         tx_feedback,
         &Registry::new(),
-        latest_protocol_version(),
     );
 
     // AND Wait for tasks to start
@@ -246,13 +246,13 @@ async fn test_rounds_return_successful_response() {
         .collect::<BTreeSet<_>>();
     let (mut certificates, _next_parents) = make_optimal_certificates(
         &committee,
+        &latest_protocol_version(),
         1..=4,
         &genesis,
         &committee
             .authorities()
             .map(|authority| authority.id())
             .collect::<Vec<AuthorityIdentifier>>(),
-        &latest_protocol_version(),
     );
 
     // Feed the certificates to the Dag
@@ -339,8 +339,8 @@ async fn test_node_read_causal_signed_certificates() {
         1..=4,
         &genesis,
         &committee,
-        &keys,
         &latest_protocol_version(),
+        &keys,
     );
 
     collection_ids.extend(
@@ -387,6 +387,7 @@ async fn test_node_read_causal_signed_certificates() {
         authority_1.network_keypair().copy(),
         committee.clone(),
         worker_cache.clone(),
+        latest_protocol_version(),
         primary_1_parameters.clone(),
         client_1,
         primary_store_1.header_store.clone(),
@@ -401,7 +402,6 @@ async fn test_node_read_causal_signed_certificates() {
         &mut tx_shutdown,
         tx_feedback,
         &Registry::new(),
-        latest_protocol_version(),
     );
 
     let (tx_new_certificates_2, rx_new_certificates_2) =
@@ -426,6 +426,7 @@ async fn test_node_read_causal_signed_certificates() {
         authority_2.network_keypair().copy(),
         committee.clone(),
         worker_cache.clone(),
+        latest_protocol_version(),
         primary_2_parameters.clone(),
         client_2,
         primary_store_2.header_store,
@@ -449,7 +450,6 @@ async fn test_node_read_causal_signed_certificates() {
         &mut tx_shutdown_2,
         tx_feedback_2,
         &Registry::new(),
-        latest_protocol_version(),
     );
 
     // Wait for tasks to start

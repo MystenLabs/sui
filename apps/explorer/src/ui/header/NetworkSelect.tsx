@@ -41,6 +41,7 @@ export interface NetworkSelectProps {
     networks: NetworkOption[];
     value: string;
     version?: number | string;
+    binaryVersion?: string;
     onChange(networkId: string): void;
 }
 
@@ -141,17 +142,19 @@ function CustomRPCInput({
 function NetworkVersion({
     label,
     version,
+    binaryVersion,
 }: {
     label: string;
     version: number | string;
+    binaryVersion: string;
 }) {
     return (
-        <div className="flex justify-between px-4 py-2">
+        <div className="flex flex-col justify-between px-4 py-2">
             <Text variant="subtitle/normal" color="steel">
                 Sui {label}
             </Text>
             <Text variant="subtitle/normal" color="steel">
-                v{version}
+                v{binaryVersion} (Protocol {version})
             </Text>
         </div>
     );
@@ -224,6 +227,7 @@ export function NetworkSelect({
     networks,
     value,
     version,
+    binaryVersion,
     onChange,
 }: NetworkSelectProps) {
     const { x, y, reference, floating, strategy } = useFloating({
@@ -282,13 +286,14 @@ export function NetworkSelect({
                                             close();
                                         }}
                                     />
-                                    {!!value && version ? (
+                                    {!!value && version && binaryVersion ? (
                                         <div className="-mx-3 -mb-4 mt-2 rounded-b-lg bg-gray-40">
                                             <NetworkVersion
                                                 label={
                                                     selected?.label ??
                                                     'Custom RPC'
                                                 }
+                                                binaryVersion={binaryVersion}
                                                 version={version}
                                             />
                                         </div>

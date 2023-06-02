@@ -36,8 +36,12 @@ pub trait IndexerStore {
     type ModuleCache;
 
     async fn get_latest_checkpoint_sequence_number(&self) -> Result<i64, IndexerError>;
-    async fn get_latest_object_checkpoint_sequence_number(&self) -> Result<i64, IndexerError>;
     async fn get_checkpoint(&self, id: CheckpointId) -> Result<RpcCheckpoint, IndexerError>;
+    async fn get_checkpoints(
+        &self,
+        cursor: Option<CheckpointId>,
+        limit: usize,
+    ) -> Result<Vec<RpcCheckpoint>, IndexerError>;
     async fn get_checkpoint_sequence_number(
         &self,
         digest: CheckpointDigest,
@@ -128,10 +132,19 @@ pub trait IndexerStore {
         is_descending: bool,
     ) -> Result<Vec<Transaction>, IndexerError>;
 
-    async fn get_transaction_page_by_sender_recipient_address(
+    async fn get_transaction_page_by_recipient_address(
         &self,
         sender_address: Option<SuiAddress>,
         recipient_address: SuiAddress,
+        start_sequence: Option<i64>,
+        limit: usize,
+        is_descending: bool,
+    ) -> Result<Vec<Transaction>, IndexerError>;
+
+    // `address` can be either sender or recipient address of the transaction
+    async fn get_transaction_page_by_address(
+        &self,
+        address: SuiAddress,
         start_sequence: Option<i64>,
         limit: usize,
         is_descending: bool,
@@ -295,8 +308,6 @@ pub struct TemporaryCheckpointStore {
     pub transactions: Vec<Transaction>,
     pub events: Vec<Event>,
     pub object_changes: Vec<TransactionObjectChanges>,
-    pub addresses: Vec<Address>,
-    pub active_addresses: Vec<ActiveAddress>,
     pub packages: Vec<Package>,
     pub input_objects: Vec<InputObject>,
     pub move_calls: Vec<MoveCall>,

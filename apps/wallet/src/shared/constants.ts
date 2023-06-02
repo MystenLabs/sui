@@ -4,6 +4,7 @@
 export const ToS_LINK = 'https://mystenlabs.com/legal?content=wallet-terms';
 export const PRIVACY_POLICY_LINK =
     'https://mystenlabs.com/legal?content=privacy';
+export const FAQ_LINK = 'https://docs.mystenlabs.com/wallet/faq';
 
 export const AUTO_LOCK_TIMER_STORAGE_KEY = 'auto-lock-timer-interval';
 export const AUTO_LOCK_TIMER_DEFAULT_INTERVAL_MINUTES = 5;
@@ -16,3 +17,4 @@ export const DEFAULT_NFT_IMAGE =
 // Staking Rewards Redeemable
 export const NUM_OF_EPOCH_BEFORE_STAKING_REWARDS_REDEEMABLE = 2;
 export const NUM_OF_EPOCH_BEFORE_STAKING_REWARDS_STARTS = 1;
+export const MIN_NUMBER_SUI_TO_STAKE = 1;

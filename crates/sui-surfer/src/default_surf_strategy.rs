@@ -67,7 +67,7 @@ impl DefaultSurfStrategy {
                 Type::U64 => CallArg::Pure(bcs::to_bytes(&state.rng.gen::<u64>()).unwrap()),
                 Type::U128 => CallArg::Pure(bcs::to_bytes(&state.rng.gen::<u128>()).unwrap()),
                 Type::Address => CallArg::Pure(
-                    bcs::to_bytes(&state.cluster.accounts.choose(&mut state.rng)).unwrap(),
+                    bcs::to_bytes(&state.cluster.get_addresses().choose(&mut state.rng)).unwrap(),
                 ),
                 ty @ Type::Struct { .. } => {
                     match Self::choose_object_call_arg(

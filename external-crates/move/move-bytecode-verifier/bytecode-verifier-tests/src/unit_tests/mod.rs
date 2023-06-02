@@ -2,9 +2,8 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use move_bytecode_verifier::{
-    verifier::DEFAULT_MAX_CONSTANT_VECTOR_LEN, verifier::DEFAULT_MAX_IDENTIFIER_LENGTH,
-    VerifierConfig,
+use move_vm_config::verifier::{
+    VerifierConfig, DEFAULT_MAX_CONSTANT_VECTOR_LEN, DEFAULT_MAX_IDENTIFIER_LENGTH,
 };
 
 pub mod ability_field_requirements_tests;

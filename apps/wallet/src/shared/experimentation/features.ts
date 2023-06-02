@@ -6,15 +6,13 @@ import Browser from 'webextension-polyfill';
 
 import { API_ENV } from '_src/shared/api-env';
 
-const GROWTHBOOK_API_KEY =
-    process.env.NODE_ENV === 'production'
-        ? 'sdk-lJ5zaQ6WI9uPth6C'
-        : 'sdk-iUMYcob41m3pnAK';
-
 export const growthbook = new GrowthBook({
-    apiHost: 'https://cdn.growthbook.io',
-    clientKey: GROWTHBOOK_API_KEY,
-    enableDevMode: true,
+    // If you want to develop locally, you can set the API host to this:
+    // apiHost: 'http://localhost:3003',
+    apiHost: 'https://apps-backend.sui.io',
+    clientKey:
+        process.env.NODE_ENV === 'development' ? 'development' : 'production',
+    enableDevMode: process.env.NODE_ENV === 'development',
 });
 
 /**
@@ -23,9 +21,7 @@ export const growthbook = new GrowthBook({
  */
 export enum FEATURES {
     USE_LOCAL_TXN_SERIALIZER = 'use-local-txn-serializer',
-    STAKING_ENABLED = 'wallet-staking-enabled',
     WALLET_DAPPS = 'wallet-dapps',
-    WALLET_MULTI_ACCOUNTS = 'wallet-multi-accounts',
     WALLET_BALANCE_REFETCH_INTERVAL = 'wallet-balance-refetch-interval',
     WALLET_ACTIVITY_REFETCH_INTERVAL = 'wallet-activity-refetch-interval',
     WALLET_EFFECTS_ONLY_SHARED_TRANSACTION = 'wallet-effects-only-shared-transaction',

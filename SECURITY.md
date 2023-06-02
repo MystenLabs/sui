@@ -42,7 +42,7 @@ All other impacts are considered out-of-scope and ineligible for payout.
 
 
 
-CRITICAL [$500,000 USD]
+CRITICAL [$100,000-$500,000 USD]
 1. Exceeding the maximum supply of 10 billion SUI + allowing the attacker to claim the excess funds
 2. Loss of Funds which includes
     * Unauthorized creation, copying, transfer or destruction of objects via bypass of or exploit of bugs in the Move or Sui bytecode verifier
@@ -56,14 +56,13 @@ CRITICAL [$500,000 USD]
     * Voting power that is redistributed because one or more other validators already has max voting power
     * Rounding errors that result in minor voting power discrepancies
 4. Unintended permanent chain split requiring hard fork (network partition requiring hard fork)
-5. Network not being able to confirm new transactions (total network shutdown)
+5. Network not being able to confirm new transactions (total network shutdown) requiring a hard fork to resolve
 6. Arbitrary, non-Move remote code execution on unmodified validator software
 
 
 HIGH [$50,000 USD]
 
-1. Unintended chain split (network partition)
-2. Temporary Total Network Shutdown (greater than 10 minutes of network downtime)
+1. Temporary Total Network Shutdown (greater than 10 minutes of network downtime)
 
 MEDIUM [$10,000 USD]
 
@@ -74,7 +73,8 @@ MEDIUM [$10,000 USD]
 
 LOW [$5,000 USD]
 
--   Sending a transaction that triggers invariant violation error code in unmodified validator software
+1. Sending a transaction that triggers invariant violation error code in unmodified validator software
+2. A remote call that crashes a Sui fullnode
 
 # Audit Discoveries and Known Issues
 Bug reports covering previously-discovered bugs are not eligible for any reward through the bug bounty program. If a bug report covers a known issue, it may be rejected together with proof of the issue being known before escalation of the bug report via Immunefi. 

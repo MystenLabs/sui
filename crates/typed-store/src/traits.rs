@@ -20,6 +20,19 @@ where
     /// Returns true if the map contains a value for the specified key.
     fn contains_key(&self, key: &K) -> Result<bool, Self::Error>;
 
+    /// Returns true if the map contains a value for the specified key.
+    fn multi_contains_keys<J>(
+        &self,
+        keys: impl IntoIterator<Item = J>,
+    ) -> Result<Vec<bool>, Self::Error>
+    where
+        J: Borrow<K>,
+    {
+        keys.into_iter()
+            .map(|key| self.contains_key(key.borrow()))
+            .collect()
+    }
+
     /// Returns the value for the given key from the map, if it exists.
     fn get(&self, key: &K) -> Result<Option<V>, Self::Error>;
 
@@ -55,8 +68,9 @@ where
     /// Returns true if the map is empty, otherwise false.
     fn is_empty(&self) -> bool;
 
-    /// Returns an iterator visiting each key-value pair in the map.
-    fn iter(&'a self) -> Self::Iterator;
+    /// Returns an unbounded iterator visiting each key-value pair in the map.
+    /// This is potentially unsafe as it can perform a full table scan
+    fn unbounded_iter(&'a self) -> Self::Iterator;
 
     /// Returns an iterator visiting each key-value pair in the map.
     fn iter_with_bounds(&'a self, lower_bound: Option<K>, upper_bound: Option<K>)

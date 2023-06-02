@@ -204,7 +204,7 @@ impl Logger for MetricsLogger {
     fn on_result(
         &self,
         method_name: &str,
-        success: bool,
+        _success: bool,
         error_code: Option<i32>,
         started_at: Self::Instant,
         _transport: TransportProtocol,
@@ -221,10 +221,6 @@ impl Logger for MetricsLogger {
             .observe(req_latency_secs);
 
         if let Some(code) = error_code {
-            println!(
-                "RPC call failed: method={}, code={}, success={}, latency={:.3}s",
-                method_name, code, success, req_latency_secs
-            );
             if code == -32000 {
                 self.metrics
                     .server_errors_by_route

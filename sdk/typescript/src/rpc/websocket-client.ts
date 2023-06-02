@@ -1,14 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { is } from 'superstruct';
+import { SubscriptionId } from '../types';
 import {
-  SuiEventFilter,
-  SubscriptionId,
-  SubscriptionEvent,
-  SuiEvent,
-} from '../types';
-import { Client as WsRpcClient } from 'rpc-websockets';
+  RequestManager,
+  Client,
+  WebSocketTransport,
+} from '@open-rpc/client-js';
 
 export const getWebsocketUrl = (httpUrl: string, port?: number): string => {
   const url = new URL(httpUrl);
@@ -19,51 +17,23 @@ export const getWebsocketUrl = (httpUrl: string, port?: number): string => {
   return url.toString();
 };
 
-enum ConnectionState {
-  NotConnected,
-  Connecting,
-  Connected,
-}
-
-type JsonRpcMethodMessage<T> = {
-  jsonrpc: '2.0';
-  method: string;
-  params: T;
-};
-
-type FilterSubHandler = {
-  id: SubscriptionId;
-  onMessage: (event: SuiEvent) => void;
-  filter: SuiEventFilter;
-};
-
-type SubscriptionData = {
-  filter: SuiEventFilter;
-  onMessage: (event: SuiEvent) => void;
-};
-
-type MinimumSubscriptionMessage = {
+type NotificationMessageParams = {
   subscription: SubscriptionId;
   result: object;
 };
 
-const isMinimumSubscriptionMessage = (
-  msg: any,
-): msg is MinimumSubscriptionMessage =>
-  msg &&
-  'subscription' in msg &&
-  typeof msg['subscription'] === 'number' &&
-  'result' in msg &&
-  typeof msg['result'] === 'object';
+type SubscriptionRequest<T = any> = {
+  id?: number;
+  method: string;
+  unsubscribe: string;
+  params: any[];
+  onMessage: (event: T) => void;
+};
 
 /**
  * Configuration options for the websocket connection
  */
 export type WebsocketClientOptions = {
-  /**
-   * Milliseconds before timing out while initially connecting
-   */
-  connectTimeout: number;
   /**
    * Milliseconds before timing out while calling an RPC method
    */
@@ -71,7 +41,7 @@ export type WebsocketClientOptions = {
   /**
    * Milliseconds between attempts to connect
    */
-  reconnectInterval: number;
+  reconnectTimeout: number;
   /**
    * Maximum number of times to try connecting before giving up
    */
@@ -79,209 +49,100 @@ export type WebsocketClientOptions = {
 };
 
 export const DEFAULT_CLIENT_OPTIONS: WebsocketClientOptions = {
-  connectTimeout: 15000,
   callTimeout: 30000,
-  reconnectInterval: 3000,
+  reconnectTimeout: 3000,
   maxReconnects: 5,
 };
 
-const SUBSCRIBE_EVENT_METHOD = 'suix_subscribeEvent';
-const UNSUBSCRIBE_EVENT_METHOD = 'suix_unsubscribeEvent';
-
-/**
- * Interface with a Sui node's websocket capabilities
- */
 export class WebsocketClient {
-  protected rpcClient: WsRpcClient;
-  protected connectionState: ConnectionState = ConnectionState.NotConnected;
-  protected connectionTimeout: number | null = null;
-  protected isSetup: boolean = false;
-  private connectionPromise: Promise<void> | null = null;
+  #client: Client | null;
+  #subscriptions: Map<SubscriptionId, SubscriptionRequest & { id: number }>;
+  #disconnects: number;
 
-  protected eventSubscriptions: Map<SubscriptionId, SubscriptionData> =
-    new Map();
-
-  /**
-   * @param endpoint Sui node endpoint to connect to (accepts websocket & http)
-   * @param options Configuration options, such as timeouts & connection behavior
-   */
   constructor(
     public endpoint: string,
     public options: WebsocketClientOptions = DEFAULT_CLIENT_OPTIONS,
   ) {
-    if (this.endpoint.startsWith('http'))
+    if (this.endpoint.startsWith('http')) {
       this.endpoint = getWebsocketUrl(this.endpoint);
+    }
 
-    this.rpcClient = new WsRpcClient(this.endpoint, {
-      reconnect_interval: this.options.reconnectInterval,
-      max_reconnects: this.options.maxReconnects,
-      autoconnect: false,
-    });
+    this.#client = null;
+    this.#subscriptions = new Map();
+    this.#disconnects = 0;
   }
 
-  private setupSocket() {
-    if (this.isSetup) return;
+  #setupClient() {
+    if (this.#client) {
+      return this.#client;
+    }
 
-    this.rpcClient.on('open', () => {
-      if (this.connectionTimeout) {
-        clearTimeout(this.connectionTimeout);
-        this.connectionTimeout = null;
+    const transport = new WebSocketTransport(this.endpoint);
+    const requestManager = new RequestManager([transport]);
+    this.#client = new Client(requestManager);
+
+    transport.connection.addEventListener('open', () => {
+      this.#disconnects = 0;
+    });
+
+    transport.connection.addEventListener('close', () => {
+      this.#disconnects++;
+      if (this.#disconnects <= this.options.maxReconnects) {
+        setTimeout(() => {
+          this.#reconnect();
+        }, this.options.reconnectTimeout);
       }
-      this.connectionState = ConnectionState.Connected;
-      // underlying websocket is private, but we need it
-      // to access messages sent by the node
-      (this.rpcClient as any).socket.on(
-        'message',
-        this.onSocketMessage.bind(this),
-      );
     });
 
-    this.rpcClient.on('close', () => {
-      this.connectionState = ConnectionState.NotConnected;
-    });
+    this.#client.onNotification((data) => {
+      const params = data.params as NotificationMessageParams;
 
-    this.rpcClient.on('error', console.error);
-    this.isSetup = true;
-  }
-
-  // called for every message received from the node over websocket
-  private onSocketMessage(rawMessage: string): void {
-    const msg: JsonRpcMethodMessage<object> = JSON.parse(rawMessage);
-
-    const params = msg.params;
-    if (msg.method === SUBSCRIBE_EVENT_METHOD) {
-      // even with validation off, we must ensure a few properties at minimum in a message
-      if (isMinimumSubscriptionMessage(params)) {
-        const sub = this.eventSubscriptions.get(params.subscription);
-        if (sub)
-          // cast to bypass type validation of 'result'
-          (sub.onMessage as (m: any) => void)(params.result);
-      } else if (is(params, SubscriptionEvent)) {
-        // call any registered handler for the message's subscription
-        const sub = this.eventSubscriptions.get(params.subscription);
-        if (sub) sub.onMessage(params.result);
-      }
-    }
-  }
-
-  private async connect(): Promise<void> {
-    // if the last attempt to connect hasn't finished, wait on it
-    if (this.connectionPromise) return this.connectionPromise;
-    if (this.connectionState === ConnectionState.Connected)
-      return Promise.resolve();
-
-    this.setupSocket();
-    this.rpcClient.connect();
-    this.connectionState = ConnectionState.Connecting;
-
-    this.connectionPromise = new Promise<void>((resolve, reject) => {
-      this.connectionTimeout = setTimeout(
-        () => reject(new Error('timeout')),
-        this.options.connectTimeout,
-      ) as any as number;
-
-      this.rpcClient.once('open', () => {
-        this.refreshSubscriptions();
-        this.connectionPromise = null;
-        resolve();
-      });
-      this.rpcClient.once('error', (err) => {
-        this.connectionPromise = null;
-        reject(err);
+      this.#subscriptions.forEach((subscription) => {
+        if (
+          subscription.method === data.method &&
+          params.subscription === subscription.id
+        ) {
+          subscription.onMessage(params.result);
+        }
       });
     });
-    return this.connectionPromise;
+
+    return this.#client;
   }
 
-  /**
-    call only upon reconnecting to a node over websocket.
-    calling multiple times on the same connection will result
-    in multiple message handlers firing each time
-  */
-  private async refreshSubscriptions() {
-    if (this.eventSubscriptions.size === 0) return;
+  #reconnect() {
+    this.#client?.close();
+    this.#client = null;
 
-    try {
-      let newSubs: Map<SubscriptionId, SubscriptionData> = new Map();
-
-      let newSubsArr: (FilterSubHandler | null)[] = await Promise.all(
-        Array.from(this.eventSubscriptions.values()).map(async (sub) => {
-          const onMessage = sub.onMessage;
-          const filter = sub.filter;
-          if (!filter || !onMessage) return Promise.resolve(null);
-          /**
-            re-subscribe to the same filter & replace the subscription id.
-            we skip calling sui_unsubscribeEvent for the old sub id, because:
-              * we assume this is being called after a reconnection
-              * the node keys subscriptions with a combo of connection id & subscription id
-          */
-          const id = await this.subscribeEvent(filter, onMessage);
-          return { id, onMessage, filter };
-        }),
-      );
-
-      newSubsArr.forEach((entry) => {
-        if (entry === null) return;
-        const filter = entry.filter;
-        const onMessage = entry.onMessage;
-        newSubs.set(entry.id, { filter, onMessage });
-      });
-
-      this.eventSubscriptions = newSubs;
-    } catch (err) {
-      throw new Error(`error refreshing event subscriptions: ${err}`);
-    }
+    this.#subscriptions.forEach((subscription) => this.request(subscription));
   }
 
-  async subscribeEvent(
-    filter: SuiEventFilter,
-    onMessage: (event: SuiEvent) => void,
-  ): Promise<SubscriptionId> {
-    try {
-      // lazily connect to websocket to avoid spamming node with connections
-      if (this.connectionState !== ConnectionState.Connected)
-        await this.connect();
+  async request<T>(input: SubscriptionRequest<T>) {
+    const client = this.#setupClient();
+    const id = await client.request(
+      { method: input.method, params: input.params },
+      this.options.callTimeout,
+    );
 
-      let subId = (await this.rpcClient.call(
-        SUBSCRIBE_EVENT_METHOD,
-        [filter],
+    // If an input ID is provided, this is a reconnect and we need to use that ID instead:
+    this.#subscriptions.set(input.id || id, {
+      ...input,
+      // Always set the latest actual subscription ID:
+      id,
+    });
+
+    return async () => {
+      const client = this.#setupClient();
+      // NOTE: Due to reconnects, the inner subscription ID could have actually changed:
+      const subscription = this.#subscriptions.get(id);
+      if (!subscription) return false;
+
+      this.#subscriptions.delete(id);
+
+      return client.request(
+        { method: input.unsubscribe, params: [subscription.id] },
         this.options.callTimeout,
-      )) as SubscriptionId;
-
-      this.eventSubscriptions.set(subId, { filter, onMessage });
-      return subId;
-    } catch (err) {
-      throw new Error(
-        `Error subscribing to event: ${JSON.stringify(
-          err,
-          null,
-          2,
-        )}, filter: ${JSON.stringify(filter)}`,
       );
-    }
-  }
-
-  async unsubscribeEvent(id: SubscriptionId): Promise<boolean> {
-    try {
-      if (this.connectionState !== ConnectionState.Connected)
-        await this.connect();
-
-      let removedOnNode = (await this.rpcClient.call(
-        UNSUBSCRIBE_EVENT_METHOD,
-        [id],
-        this.options.callTimeout,
-      )) as boolean;
-      /**
-        if the connection closes before unsubscribe is called,
-        the remote node will remove us from its subscribers list without notification,
-        leading to removedOnNode being false. but if we still had a record of it locally,
-        we should still report that it was deleted successfully
-      */
-      return this.eventSubscriptions.delete(id) || removedOnNode;
-    } catch (err) {
-      throw new Error(
-        `Error unsubscribing from event: ${err}, subscription: ${id}`,
-      );
-    }
+    };
   }
 }

@@ -116,9 +116,9 @@ pub struct MetadataV1 {
     // timestamp of when the entity created. This is generated
     // by the node which creates the entity.
     pub created_at: TimestampMs,
-    // timestamp of when the entity was received by the node. This will help
+    // timestamp of when the entity was received by an other node. This will help
     // us calculate latencies that are not affected by clock drift or network
-    // delays.
+    // delays. This field is not set for own batches.
     pub received_at: Option<TimestampMs>,
 }
 
@@ -149,7 +149,7 @@ pub enum Batch {
 
 impl Batch {
     pub fn new(transactions: Vec<Transaction>, protocol_config: &ProtocolConfig) -> Self {
-        // TODO: Remove once we have upgraded to protocol version 11.
+        // TODO: Remove once we have upgraded to protocol version 12.
         if protocol_config.narwhal_versioned_metadata() {
             Self::V2(BatchV2::new(transactions, protocol_config))
         } else {
@@ -237,6 +237,7 @@ impl BatchV1 {
 #[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Eq, Arbitrary)]
 pub struct BatchV2 {
     pub transactions: Vec<Transaction>,
+    // This field is not included as part of the batch digest
     pub versioned_metadata: VersionedMetadata,
 }
 
@@ -277,6 +278,35 @@ impl BatchV2 {
     pub fn size(&self) -> usize {
         self.transactions.iter().map(|t| t.len()).sum()
     }
+}
+
+// TODO: Remove once we have upgraded to protocol version 12.
+pub fn validate_batch_version(
+    batch: &Batch,
+    protocol_config: &ProtocolConfig,
+) -> anyhow::Result<()> {
+    // If network has advanced to using version 12, which sets narwhal_versioned_metadata
+    // to true, we will start using BatchV2 locally and so we will only accept
+    // BatchV2 from the network. Otherwise BatchV1 is used.
+    match batch {
+        Batch::V1(_) => {
+            if protocol_config.narwhal_versioned_metadata() {
+                return Err(anyhow::anyhow!(format!(
+                    "Received {batch:?} but network is at {:?} and this batch version is no longer supported",
+                    protocol_config.version
+                )));
+            }
+        }
+        Batch::V2(_) => {
+            if !protocol_config.narwhal_versioned_metadata() {
+                return Err(anyhow::anyhow!(format!(
+                    "Received {batch:?} but network is at {:?} and this batch version is not supported yet",
+                    protocol_config.version
+                )));
+            }
+        }
+    };
+    Ok(())
 }
 
 #[derive(
@@ -1477,6 +1507,7 @@ impl fmt::Display for BlockErrorKind {
     }
 }
 
+// TODO: Remove once we have upgraded to protocol version 12.
 /// Used by worker to inform primary it sealed a new batch.
 #[derive(Clone, Serialize, Deserialize, Eq, PartialEq, Debug)]
 pub struct WorkerOurBatchMessage {
@@ -1487,7 +1518,7 @@ pub struct WorkerOurBatchMessage {
 
 /// Used by worker to inform primary it sealed a new batch.
 #[derive(Clone, Serialize, Deserialize, Eq, PartialEq, Debug)]
-pub struct WorkerOurBatchMessageV2 {
+pub struct WorkerOwnBatchMessage {
     pub digest: BatchDigest,
     pub worker_id: WorkerId,
     pub metadata: VersionedMetadata,
@@ -1568,15 +1599,17 @@ mod tests {
         VersionedMetadata,
     };
     use std::time::Duration;
-    use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
+    use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
+    use test_utils::latest_protocol_version;
     use tokio::time::sleep;
 
     #[tokio::test]
     async fn test_elapsed() {
+        // TODO: Remove once we have upgraded to protocol version 12.
         // BatchV1
         let batch = Batch::new(
             vec![],
-            &ProtocolConfig::get_for_version(ProtocolVersion::new(10)),
+            &ProtocolConfig::get_for_version(ProtocolVersion::new(11), Chain::Unknown),
         );
         assert!(batch.metadata().created_at > 0);
 
@@ -1585,10 +1618,7 @@ mod tests {
         assert!(batch.metadata().created_at.elapsed().as_secs_f64() >= 2.0);
 
         // BatchV2
-        let batch = Batch::new(
-            vec![],
-            &ProtocolConfig::get_for_version(ProtocolVersion::new(11)),
-        );
+        let batch = Batch::new(vec![], &latest_protocol_version());
 
         assert!(*batch.versioned_metadata().created_at() > 0);
 
@@ -1608,6 +1638,7 @@ mod tests {
 
     #[test]
     fn test_elapsed_when_newer_than_now() {
+        // TODO: Remove once we have upgraded to protocol version 12.
         // BatchV1
         let batch = Batch::V1(BatchV1 {
             transactions: vec![],

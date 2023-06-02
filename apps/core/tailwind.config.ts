@@ -5,6 +5,9 @@ import { type Config } from 'tailwindcss';
 import { fontFamily } from 'tailwindcss/defaultTheme';
 import colors from 'tailwindcss/colors';
 
+/** The minimum line height that text should use to avoid clipping and overflow scrolling */
+const MIN_LINE_HEIGHT = '1.13';
+
 export default {
     content: ['./src/**/*.{js,jsx,ts,tsx}'],
     theme: {
@@ -100,23 +103,23 @@ export default {
             },
             fontSize: {
                 // Text sizes:
-                body: ['14px', '1'],
-                bodySmall: ['13px', '1'],
-                subtitle: ['12px', '1'],
-                subtitleSmall: ['11px', '1'],
-                subtitleSmallExtra: ['10px', '1'],
-                caption: ['12px', '1'],
-                captionSmall: ['11px', '1'],
-                captionSmallExtra: ['10px', '1'],
-                iconTextLarge: ['48px', '1'],
+                body: ['14px', MIN_LINE_HEIGHT],
+                bodySmall: ['13px', MIN_LINE_HEIGHT],
+                subtitle: ['12px', MIN_LINE_HEIGHT],
+                subtitleSmall: ['11px', MIN_LINE_HEIGHT],
+                subtitleSmallExtra: ['10px', MIN_LINE_HEIGHT],
+                caption: ['12px', MIN_LINE_HEIGHT],
+                captionSmall: ['11px', MIN_LINE_HEIGHT],
+                captionSmallExtra: ['10px', MIN_LINE_HEIGHT],
+                iconTextLarge: ['48px', MIN_LINE_HEIGHT],
 
                 // Heading sizes:
-                heading1: ['28px', '1'],
-                heading2: ['24px', '1'],
-                heading3: ['20px', '1'],
-                heading4: ['18px', '1'],
-                heading5: ['17px', '1'],
-                heading6: ['16px', '1'],
+                heading1: ['28px', MIN_LINE_HEIGHT],
+                heading2: ['24px', MIN_LINE_HEIGHT],
+                heading3: ['20px', MIN_LINE_HEIGHT],
+                heading4: ['18px', MIN_LINE_HEIGHT],
+                heading5: ['17px', MIN_LINE_HEIGHT],
+                heading6: ['16px', MIN_LINE_HEIGHT],
 
                 // Paragraph sizes:
                 pHeading6: ['16px', '1.4'],

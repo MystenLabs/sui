@@ -1,7 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useRpcClient, useGetSystemState } from '@mysten/core';
+import {
+    useRpcClient,
+    useGetSystemState,
+    isSuiNSName,
+    useSuiNSEnabled,
+} from '@mysten/core';
 import {
     isValidTransactionDigest,
     isValidSuiAddress,
@@ -79,7 +84,26 @@ const getResultsForCheckpoint = async (rpc: JsonRpcProvider, query: string) => {
     };
 };
 
-const getResultsForAddress = async (rpc: JsonRpcProvider, query: string) => {
+const getResultsForAddress = async (
+    rpc: JsonRpcProvider,
+    query: string,
+    suiNSEnabled: boolean
+) => {
+    if (suiNSEnabled && isSuiNSName(query)) {
+        const resolved = await rpc.resolveNameServiceAddress({ name: query });
+        if (!resolved) return null;
+        return {
+            label: 'address',
+            results: [
+                {
+                    id: resolved,
+                    label: resolved,
+                    type: 'address',
+                },
+            ],
+        };
+    }
+
     const normalized = normalizeSuiObjectId(query);
     if (!isValidSuiAddress(normalized) || isGenesisLibAddress(normalized))
         return null;
@@ -144,6 +168,7 @@ const getResultsForValidatorByPoolIdOrSuiAddress = async (
 export function useSearch(query: string) {
     const rpc = useRpcClient();
     const { data: systemStateSummery } = useGetSystemState();
+    const suiNSEnabled = useSuiNSEnabled();
 
     return useQuery({
         // eslint-disable-next-line @tanstack/query/exhaustive-deps
@@ -153,7 +178,7 @@ export function useSearch(query: string) {
                 await Promise.allSettled([
                     getResultsForTransaction(rpc, query),
                     getResultsForCheckpoint(rpc, query),
-                    getResultsForAddress(rpc, query),
+                    getResultsForAddress(rpc, query, suiNSEnabled),
                     getResultsForObject(rpc, query),
                     getResultsForValidatorByPoolIdOrSuiAddress(
                         systemStateSummery || null,

@@ -3,7 +3,6 @@
 
 use crate::{
     state_sync::{
-        test_utils::{empty_contents, CommitteeFixture},
         Builder, GetCheckpointSummaryRequest, PeerStateSyncInfo, StateSync, StateSyncMessage,
         UnstartedStateSync,
     },
@@ -11,6 +10,7 @@ use crate::{
 };
 use anemo::{PeerId, Request};
 use std::{collections::HashMap, time::Duration};
+use sui_swarm_config::test_utils::{empty_contents, CommitteeFixture};
 use sui_types::{
     messages_checkpoint::CheckpointDigest,
     storage::{ReadStore, SharedInMemoryStore, WriteStore},
@@ -129,7 +129,7 @@ async fn server_get_checkpoint() {
 
     // Populate the node's store with some checkpoints
     for checkpoint in ordered_checkpoints.clone() {
-        builder.store.inner_mut().insert_checkpoint(checkpoint)
+        builder.store.inner_mut().insert_checkpoint(&checkpoint)
     }
     let latest = ordered_checkpoints.last().unwrap().clone();
     builder
@@ -201,7 +201,7 @@ async fn isolated_sync_job() {
     {
         let mut store = event_loop_2.store.inner_mut();
         for checkpoint in ordered_checkpoints.clone() {
-            store.insert_checkpoint(checkpoint);
+            store.insert_checkpoint(&checkpoint);
         }
     }
 
@@ -307,6 +307,7 @@ async fn sync_with_checkpoints_being_inserted() {
     store_1
         .insert_checkpoint_contents(&checkpoint, empty_contents())
         .unwrap();
+    store_1.insert_certified_checkpoint(&checkpoint);
     handle_1.send_checkpoint(checkpoint).await;
 
     timeout(Duration::from_secs(1), async {
@@ -324,6 +325,7 @@ async fn sync_with_checkpoints_being_inserted() {
 
     // Inject all the checkpoints
     for checkpoint in checkpoint_iter {
+        store_1.insert_certified_checkpoint(&checkpoint);
         handle_1.send_checkpoint(checkpoint).await;
     }
 

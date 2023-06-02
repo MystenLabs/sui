@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useGetSystemState } from '@mysten/core';
+import { useGetSystemState, useGetBinaryVersion } from '@mysten/core';
 import { useContext } from 'react';
 
 import { NetworkContext } from '../../context';
@@ -12,6 +12,7 @@ import { NetworkSelect, type NetworkOption } from '~/ui/header/NetworkSelect';
 export default function WrappedNetworkSelect() {
     const [network, setNetwork] = useContext(NetworkContext);
     const { data } = useGetSystemState();
+    const { data: binaryVersion } = useGetBinaryVersion();
 
     const networks = [
         { id: Network.MAINNET, label: 'Mainnet' },
@@ -26,6 +27,7 @@ export default function WrappedNetworkSelect() {
             onChange={setNetwork}
             networks={networks}
             version={data?.protocolVersion}
+            binaryVersion={binaryVersion}
         />
     );
 }

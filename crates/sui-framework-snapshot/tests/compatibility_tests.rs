@@ -5,14 +5,15 @@ mod compatibility_tests {
     use std::collections::BTreeMap;
     use sui_framework::{compare_system_package, BuiltInFramework};
     use sui_framework_snapshot::{load_bytecode_snapshot, load_bytecode_snapshot_manifest};
-    use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
+    use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
 
     #[tokio::test]
     async fn test_framework_compatibility() {
         // This test checks that the current framework is compatible with all previous framework
         // bytecode snapshots.
         for (version, _snapshots) in load_bytecode_snapshot_manifest() {
-            let config = ProtocolConfig::get_for_version(ProtocolVersion::new(version));
+            let config =
+                ProtocolConfig::get_for_version(ProtocolVersion::new(version), Chain::Unknown);
             let max_binary_format_version = config.move_binary_format_version();
             let no_extraneous_module_bytes = config.no_extraneous_module_bytes();
             let framework = load_bytecode_snapshot(version).unwrap();

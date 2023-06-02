@@ -21,7 +21,6 @@ mod runtime;
 pub mod session;
 #[macro_use]
 mod tracing;
-pub mod config;
 
 // Only include debugging functionality in debug builds
 #[cfg(any(debug_assertions, feature = "debugging"))]

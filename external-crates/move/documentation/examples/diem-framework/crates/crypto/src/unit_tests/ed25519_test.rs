@@ -17,7 +17,7 @@ use core::{
     convert::TryFrom,
     ops::{Add, Index, IndexMut, Mul, Neg},
 };
-use ed25519_dalek::ed25519::signature::{Signature as _, Verifier as _};
+use ed25519_dalek::ed25519::signature::Verifier as _;
 
 use diem_crypto_derive::{BCSCryptoHash, CryptoHasher};
 use digest::Digest;

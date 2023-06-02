@@ -95,9 +95,6 @@ jobs:
         run: |
           cargo run --package sui-benchmark --bin stress -- --log-path /tmp/stress.log --num-client-threads 10 --num-server-threads 24 --num-transfer-accounts 2 bench --target-qps 100 --num-workers 10  --transfer-object 50 --shared-counter 50 --run-duration 10s --stress-stat-collection
           pushd narwhal/benchmark && fab smoke && popd
-      - name: External crates tests
-        run: |
-          cargo xtest
       - name: doctests
         run: |
           cargo test --doc
@@ -257,37 +254,6 @@ jobs:
       - uses: actions/checkout@v3
       - uses: mystenlabs/cargo-deny-action@main
 
-  move-prover:
-    name: move-prover
-    needs: diff
-    timeout-minutes: 20
-    if: needs.diff.outputs.isMove == 'true'
-    runs-on: [ubuntu-ghcloud]
-
-    steps:
-      - uses: actions/checkout@v3
-
-      - name: Prover Setup
-        run: |
-          crates/sui-move/scripts/prover_setup.sh
-      - name: Build
-        uses: actions-rs/cargo@v1
-        with:
-          command: build
-
-      - name: Prover Run
-        working-directory: crates/sui-framework/packages
-        run: |
-          set -o pipefail
-          DOTNET_ROOT="$HOME/.dotnet"
-          BIN_DIR="$HOME/bin"
-          export DOTNET_ROOT="${DOTNET_ROOT}"
-          export PATH="${DOTNET_ROOT}/tools:\$PATH"
-          export Z3_EXE="${BIN_DIR}/z3"
-          export CVC5_EXE="${BIN_DIR}/cvc5"
-          export BOOGIE_EXE="${DOTNET_ROOT}/tools/boogie"
-          ../../../target/debug/sui move prove -p sui-framework
-          ../../../target/debug/sui move prove -p sui-system
   #indexer:
   #  name: indexer
   #  needs: diff

@@ -57,7 +57,7 @@ async fn test_successfully_retrieve_block() {
         mock_server
             .expect_request_batch()
             .withf(move |request| request.body().batch == batch_digest_clone)
-            .returning(|_| {
+            .returning(move |_| {
                 Ok(anemo::Response::new(RequestBatchResponse {
                     batch: Some(Batch::new(
                         vec![vec![10u8, 5u8, 2u8], vec![8u8, 2u8, 3u8]],

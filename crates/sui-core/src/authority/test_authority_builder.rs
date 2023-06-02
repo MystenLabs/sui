@@ -27,6 +27,7 @@ use sui_storage::IndexStore;
 use sui_swarm_config::network_config::NetworkConfig;
 use sui_types::base_types::{AuthorityName, ObjectID};
 use sui_types::crypto::AuthorityKeyPair;
+use sui_types::digests::ChainIdentifier;
 use sui_types::error::SuiResult;
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::object::Object;
@@ -193,6 +194,7 @@ impl<'a> TestAuthorityBuilder<'a> {
             cache_metrics,
             signature_verifier_metrics,
             &expensive_safety_checks,
+            ChainIdentifier::from(*genesis.checkpoint().digest()),
         );
 
         let committee_store = Arc::new(CommitteeStore::new(

@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    config::VMConfig,
     data_cache::TransactionDataCache,
     interpreter::Interpreter,
     loader::{Function, Loader},
@@ -26,6 +25,7 @@ use move_core_types::{
     value::MoveTypeLayout,
     vm_status::StatusCode,
 };
+use move_vm_config::runtime::VMConfig;
 use move_vm_types::{
     data_store::DataStore,
     gas::GasMeter,

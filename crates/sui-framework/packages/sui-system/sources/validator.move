@@ -354,11 +354,12 @@ module sui_system::validator {
         self: &mut Validator,
         staked_sui: StakedSui,
         ctx: &mut TxContext,
-    ) {
+    ) : Balance<SUI> {
         let principal_amount = staking_pool::staked_sui_amount(&staked_sui);
         let stake_activation_epoch = staking_pool::stake_activation_epoch(&staked_sui);
-        let withdraw_amount = staking_pool::request_withdraw_stake(
+        let withdrawn_stake = staking_pool::request_withdraw_stake(
                 &mut self.staking_pool, staked_sui, ctx);
+        let withdraw_amount = balance::value(&withdrawn_stake);
         let reward_amount = withdraw_amount - principal_amount;
         self.next_epoch_stake = self.next_epoch_stake - withdraw_amount;
         event::emit(
@@ -371,7 +372,8 @@ module sui_system::validator {
                 principal_amount,
                 reward_amount,
             }
-        )
+        );
+        withdrawn_stake
     }
 
     /// Request to set new gas price for the next epoch.

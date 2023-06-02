@@ -15,7 +15,11 @@ export function useEpochProgress(suffix: string = 'left') {
         start !== undefined && duration !== undefined
             ? start + duration
             : undefined;
-    const time = useTimeAgo(end, true, true);
+    const time = useTimeAgo({
+        timeFrom: end || null,
+        shortedTimeLabel: true,
+        shouldEnd: true,
+    });
 
     if (!start || !end) {
         return {};

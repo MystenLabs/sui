@@ -40,27 +40,27 @@ async fn test_recovery() {
         .collect::<BTreeSet<_>>();
     let (mut certificates, next_parents) = test_utils::make_optimal_certificates(
         &committee,
+        &latest_protocol_version(),
         1..=2,
         &genesis,
         &ids,
-        &latest_protocol_version(),
     );
 
     // Make two certificate (f+1) with round 3 to trigger the commits.
     let (_, certificate) = test_utils::mock_certificate(
         &committee,
+        &latest_protocol_version(),
         ids[0],
         3,
         next_parents.clone(),
-        &latest_protocol_version(),
     );
     certificates.push_back(certificate);
     let (_, certificate) = test_utils::mock_certificate(
         &committee,
+        &latest_protocol_version(),
         ids[1],
         3,
         next_parents,
-        &latest_protocol_version(),
     );
     certificates.push_back(certificate);
 

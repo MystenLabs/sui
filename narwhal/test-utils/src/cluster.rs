@@ -1,6 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::{temp_dir, CommitteeFixture};
+use crate::{latest_protocol_version, temp_dir, CommitteeFixture};
 use config::{AuthorityIdentifier, Committee, Parameters, WorkerCache, WorkerId};
 use crypto::{KeyPair, NetworkKeyPair, PublicKey};
 use executor::SerializedTransaction;
@@ -15,7 +15,6 @@ use node::{execution_state::SimpleExecutionState, metrics::worker_metrics_regist
 use prometheus::{proto::Metric, Registry};
 use std::{cell::RefCell, collections::HashMap, path::PathBuf, rc::Rc, sync::Arc, time::Duration};
 use storage::NodeStorage;
-use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
 use telemetry_subscribers::TelemetryGuards;
 use tokio::{
     sync::{broadcast::Sender, mpsc::channel, RwLock},
@@ -308,7 +307,6 @@ impl PrimaryNodeDetails {
             parameters.clone(),
             internal_consensus_enabled,
             registry_service,
-            ProtocolConfig::get_for_version(ProtocolVersion::max()),
         );
 
         Self {
@@ -366,6 +364,7 @@ impl PrimaryNodeDetails {
                 self.key_pair.copy(),
                 self.network_key_pair.copy(),
                 self.committee.clone(),
+                latest_protocol_version(),
                 self.worker_cache.clone(),
                 client,
                 &primary_store,
@@ -431,12 +430,7 @@ impl WorkerNodeDetails {
         worker_cache: WorkerCache,
     ) -> Self {
         let registry_service = RegistryService::new(Registry::new());
-        let node = WorkerNode::new(
-            id,
-            parameters,
-            registry_service,
-            ProtocolConfig::get_for_version(ProtocolVersion::max()),
-        );
+        let node = WorkerNode::new(id, latest_protocol_version(), parameters, registry_service);
 
         Self {
             id,

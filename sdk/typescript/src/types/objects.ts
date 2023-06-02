@@ -89,8 +89,8 @@ export const SuiRawMoveObject = object({
   /** Move type (e.g., "0x2::coin::Coin<0x2::sui::SUI>") */
   type: string(),
   hasPublicTransfer: boolean(),
-  version: SequenceNumber,
-  bcsBytes: array(number()),
+  version: number(),
+  bcsBytes: string(),
 });
 export type SuiRawMoveObject = Infer<typeof SuiRawMoveObject>;
 
@@ -103,7 +103,7 @@ export type SuiRawMovePackage = Infer<typeof SuiRawMovePackage>;
 
 // TODO(chris): consolidate SuiRawParsedData and SuiRawObject using generics
 export const SuiRawData = union([
-  assign(SuiMoveObject, object({ dataType: literal('moveObject') })),
+  assign(SuiRawMoveObject, object({ dataType: literal('moveObject') })),
   assign(SuiRawMovePackage, object({ dataType: literal('package') })),
 ]);
 export type SuiRawData = Infer<typeof SuiRawData>;
@@ -118,7 +118,7 @@ export const SuiObjectResponseError = object({
   code: string(),
   error: optional(string()),
   object_id: optional(ObjectId),
-  version: optional(SequenceNumber),
+  version: optional(number()),
   digest: optional(ObjectDigest),
 });
 export type SuiObjectResponseError = Infer<typeof SuiObjectResponseError>;

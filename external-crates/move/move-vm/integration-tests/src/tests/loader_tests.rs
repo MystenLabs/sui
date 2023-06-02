@@ -12,7 +12,6 @@ use move_binary_format::{
     },
     CompiledModule,
 };
-use move_bytecode_verifier::VerifierConfig;
 use move_compiler::Compiler;
 use move_core_types::{
     account_address::AccountAddress,
@@ -23,9 +22,13 @@ use move_core_types::{
     resolver::{LinkageResolver, ModuleResolver, ResourceResolver},
     value::MoveValue,
 };
-use move_vm_runtime::{config::VMConfig, move_vm::MoveVM, session::SerializedReturnValues};
+use move_vm_config::{runtime::VMConfig, verifier::VerifierConfig};
+use move_vm_runtime::{move_vm::MoveVM, session::SerializedReturnValues};
 use move_vm_test_utils::InMemoryStorage;
-use move_vm_types::{gas::UnmeteredGasMeter, loaded_data::runtime_types::Type};
+use move_vm_types::{
+    gas::UnmeteredGasMeter,
+    loaded_data::runtime_types::{DepthFormula, StructType, Type},
+};
 
 use std::{collections::BTreeMap, path::PathBuf, str::FromStr, sync::Arc, thread};
 
@@ -201,6 +204,14 @@ impl Adapter {
             .expect("Loading type should succeed")
     }
 
+    fn load_struct(&self, module_id: &ModuleId, struct_name: &IdentStr) -> Arc<StructType> {
+        let session = self.vm.new_session(&self.store);
+        session
+            .load_struct(module_id, struct_name)
+            .expect("Loading struct should succeed")
+            .1
+    }
+
     fn get_type_tag(&self, ty: &Type) -> TypeTag {
         let session = self.vm.new_session(&self.store);
         session
@@ -368,6 +379,10 @@ fn get_loader_tests_modules() -> Vec<CompiledModule> {
     compile_modules_in_file(&get_fixture("loader_tests_modules.move")).unwrap()
 }
 
+fn get_depth_tests_modules() -> Vec<CompiledModule> {
+    compile_modules_in_file(&get_fixture("depth_tests_modules.move")).unwrap()
+}
+
 fn get_relinker_tests_modules_with_deps<'s>(
     module: &'s str,
     deps: impl IntoIterator<Item = &'s str>,
@@ -397,6 +412,213 @@ fn load() {
     adapter.publish_modules(modules);
     // calls all functions sequentially
     adapter.call_functions();
+}
+
+#[test]
+fn test_depth() {
+    let data_store = InMemoryStorage::new();
+    let mut adapter = Adapter::new(data_store);
+    let modules = get_depth_tests_modules();
+    let structs = vec![
+        (
+            "A",
+            "Box",
+            Some(DepthFormula {
+                terms: vec![(0, 1)],
+                constant: None,
+            }),
+        ),
+        (
+            "A",
+            "Box3",
+            Some(DepthFormula {
+                terms: vec![(0, 3)],
+                constant: None,
+            }),
+        ),
+        (
+            "A",
+            "Box7",
+            Some(DepthFormula {
+                terms: vec![(0, 7)],
+                constant: None,
+            }),
+        ),
+        (
+            "A",
+            "Box15",
+            Some(DepthFormula {
+                terms: vec![(0, 15)],
+                constant: None,
+            }),
+        ),
+        (
+            "A",
+            "Box31",
+            Some(DepthFormula {
+                terms: vec![(0, 31)],
+                constant: None,
+            }),
+        ),
+        (
+            "A",
+            "Box63",
+            Some(DepthFormula {
+                terms: vec![(0, 63)],
+                constant: None,
+            }),
+        ),
+        (
+            "A",
+            "Box127",
+            Some(DepthFormula {
+                terms: vec![(0, 127)],
+                constant: None,
+            }),
+        ),
+        (
+            "A",
+            "S",
+            Some(DepthFormula {
+                terms: vec![],
+                constant: Some(3),
+            }),
+        ),
+        (
+            "B",
+            "S",
+            Some(DepthFormula {
+                terms: vec![],
+                constant: Some(2),
+            }),
+        ),
+        (
+            "C",
+            "S",
+            Some(DepthFormula {
+                terms: vec![],
+                constant: Some(2),
+            }),
+        ),
+        (
+            "D",
+            "S",
+            Some(DepthFormula {
+                terms: vec![],
+                constant: Some(3),
+            }),
+        ),
+        (
+            "E",
+            "S",
+            Some(DepthFormula {
+                terms: vec![(0, 2)],
+                constant: Some(3),
+            }),
+        ),
+        (
+            "F",
+            "S",
+            Some(DepthFormula {
+                terms: vec![(0, 1)],
+                constant: Some(2),
+            }),
+        ),
+        (
+            "G",
+            "S",
+            Some(DepthFormula {
+                terms: vec![(0, 5), (1, 3)],
+                constant: Some(6),
+            }),
+        ),
+        (
+            "H",
+            "S",
+            Some(DepthFormula {
+                terms: vec![(0, 2), (1, 4)],
+                constant: Some(5),
+            }),
+        ),
+        (
+            "I",
+            "L",
+            Some(DepthFormula {
+                terms: vec![(0, 2)],
+                constant: Some(4),
+            }),
+        ),
+        (
+            "I",
+            "G",
+            Some(DepthFormula {
+                terms: vec![],
+                constant: Some(3),
+            }),
+        ),
+        (
+            "I",
+            "H",
+            Some(DepthFormula {
+                terms: vec![(0, 1)],
+                constant: Some(2),
+            }),
+        ),
+        (
+            "I",
+            "E",
+            Some(DepthFormula {
+                terms: vec![(0, 2)],
+                constant: Some(3),
+            }),
+        ),
+        (
+            "I",
+            "F",
+            Some(DepthFormula {
+                terms: vec![(0, 1)],
+                constant: Some(2),
+            }),
+        ),
+        (
+            "I",
+            "S",
+            Some(DepthFormula {
+                terms: vec![(0, 2), (1, 7)],
+                constant: Some(9),
+            }),
+        ),
+        (
+            "I",
+            "LL",
+            Some(DepthFormula {
+                terms: vec![(1, 2)],
+                constant: Some(4),
+            }),
+        ),
+        (
+            "I",
+            "N",
+            Some(DepthFormula {
+                terms: vec![],
+                constant: Some(2),
+            }),
+        ),
+    ];
+    adapter.publish_modules(modules);
+    // loads all structs sequentially
+    for (module_name, struct_name, expected_depth) in structs.iter() {
+        let computed_depth = &adapter
+            .load_struct(
+                &ModuleId::new(
+                    DEFAULT_ACCOUNT,
+                    Identifier::new(module_name.to_string()).unwrap(),
+                ),
+                ident_str!(struct_name),
+            )
+            .depth;
+        assert_eq!(computed_depth, expected_depth);
+    }
 }
 
 #[test]

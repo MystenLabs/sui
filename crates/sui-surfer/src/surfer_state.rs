@@ -165,7 +165,12 @@ impl SurferState {
         .unwrap();
         let tx = self.cluster.wallet.sign_transaction(&tx_data);
         let response = loop {
-            match self.cluster.execute_transaction(tx.clone()).await {
+            match self
+                .cluster
+                .wallet
+                .execute_transaction_may_fail(tx.clone())
+                .await
+            {
                 Ok(effects) => break effects,
                 Err(e) => {
                     error!("Error executing transaction: {:?}", e);
@@ -197,6 +202,12 @@ impl SurferState {
 
     async fn process_tx_effects(&mut self, effects: &SuiTransactionBlockEffects) {
         for (owned_ref, write_kind) in effects.all_changed_objects() {
+            if matches!(owned_ref.owner, Owner::ObjectOwner(_)) {
+                // For object owned objects, we don't need to do anything.
+                // We also cannot read them because in the case of shared objects, there can be
+                // races and the child object may no longer exist.
+                continue;
+            }
             let obj_ref = owned_ref.reference.to_object_ref();
             let object = self
                 .cluster
@@ -313,7 +324,12 @@ impl SurferState {
         );
         let tx = self.cluster.wallet.sign_transaction(&tx_data);
         let response = loop {
-            match self.cluster.execute_transaction(tx.clone()).await {
+            match self
+                .cluster
+                .wallet
+                .execute_transaction_may_fail(tx.clone())
+                .await
+            {
                 Ok(response) => {
                     break response;
                 }

@@ -1,6 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { type SuiAddress } from '@mysten/sui.js';
+
+import { toSearchQueryString } from './utils';
+
 export type QredoAPIErrorResponse = {
     code: string;
     msg: string;
@@ -37,6 +41,8 @@ export type Wallet = {
     walletID: string;
     address: string;
     network: string;
+    // the key schema is always ED25519 and qredo is not planning to change it
+    publicKey: string;
     labels: {
         key: string;
         name: string;
@@ -50,6 +56,68 @@ export type GetWalletsResponse = {
 
 export type GetWalletsParams = {
     filters?: { address?: string };
+};
+
+export type NetworkType = 'mainnet' | 'testnet' | 'devnet';
+
+export type TransactionStatus =
+    | 'pending'
+    | 'created'
+    | 'authorized'
+    | 'approved'
+    | 'expired'
+    | 'cancelled'
+    | 'rejected'
+    | 'signed'
+    | 'scheduled'
+    | 'pushed'
+    | 'confirmed'
+    | 'mined'
+    | 'failed';
+
+export type PostTransactionParams = {
+    messageWithIntent: string;
+    broadcast: boolean;
+    network: NetworkType;
+    from: SuiAddress;
+};
+
+export type TransactionInfoResponse = {
+    txID: string;
+    txHash: string;
+    status: TransactionStatus;
+    MessageWithIntent: string;
+    sig: string;
+    timestamps: Partial<Record<TransactionStatus, number>>;
+    events: {
+        id: string;
+        timestamp: number;
+        status: TransactionStatus;
+        message: string;
+    }[];
+    from: string;
+    network: string;
+    createdBy: string;
+    accountID: string;
+};
+
+export type GetTransactionsParams = {
+    network?: NetworkType;
+    /** Filter by address or part of address */
+    address?: SuiAddress;
+    /** Qredo wallet id */
+    wallet?: string;
+};
+
+export type GetTransactionsItem = {
+    walletID: string;
+    txID: string;
+    txHash: string;
+    status: TransactionStatus;
+};
+
+export type GetTransactionsResponse = {
+    list: GetTransactionsItem[];
 };
 
 export type AccessTokenRenewalFunction = (
@@ -97,7 +165,7 @@ export class QredoAPI {
         if (grantType) {
             params.append('grant_type', grantType);
         }
-        return this.#request(`${this.baseURL}connect/sui/token`, {
+        return this.#request(`${this.baseURL}token`, {
             method: 'post',
             body: params,
         });
@@ -110,11 +178,36 @@ export class QredoAPI {
         if (filters?.address) {
             searchParams.append('address', filters.address);
         }
-        const searchQuery = searchParams.toString();
         return this.#request(
-            `${this.baseURL}connect/sui/wallets${
-                searchQuery ? `?${searchQuery}` : ''
-            }`
+            `${this.baseURL}wallets${toSearchQueryString(searchParams)}`
+        );
+    }
+
+    public createTransaction(
+        params: PostTransactionParams
+    ): Promise<TransactionInfoResponse> {
+        return this.#request(`${this.baseURL}transactions`, {
+            method: 'post',
+            body: JSON.stringify(params),
+            headers: {
+                'Content-Type': 'application/json',
+            },
+        });
+    }
+
+    public getTransaction(
+        transactionID: string
+    ): Promise<TransactionInfoResponse> {
+        return this.#request(`${this.baseURL}transactions/${transactionID}`);
+    }
+
+    public getTransactions(
+        params: GetTransactionsParams
+    ): Promise<GetTransactionsResponse> {
+        return this.#request(
+            `${this.baseURL}transactions${toSearchQueryString(
+                new URLSearchParams(params)
+            )}`
         );
     }
 

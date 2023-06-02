@@ -107,6 +107,10 @@ impl ReadStore for RocksDbStore {
         }
 
         // Otherwise gather it from the individual components.
+        // Note we can't insert the constructed contents into `full_checkpoint_content`,
+        // because it needs to be inserted along with `checkpoint_sequence_by_contents_digest`
+        // and `checkpoint_content`. However at this point it's likely we don't know the
+        // corresponding sequence number yet.
         self.checkpoint_store
             .get_checkpoint_contents(digest)?
             .map(|contents| FullCheckpointContents::from_checkpoint_contents(&self, contents))
@@ -141,7 +145,7 @@ impl ReadStore for RocksDbStore {
 }
 
 impl WriteStore for RocksDbStore {
-    fn insert_checkpoint(&self, checkpoint: VerifiedCheckpoint) -> Result<(), Self::Error> {
+    fn insert_checkpoint(&self, checkpoint: &VerifiedCheckpoint) -> Result<(), Self::Error> {
         if let Some(EndOfEpochData {
             next_epoch_committee,
             ..
@@ -161,6 +165,14 @@ impl WriteStore for RocksDbStore {
     ) -> Result<(), Self::Error> {
         self.checkpoint_store
             .update_highest_synced_checkpoint(checkpoint)
+    }
+
+    fn update_highest_verified_checkpoint(
+        &self,
+        checkpoint: &VerifiedCheckpoint,
+    ) -> Result<(), Self::Error> {
+        self.checkpoint_store
+            .update_highest_verified_checkpoint(checkpoint)
     }
 
     fn insert_checkpoint_contents(

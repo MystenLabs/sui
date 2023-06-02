@@ -55,10 +55,10 @@ async fn test_consensus_recovery_with_bullshark() {
         .collect::<BTreeSet<_>>();
     let (certificates, _next_parents) = test_utils::make_optimal_certificates(
         &committee,
+        &latest_protocol_version(),
         1..=7,
         &genesis,
         &ids,
-        &latest_protocol_version(),
     );
 
     // AND Spawn the consensus engine.

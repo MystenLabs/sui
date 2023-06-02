@@ -8,10 +8,12 @@ import {
     Swap16,
     Unstaked,
     Sui,
+    Account24,
 } from '@mysten/icons';
 import cl from 'classnames';
 
-// TODO: use update icons lib
+import LoadingIndicator from '../loading/LoadingIndicator';
+
 const icons = {
     Send: (
         <ArrowRight16
@@ -32,17 +34,18 @@ const icons = {
     Rewards: <Sui className="text-gradient-blue-start text-body" />,
     Swapped: <Swap16 className="text-gradient-blue-start text-heading6" />,
     Failed: <Info16 className="text-issue-dark text-heading6" />,
+    Loading: <LoadingIndicator />,
+    PersonalMessage: (
+        <Account24
+            fill="currentColor"
+            className="text-gradient-blue-start text-body"
+        />
+    ),
 };
 
 interface TxnItemIconProps {
     txnFailed?: boolean;
-    variant:
-        | 'Rewards'
-        | 'Staked'
-        | 'Unstaked'
-        | 'Swapped'
-        | 'Send'
-        | 'Received';
+    variant: keyof typeof icons;
 }
 
 export function TxnIcon({ txnFailed, variant }: TxnItemIconProps) {

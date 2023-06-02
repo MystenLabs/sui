@@ -6,12 +6,13 @@ import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vite';
 import svgr from 'vite-plugin-svgr';
 import { configDefaults } from 'vitest/config';
+import pluginRewriteAll from 'vite-plugin-rewrite-all';
 
 process.env.VITE_VERCEL_ENV = process.env.VERCEL_ENV || 'development';
 
 // https://vitejs.dev/config/
 export default defineConfig({
-    plugins: [react(), svgr()],
+    plugins: [react(), svgr(), pluginRewriteAll()],
     test: {
         // Omit end-to-end tests:
         exclude: [...configDefaults.exclude, 'tests/**'],

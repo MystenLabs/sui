@@ -36,6 +36,7 @@ use fastcrypto::{
     signature_service::SignatureService,
     traits::{KeyPair as _, ToFromBytes},
 };
+use mysten_metrics::metered_channel::{channel_with_total, Receiver, Sender};
 use mysten_metrics::{monitored_scope, spawn_monitored_task};
 use mysten_network::{multiaddr::Protocol, Multiaddr};
 use network::{
@@ -66,13 +67,12 @@ use tracing::{debug, error, info, instrument, warn};
 use types::{
     ensure,
     error::{DagError, DagResult},
-    metered_channel::{channel_with_total, Receiver, Sender},
     now, Certificate, CertificateAPI, CertificateDigest, FetchCertificatesRequest,
     FetchCertificatesResponse, GetCertificatesRequest, GetCertificatesResponse, Header, HeaderAPI,
     MetadataAPI, PayloadAvailabilityRequest, PayloadAvailabilityResponse,
     PreSubscribedBroadcastSender, PrimaryToPrimary, PrimaryToPrimaryServer, RequestVoteRequest,
     RequestVoteResponse, Round, SendCertificateRequest, SendCertificateResponse, Vote, VoteInfoAPI,
-    WorkerOthersBatchMessage, WorkerOurBatchMessage, WorkerOurBatchMessageV2, WorkerToPrimary,
+    WorkerOthersBatchMessage, WorkerOurBatchMessage, WorkerOwnBatchMessage, WorkerToPrimary,
     WorkerToPrimaryServer,
 };
 
@@ -100,6 +100,7 @@ impl Primary {
         network_signer: NetworkKeyPair,
         committee: Committee,
         worker_cache: WorkerCache,
+        _protocol_config: ProtocolConfig,
         parameters: Parameters,
         client: NetworkClient,
         header_store: HeaderStore,
@@ -114,7 +115,6 @@ impl Primary {
         tx_shutdown: &mut PreSubscribedBroadcastSender,
         tx_committed_certificates: Sender<(Round, Vec<Certificate>)>,
         registry: &Registry,
-        _protocol_config: ProtocolConfig,
     ) -> Vec<JoinHandle<()>> {
         // Write the parameters to the logs.
         parameters.tracing();
@@ -197,6 +197,7 @@ impl Primary {
             rx_synchronizer_network,
             dag.clone(),
             node_metrics.clone(),
+            &primary_channel_metrics,
         ));
 
         let signature_service = SignatureService::new(signer);
@@ -337,6 +338,9 @@ impl Primary {
             quic_config.receive_window = Some(200 << 20);
             quic_config.send_window = Some(200 << 20);
             quic_config.crypto_buffer_size = Some(1 << 20);
+            quic_config.socket_receive_buffer_size = Some(20 << 20);
+            quic_config.socket_send_buffer_size = Some(20 << 20);
+            quic_config.allow_failed_socket_buffer_size_setting = true;
             quic_config.max_idle_timeout_ms = Some(30_000);
             // Enable keep alives every 5s
             quic_config.keep_alive_interval_ms = Some(5_000);
@@ -507,7 +511,7 @@ impl Primary {
         ];
         handles.extend(admin_handles);
 
-        // If a DAG component is present then we are not using the internal consensus (Bullshark/Tusk)
+        // If a DAG component is present then we are not using the internal consensus (Bullshark)
         // but rather an external one and we are leveraging a pure DAG structure, and more components
         // need to get initialised.
         if dag.is_some() {
@@ -1184,6 +1188,7 @@ struct WorkerReceiverHandler {
 
 #[async_trait]
 impl WorkerToPrimary for WorkerReceiverHandler {
+    // TODO: Remove once we have upgraded to protocol version 12.
     async fn report_our_batch(
         &self,
         request: anemo::Request<WorkerOurBatchMessage>,
@@ -1211,9 +1216,9 @@ impl WorkerToPrimary for WorkerReceiverHandler {
         Ok(response)
     }
 
-    async fn report_our_batch_v2(
+    async fn report_own_batch(
         &self,
-        request: anemo::Request<WorkerOurBatchMessageV2>,
+        request: anemo::Request<WorkerOwnBatchMessage>,
     ) -> Result<anemo::Response<()>, anemo::rpc::Status> {
         let message = request.into_body();
 

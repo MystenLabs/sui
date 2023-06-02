@@ -1,6 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import {
+    useGetOriginByteKioskContents,
+    isSuiNSName,
+    useRpcClient,
+    useSuiNSEnabled,
+} from '@mysten/core';
 import { ArrowRight16 } from '@mysten/icons';
 import { getTransactionDigest, TransactionBlock } from '@mysten/sui.js';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
@@ -8,6 +14,7 @@ import { Form, Field, Formik } from 'formik';
 import { toast } from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 
+import { useTransferKioskItem } from './useTransferKioskItem';
 import { createValidationSchema } from './validation';
 import { useActiveAddress } from '_app/hooks/useActiveAddress';
 import { Button } from '_app/shared/ButtonUI';
@@ -18,36 +25,75 @@ import BottomMenuLayout, {
 import { Text } from '_app/shared/text';
 import { AddressInput } from '_components/address-input';
 import { useSigner } from '_hooks';
+import { QredoActionIgnoredByUser } from '_src/ui/app/QredoSigner';
 import { getSignerOperationErrorMessage } from '_src/ui/app/helpers/errorMessages';
+import { useQredoTransaction } from '_src/ui/app/hooks/useQredoTransaction';
 
-export function TransferNFTForm({ objectId }: { objectId: string }) {
+export function TransferNFTForm({
+    objectId,
+    objectType,
+}: {
+    objectId: string;
+    objectType?: string;
+}) {
     const activeAddress = useActiveAddress();
+    const rpc = useRpcClient();
+    const suiNSEnabled = useSuiNSEnabled();
     const validationSchema = createValidationSchema(
+        rpc,
+        suiNSEnabled,
         activeAddress || '',
         objectId
     );
     const signer = useSigner();
     const queryClient = useQueryClient();
     const navigate = useNavigate();
+    const { clientIdentifier, notificationModal } = useQredoTransaction();
+
+    const kioskContents = useGetOriginByteKioskContents(activeAddress);
+    const transferKioskItem = useTransferKioskItem({ objectId, objectType });
+    const isContainedInKiosk = kioskContents?.data?.some(
+        (kioskItem) => kioskItem.data?.objectId === objectId
+    );
+
     const transferNFT = useMutation({
         mutationFn: async (to: string) => {
             if (!to || !signer) {
                 throw new Error('Missing data');
             }
+
+            if (suiNSEnabled && isSuiNSName(to)) {
+                const address = await rpc.resolveNameServiceAddress({
+                    name: to,
+                });
+                if (!address) {
+                    throw new Error('SuiNS name not found.');
+                }
+                to = address;
+            }
+
+            if (isContainedInKiosk) {
+                return transferKioskItem.mutateAsync(to);
+            }
+
             const tx = new TransactionBlock();
             tx.transferObjects([tx.object(objectId)], tx.pure(to));
 
-            return signer.signAndExecuteTransactionBlock({
-                transactionBlock: tx,
-                options: {
-                    showInput: true,
-                    showEffects: true,
-                    showEvents: true,
+            return signer.signAndExecuteTransactionBlock(
+                {
+                    transactionBlock: tx,
+                    options: {
+                        showInput: true,
+                        showEffects: true,
+                        showEvents: true,
+                    },
                 },
-            });
+                clientIdentifier
+            );
         },
         onSuccess: (response) => {
             queryClient.invalidateQueries(['object', objectId]);
+            queryClient.invalidateQueries(['originbyte-kiosk-contents']);
             queryClient.invalidateQueries(['get-owned-objects']);
             return navigate(
                 `/receipt?${new URLSearchParams({
@@ -57,13 +103,17 @@ export function TransferNFTForm({ objectId }: { objectId: string }) {
             );
         },
         onError: (error) => {
-            toast.error(
-                <div className="max-w-xs overflow-hidden flex flex-col">
-                    <small className="text-ellipsis overflow-hidden">
-                        {getSignerOperationErrorMessage(error)}
-                    </small>
-                </div>
-            );
+            if (error instanceof QredoActionIgnoredByUser) {
+                navigate('/');
+            } else {
+                toast.error(
+                    <div className="max-w-xs overflow-hidden flex flex-col">
+                        <small className="text-ellipsis overflow-hidden">
+                            {getSignerOperationErrorMessage(error)}
+                        </small>
+                    </div>
+                );
+            }
         },
     });
 
@@ -115,6 +165,7 @@ export function TransferNFTForm({ objectId }: { objectId: string }) {
                             />
                         </Menu>
                     </BottomMenuLayout>
+                    {notificationModal}
                 </Form>
             )}
         </Formik>

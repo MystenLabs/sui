@@ -8,10 +8,12 @@ import { TopValidatorsCard } from '../../components/top-validators-card/TopValid
 
 import { Activity } from '~/components/Activity';
 import { GasPriceCard } from '~/components/GasPriceCard';
-import { Checkpoint } from '~/components/HomeMetrics/Checkpoint';
-import { CurrentEpoch } from '~/components/HomeMetrics/CurrentEpoch';
-import { NetworkTPS } from '~/components/HomeMetrics/NetworkTPS';
-import { OnTheNetwork } from '~/components/HomeMetrics/OnTheNetwork';
+import {
+    Checkpoint,
+    CurrentEpoch,
+    NetworkTPS,
+    OnTheNetwork,
+} from '~/components/HomeMetrics';
 import { SuiTokenCard } from '~/components/SuiTokenCard';
 import { TopPackagesCard } from '~/components/top-packages/TopPackagesCard';
 import { useNetwork } from '~/context';

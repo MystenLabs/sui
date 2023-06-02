@@ -186,7 +186,7 @@ impl<S: IndexerStore> IndexerApi<S> {
                     .get_recipient_sequence_by_digest(cursor_str, is_descending)
                     .await?;
                 self.state
-                    .get_transaction_page_by_sender_recipient_address(
+                    .get_transaction_page_by_recipient_address(
                         /* from */ None,
                         recipient_address,
                         recipient_seq_number,
@@ -201,13 +201,22 @@ impl<S: IndexerStore> IndexerApi<S> {
                     .get_recipient_sequence_by_digest(cursor_str, is_descending)
                     .await?;
                 self.state
-                    .get_transaction_page_by_sender_recipient_address(
+                    .get_transaction_page_by_recipient_address(
                         Some(from),
                         to,
                         recipient_seq_number,
                         limit + 1,
                         is_descending,
                     )
+                    .await
+            }
+            Some(TransactionFilter::FromOrToAddress { addr }) => {
+                let start_sequence = self
+                    .state
+                    .get_recipient_sequence_by_digest(cursor_str, is_descending)
+                    .await?;
+                self.state
+                    .get_transaction_page_by_address(addr, start_sequence, limit, is_descending)
                     .await
             }
             Some(TransactionFilter::TransactionKind(tx_kind_name)) => {
@@ -449,19 +458,19 @@ where
         Ok(())
     }
 
-    async fn resolve_name_service_address(&self, _name: String) -> RpcResult<Option<SuiAddress>> {
-        // TODO(gegaowp): implement name service resolver in indexer
-        todo!()
+    async fn resolve_name_service_address(&self, name: String) -> RpcResult<Option<SuiAddress>> {
+        self.fullnode.resolve_name_service_address(name).await
     }
 
     async fn resolve_name_service_names(
         &self,
-        _address: SuiAddress,
-        _cursor: Option<ObjectID>,
-        _limit: Option<usize>,
+        address: SuiAddress,
+        cursor: Option<ObjectID>,
+        limit: Option<usize>,
     ) -> RpcResult<Page<String, ObjectID>> {
-        // TODO(gegaowp): implement name service resolver in indexer
-        todo!()
+        self.fullnode
+            .resolve_name_service_names(address, cursor, limit)
+            .await
     }
 }
 

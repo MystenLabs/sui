@@ -36,7 +36,10 @@ function NftTransferPage() {
                                     size="sm"
                                 />
                             </div>
-                            <TransferNFTForm objectId={nftId} />
+                            <TransferNFTForm
+                                objectId={nftId}
+                                objectType={ownedNFT.type}
+                            />
                         </>
                     ) : (
                         <Navigate to="/" replace />

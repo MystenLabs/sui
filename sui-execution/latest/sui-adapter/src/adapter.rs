@@ -6,13 +6,15 @@ use std::{collections::BTreeMap, sync::Arc};
 use anyhow::Result;
 use move_binary_format::{access::ModuleAccess, file_format::CompiledModule};
 use move_bytecode_verifier::meter::Meter;
-use move_bytecode_verifier::{verify_module_with_config_metered, VerifierConfig};
+use move_bytecode_verifier::verify_module_with_config_metered;
 use move_core_types::account_address::AccountAddress;
+use move_vm_config::{
+    runtime::{VMConfig, VMRuntimeLimitsConfig},
+    verifier::VerifierConfig,
+};
 pub use move_vm_runtime::move_vm::MoveVM;
 use move_vm_runtime::{
-    config::{VMConfig, VMRuntimeLimitsConfig},
-    native_extensions::NativeContextExtensions,
-    native_functions::NativeFunctionTable,
+    native_extensions::NativeContextExtensions, native_functions::NativeFunctionTable,
 };
 use sui_types::metrics::BytecodeVerifierMetrics;
 use sui_verifier::check_for_verifier_timeout;
@@ -92,6 +94,7 @@ pub fn new_move_vm(
             paranoid_type_checks,
             runtime_limits_config: VMRuntimeLimitsConfig {
                 vector_len_max: protocol_config.max_move_vector_len(),
+                max_value_nest_depth: protocol_config.max_move_value_depth_as_option(),
             },
             enable_invariant_violation_check_in_swap_loc: !protocol_config
                 .disable_invariant_violation_check_in_swap_loc(),

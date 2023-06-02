@@ -110,6 +110,7 @@ async fn test_get_collections() {
         author.network_keypair().copy(),
         committee.clone(),
         worker_cache.clone(),
+        latest_protocol_version(),
         parameters.clone(),
         client.clone(),
         store.header_store.clone(),
@@ -133,7 +134,6 @@ async fn test_get_collections() {
         &mut tx_shutdown,
         tx_feedback,
         &Registry::new(),
-        latest_protocol_version(),
     );
 
     let registry = Registry::new();
@@ -147,13 +147,13 @@ async fn test_get_collections() {
         worker_id,
         committee.clone(),
         worker_cache.clone(),
+        latest_protocol_version(),
         parameters.clone(),
         TrivialTransactionValidator::default(),
         client,
         store.batch_store.clone(),
         metrics,
         &mut tx_shutdown_worker,
-        latest_protocol_version(),
     );
 
     // Wait for tasks to start
@@ -319,6 +319,7 @@ async fn test_remove_collections() {
         author.network_keypair().copy(),
         committee.clone(),
         worker_cache.clone(),
+        latest_protocol_version(),
         parameters.clone(),
         network_client.clone(),
         store.header_store.clone(),
@@ -333,7 +334,6 @@ async fn test_remove_collections() {
         &mut tx_shutdown,
         tx_feedback,
         &Registry::new(),
-        latest_protocol_version(),
     );
 
     // Wait for tasks to start
@@ -378,13 +378,13 @@ async fn test_remove_collections() {
         worker_id,
         committee.clone(),
         worker_cache.clone(),
+        latest_protocol_version(),
         parameters.clone(),
         TrivialTransactionValidator::default(),
         network_client,
         store.batch_store.clone(),
         metrics,
         &mut tx_shutdown_worker,
-        latest_protocol_version(),
     );
 
     // Test remove no collections
@@ -531,8 +531,8 @@ async fn test_read_causal_signed_certificates() {
         1..=4,
         &genesis,
         &committee,
-        &keys,
         &latest_protocol_version(),
+        &keys,
     );
 
     collection_digests.extend(
@@ -578,6 +578,7 @@ async fn test_read_causal_signed_certificates() {
         authority_1.network_keypair().copy(),
         committee.clone(),
         worker_cache.clone(),
+        latest_protocol_version(),
         primary_1_parameters.clone(),
         client_1,
         primary_store_1.header_store.clone(),
@@ -592,7 +593,6 @@ async fn test_read_causal_signed_certificates() {
         &mut tx_shutdown,
         tx_feedback,
         &Registry::new(),
-        latest_protocol_version(),
     );
 
     let (tx_new_certificates_2, rx_new_certificates_2) =
@@ -618,6 +618,7 @@ async fn test_read_causal_signed_certificates() {
         authority_2.network_keypair().copy(),
         committee.clone(),
         worker_cache.clone(),
+        latest_protocol_version(),
         primary_2_parameters.clone(),
         client_2,
         primary_store_2.header_store,
@@ -641,7 +642,6 @@ async fn test_read_causal_signed_certificates() {
         &mut tx_shutdown_2,
         tx_feedback_2,
         &Registry::new(),
-        latest_protocol_version(),
     );
 
     // Wait for tasks to start
@@ -761,13 +761,13 @@ async fn test_read_causal_unsigned_certificates() {
 
     let (certificates, _next_parents) = make_optimal_certificates(
         &committee,
+        &latest_protocol_version(),
         1..=4,
         &genesis,
         &committee
             .authorities()
             .map(|authority| authority.id())
             .collect::<Vec<AuthorityIdentifier>>(),
-        &latest_protocol_version(),
     );
 
     collection_digests.extend(
@@ -807,6 +807,7 @@ async fn test_read_causal_unsigned_certificates() {
         authority_1.network_keypair().copy(),
         committee.clone(),
         worker_cache.clone(),
+        latest_protocol_version(),
         primary_1_parameters.clone(),
         client_1,
         primary_store_1.header_store.clone(),
@@ -821,7 +822,6 @@ async fn test_read_causal_unsigned_certificates() {
         &mut tx_shutdown,
         tx_feedback,
         &Registry::new(),
-        latest_protocol_version(),
     );
 
     let (tx_new_certificates_2, rx_new_certificates_2) =
@@ -841,6 +841,7 @@ async fn test_read_causal_unsigned_certificates() {
         network_keypair_2,
         committee.clone(),
         worker_cache.clone(),
+        latest_protocol_version(),
         primary_2_parameters.clone(),
         client_2,
         primary_store_2.header_store,
@@ -864,7 +865,6 @@ async fn test_read_causal_unsigned_certificates() {
         &mut tx_shutdown_2,
         tx_feedback_2,
         &Registry::new(),
-        latest_protocol_version(),
     );
 
     // Wait for tasks to start
@@ -1021,6 +1021,7 @@ async fn test_get_collections_with_missing_certificates() {
         authority_1.network_keypair().copy(),
         committee.clone(),
         worker_cache.clone(),
+        latest_protocol_version(),
         parameters_1.clone(),
         client_1.clone(),
         store_primary_1.header_store,
@@ -1044,7 +1045,6 @@ async fn test_get_collections_with_missing_certificates() {
         &mut tx_shutdown,
         tx_feedback_1,
         &Registry::new(),
-        latest_protocol_version(),
     );
 
     let registry_1 = Registry::new();
@@ -1058,13 +1058,13 @@ async fn test_get_collections_with_missing_certificates() {
         worker_id,
         committee.clone(),
         worker_cache.clone(),
+        latest_protocol_version(),
         parameters_1.clone(),
         TrivialTransactionValidator::default(),
         client_1,
         store_primary_1.batch_store,
         metrics_1,
         &mut tx_shutdown_worker_1,
-        latest_protocol_version(),
     );
 
     // Spawn the primary 2 - a peer to fetch missing certificates from
@@ -1094,6 +1094,7 @@ async fn test_get_collections_with_missing_certificates() {
         authority_2.network_keypair().copy(),
         committee.clone(),
         worker_cache.clone(),
+        latest_protocol_version(),
         parameters_2.clone(),
         client_2.clone(),
         store_primary_2.header_store,
@@ -1109,7 +1110,6 @@ async fn test_get_collections_with_missing_certificates() {
         &mut tx_shutdown_2,
         tx_feedback_2,
         &Registry::new(),
-        latest_protocol_version(),
     );
 
     let registry_2 = Registry::new();
@@ -1123,13 +1123,13 @@ async fn test_get_collections_with_missing_certificates() {
         worker_id,
         committee.clone(),
         worker_cache.clone(),
+        latest_protocol_version(),
         parameters_2.clone(),
         TrivialTransactionValidator::default(),
         client_2,
         store_primary_2.batch_store,
         metrics_2,
         &mut tx_shutdown_worker_2,
-        latest_protocol_version(),
     );
 
     // Wait for tasks to start
