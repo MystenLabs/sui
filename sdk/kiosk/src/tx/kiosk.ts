@@ -8,7 +8,6 @@ import {
 } from '@mysten/sui.js';
 
 import { getTypeWithoutPackageAddress, objArg } from '../utils';
-import { KioskListing } from '../query/kiosk';
 import {
   confirmRequest,
   resolveKioskLockRule,
@@ -203,16 +202,20 @@ export function purchase(
   tx: TransactionBlock,
   itemType: string,
   kiosk: ObjectArgument,
-  item: ObjectArgument,
+  itemId: SuiAddress,
   payment: ObjectArgument,
 ): [TransactionArgument, TransactionArgument] {
-  let [purchasedItem, transferRequest] = tx.moveCall({
+  let [item, transferRequest] = tx.moveCall({
     target: `${KIOSK_MODULE}::purchase`,
     typeArguments: [itemType],
-    arguments: [objArg(tx, kiosk), objArg(tx, item), objArg(tx, payment)],
+    arguments: [
+      objArg(tx, kiosk),
+      tx.pure(itemId, 'address'),
+      objArg(tx, payment),
+    ],
   });
 
-  return [purchasedItem, transferRequest];
+  return [item, transferRequest];
 }
 
 /**
@@ -342,33 +345,32 @@ export function returnValue(
 export function purchaseAndResolvePolicies(
   tx: TransactionBlock,
   itemType: string,
-  listing: KioskListing,
-  kioskId: ObjectArgument,
-  item: ObjectArgument,
+  price: string,
+  kiosk: ObjectArgument,
+  itemId: SuiAddress,
   policy: TransferPolicy,
   environment: RulesEnvironmentParam,
   extraParams?: PurchaseOptionalParams,
 ): PurchaseAndResolvePoliciesResponse {
   // if we don't pass the listing or the listing doens't have a price, return.
-  if (!listing || listing?.price === undefined)
-    throw new Error(`Listing not supplied.`);
+  if (price === undefined || typeof price !== 'string')
+    throw new Error(`Price of the listing is not supplied.`);
 
   // Split the coin for the amount of the listing.
-  const coin = tx.splitCoins(tx.gas, [tx.pure(listing.price, 'u64')]);
+  const coin = tx.splitCoins(tx.gas, [tx.pure(price, 'u64')]);
 
   // initialize the purchase `kiosk::purchase`
   const [purchasedItem, transferRequest] = purchase(
     tx,
     itemType,
-    kioskId,
-    item,
+    kiosk,
+    itemId,
     coin,
   );
 
   // Start resolving rules.
-  // For now, we only support royalty rule.
-  // Will need some tweaking to make it function properly with the other
-  // ruleset.
+  // Right now we support `kiosk_lock_rule` and `royalty_rule`.
+  // They can also be supplied in parallel (supports combination).
   let hasKioskLockRule = false;
 
   for (let rule of policy.rules) {
@@ -379,7 +381,7 @@ export function purchaseAndResolvePolicies(
         resolveRoyaltyRule(
           tx,
           itemType,
-          listing.price,
+          price,
           policy.id,
           transferRequest,
           environment,

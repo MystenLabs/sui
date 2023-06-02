@@ -100,7 +100,7 @@ const purchaseItem = async (item, kioskId) => {
   }
   // Extra params. Optional, but required if the user tries to resolve a `kiosk_lock_rule`.
   // Purchases the item. Supports `kiosk_lock_rule`, `royalty_rule` (accepts combination too).
-  const result = purchaseAndResolvePolicies(tx, item.type, item.listing, kioskId, item.objectId, policy[0], environment, extraParams);
+  const result = purchaseAndResolvePolicies(tx, item.type, item.listing.price, kioskId, item.objectId, policy[0], environment, extraParams);
 
   // result = {item: <the_purchased_item>, canTransfer: true/false // depending on whether there was a kiosk lock rule }
   // if the item didn't have a kiosk_lock_rule, we need to do something with it.

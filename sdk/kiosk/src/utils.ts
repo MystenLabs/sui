@@ -14,13 +14,11 @@ import {
 import { KioskData, KioskListing } from './query/kiosk';
 import { DynamicFieldInfo } from '@mysten/sui.js/dist/types/dynamic_fields';
 import { bcs } from './bcs';
+import { KIOSK_TYPE, Kiosk, RulesEnvironmentParam } from './types';
 import {
-  KIOSK_TYPE,
-  Kiosk,
   MAINNET_RULES_PACKAGE_ADDRESS,
-  RulesEnvironmentParam,
   TESTNET_RULES_PACKAGE_ADDRESS,
-} from './types';
+} from './constants';
 
 /* A simple map to the rule package addresses */
 // TODO: Supply the mainnet and devnet addresses.
