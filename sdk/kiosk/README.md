@@ -172,11 +172,15 @@ import { TransactionBlock } from '@mysten/sui.js';
 const withdraw = async () => {
   const kiosk = 'SomeKioskId';
   const kioskCap = 'KioskCapObjectId';
+  const address = '0xSomeAddressThatReceivesTheFunds';
   const amount = '100000';
 
   const tx = new TransactionBlock();
 
   withdrawFromKiosk(tx, kiosk, kioskCap, amount);
+
+  // transfer the Coin to self or any other address.
+  tx.transferObjects([coin], tx.pure(address, 'address'));
 
   // ... continue to sign and execute the transaction
   // ...
