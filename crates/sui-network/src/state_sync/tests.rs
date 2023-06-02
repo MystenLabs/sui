@@ -453,6 +453,7 @@ async fn sync_with_checkpoints_watermark() {
     store_1
         .insert_checkpoint_contents(&checkpoint_1, contents_1.clone())
         .unwrap();
+    store_1.insert_certified_checkpoint(&checkpoint_1);
     handle_1.send_checkpoint(checkpoint_1.clone()).await;
 
     timeout(Duration::from_secs(3), async {
@@ -515,6 +516,7 @@ async fn sync_with_checkpoints_watermark() {
         store_1
             .insert_checkpoint_contents(&checkpoint, contents)
             .unwrap();
+        store_1.insert_certified_checkpoint(&checkpoint);
         handle_1.send_checkpoint(checkpoint).await;
     }
 
