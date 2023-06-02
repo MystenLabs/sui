@@ -224,13 +224,12 @@ impl<R: rand::RngCore + rand::CryptoRng> SwarmBuilder<R> {
                 .build()
         });
 
-        let validators = network_config
+        let mut nodes: HashMap<_, _> = network_config
             .validator_configs()
             .iter()
             .map(|config| (config.protocol_public_key(), Node::new(config.to_owned())))
             .collect();
 
-        let mut fullnodes = HashMap::new();
         let mut fullnode_config_builder = FullnodeConfigBuilder::new()
             .with_config_directory(dir.as_ref().into())
             .with_db_checkpoint_config(self.db_checkpoint_config.clone());
@@ -258,14 +257,13 @@ impl<R: rand::RngCore + rand::CryptoRng> SwarmBuilder<R> {
                     }
                 }
                 let config = builder.build(&mut OsRng, &network_config);
-                fullnodes.insert(config.protocol_public_key(), Node::new(config));
+                nodes.insert(config.protocol_public_key(), Node::new(config));
             });
         }
         Swarm {
             dir,
             network_config,
-            validators,
-            fullnodes,
+            nodes,
             fullnode_config_builder,
         }
     }
@@ -276,8 +274,7 @@ impl<R: rand::RngCore + rand::CryptoRng> SwarmBuilder<R> {
 pub struct Swarm {
     dir: SwarmDirectory,
     network_config: NetworkConfig,
-    validators: HashMap<AuthorityName, Node>,
-    fullnodes: HashMap<AuthorityName, Node>,
+    nodes: HashMap<AuthorityName, Node>,
     // Save a copy of the fullnode config builder to build future fullnodes.
     fullnode_config_builder: FullnodeConfigBuilder,
 }
@@ -289,18 +286,16 @@ impl Drop for Swarm {
 }
 
 impl Swarm {
+    fn nodes_iter_mut(&mut self) -> impl Iterator<Item = &mut Node> {
+        self.nodes.values_mut()
+    }
+
     /// Return a new Builder
     pub fn builder() -> SwarmBuilder {
         SwarmBuilder::new()
     }
 
-    fn nodes_iter_mut(&mut self) -> impl Iterator<Item = &mut Node> {
-        self.validators
-            .values_mut()
-            .chain(self.fullnodes.values_mut())
-    }
-
-    /// Start all of the Validators associated with this Swarm
+    /// Start all nodes associated with this Swarm
     pub async fn launch(&mut self) -> Result<()> {
         try_join_all(self.nodes_iter_mut().map(|node| node.start())).await?;
         tracing::info!("Successfully launched Swarm");
@@ -324,38 +319,53 @@ impl Swarm {
     }
 
     /// Return a mutable reference to this Swarm's `NetworkConfig`.
+    // TODO: It's not ideal to mutate network config. We should consider removing this.
     pub fn config_mut(&mut self) -> &mut NetworkConfig {
         &mut self.network_config
     }
 
-    /// Attempt to lookup and return a shared reference to the Validator with the provided `name`.
-    pub fn validator(&self, name: AuthorityName) -> Option<&Node> {
-        self.validators.get(&name)
+    pub fn all_nodes(&self) -> impl Iterator<Item = &Node> {
+        self.nodes.values()
     }
 
-    pub fn validator_mut(&mut self, name: AuthorityName) -> Option<&mut Node> {
-        self.validators.get_mut(&name)
+    pub fn node(&self, name: &AuthorityName) -> Option<&Node> {
+        self.nodes.get(name)
     }
 
-    /// Return an iterator over shared references of all Validators.
-    pub fn validators(&self) -> impl Iterator<Item = &Node> {
-        self.validators.values()
+    pub fn node_mut(&mut self, name: &AuthorityName) -> Option<&mut Node> {
+        self.nodes.get_mut(name)
+    }
+
+    /// Return an iterator over shared references of all nodes that are set up as validators.
+    /// This means that they have a consensus config. This however doesn't mean this validator is
+    /// currently active (i.e. it's not necessarily in the validator set at the moment).
+    pub fn validator_nodes(&self) -> impl Iterator<Item = &Node> {
+        self.nodes
+            .values()
+            .filter(|node| node.config.consensus_config.is_some())
     }
 
     pub fn validator_node_handles(&self) -> Vec<SuiNodeHandle> {
-        self.validators()
+        self.validator_nodes()
             .map(|node| node.get_node_handle().unwrap())
             .collect()
     }
 
-    /// Attempt to lookup and return a shared reference to the Fullnode with the provided `name`.
-    pub fn fullnode(&self, name: AuthorityName) -> Option<&Node> {
-        self.fullnodes.get(&name)
+    /// Returns an iterator over all currently active validators.
+    pub fn active_validators(&self) -> impl Iterator<Item = &Node> {
+        self.validator_nodes().filter(|node| {
+            node.get_node_handle().map_or(false, |handle| {
+                let state = handle.state();
+                state.is_validator(&state.epoch_store_for_testing())
+            })
+        })
     }
 
     /// Return an iterator over shared references of all Fullnodes.
     pub fn fullnodes(&self) -> impl Iterator<Item = &Node> {
-        self.fullnodes.values()
+        self.nodes
+            .values()
+            .filter(|node| node.config.consensus_config.is_none())
     }
 
     pub async fn spawn_new_fullnode(&mut self, config: NodeConfig) -> SuiNodeHandle {
@@ -363,7 +373,7 @@ impl Swarm {
         let node = Node::new(config);
         node.start().await.unwrap();
         let handle = node.get_node_handle().unwrap();
-        self.fullnodes.insert(name, node);
+        self.nodes.insert(name, node);
         handle
     }
 
@@ -433,7 +443,7 @@ mod test {
 
         swarm.launch().await.unwrap();
 
-        for validator in swarm.validators() {
+        for validator in swarm.validator_nodes() {
             validator.health_check(true).await.unwrap();
         }
 
