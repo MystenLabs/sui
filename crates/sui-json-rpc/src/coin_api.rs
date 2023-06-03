@@ -885,7 +885,7 @@ mod tests {
             let error_result = response.unwrap_err();
             let error_object: ErrorObjectOwned = error_result.into();
             assert!(error_object.code() == -32000);
-            assert!(error_object.message() == "Type error while binding function arguments: \"Unable to deserialize TreasuryCap object: RemainingInput\".");
+            assert!(error_object.message() == "Failure deserializing object in the requested format: \"Unable to deserialize TreasuryCap object: remaining input\"");
         }
     }
 }
