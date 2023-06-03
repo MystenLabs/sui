@@ -7,6 +7,7 @@ export * from './cryptography/keypair';
 export * from './cryptography/ed25519-publickey';
 export * from './cryptography/secp256k1-publickey';
 export * from './cryptography/secp256r1-publickey';
+export * from './cryptography/multisig';
 export * from './cryptography/publickey';
 export * from './cryptography/mnemonics';
 export * from './cryptography/signature';

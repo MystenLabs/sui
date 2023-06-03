@@ -53,6 +53,11 @@ export interface PublicKey {
    * Return the Sui address associated with this public key
    */
   toSuiAddress(): string;
+
+  /**
+   * Return signature scheme flag of the public key
+   */
+  flag(): number;
 }
 
 export function publicKeyFromSerialized(
