@@ -12,7 +12,7 @@ To extend and customize Kiosk functionality, Sui Kiosk also supports building ex
 A Sui Kiosk is a single, typically shared `Kiosk` object. Each `Kiosk` object has a owned capability, `KioskOwnerCap`, to manage it. The `Kiosk` object provides a rich base for building custom extensions, such as creating a marketplace for your digital assets, while maintaining strong security and protected ownership of your assets . 
 
 
-To see all of the properties supported in Sui Kiosk, see [Sui Kiosk] (https://github.com/MystenLabs/sui/edit/main/crates/sui-framework/docs/kiosk.md) in the Sui Framework documentation.
+To see all of the properties supported in Sui Kiosk, see [Sui Kiosk](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/docs/kiosk.md) in the Sui Framework documentation.
 
 ## Sui Kiosk design principles
 
