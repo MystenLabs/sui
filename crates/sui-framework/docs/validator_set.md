@@ -1242,9 +1242,9 @@ gas price, weighted by stake.
     <b>let</b> threshold = <a href="voting_power.md#0x3_voting_power_total_voting_power">voting_power::total_voting_power</a>() - <a href="voting_power.md#0x3_voting_power_quorum_threshold">voting_power::quorum_threshold</a>();
     <b>let</b> result = 0;
     <b>while</b> (sum &lt; threshold) {
-        <b>let</b> (gas_price, stake) = pq::pop_max(&<b>mut</b> pq);
+        <b>let</b> (gas_price, <a href="voting_power.md#0x3_voting_power">voting_power</a>) = pq::pop_max(&<b>mut</b> pq);
         result = gas_price;
-        sum = sum + stake;
+        sum = sum + <a href="voting_power.md#0x3_voting_power">voting_power</a>;
     };
     result
 }

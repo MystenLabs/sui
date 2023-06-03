@@ -20,7 +20,6 @@
 -  [Function `process_pending_stake`](#0x3_staking_pool_process_pending_stake)
 -  [Function `withdraw_rewards`](#0x3_staking_pool_withdraw_rewards)
 -  [Function `activate_staking_pool`](#0x3_staking_pool_activate_staking_pool)
--  [Function `request_withdraw_stake_preactive`](#0x3_staking_pool_request_withdraw_stake_preactive)
 -  [Function `deactivate_staking_pool`](#0x3_staking_pool_deactivate_staking_pool)
 -  [Function `sui_balance`](#0x3_staking_pool_sui_balance)
 -  [Function `pool_id`](#0x3_staking_pool_pool_id)
@@ -45,7 +44,6 @@
 <pre><code><b>use</b> <a href="">0x1::option</a>;
 <b>use</b> <a href="../../../.././build/Sui/docs/bag.md#0x2_bag">0x2::bag</a>;
 <b>use</b> <a href="../../../.././build/Sui/docs/balance.md#0x2_balance">0x2::balance</a>;
-<b>use</b> <a href="../../../.././build/Sui/docs/coin.md#0x2_coin">0x2::coin</a>;
 <b>use</b> <a href="../../../.././build/Sui/docs/math.md#0x2_math">0x2::math</a>;
 <b>use</b> <a href="../../../.././build/Sui/docs/object.md#0x2_object">0x2::object</a>;
 <b>use</b> <a href="../../../.././build/Sui/docs/sui.md#0x2_sui">0x2::sui</a>;
@@ -806,50 +804,6 @@ Called by <code><a href="validator.md#0x3_validator">validator</a></code> module
     <b>assert</b>!(!<a href="staking_pool.md#0x3_staking_pool_is_inactive">is_inactive</a>(pool), <a href="staking_pool.md#0x3_staking_pool_EActivationOfInactivePool">EActivationOfInactivePool</a>);
     // Fill in the active epoch.
     <a href="_fill">option::fill</a>(&<b>mut</b> pool.activation_epoch, activation_epoch);
-}
-</code></pre>
-
-
-
-</details>
-
-<a name="0x3_staking_pool_request_withdraw_stake_preactive"></a>
-
-## Function `request_withdraw_stake_preactive`
-
-Withdraw stake from a preactive staking pool.
-
-
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="staking_pool.md#0x3_staking_pool_request_withdraw_stake_preactive">request_withdraw_stake_preactive</a>(pool: &<b>mut</b> <a href="staking_pool.md#0x3_staking_pool_StakingPool">staking_pool::StakingPool</a>, staked_sui: <a href="staking_pool.md#0x3_staking_pool_StakedSui">staking_pool::StakedSui</a>, ctx: &<b>mut</b> <a href="../../../.././build/Sui/docs/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): u64
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="staking_pool.md#0x3_staking_pool_request_withdraw_stake_preactive">request_withdraw_stake_preactive</a>(
-    pool: &<b>mut</b> <a href="staking_pool.md#0x3_staking_pool_StakingPool">StakingPool</a>,
-    staked_sui: <a href="staking_pool.md#0x3_staking_pool_StakedSui">StakedSui</a>,
-    ctx: &<b>mut</b> TxContext
-) : u64 {
-    // Check that the stake information matches the pool.
-    <b>assert</b>!(staked_sui.pool_id == <a href="../../../.././build/Sui/docs/object.md#0x2_object_id">object::id</a>(pool), <a href="staking_pool.md#0x3_staking_pool_EWrongPool">EWrongPool</a>);
-
-    <b>assert</b>!(<a href="staking_pool.md#0x3_staking_pool_is_preactive">is_preactive</a>(pool), <a href="staking_pool.md#0x3_staking_pool_EPoolNotPreactive">EPoolNotPreactive</a>);
-
-    <b>let</b> staker = <a href="../../../.././build/Sui/docs/tx_context.md#0x2_tx_context_sender">tx_context::sender</a>(ctx);
-
-    <b>let</b> principal = <a href="staking_pool.md#0x3_staking_pool_unwrap_staked_sui">unwrap_staked_sui</a>(staked_sui);
-    <b>let</b> withdraw_amount = <a href="../../../.././build/Sui/docs/balance.md#0x2_balance_value">balance::value</a>(&principal);
-    // The exchange rate is always 1:1 for a preactive pool so we decrement the
-    // same amount for both sui_balance and pool_token_balance.
-    pool.sui_balance = pool.sui_balance - withdraw_amount;
-    pool.pool_token_balance = pool.pool_token_balance - withdraw_amount;
-
-    <a href="../../../.././build/Sui/docs/transfer.md#0x2_transfer_public_transfer">transfer::public_transfer</a>(<a href="../../../.././build/Sui/docs/coin.md#0x2_coin_from_balance">coin::from_balance</a>(principal, ctx), staker);
-    withdraw_amount
 }
 </code></pre>
 
