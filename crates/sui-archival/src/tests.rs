@@ -38,9 +38,9 @@ async fn write_new_checkpoints_to_store(
     num_checkpoints: usize,
     prev_checkpoint: Option<VerifiedCheckpoint>,
 ) -> anyhow::Result<Option<VerifiedCheckpoint>> {
-    let (ordered_checkpoints, _sequence_number_to_digest, _checkpoints) = test_state
+    let (ordered_checkpoints, _contents, _sequence_number_to_digest, _checkpoints) = test_state
         .committee
-        .make_checkpoints(num_checkpoints, prev_checkpoint.clone());
+        .make_empty_checkpoints(num_checkpoints, prev_checkpoint.clone());
     if prev_checkpoint.is_none() {
         store.inner_mut().insert_genesis_state(
             ordered_checkpoints.first().cloned().unwrap(),
