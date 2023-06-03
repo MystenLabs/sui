@@ -91,6 +91,7 @@ members = [
     "crates/sui-json-rpc-types",
     "crates/sui-keys",
     "crates/sui-macros",
+    "crates/sui-metric-checker",
     "crates/sui-move",
     "crates/sui-move-build",
     "crates/sui-network",
