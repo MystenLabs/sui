@@ -250,9 +250,7 @@ fn coin_index_table_default_config() -> DBOptions {
                 read_size_from_env(ENV_VAR_COIN_INDEX_BLOCK_CACHE_SIZE_MB).unwrap_or(5 * 1024),
             )
             .options,
-        rw_options: ReadWriteOptions {
-            ignore_range_deletions: true,
-        },
+        rw_options: ReadWriteOptions::default().set_ignore_range_deletions(true),
     }
 }
 
