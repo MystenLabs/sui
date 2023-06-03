@@ -501,6 +501,8 @@ where
         // new committee is in store before we verify newer checkpoints in next epoch.
         // This could happen before this validator's reconfiguration finishes, because
         // state sync does not reconfig.
+        // TODO: make CheckpointAggregator use WriteStore so we don't need to do this
+        // committee insertion in two places (only in `insert_checkpoint`).
         if let Some(EndOfEpochData {
             next_epoch_committee,
             ..
