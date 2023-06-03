@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::writer::ArchiveWriterV1;
-use crate::{read_manifest, FileCompression, EPOCH_DIR_PREFIX};
+use crate::{read_manifest, FileCompression, StorageFormat, EPOCH_DIR_PREFIX};
 use object_store::path::Path;
 use object_store::DynObjectStore;
 use prometheus::Registry;
@@ -72,6 +72,7 @@ async fn setup_checkpoint_writer(temp_dir: PathBuf) -> anyhow::Result<TestState>
         local_store_config.clone(),
         remote_store_config.clone(),
         FileCompression::Zstd,
+        StorageFormat::Blob,
         Duration::from_secs(10),
         20,
         &Registry::default(),
