@@ -158,14 +158,12 @@ impl Certifier {
                 parents
             };
 
-            // TODO: Remove timeout from this RPC once anemo issue #10 is resolved.
-            match client
-                .request_vote(RequestVoteRequest {
-                    header: header.clone(),
-                    parents,
-                })
-                .await
-            {
+            let request = anemo::Request::new(RequestVoteRequest {
+                header: header.clone(),
+                parents,
+            })
+            .with_timeout(Duration::from_secs(30));
+            match client.request_vote(request).await {
                 Ok(response) => {
                     let response = response.into_body();
                     if response.vote.is_some() {
