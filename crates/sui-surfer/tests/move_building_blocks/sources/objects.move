@@ -49,12 +49,19 @@ module move_building_blocks::objects {
         }
     }
 
-    public fun wrap_child(object: &mut Object, child: Child) {
-        unwrap_child(object);
+    public fun wrap_child(object: &mut Object, child: Child, ctx: &TxContext) {
+        unwrap_child(object, ctx);
         option::fill(&mut object.wrapped, child);
     }
 
-    public fun unwrap_child(object: &mut Object) {
+    public fun unwrap_child(object: &mut Object, ctx: &TxContext) {
+        if (option::is_some(&object.wrapped)) {
+            let old_child = option::extract(&mut object.wrapped);
+            transfer::transfer(old_child, tx_context::sender(ctx));
+        }
+    }
+
+    public fun unwrap_child_and_add_to_table(object: &mut Object) {
         if (option::is_some(&object.wrapped)) {
             let old_child = option::extract(&mut object.wrapped);
             let index = ((table::length(&object.table) + 1) as u8);
