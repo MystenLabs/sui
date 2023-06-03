@@ -167,43 +167,12 @@ pub fn missing_unwrapped_msg(id: &ObjectID) -> String {
 }
 
 /// Run the bytecode verifier with a meter limit
-/// This function only fails if the verification does not complete within the limit
+///
+/// This function only fails if the verification does not complete within the limit.  If the
+/// modules fail to verify but verification completes within the meter limit, the function
+/// succeeds.
 #[instrument(level = "trace", skip_all)]
 pub fn run_metered_move_bytecode_verifier(
-    module_bytes: &[Vec<u8>],
-    protocol_config: &ProtocolConfig,
-    metered_verifier_config: &VerifierConfig,
-    meter: &mut impl Meter,
-    metrics: &Arc<BytecodeVerifierMetrics>,
-) -> Result<(), SuiError> {
-    let modules_stat = module_bytes
-        .iter()
-        .map(|b| {
-            CompiledModule::deserialize_with_config(
-                b,
-                protocol_config.move_binary_format_version(),
-                protocol_config.no_extraneous_module_bytes(),
-            )
-            .map_err(|e| e.finish(move_binary_format::errors::Location::Undefined))
-        })
-        .collect::<move_binary_format::errors::VMResult<Vec<CompiledModule>>>();
-    let modules = if let Ok(m) = modules_stat {
-        m
-    } else {
-        // Although we failed, we dont care since it failed withing the timeout
-        return Ok(());
-    };
-
-    run_metered_move_bytecode_verifier_impl(
-        &modules,
-        protocol_config,
-        metered_verifier_config,
-        meter,
-        metrics,
-    )
-}
-
-pub fn run_metered_move_bytecode_verifier_impl(
     modules: &[CompiledModule],
     protocol_config: &ProtocolConfig,
     verifier_config: &VerifierConfig,

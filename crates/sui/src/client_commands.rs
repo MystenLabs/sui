@@ -24,7 +24,7 @@ use prettytable::{row, table};
 use prometheus::Registry;
 use serde::Serialize;
 use serde_json::{json, Value};
-use sui_adapter::adapter::{default_verifier_config, run_metered_move_bytecode_verifier_impl};
+use sui_adapter::adapter::{default_verifier_config, run_metered_move_bytecode_verifier};
 use sui_move::build::resolve_lock_file_path;
 use sui_protocol_config::ProtocolConfig;
 use sui_source_validation::{BytecodeSourceVerifier, SourceMode};
@@ -775,7 +775,7 @@ impl SuiClientCommands {
                 metered_verifier_config.max_per_mod_meter_units = None;
                 let mut meter = SuiVerifierMeter::new(&metered_verifier_config);
                 println!("Running bytecode verifier for {} modules", modules.len());
-                run_metered_move_bytecode_verifier_impl(
+                run_metered_move_bytecode_verifier(
                     &modules,
                     &protocol_config,
                     &metered_verifier_config,

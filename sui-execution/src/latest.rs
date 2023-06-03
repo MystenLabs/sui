@@ -6,40 +6,52 @@ use std::{
     sync::Arc,
 };
 
+use move_binary_format::CompiledModule;
+use move_vm_config::verifier::VerifierConfig;
 use sui_protocol_config::ProtocolConfig;
 use sui_types::{
     base_types::{ObjectRef, SuiAddress, TxContext},
     committee::EpochId,
     digests::TransactionDigest,
     effects::TransactionEffects,
-    error::{ExecutionError, SuiError},
+    error::{ExecutionError, SuiError, SuiResult},
     execution::{ExecutionState, TypeLayoutStore},
     execution_mode::{self, ExecutionResult},
     gas::SuiGasStatus,
-    metrics::LimitsMetrics,
+    metrics::{BytecodeVerifierMetrics, LimitsMetrics},
     temporary_store::{InnerTemporaryStore, TemporaryStore},
     transaction::{ProgrammableTransaction, TransactionKind},
     type_resolver::LayoutResolver,
 };
 
 use move_vm_runtime_latest::move_vm::MoveVM;
-use sui_adapter_latest::adapter::new_move_vm;
+use sui_adapter_latest::adapter::{
+    default_verifier_config, new_move_vm, run_metered_move_bytecode_verifier,
+};
 use sui_adapter_latest::execution_engine::execute_transaction_to_effects;
 use sui_adapter_latest::programmable_transactions;
 use sui_adapter_latest::type_layout_resolver::TypeLayoutResolver;
 use sui_move_natives_latest::all_natives;
+use sui_verifier_latest::meter::SuiVerifierMeter;
 
-use crate::executor::Executor;
+use crate::executor;
+use crate::verifier;
 
-pub(crate) struct VM(Arc<MoveVM>);
+pub(crate) struct Executor(Arc<MoveVM>);
 
-impl VM {
+pub(crate) struct Verifier<'m> {
+    config: VerifierConfig,
+    metrics: &'m Arc<BytecodeVerifierMetrics>,
+    meter: SuiVerifierMeter,
+}
+
+impl Executor {
     pub(crate) fn new(
         protocol_config: &ProtocolConfig,
         paranoid_type_checks: bool,
         silent: bool,
     ) -> Result<Self, SuiError> {
-        Ok(VM(Arc::new(new_move_vm(
+        Ok(Executor(Arc::new(new_move_vm(
             all_natives(silent),
             protocol_config,
             paranoid_type_checks,
@@ -47,7 +59,23 @@ impl VM {
     }
 }
 
-impl Executor for VM {
+impl<'m> Verifier<'m> {
+    pub(crate) fn new(
+        protocol_config: &ProtocolConfig,
+        is_metered: bool,
+        metrics: &'m Arc<BytecodeVerifierMetrics>,
+    ) -> Self {
+        let config = default_verifier_config(protocol_config, is_metered);
+        let meter = SuiVerifierMeter::new(&config);
+        Verifier {
+            config,
+            metrics,
+            meter,
+        }
+    }
+}
+
+impl executor::Executor for Executor {
     fn execute_transaction_to_effects(
         &self,
         protocol_config: &ProtocolConfig,
@@ -154,5 +182,21 @@ impl Executor for VM {
         store: Box<dyn TypeLayoutStore + 'store>,
     ) -> Box<dyn LayoutResolver + 'r> {
         Box::new(TypeLayoutResolver::new(&self.0, store))
+    }
+}
+
+impl<'m> verifier::Verifier for Verifier<'m> {
+    fn meter_compiled_modules(
+        &mut self,
+        protocol_config: &ProtocolConfig,
+        modules: &[CompiledModule],
+    ) -> SuiResult<()> {
+        run_metered_move_bytecode_verifier(
+            modules,
+            protocol_config,
+            &self.config,
+            &mut self.meter,
+            self.metrics,
+        )
     }
 }

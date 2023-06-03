@@ -9326,7 +9326,6 @@ dependencies = [
  "more-asserts",
  "move-binary-format",
  "move-bytecode-utils",
- "move-bytecode-verifier",
  "move-core-types",
  "move-package",
  "move-symbol-pool",
@@ -9358,7 +9357,6 @@ dependencies = [
  "serde_yaml",
  "shared-crypto",
  "signature 1.6.4",
- "sui-adapter-latest",
  "sui-config",
  "sui-execution",
  "sui-framework",
@@ -9373,7 +9371,6 @@ dependencies = [
  "sui-swarm-config",
  "sui-test-transaction-builder",
  "sui-types",
- "sui-verifier-latest",
  "tap",
  "telemetry-subscribers",
  "tempfile",
@@ -9488,8 +9485,10 @@ dependencies = [
 name = "sui-execution"
 version = "0.1.0"
 dependencies = [
+ "move-binary-format",
  "move-bytecode-utils",
  "move-core-types",
+ "move-vm-config",
  "move-vm-runtime",
  "sui-adapter-latest",
  "sui-move-natives-latest",
@@ -9576,11 +9575,18 @@ dependencies = [
 name = "sui-framework-tests"
 version = "0.1.0"
 dependencies = [
+ "move-bytecode-verifier",
  "move-cli",
  "move-package",
  "move-unit-test",
+ "prometheus",
+ "sui-adapter-latest",
+ "sui-framework",
  "sui-move",
  "sui-move-build",
+ "sui-protocol-config",
+ "sui-types",
+ "sui-verifier-latest",
  "workspace-hack",
 ]
 

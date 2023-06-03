@@ -53,11 +53,6 @@ telemetry-subscribers.workspace = true
 typed-store-derive.workspace = true
 typed-store.workspace = true
 
-# TODO use sui-execution versioned crate
-move-bytecode-verifier = { path = "../../external-crates/move/move-bytecode-verifier" }
-sui-adapter = { path = "../../sui-execution/latest/sui-adapter", package = "sui-adapter-latest" }
-sui-verifier = { path = "../../sui-execution/latest/sui-verifier", package = "sui-verifier-latest" }
-
 mysten-metrics = { path = "../mysten-metrics" }
 narwhal-config = { path = "../../narwhal/config" }
 narwhal-crypto = { path = "../../narwhal/crypto" }
