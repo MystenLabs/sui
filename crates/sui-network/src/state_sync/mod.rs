@@ -57,10 +57,11 @@ use std::{
 };
 use sui_config::p2p::StateSyncConfig;
 use sui_types::{
+    committee::Committee,
     digests::CheckpointDigest,
     messages_checkpoint::{
-        CertifiedCheckpointSummary as Checkpoint, CheckpointSequenceNumber, FullCheckpointContents,
-        VerifiedCheckpoint, VerifiedCheckpointContents,
+        CertifiedCheckpointSummary as Checkpoint, CheckpointSequenceNumber, EndOfEpochData,
+        FullCheckpointContents, VerifiedCheckpoint, VerifiedCheckpointContents,
     },
     storage::ReadStore,
     storage::WriteStore,
@@ -494,6 +495,24 @@ where
                         });
                 })
                 .collect::<Vec<_>>();
+        }
+
+        // If this is the last checkpoint of a epoch, we need to make sure
+        // new committee is in store before we verify newer checkpoints in next epoch.
+        // This could happen before this validator's reconfiguration finishes, because
+        // state sync does not reconfig.
+        // TODO: make CheckpointAggregator use WriteStore so we don't need to do this
+        // committee insertion in two places (only in `insert_checkpoint`).
+        if let Some(EndOfEpochData {
+            next_epoch_committee,
+            ..
+        }) = checkpoint.end_of_epoch_data.as_ref()
+        {
+            let next_committee = next_epoch_committee.iter().cloned().collect();
+            let committee = Committee::new(checkpoint.epoch().saturating_add(1), next_committee);
+            self.store
+                .insert_committee(committee)
+                .expect("store operation should not fail");
         }
 
         self.metrics
@@ -965,9 +984,9 @@ where
 
     if Some(*current.digest()) != checkpoint.previous_digest {
         debug!(
-            current_sequence_number = current.sequence_number(),
+            current_checkpoint_seq = current.sequence_number(),
             current_digest =% current.digest(),
-            checkpoint_sequence_number = checkpoint.sequence_number(),
+            checkpoint_seq = checkpoint.sequence_number(),
             checkpoint_digest =% checkpoint.digest(),
             checkpoint_previous_digest =? checkpoint.previous_digest,
             "checkpoint not on same chain"
@@ -979,8 +998,10 @@ where
     if checkpoint.epoch() != current_epoch && checkpoint.epoch() != current_epoch.saturating_add(1)
     {
         debug!(
-            current_epoch = current_epoch,
+            checkpoint_seq = checkpoint.sequence_number(),
             checkpoint_epoch = checkpoint.epoch(),
+            current_checkpoint_seq = current.sequence_number(),
+            current_epoch = current_epoch,
             "cannot verify checkpoint with too high of an epoch",
         );
         return Err(checkpoint);
@@ -990,6 +1011,10 @@ where
         && current.next_epoch_committee().is_none()
     {
         debug!(
+            checkpoint_seq = checkpoint.sequence_number(),
+            checkpoint_epoch = checkpoint.epoch(),
+            current_checkpoint_seq = current.sequence_number(),
+            current_epoch = current_epoch,
             "next checkpoint claims to be from the next epoch but the latest verified \
             checkpoint does not indicate that it is the last checkpoint of an epoch"
         );
@@ -999,7 +1024,13 @@ where
     let committee = store
         .get_committee(checkpoint.epoch())
         .expect("store operation should not fail")
-        .expect("BUG: should have a committee for an epoch before we try to verify checkpoints from an epoch");
+        .unwrap_or_else(|| {
+            panic!(
+                "BUG: should have committee for epoch {} before we try to verify checkpoint {}",
+                checkpoint.epoch(),
+                checkpoint.sequence_number()
+            )
+        });
 
     checkpoint.verify_signature(&committee).map_err(|e| {
         debug!("error verifying checkpoint: {e}");
