@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { ConnectButton, useWalletKit } from '@mysten/wallet-kit';
-import { formatAddress } from '@mysten/sui.js';
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 
@@ -21,11 +20,6 @@ export function SuiConnectButton() {
       style={{
         backgroundColor: '#101827',
       }}
-      className="mx-auto"
-      connectText={'Connect Wallet'}
-      connectedText={`Connected: ${formatAddress(
-        currentAccount?.address || '',
-      )}`}
     />
   );
 }
