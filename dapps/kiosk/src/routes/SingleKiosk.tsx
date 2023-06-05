@@ -1,3 +1,6 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 import { useNavigate, useParams } from 'react-router-dom';
 import { KioskItems } from '../components/Kiosk/KioskItems';
 import { useWalletKit } from '@mysten/wallet-kit';
