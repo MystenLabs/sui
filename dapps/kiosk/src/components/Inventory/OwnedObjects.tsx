@@ -1,37 +1,35 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useEffect, useState } from 'react';
-import {
-  PaginatedObjectsResponse,
-  TransactionBlock,
-  getObjectId,
-  getObjectType,
-} from '@mysten/sui.js';
+import { useState } from 'react';
+import { TransactionBlock } from '@mysten/sui.js';
 import { OwnedObject } from './OwnedObject';
-import { parseObjectDisplays } from '../../utils/utils';
 import { useTransactionExecution } from '../../hooks/useTransactionExecution';
 import { KioskItem, place, placeAndList } from '@mysten/kiosk';
 import { ListPrice } from '../Modals/ListPrice';
 import { Loading } from '../Base/Loading';
-import { useRpc } from '../../context/RpcClientContext';
 import { useOwnedKiosk } from '../../hooks/kiosk';
+import { useOwnedObjects } from '../../hooks/useOwnedObjects';
 
 export type OwnedObjectType = KioskItem & {
   display: Record<string, string>;
 };
 
 export function OwnedObjects({ address }: { address: string }): JSX.Element {
-  const provider = useRpc();
-
   const { data: ownedKiosk } = useOwnedKiosk();
   const kioskId = ownedKiosk?.kioskId;
   const kioskOwnerCap = ownedKiosk?.kioskCap;
 
-  const [loading, setLoading] = useState<boolean>(false);
-  const [ownedObjects, setOwnedObjects] = useState<OwnedObjectType[]>([]);
   const [modalItem, setModalItem] = useState<OwnedObjectType | null>(null);
   const { signAndExecute } = useTransactionExecution();
+
+  const {
+    data: ownedObjects,
+    isLoading,
+    refetch: getOwnedObjects,
+  } = useOwnedObjects({
+    address,
+  });
 
   const placeToKiosk = async (item: OwnedObjectType) => {
     if (!kioskId || !kioskOwnerCap) return;
@@ -53,42 +51,11 @@ export function OwnedObjects({ address }: { address: string }): JSX.Element {
     }
   };
 
-  const getOwnedObjects = async () => {
-    setLoading(true);
-    const { data }: PaginatedObjectsResponse = await provider
-      .getOwnedObjects({
-        owner: address,
-        options: {
-          showDisplay: true,
-          showType: true,
-        },
-      })
-      .finally(() => setLoading(false));
-
-    if (!data) return;
-
-    const displays = parseObjectDisplays(data);
-
-    // Simple mapping to OwnedObject style.
-    const items = data.map((item) => ({
-      display: displays[getObjectId(item)] || {},
-      type: getObjectType(item) || '',
-      isLocked: false,
-      objectId: getObjectId(item),
-    }));
-
-    setOwnedObjects(items);
-  };
-
-  useEffect(() => {
-    getOwnedObjects();
-  }, [address]);
-
-  if (loading) return <Loading />;
+  if (isLoading) return <Loading />;
 
   return (
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-5">
-      {ownedObjects.map((item) => (
+      {ownedObjects?.map((item) => (
         <OwnedObject
           key={item.objectId}
           object={item}
