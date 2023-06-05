@@ -1,3 +1,6 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 import { createKioskAndShare } from '@mysten/kiosk';
 import { TransactionBlock } from '@mysten/sui.js';
 import { useTransactionExecution } from '../../hooks/useTransactionExecution';
