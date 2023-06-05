@@ -199,8 +199,14 @@ impl<'a> Compiler<'a> {
         self
     }
 
-    pub fn add_visitor(mut self, pass: impl Into<Visitor>) {
-        self.visitors.push(pass.into())
+    pub fn add_visitor(mut self, pass: impl Into<Visitor>) -> Self {
+        self.visitors.push(pass.into());
+        self
+    }
+
+    pub fn add_visitors(mut self, passes: impl IntoIterator<Item = Visitor>) -> Self {
+        self.visitors.extend(passes);
+        self
     }
 
     pub fn run<const TARGET: Pass>(
