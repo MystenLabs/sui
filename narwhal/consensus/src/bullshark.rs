@@ -112,15 +112,15 @@ impl Bullshark {
         committee: &Committee,
         round: Round,
         dag: &'a Dag,
-    ) -> (Option<&'a Certificate>, Authority) {
+    ) -> (Authority, Option<&'a Certificate>) {
         // Note: this function is often called with even rounds only. While we do not aim at random selection
         // yet (see issue #10), repeated calls to this function should still pick from the whole roster of leaders.
         let leader = Self::leader_authority(committee, round);
 
         // Return its certificate and the certificate's digest.
         match dag.get(&round).and_then(|x| x.get(&leader.id())) {
-            None => (None, leader),
-            Some((_, certificate)) => (Some(certificate), leader),
+            None => (leader, None),
+            Some((_, certificate)) => (leader, Some(certificate)),
         }
     }
 
@@ -237,8 +237,8 @@ impl Bullshark {
 
         let (leader, leader_authority) =
             match Self::leader(&self.committee, leader_round, &state.dag) {
-                (Some(certificate), leader_authority) => (certificate, leader_authority),
-                (None, leader_authority) => {
+                (leader_authority, Some(certificate)) => (certificate, leader_authority),
+                (leader_authority, None) => {
                     self.last_leader_election = LastRound {
                         leader: Some(leader_authority),
                         leader_found: false,

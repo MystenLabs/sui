@@ -15,7 +15,7 @@ pub fn order_leaders<'a, LeaderElector>(
     get_leader: LeaderElector,
 ) -> Vec<Certificate>
 where
-    LeaderElector: Fn(&Committee, Round, &'a Dag) -> (Option<&'a Certificate>, Authority),
+    LeaderElector: Fn(&Committee, Round, &'a Dag) -> (Authority, Option<&'a Certificate>),
 {
     let mut to_commit = vec![leader.clone()];
     let mut leader = leader;
@@ -26,8 +26,8 @@ where
     {
         // Get the certificate proposed by the previous leader.
         let prev_leader = match get_leader(committee, r, &state.dag) {
-            (Some(x), _) => x,
-            (None, _) => continue,
+            (_authority, Some(x)) => x,
+            (_authority, None) => continue,
         };
 
         // Check whether there is a path between the last two leaders.
