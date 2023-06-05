@@ -586,7 +586,7 @@ impl KeyToolCommand {
                 let first_bigint = BigInt::from_bytes_be(Sign::Plus, first_half);
                 let second_bigint = BigInt::from_bytes_be(Sign::Plus, second_half);
 
-                let mut poseidon = PoseidonWrapper::new(4);
+                let mut poseidon = PoseidonWrapper::new();
                 let first = Bn254Fr::from_str(&first_bigint.to_string()).unwrap();
                 let second = Bn254Fr::from_str(&second_bigint.to_string()).unwrap();
                 let max_epoch = Bn254Fr::from_str(max_epoch.as_str()).unwrap();
@@ -594,7 +594,7 @@ impl KeyToolCommand {
                     "50683480294434968413708503290439057629605340925620961559740848568164438166",
                 )
                 .unwrap();
-                let hash = poseidon.hash(&[first, second, max_epoch, jwt_randomness]);
+                let hash = poseidon.hash(vec![first, second, max_epoch, jwt_randomness])?;
                 println!("Nonce: {:?}", hash.to_string());
             }
 

@@ -23,7 +23,7 @@ mod test {
     use sui_config::{AUTHORITIES_DB_NAME, SUI_KEYSTORE_FILENAME};
     use sui_core::authority::authority_store_tables::AuthorityPerpetualTables;
     use sui_core::authority::framework_injection;
-    use sui_core::checkpoints::CheckpointStore;
+    use sui_core::checkpoints::{CheckpointStore, CheckpointWatermark};
     use sui_framework::BuiltInFramework;
     use sui_macros::{register_fail_point_async, register_fail_points, sim_test};
     use sui_protocol_config::{ProtocolVersion, SupportedProtocolVersions};
@@ -250,6 +250,27 @@ mod test {
             handle_failpoint(dead_validator.clone(), keep_alive_nodes.clone(), 1.0);
         });
         test_simulated_load(TestInitData::new(&test_cluster).await, 120).await;
+    }
+
+    #[ignore]
+    #[sim_test(config = "test_config()")]
+    async fn test_simulated_load_checkpoint_pruning() {
+        let test_cluster = build_test_cluster(4, 1000).await;
+        test_simulated_load(TestInitData::new(&test_cluster).await, 30).await;
+
+        let swarm_dir = test_cluster.swarm.dir().join(AUTHORITIES_DB_NAME);
+        let random_validator_path = std::fs::read_dir(swarm_dir).unwrap().next().unwrap();
+        let validator_path = random_validator_path.unwrap().path();
+        let checkpoint_store =
+            CheckpointStore::open_readonly(&validator_path.join("live").join("checkpoints"));
+
+        let pruned = checkpoint_store
+            .watermarks
+            .get(&CheckpointWatermark::HighestPruned)
+            .unwrap()
+            .unwrap()
+            .0;
+        assert!(pruned > 0);
     }
 
     // TODO add this back once flakiness is resolved

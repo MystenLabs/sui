@@ -13,7 +13,7 @@ async fn basic_checkpoints_integration_test() {
         .make_transfer_sui_transaction(None, None)
         .await;
     let digest = *tx.digest();
-    test_cluster.execute_transaction(tx).await.unwrap();
+    test_cluster.execute_transaction(tx).await;
 
     for _ in 0..600 {
         let all_included = test_cluster

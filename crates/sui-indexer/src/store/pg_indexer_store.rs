@@ -45,7 +45,7 @@ use sui_types::object::ObjectRead;
 
 use crate::errors::{Context, IndexerError};
 use crate::metrics::IndexerMetrics;
-use crate::models::addresses::{ActiveAddress, Address, AddressStats};
+use crate::models::addresses::{ActiveAddress, Address, AddressStats, DBAddressStats};
 use crate::models::checkpoints::Checkpoint;
 use crate::models::epoch::DBEpochInfo;
 use crate::models::events::Event;
@@ -1729,6 +1729,37 @@ WHERE e1.epoch = e2.epoch
             )
             .as_str(),
         )
+    }
+
+    async fn get_all_epoch_address_stats(
+        &self,
+        descending_order: Option<bool>,
+    ) -> Result<Vec<AddressStats>, IndexerError> {
+        let is_descending = descending_order.unwrap_or_default();
+        let epoch_addr_stats_query = format!(
+            "WITH ranked_rows AS (
+                SELECT
+                  checkpoint, epoch, timestamp_ms, cumulative_addresses, cumulative_active_addresses, daily_active_addresses,
+                  row_number() OVER(PARTITION BY epoch ORDER BY checkpoint DESC) as row_num
+                FROM
+                  address_stats
+              )
+              SELECT 
+                checkpoint, epoch, timestamp_ms, cumulative_addresses, cumulative_active_addresses, daily_active_addresses
+              FROM ranked_rows
+              WHERE row_num = 1 ORDER BY epoch {}",
+              if is_descending { "DESC" } else { "ASC" },
+        );
+
+        let db_addr_stats = read_only_blocking!(&self.blocking_cp, |conn| diesel::sql_query(
+            epoch_addr_stats_query
+        )
+        .load::<DBAddressStats>(conn))
+        .context("Failed reading all epoch address stats from PostgresDB")?;
+        Ok(db_addr_stats
+            .into_iter()
+            .map(|db_addr_stats| db_addr_stats.into())
+            .collect())
     }
 }
 

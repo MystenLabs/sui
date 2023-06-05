@@ -53,10 +53,10 @@ const getKiosk = async () => {
 </details>
 
 <details>
-<summary>Purchasing an item (currently supports royalty rule deployed on testnet or no rules)</summary>
+<summary>Purchasing an item (currently supports royalty rule, kiosk_lock_rule, no rules, (combination works too))</summary>
 
 ```typescript
-import { fetchKiosk } from '@mysten/kiosk';
+import { queryTransferPolicy, purchaseAndResolvePolicies, place, testnetEnvironment } from '@mysten/kiosk';
 import { Connection, JsonRpcProvider } from '@mysten/sui.js';
 
 const provider = new JsonRpcProvider(
@@ -76,6 +76,9 @@ const item = {
     price: "20000000000" // in MIST
   }
 }
+const ownedKiosk = `0xMyKioskAddress`;
+const ownedKioskCap = `0xMyKioskOwnerCap`;
+
 const purchaseItem = async (item, kioskId) => {
 
   // fetch the policy of the item (could be an array, if there's more than one transfer policy)
@@ -85,14 +88,25 @@ const purchaseItem = async (item, kioskId) => {
   // initialize tx block.
   const tx = new TransactionBlock();
 
-  // Purchases the item. Right now it also resolves a royalty rule, if one exists.
-  // There will be some additional work to support further rules & custom ones soon.
-  const purchasedItem = purchaseAndResolvePolicies(tx, item.type, item.listing, kioskId, item.objectId, policy[0]);
+  // Both are required if you there is a `kiosk_lock_rule`.
+  // Optional otherwise. Function will throw an error if there's a kiosk_lock_rule and these are missing.
+  const extraParams = {
+    ownedKiosk,
+    ownedKioskCap
+  }
+  // Define the environment.
+  // To use a custom package address for rules, you could call:
+  // const environment = customEnvironment('<PackageAddress>');
+  const environment = testnetEnvironment;
 
-  // now we need to decide what to do with the item
-  // ... e.g. place() // places the item to the user's kiosk.
-  // (NOT YET SUPPORTED BUT WORTH MENTIONING if the item has the `kiosk_lock` rule, the resolver will place it in the kiosk automatically.
-  // For now, to support this rule, we need to manually resolve the `kiosk_lock` rule and place it in our owned kiosk.)
+  // Extra params. Optional, but required if the user tries to resolve a `kiosk_lock_rule`.
+  // Purchases the item. Supports `kiosk_lock_rule`, `royalty_rule` (accepts combination too).
+  const result = purchaseAndResolvePolicies(tx, item.type, item.listing.price, kioskId, item.objectId, policy[0], environment, extraParams);
+
+  // result = {item: <the_purchased_item>, canTransfer: true/false // depending on whether there was a kiosk lock rule }
+  // if the item didn't have a kiosk_lock_rule, we need to do something with it.
+  // for e..g place it in our own kiosk. (demonstrated below)
+  if(result.canTransfer) place(tx, item.type, ownedKiosk, ownedKioskCap , result.item);
 
   // ...finally, sign PTB & execute it.
 
@@ -158,11 +172,15 @@ import { TransactionBlock } from '@mysten/sui.js';
 const withdraw = async () => {
   const kiosk = 'SomeKioskId';
   const kioskCap = 'KioskCapObjectId';
+  const address = '0xSomeAddressThatReceivesTheFunds';
   const amount = '100000';
 
   const tx = new TransactionBlock();
 
   withdrawFromKiosk(tx, kiosk, kioskCap, amount);
+
+  // transfer the Coin to self or any other address.
+  tx.transferObjects([coin], tx.pure(address, 'address'));
 
   // ... continue to sign and execute the transaction
   // ...

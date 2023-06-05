@@ -47,7 +47,7 @@ ark-relations = { version = "0.4", features = ["std"] }
 ark-secp256r1 = { version = "0.4" }
 ark-serialize = { version = "0.4", features = ["derive", "std"] }
 ark-snark = { version = "0.4", default-features = false }
-ark-std = { version = "0.4", default-features = false, features = ["parallel"] }
+ark-std = { version = "0.4", features = ["parallel"] }
 arrayref = { version = "0.3", default-features = false }
 arrayvec-ca01ad9e24f5d932 = { package = "arrayvec", version = "0.7" }
 arrayvec-d8f496e17d97b5cb = { package = "arrayvec", version = "0.5", features = ["array-sizes-33-128"] }
@@ -205,8 +205,8 @@ event-listener = { version = "2", default-features = false }
 expect-test = { version = "1", default-features = false }
 eyre = { version = "0.6" }
 fail = { version = "0.4", default-features = false }
-fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "6d4da5715a15a47ff215c230f0edc48c2f34e065", features = ["copy_key"] }
-fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "6d4da5715a15a47ff215c230f0edc48c2f34e065", default-features = false }
+fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "c961a01596a87e76f590c7e43aca9d57106dbbb1", features = ["copy_key"] }
+fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "c961a01596a87e76f590c7e43aca9d57106dbbb1", default-features = false }
 fastrand = { version = "1", default-features = false }
 fd-lock = { version = "3", default-features = false }
 fdlimit = { version = "0.2", default-features = false }
@@ -315,7 +315,6 @@ libm = { version = "0.2" }
 librocksdb-sys = { version = "0.11", features = ["bzip2", "lz4", "snappy", "zlib", "zstd"] }
 libtest-mimic = { version = "0.5", default-features = false }
 libz-sys = { version = "1", default-features = false, features = ["static"] }
-light-poseidon = { version = "0.0.4", default-features = false }
 linked-hash-map = { version = "0.5", default-features = false }
 lock_api = { version = "0.4", default-features = false }
 log = { version = "0.4", default-features = false, features = ["serde", "std"] }
@@ -441,6 +440,7 @@ plotters-backend = { version = "0.3", default-features = false }
 plotters-svg = { version = "0.3", default-features = false }
 polyval = { version = "0.6", default-features = false }
 portable-atomic = { version = "0.3" }
+poseidon-ark = { git = "https://github.com/arnaucube/poseidon-ark.git", rev = "bf96de3b946e8b343c6b65412bae92f8d32251ad", default-features = false }
 ppv-lite86 = { version = "0.2", default-features = false, features = ["simd", "std"] }
 pq-sys = { version = "0.4", default-features = false }
 predicates = { version = "2" }
@@ -717,7 +717,7 @@ ark-secp256r1 = { version = "0.4" }
 ark-serialize = { version = "0.4", features = ["derive", "std"] }
 ark-serialize-derive = { version = "0.4", default-features = false }
 ark-snark = { version = "0.4", default-features = false }
-ark-std = { version = "0.4", default-features = false, features = ["parallel"] }
+ark-std = { version = "0.4", features = ["parallel"] }
 arrayref = { version = "0.3", default-features = false }
 arrayvec-ca01ad9e24f5d932 = { package = "arrayvec", version = "0.7" }
 arrayvec-d8f496e17d97b5cb = { package = "arrayvec", version = "0.5", features = ["array-sizes-33-128"] }
@@ -907,9 +907,9 @@ event-listener = { version = "2", default-features = false }
 expect-test = { version = "1", default-features = false }
 eyre = { version = "0.6" }
 fail = { version = "0.4", default-features = false }
-fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "6d4da5715a15a47ff215c230f0edc48c2f34e065", features = ["copy_key"] }
-fastcrypto-derive = { git = "https://github.com/MystenLabs/fastcrypto", rev = "6d4da5715a15a47ff215c230f0edc48c2f34e065", default-features = false }
-fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "6d4da5715a15a47ff215c230f0edc48c2f34e065", default-features = false }
+fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "c961a01596a87e76f590c7e43aca9d57106dbbb1", features = ["copy_key"] }
+fastcrypto-derive = { git = "https://github.com/MystenLabs/fastcrypto", rev = "c961a01596a87e76f590c7e43aca9d57106dbbb1", default-features = false }
+fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "c961a01596a87e76f590c7e43aca9d57106dbbb1", default-features = false }
 fastrand = { version = "1", default-features = false }
 fd-lock = { version = "3", default-features = false }
 fdlimit = { version = "0.2", default-features = false }
@@ -1031,7 +1031,6 @@ libm = { version = "0.2" }
 librocksdb-sys = { version = "0.11", features = ["bzip2", "lz4", "snappy", "zlib", "zstd"] }
 libtest-mimic = { version = "0.5", default-features = false }
 libz-sys = { version = "1", default-features = false, features = ["static"] }
-light-poseidon = { version = "0.0.4", default-features = false }
 linked-hash-map = { version = "0.5", default-features = false }
 lock_api = { version = "0.4", default-features = false }
 log = { version = "0.4", default-features = false, features = ["serde", "std"] }
@@ -1177,6 +1176,7 @@ plotters-backend = { version = "0.3", default-features = false }
 plotters-svg = { version = "0.3", default-features = false }
 polyval = { version = "0.6", default-features = false }
 portable-atomic = { version = "0.3" }
+poseidon-ark = { git = "https://github.com/arnaucube/poseidon-ark.git", rev = "bf96de3b946e8b343c6b65412bae92f8d32251ad", default-features = false }
 ppv-lite86 = { version = "0.2", default-features = false, features = ["simd", "std"] }
 pq-sys = { version = "0.4", default-features = false }
 predicates = { version = "2" }

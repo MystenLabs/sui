@@ -259,8 +259,7 @@ impl CertificateFetcher {
 
         self.targets.retain(|origin, target_round| {
             let last_written_round = written_rounds.get(origin).map_or(gc_round, |rounds| {
-                // TODO: switch to last() after it stabilizes for BTreeSet.
-                rounds.iter().rev().next().unwrap_or(&gc_round).to_owned()
+                rounds.last().unwrap_or(&gc_round).to_owned()
             });
             // Drop sync target when cert store already has an equal or higher round for the origin.
             // This applies GC to targets as well.
@@ -362,7 +361,6 @@ async fn fetch_certificates_helper(
     let fetch_timeout = PARALLEL_FETCH_REQUEST_INTERVAL_SECS * peers.len().try_into().unwrap()
         + PARALLEL_FETCH_REQUEST_ADDITIONAL_TIMEOUT;
     let fetch_callback = async move {
-        // TODO: shuffle by stake weight instead.
         debug!("Starting to fetch certificates");
         let mut fut = FuturesUnordered::new();
         // Loop until one peer returns with certificates, or no peer does.

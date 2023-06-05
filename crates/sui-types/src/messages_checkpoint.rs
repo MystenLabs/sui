@@ -2,13 +2,16 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::accumulator::Accumulator;
-use crate::base_types::{ExecutionData, ExecutionDigests, VerifiedExecutionData};
+use crate::base_types::{
+    random_object_ref, ExecutionData, ExecutionDigests, VerifiedExecutionData,
+};
 use crate::committee::{EpochId, ProtocolVersion, StakeUnit};
 use crate::crypto::{
-    default_hash, AggregateAuthoritySignature, AuthoritySignInfo, AuthorityStrongQuorumSignInfo,
+    default_hash, get_key_pair, AccountKeyPair, AggregateAuthoritySignature, AuthoritySignInfo,
+    AuthorityStrongQuorumSignInfo,
 };
 use crate::digests::Digest;
-use crate::effects::TransactionEffectsAPI;
+use crate::effects::{TransactionEffects, TransactionEffectsAPI};
 use crate::error::SuiResult;
 use crate::gas::GasCostSummary;
 use crate::message_envelope::{Envelope, Message, TrustedEnvelope, VerifiedEnvelope};
@@ -17,6 +20,7 @@ use crate::storage::ReadStore;
 use crate::sui_serde::AsProtocolVersion;
 use crate::sui_serde::BigInt;
 use crate::sui_serde::Readable;
+use crate::transaction::{Transaction, TransactionData};
 use crate::{base_types::AuthorityName, committee::Committee, error::SuiError};
 use anyhow::Result;
 use fastcrypto::hash::MultisetHash;
@@ -24,7 +28,7 @@ use once_cell::sync::OnceCell;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
-use shared_crypto::intent::IntentScope;
+use shared_crypto::intent::{Intent, IntentScope};
 use std::fmt::{Debug, Display, Formatter};
 use std::slice::Iter;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -515,6 +519,28 @@ impl FullCheckpointContents {
     pub fn size(&self) -> usize {
         self.transactions.len()
     }
+
+    pub fn random_for_testing() -> Self {
+        let (a, key): (_, AccountKeyPair) = get_key_pair();
+        let transaction = Transaction::from_data_and_signer(
+            TransactionData::new_transfer(
+                a,
+                random_object_ref(),
+                a,
+                random_object_ref(),
+                100000000000,
+                100,
+            ),
+            Intent::sui_transaction(),
+            vec![&key],
+        );
+        let effects = TransactionEffects::new_with_tx(&transaction);
+        let exe_data = ExecutionData {
+            transaction,
+            effects,
+        };
+        FullCheckpointContents::new_with_causally_ordered_transactions(vec![exe_data].into_iter())
+    }
 }
 
 impl IntoIterator for FullCheckpointContents {
@@ -560,6 +586,18 @@ impl VerifiedCheckpointContents {
                 .collect(),
             user_signatures: self.user_signatures,
         }
+    }
+
+    pub fn into_checkpoint_contents(self) -> CheckpointContents {
+        self.into_inner().into_checkpoint_contents()
+    }
+
+    pub fn into_checkpoint_contents_digest(self) -> CheckpointContentsDigest {
+        *self.into_inner().into_checkpoint_contents().digest()
+    }
+
+    pub fn num_of_transactions(&self) -> usize {
+        self.transactions.len()
     }
 }
 

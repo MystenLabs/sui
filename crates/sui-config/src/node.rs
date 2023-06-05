@@ -447,6 +447,9 @@ pub struct AuthorityStorePruningConfig {
     /// That ensures that all sst files eventually go through the compaction process
     #[serde(skip_serializing_if = "Option::is_none")]
     pub periodic_compaction_threshold_days: Option<usize>,
+    /// number of epochs to keep the latest version of transactions and effects for
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub num_epochs_to_retain_for_checkpoints: Option<u64>,
 }
 
 impl Default for AuthorityStorePruningConfig {
@@ -463,6 +466,7 @@ impl Default for AuthorityStorePruningConfig {
             max_transactions_in_batch: 1000,
             use_range_deletion: true,
             periodic_compaction_threshold_days: None,
+            num_epochs_to_retain_for_checkpoints: None,
         }
     }
 }
@@ -481,6 +485,7 @@ impl AuthorityStorePruningConfig {
             max_transactions_in_batch: 1000,
             use_range_deletion: true,
             periodic_compaction_threshold_days: None,
+            num_epochs_to_retain_for_checkpoints: None,
         }
     }
     pub fn fullnode_config() -> Self {
@@ -496,6 +501,7 @@ impl AuthorityStorePruningConfig {
             max_transactions_in_batch: 1000,
             use_range_deletion: true,
             periodic_compaction_threshold_days: None,
+            num_epochs_to_retain_for_checkpoints: None,
         }
     }
 }

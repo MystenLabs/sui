@@ -2,7 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useResolveSuiNSName } from '@mysten/core';
-import { Account24, ArrowUpRight12, Domain24, Version24 } from '@mysten/icons';
+import {
+    Account24,
+    ArrowUpRight12,
+    Domain24,
+    Version24,
+    CopyArchiveDoNotUse24,
+} from '@mysten/icons';
 import { formatAddress } from '@mysten/sui.js';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -16,7 +22,7 @@ import { Button } from '_app/shared/ButtonUI';
 import { lockWallet } from '_app/wallet/actions';
 import { useNextMenuUrl } from '_components/menu/hooks';
 import { useAppDispatch, useAppSelector } from '_hooks';
-import { ToS_LINK } from '_src/shared/constants';
+import { ToS_LINK, FAQ_LINK } from '_src/shared/constants';
 import { useActiveAddress } from '_src/ui/app/hooks/useActiveAddress';
 import { useAutoLockInterval } from '_src/ui/app/hooks/useAutoLockInterval';
 import { logout } from '_src/ui/app/redux/slices/account';
@@ -69,6 +75,16 @@ function MenuList() {
                                 <LoadingIndicator />
                             )
                         }
+                    />
+                    <MenuListItem
+                        icon={<CopyArchiveDoNotUse24 />}
+                        title={
+                            <div className="flex gap-1.5 items-center">
+                                FAQ
+                                <ArrowUpRight12 className="text-steel w-3 h-3" />
+                            </div>
+                        }
+                        href={FAQ_LINK}
                     />
                 </div>
                 <div className="flex flex-col items-stretch mt-2.5">

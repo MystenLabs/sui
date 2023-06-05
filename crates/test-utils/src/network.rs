@@ -14,11 +14,10 @@ use rand::{distributions::*, rngs::OsRng, seq::SliceRandom};
 use sui_config::node::DBCheckpointConfig;
 use sui_config::{Config, SUI_CLIENT_CONFIG, SUI_NETWORK_CONFIG};
 use sui_config::{NodeConfig, PersistedConfig, SUI_KEYSTORE_FILENAME};
-use sui_json_rpc_types::{SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions};
+use sui_json_rpc_types::SuiTransactionBlockResponse;
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_node::SuiNodeHandle;
 use sui_protocol_config::{ProtocolVersion, SupportedProtocolVersions};
-use sui_sdk::error::SuiRpcResult;
 use sui_sdk::sui_client_config::{SuiClientConfig, SuiEnv};
 use sui_sdk::wallet_context::WalletContext;
 use sui_sdk::{SuiClient, SuiClientBuilder};
@@ -329,19 +328,13 @@ impl TestCluster {
         }
     }
 
+    /// Execute a transaction on the network and wait for it to be executed on the rpc fullnode.
+    /// Also expects the effects status to be ExecutionStatus::Success.
     pub async fn execute_transaction(
         &self,
-        transaction: VerifiedTransaction,
-    ) -> SuiRpcResult<SuiTransactionBlockResponse> {
-        self.fullnode_handle
-            .sui_client
-            .quorum_driver_api()
-            .execute_transaction_block(
-                transaction,
-                SuiTransactionBlockResponseOptions::new().with_effects(),
-                None,
-            )
-            .await
+        tx: VerifiedTransaction,
+    ) -> SuiTransactionBlockResponse {
+        self.wallet.execute_transaction_must_succeed(tx).await
     }
 
     #[cfg(msim)]

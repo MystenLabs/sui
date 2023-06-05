@@ -125,10 +125,12 @@ async fn test_hash_collections() {
 #[sim_test(check_determinism)]
 async fn test_net_determinism() {
     let mut test_cluster = TestClusterBuilder::new().build().await.unwrap();
-    let context = &mut test_cluster.wallet;
 
-    let txn = context.make_transfer_sui_transaction(None, None).await;
-    let digest = context.execute_transaction_block(txn).await.unwrap().digest;
+    let txn = test_cluster
+        .wallet
+        .make_transfer_sui_transaction(None, None)
+        .await;
+    let digest = test_cluster.execute_transaction(txn).await.digest;
 
     sleep(Duration::from_millis(1000)).await;
 

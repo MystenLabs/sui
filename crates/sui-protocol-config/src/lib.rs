@@ -39,7 +39,7 @@ const MAX_PROTOCOL_VERSION: u64 = 12;
 // Version 11: Introduce `std::type_name::get_with_original_ids` to the system frameworks. Bound max depth of values within the VM.
 // Version 12: Changes to deepbook in framework to add API for querying marketplace.
 //             Change NW Batch to use versioned metadata field.
-//             Changes to sui-system package to add PTB-friendly unstake function.
+//             Changes to sui-system package to add PTB-friendly unstake function, and minor cleanup.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -1178,6 +1178,9 @@ impl ProtocolConfig {
                 cfg.feature_flags.narwhal_versioned_metadata = true;
                 if chain != Chain::Mainnet {
                     cfg.feature_flags.commit_root_state_digest = true;
+                }
+
+                if chain != Chain::Mainnet && chain != Chain::Testnet {
                     cfg.feature_flags.zklogin_auth = true;
                 }
                 cfg
