@@ -18,9 +18,14 @@ use super::{self_transfer::SelfTransferAnalysis, share_owned::ShareOwnedAnalysis
 
 fn has_no_lint_attr(env: &GlobalEnv, attributes: &[Attribute]) -> bool {
     attributes.iter().any(|attr| {
-        if let Attribute::Apply(_, s, _) = attr {
-            if s.display(env.symbol_pool()).to_string() == "no_lint" {
-                return true;
+        if let Attribute::Apply(_, sym, allow_attributes) = attr {
+            if sym.display(env.symbol_pool()).to_string() == "allow" && allow_attributes.len() == 1
+            {
+                if let Attribute::Apply(_, attr_sym, _) = allow_attributes[0] {
+                    if attr_sym.display(env.symbol_pool()).to_string() == "all" {
+                        return true;
+                    }
+                }
             }
         }
         false

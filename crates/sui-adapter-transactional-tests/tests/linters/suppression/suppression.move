@@ -4,7 +4,7 @@
 //# init --addresses test=0x0
 
 //# lint
-#[no_lint]
+#[allow(all)]
 module test::module_level {
     struct UnusedType has drop {}
 
@@ -13,12 +13,12 @@ module test::module_level {
 
 //# lint
 module test::struct_level {
-    #[no_lint]
+    #[allow(all)]
     struct UnusedType has drop {}
 }
 
 //# lint
 module test::function_level {
-    #[no_lint]
+    #[allow(all)]
     fun unused_private() {}
 }
