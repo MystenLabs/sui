@@ -1,9 +1,9 @@
 [package]
-name = "Math"
+name = "Crypto"
 version = "0.0.1"
 
 [dependencies]
 Sui = { local = "../../../crates/sui-framework/packages/sui-framework" }
 
 [addresses]
-math = "0x0"
+crypto = "0x0"

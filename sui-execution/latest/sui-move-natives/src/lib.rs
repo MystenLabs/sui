@@ -33,6 +33,7 @@ use self::{
     types::TypesIsOneTimeWitnessCostParams,
     validator::ValidatorValidateMetadataBcsCostParams,
 };
+use crate::crypto::group_ops;
 use crate::crypto::zklogin;
 use crate::crypto::zklogin::{CheckZkloginIdCostParams, CheckZkloginIssuerCostParams};
 use better_any::{Tid, TidAble};
@@ -598,6 +599,46 @@ pub fn all_natives(silent: bool) -> NativeFunctionTable {
         ),
         ("hmac", "hmac_sha3_256", make_native!(hmac::hmac_sha3_256)),
         ("hash", "keccak256", make_native!(hash::keccak256)),
+        (
+            "group_ops",
+            "internal_validate",
+            make_native!(group_ops::internal_validate),
+        ),
+        (
+            "group_ops",
+            "internal_add",
+            make_native!(group_ops::internal_add),
+        ),
+        (
+            "group_ops",
+            "internal_sub",
+            make_native!(group_ops::internal_sub),
+        ),
+        (
+            "group_ops",
+            "internal_mul",
+            make_native!(group_ops::internal_mul),
+        ),
+        (
+            "group_ops",
+            "internal_div",
+            make_native!(group_ops::internal_div),
+        ),
+        (
+            "group_ops",
+            "internal_hash_to",
+            make_native!(group_ops::internal_hash_to),
+        ),
+        (
+            "group_ops",
+            "internal_multi_scalar_mul",
+            make_native!(group_ops::internal_multi_scalar_mul),
+        ),
+        (
+            "group_ops",
+            "internal_pairing",
+            make_native!(group_ops::internal_pairing),
+        ),
         ("object", "delete_impl", make_native!(object::delete_impl)),
         ("object", "borrow_uid", make_native!(object::borrow_uid)),
         (
