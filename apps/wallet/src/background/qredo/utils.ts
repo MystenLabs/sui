@@ -46,6 +46,7 @@ export function validateInputOrThrow(input: QredoConnectInput) {
         service,
         apiUrl: apiUrl.toString(),
         token,
+        organization: trimString(input.organization),
     };
 }
 
@@ -61,6 +62,7 @@ export function toUIQredoPendingRequest(
         origin: stored.origin,
         originFavIcon: stored.originFavIcon,
         partialToken: `…${stored.token.slice(-UI_TOKEN_MAX_LENGTH)}`,
+        organization: stored.organization || '',
     };
 }
 
@@ -73,6 +75,7 @@ export function isSameQredoConnection<T1 extends QredoConnectIdentity | string>(
         (typeof a === 'object' &&
             a.apiUrl === b.apiUrl &&
             a.origin === b.origin &&
-            a.service === b.service)
+            a.service === b.service &&
+            a.organization === b.organization)
     );
 }
