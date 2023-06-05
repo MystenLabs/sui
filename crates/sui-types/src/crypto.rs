@@ -593,25 +593,58 @@ where
 }
 
 // TODO: C-GETTER
+/// Get <SuiAddress, KeyPair> from a `bytes` object that includes the concatenation of a private and
+/// public key. Note that the logic behind this function derives the public key from the private key
+/// and compares against the public key input bytes. If a keypair from the bytes of a private key
+/// only is requires, please use `get_key_pair_from_priv_key_bytes`.
 pub fn get_key_pair_from_bytes<KP: KeypairTraits>(bytes: &[u8]) -> SuiResult<(SuiAddress, KP)>
 where
     <KP as KeypairTraits>::PubKey: SuiPublicKey,
 {
     let priv_length = <KP as KeypairTraits>::PrivKey::LENGTH;
     let pub_key_length = <KP as KeypairTraits>::PubKey::LENGTH;
+    // Check that the input bytes have the correct length.
     if bytes.len() != priv_length + pub_key_length {
         return Err(SuiError::KeyConversionError(format!(
-            "Invalid input byte length, expected {}: {}",
-            priv_length,
+            "Invalid input byte length (note: the input bytes should be the concatenation of private \
+            and public key bytes), expected {}: {}",
+            priv_length + pub_key_length,
             bytes.len()
         )));
     }
+    // Construct a keypair from the private key bytes.
     let sk = <KP as KeypairTraits>::PrivKey::from_bytes(
         bytes
             .get(..priv_length)
             .ok_or(SuiError::InvalidPrivateKey)?,
     )
     .map_err(|_| SuiError::InvalidPrivateKey)?;
+    // Sanity check: compare the derived public key against the input public key bytes. This is
+    // important, to avoid the Double Public Key Signing Function Oracle Attack (i.e., for Ed25519
+    // keys see https://github.com/MystenLabs/ed25519-unsafe-libs).
+    let kp: KP = sk.into();
+    assert_eq!(kp.public().as_ref(), &bytes[priv_length..]);
+    Ok((kp.public().into(), kp))
+}
+
+// TODO: C-GETTER
+/// Get <SuiAddress, KeyPair> from a private key's `bytes`.
+pub fn get_key_pair_from_private_key_bytes<KP: KeypairTraits>(
+    bytes: &[u8],
+) -> SuiResult<(SuiAddress, KP)>
+where
+    <KP as KeypairTraits>::PubKey: SuiPublicKey,
+{
+    let priv_length = <KP as KeypairTraits>::PrivKey::LENGTH;
+    if bytes.len() != priv_length {
+        return Err(SuiError::KeyConversionError(format!(
+            "Invalid input byte length, expected {}: {}",
+            priv_length,
+            bytes.len()
+        )));
+    }
+    let sk = <KP as KeypairTraits>::PrivKey::from_bytes(bytes)
+        .map_err(|_| SuiError::InvalidPrivateKey)?;
     let kp: KP = sk.into();
     Ok((kp.public().into(), kp))
 }
