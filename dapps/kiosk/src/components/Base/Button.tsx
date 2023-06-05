@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { Spinner } from './Spinner';
+import classNames from 'classnames';
 
 export function Button({
   children,
@@ -16,7 +17,14 @@ export function Button({
   onClick: () => Promise<void> | void;
 }): JSX.Element {
   return (
-    <button className={className} onClick={onClick} {...props}>
+    <button
+      className={classNames(
+        'ease-in-out duration-300 rounded border border-transparent py-2 px-4 bg-gray-200',
+        className,
+      )}
+      onClick={onClick}
+      {...props}
+    >
       {loading ? <Spinner /> : children}
     </button>
   );

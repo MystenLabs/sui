@@ -36,7 +36,7 @@ export function KioskItem({
           {listing && purchaseFn && (
             <Button
               loading={mutation.isLoading}
-              className="btn-outline-primary md:col-span-2"
+              className="ease-in-out duration-300 rounded py-2 px-4 btn-outline-primary md:col-span-2"
               onClick={() =>
                 mutation.mutate({
                   fn: purchaseFn,
@@ -56,6 +56,7 @@ export function KioskItem({
         {!listing && !isGuest && (
           <>
             <Button
+              className="ease-in-out duration-300 rounded border border-transparent py-2 px-4 bg-gray-200"
               loading={mutation.isLoading}
               onClick={() => mutation.mutate({ fn: takeFn, object: item })}
             >
@@ -64,7 +65,7 @@ export function KioskItem({
 
             <Button
               loading={mutation.isLoading}
-              className="btn-outline-primary"
+              className="ease-in-out duration-300 rounded py-2 px-4 btn-outline-primary"
               onClick={() => mutation.mutate({ fn: listFn, object: item })}
             >
               List for Sale
@@ -74,7 +75,7 @@ export function KioskItem({
         {listing && !isGuest && (
           <Button
             loading={mutation.isLoading}
-            className="btn-outline-primary md:col-span-2"
+            className="ease-in-out duration-300 rounded py-2 px-4 btn-outline-primary md:col-span-2"
             onClick={() => mutation.mutate({ fn: delistFn, object: item })}
           >
             Delist item

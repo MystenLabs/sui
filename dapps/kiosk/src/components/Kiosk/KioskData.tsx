@@ -13,6 +13,9 @@ import { useTransactionExecution } from '../../hooks/useTransactionExecution';
 import { toast } from 'react-hot-toast';
 import { useKioskDetails, useOwnedKiosk } from '../../hooks/kiosk';
 import { Loading } from '../Base/Loading';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { TANSTACK_KIOSK_DATA_KEY } from '../../utils/constants';
+import { Button } from '../Base/Button';
 
 export function KioskData() {
   const { currentAccount } = useWalletKit();
@@ -24,6 +27,7 @@ export function KioskData() {
 
   const { data: kiosk, isLoading } = useKioskDetails(kioskId);
 
+  const queryClient = useQueryClient();
   const withdrawProfits = async () => {
     if (!kiosk || !kioskId || !kioskOwnerCap || !currentAccount?.address)
       return;
@@ -35,8 +39,15 @@ export function KioskData() {
 
     const success = await signAndExecute({ tx });
 
-    if (success) toast.success('Profits withdrawn successfully');
+    if (success) {
+      toast.success('Profits withdrawn successfully');
+      // invalidate query to refetch kiosk data and update the balance.
+      queryClient.invalidateQueries([TANSTACK_KIOSK_DATA_KEY, kioskId]);
+    }
   };
+  const mutation = useMutation({
+    mutationFn: withdrawProfits,
+  });
 
   const profits = formatSui(mistToSui(kiosk?.profits));
 
@@ -67,12 +78,13 @@ export function KioskData() {
             <div className="mt-2">
               Profits: {profits} SUI
               {Number(kiosk.profits) > 0 && (
-                <button
-                  className="text-xs !py-1 ml-3"
-                  onClick={withdrawProfits}
+                <Button
+                  loading={mutation.isLoading}
+                  className=" ease-in-out duration-300 rounded border border-transparent px-4 bg-gray-200 text-xs !py-1 ml-3"
+                  onClick={() => mutation.mutate()}
                 >
                   Withdraw all
-                </button>
+                </Button>
               )}
             </div>
             <div className="mt-2">

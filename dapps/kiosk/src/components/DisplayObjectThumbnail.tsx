@@ -14,7 +14,7 @@ export function DisplayObjectThumbnail({ item }: { item: OwnedObjectType }) {
         ></img>
       </div>
       <div>
-        <label>Selected Item</label>
+        <label className="font-medium mb-1 block text-sm">Selected Item</label>
         <p>Name: {item.display.name}</p>
         <p>Description: {item.display.description}</p>
       </div>

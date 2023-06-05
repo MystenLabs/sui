@@ -33,7 +33,7 @@ export function ListPrice({
           <DisplayObjectThumbnail item={item}></DisplayObjectThumbnail>
         </div>
         <div>
-          <label>
+          <label className="font-medium mb-1 block text-sm">
             Listing price (in MIST) ({Number(price) / Number(MIST_PER_SUI)} SUI)
           </label>
           <input
@@ -47,7 +47,7 @@ export function ListPrice({
         <div className="mt-6">
           <Button
             loading={loading}
-            className="btn-primary w-full"
+            className="ease-in-out duration-300 rounded py-2 px-4 bg-primary text-white hover:opacity-70 w-full"
             onClick={list}
           >
             List Item

@@ -12,12 +12,15 @@ export function Header(): JSX.Element {
     <div className="border-b border-gray-400">
       <div className="md:flex items-center gap-2 container py-4 ">
         <button
-          className="text-lg font-bold text-center mr-3 bg-transparent"
+          className="text-lg font-bold text-center mr-3 bg-transparent ease-in-out duration-300 rounded border border-transparent py-2 px-4 bg-gray-200"
           onClick={() => navigate('/')}
         >
           Kiosk demo
         </button>
-        <button className="mr-2 bg-transparent" onClick={() => navigate('/')}>
+        <button
+          className="mr-2 bg-transparent ease-in-out duration-300 rounded border border-transparent py-2 px-4 "
+          onClick={() => navigate('/')}
+        >
           <svg
             xmlns="http://www.w3.org/2000/svg"
             width="22"
