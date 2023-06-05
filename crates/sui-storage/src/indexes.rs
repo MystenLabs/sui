@@ -35,7 +35,7 @@ use sui_types::temporary_store::TxCoins;
 use tokio::task::spawn_blocking;
 use tracing::{debug, trace};
 use typed_store::rocks::{
-    default_db_options, read_size_from_env, DBBatch, DBMap, DBOptions, MetricConf, ReadWriteOptions,
+    default_db_options, read_size_from_env, DBBatch, DBMap, DBOptions, MetricConf,
 };
 use typed_store::traits::Map;
 use typed_store::traits::{TableSummary, TypedStoreDebug};
@@ -243,15 +243,11 @@ fn index_table_default_config() -> DBOptions {
     default_db_options()
 }
 fn coin_index_table_default_config() -> DBOptions {
-    DBOptions {
-        options: default_db_options()
-            .optimize_for_write_throughput()
-            .optimize_for_read(
-                read_size_from_env(ENV_VAR_COIN_INDEX_BLOCK_CACHE_SIZE_MB).unwrap_or(5 * 1024),
-            )
-            .options,
-        rw_options: ReadWriteOptions::default().set_ignore_range_deletions(true),
-    }
+    default_db_options()
+        .optimize_for_write_throughput()
+        .optimize_for_read(
+            read_size_from_env(ENV_VAR_COIN_INDEX_BLOCK_CACHE_SIZE_MB).unwrap_or(5 * 1024),
+        )
 }
 
 impl IndexStore {

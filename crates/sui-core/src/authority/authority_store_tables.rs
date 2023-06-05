@@ -546,21 +546,19 @@ impl Iterator for LiveSetIter<'_> {
 
 // These functions are used to initialize the DB tables
 fn owned_object_transaction_locks_table_default_config() -> DBOptions {
-    default_db_options()
-        .optimize_for_write_throughput()
-        .optimize_for_read(read_size_from_env(ENV_VAR_LOCKS_BLOCK_CACHE_SIZE).unwrap_or(1024))
-}
-
-fn objects_table_default_config() -> DBOptions {
     DBOptions {
         options: default_db_options()
             .optimize_for_write_throughput()
-            .optimize_for_read(
-                read_size_from_env(ENV_VAR_OBJECTS_BLOCK_CACHE_SIZE).unwrap_or(5 * 1024),
-            )
+            .optimize_for_read(read_size_from_env(ENV_VAR_LOCKS_BLOCK_CACHE_SIZE).unwrap_or(1024))
             .options,
-        rw_options: ReadWriteOptions::default().set_ignore_range_deletions(true),
+        rw_options: ReadWriteOptions::default().set_ignore_range_deletions(false),
     }
+}
+
+fn objects_table_default_config() -> DBOptions {
+    default_db_options()
+        .optimize_for_write_throughput()
+        .optimize_for_read(read_size_from_env(ENV_VAR_OBJECTS_BLOCK_CACHE_SIZE).unwrap_or(5 * 1024))
 }
 
 fn transactions_table_default_config() -> DBOptions {
