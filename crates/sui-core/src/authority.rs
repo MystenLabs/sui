@@ -4,8 +4,8 @@
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
-use std::time::Duration;
-use std::{collections::HashMap, fs, pin::Pin, sync::Arc};
+use std::time::{Duration, Instant};
+use std::{collections::HashMap, fs, pin::Pin, sync::Arc, thread};
 
 use anyhow::anyhow;
 use arc_swap::{ArcSwap, Guard};
@@ -125,7 +125,7 @@ use crate::event_handler::SubscriptionHandler;
 use crate::execution_driver::execution_process;
 use crate::module_cache_metrics::ResolverMetrics;
 use crate::stake_aggregator::StakeAggregator;
-use crate::state_accumulator::StateAccumulator;
+use crate::state_accumulator::{StateAccumulator, WrappedObject};
 use crate::{transaction_input_checker, transaction_manager::TransactionManager};
 
 #[cfg(test)]
@@ -2083,6 +2083,91 @@ impl AuthorityState {
         // see also assert in AuthorityState::process_certificate
         // on the epoch store and execution lock epoch match
         Ok(new_epoch_store)
+    }
+
+    pub fn reaccumulate_state_hash(&self, cur_accumulator: Accumulator) {
+        let cur_time = Instant::now();
+        thread::scope(|s| {
+            let pending_tasks = FuturesUnordered::new();
+            const BITS: u8 = 5;
+            for i in 0u8..(1 << BITS) {
+                pending_tasks.push(s.spawn(move || {
+                    let mut id_bytes = [0; ObjectID::LENGTH];
+                    id_bytes[0] = i << (8 - BITS);
+                    let start_id = ObjectID::new(id_bytes);
+                    id_bytes[0] = id_bytes[0] | ((1 << (8 - BITS)) - 1);
+                    for j in 1..ObjectID::LENGTH {
+                        id_bytes[j] = u8::MAX;
+                    }
+                    let end_id = ObjectID::new(id_bytes);
+                    info!(
+                        "[Re-accumulate] Scanning object ID range {:?}..{:?}",
+                        start_id, end_id
+                    );
+                    let mut prev = (
+                        ObjectKey::min_for_id(&ObjectID::ZERO),
+                        StoreObjectWrapper::V1(StoreObject::Deleted),
+                    );
+                    let mut object_scanned: u64 = 0;
+                    let mut wrapped_objects_to_remove = vec![];
+                    for (object_key, object) in self.database.perpetual_tables.objects.range_iter(
+                        ObjectKey::min_for_id(&start_id)..=ObjectKey::max_for_id(&end_id),
+                    ) {
+                        object_scanned += 1;
+                        if object_scanned % 100000 == 0 {
+                            info!(
+                                "[Re-accumulate] Task {}: object scanned: {}",
+                                i, object_scanned,
+                            );
+                        }
+                        if object_key.0 != prev.0 .0 {
+                            if matches!(prev.1.inner(), StoreObject::Wrapped) {
+                                wrapped_objects_to_remove
+                                    .push(WrappedObject::new(prev.0 .0, prev.0 .1));
+                            }
+                        }
+                        prev = (object_key, object);
+                    }
+                    if matches!(prev.1.inner(), StoreObject::Wrapped) {
+                        wrapped_objects_to_remove.push(WrappedObject::new(prev.0 .0, prev.0 .1));
+                    }
+                    info!(
+                        "[Re-accumulate] Task {}: object scanned: {}, wrapped objects: {}",
+                        i,
+                        object_scanned,
+                        wrapped_objects_to_remove.len(),
+                    );
+                    (wrapped_objects_to_remove, object_scanned)
+                }));
+            }
+            let (accumulator, total_objects_scanned, total_wrapped_objects) =
+                pending_tasks.into_iter().fold(
+                    (cur_accumulator, 0u64, 0usize),
+                    |(mut accumulator, total_objects_scanned, total_wrapped_objects), task| {
+                        let (wrapped_objects_to_remove, object_scanned) = task.join().unwrap();
+                        accumulator.remove_all(
+                            wrapped_objects_to_remove
+                                .iter()
+                                .map(|wrapped| bcs::to_bytes(wrapped).unwrap().to_vec())
+                                .collect::<Vec<Vec<u8>>>(),
+                        );
+                        (
+                            accumulator,
+                            total_objects_scanned + object_scanned,
+                            total_wrapped_objects + wrapped_objects_to_remove.len(),
+                        )
+                    },
+                );
+            info!(
+                "[Re-accumulate] Total objects scanned: {}, total wrapped objects: {}",
+                total_objects_scanned, total_wrapped_objects,
+            );
+            info!("[Re-accumulate] Accumulator: {:?}", accumulator.digest());
+        });
+        info!(
+            "[Re-accumulate] Re-accumulating took {}seconds",
+            cur_time.elapsed().as_secs()
+        );
     }
 
     fn check_system_consistency(
@@ -4071,8 +4156,12 @@ pub mod framework_injection {
     }
 }
 
+use crate::authority::authority_store_types::{StoreObject, StoreObjectWrapper};
+use fastcrypto::hash::MultisetHash;
+use futures::stream::FuturesUnordered;
 use std::fs::File;
 use std::io::Write;
+use sui_types::accumulator::Accumulator;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct NodeStateDump {
