@@ -87,9 +87,6 @@ impl Error {
                 }
                 _ => RpcError::Call(CallError::Failed(err.into())),
             },
-            // such as with JoinError, perhaps this should just be a generic, "Internal server error"
-            // but only after we've mapped out everything
-            // so joinerror should explicitly be mapped for now
             _ => RpcError::Call(CallError::Failed(self.into())),
         }
     }
