@@ -13,7 +13,7 @@ export function Button({
   children: JSX.Element[] | JSX.Element | string;
   loading?: boolean;
   className?: string;
-  onClick: () => Promise<void>;
+  onClick: () => Promise<void> | void;
 }): JSX.Element {
   return (
     <button className={className} onClick={onClick} {...props}>

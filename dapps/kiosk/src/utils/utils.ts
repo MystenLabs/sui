@@ -34,6 +34,7 @@ export const processKioskListings = (
     .filter((x) => !!x)
     .map((x: KioskListing) => {
       results[x.objectId || ''] = x;
+      return x;
     });
   return results;
 };
