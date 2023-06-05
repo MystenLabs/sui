@@ -29,7 +29,7 @@ import { OwnedObjectType } from '../components/Inventory/OwnedObjects';
 export type KioskFnType = (
   item: OwnedObjectType,
   price?: string,
-) => Promise<void>;
+) => Promise<void> | void;
 
 /**
  * A helper to get user's kiosks.
@@ -144,7 +144,7 @@ export function useKioskMutationFn() {
       fn: KioskFnType;
       object: OwnedObjectType;
     }) => {
-      return fn(object);
+      return fn(object) as Promise<void>;
     },
   });
 }
