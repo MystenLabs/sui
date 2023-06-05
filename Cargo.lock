@@ -9473,6 +9473,7 @@ dependencies = [
  "sui-protocol-config",
  "sui-types",
  "sui-verifier-latest",
+ "workspace-hack",
 ]
 
 [[package]]
