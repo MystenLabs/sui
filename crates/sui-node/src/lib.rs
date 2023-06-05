@@ -372,6 +372,7 @@ impl SuiNode {
             config.state_debug_dump_config.clone(),
         )
         .await;
+        state.reaccumulate_state_hash();
         // ensure genesis txn was executed
         if epoch_store.epoch() == 0 {
             let txn = &genesis.transaction();
