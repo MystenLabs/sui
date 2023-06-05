@@ -1178,6 +1178,9 @@ impl ProtocolConfig {
                 cfg.feature_flags.narwhal_versioned_metadata = true;
                 if chain != Chain::Mainnet {
                     cfg.feature_flags.commit_root_state_digest = true;
+                }
+
+                if chain != Chain::Mainnet && chain != Chain::Testnet {
                     cfg.feature_flags.zklogin_auth = true;
                 }
                 cfg
