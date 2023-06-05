@@ -418,6 +418,14 @@ impl SuiNode {
 
         let accumulator = Arc::new(StateAccumulator::new(store));
 
+        {
+            // Temporary code to see how long it takes to re-accumulate state hash.
+            // In practice, this will need to run at epoch boundary using the previous epoch's ending accumulator.
+            let prev_epoch = epoch_store.epoch() - 1;
+            let accumulator = state.database.get_root_state(prev_epoch);
+            state.reaccumulate_state_hash(accumulator);
+        }
+
         let authority_names_to_peer_ids = epoch_store
             .epoch_start_state()
             .get_authority_names_to_peer_ids();

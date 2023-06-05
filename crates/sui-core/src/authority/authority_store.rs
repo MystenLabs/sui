@@ -290,6 +290,15 @@ impl AuthorityStore {
         Ok(acc.1.digest().into())
     }
 
+    pub fn get_root_state(&self, epoch: EpochId) -> Accumulator {
+        self.perpetual_tables
+            .root_state_hash_by_epoch
+            .get(&epoch)
+            .unwrap()
+            .unwrap()
+            .1
+    }
+
     pub fn get_recovery_epoch_at_restart(&self) -> SuiResult<EpochId> {
         self.perpetual_tables.get_recovery_epoch_at_restart()
     }
