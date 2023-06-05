@@ -45,6 +45,7 @@ jobs:
     - name: Read last saved protocol version for ${{ inputs.environment }}
       continue-on-error: true
       shell: bash
+      # this paths for extractions become 
       run: |
         echo "saved_protocol_version=`cat /tmp/${{ inputs.environment }}_saved_protocol_version.txt/${{ inputs.environment }}_saved_protocol_version.txt || ''`" >> $GITHUB_ENV
 
@@ -60,8 +61,8 @@ jobs:
       uses: LucasRuy/sync-branch-action@v1.1.1
       with:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        SOURCE_BRANCH: ${{ inputs.environment }}
-        DESTINATION_BRANCH: framework/${{ inputs.environment }}
+        SOURCE_BRANCH: framework/${{ inputs.environment }}
+        DESTINATION_BRANCH: ${{ inputs.environment }}
 
     - name: Save current protocol version for ${{ inputs.environment }} to artifact
       shell: bash
@@ -73,4 +74,4 @@ jobs:
       uses: actions/upload-artifact@v3
       with:
         name: ${{ inputs.environment }}-protocol-version
-        path: /tmp/${{ inputs.environment }}_saved_protocol_version.txt
+        path: /tmp/${{ inputs.environment }}_saved_protocol_version.txt/${{ inputs.environment }}_saved_protocol_version.txt
