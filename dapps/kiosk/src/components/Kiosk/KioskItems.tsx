@@ -2,10 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import {
-  KioskItem,
-  KioskListing,
   delist,
-  fetchKiosk,
   list,
   place,
   purchaseAndResolvePolicies,
@@ -13,133 +10,80 @@ import {
   take,
   testnetEnvironment,
 } from '@mysten/kiosk';
-import { useRpc } from '../../hooks/useRpc';
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { KioskItem as KioskItemCmp } from './KioskItem';
 import { TransactionBlock } from '@mysten/sui.js';
 import { ListPrice } from '../Modals/ListPrice';
 import { OwnedObjectType } from '../Inventory/OwnedObjects';
-import {
-  getOwnedKiosk,
-  getOwnedKioskCap,
-  localStorageKeys,
-  parseObjectDisplays,
-} from '../../utils/utils';
 import { useTransactionExecution } from '../../hooks/useTransactionExecution';
 import { Loading } from '../Base/Loading';
 import { toast } from 'react-hot-toast';
 import { useWalletKit } from '@mysten/wallet-kit';
 import { useLocation } from 'react-router-dom';
+import { useRpc } from '../../context/RpcClientContext';
+import { useKiosk, useOwnedKiosk } from '../../hooks/kiosk';
 
-export function KioskItems({
-  kioskId,
-  address,
-}: {
-  address?: string;
-  kioskId?: string;
-}): JSX.Element {
+export function KioskItems({ kioskId }: { kioskId?: string }): JSX.Element {
   const provider = useRpc();
-  const [loading, setLoading] = useState<boolean>(false);
   const { currentAccount } = useWalletKit();
   const location = useLocation();
 
-  const isKioskPage = location.pathname.startsWith('/kiosk/');
+  const { data: walletKiosk } = useOwnedKiosk();
+  const ownedKioskCap = walletKiosk?.kioskCap;
+  const ownedKiosk = walletKiosk?.kioskId;
 
-  // we are depending on currentAccount too, as this is what triggers the `getOwnedKioskCap()` function to change
-  const kioskOwnerCap = useMemo(() => {
-    return getOwnedKioskCap();
-  }, [currentAccount?.address]);
+  const isKioskPage = location.pathname.startsWith('/kiosk/');
 
   // checks if this is an owned kiosk.
   // We are depending on currentAccount too, as this is what triggers the `getOwnedKioskCap()` function to change
   // using endsWith because we support it with both 0x prefix and without.
   const isOwnedKiosk = useMemo(() => {
-    return getOwnedKiosk()?.endsWith(kioskId || '~');
-  }, [kioskId, currentAccount?.address]);
+    return ownedKiosk?.endsWith(kioskId || '~');
+  }, [ownedKiosk, kioskId]);
 
   const [modalItem, setModalItem] = useState<OwnedObjectType | null>(null);
-  const [kioskItems, setKioskItems] = useState<OwnedObjectType[]>([]);
 
-  const [kioskListings, setKioskListings] =
-    useState<Record<string, KioskListing>>();
+  const {
+    data: kioskData,
+    isLoading,
+    refetch: getKioskData,
+  } = useKiosk(kioskId);
+
+  const kioskItems = kioskData?.items || [];
+  const kioskListings = kioskData?.listings || {};
 
   const { signAndExecute } = useTransactionExecution();
 
-  useEffect(() => {
-    if (!kioskId) return;
-    getKioskData();
-  }, [kioskId]);
-
-  const getKioskData = async () => {
-    if (!kioskId) return;
-    setLoading(true);
-
-    try {
-      const { data: res } = await fetchKiosk(
-        provider,
-        kioskId,
-        { limit: 1000 },
-        {
-          withKioskFields: true,
-          withListingPrices: true,
-        },
-      ); // could also add `cursor` for pagination
-      // get items.
-      const items = await provider.multiGetObjects({
-        ids: res.itemIds,
-        options: { showDisplay: true, showType: true },
-      });
-
-      localStorage.setItem(localStorageKeys.LAST_VISITED_KIOSK_ID, kioskId);
-
-      const displays = parseObjectDisplays(items) || {};
-      const ownedItems = res.items.map((item: KioskItem) => {
-        return {
-          ...item,
-          display: displays[item.objectId] || {},
-        };
-      });
-      setKioskItems(ownedItems);
-      processKioskListings(res.items.map((x) => x.listing) as KioskListing[]);
-    } catch (e) {
-      setKioskItems([]);
-      toast.error(
-        'Something went wrong. Either this is not a valid kiosk address, or the RPC call failed.',
-      );
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const processKioskListings = (data: KioskListing[]) => {
-    const results: Record<string, KioskListing> = {};
-
-    data
-      .filter((x) => !!x)
-      .map((x: KioskListing) => {
-        results[x.objectId || ''] = x;
-      });
-    setKioskListings(results);
-  };
-
   const takeFromKiosk = async (item: OwnedObjectType) => {
-    if (!item?.objectId || !kioskId || !address || !kioskOwnerCap) return;
+    if (
+      !item?.objectId ||
+      !kioskId ||
+      !currentAccount?.address ||
+      !ownedKioskCap
+    )
+      return;
 
     const tx = new TransactionBlock();
 
-    const obj = take(tx, item.type, kioskId, kioskOwnerCap, item.objectId);
+    const obj = take(tx, item.type, kioskId, ownedKioskCap, item.objectId);
 
-    tx.transferObjects([obj], tx.pure(address));
+    tx.transferObjects([obj], tx.pure(currentAccount?.address));
 
     const success = await signAndExecute({ tx });
     if (success) getKioskData();
   };
 
   const delistFromKiosk = async (item: OwnedObjectType) => {
-    if (!item?.objectId || !kioskId || !address || !kioskOwnerCap) return;
+    if (
+      !item?.objectId ||
+      !kioskId ||
+      !currentAccount?.address ||
+      !ownedKioskCap
+    )
+      return;
     const tx = new TransactionBlock();
 
-    delist(tx, item.type, kioskId, kioskOwnerCap, item.objectId);
+    delist(tx, item.type, kioskId, ownedKioskCap, item.objectId);
 
     const success = await signAndExecute({ tx });
 
@@ -147,11 +91,11 @@ export function KioskItems({
   };
 
   const listToKiosk = async (item: OwnedObjectType, price: string) => {
-    if (!kioskId || !kioskOwnerCap) return;
+    if (!kioskId || !ownedKioskCap) return;
 
     const tx = new TransactionBlock();
 
-    list(tx, item.type, kioskId, kioskOwnerCap, item.objectId, price);
+    list(tx, item.type, kioskId, ownedKioskCap, item.objectId, price);
 
     const success = await signAndExecute({ tx });
 
@@ -162,14 +106,11 @@ export function KioskItems({
   };
 
   const purchaseItem = async (item: OwnedObjectType) => {
-    const ownedKiosk = getOwnedKiosk();
-    const ownedKioskCap = getOwnedKioskCap();
-
     if (
       !item ||
       !item.listing?.price ||
       !kioskId ||
-      !address ||
+      !currentAccount?.address ||
       !ownedKiosk ||
       !ownedKioskCap
     )
@@ -213,7 +154,7 @@ export function KioskItems({
     }
   };
 
-  if (loading) return <Loading />;
+  if (isLoading) return <Loading />;
 
   if (kioskItems.length === 0)
     return <div className="py-12">The kiosk you are viewing is empty!</div>;

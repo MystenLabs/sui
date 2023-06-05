@@ -6,40 +6,30 @@ import { Tab } from '@headlessui/react';
 import { OwnedObjects } from '../Inventory/OwnedObjects';
 import { KioskItems } from './KioskItems';
 import { Kiosk, getKioskObject, withdrawFromKiosk } from '@mysten/kiosk';
-import { useEffect, useMemo, useState } from 'react';
-import { useRpc } from '../../hooks/useRpc';
+import { useEffect, useState } from 'react';
 import { TransactionBlock, formatAddress } from '@mysten/sui.js';
 import { ExplorerLink } from '../Base/ExplorerLink';
-import {
-  formatSui,
-  getOwnedKiosk,
-  getOwnedKioskCap,
-  mistToSui,
-} from '../../utils/utils';
+import { formatSui, mistToSui } from '../../utils/utils';
 import { useTransactionExecution } from '../../hooks/useTransactionExecution';
 import { toast } from 'react-hot-toast';
+import { useRpc } from '../../context/RpcClientContext';
+import { useOwnedKiosk } from '../../hooks/kiosk';
 
-export type KioskData = {
-  setSelectedKiosk?: (address: string | null) => void;
-};
-
-export function KioskData({}: KioskData) {
+export function KioskData() {
   const provider = useRpc();
   const { currentAccount } = useWalletKit();
   const [kiosk, setKiosk] = useState<Kiosk | undefined>(undefined);
 
+  const { data: ownedKiosk } = useOwnedKiosk();
+
+  const kioskId = ownedKiosk?.kioskId;
+  const kioskOwnerCap = ownedKiosk?.kioskCap;
+
   const { signAndExecute } = useTransactionExecution();
 
-  const kioskId = useMemo(() => {
-    return getOwnedKiosk() || '';
-  }, []);
-
-  const kioskOwnerCap = useMemo(() => {
-    return getOwnedKioskCap() || '';
-  }, []);
-
   useEffect(() => {
-    if (!kiosk && kioskId) {
+    if (!kioskId) return;
+    if (!kiosk && ownedKiosk?.kioskId) {
       getKioskObject(provider, kioskId).then((res) => setKiosk(res));
     }
   }, [kioskId]);
@@ -108,12 +98,7 @@ export function KioskData({}: KioskData) {
         </Tab.List>
         <Tab.Panels>
           <Tab.Panel>
-            {currentAccount && (
-              <KioskItems
-                kioskId={kioskId}
-                address={currentAccount.address}
-              ></KioskItems>
-            )}
+            {kioskId && <KioskItems kioskId={kioskId}></KioskItems>}
           </Tab.Panel>
           <Tab.Panel className="mt-12">
             {currentAccount && (

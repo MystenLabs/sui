@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   PaginatedObjectsResponse,
   TransactionBlock,
@@ -9,34 +9,24 @@ import {
   getObjectType,
 } from '@mysten/sui.js';
 import { OwnedObject } from './OwnedObject';
-import { KioskData } from '../Kiosk/KioskData';
-import { useRpc } from '../../hooks/useRpc';
-import {
-  getOwnedKiosk,
-  getOwnedKioskCap,
-  parseObjectDisplays,
-} from '../../utils/utils';
+import { parseObjectDisplays } from '../../utils/utils';
 import { useTransactionExecution } from '../../hooks/useTransactionExecution';
 import { KioskItem, place, placeAndList } from '@mysten/kiosk';
 import { ListPrice } from '../Modals/ListPrice';
 import { Loading } from '../Base/Loading';
+import { useRpc } from '../../context/RpcClientContext';
+import { useOwnedKiosk } from '../../hooks/kiosk';
 
 export type OwnedObjectType = KioskItem & {
   display: Record<string, string>;
 };
 
-export function OwnedObjects({
-  address,
-}: { address: string } & KioskData): JSX.Element {
+export function OwnedObjects({ address }: { address: string }): JSX.Element {
   const provider = useRpc();
 
-  const kioskId = useMemo(() => {
-    return getOwnedKiosk() || '';
-  }, []);
-
-  const kioskOwnerCap = useMemo(() => {
-    return getOwnedKioskCap() || '';
-  }, []);
+  const { data: ownedKiosk } = useOwnedKiosk();
+  const kioskId = ownedKiosk?.kioskId;
+  const kioskOwnerCap = ownedKiosk?.kioskCap;
 
   const [loading, setLoading] = useState<boolean>(false);
   const [ownedObjects, setOwnedObjects] = useState<OwnedObjectType[]>([]);
@@ -44,7 +34,7 @@ export function OwnedObjects({
   const { signAndExecute } = useTransactionExecution();
 
   const placeToKiosk = async (item: OwnedObjectType) => {
-    if (!kioskId) return;
+    if (!kioskId || !kioskOwnerCap) return;
 
     const tx = new TransactionBlock();
     place(tx, item.type, kioskId, kioskOwnerCap, item.objectId);
@@ -53,7 +43,7 @@ export function OwnedObjects({
   };
 
   const placeAndListToKiosk = async (item: OwnedObjectType, price: string) => {
-    if (!kioskId) return;
+    if (!kioskId || !kioskOwnerCap) return;
     const tx = new TransactionBlock();
     placeAndList(tx, item.type, kioskId, kioskOwnerCap, item.objectId, price);
     const success = await signAndExecute({ tx });

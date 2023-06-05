@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { KioskListing } from '@mysten/kiosk';
 import {
   MIST_PER_SUI,
   ObjectId,
@@ -24,18 +25,17 @@ export const parseObjectDisplays = (
   );
 };
 
-export const localStorageKeys = {
-  LAST_VISITED_KIOSK_ID: 'LAST_VISITED_KIOSK_ID',
-  USER_KIOSK_OWNER_CAP: 'USER_KIOSK_OWNER_CAP',
-  USER_KIOSK_ID: 'USER_KIOSK',
-};
+export const processKioskListings = (
+  data: KioskListing[],
+): Record<ObjectId, KioskListing> => {
+  const results: Record<ObjectId, KioskListing> = {};
 
-export const getOwnedKiosk = (): string | null => {
-  return localStorage.getItem(localStorageKeys.USER_KIOSK_ID) || null;
-};
-
-export const getOwnedKioskCap = (): string | null => {
-  return localStorage.getItem(localStorageKeys.USER_KIOSK_OWNER_CAP) || null;
+  data
+    .filter((x) => !!x)
+    .map((x: KioskListing) => {
+      results[x.objectId || ''] = x;
+    });
+  return results;
 };
 
 export const mistToSui = (mist: bigint | string | undefined) => {
