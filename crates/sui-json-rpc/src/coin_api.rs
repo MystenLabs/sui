@@ -556,6 +556,29 @@ mod tests {
         }
 
         #[tokio::test]
+        async fn test_unrecognized_token() {
+            let owner = get_test_owner();
+            let coin_type = "0x2::sui:🤵";
+            let mock_internal = MockCoinReadInternalTrait::new();
+            let coin_read_api = CoinReadApi {
+                internal: Arc::new(mock_internal),
+            };
+
+            let response = coin_read_api
+                .get_coins(owner, Some(coin_type.to_string()), None, None)
+                .await;
+
+            assert!(response.is_err());
+            let error_result = response.unwrap_err();
+            let error_object: ErrorObjectOwned = error_result.into();
+            assert_eq!(error_object.code(), -32602);
+            assert_eq!(
+                error_object.message(),
+                "Invalid struct type: 0x2::sui:🤵. Got error: unrecognized token: :🤵"
+            );
+        }
+
+        #[tokio::test]
         async fn test_get_coins_iterator_index_store_not_available() {
             let owner = get_test_owner();
             let coin_type = get_test_coin_type(get_test_package_id());
