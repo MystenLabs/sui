@@ -6,6 +6,7 @@ import { ModalBase } from './Base';
 import { OwnedObjectType } from '../Inventory/OwnedObjects';
 import { DisplayObjectThumbnail } from '../DisplayObjectThumbnail';
 import { Button } from '../Base/Button';
+import { MIST_PER_SUI } from '@mysten/sui.js';
 
 export interface ListPriceProps {
   item: OwnedObjectType;
@@ -26,17 +27,15 @@ export function ListPrice({
     setLoading(false);
   };
   return (
-    <ModalBase
-      isOpen
-      closeModal={closeModal}
-      title="Select the listing price in SUI"
-    >
+    <ModalBase isOpen closeModal={closeModal} title="Select the listing price">
       <>
         <div>
           <DisplayObjectThumbnail item={item}></DisplayObjectThumbnail>
         </div>
         <div>
-          <label>Listing price</label>
+          <label>
+            Listing price (in MIST) ({Number(price) / Number(MIST_PER_SUI)} SUI)
+          </label>
           <input
             value={price}
             className="content"

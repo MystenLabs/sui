@@ -33,7 +33,7 @@ export function OwnedObject({
           onClick={() => actionWithLoader(listFn, object, setLoading)}
           className="btn-outline-primary"
         >
-          List in Kiosk
+          Sell in Kiosk
         </Button>
       </>
     </DisplayObject>
