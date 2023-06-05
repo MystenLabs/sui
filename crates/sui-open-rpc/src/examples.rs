@@ -1416,7 +1416,7 @@ impl RpcExampleProvider {
                     stake_request_epoch: 62,
                     stake_active_epoch: 63,
                     principal,
-                    status: StakeStatus::Active { 
+                    status: StakeStatus::Active {
                         estimated_reward: (principal as f64 * 0.0026) as u64,
                     },
                 },
@@ -1459,7 +1459,7 @@ impl RpcExampleProvider {
                     stake_request_epoch: 62,
                     stake_active_epoch: 63,
                     principal,
-                    status: StakeStatus::Active { 
+                    status: StakeStatus::Active {
                         estimated_reward: (principal as f64 * 0.0026) as u64,
                     },
                 },
