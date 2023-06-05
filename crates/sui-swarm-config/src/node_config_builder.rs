@@ -21,6 +21,7 @@ use sui_config::{
 };
 use sui_protocol_config::SupportedProtocolVersions;
 use sui_types::crypto::{AuthorityKeyPair, AuthorityPublicKeyBytes, SuiKeyPair};
+use sui_types::multiaddr::Multiaddr;
 
 /// This builder contains information that's not included in ValidatorGenesisConfig for building
 /// a validator NodeConfig. It can be used to build either a genesis validator or a new validator.
@@ -159,6 +160,7 @@ pub struct FullnodeConfigBuilder {
     supported_protocol_versions: Option<SupportedProtocolVersions>,
     db_checkpoint_config: Option<DBCheckpointConfig>,
     expensive_safety_check_config: Option<ExpensiveSafetyCheckConfig>,
+    p2p_external_address: Option<Multiaddr>,
 }
 
 impl FullnodeConfigBuilder {
@@ -201,6 +203,11 @@ impl FullnodeConfigBuilder {
         self
     }
 
+    pub fn with_p2p_external_address(mut self, p2p_external_address: Multiaddr) -> Self {
+        self.p2p_external_address = Some(p2p_external_address);
+        self
+    }
+
     pub fn build<R: rand::RngCore + rand::CryptoRng>(
         self,
         rng: &mut R,
@@ -222,6 +229,11 @@ impl FullnodeConfigBuilder {
             .unwrap_or_else(|| tempfile::tempdir().unwrap().into_path());
         let db_path = config_directory.join(FULL_NODE_DB_PATH).join(key_path);
 
+        let external_address = if self.p2p_external_address.is_none() {
+            Some(validator_config.p2p_address.clone())
+        } else {
+            self.p2p_external_address
+        };
         let p2p_config = {
             let seed_peers = network_config
                 .validator_configs
@@ -241,7 +253,7 @@ impl FullnodeConfigBuilder {
                         .udp_multiaddr_to_listen_address()
                         .unwrap()
                 }),
-                external_address: Some(validator_config.p2p_address),
+                external_address,
                 seed_peers,
                 ..Default::default()
             }

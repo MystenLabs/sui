@@ -16,6 +16,7 @@ use std::io::{stderr, stdout, Write};
 use std::num::NonZeroUsize;
 use std::path::{Path, PathBuf};
 use std::{fs, io};
+use sui_config::p2p::SeedPeer;
 use sui_config::{
     sui_config_dir, Config, PersistedConfig, FULL_NODE_DB_PATH, SUI_CLIENT_CONFIG,
     SUI_FULLNODE_CONFIG, SUI_NETWORK_CONFIG,
@@ -379,6 +380,7 @@ async fn genesis(
     let network_path = sui_config_dir.join(SUI_NETWORK_CONFIG);
     let genesis_path = sui_config_dir.join(SUI_GENESIS_FILENAME);
 
+    // genesis_conf is read from genesis.yaml - that's the place we probably want to grab the new ssfn configs from
     let mut genesis_conf = match from_config {
         Some(path) => PersistedConfig::read(&path)?,
         None => {
@@ -408,6 +410,8 @@ async fn genesis(
     }
 
     let validator_info = genesis_conf.validator_config_info.take();
+    let ssfn_info = genesis_conf.ssfn_config_info.take();
+
     let builder = ConfigBuilder::new(sui_config_dir);
     if let Some(epoch_duration_ms) = epoch_duration_ms {
         genesis_conf.parameters.epoch_duration_ms = epoch_duration_ms;
@@ -447,14 +451,49 @@ async fn genesis(
         .build(&mut OsRng, &network_config);
 
     fullnode_config.save(sui_config_dir.join(SUI_FULLNODE_CONFIG))?;
+    let mut ssfn_nodes = vec![];
+    if ssfn_info.is_some() {
+        for (i, ssfn) in ssfn_info.unwrap().into_iter().enumerate() {
+            let path = sui_config_dir.join(sui_config::ssfn_config_file(i));
+            // join base fullnode config with each SsfnGenesisConfig entry
+            let ssfn_config = FullnodeConfigBuilder::new()
+                .with_config_directory(FULL_NODE_DB_PATH.into())
+                .with_p2p_external_address(ssfn.p2p_address)
+                .build(&mut OsRng, &network_config);
+            ssfn_nodes.push(ssfn_config.clone());
+            ssfn_config.save(path)?;
+        }
 
-    for (i, validator) in network_config
-        .into_validator_configs()
-        .into_iter()
-        .enumerate()
-    {
-        let path = sui_config_dir.join(sui_config::validator_config_file(i));
-        validator.save(path)?;
+        let ssfn_seed_peers: Vec<SeedPeer> = ssfn_nodes
+            .iter()
+            .map(|config| SeedPeer {
+                peer_id: Some(anemo::PeerId(
+                    config.network_key_pair().public().0.to_bytes(),
+                )),
+                address: config.p2p_config.external_address.clone().unwrap(),
+            })
+            .collect();
+
+        for (i, mut validator) in network_config
+            .into_validator_configs()
+            .into_iter()
+            .enumerate()
+        {
+            let path = sui_config_dir.join(sui_config::validator_config_file(i));
+            let mut val_p2p = validator.p2p_config.clone();
+            val_p2p.seed_peers = ssfn_seed_peers.clone();
+            validator.p2p_config = val_p2p;
+            validator.save(path)?;
+        }
+    } else {
+        for (i, validator) in network_config
+            .into_validator_configs()
+            .into_iter()
+            .enumerate()
+        {
+            let path = sui_config_dir.join(sui_config::validator_config_file(i));
+            validator.save(path)?;
+        }
     }
 
     let mut client_config = if client_path.exists() {
