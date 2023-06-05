@@ -45,11 +45,13 @@ export async function requestUserApproval(
     message: Message
 ) {
     const origin = connection.origin;
-    const { service, apiUrl, token } = validateInputOrThrow(input);
+    const { service, apiUrl, token, organization } =
+        validateInputOrThrow(input);
     const connectionIdentity = {
         service,
         apiUrl,
         origin,
+        organization,
     };
     const existingPendingRequest = await getPendingRequest(connectionIdentity);
     if (existingPendingRequest) {
@@ -90,6 +92,7 @@ export async function requestUserApproval(
             origin,
             originFavIcon: connection.originFavIcon,
             accessToken: null,
+            organization,
         },
         message.id
     );
@@ -222,12 +225,14 @@ export async function acceptQredoConnection({
             `Accepting Qredo connection failed, pending request ${qredoID} not found`
         );
     }
-    const { apiUrl, origin, originFavIcon, service } = pendingRequest;
+    const { apiUrl, origin, originFavIcon, service, organization } =
+        pendingRequest;
     // make sure we replace an existing connection when it's the same
     const existingConnection = await getQredoConnection({
         apiUrl,
         origin,
         service,
+        organization,
     });
     const qredoIDToUse = existingConnection?.id || qredoID;
     await keyring.storeQredoConnection(
@@ -244,6 +249,7 @@ export async function acceptQredoConnection({
         service,
         accounts,
         accessToken: null,
+        organization,
     });
     await deletePendingRequest(pendingRequest);
     qredoEvents.emit('onConnectionResponse', {
