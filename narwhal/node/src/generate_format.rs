@@ -55,6 +55,7 @@ fn get_registry() -> Result<Registry> {
             1,
             primary_address,
             network_key.public().clone(),
+            i.to_string(),
         );
     }
 

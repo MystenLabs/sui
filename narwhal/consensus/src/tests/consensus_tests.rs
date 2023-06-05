@@ -142,7 +142,7 @@ async fn test_consensus_recovery_with_bullshark() {
         let last_round = *last_committed.get(&id).unwrap();
 
         // For the leader of round 6 we expect to have last committed round of 6.
-        if id == Bullshark::leader_authority(&committee, 6) {
+        if id == Bullshark::leader_authority(&committee, 6).id() {
             assert_eq!(last_round, 6);
         } else {
             // For the others should be 5.

@@ -713,7 +713,7 @@ mod tests {
         let mut committee_builder = CommitteeBuilder::new(0);
         let mut rng = StdRng::from_rng(&mut OsRng).unwrap();
 
-        for _ in 0..committee_size {
+        for i in 0..committee_size {
             let pair = KeyPair::generate(&mut rng);
             let public_key = pair.public().clone();
 
@@ -722,6 +722,7 @@ mod tests {
                 1,
                 Multiaddr::empty(),
                 NetworkPublicKey::insecure_default(),
+                i.to_string(),
             );
         }
 
