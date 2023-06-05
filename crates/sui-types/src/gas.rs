@@ -6,6 +6,7 @@ use crate::effects::{TransactionEffects, TransactionEffectsAPI};
 use crate::sui_serde::BigInt;
 use crate::sui_serde::Readable;
 use crate::{
+    base_types::TransactionDigest,
     error::{ExecutionError, UserInputError, UserInputResult},
     gas_model::gas_v1::{self, SuiCostTable as SuiCostTableV1, SuiGasStatus as SuiGasStatusV1},
     gas_model::gas_v2::{self, SuiCostTable as SuiCostTableV2, SuiGasStatus as SuiGasStatusV2},
@@ -13,13 +14,34 @@ use crate::{
 };
 use enum_dispatch::enum_dispatch;
 use itertools::MultiUnzip;
+use once_cell::sync::Lazy;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use sui_cost_tables::bytecode_tables::GasStatus;
 use sui_protocol_config::ProtocolConfig;
+use tracing::error;
 
 sui_macros::checked_arithmetic! {
+
+static LOGGING_FILE: Lazy<std::sync::Mutex<std::fs::File>> = Lazy::new(|| {
+    std::sync::Mutex::new(
+        std::fs::OpenOptions::new()
+            .write(true)
+            .create(true)
+            .append(true)
+            .open("/Users/dariorussi/tmp/track_gas/stats")
+            .unwrap(),
+    )
+});
+
+pub fn write_gas_stats(stats: &str) {
+    use std::io::Write;
+    let f = &mut *LOGGING_FILE.lock().unwrap();
+    if writeln!(f, "{}", stats).is_err() {
+        error!("cannot write to gas stats tracking file");
+    }
+}
 
 #[enum_dispatch]
 pub trait SuiGasStatusAPI {
@@ -52,7 +74,12 @@ pub enum SuiGasStatus {
 }
 
 impl SuiGasStatus {
-    pub fn new_with_budget(gas_budget: u64, gas_price: u64, config: &ProtocolConfig) -> Self {
+    pub fn new_with_budget(
+        gas_budget: u64,
+        gas_price: u64,
+        config: &ProtocolConfig,
+        tx_digest: Option<TransactionDigest>,
+    ) -> Self {
         match config.gas_model_version() {
             1 => Self::V1(SuiGasStatusV1::new_with_budget(
                 gas_budget,
@@ -63,6 +90,7 @@ impl SuiGasStatus {
                 gas_budget,
                 gas_price,
                 config,
+                tx_digest,
             )),
             _ => panic!("unknown gas model version"),
         }

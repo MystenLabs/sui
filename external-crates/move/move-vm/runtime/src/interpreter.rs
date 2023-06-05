@@ -4,7 +4,7 @@
 
 use crate::{
     loader::{Function, Loader, Resolver},
-    native_functions::NativeContext,
+    native_functions::{NativeContext, NativesTracker},
     trace,
 };
 use fail::fail_point;
@@ -504,6 +504,9 @@ impl Interpreter {
         )?;
 
         let result = native_function(&mut native_context, ty_args.to_vec(), args)?;
+
+        let native_tracker = extensions.get_mut::<NativesTracker>();
+        native_tracker.track_native(function.name().to_string(), result.cost.into());
 
         // Note(Gas): The order by which gas is charged / error gets returned MUST NOT be modified
         //            here or otherwise it becomes an incompatible change!!!

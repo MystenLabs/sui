@@ -59,6 +59,7 @@ impl<'a> NativeContextExtensions<'a> {
 }
 
 #[cfg(test)]
+
 mod tests {
     use crate::native_extensions::NativeContextExtensions;
     use better_any::{Tid, TidAble};

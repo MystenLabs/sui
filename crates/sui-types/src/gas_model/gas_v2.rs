@@ -3,8 +3,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::error::{UserInputError, UserInputResult};
-use crate::gas::{self, GasCostSummary, SuiGasStatusAPI};
+use crate::gas::{self, write_gas_stats, GasCostSummary, SuiGasStatusAPI};
 use crate::{
+    digests::TransactionDigest,
     error::{ExecutionError, ExecutionErrorKind},
     object::{Object, Owner},
 };
@@ -204,6 +205,8 @@ pub struct SuiGasStatus {
     /// Amount of storage rebate accumulated when we are running in unmetered mode (i.e. system transaction).
     /// This allows us to track how much storage rebate we need to retain in system transactions.
     unmetered_storage_rebate: u64,
+    // transaction digest (for logging purposes)
+    tx_digest: Option<TransactionDigest>,
 }
 
 impl SuiGasStatus {
@@ -215,6 +218,7 @@ impl SuiGasStatus {
         storage_gas_price: u64,
         rebate_rate: u64,
         cost_table: SuiCostTable,
+        tx_digest: Option<TransactionDigest>,
     ) -> SuiGasStatus {
         SuiGasStatus {
             gas_status: move_gas_status,
@@ -228,6 +232,7 @@ impl SuiGasStatus {
             rebate_rate,
             unmetered_storage_rebate: 0,
             cost_table,
+            tx_digest,
         }
     }
 
@@ -235,6 +240,7 @@ impl SuiGasStatus {
         gas_budget: u64,
         gas_price: u64,
         config: &ProtocolConfig,
+        tx_digest: Option<TransactionDigest>,
     ) -> SuiGasStatus {
         let storage_gas_price = config.storage_gas_price();
         let max_computation_budget = config.max_gas_computation_bucket() * gas_price;
@@ -257,6 +263,7 @@ impl SuiGasStatus {
             storage_gas_price,
             config.storage_rebate_rate(),
             sui_cost_table,
+            tx_digest,
         )
     }
 
@@ -287,6 +294,7 @@ impl SuiGasStatus {
             storage_gas_price,
             rebate_rate,
             cost_table,
+            None,
         )
     }
 
@@ -299,7 +307,69 @@ impl SuiGasStatus {
             0,
             0,
             SuiCostTable::unmetered(),
+            None,
         )
+    }
+
+    fn gas_status_stats(&self, summary: &GasCostSummary, digest: TransactionDigest) {
+        let gas_used = self.gas_status.gas_used_pre_gas_price();
+        let gas_rounded = if gas_used > 0 && gas_used % 1000 == 0 {
+            gas_used * self.gas_price
+        } else {
+            ((gas_used / 1000) + 1) * 1000 * self.gas_price
+        };
+        let computation_cost = if self.gas_budget <= gas_rounded {
+            self.gas_budget
+        } else {
+            gas_rounded
+        };
+        let (instr_count, stack_height, stack_size) = self.gas_status.get_status_info();
+        write_gas_stats(
+            format!(
+                "{}: b = {}, p = {}, c_c = {}, s_c = {}, s_r = {}, \
+                n_r_s_f = {}, ins = {}, st_h = {}, \
+                st_s = {}, gas = {}, c_c_r = {}",
+                digest,
+                self.gas_budget,
+                self.gas_price,
+                summary.computation_cost,
+                summary.storage_cost,
+                summary.storage_rebate,
+                summary.non_refundable_storage_fee,
+                instr_count,
+                stack_height,
+                stack_size,
+                gas_used,
+                computation_cost,
+            )
+            .as_str(),
+        );
+
+        let info = self.gas_status.get_others_info();
+        for (idx, (gas_used, instr_count, stack_height, stack_size)) in info.into_iter().enumerate() {
+            let bucket_cost = get_bucket_cost(&self.cost_table.computation_bucket, gas_used);
+            // charge extra on top of `computation_cost` to make the total computation
+            // cost a bucket value
+            let total_gas_used = bucket_cost * self.gas_price;
+            let computation_cost = if self.gas_budget <= total_gas_used {
+                self.gas_budget
+            } else {
+                total_gas_used
+            };
+            write_gas_stats(
+                format!(
+                    "{}: c_c_v{idx} = {}, ins_v{idx} = {}, \
+                    st_h_v{idx} = {}, st_s_v{idx} = {}, gas_v{idx} = {}",
+                    digest,
+                    computation_cost,
+                    instr_count,
+                    stack_height,
+                    stack_size,
+                    gas_used,
+                )
+                .as_str(),
+            );
+        }
     }
 }
 
@@ -335,12 +405,16 @@ impl SuiGasStatusAPI for SuiGasStatus {
         let sender_rebate = sender_rebate(self.storage_rebate, self.rebate_rate);
         assert!(sender_rebate <= self.storage_rebate);
         let non_refundable_storage_fee = self.storage_rebate - sender_rebate;
-        GasCostSummary {
+        let summary = GasCostSummary {
             computation_cost: self.computation_cost,
             storage_cost: self.storage_cost,
             storage_rebate: sender_rebate,
             non_refundable_storage_fee,
-        }
+        };
+        if let Some(digest) = self.tx_digest {
+            self.gas_status_stats(&summary, digest);
+        };
+        summary
     }
 
     fn gas_budget(&self) -> u64 {
