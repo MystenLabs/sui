@@ -258,6 +258,10 @@ pub trait IndexerStore {
         &self,
         checkpoint: i64,
     ) -> Result<AddressStats, IndexerError>;
+    async fn get_all_epoch_address_stats(
+        &self,
+        descending_order: Option<bool>,
+    ) -> Result<Vec<AddressStats>, IndexerError>;
 }
 
 #[derive(Clone, Debug)]
