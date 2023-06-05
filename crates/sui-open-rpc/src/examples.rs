@@ -26,7 +26,7 @@ use sui_json_rpc_types::TransactionFilter;
 use sui_json_rpc_types::{
     Balance, Checkpoint, CheckpointId, CheckpointPage, Coin, CoinPage, DelegatedStake,
     DynamicFieldPage, EventPage, MoveCallParams, MoveFunctionArgType, ObjectChange,
-    ObjectValueKind::ByImmutableReference, ObjectValueKind::ByMutableReference, 
+    ObjectValueKind::ByImmutableReference, ObjectValueKind::ByMutableReference,
     ObjectValueKind::ByValue, ObjectsPage, OwnedObjectRef, Page, RPCTransactionRequestParams,
     Stake, StakeStatus, SuiCommittee, SuiData, SuiEvent, SuiExecutionStatus,
     SuiGetPastObjectRequest, SuiLoadedChildObject, SuiLoadedChildObjectsResponse, SuiMoveAbility,
@@ -1417,7 +1417,7 @@ impl RpcExampleProvider {
                     stake_active_epoch: 63,
                     principal,
                     status: StakeStatus::Active { 
-                        estimated_reward: (principal as f64 * 0.0026) as u64 
+                        estimated_reward: (principal as f64 * 0.0026) as u64,
                     },
                 },
                 Stake {
@@ -1460,7 +1460,7 @@ impl RpcExampleProvider {
                     stake_active_epoch: 63,
                     principal,
                     status: StakeStatus::Active { 
-                        estimated_reward: (principal as f64 * 0.0026) as u64 
+                        estimated_reward: (principal as f64 * 0.0026) as u64,
                     },
                 },
                 Stake {
