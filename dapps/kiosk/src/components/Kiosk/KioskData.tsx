@@ -5,34 +5,24 @@ import { useWalletKit } from '@mysten/wallet-kit';
 import { Tab } from '@headlessui/react';
 import { OwnedObjects } from '../Inventory/OwnedObjects';
 import { KioskItems } from './KioskItems';
-import { Kiosk, getKioskObject, withdrawFromKiosk } from '@mysten/kiosk';
-import { useEffect, useState } from 'react';
+import { withdrawFromKiosk } from '@mysten/kiosk';
 import { TransactionBlock, formatAddress } from '@mysten/sui.js';
 import { ExplorerLink } from '../Base/ExplorerLink';
 import { formatSui, mistToSui } from '../../utils/utils';
 import { useTransactionExecution } from '../../hooks/useTransactionExecution';
 import { toast } from 'react-hot-toast';
-import { useRpc } from '../../context/RpcClientContext';
-import { useOwnedKiosk } from '../../hooks/kiosk';
+import { useKioskDetails, useOwnedKiosk } from '../../hooks/kiosk';
+import { Loading } from '../Base/Loading';
 
 export function KioskData() {
-  const provider = useRpc();
   const { currentAccount } = useWalletKit();
-  const [kiosk, setKiosk] = useState<Kiosk | undefined>(undefined);
-
   const { data: ownedKiosk } = useOwnedKiosk();
+  const { signAndExecute } = useTransactionExecution();
 
   const kioskId = ownedKiosk?.kioskId;
   const kioskOwnerCap = ownedKiosk?.kioskCap;
 
-  const { signAndExecute } = useTransactionExecution();
-
-  useEffect(() => {
-    if (!kioskId) return;
-    if (!kiosk && ownedKiosk?.kioskId) {
-      getKioskObject(provider, kioskId).then((res) => setKiosk(res));
-    }
-  }, [kioskId]);
+  const { data: kiosk, isLoading } = useKioskDetails(kioskId);
 
   const withdrawProfits = async () => {
     if (!kiosk || !kioskId || !kioskOwnerCap || !currentAccount?.address)
@@ -50,6 +40,7 @@ export function KioskData() {
 
   const profits = formatSui(mistToSui(kiosk?.profits));
 
+  if (isLoading) return <Loading />;
   return (
     <div className="container">
       <div className="my-12 ">

@@ -1,6 +1,7 @@
 import { useWalletKit } from '@mysten/wallet-kit';
 import { useQuery } from '@tanstack/react-query';
 import {
+  TANSTACK_KIOSK_DATA_KEY,
   TANSTACK_KIOSK_KEY,
   TANSTACK_OWNED_KIOSK_KEY,
 } from '../utils/constants';
@@ -13,9 +14,11 @@ import {
 } from '@mysten/sui.js';
 import {
   KIOSK_OWNER_CAP,
+  Kiosk,
   KioskItem,
   KioskListing,
   fetchKiosk,
+  getKioskObject,
 } from '@mysten/kiosk';
 import { parseObjectDisplays, processKioskListings } from '../utils/utils';
 import { OwnedObjectType } from '../components/Inventory/OwnedObjects';
@@ -59,14 +62,13 @@ export function useOwnedKiosk() {
 }
 
 /**
- * A hook to fetch a kiosk by its id.
+ * A hook to fetch a kiosk (items, listings, etc) by its id.
  */
 export function useKiosk(kioskId: string | undefined | null) {
-  const { currentAccount } = useWalletKit();
   const provider = useRpc();
 
   return useQuery({
-    queryKey: [TANSTACK_KIOSK_KEY, kioskId, currentAccount?.address],
+    queryKey: [TANSTACK_KIOSK_KEY, kioskId],
     queryFn: async (): Promise<{
       items: OwnedObjectType[];
       listings: Record<ObjectId, KioskListing>;
@@ -106,6 +108,21 @@ export function useKiosk(kioskId: string | undefined | null) {
           res.items.map((x) => x.listing) as KioskListing[],
         ),
       };
+    },
+  });
+}
+
+/**
+ * A hook to fetch a kiosk's details.
+ */
+export function useKioskDetails(kioskId: string | undefined | null) {
+  const provider = useRpc();
+
+  return useQuery({
+    queryKey: [TANSTACK_KIOSK_DATA_KEY, kioskId],
+    queryFn: async (): Promise<Kiosk | null> => {
+      if (!kioskId) return null;
+      return await getKioskObject(provider, kioskId);
     },
   });
 }
