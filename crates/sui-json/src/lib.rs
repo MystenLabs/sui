@@ -904,7 +904,7 @@ fn convert_string_to_u256(s: &str) -> Result<U256, anyhow::Error> {
 #[macro_export]
 macro_rules! call_args {
         ($($value:expr),*) => {
-        Ok::<_, anyhow::Error>(vec![$(sui_json::call_arg!($value)?,)*])
+        anyhow::Ok(vec![$(sui_json::call_arg!($value)?,)*])
     };
     }
 
@@ -968,9 +968,9 @@ macro_rules! type_args {
         }
         impl <T: core::fmt::Display> SuiJsonTypeArg for T {
             fn to_sui_json(&self) -> anyhow::Result<SuiTypeTag> {
-                Ok(sui_types::parse_sui_type_tag(&self.to_string())?.into())
+                anyhow::Ok(sui_types::parse_sui_type_tag(&self.to_string())?.into())
             }
         }
-        Ok::<_, anyhow::Error>(vec![$($value.to_sui_json()?,)*])
+        anyhow::Ok(vec![$($value.to_sui_json()?,)*])
     }};
     }
