@@ -99,9 +99,9 @@ impl Authority {
         self.network_key.clone()
     }
 
-    pub fn hostname(&self) -> String {
+    pub fn hostname(&self) -> &str {
         assert!(self.initialised);
-        self.hostname.clone()
+        self.hostname.as_str()
     }
 }
 

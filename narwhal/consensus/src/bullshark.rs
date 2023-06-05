@@ -206,12 +206,12 @@ impl Bullshark {
             if !last_election_round.leader_found {
                 self.metrics
                     .leader_election
-                    .with_label_values(&["not_found", &hostname])
+                    .with_label_values(&["not_found", hostname])
                     .inc();
             } else if !last_election_round.leader_has_support {
                 self.metrics
                     .leader_election
-                    .with_label_values(&["not_enough_support", &hostname])
+                    .with_label_values(&["not_enough_support", hostname])
                     .inc();
             }
         }
@@ -347,7 +347,7 @@ impl Bullshark {
 
         self.metrics
             .leader_election
-            .with_label_values(&["elected", &hostname])
+            .with_label_values(&["elected", hostname])
             .inc();
 
         // The total leader_commits are expected to grow the same amount on validators,
