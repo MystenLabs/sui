@@ -289,6 +289,9 @@ module crypto::ec_ops {
         }
     }
 
+
+    // Broken since the current chain does not follow the RFC - https://github.com/drand/kyber-bls12381/issues/22
+    // TODO: Update once the new chain is deployed.
     #[test]
     fun test_ibe_decrypt_drand() {
         // Retrieved using 'curl https://api.drand.sh/dbd506d6ef76e5f386f41c651dcb808c5bcbd75471cc4eafa3f4df7ad4e4c493/info'
