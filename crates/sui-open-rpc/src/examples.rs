@@ -25,12 +25,12 @@ use sui_json_rpc_types::SuiTransactionBlockEvents;
 use sui_json_rpc_types::TransactionFilter;
 use sui_json_rpc_types::{
     Balance, Checkpoint, CheckpointId, CheckpointPage, Coin, CoinPage, DelegatedStake,
-    DynamicFieldPage, EventPage, MoveCallParams, MoveFunctionArgType, ObjectChange, 
+    DynamicFieldPage, EventPage, MoveCallParams, MoveFunctionArgType, ObjectChange,
     ObjectValueKind::ByImmutableReference, ObjectValueKind::ByMutableReference, 
     ObjectValueKind::ByValue, ObjectsPage, OwnedObjectRef, Page, RPCTransactionRequestParams,
-    Stake, StakeStatus, SuiCommittee, SuiData, SuiEvent, SuiExecutionStatus, SuiGetPastObjectRequest,
-    SuiLoadedChildObject, SuiLoadedChildObjectsResponse, SuiMoveAbility, SuiMoveAbilitySet,
-    SuiMoveNormalizedFunction, SuiMoveNormalizedModule, SuiMoveNormalizedStruct,
+    Stake, StakeStatus, SuiCommittee, SuiData, SuiEvent, SuiExecutionStatus,
+    SuiGetPastObjectRequest, SuiLoadedChildObject, SuiLoadedChildObjectsResponse, SuiMoveAbility,
+    SuiMoveAbilitySet, SuiMoveNormalizedFunction, SuiMoveNormalizedModule, SuiMoveNormalizedStruct,
     SuiMoveNormalizedType, SuiMoveVisibility, SuiObjectData, SuiObjectDataFilter,
     SuiObjectDataOptions, SuiObjectRef, SuiObjectResponse, SuiObjectResponseQuery, SuiParsedData,
     SuiPastObjectResponse, SuiTransactionBlock, SuiTransactionBlockData,
@@ -1416,7 +1416,9 @@ impl RpcExampleProvider {
                     stake_request_epoch: 62,
                     stake_active_epoch: 63,
                     principal,
-                    status: StakeStatus::Active { estimated_reward: (principal as f64 * 0.0026) as u64 },
+                    status: StakeStatus::Active { 
+                        estimated_reward: (principal as f64 * 0.0026) as u64 
+                    },
                 },
                 Stake {
                     staked_sui_id: ObjectID::new(self.rng.gen()),
@@ -1457,7 +1459,9 @@ impl RpcExampleProvider {
                     stake_request_epoch: 62,
                     stake_active_epoch: 63,
                     principal,
-                    status: StakeStatus::Active { estimated_reward: (principal as f64 * 0.0026) as u64 },
+                    status: StakeStatus::Active { 
+                        estimated_reward: (principal as f64 * 0.0026) as u64 
+                    },
                 },
                 Stake {
                     staked_sui_id: stake2,
@@ -1512,40 +1516,14 @@ impl RpcExampleProvider {
         )
     }
 
-    /*
-    
-
-    fn sui_try_multi_get_past_objects(&mut self) -> Examples {
-        let result = "";
-        
-        let objects = (0..3)
-        .map(|_| {
-            objectId: ObjectID::new(self.rng.gen()),
-            version: Default::default(),
-        }).collect();
-
-        Examples::new(
-            "sui_tryMultiGetPastObjects",
-            vec![ExamplePairing::new(
-                "Get past object data for multiple objects provided in the request.",
-                vec![],
-                json!(result),
-            )],
-        )
-    }
-    */
-
     fn sui_try_multi_get_past_objects(&mut self) -> Examples {
         let object_id = ObjectID::new(self.rng.gen());
         let object_id2 = ObjectID::new(self.rng.gen());
         let version = SequenceNumber::from_u64(4);
         let version2 = SequenceNumber::from_u64(12);
         let objects = vec![
-            SuiGetPastObjectRequest{
-                object_id,
-                version,
-            },
-            SuiGetPastObjectRequest{
+            SuiGetPastObjectRequest { object_id, version },
+            SuiGetPastObjectRequest {
                 object_id: object_id2,
                 version: version2,
             },
