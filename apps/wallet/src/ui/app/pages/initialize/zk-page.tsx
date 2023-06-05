@@ -109,7 +109,7 @@ export function ZkPage() {
                             createAccountMutation.isSuccess ||
                             isLoading ||
                             error ||
-                            !currentEpoch ||
+                            currentEpoch === null ||
                             isPinInputVisible
                         )
                     }
@@ -210,7 +210,7 @@ export function ZkPage() {
                             size="tall"
                             text="Continue"
                             disabled={
-                                !currentEpoch ||
+                                currentEpoch === null ||
                                 createAccountMutation.isLoading ||
                                 !pin.length
                             }
