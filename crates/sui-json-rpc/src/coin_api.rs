@@ -71,10 +71,10 @@ impl CoinReadApiServer for CoinReadApi {
     ) -> RpcResult<CoinPage> {
         with_tracing!(async move {
             let coin_type_tag = TypeTag::Struct(Box::new(match coin_type {
-                Some(c) => parse_sui_struct_tag(&c).map_err(|_| {
+                Some(c) => parse_sui_struct_tag(&c).map_err(|e| {
                     Error::SuiRpcInputError(
                         // todo: clean up parse_sui_struct_tag to return actionable errors
-                        SuiRpcInputError::CannotParseSuiStructTag(c),
+                        SuiRpcInputError::CannotParseSuiStructTag(format!("{e}")),
                     )
                 })?,
                 None => GAS::type_(),
@@ -551,7 +551,7 @@ mod tests {
             assert_eq!(error_object.code(), -32602);
             assert_eq!(
                 error_object.message(),
-                "Invalid struct type: 0x2::invalid::struct::tag"
+                "Invalid struct type: 0x2::invalid::struct::tag. Got error: Expected end of token stream. Got: ::"
             );
         }
 

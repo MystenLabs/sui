@@ -115,6 +115,6 @@ pub enum SuiRpcInputError {
     #[error("Unable to serialize: {0}")]
     CannotSerialize(#[from] bcs::Error),
 
-    #[error("Invalid struct type: {0}")]
+    #[error("{0}")]
     CannotParseSuiStructTag(String),
 }
