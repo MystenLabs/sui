@@ -1262,8 +1262,10 @@ module deepbook::clob {
                 price_low,
                 clock::timestamp_ms(clock)
             );
-            vector::push_back(&mut price_vec, price_low);
-            vector::push_back(&mut depth_vec, depth);
+            if (depth != 0) {
+                vector::push_back(&mut price_vec, price_low);
+                vector::push_back(&mut depth_vec, depth);
+            };
             let (next_price, _) = critbit::next_leaf(&pool.bids, price_low);
             if (next_price == 0) { break }
             else { price_low = next_price };
@@ -1296,8 +1298,10 @@ module deepbook::clob {
                 price_low,
                 clock::timestamp_ms(clock)
             );
-            vector::push_back(&mut price_vec, price_low);
-            vector::push_back(&mut depth_vec, depth);
+            if (depth != 0) {
+                vector::push_back(&mut price_vec, price_low);
+                vector::push_back(&mut depth_vec, depth);
+            };
             let (next_price, _) = critbit::next_leaf(&pool.asks, price_low);
             if (next_price == 0) { break }
             else { price_low = next_price };

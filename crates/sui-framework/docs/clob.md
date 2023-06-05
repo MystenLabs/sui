@@ -2583,8 +2583,10 @@ The latter is the corresponding depth list
             price_low,
             <a href="../../../.././build/Sui/docs/clock.md#0x2_clock_timestamp_ms">clock::timestamp_ms</a>(<a href="../../../.././build/Sui/docs/clock.md#0x2_clock">clock</a>)
         );
-        <a href="_push_back">vector::push_back</a>(&<b>mut</b> price_vec, price_low);
-        <a href="_push_back">vector::push_back</a>(&<b>mut</b> depth_vec, depth);
+        <b>if</b> (depth != 0) {
+            <a href="_push_back">vector::push_back</a>(&<b>mut</b> price_vec, price_low);
+            <a href="_push_back">vector::push_back</a>(&<b>mut</b> depth_vec, depth);
+        };
         <b>let</b> (next_price, _) = <a href="critbit.md#0xdee9_critbit_next_leaf">critbit::next_leaf</a>(&pool.bids, price_low);
         <b>if</b> (next_price == 0) { <b>break</b> }
         <b>else</b> { price_low = next_price };
@@ -2637,8 +2639,10 @@ The latter is the corresponding depth list
             price_low,
             <a href="../../../.././build/Sui/docs/clock.md#0x2_clock_timestamp_ms">clock::timestamp_ms</a>(<a href="../../../.././build/Sui/docs/clock.md#0x2_clock">clock</a>)
         );
-        <a href="_push_back">vector::push_back</a>(&<b>mut</b> price_vec, price_low);
-        <a href="_push_back">vector::push_back</a>(&<b>mut</b> depth_vec, depth);
+        <b>if</b> (depth != 0) {
+            <a href="_push_back">vector::push_back</a>(&<b>mut</b> price_vec, price_low);
+            <a href="_push_back">vector::push_back</a>(&<b>mut</b> depth_vec, depth);
+        };
         <b>let</b> (next_price, _) = <a href="critbit.md#0xdee9_critbit_next_leaf">critbit::next_leaf</a>(&pool.asks, price_low);
         <b>if</b> (next_price == 0) { <b>break</b> }
         <b>else</b> { price_low = next_price };
