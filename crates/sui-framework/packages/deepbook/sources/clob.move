@@ -1247,15 +1247,15 @@ module deepbook::clob {
         price_high: u64,
         clock: &Clock
     ): (vector<u64>, vector<u64>) {
+        let price_vec = vector::empty<u64>();
+        let depth_vec = vector::empty<u64>();
+        if (critbit::is_empty(&pool.bids)) { return (price_vec, depth_vec) };
         let (price_low_, _) = critbit::min_leaf(&pool.bids);
         if (price_low < price_low_) price_low = price_low_;
         let (price_high_, _) = critbit::max_leaf(&pool.bids);
         if (price_high > price_high_) price_high = price_high_;
         price_low = critbit::find_closest_key(&pool.bids, price_low);
         price_high = critbit::find_closest_key(&pool.bids, price_high);
-        let price_vec = vector::empty<u64>();
-        let depth_vec = vector::empty<u64>();
-        if (price_low == 0) { return (price_vec, depth_vec) };
         while (price_low <= price_high) {
             let depth = get_level2_book_status<BaseAsset, QuoteAsset>(
                 &pool.bids,
@@ -1281,15 +1281,15 @@ module deepbook::clob {
         price_high: u64,
         clock: &Clock
     ): (vector<u64>, vector<u64>) {
+        let price_vec = vector::empty<u64>();
+        let depth_vec = vector::empty<u64>();
+        if (critbit::is_empty(&pool.asks)) { return (price_vec, depth_vec) };
         let (price_low_, _) = critbit::min_leaf(&pool.asks);
         if (price_low < price_low_) price_low = price_low_;
         let (price_high_, _) = critbit::max_leaf(&pool.asks);
         if (price_high > price_high_) price_high = price_high_;
         price_low = critbit::find_closest_key(&pool.asks, price_low);
         price_high = critbit::find_closest_key(&pool.asks, price_high);
-        let price_vec = vector::empty<u64>();
-        let depth_vec = vector::empty<u64>();
-        if (price_low == 0) { return (price_vec, depth_vec) };
         while (price_low <= price_high) {
             let depth = get_level2_book_status<BaseAsset, QuoteAsset>(
                 &pool.asks,
