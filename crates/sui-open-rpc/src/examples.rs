@@ -1505,7 +1505,7 @@ impl RpcExampleProvider {
         Examples::new(
             "suix_resolveNameServiceNames",
             vec![ExamplePairing::new(
-                "Returns the resolved address for the name the request provides.",
+                "Returns the SuiNS name for the address the request provides. Currently, the API returns only the first name in cases where there are multiple. Future support will use the cursor ID and limit values in the request to control pagination of the response for addresses with multiple names.",
                 vec![
                     ("address", json!(object_id)),
                     ("cursor", json!(next_cursor)),
