@@ -223,9 +223,11 @@ impl<'a> ShareOwnedAnalysis<'a> {
     }
 
     pub fn add_warning(&self, arg_index: usize, call_attr: AttrId) {
-        let message = "You may be trying to share an owned object. A typical pattern is to create an object and share it within the same function.";
+        let main_message = "Possible owned object share";
+        let label_message = "You may be trying to share an owned object. A typical pattern is to create an object and share it within the same function.";
         let warning_loc = self.func_data.locations.get(&call_attr).unwrap();
-        let label = Label::primary(warning_loc.file_id(), warning_loc.span());
+        let label =
+            Label::primary(warning_loc.file_id(), warning_loc.span()).with_message(label_message);
         let warning_id = WarningId {
             arg_index,
             call_attr,
@@ -233,7 +235,7 @@ impl<'a> ShareOwnedAnalysis<'a> {
         self.warnings.borrow_mut().insert(
             warning_id,
             Diagnostic::new(Severity::Warning)
-                .with_message(message)
+                .with_message(main_message)
                 .with_labels(vec![label]),
         );
     }

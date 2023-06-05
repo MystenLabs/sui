@@ -267,14 +267,16 @@ impl<'a> SelfTransferAnalysis<'a> {
         function_name: &str,
         env: &GlobalEnv,
     ) {
-        let message = format!(
-            "Instead of transferring object of type `{}` to `tx_context::sender()`, consider returning it from `{}`.
-            This allows a caller to use the object, and enables composability via programmable transactions",
+        let main_message = "Non-composable transfer to sender";
+
+        let label_message = format!("Instead of transferring object of type `{}` to `tx_context::sender()`, consider returning it from `{}`.\
+             This allows a caller to use the object, and enables composability via programmable transactions.",
             transferred_type.display(&env.get_type_display_ctx()),
             function_name,
         );
         let warning_loc = self.func_data.locations.get(&call_attr).unwrap();
-        let label = Label::primary(warning_loc.file_id(), warning_loc.span());
+        let label =
+            Label::primary(warning_loc.file_id(), warning_loc.span()).with_message(label_message);
         let warning_id = WarningId {
             arg_index,
             call_attr,
@@ -282,7 +284,7 @@ impl<'a> SelfTransferAnalysis<'a> {
         self.warnings.borrow_mut().insert(
             warning_id,
             Diagnostic::new(Severity::Warning)
-                .with_message(message)
+                .with_message(main_message)
                 .with_labels(vec![label]),
         );
     }

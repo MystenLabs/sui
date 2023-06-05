@@ -1,19 +1,19 @@
 processed 4 tasks
 
 task 2 'lint'. lines 22-36:
-warning: You may be trying to share an owned object. A typical pattern is to create an object and share it within the same function.
+warning: Possible owned object share
    ┌─ temp_test_file:32:9
    │
 32 │         transfer::public_share_object(arg);
-   │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ You may be trying to share an owned object. A typical pattern is to create an object and share it within the same function.
 
 
 
 task 3 'lint'. lines 38-59:
-warning: You may be trying to share an owned object. A typical pattern is to create an object and share it within the same function.
+warning: Possible owned object share
    ┌─ temp_test_file:53:9
    │
 53 │         transfer::public_share_object(o);
-   │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ You may be trying to share an owned object. A typical pattern is to create an object and share it within the same function.
 
 
