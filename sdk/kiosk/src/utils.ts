@@ -13,16 +13,21 @@ import {
 } from '@mysten/sui.js';
 import { KioskData, KioskListing } from './query/kiosk';
 import { DynamicFieldInfo } from '@mysten/sui.js/dist/types/dynamic_fields';
-import { bcs, Kiosk } from './bcs';
+import { bcs } from './bcs';
+import { KIOSK_TYPE, Kiosk, RulesEnvironmentParam } from './types';
+import {
+  MAINNET_RULES_PACKAGE_ADDRESS,
+  TESTNET_RULES_PACKAGE_ADDRESS,
+} from './constants';
 
-/**
- * A valid argument for any of the Kiosk functions.
- */
-export type ObjectArgument =
-  | string
-  | TransactionArgument
-  | SharedObjectRef
-  | SuiObjectRef;
+/* A simple map to the rule package addresses */
+// TODO: Supply the mainnet and devnet addresses.
+export const rulesPackageAddresses = {
+  mainnet: MAINNET_RULES_PACKAGE_ADDRESS,
+  testnet: TESTNET_RULES_PACKAGE_ADDRESS,
+  devnet: '',
+  custom: null,
+};
 
 /**
  * Convert any valid input into a TransactionArgument.
@@ -68,7 +73,7 @@ export async function getKioskObject(
     throw new Error(`Invalid kiosk query: ${id}, expected object, got package`);
   }
 
-  return bcs.de('0x2::kiosk::Kiosk', queryRes.data.bcs!.bcsBytes, 'base64');
+  return bcs.de(KIOSK_TYPE, queryRes.data.bcs!.bcsBytes, 'base64');
 }
 
 // helper to extract kiosk data from dynamic fields.
@@ -109,18 +114,18 @@ export function extractKioskData(
 }
 
 // e.g. 0x2::kiosk::Item -> kiosk::Item
-export const getTypeWithoutPackageAddress = (type: string) => {
+export function getTypeWithoutPackageAddress(type: string) {
   return type.split('::').slice(-2).join('::');
-};
+}
 
 /**
  * A helper that attaches the listing prices to kiosk listings.
  */
-export const attachListingsAndPrices = (
+export function attachListingsAndPrices(
   kioskData: KioskData,
   listings: KioskListing[],
   listingObjects: SuiObjectResponse[],
-) => {
+) {
   // map item listings as {item_id: KioskListing}
   // for easier mapping on the nex
   const itemListings = listings.reduce<Record<ObjectId, KioskListing>>(
@@ -143,15 +148,15 @@ export const attachListingsAndPrices = (
   kioskData.items.map((item) => {
     item.listing = itemListings[item.objectId] || undefined;
   });
-};
+}
 
 /**
  * A Helper to attach locked state to items in Kiosk Data.
  */
-export const attachLockedItems = (
+export function attachLockedItems(
   kioskData: KioskData,
   lockedItemIds: ObjectId[],
-) => {
+) {
   // map lock status in an array of type { item_id: true }
   const lockedStatuses = lockedItemIds.reduce<Record<ObjectId, boolean>>(
     (acc: Record<ObjectId, boolean>, item: string) => {
@@ -165,4 +170,19 @@ export const attachLockedItems = (
   kioskData.items.map((item) => {
     item.isLocked = lockedStatuses[item.objectId] || false;
   });
-};
+}
+
+/**
+ * A helper to get a rule's environment address.
+ */
+export function getRulePackageAddress(
+  environment: RulesEnvironmentParam,
+): string {
+  // if we have custom environment, we return it.
+  if (environment.env === 'custom') {
+    if (!environment.address)
+      throw new Error('Please supply the custom package address for rules.');
+    return environment.address;
+  }
+  return rulesPackageAddresses[environment.env];
+}

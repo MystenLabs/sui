@@ -7,19 +7,23 @@ import {
   TransactionBlock,
 } from '@mysten/sui.js';
 
-import { ObjectArgument, getTypeWithoutPackageAddress, objArg } from '../utils';
-import { KioskListing } from '../query/kiosk';
-import { TransferPolicy } from '../bcs';
-import { confirmRequest, resolveRoyaltyRule } from './transfer-policy';
-
-/** The Kiosk module. */
-export const KIOSK_MODULE = '0x2::kiosk';
-
-/** The Kiosk type. */
-export const KIOSK_TYPE = `${KIOSK_MODULE}::Kiosk`;
-
-/** The Kiosk Owner Cap Type */
-export const KIOSK_OWNER_CAP = `${KIOSK_MODULE}::KioskOwnerCap`;
+import { getTypeWithoutPackageAddress, objArg } from '../utils';
+import {
+  confirmRequest,
+  resolveKioskLockRule,
+  resolveRoyaltyRule,
+} from './transfer-policy';
+import {
+  KIOSK_LOCK_RULE,
+  KIOSK_MODULE,
+  KIOSK_TYPE,
+  ObjectArgument,
+  PurchaseAndResolvePoliciesResponse,
+  PurchaseOptionalParams,
+  ROYALTY_RULE,
+  RulesEnvironmentParam,
+  TransferPolicy,
+} from '../types';
 
 /**
  * Create a new shared Kiosk and returns the [kiosk, kioskOwnerCap] tuple.
@@ -228,7 +232,12 @@ export function withdrawFromKiosk(
 ): TransactionArgument {
   let amountArg =
     amount !== null
-      ? tx.pure(amount, 'Option<u64>')
+      ? tx.pure(
+          {
+            Some: amount,
+          },
+          'Option<u64>',
+        )
       : tx.pure({ None: true }, 'Option<u64>');
 
   let [coin] = tx.moveCall({
@@ -335,46 +344,71 @@ export function returnValue(
  * Completes the full purchase flow that includes:
  * 1. Purchasing the item.
  * 2. Resolving all the transfer policies (if any).
- * 3. Returns the PurchasedItem OR places the item in the user's kiosk (if there's a kiosk lock policy).
+ * 3. Returns the item and whether the user can transfer it or not.
+ *
+ * If the item can be transferred, there's an extra transaction required by the user
+ * to transfer it to an address or place it in their kiosk.
  */
 export function purchaseAndResolvePolicies(
   tx: TransactionBlock,
   itemType: string,
-  listing: KioskListing,
-  kioskId: string,
-  itemId: string,
+  price: string,
+  kiosk: ObjectArgument,
+  itemId: SuiAddress,
   policy: TransferPolicy,
-): TransactionArgument | null {
+  environment: RulesEnvironmentParam,
+  extraParams?: PurchaseOptionalParams,
+): PurchaseAndResolvePoliciesResponse {
   // if we don't pass the listing or the listing doens't have a price, return.
-  if (!listing || listing?.price === undefined) return null;
+  if (price === undefined || typeof price !== 'string')
+    throw new Error(`Price of the listing is not supplied.`);
 
   // Split the coin for the amount of the listing.
-  const coin = tx.splitCoins(tx.gas, [tx.pure(listing.price)]);
+  const coin = tx.splitCoins(tx.gas, [tx.pure(price, 'u64')]);
 
   // initialize the purchase `kiosk::purchase`
   const [purchasedItem, transferRequest] = purchase(
     tx,
     itemType,
-    kioskId,
+    kiosk,
     itemId,
     coin,
   );
 
   // Start resolving rules.
-  // For now, we only support royalty rule.
-  // Will need some tweaking to make it function properly with the other
-  // ruleset.
+  // Right now we support `kiosk_lock_rule` and `royalty_rule`.
+  // They can also be supplied in parallel (supports combination).
+  let hasKioskLockRule = false;
+
   for (let rule of policy.rules) {
     const ruleWithoutAddr = getTypeWithoutPackageAddress(rule);
 
     switch (ruleWithoutAddr) {
-      case 'royalty_rule::Rule':
+      case ROYALTY_RULE:
         resolveRoyaltyRule(
           tx,
           itemType,
-          listing.price,
+          price,
           policy.id,
           transferRequest,
+          environment,
+        );
+        break;
+      case KIOSK_LOCK_RULE:
+        if (!extraParams?.ownedKiosk || !extraParams?.ownedKioskCap)
+          throw new Error(
+            `This item type ${itemType} has a 'kiosk_lock_rule', but function call is missing user's kiosk and kioskCap params`,
+          );
+        hasKioskLockRule = true;
+        resolveKioskLockRule(
+          tx,
+          itemType,
+          purchasedItem,
+          extraParams.ownedKiosk,
+          extraParams.ownedKioskCap,
+          policy.id,
+          transferRequest,
+          environment,
         );
         break;
       default:
@@ -385,5 +419,8 @@ export function purchaseAndResolvePolicies(
   // confirm the Transfer Policy request.
   confirmRequest(tx, itemType, policy.id, transferRequest);
 
-  return purchasedItem;
+  return {
+    item: purchasedItem,
+    canTransfer: !hasKioskLockRule,
+  };
 }

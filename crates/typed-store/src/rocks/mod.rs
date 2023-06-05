@@ -341,15 +341,19 @@ impl RocksDB {
         delegate_call!(self.try_catch_up_with_primary())
     }
 
-    pub fn write(&self, batch: RocksDBBatch) -> Result<(), TypedStoreError> {
+    pub fn write(
+        &self,
+        batch: RocksDBBatch,
+        writeopts: &WriteOptions,
+    ) -> Result<(), TypedStoreError> {
         fail_point!("batch-write-before");
         let ret = match (self, batch) {
             (RocksDB::DBWithThreadMode(db), RocksDBBatch::Regular(batch)) => {
-                db.underlying.write(batch)?;
+                db.underlying.write_opt(batch, writeopts)?;
                 Ok(())
             }
             (RocksDB::OptimisticTransactionDB(db), RocksDBBatch::Transactional(batch)) => {
-                db.underlying.write(batch)?;
+                db.underlying.write_opt(batch, writeopts)?;
                 Ok(())
             }
             _ => Err(TypedStoreError::RocksDBError(
@@ -779,6 +783,7 @@ impl<K, V> DBMap<K, V> {
         DBBatch::new(
             &self.rocksdb,
             batch,
+            self.opts.writeopts(),
             &self.db_metrics,
             &self.write_sample_interval,
         )
@@ -1133,6 +1138,7 @@ impl<K, V> DBMap<K, V> {
 pub struct DBBatch {
     rocksdb: Arc<RocksDB>,
     batch: RocksDBBatch,
+    opts: WriteOptions,
     db_metrics: Arc<DBMetrics>,
     write_sample_interval: SamplingInterval,
 }
@@ -1144,12 +1150,14 @@ impl DBBatch {
     pub fn new(
         dbref: &Arc<RocksDB>,
         batch: RocksDBBatch,
+        opts: WriteOptions,
         db_metrics: &Arc<DBMetrics>,
         write_sample_interval: &SamplingInterval,
     ) -> Self {
         DBBatch {
             rocksdb: dbref.clone(),
             batch,
+            opts,
             db_metrics: db_metrics.clone(),
             write_sample_interval: write_sample_interval.clone(),
         }
@@ -1172,7 +1180,7 @@ impl DBBatch {
         } else {
             None
         };
-        self.rocksdb.write(self.batch)?;
+        self.rocksdb.write(self.batch, &self.opts)?;
         self.db_metrics
             .op_metrics
             .rocksdb_batch_commit_bytes
@@ -2082,9 +2090,11 @@ pub fn read_size_from_env(var_name: &str) -> Option<usize> {
         .ok()
 }
 
-#[derive(Default, Clone, Debug)]
+#[derive(Clone, Debug)]
 pub struct ReadWriteOptions {
     pub ignore_range_deletions: bool,
+    // Whether to sync to disk on every write.
+    sync_to_disk: bool,
 }
 
 impl ReadWriteOptions {
@@ -2093,8 +2103,25 @@ impl ReadWriteOptions {
         readopts.set_ignore_range_deletions(self.ignore_range_deletions);
         readopts
     }
+
     pub fn writeopts(&self) -> WriteOptions {
-        WriteOptions::default()
+        let mut opts = WriteOptions::default();
+        opts.set_sync(self.sync_to_disk);
+        opts
+    }
+
+    pub fn set_ignore_range_deletions(mut self, ignore: bool) -> Self {
+        self.ignore_range_deletions = ignore;
+        self
+    }
+}
+
+impl Default for ReadWriteOptions {
+    fn default() -> Self {
+        Self {
+            ignore_range_deletions: false,
+            sync_to_disk: std::env::var("SUI_DB_SYNC_TO_DISK").map_or(false, |v| v != "0"),
+        }
     }
 }
 
