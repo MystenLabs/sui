@@ -19,7 +19,7 @@ import { useTransactionExecution } from '../../hooks/useTransactionExecution';
 import { Loading } from '../Base/Loading';
 import { toast } from 'react-hot-toast';
 import { useWalletKit } from '@mysten/wallet-kit';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useRpc } from '../../context/RpcClientContext';
 import { useKiosk, useOwnedKiosk } from '../../hooks/kiosk';
 
@@ -46,8 +46,17 @@ export function KioskItems({ kioskId }: { kioskId?: string }): JSX.Element {
   const {
     data: kioskData,
     isLoading,
+    isError,
     refetch: getKioskData,
   } = useKiosk(kioskId);
+
+  const navigate = useNavigate();
+  if (isError) {
+    toast.error(
+      'The requested kiosk was not found. You either supplied a wrong kiosk Id or the RPC call failed.',
+    );
+    navigate('/');
+  }
 
   const kioskItems = kioskData?.items || [];
   const kioskListings = kioskData?.listings || {};
@@ -105,7 +114,7 @@ export function KioskItems({ kioskId }: { kioskId?: string }): JSX.Element {
     }
   };
 
-  const purchaseItem = async (item: OwnedObjectType) => {
+  const purchaseItem = async (item: OwnedObjectType): Promise<void> => {
     if (
       !item ||
       !item.listing?.price ||
@@ -119,10 +128,12 @@ export function KioskItems({ kioskId }: { kioskId?: string }): JSX.Element {
     const policy = await queryTransferPolicy(provider, item.type);
 
     const policyId = policy[0]?.id;
-    if (!policyId)
-      return toast.error(
+    if (!policyId) {
+      toast.error(
         `This item doesn't have a Transfer Policy attached so it can't be traded through kiosk.`,
       );
+      return;
+    }
 
     const tx = new TransactionBlock();
 
@@ -177,6 +188,7 @@ export function KioskItems({ kioskId }: { kioskId?: string }): JSX.Element {
             isGuest={!isOwnedKiosk}
             listing={kioskListings && kioskListings[item.objectId]}
             takeFn={takeFromKiosk}
+            //@ts-ignore
             listFn={(item: OwnedObjectType) => setModalItem(item)}
             delistFn={(item: OwnedObjectType) => delistFromKiosk(item)}
             purchaseFn={purchaseItem}
