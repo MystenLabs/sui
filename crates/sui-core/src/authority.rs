@@ -794,8 +794,10 @@ impl AuthorityState {
             );
             self.database
                 .fullnode_fast_path_insert_objects_to_object_store_maybe(&objects)?;
-            self.transaction_manager()
-                .objects_available(objects.iter().map(InputKey::from).collect(), epoch_store);
+            self.transaction_manager().fastpath_objects_available(
+                objects.iter().map(InputKey::from).collect(),
+                epoch_store,
+            );
         }
 
         if transaction.contains_shared_object() {

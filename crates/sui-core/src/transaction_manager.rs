@@ -273,8 +273,14 @@ impl Inner {
     // Checks if there is any transaction waiting on the lock of input_key, and try to
     // update transactions that can acquire the lock.
     // Must ensure input_key is available in storage before calling this function.
-    fn try_acquire_lock(&mut self, input_key: InputKey) -> Vec<PendingCertificate> {
-        self.available_objects_cache.insert(&input_key);
+    fn try_acquire_lock(
+        &mut self,
+        input_key: InputKey,
+        update_cache: bool,
+    ) -> Vec<PendingCertificate> {
+        if update_cache {
+            self.available_objects_cache.insert(&input_key);
+        }
 
         let mut ready_certificates = Vec::new();
 
@@ -677,6 +683,18 @@ impl TransactionManager {
     /// Notifies TransactionManager that the given objects are available in the objects table.
     /// Useful when transactions associated with the objects are not known, e.g. after checking
     /// object availability from storage, or for testing.
+    pub(crate) fn fastpath_objects_available(
+        &self,
+        input_keys: Vec<InputKey>,
+        epoch_store: &AuthorityPerEpochStore,
+    ) {
+        let mut inner = self.inner.write();
+        let _scope = monitored_scope("TransactionManager::objects_available::wlock");
+        self.objects_available_locked(&mut inner, epoch_store, input_keys, false);
+        inner.maybe_shrink_capacity();
+    }
+
+    #[cfg(test)]
     pub(crate) fn objects_available(
         &self,
         input_keys: Vec<InputKey>,
@@ -684,7 +702,7 @@ impl TransactionManager {
     ) {
         let mut inner = self.inner.write();
         let _scope = monitored_scope("TransactionManager::objects_available::wlock");
-        self.objects_available_locked(&mut inner, epoch_store, input_keys);
+        self.objects_available_locked(&mut inner, epoch_store, input_keys, true);
         inner.maybe_shrink_capacity();
     }
 
@@ -693,6 +711,7 @@ impl TransactionManager {
         inner: &mut Inner,
         epoch_store: &AuthorityPerEpochStore,
         input_keys: Vec<InputKey>,
+        update_cache: bool,
     ) {
         if inner.epoch != epoch_store.epoch() {
             warn!(
@@ -707,7 +726,7 @@ impl TransactionManager {
 
         for input_key in input_keys {
             trace!(?input_key, "object available");
-            for ready_cert in inner.try_acquire_lock(input_key) {
+            for ready_cert in inner.try_acquire_lock(input_key, update_cache) {
                 self.certificate_ready(inner, ready_cert);
             }
         }
@@ -739,7 +758,7 @@ impl TransactionManager {
                 return;
             }
 
-            self.objects_available_locked(&mut inner, epoch_store, output_object_keys);
+            self.objects_available_locked(&mut inner, epoch_store, output_object_keys, true);
 
             let Some(acquired_locks) = inner.executing_certificates.remove(digest) else {
                 trace!("{:?} not found in executing certificates, likely because it is a system transaction", digest);
@@ -757,7 +776,7 @@ impl TransactionManager {
                     "Certificate {:?} not found among readonly lock holders",
                     digest
                 );
-                for ready_cert in inner.try_acquire_lock(key) {
+                for ready_cert in inner.try_acquire_lock(key, true) {
                     self.certificate_ready(&mut inner, ready_cert);
                 }
             }
