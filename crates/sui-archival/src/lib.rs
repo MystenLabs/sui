@@ -16,12 +16,10 @@ use num_enum::TryFromPrimitive;
 use object_store::path::Path;
 use object_store::DynObjectStore;
 use serde::{Deserialize, Serialize};
-use std::fs::File;
-use std::io::{BufReader, BufWriter, Read, Seek, SeekFrom, Write};
+use std::io::{BufWriter, Cursor, Read, Seek, SeekFrom, Write};
 use std::ops::Range;
-use std::path::PathBuf;
 use std::sync::Arc;
-use sui_storage::object_store::util::{copy_file, path_to_filesystem, put};
+use sui_storage::object_store::util::{get, put};
 use sui_storage::{compute_sha3_checksum, Blob, Encoding, FileCompression, SHA3_BYTES};
 
 /// The following describes the format of checkpoint (*.chk) and summary (*.sum) files used for
@@ -271,22 +269,11 @@ pub fn create_file_metadata(
     Ok(file_metadata)
 }
 
-pub async fn read_manifest(
-    local_root_path: PathBuf,
-    local_store: Arc<DynObjectStore>,
-    remote_store: Arc<DynObjectStore>,
-) -> Result<Manifest> {
+pub async fn read_manifest(remote_store: Arc<DynObjectStore>) -> Result<Manifest> {
     let manifest_file_path = Path::from(MANIFEST_FILENAME);
-    copy_file(
-        manifest_file_path.clone(),
-        manifest_file_path.clone(),
-        remote_store,
-        local_store,
-    )
-    .await?;
-    let manifest_file = File::open(path_to_filesystem(local_root_path, &manifest_file_path)?)?;
-    let manifest_file_size = manifest_file.metadata()?.len() as usize;
-    let mut manifest_reader = BufReader::new(manifest_file);
+    let vec = get(&manifest_file_path, remote_store).await?.to_vec();
+    let manifest_file_size = vec.len();
+    let mut manifest_reader = Cursor::new(vec);
     manifest_reader.rewind()?;
     let magic = manifest_reader.read_u32::<BigEndian>()?;
     if magic != MANIFEST_FILE_MAGIC {
@@ -310,21 +297,18 @@ pub async fn read_manifest(
     }
     manifest_reader.rewind()?;
     manifest_reader.seek(SeekFrom::Start(MAGIC_BYTES as u64))?;
-    let blob = Blob::read(&mut manifest_reader)?;
-    blob.decode()
+    Blob::read(&mut manifest_reader)?.decode()
 }
 
-pub async fn write_manifest(
-    manifest: Manifest,
-    path: Path,
-    remote_store: Arc<DynObjectStore>,
-) -> Result<()> {
+pub async fn write_manifest(manifest: Manifest, remote_store: Arc<DynObjectStore>) -> Result<()> {
+    let path = Path::from(MANIFEST_FILENAME);
     let mut buf = BufWriter::new(vec![]);
     buf.write_u32::<BigEndian>(MANIFEST_FILE_MAGIC)?;
     let blob = Blob::encode(&manifest, Encoding::Bcs)?;
     blob.write(&mut buf)?;
+    buf.flush()?;
     let mut hasher = Sha3_256::default();
-    hasher.update(buf.buffer());
+    hasher.update(buf.get_ref());
     let computed_digest = hasher.finalize().digest;
     buf.write_all(&computed_digest)?;
     let bytes = Bytes::from(buf.into_inner()?);
