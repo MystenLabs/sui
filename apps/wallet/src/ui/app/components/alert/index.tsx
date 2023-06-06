@@ -41,7 +41,7 @@ export default function Alert({ children, mode = 'warning' }: AlertProps) {
     return (
         <div className={alertStyles({ mode })}>
             {modeToIcon[mode]}
-            <div className="break-all flex-1">{children}</div>
+            <div className="break-words flex-1">{children}</div>
         </div>
     );
 }
