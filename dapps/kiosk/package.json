@@ -1,0 +1,55 @@
+{
+  "name": "kiosk-demo",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "lint": "eslint ./src/**/**",
+    "lint:fix": "eslint ./src/**/** --fix",
+    "prettier:fix": "prettier --write .",
+    "precommit": "pnpm prettier:fix && pnpm lint"
+  },
+  "dependencies": {
+    "@headlessui/react": "^1.7.14",
+    "@headlessui/tailwindcss": "^0.1.3",
+    "@mysten/kiosk": "workspace:*",
+    "@mysten/sui.js": "workspace:*",
+    "@mysten/wallet-kit": "workspace:*",
+    "@tanstack/react-query": "^4.29.3",
+    "classnames": "^2.3.2",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-hot-toast": "^2.4.0",
+    "react-router-dom": "^6.10.0"
+  },
+  "prettier": {
+    "printWidth": 80,
+    "semi": true,
+    "singleQuote": true,
+    "trailingComma": "all"
+  },
+  "devDependencies": {
+    "@tanstack/eslint-plugin-query": "^4.29.4",
+    "@types/react": "^18.0.35",
+    "@types/react-dom": "^18.0.11",
+    "@typescript-eslint/eslint-plugin": "^5.59.8",
+    "@typescript-eslint/parser": "^5.59.8",
+    "@vitejs/plugin-react": "^3.1.0",
+    "autoprefixer": "^10.4.14",
+    "eslint": "^8.38.0",
+    "eslint-config-prettier": "^8.8.0",
+    "eslint-config-react-app": "^7.0.1",
+    "eslint-plugin-prettier": "^4.2.1",
+    "eslint-plugin-react-hooks": "^4.6.0",
+    "eslint-plugin-react-refresh": "^0.3.5",
+    "eslint-plugin-unused-imports": "^2.0.0",
+    "postcss": "^8.4.19",
+    "prettier": "^2.8.7",
+    "tailwindcss": "^3.3.1",
+    "typescript": "^5.0.4",
+    "vite": "^4.2.3"
+  }
+}
