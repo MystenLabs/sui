@@ -58,7 +58,7 @@ export function isValidUrl(url: string | null) {
     }
 }
 
-export function getAppUrl(appUrl: string) {
+export function getDAppUrl(appUrl: string) {
     const url = new URL(appUrl);
     const isMystenLabsDApp = MYSTEN_LABS_DAPPS.includes(url.hostname);
     return isMystenLabsDApp ? getUrlWithDeviceId(url) : url;
@@ -66,7 +66,7 @@ export function getAppUrl(appUrl: string) {
 
 export function getValidDAppUrl(appUrl: string) {
     try {
-        return getAppUrl(appUrl);
+        return getDAppUrl(appUrl);
     } catch (error) {
         /* empty */
     }

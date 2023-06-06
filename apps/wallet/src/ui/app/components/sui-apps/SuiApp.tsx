@@ -7,7 +7,7 @@ import { useState } from 'react';
 import DisconnectApp from './DisconnectApp';
 import ExternalLink from '_components/external-link';
 import { trackEvent } from '_src/shared/plausible';
-import { getAppUrl } from '_src/shared/utils';
+import { getDAppUrl } from '_src/shared/utils';
 
 import st from './SuiApp.module.scss';
 
@@ -34,7 +34,7 @@ export function SuiApp({
     permissionID,
 }: SuiAppProps) {
     const [showDisconnectApp, setShowDisconnectApp] = useState(false);
-    const appUrl = getAppUrl(link);
+    const appUrl = getDAppUrl(link);
     const originLabel = appUrl.hostname;
 
     const AppDetails = (
