@@ -300,8 +300,9 @@ struct ProcessTransactionState {
     // 1) >= 2f+1 signatures
     // 2) >= f+1 non-retryable errors
     // 3) >= 2f+1 object not found errors
-    // Note: For conflicting transactions we wait till we receive all responses to make
-    // a determination on whether to retry or not.
+    // Note: For conflicting transactions we collect as many responses as possible
+    // before we know for sure no tx can reach quorum. Namely, stake of the most
+    // promising tx + retryable stake < 2f+1.
     retryable: bool,
 
     conflicting_tx_total_stake: StakeUnit,
@@ -323,23 +324,30 @@ impl ProcessTransactionState {
             .map(|(digest, (validators, stake))| (*digest, validators, *stake))
     }
 
-    pub fn record_conflicting_transaction(
+    pub fn record_conflicting_transaction_if_any(
         &mut self,
-        transaction: &TransactionDigest,
         validator_name: AuthorityName,
-        obj_ref: &ObjectRef,
         weight: StakeUnit,
-    ) {
-        let (lock_records, total_stake) = self
-            .conflicting_tx_digests
-            .entry(*transaction)
-            .or_insert((Vec::new(), 0));
-        lock_records.push((validator_name, *obj_ref));
-        *total_stake += weight;
-        self.conflicting_tx_total_stake += weight;
-        if *total_stake > self.most_staked_conflicting_tx_stake {
-            self.most_staked_conflicting_tx_stake = *total_stake;
+        err: &SuiError,
+    ) -> bool {
+        if let SuiError::ObjectLockConflict {
+            obj_ref,
+            pending_transaction: transaction,
+        } = err
+        {
+            let (lock_records, total_stake) = self
+                .conflicting_tx_digests
+                .entry(*transaction)
+                .or_insert((Vec::new(), 0));
+            lock_records.push((validator_name, *obj_ref));
+            *total_stake += weight;
+            self.conflicting_tx_total_stake += weight;
+            if *total_stake > self.most_staked_conflicting_tx_stake {
+                self.most_staked_conflicting_tx_stake = *total_stake;
+            }
+            return true;
         }
+        false
     }
 }
 
@@ -1194,18 +1202,28 @@ where
                                     // and notify the user.
                                     state.overloaded_stake += weight;
                                 }
-                                else if !retryable && !self.record_conflicting_transaction_if_any(&mut state, name, weight, &err) {
+                                else if !retryable && !state.record_conflicting_transaction_if_any(name, weight, &err) {
                                     // We don't count conflicting transactions as non-retryable errors here
                                     // because its handling is a bit different.
                                     state.non_retryable_stake += weight;
                                 }
                                 state.errors.push((err, vec![name], weight));
 
-                                // If there is no chance for any tx to get quorum, exit.
-                                // But don't mark `state.retryable` yet, we want to handle
-                                // conflicts accordingly in `handle_process_transaction_error`
                                 let retryable_stake = self.get_retryable_stake(&state);
-                                if state.most_staked_conflicting_tx_stake + retryable_stake < quorum_threshold {
+                                let good_stake = state.tx_signatures.total_votes();
+                                let stake_of_most_promising_tx = std::cmp::max(good_stake, state.most_staked_conflicting_tx_stake);
+                                if stake_of_most_promising_tx + retryable_stake < quorum_threshold {
+                                    debug!(
+                                        tx_digest = ?tx_digest,
+                                        good_stake,
+                                        most_staked_conflicting_tx_stake =? state.most_staked_conflicting_tx_stake,
+                                        retryable_stake,
+                                        "No chance for any tx to get quorum, exiting. Confliting_txes: {:?}",
+                                        state.conflicting_tx_digests
+                                    );
+                                    // If there is no chance for any tx to get quorum, exit.
+                                    // But don't mark `state.retryable` yet, we want to handle
+                                    // conflicts accordingly in `handle_process_transaction_error`
                                     return ReduceOutput::Failed(state);
                                 }
 
@@ -1368,24 +1386,6 @@ where
             }
             Err(err) => Err(err),
         }
-    }
-
-    fn record_conflicting_transaction_if_any(
-        &self,
-        state: &mut ProcessTransactionState,
-        name: AuthorityName,
-        weight: StakeUnit,
-        err: &SuiError,
-    ) -> bool {
-        if let SuiError::ObjectLockConflict {
-            obj_ref,
-            pending_transaction,
-        } = err
-        {
-            state.record_conflicting_transaction(pending_transaction, name, obj_ref, weight);
-            return true;
-        }
-        false
     }
 
     fn handle_transaction_response_with_signed(
