@@ -228,7 +228,6 @@ impl SuiNode {
         custom_rpc_runtime: Option<Handle>,
     ) -> Result<()> {
         NodeConfigMetrics::new(&registry_service.default_registry()).record_metrics(config);
-        Self::start_jwk_updater();
         let mut config = config.clone();
         if config.supported_protocol_versions.is_none() {
             info!(
@@ -303,6 +302,10 @@ impl SuiNode {
             &config.expensive_safety_check_config,
             ChainIdentifier::from(*genesis.checkpoint().digest()),
         );
+
+        if epoch_store.protocol_config().zklogin_auth() {
+            Self::start_jwk_updater();
+        }
 
         // the database is empty at genesis time
         if is_genesis {
@@ -1278,6 +1281,10 @@ impl SuiNode {
     #[cfg(msim)]
     pub fn get_sim_node_id(&self) -> sui_simulator::task::NodeId {
         self.sim_node.id()
+    }
+
+    pub fn get_config(&self) -> &NodeConfig {
+        &self.config
     }
 }
 

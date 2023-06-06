@@ -66,6 +66,8 @@ pub mod temporary_store;
 pub mod transaction;
 pub mod type_resolver;
 pub mod versioned;
+pub mod zk_login_authenticator;
+pub mod zk_login_util;
 
 pub mod epoch_data;
 

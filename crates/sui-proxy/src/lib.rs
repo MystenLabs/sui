@@ -97,12 +97,15 @@ mod tests {
             )
             .unwrap();
 
-        let client = admin::make_reqwest_client(RemoteWriteConfig {
-            url: dummy_remote_write_url.to_owned(),
-            username: "bar".into(),
-            password: "foo".into(),
-            ..Default::default()
-        });
+        let client = admin::make_reqwest_client(
+            RemoteWriteConfig {
+                url: dummy_remote_write_url.to_owned(),
+                username: "bar".into(),
+                password: "foo".into(),
+                ..Default::default()
+            },
+            "dummy user agent",
+        );
 
         // add handler to server
         async fn handler(tls_info: axum::Extension<TlsConnectionInfo>) -> String {

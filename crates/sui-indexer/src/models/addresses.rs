@@ -4,6 +4,8 @@
 use std::collections::HashMap;
 
 use diesel::prelude::*;
+use diesel::sql_types::BigInt;
+use diesel::QueryableByName;
 
 use sui_json_rpc_types::AddressMetrics;
 
@@ -106,6 +108,35 @@ impl From<AddressStats> for AddressMetrics {
             cumulative_addresses: stats.cumulative_addresses as u64,
             cumulative_active_addresses: stats.cumulative_active_addresses as u64,
             daily_active_addresses: stats.daily_active_addresses as u64,
+        }
+    }
+}
+
+#[derive(QueryableByName, Debug, Clone, Default)]
+pub struct DBAddressStats {
+    #[diesel(sql_type = BigInt)]
+    pub checkpoint: i64,
+    #[diesel(sql_type = BigInt)]
+    pub epoch: i64,
+    #[diesel(sql_type = BigInt)]
+    pub timestamp_ms: i64,
+    #[diesel(sql_type = BigInt)]
+    pub cumulative_addresses: i64,
+    #[diesel(sql_type = BigInt)]
+    pub cumulative_active_addresses: i64,
+    #[diesel(sql_type = BigInt)]
+    pub daily_active_addresses: i64,
+}
+
+impl From<DBAddressStats> for AddressStats {
+    fn from(stats: DBAddressStats) -> Self {
+        AddressStats {
+            checkpoint: stats.checkpoint,
+            epoch: stats.epoch,
+            timestamp_ms: stats.timestamp_ms,
+            cumulative_addresses: stats.cumulative_addresses,
+            cumulative_active_addresses: stats.cumulative_active_addresses,
+            daily_active_addresses: stats.daily_active_addresses,
         }
     }
 }

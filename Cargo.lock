@@ -91,6 +91,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "aho-corasick"
+version = "1.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "67fc08ce920c31afb70f013dcce1bfc3a3195de6a228474e45e1f145b36f8d04"
+dependencies = [
+ "memchr",
+]
+
+[[package]]
 name = "aliasable"
 version = "0.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -123,7 +132,7 @@ dependencies = [
 [[package]]
 name = "anemo"
 version = "0.0.0"
-source = "git+https://github.com/mystenlabs/anemo.git?rev=88dd6f93a81871657f177384eeeff1268b58083b#88dd6f93a81871657f177384eeeff1268b58083b"
+source = "git+https://github.com/mystenlabs/anemo.git?rev=0f0ae8d8f222820a20b586088ea7a2941478a159#0f0ae8d8f222820a20b586088ea7a2941478a159"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -176,7 +185,7 @@ dependencies = [
 [[package]]
 name = "anemo-build"
 version = "0.0.0"
-source = "git+https://github.com/mystenlabs/anemo.git?rev=88dd6f93a81871657f177384eeeff1268b58083b#88dd6f93a81871657f177384eeeff1268b58083b"
+source = "git+https://github.com/mystenlabs/anemo.git?rev=0f0ae8d8f222820a20b586088ea7a2941478a159#0f0ae8d8f222820a20b586088ea7a2941478a159"
 dependencies = [
  "prettyplease 0.1.23",
  "proc-macro2 1.0.58",
@@ -187,7 +196,7 @@ dependencies = [
 [[package]]
 name = "anemo-cli"
 version = "0.0.0"
-source = "git+https://github.com/mystenlabs/anemo.git?rev=88dd6f93a81871657f177384eeeff1268b58083b#88dd6f93a81871657f177384eeeff1268b58083b"
+source = "git+https://github.com/mystenlabs/anemo.git?rev=0f0ae8d8f222820a20b586088ea7a2941478a159#0f0ae8d8f222820a20b586088ea7a2941478a159"
 dependencies = [
  "anemo",
  "anemo-tower",
@@ -203,7 +212,7 @@ dependencies = [
 [[package]]
 name = "anemo-tower"
 version = "0.0.0"
-source = "git+https://github.com/mystenlabs/anemo.git?rev=88dd6f93a81871657f177384eeeff1268b58083b#88dd6f93a81871657f177384eeeff1268b58083b"
+source = "git+https://github.com/mystenlabs/anemo.git?rev=0f0ae8d8f222820a20b586088ea7a2941478a159#0f0ae8d8f222820a20b586088ea7a2941478a159"
 dependencies = [
  "anemo",
  "bytes",
@@ -961,9 +970,9 @@ dependencies = [
 
 [[package]]
 name = "axum"
-version = "0.6.6"
+version = "0.6.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4e246206a63c9830e118d12c894f56a82033da1a2361f5544deeee3df85c99d9"
+checksum = "f8175979259124331c1d7bf6586ee7e0da434155e4b2d48ec2c8386281d8df39"
 dependencies = [
  "async-trait",
  "axum-core",
@@ -988,7 +997,6 @@ dependencies = [
  "sync_wrapper",
  "tokio",
  "tower",
- "tower-http 0.3.5",
  "tower-layer",
  "tower-service",
 ]
@@ -2410,25 +2418,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "deadpool"
-version = "0.9.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "421fe0f90f2ab22016f32a9881be5134fdd71c65298917084b0c7477cbc3856e"
-dependencies = [
- "async-trait",
- "deadpool-runtime",
- "num_cpus",
- "retain_mut",
- "tokio",
-]
-
-[[package]]
-name = "deadpool-runtime"
-version = "0.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "eaa37046cc0f6c3cc6090fbdbf73ef0b8ef4cfcc37f6befc0020f63e8cf121e1"
-
-[[package]]
 name = "debug-ignore"
 version = "1.0.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2593,21 +2582,6 @@ dependencies = [
  "pq-sys",
  "r2d2",
  "serde_json",
-]
-
-[[package]]
-name = "diesel-async"
-version = "0.2.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "67d310b8050b1068b32fd03c55bd73f8d9ef5a789e2443c5b4e92f4587c63ed3"
-dependencies = [
- "async-trait",
- "deadpool",
- "diesel",
- "futures",
- "scoped-futures",
- "tokio",
- "tokio-postgres",
 ]
 
 [[package]]
@@ -3067,15 +3041,9 @@ dependencies = [
 ]
 
 [[package]]
-name = "fallible-iterator"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4443176a9f2c162692bd3d352d745ef9413eec5782a80d8fd6f8a1ac692a07f7"
-
-[[package]]
 name = "fastcrypto"
 version = "0.1.5"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=c27e87fb539c88b6fe1eac7dd82561254bb1e07a#c27e87fb539c88b6fe1eac7dd82561254bb1e07a"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=c961a01596a87e76f590c7e43aca9d57106dbbb1#c961a01596a87e76f590c7e43aca9d57106dbbb1"
 dependencies = [
  "aes",
  "aes-gcm",
@@ -3104,6 +3072,7 @@ dependencies = [
  "generic-array",
  "hex",
  "hkdf",
+ "lazy_static 1.4.0",
  "merlin",
  "once_cell",
  "p256",
@@ -3128,8 +3097,8 @@ dependencies = [
 
 [[package]]
 name = "fastcrypto-derive"
-version = "0.1.2"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=c27e87fb539c88b6fe1eac7dd82561254bb1e07a#c27e87fb539c88b6fe1eac7dd82561254bb1e07a"
+version = "0.1.3"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=c961a01596a87e76f590c7e43aca9d57106dbbb1#c961a01596a87e76f590c7e43aca9d57106dbbb1"
 dependencies = [
  "convert_case 0.6.0",
  "proc-macro2 1.0.58",
@@ -3140,7 +3109,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto-zkp"
 version = "0.1.1"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=c27e87fb539c88b6fe1eac7dd82561254bb1e07a#c27e87fb539c88b6fe1eac7dd82561254bb1e07a"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=c961a01596a87e76f590c7e43aca9d57106dbbb1#c961a01596a87e76f590c7e43aca9d57106dbbb1"
 dependencies = [
  "ark-bls12-381",
  "ark-bn254",
@@ -3154,6 +3123,13 @@ dependencies = [
  "byte-slice-cast",
  "derive_more",
  "fastcrypto",
+ "num-bigint",
+ "once_cell",
+ "poseidon-ark",
+ "regex",
+ "schemars",
+ "serde 1.0.152",
+ "serde_json",
 ]
 
 [[package]]
@@ -3497,7 +3473,7 @@ version = "0.4.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "029d74589adefde59de1a0c4f4732695c32805624aec7b68d91503d4dba79afc"
 dependencies = [
- "aho-corasick",
+ "aho-corasick 0.7.20",
  "bstr",
  "fnv",
  "log",
@@ -4679,15 +4655,6 @@ dependencies = [
  "block-buffer 0.9.0",
  "digest 0.9.0",
  "opaque-debug",
-]
-
-[[package]]
-name = "md-5"
-version = "0.10.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6365506850d44bff6e2fbcb5176cf63650e48bd45ef2fe2665ae1570e0f4b9ca"
-dependencies = [
- "digest 0.10.6",
 ]
 
 [[package]]
@@ -6348,6 +6315,7 @@ dependencies = [
  "autocfg",
  "num-integer",
  "num-traits 0.2.15",
+ "rand 0.8.5",
 ]
 
 [[package]]
@@ -7020,32 +6988,13 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "26f6a7b87c2e435a3241addceeeff740ff8b7e76b74c13bf9acb17fa454ea00b"
 
 [[package]]
-name = "postgres-protocol"
-version = "0.6.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "78b7fa9f396f51dffd61546fd8573ee20592287996568e6175ceb0f8699ad75d"
+name = "poseidon-ark"
+version = "0.0.1"
+source = "git+https://github.com/arnaucube/poseidon-ark.git?rev=bf96de3b946e8b343c6b65412bae92f8d32251ad#bf96de3b946e8b343c6b65412bae92f8d32251ad"
 dependencies = [
- "base64 0.21.0",
- "byteorder",
- "bytes",
- "fallible-iterator",
- "hmac 0.12.1",
- "md-5 0.10.5",
- "memchr",
- "rand 0.8.5",
- "sha2 0.10.6",
- "stringprep",
-]
-
-[[package]]
-name = "postgres-types"
-version = "0.2.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f028f05971fe20f512bcc679e2c10227e57809a3af86a7606304435bc8896cd6"
-dependencies = [
- "bytes",
- "fallible-iterator",
- "postgres-protocol",
+ "ark-bn254",
+ "ark-ff",
+ "ark-std",
 ]
 
 [[package]]
@@ -7290,7 +7239,7 @@ dependencies = [
  "rand 0.8.5",
  "rand_chacha 0.3.1",
  "rand_xorshift",
- "regex-syntax",
+ "regex-syntax 0.6.28",
  "rusty-fork",
  "tempfile",
  "unarray",
@@ -7772,13 +7721,13 @@ dependencies = [
 
 [[package]]
 name = "regex"
-version = "1.7.1"
+version = "1.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "48aaa5748ba571fb95cd2c85c09f629215d3a6ece942baa100950af03a34f733"
+checksum = "81ca098a9821bd52d6b24fd8b10bd081f47d39c22778cafaa75a2857a62c6390"
 dependencies = [
- "aho-corasick",
+ "aho-corasick 1.0.1",
  "memchr",
- "regex-syntax",
+ "regex-syntax 0.7.2",
 ]
 
 [[package]]
@@ -7787,7 +7736,7 @@ version = "0.1.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6c230d73fb8d8c1b9c0b3135c5142a8acee3a0558fb8db5cf1cb65f8d7862132"
 dependencies = [
- "regex-syntax",
+ "regex-syntax 0.6.28",
 ]
 
 [[package]]
@@ -7795,6 +7744,12 @@ name = "regex-syntax"
 version = "0.6.28"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "456c603be3e8d448b072f410900c09faf164fbce2d480456f50eea6e25f9c848"
+
+[[package]]
+name = "regex-syntax"
+version = "0.7.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "436b050e76ed2903236f032a59761c1eb99e1b0aead2c257922771dab1fc8c78"
 
 [[package]]
 name = "reqwest"
@@ -8048,7 +8003,7 @@ dependencies = [
  "http",
  "hyper",
  "log",
- "md-5 0.9.1",
+ "md-5",
  "percent-encoding",
  "pin-project-lite",
  "rusoto_credential",
@@ -8302,16 +8257,6 @@ dependencies = [
  "quote 1.0.26",
  "serde_derive_internals",
  "syn 1.0.107",
-]
-
-[[package]]
-name = "scoped-futures"
-version = "0.1.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b1473e24c637950c9bd38763220bea91ec3e095a89f672bbd7a10d03e77ba467"
-dependencies = [
- "cfg-if",
- "pin-utils",
 ]
 
 [[package]]
@@ -8976,16 +8921,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9091b6114800a5f2141aee1d1b9d6ca3592ac062dc5decb3764ec5895a47b4eb"
 
 [[package]]
-name = "stringprep"
-version = "0.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8ee348cb74b87454fff4b551cbf727025810a004f88aeacae7f85b87f4e9a1c1"
-dependencies = [
- "unicode-bidi",
- "unicode-normalization",
-]
-
-[[package]]
 name = "strip-ansi-escapes"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -9076,7 +9011,7 @@ checksum = "734676eb262c623cec13c3155096e08d1f8f29adce39ba17948b18dad1e54142"
 
 [[package]]
 name = "sui"
-version = "1.3.0"
+version = "1.4.0"
 dependencies = [
  "anemo",
  "anyhow",
@@ -9091,6 +9026,7 @@ dependencies = [
  "csv",
  "expect-test",
  "fastcrypto",
+ "fastcrypto-zkp",
  "fs_extra",
  "git-version",
  "inquire",
@@ -9098,6 +9034,7 @@ dependencies = [
  "move-bytecode-verifier",
  "move-core-types",
  "move-package",
+ "num-bigint",
  "prettytable-rs",
  "prometheus",
  "rand 0.8.5",
@@ -9358,6 +9295,7 @@ dependencies = [
  "expect-test",
  "eyre",
  "fastcrypto",
+ "fastcrypto-zkp",
  "fs_extra",
  "futures",
  "itertools",
@@ -9369,7 +9307,6 @@ dependencies = [
  "move-core-types",
  "move-package",
  "move-symbol-pool",
- "move-vm-runtime",
  "mysten-common",
  "mysten-metrics",
  "mysten-network",
@@ -9400,12 +9337,12 @@ dependencies = [
  "signature 1.6.4",
  "sui-adapter-latest",
  "sui-config",
+ "sui-execution",
  "sui-framework",
  "sui-genesis-builder",
  "sui-json-rpc-types",
  "sui-macros",
  "sui-move-build",
- "sui-move-natives-latest",
  "sui-network",
  "sui-protocol-config",
  "sui-simulator",
@@ -9525,8 +9462,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "sui-execution"
+version = "0.1.0"
+dependencies = [
+ "move-bytecode-utils",
+ "move-core-types",
+ "move-vm-runtime",
+ "sui-adapter-latest",
+ "sui-move-natives-latest",
+ "sui-protocol-config",
+ "sui-types",
+ "sui-verifier-latest",
+ "workspace-hack",
+]
+
+[[package]]
 name = "sui-faucet"
-version = "1.3.0"
+version = "1.4.0"
 dependencies = [
  "anyhow",
  "async-recursion",
@@ -9623,7 +9575,6 @@ dependencies = [
  "insta",
  "move-binary-format",
  "move-core-types",
- "move-vm-runtime",
  "narwhal-config",
  "once_cell",
  "prometheus",
@@ -9632,11 +9583,10 @@ dependencies = [
  "serde_with",
  "serde_yaml",
  "shared-crypto",
- "sui-adapter-latest",
  "sui-config",
+ "sui-execution",
  "sui-framework",
  "sui-keys",
- "sui-move-natives-latest",
  "sui-protocol-config",
  "sui-simulator",
  "sui-storage",
@@ -9648,7 +9598,7 @@ dependencies = [
 
 [[package]]
 name = "sui-indexer"
-version = "1.3.0"
+version = "1.4.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -9660,7 +9610,6 @@ dependencies = [
  "clap 3.2.23",
  "criterion",
  "diesel",
- "diesel-async",
  "diesel-derive-enum",
  "diesel_migrations",
  "fastcrypto",
@@ -9672,7 +9621,6 @@ dependencies = [
  "ntest",
  "prometheus",
  "regex",
- "rustls 0.20.7",
  "serde 1.0.152",
  "serde_json",
  "sui-config",
@@ -9690,8 +9638,6 @@ dependencies = [
  "test-utils",
  "thiserror",
  "tokio",
- "tokio-postgres",
- "tokio-postgres-rustls",
  "tokio-stream",
  "tracing",
  "url",
@@ -9835,7 +9781,7 @@ dependencies = [
 
 [[package]]
 name = "sui-move"
-version = "1.3.0"
+version = "1.4.0"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -9954,7 +9900,7 @@ dependencies = [
 
 [[package]]
 name = "sui-node"
-version = "1.3.0"
+version = "1.4.0"
 dependencies = [
  "anemo",
  "anemo-tower",
@@ -9998,7 +9944,7 @@ dependencies = [
 
 [[package]]
 name = "sui-open-rpc"
-version = "1.3.0"
+version = "1.4.0"
 dependencies = [
  "anyhow",
  "bcs",
@@ -10138,14 +10084,13 @@ dependencies = [
  "serde_yaml",
  "shellexpand",
  "similar",
- "sui-adapter-latest",
  "sui-config",
  "sui-core",
+ "sui-execution",
  "sui-framework",
  "sui-json-rpc",
  "sui-json-rpc-types",
  "sui-macros",
- "sui-move-natives-latest",
  "sui-protocol-config",
  "sui-sdk",
  "sui-storage",
@@ -10207,7 +10152,7 @@ dependencies = [
 
 [[package]]
 name = "sui-rpc-loadgen"
-version = "1.3.0"
+version = "1.4.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -10256,7 +10201,7 @@ dependencies = [
 
 [[package]]
 name = "sui-sdk"
-version = "1.3.0"
+version = "1.4.0"
 dependencies = [
  "anyhow",
  "async-recursion",
@@ -10416,7 +10361,7 @@ dependencies = [
 
 [[package]]
 name = "sui-surfer"
-version = "1.3.0"
+version = "1.4.0"
 dependencies = [
  "async-trait",
  "bcs",
@@ -10484,7 +10429,6 @@ dependencies = [
  "insta",
  "move-binary-format",
  "move-core-types",
- "move-vm-runtime",
  "narwhal-config",
  "once_cell",
  "prometheus",
@@ -10493,12 +10437,11 @@ dependencies = [
  "serde_with",
  "serde_yaml",
  "shared-crypto",
- "sui-adapter-latest",
  "sui-config",
+ "sui-execution",
  "sui-framework",
  "sui-genesis-builder",
  "sui-keys",
- "sui-move-natives-latest",
  "sui-protocol-config",
  "sui-simulator",
  "sui-storage",
@@ -10528,6 +10471,7 @@ dependencies = [
  "bcs",
  "move-core-types",
  "shared-crypto",
+ "sui-genesis-builder",
  "sui-move-build",
  "sui-types",
  "workspace-hack",
@@ -10574,7 +10518,7 @@ dependencies = [
 
 [[package]]
 name = "sui-tool"
-version = "1.3.0"
+version = "1.4.0"
 dependencies = [
  "anemo",
  "anemo-cli",
@@ -10684,6 +10628,7 @@ dependencies = [
  "enum_dispatch",
  "eyre",
  "fastcrypto",
+ "fastcrypto-zkp",
  "indexmap",
  "itertools",
  "move-binary-format",
@@ -11253,44 +11198,6 @@ dependencies = [
  "proc-macro2 1.0.58",
  "quote 1.0.26",
  "syn 2.0.16",
-]
-
-[[package]]
-name = "tokio-postgres"
-version = "0.7.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "29a12c1b3e0704ae7dfc25562629798b29c72e6b1d0a681b6f29ab4ae5e7f7bf"
-dependencies = [
- "async-trait",
- "byteorder",
- "bytes",
- "fallible-iterator",
- "futures-channel",
- "futures-util",
- "log",
- "parking_lot 0.12.1",
- "percent-encoding",
- "phf",
- "pin-project-lite",
- "postgres-protocol",
- "postgres-types",
- "socket2 0.4.9",
- "tokio",
- "tokio-util 0.7.4",
-]
-
-[[package]]
-name = "tokio-postgres-rustls"
-version = "0.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "606f2b73660439474394432239c82249c0d45eb5f23d91f401be1e33590444a7"
-dependencies = [
- "futures",
- "ring",
- "rustls 0.20.7",
- "tokio",
- "tokio-postgres",
- "tokio-rustls",
 ]
 
 [[package]]
@@ -12429,7 +12336,8 @@ dependencies = [
  "aes-gcm",
  "ahash 0.7.6",
  "ahash 0.8.2",
- "aho-corasick",
+ "aho-corasick 0.7.20",
+ "aho-corasick 1.0.1",
  "aliasable",
  "alloc-no-stdlib",
  "alloc-stdlib",
@@ -12605,8 +12513,6 @@ dependencies = [
  "data-encoding-macro",
  "data-encoding-macro-internal",
  "datatest-stable",
- "deadpool",
- "deadpool-runtime",
  "debug-ignore",
  "debugid",
  "der 0.6.1",
@@ -12622,7 +12528,6 @@ dependencies = [
  "determinator",
  "deunicode",
  "diesel",
- "diesel-async",
  "diesel-derive-enum",
  "diesel_derives",
  "diesel_migrations",
@@ -12665,7 +12570,6 @@ dependencies = [
  "expect-test",
  "eyre",
  "fail",
- "fallible-iterator",
  "fastcrypto",
  "fastcrypto-derive",
  "fastcrypto-zkp",
@@ -12808,8 +12712,7 @@ dependencies = [
  "matchers",
  "matchit 0.5.0",
  "matchit 0.7.0",
- "md-5 0.10.5",
- "md-5 0.9.1",
+ "md-5",
  "memchr",
  "memmap2",
  "memoffset 0.6.5",
@@ -12954,8 +12857,7 @@ dependencies = [
  "plotters-svg",
  "polyval",
  "portable-atomic",
- "postgres-protocol",
- "postgres-types",
+ "poseidon-ark",
  "pprof",
  "ppv-lite86",
  "pq-sys",
@@ -13016,7 +12918,8 @@ dependencies = [
  "ref-cast-impl",
  "regex",
  "regex-automata",
- "regex-syntax",
+ "regex-syntax 0.6.28",
+ "regex-syntax 0.7.2",
  "reqwest",
  "retain_mut",
  "rfc6979 0.3.1",
@@ -13058,7 +12961,6 @@ dependencies = [
  "scheduled-thread-pool",
  "schemars",
  "schemars_derive",
- "scoped-futures",
  "scopeguard",
  "sct",
  "sec1 0.3.0",
@@ -13123,7 +13025,6 @@ dependencies = [
  "static_assertions",
  "str-buf",
  "str_stack",
- "stringprep",
  "strip-ansi-escapes",
  "strsim 0.10.0",
  "strsim 0.8.0",
@@ -13173,8 +13074,6 @@ dependencies = [
  "tokio",
  "tokio-io-timeout",
  "tokio-macros 2.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "tokio-postgres",
- "tokio-postgres-rustls",
  "tokio-retry",
  "tokio-rustls",
  "tokio-stream",

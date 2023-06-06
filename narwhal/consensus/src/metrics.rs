@@ -105,7 +105,7 @@ impl ConsensusMetrics {
             leader_election: register_int_counter_vec_with_registry!(
                 "leader_election",
                 "The outcome of a leader election round",
-                &["outcome"],
+                &["outcome", "authority"],
                 registry
             ).unwrap(),
             leader_commits: register_int_counter_vec_with_registry!(

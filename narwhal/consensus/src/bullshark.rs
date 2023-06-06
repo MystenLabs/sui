@@ -6,16 +6,13 @@ use crate::{
     consensus::{ConsensusState, Dag},
     utils, ConsensusError, Outcome,
 };
-use config::{AuthorityIdentifier, Committee, Stake};
+use config::{Authority, Committee, Stake};
 use fastcrypto::hash::Hash;
 use std::sync::Arc;
 use storage::ConsensusStore;
 use tokio::time::Instant;
 use tracing::{debug, error_span};
-use types::{
-    Certificate, CertificateAPI, CertificateDigest, CommittedSubDag, HeaderAPI, ReputationScores,
-    Round,
-};
+use types::{Certificate, CertificateAPI, CommittedSubDag, HeaderAPI, ReputationScores, Round};
 
 #[cfg(test)]
 #[path = "tests/bullshark_tests.rs"]
@@ -32,6 +29,9 @@ pub mod randomized_tests;
 /// and consequently a commit.
 #[derive(Default)]
 pub struct LastRound {
+    /// The elected leader of the round. That's irrespective of whether the corresponding certificate
+    /// is found or not.
+    leader: Option<Authority>,
     /// True when the leader has actually proposed a certificate
     /// and found in our DAG
     leader_found: bool,
@@ -77,10 +77,10 @@ impl Bullshark {
         }
     }
 
-    // Returns the PublicKey of the authority which is the leader for the provided `round`.
+    // Returns the the authority which is the leader for the provided `round`.
     // Pay attention that this method will return always the first authority as the leader
     // when used under a test environment.
-    pub fn leader_authority(committee: &Committee, round: Round) -> AuthorityIdentifier {
+    pub fn leader_authority(committee: &Committee, round: Round) -> Authority {
         assert_eq!(
             round % 2,
             0,
@@ -97,27 +97,31 @@ impl Bullshark {
                 let next_leader = (round/2 - 1) as usize % committee.size();
                 let authorities = committee.authorities().collect::<Vec<_>>();
 
-                authorities.get(next_leader).unwrap().id()
+                (*authorities.get(next_leader).unwrap()).clone()
             } else {
                 // Elect the leader in a stake-weighted choice seeded by the round
-                committee.leader(round).id()
+                committee.leader(round)
             }
         }
     }
 
-    /// Returns the certificate (and the certificate's digest) originated by the leader of the
-    /// specified round (if any).
+    /// Returns the certificate originated by the leader of the specified round (if any). The Authority
+    /// leader of the round is always returned and that's irrespective of whether the certificate exists
+    /// as that's deterministically determined.
     fn leader<'a>(
         committee: &Committee,
         round: Round,
         dag: &'a Dag,
-    ) -> Option<&'a (CertificateDigest, Certificate)> {
+    ) -> (Authority, Option<&'a Certificate>) {
         // Note: this function is often called with even rounds only. While we do not aim at random selection
         // yet (see issue #10), repeated calls to this function should still pick from the whole roster of leaders.
         let leader = Self::leader_authority(committee, round);
 
         // Return its certificate and the certificate's digest.
-        dag.get(&round).and_then(|x| x.get(&leader))
+        match dag.get(&round).and_then(|x| x.get(&leader.id())) {
+            None => (leader, None),
+            Some((_, certificate)) => (leader, Some(certificate)),
+        }
     }
 
     /// Calculates the reputation score for the current commit by taking into account the reputation
@@ -193,16 +197,21 @@ impl Bullshark {
         // Report last leader election if was unsuccessful
         if round > self.max_inserted_certificate_round && round % 2 == 0 {
             let last_election_round = &self.last_leader_election;
+            let hostname = last_election_round
+                .leader
+                .as_ref()
+                .map(|authority| authority.hostname())
+                .unwrap_or_default();
 
             if !last_election_round.leader_found {
                 self.metrics
                     .leader_election
-                    .with_label_values(&["not_found"])
+                    .with_label_values(&["not_found", hostname])
                     .inc();
             } else if !last_election_round.leader_has_support {
                 self.metrics
                     .leader_election
-                    .with_label_values(&["not_enough_support"])
+                    .with_label_values(&["not_enough_support", hostname])
                     .inc();
             }
         }
@@ -225,18 +234,21 @@ impl Bullshark {
         if leader_round <= state.last_round.committed_round {
             return Ok((Outcome::LeaderBelowCommitRound, Vec::new()));
         }
-        let (leader_digest, leader) = match Self::leader(&self.committee, leader_round, &state.dag)
-        {
-            Some(x) => x,
-            None => {
-                self.last_leader_election = LastRound {
-                    leader_found: false,
-                    leader_has_support: false,
-                };
-                // leader has not been found - we don't have any certificate
-                return Ok((Outcome::LeaderNotFound, Vec::new()));
-            }
-        };
+
+        let (leader, leader_authority) =
+            match Self::leader(&self.committee, leader_round, &state.dag) {
+                (leader_authority, Some(certificate)) => (certificate, leader_authority),
+                (leader_authority, None) => {
+                    self.last_leader_election = LastRound {
+                        leader: Some(leader_authority),
+                        leader_found: false,
+                        leader_has_support: false,
+                    };
+
+                    // leader has not been found - we don't have any certificate
+                    return Ok((Outcome::LeaderNotFound, Vec::new()));
+                }
+            };
 
         // Check if the leader has f+1 support from its children (ie. round r+1).
         let stake: Stake = state
@@ -244,11 +256,12 @@ impl Bullshark {
             .get(&round)
             .expect("We should have the whole history by now")
             .values()
-            .filter(|(_, x)| x.header().parents().contains(leader_digest))
+            .filter(|(_, x)| x.header().parents().contains(&leader.digest()))
             .map(|(_, x)| self.committee.stake_by_id(x.origin()))
             .sum();
 
         self.last_leader_election = LastRound {
+            leader: Some(leader_authority),
             leader_found: true,
             leader_has_support: false,
         };
@@ -325,9 +338,16 @@ impl Bullshark {
 
         self.last_successful_leader_election_timestamp = Instant::now();
 
+        let hostname = self
+            .last_leader_election
+            .leader
+            .as_ref()
+            .map(|authority| authority.hostname())
+            .unwrap_or_default();
+
         self.metrics
             .leader_election
-            .with_label_values(&["elected"])
+            .with_label_values(&["elected", hostname])
             .inc();
 
         // The total leader_commits are expected to grow the same amount on validators,

@@ -64,6 +64,15 @@ impl Test {
     }
 }
 
+static TEST_STORE: Lazy<TemporaryStore> = Lazy::new(|| {
+    TemporaryStore::new(
+        InMemoryStorage::new(vec![]),
+        InputObjects::new(vec![]),
+        TransactionDigest::random(),
+        &ProtocolConfig::get_for_min_version(),
+    )
+});
+
 static SET_EXTENSION_HOOK: Lazy<()> =
     Lazy::new(|| set_extension_hook(Box::new(new_testing_object_and_natives_cost_runtime)));
 
@@ -96,19 +105,13 @@ pub fn run_move_unit_tests(
 }
 
 fn new_testing_object_and_natives_cost_runtime(ext: &mut NativeContextExtensions) {
-    let store = InMemoryStorage::new(vec![]);
-    let state_view = TemporaryStore::new(
-        store,
-        InputObjects::new(vec![]),
-        TransactionDigest::random(),
-        &ProtocolConfig::get_for_min_version(),
-    );
     // Use a throwaway metrics registry for testing.
     let registry = prometheus::Registry::new();
     let metrics = Arc::new(LimitsMetrics::new(&registry));
+    let store = Lazy::force(&TEST_STORE);
 
     ext.add(ObjectRuntime::new(
-        Box::new(state_view),
+        store,
         BTreeMap::new(),
         false,
         &ProtocolConfig::get_for_min_version(),

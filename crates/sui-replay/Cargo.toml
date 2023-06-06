@@ -36,12 +36,9 @@ move-package.workspace = true
 tokio.workspace = true
 typed-store.workspace = true
 
-# TODO use sui-execution versioned crate
-sui-adapter = { path = "../../sui-execution/latest/sui-adapter", package = "sui-adapter-latest" }
-sui-move-natives = { path = "../../sui-execution/latest/sui-move-natives", package = "sui-move-natives-latest" }
-
 sui-config = { path = "../sui-config" }
 sui-core = { path = "../sui-core" }
+sui-execution = { path = "../../sui-execution" }
 sui-framework = { path = "../sui-framework" }
 sui-json-rpc = { path = "../sui-json-rpc" }
 sui-json-rpc-types = { path = "../sui-json-rpc-types" }

@@ -1,6 +1,6 @@
 {
   "name": "@mysten/wallet-adapter-unsafe-burner",
-  "version": "0.8.8",
+  "version": "0.8.9",
   "description": "",
   "license": "Apache-2.0",
   "author": "Mysten Labs <build@mystenlabs.com>",

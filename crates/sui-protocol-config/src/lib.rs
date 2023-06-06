@@ -36,10 +36,10 @@ const MAX_PROTOCOL_VERSION: u64 = 12;
 // Version 10:increase bytecode verifier `max_verifier_meter_ticks_per_function` and
 //            `max_meter_ticks_per_module` limits each from 6_000_000 to 16_000_000. sui-system
 //            framework changes.
-// Version 11: Introduce `std::type_name::get_with_original_ids` to the system frameworks.
+// Version 11: Introduce `std::type_name::get_with_original_ids` to the system frameworks. Bound max depth of values within the VM.
 // Version 12: Changes to deepbook in framework to add API for querying marketplace.
 //             Change NW Batch to use versioned metadata field.
-//             Changes to sui-system package to add PTB-friendly unstake function.
+//             Changes to sui-system package to add PTB-friendly unstake function, and minor cleanup.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -201,6 +201,10 @@ struct FeatureFlags {
     // If true, then use the versioned metadata format in narwhal entities.
     #[serde(skip_serializing_if = "is_false")]
     narwhal_versioned_metadata: bool,
+
+    // Enable zklogin auth
+    #[serde(skip_serializing_if = "is_false")]
+    zklogin_auth: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -364,6 +368,9 @@ pub struct ProtocolConfig {
 
     /// Maximum length of an `Identifier` in Move. Enforced by the bytecode verifier at signing.
     max_move_identifier_len: Option<u64>,
+
+    /// Maximum depth of a Move value within the VM.
+    max_move_value_depth: Option<u64>,
 
     /// Maximum number of back edges in Move function. Enforced by the bytecode verifier at signing.
     max_back_edges_per_function: Option<u64>,
@@ -728,6 +735,10 @@ impl ProtocolConfig {
     pub fn no_extraneous_module_bytes(&self) -> bool {
         self.feature_flags.no_extraneous_module_bytes
     }
+
+    pub fn zklogin_auth(&self) -> bool {
+        self.feature_flags.zklogin_auth
+    }
 }
 
 #[cfg(not(msim))]
@@ -812,7 +823,7 @@ impl ProtocolConfig {
         ProtocolConfig::get_for_version(ProtocolVersion::MAX, Chain::Unknown)
     }
 
-    fn get_for_version_impl(version: ProtocolVersion, _chain: Chain) -> Self {
+    fn get_for_version_impl(version: ProtocolVersion, chain: Chain) -> Self {
         #[cfg(msim)]
         {
             // populate the fake simulator version # with a different base tx cost.
@@ -1075,17 +1086,18 @@ impl ProtocolConfig {
 
                 // Limits the length of a Move identifier
                 max_move_identifier_len: None,
+                max_move_value_depth: None,
 
                 // When adding a new constant, set it to None in the earliest version, like this:
                 // new_constant: None,
             },
             2 => {
-                let mut cfg = Self::get_for_version_impl(version - 1, _chain);
+                let mut cfg = Self::get_for_version_impl(version - 1, chain);
                 cfg.feature_flags.advance_epoch_start_time_in_safe_mode = true;
                 cfg
             }
             3 => {
-                let mut cfg = Self::get_for_version_impl(version - 1, _chain);
+                let mut cfg = Self::get_for_version_impl(version - 1, chain);
                 // changes for gas model
                 cfg.gas_model_version = Some(2);
                 // max gas budget is in MIST and an absolute value 50SUI
@@ -1103,7 +1115,7 @@ impl ProtocolConfig {
                 cfg
             }
             4 => {
-                let mut cfg = Self::get_for_version_impl(version - 1, _chain);
+                let mut cfg = Self::get_for_version_impl(version - 1, chain);
                 // Change reward slashing rate to 100%.
                 cfg.reward_slashing_rate = Some(10000);
                 // protect old and new lookup for object version
@@ -1111,7 +1123,7 @@ impl ProtocolConfig {
                 cfg
             }
             5 => {
-                let mut cfg = Self::get_for_version_impl(version - 1, _chain);
+                let mut cfg = Self::get_for_version_impl(version - 1, chain);
                 cfg.feature_flags.missing_type_is_compatibility_error = true;
                 cfg.gas_model_version = Some(4);
                 cfg.feature_flags.scoring_decision_with_validity_cutoff = true;
@@ -1120,14 +1132,14 @@ impl ProtocolConfig {
                 cfg
             }
             6 => {
-                let mut cfg = Self::get_for_version_impl(version - 1, _chain);
+                let mut cfg = Self::get_for_version_impl(version - 1, chain);
                 cfg.gas_model_version = Some(5);
                 cfg.buffer_stake_for_protocol_upgrade_bps = Some(5000);
                 cfg.feature_flags.consensus_order_end_of_epoch_last = true;
                 cfg
             }
             7 => {
-                let mut cfg = Self::get_for_version_impl(version - 1, _chain);
+                let mut cfg = Self::get_for_version_impl(version - 1, chain);
                 cfg.feature_flags.disallow_adding_abilities_on_upgrade = true;
                 cfg.feature_flags
                     .disable_invariant_violation_check_in_swap_loc = true;
@@ -1136,13 +1148,13 @@ impl ProtocolConfig {
                 cfg
             }
             8 => {
-                let mut cfg = Self::get_for_version_impl(version - 1, _chain);
+                let mut cfg = Self::get_for_version_impl(version - 1, chain);
                 cfg.feature_flags
                     .disallow_change_struct_type_params_on_upgrade = true;
                 cfg
             }
             9 => {
-                let mut cfg = Self::get_for_version_impl(version - 1, _chain);
+                let mut cfg = Self::get_for_version_impl(version - 1, chain);
                 // Limits the length of a Move identifier
                 cfg.max_move_identifier_len = Some(128);
                 cfg.feature_flags.no_extraneous_module_bytes = true;
@@ -1151,15 +1163,26 @@ impl ProtocolConfig {
                 cfg
             }
             10 => {
-                let mut cfg = Self::get_for_version_impl(version - 1, _chain);
+                let mut cfg = Self::get_for_version_impl(version - 1, chain);
                 cfg.max_verifier_meter_ticks_per_function = Some(16_000_000);
                 cfg.max_meter_ticks_per_module = Some(16_000_000);
                 cfg
             }
-            11 => Self::get_for_version_impl(version - 1, _chain),
+            11 => {
+                let mut cfg = Self::get_for_version_impl(version - 1, chain);
+                cfg.max_move_value_depth = Some(128);
+                cfg
+            }
             12 => {
-                let mut cfg = Self::get_for_version_impl(version - 1, _chain);
+                let mut cfg = Self::get_for_version_impl(version - 1, chain);
                 cfg.feature_flags.narwhal_versioned_metadata = true;
+                if chain != Chain::Mainnet {
+                    cfg.feature_flags.commit_root_state_digest = true;
+                }
+
+                if chain != Chain::Mainnet && chain != Chain::Testnet {
+                    cfg.feature_flags.zklogin_auth = true;
+                }
                 cfg
             }
             // Use this template when making changes:
@@ -1213,6 +1236,9 @@ impl ProtocolConfig {
     }
     pub fn set_commit_root_state_digest_supported(&mut self, val: bool) {
         self.feature_flags.commit_root_state_digest = val
+    }
+    pub fn set_zklogin_auth(&mut self, val: bool) {
+        self.feature_flags.zklogin_auth = val
     }
 }
 

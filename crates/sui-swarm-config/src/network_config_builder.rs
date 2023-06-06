@@ -12,7 +12,7 @@ use sui_config::genesis::{TokenAllocation, TokenDistributionScheduleBuilder};
 use sui_protocol_config::SupportedProtocolVersions;
 use sui_types::base_types::{AuthorityName, SuiAddress};
 use sui_types::committee::{Committee, ProtocolVersion};
-use sui_types::crypto::{generate_proof_of_possession, AccountKeyPair, KeypairTraits, PublicKey};
+use sui_types::crypto::{AccountKeyPair, KeypairTraits, PublicKey};
 use sui_types::object::Object;
 
 pub enum CommitteeConfig {
@@ -250,11 +250,8 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
             for (i, validator) in validators.iter().enumerate() {
                 let name = format!("validator-{i}");
                 let validator_info = validator.to_validator_info(name);
-                let pop = generate_proof_of_possession(
-                    &validator.key_pair,
-                    (&validator.account_key_pair.public()).into(),
-                );
-                builder = builder.add_validator(validator_info, pop);
+                builder =
+                    builder.add_validator(validator_info.info, validator_info.proof_of_possession);
             }
 
             builder = builder.with_token_distribution_schedule(token_distribution_schedule);
@@ -270,7 +267,8 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
             .into_iter()
             .enumerate()
             .map(|(idx, validator)| {
-                let mut builder = ValidatorConfigBuilder::new(self.config_directory.clone());
+                let mut builder = ValidatorConfigBuilder::new()
+                    .with_config_directory(self.config_directory.clone());
                 if let Some(spvc) = &self.supported_protocol_versions_config {
                     let supported_versions = match spvc {
                         ProtocolVersionsConfig::Default => {
@@ -344,13 +342,13 @@ mod tests {
 
 #[cfg(test)]
 mod test {
-    use std::collections::HashSet;
+    use std::collections::{BTreeSet, HashSet};
     use std::sync::Arc;
     use sui_config::genesis::Genesis;
     use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
     use sui_types::epoch_data::EpochData;
-    use sui_types::execution_mode;
     use sui_types::gas::SuiGasStatus;
+    use sui_types::in_memory_storage::InMemoryStorage;
     use sui_types::metrics::LimitsMetrics;
     use sui_types::sui_system_state::SuiSystemStateTrait;
     use sui_types::temporary_store::TemporaryStore;
@@ -379,50 +377,45 @@ mod test {
 
         let genesis_transaction = genesis.transaction().clone();
 
-        let mut store = sui_types::in_memory_storage::InMemoryStorage::new(Vec::new());
         let temporary_store = TemporaryStore::new(
-            &mut store,
+            InMemoryStorage::new(Vec::new()),
             InputObjects::new(vec![]),
             *genesis_transaction.digest(),
             &protocol_config,
         );
 
-        let enable_move_vm_paranoid_checks = false;
-        let native_functions = sui_move_natives::all_natives(/* silent */ true);
-        let move_vm = std::sync::Arc::new(
-            sui_adapter::adapter::new_move_vm(
-                native_functions,
-                &protocol_config,
-                enable_move_vm_paranoid_checks,
-            )
-            .expect("We defined natives to not fail here"),
-        );
+        let silent = true;
+        let paranoid_checks = false;
+        let executor = sui_execution::executor(&protocol_config, paranoid_checks, silent)
+            .expect("Creating an executor should not fail here");
 
         // Use a throwaway metrics registry for genesis transaction execution.
         let registry = prometheus::Registry::new();
         let metrics = Arc::new(LimitsMetrics::new(&registry));
-
+        let expensive_checks = false;
+        let certificate_deny_set = HashSet::new();
+        let epoch = EpochData::new_test();
+        let shared_object_refs = vec![];
         let transaction_data = &genesis_transaction.data().intent_message().value;
         let (kind, signer, gas) = transaction_data.execution_parts();
-        let (_inner_temp_store, effects, _execution_error) =
-            sui_adapter::execution_engine::execute_transaction_to_effects::<
-                execution_mode::Normal,
-                _,
-            >(
-                vec![],
-                temporary_store,
-                kind,
-                signer,
-                &gas,
-                *genesis_transaction.digest(),
-                Default::default(),
-                &move_vm,
-                SuiGasStatus::new_unmetered(&protocol_config),
-                &EpochData::new_test(),
+        let transaction_dependencies = BTreeSet::new();
+
+        let (_inner_temp_store, effects, _execution_error) = executor
+            .execute_transaction_to_effects(
                 &protocol_config,
                 metrics,
-                false, // enable_expensive_checks
-                &HashSet::new(),
+                expensive_checks,
+                &certificate_deny_set,
+                &epoch.epoch_id(),
+                epoch.epoch_start_timestamp(),
+                temporary_store,
+                shared_object_refs,
+                SuiGasStatus::new_unmetered(&protocol_config),
+                &gas,
+                kind,
+                signer,
+                *genesis_transaction.digest(),
+                transaction_dependencies,
             );
 
         assert_eq!(&effects, genesis.effects());

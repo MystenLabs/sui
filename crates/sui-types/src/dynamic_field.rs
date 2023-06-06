@@ -271,13 +271,12 @@ where
 /// from the `object_store`. The key type `K` must implement `MoveTypeTagTrait` which has an associated
 /// function that returns the Move type tag.
 /// Note that this function returns the Field object itself, not the value in the field.
-pub fn get_dynamic_field_object_from_store<S, K>(
-    object_store: &S,
+pub fn get_dynamic_field_object_from_store<K>(
+    object_store: &dyn ObjectStore,
     parent_id: ObjectID,
     key: &K,
 ) -> Result<Object, SuiError>
 where
-    S: ObjectStore,
     K: MoveTypeTagTrait + Serialize + DeserializeOwned + fmt::Debug,
 {
     let id = derive_dynamic_field_id(parent_id, &K::get_type_tag(), &bcs::to_bytes(key).unwrap())
@@ -293,13 +292,12 @@ where
 
 /// Similar to `get_dynamic_field_object_from_store`, but returns the value in the field instead of
 /// the Field object itself.
-pub fn get_dynamic_field_from_store<S, K, V>(
-    object_store: &S,
+pub fn get_dynamic_field_from_store<K, V>(
+    object_store: &dyn ObjectStore,
     parent_id: ObjectID,
     key: &K,
 ) -> Result<V, SuiError>
 where
-    S: ObjectStore,
     K: MoveTypeTagTrait + Serialize + DeserializeOwned + fmt::Debug,
     V: Serialize + DeserializeOwned,
 {

@@ -22,13 +22,14 @@ aes = { version = "0.8", default-features = false }
 aes-gcm = { version = "0.10" }
 ahash-c38e5c1d305a1b54 = { package = "ahash", version = "0.8", default-features = false }
 ahash-ca01ad9e24f5d932 = { package = "ahash", version = "0.7" }
-aho-corasick = { version = "0.7" }
+aho-corasick-ca01ad9e24f5d932 = { package = "aho-corasick", version = "0.7" }
+aho-corasick-dff4ba8e3ae991db = { package = "aho-corasick", version = "1" }
 aliasable = { version = "0.1" }
 alloc-no-stdlib = { version = "2", default-features = false }
 alloc-stdlib = { version = "0.2", default-features = false }
-anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "88dd6f93a81871657f177384eeeff1268b58083b", default-features = false }
-anemo-cli = { git = "https://github.com/mystenlabs/anemo.git", rev = "88dd6f93a81871657f177384eeeff1268b58083b", default-features = false }
-anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "88dd6f93a81871657f177384eeeff1268b58083b", default-features = false }
+anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "0f0ae8d8f222820a20b586088ea7a2941478a159", default-features = false }
+anemo-cli = { git = "https://github.com/mystenlabs/anemo.git", rev = "0f0ae8d8f222820a20b586088ea7a2941478a159", default-features = false }
+anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "0f0ae8d8f222820a20b586088ea7a2941478a159", default-features = false }
 anes = { version = "0.1" }
 ansi_term = { version = "0.12", default-features = false }
 anyhow = { version = "1", features = ["backtrace"] }
@@ -46,7 +47,7 @@ ark-relations = { version = "0.4", features = ["std"] }
 ark-secp256r1 = { version = "0.4" }
 ark-serialize = { version = "0.4", features = ["derive", "std"] }
 ark-snark = { version = "0.4", default-features = false }
-ark-std = { version = "0.4", default-features = false, features = ["parallel"] }
+ark-std = { version = "0.4", features = ["parallel"] }
 arrayref = { version = "0.3", default-features = false }
 arrayvec-ca01ad9e24f5d932 = { package = "arrayvec", version = "0.7" }
 arrayvec-d8f496e17d97b5cb = { package = "arrayvec", version = "0.5", features = ["array-sizes-33-128"] }
@@ -163,8 +164,6 @@ dashmap = { version = "5", default-features = false }
 data-encoding = { version = "2" }
 data-encoding-macro = { version = "0.1", default-features = false }
 datatest-stable = { version = "0.1", default-features = false }
-deadpool = { version = "0.9" }
-deadpool-runtime = { version = "0.1", default-features = false }
 debug-ignore = { version = "1", default-features = false }
 der-3b31131e45eafb45 = { package = "der", version = "0.6", default-features = false, features = ["oid", "pem", "std"] }
 der-ca01ad9e24f5d932 = { package = "der", version = "0.7", default-features = false, features = ["oid", "pem", "std"] }
@@ -172,8 +171,7 @@ der-parser = { version = "8", features = ["bigint"] }
 derive_builder = { version = "0.12" }
 determinator = { version = "0.10", default-features = false }
 deunicode = { version = "0.4", default-features = false }
-diesel = { version = "2", features = ["64-column-tables", "chrono", "i-implement-a-third-party-backend-and-opt-into-breaking-changes", "postgres", "r2d2", "serde_json"] }
-diesel-async = { version = "0.2", features = ["deadpool", "postgres"] }
+diesel = { version = "2", features = ["64-column-tables", "chrono", "postgres", "r2d2", "serde_json"] }
 diesel_migrations = { version = "2" }
 diff = { version = "0.1", default-features = false }
 difference = { version = "2" }
@@ -207,9 +205,8 @@ event-listener = { version = "2", default-features = false }
 expect-test = { version = "1", default-features = false }
 eyre = { version = "0.6" }
 fail = { version = "0.4", default-features = false }
-fallible-iterator = { version = "0.2" }
-fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "c27e87fb539c88b6fe1eac7dd82561254bb1e07a", features = ["copy_key"] }
-fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "c27e87fb539c88b6fe1eac7dd82561254bb1e07a", default-features = false }
+fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "c961a01596a87e76f590c7e43aca9d57106dbbb1", features = ["copy_key"] }
+fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "c961a01596a87e76f590c7e43aca9d57106dbbb1", default-features = false }
 fastrand = { version = "1", default-features = false }
 fd-lock = { version = "3", default-features = false }
 fdlimit = { version = "0.2", default-features = false }
@@ -235,7 +232,7 @@ futures-lite = { version = "1" }
 futures-sink = { version = "0.3" }
 futures-task = { version = "0.3", default-features = false, features = ["std", "unstable"] }
 futures-timer = { version = "3", default-features = false, features = ["wasm-bindgen"] }
-futures-util = { version = "0.3", features = ["bilock", "channel", "io", "sink", "unstable"] }
+futures-util = { version = "0.3", default-features = false, features = ["async-await-macro", "bilock", "channel", "io", "sink", "unstable"] }
 generic-array = { version = "0.14", default-features = false, features = ["more_lengths", "serde", "zeroize"] }
 getrandom-6f8ce4dd05d13bba = { package = "getrandom", version = "0.2", default-features = false, features = ["std"] }
 getrandom-c65f7effa3be6d31 = { package = "getrandom", version = "0.1", default-features = false, features = ["std"] }
@@ -327,8 +324,7 @@ match_opt = { version = "0.1", default-features = false }
 matchers = { version = "0.1", default-features = false }
 matchit-ca01ad9e24f5d932 = { package = "matchit", version = "0.7" }
 matchit-d8f496e17d97b5cb = { package = "matchit", version = "0.5" }
-md-5-274715c4dabd11b0 = { package = "md-5", version = "0.9" }
-md-5-93f6ce9d446188ac = { package = "md-5", version = "0.10" }
+md-5 = { version = "0.9" }
 memchr = { version = "2", features = ["use_std"] }
 memoffset-ca01ad9e24f5d932 = { package = "memoffset", version = "0.7" }
 merlin = { version = "3" }
@@ -393,7 +389,7 @@ normalize-line-endings = { version = "0.3", default-features = false }
 ntest = { version = "0.9", default-features = false }
 nu-ansi-term = { version = "0.46", default-features = false }
 num = { version = "0.4" }
-num-bigint = { version = "0.4" }
+num-bigint = { version = "0.4", features = ["rand"] }
 num-bigint-dig = { version = "0.8", default-features = false, features = ["i128", "prime", "u64_digit", "zeroize"] }
 num-complex = { version = "0.4", default-features = false, features = ["std"] }
 num-integer = { version = "0.1", default-features = false, features = ["i128", "std"] }
@@ -431,7 +427,7 @@ percent-encoding = { version = "2" }
 pest = { version = "2" }
 petgraph-3b31131e45eafb45 = { package = "petgraph", version = "0.6" }
 petgraph-d8f496e17d97b5cb = { package = "petgraph", version = "0.5" }
-phf = { version = "0.11", features = ["uncased"] }
+phf = { version = "0.11", default-features = false, features = ["uncased"] }
 phf_shared = { version = "0.11", features = ["uncased"] }
 pin-project = { version = "1", default-features = false }
 pin-project-lite = { version = "0.2", default-features = false }
@@ -444,8 +440,7 @@ plotters-backend = { version = "0.3", default-features = false }
 plotters-svg = { version = "0.3", default-features = false }
 polyval = { version = "0.6", default-features = false }
 portable-atomic = { version = "0.3" }
-postgres-protocol = { version = "0.6", default-features = false }
-postgres-types = { version = "0.2", default-features = false }
+poseidon-ark = { git = "https://github.com/arnaucube/poseidon-ark.git", rev = "bf96de3b946e8b343c6b65412bae92f8d32251ad", default-features = false }
 ppv-lite86 = { version = "0.2", default-features = false, features = ["simd", "std"] }
 pq-sys = { version = "0.4", default-features = false }
 predicates = { version = "2" }
@@ -488,7 +483,8 @@ read-write-set-dynamic = { path = "../../external-crates/move/tools/read-write-s
 ref-cast = { version = "1", default-features = false }
 regex = { version = "1" }
 regex-automata = { version = "0.1" }
-regex-syntax = { version = "0.6" }
+regex-syntax-3b31131e45eafb45 = { package = "regex-syntax", version = "0.6" }
+regex-syntax-ca01ad9e24f5d932 = { package = "regex-syntax", version = "0.7" }
 reqwest = { version = "0.11", default-features = false, features = ["blocking", "json", "rustls-tls"] }
 retain_mut = { version = "0.1", default-features = false }
 rfc6979-468e82937335b1c9 = { package = "rfc6979", version = "0.3", default-features = false }
@@ -521,7 +517,6 @@ ryu = { version = "1", default-features = false }
 same-file = { version = "1", default-features = false }
 scheduled-thread-pool = { version = "0.2", default-features = false }
 schemars = { version = "0.8", features = ["either"] }
-scoped-futures = { version = "0.1" }
 scopeguard = { version = "1" }
 sct = { version = "0.7", default-features = false }
 sec1-468e82937335b1c9 = { package = "sec1", version = "0.3", features = ["subtle", "zeroize"] }
@@ -573,7 +568,6 @@ spki-3b31131e45eafb45 = { package = "spki", version = "0.6", default-features = 
 spki-ca01ad9e24f5d932 = { package = "spki", version = "0.7", default-features = false, features = ["pem", "std"] }
 stable_deref_trait = { version = "1" }
 static_assertions = { version = "1", default-features = false }
-stringprep = { version = "0.1", default-features = false }
 strip-ansi-escapes = { version = "0.1", default-features = false }
 strsim-93f6ce9d446188ac = { package = "strsim", version = "0.10", default-features = false }
 strsim-c38e5c1d305a1b54 = { package = "strsim", version = "0.8", default-features = false }
@@ -611,8 +605,6 @@ tinyvec = { version = "1", features = ["alloc"] }
 tinyvec_macros = { version = "0.1", default-features = false }
 tokio = { version = "1", features = ["full", "test-util", "tracing"] }
 tokio-io-timeout = { version = "1", default-features = false }
-tokio-postgres = { version = "0.7" }
-tokio-postgres-rustls = { version = "0.9", default-features = false }
 tokio-retry = { version = "0.3", default-features = false }
 tokio-rustls = { version = "0.23" }
 tokio-stream = { version = "0.1", features = ["net", "sync"] }
@@ -696,14 +688,15 @@ aes = { version = "0.8", default-features = false }
 aes-gcm = { version = "0.10" }
 ahash-c38e5c1d305a1b54 = { package = "ahash", version = "0.8", default-features = false }
 ahash-ca01ad9e24f5d932 = { package = "ahash", version = "0.7" }
-aho-corasick = { version = "0.7" }
+aho-corasick-ca01ad9e24f5d932 = { package = "aho-corasick", version = "0.7" }
+aho-corasick-dff4ba8e3ae991db = { package = "aho-corasick", version = "1" }
 aliasable = { version = "0.1" }
 alloc-no-stdlib = { version = "2", default-features = false }
 alloc-stdlib = { version = "0.2", default-features = false }
-anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "88dd6f93a81871657f177384eeeff1268b58083b", default-features = false }
-anemo-build = { git = "https://github.com/mystenlabs/anemo.git", rev = "88dd6f93a81871657f177384eeeff1268b58083b", default-features = false }
-anemo-cli = { git = "https://github.com/mystenlabs/anemo.git", rev = "88dd6f93a81871657f177384eeeff1268b58083b", default-features = false }
-anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "88dd6f93a81871657f177384eeeff1268b58083b", default-features = false }
+anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "0f0ae8d8f222820a20b586088ea7a2941478a159", default-features = false }
+anemo-build = { git = "https://github.com/mystenlabs/anemo.git", rev = "0f0ae8d8f222820a20b586088ea7a2941478a159", default-features = false }
+anemo-cli = { git = "https://github.com/mystenlabs/anemo.git", rev = "0f0ae8d8f222820a20b586088ea7a2941478a159", default-features = false }
+anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "0f0ae8d8f222820a20b586088ea7a2941478a159", default-features = false }
 anes = { version = "0.1" }
 ansi_term = { version = "0.12", default-features = false }
 anyhow = { version = "1", features = ["backtrace"] }
@@ -724,7 +717,7 @@ ark-secp256r1 = { version = "0.4" }
 ark-serialize = { version = "0.4", features = ["derive", "std"] }
 ark-serialize-derive = { version = "0.4", default-features = false }
 ark-snark = { version = "0.4", default-features = false }
-ark-std = { version = "0.4", default-features = false, features = ["parallel"] }
+ark-std = { version = "0.4", features = ["parallel"] }
 arrayref = { version = "0.3", default-features = false }
 arrayvec-ca01ad9e24f5d932 = { package = "arrayvec", version = "0.7" }
 arrayvec-d8f496e17d97b5cb = { package = "arrayvec", version = "0.5", features = ["array-sizes-33-128"] }
@@ -863,8 +856,6 @@ data-encoding = { version = "2" }
 data-encoding-macro = { version = "0.1", default-features = false }
 data-encoding-macro-internal = { version = "0.1", default-features = false }
 datatest-stable = { version = "0.1", default-features = false }
-deadpool = { version = "0.9" }
-deadpool-runtime = { version = "0.1", default-features = false }
 debug-ignore = { version = "1", default-features = false }
 der-3b31131e45eafb45 = { package = "der", version = "0.6", default-features = false, features = ["oid", "pem", "std"] }
 der-ca01ad9e24f5d932 = { package = "der", version = "0.7", default-features = false, features = ["oid", "pem", "std"] }
@@ -878,8 +869,7 @@ derive_builder_macro = { version = "0.12", default-features = false }
 derive_more = { version = "0.99" }
 determinator = { version = "0.10", default-features = false }
 deunicode = { version = "0.4", default-features = false }
-diesel = { version = "2", features = ["64-column-tables", "chrono", "i-implement-a-third-party-backend-and-opt-into-breaking-changes", "postgres", "r2d2", "serde_json"] }
-diesel-async = { version = "0.2", features = ["deadpool", "postgres"] }
+diesel = { version = "2", features = ["64-column-tables", "chrono", "postgres", "r2d2", "serde_json"] }
 diesel-derive-enum = { version = "2", default-features = false, features = ["postgres"] }
 diesel_derives = { version = "2", features = ["64-column-tables", "postgres", "with-deprecated"] }
 diesel_migrations = { version = "2" }
@@ -917,10 +907,9 @@ event-listener = { version = "2", default-features = false }
 expect-test = { version = "1", default-features = false }
 eyre = { version = "0.6" }
 fail = { version = "0.4", default-features = false }
-fallible-iterator = { version = "0.2" }
-fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "c27e87fb539c88b6fe1eac7dd82561254bb1e07a", features = ["copy_key"] }
-fastcrypto-derive = { git = "https://github.com/MystenLabs/fastcrypto", rev = "c27e87fb539c88b6fe1eac7dd82561254bb1e07a", default-features = false }
-fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "c27e87fb539c88b6fe1eac7dd82561254bb1e07a", default-features = false }
+fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "c961a01596a87e76f590c7e43aca9d57106dbbb1", features = ["copy_key"] }
+fastcrypto-derive = { git = "https://github.com/MystenLabs/fastcrypto", rev = "c961a01596a87e76f590c7e43aca9d57106dbbb1", default-features = false }
+fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "c961a01596a87e76f590c7e43aca9d57106dbbb1", default-features = false }
 fastrand = { version = "1", default-features = false }
 fd-lock = { version = "3", default-features = false }
 fdlimit = { version = "0.2", default-features = false }
@@ -947,7 +936,7 @@ futures-macro = { version = "0.3", default-features = false }
 futures-sink = { version = "0.3" }
 futures-task = { version = "0.3", default-features = false, features = ["std", "unstable"] }
 futures-timer = { version = "3", default-features = false, features = ["wasm-bindgen"] }
-futures-util = { version = "0.3", features = ["bilock", "channel", "io", "sink", "unstable"] }
+futures-util = { version = "0.3", default-features = false, features = ["async-await-macro", "bilock", "channel", "io", "sink", "unstable"] }
 generic-array = { version = "0.14", default-features = false, features = ["more_lengths", "serde", "zeroize"] }
 getrandom-6f8ce4dd05d13bba = { package = "getrandom", version = "0.2", default-features = false, features = ["std"] }
 getrandom-c65f7effa3be6d31 = { package = "getrandom", version = "0.1", default-features = false, features = ["std"] }
@@ -1051,8 +1040,7 @@ match_opt = { version = "0.1", default-features = false }
 matchers = { version = "0.1", default-features = false }
 matchit-ca01ad9e24f5d932 = { package = "matchit", version = "0.7" }
 matchit-d8f496e17d97b5cb = { package = "matchit", version = "0.5" }
-md-5-274715c4dabd11b0 = { package = "md-5", version = "0.9" }
-md-5-93f6ce9d446188ac = { package = "md-5", version = "0.10" }
+md-5 = { version = "0.9" }
 memchr = { version = "2", features = ["use_std"] }
 memoffset-ca01ad9e24f5d932 = { package = "memoffset", version = "0.7" }
 merlin = { version = "3" }
@@ -1123,7 +1111,7 @@ ntest_test_cases = { version = "0.9", default-features = false }
 ntest_timeout = { version = "0.9", default-features = false }
 nu-ansi-term = { version = "0.46", default-features = false }
 num = { version = "0.4" }
-num-bigint = { version = "0.4" }
+num-bigint = { version = "0.4", features = ["rand"] }
 num-bigint-dig = { version = "0.8", default-features = false, features = ["i128", "prime", "u64_digit", "zeroize"] }
 num-complex = { version = "0.4", default-features = false, features = ["std"] }
 num-integer = { version = "0.1", default-features = false, features = ["i128", "std"] }
@@ -1171,7 +1159,7 @@ pest_generator = { version = "2", default-features = false, features = ["std"] }
 pest_meta = { version = "2", default-features = false }
 petgraph-3b31131e45eafb45 = { package = "petgraph", version = "0.6" }
 petgraph-d8f496e17d97b5cb = { package = "petgraph", version = "0.5" }
-phf = { version = "0.11", features = ["uncased"] }
+phf = { version = "0.11", default-features = false, features = ["uncased"] }
 phf_codegen = { version = "0.11", default-features = false }
 phf_generator = { version = "0.11", default-features = false }
 phf_shared = { version = "0.11", features = ["uncased"] }
@@ -1188,8 +1176,7 @@ plotters-backend = { version = "0.3", default-features = false }
 plotters-svg = { version = "0.3", default-features = false }
 polyval = { version = "0.6", default-features = false }
 portable-atomic = { version = "0.3" }
-postgres-protocol = { version = "0.6", default-features = false }
-postgres-types = { version = "0.2", default-features = false }
+poseidon-ark = { git = "https://github.com/arnaucube/poseidon-ark.git", rev = "bf96de3b946e8b343c6b65412bae92f8d32251ad", default-features = false }
 ppv-lite86 = { version = "0.2", default-features = false, features = ["simd", "std"] }
 pq-sys = { version = "0.4", default-features = false }
 predicates = { version = "2" }
@@ -1245,7 +1232,8 @@ ref-cast = { version = "1", default-features = false }
 ref-cast-impl = { version = "1", default-features = false }
 regex = { version = "1" }
 regex-automata = { version = "0.1" }
-regex-syntax = { version = "0.6" }
+regex-syntax-3b31131e45eafb45 = { package = "regex-syntax", version = "0.6" }
+regex-syntax-ca01ad9e24f5d932 = { package = "regex-syntax", version = "0.7" }
 reqwest = { version = "0.11", default-features = false, features = ["blocking", "json", "rustls-tls"] }
 retain_mut = { version = "0.1", default-features = false }
 rfc6979-468e82937335b1c9 = { package = "rfc6979", version = "0.3", default-features = false }
@@ -1283,7 +1271,6 @@ same-file = { version = "1", default-features = false }
 scheduled-thread-pool = { version = "0.2", default-features = false }
 schemars = { version = "0.8", features = ["either"] }
 schemars_derive = { version = "0.8", default-features = false }
-scoped-futures = { version = "0.1" }
 scopeguard = { version = "1" }
 sct = { version = "0.7", default-features = false }
 sec1-468e82937335b1c9 = { package = "sec1", version = "0.3", features = ["subtle", "zeroize"] }
@@ -1341,7 +1328,6 @@ spki-3b31131e45eafb45 = { package = "spki", version = "0.6", default-features = 
 spki-ca01ad9e24f5d932 = { package = "spki", version = "0.7", default-features = false, features = ["pem", "std"] }
 stable_deref_trait = { version = "1" }
 static_assertions = { version = "1", default-features = false }
-stringprep = { version = "0.1", default-features = false }
 strip-ansi-escapes = { version = "0.1", default-features = false }
 strsim-93f6ce9d446188ac = { package = "strsim", version = "0.10", default-features = false }
 strsim-c38e5c1d305a1b54 = { package = "strsim", version = "0.8", default-features = false }
@@ -1389,8 +1375,6 @@ tinyvec_macros = { version = "0.1", default-features = false }
 tokio = { version = "1", features = ["full", "test-util", "tracing"] }
 tokio-io-timeout = { version = "1", default-features = false }
 tokio-macros = { version = "2", default-features = false }
-tokio-postgres = { version = "0.7" }
-tokio-postgres-rustls = { version = "0.9", default-features = false }
 tokio-retry = { version = "0.3", default-features = false }
 tokio-rustls = { version = "0.23" }
 tokio-stream = { version = "0.1", features = ["net", "sync"] }

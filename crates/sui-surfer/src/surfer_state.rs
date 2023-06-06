@@ -165,7 +165,12 @@ impl SurferState {
         .unwrap();
         let tx = self.cluster.wallet.sign_transaction(&tx_data);
         let response = loop {
-            match self.cluster.execute_transaction(tx.clone()).await {
+            match self
+                .cluster
+                .wallet
+                .execute_transaction_may_fail(tx.clone())
+                .await
+            {
                 Ok(effects) => break effects,
                 Err(e) => {
                     error!("Error executing transaction: {:?}", e);
@@ -319,7 +324,12 @@ impl SurferState {
         );
         let tx = self.cluster.wallet.sign_transaction(&tx_data);
         let response = loop {
-            match self.cluster.execute_transaction(tx.clone()).await {
+            match self
+                .cluster
+                .wallet
+                .execute_transaction_may_fail(tx.clone())
+                .await
+            {
                 Ok(response) => {
                     break response;
                 }

@@ -26,29 +26,6 @@ use tower_http::{
 };
 use tracing::{info, Level};
 
-const GIT_REVISION: &str = {
-    if let Some(revision) = option_env!("GIT_REVISION") {
-        revision
-    } else {
-        git_version::git_version!(
-            args = ["--always", "--dirty", "--exclude", "*"],
-            fallback = "DIRTY"
-        )
-    }
-};
-
-// VERSION mimics what other sui binaries use for the same const
-pub const VERSION: &str = const_str::concat!(env!("CARGO_PKG_VERSION"), "-", GIT_REVISION);
-
-/// user agent we use when posting to mimir
-static APP_USER_AGENT: &str = const_str::concat!(
-    env!("CARGO_PKG_NAME"),
-    "/",
-    env!("CARGO_PKG_VERSION"),
-    "/",
-    VERSION
-);
-
 /// Configure our graceful shutdown scenarios
 pub async fn shutdown_signal(h: axum_server::Handle) {
     let ctrl_c = async {
@@ -90,10 +67,10 @@ pub struct ReqwestClient {
     pub settings: RemoteWriteConfig,
 }
 
-pub fn make_reqwest_client(settings: RemoteWriteConfig) -> ReqwestClient {
+pub fn make_reqwest_client(settings: RemoteWriteConfig, user_agent: &str) -> ReqwestClient {
     ReqwestClient {
         client: reqwest::Client::builder()
-            .user_agent(APP_USER_AGENT)
+            .user_agent(user_agent)
             .pool_max_idle_per_host(settings.pool_max_idle_per_host)
             .timeout(Duration::from_secs(var!("MIMIR_CLIENT_TIMEOUT", 30)))
             .build()

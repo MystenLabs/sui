@@ -252,11 +252,11 @@ pub enum ExecutionStoreEvent {
     ResourceResolverGetResource {
         address: AccountAddress,
         typ: StructTag,
-        result: Result<Option<Vec<u8>>, ReplayEngineError>,
+        result: SuiResult<Option<Vec<u8>>>,
     },
     ModuleResolverGetModule {
         module_id: ModuleId,
-        result: Result<Option<Vec<u8>>, ReplayEngineError>,
+        result: SuiResult<Option<Vec<u8>>>,
     },
     ObjectStoreGetObject {
         object_id: ObjectID,
@@ -269,6 +269,6 @@ pub enum ExecutionStoreEvent {
     },
     GetModuleGetModuleByModuleId {
         id: ModuleId,
-        result: Result<Option<CompiledModule>, ReplayEngineError>,
+        result: SuiResult<Option<CompiledModule>>,
     },
 }

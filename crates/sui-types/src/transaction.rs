@@ -1685,6 +1685,10 @@ impl SenderSignedData {
         &self.inner().tx_signatures
     }
 
+    pub fn has_zklogin_sig(&self) -> bool {
+        self.tx_signatures().iter().any(|sig| sig.is_zklogin())
+    }
+
     #[cfg(test)]
     pub fn intent_message_mut_for_testing(&mut self) -> &mut IntentMessage<TransactionData> {
         &mut self.inner_mut().intent_message
@@ -1720,7 +1724,9 @@ impl VersionedProtocolMessage for SenderSignedData {
         // SuiError::WrongMessageVersion
         for sig in &self.inner().tx_signatures {
             match sig {
-                GenericSignature::MultiSig(_) | GenericSignature::Signature(_) => (),
+                GenericSignature::Signature(_)
+                | GenericSignature::MultiSig(_)
+                | GenericSignature::ZkLoginAuthenticator(_) => (),
             }
         }
 

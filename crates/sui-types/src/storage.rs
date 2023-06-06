@@ -93,50 +93,6 @@ pub trait BackingPackageStore {
         self.get_package_object(package_id)
             .map(|opt_obj| opt_obj.and_then(|obj| obj.data.try_into_package()))
     }
-    /// Returns Ok(<object for each package id in `package_ids`>) if all package IDs in
-    /// `package_id` were found. If any package in `package_ids` was not found it returns a list
-    /// of any package ids that are unable to be found>).
-    fn get_package_objects<'a>(
-        &self,
-        package_ids: impl IntoIterator<Item = &'a ObjectID>,
-    ) -> SuiResult<PackageFetchResults<Object>> {
-        let package_objects: Vec<Result<Object, ObjectID>> = package_ids
-            .into_iter()
-            .map(|id| match self.get_package_object(id) {
-                Ok(None) => Ok(Err(*id)),
-                Ok(Some(o)) => Ok(Ok(o)),
-                Err(x) => Err(x),
-            })
-            .collect::<SuiResult<_>>()?;
-
-        let (fetched, failed_to_fetch): (Vec<_>, Vec<_>) =
-            package_objects.into_iter().partition_result();
-        if !failed_to_fetch.is_empty() {
-            Ok(Err(failed_to_fetch))
-        } else {
-            Ok(Ok(fetched))
-        }
-    }
-    fn get_packages<'a>(
-        &self,
-        package_ids: impl IntoIterator<Item = &'a ObjectID>,
-    ) -> SuiResult<PackageFetchResults<MovePackage>> {
-        let objects = self.get_package_objects(package_ids)?;
-        Ok(objects.and_then(|objects| {
-            let (packages, failed): (Vec<_>, Vec<_>) = objects
-                .into_iter()
-                .map(|obj| {
-                    let obj_id = obj.id();
-                    obj.data.try_into_package().ok_or(obj_id)
-                })
-                .partition_result();
-            if !failed.is_empty() {
-                Err(failed)
-            } else {
-                Ok(packages)
-            }
-        }))
-    }
 }
 
 impl<S: BackingPackageStore> BackingPackageStore for std::sync::Arc<S> {
@@ -145,16 +101,62 @@ impl<S: BackingPackageStore> BackingPackageStore for std::sync::Arc<S> {
     }
 }
 
-impl<S: BackingPackageStore> BackingPackageStore for &S {
+impl<S: ?Sized + BackingPackageStore> BackingPackageStore for &S {
     fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<Object>> {
         BackingPackageStore::get_package_object(*self, package_id)
     }
 }
 
-impl<S: BackingPackageStore> BackingPackageStore for &mut S {
+impl<S: ?Sized + BackingPackageStore> BackingPackageStore for &mut S {
     fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<Object>> {
         BackingPackageStore::get_package_object(*self, package_id)
     }
+}
+
+/// Returns Ok(<object for each package id in `package_ids`>) if all package IDs in
+/// `package_id` were found. If any package in `package_ids` was not found it returns a list
+/// of any package ids that are unable to be found>).
+pub fn get_package_objects<'a>(
+    store: &impl BackingPackageStore,
+    package_ids: impl IntoIterator<Item = &'a ObjectID>,
+) -> SuiResult<PackageFetchResults<Object>> {
+    let package_objects: Vec<Result<Object, ObjectID>> = package_ids
+        .into_iter()
+        .map(|id| match store.get_package_object(id) {
+            Ok(None) => Ok(Err(*id)),
+            Ok(Some(o)) => Ok(Ok(o)),
+            Err(x) => Err(x),
+        })
+        .collect::<SuiResult<_>>()?;
+
+    let (fetched, failed_to_fetch): (Vec<_>, Vec<_>) =
+        package_objects.into_iter().partition_result();
+    if !failed_to_fetch.is_empty() {
+        Ok(Err(failed_to_fetch))
+    } else {
+        Ok(Ok(fetched))
+    }
+}
+
+pub fn get_packages<'a>(
+    store: &impl BackingPackageStore,
+    package_ids: impl IntoIterator<Item = &'a ObjectID>,
+) -> SuiResult<PackageFetchResults<MovePackage>> {
+    let objects = get_package_objects(store, package_ids)?;
+    Ok(objects.and_then(|objects| {
+        let (packages, failed): (Vec<_>, Vec<_>) = objects
+            .into_iter()
+            .map(|obj| {
+                let obj_id = obj.id();
+                obj.data.try_into_package().ok_or(obj_id)
+            })
+            .partition_result();
+        if !failed.is_empty() {
+            Err(failed)
+        } else {
+            Ok(packages)
+        }
+    }))
 }
 
 pub fn get_module<S: BackingPackageStore>(
@@ -236,6 +238,8 @@ pub trait ReadStore {
 
     fn get_highest_synced_checkpoint(&self) -> Result<VerifiedCheckpoint, Self::Error>;
 
+    fn get_lowest_available_checkpoint(&self) -> Result<CheckpointSequenceNumber, Self::Error>;
+
     fn get_full_checkpoint_contents_by_sequence_number(
         &self,
         sequence_number: CheckpointSequenceNumber,
@@ -289,6 +293,10 @@ impl<T: ReadStore> ReadStore for &T {
         ReadStore::get_highest_synced_checkpoint(*self)
     }
 
+    fn get_lowest_available_checkpoint(&self) -> Result<CheckpointSequenceNumber, Self::Error> {
+        ReadStore::get_lowest_available_checkpoint(*self)
+    }
+
     fn get_full_checkpoint_contents_by_sequence_number(
         &self,
         sequence_number: CheckpointSequenceNumber,
@@ -330,8 +338,12 @@ impl<T: ReadStore> ReadStore for &T {
 }
 
 pub trait WriteStore: ReadStore {
-    fn insert_checkpoint(&self, checkpoint: VerifiedCheckpoint) -> Result<(), Self::Error>;
+    fn insert_checkpoint(&self, checkpoint: &VerifiedCheckpoint) -> Result<(), Self::Error>;
     fn update_highest_synced_checkpoint(
+        &self,
+        checkpoint: &VerifiedCheckpoint,
+    ) -> Result<(), Self::Error>;
+    fn update_highest_verified_checkpoint(
         &self,
         checkpoint: &VerifiedCheckpoint,
     ) -> Result<(), Self::Error>;
@@ -345,7 +357,7 @@ pub trait WriteStore: ReadStore {
 }
 
 impl<T: WriteStore> WriteStore for &T {
-    fn insert_checkpoint(&self, checkpoint: VerifiedCheckpoint) -> Result<(), Self::Error> {
+    fn insert_checkpoint(&self, checkpoint: &VerifiedCheckpoint) -> Result<(), Self::Error> {
         WriteStore::insert_checkpoint(*self, checkpoint)
     }
 
@@ -354,6 +366,13 @@ impl<T: WriteStore> WriteStore for &T {
         checkpoint: &VerifiedCheckpoint,
     ) -> Result<(), Self::Error> {
         WriteStore::update_highest_synced_checkpoint(*self, checkpoint)
+    }
+
+    fn update_highest_verified_checkpoint(
+        &self,
+        checkpoint: &VerifiedCheckpoint,
+    ) -> Result<(), Self::Error> {
+        WriteStore::update_highest_verified_checkpoint(*self, checkpoint)
     }
 
     fn insert_checkpoint_contents(
@@ -383,6 +402,8 @@ pub struct InMemoryStore {
     events: HashMap<TransactionEventsDigest, TransactionEvents>,
 
     epoch_to_committee: Vec<Committee>,
+
+    lowest_checkpoint_number: CheckpointSequenceNumber,
 }
 
 impl InMemoryStore {
@@ -393,7 +414,7 @@ impl InMemoryStore {
         committee: Committee,
     ) {
         self.insert_committee(committee);
-        self.insert_checkpoint(checkpoint.clone());
+        self.insert_checkpoint(&checkpoint);
         self.insert_checkpoint_contents(&checkpoint, contents);
         self.update_highest_synced_checkpoint(&checkpoint);
     }
@@ -433,6 +454,17 @@ impl InMemoryStore {
             .and_then(|(_, digest)| self.get_checkpoint_by_digest(digest))
     }
 
+    pub fn get_lowest_available_checkpoint(&self) -> CheckpointSequenceNumber {
+        self.lowest_checkpoint_number
+    }
+
+    pub fn set_lowest_available_checkpoint(
+        &mut self,
+        checkpoint_seq_num: CheckpointSequenceNumber,
+    ) {
+        self.lowest_checkpoint_number = checkpoint_seq_num;
+    }
+
     pub fn get_checkpoint_contents(
         &self,
         digest: &CheckpointContentsDigest,
@@ -461,7 +493,19 @@ impl InMemoryStore {
             .insert(*contents.digest(), contents);
     }
 
-    pub fn insert_checkpoint(&mut self, checkpoint: VerifiedCheckpoint) {
+    pub fn insert_checkpoint(&mut self, checkpoint: &VerifiedCheckpoint) {
+        self.insert_certified_checkpoint(checkpoint);
+        let digest = *checkpoint.digest();
+        let sequence_number = *checkpoint.sequence_number();
+
+        if Some(sequence_number) > self.highest_verified_checkpoint.map(|x| x.0) {
+            self.highest_verified_checkpoint = Some((sequence_number, digest));
+        }
+    }
+
+    // This function simulates Consensus inserts certified checkpoint into the checkpoint store
+    // without bumping the highest_verified_checkpoint watermark.
+    pub fn insert_certified_checkpoint(&mut self, checkpoint: &VerifiedCheckpoint) {
         let digest = *checkpoint.digest();
         let sequence_number = *checkpoint.sequence_number();
 
@@ -475,12 +519,7 @@ impl InMemoryStore {
             self.insert_committee(committee);
         }
 
-        // Update latest
-        if Some(sequence_number) > self.highest_verified_checkpoint.map(|x| x.0) {
-            self.highest_verified_checkpoint = Some((sequence_number, digest));
-        }
-
-        self.checkpoints.insert(digest, checkpoint);
+        self.checkpoints.insert(digest, checkpoint.clone());
         self.sequence_number_to_digest
             .insert(sequence_number, digest);
     }
@@ -491,6 +530,14 @@ impl InMemoryStore {
         }
 
         self.highest_synced_checkpoint =
+            Some((*checkpoint.sequence_number(), *checkpoint.digest()));
+    }
+
+    pub fn update_highest_verified_checkpoint(&mut self, checkpoint: &VerifiedCheckpoint) {
+        if !self.checkpoints.contains_key(checkpoint.digest()) {
+            panic!("store should already contain checkpoint");
+        }
+        self.highest_verified_checkpoint =
             Some((*checkpoint.sequence_number(), *checkpoint.digest()));
     }
 
@@ -596,6 +643,10 @@ impl ReadStore for SharedInMemoryStore {
             .pipe(Ok)
     }
 
+    fn get_lowest_available_checkpoint(&self) -> Result<CheckpointSequenceNumber, Self::Error> {
+        Ok(self.inner().get_lowest_available_checkpoint())
+    }
+
     fn get_full_checkpoint_contents_by_sequence_number(
         &self,
         sequence_number: CheckpointSequenceNumber,
@@ -667,7 +718,7 @@ impl ReadStore for SharedInMemoryStore {
 }
 
 impl WriteStore for SharedInMemoryStore {
-    fn insert_checkpoint(&self, checkpoint: VerifiedCheckpoint) -> Result<(), Self::Error> {
+    fn insert_checkpoint(&self, checkpoint: &VerifiedCheckpoint) -> Result<(), Self::Error> {
         self.inner_mut().insert_checkpoint(checkpoint);
         Ok(())
     }
@@ -678,6 +729,15 @@ impl WriteStore for SharedInMemoryStore {
     ) -> Result<(), Self::Error> {
         self.inner_mut()
             .update_highest_synced_checkpoint(checkpoint);
+        Ok(())
+    }
+
+    fn update_highest_verified_checkpoint(
+        &self,
+        checkpoint: &VerifiedCheckpoint,
+    ) -> Result<(), Self::Error> {
+        self.inner_mut()
+            .update_highest_verified_checkpoint(checkpoint);
         Ok(())
     }
 
@@ -694,6 +754,12 @@ impl WriteStore for SharedInMemoryStore {
     fn insert_committee(&self, new_committee: Committee) -> Result<(), Self::Error> {
         self.inner_mut().insert_committee(new_committee);
         Ok(())
+    }
+}
+
+impl SharedInMemoryStore {
+    pub fn insert_certified_checkpoint(&self, checkpoint: &VerifiedCheckpoint) {
+        self.inner_mut().insert_certified_checkpoint(checkpoint);
     }
 }
 

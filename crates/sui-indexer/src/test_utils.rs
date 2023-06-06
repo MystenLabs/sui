@@ -18,7 +18,7 @@ pub async fn start_test_indexer(
     config: IndexerConfig,
 ) -> Result<(PgIndexerStore, JoinHandle<Result<(), IndexerError>>), anyhow::Error> {
     let parsed_url = config.base_connection_url()?;
-    let (blocking_pool, async_pool) = new_pg_connection_pool(&parsed_url)
+    let blocking_pool = new_pg_connection_pool(&parsed_url)
         .await
         .map_err(|e| anyhow!("unable to connect to Postgres, is it running? {e}"))?;
     if config.reset_db {
@@ -33,7 +33,7 @@ pub async fn start_test_indexer(
     let registry = Registry::default();
     let indexer_metrics = IndexerMetrics::new(&registry);
 
-    let store = PgIndexerStore::new(async_pool, blocking_pool, indexer_metrics.clone()).await;
+    let store = PgIndexerStore::new(blocking_pool, indexer_metrics.clone()).await;
     let store_clone = store.clone();
     let handle = tokio::spawn(async move {
         Indexer::start(&config, &registry, store_clone, indexer_metrics, None).await

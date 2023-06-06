@@ -524,9 +524,9 @@ module sui_system::validator_set {
         let threshold = voting_power::total_voting_power() - voting_power::quorum_threshold();
         let result = 0;
         while (sum < threshold) {
-            let (gas_price, stake) = pq::pop_max(&mut pq);
+            let (gas_price, voting_power) = pq::pop_max(&mut pq);
             result = gas_price;
-            sum = sum + stake;
+            sum = sum + voting_power;
         };
         result
     }

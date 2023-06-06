@@ -48,13 +48,11 @@ use crate::module_cache_metrics::ResolverMetrics;
 use crate::signature_verifier::*;
 use crate::stake_aggregator::StakeAggregator;
 use move_bytecode_utils::module_cache::SyncModuleCache;
-use move_vm_runtime::move_vm::MoveVM;
-use move_vm_runtime::native_functions::NativeFunctionTable;
 use mysten_common::sync::notify_once::NotifyOnce;
 use mysten_common::sync::notify_read::NotifyRead;
 use mysten_metrics::monitored_scope;
 use prometheus::IntCounter;
-use sui_adapter::adapter;
+use sui_execution::{self, Executor};
 use sui_macros::fail_point;
 use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
 use sui_storage::mutex_table::{MutexGuard, MutexTable};
@@ -99,6 +97,15 @@ impl CertTxGuard {
     pub fn commit_tx(self) {}
 }
 
+pub enum ConsensusCertificateResult {
+    /// The consensus message was ignored (e.g. because it has already been processed).
+    Ignored,
+    /// An executable transaction (can be a user tx or a system tx)
+    SuiTransaction(VerifiedExecutableTransaction),
+    /// Everything else, e.g. AuthorityCapabilities, CheckpointSignatures, etc.
+    ConsensusMessage,
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq, Eq)]
 pub struct ExecutionIndicesWithHash {
     pub index: ExecutionIndices,
@@ -107,9 +114,7 @@ pub struct ExecutionIndicesWithHash {
 
 // Data related to VM and Move execution and type layout
 pub struct ExecutionComponents {
-    /// Move native functions that are available to invoke
-    pub(crate) native_functions: NativeFunctionTable,
-    pub(crate) move_vm: Arc<MoveVM>,
+    pub(crate) executor: Arc<dyn Executor + Send + Sync>,
     // TODO: use strategies (e.g. LRU?) to constraint memory usage
     pub(crate) module_cache: Arc<SyncModuleCache<ResolverWrapper<AuthorityStore>>>,
     metrics: Arc<ResolverMetrics>,
@@ -542,12 +547,8 @@ impl AuthorityPerEpochStore {
         &self.execution_component.module_cache
     }
 
-    pub fn move_vm(&self) -> &Arc<MoveVM> {
-        &self.execution_component.move_vm
-    }
-
-    pub fn native_functions(&self) -> &NativeFunctionTable {
-        &self.execution_component.native_functions
+    pub fn executor(&self) -> &Arc<dyn Executor + Send + Sync> {
+        &self.execution_component.executor
     }
 
     pub async fn acquire_tx_guard(
@@ -1428,7 +1429,7 @@ impl AuthorityPerEpochStore {
         parent_sync_store: impl ParentSync,
     ) -> SuiResult<Vec<VerifiedExecutableTransaction>> {
         let mut batch = self.db_batch();
-        let (executable_txns, _lock) = self
+        let (executable_txns, notifications, _lock) = self
             .process_consensus_transactions(
                 &mut batch,
                 transactions,
@@ -1439,14 +1440,7 @@ impl AuthorityPerEpochStore {
             .await?;
         batch.write()?;
 
-        for tx in transactions
-            .iter()
-            .chain(end_of_publish_transactions.iter())
-        {
-            let key = tx.0.transaction.key();
-            self.consensus_notify_read.notify(&key, &());
-        }
-
+        self.process_notifications(&notifications, end_of_publish_transactions);
         Ok(executable_txns)
     }
 
@@ -1462,7 +1456,7 @@ impl AuthorityPerEpochStore {
             .into_iter()
             .partition(|txn| !txn.0.is_end_of_publish());
 
-        let (certs, _lock) = self
+        let (certs, notifications, _lock) = self
             .process_consensus_transactions(
                 &mut batch,
                 &transactions,
@@ -1473,15 +1467,22 @@ impl AuthorityPerEpochStore {
             .await?;
         batch.write()?;
 
-        for tx in transactions
+        self.process_notifications(&notifications, &end_of_publish_transactions);
+        Ok(certs)
+    }
+
+    fn process_notifications(
+        &self,
+        notifications: &[SequencedConsensusTransactionKey],
+        end_of_publish: &[VerifiedSequencedConsensusTransaction],
+    ) {
+        for key in notifications
             .iter()
-            .chain(end_of_publish_transactions.iter())
+            .cloned()
+            .chain(end_of_publish.iter().map(|tx| tx.0.transaction.key()))
         {
-            let key = tx.0.transaction.key();
             self.consensus_notify_read.notify(&key, &());
         }
-
-        Ok(certs)
     }
 
     /// Depending on the type of the VerifiedSequencedConsensusTransaction wrappers,
@@ -1497,9 +1498,11 @@ impl AuthorityPerEpochStore {
         parent_sync_store: impl ParentSync,
     ) -> SuiResult<(
         Vec<VerifiedExecutableTransaction>,
+        Vec<SequencedConsensusTransactionKey>, // keys to notify as complete
         Option<parking_lot::RwLockWriteGuard<ReconfigState>>,
     )> {
-        let mut verified_certificates = Vec::new();
+        let mut verified_certificates = Vec::with_capacity(transactions.len());
+        let mut notifications = Vec::with_capacity(transactions.len());
 
         // get the current next versions for each shared object in transactions
         let mut shared_input_next_versions = {
@@ -1528,7 +1531,9 @@ impl AuthorityPerEpochStore {
         };
 
         for tx in transactions {
-            if let Some(cert) = self
+            let key = tx.0.transaction.key();
+
+            match self
                 .process_consensus_transaction(
                     batch,
                     &mut shared_input_next_versions,
@@ -1537,7 +1542,12 @@ impl AuthorityPerEpochStore {
                 )
                 .await?
             {
-                verified_certificates.push(cert);
+                ConsensusCertificateResult::SuiTransaction(cert) => {
+                    notifications.push(key);
+                    verified_certificates.push(cert);
+                }
+                ConsensusCertificateResult::ConsensusMessage => notifications.push(key),
+                ConsensusCertificateResult::Ignored => (),
             }
         }
 
@@ -1548,7 +1558,7 @@ impl AuthorityPerEpochStore {
 
         let lock = self.process_end_of_publish_transactions(batch, end_of_publish_transactions)?;
 
-        Ok((verified_certificates, lock))
+        Ok((verified_certificates, notifications, lock))
     }
 
     fn process_end_of_publish_transactions(
@@ -1632,7 +1642,7 @@ impl AuthorityPerEpochStore {
         shared_input_next_versions: &mut HashMap<ObjectID, SequenceNumber>,
         transaction: &VerifiedSequencedConsensusTransaction,
         checkpoint_service: &Arc<C>,
-    ) -> SuiResult<Option<VerifiedExecutableTransaction>> {
+    ) -> SuiResult<ConsensusCertificateResult> {
         let _scope = monitored_scope("HandleConsensusTransaction");
         let VerifiedSequencedConsensusTransaction(SequencedConsensusTransaction {
             certificate: _consensus_output,
@@ -1654,7 +1664,7 @@ impl AuthorityPerEpochStore {
                         certificate.epoch(),
                         self.epoch()
                     );
-                    return Ok(None);
+                    return Ok(ConsensusCertificateResult::Ignored);
                 }
                 if self.has_sent_end_of_publish(certificate_author)? {
                     // This can not happen with valid authority
@@ -1662,7 +1672,7 @@ impl AuthorityPerEpochStore {
                     // However this certificate will be filtered out before this line by `consensus_message_processed` call in `verify_consensus_transaction`
                     // If we see some new certificate here it means authority is byzantine and sent certificate after EndOfPublish (or we have some bug in ConsensusAdapter)
                     warn!("[Byzantine authority] Authority {:?} sent a new, previously unseen certificate {:?} after it sent EndOfPublish message to consensus", certificate_author.concise(), certificate.digest());
-                    return Ok(None);
+                    return Ok(ConsensusCertificateResult::Ignored);
                 }
                 // Safe because signatures are verified when VerifiedSequencedConsensusTransaction
                 // is constructed.
@@ -1681,7 +1691,7 @@ impl AuthorityPerEpochStore {
                 {
                     debug!("Ignoring consensus certificate for transaction {:?} because of end of epoch",
                     certificate.digest());
-                    return Ok(None);
+                    return Ok(ConsensusCertificateResult::Ignored);
                 }
 
                 if certificate.contains_shared_object() {
@@ -1703,7 +1713,7 @@ impl AuthorityPerEpochStore {
                     .await?;
                 }
 
-                Ok(Some(certificate))
+                Ok(ConsensusCertificateResult::SuiTransaction(certificate))
             }
             SequencedConsensusTransactionKind::External(ConsensusTransaction {
                 kind: ConsensusTransactionKind::CheckpointSignature(info),
@@ -1711,7 +1721,7 @@ impl AuthorityPerEpochStore {
             }) => {
                 checkpoint_service.notify_checkpoint_signature(self, info)?;
                 self.record_consensus_transaction_processed(batch, transaction, consensus_index)?;
-                Ok(None)
+                Ok(ConsensusCertificateResult::ConsensusMessage)
             }
             SequencedConsensusTransactionKind::External(ConsensusTransaction {
                 kind: ConsensusTransactionKind::EndOfPublish(_),
@@ -1741,7 +1751,7 @@ impl AuthorityPerEpochStore {
                     );
                 }
                 self.record_consensus_transaction_processed(batch, transaction, consensus_index)?;
-                Ok(None)
+                Ok(ConsensusCertificateResult::ConsensusMessage)
             }
             SequencedConsensusTransactionKind::System(system_transaction) => {
                 if !self
@@ -1752,7 +1762,7 @@ impl AuthorityPerEpochStore {
                         "Ignoring system transaction {:?} because of end of epoch",
                         system_transaction.digest()
                     );
-                    return Ok(None);
+                    return Ok(ConsensusCertificateResult::Ignored);
                 }
 
                 // If needed we can support owned object system transactions as well...
@@ -1766,7 +1776,9 @@ impl AuthorityPerEpochStore {
                 )
                 .await?;
 
-                Ok(Some(system_transaction.clone()))
+                Ok(ConsensusCertificateResult::SuiTransaction(
+                    system_transaction.clone(),
+                ))
             }
         }
     }
@@ -2021,22 +2033,20 @@ impl ExecutionComponents {
         metrics: Arc<ResolverMetrics>,
         expensive_safety_check_config: &ExpensiveSafetyCheckConfig,
     ) -> Self {
-        let native_functions = sui_move_natives::all_natives(/* silent */ true);
-        let move_vm = Arc::new(
-            adapter::new_move_vm(
-                native_functions.clone(),
-                protocol_config,
-                expensive_safety_check_config.enable_move_vm_paranoid_checks(),
-            )
-            .expect("We defined natives to not fail here"),
-        );
+        let silent = true;
+        let executor = sui_execution::executor(
+            protocol_config,
+            expensive_safety_check_config.enable_move_vm_paranoid_checks(),
+            silent,
+        )
+        .expect("Creating an executor should not fail here");
+
         let module_cache = Arc::new(SyncModuleCache::new(ResolverWrapper::new(
             store,
             metrics.clone(),
         )));
         Self {
-            native_functions,
-            move_vm,
+            executor,
             module_cache,
             metrics,
         }

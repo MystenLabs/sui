@@ -7,6 +7,7 @@ export type QredoConnectIdentity = {
     service: string;
     apiUrl: string;
     origin: string;
+    organization: string;
 };
 
 export type QredoConnectPendingRequest = {
@@ -20,7 +21,7 @@ export type QredoConnectPendingRequest = {
 
 export type UIQredoPendingRequest = Pick<
     QredoConnectPendingRequest,
-    'id' | 'service' | 'apiUrl' | 'origin' | 'originFavIcon'
+    'id' | 'service' | 'apiUrl' | 'origin' | 'originFavIcon' | 'organization'
 > & { partialToken: `…${string}` };
 
 export type UIQredoInfo = {

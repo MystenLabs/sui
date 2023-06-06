@@ -2,10 +2,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::consensus::{ConsensusState, Dag};
-use config::Committee;
+use config::{Authority, Committee};
 use std::collections::HashSet;
 use tracing::debug;
-use types::{Certificate, CertificateAPI, CertificateDigest, HeaderAPI, Round};
+use types::{Certificate, CertificateAPI, HeaderAPI, Round};
 
 /// Order the past leaders that we didn't already commit.
 pub fn order_leaders<'a, LeaderElector>(
@@ -15,7 +15,7 @@ pub fn order_leaders<'a, LeaderElector>(
     get_leader: LeaderElector,
 ) -> Vec<Certificate>
 where
-    LeaderElector: Fn(&Committee, Round, &'a Dag) -> Option<&'a (CertificateDigest, Certificate)>,
+    LeaderElector: Fn(&Committee, Round, &'a Dag) -> (Authority, Option<&'a Certificate>),
 {
     let mut to_commit = vec![leader.clone()];
     let mut leader = leader;
@@ -25,9 +25,9 @@ where
         .step_by(2)
     {
         // Get the certificate proposed by the previous leader.
-        let (_, prev_leader) = match get_leader(committee, r, &state.dag) {
-            Some(x) => x,
-            None => continue,
+        let prev_leader = match get_leader(committee, r, &state.dag) {
+            (_authority, Some(x)) => x,
+            (_authority, None) => continue,
         };
 
         // Check whether there is a path between the last two leaders.
