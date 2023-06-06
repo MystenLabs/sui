@@ -60,7 +60,7 @@ export function QredoTransaction({
                     }
                 />
             </div>
-            <div className="flex flex-col gap-1">
+            <div className="flex flex-col gap-1 overflow-hidden">
                 {isLoading ? (
                     <>
                         <div className="bg-sui-lightest h-3 w-20 rounded" />
@@ -82,7 +82,7 @@ export function QredoTransaction({
                             #{data.txID}
                         </Text>
                         {isSignMessage && messageToSign ? (
-                            <div className="break-all">
+                            <div className="break-words line-clamp-3 overflow-hidden">
                                 <Text color="gray-80" weight="normal">
                                     {messageToSign}
                                 </Text>
