@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { DEFAULT_API_ENV } from '_app/ApiProvider';
+import { getUrlWithDeviceId } from '_src/shared/analytics/amplitude';
 import { API_ENV } from '_src/shared/api-env';
 
 import type { ObjectId, SuiAddress, TransactionDigest } from '@mysten/sui.js';
@@ -25,12 +26,11 @@ function getExplorerUrl(
     const explorerEnv =
         apiEnv === 'customRPC' ? customRPC : API_ENV_TO_EXPLORER_ENV[apiEnv];
 
-    const url = new URL(path, EXPLORER_LINK);
-    const searchParams = new URLSearchParams(url.search);
+    const url = getUrlWithDeviceId(new URL(path, EXPLORER_LINK));
     if (explorerEnv) {
-        searchParams.set('network', explorerEnv);
-        url.search = searchParams.toString();
+        url.searchParams.append('network', explorerEnv);
     }
+
     return url.href;
 }
 
