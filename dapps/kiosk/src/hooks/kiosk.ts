@@ -12,12 +12,14 @@ import { useRpc } from '../context/RpcClientContext';
 import {
   ObjectId,
   SuiAddress,
+  SuiObjectResponse,
   getObjectFields,
   getObjectId,
 } from '@mysten/sui.js';
 import {
   KIOSK_OWNER_CAP,
   Kiosk,
+  KioskData,
   KioskItem,
   KioskListing,
   fetchKiosk,
@@ -78,10 +80,10 @@ export function useKiosk(kioskId: string | undefined | null) {
   return useQuery({
     queryKey: [TANSTACK_KIOSK_KEY, kioskId],
     queryFn: async (): Promise<{
-      items: OwnedObjectType[];
-      listings: Record<ObjectId, KioskListing>;
+      kioskData: KioskData | null;
+      items: SuiObjectResponse[];
     }> => {
-      if (!kioskId) return { items: [], listings: {} };
+      if (!kioskId) return { kioskData: null, items: [] };
       const { data: res } = await fetchKiosk(
         provider,
         kioskId,
@@ -98,11 +100,24 @@ export function useKiosk(kioskId: string | undefined | null) {
         options: { showDisplay: true, showType: true },
       });
 
+      return {
+        kioskData: res,
+        items,
+      };
+    },
+    select: ({
+      items,
+      kioskData,
+    }): {
+      items: OwnedObjectType[];
+      listings: Record<ObjectId, KioskListing>;
+    } => {
+      if (!kioskData) return { items: [], listings: {} };
       // parse the displays for FE.
       const displays = parseObjectDisplays(items) || {};
 
       // attach the displays to the objects.
-      const ownedItems = res.items.map((item: KioskItem) => {
+      const ownedItems = kioskData.items.map((item: KioskItem) => {
         return {
           ...item,
           display: displays[item.objectId] || {},
@@ -113,7 +128,7 @@ export function useKiosk(kioskId: string | undefined | null) {
       return {
         items: ownedItems,
         listings: processKioskListings(
-          res.items.map((x) => x.listing) as KioskListing[],
+          kioskData.items.map((x) => x.listing) as KioskListing[],
         ),
       };
     },
