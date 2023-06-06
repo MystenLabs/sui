@@ -5,30 +5,42 @@ use crate::committee::EpochId;
 use crate::crypto::{SignatureScheme, SuiSignature};
 use crate::multisig_legacy::MultiSigLegacy;
 use crate::zk_login_authenticator::ZkLoginAuthenticator;
+use crate::zk_login_util::OAuthProviderContent;
 use crate::{base_types::SuiAddress, crypto::Signature, error::SuiError, multisig::MultiSig};
 pub use enum_dispatch::enum_dispatch;
 use fastcrypto::{
     error::FastCryptoError,
     traits::{EncodeDecodeBase64, ToFromBytes},
 };
+use im::hashmap::HashMap as ImHashMap;
 use schemars::JsonSchema;
 use serde::Serialize;
 use shared_crypto::intent::IntentMessage;
 use std::hash::Hash;
+use std::sync::Arc;
+
 #[derive(Default, Debug, Clone)]
 pub struct AuxVerifyData {
     pub epoch: Option<EpochId>,
-    pub google_jwk_as_bytes: Option<Vec<u8>>,
+    //pub google_jwk_as_bytes: Option<Vec<u8>>,
+    //pub oauth_provider_jwk: Option<Arc<OAuthProviderContent>>,
+
+    // map from kid => OauthProviderContent
+    pub oauth_provider_jwks: ImHashMap<String, Arc<OAuthProviderContent>>,
 }
 
 impl AuxVerifyData {
-    pub fn new(epoch: Option<EpochId>, google_jwk_as_bytes: Option<Vec<u8>>) -> Self {
+    pub fn new(
+        epoch: Option<EpochId>,
+        oauth_provider_jwks: ImHashMap<String, Arc<OAuthProviderContent>>,
+    ) -> Self {
         Self {
             epoch,
-            google_jwk_as_bytes,
+            oauth_provider_jwks,
         }
     }
 }
+
 /// A lightweight trait that all members of [enum GenericSignature] implement.
 #[enum_dispatch]
 pub trait AuthenticatorTrait {
@@ -36,7 +48,7 @@ pub trait AuthenticatorTrait {
         &self,
         value: &IntentMessage<T>,
         author: SuiAddress,
-        aux_verify_data: AuxVerifyData,
+        aux_verify_data: &AuxVerifyData,
     ) -> Result<(), SuiError>
     where
         T: Serialize;
@@ -150,7 +162,7 @@ impl AuthenticatorTrait for Signature {
         &self,
         value: &IntentMessage<T>,
         author: SuiAddress,
-        _aux_verify_data: AuxVerifyData,
+        _aux_verify_data: &AuxVerifyData,
     ) -> Result<(), SuiError>
     where
         T: Serialize,

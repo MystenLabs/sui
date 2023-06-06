@@ -79,7 +79,7 @@ impl AuthenticatorTrait for MultiSig {
         &self,
         value: &IntentMessage<T>,
         author: SuiAddress,
-        _aux_verify_data: AuxVerifyData,
+        _aux_verify_data: &AuxVerifyData,
     ) -> Result<(), SuiError>
     where
         T: Serialize,

@@ -261,6 +261,7 @@ http = "0.2.8"
 http-body = "0.4.5"
 humantime = "2.1.0"
 hyper = "0.14.20"
+im = "15"
 impl-trait-for-tuples = "0.2.0"
 indexmap = { version = "1.9.2", features = ["serde"] }
 indicatif = "0.17.2"
