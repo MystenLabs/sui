@@ -1,111 +1,56 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use futures::{stream, StreamExt};
+use std::ops::Deref;
 use std::time::{Duration, SystemTime};
-use sui_core::authority_client::AuthorityAPI;
 use sui_core::consensus_adapter::position_submit_certificate;
-use sui_types::transaction::{CallArg, ObjectArg};
-use test_utils::authority::get_client;
-use test_utils::authority::{spawn_test_authorities, test_authority_configs_with_objects};
-use test_utils::transaction::{
-    publish_counter_package, submit_shared_object_transaction, submit_single_owner_transaction,
-};
-
+use sui_json_rpc_types::SuiTransactionBlockEffectsAPI;
 use sui_macros::sim_test;
 use sui_test_transaction_builder::TestTransactionBuilder;
-use sui_types::base_types::dbg_addr;
-use sui_types::crypto::deterministic_random_account_key;
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::event::Event;
 use sui_types::execution_status::{CommandArgumentError, ExecutionFailureStatus, ExecutionStatus};
 use sui_types::messages_grpc::ObjectInfoRequest;
-use sui_types::object::generate_test_gas_objects;
+use sui_types::transaction::{CallArg, ObjectArg};
 use sui_types::SUI_CLOCK_OBJECT_ID;
+use test_utils::network::TestClusterBuilder;
 
 /// Send a simple shared object transaction to Sui and ensures the client gets back a response.
 #[sim_test]
 async fn shared_object_transaction() {
-    let gas_objects = generate_test_gas_objects();
+    let test_cluster = TestClusterBuilder::new().build().await;
+    let (sender, mut objects) = test_cluster.wallet.get_one_account().await.unwrap();
+    let rgp = test_cluster.get_reference_gas_price().await;
+    let transaction = TestTransactionBuilder::new(sender, objects.pop().unwrap(), rgp)
+        .call_staking(
+            objects.pop().unwrap(),
+            test_cluster
+                .swarm
+                .active_validators()
+                .next()
+                .unwrap()
+                .config
+                .sui_address(),
+        )
+        .build();
 
-    // Get the authority configs and spawn them. Note that it is important to not drop
-    // the handles (or the authorities will stop).
-    let (configs, objects) = test_authority_configs_with_objects(gas_objects);
-    let rgp = configs.genesis.reference_gas_price();
-    let _handles = spawn_test_authorities(&configs).await;
-
-    // Make a test shared object certificate.
-    let (sender, keypair) = deterministic_random_account_key();
-    let transaction =
-        TestTransactionBuilder::new(sender, objects[0].compute_object_reference(), rgp)
-            .call_staking(objects[1].compute_object_reference(), dbg_addr(2))
-            .build_and_sign(&keypair);
-
-    // Submit the transaction. Note that this transaction is random and we do not expect
-    // it to be successfully executed by the Move execution engine.
-    let _effects = submit_shared_object_transaction(transaction, &configs.net_addresses())
-        .await
-        .unwrap();
-}
-
-/// Same as `shared_object_transaction` but every authorities submit the transaction.
-#[sim_test]
-async fn many_shared_object_transactions() {
-    let gas_objects = generate_test_gas_objects();
-
-    // Get the authority configs and spawn them. Note that it is important to not drop
-    // the handles (or the authorities will stop).
-    let (configs, objects) = test_authority_configs_with_objects(gas_objects);
-    let rgp = configs.genesis.reference_gas_price();
-
-    let _handles = spawn_test_authorities(&configs).await;
-
-    // Make a test shared object certificate.
-    let (sender, keypair) = deterministic_random_account_key();
-    let transaction =
-        TestTransactionBuilder::new(sender, objects[0].compute_object_reference(), rgp)
-            .call_staking(objects[1].compute_object_reference(), dbg_addr(2))
-            .build_and_sign(&keypair);
-
-    // Submit the transaction. Note that this transaction is random and we do not expect
-    // it to be successfully executed by the Move execution engine.
-    let _effects = submit_shared_object_transaction(transaction, &configs.net_addresses())
-        .await
-        .unwrap();
+    test_cluster
+        .sign_and_execute_transaction(&transaction)
+        .await;
 }
 
 /// End-to-end shared transaction test for a Sui validator. It does not test the client or wallet,
 /// but tests the end-to-end flow from Sui to consensus.
 #[sim_test]
 async fn call_shared_object_contract() {
-    let gas_objects = generate_test_gas_objects();
-
-    // Get the authority configs and spawn them. Note that it is important to not drop
-    // the handles (or the authorities will stop).
-    let (configs, mut gas_objects) = test_authority_configs_with_objects(gas_objects);
-    let rgp = configs.genesis.reference_gas_price();
-    let _handles = spawn_test_authorities(&configs).await;
-
-    // Publish the move package to all authorities and get its package ID.
-    let package_id =
-        publish_counter_package(gas_objects.pop().unwrap(), &configs.net_addresses(), rgp)
-            .await
-            .0;
-
-    let (sender, keypair) = deterministic_random_account_key();
-    // Make a transaction to create a counter.
-    let transaction = TestTransactionBuilder::new(
-        sender,
-        gas_objects.pop().unwrap().compute_object_reference(),
-        rgp,
-    )
-    .call_counter_create(package_id)
-    .build_and_sign(&keypair);
-    let (effects, _, _) =
-        submit_single_owner_transaction(transaction, &configs.net_addresses()).await;
-    assert!(matches!(effects.status(), ExecutionStatus::Success { .. }));
-    let counter_creation_transaction = *effects.transaction_digest();
-    let ((counter_id, counter_initial_shared_version, _), _) = effects.created()[0];
+    let test_cluster = TestClusterBuilder::new().build().await;
+    let (package, counter) = test_cluster
+        .wallet
+        .publish_basics_package_and_make_counter()
+        .await;
+    let package_id = package.0;
+    let counter_id = counter.0;
+    let counter_initial_shared_version = counter.1;
     let counter_object_arg = ObjectArg::SharedObject {
         id: counter_id,
         initial_shared_version: counter_initial_shared_version,
@@ -116,111 +61,117 @@ async fn call_shared_object_contract() {
         initial_shared_version: counter_initial_shared_version,
         mutable: false,
     };
+    let counter_creation_transaction = test_cluster
+        .get_object_from_fullnode_store(&counter_id)
+        .await
+        .unwrap()
+        .previous_transaction;
 
     // Send two read only transactions
-    for _ in 0..2 {
+    let (sender, objects) = test_cluster.wallet.get_one_account().await.unwrap();
+    let rgp = test_cluster.get_reference_gas_price().await;
+    let mut prev_assert_value_txs = Vec::new();
+    for gas in objects {
         // Ensure the value of the counter is `0`.
-        let transaction = TestTransactionBuilder::new(
-            sender,
-            gas_objects.pop().unwrap().compute_object_reference(),
-            rgp,
-        )
-        .move_call(
-            package_id,
-            "counter",
-            "assert_value",
-            vec![
-                CallArg::Object(counter_object_arg_imm),
-                CallArg::Pure(0u64.to_le_bytes().to_vec()),
-            ],
-        )
-        .build_and_sign(&keypair);
-        let (effects, _, _) =
-            submit_shared_object_transaction(transaction, &configs.net_addresses())
-                .await
-                .unwrap();
-        assert!(matches!(effects.status(), ExecutionStatus::Success { .. }));
-        // Only genesis, assert_value, and counter creation are dependencies
-        // Note that this assert would fail for second transaction
-        // if they send counter_object_arg instead of counter_object_arg_imm
-        assert_eq!(effects.dependencies().len(), 3);
+        let transaction = TestTransactionBuilder::new(sender, gas, rgp)
+            .move_call(
+                package_id,
+                "counter",
+                "assert_value",
+                vec![
+                    CallArg::Object(counter_object_arg_imm),
+                    CallArg::Pure(0u64.to_le_bytes().to_vec()),
+                ],
+            )
+            .build();
+        let effects = test_cluster
+            .sign_and_execute_transaction(&transaction)
+            .await
+            .effects
+            .unwrap();
+        // Check that all reads must depend on the creation of the counter, but not to any previous reads.
         assert!(effects
             .dependencies()
             .contains(&counter_creation_transaction));
+        assert!(prev_assert_value_txs
+            .iter()
+            .all(|tx| { !effects.dependencies().contains(tx) }));
+        prev_assert_value_txs.push(*effects.transaction_digest());
     }
 
     // Make a transaction to increment the counter.
-    let transaction = TestTransactionBuilder::new(
-        sender,
-        gas_objects.pop().unwrap().compute_object_reference(),
-        rgp,
-    )
-    .call_counter_increment(package_id, counter_id, counter_initial_shared_version)
-    .build_and_sign(&keypair);
-    let (effects, _, _) = submit_shared_object_transaction(transaction, &configs.net_addresses())
+    let transaction = test_cluster
+        .test_transaction_builder()
         .await
+        .call_counter_increment(package_id, counter_id, counter_initial_shared_version)
+        .build();
+    let effects = test_cluster
+        .sign_and_execute_transaction(&transaction)
+        .await
+        .effects
         .unwrap();
     let increment_transaction = *effects.transaction_digest();
-    assert!(matches!(effects.status(), ExecutionStatus::Success { .. }));
-    // Again - only genesis, increment, and counter creation are dependencies
-    // Previously executed assert_value transaction(s) are not a dependency because they took immutable reference to shared object
-    assert_eq!(effects.dependencies().len(), 3);
     assert!(effects
         .dependencies()
         .contains(&counter_creation_transaction));
+    // Previously executed assert_value transaction(s) are not a dependency because they took immutable reference to shared object
+    assert!(prev_assert_value_txs
+        .iter()
+        .all(|tx| { !effects.dependencies().contains(tx) }));
 
     // assert_value can take both mutable and immutable references
     // it is allowed to pass mutable shared object arg to move call taking immutable reference
     let mut assert_value_mut_transaction = None;
     for imm in [true, false] {
         // Ensure the value of the counter is `1`.
-        let transaction = TestTransactionBuilder::new(
-            sender,
-            gas_objects.pop().unwrap().compute_object_reference(),
-            rgp,
-        )
-        .move_call(
-            package_id,
-            "counter",
-            "assert_value",
-            vec![
-                CallArg::Object(if imm {
-                    counter_object_arg_imm
-                } else {
-                    counter_object_arg
-                }),
-                CallArg::Pure(1u64.to_le_bytes().to_vec()),
-            ],
-        )
-        .build_and_sign(&keypair);
-        let (effects, _, _) =
-            submit_shared_object_transaction(transaction, &configs.net_addresses())
-                .await
-                .unwrap();
-        assert!(matches!(effects.status(), ExecutionStatus::Success { .. }));
-        // Genesis, assert_value, and increment transaction are dependencies
-        assert_eq!(effects.dependencies().len(), 3);
+        let transaction = test_cluster
+            .test_transaction_builder()
+            .await
+            .move_call(
+                package_id,
+                "counter",
+                "assert_value",
+                vec![
+                    CallArg::Object(if imm {
+                        counter_object_arg_imm
+                    } else {
+                        counter_object_arg
+                    }),
+                    CallArg::Pure(1u64.to_le_bytes().to_vec()),
+                ],
+            )
+            .build();
+        let effects = test_cluster
+            .sign_and_execute_transaction(&transaction)
+            .await
+            .effects
+            .unwrap();
         assert!(effects.dependencies().contains(&increment_transaction));
+        if let Some(prev) = assert_value_mut_transaction {
+            assert!(effects.dependencies().contains(&prev));
+        }
         assert_value_mut_transaction = Some(*effects.transaction_digest());
     }
 
     let assert_value_mut_transaction = assert_value_mut_transaction.unwrap();
 
     // And last check - attempt to send increment transaction with immutable reference
-    let transaction = TestTransactionBuilder::new(
-        sender,
-        gas_objects.pop().unwrap().compute_object_reference(),
-        rgp,
-    )
-    .move_call(
-        package_id,
-        "counter",
-        "increment",
-        vec![CallArg::Object(counter_object_arg_imm)],
-    )
-    .build_and_sign(&keypair);
-    let (effects, _, _) = submit_shared_object_transaction(transaction, &configs.net_addresses())
+    let transaction = test_cluster
+        .test_transaction_builder()
         .await
+        .move_call(
+            package_id,
+            "counter",
+            "increment",
+            vec![CallArg::Object(counter_object_arg_imm)],
+        )
+        .build();
+    let effects = test_cluster
+        .wallet
+        .execute_transaction_may_fail(test_cluster.wallet.sign_transaction(&transaction))
+        .await
+        .unwrap()
+        .effects
         .unwrap();
     // Transaction fails
     assert_eq!(
@@ -232,8 +183,8 @@ async fn call_shared_object_contract() {
             },
             command: Some(0),
         }
+        .into()
     );
-    assert_eq!(effects.dependencies().len(), 3);
     assert!(effects
         .dependencies()
         .contains(&assert_value_mut_transaction));
@@ -241,36 +192,24 @@ async fn call_shared_object_contract() {
 
 #[sim_test]
 async fn access_clock_object_test() {
-    let gas_objects = generate_test_gas_objects();
+    let test_cluster = TestClusterBuilder::new().build().await;
+    let package_id = test_cluster.wallet.publish_basics_package().await.0;
 
-    // Get the authority configs and spawn them. Note that it is important to not drop
-    // the handles (or the authorities will stop).
-    let (configs, mut gas_objects) = test_authority_configs_with_objects(gas_objects);
-    let rgp = configs.genesis.reference_gas_price();
-    let handles = spawn_test_authorities(&configs).await;
-
-    // Publish the move package to all authorities and get its package ID.
-    let package_id =
-        publish_counter_package(gas_objects.pop().unwrap(), &configs.net_addresses(), rgp)
+    let transaction = test_cluster.wallet.sign_transaction(
+        &test_cluster
+            .test_transaction_builder()
             .await
-            .0;
-
-    let (sender, keypair) = deterministic_random_account_key();
-    let transaction = TestTransactionBuilder::new(
-        sender,
-        gas_objects.pop().unwrap().compute_object_reference(),
-        rgp,
-    )
-    .move_call(package_id, "clock", "get_time", vec![CallArg::CLOCK_IMM])
-    .build_and_sign(&keypair);
+            .move_call(package_id, "clock", "get_time", vec![CallArg::CLOCK_IMM])
+            .build(),
+    );
     let digest = *transaction.digest();
     let start = SystemTime::now()
         .duration_since(SystemTime::UNIX_EPOCH)
         .unwrap();
-    let (effects, events, objects) =
-        submit_shared_object_transaction(transaction, &configs.net_addresses())
-            .await
-            .unwrap();
+    let validators = test_cluster.get_validator_pubkeys();
+    let (effects, events, objects) = test_cluster
+        .submit_transaction_to_validators(transaction, &validators)
+        .await;
 
     assert_eq!(
         objects.first().unwrap().compute_object_reference(),
@@ -305,9 +244,9 @@ async fn access_clock_object_test() {
     let mut attempt = 0;
     #[allow(clippy::never_loop)] // seem to be a bug in clippy with let else statement
     loop {
-        let checkpoint = handles
-            .get(0)
-            .unwrap()
+        let checkpoint = test_cluster
+            .fullnode_handle
+            .sui_node
             .with_async(|node| async {
                 node.state()
                     .get_transaction_checkpoint(&digest, &node.state().epoch_store_for_testing())
@@ -330,237 +269,104 @@ async fn access_clock_object_test() {
     }
 }
 
-/// Same test as `call_shared_object_contract` but the clients submits many times the same
-/// transaction (one copy per authority).
-#[sim_test]
-async fn shared_object_flood() {
-    telemetry_subscribers::init_for_testing();
-    let gas_objects = generate_test_gas_objects();
-
-    // Get the authority configs and spawn them. Note that it is important to not drop
-    // the handles (or the authorities will stop).
-    let (configs, mut gas_objects) = test_authority_configs_with_objects(gas_objects);
-    let rgp = configs.genesis.reference_gas_price();
-    let _handles = spawn_test_authorities(&configs).await;
-
-    // Publish the move package to all authorities and get its package ID.
-    let package_id =
-        publish_counter_package(gas_objects.pop().unwrap(), &configs.net_addresses(), rgp)
-            .await
-            .0;
-
-    let (sender, keypair) = deterministic_random_account_key();
-    // Make a transaction to create a counter.
-    let transaction = TestTransactionBuilder::new(
-        sender,
-        gas_objects.pop().unwrap().compute_object_reference(),
-        rgp,
-    )
-    .call_counter_create(package_id)
-    .build_and_sign(&keypair);
-    let (effects, _, _) =
-        submit_single_owner_transaction(transaction, &configs.net_addresses()).await;
-    assert!(matches!(effects.status(), ExecutionStatus::Success { .. }));
-    let ((counter_id, counter_initial_shared_version, _), _) = effects.created()[0];
-    let counter_object_arg = ObjectArg::SharedObject {
-        id: counter_id,
-        initial_shared_version: counter_initial_shared_version,
-        mutable: true,
-    };
-
-    // Ensure the value of the counter is `0`.
-    let transaction = TestTransactionBuilder::new(
-        sender,
-        gas_objects.pop().unwrap().compute_object_reference(),
-        rgp,
-    )
-    .move_call(
-        package_id,
-        "counter",
-        "assert_value",
-        vec![
-            CallArg::Object(counter_object_arg),
-            CallArg::Pure(0u64.to_le_bytes().to_vec()),
-        ],
-    )
-    .build_and_sign(&keypair);
-    let (effects, _, _) = submit_shared_object_transaction(transaction, &configs.net_addresses())
-        .await
-        .unwrap();
-    assert!(matches!(effects.status(), ExecutionStatus::Success { .. }));
-
-    // Make a transaction to increment the counter.
-    let transaction = TestTransactionBuilder::new(
-        sender,
-        gas_objects.pop().unwrap().compute_object_reference(),
-        rgp,
-    )
-    .call_counter_increment(package_id, counter_id, counter_initial_shared_version)
-    .build_and_sign(&keypair);
-    let (effects, _, _) = submit_shared_object_transaction(transaction, &configs.net_addresses())
-        .await
-        .unwrap();
-    assert!(matches!(effects.status(), ExecutionStatus::Success { .. }));
-
-    // Ensure the value of the counter is `1`.
-    let transaction = TestTransactionBuilder::new(
-        sender,
-        gas_objects.pop().unwrap().compute_object_reference(),
-        rgp,
-    )
-    .move_call(
-        package_id,
-        "counter",
-        "assert_value",
-        vec![
-            CallArg::Object(counter_object_arg),
-            CallArg::Pure(1u64.to_le_bytes().to_vec()),
-        ],
-    )
-    .build_and_sign(&keypair);
-    let (effects, _, _) = submit_shared_object_transaction(transaction, &configs.net_addresses())
-        .await
-        .unwrap();
-    assert!(matches!(effects.status(), ExecutionStatus::Success { .. }));
-}
-
 #[sim_test]
 async fn shared_object_sync() {
-    telemetry_subscribers::init_for_testing();
-    let gas_objects = generate_test_gas_objects();
+    let test_cluster = TestClusterBuilder::new().build().await;
+    let package_id = test_cluster.wallet.publish_basics_package().await.0;
 
-    // Get the authority configs and spawn them. Note that it is important to not drop
-    // the handles (or the authorities will stop).
-    let (configs, mut gas_objects) = test_authority_configs_with_objects(gas_objects);
-    let rgp = configs.genesis.reference_gas_price();
-    let _handles = spawn_test_authorities(&configs).await;
-
-    // Publish the move package to all authorities and get its package ID.
-    let package_id =
-        publish_counter_package(gas_objects.pop().unwrap(), &configs.net_addresses(), rgp)
-            .await
-            .0;
-
+    // Since we use submit_transaction_to_validators in this test, which does not go through fullnode,
+    // we need to manage gas objects ourselves.
+    let (sender, mut objects) = test_cluster.wallet.get_one_account().await.unwrap();
+    let rgp = test_cluster.get_reference_gas_price().await;
     // Send a transaction to create a counter, to all but one authority.
-    let (sender, keypair) = deterministic_random_account_key();
-    let create_counter_transaction = TestTransactionBuilder::new(
-        sender,
-        gas_objects.pop().unwrap().compute_object_reference(),
-        rgp,
-    )
-    .call_counter_create(package_id)
-    .build_and_sign(&keypair);
-    let committee = configs.committee_with_network();
-    let (slow_validators, fast_validators): (Vec<_>, Vec<_>) = committee
-        .network_metadata
-        .into_iter()
-        .partition(|(name, _net)| {
-            position_submit_certificate(
-                &committee.committee,
-                name,
-                create_counter_transaction.digest(),
-            ) > 0
+    let create_counter_transaction = test_cluster.wallet.sign_transaction(
+        &TestTransactionBuilder::new(sender, objects.pop().unwrap(), rgp)
+            .call_counter_create(package_id)
+            .build(),
+    );
+    let committee = test_cluster.committee().deref().clone();
+    let validators = test_cluster.get_validator_pubkeys();
+    let (slow_validators, fast_validators): (Vec<_>, Vec<_>) =
+        validators.iter().partition(|name| {
+            position_submit_certificate(&committee, name, create_counter_transaction.digest()) > 0
         });
 
-    let (effects, _, _) = submit_single_owner_transaction(
-        create_counter_transaction.clone(),
-        &slow_validators
-            .iter()
-            .map(|(_, net)| net.network_address.clone())
-            .collect::<Vec<_>>(),
-    )
-    .await;
-    assert!(matches!(effects.status(), ExecutionStatus::Success { .. }));
+    let (effects, _, _) = test_cluster
+        .submit_transaction_to_validators(create_counter_transaction.clone(), &slow_validators)
+        .await;
     let ((counter_id, counter_initial_shared_version, _), _) = effects.created()[0];
 
     // Check that the counter object exists in at least one of the validators the transaction was
     // sent to.
-    let has_counter = stream::iter(&slow_validators).any(|(_, net)| async move {
-        get_client(&net.network_address)
-            .handle_object_info_request(ObjectInfoRequest::latest_object_info_request(
-                counter_id, None,
-            ))
-            .await
-            .is_ok()
-    });
-
-    assert!(has_counter.await);
+    for validator in test_cluster.swarm.validator_node_handles() {
+        if slow_validators.contains(&validator.state().name) {
+            assert!(validator
+                .state()
+                .handle_object_info_request(ObjectInfoRequest::latest_object_info_request(
+                    counter_id, None,
+                ))
+                .await
+                .is_ok());
+        }
+    }
 
     // Check that the validator that wasn't sent the transaction is unaware of the counter object
-    assert!(get_client(&fast_validators[0].1.network_address)
-        .handle_object_info_request(ObjectInfoRequest::latest_object_info_request(
-            counter_id, None,
-        ))
-        .await
-        .is_err());
+    for validator in test_cluster.swarm.validator_node_handles() {
+        if fast_validators.contains(&validator.state().name) {
+            assert!(validator
+                .state()
+                .handle_object_info_request(ObjectInfoRequest::latest_object_info_request(
+                    counter_id, None,
+                ))
+                .await
+                .is_err());
+        }
+    }
 
     // Make a transaction to increment the counter.
-    let increment_counter_transaction = TestTransactionBuilder::new(
-        sender,
-        gas_objects.pop().unwrap().compute_object_reference(),
-        rgp,
-    )
-    .call_counter_increment(package_id, counter_id, counter_initial_shared_version)
-    .build_and_sign(&keypair);
+    let increment_counter_transaction = test_cluster.wallet.sign_transaction(
+        &TestTransactionBuilder::new(sender, objects.pop().unwrap(), rgp)
+            .call_counter_increment(package_id, counter_id, counter_initial_shared_version)
+            .build(),
+    );
 
-    // Let's submit the transaction to the original set of validators.
-    let (effects, _, _) = submit_shared_object_transaction(
-        increment_counter_transaction.clone(),
-        &configs.net_addresses()[1..],
-    )
-    .await
-    .unwrap();
-    assert!(matches!(effects.status(), ExecutionStatus::Success { .. }));
+    // Let's submit the transaction to the original set of validators, except the first.
+    test_cluster
+        .submit_transaction_to_validators(increment_counter_transaction.clone(), &validators[1..])
+        .await;
 
     // Submit transactions to the out-of-date authority.
     // It will succeed because we share owned object certificates through narwhal
-    let (effects, _, _) = submit_shared_object_transaction(
-        increment_counter_transaction,
-        &configs.net_addresses()[0..1],
-    )
-    .await
-    .unwrap();
-    assert!(matches!(effects.status(), ExecutionStatus::Success { .. }));
+    test_cluster
+        .submit_transaction_to_validators(increment_counter_transaction, &validators[0..1])
+        .await;
 }
 
 /// Send a simple shared object transaction to Sui and ensures the client gets back a response.
 #[sim_test]
 async fn replay_shared_object_transaction() {
-    let gas_objects = generate_test_gas_objects();
-
-    // Get the authority configs and spawn them. Note that it is important to not drop
-    // the handles (or the authorities will stop).
-    let (configs, mut gas_objects) = test_authority_configs_with_objects(gas_objects);
-    let rgp = configs.genesis.reference_gas_price();
-    let _handles = spawn_test_authorities(&configs).await;
-
-    // Publish the move package to all authorities and get its package ID
-    let package_id =
-        publish_counter_package(gas_objects.pop().unwrap(), &configs.net_addresses(), rgp)
-            .await
-            .0;
+    let test_cluster = TestClusterBuilder::new().build().await;
+    let package_id = test_cluster.wallet.publish_basics_package().await.0;
 
     // Send a transaction to create a counter (only to one authority) -- twice.
-    let (sender, keypair) = deterministic_random_account_key();
-    let create_counter_transaction = TestTransactionBuilder::new(
-        sender,
-        gas_objects.pop().unwrap().compute_object_reference(),
-        rgp,
-    )
-    .call_counter_create(package_id)
-    .build_and_sign(&keypair);
+    let create_counter_transaction = test_cluster.wallet.sign_transaction(
+        &test_cluster
+            .test_transaction_builder()
+            .await
+            .call_counter_create(package_id)
+            .build(),
+    );
 
     let mut version = None;
     for _ in 0..2 {
-        let (effects, _, _) = submit_single_owner_transaction(
-            create_counter_transaction.clone(),
-            &configs.net_addresses(),
-        )
-        .await;
-        assert!(matches!(effects.status(), ExecutionStatus::Success { .. }));
+        let effects = test_cluster
+            .execute_transaction(create_counter_transaction.clone())
+            .await
+            .effects
+            .unwrap();
 
         // Ensure the sequence number of the shared object did not change.
-        let ((_, curr, _), _) = effects.created()[0];
+        let curr = effects.created()[0].reference.version;
         if let Some(prev) = version {
             assert_eq!(
                 prev, curr,
