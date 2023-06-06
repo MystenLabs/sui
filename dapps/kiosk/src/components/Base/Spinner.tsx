@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-export function Spinner(): JSX.Element {
+export function Spinner() {
   return (
     <div className="h-full min-h-[24px]  flex items-center justify-center">
       <div role="status">

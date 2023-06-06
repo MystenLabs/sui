@@ -13,7 +13,7 @@ export function SuiConnectButton() {
   const navigate = useNavigate();
   useEffect(() => {
     navigate('/');
-  }, [navigate, currentAccount?.address]);
+  }, [currentAccount?.address]);
 
   return (
     <ConnectButton

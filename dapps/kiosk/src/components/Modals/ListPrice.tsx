@@ -13,11 +13,7 @@ export interface ListPriceProps {
   onSubmit: (item: OwnedObjectType, price: string) => void;
   closeModal: () => void;
 }
-export function ListPrice({
-  item,
-  onSubmit,
-  closeModal,
-}: ListPriceProps): JSX.Element {
+export function ListPrice({ item, onSubmit, closeModal }: ListPriceProps) {
   const [price, setPrice] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(false);
 

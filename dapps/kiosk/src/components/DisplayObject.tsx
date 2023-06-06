@@ -17,7 +17,7 @@ export function DisplayObject({
   item,
   listing = null,
   children,
-}: DisplayObject): JSX.Element {
+}: DisplayObject) {
   const { currentAccount } = useWalletKit();
 
   const price = formatSui(mistToSui(listing?.price));

@@ -2,16 +2,17 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useNavigate, useParams } from 'react-router-dom';
+import { useEffect } from 'react';
 import { KioskItems } from '../components/Kiosk/KioskItems';
 
-export default function SingleKiosk(): JSX.Element {
+export default function SingleKiosk() {
   const { kioskId } = useParams();
   const navigate = useNavigate();
 
-  if (!kioskId) {
+  useEffect(() => {
+    if (kioskId) return;
     navigate('/');
-    return <></>;
-  }
+  }, [navigate, kioskId]);
 
   return (
     <div className="container">

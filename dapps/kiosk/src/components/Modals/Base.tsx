@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { Fragment } from 'react';
+import { Fragment, ReactNode } from 'react';
 import { Dialog, Transition } from '@headlessui/react';
 
 export function ModalBase({
@@ -12,9 +12,9 @@ export function ModalBase({
 }: {
   isOpen: boolean;
   closeModal: () => void;
-  children: JSX.Element[] | JSX.Element | string;
+  children: ReactNode;
   title: string;
-}): JSX.Element {
+}) {
   return (
     <Transition appear show={isOpen} as={Fragment}>
       <Dialog

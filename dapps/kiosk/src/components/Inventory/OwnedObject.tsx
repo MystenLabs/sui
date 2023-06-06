@@ -14,7 +14,7 @@ export function OwnedObject({
   listFn: KioskFnType;
   placeFn: KioskFnType;
   object: OwnedObjectType;
-}): JSX.Element {
+}) {
   const mutation = useKioskMutationFn();
 
   return (

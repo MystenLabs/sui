@@ -10,7 +10,7 @@ import {
   take,
   testnetEnvironment,
 } from '@mysten/kiosk';
-import { useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { KioskItem as KioskItemCmp } from './KioskItem';
 import { TransactionBlock } from '@mysten/sui.js';
 import { ListPrice } from '../Modals/ListPrice';
@@ -23,7 +23,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { useRpc } from '../../context/RpcClientContext';
 import { useKiosk, useOwnedKiosk } from '../../hooks/kiosk';
 
-export function KioskItems({ kioskId }: { kioskId?: string }): JSX.Element {
+export function KioskItems({ kioskId }: { kioskId?: string }) {
   const provider = useRpc();
   const { currentAccount } = useWalletKit();
   const location = useLocation();
@@ -37,9 +37,9 @@ export function KioskItems({ kioskId }: { kioskId?: string }): JSX.Element {
   // checks if this is an owned kiosk.
   // We are depending on currentAccount too, as this is what triggers the `getOwnedKioskCap()` function to change
   // using endsWith because we support it with both 0x prefix and without.
-  const isOwnedKiosk = useMemo(() => {
+  const isOwnedKiosk = () => {
     return ownedKiosk?.endsWith(kioskId || '~');
-  }, [ownedKiosk, kioskId]);
+  };
 
   const [modalItem, setModalItem] = useState<OwnedObjectType | null>(null);
 
@@ -51,12 +51,14 @@ export function KioskItems({ kioskId }: { kioskId?: string }): JSX.Element {
   } = useKiosk(kioskId);
 
   const navigate = useNavigate();
-  if (isError) {
+
+  useEffect(() => {
+    if (!isError) return;
     toast.error(
       'The requested kiosk was not found. You either supplied a wrong kiosk Id or the RPC call failed.',
     );
     navigate('/');
-  }
+  }, [navigate, isError]);
 
   const kioskItems = kioskData?.items || [];
   const kioskListings = kioskData?.listings || {};
@@ -174,7 +176,7 @@ export function KioskItems({ kioskId }: { kioskId?: string }): JSX.Element {
     <div className="mt-12">
       {
         // We're hiding this when we've clicked "view kiosk" for our own kiosk.
-        isOwnedKiosk && isKioskPage && (
+        isOwnedKiosk() && isKioskPage && (
           <div className="bg-yellow-300 text-black rounded px-3 py-2 mb-6">
             You're viewing your own kiosk
           </div>
@@ -185,7 +187,7 @@ export function KioskItems({ kioskId }: { kioskId?: string }): JSX.Element {
           <KioskItemCmp
             key={item.objectId}
             item={item}
-            isGuest={!isOwnedKiosk}
+            isGuest={!isOwnedKiosk()}
             listing={kioskListings && kioskListings[item.objectId]}
             takeFn={takeFromKiosk}
             //@ts-ignore

@@ -8,11 +8,7 @@ import { useWalletKit } from '@mysten/wallet-kit';
 import { useState } from 'react';
 import { Loading } from '../Base/Loading';
 
-export function KioskCreation({
-  onCreate,
-}: {
-  onCreate: () => void;
-}): JSX.Element {
+export function KioskCreation({ onCreate }: { onCreate: () => void }) {
   const { signAndExecute } = useTransactionExecution();
   const { currentAccount } = useWalletKit();
   const [loading, setLoading] = useState<boolean>(false);

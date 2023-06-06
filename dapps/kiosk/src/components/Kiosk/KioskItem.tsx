@@ -26,7 +26,7 @@ export function KioskItem({
   takeFn,
   listFn,
   delistFn,
-}: KioskItemProps): JSX.Element {
+}: KioskItemProps) {
   const mutation = useKioskMutationFn();
 
   if (isGuest)

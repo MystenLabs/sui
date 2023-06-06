@@ -3,7 +3,7 @@
 
 import { SuiConnectButton } from './SuiConnectButton';
 
-export function WalletNotConnected(): JSX.Element {
+export function WalletNotConnected() {
   return (
     <div className=" mb-12 flex items-center justify-center">
       <div className="flex justify-center min-h-[70vh] items-center">

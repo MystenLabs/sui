@@ -9,9 +9,10 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { RpcClientContext } from './context/RpcClientContext';
 import { JsonRpcProvider, testnetConnection } from '@mysten/sui.js';
 
+const queryClient = new QueryClient();
+const rpcProvider = new JsonRpcProvider(testnetConnection);
+
 export default function Root() {
-  const queryClient = new QueryClient();
-  const rpcProvider = new JsonRpcProvider(testnetConnection);
   return (
     <WalletKitProvider>
       <QueryClientProvider client={queryClient}>

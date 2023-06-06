@@ -5,7 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import FindKiosk from '../Kiosk/FindKiosk';
 import { SuiConnectButton } from './SuiConnectButton';
 
-export function Header(): JSX.Element {
+export function Header() {
   const navigate = useNavigate();
 
   return (

@@ -15,7 +15,7 @@ export type OwnedObjectType = KioskItem & {
   display: Record<string, string>;
 };
 
-export function OwnedObjects({ address }: { address: string }): JSX.Element {
+export function OwnedObjects({ address }: { address: string }) {
   const { data: ownedKiosk } = useOwnedKiosk();
   const kioskId = ownedKiosk?.kioskId;
   const kioskOwnerCap = ownedKiosk?.kioskCap;
