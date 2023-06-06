@@ -24,18 +24,21 @@ use sui_types::crypto::{AuthorityKeyPair, AuthorityPublicKeyBytes, SuiKeyPair};
 
 /// This builder contains information that's not included in ValidatorGenesisConfig for building
 /// a validator NodeConfig. It can be used to build either a genesis validator or a new validator.
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct ValidatorConfigBuilder {
-    config_directory: PathBuf,
+    config_directory: Option<PathBuf>,
     supported_protocol_versions: Option<SupportedProtocolVersions>,
 }
 
 impl ValidatorConfigBuilder {
-    pub fn new(config_directory: PathBuf) -> Self {
-        Self {
-            config_directory,
-            supported_protocol_versions: None,
-        }
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn with_config_directory(mut self, config_directory: PathBuf) -> Self {
+        assert!(self.config_directory.is_none());
+        self.config_directory = Some(config_directory);
+        self
     }
 
     pub fn with_supported_protocol_versions(
@@ -53,7 +56,9 @@ impl ValidatorConfigBuilder {
         genesis: sui_config::genesis::Genesis,
     ) -> NodeConfig {
         let key_path = get_key_path(&validator.key_pair);
-        let config_directory = self.config_directory;
+        let config_directory = self
+            .config_directory
+            .unwrap_or_else(|| tempfile::tempdir().unwrap().into_path());
         let db_path = config_directory
             .join(AUTHORITIES_DB_NAME)
             .join(key_path.clone());

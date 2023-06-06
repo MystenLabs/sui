@@ -368,7 +368,7 @@ impl Swarm {
             .filter(|node| node.config.consensus_config.is_none())
     }
 
-    pub async fn spawn_new_fullnode(&mut self, config: NodeConfig) -> SuiNodeHandle {
+    pub async fn spawn_new_node(&mut self, config: NodeConfig) -> SuiNodeHandle {
         let name = config.protocol_public_key();
         let node = Node::new(config);
         node.start().await.unwrap();
