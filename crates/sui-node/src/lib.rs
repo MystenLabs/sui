@@ -44,6 +44,7 @@ use mysten_network::server::ServerBuilder;
 use narwhal_network::metrics::MetricsMakeCallbackHandler;
 use narwhal_network::metrics::{NetworkConnectionMetrics, NetworkMetrics};
 use sui_archival::writer::ArchiveWriterV1;
+use sui_archival::StorageFormat;
 use sui_config::node::DBCheckpointConfig;
 use sui_config::node_config_metrics::NodeConfigMetrics;
 use sui_config::{ConsensusConfig, NodeConfig};
@@ -388,6 +389,7 @@ impl SuiNode {
                     local_store_config,
                     remote_store_config.clone(),
                     FileCompression::Zstd,
+                    StorageFormat::Blob,
                     Duration::from_secs(600),
                     1024 * 1024 * 1024,
                     &prometheus_registry,

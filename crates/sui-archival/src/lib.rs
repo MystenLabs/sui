@@ -51,6 +51,10 @@ use sui_storage::{compute_sha3_checksum, Blob, Encoding, FileCompression, SHA3_B
 ///┌──────────────────────────────┐
 ///│       magic <4 byte>         │
 ///├──────────────────────────────┤
+///│  storage format <1 byte>     │
+// ├──────────────────────────────┤
+///│    file compression <1 byte> │
+// ├──────────────────────────────┤
 ///│ ┌──────────────────────────┐ │
 ///│ │   CheckpointContent 1    │ │
 ///│ ├──────────────────────────┤ │
@@ -68,6 +72,10 @@ use sui_storage::{compute_sha3_checksum, Blob, Encoding, FileCompression, SHA3_B
 ///┌──────────────────────────────┐
 ///│       magic <4 byte>         │
 ///├──────────────────────────────┤
+///│  storage format <1 byte>     │
+// ├──────────────────────────────┤
+// │  file compression <1 byte>   │
+// ├──────────────────────────────┤
 ///│ ┌──────────────────────────┐ │
 ///│ │   CheckpointSummary 1    │ │
 ///│ ├──────────────────────────┤ │
@@ -102,6 +110,14 @@ const MANIFEST_FILENAME: &str = "MANIFEST";
     Copy, Clone, Debug, Eq, PartialEq, Serialize, Deserialize, TryFromPrimitive, IntoPrimitive,
 )]
 #[repr(u8)]
+pub enum StorageFormat {
+    Blob = 0,
+}
+
+#[derive(
+    Copy, Clone, Debug, Eq, PartialEq, Serialize, Deserialize, TryFromPrimitive, IntoPrimitive,
+)]
+#[repr(u8)]
 pub enum FileType {
     CheckpointContent = 0,
     CheckpointSummary,
@@ -113,6 +129,7 @@ pub struct FileMetadata {
     pub epoch_num: u64,
     pub checkpoint_seq_range: Range<u64>,
     pub file_compression: FileCompression,
+    pub storage_format: StorageFormat,
     pub sha3_digest: [u8; 32],
 }
 
@@ -237,6 +254,7 @@ pub fn create_file_metadata(
     file_path: &std::path::Path,
     file_compression: FileCompression,
     file_type: FileType,
+    storage_format: StorageFormat,
     epoch_num: u64,
     checkpoint_seq_range: Range<u64>,
 ) -> Result<FileMetadata> {
@@ -247,6 +265,7 @@ pub fn create_file_metadata(
         epoch_num,
         checkpoint_seq_range,
         file_compression,
+        storage_format,
         sha3_digest,
     };
     Ok(file_metadata)
