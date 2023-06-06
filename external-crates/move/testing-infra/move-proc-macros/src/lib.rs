@@ -42,42 +42,42 @@ pub fn test_variant_order(attr: TokenStream, item: TokenStream) -> TokenStream {
     let ast = parse_macro_input!(item as DeriveInput);
     let name = &ast.ident;
     let test_fn_name = syn::Ident::new(&format!("enforce_enum_order_test_{}", name), name.span());
-    if let Data::Enum(DataEnum { variants, .. }) = ast.data {
-        let variant_entries = variants
-            .iter()
-            .enumerate()
-            .map(|(index, variant)| {
-                let variant_name = variant.ident.to_string();
-                quote! {
-                    map.insert( #index as u64, (#variant_name).to_string());
-                }
-            })
-            .collect::<Vec<_>>();
-        let deriv = quote! {
-            #[cfg(test)]
-            impl enum_compat_util::EnumOrderMap for #name {
-                fn order_to_variant_map() -> std::collections::BTreeMap<u64, String> {
-                    let mut map = std::collections::BTreeMap::new();
-                    #(#variant_entries)*
-                    map
-                }
+    let Data::Enum(DataEnum { variants, .. }) = ast.data else {
+        panic!("`test_variant_order` macro can only be used with enums.");
+    };
+
+    let variant_entries = variants
+        .iter()
+        .enumerate()
+        .map(|(index, variant)| {
+            let variant_name = variant.ident.to_string();
+            quote! {
+                map.insert( #index as u64, (#variant_name).to_string());
             }
-
-            #[allow(non_snake_case)]
-            #[test]
-            fn #test_fn_name() {
-                let mut base_path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-                base_path.extend([
-                    #path,
-                ]);
-                enum_compat_util::check_enum_compat_order::<#name>(base_path);
+        })
+        .collect::<Vec<_>>();
+    let deriv = quote! {
+        #[cfg(test)]
+        impl enum_compat_util::EnumOrderMap for #name {
+            fn order_to_variant_map() -> std::collections::BTreeMap<u64, String> {
+                let mut map = std::collections::BTreeMap::new();
+                #(#variant_entries)*
+                map
             }
+        }
 
-            #ast_orig
-        };
+        #[allow(non_snake_case)]
+        #[test]
+        fn #test_fn_name() {
+            let mut base_path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+            base_path.extend([
+                #path,
+            ]);
+            enum_compat_util::check_enum_compat_order::<#name>(base_path);
+        }
 
-        deriv.into()
-    } else {
-        panic!("EnumVariantOrder can only be used with enums.");
-    }
+        #ast_orig
+    };
+
+    deriv.into()
 }
