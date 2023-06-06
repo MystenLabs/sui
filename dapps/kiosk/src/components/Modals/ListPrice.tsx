@@ -38,7 +38,7 @@ export function ListPrice({
           </label>
           <input
             value={price}
-            className="content"
+            className="block w-full rounded border border-primary bg-white p-2.5 text-sm outline-primary focus:border-gray-500"
             placeholder="The amount in SUI"
             onChange={(e) => setPrice(e.target.value)}
           ></input>

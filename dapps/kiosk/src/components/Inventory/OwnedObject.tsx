@@ -21,7 +21,7 @@ export function OwnedObject({
     <DisplayObject item={object}>
       <>
         <Button
-          className="ease-in-out duration-300 rounded border border-transparent py-2 px-4 bg-gray-200"
+          className="bg-gray-200"
           loading={mutation.isLoading}
           onClick={() => mutation.mutate({ fn: placeFn, object })}
         >
@@ -29,7 +29,7 @@ export function OwnedObject({
         </Button>
         <Button
           loading={mutation.isLoading}
-          className="ease-in-out duration-300 rounded py-2 btn-outline-primary"
+          className="border-gray-400 bg-transparent hover:bg-primary hover:text-white"
           onClick={() => mutation.mutate({ fn: listFn, object })}
         >
           Sell in Kiosk

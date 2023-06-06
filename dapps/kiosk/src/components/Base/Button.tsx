@@ -19,7 +19,7 @@ export function Button({
   return (
     <button
       className={classNames(
-        'ease-in-out duration-300 rounded border border-transparent py-2 px-4 bg-gray-200',
+        'ease-in-out duration-300 rounded border py-2 px-4 bg-gray-200',
         className,
       )}
       onClick={onClick}
