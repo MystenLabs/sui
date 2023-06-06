@@ -22,15 +22,18 @@ use sui_sdk::sui_client_config::{SuiClientConfig, SuiEnv};
 use sui_sdk::wallet_context::WalletContext;
 use sui_sdk::{SuiClient, SuiClientBuilder};
 use sui_swarm::memory::{Swarm, SwarmBuilder};
-use sui_swarm_config::genesis_config::{AccountConfig, GenesisConfig};
+use sui_swarm_config::genesis_config::{
+    AccountConfig, GenesisConfig, ValidatorGenesisConfig, DEFAULT_GAS_AMOUNT,
+};
 use sui_swarm_config::network_config_builder::{
     ProtocolVersionsConfig, SupportedProtocolVersionsCallback,
 };
-use sui_swarm_config::node_config_builder::FullnodeConfigBuilder;
+use sui_swarm_config::node_config_builder::{FullnodeConfigBuilder, ValidatorConfigBuilder};
 use sui_types::base_types::{AuthorityName, ObjectID, SuiAddress};
 use sui_types::committee::EpochId;
 use sui_types::crypto::KeypairTraits;
 use sui_types::crypto::SuiKeyPair;
+use sui_types::governance::MIN_VALIDATOR_JOINING_STAKE_MIST;
 use sui_types::object::Object;
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
 use sui_types::sui_system_state::SuiSystemState;
@@ -132,7 +135,7 @@ impl TestCluster {
 
     pub async fn start_fullnode_from_config(&mut self, config: NodeConfig) -> FullNodeHandle {
         let json_rpc_address = config.json_rpc_address;
-        let node = self.swarm.spawn_new_fullnode(config).await;
+        let node = self.swarm.spawn_new_node(config).await;
         FullNodeHandle::new(node, json_rpc_address).await
     }
 
@@ -174,6 +177,15 @@ impl TestCluster {
             return;
         }
         node.start().await.unwrap();
+    }
+
+    pub async fn spawn_new_validator(
+        &mut self,
+        genesis_config: ValidatorGenesisConfig,
+    ) -> SuiNodeHandle {
+        let node_config = ValidatorConfigBuilder::new()
+            .build(genesis_config, self.swarm.config().genesis.clone());
+        self.swarm.spawn_new_node(node_config).await
     }
 
     pub fn random_node_restarter(self: &Arc<Self>) -> RandomNodeRestarter {
@@ -261,15 +273,19 @@ impl TestCluster {
         info!("close_epoch complete after {:?}", start.elapsed());
 
         self.wait_for_epoch(Some(cur_committee.epoch + 1)).await;
-        self.wait_for_epoch_all_validators(cur_committee.epoch + 1)
-            .await;
+        self.wait_for_epoch_all_nodes(cur_committee.epoch + 1).await;
 
         info!("reconfiguration complete after {:?}", start.elapsed());
     }
 
-    pub async fn wait_for_epoch_all_validators(&self, target_epoch: EpochId) {
-        let handles = self.swarm.validator_node_handles();
-        let tasks: Vec<_> = handles.iter()
+    pub async fn wait_for_epoch_all_nodes(&self, target_epoch: EpochId) {
+        let handles: Vec<_> = self
+            .swarm
+            .all_nodes()
+            .map(|node| node.get_node_handle().unwrap())
+            .collect();
+        let tasks: Vec<_> = handles
+            .iter()
             .map(|handle| {
                 handle.with_async(|node| async {
                     let mut retries = 0;
@@ -518,6 +534,19 @@ impl TestClusterBuilder {
     ) -> Self {
         self.validator_supported_protocol_versions_config =
             ProtocolVersionsConfig::PerValidator(func);
+        self
+    }
+
+    pub fn with_validator_candidates(
+        mut self,
+        addresses: impl IntoIterator<Item = SuiAddress>,
+    ) -> Self {
+        self.get_or_init_genesis_config()
+            .accounts
+            .extend(addresses.into_iter().map(|address| AccountConfig {
+                address: Some(address),
+                gas_amounts: vec![DEFAULT_GAS_AMOUNT, MIN_VALIDATOR_JOINING_STAKE_MIST],
+            }));
         self
     }
 
