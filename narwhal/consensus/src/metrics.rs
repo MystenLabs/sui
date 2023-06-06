@@ -43,6 +43,7 @@ pub struct ConsensusMetrics {
     /// * not_enough_support: when the leader certificate has been found but there was not enough support
     /// * elected: when the leader certificate has been found and had enough support
     pub leader_election: IntCounterVec,
+    pub leader_commit_on_time: IntCounterVec,
     /// Count leader certificates committed, and whether the leader has strong support.
     pub leader_commits: IntCounterVec,
 }
@@ -100,6 +101,12 @@ impl ConsensusMetrics {
                 "certificate_commit_latency",
                 "The time it takes for a certificate from the moment it gets created up to the moment it gets committed.",
                 LATENCY_SEC_BUCKETS.to_vec(),
+                registry
+            ).unwrap(),
+            leader_commit_on_time: register_int_counter_vec_with_registry!(
+                "leader_commit_on_time",
+                "Whether a leader commit has been triggered on time - meaning that network hasn't progress to the next even round before it got committed",
+                &["outcome", "authority"],
                 registry
             ).unwrap(),
             leader_election: register_int_counter_vec_with_registry!(

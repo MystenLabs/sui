@@ -27,7 +27,8 @@ pub struct Bullshark {
     pub committee: Committee,
     /// Persistent storage to safe ensure crash-recovery.
     pub store: Arc<ConsensusStore>,
-
+    /// The most recent round of inserted certificate
+    pub max_inserted_certificate_round: Round,
     pub metrics: Arc<ConsensusMetrics>,
     /// The last time we had a successful leader election
     pub last_successful_leader_election_timestamp: Instant,
@@ -48,6 +49,7 @@ impl Bullshark {
             committee,
             store,
             last_successful_leader_election_timestamp: Instant::now(),
+            max_inserted_certificate_round: 0,
             metrics,
             num_sub_dags_per_schedule,
         }
@@ -169,6 +171,32 @@ impl Bullshark {
             // Certificate has not been added to the dag since it's below commit round
             return Ok((Outcome::CertificateBelowCommitRound, vec![]));
         }
+
+        // Under normal circumstances every odd round should trigger leader election for its previous
+        // even round. We consider a "hit" in this case when the leader has been elected when the network
+        // has not moved to the next even round (so latency it's still in the expected range). If the network
+        // has moved to the next even round and the leader has not been elected/committed, then we consider
+        // this a "miss". The leader might be committed later on, but we don't consider this a case where
+        // the leader has been committed "on time".
+        if round > self.max_inserted_certificate_round && round % 2 == 0 {
+            let previous_leader_round = round - 2;
+            let authority = Self::leader_authority(&self.committee, previous_leader_round);
+
+            // normally the last committed round should be the round - 2
+            if state.last_round.committed_round < previous_leader_round {
+                self.metrics
+                    .leader_commit_on_time
+                    .with_label_values(&["missed", authority.hostname()])
+                    .inc();
+            } else {
+                self.metrics
+                    .leader_commit_on_time
+                    .with_label_values(&["hit", authority.hostname()])
+                    .inc();
+            }
+        }
+
+        self.max_inserted_certificate_round = self.max_inserted_certificate_round.max(round);
 
         // Try to order the dag to commit. Start from the highest round for which we have at least
         // f+1 certificates. This is because we need them to provide
