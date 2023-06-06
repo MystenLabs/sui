@@ -158,6 +158,7 @@ impl Inner {
 
         // TODO: remove this validation later to reduce rocksdb access.
         if certificate.round() > self.gc_round.load(Ordering::Acquire) + 1 {
+            let _scope = monitored_scope("Synchronizer::accept_certificate_internal::parents");
             for digest in certificate.header().parents() {
                 if !self.certificate_store.contains(digest).unwrap() {
                     panic!("Parent {digest:?} not found for {certificate:?}!");
@@ -222,6 +223,8 @@ impl Inner {
         &self,
         header: &Header,
     ) -> DagResult<Vec<CertificateDigest>> {
+        let _scope = monitored_scope("Synchronizer::get_unknown_parent_digests");
+
         if header.round() == 1 {
             for digest in header.parents() {
                 if !self.genesis.contains_key(digest) {
@@ -251,6 +254,8 @@ impl Inner {
         &self,
         certificate: &Certificate,
     ) -> DagResult<Vec<CertificateDigest>> {
+        let _scope = monitored_scope("Synchronizer::get_missing_parents");
+
         let mut result = Vec::new();
         if certificate.round() == 1 {
             for digest in certificate.header().parents() {
