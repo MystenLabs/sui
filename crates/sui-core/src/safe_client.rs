@@ -5,6 +5,7 @@
 use crate::authority_client::AuthorityAPI;
 use crate::epoch::committee_store::CommitteeStore;
 use fastcrypto::encoding::Encoding;
+use im::hashmap::HashMap as ImHashMap;
 use mysten_metrics::histogram::{Histogram, HistogramVec};
 use prometheus::core::GenericCounter;
 use prometheus::{
@@ -27,7 +28,9 @@ use sui_types::sui_system_state::SuiSystemState;
 use sui_types::{base_types::*, committee::*, fp_ensure};
 use sui_types::{
     error::{SuiError, SuiResult},
+    signature::AuxVerifyData,
     transaction::*,
+    zk_login_util::OAuthProviderContent,
 };
 use tap::TapFallible;
 use tracing::{debug, error, warn};
@@ -164,6 +167,8 @@ where
     committee_store: Arc<CommitteeStore>,
     address: AuthorityPublicKeyBytes,
     metrics: SafeClientMetrics,
+
+    oauth_provider_jwks: ImHashMap<String, Arc<OAuthProviderContent>>,
 }
 
 impl<C: Clone> SafeClient<C> {
@@ -178,6 +183,7 @@ impl<C: Clone> SafeClient<C> {
             committee_store,
             address,
             metrics,
+            oauth_provider_jwks: Default::default(),
         }
     }
 }
@@ -266,7 +272,9 @@ impl<C: Clone> SafeClient<C> {
                             transaction.into_message(),
                             cert,
                         );
-                        ct.verify_signature(&committee)
+                        let verify_params =
+                            AuxVerifyData::new(None, self.oauth_provider_jwks.clone());
+                        ct.verify_signature(&committee, &verify_params)
                             .tap_err(|e| {
                                 // TODO: We show the below messages for debugging purposes re. incident #267. When this is fixed, we should remove them again.
                                 warn!(?digest, ?ct, "Received invalid tx cert: {}", e);

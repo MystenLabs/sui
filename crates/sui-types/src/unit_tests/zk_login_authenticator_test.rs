@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::str::FromStr;
+use std::sync::Arc;
 
 use crate::signature::{AuthenticatorTrait, AuxVerifyData};
 use crate::utils::{make_transaction, make_zklogin_tx};
@@ -10,6 +11,7 @@ use crate::{
     crypto::{get_key_pair_from_rng, DefaultHash, SignatureScheme, SuiKeyPair},
     signature::GenericSignature,
     zk_login_authenticator::{AddressParams, PublicInputs, ZkLoginAuthenticator, ZkLoginProof},
+    zk_login_util::{parse_jwks, OAuthProviderContent},
 };
 use fastcrypto::encoding::{Base64, Encoding};
 use fastcrypto::hash::HashFunction;
@@ -43,6 +45,7 @@ pub const TEST_JWK_BYTES: &[u8] = r#"{
 
 #[test]
 fn zklogin_authenticator_scenarios() {
+    use im::hashmap::HashMap as ImHashMap;
     let (user_address, tx, authenticator) = make_zklogin_tx();
 
     let intent_msg = IntentMessage::new(
@@ -50,20 +53,29 @@ fn zklogin_authenticator_scenarios() {
         tx.into_data().transaction_data().clone(),
     );
 
+    let parsed = parse_jwks(TEST_JWK_BYTES).unwrap();
+
     // Construct the required info required to verify a zk login authenticator
     // in authority server (i.e. epoch and default JWK).
-    let aux_verify_data = AuxVerifyData::new(Some(0), Some(TEST_JWK_BYTES.to_vec()));
+    let aux_verify_data = AuxVerifyData::new(Some(0), parsed.clone());
 
     // Verify passes.
     assert!(authenticator
-        .verify_secure_generic(&intent_msg, user_address, aux_verify_data)
+        .verify_secure_generic(&intent_msg, user_address, &aux_verify_data)
         .is_ok());
-    // Malformed JWK in aux verify data.
-    let aux_verify_data = AuxVerifyData::new(Some(9999), Some(vec![0, 0, 0]));
+
+    let parsed: ImHashMap<String, Arc<OAuthProviderContent>> = parsed
+        .into_iter()
+        .enumerate()
+        .map(|(i, (_, v))| (format!("nosuchkey_{}", i), v))
+        .collect();
+
+    // correct kid can no longer be found
+    let aux_verify_data = AuxVerifyData::new(Some(9999), parsed);
 
     // Verify fails.
     assert!(authenticator
-        .verify_secure_generic(&intent_msg, user_address, aux_verify_data)
+        .verify_secure_generic(&intent_msg, user_address, &aux_verify_data)
         .is_err());
 }
 

@@ -10,9 +10,7 @@ use crate::crypto::{
     ToFromBytes,
 };
 use crate::digests::{CertificateDigest, SenderSignedDataDigest};
-use crate::message_envelope::{
-    get_google_jwk_bytes, Envelope, Message, TrustedEnvelope, VerifiedEnvelope,
-};
+use crate::message_envelope::{Envelope, Message, TrustedEnvelope, VerifiedEnvelope};
 use crate::messages_checkpoint::CheckpointTimestamp;
 use crate::messages_consensus::ConsensusCommitPrologue;
 use crate::object::{MoveObject, Object, Owner};
@@ -1742,7 +1740,7 @@ impl Message for SenderSignedData {
         TransactionDigest::new(default_hash(&self.intent_message().value))
     }
 
-    fn verify(&self, sig_epoch: Option<EpochId>) -> SuiResult {
+    fn verify(&self, verify_params: &AuxVerifyData) -> SuiResult {
         fp_ensure!(
             self.0.len() == 1,
             SuiError::UserInputError {
@@ -1777,14 +1775,7 @@ impl Message for SenderSignedData {
 
         // Verify all present signatures.
         for (signer, signature) in present_sigs {
-            signature.verify_secure_generic(
-                self.intent_message(),
-                signer,
-                AuxVerifyData::new(
-                    sig_epoch,
-                    Some(get_google_jwk_bytes().read().unwrap().clone()),
-                ),
-            )?;
+            signature.verify_secure_generic(self.intent_message(), signer, verify_params)?;
         }
         Ok(())
     }

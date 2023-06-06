@@ -1109,11 +1109,10 @@ where
             )
         });
 
-    checkpoint.verify_signature(&committee).map_err(|e| {
+    checkpoint.clone().verify(&committee).map_err(|e| {
         debug!("error verifying checkpoint: {e}");
-        checkpoint.clone()
-    })?;
-    Ok(VerifiedCheckpoint::new_unchecked(checkpoint))
+        checkpoint
+    })
 }
 
 async fn sync_checkpoint_contents<S>(

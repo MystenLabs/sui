@@ -26,6 +26,7 @@ use sui_types::transaction::{
     CertifiedTransaction, SenderSignedData, SharedInputObject, TransactionDataAPI,
     VerifiedCertificate, VerifiedSignedTransaction,
 };
+use sui_types::zk_login_util::OAuthProviderContent;
 use tracing::{debug, error, info, trace, warn};
 use typed_store::rocks::{
     default_db_options, DBBatch, DBMap, DBOptions, MetricConf, TypedStoreError,
@@ -303,6 +304,9 @@ pub struct AuthorityEpochTables {
     /// Contains a single key, which overrides the value of
     /// ProtocolConfig::buffer_stake_for_protocol_upgrade_bps
     override_protocol_upgrade_buffer_stake: DBMap<u64, u64>,
+
+    /// Map from kid (key id) to the fetched OAuthProviderContent for that key.
+    oauth_provider_jwk: DBMap<String, OAuthProviderContent>,
 }
 
 fn signed_transactions_table_default_config() -> DBOptions {
@@ -366,6 +370,14 @@ impl AuthorityEpochTables {
             .map(|(_k, v)| v)
             .collect()
     }
+
+    fn load_oauth_provider_jwk(&self) -> SuiResult<HashMap<String, Arc<OAuthProviderContent>>> {
+        Ok(self
+            .oauth_provider_jwk
+            .unbounded_iter()
+            .map(|(k, v)| (k, Arc::new(v)))
+            .collect())
+    }
 }
 
 pub(crate) const MUTEX_TABLE_SIZE: usize = 1024;
@@ -392,6 +404,10 @@ impl AuthorityPerEpochStore {
         let reconfig_state = tables
             .load_reconfig_state()
             .expect("Load reconfig state at initialization cannot fail");
+        let oauth_provider_jwk = tables
+            .load_oauth_provider_jwk()
+            .expect("Load oauth provider jwk at initialization cannot fail");
+
         let epoch_alive_notify = NotifyOnce::new();
         let pending_consensus_transactions = tables.get_all_pending_consensus_transactions();
         let pending_consensus_certificates: HashSet<_> = pending_consensus_transactions
@@ -427,6 +443,11 @@ impl AuthorityPerEpochStore {
         );
         let signature_verifier =
             SignatureVerifier::new(committee.clone(), signature_verifier_metrics);
+
+        for (_, v) in oauth_provider_jwk.iter() {
+            signature_verifier.insert_oauth_jwk(v);
+        }
+
         let is_validator = committee.authority_index(&name).is_some();
         if is_validator {
             assert!(epoch_start_configuration
@@ -2023,6 +2044,17 @@ impl AuthorityPerEpochStore {
         self.metrics
             .epoch_total_duration
             .set(self.epoch_open_time.elapsed().as_millis() as i64);
+    }
+
+    pub(crate) fn insert_oauth_jwk(&self, content: &OAuthProviderContent) -> SuiResult {
+        if self.signature_verifier.insert_oauth_jwk(content) {
+            self.tables
+                .oauth_provider_jwk
+                .insert(&content.kid().to_string(), content)?;
+        } else {
+            info!("OAuth JWK with kid {} already exists", content.kid());
+        }
+        Ok(())
     }
 }
 
