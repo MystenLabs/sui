@@ -267,14 +267,14 @@ async fn test_loss_of_liveness_without_recovery() {
     cluster.authority(2).start(true, Some(1)).await;
     cluster.authority(3).start(true, Some(1)).await;
 
-    // wait and fetch the latest commit round
+    // wait and fetch the latest commit round. All of them should have advanced and we allow a small
+    // threshold in case some node is faster than the others
     tokio::time::sleep(node_advance_delay).await;
-    let rounds_3 = cluster.assert_progress(4, 0).await;
+    let rounds_3 = cluster.assert_progress(4, 2).await;
 
+    // we test that nodes 0 & 1 have actually advanced in rounds compared to before.
     assert!(rounds_3.get(&0) > rounds_2.get(&0));
     assert!(rounds_3.get(&1) > rounds_2.get(&1));
-    assert_eq!(rounds_3.get(&0), rounds_3.get(&2));
-    assert_eq!(rounds_3.get(&0), rounds_3.get(&3));
 }
 
 #[ignore]
