@@ -8,6 +8,7 @@ use async_trait::async_trait;
 use prometheus::Registry;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use tap::tap::TapFallible;
+use ttl_cache::TtlCache;
 
 use shared_crypto::intent::Intent;
 #[cfg(test)]
@@ -32,12 +33,15 @@ use tokio::sync::{
     mpsc::{self, Receiver, Sender},
     Mutex,
 };
-use tokio::time::{timeout, Duration, Instant};
+use tokio::time::{timeout, Duration};
 use tracing::{error, info, warn};
 use uuid::Uuid;
 
 use super::write_ahead_log::WriteAheadLog;
-use crate::{BatchFaucetReceipt, CoinInfo, Faucet, FaucetConfig, FaucetError, FaucetReceipt};
+use crate::{
+    BatchFaucetReceipt, BatchSendStatus, BatchSendStatusType, CoinInfo, Faucet, FaucetConfig,
+    FaucetError, FaucetReceipt,
+};
 
 pub struct SimpleFaucet {
     wallet: WalletContext,
@@ -46,9 +50,10 @@ pub struct SimpleFaucet {
     consumer: Mutex<Receiver<ObjectID>>,
     pub metrics: FaucetMetrics,
     wal: Mutex<WriteAheadLog>,
-    request_producer: Mutex<Sender<(Uuid, SuiAddress, Vec<u64>)>>,
+    request_producer: Sender<(Uuid, SuiAddress, Vec<u64>)>,
     request_consumer: Mutex<Receiver<(Uuid, SuiAddress, Vec<u64>)>>,
     batch_request_size: u64,
+    task_id_cache: Mutex<TtlCache<Uuid, BatchSendStatus>>,
 }
 
 enum GasCoinResponse {
@@ -128,9 +133,11 @@ impl SimpleFaucet {
             consumer: Mutex::new(consumer),
             metrics,
             wal: Mutex::new(wal),
-            request_producer: Mutex::new(sender),
+            request_producer: sender,
             request_consumer: Mutex::new(receiver),
             batch_request_size: config.batch_request_size,
+            // Max faucet requests times 10 minutes worth of requests to hold onto at max.
+            task_id_cache: TtlCache::new(config.max_request_per_second * 60 * 10).into(),
         };
 
         // Retrying all the pending transactions from the WAL, before continuing.  Ignore return
@@ -588,6 +595,35 @@ impl SimpleFaucet {
         ))
     }
 
+    async fn batch_gather(
+        &self,
+        requests: &mut Vec<(Uuid, SuiAddress, Vec<u64>)>,
+    ) -> Result<(), FaucetError> {
+        let Ok(mut req_consumer) = tokio::time::timeout(LOCK_TIMEOUT, self.request_consumer.lock()).await else {
+            error!("Timeout when getting request consumer lock");
+            return Err(FaucetError::Internal("Unable to get request queue lock.".to_string()));
+        };
+
+        let mut counter = 0;
+        // We take the first 500 items off the queue.
+        while counter < self.batch_request_size - 1 {
+            // We do need a timeout here or else it waits forever and gets stuck in this loop
+            let request = req_consumer.recv().await;
+            match request {
+                Some(req) => {
+                    requests.push(req);
+                    counter += 1;
+                }
+                None => {
+                    // Fail with error logging, so that we can continue, but we should never reach here.
+                    error!("Empty request stored in request consumer queue.");
+                }
+            }
+        }
+
+        Ok(())
+    }
+
     // Function to process the batch send of the mcsp queue
     pub async fn batch_transfer_gases(&self) -> Result<TransactionDigest, FaucetError> {
         let Ok(mut req_consumer) = tokio::time::timeout(LOCK_TIMEOUT, self.request_consumer.lock()).await else {
@@ -596,14 +632,12 @@ impl SimpleFaucet {
             };
 
         let mut requests = Vec::new();
-        let mut counter = 0;
 
         // First request we just wait for without timeout
         let first_req = req_consumer.recv().await;
         match first_req {
             Some((uuid, address, amounts)) => {
                 requests.push((uuid, address, amounts));
-                counter += 1;
             }
             None => {
                 return Err(FaucetError::Internal(
@@ -611,24 +645,13 @@ impl SimpleFaucet {
                 ));
             }
         }
-
-        let start_time = Instant::now();
-
-        // We take the first 500 items off the queue or when [BATCH_TIMEOUT] passes.
-        while counter < self.batch_request_size - 1 || start_time.elapsed() < BATCH_TIMEOUT {
-            // We do need a timeout here or else it waits forever and gets stuck in this loop
-            match timeout(RECV_TIMEOUT, req_consumer.recv()).await {
-                Ok(Some((uuid, address, amounts))) => {
-                    requests.push((uuid, address, amounts));
-                    counter += 1;
-                }
-
-                _ => {
-                    info!("Out of requests in queue.");
-                    break;
-                }
-            };
-        }
+        drop(req_consumer);
+        match timeout(BATCH_TIMEOUT, self.batch_gather(&mut requests)).await {
+            Ok(_) => {}
+            Err(_) => {
+                warn!("Batch timeout elapsed while waiting.");
+            }
+        };
 
         // Early exiting this function if there is nothing to batch.
         if requests.is_empty() {
@@ -653,7 +676,12 @@ impl SimpleFaucet {
             match gas_coin_response {
                 GasCoinResponse::ValidGasCoin(coin_id) => {
                     let tx_data = self
-                        .build_batch_pay_sui_txn(coin_id, requests, self.active_address, gas_cost)
+                        .build_batch_pay_sui_txn(
+                            coin_id,
+                            requests.clone(),
+                            self.active_address,
+                            gas_cost,
+                        )
                         .await
                         .map_err(FaucetError::internal)?;
 
@@ -676,14 +704,34 @@ impl SimpleFaucet {
                         .total_coin_requests_succeeded
                         .add(total_requests as i64);
                     // TODO (jian): add a check on the reqs and the coins sent
+
+                    // Aquire lock and update all of the request Uuids
+                    let mut task_map = self.task_id_cache.lock().await;
+                    for (uuid, _addy, _amounts) in requests {
+                        task_map.insert(
+                            uuid,
+                            // BatchSendStatus {
+                            //     status: "SUCCEEDED".to_string(),
+                            //     transferred_gas_objects: Some(FaucetReceipt {
+                            //         sent: CoinInfo { amount: id },
+                            //     }),
+                            // },
+                            BatchSendStatus {
+                                status: BatchSendStatusType::SUCCEEDED,
+                                transferred_gas_objects: None,
+                            },
+                            Duration::from_secs(300),
+                        );
+                    }
+
                     return Ok(response.digest);
                 }
 
                 GasCoinResponse::UnknownGasCoin(coin_id) => {
-                    self.recycle_gas_coin(coin_id, uuid).await;
-                    return Err(FaucetError::FullnodeReadingError(format!(
-                        "unknown gas coin {coin_id:?}"
-                    )));
+                    // Continue the loop to retry preparing the gas coin
+                    warn!(?uuid, ?coin_id, "unknown gas coin.");
+                    self.metrics.total_discarded_coins.inc();
+                    continue;
                 }
 
                 GasCoinResponse::GasCoinWithInsufficientBalance(coin_id) => {
@@ -782,13 +830,29 @@ impl Faucet for SimpleFaucet {
         amounts: &[u64],
     ) -> Result<BatchFaucetReceipt, FaucetError> {
         info!(?recipient, uuid = ?id, "Getting faucet request");
-        let request_producer = self.request_producer.lock().await;
-        request_producer
+        self.request_producer
             .try_send((id, recipient, amounts.to_vec()))
             .expect("producer queue is full");
+        let mut task_map = self.task_id_cache.lock().await;
+        task_map.insert(
+            id,
+            BatchSendStatus {
+                status: BatchSendStatusType::INPROGRESS,
+                transferred_gas_objects: None,
+            },
+            Duration::from_secs(300),
+        );
         Ok(BatchFaucetReceipt {
             task: id.to_string(),
         })
+    }
+
+    async fn get_batch_send_status(&self, task_id: Uuid) -> Result<BatchSendStatus, FaucetError> {
+        let task_map = self.task_id_cache.lock().await;
+        match task_map.get(&task_id) {
+            Some(status) => Ok(status.clone()),
+            None => Err(FaucetError::Internal("task id not found".to_string())),
+        }
     }
 }
 
@@ -902,6 +966,8 @@ mod tests {
             gases, candidates
         );
     }
+
+    // TODO: write a test for testing the batch function
 
     #[tokio::test]
     async fn test_discard_invalid_gas() {

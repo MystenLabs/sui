@@ -20,8 +20,8 @@ use std::{
 };
 use sui_config::{sui_config_dir, SUI_CLIENT_CONFIG};
 use sui_faucet::{
-    BatchFaucetResponse, Faucet, FaucetConfig, FaucetRequest, FaucetResponse, RequestMetricsLayer,
-    SimpleFaucet,
+    BatchFaucetResponse, BatchStatusFaucetResponse, Faucet, FaucetConfig, FaucetError,
+    FaucetRequest, FaucetResponse, RequestMetricsLayer, SimpleFaucet,
 };
 use sui_sdk::wallet_context::WalletContext;
 use tower::{limit::RateLimitLayer, ServiceBuilder};
@@ -93,6 +93,7 @@ async fn main() -> Result<(), anyhow::Error> {
         .route("/", get(health))
         .route("/gas", post(request_gas))
         .route("/v1/gas", post(batch_request_gas))
+        .route("/v1/status", post(request_status))
         .layer(
             ServiceBuilder::new()
                 .layer(HandleErrorLayer::new(handle_error))
@@ -167,6 +168,14 @@ async fn batch_request_gas(
             .await
             .unwrap()
         }
+        _ => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(BatchFaucetResponse::from(FaucetError::Internal(
+                    "Input Error.".to_string(),
+                ))),
+            )
+        }
     };
     match result {
         Ok(v) => {
@@ -180,6 +189,44 @@ async fn batch_request_gas(
                 Json(BatchFaucetResponse::from(v)),
             )
         }
+    }
+}
+
+/// handler for batch_get_status requests
+async fn request_status(
+    Extension(state): Extension<Arc<AppState>>,
+    Json(payload): Json<FaucetRequest>,
+) -> impl IntoResponse {
+    match payload {
+        FaucetRequest::GetBatchSendStatusRequest(requests) => {
+            match Uuid::parse_str(&requests.task_id) {
+                Ok(task_id) => {
+                    let result = state.faucet.get_batch_send_status(task_id).await;
+                    match result {
+                        Ok(v) => (
+                            StatusCode::CREATED,
+                            Json(BatchStatusFaucetResponse::from(v)),
+                        ),
+                        Err(v) => (
+                            StatusCode::INTERNAL_SERVER_ERROR,
+                            Json(BatchStatusFaucetResponse::from(v)),
+                        ),
+                    }
+                }
+                Err(e) => (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(BatchStatusFaucetResponse::from(FaucetError::Internal(
+                        e.to_string(),
+                    ))),
+                ),
+            }
+        }
+        _ => (
+            StatusCode::BAD_REQUEST,
+            Json(BatchStatusFaucetResponse::from(FaucetError::Internal(
+                "Input Error.".to_string(),
+            ))),
+        ),
     }
 }
 
@@ -207,6 +254,14 @@ async fn request_gas(
             })
             .await
             .unwrap()
+        }
+        _ => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(FaucetResponse::from(FaucetError::Internal(
+                    "Input Error.".to_string(),
+                ))),
+            )
         }
     };
     match result {

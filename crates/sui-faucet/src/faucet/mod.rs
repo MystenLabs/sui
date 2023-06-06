@@ -30,6 +30,20 @@ pub struct CoinInfo {
     pub transfer_tx_digest: TransactionDigest,
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct BatchSendStatus {
+    pub status: BatchSendStatusType,
+    pub transferred_gas_objects: Option<FaucetReceipt>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "UPPERCASE")]
+pub enum BatchSendStatusType {
+    INPROGRESS,
+    SUCCEEDED,
+    DISCARDED,
+}
+
 #[async_trait]
 pub trait Faucet {
     /// Send `Coin<SUI>` of the specified amount to the recipient
@@ -47,6 +61,9 @@ pub trait Faucet {
         recipient: SuiAddress,
         amounts: &[u64],
     ) -> Result<BatchFaucetReceipt, FaucetError>;
+
+    /// Get the status of a batch_send request
+    async fn get_batch_send_status(&self, task_id: Uuid) -> Result<BatchSendStatus, FaucetError>;
 }
 
 pub const DEFAULT_AMOUNT: u64 = 1_000_000_000;
