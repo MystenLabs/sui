@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useWalletKit } from '@mysten/wallet-kit';
-import { useMutation, useQuery } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import {
   TANSTACK_KIOSK_DATA_KEY,
   TANSTACK_KIOSK_KEY,
@@ -43,12 +43,13 @@ export function useOwnedKiosk() {
 
   return useQuery({
     queryKey: [TANSTACK_OWNED_KIOSK_KEY, currentAccount?.address],
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
     queryFn: async (): Promise<{
       kioskId: SuiAddress | null;
       kioskCap: SuiAddress | null;
     } | null> => {
       if (!currentAccount?.address) return null;
-
       const ownedKiosks = await provider.getOwnedObjects({
         owner: currentAccount.address,
         filter: { StructType: `${KIOSK_OWNER_CAP}` },
@@ -146,20 +147,6 @@ export function useKioskDetails(kioskId: string | undefined | null) {
     queryFn: async (): Promise<Kiosk | null> => {
       if (!kioskId) return null;
       return await getKioskObject(provider, kioskId);
-    },
-  });
-}
-
-export function useKioskMutationFn() {
-  return useMutation({
-    mutationFn: ({
-      fn,
-      object,
-    }: {
-      fn: KioskFnType;
-      object: OwnedObjectType;
-    }) => {
-      return fn(object) as Promise<void>;
     },
   });
 }

@@ -3,44 +3,71 @@
 
 import { OwnedObjectType } from '../Inventory/OwnedObjects';
 import { DisplayObject } from '../DisplayObject';
-// import { Spinner } from "../Spinner";
 import { Button } from '../Base/Button';
 import { KioskListing } from '@mysten/kiosk';
-import { KioskFnType, useKioskMutationFn } from '../../hooks/kiosk';
+import { KioskFnType } from '../../hooks/kiosk';
+import {
+  useDelistMutation,
+  usePurchaseItemMutation,
+  useTakeMutation,
+} from '../../mutations/kiosk';
+import { toast } from 'react-hot-toast';
+import { ObjectId } from '@mysten/sui.js';
 
 export type KioskItemProps = {
   isGuest?: boolean;
   listing?: KioskListing | null;
-  takeFn: KioskFnType;
+  kioskId: ObjectId;
+  onSuccess: () => void;
   listFn: KioskFnType;
-  delistFn: KioskFnType;
-  purchaseFn?: KioskFnType;
   item: OwnedObjectType;
 };
 
 export function KioskItem({
   item,
+  kioskId,
   listing = null,
   isGuest = false,
-  purchaseFn,
-  takeFn,
+  onSuccess,
   listFn,
-  delistFn,
 }: KioskItemProps) {
-  const mutation = useKioskMutationFn();
+  // The mutation for the take fn.
+  const takeMutation = useTakeMutation({
+    onSuccess: () => {
+      toast.success('Item was transferred back to the address.');
+      onSuccess();
+    },
+  });
+
+  const delistMutation = useDelistMutation({
+    onSuccess: () => {
+      toast.success('Item delisted successfully');
+      onSuccess();
+    },
+  });
+
+  const purchaseMutation = usePurchaseItemMutation({
+    onSuccess: () => {
+      toast.success('Item purchased successfully');
+      onSuccess();
+    },
+  });
 
   if (isGuest)
     return (
       <DisplayObject item={item} listing={listing}>
         <>
-          {listing && purchaseFn && (
+          {listing && (
             <Button
-              loading={mutation.isLoading}
+              loading={purchaseMutation.isLoading}
               className="border-gray-400 bg-transparent hover:bg-primary hover:text-white md:col-span-2"
               onClick={() =>
-                mutation.mutate({
-                  fn: purchaseFn,
-                  object: { ...item, listing },
+                purchaseMutation.mutate({
+                  item: {
+                    ...item,
+                    listing,
+                  },
+                  kioskId: kioskId,
                 })
               }
             >
@@ -57,16 +84,15 @@ export function KioskItem({
           <>
             <Button
               className="border-transparent py-2 px-4 bg-gray-200"
-              loading={mutation.isLoading}
-              onClick={() => mutation.mutate({ fn: takeFn, object: item })}
+              loading={takeMutation.isLoading}
+              onClick={() => takeMutation.mutate(item)}
             >
               Take from Kiosk
             </Button>
 
             <Button
-              loading={mutation.isLoading}
               className="border-gray-400 bg-transparent hover:bg-primary hover:text-white"
-              onClick={() => mutation.mutate({ fn: listFn, object: item })}
+              onClick={() => listFn(item)}
             >
               List for Sale
             </Button>
@@ -74,9 +100,9 @@ export function KioskItem({
         )}
         {listing && !isGuest && (
           <Button
-            loading={mutation.isLoading}
+            loading={delistMutation.isLoading}
             className="border-gray-400 bg-transparent hover:bg-primary hover:text-white md:col-span-2"
-            onClick={() => mutation.mutate({ fn: delistFn, object: item })}
+            onClick={() => delistMutation.mutate(item)}
           >
             Delist item
           </Button>

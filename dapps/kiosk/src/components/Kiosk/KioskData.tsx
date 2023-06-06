@@ -5,48 +5,32 @@ import { useWalletKit } from '@mysten/wallet-kit';
 import { Tab } from '@headlessui/react';
 import { OwnedObjects } from '../Inventory/OwnedObjects';
 import { KioskItems } from './KioskItems';
-import { withdrawFromKiosk } from '@mysten/kiosk';
-import { TransactionBlock, formatAddress } from '@mysten/sui.js';
+import { formatAddress } from '@mysten/sui.js';
 import { ExplorerLink } from '../Base/ExplorerLink';
 import { formatSui, mistToSui } from '../../utils/utils';
-import { useTransactionExecution } from '../../hooks/useTransactionExecution';
 import { toast } from 'react-hot-toast';
 import { useKioskDetails, useOwnedKiosk } from '../../hooks/kiosk';
 import { Loading } from '../Base/Loading';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQueryClient } from '@tanstack/react-query';
 import { TANSTACK_KIOSK_DATA_KEY } from '../../utils/constants';
 import { Button } from '../Base/Button';
+import { useWithdrawMutation } from '../../mutations/kiosk';
 
 export function KioskData() {
   const { currentAccount } = useWalletKit();
   const { data: ownedKiosk } = useOwnedKiosk();
-  const { signAndExecute } = useTransactionExecution();
-
   const kioskId = ownedKiosk?.kioskId;
-  const kioskOwnerCap = ownedKiosk?.kioskCap;
 
   const { data: kiosk, isLoading } = useKioskDetails(kioskId);
 
   const queryClient = useQueryClient();
-  const withdrawProfits = async () => {
-    if (!kiosk || !kioskId || !kioskOwnerCap || !currentAccount?.address)
-      return;
 
-    const tx = new TransactionBlock();
-    const coin = withdrawFromKiosk(tx, kioskId, kioskOwnerCap, kiosk.profits);
-
-    tx.transferObjects([coin], tx.pure(currentAccount.address, 'address'));
-
-    const success = await signAndExecute({ tx });
-
-    if (success) {
+  const withdrawMutation = useWithdrawMutation({
+    onSuccess: () => {
       toast.success('Profits withdrawn successfully');
       // invalidate query to refetch kiosk data and update the balance.
       queryClient.invalidateQueries([TANSTACK_KIOSK_DATA_KEY, kioskId]);
-    }
-  };
-  const mutation = useMutation({
-    mutationFn: withdrawProfits,
+    },
   });
 
   const profits = formatSui(mistToSui(kiosk?.profits));
@@ -79,9 +63,9 @@ export function KioskData() {
               Profits: {profits} SUI
               {Number(kiosk.profits) > 0 && (
                 <Button
-                  loading={mutation.isLoading}
+                  loading={withdrawMutation.isLoading}
                   className=" ease-in-out duration-300 rounded border border-transparent px-4 bg-gray-200 text-xs !py-1 ml-3"
-                  onClick={() => mutation.mutate()}
+                  onClick={() => withdrawMutation.mutate(kiosk)}
                 >
                   Withdraw all
                 </Button>

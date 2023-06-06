@@ -8,7 +8,6 @@ import {
   getExecutionStatus,
 } from '@mysten/sui.js';
 
-import { toast } from 'react-hot-toast';
 import { useRpc } from '../context/RpcClientContext';
 
 // A helper to execute transactions by:
@@ -28,21 +27,18 @@ export function useTransactionExecution() {
     tx: TransactionBlock;
     options?: SuiTransactionBlockResponseOptions | undefined;
   }) => {
-    try {
-      const signedTx = await signTransactionBlock({ transactionBlock: tx });
+    const signedTx = await signTransactionBlock({ transactionBlock: tx });
 
-      const res = await provider.executeTransactionBlock({
-        transactionBlock: signedTx.transactionBlockBytes,
-        signature: signedTx.signature,
-        options,
-      });
+    const res = await provider.executeTransactionBlock({
+      transactionBlock: signedTx.transactionBlockBytes,
+      signature: signedTx.signature,
+      options,
+    });
 
-      return getExecutionStatus(res)?.status === 'success' || false;
-    } catch (e: unknown) {
-      if (typeof e === 'string') toast.error(e);
-      if (e instanceof Error) toast.error(e.message);
-      return false;
-    }
+    const status = getExecutionStatus(res)?.status === 'success';
+
+    if (status) return true;
+    else throw new Error('Transaction execution failed.');
   };
 
   return { signAndExecute };

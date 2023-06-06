@@ -7,21 +7,26 @@ import { OwnedObjectType } from '../Inventory/OwnedObjects';
 import { DisplayObjectThumbnail } from '../DisplayObjectThumbnail';
 import { Button } from '../Base/Button';
 import { MIST_PER_SUI } from '@mysten/sui.js';
+import { usePlaceAndListMutation } from '../../mutations/kiosk';
 
 export interface ListPriceProps {
   item: OwnedObjectType;
-  onSubmit: (item: OwnedObjectType, price: string) => void;
+  onSuccess: () => void;
   closeModal: () => void;
+  listAndPlace?: boolean;
 }
-export function ListPrice({ item, onSubmit, closeModal }: ListPriceProps) {
+export function ListPrice({
+  item,
+  onSuccess,
+  closeModal,
+  listAndPlace,
+}: ListPriceProps) {
   const [price, setPrice] = useState<string>('');
-  const [loading, setLoading] = useState<boolean>(false);
 
-  const list = async () => {
-    setLoading(true);
-    if (onSubmit) await onSubmit(item, price);
-    setLoading(false);
-  };
+  const placeAndListToKioskMutation = usePlaceAndListMutation({
+    onSuccess: onSuccess,
+  });
+
   return (
     <ModalBase isOpen closeModal={closeModal} title="Select the listing price">
       <>
@@ -42,9 +47,15 @@ export function ListPrice({ item, onSubmit, closeModal }: ListPriceProps) {
 
         <div className="mt-6">
           <Button
-            loading={loading}
+            loading={placeAndListToKioskMutation.isLoading}
             className="ease-in-out duration-300 rounded py-2 px-4 bg-primary text-white hover:opacity-70 w-full"
-            onClick={list}
+            onClick={() =>
+              placeAndListToKioskMutation.mutate({
+                item,
+                price,
+                shouldPlace: listAndPlace,
+              })
+            }
           >
             List Item
           </Button>

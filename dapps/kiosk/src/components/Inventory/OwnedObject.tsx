@@ -4,33 +4,35 @@
 import { OwnedObjectType } from './OwnedObjects';
 import { DisplayObject } from '../DisplayObject';
 import { Button } from '../Base/Button';
-import { KioskFnType, useKioskMutationFn } from '../../hooks/kiosk';
+import { KioskFnType } from '../../hooks/kiosk';
+import { usePlaceMutation } from '../../mutations/kiosk';
 
 export function OwnedObject({
   object,
-  placeFn,
+  onListSuccess,
   listFn,
 }: {
+  onListSuccess: () => void;
   listFn: KioskFnType;
-  placeFn: KioskFnType;
   object: OwnedObjectType;
 }) {
-  const mutation = useKioskMutationFn();
+  const placeToKioskMutation = usePlaceMutation({
+    onSuccess: onListSuccess,
+  });
 
   return (
     <DisplayObject item={object}>
       <>
         <Button
           className="bg-gray-200"
-          loading={mutation.isLoading}
-          onClick={() => mutation.mutate({ fn: placeFn, object })}
+          loading={placeToKioskMutation.isLoading}
+          onClick={() => placeToKioskMutation.mutate(object)}
         >
           Place in kiosk
         </Button>
         <Button
-          loading={mutation.isLoading}
           className="border-gray-400 bg-transparent hover:bg-primary hover:text-white"
-          onClick={() => mutation.mutate({ fn: listFn, object })}
+          onClick={() => listFn(object)}
         >
           Sell in Kiosk
         </Button>
