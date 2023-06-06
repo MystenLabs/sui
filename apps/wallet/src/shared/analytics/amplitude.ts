@@ -31,7 +31,6 @@ export function getUrlWithDeviceId(url: URL) {
     const amplitudeDeviceId = ampli.client.getDeviceId();
     if (amplitudeDeviceId) {
         url.searchParams.append('deviceId', amplitudeDeviceId);
-        return url;
     }
     return url;
 }
