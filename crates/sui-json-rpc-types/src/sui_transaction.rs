@@ -1667,6 +1667,8 @@ pub enum TransactionFilter {
     ToAddress(SuiAddress),
     /// Query by sender and recipient address.
     FromAndToAddress { from: SuiAddress, to: SuiAddress },
+    /// Query txs that have a given address as sender or recipient.
+    FromOrToAddress { addr: SuiAddress },
     /// Query by transaction kind
     TransactionKind(String),
 }
@@ -1707,6 +1709,7 @@ impl Filter<EffectsWithInput> for TransactionFilter {
             TransactionFilter::TransactionKind(kind) => item.input.kind().to_string() == *kind,
             // these filters are not supported, rpc will reject these filters on subscription
             TransactionFilter::Checkpoint(_) => false,
+            TransactionFilter::FromOrToAddress { addr: _ } => false,
         }
     }
 }

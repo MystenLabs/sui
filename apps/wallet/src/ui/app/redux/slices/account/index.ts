@@ -5,6 +5,7 @@ import { type SuiAddress } from '@mysten/sui.js';
 import {
     createAsyncThunk,
     createEntityAdapter,
+    createListenerMiddleware,
     createSlice,
 } from '@reduxjs/toolkit';
 import Browser from 'webextension-polyfill';
@@ -13,6 +14,8 @@ import {
     AccountType,
     type SerializedAccount,
 } from '_src/background/keyring/Account';
+import { ampli } from '_src/shared/analytics/ampli';
+import { persistableStorage } from '_src/shared/analytics/amplitude';
 import { persister, queryClient } from '_src/ui/app/helpers/queryClient';
 
 import type { PayloadAction, Reducer } from '@reduxjs/toolkit';
@@ -58,6 +61,8 @@ export const logout = createAsyncThunk<void, void, AppThunkConfig>(
         queryClient.clear();
         queryClient.unmount();
         await persister.removeClient();
+
+        ampli.client.reset();
     }
 );
 
@@ -138,6 +143,21 @@ const accountSlice = createSlice({
 });
 
 export const { setKeyringStatus } = accountSlice.actions;
+
+export const amplitudePersistenceMiddleware = createListenerMiddleware();
+amplitudePersistenceMiddleware.startListening({
+    actionCreator: setKeyringStatus,
+    effect: async ({ payload }, listenerApi) => {
+        if (payload.isInitialized) {
+            // The user has accepted our terms of service after their primary
+            // account has been initialized (either by creating a new wallet
+            // or importing a previous account). This means we've gained
+            // consent and can persist device data to cookie storage
+            persistableStorage.persist();
+            listenerApi.unsubscribe();
+        }
+    },
+});
 
 export const accountsAdapterSelectors = accountsAdapter.getSelectors(
     (state: RootState) => state.account

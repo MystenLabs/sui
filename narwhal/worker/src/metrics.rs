@@ -63,6 +63,8 @@ pub struct WorkerMetrics {
     pub created_batch_latency: HistogramVec,
     /// The number of parallel worker batches currently processed by the worker
     pub parallel_worker_batches: IntGauge,
+    /// Latency of broadcasting batches to a quorum in seconds.
+    pub batch_broadcast_quorum_latency: Histogram,
     /// Counter of remote/local batch fetch statuses.
     pub worker_batch_fetch: IntCounterVec,
     /// Time it takes to download a payload from local worker peer
@@ -109,6 +111,14 @@ impl WorkerMetrics {
             parallel_worker_batches: register_int_gauge_with_registry!(
                 "parallel_worker_batches",
                 "The number of parallel worker batches currently processed by the worker",
+                registry
+            )
+            .unwrap(),
+            batch_broadcast_quorum_latency: register_histogram_with_registry!(
+                "batch_broadcast_quorum_latency",
+                "The latency of broadcasting batches to a quorum in seconds",
+                // buckets in seconds
+                LATENCY_SEC_BUCKETS.to_vec(),
                 registry
             )
             .unwrap(),

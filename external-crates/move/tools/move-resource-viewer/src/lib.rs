@@ -22,7 +22,7 @@ use move_core_types::{
     value::{MoveStruct, MoveTypeLayout, MoveValue},
     vm_status::VMStatus,
 };
-use move_proc_macros::EnumVariantOrder;
+use move_proc_macros::test_variant_order;
 use serde::ser::{SerializeMap, SerializeSeq};
 use std::{
     convert::{TryFrom, TryInto},
@@ -45,7 +45,8 @@ pub struct AnnotatedMoveStruct {
 /// for debugging/client purpose right now and just for a better visualization of on chain data. In
 /// the long run, we would like to transform this struct to a Json value so that we can have a cross
 /// platform interpretation of the on chain data.
-#[derive(Clone, Debug, EnumVariantOrder)]
+#[derive(Clone, Debug)]
+#[test_variant_order(src/unit_tests/staged_enum_variant_order/annotated_move_value.yaml)]
 pub enum AnnotatedMoveValue {
     U8(u8),
     U64(u64),
@@ -403,19 +404,5 @@ impl Display for AnnotatedMoveValue {
 impl Display for AnnotatedMoveStruct {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         pretty_print_struct(f, self, 0)
-    }
-}
-
-mod tests {
-    #[test]
-    fn enforce_order_test() {
-        let mut path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-        path.extend([
-            "src",
-            "unit_tests",
-            "staged_enum_variant_order",
-            "annotated_move_value.yaml",
-        ]);
-        enum_compat_util::check_enum_compat_order::<crate::AnnotatedMoveValue>(path);
     }
 }

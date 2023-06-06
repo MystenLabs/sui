@@ -325,3 +325,8 @@ We will also release a script that downloads all the necessary signed binaries a
 
 Usage
 `./download_private.sh <directory-name>`
+
+You can also download and verify specific binaries that may not be included by the above script using the `download_and_verify_private_binary.sh` script.
+
+Usage:
+`./download_and_verify_private_binary.sh <directory-name> <binary-name>`

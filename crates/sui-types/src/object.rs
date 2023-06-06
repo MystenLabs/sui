@@ -23,8 +23,8 @@ use crate::error::{ExecutionError, ExecutionErrorKind, UserInputError, UserInput
 use crate::error::{SuiError, SuiResult};
 use crate::gas_coin::TOTAL_SUPPLY_MIST;
 use crate::is_system_package;
-use crate::layout_resolver::LayoutResolver;
 use crate::move_package::MovePackage;
+use crate::type_resolver::LayoutResolver;
 use crate::{
     base_types::{
         ObjectDigest, ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest,
@@ -354,10 +354,7 @@ impl MoveObject {
     }
 
     /// Get the total amount of SUI embedded in `self`. Intended for testing purposes
-    pub fn get_total_sui(
-        &self,
-        layout_resolver: &mut impl LayoutResolver,
-    ) -> Result<u64, SuiError> {
+    pub fn get_total_sui(&self, layout_resolver: &mut dyn LayoutResolver) -> Result<u64, SuiError> {
         if self.type_.is_gas_coin() {
             // Fast path without deserialization.
             return Ok(self.get_coin_value_unsafe());
@@ -832,10 +829,7 @@ impl Object {
 // Testing-related APIs.
 impl Object {
     /// Get the total amount of SUI embedded in `self`, including both Move objects and the storage rebate
-    pub fn get_total_sui(
-        &self,
-        layout_resolver: &mut impl LayoutResolver,
-    ) -> Result<u64, SuiError> {
+    pub fn get_total_sui(&self, layout_resolver: &mut dyn LayoutResolver) -> Result<u64, SuiError> {
         Ok(self.storage_rebate
             + match &self.data {
                 Data::Move(m) => m.get_total_sui(layout_resolver)?,

@@ -87,10 +87,10 @@ pub struct BuilderCheckpointSummary {
 #[derive(DBMapUtils)]
 pub struct CheckpointStore {
     /// Maps checkpoint contents digest to checkpoint contents
-    checkpoint_content: DBMap<CheckpointContentsDigest, CheckpointContents>,
+    pub(crate) checkpoint_content: DBMap<CheckpointContentsDigest, CheckpointContents>,
 
     /// Maps checkpoint contents digest to checkpoint sequence number
-    checkpoint_sequence_by_contents_digest:
+    pub(crate) checkpoint_sequence_by_contents_digest:
         DBMap<CheckpointContentsDigest, CheckpointSequenceNumber>,
 
     /// Stores entire checkpoint contents from state sync, indexed by sequence number, for
@@ -101,14 +101,14 @@ pub struct CheckpointStore {
     /// Stores certified checkpoints
     pub(crate) certified_checkpoints: DBMap<CheckpointSequenceNumber, TrustedCheckpoint>,
     /// Map from checkpoint digest to certified checkpoint
-    checkpoint_by_digest: DBMap<CheckpointDigest, TrustedCheckpoint>,
+    pub(crate) checkpoint_by_digest: DBMap<CheckpointDigest, TrustedCheckpoint>,
 
     /// A map from epoch ID to the sequence number of the last checkpoint in that epoch.
     epoch_last_checkpoint_map: DBMap<EpochId, CheckpointSequenceNumber>,
 
     /// Watermarks used to determine the highest verified, fully synced, and
     /// fully executed checkpoints
-    watermarks: DBMap<CheckpointWatermark, (CheckpointSequenceNumber, CheckpointDigest)>,
+    pub(crate) watermarks: DBMap<CheckpointWatermark, (CheckpointSequenceNumber, CheckpointDigest)>,
 }
 
 impl CheckpointStore {
@@ -160,7 +160,7 @@ impl CheckpointStore {
                 );
             }
             self.insert_checkpoint_contents(contents).unwrap();
-            self.insert_verified_checkpoint(checkpoint.clone()).unwrap();
+            self.insert_verified_checkpoint(&checkpoint).unwrap();
             self.update_highest_synced_checkpoint(&checkpoint).unwrap();
         }
     }
@@ -239,16 +239,6 @@ impl CheckpointStore {
         self.get_checkpoint_by_digest(&highest_verified.1)
     }
 
-    pub fn get_highest_synced_checkpoint_seq_number(
-        &self,
-    ) -> Result<Option<CheckpointSequenceNumber>, TypedStoreError> {
-        if let Some(highest_synced) = self.watermarks.get(&CheckpointWatermark::HighestSynced)? {
-            Ok(Some(highest_synced.0))
-        } else {
-            Ok(None)
-        }
-    }
-
     pub fn get_highest_synced_checkpoint(
         &self,
     ) -> Result<Option<VerifiedCheckpoint>, TypedStoreError> {
@@ -287,6 +277,16 @@ impl CheckpointStore {
         self.get_checkpoint_by_digest(&highest_executed.1)
     }
 
+    pub fn get_highest_pruned_checkpoint_seq_number(
+        &self,
+    ) -> Result<CheckpointSequenceNumber, TypedStoreError> {
+        Ok(self
+            .watermarks
+            .get(&CheckpointWatermark::HighestPruned)?
+            .unwrap_or_default()
+            .0)
+    }
+
     pub fn get_checkpoint_contents(
         &self,
         digest: &CheckpointContentsDigest,
@@ -301,6 +301,11 @@ impl CheckpointStore {
         self.full_checkpoint_content.get(&seq)
     }
 
+    // Called by consensus (ConsensusAggregator).
+    // Different from `insert_verified_checkpoint`, it does not touch
+    // the highest_verified_checkpoint watermark such that state sync
+    // will have a chance to process this checkpoint and perfom some
+    // state-sync only things.
     pub fn insert_certified_checkpoint(
         &self,
         checkpoint: &VerifiedCheckpoint,
@@ -324,13 +329,20 @@ impl CheckpointStore {
         batch.write()
     }
 
+    // Called by state sync, apart from inserting the checkpoint and updating
+    // related tables, it also bumps the highest_verified_checkpoint watermark.
     pub fn insert_verified_checkpoint(
         &self,
-        checkpoint: VerifiedCheckpoint,
+        checkpoint: &VerifiedCheckpoint,
     ) -> Result<(), TypedStoreError> {
-        self.insert_certified_checkpoint(&checkpoint)?;
+        self.insert_certified_checkpoint(checkpoint)?;
+        self.update_highest_verified_checkpoint(checkpoint)
+    }
 
-        // Update latest
+    pub fn update_highest_verified_checkpoint(
+        &self,
+        checkpoint: &VerifiedCheckpoint,
+    ) -> Result<(), TypedStoreError> {
         if Some(*checkpoint.sequence_number())
             > self
                 .get_highest_verified_checkpoint()?
@@ -495,6 +507,7 @@ pub enum CheckpointWatermark {
     HighestVerified,
     HighestSynced,
     HighestExecuted,
+    HighestPruned,
 }
 
 pub struct CheckpointBuilder {

@@ -227,6 +227,9 @@ impl Worker {
             quic_config.receive_window = Some(200 << 20);
             quic_config.send_window = Some(200 << 20);
             quic_config.crypto_buffer_size = Some(1 << 20);
+            quic_config.socket_receive_buffer_size = Some(20 << 20);
+            quic_config.socket_send_buffer_size = Some(20 << 20);
+            quic_config.allow_failed_socket_buffer_size_setting = true;
             quic_config.max_idle_timeout_ms = Some(30_000);
             // Enable keep alives every 5s
             quic_config.keep_alive_interval_ms = Some(5_000);
@@ -490,7 +493,7 @@ impl Worker {
             shutdown_receivers.pop().unwrap(),
             rx_batch_maker,
             tx_quorum_waiter,
-            node_metrics,
+            node_metrics.clone(),
             client,
             self.store.clone(),
             self.protocol_config.clone(),
@@ -506,6 +509,7 @@ impl Worker {
             shutdown_receivers.pop().unwrap(),
             rx_quorum_waiter,
             network,
+            node_metrics,
         );
 
         info!(

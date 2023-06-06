@@ -4,11 +4,12 @@
 
 use crate::{account_address::AccountAddress, u256, value::MoveValue};
 use anyhow::{anyhow, Error, Result};
-use move_proc_macros::EnumVariantOrder;
+use move_proc_macros::test_variant_order;
 use serde::{Deserialize, Serialize};
 use std::{convert::TryFrom, fmt};
 
-#[derive(Clone, Hash, Eq, PartialEq, Serialize, Deserialize, EnumVariantOrder)]
+#[derive(Clone, Hash, Eq, PartialEq, Serialize, Deserialize)]
+#[test_variant_order(src/unit_tests/staged_enum_variant_order/transaction_argument.yaml)]
 pub enum TransactionArgument {
     U8(u8),
     U64(u64),
@@ -121,7 +122,6 @@ impl VecBytes {
 
 #[cfg(test)]
 mod tests {
-    use enum_compat_util::check_enum_compat_order;
     use std::convert::{From, TryInto};
 
     use crate::{
@@ -146,17 +146,5 @@ mod tests {
             let ret: TransactionArgument = MoveValue::from(val.clone()).try_into().unwrap();
             assert_eq!(ret, val);
         }
-    }
-
-    #[test]
-    fn enforce_order_test() {
-        let mut path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-        path.extend([
-            "src",
-            "unit_tests",
-            "staged_enum_variant_order",
-            "transaction_argument.yaml",
-        ]);
-        check_enum_compat_order::<TransactionArgument>(path);
     }
 }

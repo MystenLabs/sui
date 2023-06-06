@@ -19,32 +19,38 @@ use move_vm_runtime::{move_vm::MoveVM, session::Session};
 use move_vm_types::loaded_data::runtime_types::Type;
 use sui_move_natives::object_runtime::{max_event_error, ObjectRuntime, RuntimeResults};
 use sui_protocol_config::ProtocolConfig;
-use sui_types::execution_status::CommandArgumentError;
 use sui_types::{
     balance::Balance,
-    base_types::{ObjectID, SequenceNumber, SuiAddress, TxContext},
+    base_types::{MoveObjectType, ObjectID, SequenceNumber, SuiAddress, TxContext},
     coin::Coin,
     error::{ExecutionError, ExecutionErrorKind},
+    execution::{
+        ExecutionResults, ExecutionState, InputObjectMetadata, InputValue, ObjectValue,
+        RawValueType, ResultValue, UsageKind,
+    },
     gas::{SuiGasStatus, SuiGasStatusAPI},
     metrics::LimitsMetrics,
     move_package::MovePackage,
-    object::{MoveObject, Object, Owner},
-    storage::{ObjectChange, WriteKind},
+    object::{Data, MoveObject, Object, Owner},
+    storage::{BackingPackageStore, ChildObjectResolver, ObjectChange, WriteKind},
     transaction::{Argument, CallArg, ObjectArg},
+    type_resolver::TypeTagResolver,
+};
+use sui_types::{
+    error::command_argument_error,
+    execution::{CommandKind, ObjectContents, TryFromValue, Value},
+    execution_mode::ExecutionMode,
+    execution_status::CommandArgumentError,
 };
 
-use crate::{
-    adapter::{missing_unwrapped_msg, new_native_extensions},
-    execution_mode::ExecutionMode,
-};
+use crate::adapter::{missing_unwrapped_msg, new_native_extensions};
 
 use super::linkage_view::{LinkageInfo, LinkageView, SavedLinkage};
-use super::types::*;
 
 sui_macros::checked_arithmetic! {
 
 /// Maintains all runtime state specific to programmable transactions
-pub struct ExecutionContext<'vm, 'state, 'a, S: StorageView> {
+pub struct ExecutionContext<'vm, 'state, 'a> {
     /// The protocol config
     pub protocol_config: &'a ProtocolConfig,
     /// Metrics for reporting exceeded limits
@@ -52,14 +58,14 @@ pub struct ExecutionContext<'vm, 'state, 'a, S: StorageView> {
     /// The MoveVM
     pub vm: &'vm MoveVM,
     /// The global state, used for resolving packages
-    pub state_view: &'state S,
+    pub state_view: &'state dyn ExecutionState,
     /// A shared transaction context, contains transaction digest information and manages the
     /// creation of new object IDs
     pub tx_context: &'a mut TxContext,
     /// The gas status used for metering
     pub gas_status: &'a mut SuiGasStatus,
     /// The session used for interacting with Move types and calls
-    pub session: Session<'state, 'vm, LinkageView<&'state S>>,
+    pub session: Session<'state, 'vm, LinkageView<'state>>,
     /// Additional transfers not from the Move runtime
     additional_transfers: Vec<(/* new owner */ SuiAddress, ObjectValue)>,
     /// Newly published packages
@@ -92,15 +98,12 @@ struct AdditionalWrite {
     bytes: Vec<u8>,
 }
 
-impl<'vm, 'state, 'a, S: StorageView> ExecutionContext<'vm, 'state, 'a, S>
-where
-    &'state S: SuiResolver,
-{
+impl<'vm, 'state, 'a> ExecutionContext<'vm, 'state, 'a> {
     pub fn new(
         protocol_config: &'a ProtocolConfig,
         metrics: Arc<LimitsMetrics>,
         vm: &'vm MoveVM,
-        state_view: &'state S,
+        state_view: &'state dyn ExecutionState,
         tx_context: &'a mut TxContext,
         gas_status: &'a mut SuiGasStatus,
         gas_coin_opt: Option<ObjectID>,
@@ -114,9 +117,11 @@ where
 
         // we need a new session just for loading types, which is sad
         // TODO remove this
+        let linkage = LinkageView::new(Box::new(state_view.as_sui_resolver()), init_linkage);
         let mut tmp_session = new_session(
             vm,
-            LinkageView::new(state_view, init_linkage),
+            linkage,
+            state_view.as_child_resolver(),
             BTreeMap::new(),
             !gas_status.is_unmetered(),
             protocol_config,
@@ -181,6 +186,7 @@ where
         let session = new_session(
             vm,
             linkage,
+            state_view.as_child_resolver(),
             object_owner_map,
             !gas_status.is_unmetered(),
             protocol_config,
@@ -659,6 +665,7 @@ where
         let tmp_session = new_session(
             vm,
             linkage,
+            state_view.as_child_resolver(),
             BTreeMap::new(),
             !gas_status.is_unmetered(),
             protocol_config,
@@ -737,7 +744,10 @@ where
         for (id, delete_kind) in deletions {
             let version = match input_object_metadata.get(&id) {
                 Some(metadata) => {
-                    assert_invariant!(!matches!(metadata.owner, Owner::Immutable), "Attempting to delete immutable object {id} via delete kind {delete_kind}");
+                    assert_invariant!(
+                        !matches!(metadata.owner, Owner::Immutable),
+                        "Attempting to delete immutable object {id} via delete kind {delete_kind}"
+                    );
                     metadata.version
                 }
                 None => match state_view.get_latest_parent_entry_ref(id) {
@@ -855,35 +865,46 @@ where
     }
 }
 
-pub(crate) fn new_session<'state, 'vm, S: StorageView>(
+impl<'vm, 'state, 'a> TypeTagResolver for ExecutionContext<'vm, 'state, 'a> {
+    fn get_type_tag(&self, type_: &Type) -> Result<TypeTag, ExecutionError> {
+        self.session
+            .get_type_tag(type_)
+            .map_err(|e| self.convert_vm_error(e))
+    }
+}
+
+pub(crate) fn new_session<'state, 'vm>(
     vm: &'vm MoveVM,
-    linkage: LinkageView<&'state S>,
+    linkage: LinkageView<'state>,
+    child_resolver: &'state dyn ChildObjectResolver,
     input_objects: BTreeMap<ObjectID, Owner>,
     is_metered: bool,
     protocol_config: &ProtocolConfig,
     metrics: Arc<LimitsMetrics>,
-) -> Session<'state, 'vm, LinkageView<&'state S>>
-where
-    &'state S: SuiResolver,
-{
-    let store = *linkage.storage();
+) -> Session<'state, 'vm, LinkageView<'state>> {
     vm.new_session_with_extensions(
         linkage,
-        new_native_extensions(store, input_objects, is_metered, protocol_config, metrics),
+        new_native_extensions(
+            child_resolver,
+            input_objects,
+            is_metered,
+            protocol_config,
+            metrics,
+        ),
     )
 }
 
 // Create a new Session suitable for resolving type and type operations rather than execution
-pub(crate) fn new_session_for_linkage<'state, S: SuiResolver>(
-    vm: &MoveVM,
-    linkage: LinkageView<S>,
-) -> Session<'state, '_, LinkageView<S>> {
+pub(crate) fn new_session_for_linkage<'vm, 'state>(
+    vm: &'vm MoveVM,
+    linkage: LinkageView<'state>,
+) -> Session<'state, 'vm, LinkageView<'state>> {
     vm.new_session(linkage)
 }
 
 /// Set the link context for the session from the linkage information in the `package`.
-pub fn set_linkage<S: SuiResolver>(
-    session: &mut Session<LinkageView<S>>,
+pub fn set_linkage(
+    session: &mut Session<LinkageView>,
     linkage: &MovePackage,
 ) -> Result<AccountAddress, ExecutionError> {
     session.get_resolver_mut().set_linkage(linkage)
@@ -891,18 +912,16 @@ pub fn set_linkage<S: SuiResolver>(
 
 /// Turn off linkage information, so that the next use of the session will need to set linkage
 /// information to succeed.
-pub fn reset_linkage<S: SuiResolver>(session: &mut Session<LinkageView<S>>) {
+pub fn reset_linkage(session: &mut Session<LinkageView>) {
     session.get_resolver_mut().reset_linkage();
 }
 
-pub fn steal_linkage<S: SuiResolver>(
-    session: &mut Session<LinkageView<S>>,
-) -> Option<SavedLinkage> {
+pub fn steal_linkage(session: &mut Session<LinkageView>) -> Option<SavedLinkage> {
     session.get_resolver_mut().steal_linkage()
 }
 
-pub fn restore_linkage<S: SuiResolver>(
-    session: &mut Session<LinkageView<S>>,
+pub fn restore_linkage(
+    session: &mut Session<LinkageView>,
     saved: Option<SavedLinkage>,
 ) -> Result<(), ExecutionError> {
     session.get_resolver_mut().restore_linkage(saved)
@@ -910,15 +929,14 @@ pub fn restore_linkage<S: SuiResolver>(
 
 /// Fetch the package at `package_id` with a view to using it as a link context.  Produces an error
 /// if the object at that ID does not exist, or is not a package.
-fn package_for_linkage<S: SuiResolver>(
-    session: &Session<LinkageView<S>>,
+fn package_for_linkage(
+    session: &Session<LinkageView>,
     package_id: ObjectID,
 ) -> VMResult<MovePackage> {
     use move_binary_format::errors::PartialVMError;
     use move_core_types::vm_status::StatusCode;
 
-    let storage = session.get_resolver().storage();
-    match storage.get_package(&package_id) {
+    match session.get_resolver().get_package(&package_id) {
         Ok(Some(package)) => Ok(package),
         Ok(None) => Err(PartialVMError::new(StatusCode::LINKER_ERROR)
             .with_message(format!("Cannot find link context {package_id} in store"))
@@ -933,10 +951,7 @@ fn package_for_linkage<S: SuiResolver>(
 
 /// Load `type_tag` to get a `Type` in the provided `session`.  `session`'s linkage context may be
 /// reset after this operation, because during the operation, it may change when loading a struct.
-pub fn load_type<S: SuiResolver>(
-    session: &mut Session<LinkageView<S>>,
-    type_tag: &TypeTag,
-) -> VMResult<Type> {
+pub fn load_type(session: &mut Session<LinkageView>, type_tag: &TypeTag) -> VMResult<Type> {
     use move_binary_format::errors::PartialVMError;
     use move_core_types::vm_status::StatusCode;
 
@@ -1009,18 +1024,63 @@ pub fn load_type<S: SuiResolver>(
     })
 }
 
-/// Load an input object from the state_view
-fn load_object<'vm, 'state, S: StorageView>(
+pub(crate) fn make_object_value<'vm, 'state>(
     vm: &'vm MoveVM,
-    state_view: &'state S,
-    session: &mut Session<'state, 'vm, LinkageView<&'state S>>,
+    session: &mut Session<'state, 'vm, LinkageView<'state>>,
+    type_: MoveObjectType,
+    has_public_transfer: bool,
+    used_in_non_entry_move_call: bool,
+    contents: &[u8],
+) -> Result<ObjectValue, ExecutionError> {
+    let contents = if type_.is_coin() {
+        let Ok(coin) = Coin::from_bcs_bytes(contents) else {
+            invariant_violation!("Could not deserialize a coin")
+        };
+        ObjectContents::Coin(coin)
+    } else {
+        ObjectContents::Raw(contents.to_vec())
+    };
+
+    let tag: StructTag = type_.into();
+    let type_ = load_type(session, &TypeTag::Struct(Box::new(tag)))
+        .map_err(|e| crate::error::convert_vm_error(e, vm, session.get_resolver()))?;
+    Ok(ObjectValue {
+        type_,
+        has_public_transfer,
+        used_in_non_entry_move_call,
+        contents,
+    })
+}
+
+pub(crate) fn value_from_object<'vm, 'state>(
+    vm: &'vm MoveVM,
+    session: &mut Session<'state, 'vm, LinkageView<'state>>,
+    object: &Object,
+) -> Result<ObjectValue, ExecutionError> {
+    let Object { data: Data::Move(object), .. } = object else {
+        invariant_violation!("Expected a Move object");
+    };
+
+    let used_in_non_entry_move_call = false;
+    make_object_value(
+        vm,
+        session,
+        object.type_().clone(),
+        object.has_public_transfer(),
+        used_in_non_entry_move_call,
+        object.contents(),
+    )
+}
+
+/// Load an input object from the state_view
+fn load_object<'vm, 'state>(
+    vm: &'vm MoveVM,
+    state_view: &'state dyn ExecutionState,
+    session: &mut Session<'state, 'vm, LinkageView<'state>>,
     object_owner_map: &mut BTreeMap<ObjectID, Owner>,
     override_as_immutable: bool,
     id: ObjectID,
-) -> Result<InputValue, ExecutionError>
-where
-    &'state S: SuiResolver,
-{
+) -> Result<InputValue, ExecutionError> {
     let Some(obj) = state_view.read_object(&id) else {
         // protected by transaction input checker
         invariant_violation!("Object {} does not exist yet", id);
@@ -1048,21 +1108,18 @@ where
     let prev = object_owner_map.insert(id, obj.owner);
     // protected by transaction input checker
     assert_invariant!(prev.is_none(), "Duplicate input object {}", id);
-    let obj_value = ObjectValue::from_object(vm, session, obj)?;
+    let obj_value = value_from_object(vm, session, obj)?;
     Ok(InputValue::new_object(object_metadata, obj_value))
 }
 
 /// Load an a CallArg, either an object or a raw set of BCS bytes
-fn load_call_arg<'vm, 'state, S: StorageView>(
+fn load_call_arg<'vm, 'state>(
     vm: &'vm MoveVM,
-    state_view: &'state S,
-    session: &mut Session<'state, 'vm, LinkageView<&'state S>>,
+    state_view: &'state dyn ExecutionState,
+    session: &mut Session<'state, 'vm, LinkageView<'state>>,
     object_owner_map: &mut BTreeMap<ObjectID, Owner>,
     call_arg: CallArg,
-) -> Result<InputValue, ExecutionError>
-where
-    &'state S: SuiResolver,
-{
+) -> Result<InputValue, ExecutionError> {
     Ok(match call_arg {
         CallArg::Pure(bytes) => InputValue::new_raw(RawValueType::Any, bytes),
         CallArg::Object(obj_arg) => {
@@ -1072,16 +1129,13 @@ where
 }
 
 /// Load an ObjectArg from state view, marking if it can be treated as mutable or not
-fn load_object_arg<'vm, 'state, S: StorageView>(
+fn load_object_arg<'vm, 'state>(
     vm: &'vm MoveVM,
-    state_view: &'state S,
-    session: &mut Session<'state, 'vm, LinkageView<&'state S>>,
+    state_view: &'state dyn ExecutionState,
+    session: &mut Session<'state, 'vm, LinkageView<'state>>,
     object_owner_map: &mut BTreeMap<ObjectID, Owner>,
     obj_arg: ObjectArg,
-) -> Result<InputValue, ExecutionError>
-where
-    &'state S: SuiResolver,
-{
+) -> Result<InputValue, ExecutionError> {
     match obj_arg {
         ObjectArg::ImmOrOwnedObject((id, _, _)) => load_object(
             vm,
@@ -1163,9 +1217,9 @@ fn refund_max_gas_budget(
 ///
 /// This function assumes proper generation of has_public_transfer, either from the abilities of
 /// the StructTag, or from the runtime correctly propagating from the inputs
-unsafe fn create_written_object<'state, S: StorageView>(
-    vm: &MoveVM,
-    session: &Session<'state, '_, LinkageView<&'state S>>,
+unsafe fn create_written_object<'vm, 'state>(
+    vm: &'vm MoveVM,
+    session: &Session<'state, 'vm, LinkageView<'state>>,
     protocol_config: &ProtocolConfig,
     input_object_metadata: &BTreeMap<ObjectID, InputObjectMetadata>,
     loaded_child_objects: &BTreeMap<ObjectID, SequenceNumber>,
@@ -1174,10 +1228,7 @@ unsafe fn create_written_object<'state, S: StorageView>(
     has_public_transfer: bool,
     contents: Vec<u8>,
     write_kind: WriteKind,
-) -> Result<MoveObject, ExecutionError>
-where
-    &'state S: SuiResolver,
-{
+) -> Result<MoveObject, ExecutionError> {
     debug_assert_eq!(
         id,
         MoveObject::id_opt(&contents).expect("object contents should start with an id")

@@ -141,6 +141,9 @@ impl LocalAuthorityClient {
         }
     }
 
+    // One difference between this implementation and actual certificate execution, is that
+    // this assumes shared object locks have already been acquired and tries to execute shared
+    // object transactions as well as owned object transactions.
     async fn handle_certificate(
         state: Arc<AuthorityState>,
         certificate: CertifiedTransaction,
@@ -155,15 +158,19 @@ impl LocalAuthorityClient {
         // from previous epochs.
         let tx_digest = *certificate.digest();
         let epoch_store = state.epoch_store_for_testing();
-        let signed_effects =
-            match state.get_signed_effects_and_maybe_resign(&tx_digest, &epoch_store) {
-                Ok(Some(effects)) => effects,
-                _ => {
-                    let certificate = certificate.verify(epoch_store.committee())?;
-                    state.try_execute_for_test(&certificate).await?.0
-                }
+        let signed_effects = match state
+            .get_signed_effects_and_maybe_resign(&tx_digest, &epoch_store)
+        {
+            Ok(Some(effects)) => effects,
+            _ => {
+                let certificate = certificate.verify(epoch_store.committee())?;
+                state
+                    .enqueue_certificates_for_execution(vec![certificate.clone()], &epoch_store)?;
+                let effects = state.notify_read_effects(&certificate).await?;
+                state.sign_effects(effects, &epoch_store)?
             }
-            .into_inner();
+        }
+        .into_inner();
 
         let events = if let Some(digest) = signed_effects.events_digest() {
             state.get_transaction_events(digest)?

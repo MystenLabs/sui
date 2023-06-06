@@ -45,7 +45,7 @@ use sui_types::object::ObjectRead;
 
 use crate::errors::{Context, IndexerError};
 use crate::metrics::IndexerMetrics;
-use crate::models::addresses::{ActiveAddress, Address, AddressStats};
+use crate::models::addresses::{ActiveAddress, Address, AddressStats, DBAddressStats};
 use crate::models::checkpoints::Checkpoint;
 use crate::models::epoch::DBEpochInfo;
 use crate::models::events::Event;
@@ -69,7 +69,7 @@ use crate::store::query::DBFilter;
 use crate::store::TransactionObjectChanges;
 use crate::store::{IndexerStore, TemporaryEpochStore};
 use crate::utils::{get_balance_changes_from_effect, get_object_changes};
-use crate::{AsyncPgConnectionPool, PgConnectionPool};
+use crate::PgConnectionPool;
 
 const MAX_EVENT_PAGE_SIZE: usize = 1000;
 const PG_COMMIT_CHUNK_SIZE: usize = 1000;
@@ -94,8 +94,6 @@ struct TempDigestTable {
 
 #[derive(Clone)]
 pub struct PgIndexerStore {
-    #[allow(dead_code)]
-    cp: AsyncPgConnectionPool,
     blocking_cp: PgConnectionPool,
     // MUSTFIX(gegaowp): temporarily disable partition management.
     #[allow(dead_code)]
@@ -105,16 +103,11 @@ pub struct PgIndexerStore {
 }
 
 impl PgIndexerStore {
-    pub async fn new(
-        cp: AsyncPgConnectionPool,
-        blocking_cp: PgConnectionPool,
-        metrics: IndexerMetrics,
-    ) -> Self {
+    pub async fn new(blocking_cp: PgConnectionPool, metrics: IndexerMetrics) -> Self {
         let module_cache = Arc::new(SyncModuleCache::new(IndexerModuleResolver::new(
             blocking_cp.clone(),
         )));
         PgIndexerStore {
-            cp: cp.clone(),
             blocking_cp: blocking_cp.clone(),
             partition_manager: PartitionManager::new(blocking_cp).await.unwrap(),
             module_cache,
@@ -1047,7 +1040,7 @@ impl IndexerStore for PgIndexerStore {
         self.multi_get_transactions_by_digests(&tx_digests).await
     }
 
-    async fn get_transaction_page_by_sender_recipient_address(
+    async fn get_transaction_page_by_recipient_address(
         &self,
         from: Option<SuiAddress>,
         to: SuiAddress,
@@ -1082,6 +1075,43 @@ impl IndexerStore for PgIndexerStore {
         );
         let tx_digests: Vec<String> = read_only_blocking!(&self.blocking_cp, |conn| diesel::sql_query(sql_query).load(conn))
                 .context(&format!("Failed reading transaction digests by recipient address {to} with start_sequence {start_sequence:?} and limit {limit}"))?
+                .into_iter()
+                .map(|table: TempDigestTable| table.digest_name)
+                .collect();
+        self.multi_get_transactions_by_digests(&tx_digests).await
+    }
+
+    async fn get_transaction_page_by_address(
+        &self,
+        address: SuiAddress,
+        start_sequence: Option<i64>,
+        limit: usize,
+        is_descending: bool,
+    ) -> Result<Vec<Transaction>, IndexerError> {
+        let sql_query = format!(
+            "SELECT transaction_digest as digest_name FROM (
+                SELECT transaction_digest, max(id) AS max_id
+                FROM recipients
+                WHERE recipient = '{}' OR sender = '{}'
+                {} GROUP BY transaction_digest
+                ORDER BY max_id {} LIMIT {}
+            ) AS t",
+            address,
+            address,
+            if let Some(start_sequence) = start_sequence {
+                if is_descending {
+                    format!("AND id < {}", start_sequence)
+                } else {
+                    format!("AND id > {}", start_sequence)
+                }
+            } else {
+                "".to_string()
+            },
+            if is_descending { "DESC" } else { "ASC" },
+            limit
+        );
+        let tx_digests: Vec<String> = read_only_blocking!(&self.blocking_cp, |conn| diesel::sql_query(sql_query).load(conn))
+                .context(&format!("Failed reading transaction digests by address {address} with start_sequence {start_sequence:?} and limit {limit}"))?
                 .into_iter()
                 .map(|table: TempDigestTable| table.digest_name)
                 .collect();
@@ -1699,6 +1729,37 @@ WHERE e1.epoch = e2.epoch
             )
             .as_str(),
         )
+    }
+
+    async fn get_all_epoch_address_stats(
+        &self,
+        descending_order: Option<bool>,
+    ) -> Result<Vec<AddressStats>, IndexerError> {
+        let is_descending = descending_order.unwrap_or_default();
+        let epoch_addr_stats_query = format!(
+            "WITH ranked_rows AS (
+                SELECT
+                  checkpoint, epoch, timestamp_ms, cumulative_addresses, cumulative_active_addresses, daily_active_addresses,
+                  row_number() OVER(PARTITION BY epoch ORDER BY checkpoint DESC) as row_num
+                FROM
+                  address_stats
+              )
+              SELECT 
+                checkpoint, epoch, timestamp_ms, cumulative_addresses, cumulative_active_addresses, daily_active_addresses
+              FROM ranked_rows
+              WHERE row_num = 1 ORDER BY epoch {}",
+              if is_descending { "DESC" } else { "ASC" },
+        );
+
+        let db_addr_stats = read_only_blocking!(&self.blocking_cp, |conn| diesel::sql_query(
+            epoch_addr_stats_query
+        )
+        .load::<DBAddressStats>(conn))
+        .context("Failed reading all epoch address stats from PostgresDB")?;
+        Ok(db_addr_stats
+            .into_iter()
+            .map(|db_addr_stats| db_addr_stats.into())
+            .collect())
     }
 }
 

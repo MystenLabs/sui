@@ -127,8 +127,8 @@ mod sim_only_tests {
             .await
             .unwrap();
 
-        let validator = test_cluster.get_validator_addresses()[0].clone();
-        test_cluster.stop_validator(validator);
+        let validator = test_cluster.get_validator_pubkeys()[0].clone();
+        test_cluster.stop_node(&validator);
 
         assert_eq!(
             test_cluster
@@ -137,12 +137,12 @@ mod sim_only_tests {
                 .protocol_version(),
             FINISH
         );
-        test_cluster.start_validator(validator).await;
+        test_cluster.start_node(&validator).await;
 
         test_cluster.wait_for_epoch(Some(2)).await;
         let validator_handle = test_cluster
             .swarm
-            .validator(validator.clone())
+            .node(&validator)
             .unwrap()
             .get_node_handle()
             .unwrap();
@@ -185,7 +185,7 @@ mod sim_only_tests {
         expect_upgrade_succeeded(&test_cluster).await;
 
         // verify that the node that didn't support the new version shut itself down.
-        for v in test_cluster.swarm.validators() {
+        for v in test_cluster.swarm.validator_nodes() {
             if !v
                 .config
                 .supported_protocol_versions
@@ -217,7 +217,7 @@ mod sim_only_tests {
             .await
             .unwrap();
 
-        test_cluster.swarm.validators().for_each(|v| {
+        test_cluster.swarm.validator_nodes().for_each(|v| {
             let node_handle = v.get_node_handle().expect("node should be running");
             node_handle.with(|node| {
                 node.set_override_protocol_upgrade_buffer_stake(0, 0)
@@ -251,7 +251,7 @@ mod sim_only_tests {
             .await
             .unwrap();
 
-        test_cluster.swarm.validators().for_each(|v| {
+        test_cluster.swarm.validator_nodes().for_each(|v| {
             let node_handle = v.get_node_handle().expect("node should be running");
             node_handle.with(|node| {
                 node.set_override_protocol_upgrade_buffer_stake(0, 0)
@@ -260,7 +260,7 @@ mod sim_only_tests {
         });
 
         // Verify that clearing the override is respected.
-        test_cluster.swarm.validators().for_each(|v| {
+        test_cluster.swarm.validator_nodes().for_each(|v| {
             let node_handle = v.get_node_handle().expect("node should be running");
             node_handle.with(|node| {
                 node.clear_override_protocol_upgrade_buffer_stake(0)
@@ -514,13 +514,7 @@ mod sim_only_tests {
         cluster: &TestCluster,
         package: &ObjectID,
     ) -> TransactionEffects {
-        let node_handle = cluster
-            .swarm
-            .validators()
-            .next()
-            .unwrap()
-            .get_node_handle()
-            .unwrap();
+        let node_handle = &cluster.fullnode_handle.sui_node;
 
         node_handle
             .with_async(|node| async {
@@ -534,13 +528,7 @@ mod sim_only_tests {
     }
 
     async fn get_object(cluster: &TestCluster, package: &ObjectID) -> Object {
-        let node_handle = cluster
-            .swarm
-            .validators()
-            .next()
-            .unwrap()
-            .get_node_handle()
-            .unwrap();
+        let node_handle = &cluster.fullnode_handle.sui_node;
 
         node_handle
             .with_async(|node| async { node.state().db().get_object(package).unwrap().unwrap() })
@@ -587,7 +575,7 @@ mod sim_only_tests {
         // may start running before the override and hence send capabilities indicating that they
         // only support the genesis system modules.
         test_cluster.stop_all_validators().await;
-        let first = test_cluster.swarm.validators().next().unwrap();
+        let first = test_cluster.swarm.validator_nodes().next().unwrap();
         let first_name = first.name();
         override_sui_system_modules_cb(Box::new(move |name| {
             if name == first_name {
@@ -597,7 +585,7 @@ mod sim_only_tests {
                 Some(sui_system_modules("compatible"))
             }
         }));
-        test_cluster.start_all_validator().await;
+        test_cluster.start_all_validators().await;
 
         expect_upgrade_succeeded(&test_cluster).await;
 
@@ -637,7 +625,7 @@ mod sim_only_tests {
             .unwrap();
 
         test_cluster.stop_all_validators().await;
-        let mut validators = test_cluster.swarm.validators();
+        let mut validators = test_cluster.swarm.validator_nodes();
         let first = validators.next().unwrap().name();
         let second = validators.next().unwrap().name();
         override_sui_system_modules_cb(Box::new(move |name| {
@@ -647,7 +635,7 @@ mod sim_only_tests {
                 None
             }
         }));
-        test_cluster.start_all_validator().await;
+        test_cluster.start_all_validators().await;
 
         expect_upgrade_failed(&test_cluster).await;
     }
@@ -667,7 +655,7 @@ mod sim_only_tests {
             .unwrap();
         let genesis_epoch_start_time = test_cluster
             .swarm
-            .validators()
+            .validator_nodes()
             .next()
             .unwrap()
             .get_node_handle()

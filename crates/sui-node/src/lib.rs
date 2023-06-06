@@ -20,10 +20,12 @@ use arc_swap::ArcSwap;
 use futures::TryFutureExt;
 use mysten_common::sync::async_once_cell::AsyncOnceCell;
 use prometheus::Registry;
+use reqwest::Client;
 use sui_core::authority::CHAIN_IDENTIFIER;
 use sui_core::consensus_adapter::LazyNarwhalClient;
 use sui_json_rpc::api::JsonRpcMetrics;
 use sui_types::digests::ChainIdentifier;
+use sui_types::message_envelope::get_google_jwk_bytes;
 use sui_types::sui_system_state::SuiSystemState;
 use tap::tap::TapFallible;
 use tokio::runtime::Handle;
@@ -179,6 +181,46 @@ impl SuiNode {
         Ok(node_one_cell.get().await)
     }
 
+    fn start_jwk_updater() {
+        info!("Starting JWK updater thread for authority");
+        tokio::task::spawn(async move {
+            loop {
+                // Update the JWK value in the authority server
+                let res = Self::update_google_jwk().await;
+                if let Err(e) = res {
+                    warn!("Error when fetching JWK {:?}", e);
+                }
+                // Sleep for 1 hour
+                tokio::time::sleep(Duration::from_secs(3600)).await;
+            }
+        });
+    }
+
+    async fn update_google_jwk() -> Result<(), SuiError> {
+        if cfg!(msim) {
+            return Ok(());
+        }
+
+        let client = Client::new();
+        let response = client
+            .get("https://www.googleapis.com/oauth2/v2/certs")
+            .send()
+            .await
+            .map_err(|_| SuiError::JWKRetrievalError)?;
+        let bytes = response
+            .bytes()
+            .await
+            .map_err(|_| SuiError::JWKRetrievalError)?;
+        let jwk = get_google_jwk_bytes();
+        if let Ok(mut jwk) = jwk.write() {
+            if jwk.to_vec() != bytes.to_vec() {
+                *jwk = bytes.to_vec();
+                info!("New JWK value updated");
+            }
+        }
+        Ok(())
+    }
+
     pub async fn start_async(
         config: &NodeConfig,
         registry_service: RegistryService,
@@ -186,7 +228,6 @@ impl SuiNode {
         custom_rpc_runtime: Option<Handle>,
     ) -> Result<()> {
         NodeConfigMetrics::new(&registry_service.default_registry()).record_metrics(config);
-
         let mut config = config.clone();
         if config.supported_protocol_versions.is_none() {
             info!(
@@ -259,7 +300,12 @@ impl SuiNode {
             cache_metrics,
             signature_verifier_metrics,
             &config.expensive_safety_check_config,
+            ChainIdentifier::from(*genesis.checkpoint().digest()),
         );
+
+        if epoch_store.protocol_config().zklogin_auth() {
+            Self::start_jwk_updater();
+        }
 
         // the database is empty at genesis time
         if is_genesis {
@@ -268,7 +314,7 @@ impl SuiNode {
             // an epoch and the SUI conservation check will fail. This also initialize
             // the expected_network_sui_amount table.
             store
-                .expensive_check_sui_conservation(epoch_store.move_vm())
+                .expensive_check_sui_conservation(&epoch_store)
                 .expect("SUI conservation check cannot fail at genesis");
         }
 
@@ -651,6 +697,18 @@ impl SuiNode {
             // staking events in the epoch change txn.
             anemo_config.max_frame_size = Some(2 << 30);
 
+            // Set a higher default value for socket send/receive buffers if not already
+            // configured.
+            let mut quic_config = anemo_config.quic.unwrap_or_default();
+            if quic_config.socket_send_buffer_size.is_none() {
+                quic_config.socket_send_buffer_size = Some(20 << 20);
+            }
+            if quic_config.socket_receive_buffer_size.is_none() {
+                quic_config.socket_receive_buffer_size = Some(20 << 20);
+            }
+            quic_config.allow_failed_socket_buffer_size_setting = true;
+            anemo_config.quic = Some(quic_config);
+
             let server_name = format!("sui-{}", chain_identifier);
             let alt_server_name = "sui";
             let network = Network::bind(config.p2p_config.listen_address)
@@ -973,6 +1031,13 @@ impl SuiNode {
         self.transaction_orchestrator.clone()
     }
 
+    pub fn get_google_jwk_bytes(&self) -> Result<Vec<u8>, SuiError> {
+        Ok(get_google_jwk_bytes()
+            .read()
+            .map_err(|_| SuiError::JWKRetrievalError)?
+            .to_vec())
+    }
+
     pub fn subscribe_to_transaction_orchestrator_effects(
         &self,
     ) -> Result<tokio::sync::broadcast::Receiver<QuorumDriverEffectsQueueResult>> {
@@ -1216,6 +1281,10 @@ impl SuiNode {
     #[cfg(msim)]
     pub fn get_sim_node_id(&self) -> sui_simulator::task::NodeId {
         self.sim_node.id()
+    }
+
+    pub fn get_config(&self) -> &NodeConfig {
+        &self.config
     }
 }
 

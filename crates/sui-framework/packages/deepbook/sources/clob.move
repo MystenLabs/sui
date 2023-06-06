@@ -21,9 +21,6 @@ module deepbook::clob {
     use deepbook::custodian::{Self, Custodian, AccountCap, mint_account_cap};
     use deepbook::math::Self as clob_math;
 
-    #[test_only] use sui::coin::mint_for_testing;
-    #[test_only] use sui::test_scenario::{Self, Scenario};
-
     // <<<<<<<<<<<<<<<<<<<<<<<< Error codes <<<<<<<<<<<<<<<<<<<<<<<<
     const ENotImplemented: u64 = 1;
     const EInvalidFeeRateRebateRate: u64 = 2;
@@ -392,16 +389,17 @@ module deepbook::clob {
                     emit_order_canceled<BaseAsset, QuoteAsset>(pool_id, maker_order);
                 } else {
                     // Calculate how much quote asset (maker_quote_quantity) is required, including the commission, to fill the maker order.
-                    let (flag, maker_quote_quantity) = clob_math::mul_round(
+                    let maker_quote_quantity_without_commission = clob_math::mul(
                         maker_base_quantity,
                         maker_order.price
                     );
-                    if (flag) maker_quote_quantity = maker_quote_quantity + 1;
-                    (flag, maker_quote_quantity) = clob_math::mul_round(
-                        maker_quote_quantity,
-                        FLOAT_SCALING + pool.taker_fee_rate
+                    let (is_round_down, taker_commission)  = clob_math::unsafe_mul_round(
+                        maker_quote_quantity_without_commission,
+                        pool.taker_fee_rate
                     );
-                    if (flag) maker_quote_quantity = maker_quote_quantity + 1;
+                    if (is_round_down)  taker_commission = taker_commission + 1;
+
+                    let maker_quote_quantity = maker_quote_quantity_without_commission + taker_commission;
 
                     // Total base quantity filled.
                     let filled_base_quantity: u64;
@@ -410,22 +408,19 @@ module deepbook::clob {
                     // Total quote quantity paid by taker.
                     // filled_quote_quantity_without_commission * (FLOAT_SCALING + taker_fee_rate) = filled_quote_quantity
                     let filled_quote_quantity_without_commission: u64;
-                    if (taker_quote_quantity_remaining >= maker_quote_quantity) {
+                    if (taker_quote_quantity_remaining > maker_quote_quantity) {
                         filled_quote_quantity = maker_quote_quantity;
-                        (_, filled_quote_quantity_without_commission) = clob_math::div_round(
-                            filled_quote_quantity,
-                            FLOAT_SCALING + pool.taker_fee_rate
-                        );
+                        filled_quote_quantity_without_commission = maker_quote_quantity_without_commission;
                         filled_base_quantity = maker_base_quantity;
                     } else {
                         terminate_loop = true;
                         // if not enough quote quantity to pay for taker commission, then no quantity will be filled
-                        (_, filled_quote_quantity_without_commission) = clob_math::unsafe_div_round(
+                        filled_quote_quantity_without_commission = clob_math::unsafe_div(
                             taker_quote_quantity_remaining,
                             FLOAT_SCALING + pool.taker_fee_rate
                         );
                         // filled_base_quantity = 0 is permitted since filled_quote_quantity_without_commission can be 0
-                        (_, filled_base_quantity) = clob_math::unsafe_div_round(
+                        filled_base_quantity = clob_math::unsafe_div(
                             filled_quote_quantity_without_commission,
                             maker_order.price
                         );
@@ -455,9 +450,6 @@ module deepbook::clob {
 
                     // maker in ask side, decrease maker's locked base asset, increase maker's available quote asset
                     taker_quote_quantity_remaining = taker_quote_quantity_remaining - filled_quote_quantity;
-                    if (taker_quote_quantity_remaining == 0) {
-                        terminate_loop = true;
-                    };
                     let locked_base_balance = custodian::decrease_user_locked_balance<BaseAsset>(
                         &mut pool.base_custodian,
                         maker_order.owner,
@@ -562,10 +554,9 @@ module deepbook::clob {
                     let filled_base_quantity =
                         if (taker_base_quantity_remaining > maker_base_quantity) { maker_base_quantity }
                         else { taker_base_quantity_remaining };
-                    // filled_quote_quantity to maker,  no need to round up
+
                     let filled_quote_quantity = clob_math::mul(filled_base_quantity, maker_order.price);
 
-                    // rebate_fee to maker, no need to round up
                     // if maker_rebate = 0 due to underflow, maker will not receive a rebate
                     let maker_rebate = clob_math::unsafe_mul(filled_quote_quantity, pool.maker_rebate_rate);
                     // if taker_commission = 0 due to underflow, round it up to 1
@@ -683,10 +674,9 @@ module deepbook::clob {
                     let filled_base_quantity =
                         if (taker_base_quantity_remaining >= maker_base_quantity) { maker_base_quantity }
                         else { taker_base_quantity_remaining };
-                    // filled_quote_quantity from maker, need to round up, but do in decrease stage
+
                     let filled_quote_quantity = clob_math::mul(filled_base_quantity, maker_order.price);
 
-                    // rebate_fee to maker, no need to round up
                     // if maker_rebate = 0 due to underflow, maker will not receive a rebate
                     let maker_rebate = clob_math::unsafe_mul(filled_quote_quantity, pool.maker_rebate_rate);
                     // if taker_commission = 0 due to underflow, round it up to 1
@@ -1355,6 +1345,10 @@ module deepbook::clob {
 
 
     // Note that open orders and quotes can be directly accessed by loading in the entire Pool.
+
+    #[test_only] use sui::coin::mint_for_testing;
+
+    #[test_only] use sui::test_scenario::{Self, Scenario};
 
     #[test_only] const E_NULL: u64 = 0;
 

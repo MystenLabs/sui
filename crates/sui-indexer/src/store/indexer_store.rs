@@ -132,10 +132,19 @@ pub trait IndexerStore {
         is_descending: bool,
     ) -> Result<Vec<Transaction>, IndexerError>;
 
-    async fn get_transaction_page_by_sender_recipient_address(
+    async fn get_transaction_page_by_recipient_address(
         &self,
         sender_address: Option<SuiAddress>,
         recipient_address: SuiAddress,
+        start_sequence: Option<i64>,
+        limit: usize,
+        is_descending: bool,
+    ) -> Result<Vec<Transaction>, IndexerError>;
+
+    // `address` can be either sender or recipient address of the transaction
+    async fn get_transaction_page_by_address(
+        &self,
+        address: SuiAddress,
         start_sequence: Option<i64>,
         limit: usize,
         is_descending: bool,
@@ -249,6 +258,10 @@ pub trait IndexerStore {
         &self,
         checkpoint: i64,
     ) -> Result<AddressStats, IndexerError>;
+    async fn get_all_epoch_address_stats(
+        &self,
+        descending_order: Option<bool>,
+    ) -> Result<Vec<AddressStats>, IndexerError>;
 }
 
 #[derive(Clone, Debug)]

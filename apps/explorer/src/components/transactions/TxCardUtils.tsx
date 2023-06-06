@@ -9,39 +9,12 @@ import {
     type JsonRpcProvider,
     type SuiTransactionBlockResponse,
 } from '@mysten/sui.js';
-import clsx from 'clsx';
-import { type ReactNode } from 'react';
 
 import { SuiAmount } from '../Table/SuiAmount';
 import { TxTimeType } from '../tx-time/TxTimeType';
 
+import { HighlightedTableCol } from '~/components/Table/HighlightedTableCol';
 import { AddressLink, TransactionLink } from '~/ui/InternalLink';
-
-function TxTableHeader({ label }: { label: string }) {
-    return <div className="pl-3">{label}</div>;
-}
-
-export function TxTableCol({
-    isHighlightedOnHover,
-    isFirstCol,
-    children,
-}: {
-    isHighlightedOnHover?: boolean;
-    isFirstCol?: boolean;
-    children: ReactNode;
-}) {
-    return (
-        <div
-            className={clsx(
-                'flex h-full items-center rounded',
-                !isFirstCol && 'px-3',
-                isHighlightedOnHover && 'hover:bg-sui-light'
-            )}
-        >
-            {children}
-        </div>
-    );
-}
 
 // Generate table data from the transaction data
 export const genTableDataFromTxData = (
@@ -53,14 +26,14 @@ export const genTableDataFromTxData = (
 
         return {
             date: (
-                <TxTableCol>
+                <HighlightedTableCol>
                     <TxTimeType
                         timestamp={Number(transaction.timestampMs || 0)}
                     />
-                </TxTableCol>
+                </HighlightedTableCol>
             ),
             digest: (
-                <TxTableCol isFirstCol isHighlightedOnHover>
+                <HighlightedTableCol first>
                     <TransactionLink
                         digest={transaction.digest}
                         before={
@@ -71,26 +44,22 @@ export const genTableDataFromTxData = (
                             )
                         }
                     />
-                </TxTableCol>
+                </HighlightedTableCol>
             ),
             txns: (
-                <TxTableCol>
+                <div>
                     {transaction.transaction?.data.transaction.kind ===
                     'ProgrammableTransaction'
                         ? transaction.transaction.data.transaction.transactions
                               .length
                         : '--'}
-                </TxTableCol>
+                </div>
             ),
-            gas: (
-                <TxTableCol>
-                    <SuiAmount amount={getTotalGasUsed(transaction)} />
-                </TxTableCol>
-            ),
+            gas: <SuiAmount amount={getTotalGasUsed(transaction)} />,
             sender: (
-                <TxTableCol isHighlightedOnHover>
+                <HighlightedTableCol>
                     {sender ? <AddressLink address={sender} /> : '-'}
-                </TxTableCol>
+                </HighlightedTableCol>
             ),
         };
     }),
@@ -100,19 +69,19 @@ export const genTableDataFromTxData = (
             accessorKey: 'digest',
         },
         {
-            header: () => <TxTableHeader label="Sender" />,
+            header: 'Sender',
             accessorKey: 'sender',
         },
         {
-            header: () => <TxTableHeader label="Txns" />,
+            header: 'Txns',
             accessorKey: 'txns',
         },
         {
-            header: () => <TxTableHeader label="Gas" />,
+            header: 'Gas',
             accessorKey: 'gas',
         },
         {
-            header: () => <TxTableHeader label="Time" />,
+            header: 'Time',
             accessorKey: 'date',
         },
     ],

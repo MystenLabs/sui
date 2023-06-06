@@ -40,7 +40,7 @@ impl SurferTask {
             .collect();
         let validator = cluster
             .swarm
-            .validators()
+            .validator_nodes()
             .next()
             .unwrap()
             .get_node_handle()

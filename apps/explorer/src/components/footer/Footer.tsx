@@ -11,7 +11,7 @@ import { Text } from '~/ui/Text';
 function FooterLinks() {
     return (
         <div className="flex flex-col items-center justify-center gap-6 md:flex-row md:justify-end">
-            <ul className="flex gap-6 md:flex-row">
+            <ul className="flex gap-4 md:flex-row md:gap-6">
                 {footerLinks.map(({ title, href }) => (
                     <li key={href}>
                         <Link variant="text" href={href}>

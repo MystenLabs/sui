@@ -81,6 +81,12 @@ impl ReadStore for RocksDbStore {
             })
     }
 
+    fn get_lowest_available_checkpoint(&self) -> Result<CheckpointSequenceNumber, Self::Error> {
+        // TODO: use checkpoint_store.get_highest_pruned_checkpoint_seq_number once
+        // https://github.com/MystenLabs/sui/pull/12067 lands
+        Ok(0)
+    }
+
     fn get_full_checkpoint_contents_by_sequence_number(
         &self,
         sequence_number: CheckpointSequenceNumber,
@@ -145,7 +151,7 @@ impl ReadStore for RocksDbStore {
 }
 
 impl WriteStore for RocksDbStore {
-    fn insert_checkpoint(&self, checkpoint: VerifiedCheckpoint) -> Result<(), Self::Error> {
+    fn insert_checkpoint(&self, checkpoint: &VerifiedCheckpoint) -> Result<(), Self::Error> {
         if let Some(EndOfEpochData {
             next_epoch_committee,
             ..
@@ -165,6 +171,14 @@ impl WriteStore for RocksDbStore {
     ) -> Result<(), Self::Error> {
         self.checkpoint_store
             .update_highest_synced_checkpoint(checkpoint)
+    }
+
+    fn update_highest_verified_checkpoint(
+        &self,
+        checkpoint: &VerifiedCheckpoint,
+    ) -> Result<(), Self::Error> {
+        self.checkpoint_store
+            .update_highest_verified_checkpoint(checkpoint)
     }
 
     fn insert_checkpoint_contents(

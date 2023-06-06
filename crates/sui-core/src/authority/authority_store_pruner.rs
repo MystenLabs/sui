@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::authority::authority_store_types::{ObjectContentDigest, StoreData, StoreObject};
-use crate::checkpoints::CheckpointStore;
+use crate::checkpoints::{CheckpointStore, CheckpointWatermark};
+use anyhow::anyhow;
 use mysten_metrics::{monitored_scope, spawn_monitored_task};
 use prometheus::{
     register_int_counter_with_registry, register_int_gauge_with_registry, IntCounter, IntGauge,
@@ -18,7 +19,10 @@ use sui_storage::mutex_table::RwLockTable;
 use sui_types::base_types::SequenceNumber;
 use sui_types::effects::TransactionEffects;
 use sui_types::effects::TransactionEffectsAPI;
-use sui_types::messages_checkpoint::CheckpointSequenceNumber;
+use sui_types::message_envelope::Message;
+use sui_types::messages_checkpoint::{
+    CheckpointContents, CheckpointDigest, CheckpointSequenceNumber,
+};
 use sui_types::{
     base_types::{ObjectID, VersionNumber},
     storage::ObjectKey,
@@ -37,6 +41,7 @@ pub struct AuthorityStorePruner {
 pub struct AuthorityStorePruningMetrics {
     pub last_pruned_checkpoint: IntGauge,
     pub num_pruned_objects: IntCounter,
+    pub last_pruned_effects_checkpoint: IntGauge,
 }
 
 impl AuthorityStorePruningMetrics {
@@ -54,6 +59,12 @@ impl AuthorityStorePruningMetrics {
                 registry
             )
             .unwrap(),
+            last_pruned_effects_checkpoint: register_int_gauge_with_registry!(
+                "last_pruned_effects_checkpoint",
+                "Last pruned effects checkpoint",
+                registry
+            )
+            .unwrap(),
         };
         Arc::new(this)
     }
@@ -65,9 +76,15 @@ enum DeletionMethod {
     PointDelete,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum PruningMode {
+    Objects,
+    Checkpoints,
+}
+
 impl AuthorityStorePruner {
     /// prunes old versions of objects based on transaction effects
-    async fn prune_effects(
+    async fn prune_objects(
         transaction_effects: Vec<TransactionEffects>,
         perpetual_db: &Arc<AuthorityPerpetualTables>,
         objects_lock_table: &Arc<RwLockTable<ObjectContentDigest>>,
@@ -144,7 +161,104 @@ impl AuthorityStorePruner {
         Ok(())
     }
 
-    /// Prunes old object versions based on effects from all checkpoints from epochs eligible for pruning
+    fn prune_checkpoints(
+        perpetual_db: &Arc<AuthorityPerpetualTables>,
+        checkpoint_db: &Arc<CheckpointStore>,
+        checkpoint_number: CheckpointSequenceNumber,
+        checkpoints_to_prune: Vec<CheckpointDigest>,
+        checkpoint_content_to_prune: Vec<CheckpointContents>,
+        effects_to_prune: &Vec<TransactionEffects>,
+        metrics: Arc<AuthorityStorePruningMetrics>,
+    ) -> anyhow::Result<()> {
+        let _scope = monitored_scope("EffectsLivePruner");
+
+        let mut perpetual_batch = perpetual_db.objects.batch();
+        let transactions = checkpoint_content_to_prune
+            .iter()
+            .flat_map(|content| content.iter().map(|tx| tx.transaction));
+        for transaction_digest in transactions {
+            if let Some(next_digest) = transaction_digest.next_lexicographical() {
+                perpetual_batch.delete_range(
+                    &perpetual_db.transactions,
+                    &transaction_digest,
+                    &next_digest,
+                )?;
+                perpetual_batch.delete_range(
+                    &perpetual_db.executed_effects,
+                    &transaction_digest,
+                    &next_digest,
+                )?;
+                perpetual_batch.delete_range(
+                    &perpetual_db.executed_transactions_to_checkpoint,
+                    &transaction_digest,
+                    &next_digest,
+                )?;
+            }
+        }
+
+        for effects in effects_to_prune {
+            let effects_digest = effects.digest();
+            if let Some(next_digest) = effects.digest().next_lexicographical() {
+                perpetual_batch.delete_range(
+                    &perpetual_db.effects,
+                    &effects_digest,
+                    &next_digest,
+                )?;
+            }
+            if let Some(event_digest) = effects.events_digest() {
+                if let Some(next_digest) = event_digest.next_lexicographical() {
+                    perpetual_batch.delete_range(
+                        &perpetual_db.events,
+                        &(*event_digest, 0),
+                        &(next_digest, 0),
+                    )?;
+                }
+            }
+        }
+
+        let mut checkpoints_batch = checkpoint_db.certified_checkpoints.batch();
+
+        for checkpoint_content in checkpoint_content_to_prune {
+            let content_digest = *checkpoint_content.digest();
+            if let Some(next_digest) = content_digest.next_lexicographical() {
+                checkpoints_batch.delete_range(
+                    &checkpoint_db.checkpoint_content,
+                    &content_digest,
+                    &next_digest,
+                )?;
+                checkpoints_batch.delete_range(
+                    &checkpoint_db.checkpoint_sequence_by_contents_digest,
+                    &content_digest,
+                    &next_digest,
+                )?;
+            }
+        }
+        for checkpoint_digest in checkpoints_to_prune {
+            if let Some(next_digest) = checkpoint_digest.next_lexicographical() {
+                checkpoints_batch.delete_range(
+                    &checkpoint_db.checkpoint_by_digest,
+                    &checkpoint_digest,
+                    &next_digest,
+                )?;
+            }
+        }
+        checkpoints_batch.insert_batch(
+            &checkpoint_db.watermarks,
+            [(
+                &CheckpointWatermark::HighestPruned,
+                &(checkpoint_number, CheckpointDigest::random()),
+            )],
+        )?;
+
+        perpetual_batch.write()?;
+        checkpoints_batch.write()?;
+        metrics
+            .last_pruned_effects_checkpoint
+            .set(checkpoint_number as i64);
+        Ok(())
+    }
+
+    /// Prunes old data based on effects from all checkpoints from epochs eligible for pruning
     pub async fn prune_objects_for_eligible_epochs(
         perpetual_db: &Arc<AuthorityPerpetualTables>,
         checkpoint_store: &Arc<CheckpointStore>,
@@ -153,24 +267,80 @@ impl AuthorityStorePruner {
         metrics: Arc<AuthorityStorePruningMetrics>,
         indirect_objects_threshold: usize,
     ) -> anyhow::Result<()> {
+        let max_eligible_checkpoint_number = checkpoint_store
+            .get_highest_executed_checkpoint()?
+            .map(|c| *c.sequence_number())
+            .unwrap_or_default();
+        let pruned_checkpoint_number = perpetual_db.get_highest_pruned_checkpoint()?;
+        Self::prune_for_eligible_epochs(
+            perpetual_db,
+            checkpoint_store,
+            PruningMode::Objects,
+            config.num_epochs_to_retain,
+            pruned_checkpoint_number,
+            max_eligible_checkpoint_number,
+            objects_lock_table,
+            config,
+            metrics.clone(),
+            indirect_objects_threshold,
+        )
+        .await
+    }
+
+    pub async fn prune_checkpoints_for_eligible_epochs(
+        perpetual_db: &Arc<AuthorityPerpetualTables>,
+        checkpoint_store: &Arc<CheckpointStore>,
+        objects_lock_table: &Arc<RwLockTable<ObjectContentDigest>>,
+        config: AuthorityStorePruningConfig,
+        metrics: Arc<AuthorityStorePruningMetrics>,
+        indirect_objects_threshold: usize,
+    ) -> anyhow::Result<()> {
+        let pruned_checkpoint_number =
+            checkpoint_store.get_highest_pruned_checkpoint_seq_number()?;
+        Self::prune_for_eligible_epochs(
+            perpetual_db,
+            checkpoint_store,
+            PruningMode::Checkpoints,
+            config
+                .num_epochs_to_retain_for_checkpoints
+                .ok_or_else(|| anyhow!("config value not set"))?,
+            pruned_checkpoint_number,
+            perpetual_db.get_highest_pruned_checkpoint()?,
+            objects_lock_table,
+            config,
+            metrics.clone(),
+            indirect_objects_threshold,
+        )
+        .await
+    }
+
+    /// Prunes old object versions based on effects from all checkpoints from epochs eligible for pruning
+    pub async fn prune_for_eligible_epochs(
+        perpetual_db: &Arc<AuthorityPerpetualTables>,
+        checkpoint_store: &Arc<CheckpointStore>,
+        mode: PruningMode,
+        num_epochs_to_retain: u64,
+        starting_checkpoint_number: CheckpointSequenceNumber,
+        max_eligible_checkpoint: CheckpointSequenceNumber,
+        objects_lock_table: &Arc<RwLockTable<ObjectContentDigest>>,
+        config: AuthorityStorePruningConfig,
+        metrics: Arc<AuthorityStorePruningMetrics>,
+        indirect_objects_threshold: usize,
+    ) -> anyhow::Result<()> {
+        let mut checkpoint_number = starting_checkpoint_number;
         let deletion_method = if config.use_range_deletion {
             DeletionMethod::RangeDelete
         } else {
             DeletionMethod::PointDelete
         };
-        let mut checkpoint_number = perpetual_db.get_highest_pruned_checkpoint()?;
-        let (highest_executed_checkpoint, current_epoch) = checkpoint_store
+        let current_epoch = checkpoint_store
             .get_highest_executed_checkpoint()?
-            .map(|c| (c.sequence_number, c.epoch()))
+            .map(|c| c.epoch())
             .unwrap_or_default();
-        let mut checkpoints_in_batch = 0;
-        let mut batch_effects = vec![];
-        let mut network_total_transactions = 0;
 
-        debug!(
-            "Starting object pruning. Current epoch: {}. Latest pruned checkpoint: {}",
-            current_epoch, checkpoint_number
-        );
+        let mut checkpoints_to_prune = vec![];
+        let mut checkpoint_content_to_prune = vec![];
+        let mut effects_to_prune = vec![];
 
         loop {
             let Some(ckpt) = checkpoint_store.certified_checkpoints.get(&(checkpoint_number + 1))? else {break;};
@@ -178,17 +348,12 @@ impl AuthorityStorePruner {
             // Skipping because  checkpoint's epoch or checkpoint number is too new.
             // We have to respect the highest executed checkpoint watermark because there might be
             // parts of the system that still require access to old object versions (i.e. state accumulator)
-            if (current_epoch < checkpoint.epoch() + config.num_epochs_to_retain)
-                || (*checkpoint.sequence_number() > highest_executed_checkpoint)
+            if (current_epoch < checkpoint.epoch() + num_epochs_to_retain)
+                || (*checkpoint.sequence_number() > max_eligible_checkpoint)
             {
                 break;
             }
             checkpoint_number = *checkpoint.sequence_number();
-            checkpoints_in_batch += 1;
-            if network_total_transactions == checkpoint.network_total_transactions {
-                continue;
-            }
-            network_total_transactions = checkpoint.network_total_transactions;
 
             let content = checkpoint_store
                 .get_checkpoint_contents(&checkpoint.content_digest)?
@@ -197,39 +362,65 @@ impl AuthorityStorePruner {
                 .effects
                 .multi_get(content.iter().map(|tx| tx.effects))?;
 
-            if effects.iter().any(|effect| effect.is_none()) {
-                return Err(anyhow::anyhow!("transaction effects data is missing"));
-            }
-            batch_effects.extend(effects.into_iter().flatten());
+            checkpoints_to_prune.push(*checkpoint.digest());
+            checkpoint_content_to_prune.push(content);
+            effects_to_prune.extend(effects.into_iter().flatten());
 
-            if batch_effects.len() >= config.max_transactions_in_batch
-                || checkpoints_in_batch >= config.max_checkpoints_in_batch
+            if effects_to_prune.len() >= config.max_transactions_in_batch
+                || checkpoints_to_prune.len() >= config.max_checkpoints_in_batch
             {
-                Self::prune_effects(
-                    batch_effects,
-                    perpetual_db,
-                    objects_lock_table,
-                    checkpoint_number,
-                    deletion_method,
-                    metrics.clone(),
-                    indirect_objects_threshold,
-                )
-                .await?;
-                batch_effects = vec![];
-                checkpoints_in_batch = 0;
+                match mode {
+                    PruningMode::Objects => {
+                        Self::prune_objects(
+                            effects_to_prune,
+                            perpetual_db,
+                            objects_lock_table,
+                            checkpoint_number,
+                            deletion_method,
+                            metrics.clone(),
+                            indirect_objects_threshold,
+                        )
+                        .await?
+                    }
+                    PruningMode::Checkpoints => Self::prune_checkpoints(
+                        perpetual_db,
+                        checkpoint_store,
+                        checkpoint_number,
+                        checkpoints_to_prune,
+                        checkpoint_content_to_prune,
+                        &effects_to_prune,
+                        metrics.clone(),
+                    )?,
+                };
+                checkpoints_to_prune = vec![];
+                checkpoint_content_to_prune = vec![];
+                effects_to_prune = vec![];
             }
         }
-        if !batch_effects.is_empty() {
-            Self::prune_effects(
-                batch_effects,
-                perpetual_db,
-                objects_lock_table,
-                checkpoint_number,
-                deletion_method,
-                metrics.clone(),
-                indirect_objects_threshold,
-            )
-            .await?;
+        if !checkpoints_to_prune.is_empty() {
+            match mode {
+                PruningMode::Objects => {
+                    Self::prune_objects(
+                        effects_to_prune,
+                        perpetual_db,
+                        objects_lock_table,
+                        checkpoint_number,
+                        deletion_method,
+                        metrics.clone(),
+                        indirect_objects_threshold,
+                    )
+                    .await?
+                }
+                PruningMode::Checkpoints => Self::prune_checkpoints(
+                    perpetual_db,
+                    checkpoint_store,
+                    checkpoint_number,
+                    checkpoints_to_prune,
+                    checkpoint_content_to_prune,
+                    &effects_to_prune,
+                    metrics.clone(),
+                )?,
+            };
         }
         Ok(())
     }
@@ -272,7 +463,7 @@ impl AuthorityStorePruner {
         Ok(())
     }
 
-    fn setup_objects_pruning(
+    fn setup_pruning(
         config: AuthorityStorePruningConfig,
         epoch_duration_ms: u64,
         perpetual_db: Arc<AuthorityPerpetualTables>,
@@ -290,12 +481,17 @@ impl AuthorityStorePruner {
             if config.num_epochs_to_retain > 0 {
                 min(epoch_duration_ms / 2, 60 * 60 * 1000)
             } else {
-                60 * 1000
+                min(epoch_duration_ms / 2, 60 * 1000)
             },
         ));
-        let pruning_initial_delay =
-            Duration::from_secs(config.pruning_run_delay_seconds.unwrap_or(60 * 60));
-        let mut prune_interval =
+        let pruning_initial_delay = if cfg!(msim) {
+            Duration::from_millis(1)
+        } else {
+            Duration::from_secs(config.pruning_run_delay_seconds.unwrap_or(60 * 60))
+        };
+        let mut objects_prune_interval =
+            tokio::time::interval_at(Instant::now() + pruning_initial_delay, tick_duration);
+        let mut checkpoints_prune_interval =
             tokio::time::interval_at(Instant::now() + pruning_initial_delay, tick_duration);
 
         let perpetual_db_for_compaction = perpetual_db.clone();
@@ -314,12 +510,18 @@ impl AuthorityStorePruner {
                 }
             });
         }
+
         tokio::task::spawn(async move {
             loop {
                 tokio::select! {
-                    _ = prune_interval.tick(), if config.num_epochs_to_retain != u64::MAX => {
+                    _ = objects_prune_interval.tick(), if config.num_epochs_to_retain != u64::MAX => {
                         if let Err(err) = Self::prune_objects_for_eligible_epochs(&perpetual_db, &checkpoint_store, &objects_lock_table, config, metrics.clone(), indirect_objects_threshold).await {
                             error!("Failed to prune objects: {:?}", err);
+                        }
+                    },
+                    _ = checkpoints_prune_interval.tick(), if !matches!(config.num_epochs_to_retain_for_checkpoints, None | Some(u64::MAX) | Some(0)) => {
+                        if let Err(err) = Self::prune_checkpoints_for_eligible_epochs(&perpetual_db, &checkpoint_store, &objects_lock_table, config, metrics.clone(), indirect_objects_threshold).await {
+                            error!("Failed to prune checkpoints: {:?}", err);
                         }
                     },
                     _ = &mut recv => break,
@@ -328,6 +530,7 @@ impl AuthorityStorePruner {
         });
         sender
     }
+
     pub fn new(
         perpetual_db: Arc<AuthorityPerpetualTables>,
         checkpoint_store: Arc<CheckpointStore>,
@@ -338,7 +541,7 @@ impl AuthorityStorePruner {
         indirect_objects_threshold: usize,
     ) -> Self {
         AuthorityStorePruner {
-            _objects_pruner_cancel_handle: Self::setup_objects_pruning(
+            _objects_pruner_cancel_handle: Self::setup_pruning(
                 pruning_config,
                 epoch_duration_ms,
                 perpetual_db,
@@ -539,7 +742,7 @@ mod tests {
             let mut effects = TransactionEffects::default();
             *effects.modified_at_versions_mut_for_testing() =
                 to_delete.into_iter().map(|o| (o.0, o.1)).collect();
-            AuthorityStorePruner::prune_effects(
+            AuthorityStorePruner::prune_objects(
                 vec![effects],
                 &db,
                 &lock_table(),
@@ -651,7 +854,7 @@ mod tests {
         *effects.modified_at_versions_mut_for_testing() = to_delete;
         let registry = Registry::default();
         let metrics = AuthorityStorePruningMetrics::new(&registry);
-        let total_pruned = AuthorityStorePruner::prune_effects(
+        let total_pruned = AuthorityStorePruner::prune_objects(
             vec![effects],
             &perpetual_db,
             &lock_table(),
@@ -688,7 +891,7 @@ mod tests {
         let primary_path = tempfile::tempdir()?.into_path();
         let perpetual_db = Arc::new(AuthorityPerpetualTables::open(&primary_path, None));
         let effects = insert_keys(&perpetual_db.objects)?;
-        AuthorityStorePruner::prune_effects(
+        AuthorityStorePruner::prune_objects(
             vec![effects],
             &perpetual_db,
             &lock_table(),
@@ -724,7 +927,7 @@ mod tests {
         let effects = insert_keys(&perpetual_db.objects)?;
         let registry = Registry::default();
         let metrics = AuthorityStorePruningMetrics::new(&registry);
-        AuthorityStorePruner::prune_effects(
+        AuthorityStorePruner::prune_objects(
             vec![effects],
             &perpetual_db,
             &lock_table(),

@@ -576,6 +576,10 @@ pub(crate) fn make_anemo_config() -> anemo_cli::Config {
                         get_checkpoint_contents,
                         sui_types::messages_checkpoint::CheckpointContentsDigest
                     ),
+                )
+                .add_method(
+                    "GetCheckpointAvailability",
+                    anemo_cli::ron_method!(StateSyncClient, get_checkpoint_availability, ()),
                 ),
         )
 }

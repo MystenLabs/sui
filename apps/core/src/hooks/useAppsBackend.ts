@@ -3,18 +3,20 @@
 
 import { useCallback } from 'react';
 
+const backendUrl =
+    process.env.NODE_ENV === 'development'
+        ? 'http://localhost:3003'
+        : 'https://apps-backend.sui.io';
+
 export function useAppsBackend() {
     const request = useCallback(
         async <T>(
             path: string,
-            queryString: Record<string, any>,
+            queryParams?: Record<string, any>,
             options?: RequestInit
         ): Promise<T> => {
-            const query = new URLSearchParams(queryString);
             const res = await fetch(
-                process.env.NODE_ENV === 'development'
-                    ? `http://localhost:3003/${path}?${query}`
-                    : `https://apps-backend.sui.io/${path}?${query}`,
+                formatRequestURL(`${backendUrl}/${path}`, queryParams),
                 options
             );
 
@@ -28,4 +30,12 @@ export function useAppsBackend() {
     );
 
     return { request };
+}
+
+function formatRequestURL(url: string, queryParams?: Record<string, any>) {
+    if (queryParams && Object.keys(queryParams).length > 0) {
+        const searchParams = new URLSearchParams(queryParams);
+        return `${url}?${searchParams}`;
+    }
+    return url;
 }

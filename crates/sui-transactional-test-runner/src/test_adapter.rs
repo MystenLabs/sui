@@ -38,17 +38,18 @@ use std::{
     path::Path,
     sync::Arc,
 };
+use sui_adapter::adapter::new_move_vm;
 use sui_adapter::execution_engine;
-use sui_adapter::{adapter::new_move_vm, execution_mode};
 use sui_core::{
     state_accumulator::{accumulate_effects, WrappedObject},
     transaction_input_checker::check_objects,
 };
 use sui_framework::BuiltInFramework;
 use sui_framework::DEFAULT_FRAMEWORK_PATH;
-use sui_protocol_config::ProtocolConfig;
+use sui_protocol_config::{Chain, ProtocolConfig};
 use sui_types::accumulator::Accumulator;
 use sui_types::effects::TransactionEffectsAPI;
+use sui_types::execution_mode;
 use sui_types::execution_status::ExecutionStatus;
 use sui_types::MOVE_STDLIB_PACKAGE_ID;
 use sui_types::{
@@ -255,7 +256,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                     .map(|v| v.into_iter().collect::<BTreeSet<_>>())
                     .unwrap_or_default();
                 let protocol_config = if let Some(protocol_version) = protocol_version {
-                    ProtocolConfig::get_for_version(protocol_version.into())
+                    ProtocolConfig::get_for_version(protocol_version.into(), Chain::Unknown)
                 } else {
                     ProtocolConfig::get_for_max_version()
                 };
@@ -325,7 +326,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                 )
                 .unwrap(),
             ),
-            storage: Arc::new(InMemoryStorage::new(objects)),
+            storage: InMemoryStorage::new(objects),
             compiled_state: CompiledState::new(
                 named_address_mapping,
                 pre_compiled_deps,
@@ -520,13 +521,15 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
         let default_protocol_version = self.protocol_config.version;
         if let Some(protocol_version) = protocol_version {
             // override protocol version, just for this call
-            self.protocol_config = ProtocolConfig::get_for_version(protocol_version.into())
+            self.protocol_config =
+                ProtocolConfig::get_for_version(protocol_version.into(), Chain::Unknown)
         }
         let summary = self.execute_txn(transaction, gas_budget, uncharged)?;
         let output = self.object_summary_output(&summary);
         // restore old protocol version (if needed)
         if protocol_version.is_some() {
-            self.protocol_config = ProtocolConfig::get_for_version(default_protocol_version)
+            self.protocol_config =
+                ProtocolConfig::get_for_version(default_protocol_version, Chain::Unknown)
         }
         let empty = SerializedReturnValues {
             mutable_reference_outputs: vec![],
@@ -1135,7 +1138,8 @@ impl<'a> SuiTestAdapter<'a> {
             .value
             .clone();
         let (kind, signer, gas) = transaction_data.execution_parts();
-
+        // TODO: Support different epochs in transactional tests.
+        let epoch_data = EpochData::new_test();
         let (
             inner,
             effects,
@@ -1154,7 +1158,7 @@ impl<'a> SuiTestAdapter<'a> {
             },
             */
             execution_error,
-        ) = execution_engine::execute_transaction_to_effects::<execution_mode::Normal, _>(
+        ) = execution_engine::execute_transaction_to_effects::<execution_mode::Normal>(
             shared_object_refs,
             temporary_store,
             kind,
@@ -1164,8 +1168,8 @@ impl<'a> SuiTestAdapter<'a> {
             transaction_dependencies,
             &self.vm,
             gas_status,
-            // TODO: Support different epochs in transactional tests.
-            &EpochData::new_test(),
+            &epoch_data.epoch_id(),
+            epoch_data.epoch_start_timestamp(),
             &self.protocol_config,
             self.metrics.clone(),
             false, // enable_expensive_checks

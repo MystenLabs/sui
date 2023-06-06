@@ -8,7 +8,7 @@ import { Link } from 'react-router-dom';
 import { CoinItem } from './CoinItem';
 import { useActiveAddress } from '_app/hooks/useActiveAddress';
 import Loading from '_components/loading';
-import { sortGetAllBalancesToken } from '_helpers';
+import { filterAndSortTokenBalances } from '_helpers';
 import { useCoinsReFetchingConfig } from '_hooks';
 
 export function ActiveCoinsCard({
@@ -25,7 +25,7 @@ export function ActiveCoinsCard({
         selectedAddress!,
         refetchInterval,
         staleTime,
-        sortGetAllBalancesToken
+        filterAndSortTokenBalances
     );
 
     const activeCoin = coins?.find(

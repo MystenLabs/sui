@@ -4,6 +4,8 @@
 use crate::verifier::{VerifierConfig, DEFAULT_MAX_CONSTANT_VECTOR_LEN};
 use move_binary_format::file_format_common::VERSION_MAX;
 
+pub const DEFAULT_MAX_VALUE_NEST_DEPTH: u64 = 128;
+
 /// Dynamic config options for the Move VM.
 pub struct VMConfig {
     pub verifier: VerifierConfig,
@@ -36,12 +38,15 @@ impl Default for VMConfig {
 pub struct VMRuntimeLimitsConfig {
     /// Maximum number of items that can be pushed into a vec
     pub vector_len_max: u64,
+    /// Maximum value nest depth for structs
+    pub max_value_nest_depth: Option<u64>,
 }
 
 impl Default for VMRuntimeLimitsConfig {
     fn default() -> Self {
         Self {
             vector_len_max: DEFAULT_MAX_CONSTANT_VECTOR_LEN,
+            max_value_nest_depth: Some(DEFAULT_MAX_VALUE_NEST_DEPTH),
         }
     }
 }

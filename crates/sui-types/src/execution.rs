@@ -9,36 +9,63 @@ use move_core_types::{
     language_storage::{ModuleId, StructTag},
     resolver::{ModuleResolver, ResourceResolver},
 };
-use move_vm_runtime::{move_vm::MoveVM, session::Session};
 use move_vm_types::loaded_data::runtime_types::Type;
 use serde::Deserialize;
-use sui_types::execution_status::CommandArgumentError;
-use sui_types::{
-    base_types::{MoveObjectType, ObjectID, SequenceNumber, SuiAddress},
+
+use crate::{
+    base_types::{ObjectID, SequenceNumber, SuiAddress},
     coin::Coin,
     error::{ExecutionError, ExecutionErrorKind, SuiError},
-    object::{Data, MoveObject, Object, Owner},
-    storage::{BackingPackageStore, ChildObjectResolver, ObjectChange, ParentSync, Storage},
-    TypeTag,
+    execution_status::CommandArgumentError,
+    object::Owner,
+    storage::{BackingPackageStore, ChildObjectResolver, ObjectChange, StorageView},
 };
-
-use super::{context::load_type, linkage_view::LinkageView};
-
-sui_macros::checked_arithmetic! {
 
 pub trait SuiResolver:
     ResourceResolver<Error = SuiError> + ModuleResolver<Error = SuiError> + BackingPackageStore
 {
+    fn as_backing_package_store(&self) -> &dyn BackingPackageStore;
 }
 
-impl<
-        T: ResourceResolver<Error = SuiError> + ModuleResolver<Error = SuiError> + BackingPackageStore,
-    > SuiResolver for T
+impl<T> SuiResolver for T
+where
+    T: ResourceResolver<Error = SuiError>,
+    T: ModuleResolver<Error = SuiError>,
+    T: BackingPackageStore,
+{
+    fn as_backing_package_store(&self) -> &dyn BackingPackageStore {
+        self
+    }
+}
+
+/// Interface with the store necessary to execute a programmable transaction
+pub trait ExecutionState: StorageView + SuiResolver {
+    fn as_sui_resolver(&self) -> &dyn SuiResolver;
+    fn as_child_resolver(&self) -> &dyn ChildObjectResolver;
+}
+
+impl<T> ExecutionState for T
+where
+    T: StorageView,
+    T: SuiResolver,
+{
+    fn as_sui_resolver(&self) -> &dyn SuiResolver {
+        self
+    }
+
+    fn as_child_resolver(&self) -> &dyn ChildObjectResolver {
+        self
+    }
+}
+
+/// View of the store necessary to produce the layouts of types.
+pub trait TypeLayoutStore: BackingPackageStore + ModuleResolver<Error = SuiError> {}
+impl<T> TypeLayoutStore for T
+where
+    T: BackingPackageStore,
+    T: ModuleResolver<Error = SuiError>,
 {
 }
-
-pub trait StorageView: Storage + ParentSync + ChildObjectResolver {}
-impl<T: Storage + ParentSync + ChildObjectResolver> StorageView for T {}
 
 pub struct ExecutionResults {
     pub object_changes: BTreeMap<ObjectID, ObjectChange>,
@@ -183,69 +210,6 @@ impl Value {
 }
 
 impl ObjectValue {
-    pub fn new<'vm, 'state, S: StorageView>(
-        vm: &'vm MoveVM,
-        session: &mut Session<'state, 'vm, LinkageView<&'state S>>,
-        type_: MoveObjectType,
-        has_public_transfer: bool,
-        used_in_non_entry_move_call: bool,
-        contents: &[u8],
-    ) -> Result<Self, ExecutionError>
-    where
-        &'state S: SuiResolver,
-    {
-        let contents = if type_.is_coin() {
-            let Ok(coin) = Coin::from_bcs_bytes(contents) else{
-                invariant_violation!("Could not deserialize a coin")
-            };
-            ObjectContents::Coin(coin)
-        } else {
-            ObjectContents::Raw(contents.to_vec())
-        };
-        let tag: StructTag = type_.into();
-        let type_ = load_type(session, &TypeTag::Struct(Box::new(tag)))
-            .map_err(|e| crate::error::convert_vm_error(e, vm, session.get_resolver()))?;
-        Ok(Self {
-            type_,
-            has_public_transfer,
-            used_in_non_entry_move_call,
-            contents,
-        })
-    }
-
-    pub fn from_object<'vm, 'state, S: StorageView>(
-        vm: &'vm MoveVM,
-        session: &mut Session<'state, 'vm, LinkageView<&'state S>>,
-        object: &Object,
-    ) -> Result<Self, ExecutionError>
-    where
-        &'state S: SuiResolver,
-    {
-        let Object { data, .. } = object;
-        match data {
-            Data::Package(_) => invariant_violation!("Expected a Move object"),
-            Data::Move(move_object) => Self::from_move_object(vm, session, move_object),
-        }
-    }
-
-    pub fn from_move_object<'vm, 'state, S: StorageView>(
-        vm: &'vm MoveVM,
-        session: &mut Session<'state, 'vm, LinkageView<&'state S>>,
-        object: &MoveObject,
-    ) -> Result<Self, ExecutionError>
-    where
-        &'state S: SuiResolver,
-    {
-        Self::new(
-            vm,
-            session,
-            object.type_().clone(),
-            object.has_public_transfer(),
-            false,
-            object.contents(),
-        )
-    }
-
     /// # Safety
     /// We must have the Type is the coin type, but we are unable to check it at this spot
     pub unsafe fn coin(type_: Type, coin: Coin) -> Self {
@@ -320,13 +284,4 @@ fn try_from_value_prim<'a, T: Deserialize<'a>>(
             bcs::from_bytes(bytes).map_err(|_| CommandArgumentError::InvalidBCSBytes)
         }
     }
-}
-
-pub fn command_argument_error(e: CommandArgumentError, arg_idx: usize) -> ExecutionError {
-    ExecutionError::from_kind(ExecutionErrorKind::command_argument_error(
-        e,
-        arg_idx as u16,
-    ))
-}
-
 }

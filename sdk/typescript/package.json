@@ -2,7 +2,7 @@
   "name": "@mysten/sui.js",
   "author": "Mysten Labs <build@mystenlabs.com>",
   "description": "Sui TypeScript API(Work in Progress)",
-  "version": "0.35.0",
+  "version": "0.35.1",
   "license": "Apache-2.0",
   "files": [
     "dist",
@@ -85,7 +85,7 @@
     "tsup": "^6.7.0",
     "typedoc": "^0.24.1",
     "typescript": "^5.0.4",
-    "vite": "^4.2.1",
+    "vite": "^4.2.3",
     "vitest": "^0.30.1",
     "wait-on": "^7.0.1"
   },

@@ -140,6 +140,20 @@ impl<S: IndexerStore + Sync + Send + 'static> ExtendedApiServer for ExtendedApi<
             .await?;
         Ok(AddressMetrics::from(address_stats))
     }
+
+    async fn get_all_epoch_address_metrics(
+        &self,
+        descending_order: Option<bool>,
+    ) -> RpcResult<Vec<AddressMetrics>> {
+        let epoch_address_stats = self
+            .state
+            .get_all_epoch_address_stats(descending_order)
+            .await?;
+        Ok(epoch_address_stats
+            .into_iter()
+            .map(AddressMetrics::from)
+            .collect())
+    }
 }
 
 impl<S> SuiRpcModule for ExtendedApi<S>

@@ -4,7 +4,7 @@
 use crate::ValidatorProxy;
 use std::sync::Arc;
 use std::time::Duration;
-use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
+use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
 use tokio::sync::oneshot::Sender;
 use tokio::sync::watch;
 use tokio::sync::watch::Receiver;
@@ -39,7 +39,7 @@ impl SystemStateObserver {
                     _ = interval.tick() => {
                         match proxy.get_latest_system_state_object().await {
                             Ok(result) => {
-                                let p = ProtocolConfig::get_for_version(ProtocolVersion::new(result.protocol_version));
+                                let p = ProtocolConfig::get_for_version(ProtocolVersion::new(result.protocol_version), Chain::Unknown);
                                 if tx.send(SystemState {reference_gas_price: result.reference_gas_price,protocol_config: Some(p)}).is_ok() {
                                     info!("Reference gas price = {:?}", result.reference_gas_price    );
                                 }

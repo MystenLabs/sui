@@ -9,7 +9,6 @@ use crate::{
     language_storage::{ModuleId, StructTag, TypeTag, TYPETAG_ENUM_ABSTRACT_SIZE},
 };
 use bcs::test_helpers::assert_canonical_encode_decode;
-use enum_compat_util::*;
 use proptest::prelude::*;
 
 proptest! {
@@ -127,16 +126,4 @@ fn test_type_tag_deserialize_case_insensitive() {
     assert_eq!(org_struct_tag, lower_case_decoded);
 
     assert_eq!(current_json, lower_case_json);
-}
-
-#[test]
-fn enforce_order_test() {
-    let mut path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    path.extend([
-        "src",
-        "unit_tests",
-        "staged_enum_variant_order",
-        "type_tag.yaml",
-    ]);
-    check_enum_compat_order::<TypeTag>(path);
 }

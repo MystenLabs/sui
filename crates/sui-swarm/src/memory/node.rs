@@ -152,7 +152,7 @@ mod test {
         telemetry_subscribers::init_for_testing();
         let swarm = Swarm::builder().build();
 
-        let validator = swarm.validators().next().unwrap();
+        let validator = swarm.validator_nodes().next().unwrap();
 
         validator.start().await.unwrap();
         validator.health_check(true).await.unwrap();

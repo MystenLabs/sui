@@ -20,6 +20,19 @@ where
     /// Returns true if the map contains a value for the specified key.
     fn contains_key(&self, key: &K) -> Result<bool, Self::Error>;
 
+    /// Returns true if the map contains a value for the specified key.
+    fn multi_contains_keys<J>(
+        &self,
+        keys: impl IntoIterator<Item = J>,
+    ) -> Result<Vec<bool>, Self::Error>
+    where
+        J: Borrow<K>,
+    {
+        keys.into_iter()
+            .map(|key| self.contains_key(key.borrow()))
+            .collect()
+    }
+
     /// Returns the value for the given key from the map, if it exists.
     fn get(&self, key: &K) -> Result<Option<V>, Self::Error>;
 

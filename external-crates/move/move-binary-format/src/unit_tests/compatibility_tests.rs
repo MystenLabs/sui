@@ -8,7 +8,6 @@ use crate::{
     file_format::*,
     normalized::{self, Type},
 };
-use enum_compat_util::*;
 use move_core_types::{account_address::AccountAddress, ident_str, identifier::Identifier};
 
 // A way to permute pools, and index into them still.
@@ -843,16 +842,4 @@ fn check_exact_and_unchange_same_complex_module_permutations() {
             assert!(InclusionCheck::Subset.check(m1, m0).is_ok());
         }
     }
-}
-
-#[test]
-fn enforce_order_test() {
-    let mut path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    path.extend([
-        "src",
-        "unit_tests",
-        "staged_enum_variant_order",
-        "type.yaml",
-    ]);
-    check_enum_compat_order::<Type>(path);
 }

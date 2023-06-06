@@ -18,7 +18,7 @@ use move_core_types::{
     identifier::{IdentStr, Identifier},
     language_storage::{ModuleId, StructTag, TypeTag},
 };
-use move_proc_macros::EnumVariantOrder;
+use move_proc_macros::test_variant_order;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
@@ -32,9 +32,8 @@ use std::collections::BTreeMap;
 /// A normalized version of `SignatureToken`, a type expression appearing in struct or function
 /// declarations. Unlike `SignatureToken`s, `normalized::Type`s from different modules can safely be
 /// compared.
-#[derive(
-    Clone, Debug, Ord, PartialOrd, Eq, PartialEq, Serialize, Deserialize, EnumVariantOrder,
-)]
+#[derive(Clone, Debug, Ord, PartialOrd, Eq, PartialEq, Serialize, Deserialize)]
+#[test_variant_order(src/unit_tests/staged_enum_variant_order/type.yaml)]
 pub enum Type {
     #[serde(rename = "bool")]
     Bool,

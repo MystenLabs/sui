@@ -74,6 +74,7 @@ export type QredoConnectInput = {
     service: string;
     apiUrl: string;
     token: string;
+    organization: string;
 };
 type QredoConnectFeature = {
     'qredo:connect': {

@@ -7,9 +7,8 @@ use crate::{
     ident_str,
     identifier::Identifier,
     language_storage::{StructTag, TypeTag},
-    value::{MoveStruct, MoveTypeLayout, MoveValue},
+    value::{MoveStruct, MoveValue},
 };
-use enum_compat_util::check_enum_compat_order;
 use serde_json::json;
 
 #[test]
@@ -136,25 +135,4 @@ fn nested_typed_struct_deserialization() {
             "type": "0x0::MyModule::MyStruct"
         })
     );
-}
-
-#[test]
-fn enforce_order_test() {
-    let mut path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    path.extend([
-        "src",
-        "unit_tests",
-        "staged_enum_variant_order",
-        "move_value.yaml",
-    ]);
-    check_enum_compat_order::<MoveValue>(path);
-
-    let mut path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    path.extend([
-        "src",
-        "unit_tests",
-        "staged_enum_variant_order",
-        "move_type_layout.yaml",
-    ]);
-    check_enum_compat_order::<MoveTypeLayout>(path);
 }
