@@ -1431,7 +1431,7 @@ mod tests {
     use async_trait::async_trait;
     use std::collections::{BTreeMap, HashMap};
     use std::ops::Deref;
-    use sui_types::base_types::{ObjectID, SequenceNumber, TransactionEffectsDigest};
+    use sui_types::base_types::{ObjectID, SequenceNumber};
     use sui_types::crypto::Signature;
     use sui_types::effects::TransactionEffects;
     use sui_types::messages_checkpoint::SignedCheckpointSummary;
@@ -1622,20 +1622,6 @@ mod tests {
             Ok(digests
                 .into_iter()
                 .map(|d| self.get(&d).expect("effects not found").clone())
-                .collect())
-        }
-
-        async fn notify_read_executed_effects_digests(
-            &self,
-            digests: Vec<TransactionDigest>,
-        ) -> SuiResult<Vec<TransactionEffectsDigest>> {
-            Ok(digests
-                .into_iter()
-                .map(|d| {
-                    self.get(&d)
-                        .map(|fx| fx.digest())
-                        .expect("effects not found")
-                })
                 .collect())
         }
 

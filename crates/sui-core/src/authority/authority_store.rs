@@ -110,8 +110,6 @@ pub struct AuthorityStore {
 
     // Implementation detail to support notify_read_effects().
     pub(crate) executed_effects_notify_read: NotifyRead<TransactionDigest, TransactionEffects>,
-    pub(crate) executed_effects_digests_notify_read:
-        NotifyRead<TransactionDigest, TransactionEffectsDigest>,
 
     pub(crate) root_state_notify_read: NotifyRead<EpochId, (CheckpointSequenceNumber, Accumulator)>,
     /// This lock denotes current 'execution epoch'.
@@ -230,7 +228,6 @@ impl AuthorityStore {
             mutex_table: MutexTable::new(NUM_SHARDS),
             perpetual_tables,
             executed_effects_notify_read: NotifyRead::new(),
-            executed_effects_digests_notify_read: NotifyRead::new(),
             root_state_notify_read:
                 NotifyRead::<EpochId, (CheckpointSequenceNumber, Accumulator)>::new(),
             execution_lock: RwLock::new(epoch),
