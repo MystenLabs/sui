@@ -1,6 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-import { formatRequestURL, useAppsBackend } from '@mysten/core';
+import { useAppsBackend } from '@mysten/core';
 import { useQuery } from '@tanstack/react-query';
 
 // https://cloud.google.com/vision/docs/supported-files
