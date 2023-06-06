@@ -19,7 +19,7 @@ export function CompletedTransactions() {
         error,
     } = useQueryTransactionsByAddress(activeAddress);
     if (error) {
-        return <Alert mode="warning">{(error as Error)?.message}</Alert>;
+        return <Alert>{(error as Error)?.message}</Alert>;
     }
     return (
         <Loading loading={isLoading}>
