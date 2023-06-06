@@ -1342,12 +1342,21 @@ mod test {
         println!("! IMPORTANT: never update snapshots from this test. only add new versions! !");
         println!("!                                                                          !");
         println!("============================================================================\n");
-        for i in MIN_PROTOCOL_VERSION..=MAX_PROTOCOL_VERSION {
-            let cur = ProtocolVersion::new(i);
-            assert_yaml_snapshot!(
-                format!("version_{}", cur.as_u64()),
-                ProtocolConfig::get_for_version(cur, Chain::Unknown)
-            );
+        for chain_id in &[Chain::Unknown, Chain::Mainnet, Chain::Testnet] {
+            // make Chain::Unknown snapshots compatible with pre-chain-id snapshots so that we
+            // don't break the release-time compatibility tests. Once Chain Id configs have been
+            // released everywhere, we can remove this and only test Mainnet and Testnet
+            let chain_str = match chain_id {
+                Chain::Unknown => "".to_string(),
+                _ => format!("{:?}_", chain_id),
+            };
+            for i in MIN_PROTOCOL_VERSION..=MAX_PROTOCOL_VERSION {
+                let cur = ProtocolVersion::new(i);
+                assert_yaml_snapshot!(
+                    format!("{}version_{}", chain_str, cur.as_u64()),
+                    ProtocolConfig::get_for_version(cur, *chain_id)
+                );
+            }
         }
     }
 
