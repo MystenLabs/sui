@@ -7,6 +7,7 @@ module deepbook::math {
     const FLOAT_SCALING_U128: u128 = 1_000_000_000;
 
     friend deepbook::clob;
+    friend deepbook::clob_v2;
     friend deepbook::critbit;
 
     // <<<<<<<<<<<<<<<<<<<<<<<< Error codes <<<<<<<<<<<<<<<<<<<<<<<<

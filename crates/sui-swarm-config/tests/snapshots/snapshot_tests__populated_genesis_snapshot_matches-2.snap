@@ -240,6 +240,7 @@ validators:
         next_epoch_worker_address: ~
         extra_fields:
           id:
+<<<<<<< HEAD
             id: "0x58cddabda35229a0133230354eaaea320ffdcade894816abd770a1d452ff7b5e"
           size: 0
       voting_power: 10000
@@ -247,6 +248,15 @@ validators:
       gas_price: 1000
       staking_pool:
         id: "0xc8daced9001912f24e6eb3c197d52ecf0fc2d2e729f6a4449286ffebcf8bdeb4"
+=======
+            id: "0x10dd980e1b6da92f56dc8777636d7d68d17f5bc3593cc0a2084e15573a882390"
+          size: 0
+      voting_power: 10000
+      operation_cap_id: "0xe236c3ffa6394a69b567f9b39d969d78190ed0c0b70050b279cd7616c8e81f82"
+      gas_price: 1000
+      staking_pool:
+        id: "0xbd06dd50c4993a2de98c954b2614bf50fbdc9209e7b877c6812543e3024884ae"
+>>>>>>> ee1fc5a532 (init clob_v2 and custodian_v2 with original module)
         activation_epoch: 0
         deactivation_epoch: ~
         sui_balance: 20000000000000000
@@ -254,14 +264,22 @@ validators:
           value: 0
         pool_token_balance: 20000000000000000
         exchange_rates:
+<<<<<<< HEAD
           id: "0xb412c8f83790ee1970693a99e18b4b8664a9e3a30b0a193c6c003040930710f0"
+=======
+          id: "0xd4f4299f2ffa239959179b6a7373400eb7021069348641fab4593b091b992612"
+>>>>>>> ee1fc5a532 (init clob_v2 and custodian_v2 with original module)
           size: 1
         pending_stake: 0
         pending_total_sui_withdraw: 0
         pending_pool_token_withdraw: 0
         extra_fields:
           id:
+<<<<<<< HEAD
             id: "0x3ea8de4c21e39006bed08fe15b1c0ae71757745f6426724a67b9aa514d6501be"
+=======
+            id: "0x3bb4ef1df6f9549cd678365856859a5987c7748bbbfe1db49288ce586f401a09"
+>>>>>>> ee1fc5a532 (init clob_v2 and custodian_v2 with original module)
           size: 0
       commission_rate: 200
       next_epoch_stake: 20000000000000000
@@ -269,6 +287,7 @@ validators:
       next_epoch_commission_rate: 200
       extra_fields:
         id:
+<<<<<<< HEAD
           id: "0x2bd7c85b5c19900ddb4a8522323d751c31f599cd063727dffd9c865b99cf6c8d"
         size: 0
   pending_active_validators:
@@ -284,12 +303,33 @@ validators:
     size: 0
   validator_candidates:
     id: "0x5af0129f2a833611d88adbfbcd211664cf4999eefda23b6f9fbe4f7eff8c7175"
+=======
+          id: "0x31844066e8233c2f4b721b204947b688fa939425ec3c8191ab3a436320f25e73"
+        size: 0
+  pending_active_validators:
+    contents:
+      id: "0x4417b8fe5ad06afc811b1f0e6f4c149f4b4c62e8c7cda2c0789aa896baf09cb1"
+      size: 0
+  pending_removals: []
+  staking_pool_mappings:
+    id: "0x12527131f0cdf27fec7d1d299075471fa16c40f93f482a67a0f366aba26f29da"
+    size: 1
+  inactive_validators:
+    id: "0x34a6fe3ecaca197d081b98d2066c863cd868304d304c7861e1463d874bda2637"
+    size: 0
+  validator_candidates:
+    id: "0x6bb7fc684f031f91844f1382aadf57c9c9c331eb5da3d23a1cd353b6e907c4eb"
+>>>>>>> ee1fc5a532 (init clob_v2 and custodian_v2 with original module)
     size: 0
   at_risk_validators:
     contents: []
   extra_fields:
     id:
+<<<<<<< HEAD
       id: "0x98b720f7b0b19ed5bc26fca5bfd847b0cd412e8e55c937c0281c9205c62cb824"
+=======
+      id: "0xbeffc81804231c03d3c04f035e200d44462ca3595df43a341b2b77324b40ff4a"
+>>>>>>> ee1fc5a532 (init clob_v2 and custodian_v2 with original module)
     size: 0
 storage_fund:
   total_object_storage_rebates:
@@ -306,7 +346,11 @@ parameters:
   validator_low_stake_grace_period: 7
   extra_fields:
     id:
+<<<<<<< HEAD
       id: "0xb7ac22ef65c28d5c786842139632023c1238cdce3eb07e32b20b22c777939592"
+=======
+      id: "0x8288a9516e4fbd10472d8363d3a20c4004927407d510115a3059710bcbbd2b35"
+>>>>>>> ee1fc5a532 (init clob_v2 and custodian_v2 with original module)
     size: 0
 reference_gas_price: 1000
 validator_report_records:
@@ -320,7 +364,11 @@ stake_subsidy:
   stake_subsidy_decrease_rate: 1000
   extra_fields:
     id:
+<<<<<<< HEAD
       id: "0x0fdf6028c5f3f5f07747ffc4834d3d42bab0a24bf2d0244de41685c3dd8c22d9"
+=======
+      id: "0x47a6a53f0fc1f291cb9a0f79f679ffe83c92b149fbbefca5a714ad46525d9865"
+>>>>>>> ee1fc5a532 (init clob_v2 and custodian_v2 with original module)
     size: 0
 safe_mode: false
 safe_mode_storage_rewards:
@@ -332,6 +380,10 @@ safe_mode_non_refundable_storage_fee: 0
 epoch_start_timestamp_ms: 10
 extra_fields:
   id:
+<<<<<<< HEAD
     id: "0xb20341d9287cb6ad7352c4fb251e2fa79de9a50241904766c8424c61d30cbcce"
+=======
+    id: "0x32aec626f63da4586cf41af7cdf4580b586ca65266d8e1d01ca6ea80869aad78"
+>>>>>>> ee1fc5a532 (init clob_v2 and custodian_v2 with original module)
   size: 0
 
