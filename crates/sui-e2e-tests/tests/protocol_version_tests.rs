@@ -1,26 +1,22 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use mysten_metrics::RegistryService;
-use prometheus::Registry;
 use sui_protocol_config::{ProtocolConfig, ProtocolVersion, SupportedProtocolVersions};
-use test_utils::authority::start_node;
+use test_utils::network::TestClusterBuilder;
 
 #[tokio::test]
 #[should_panic]
 async fn test_validator_panics_on_unsupported_protocol_version() {
-    let dir = tempfile::TempDir::new().unwrap();
     let latest_version = ProtocolVersion::MAX;
-    let network_config = sui_swarm_config::network_config_builder::ConfigBuilder::new(&dir)
+    let _test_cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
         .with_protocol_version(ProtocolVersion::new(latest_version.as_u64() + 1))
         .with_supported_protocol_versions(SupportedProtocolVersions::new_for_testing(
             latest_version.as_u64(),
             latest_version.as_u64(),
         ))
-        .build();
-
-    let registry_service = RegistryService::new(Registry::new());
-    let _sui_node = start_node(&network_config.validator_configs[0], registry_service).await;
+        .build()
+        .await;
 }
 
 #[test]

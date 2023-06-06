@@ -4,16 +4,12 @@
 use mysten_metrics::RegistryService;
 use prometheus::Registry;
 use rand::{prelude::StdRng, SeedableRng};
-use std::num::NonZeroUsize;
 use std::time::Duration;
 use sui_config::NodeConfig;
-use sui_core::authority_client::AuthorityAPI;
 use sui_core::authority_client::NetworkAuthorityClient;
 pub use sui_node::{SuiNode, SuiNodeHandle};
 use sui_swarm_config::network_config::NetworkConfig;
 use sui_swarm_config::network_config_builder::ConfigBuilder;
-use sui_types::base_types::ObjectID;
-use sui_types::messages_grpc::ObjectInfoRequest;
 use sui_types::multiaddr::Multiaddr;
 use sui_types::object::Object;
 
@@ -22,31 +18,6 @@ pub const NETWORK_BUFFER_SIZE: usize = 65_000;
 
 /// Default committee size for tests
 pub const TEST_COMMITTEE_SIZE: usize = 4;
-
-/// Make an authority config for each of the `TEST_COMMITTEE_SIZE` authorities in the test committee.
-pub fn test_authority_configs() -> NetworkConfig {
-    test_and_configure_authority_configs(TEST_COMMITTEE_SIZE)
-}
-
-pub fn test_and_configure_authority_configs(committee_size: usize) -> NetworkConfig {
-    let config_dir = tempfile::tempdir().unwrap().into_path();
-    let rng = StdRng::from_seed([0; 32]);
-    let mut configs = ConfigBuilder::new(config_dir)
-        .committee_size(NonZeroUsize::new(committee_size).unwrap())
-        .rng(rng)
-        .build();
-    for config in configs.validator_configs.iter_mut() {
-        let parameters = &mut config.consensus_config.as_mut().unwrap().narwhal_config;
-        // NOTE: the following parameters are important to ensure tests run fast. Using the default
-        // Narwhal parameters may result in tests taking >60 seconds.
-        parameters.header_num_of_batches_threshold = 1;
-        parameters.max_header_delay = Duration::from_millis(200);
-        parameters.min_header_delay = Duration::from_millis(200);
-        parameters.batch_size = 1;
-        parameters.max_batch_delay = Duration::from_millis(200);
-    }
-    configs
-}
 
 pub fn test_authority_configs_with_objects<I: IntoIterator<Item = Object> + Clone>(
     objects: I,
@@ -150,14 +121,4 @@ pub async fn spawn_test_authorities(config: &NetworkConfig) -> Vec<SuiNodeHandle
 /// Get a network client to communicate with the consensus.
 pub fn get_client(net_address: &Multiaddr) -> NetworkAuthorityClient {
     NetworkAuthorityClient::connect_lazy(net_address).unwrap()
-}
-
-pub async fn get_object(net_address: &Multiaddr, object_id: ObjectID) -> Object {
-    get_client(net_address)
-        .handle_object_info_request(ObjectInfoRequest::latest_object_info_request(
-            object_id, None,
-        ))
-        .await
-        .unwrap()
-        .object
 }

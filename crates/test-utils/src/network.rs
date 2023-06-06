@@ -2,15 +2,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use futures::future::join_all;
-use std::net::SocketAddr;
-use std::num::NonZeroUsize;
-use std::sync::{Arc, Mutex};
-use std::time::Duration;
-
 use jsonrpsee::http_client::{HttpClient, HttpClientBuilder};
 use jsonrpsee::ws_client::WsClient;
 use jsonrpsee::ws_client::WsClientBuilder;
 use rand::{distributions::*, rngs::OsRng, seq::SliceRandom};
+use std::collections::{HashMap, HashSet};
+use std::net::SocketAddr;
+use std::num::NonZeroUsize;
+use std::sync::{Arc, Mutex};
+use std::time::Duration;
 use sui_config::node::DBCheckpointConfig;
 use sui_config::{Config, SUI_CLIENT_CONFIG, SUI_NETWORK_CONFIG};
 use sui_config::{NodeConfig, PersistedConfig, SUI_KEYSTORE_FILENAME};
@@ -31,10 +31,13 @@ use sui_swarm_config::network_config_builder::{
 use sui_swarm_config::node_config_builder::{FullnodeConfigBuilder, ValidatorConfigBuilder};
 use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::base_types::{AuthorityName, ObjectID, ObjectRef, SuiAddress};
-use sui_types::committee::EpochId;
+use sui_types::committee::{Committee, EpochId};
 use sui_types::crypto::KeypairTraits;
 use sui_types::crypto::SuiKeyPair;
+use sui_types::effects::TransactionEffectsAPI;
+use sui_types::effects::{TransactionEffects, TransactionEvents};
 use sui_types::governance::MIN_VALIDATOR_JOINING_STAKE_MIST;
+use sui_types::message_envelope::Message;
 use sui_types::object::Object;
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
 use sui_types::sui_system_state::SuiSystemState;
@@ -123,6 +126,12 @@ impl TestCluster {
 
     pub fn fullnode_config_builder(&self) -> FullnodeConfigBuilder {
         self.swarm.get_fullnode_config_builder()
+    }
+
+    pub fn committee(&self) -> Arc<Committee> {
+        self.fullnode_handle
+            .sui_node
+            .with(|node| node.state().epoch_store_for_testing().committee().clone())
     }
 
     /// Convenience method to start a new fullnode in the test cluster.
@@ -371,10 +380,10 @@ impl TestCluster {
 
     pub async fn sign_and_execute_transaction(
         &self,
-        tx: &TransactionData,
+        tx_data: &TransactionData,
     ) -> SuiTransactionBlockResponse {
-        let signed_tx = self.wallet.sign_transaction(tx);
-        self.execute_transaction(signed_tx).await
+        let tx = self.wallet.sign_transaction(tx_data);
+        self.execute_transaction(tx).await
     }
 
     /// Execute a transaction on the network and wait for it to be executed on the rpc fullnode.
@@ -384,6 +393,80 @@ impl TestCluster {
         tx: VerifiedTransaction,
     ) -> SuiTransactionBlockResponse {
         self.wallet.execute_transaction_must_succeed(tx).await
+    }
+
+    /// Execute a transaction on specified list of validators, and bypassing authority aggregator.
+    /// This allows us to obtain the return value directly from validators, so that we can access more
+    /// information directly such as the original effects, events and extra objects returned.
+    /// This also allows us to control which validator to send certificates to, which is useful in
+    /// some tests.
+    pub async fn submit_transaction_to_validators(
+        &self,
+        tx: VerifiedTransaction,
+        pubkeys: &[AuthorityName],
+    ) -> (TransactionEffects, TransactionEvents, Vec<Object>) {
+        let agg = self
+            .fullnode_handle
+            .sui_node
+            .with(|node| node.clone_authority_aggregator().unwrap());
+        let certificate = agg
+            .process_transaction(tx)
+            .await
+            .unwrap()
+            .into_cert_for_testing();
+        let replies = loop {
+            let futures: Vec<_> = agg
+                .authority_clients
+                .iter()
+                .filter_map(|(name, client)| {
+                    if pubkeys.contains(name) {
+                        Some(client)
+                    } else {
+                        None
+                    }
+                })
+                .map(|client| {
+                    let cert = certificate.clone();
+                    async move { client.handle_certificate_v2(cert.into()).await }
+                })
+                .collect();
+
+            let replies: Vec<_> = futures::future::join_all(futures)
+                .await
+                .into_iter()
+                // Remove all `FailedToHearBackFromConsensus` replies. Note that the original Sui error type
+                // `SuiError::FailedToHearBackFromConsensus(..)` is lost when the message is sent through the
+                // network (it is replaced by `RpcError`). As a result, the following filter doesn't work:
+                // `.filter(|result| !matches!(result, Err(SuiError::FailedToHearBackFromConsensus(..))))`.
+                .filter(|result| match result {
+                    Err(e) => !e.to_string().contains("deadline has elapsed"),
+                    _ => true,
+                })
+                .collect();
+
+            if !replies.is_empty() {
+                break replies;
+            }
+        };
+        let replies = replies.into_iter().map(|r| r.unwrap());
+        let mut all_effects = HashMap::new();
+        let mut all_events = HashMap::new();
+        let mut all_objects = HashSet::new();
+        for reply in replies {
+            let effects = reply.signed_effects.into_data();
+            assert!(effects.status().is_ok());
+            all_effects.insert(effects.digest(), effects);
+            all_events.insert(reply.events.digest(), reply.events);
+            all_objects.insert(reply.fastpath_input_objects);
+        }
+        assert_eq!(all_effects.len(), 1);
+        assert_eq!(all_events.len(), 1);
+        assert_eq!(all_objects.len(), 1);
+        (
+            all_effects.into_values().next().unwrap(),
+            all_events.into_values().next().unwrap(),
+            all_objects.into_iter().next().unwrap(),
+        )
     }
 
     #[cfg(msim)]
