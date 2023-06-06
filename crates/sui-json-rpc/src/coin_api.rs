@@ -37,7 +37,7 @@ use crate::{with_tracing, SuiRpcModule};
 use mockall::automock;
 
 pub struct CoinReadApi {
-    internal: Arc<dyn CoinReadInternalTrait + Send + Sync>,
+    internal: Arc<dyn CoinReadInternal + Send + Sync>,
 }
 
 impl CoinReadApi {
@@ -386,7 +386,7 @@ async fn find_package_object_id(
 
 #[cfg_attr(test, automock)]
 #[async_trait]
-pub trait CoinReadInternalTrait {
+pub trait CoinReadInternal {
     fn get_state(&self) -> Arc<dyn StateServiceWrapper + Send + Sync>;
     async fn get_coins_iterator(
         &self,
@@ -417,7 +417,7 @@ impl CoinReadInternalService {
 }
 
 #[async_trait]
-impl CoinReadInternalTrait for CoinReadInternalService {
+impl CoinReadInternal for CoinReadInternalService {
     fn get_state(&self) -> Arc<dyn StateServiceWrapper + Send + Sync> {
         self.state.clone()
     }
@@ -535,7 +535,7 @@ mod tests {
         async fn test_invalid_coin_type() {
             let owner = get_test_owner();
             let coin_type = "0x2::invalid::struct::tag";
-            let mock_internal = MockCoinReadInternalTrait::new();
+            let mock_internal = MockCoinReadInternal::new();
             let coin_read_api = CoinReadApi {
                 internal: Arc::new(mock_internal),
             };
@@ -558,7 +558,7 @@ mod tests {
         async fn test_unrecognized_token() {
             let owner = get_test_owner();
             let coin_type = "0x2::sui:🤵";
-            let mock_internal = MockCoinReadInternalTrait::new();
+            let mock_internal = MockCoinReadInternal::new();
             let coin_read_api = CoinReadApi {
                 internal: Arc::new(mock_internal),
             };
@@ -827,7 +827,7 @@ mod tests {
         #[tokio::test]
         async fn test_success_response_for_gas_coin() {
             let coin_type = "0x2::sui::SUI";
-            let mock_internal = MockCoinReadInternalTrait::new();
+            let mock_internal = MockCoinReadInternal::new();
             let coin_read_api = CoinReadApi {
                 internal: Arc::new(mock_internal),
             };
