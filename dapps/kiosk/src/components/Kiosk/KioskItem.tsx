@@ -18,7 +18,7 @@ export type KioskItemProps = {
   isGuest?: boolean;
   listing?: KioskListing | null;
   kioskId: ObjectId;
-  onSuccess: () => void;
+  onSuccess: () => void; // parent component onSuccess handler.
   listFn: KioskFnType;
   item: OwnedObjectType;
 };
@@ -31,7 +31,6 @@ export function KioskItem({
   onSuccess,
   listFn,
 }: KioskItemProps) {
-  // The mutation for the take fn.
   const takeMutation = useTakeMutation({
     onSuccess: () => {
       toast.success('Item was transferred back to the address.');
