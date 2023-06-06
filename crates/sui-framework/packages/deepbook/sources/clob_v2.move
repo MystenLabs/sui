@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-module deepbook::clob {
+module deepbook::clob_v2 {
     use std::option;
     use std::type_name::{Self, TypeName};
     use std::vector;
@@ -18,11 +18,10 @@ module deepbook::clob {
     use sui::tx_context::TxContext;
 
     use deepbook::critbit::{Self, CritbitTree, is_empty, borrow_mut_leaf_by_index, min_leaf, remove_leaf_by_index, max_leaf, next_leaf, previous_leaf, borrow_leaf_by_index, borrow_leaf_by_key, find_leaf, insert_leaf};
-    use deepbook::custodian::{Self, Custodian, AccountCap};
+    use deepbook::custodian::{Self, Custodian, AccountCap, mint_account_cap};
     use deepbook::math::Self as clob_math;
 
     // <<<<<<<<<<<<<<<<<<<<<<<< Error codes <<<<<<<<<<<<<<<<<<<<<<<<
-    const DEPRECATED: u64 = 0;
     const ENotImplemented: u64 = 1;
     const EInvalidFeeRateRebateRate: u64 = 2;
     const EInvalidOrderId: u64 = 3;
@@ -195,8 +194,8 @@ module deepbook::clob {
         linked_table::destroy_empty(orders);
     }
 
-    public fun create_account(_ctx: &mut TxContext): AccountCap {
-        abort DEPRECATED
+    public fun create_account(ctx: &mut TxContext): AccountCap {
+        mint_account_cap(ctx)
     }
 
     fun create_pool_<BaseAsset, QuoteAsset>(
@@ -247,12 +246,20 @@ module deepbook::clob {
     }
 
     public fun create_pool<BaseAsset, QuoteAsset>(
-        _tick_size: u64,
-        _lot_size: u64,
-        _creation_fee: Coin<SUI>,
-        _ctx: &mut TxContext,
+        tick_size: u64,
+        lot_size: u64,
+        creation_fee: Coin<SUI>,
+        ctx: &mut TxContext,
     ) {
-        abort DEPRECATED
+        assert!(coin::value(&creation_fee) == FEE_AMOUNT_FOR_CREATE_POOL, EInvalidFee);
+        create_pool_<BaseAsset, QuoteAsset>(
+            REFERENCE_TAKER_FEE_RATE,
+            REFERENCE_MAKER_REBATE_RATE,
+            tick_size,
+            lot_size,
+            coin::into_balance(creation_fee),
+            ctx
+        )
     }
 
     public fun deposit_base<BaseAsset, QuoteAsset>(
@@ -1339,6 +1346,8 @@ module deepbook::clob {
 
     // Note that open orders and quotes can be directly accessed by loading in the entire Pool.
 
+    #[test_only] use sui::coin::mint_for_testing;
+
     #[test_only] use sui::test_scenario::{Self, Scenario};
 
     #[test_only] const E_NULL: u64 = 0;
@@ -1662,6 +1671,504 @@ module deepbook::clob {
             )
         };
         order
+    }
+
+    #[test]
+    #[expected_failure(abort_code = EInvalidRestriction)]
+    fun test_place_limit_order_with_invalid_restrictions_() {
+        let owner: address = @0xAAAA;
+        let alice: address = @0xBBBB;
+        let test = test_scenario::begin(owner);
+        test_scenario::next_tx(&mut test, owner);
+        {
+            setup_test(0, 0, &mut test, owner);
+        };
+        test_scenario::next_tx(&mut test, owner);
+        {
+            mint_account_cap_transfer(
+                alice,
+                test_scenario::ctx(&mut test)
+            );
+        };
+        test_scenario::next_tx(&mut test, alice);
+        {
+            let pool = test_scenario::take_shared<Pool<SUI, USD>>(&mut test);
+            let clock = test_scenario::take_shared<Clock>(&test);
+            let account_cap = test_scenario::take_from_address<AccountCap>(&test, alice);
+            let account_cap_user = object::id(&account_cap);
+            custodian::deposit(
+                &mut pool.base_custodian,
+                mint_for_testing<SUI>(1000 * 100000000, test_scenario::ctx(&mut test)),
+                account_cap_user
+            );
+            custodian::deposit(
+                &mut pool.quote_custodian,
+                mint_for_testing<USD>(10000 * 100000000, test_scenario::ctx(&mut test)),
+                account_cap_user
+            );
+            place_limit_order<SUI, USD>(
+                &mut pool,
+                5 * FLOAT_SCALING,
+                200 * 100000000,
+                true,
+                TIMESTAMP_INF,
+                5,
+                &clock,
+                &account_cap,
+                test_scenario::ctx(&mut test)
+            );
+            test_scenario::return_shared(pool);
+            test_scenario::return_shared(clock);
+            test_scenario::return_to_address<AccountCap>(alice, account_cap);
+        };
+
+        test_scenario::end(test);
+    }
+
+    #[test]
+    #[expected_failure(abort_code = EOrderCannotBeFullyFilled)]
+    fun test_place_limit_order_with_restrictions_FILL_OR_KILL_() {
+        let owner: address = @0xAAAA;
+        let alice: address = @0xBBBB;
+        let bob: address = @0xCCCC;
+        let test = test_scenario::begin(owner);
+        test_scenario::next_tx(&mut test, owner);
+        {
+            setup_test(0, 0, &mut test, owner);
+        };
+        test_scenario::next_tx(&mut test, owner);
+        {
+            mint_account_cap_transfer(
+                alice,
+                test_scenario::ctx(&mut test)
+            );
+            mint_account_cap_transfer(
+                bob,
+                test_scenario::ctx(&mut test)
+            );
+        };
+        test_scenario::next_tx(&mut test, alice);
+        {
+            let pool = test_scenario::take_shared<Pool<SUI, USD>>(&mut test);
+            let clock = test_scenario::take_shared<Clock>(&test);
+            let account_cap = test_scenario::take_from_address<AccountCap>(&test, alice);
+            let account_cap_user = object::id(&account_cap);
+            custodian::deposit(
+                &mut pool.base_custodian,
+                mint_for_testing<SUI>(1000 * 100000000, test_scenario::ctx(&mut test)),
+                account_cap_user
+            );
+            custodian::deposit(
+                &mut pool.quote_custodian,
+                mint_for_testing<USD>(10000 * 100000000, test_scenario::ctx(&mut test)),
+                account_cap_user
+            );
+            place_limit_order<SUI, USD>(
+                &mut pool,
+                5 * FLOAT_SCALING,
+                200 * 100000000,
+                true,
+                TIMESTAMP_INF,
+                0,
+                &clock,
+                &account_cap,
+                test_scenario::ctx(&mut test)
+            );
+            place_limit_order<SUI, USD>(
+                &mut pool,
+                4 * FLOAT_SCALING,
+                200 * 100000000,
+                true,
+                TIMESTAMP_INF,
+                0,
+                &clock,
+                &account_cap,
+                test_scenario::ctx(&mut test)
+            );
+            place_limit_order<SUI, USD>(
+                &mut pool,
+                4 * FLOAT_SCALING,
+                200 * 100000000,
+                true,
+                TIMESTAMP_INF,
+                0,
+                &clock,
+                &account_cap,
+                test_scenario::ctx(&mut test)
+            );
+            place_limit_order<SUI, USD>(
+                &mut pool,
+                10 * FLOAT_SCALING,
+                1000 * 100000000,
+                false,
+                TIMESTAMP_INF,
+                0,
+                &clock,
+                &account_cap,
+                test_scenario::ctx(&mut test)
+            );
+            let (next_bid_order_id, next_ask_order_id, _, _) = get_pool_stat(&pool);
+            assert!(next_bid_order_id == order_id(3, true), 0);
+            assert!(next_ask_order_id == order_id(1, false), 0);
+            custodian::assert_user_balance<USD>(
+                &pool.quote_custodian,
+                account_cap_user,
+                7400 * 100000000,
+                2600 * 100000000
+            );
+            custodian::assert_user_balance<SUI>(&pool.base_custodian, account_cap_user, 0, 1000 * 100000000);
+            test_scenario::return_shared(pool);
+            test_scenario::return_shared(clock);
+            test_scenario::return_to_address<AccountCap>(alice, account_cap);
+        };
+
+        test_scenario::next_tx(&mut test, bob);
+        {
+            let pool = test_scenario::take_shared<Pool<SUI, USD>>(&mut test);
+            let clock = test_scenario::take_shared<Clock>(&test);
+            let account_cap = test_scenario::take_from_address<AccountCap>(&test, bob);
+            let account_cap_user = object::id(&account_cap);
+            custodian::deposit(
+                &mut pool.base_custodian,
+                mint_for_testing<SUI>(900 * 100000000, test_scenario::ctx(&mut test)),
+                account_cap_user
+            );
+            custodian::assert_user_balance<SUI>(&pool.base_custodian, account_cap_user, 900 * 100000000, 0);
+            place_limit_order<SUI, USD>(
+                &mut pool,
+                4 * FLOAT_SCALING,
+                601 * 100000000,
+                false,
+                TIMESTAMP_INF,
+                FILL_OR_KILL,
+                &clock,
+                &account_cap,
+                test_scenario::ctx(&mut test)
+            );
+            custodian::assert_user_balance<USD>(&pool.quote_custodian, account_cap_user, 900 * 100000000, 0);
+            test_scenario::return_shared(pool);
+            test_scenario::return_shared(clock);
+            test_scenario::return_to_address<AccountCap>(bob, account_cap);
+        };
+        test_scenario::end(test);
+    }
+
+    #[test]
+    #[expected_failure(abort_code = EOrderCannotBeFullyPassive)]
+    fun test_place_limit_order_with_restrictions_E_ORDER_CANNOT_BE_FULLY_PASSIVE_() {
+        let owner: address = @0xAAAA;
+        let alice: address = @0xBBBB;
+        let bob: address = @0xCCCC;
+        let test = test_scenario::begin(owner);
+        test_scenario::next_tx(&mut test, owner);
+        {
+            setup_test(0, 0, &mut test, owner);
+        };
+        test_scenario::next_tx(&mut test, owner);
+        {
+            mint_account_cap_transfer(
+                alice,
+                test_scenario::ctx(&mut test)
+            );
+            mint_account_cap_transfer(
+                bob,
+                test_scenario::ctx(&mut test)
+            );
+        };
+        test_scenario::next_tx(&mut test, alice);
+        {
+            let pool = test_scenario::take_shared<Pool<SUI, USD>>(&mut test);
+            let clock = test_scenario::take_shared<Clock>(&test);
+            let account_cap = test_scenario::take_from_address<AccountCap>(&test, alice);
+            let account_cap_user = object::id(&account_cap);
+            custodian::deposit(
+                &mut pool.base_custodian,
+                mint_for_testing<SUI>(1000 * 100000000, test_scenario::ctx(&mut test)),
+                account_cap_user
+            );
+            custodian::deposit(
+                &mut pool.quote_custodian,
+                mint_for_testing<USD>(10000 * 100000000, test_scenario::ctx(&mut test)),
+                account_cap_user
+            );
+            place_limit_order<SUI, USD>(
+                &mut pool,
+                5 * FLOAT_SCALING,
+                200 * 100000000,
+                true,
+                TIMESTAMP_INF,
+                0,
+                &clock,
+                &account_cap,
+                test_scenario::ctx(&mut test)
+            );
+            place_limit_order<SUI, USD>(
+                &mut pool,
+                4 * FLOAT_SCALING,
+                200 * 100000000,
+                true,
+                TIMESTAMP_INF,
+                0,
+                &clock,
+                &account_cap,
+                test_scenario::ctx(&mut test)
+            );
+            place_limit_order<SUI, USD>(
+                &mut pool,
+                4 * FLOAT_SCALING,
+                200 * 100000000,
+                true,
+                TIMESTAMP_INF,
+                0,
+                &clock,
+                &account_cap,
+                test_scenario::ctx(&mut test)
+            );
+            place_limit_order<SUI, USD>(
+                &mut pool,
+                10 * FLOAT_SCALING,
+                1000 * 100000000,
+                false,
+                TIMESTAMP_INF,
+                0,
+                &clock,
+                &account_cap,
+                test_scenario::ctx(&mut test)
+            );
+            let (next_bid_order_id, next_ask_order_id, _, _) = get_pool_stat(&pool);
+            assert!(next_bid_order_id == order_id(3, true), 0);
+            assert!(next_ask_order_id == order_id(1, false), 0);
+            custodian::assert_user_balance<USD>(
+                &pool.quote_custodian,
+                account_cap_user,
+                7400 * 100000000,
+                2600 * 100000000
+            );
+            custodian::assert_user_balance<SUI>(&pool.base_custodian, account_cap_user, 0, 1000 * 100000000);
+            test_scenario::return_shared(pool);
+            test_scenario::return_shared(clock);
+            test_scenario::return_to_address<AccountCap>(alice, account_cap);
+        };
+
+        test_scenario::next_tx(&mut test, bob);
+        {
+            let pool = test_scenario::take_shared<Pool<SUI, USD>>(&mut test);
+            let clock = test_scenario::take_shared<Clock>(&test);
+            let account_cap = test_scenario::take_from_address<AccountCap>(&test, bob);
+            let account_cap_user = object::id(&account_cap);
+            custodian::deposit(
+                &mut pool.base_custodian,
+                mint_for_testing<SUI>(900 * 100000000, test_scenario::ctx(&mut test)),
+                account_cap_user
+            );
+            custodian::assert_user_balance<SUI>(&pool.base_custodian, account_cap_user, 900 * 100000000, 0);
+            place_limit_order<SUI, USD>(
+                &mut pool,
+                4 * FLOAT_SCALING,
+                601 * 100000000,
+                false,
+                TIMESTAMP_INF,
+                POST_OR_ABORT,
+                &clock,
+                &account_cap,
+                test_scenario::ctx(&mut test)
+            );
+            custodian::assert_user_balance<SUI>(&pool.base_custodian, account_cap_user, 900 * 100000000, 0);
+            test_scenario::return_shared(pool);
+            test_scenario::return_shared(clock);
+            test_scenario::return_to_address<AccountCap>(bob, account_cap);
+        };
+        test_scenario::end(test);
+    }
+
+    #[test]
+    fun test_place_limit_order_with_restrictions_IMMEDIATE_OR_CANCEL() {
+        let owner: address = @0xAAAA;
+        let alice: address = @0xBBBB;
+        let bob: address = @0xCCCC;
+        let test = test_scenario::begin(owner);
+        test_scenario::next_tx(&mut test, owner);
+        {
+            setup_test(0, 0, &mut test, owner);
+        };
+        test_scenario::next_tx(&mut test, owner);
+        {
+            mint_account_cap_transfer(
+                alice,
+                test_scenario::ctx(&mut test)
+            );
+            mint_account_cap_transfer(
+                bob,
+                test_scenario::ctx(&mut test)
+            );
+        };
+        test_scenario::next_tx(&mut test, alice);
+        {
+            let pool = test_scenario::take_shared<Pool<SUI, USD>>(&mut test);
+            let clock = test_scenario::take_shared<Clock>(&test);
+            let account_cap = test_scenario::take_from_address<AccountCap>(&test, alice);
+            let account_cap_user = object::id(&account_cap);
+            custodian::deposit(
+                &mut pool.base_custodian,
+                mint_for_testing<SUI>(1000 * 100000000, test_scenario::ctx(&mut test)),
+                account_cap_user
+            );
+            custodian::deposit(
+                &mut pool.quote_custodian,
+                mint_for_testing<USD>(10000 * 100000000, test_scenario::ctx(&mut test)),
+                account_cap_user
+            );
+            place_limit_order<SUI, USD>(
+                &mut pool,
+                5 * FLOAT_SCALING,
+                200 * 100000000,
+                true,
+                TIMESTAMP_INF,
+                0,
+                &clock,
+                &account_cap,
+                test_scenario::ctx(&mut test)
+            );
+            place_limit_order<SUI, USD>(
+                &mut pool,
+                4 * FLOAT_SCALING,
+                200 * 100000000,
+                true,
+                TIMESTAMP_INF,
+                0,
+                &clock,
+                &account_cap,
+                test_scenario::ctx(&mut test)
+            );
+            place_limit_order<SUI, USD>(
+                &mut pool,
+                4 * FLOAT_SCALING,
+                200 * 100000000,
+                true,
+                TIMESTAMP_INF,
+                0,
+                &clock,
+                &account_cap,
+                test_scenario::ctx(&mut test)
+            );
+
+            let (base_filled, quote_filled, maker_injected, maker_order_id) = place_limit_order<SUI, USD>(
+                &mut pool,
+                10 * FLOAT_SCALING,
+                1000 * 100000000,
+                false,
+                TIMESTAMP_INF,
+                0,
+                &clock,
+                &account_cap,
+                test_scenario::ctx(&mut test)
+            );
+            assert!(base_filled == 0, E_NULL);
+            assert!(quote_filled == 0, E_NULL);
+            assert!(maker_injected, E_NULL);
+            assert!(maker_order_id == order_id(0, false), E_NULL);
+
+            let (next_bid_order_id, next_ask_order_id, _, _) = get_pool_stat(&pool);
+            assert!(next_bid_order_id == order_id(3, true), 0);
+            assert!(next_ask_order_id == order_id(1, false), 0);
+            custodian::assert_user_balance<USD>(
+                &pool.quote_custodian,
+                account_cap_user,
+                7400 * 100000000,
+                2600 * 100000000
+            );
+            custodian::assert_user_balance<SUI>(&pool.base_custodian, account_cap_user, 0, 1000 * 100000000);
+            test_scenario::return_shared(pool);
+            test_scenario::return_shared(clock);
+            test_scenario::return_to_address<AccountCap>(alice, account_cap);
+        };
+
+        test_scenario::next_tx(&mut test, bob);
+        {
+            let pool = test_scenario::take_shared<Pool<SUI, USD>>(&mut test);
+            let clock = test_scenario::take_shared<Clock>(&test);
+            let account_cap = test_scenario::take_from_address<AccountCap>(&test, bob);
+            let account_cap_user = object::id(&account_cap);
+            custodian::deposit(
+                &mut pool.base_custodian,
+                mint_for_testing<SUI>(900 * 100000000, test_scenario::ctx(&mut test)),
+                account_cap_user
+            );
+            custodian::assert_user_balance<SUI>(&pool.base_custodian, account_cap_user, 900 * 100000000, 0);
+
+            let (base_filled, quote_filled, maker_injected, _) = place_limit_order<SUI, USD>(
+                &mut pool,
+                4 * FLOAT_SCALING,
+                800 * 100000000,
+                false,
+                TIMESTAMP_INF,
+                IMMEDIATE_OR_CANCEL,
+                &clock,
+                &account_cap,
+                test_scenario::ctx(&mut test)
+            );
+            assert!(base_filled == 600 * 100000000, E_NULL);
+            assert!(quote_filled == 2600 * 100000000, E_NULL);
+            assert!(!maker_injected, E_NULL);
+
+            custodian::assert_user_balance<SUI>(&pool.base_custodian, account_cap_user, 300 * 100000000, 0);
+            {
+                let (_, _, bids, _) = get_pool_stat(&pool);
+                check_empty_tick_level(bids, 4 * FLOAT_SCALING);
+            };
+            test_scenario::return_shared(pool);
+            test_scenario::return_shared(clock);
+            test_scenario::return_to_address<AccountCap>(bob, account_cap);
+        };
+        test_scenario::end(test);
+    }
+
+    #[test]
+    #[expected_failure(abort_code = EInvalidPair)]
+    fun test_create_pool_invalid_pair() {
+        let owner: address = @0xAAAA;
+        let test = test_scenario::begin(owner);
+        test_scenario::next_tx(&mut test, owner);
+        {
+            setup_test(0, 0, &mut test, owner);
+        };
+        // create pool which is already exist fail
+        test_scenario::next_tx(&mut test, owner);
+        {
+            create_pool_<SUI, SUI>(
+                REFERENCE_TAKER_FEE_RATE,
+                REFERENCE_MAKER_REBATE_RATE,
+                1 * FLOAT_SCALING,
+                1,
+                balance::create_for_testing(FEE_AMOUNT_FOR_CREATE_POOL),
+                test_scenario::ctx(&mut test)
+            );
+        };
+        test_scenario::end(test);
+    }
+
+    #[test]
+    #[expected_failure(abort_code = EInvalidTickSizeLotSize)]
+    fun test_create_pool_invalid_tick_size_lot_size() {
+        let owner: address = @0xAAAA;
+        let test = test_scenario::begin(owner);
+        test_scenario::next_tx(&mut test, owner);
+        {
+            setup_test(0, 0, &mut test, owner);
+        };
+        // create pool which is already exist fail
+        test_scenario::next_tx(&mut test, owner);
+        {
+            create_pool_<SUI, SUI>(
+                REFERENCE_TAKER_FEE_RATE,
+                REFERENCE_MAKER_REBATE_RATE,
+                100_000,
+                5,
+                balance::create_for_testing(FEE_AMOUNT_FOR_CREATE_POOL),
+            test_scenario::ctx(&mut test)
+            );
+        };
+        test_scenario::end(test);
     }
 
     // === Deprecated ===
