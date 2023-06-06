@@ -151,7 +151,7 @@ impl TestInventories {
 
 impl<'a> ObjectRuntime<'a> {
     pub fn new(
-        object_resolver: Box<dyn ChildObjectResolver + 'a>,
+        object_resolver: &'a dyn ChildObjectResolver,
         input_objects: BTreeMap<ObjectID, Owner>,
         is_metered: bool,
         protocol_config: &ProtocolConfig,

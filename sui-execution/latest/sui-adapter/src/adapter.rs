@@ -12,9 +12,9 @@ use move_vm_config::{
     runtime::{VMConfig, VMRuntimeLimitsConfig},
     verifier::VerifierConfig,
 };
-pub use move_vm_runtime::move_vm::MoveVM;
 use move_vm_runtime::{
-    native_extensions::NativeContextExtensions, native_functions::NativeFunctionTable,
+    move_vm::MoveVM, native_extensions::NativeContextExtensions,
+    native_functions::NativeFunctionTable,
 };
 use sui_types::metrics::BytecodeVerifierMetrics;
 use sui_verifier::check_for_verifier_timeout;
@@ -106,7 +106,7 @@ pub fn new_move_vm(
 }
 
 pub fn new_native_extensions<'r>(
-    child_resolver: &'r impl ChildObjectResolver,
+    child_resolver: &'r dyn ChildObjectResolver,
     input_objects: BTreeMap<ObjectID, Owner>,
     is_metered: bool,
     protocol_config: &ProtocolConfig,
@@ -114,7 +114,7 @@ pub fn new_native_extensions<'r>(
 ) -> NativeContextExtensions<'r> {
     let mut extensions = NativeContextExtensions::default();
     extensions.add(ObjectRuntime::new(
-        Box::new(child_resolver),
+        child_resolver,
         input_objects,
         is_metered,
         protocol_config,

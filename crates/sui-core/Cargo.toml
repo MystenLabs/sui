@@ -43,12 +43,10 @@ tracing = "0.1.36"
 fastcrypto.workspace = true
 fastcrypto-zkp.workspace = true
 move-binary-format.workspace = true
-move-bytecode-verifier.workspace = true
 move-bytecode-utils.workspace = true
 move-core-types.workspace = true
 move-package.workspace = true
 move-symbol-pool.workspace = true
-move-vm-runtime.workspace = true
 mysten-common.workspace = true
 mysten-network.workspace = true
 telemetry-subscribers.workspace = true
@@ -56,8 +54,9 @@ typed-store-derive.workspace = true
 typed-store.workspace = true
 
 # TODO use sui-execution versioned crate
+move-bytecode-verifier = { path = "../../external-crates/move/move-bytecode-verifier" }
 sui-adapter = { path = "../../sui-execution/latest/sui-adapter", package = "sui-adapter-latest" }
-sui-move-natives = { path = "../../sui-execution/latest/sui-move-natives", package = "sui-move-natives-latest" }
+sui-verifier = { path = "../../sui-execution/latest/sui-verifier", package = "sui-verifier-latest" }
 
 mysten-metrics = { path = "../mysten-metrics" }
 narwhal-config = { path = "../../narwhal/config" }
@@ -69,6 +68,7 @@ narwhal-types = { path = "../../narwhal/types" }
 narwhal-worker = { path = "../../narwhal/worker" }
 shared-crypto = { path = "../shared-crypto" }
 sui-config = { path = "../sui-config" }
+sui-execution = { path = "../../sui-execution" }
 sui-framework = { path = "../sui-framework" }
 sui-swarm-config = { path = "../sui-swarm-config" }
 sui-genesis-builder = { path = "../sui-genesis-builder" }
@@ -81,7 +81,6 @@ sui-simulator = { path = "../sui-simulator" }
 sui-storage = { path = "../sui-storage" }
 sui-test-transaction-builder = { path = "../sui-test-transaction-builder" }
 sui-types = { path = "../sui-types" }
-sui-verifier = { path = "../../sui-execution/latest/sui-verifier", package = "sui-verifier-latest" }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
@@ -95,9 +94,6 @@ serde-reflection = "0.3.6"
 serde_yaml = "0.8.26"
 
 move-symbol-pool.workspace = true
-
-# TODO use sui-execution versioned crate
-sui-verifier = { path = "../../sui-execution/latest/sui-verifier", package = "sui-verifier-latest" }
 
 narwhal-test-utils = { path = "../../narwhal/test-utils" }
 sui-types = { path = "../sui-types", features = ["test-utils"] }

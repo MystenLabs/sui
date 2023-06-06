@@ -14,23 +14,22 @@ use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::resolver::ModuleResolver;
 use once_cell::sync::OnceCell;
 use serde::{Deserialize, Serialize};
-use sui_types::messages_checkpoint::ECMHLiveObjectSetDigest;
-use tokio::sync::{RwLock, RwLockReadGuard, RwLockWriteGuard};
-use tokio::time::Instant;
-use tracing::{debug, info, trace};
-
 use sui_protocol_config::ProtocolConfig;
 use sui_storage::mutex_table::{MutexGuard, MutexTable, RwLockGuard, RwLockTable};
 use sui_types::accumulator::Accumulator;
 use sui_types::digests::TransactionEventsDigest;
 use sui_types::error::UserInputError;
 use sui_types::message_envelope::Message;
+use sui_types::messages_checkpoint::ECMHLiveObjectSetDigest;
 use sui_types::object::Owner;
 use sui_types::storage::{
     get_module_by_id, BackingPackageStore, ChildObjectResolver, DeleteKind, ObjectKey, ObjectStore,
 };
 use sui_types::sui_system_state::get_sui_system_state;
 use sui_types::{base_types::SequenceNumber, fp_bail, fp_ensure, storage::ParentSync};
+use tokio::sync::{RwLock, RwLockReadGuard, RwLockWriteGuard};
+use tokio::time::Instant;
+use tracing::{debug, info, trace};
 use typed_store::rocks::{DBBatch, DBMap, TypedStoreError};
 use typed_store::traits::Map;
 
@@ -43,7 +42,6 @@ use crate::authority::epoch_start_configuration::{EpochFlag, EpochStartConfigura
 use super::authority_store_tables::LiveObject;
 use super::{authority_store_tables::AuthorityPerpetualTables, *};
 use mysten_common::sync::notify_read::NotifyRead;
-use sui_adapter::type_layout_resolver::TypeLayoutResolver;
 use sui_storage::package_object_cache::PackageObjectCache;
 use sui_types::effects::{TransactionEffects, TransactionEvents};
 use sui_types::gas_coin::TOTAL_SUPPLY_MIST;
@@ -1608,7 +1606,7 @@ impl AuthorityStore {
             return Ok(());
         }
 
-        let move_vm = old_epoch_store.move_vm();
+        let executor = old_epoch_store.executor();
         let chain_identifier = old_epoch_store.get_chain_identifier();
 
         let protocol_version = ProtocolVersion::new(
@@ -1641,7 +1639,7 @@ impl AuthorityStore {
                             let package_cache_clone = package_cache.clone();
                             pending_tasks.push(s.spawn(move || {
                                 let mut layout_resolver =
-                                    TypeLayoutResolver::new(move_vm, &package_cache_clone);
+                                    executor.type_layout_resolver(Box::new(&package_cache_clone));
                                 let mut total_storage_rebate = 0;
                                 let mut total_sui = 0;
                                 for object in task_objects {
@@ -1649,7 +1647,7 @@ impl AuthorityStore {
                                     // get_total_sui includes storage rebate, however all storage rebate is
                                     // also stored in the storage fund, so we need to subtract it here.
                                     total_sui +=
-                                        object.get_total_sui(&mut layout_resolver).unwrap()
+                                        object.get_total_sui(layout_resolver.as_mut()).unwrap()
                                             - object.storage_rebate;
                                 }
                                 if count % 50_000_000 == 0 {
@@ -1667,11 +1665,11 @@ impl AuthorityStore {
                 (init.0 + result.0, init.1 + result.1)
             })
         });
-        let mut layout_resolver = TypeLayoutResolver::new(move_vm, self.as_ref());
+        let mut layout_resolver = executor.type_layout_resolver(Box::new(self.as_ref()));
         for object in pending_objects {
             total_storage_rebate += object.storage_rebate;
             total_sui +=
-                object.get_total_sui(&mut layout_resolver).unwrap() - object.storage_rebate;
+                object.get_total_sui(layout_resolver.as_mut()).unwrap() - object.storage_rebate;
         }
         info!(
             "Scanned {} live objects, took {:?}",

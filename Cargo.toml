@@ -140,6 +140,7 @@ members = [
     "narwhal/test-utils",
     "narwhal/types",
     "narwhal/worker",
+    "sui-execution",
     "sui-execution/latest/sui-adapter",
     "sui-execution/latest/sui-move-natives",
     "sui-execution/latest/sui-verifier",
@@ -192,14 +193,11 @@ axum = { version = "0.6.6", default-features = false, features = ["headers", "to
 # Move dependencies
 move-binary-format = { path = "external-crates/move/move-binary-format" }
 move-bytecode-utils = { path = "external-crates/move/tools/move-bytecode-utils" }
-move-bytecode-verifier = { path = "external-crates/move/move-bytecode-verifier" }
 move-cli = { path = "external-crates/move/tools/move-cli" }
 move-compiler = { path = "external-crates/move/move-compiler" }
 move-core-types = { path = "external-crates/move/move-core/types", features = ["address32"] }
 move-disassembler = { path = "external-crates/move/tools/move-disassembler" }
 move-package = { path = "external-crates/move/tools/move-package" }
-move-stdlib = { path = "external-crates/move/move-stdlib" }
-move-vm-runtime =  { path = "external-crates/move/move-vm/runtime" }
 move-unit-test = { path = "external-crates/move/tools/move-unit-test" }
 move-vm-config = { path = "external-crates/move/move-vm/config" }
 move-vm-test-utils = { path = "external-crates/move/move-vm/test-utils" }

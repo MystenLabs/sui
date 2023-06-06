@@ -12,6 +12,7 @@ anyhow = { version = "1.0.64", features = ["backtrace"] }
 fastcrypto = { workspace = true }
 tempfile = "3.3.0"
 
+move-bytecode-verifier = { path = "../../external-crates/move/move-bytecode-verifier" }
 sui-adapter = { path = "../../sui-execution/latest/sui-adapter", package = "sui-adapter-latest" }
 sui-verifier = { path = "../../sui-execution/latest/sui-verifier", package = "sui-verifier-latest" }
 
@@ -21,7 +22,6 @@ sui-protocol-config = { path = "../sui-protocol-config" }
 
 move-binary-format.workspace = true
 move-bytecode-utils.workspace = true
-move-bytecode-verifier.workspace = true
 move-compiler.workspace = true
 move-core-types.workspace = true
 move-package.workspace = true

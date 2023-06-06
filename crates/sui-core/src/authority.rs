@@ -15,6 +15,7 @@ use fastcrypto::encoding::Encoding;
 use itertools::Itertools;
 use move_binary_format::CompiledModule;
 use move_core_types::language_storage::ModuleId;
+use move_core_types::value::MoveStructLayout;
 use mysten_metrics::{TX_TYPE_SHARED_OBJ_TX, TX_TYPE_SINGLE_WRITER_TX};
 use parking_lot::Mutex;
 use prometheus::{
@@ -41,9 +42,6 @@ use narwhal_config::{
 };
 use once_cell::sync::OnceCell;
 use shared_crypto::intent::{Intent, IntentScope};
-use sui_adapter::adapter;
-use sui_adapter::execution_engine;
-use sui_adapter::type_layout_resolver::TypeLayoutResolver;
 use sui_config::certificate_deny_config::CertificateDenyConfig;
 use sui_config::genesis::Genesis;
 use sui_config::node::{
@@ -75,7 +73,6 @@ use sui_types::effects::{
 use sui_types::error::{ExecutionError, UserInputError};
 use sui_types::event::{Event, EventID};
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
-use sui_types::execution_mode;
 use sui_types::gas::{GasCostSummary, SuiGasStatus};
 use sui_types::message_envelope::Message;
 use sui_types::messages_checkpoint::{
@@ -98,7 +95,6 @@ pub use sui_types::temporary_store::TemporaryStore;
 use sui_types::temporary_store::{
     InnerTemporaryStore, ObjectMap, TemporaryModuleResolver, TxCoins, WrittenObjects,
 };
-use sui_types::type_resolver::LayoutResolver;
 use sui_types::{
     base_types::*,
     committee::Committee,
@@ -1211,17 +1207,7 @@ impl AuthorityState {
         let transaction_data = &certificate.data().intent_message().value;
         let (kind, signer, gas) = transaction_data.execution_parts();
         let (inner_temp_store, effects, execution_error_opt) =
-            execution_engine::execute_transaction_to_effects::<execution_mode::Normal, _>(
-                shared_object_refs,
-                temporary_store,
-                kind,
-                signer,
-                &gas,
-                *certificate.digest(),
-                transaction_dependencies,
-                epoch_store.move_vm(),
-                gas_status,
-                &epoch_store.epoch_start_config().epoch_data(),
+            epoch_store.executor().execute_transaction_to_effects(
                 epoch_store.protocol_config(),
                 self.metrics.limits_metrics.clone(),
                 // TODO: would be nice to pass the whole NodeConfig here, but it creates a
@@ -1229,6 +1215,19 @@ impl AuthorityState {
                 self.expensive_safety_check_config
                     .enable_deep_per_tx_sui_conservation_check(),
                 self.certificate_deny_config.certificate_deny_set(),
+                &epoch_store.epoch_start_config().epoch_data().epoch_id(),
+                epoch_store
+                    .epoch_start_config()
+                    .epoch_data()
+                    .epoch_start_timestamp(),
+                temporary_store,
+                shared_object_refs,
+                gas_status,
+                &gas,
+                kind,
+                signer,
+                *certificate.digest(),
+                transaction_dependencies,
             );
 
         Ok((inner_temp_store, effects, execution_error_opt.err()))
@@ -1312,32 +1311,37 @@ impl AuthorityState {
             epoch_store.protocol_config(),
         );
         let (kind, signer, _) = transaction.execution_parts();
+
+        let silent = true;
         // don't bother with paranoid checks in dry run
         let enable_move_vm_paranoid_checks = false;
-        let move_vm = Arc::new(
-            adapter::new_move_vm(
-                epoch_store.native_functions().clone(),
-                epoch_store.protocol_config(),
-                enable_move_vm_paranoid_checks,
-            )
-            .expect("We defined natives to not fail here"),
-        );
-        let (inner_temp_store, effects, _execution_error) =
-            execution_engine::execute_transaction_to_effects::<execution_mode::Normal, _>(
-                shared_object_refs,
-                temporary_store,
-                kind,
-                signer,
-                &gas_object_refs,
-                transaction_digest,
-                transaction_dependencies,
-                &move_vm,
-                gas_status,
-                &epoch_store.epoch_start_config().epoch_data(),
+        let executor = sui_execution::executor(
+            epoch_store.protocol_config(),
+            enable_move_vm_paranoid_checks,
+            silent,
+        )
+        .expect("Creating an executor should not fail here");
+
+        let expensive_checks = false;
+        let (inner_temp_store, effects, _execution_error) = executor
+            .execute_transaction_to_effects(
                 epoch_store.protocol_config(),
                 self.metrics.limits_metrics.clone(),
-                false, // enable_expensive_checks
+                expensive_checks,
                 self.certificate_deny_config.certificate_deny_set(),
+                &epoch_store.epoch_start_config().epoch_data().epoch_id(),
+                epoch_store
+                    .epoch_start_config()
+                    .epoch_data()
+                    .epoch_start_timestamp(),
+                temporary_store,
+                shared_object_refs,
+                gas_status,
+                &gas_object_refs,
+                kind,
+                signer,
+                transaction_digest,
+                transaction_dependencies,
             );
         let tx_digest = *effects.transaction_digest();
 
@@ -1453,32 +1457,34 @@ impl AuthorityState {
             protocol_config,
         );
         let gas_status = SuiGasStatus::new_with_budget(max_tx_gas, gas_price, protocol_config);
-        let move_vm = Arc::new(
-            adapter::new_move_vm(
-                epoch_store.native_functions().clone(),
-                epoch_store.protocol_config(),
-                self.expensive_safety_check_config
-                    .enable_move_vm_paranoid_checks(),
-            )
-            .expect("We defined natives to not fail here"),
+        let silent = true;
+        let executor = sui_execution::executor(
+            epoch_store.protocol_config(),
+            self.expensive_safety_check_config
+                .enable_move_vm_paranoid_checks(),
+            silent,
+        )
+        .expect("Creating an executor should not fail here");
+        let expensive_checks = false;
+        let (inner_temp_store, effects, execution_result) = executor.dev_inspect_transaction(
+            protocol_config,
+            self.metrics.limits_metrics.clone(),
+            expensive_checks,
+            self.certificate_deny_config.certificate_deny_set(),
+            &epoch_store.epoch_start_config().epoch_data().epoch_id(),
+            epoch_store
+                .epoch_start_config()
+                .epoch_data()
+                .epoch_start_timestamp(),
+            temporary_store,
+            shared_object_refs,
+            gas_status,
+            &[gas_object_ref],
+            transaction_kind,
+            sender,
+            transaction_digest,
+            transaction_dependencies,
         );
-        let (inner_temp_store, effects, execution_result) =
-            execution_engine::execute_transaction_to_effects::<execution_mode::DevInspect, _>(
-                shared_object_refs,
-                temporary_store,
-                transaction_kind,
-                sender,
-                &[gas_object_ref],
-                transaction_digest,
-                transaction_dependencies,
-                &move_vm,
-                gas_status,
-                &epoch_store.epoch_start_config().epoch_data(),
-                protocol_config,
-                self.metrics.limits_metrics.clone(),
-                false, // enable_expensive_checks
-                self.certificate_deny_config.certificate_deny_set(),
-            );
 
         let module_cache =
             TemporaryModuleResolver::new(&inner_temp_store, epoch_store.module_cache().clone());
@@ -1842,10 +1848,12 @@ impl AuthorityState {
         let layout = if let (Some(format), Some(move_obj)) =
             (request.object_format_options, object.data.try_as_move())
         {
-            let epoch_store = self.load_epoch_store_one_call_per_task();
-            let move_vm = epoch_store.move_vm();
-            let mut layout_resolver = TypeLayoutResolver::new(move_vm, self.database.as_ref());
-            Some(layout_resolver.get_layout(move_obj, format)?)
+            Some(
+                self.load_epoch_store_one_call_per_task()
+                    .executor()
+                    .type_layout_resolver(Box::new(self.database.as_ref()))
+                    .get_layout(move_obj, format)?,
+            )
         } else {
             None
         };
@@ -2313,45 +2321,26 @@ impl AuthorityState {
     }
 
     pub fn get_object_read(&self, object_id: &ObjectID) -> SuiResult<ObjectRead> {
-        match self.database.get_object_or_tombstone(*object_id)? {
-            None => Ok(ObjectRead::NotExists(*object_id)),
-            Some(obj_ref) => {
-                if obj_ref.2.is_alive() {
-                    match self.database.get_object_by_key(object_id, obj_ref.1)? {
-                        None => {
-                            error!("Object with in parent_entry is missing from object store, datastore is inconsistent");
-                            Err(UserInputError::ObjectNotFound {
-                                object_id: *object_id,
-                                version: Some(obj_ref.1),
-                            }
-                            .into())
-                        }
-                        Some(object) => {
-                            let layout = {
-                                match object.data.try_as_move() {
-                                    None => None,
-                                    Some(move_obj) => {
-                                        let epoch_store = self.load_epoch_store_one_call_per_task();
-                                        let move_vm = epoch_store.move_vm();
-                                        let mut layout_resolver = TypeLayoutResolver::new(
-                                            move_vm,
-                                            self.database.as_ref(),
-                                        );
-                                        Some(
-                                            layout_resolver.get_layout(
-                                                move_obj,
-                                                ObjectFormatOptions::default(),
-                                            )?,
-                                        )
-                                    }
-                                }
-                            };
-                            Ok(ObjectRead::Exists(obj_ref, object, layout))
-                        }
-                    }
-                } else {
-                    Ok(ObjectRead::Deleted(obj_ref))
+        let Some(obj_ref) = self.database.get_object_or_tombstone(*object_id)? else {
+            return Ok(ObjectRead::NotExists(*object_id))
+        };
+
+        if !obj_ref.2.is_alive() {
+            return Ok(ObjectRead::Deleted(obj_ref));
+        }
+
+        match self.read_object_at_version(object_id, obj_ref.1)? {
+            Some((object, layout)) => Ok(ObjectRead::Exists(obj_ref, object, layout)),
+            None => {
+                error!(
+                    "Object with in parent_entry is missing from object store, datastore is \
+                     inconsistent",
+                );
+                Err(UserInputError::ObjectNotFound {
+                    object_id: *object_id,
+                    version: Some(obj_ref.1),
                 }
+                .into())
             }
         }
     }
@@ -2415,85 +2404,72 @@ impl AuthorityState {
         object_id: &ObjectID,
         version: SequenceNumber,
     ) -> SuiResult<PastObjectRead> {
-        // Firstly we see if the object ever exists by getting its latest data
-        match self.database.get_object_or_tombstone(*object_id)? {
-            None => Ok(PastObjectRead::ObjectNotExists(*object_id)),
-            Some(obj_ref) => {
-                if version > obj_ref.1 {
-                    return Ok(PastObjectRead::VersionTooHigh {
-                        object_id: *object_id,
-                        asked_version: version,
-                        latest_version: obj_ref.1,
-                    });
+        // Firstly we see if the object ever existed by getting its latest data
+        let Some(obj_ref) = self.database.get_object_or_tombstone(*object_id)? else {
+            return Ok(PastObjectRead::ObjectNotExists(*object_id));
+        };
+
+        if version > obj_ref.1 {
+            return Ok(PastObjectRead::VersionTooHigh {
+                object_id: *object_id,
+                asked_version: version,
+                latest_version: obj_ref.1,
+            });
+        }
+
+        if version < obj_ref.1 {
+            // Read past objects
+            return Ok(match self.read_object_at_version(object_id, version)? {
+                Some((object, layout)) => {
+                    let obj_ref = object.compute_object_reference();
+                    PastObjectRead::VersionFound(obj_ref, object, layout)
                 }
-                if version < obj_ref.1 {
-                    // Read past objects
-                    return Ok(match self.database.get_object_by_key(object_id, version)? {
-                        None => PastObjectRead::VersionNotFound(*object_id, version),
-                        Some(object) => {
-                            let layout = {
-                                match object.data.try_as_move() {
-                                    None => None,
-                                    Some(move_obj) => {
-                                        let epoch_store = self.load_epoch_store_one_call_per_task();
-                                        let move_vm = epoch_store.move_vm();
-                                        let mut layout_resolver = TypeLayoutResolver::new(
-                                            move_vm,
-                                            self.database.as_ref(),
-                                        );
-                                        Some(
-                                            layout_resolver.get_layout(
-                                                move_obj,
-                                                ObjectFormatOptions::default(),
-                                            )?,
-                                        )
-                                    }
-                                }
-                            };
-                            let obj_ref = object.compute_object_reference();
-                            PastObjectRead::VersionFound(obj_ref, object, layout)
-                        }
-                    });
+
+                None => PastObjectRead::VersionNotFound(*object_id, version),
+            });
+        }
+
+        if !obj_ref.2.is_alive() {
+            return Ok(PastObjectRead::ObjectDeleted(obj_ref));
+        }
+
+        match self.read_object_at_version(object_id, obj_ref.1)? {
+            Some((object, layout)) => Ok(PastObjectRead::VersionFound(obj_ref, object, layout)),
+            None => {
+                error!(
+                    "Object with in parent_entry is missing from object store, datastore is \
+                     inconsistent",
+                );
+                Err(UserInputError::ObjectNotFound {
+                    object_id: *object_id,
+                    version: Some(obj_ref.1),
                 }
-                // version is equal to the latest seq number this node knows
-                if obj_ref.2.is_alive() {
-                    match self.database.get_object_by_key(object_id, obj_ref.1)? {
-                        None => {
-                            error!("Object with in parent_entry is missing from object store, datastore is inconsistent");
-                            Err(UserInputError::ObjectNotFound {
-                                object_id: *object_id,
-                                version: Some(obj_ref.1),
-                            }
-                            .into())
-                        }
-                        Some(object) => {
-                            let layout = {
-                                match object.data.try_as_move() {
-                                    None => None,
-                                    Some(move_obj) => {
-                                        let epoch_store = self.load_epoch_store_one_call_per_task();
-                                        let move_vm = epoch_store.move_vm();
-                                        let mut layout_resolver = TypeLayoutResolver::new(
-                                            move_vm,
-                                            self.database.as_ref(),
-                                        );
-                                        Some(
-                                            layout_resolver.get_layout(
-                                                move_obj,
-                                                ObjectFormatOptions::default(),
-                                            )?,
-                                        )
-                                    }
-                                }
-                            };
-                            Ok(PastObjectRead::VersionFound(obj_ref, object, layout))
-                        }
-                    }
-                } else {
-                    Ok(PastObjectRead::ObjectDeleted(obj_ref))
-                }
+                .into())
             }
         }
+    }
+
+    fn read_object_at_version(
+        &self,
+        object_id: &ObjectID,
+        version: SequenceNumber,
+    ) -> SuiResult<Option<(Object, Option<MoveStructLayout>)>> {
+        let Some(object) = self.database.get_object_by_key(object_id, version)? else {
+            return Ok(None);
+        };
+
+        let layout = object
+            .data
+            .try_as_move()
+            .map(|object| {
+                self.load_epoch_store_one_call_per_task()
+                    .executor()
+                    .type_layout_resolver(Box::new(self.database.as_ref()))
+                    .get_layout(object, ObjectFormatOptions::default())
+            })
+            .transpose()?;
+
+        Ok(Some((object, layout)))
     }
 
     fn get_owner_at_version(

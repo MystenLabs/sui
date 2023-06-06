@@ -48,13 +48,11 @@ use crate::module_cache_metrics::ResolverMetrics;
 use crate::signature_verifier::*;
 use crate::stake_aggregator::StakeAggregator;
 use move_bytecode_utils::module_cache::SyncModuleCache;
-use move_vm_runtime::move_vm::MoveVM;
-use move_vm_runtime::native_functions::NativeFunctionTable;
 use mysten_common::sync::notify_once::NotifyOnce;
 use mysten_common::sync::notify_read::NotifyRead;
 use mysten_metrics::monitored_scope;
 use prometheus::IntCounter;
-use sui_adapter::adapter;
+use sui_execution::{self, Executor};
 use sui_macros::fail_point;
 use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
 use sui_storage::mutex_table::{MutexGuard, MutexTable};
@@ -116,9 +114,7 @@ pub struct ExecutionIndicesWithHash {
 
 // Data related to VM and Move execution and type layout
 pub struct ExecutionComponents {
-    /// Move native functions that are available to invoke
-    pub(crate) native_functions: NativeFunctionTable,
-    pub(crate) move_vm: Arc<MoveVM>,
+    pub(crate) executor: Arc<dyn Executor + Send + Sync>,
     // TODO: use strategies (e.g. LRU?) to constraint memory usage
     pub(crate) module_cache: Arc<SyncModuleCache<ResolverWrapper<AuthorityStore>>>,
     metrics: Arc<ResolverMetrics>,
@@ -551,12 +547,8 @@ impl AuthorityPerEpochStore {
         &self.execution_component.module_cache
     }
 
-    pub fn move_vm(&self) -> &Arc<MoveVM> {
-        &self.execution_component.move_vm
-    }
-
-    pub fn native_functions(&self) -> &NativeFunctionTable {
-        &self.execution_component.native_functions
+    pub fn executor(&self) -> &Arc<dyn Executor + Send + Sync> {
+        &self.execution_component.executor
     }
 
     pub async fn acquire_tx_guard(
@@ -2041,22 +2033,20 @@ impl ExecutionComponents {
         metrics: Arc<ResolverMetrics>,
         expensive_safety_check_config: &ExpensiveSafetyCheckConfig,
     ) -> Self {
-        let native_functions = sui_move_natives::all_natives(/* silent */ true);
-        let move_vm = Arc::new(
-            adapter::new_move_vm(
-                native_functions.clone(),
-                protocol_config,
-                expensive_safety_check_config.enable_move_vm_paranoid_checks(),
-            )
-            .expect("We defined natives to not fail here"),
-        );
+        let silent = true;
+        let executor = sui_execution::executor(
+            protocol_config,
+            expensive_safety_check_config.enable_move_vm_paranoid_checks(),
+            silent,
+        )
+        .expect("Creating an executor should not fail here");
+
         let module_cache = Arc::new(SyncModuleCache::new(ResolverWrapper::new(
             store,
             metrics.clone(),
         )));
         Self {
-            native_functions,
-            move_vm,
+            executor,
             module_cache,
             metrics,
         }
