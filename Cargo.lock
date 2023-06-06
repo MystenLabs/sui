@@ -5220,9 +5220,9 @@ name = "move-proc-macros"
 version = "0.1.0"
 dependencies = [
  "enum-compat-util",
- "proc-macro2 1.0.54",
+ "proc-macro2 1.0.58",
  "quote 1.0.26",
- "syn 2.0.10",
+ "syn 2.0.16",
 ]
 
 [[package]]
