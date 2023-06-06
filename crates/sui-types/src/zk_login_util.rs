@@ -1,12 +1,13 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::error::SuiError;
+use crate::error::{SuiError, SuiResult};
 use fastcrypto_zkp::bn254::zk_login::OAuthProvider;
+use im::hashmap::HashMap as ImHashMap;
 use once_cell::sync::Lazy;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, hash::Hash};
+use std::{collections::HashMap, hash::Hash, sync::Arc};
 
 /// A whitelist of client_ids (i.e. the value of "aud" in cliams) for each provider
 pub static DEFAULT_WHITELIST: Lazy<HashMap<&str, Vec<&str>>> = Lazy::new(|| {
@@ -62,6 +63,10 @@ pub struct OAuthProviderContentReader {
 }
 
 impl OAuthProviderContent {
+    pub fn kid(&self) -> &str {
+        &self.kid
+    }
+
     pub fn from_reader(reader: OAuthProviderContentReader) -> Self {
         Self {
             kty: reader.kty,
@@ -78,24 +83,26 @@ fn trim(str: String) -> String {
     str.trim_end_matches(|c: char| c == '=').to_owned()
 }
 
-/// Parse the bytes as JSON and find the keys that has the expected kid.
-/// Return the OAuthProviderContentReader if valid.
-pub fn find_jwk_by_kid(kid: &str, json_bytes: &[u8]) -> Result<OAuthProviderContent, SuiError> {
+/// Parse the JWK bytes received from the oauth provider keys endpoint into a map from kid to
+/// OAuthProviderContent.
+pub fn parse_jwks(json_bytes: &[u8]) -> SuiResult<ImHashMap<String, Arc<OAuthProviderContent>>> {
     let json_str = String::from_utf8_lossy(json_bytes);
     let parsed_list: Result<serde_json::Value, serde_json::Error> = serde_json::from_str(&json_str);
     if let Ok(parsed_list) = parsed_list {
         if let Some(keys) = parsed_list["keys"].as_array() {
+            let mut ret = ImHashMap::new();
             for k in keys {
                 let parsed: OAuthProviderContentReader =
                     serde_json::from_value(k.clone()).map_err(|_| SuiError::JWKRetrievalError)?;
-                if parsed.kid == kid
-                    && parsed.alg == "RS256"
-                    && parsed.my_use == "sig"
-                    && parsed.kty == "RSA"
-                {
-                    return Ok(OAuthProviderContent::from_reader(parsed));
+
+                if parsed.alg == "RS256" && parsed.my_use == "sig" && parsed.kty == "RSA" {
+                    ret.insert(
+                        parsed.kid.clone(),
+                        Arc::new(OAuthProviderContent::from_reader(parsed)),
+                    );
                 }
             }
+            return Ok(ret);
         }
     }
     Err(SuiError::JWKRetrievalError)

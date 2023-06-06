@@ -10,6 +10,7 @@ use crate::crypto::{
 use crate::error::SuiResult;
 use crate::executable_transaction::CertificateProof;
 use crate::messages_checkpoint::CheckpointSequenceNumber;
+use crate::signature::AuxVerifyData;
 use crate::transaction::VersionedProtocolMessage;
 use fastcrypto::traits::KeyPair;
 use once_cell::sync::OnceCell;
@@ -63,7 +64,7 @@ pub trait Message {
     /// Verify the internal data consistency of this message.
     /// In some cases, such as user signed transaction, we also need
     /// to verify the user signature here.
-    fn verify(&self, signature_epoch: Option<EpochId>) -> SuiResult;
+    fn verify(&self, verify_params: &AuxVerifyData) -> SuiResult;
 }
 
 #[derive(Clone, Debug, Eq, Serialize, Deserialize)]
@@ -148,15 +149,22 @@ impl<T: Message> Envelope<T, EmptySignInfo> {
         }
     }
 
-    pub fn verify_signature(&self) -> SuiResult {
-        self.data.verify(None)
+    pub fn verify_signature(&self, verify_params: &AuxVerifyData) -> SuiResult {
+        self.data.verify(verify_params)
     }
 
-    pub fn verify(self) -> SuiResult<VerifiedEnvelope<T, EmptySignInfo>> {
-        self.verify_signature()?;
+    pub fn verify_with_params(
+        self,
+        verify_params: &AuxVerifyData,
+    ) -> SuiResult<VerifiedEnvelope<T, EmptySignInfo>> {
+        self.verify_signature(verify_params)?;
         Ok(VerifiedEnvelope::<T, EmptySignInfo>::new_from_verified(
             self,
         ))
+    }
+
+    pub fn verify(self) -> SuiResult<VerifiedEnvelope<T, EmptySignInfo>> {
+        self.verify_with_params(&AuxVerifyData::default())
     }
 }
 
@@ -191,20 +199,34 @@ where
         self.auth_signature.epoch
     }
 
-    pub fn verify_signature(&self, committee: &Committee) -> SuiResult {
-        self.data.verify(Some(self.auth_sig().epoch))?;
+    pub fn verify_signature(
+        &self,
+        committee: &Committee,
+        verify_params: &AuxVerifyData,
+    ) -> SuiResult {
+        let mut verify_params = verify_params.clone();
+        verify_params.epoch = Some(self.auth_sig().epoch);
+        self.data.verify(&verify_params)?;
         self.auth_signature
             .verify_secure(self.data(), Intent::sui_app(T::SCOPE), committee)
+    }
+
+    pub fn verify_with_params(
+        self,
+        committee: &Committee,
+        verify_params: &AuxVerifyData,
+    ) -> SuiResult<VerifiedEnvelope<T, AuthoritySignInfo>> {
+        self.verify_signature(committee, verify_params)?;
+        Ok(VerifiedEnvelope::<T, AuthoritySignInfo>::new_from_verified(
+            self,
+        ))
     }
 
     pub fn verify(
         self,
         committee: &Committee,
     ) -> SuiResult<VerifiedEnvelope<T, AuthoritySignInfo>> {
-        self.verify_signature(committee)?;
-        Ok(VerifiedEnvelope::<T, AuthoritySignInfo>::new_from_verified(
-            self,
-        ))
+        self.verify_with_params(committee, &AuxVerifyData::default())
     }
 }
 
@@ -254,18 +276,32 @@ where
 
     // TODO: Eventually we should remove all calls to verify_signature
     // and make sure they all call verify to avoid repeated verifications.
-    pub fn verify_signature(&self, committee: &Committee) -> SuiResult {
-        self.data.verify(Some(self.auth_sig().epoch))?;
+    pub fn verify_signature(
+        &self,
+        committee: &Committee,
+        verify_params: &AuxVerifyData,
+    ) -> SuiResult {
+        let mut verify_params = verify_params.clone();
+        verify_params.epoch = Some(self.auth_sig().epoch);
+        self.data.verify(&verify_params)?;
         self.auth_signature
             .verify_secure(self.data(), Intent::sui_app(T::SCOPE), committee)
+    }
+
+    pub fn verify_with_params(
+        self,
+        committee: &Committee,
+        verify_params: &AuxVerifyData,
+    ) -> SuiResult<VerifiedEnvelope<T, AuthorityQuorumSignInfo<S>>> {
+        self.verify_signature(committee, verify_params)?;
+        Ok(VerifiedEnvelope::<T, AuthorityQuorumSignInfo<S>>::new_from_verified(self))
     }
 
     pub fn verify(
         self,
         committee: &Committee,
     ) -> SuiResult<VerifiedEnvelope<T, AuthorityQuorumSignInfo<S>>> {
-        self.verify_signature(committee)?;
-        Ok(VerifiedEnvelope::<T, AuthorityQuorumSignInfo<S>>::new_from_verified(self))
+        self.verify_with_params(committee, &AuxVerifyData::default())
     }
 }
 

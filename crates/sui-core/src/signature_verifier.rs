@@ -3,6 +3,7 @@
 
 use either::Either;
 use futures::pin_mut;
+use im::hashmap::HashMap as ImHashMap;
 use itertools::izip;
 use lru::LruCache;
 use parking_lot::{Mutex, MutexGuard, RwLock};
@@ -17,7 +18,9 @@ use sui_types::{
     error::{SuiError, SuiResult},
     message_envelope::Message,
     messages_checkpoint::SignedCheckpointSummary,
+    signature::AuxVerifyData,
     transaction::{CertifiedTransaction, VerifiedCertificate},
+    zk_login_util::OAuthProviderContent,
 };
 
 use mysten_metrics::monitored_scope;
@@ -89,6 +92,13 @@ pub struct SignatureVerifier {
     certificate_cache: VerifiedDigestCache<CertificateDigest>,
     signed_data_cache: VerifiedDigestCache<SenderSignedDataDigest>,
 
+    /// Map from kid (key id) to the fetched OAuthProviderContent for that key.
+    /// We use an immutable data structure because verification of ZKLogins may be slow, so we
+    /// don't want to pass a reference to the map to the verify method, since that would lead to a
+    /// lengthy critical section. Instead, we use an immutable data structure which can be cloned
+    /// very cheaply.
+    oauth_provider_jwk: RwLock<ImHashMap<String, Arc<OAuthProviderContent>>>,
+
     queue: Mutex<CertBuffer>,
     pub metrics: Arc<SignatureVerifierMetrics>,
 }
@@ -109,6 +119,7 @@ impl SignatureVerifier {
                 metrics.signed_data_cache_hits.clone(),
                 metrics.signed_data_cache_evictions.clone(),
             ),
+            oauth_provider_jwk: Default::default(),
             queue: Mutex::new(CertBuffer::new(batch_size)),
             metrics,
         }
@@ -264,9 +275,27 @@ impl SignatureVerifier {
         });
     }
 
+    /// Insert a JWK into the verifier state. Returns true if the kid of the JWK has not already
+    /// been inserted.
+    pub(crate) fn insert_oauth_jwk(&self, content: &OAuthProviderContent) -> bool {
+        let mut oauth_provider_jwk = self.oauth_provider_jwk.write();
+
+        if oauth_provider_jwk.contains_key(content.kid()) {
+            return false;
+        }
+
+        let kid = content.kid().to_string();
+        oauth_provider_jwk.insert(kid, Arc::new(content.clone()));
+        true
+    }
+
     pub fn verify_tx(&self, signed_tx: &SenderSignedData) -> SuiResult {
         self.signed_data_cache
-            .is_verified(signed_tx.full_message_digest(), || signed_tx.verify(None))
+            .is_verified(signed_tx.full_message_digest(), || {
+                let oauth_provider_jwk = self.oauth_provider_jwk.read().clone();
+                let aux_data = AuxVerifyData::new(None, oauth_provider_jwk);
+                signed_tx.verify(&aux_data)
+            })
     }
 }
 
@@ -351,8 +380,9 @@ pub fn batch_verify_all_certificates_and_checkpoints(
 ) -> SuiResult {
     // certs.data() is assumed to be verified already by the caller.
 
+    let verify_params = AuxVerifyData::new(Some(committee.epoch()), Default::default());
     for ckpt in checkpoints {
-        ckpt.data().verify(Some(committee.epoch()))?;
+        ckpt.data().verify(&verify_params)?;
     }
 
     batch_verify(committee, certs, checkpoints)
@@ -365,6 +395,7 @@ pub fn batch_verify_certificates(
 ) -> Vec<SuiResult> {
     // certs.data() is assumed to be verified already by the caller.
 
+    let verify_params = AuxVerifyData::new(None, Default::default());
     match batch_verify(committee, certs, &[]) {
         Ok(_) => vec![Ok(()); certs.len()],
 
@@ -373,7 +404,7 @@ pub fn batch_verify_certificates(
             .iter()
             // TODO: verify_signature currently checks the tx sig as well, which might be cached
             // already.
-            .map(|c| c.verify_signature(committee))
+            .map(|c| c.verify_signature(committee, &verify_params))
             .collect(),
 
         Err(e) => vec![Err(e)],
