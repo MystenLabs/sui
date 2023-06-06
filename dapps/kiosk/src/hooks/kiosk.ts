@@ -44,7 +44,6 @@ export function useOwnedKiosk() {
   return useQuery({
     queryKey: [TANSTACK_OWNED_KIOSK_KEY, currentAccount?.address],
     refetchOnMount: false,
-    refetchOnWindowFocus: false,
     queryFn: async (): Promise<{
       kioskId: SuiAddress | null;
       kioskCap: SuiAddress | null;
