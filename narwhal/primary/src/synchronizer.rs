@@ -4,7 +4,6 @@
 use anemo::{rpc::Status, Network, Request, Response};
 use config::{AuthorityIdentifier, Committee, Epoch, WorkerCache};
 use consensus::consensus::ConsensusRound;
-use consensus::dag::Dag;
 use crypto::NetworkPublicKey;
 use fastcrypto::hash::Hash as _;
 use futures::{stream::FuturesOrdered, StreamExt};
@@ -93,8 +92,6 @@ struct Inner {
     rx_consensus_round_updates: watch::Receiver<ConsensusRound>,
     /// Genesis digests and contents.
     genesis: HashMap<CertificateDigest, Certificate>,
-    /// The dag used for the external consensus
-    dag: Option<Arc<Dag>>,
     /// Contains Synchronizer specific metrics among other Primary metrics.
     metrics: Arc<PrimaryMetrics>,
     /// Background tasks broadcasting newly formed certificates.
@@ -159,9 +156,12 @@ impl Inner {
         // TODO: remove this validation later to reduce rocksdb access.
         if certificate.round() > self.gc_round.load(Ordering::Acquire) + 1 {
             let _scope = monitored_scope("Synchronizer::accept_certificate_internal::parents");
-            for digest in certificate.header().parents() {
-                if !self.certificate_store.contains(digest).unwrap() {
-                    panic!("Parent {digest:?} not found for {certificate:?}!");
+            let existence = self
+                .certificate_store
+                .multi_contains(certificate.header().parents().iter())?;
+            for (digest, exists) in certificate.header().parents().iter().zip(existence.iter()) {
+                if !*exists {
+                    panic!("Parent {digest:?} not found for {certificate:?}!")
                 }
             }
         }
@@ -234,13 +234,14 @@ impl Inner {
             return Ok(Vec::new());
         }
 
+        let existence = self
+            .certificate_store
+            .multi_contains(header.parents().iter())?;
         let mut unknown: Vec<_> = header
             .parents()
             .iter()
-            .filter_map(|digest| match self.certificate_store.contains(digest) {
-                Ok(true) => None,
-                _ => Some(*digest),
-            })
+            .zip(existence.iter())
+            .filter_map(|(digest, exists)| if *exists { None } else { Some(*digest) })
             .collect();
         let state = self.state.lock().await;
         unknown.retain(|digest| !state.suspended.contains_key(digest));
@@ -266,8 +267,12 @@ impl Inner {
             return Ok(result);
         }
 
-        for digest in certificate.header().parents() {
-            if !self.has_processed_certificate(*digest).await? {
+        let _scope = monitored_scope("Synchronizer::accept_certificate_internal::parents");
+        let existence = self
+            .certificate_store
+            .multi_contains(certificate.header().parents().iter())?;
+        for (digest, exists) in certificate.header().parents().iter().zip(existence.iter()) {
+            if !*exists {
                 result.push(*digest);
             }
         }
@@ -278,18 +283,6 @@ impl Inner {
                 .map_err(|_| DagError::ShuttingDown)?;
         }
         Ok(result)
-    }
-
-    /// This method answers to the question of whether the certificate with the
-    /// provided digest has ever been successfully processed (seen) by this
-    /// node. Depending on the mode of running the node (internal Vs external
-    /// consensus) either the dag will be used to confirm that or the
-    /// certificate_store.
-    async fn has_processed_certificate(&self, digest: CertificateDigest) -> DagResult<bool> {
-        if let Some(dag) = &self.dag {
-            return Ok(dag.has_ever_contained(digest).await);
-        }
-        Ok(self.certificate_store.contains(&digest)?)
     }
 }
 
@@ -319,7 +312,6 @@ impl Synchronizer {
         tx_parents: Sender<(Vec<Certificate>, Round, Epoch)>,
         rx_consensus_round_updates: watch::Receiver<ConsensusRound>,
         rx_synchronizer_network: oneshot::Receiver<Network>,
-        dag: Option<Arc<Dag>>,
         metrics: Arc<PrimaryMetrics>,
         primary_channel_metrics: &PrimaryChannelMetrics,
     ) -> Self {
@@ -360,7 +352,6 @@ impl Synchronizer {
             tx_own_certificate_broadcast: tx_own_certificate_broadcast.clone(),
             rx_consensus_round_updates: rx_consensus_round_updates.clone(),
             genesis,
-            dag,
             metrics,
             tx_batch_tasks,
             certificate_senders: Mutex::new(JoinSet::new()),
