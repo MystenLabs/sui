@@ -247,7 +247,6 @@ pub trait StateServiceWrapper {
     fn get_owned_coins(
         &self,
         owner: SuiAddress,
-        // If `Some`, the query will start from the next item after the specified cursor
         cursor: (String, ObjectID),
         limit: usize,
         one_coin_type_only: bool,
