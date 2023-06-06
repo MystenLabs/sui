@@ -1,0 +1,39 @@
+name: Generate Release Notes
+
+on:
+  workflow_call:
+    inputs:
+      previous_branch:
+        description: 'Previous Release Branch (releases/sui-vX.X.X-release)'
+        type: string
+        required: true
+      new_branch:
+        description: 'New Release Branch (releases/sui-vX.X.X-release)'
+        type: string
+        required: true
+  workflow_dispatch:
+    inputs:
+      previous_branch:
+        type: string
+        required: true
+      new_branch:
+        type: string
+        required: true
+
+jobs:
+  tag:
+    name: Tag
+    runs-on: [self-hosted, self-hosted-arc]
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v3
+
+    - name: Tag
+      uses: julbme/gh-action-manage-tag@v1
+      with:
+        name: ${{ env.TAG_NAME }}
+        state: present
+        from: ${{ env.SUI_COMMIT }}
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
