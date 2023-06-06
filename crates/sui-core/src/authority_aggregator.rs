@@ -303,6 +303,9 @@ struct ProcessTransactionState {
     // Note: For conflicting transactions we wait till we receive all responses to make
     // a determination on whether to retry or not.
     retryable: bool,
+
+    conflicting_tx_total_stake: StakeUnit,
+    most_staked_conflicting_tx_stake: StakeUnit,
 }
 
 impl ProcessTransactionState {
@@ -320,11 +323,23 @@ impl ProcessTransactionState {
             .map(|(digest, (validators, stake))| (*digest, validators, *stake))
     }
 
-    pub fn conflicting_tx_digests_total_stake(&self) -> StakeUnit {
-        self.conflicting_tx_digests
-            .iter()
-            .map(|(_, (_, stake))| *stake)
-            .sum()
+    pub fn record_conflicting_transaction(
+        &mut self,
+        transaction: &TransactionDigest,
+        validator_name: AuthorityName,
+        obj_ref: &ObjectRef,
+        weight: StakeUnit,
+    ) {
+        let (lock_records, total_stake) = self
+            .conflicting_tx_digests
+            .entry(*transaction)
+            .or_insert((Vec::new(), 0));
+        lock_records.push((validator_name, *obj_ref));
+        *total_stake += weight;
+        self.conflicting_tx_total_stake += weight;
+        if *total_stake > self.most_staked_conflicting_tx_stake {
+            self.most_staked_conflicting_tx_stake = *total_stake;
+        }
     }
 }
 
@@ -1111,6 +1126,8 @@ where
             overloaded_stake: 0,
             retryable: true,
             conflicting_tx_digests: Default::default(),
+            conflicting_tx_total_stake: 0,
+            most_staked_conflicting_tx_stake: 0,
         };
 
         let transaction_ref = &transaction;
@@ -1178,10 +1195,19 @@ where
                                     state.overloaded_stake += weight;
                                 }
                                 else if !retryable && !self.record_conflicting_transaction_if_any(&mut state, name, weight, &err) {
-                                    // Error is neither retryable or a potentially retryable conflicting transaction.
+                                    // We don't count conflicting transactions as non-retryable errors here
+                                    // because its handling is a bit different.
                                     state.non_retryable_stake += weight;
                                 }
                                 state.errors.push((err, vec![name], weight));
+
+                                // If there is no chance for any tx to get quorum, exit.
+                                // But don't mark `state.retryable` yet, we want to handle
+                                // conflicts accordingly in `handle_process_transaction_error`
+                                let retryable_stake = self.get_retryable_stake(&state);
+                                if state.most_staked_conflicting_tx_stake + retryable_stake < quorum_threshold {
+                                    return ReduceOutput::Failed(state);
+                                }
 
                                 if state.non_retryable_stake >= validity_threshold
                                     || state.object_or_package_not_found_stake >= quorum_threshold
@@ -1356,12 +1382,7 @@ where
             pending_transaction,
         } = err
         {
-            let (lock_records, total_stake) = state
-                .conflicting_tx_digests
-                .entry(*pending_transaction)
-                .or_insert((Vec::new(), 0));
-            lock_records.push((name, *obj_ref));
-            *total_stake += weight;
+            state.record_conflicting_transaction(pending_transaction, name, obj_ref, weight);
             return true;
         }
         false
@@ -1507,7 +1528,7 @@ where
 
     fn get_retryable_stake(&self, state: &ProcessTransactionState) -> StakeUnit {
         self.committee.total_votes()
-            - state.conflicting_tx_digests_total_stake()
+            - state.conflicting_tx_total_stake
             - state.non_retryable_stake
             - state.effects_map.total_votes()
             - state.tx_signatures.total_votes()
