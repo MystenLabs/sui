@@ -1,6 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-import { useAppsBackend } from '@mysten/core';
+import { formatRequestURL, useAppsBackend } from '@mysten/core';
 import { useQuery } from '@tanstack/react-query';
 
 // https://cloud.google.com/vision/docs/supported-files
@@ -40,7 +40,7 @@ const isURL = (url?: string) => {
 };
 
 export function useImageMod({
-    url,
+    url = '',
     enabled = true,
 }: {
     url?: string;
@@ -51,9 +51,9 @@ export function useImageMod({
     return useQuery({
         queryKey: ['image-mod', url, enabled],
         queryFn: async () => {
-            if (!isURL || !enabled) return placeholderData;
+            if (!isURL(url) || !enabled) return placeholderData;
 
-            const res = await fetch(`${url}`, {
+            const res = await fetch(url, {
                 method: 'HEAD',
             });
 
