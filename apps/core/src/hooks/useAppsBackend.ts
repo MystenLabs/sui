@@ -4,7 +4,7 @@
 import { useCallback } from 'react';
 
 const backendUrl =
-    process.env.NODE_ENV !== 'development'
+    process.env.NODE_ENV === 'development'
         ? 'http://localhost:3003'
         : 'https://apps-backend.sui.io';
 
