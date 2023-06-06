@@ -6,6 +6,7 @@ import { OwnedObjectType } from './Inventory/OwnedObjects';
 import { KioskListing } from '@mysten/kiosk';
 import { useWalletKit } from '@mysten/wallet-kit';
 import { formatSui, mistToSui } from '../utils/utils';
+import { ItemLockedBadge } from './Kiosk/ItemLockedBadge';
 
 export interface DisplayObject {
   listing?: KioskListing | null;
@@ -48,6 +49,7 @@ export function DisplayObject({
             {price} SUI
           </div>
         )}
+        {item.isLocked && <ItemLockedBadge />}
 
         {/* button actions */}
         {currentAccount?.address ? (

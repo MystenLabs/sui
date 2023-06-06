@@ -9,6 +9,7 @@ export function Button({
   children,
   loading,
   className,
+  disabled,
   onClick,
   ...props
 }: {
@@ -16,6 +17,7 @@ export function Button({
   loading?: boolean;
   className?: string;
   onClick: () => Promise<void> | void;
+  disabled?: boolean;
 }) {
   return (
     <button
@@ -24,6 +26,7 @@ export function Button({
         className,
       )}
       onClick={onClick}
+      disabled={!!disabled}
       {...props}
     >
       {loading ? <Spinner /> : children}

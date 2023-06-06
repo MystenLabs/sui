@@ -1,6 +1,6 @@
 # Kiosk Demo Dapp
 
-A demo for kiosk's functionality.
+A demo for Kiosk's functionality.
 
 ## Installation
 
@@ -18,12 +18,12 @@ pnpm dev
 
 ## Kiosk Management
 
-An interactive demo for Kiosk, giving the following flows for a kiosk owner.
+An interactive demo for Kiosk, giving the following flows for a Kiosk owner.
 
-1. Create a kiosk if the account doesn't have one.
-2. View the kiosk details (profits, items count, address), the items that are included, the listings and the locked status.
-3. (Place / list for sale) of owned objects from the connected wallet's address to the kiosk.
-4. (Delist / list for sale / take from kiosk) For items in the kiosk.
+1. Create a Kiosk if the account doesn't have one.
+2. View the Kiosk details (profits, items count, address), the items that are included, the listings and the locked status.
+3. (Place / list for sale) of owned objects from the connected wallet's address to the Kiosk.
+4. (Delist / list for sale / take from Kiosk) For items in the Kiosk.
 5. Withdraw Kiosk profits.
 
 ## Purchase Flow
@@ -32,8 +32,8 @@ Apart from the management flows, there's also the `purchase flow.`
 
 You can type a kiosk's address on the search bar and view the contents of it.
 
-If there are items listed for sale, you can purchase them directly. The purchased item will be placed in the owned kiosk.
-If the account doesn't have a kiosk, the purchase will fail.
+If there are items listed for sale, you can purchase them directly. When you purchase an item, it gets placed into your Kiosk.
+If the connected address doesn't own a Kiosk (missing kioskOwnerCap), the purchase will fail.
 
 ### Transfer Policy Rules supported
 
