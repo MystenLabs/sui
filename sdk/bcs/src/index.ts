@@ -1421,12 +1421,40 @@ export class BCS {
     }
 
     let typeName = name.slice(0, l_bound);
-    let params = name
-      .slice(l_bound + 1, name.length - r_bound - 1)
-      .split(",")
-      .map((e) => e.trim());
+    let params = this.splitArgsWithinGenericSep(
+      name.slice(l_bound + 1, name.length - r_bound - 1)
+    );
 
     return { name: typeName, params };
+  }
+
+  // split `str` by all `,` outside generic separators
+  // e.g. `T, U<A, B>` -> `[ 'T', 'U<A, B>' ]`
+  splitArgsWithinGenericSep(str: string): string[] {
+    const [left, right] = this.schema.genericSeparators || ["<", ">"];
+
+    const tok = [];
+    let word = "";
+    let nestedAngleBrackets = 0;
+    for (let i = 0; i < str.length; i++) {
+      const char = str[i];
+      if (char === left) {
+        nestedAngleBrackets++;
+      }
+      if (char === right) {
+        nestedAngleBrackets--;
+      }
+      if (nestedAngleBrackets == 0 && char === ',') {
+        tok.push(word.trim());
+        word = '';
+        continue;
+      }
+      word += char;
+    }
+
+    tok.push(word.trim());
+
+    return tok;
   }
 }
 
