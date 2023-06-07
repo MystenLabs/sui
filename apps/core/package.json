@@ -30,7 +30,8 @@
         "@tanstack/react-query": "^4.29.3",
         "bignumber.js": "^9.1.1",
         "react": "^18.2.0",
-        "react-dom": "^18.2.0"
+        "react-dom": "^18.2.0",
+        "vanilla-cookieconsent": "^2.9.1"
     },
     "devDependencies": {
         "@headlessui/tailwindcss": "^0.1.3",
