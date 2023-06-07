@@ -41,6 +41,13 @@ import { TRANSACTION_TYPE, create, WellKnownEncoding } from './utils';
 
 type TransactionResult = TransactionArgument & TransactionArgument[];
 
+const DefaultOfflineLimits = {
+  maxPureArgumentSize: 16 * 1024,
+  maxTxGas: 50_000_000_000,
+  maxGasObjects: 256,
+  maxTxSizeBytes: 128 * 1024,
+} satisfies Limits;
+
 function createTransactionResult(index: number): TransactionResult {
   const baseResult: TransactionArgument = { kind: 'Result', index };
 
@@ -382,9 +389,7 @@ export class TransactionBlock {
     }
 
     if (!protocolConfig) {
-      throw new Error(
-        'Missing protocol config, cannot build transaction without either a protocol config, or explicit limits',
-      );
+      return DefaultOfflineLimits[key];
     }
 
     // Fallback to protocol config:
@@ -731,10 +736,8 @@ export class TransactionBlock {
       throw new Error('Missing transaction sender');
     }
 
-    if (!options.protocolConfig && !options.limits) {
-      options.protocolConfig = await expectProvider(
-        options,
-      ).getProtocolConfig();
+    if (!options.protocolConfig && !options.limits && options.provider) {
+      options.protocolConfig = await options.provider.getProtocolConfig();
     }
 
     await Promise.all([
