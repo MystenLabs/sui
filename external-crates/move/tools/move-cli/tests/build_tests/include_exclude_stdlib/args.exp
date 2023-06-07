@@ -11,6 +11,8 @@ warning[W09002]: unused variable
   │
 5 │   public fun f(account: &signer): address {
   │                ^^^^^^^ Unused parameter 'account'. Consider removing or prefixing with an underscore: '_account'
+  │
+  = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 error[E03002]: unbound module
   ┌─ ./sources/UseSigner.move:6:5

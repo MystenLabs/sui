@@ -42,6 +42,20 @@ pub trait DiagnosticCode: Copy {
     }
 }
 
+#[derive(PartialEq, Eq, Clone, Copy, Debug)]
+/// Represents a single annotation for a diagnostic filter
+pub enum WarningFilter {
+    /// Filters all warnings
+    All,
+    /// Filters all warnings of a specific category
+    Category(Category),
+    /// Filters a single warning, as defined by codes below
+    Code(Category, /* code */ u8),
+}
+
+/// The text used in the attribute for warning suppression
+pub const WARNING_FILTER_ATTR: &str = "allow";
+
 //**************************************************************************************************
 // Categories and Codes
 //**************************************************************************************************
@@ -50,7 +64,7 @@ macro_rules! codes {
     ($($cat:ident: [
         $($code:ident: { msg: $code_msg:literal, severity:$sev:ident $(,)? }),* $(,)?
     ]),* $(,)?) => {
-        #[derive(PartialEq, Eq, Clone, Copy, Debug, Hash)]
+        #[derive(PartialEq, Eq, Clone, Copy, Debug, Hash, PartialOrd, Ord)]
         #[repr(u8)]
         pub enum Category {
             $($cat,)*
@@ -242,6 +256,54 @@ codes!(
 );
 
 //**************************************************************************************************
+// Warning Filter
+//**************************************************************************************************
+
+macro_rules! warning_filter {
+    ($($str:literal: $category:ident::$code:ident),* $(,)?) => {
+        impl WarningFilter {
+            pub fn from_str(s: &str) -> Option<Self> {
+                Some(match s {
+                    "all" => Self::All,
+                    "unused" => Self::Category(Category::UnusedItem),
+                    $(
+                    $str => {
+                        let category = Category::$category;
+                        let code = $category::$code as u8;
+                        Self::Code(category, code)
+                    }
+                    )*
+                    _ => return None,
+                })
+            }
+
+            pub fn to_str(self) -> Option<&'static str> {
+                Some(match self {
+                    Self::All => "all",
+                    Self::Category(Category::UnusedItem) => "unused",
+                    $(
+                    Self::Code(Category::$category, code) if ($category::$code as u8) == code =>
+                        $str,
+                    )*
+                    _ => return None,
+                })
+            }
+        }
+    };
+}
+
+warning_filter!(
+    "missing_phantom": Declarations::InvalidNonPhantomUse,
+    "unused_use": UnusedItem::Alias,
+    "unused_variable": UnusedItem::Variable,
+    "unused_assignment": UnusedItem::Assignment,
+    "unused_trailing_semi": UnusedItem::TrailingSemi,
+    "unused_attribute": UnusedItem::Attribute,
+    "unused_type_parameter": UnusedItem::StructTypeParam,
+    "dead_code": UnusedItem::DeadCode,
+);
+
+//**************************************************************************************************
 // impls
 //**************************************************************************************************
 
@@ -270,6 +332,14 @@ impl DiagnosticInfo {
 
     pub fn severity(&self) -> Severity {
         self.severity
+    }
+
+    pub fn category(&self) -> Category {
+        self.category
+    }
+
+    pub fn code(&self) -> u8 {
+        self.code
     }
 }
 

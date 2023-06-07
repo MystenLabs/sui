@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
+    diagnostics::WarningFilters,
     expansion::ast::{Attributes, Friend, ModuleIdent, Visibility},
     hlir::ast::{
         BaseType, Command, Command_, FunctionSignature, Label, SingleType, StructDefinition, Var,
@@ -33,6 +34,7 @@ pub struct Program {
 
 #[derive(Debug, Clone)]
 pub struct Script {
+    pub warning_filter: WarningFilters,
     // package name metadata from compiler arguments, not used for any language rules
     pub package_name: Option<Symbol>,
     pub attributes: Attributes,
@@ -48,6 +50,7 @@ pub struct Script {
 
 #[derive(Debug, Clone)]
 pub struct ModuleDefinition {
+    pub warning_filter: WarningFilters,
     // package name metadata from compiler arguments, not used for any language rules
     pub package_name: Option<Symbol>,
     pub attributes: Attributes,
@@ -66,6 +69,7 @@ pub struct ModuleDefinition {
 
 #[derive(PartialEq, Eq, Debug, Clone)]
 pub struct Constant {
+    pub warning_filter: WarningFilters,
     // index in the original order as defined in the source file
     pub index: usize,
     pub attributes: Attributes,
@@ -92,6 +96,7 @@ pub type FunctionBody = Spanned<FunctionBody_>;
 
 #[derive(PartialEq, Debug, Clone)]
 pub struct Function {
+    pub warning_filter: WarningFilters,
     // index in the original order as defined in the source file
     pub index: usize,
     pub attributes: Attributes,
@@ -208,6 +213,7 @@ impl AstDebug for Program {
 impl AstDebug for Script {
     fn ast_debug(&self, w: &mut AstWriter) {
         let Script {
+            warning_filter,
             package_name,
             attributes,
             loc: _loc,
@@ -215,6 +221,7 @@ impl AstDebug for Script {
             function_name,
             function,
         } = self;
+        warning_filter.ast_debug(w);
         if let Some(n) = package_name {
             w.writeln(&format!("{}", n))
         }
@@ -230,6 +237,7 @@ impl AstDebug for Script {
 impl AstDebug for ModuleDefinition {
     fn ast_debug(&self, w: &mut AstWriter) {
         let ModuleDefinition {
+            warning_filter,
             package_name,
             attributes,
             is_source_module,
@@ -239,6 +247,7 @@ impl AstDebug for ModuleDefinition {
             constants,
             functions,
         } = self;
+        warning_filter.ast_debug(w);
         if let Some(n) = package_name {
             w.writeln(&format!("{}", n))
         }
@@ -273,6 +282,7 @@ impl AstDebug for (ConstantName, &Constant) {
         let (
             name,
             Constant {
+                warning_filter,
                 index,
                 attributes,
                 loc: _loc,
@@ -280,6 +290,7 @@ impl AstDebug for (ConstantName, &Constant) {
                 value,
             },
         ) = self;
+        warning_filter.ast_debug(w);
         attributes.ast_debug(w);
         w.write(&format!("const#{index} {name}:"));
         signature.ast_debug(w);
@@ -320,6 +331,7 @@ impl AstDebug for (FunctionName, &Function) {
         let (
             name,
             Function {
+                warning_filter,
                 index,
                 attributes,
                 visibility,
@@ -329,6 +341,7 @@ impl AstDebug for (FunctionName, &Function) {
                 body,
             },
         ) = self;
+        warning_filter.ast_debug(w);
         attributes.ast_debug(w);
         visibility.ast_debug(w);
         if entry.is_some() {

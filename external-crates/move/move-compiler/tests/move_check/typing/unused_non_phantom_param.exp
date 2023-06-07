@@ -3,4 +3,6 @@ warning[W09006]: unused struct type parameter
   │
 2 │     struct S<T1, T2> {
   │                  ^^ Unused type parameter 'T2'. Consider declaring it as phantom
+  │
+  = This warning can be suppressed with '#[allow(unused_type_parameter)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 

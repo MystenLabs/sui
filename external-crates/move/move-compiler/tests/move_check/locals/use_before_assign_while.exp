@@ -35,4 +35,6 @@ warning[W09003]: unused assignment
    │
 19 │         while (cond) { let y = &x; _ = move y; if (cond) { x = 0 }; break }
    │                                                            ^ Unused assignment for variable 'x'. Consider removing, replacing with '_', or prefixing with '_' (e.g., '_x')
+   │
+   = This warning can be suppressed with '#[allow(unused_assignment)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 

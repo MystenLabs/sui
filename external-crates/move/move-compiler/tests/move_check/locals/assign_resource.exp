@@ -3,6 +3,8 @@ warning[W09003]: unused assignment
   │
 5 │         let r = R{};
   │             ^ Unused assignment for variable 'r'. Consider removing, replacing with '_', or prefixing with '_' (e.g., '_r')
+  │
+  = This warning can be suppressed with '#[allow(unused_assignment)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 error[E06001]: unused value without 'drop'
   ┌─ tests/move_check/locals/assign_resource.move:6:9
@@ -61,6 +63,8 @@ warning[W09003]: unused assignment
    │
 29 │         let r = R{};
    │             ^ Unused assignment for variable 'r'. Consider removing, replacing with '_', or prefixing with '_' (e.g., '_r')
+   │
+   = This warning can be suppressed with '#[allow(unused_assignment)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 error[E06001]: unused value without 'drop'
    ┌─ tests/move_check/locals/assign_resource.move:30:16

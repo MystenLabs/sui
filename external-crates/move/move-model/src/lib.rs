@@ -510,6 +510,7 @@ fn run_spec_checker(env: &mut GlobalEnv, units: Vec<AnnotatedCompiledUnit>, mut 
                     function_info,
                 }) => {
                     let move_compiler::expansion::ast::Script {
+                        warning_filter: _warning_filter,
                         package_name,
                         attributes,
                         loc,
@@ -542,6 +543,7 @@ fn run_spec_checker(env: &mut GlobalEnv, units: Vec<AnnotatedCompiledUnit>, mut 
                     let mut functions = UniqueMap::new();
                     functions.add(function_name, function).unwrap();
                     let expanded_module = ModuleDefinition {
+                        warning_filter: _warning_filter,
                         package_name,
                         attributes,
                         loc,
