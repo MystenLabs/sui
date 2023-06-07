@@ -425,9 +425,6 @@ impl AuthorityPerEpochStore {
         let reconfig_state = tables
             .load_reconfig_state()
             .expect("Load reconfig state at initialization cannot fail");
-        let oauth_provider_jwk = tables
-            .load_oauth_provider_jwk()
-            .expect("Load oauth provider jwk at initialization cannot fail");
 
         let epoch_alive_notify = NotifyOnce::new();
         let pending_consensus_transactions = tables.get_all_pending_consensus_transactions();
@@ -462,9 +459,13 @@ impl AuthorityPerEpochStore {
             cache_metrics,
             expensive_safety_check_config,
         );
+
+        let oauth_provider_jwk = tables
+            .load_oauth_provider_jwk()
+            .expect("Load oauth provider jwk at initialization cannot fail");
+
         let signature_verifier =
             SignatureVerifier::new(committee.clone(), signature_verifier_metrics);
-
         for (_, v) in oauth_provider_jwk.iter() {
             signature_verifier.insert_oauth_jwk(v);
         }
@@ -2121,15 +2122,17 @@ impl AuthorityPerEpochStore {
             .set(self.epoch_open_time.elapsed().as_millis() as i64);
     }
 
-    pub(crate) fn insert_oauth_jwk(&self, content: &OAuthProviderContent) -> SuiResult {
+    // TODO: should be pub(crate) when it is inserted only from consensus
+    pub fn insert_oauth_jwk(&self, content: &OAuthProviderContent) {
         if self.signature_verifier.insert_oauth_jwk(content) {
             self.tables
                 .oauth_provider_jwk
-                .insert(&content.kid().to_string(), content)?;
+                .insert(&content.kid().to_string(), content)
+                .expect("write to oauth_provider_jwk should not fail");
+            info!("Added new JWK with kid {}: {:?}", content.kid(), content);
         } else {
             info!("OAuth JWK with kid {} already exists", content.kid());
         }
-        Ok(())
     }
 }
 
