@@ -11,14 +11,15 @@ use tap::tap::TapFallible;
 use ttl_cache::TtlCache;
 
 use shared_crypto::intent::Intent;
+use std::collections::HashMap;
 #[cfg(test)]
 use std::collections::HashSet;
 use std::path::Path;
 use typed_store::Map;
 
 use sui_json_rpc_types::{
-    SuiObjectDataOptions, SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponse,
-    SuiTransactionBlockResponseOptions,
+    OwnedObjectRef, SuiObjectDataOptions, SuiTransactionBlockEffectsAPI,
+    SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
 };
 use sui_keys::keystore::AccountKeystore;
 use sui_sdk::wallet_context::WalletContext;
@@ -137,7 +138,7 @@ impl SimpleFaucet {
             request_consumer: Mutex::new(receiver),
             batch_request_size: config.batch_request_size,
             // Max faucet requests times 10 minutes worth of requests to hold onto at max.
-            task_id_cache: TtlCache::new(config.max_request_per_second * 60 * 10).into(),
+            task_id_cache: TtlCache::new(config.max_request_per_second as usize * 60 * 10).into(),
         };
 
         // Retrying all the pending transactions from the WAL, before continuing.  Ignore return
@@ -703,26 +704,9 @@ impl SimpleFaucet {
                     self.metrics
                         .total_coin_requests_succeeded
                         .add(total_requests as i64);
-                    // TODO (jian): add a check on the reqs and the coins sent
 
-                    // Aquire lock and update all of the request Uuids
-                    let mut task_map = self.task_id_cache.lock().await;
-                    for (uuid, _addy, _amounts) in requests {
-                        task_map.insert(
-                            uuid,
-                            // BatchSendStatus {
-                            //     status: "SUCCEEDED".to_string(),
-                            //     transferred_gas_objects: Some(FaucetReceipt {
-                            //         sent: CoinInfo { amount: id },
-                            //     }),
-                            // },
-                            BatchSendStatus {
-                                status: BatchSendStatusType::SUCCEEDED,
-                                transferred_gas_objects: None,
-                            },
-                            Duration::from_secs(300),
-                        );
-                    }
+                    self.check_and_map_batch_transfer_gas_result(response.clone(), requests)
+                        .await?;
 
                     return Ok(response.digest);
                 }
@@ -752,6 +736,82 @@ impl SimpleFaucet {
                 GasCoinResponse::NoGasCoinAvailable => return Err(FaucetError::NoGasCoinAvailable),
             }
         }
+    }
+
+    async fn check_and_map_batch_transfer_gas_result(
+        &self,
+        res: SuiTransactionBlockResponse,
+        requests: Vec<(Uuid, SuiAddress, Vec<u64>)>,
+    ) -> Result<(), FaucetError> {
+        // Grab the list of created coins and turn it into a map of destination SuiAddress to Vec<Coins>
+        let created = res
+            .effects
+            .ok_or_else(|| {
+                FaucetError::ParseTransactionResponseError(format!(
+                    "effects field missing for txn {}",
+                    res.digest
+                ))
+            })?
+            .created()
+            .to_vec();
+
+        let mut address_coins_map: HashMap<SuiAddress, Vec<OwnedObjectRef>> = HashMap::new();
+        created.iter().for_each(|created_coin_owner_ref| {
+            let owner = created_coin_owner_ref.owner.clone();
+            let coin_obj_ref = created_coin_owner_ref.clone();
+
+            // Insert the coins into the map based on the destination address
+            address_coins_map
+                .entry(owner.get_owner_address().unwrap())
+                .or_insert_with(Vec::new)
+                .push(coin_obj_ref);
+        });
+
+        // Assert that the number of times a sui_address occurs is the number of times the coins
+        // come up in the vector.
+        let mut request_count: HashMap<SuiAddress, u64> = HashMap::new();
+        // Aquire lock and update all of the request Uuids
+        let mut task_map = self.task_id_cache.lock().await;
+        for (uuid, addy, amounts) in requests {
+            let number_of_coins = amounts.len();
+            // Get or insert sui_address into request count
+            let index = *request_count.entry(addy).or_insert(0);
+            // If the number of objects don't match the number of coins panic
+            let coins_created_for_address = address_coins_map.entry(addy).or_insert_with(|| {
+                panic!("No entries found for address: {}", addy);
+            });
+            if number_of_coins as u64 + index > coins_created_for_address.len() as u64 {
+                panic!("Less coins created expected than number requested");
+            }
+            let coins_slice =
+                &mut coins_created_for_address[index as usize..(index as usize + number_of_coins)];
+
+            request_count.insert(addy, number_of_coins as u64 + index);
+
+            let transferred_gases = coins_slice
+                .iter()
+                .map(|coin| CoinInfo {
+                    id: coin.object_id(),
+                    transfer_tx_digest: res.digest,
+                    // Grab this from config later
+                    amount: 100000000,
+                })
+                .collect();
+
+            task_map.insert(
+                uuid,
+                BatchSendStatus {
+                    status: BatchSendStatusType::SUCCEEDED,
+                    transferred_gas_objects: Some(FaucetReceipt {
+                        sent: transferred_gases,
+                    }),
+                },
+                Duration::from_secs(300),
+            );
+        }
+
+        // We use a seperate map to figure out which index should correlate to the
+        Ok(())
     }
 
     #[cfg(test)]
