@@ -666,9 +666,7 @@ impl AuthorityPerEpochStore {
         Ok(self
             .tables
             .state_hash_by_checkpoint
-            .unbounded_iter()
-            .skip_to(&from_checkpoint)?
-            .take_while(|(checkpoint, _)| *checkpoint <= to_checkpoint)
+            .range_iter(from_checkpoint..=to_checkpoint)
             .collect())
     }
 
