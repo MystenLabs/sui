@@ -14,6 +14,7 @@ use crate::{ExecutionEffects, ValidatorProxy};
 use async_trait::async_trait;
 use futures::future::join_all;
 use rand::seq::SliceRandom;
+use rand::Rng;
 use std::sync::Arc;
 use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::crypto::get_key_pair;
@@ -23,12 +24,16 @@ use sui_types::{
 };
 use tracing::{debug, error, info};
 
+/// The max amount of gas units needed for a payload.
+pub const MAX_GAS_IN_UNIT: u64 = 1_000_000_000;
+
 #[derive(Debug)]
 pub struct SharedCounterTestPayload {
     package_id: ObjectID,
     counter_id: ObjectID,
     counter_initial_shared_version: SequenceNumber,
     gas: Gas,
+    max_tip_amount: u64,
     system_state_observer: Arc<SystemStateObserver>,
 }
 
@@ -47,20 +52,24 @@ impl Payload for SharedCounterTestPayload {
         self.gas.0 = effects.gas_object().0;
     }
     fn make_transaction(&mut self) -> VerifiedTransaction {
-        TestTransactionBuilder::new(
-            self.gas.1,
-            self.gas.0,
-            self.system_state_observer
-                .state
-                .borrow()
-                .reference_gas_price,
-        )
-        .call_counter_increment(
-            self.package_id,
-            self.counter_id,
-            self.counter_initial_shared_version,
-        )
-        .build_and_sign(self.gas.2.as_ref())
+        let rgp = self
+            .system_state_observer
+            .state
+            .borrow()
+            .reference_gas_price;
+        let gas_price_increment = if self.max_tip_amount == 0 {
+            0
+        } else {
+            rand::thread_rng().gen_range(0..self.max_tip_amount)
+        };
+        let gas_price = rgp + gas_price_increment;
+        TestTransactionBuilder::new(self.gas.1, self.gas.0, gas_price)
+            .call_counter_increment(
+                self.package_id,
+                self.counter_id,
+                self.counter_initial_shared_version,
+            )
+            .build_and_sign(self.gas.2.as_ref())
     }
 }
 
@@ -68,6 +77,8 @@ impl Payload for SharedCounterTestPayload {
 pub struct SharedCounterWorkloadBuilder {
     num_counters: u64,
     num_payloads: u64,
+    max_tip_amount: u64,
+    rgp: u64,
 }
 
 impl SharedCounterWorkloadBuilder {
@@ -77,6 +88,8 @@ impl SharedCounterWorkloadBuilder {
         num_workers: u64,
         in_flight_ratio: u64,
         shared_counter_hotness_factor: u32,
+        shared_counter_max_tip_amount: u64,
+        reference_gas_price: u64,
     ) -> Option<WorkloadBuilderInfo> {
         let target_qps = (workload_weight * target_qps as f32) as u64;
         let num_workers = (workload_weight * num_workers as f32).ceil() as u64;
@@ -96,6 +109,8 @@ impl SharedCounterWorkloadBuilder {
                 SharedCounterWorkloadBuilder {
                     num_counters: num_shared_counters,
                     num_payloads: max_ops,
+                    max_tip_amount: shared_counter_max_tip_amount,
+                    rgp: reference_gas_price,
                 },
             ));
             let builder_info = WorkloadBuilderInfo {
@@ -133,7 +148,7 @@ impl WorkloadBuilder<dyn Payload> for SharedCounterWorkloadBuilder {
     }
     async fn generate_coin_config_for_payloads(&self) -> Vec<GasCoinConfig> {
         let mut configs = vec![];
-        let amount = MAX_GAS_FOR_TESTING
+        let amount = MAX_GAS_IN_UNIT * (self.rgp + self.max_tip_amount)
             + ESTIMATED_COMPUTATION_COST
             + STORAGE_COST_PER_COUNTER * self.num_counters;
         // Gas coins for running workload
@@ -157,6 +172,7 @@ impl WorkloadBuilder<dyn Payload> for SharedCounterWorkloadBuilder {
             counters: vec![],
             init_gas,
             payload_gas,
+            max_tip_amount: self.max_tip_amount,
         }))
     }
 }
@@ -167,6 +183,7 @@ pub struct SharedCounterWorkload {
     pub counters: Vec<(ObjectID, SequenceNumber, ObjectDigest)>,
     pub init_gas: Vec<Gas>,
     pub payload_gas: Vec<Gas>,
+    pub max_tip_amount: u64,
 }
 
 #[async_trait]
@@ -240,6 +257,7 @@ impl Workload<dyn Payload> for SharedCounterWorkload {
                 counter_initial_shared_version: counter_ref.1,
                 gas: g.clone(),
                 system_state_observer: system_state_observer.clone(),
+                max_tip_amount: self.max_tip_amount,
             }));
         }
         let payloads: Vec<Box<dyn Payload>> = shared_payloads
