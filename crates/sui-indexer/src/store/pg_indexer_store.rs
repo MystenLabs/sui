@@ -1560,11 +1560,6 @@ impl IndexerStore for PgIndexerStore {
                     ))
                     .execute(conn)?;
             }
-            diesel::insert_into(epochs::table)
-                .values(&data.new_epoch)
-                .on_conflict_do_nothing()
-                .execute(conn)?;
-
             diesel::insert_into(system_states::table)
                 .values(&data.system_state)
                 .on_conflict_do_nothing()
@@ -1574,6 +1569,14 @@ impl IndexerStore for PgIndexerStore {
                 .values(&data.validators)
                 .on_conflict_do_nothing()
                 .execute(conn)
+        })?;
+        // split new epoch commit to a different to avoid error of
+        // "could not serialize access due to read/write dependencies among transactions"
+        transactional_blocking!(&self.blocking_cp, |conn| {
+            diesel::insert_into(epochs::table)
+            .values(&data.new_epoch)
+            .on_conflict_do_nothing()
+            .execute(conn)
         })?;
         info!("Persisted epoch {}", last_epoch_number);
         Ok(())
