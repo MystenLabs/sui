@@ -1,3 +1,6 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 import {
     JsonRpcProvider,
     localnetConnection,
@@ -5,13 +8,9 @@ import {
     TransactionArgument,
     TransactionBlock,
 } from '@mysten/sui.js';
-import {
-    getPoolInfoByRecords,
-} from './utils';
+import { getPoolInfoByRecords } from './utils';
 import { PoolInfo, Records } from './utils';
-import { defaultGasBudget, F } from './utils';
-
-const treasury = require('../treasuryCap-example.json');
+import { defaultGasBudget } from './utils';
 
 export type smartRouteResult = {
     maxSwapTokens: number;
@@ -33,7 +32,7 @@ export class DeepBook_sdk {
         provider: JsonRpcProvider = new JsonRpcProvider(localnetConnection),
         currentAddress: string,
         gasBudget: number,
-        records: Records,
+        records: Records
     ) {
         this.provider = provider;
         this.currentAddress = currentAddress;
@@ -52,7 +51,7 @@ export class DeepBook_sdk {
         token1: string,
         token2: string,
         tickSize: number,
-        lotSize: number,
+        lotSize: number
     ): TransactionBlock {
         const txb = new TransactionBlock();
         // 100 sui to create a pool
@@ -71,7 +70,7 @@ export class DeepBook_sdk {
      * @param currentAddress: current user address, eg: "0xbddc9d4961b46a130c2e1f38585bbc6fa8077ce54bcb206b26874ac08d607966"
      */
     async createAccount(
-        currentAddress: string,
+        currentAddress: string
     ): Promise<TransactionBlock | TransactionArgument> {
         const txb = new TransactionBlock();
         let [cap] = txb.moveCall({
@@ -98,11 +97,11 @@ export class DeepBook_sdk {
         token2: string,
         poolId: string,
         coin: string,
-        accountCap: string,
+        accountCap: string
     ): TransactionBlock {
         const txb = new TransactionBlock();
         txb.moveCall({
-            typeArguments: [token1,token2],
+            typeArguments: [token1, token2],
             target: `dee9::clob::deposit_base`,
             arguments: [
                 txb.object(`${poolId}`),
@@ -127,11 +126,11 @@ export class DeepBook_sdk {
         token2: string,
         poolId: string,
         coin: string,
-        accountCap: string,
+        accountCap: string
     ): TransactionBlock {
         const txb = new TransactionBlock();
         txb.moveCall({
-            typeArguments: [token1,token2],
+            typeArguments: [token1, token2],
             target: `dee9::clob::deposit_quote`,
             arguments: [
                 txb.object(`${poolId}`),
@@ -158,7 +157,7 @@ export class DeepBook_sdk {
         poolId: string,
         quantity: number,
         currentAddress: string,
-        accountCap: string | TransactionArgument,
+        accountCap: string | TransactionArgument
     ): Promise<TransactionBlock> {
         const txb = new TransactionBlock();
         const withdraw = txb.moveCall({
@@ -190,7 +189,7 @@ export class DeepBook_sdk {
         poolId: string,
         quantity: number,
         currentAddress: string,
-        accountCap: string,
+        accountCap: string
     ): TransactionBlock {
         const txb = new TransactionBlock();
         const withdraw = txb.moveCall({
@@ -222,25 +221,23 @@ export class DeepBook_sdk {
         poolId: string,
         tokenObjectIn: string,
         amountIn: number,
-        currentAddress: string,
+        currentAddress: string
     ): TransactionBlock {
         const txb = new TransactionBlock();
         // in this case, we assume that the tokenIn--tokenOut always exists.
-        const [base_coin_ret, quote_coin_ret, amount] = txb.moveCall({
-                typeArguments: [
-                    token1,
-                    token2,
-                ],
-                target: `dee9::clob::swap_exact_quote_for_base`,
-                arguments: [
-                    txb.object(String(poolId)),
-                    txb.object(String(amountIn)),
-                    txb.object(normalizeSuiObjectId('0x6')),
-                    txb.object(tokenObjectIn)
-                ],
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const [base_coin_ret, quote_coin_ret, _amount] = txb.moveCall({
+            typeArguments: [token1, token2],
+            target: `dee9::clob::swap_exact_quote_for_base`,
+            arguments: [
+                txb.object(String(poolId)),
+                txb.object(String(amountIn)),
+                txb.object(normalizeSuiObjectId('0x6')),
+                txb.object(tokenObjectIn),
+            ],
         });
         txb.transferObjects([base_coin_ret], txb.pure(currentAddress));
-        txb.transferObjects([quote_coin_ret],txb.pure(currentAddress));
+        txb.transferObjects([quote_coin_ret], txb.pure(currentAddress));
         txb.setSenderIfNotSet(currentAddress);
         txb.setGasBudget(this.gasBudget);
         return txb;
@@ -263,11 +260,12 @@ export class DeepBook_sdk {
         treasury: string,
         tokenObjectIn: string,
         amountIn: number,
-        currentAddress: string,
+        currentAddress: string
     ): TransactionBlock {
         const txb = new TransactionBlock();
         // in this case, we assume that the tokenIn--tokenOut always exists.
-        const [base_coin_ret, quote_coin_ret, amount] = txb.moveCall({
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const [base_coin_ret, quote_coin_ret, _amount] = txb.moveCall({
             typeArguments: [token1, token2],
             target: `dee9::clob::swap_exact_base_for_quote`,
             arguments: [
@@ -276,14 +274,14 @@ export class DeepBook_sdk {
                 txb.object(tokenObjectIn),
                 // we have to mint a zero amount of token2 in the treasury, only with this object can we pass it into the function.
                 this.mint(token2, 0, treasury, txb),
-                txb.object(normalizeSuiObjectId('0x6'))
-            ]
+                txb.object(normalizeSuiObjectId('0x6')),
+            ],
         });
-            txb.transferObjects([base_coin_ret], txb.pure(currentAddress));
-            txb.transferObjects([quote_coin_ret],txb.pure(currentAddress));
-            txb.setSenderIfNotSet(currentAddress);
-            txb.setGasBudget(this.gasBudget);
-            return txb;
+        txb.transferObjects([base_coin_ret], txb.pure(currentAddress));
+        txb.transferObjects([quote_coin_ret], txb.pure(currentAddress));
+        txb.setSenderIfNotSet(currentAddress);
+        txb.setGasBudget(this.gasBudget);
+        return txb;
     }
 
     /**
@@ -307,7 +305,7 @@ export class DeepBook_sdk {
         isBid: boolean,
         expireTimestamp: number,
         restriction: number,
-        accountCap: string,
+        accountCap: string
     ): TransactionBlock {
         const txb = new TransactionBlock();
         const args = [
@@ -343,14 +341,18 @@ export class DeepBook_sdk {
         token2: string,
         poolId: string,
         orderId: string,
-        currentAddress: string,
-        accountCap: string,
+        _currentAddress: string,
+        accountCap: string
     ): TransactionBlock {
         const txb = new TransactionBlock();
         txb.moveCall({
-            typeArguments: [ token1, token2],
+            typeArguments: [token1, token2],
             target: `dee9::clob::cancel_order`,
-            arguments: [txb.object(poolId), txb.pure(orderId), txb.object(accountCap)],
+            arguments: [
+                txb.object(poolId),
+                txb.pure(orderId),
+                txb.object(accountCap),
+            ],
         });
         txb.setGasBudget(this.gasBudget);
         return txb;
@@ -367,7 +369,7 @@ export class DeepBook_sdk {
         token1: string,
         token2: string,
         poolId: string,
-        accountCap: string,
+        accountCap: string
     ): Promise<TransactionBlock> {
         const txb = new TransactionBlock();
         txb.moveCall({
@@ -392,13 +394,17 @@ export class DeepBook_sdk {
         token2: string,
         poolId: string,
         orderIds: string[],
-        accountCap: string,
+        accountCap: string
     ): TransactionBlock {
         const txb = new TransactionBlock();
         txb.moveCall({
-            typeArguments: [token1,token2],
+            typeArguments: [token1, token2],
             target: `dee9::clob::batch_cancel_order`,
-            arguments: [txb.object(String(poolId)), txb.pure(orderIds), txb.object(accountCap)],
+            arguments: [
+                txb.object(String(poolId)),
+                txb.pure(orderIds),
+                txb.object(accountCap),
+            ],
         });
         txb.setGasBudget(defaultGasBudget);
         return txb;
@@ -410,7 +416,13 @@ export class DeepBook_sdk {
      * @param amountIn the amount of token you want to swap
      * @param isBid true for bid, false for ask
      */
-    public async findBestRoute(tokenInObject: string, tokenOut: string, amountIn: number, isBid: boolean): Promise<smartRouteResult> {
+    public async findBestRoute(
+        tokenInObject: string,
+        tokenOut: string,
+        amountIn: number,
+        isBid: boolean,
+        treasury: string
+    ): Promise<smartRouteResult> {
         // const tokenTypeIn: string = convertToTokenType(tokenIn, this.records);
         // should get the tokenTypeIn from tokenInObject
         const tokenInfo = await this.provider.getObject({
@@ -427,15 +439,20 @@ export class DeepBook_sdk {
         let maxSwapTokens = 0;
         let smartRoute: string[] = [];
         for (const path of paths) {
-            const smartRouteResultWithExactPath = await this.placeMarketOrderWithSmartRouting(
-                tokenInObject,
-                tokenOut,
-                isBid,
-                amountIn,
-                this.currentAddress,
-                path
-            );
-            if (smartRouteResultWithExactPath && smartRouteResultWithExactPath.amount > maxSwapTokens) {
+            const smartRouteResultWithExactPath =
+                await this.placeMarketOrderWithSmartRouting(
+                    tokenInObject,
+                    tokenOut,
+                    isBid,
+                    amountIn,
+                    this.currentAddress,
+                    path,
+                    treasury
+                );
+            if (
+                smartRouteResultWithExactPath &&
+                smartRouteResultWithExactPath.amount > maxSwapTokens
+            ) {
                 maxSwapTokens = smartRouteResultWithExactPath.amount;
                 smartRoute = path;
             }
@@ -458,6 +475,7 @@ export class DeepBook_sdk {
         amountIn: number,
         currentAddress: string,
         path: string[],
+        treasury: string
     ): Promise<smartRouteResultWithExactPath | undefined> {
         const txb = new TransactionBlock();
         const tokenIn = txb.object(tokenInObject);
@@ -470,9 +488,13 @@ export class DeepBook_sdk {
         let lastBid: boolean;
         while (path[i]) {
             const nextPath = path[i + 1] ? path[i + 1] : tokenTypeOut;
-            const poolInfo: PoolInfo = getPoolInfoByRecords(path[i], nextPath, this.records);
+            const poolInfo: PoolInfo = getPoolInfoByRecords(
+                path[i],
+                nextPath,
+                this.records
+            );
             let _isBid, _tokenIn, _tokenOut, _amount;
-            if (i == 0) {
+            if (i === 0) {
                 if (!isBid) {
                     _isBid = false;
                     _tokenIn = tokenIn;
@@ -489,7 +511,7 @@ export class DeepBook_sdk {
                     txb.transferObjects(
                         // @ts-ignore
                         [lastBid ? quote_coin_ret : base_coin_ret],
-                        txb.pure(currentAddress),
+                        txb.pure(currentAddress)
                     );
                     _isBid = false;
                     // @ts-ignore
@@ -501,7 +523,7 @@ export class DeepBook_sdk {
                     txb.transferObjects(
                         // @ts-ignore
                         [lastBid ? quote_coin_ret : base_coin_ret],
-                        txb.pure(currentAddress),
+                        txb.pure(currentAddress)
                     );
                     _isBid = true;
                     // _tokenIn = this.mint(txb, nextPath, 0)
@@ -518,7 +540,10 @@ export class DeepBook_sdk {
             if (_isBid) {
                 // here swap_exact_quote_for_base
                 [base_coin_ret, quote_coin_ret, amount] = txb.moveCall({
-                    typeArguments: [isBid ? nextPath : path[i], isBid ? path[i] : nextPath],
+                    typeArguments: [
+                        isBid ? nextPath : path[i],
+                        isBid ? path[i] : nextPath,
+                    ],
                     target: `dee9::clob::swap_exact_quote_for_base`,
                     arguments: [
                         txb.object(String(poolInfo.clob)),
@@ -530,7 +555,10 @@ export class DeepBook_sdk {
             } else {
                 // here swap_exact_base_for_quote
                 [base_coin_ret, quote_coin_ret, amount] = txb.moveCall({
-                    typeArguments: [isBid ? nextPath : path[i], isBid ? path[i] : nextPath],
+                    typeArguments: [
+                        isBid ? nextPath : path[i],
+                        isBid ? path[i] : nextPath,
+                    ],
                     target: `dee9::clob::swap_exact_base_for_quote`,
                     arguments: [
                         txb.object(String(poolInfo.clob)),
@@ -542,7 +570,7 @@ export class DeepBook_sdk {
                     ],
                 });
             }
-            if (nextPath == tokenTypeOut) {
+            if (nextPath === tokenTypeOut) {
                 txb.transferObjects([base_coin_ret], txb.pure(currentAddress));
                 txb.transferObjects([quote_coin_ret], txb.pure(currentAddress));
                 break;
@@ -557,7 +585,7 @@ export class DeepBook_sdk {
         });
         if (r.effects.status.status === 'success') {
             for (const ele of r.balanceChanges) {
-                if (ele.coinType == tokenTypeOut) {
+                if (ele.coinType === tokenTypeOut) {
                     return {
                         txb: txb,
                         amount: Number(ele.amount),
@@ -565,6 +593,7 @@ export class DeepBook_sdk {
                 }
             }
         }
+        return;
     }
 
     /**
@@ -573,7 +602,12 @@ export class DeepBook_sdk {
      * @param treasury the treasury object id, eg: "0x765c7040f06527df0f76d5a38ceaae67c70311c90c266acf15e39f17e0e4ed61"
      * @param txb TransactionBlock
      */
-    protected mint(token: string, quantity: number, treasury: string, txb: TransactionBlock): TransactionArgument {
+    protected mint(
+        token: string,
+        quantity: number,
+        treasury: string,
+        txb: TransactionBlock
+    ): TransactionArgument {
         return txb.moveCall({
             typeArguments: [token],
             target: `0x2::coin::mint`,
@@ -595,7 +629,7 @@ export class DeepBook_sdk {
         records: Records,
         path: string[] = [],
         depth: number = 2,
-        res: string[][] = new Array().fill([]),
+        res: string[][] = []
     ) {
         // first updates the records
         if (depth < 0) {
@@ -609,27 +643,41 @@ export class DeepBook_sdk {
         // find children of tokenIn
         let children: Set<string> = new Set();
         for (const record of records.pools) {
-            if (String((record as any).type).indexOf(tokenTypeIn.substring(2)) > -1) {
+            if (
+                String((record as any).type).indexOf(tokenTypeIn.substring(2)) >
+                -1
+            ) {
                 String((record as any).type)
                     .split(',')
                     .forEach((token: string) => {
-                        if (token.indexOf('clob') != -1) {
+                        if (token.indexOf('clob') !== -1) {
                             token = token.split('<')[1];
                         } else {
                             token = token.split('>')[0].substring(1);
                         }
-                        if (token !== tokenTypeIn && path.indexOf(token) === -1) {
+                        if (
+                            token !== tokenTypeIn &&
+                            path.indexOf(token) === -1
+                        ) {
                             children.add(token);
                         }
                     });
             }
         }
+
         children.forEach((child: string) => {
-            const result = this.dfs(child, tokenTypeOut, records, [...path, tokenTypeIn], depth, res);
-            if (result) {
-                return result;
-            }
+            const result = this.dfs(
+                child,
+                tokenTypeOut,
+                records,
+                [...path, tokenTypeIn],
+                depth,
+                res
+            );
+
+            return result;
         });
+
         return res;
     }
 }

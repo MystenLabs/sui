@@ -1,8 +1,12 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 import {
     DevInspectResults,
     JsonRpcProvider,
-    normalizeSuiObjectId, testnetConnection,
-    TransactionBlock
+    normalizeSuiObjectId,
+    testnetConnection,
+    TransactionBlock,
 } from '@mysten/sui.js';
 
 export class DeepBook_query {
@@ -11,7 +15,7 @@ export class DeepBook_query {
 
     constructor(
         provider: JsonRpcProvider = new JsonRpcProvider(testnetConnection),
-        currentAddress: string,
+        currentAddress: string
     ) {
         this.provider = provider;
         this.currentAddress = currentAddress;
@@ -25,12 +29,12 @@ export class DeepBook_query {
      * @param orderId the order id, eg: 1
      * @param accountCap: your accountCap, eg: 0x6f699fef193723277559c8f499ca3706121a65ac96d273151b8e52deb29135d3
      */
-    public async get_order_status (
+    public async get_order_status(
         token1: string,
         token2: string,
         poolId: string,
         orderId: number,
-        accountCap: string,
+        accountCap: string
     ): Promise<DevInspectResults> {
         const txb = new TransactionBlock();
         txb.moveCall({
@@ -56,11 +60,11 @@ export class DeepBook_query {
      * @param poolId the pool id, eg: 0xcaee8e1c046b58e55196105f1436a2337dcaa0c340a7a8c8baf65e4afb8823a4
      * @param accountCap your accountCap, eg: 0x6f699fef193723277559c8f499ca3706121a65ac96d273151b8e52deb29135d3
      */
-    public async get_usr_position (
+    public async get_usr_position(
         token1: string,
         token2: string,
         poolId: string,
-        accountCap: string,
+        accountCap: string
     ): Promise<DevInspectResults> {
         const txb = new TransactionBlock();
         txb.moveCall({
@@ -82,11 +86,11 @@ export class DeepBook_query {
      * @param poolId the pool id, eg: 0xcaee8e1c046b58e55196105f1436a2337dcaa0c340a7a8c8baf65e4afb8823a4
      * @param accountCap your accountCap, eg: 0x6f699fef193723277559c8f499ca3706121a65ac96d273151b8e52deb29135d3
      */
-    public async list_open_orders (
+    public async list_open_orders(
         token1: string,
         token2: string,
         poolId: string,
-        accountCap: string,
+        accountCap: string
     ): Promise<DevInspectResults> {
         const txb = new TransactionBlock();
         txb.moveCall({
@@ -111,7 +115,7 @@ export class DeepBook_query {
     public async get_market_price(
         token1: string,
         token2: string,
-        poolId: string,
+        poolId: string
     ) {
         const txb = new TransactionBlock();
         txb.moveCall({
@@ -140,7 +144,7 @@ export class DeepBook_query {
         poolId: string,
         lowerPrice: number,
         higherPrice: number,
-        is_bid_side: boolean,
+        is_bid_side: boolean
     ) {
         const txb = new TransactionBlock();
         txb.moveCall({
