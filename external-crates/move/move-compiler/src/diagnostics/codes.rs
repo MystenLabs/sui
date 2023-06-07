@@ -45,11 +45,15 @@ pub trait DiagnosticCode: Copy {
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]
 /// Represents a single annotation for a diagnostic filter
 pub enum WarningFilter {
+    /// Filters all warnings
     All,
+    /// Filters all warnings of a specific category
     Category(Category),
+    /// Filters a single warning, as defined by codes below
     Code(Category, /* code */ u8),
 }
 
+/// The text used in the attribute for warning suppression
 pub const WARNING_FILTER_ATTR: &str = "allow";
 
 //**************************************************************************************************

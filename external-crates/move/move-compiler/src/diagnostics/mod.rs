@@ -385,10 +385,14 @@ impl WarningFilters {
 
     pub fn union(&mut self, other: &WarningFilters) {
         match (self, other) {
+            // if self is empty, just take the other filter
             (s @ Self::Empty, _) => *s = other.clone(),
+            // if other is empty, or self is ALL, no change to the filter
             (_, Self::Empty) => (),
             (Self::All, _) => (),
+            // if other is all, self is now all
             (s, Self::All) => *s = Self::All,
+            // category and code level union
             (
                 Self::Specified { category, codes },
                 Self::Specified {
@@ -397,7 +401,12 @@ impl WarningFilters {
                 },
             ) => {
                 category.extend(other_category);
-                codes.extend(other_codes);
+                // remove any codes covered by the category level filter
+                codes.extend(
+                    other_codes
+                        .iter()
+                        .filter(|(codes_cat, _)| !category.contains(codes_cat)),
+                );
             }
         }
     }
@@ -416,9 +425,14 @@ impl WarningFilters {
                 WarningFilter::All => *self = WarningFilters::All,
                 WarningFilter::Category(cat) => {
                     category.insert(cat);
+                    // remove any codes now covered by this category
+                    codes.retain(|(codes_cat, _)| codes_cat != &cat);
                 }
                 WarningFilter::Code(cat, code) => {
-                    codes.insert((cat, code));
+                    // no need to add the filter if already covered by the category
+                    if !category.contains(&cat) {
+                        codes.insert((cat, code));
+                    }
                 }
             },
         }

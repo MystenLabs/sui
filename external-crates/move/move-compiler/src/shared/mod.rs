@@ -206,7 +206,7 @@ impl CompilationEnv {
                     WarningFilter::Code(diag.info().category(), diag.info().code());
                 if let Some(filter_name) = possible_filter.to_str() {
                     let help = format!(
-                        "This warning can be suppressed with with '#[{}({})]' \
+                        "This warning can be suppressed with '#[{}({})]' \
                         applied to the 'module' or module member ('const', 'fun', or 'struct')",
                         WARNING_FILTER_ATTR, filter_name
                     );
