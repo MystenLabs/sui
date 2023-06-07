@@ -1,6 +1,8 @@
 name: Release Binaries
 
 on:
+  release:
+    types: [published]
   workflow_dispatch:
     inputs:
       sui_tag:
@@ -9,6 +11,7 @@ on:
         required: true
 
 env:
+  TAG_NAME: "${{ github.event.inputs.sui_tag || github.ref }}"
   CARGO_TERM_COLOR: always
   # Disable incremental compilation.
   #
@@ -32,15 +35,21 @@ env:
 
 jobs:
   release-build:
-    # needs: release
     timeout-minutes: 45
     runs-on: [ubuntu-ghcloud]
     strategy:
       fail-fast: false
     steps:
-      - uses: actions/checkout@v3
+      - name: Clean up tag name
+        shell: bash
+        run: |
+          echo "refs/tags/devnet-v1.1.0" | sed s/"refs\/tags\/"//
+          echo "sui_tag=$(echo ${{ env.TAG_NAME }}) | sed s/'refs\/tags\/'//" >> $GITHUB_ENV
+
+      - name: Checking out ${{ env.sui_tag }}
+        uses: actions/checkout@v3
         with:
-          ref: ${{ inputs.sui_tag }}
+          ref: ${{ env.sui_tag }}
 
       - name: cargo build (release)
         id: build
@@ -66,10 +75,10 @@ jobs:
             ${{ steps.build.outputs.BIN_SUI_TEST_VALIDATOR }}
             ${{ steps.build.outputs.BIN_SUI_INDEXER }}
 
-      - name: Publish binaries
+      - name: Publish binaries for ${{ env.sui_tag }} release
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: ${{ inputs.sui_tag }}
+          tag_name: ${{ env.sui_tag }}
           files: |
             ${{ steps.build.outputs.BIN_SUI }}
             ${{ steps.build.outputs.BIN_SUI_NODE }}
