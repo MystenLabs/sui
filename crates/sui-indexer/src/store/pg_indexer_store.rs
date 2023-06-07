@@ -10,7 +10,6 @@ use async_trait::async_trait;
 use cached::proc_macro::once;
 use diesel::dsl::{count, max};
 use diesel::pg::PgConnection;
-use diesel::query_builder::AsQuery;
 use diesel::sql_types::{BigInt, VarChar};
 use diesel::upsert::excluded;
 use diesel::{ExpressionMethods, PgArrayExpressionMethods};
@@ -1331,47 +1330,31 @@ impl IndexerStore for PgIndexerStore {
 
     async fn persist_object_changes(
         &self,
-        checkpoint: &Checkpoint,
         tx_object_changes: &[TransactionObjectChanges],
         object_mutation_latency: Histogram,
         object_deletion_latency: Histogram,
     ) -> Result<(), IndexerError> {
         transactional_blocking!(&self.blocking_cp, |conn| {
-            // update epoch transaction count within an epoch;
-            // do no update after end-of-epoch commit to avoid double counting
-            let sql = "UPDATE epochs e1
-                        SET epoch_total_transactions = e2.epoch_total_transactions + $1
-                        FROM epochs e2
-                        WHERE e1.epoch = e2.epoch
-                        AND e1.epoch = $2 AND e1.last_checkpoint_id IS NULL;";
-            diesel::sql_query(sql)
-                .bind::<BigInt, _>(checkpoint.transactions.len() as i64)
-                .bind::<BigInt, _>(checkpoint.epoch)
-                .as_query()
-                .execute(conn)?;
-
-            {
-                let mutated_objects: Vec<Object> = tx_object_changes
-                    .iter()
-                    .flat_map(|changes| changes.changed_objects.iter().cloned())
-                    .collect();
-                let deleted_changes = tx_object_changes
-                    .iter()
-                    .flat_map(|changes| changes.deleted_objects.iter().cloned())
-                    .collect::<Vec<_>>();
-                let deleted_objects: Vec<Object> = deleted_changes
-                    .iter()
-                    .map(|deleted_object| deleted_object.clone().into())
-                    .collect();
-                persist_transaction_object_changes(
-                    conn,
-                    mutated_objects,
-                    deleted_objects,
-                    Some(object_mutation_latency),
-                    Some(object_deletion_latency),
-                )?;
-                Ok::<(), IndexerError>(())
-            }
+            let mutated_objects: Vec<Object> = tx_object_changes
+                .iter()
+                .flat_map(|changes| changes.changed_objects.iter().cloned())
+                .collect();
+            let deleted_changes = tx_object_changes
+                .iter()
+                .flat_map(|changes| changes.deleted_objects.iter().cloned())
+                .collect::<Vec<_>>();
+            let deleted_objects: Vec<Object> = deleted_changes
+                .iter()
+                .map(|deleted_object| deleted_object.clone().into())
+                .collect();
+            persist_transaction_object_changes(
+                conn,
+                mutated_objects,
+                deleted_objects,
+                Some(object_mutation_latency),
+                Some(object_deletion_latency),
+            )?;
+            Ok::<(), IndexerError>(())
         })?;
         Ok(())
     }
@@ -1498,7 +1481,7 @@ impl IndexerStore for PgIndexerStore {
         Ok(())
     }
 
-    async fn count_network_transaction_previous_epoch(
+    async fn get_network_total_transactions_previous_epoch(
         &self,
         epoch: i64,
     ) -> Result<i64, IndexerError> {
@@ -1525,11 +1508,9 @@ impl IndexerStore for PgIndexerStore {
                 .advance_epoch(&data.new_epoch, last_epoch_cp_id)
                 .await?;
         }
-        let last_epoch_number = data.new_epoch.epoch;
-        info!("Persisting epoch {}", last_epoch_number);
-
         transactional_blocking!(&self.blocking_cp, |conn| {
             if let Some(last_epoch) = &data.last_epoch {
+                info!("Persisting at the end of epoch {}", last_epoch.epoch);
                 diesel::insert_into(epochs::table)
                     .values(last_epoch)
                     .on_conflict(epochs::epoch)
@@ -1560,12 +1541,8 @@ impl IndexerStore for PgIndexerStore {
                             .eq(excluded(epochs::leftover_storage_fund_inflow)),
                     ))
                     .execute(conn)?;
+                info!("Persisted epoch {}", last_epoch.epoch);
             }
-            diesel::insert_into(epochs::table)
-                .values(&data.new_epoch)
-                .on_conflict_do_nothing()
-                .execute(conn)?;
-
             diesel::insert_into(system_states::table)
                 .values(&data.system_state)
                 .on_conflict_do_nothing()
@@ -1576,7 +1553,14 @@ impl IndexerStore for PgIndexerStore {
                 .on_conflict_do_nothing()
                 .execute(conn)
         })?;
-        info!("Persisted epoch {}", last_epoch_number);
+        info!("Persisting initial state of epoch {}", data.new_epoch.epoch);
+        transactional_blocking!(&self.blocking_cp, |conn| {
+            diesel::insert_into(epochs::table)
+                .values(&data.new_epoch)
+                .on_conflict_do_nothing()
+                .execute(conn)
+        })?;
+        info!("Persisted initial state of epoch {}", data.new_epoch.epoch);
         Ok(())
     }
 
