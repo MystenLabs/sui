@@ -48,6 +48,8 @@ import {
   take,
   lock,
   purchaseAndResolvePolicies,
+  mainnetEnvironment,
+  testnetEnvironment,
 } from '@mysten/kiosk';
 
 /**
@@ -494,7 +496,7 @@ async function delistItem(itemId) {
  * - add destination "kiosk" or "user" (kiosk by default)
  */
 async function purchaseItem(itemId, opts) {
-  const { target, kiosk: inputKioskId } = opts;
+  const { target, kiosk: inputKioskId, env } = opts;
 
   if (target && target !== 'kiosk' && !isValidSuiAddress(target)) {
     throw new Error(
@@ -566,34 +568,38 @@ async function purchaseItem(itemId, opts) {
     throw new Error(`No transfer policy found for type ${itemInfo.data.type}`);
   }
 
+  const envOption = env && env == 'mainnet' ? mainnetEnvironment : testnetEnvironment;
   const price = listing.data.content.fields.value;
   const txb = new TransactionBlock();
-  const item = purchaseAndResolvePolicies(
+  const fromKioskArg = txb.object(kiosk.data.objectId);
+  const kioskCap = await findKioskCap().catch(() => null);
+
+  if (kioskCap === null) {
+    throw new Error(
+      'No Kiosk found for sender; use `new` to create one; cannot place item to Kiosk',
+    );
+  }
+
+  const ownedKiosk = txb.object(kioskCap.content.fields.for);
+  const ownedKioskCap = txb.objectRef({ ...kioskCap });
+  const { item, canTransfer } = purchaseAndResolvePolicies(
     txb,
     itemInfo.data.type,
-    { price },
-    kioskId,
+    price,
+    fromKioskArg,
     itemInfo.data.objectId,
     policies[0],
+    envOption,
+    { ownedKiosk, ownedKioskCap }
   );
 
   // For the locking policy scenario when an item needs to be locked;
-  if (item === null) {
+  if (!canTransfer) {
     return sendTx(txb);
   }
 
   if (target === 'kiosk') {
-    const kioskCap = await findKioskCap().catch(() => null);
-    if (kioskCap === null) {
-      throw new Error(
-        'No Kiosk found for sender; use `new` to create one; cannot place item to Kiosk',
-      );
-    }
-
-    const kioskArg = txb.object(kioskCap.content.fields.for);
-    const capArg = txb.objectRef({ ...kioskCap });
-
-    place(txb, itemInfo.data.type, kioskArg, capArg, item);
+    place(txb, itemInfo.data.type, ownedKiosk, ownedKioskCap, item);
   } else {
     const receiver = target || (await signer.getAddress());
     txb.transferObjects([item], txb.pure(receiver, 'address'));
