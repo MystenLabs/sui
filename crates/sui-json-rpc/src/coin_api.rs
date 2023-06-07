@@ -120,14 +120,14 @@ impl CoinReadApiServer for CoinReadApi {
                             let coin_type = obj.coin_type_maybe();
                             if coin_type.is_none() {
                                 Err(Error::SuiRpcInputError(SuiRpcInputError::GenericInvalid(
-                                    format!("Invalid Cursor {:?}, Object is not a coin", object_id),
+                                    "cursor is not a coin".to_string(),
                                 )))
                             } else {
                                 Ok((coin_type.unwrap().to_string(), object_id))
                             }
                         }
                         None => Err(Error::SuiRpcInputError(SuiRpcInputError::GenericInvalid(
-                            format!("Invalid Cursor {:?}, Object not found", object_id),
+                            "cursor not found".to_string(),
                         ))),
                     }
                 }
@@ -490,6 +490,7 @@ impl CoinReadInternal for CoinReadInternalImpl {
 
 #[cfg(test)]
 mod tests {
+    use expect_test::expect;
     use jsonrpsee::types::ErrorObjectOwned;
     use move_core_types::language_storage::StructTag;
     use sui_types::balance::Supply;
@@ -554,11 +555,10 @@ mod tests {
             assert!(response.is_err());
             let error_result = response.unwrap_err();
             let error_object: ErrorObjectOwned = error_result.into();
-            assert_eq!(error_object.code(), -32602);
-            assert_eq!(
-                error_object.message(),
-                "Invalid struct type: 0x2::invalid::struct::tag. Got error: Expected end of token stream. Got: ::"
-            );
+            let expected = expect!["-32602"];
+            expected.assert_eq(&error_object.code().to_string());
+            let expected = expect!["Invalid struct type: 0x2::invalid::struct::tag. Got error: Expected end of token stream. Got: ::"];
+            expected.assert_eq(error_object.message());
         }
 
         #[tokio::test]
@@ -577,11 +577,11 @@ mod tests {
             assert!(response.is_err());
             let error_result = response.unwrap_err();
             let error_object: ErrorObjectOwned = error_result.into();
-            assert_eq!(error_object.code(), -32602);
-            assert_eq!(
-                error_object.message(),
-                "Invalid struct type: 0x2::sui:🤵. Got error: unrecognized token: :🤵"
-            );
+            let expected = expect!["-32602"];
+            expected.assert_eq(&error_object.code().to_string());
+            let expected =
+                expect!["Invalid struct type: 0x2::sui:🤵. Got error: unrecognized token: :🤵"];
+            expected.assert_eq(error_object.message());
         }
 
         #[tokio::test]
@@ -607,12 +607,10 @@ mod tests {
             assert!(response.is_err());
             let error_result = response.unwrap_err();
             let error_object: ErrorObjectOwned = error_result.into();
-
-            assert_eq!(error_object.code(), -32000);
-            assert_eq!(
-                error_object.message(),
-                "Index store not available on this Fullnode."
-            );
+            let expected = expect!["-32000"];
+            expected.assert_eq(&error_object.code().to_string());
+            let expected = expect!["Index store not available on this Fullnode."];
+            expected.assert_eq(error_object.message());
         }
 
         #[tokio::test]
@@ -640,9 +638,10 @@ mod tests {
             assert!(response.is_err());
             let error_result = response.unwrap_err();
             let error_object: ErrorObjectOwned = error_result.into();
-
-            assert_eq!(error_object.code(), -32000);
-            assert_eq!(error_object.message(), "Storage error");
+            let expected = expect!["-32000"];
+            expected.assert_eq(&error_object.code().to_string());
+            let expected = expect!["Storage error"];
+            expected.assert_eq(error_object.message());
         }
     }
 
@@ -679,10 +678,10 @@ mod tests {
             let error_result = response.unwrap_err();
             let error_object: ErrorObjectOwned = error_result.into();
             assert_eq!(error_object.code(), -32602);
-            assert_eq!(
-                error_object.message(),
-                format!("Invalid Cursor {:?}, Object is not a coin", object_id)
-            );
+            let expected = expect!["-32602"];
+            expected.assert_eq(&error_object.code().to_string());
+            let expected = expect!["cursor is not a coin"];
+            expected.assert_eq(error_object.message());
         }
 
         #[tokio::test]
@@ -708,11 +707,10 @@ mod tests {
             assert!(response.is_err());
             let error_result = response.unwrap_err();
             let error_object: ErrorObjectOwned = error_result.into();
-            assert_eq!(error_object.code(), -32602);
-            assert_eq!(
-                error_object.message(),
-                format!("Invalid Cursor {:?}, Object not found", object_id)
-            );
+            let expected = expect!["-32602"];
+            expected.assert_eq(&error_object.code().to_string());
+            let expected = expect!["cursor not found"];
+            expected.assert_eq(error_object.message());
         }
     }
 
@@ -744,11 +742,10 @@ mod tests {
             assert!(response.is_err());
             let error_result = response.unwrap_err();
             let error_object: ErrorObjectOwned = error_result.into();
-            assert_eq!(error_object.code(), -32000);
-            assert_eq!(
-                error_object.message(),
-                "Index store not available on this Fullnode."
-            );
+            let expected = expect!["-32000"];
+            expected.assert_eq(&error_object.code().to_string());
+            let expected = expect!["Index store not available on this Fullnode."];
+            expected.assert_eq(error_object.message());
         }
 
         #[tokio::test]
@@ -775,8 +772,10 @@ mod tests {
             let error_result = response.unwrap_err();
             let error_object: ErrorObjectOwned = error_result.into();
 
-            assert_eq!(error_object.code(), -32000);
-            assert_eq!(error_object.message(), "Error executing mock db error");
+            let expected = expect!["-32000"];
+            expected.assert_eq(&error_object.code().to_string());
+            let expected = expect!["Error executing mock db error"];
+            expected.assert_eq(error_object.message());
         }
     }
 
@@ -842,7 +841,8 @@ mod tests {
             let response = coin_read_api.get_total_supply(coin_type.to_string()).await;
 
             let supply = response.unwrap();
-            assert_eq!(supply.value, 0);
+            let expected = expect!["0"];
+            expected.assert_eq(&supply.value.to_string());
         }
 
         #[tokio::test]
@@ -873,7 +873,8 @@ mod tests {
 
             assert!(response.is_ok());
             let result = response.unwrap();
-            assert_eq!(result.value, 420);
+            let expected = expect!["420"];
+            expected.assert_eq(&result.value.to_string());
         }
 
         #[tokio::test]
@@ -913,8 +914,10 @@ mod tests {
             let response = coin_read_api.get_total_supply(coin_name.clone()).await;
             let error_result = response.unwrap_err();
             let error_object: ErrorObjectOwned = error_result.into();
-            assert!(error_object.code() == -32000);
-            assert!(error_object.message() == "Failure deserializing object in the requested format: \"Unable to deserialize TreasuryCap object: remaining input\"");
+            let expected = expect!["-32000"];
+            expected.assert_eq(&error_object.code().to_string());
+            let expected = expect!["Failure deserializing object in the requested format: \"Unable to deserialize TreasuryCap object: remaining input\""];
+            expected.assert_eq(error_object.message());
         }
     }
 }
