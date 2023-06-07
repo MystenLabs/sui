@@ -279,6 +279,9 @@ impl AuthorityAPI for MockAuthorityApi {
 #[derive(Clone)]
 pub struct HandleTransactionTestAuthorityClient {
     pub tx_info_resp_to_return: SuiResult<HandleTransactionResponse>,
+    // If set, sleep for this duration before responding to a request.
+    // This is useful in testing a timeout scenario.
+    pub sleep_duration_before_responding: Option<Duration>,
 }
 
 #[async_trait]
@@ -287,6 +290,9 @@ impl AuthorityAPI for HandleTransactionTestAuthorityClient {
         &self,
         _transaction: Transaction,
     ) -> Result<HandleTransactionResponse, SuiError> {
+        if let Some(duration) = self.sleep_duration_before_responding {
+            tokio::time::sleep(duration).await;
+        }
         self.tx_info_resp_to_return.clone()
     }
 
@@ -337,6 +343,7 @@ impl HandleTransactionTestAuthorityClient {
     pub fn new() -> Self {
         Self {
             tx_info_resp_to_return: Err(SuiError::Unknown("".to_string())),
+            sleep_duration_before_responding: None,
         }
     }
 
@@ -350,6 +357,10 @@ impl HandleTransactionTestAuthorityClient {
 
     pub fn reset_tx_info_response(&mut self) {
         self.tx_info_resp_to_return = Err(SuiError::Unknown("".to_string()));
+    }
+
+    pub fn set_sleep_duration_before_responding(&mut self, duration: Duration) {
+        self.sleep_duration_before_responding = Some(duration);
     }
 }
 
