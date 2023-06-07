@@ -288,6 +288,17 @@ impl AuthorityStore {
         Ok(acc.1.digest().into())
     }
 
+    pub fn get_root_state_accumulator(
+        &self,
+        epoch: EpochId,
+    ) -> (CheckpointSequenceNumber, Accumulator) {
+        self.perpetual_tables
+            .root_state_hash_by_epoch
+            .get(&epoch)
+            .unwrap()
+            .unwrap()
+    }
+
     pub fn get_recovery_epoch_at_restart(&self) -> SuiResult<EpochId> {
         self.perpetual_tables.get_recovery_epoch_at_restart()
     }
@@ -1758,13 +1769,17 @@ impl AuthorityStore {
         &self,
         checkpoint_executor: &CheckpointExecutor,
         accumulator: Arc<StateAccumulator>,
-        epoch: EpochId,
+        cur_epoch_store: &AuthorityPerEpochStore,
         panic: bool,
     ) {
-        let live_object_set_hash = accumulator.digest_live_object_set();
+        let live_object_set_hash = accumulator.digest_live_object_set(
+            !cur_epoch_store
+                .protocol_config()
+                .simplified_unwrap_then_delete(),
+        );
 
         let root_state_hash = self
-            .get_root_state_hash(epoch)
+            .get_root_state_hash(cur_epoch_store.epoch())
             .expect("Retrieving root state hash cannot fail");
 
         let is_inconsistent = root_state_hash != live_object_set_hash;
@@ -1787,6 +1802,18 @@ impl AuthorityStore {
         if !panic {
             checkpoint_executor.set_inconsistent_state(is_inconsistent);
         }
+    }
+
+    #[cfg(msim)]
+    pub fn remove_all_versions_of_object(&self, object_id: ObjectID) {
+        let entries: Vec<_> = self
+            .perpetual_tables
+            .objects
+            .unbounded_iter()
+            .filter_map(|(key, _)| if key.0 == object_id { Some(key) } else { None })
+            .collect();
+        info!("Removing all versions of object: {:?}", entries);
+        self.perpetual_tables.objects.multi_remove(entries).unwrap();
     }
 }
 

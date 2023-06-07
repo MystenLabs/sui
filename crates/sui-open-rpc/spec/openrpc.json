@@ -1365,6 +1365,7 @@
                 "package_digest_hash_module": false,
                 "package_upgrades": true,
                 "scoring_decision_with_validity_cutoff": true,
+                "simplified_unwrap_then_delete": false,
                 "zklogin_auth": false
               },
               "attributes": {

@@ -216,6 +216,16 @@ struct FeatureFlags {
     // How we order transactions coming out of consensus before sending to execution.
     #[serde(skip_serializing_if = "ConsensusTransactionOrdering::is_none")]
     consensus_transaction_ordering: ConsensusTransactionOrdering,
+
+    // Previously, the unwrapped_then_deleted field in TransactionEffects makes a distinction between
+    // whether an object has existed in the store previously (i.e. whether there is a tombstone).
+    // Such dependency makes effects generation inefficient, and requires us to include wrapped
+    // tombstone in state root hash.
+    // To prepare for effects V2, with this flag set to true, we simplify the definition of
+    // unwrapped_then_deleted to always include unwrapped then deleted objects,
+    // regardless of their previous state in the store.
+    #[serde(skip_serializing_if = "is_false")]
+    simplified_unwrap_then_delete: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -771,6 +781,10 @@ impl ProtocolConfig {
     pub fn consensus_transaction_ordering(&self) -> ConsensusTransactionOrdering {
         self.feature_flags.consensus_transaction_ordering
     }
+
+    pub fn simplified_unwrap_then_delete(&self) -> bool {
+        self.feature_flags.simplified_unwrap_then_delete
+    }
 }
 
 #[cfg(not(msim))]
@@ -1289,6 +1303,10 @@ impl ProtocolConfig {
     }
     pub fn set_max_tx_gas_for_testing(&mut self, max_tx_gas: u64) {
         self.max_tx_gas = Some(max_tx_gas)
+    }
+    #[cfg(msim)]
+    pub fn set_simplified_unwrap_then_delete(&mut self, val: bool) {
+        self.feature_flags.simplified_unwrap_then_delete = val
     }
 }
 
