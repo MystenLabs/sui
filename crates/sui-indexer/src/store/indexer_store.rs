@@ -235,6 +235,10 @@ pub trait IndexerStore {
     ) -> Result<(), IndexerError>;
 
     async fn persist_epoch(&self, data: &TemporaryEpochStore) -> Result<(), IndexerError>;
+    async fn count_network_transaction_previous_epoch(
+        &self,
+        epoch: i64,
+    ) -> Result<i64, IndexerError>;
 
     async fn get_epochs(
         &self,
