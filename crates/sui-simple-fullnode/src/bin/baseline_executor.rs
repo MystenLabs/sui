@@ -1,38 +1,24 @@
 use clap::*;
 use std::collections::HashSet;
 use std::path::PathBuf;
-use std::sync::Arc;
 use std::time::Instant;
 use sui_adapter::execution_engine;
 use sui_adapter::execution_mode;
 use sui_config::{Config, NodeConfig};
-use sui_core::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use sui_core::authority::epoch_start_configuration::EpochStartConfiguration;
-use sui_core::authority::AuthorityStore;
-use sui_core::checkpoints::CheckpointStore;
-use sui_core::epoch::committee_store::CommitteeStore;
-use sui_core::epoch::epoch_metrics::EpochMetrics;
-use sui_core::module_cache_metrics::ResolverMetrics;
-use sui_core::signature_verifier::SignatureVerifierMetrics;
-use sui_core::storage::RocksDbStore;
 use sui_core::transaction_input_checker::get_gas_status_no_epoch_store_experimental;
-use sui_node;
-use sui_node::metrics;
 use sui_simple_fullnode::MemoryBackedStore;
+use sui_simple_fullnode::SequenceWorkerState;
 use sui_types::message_envelope::Message;
 use sui_types::messages::InputObjectKind;
 use sui_types::messages::InputObjects;
 use sui_types::messages::TransactionDataAPI;
 use sui_types::messages::TransactionKind;
-use sui_types::metrics::LimitsMetrics;
 use sui_types::multiaddr::Multiaddr;
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
 use sui_types::sui_system_state::get_sui_system_state;
 use sui_types::sui_system_state::SuiSystemStateTrait;
 use sui_types::temporary_store::TemporaryStore;
-use tokio::sync::watch;
-use tokio::time::Duration;
-use typed_store::rocks::default_db_options;
 
 const GIT_REVISION: &str = {
     if let Some(revision) = option_env!("GIT_REVISION") {
@@ -76,115 +62,10 @@ async fn main() {
     let args = Args::parse();
     let config = NodeConfig::load(&args.config_path).unwrap();
     let genesis = config.genesis().expect("Could not load genesis");
-    let registry_service = { metrics::start_prometheus_server(config.metrics_address) };
-    let prometheus_registry = registry_service.default_registry();
-    let metrics = Arc::new(LimitsMetrics::new(&prometheus_registry));
-    let checkpoint_store = CheckpointStore::new(&config.db_path().join("checkpoints"));
-
-    // stores
-    let genesis_committee = genesis.committee().expect("Could not get committee");
-    // committee store
-    let committee_store = Arc::new(CommitteeStore::new(
-        config.db_path().join("epochs"),
-        &genesis_committee,
-        None,
-    ));
-    // authority store
-    let perpetual_options = default_db_options().optimize_db_for_write_throughput(4);
-    // let perpetual_tables = Arc::new(AuthorityPerpetualTables::open(
-    //     &config.db_path().join("store"),
-    //     Some(perpetual_options.options),
-    // ));
-    let store = AuthorityStore::open(
-        &config.db_path().join("store"),
-        Some(perpetual_options.options),
-        genesis,
-        &committee_store,
-        config.indirect_objects_threshold,
-        config
-            .expensive_safety_check_config
-            .enable_epoch_sui_conservation_check(),
-        &prometheus_registry,
-    )
-    .await
-    .expect("Could not create AuthorityStore");
-    let epoch_start_configuration = {
-        let epoch_start_configuration = EpochStartConfiguration::new(
-            genesis.sui_system_object().into_epoch_start_state(),
-            *genesis.checkpoint().digest(),
-        );
-        store
-            .set_epoch_start_configuration(&epoch_start_configuration)
-            .await
-            .expect("Could not set epoch start configuration");
-        epoch_start_configuration
-    };
-    // epoch store
-    let cur_epoch = 0; // always start from epoch 0
-    let committee = committee_store
-        .get_committee(&cur_epoch)
-        .expect("Could not get committee")
-        .expect("Committee of the current epoch must exist");
-    let cache_metrics = Arc::new(ResolverMetrics::new(&prometheus_registry));
-    let signature_verifier_metrics = SignatureVerifierMetrics::new(&prometheus_registry);
-    let epoch_options = default_db_options().optimize_db_for_write_throughput(4);
-    let mut epoch_store = AuthorityPerEpochStore::new(
-        config.protocol_public_key(),
-        committee.clone(),
-        &config.db_path().join("store"),
-        Some(epoch_options.options),
-        EpochMetrics::new(&registry_service.default_registry()),
-        epoch_start_configuration,
-        store.clone(),
-        cache_metrics,
-        signature_verifier_metrics,
-        &config.expensive_safety_check_config,
-    );
-    checkpoint_store.insert_genesis_checkpoint(
-        genesis.checkpoint(),
-        genesis.checkpoint_contents().clone(),
-        &epoch_store,
-    );
+    let mut sw_state = SequenceWorkerState::new(&config).await;
 
     if let Some(watermark) = args.download {
-        let mut highest_synced_checkpoint_seq = 0;
-        if let Some(highest) = checkpoint_store
-            .get_highest_synced_checkpoint_seq_number()
-            .expect("Could not get highest checkpoint")
-        {
-            highest_synced_checkpoint_seq = highest;
-        }
-        println!(
-            "Requested watermark = {}, current highest checkpoint = {}",
-            watermark, highest_synced_checkpoint_seq
-        );
-        if watermark > highest_synced_checkpoint_seq {
-            // we have already downloaded all the checkpoints up to the watermark -> nothing to do
-            let state_sync_store = RocksDbStore::new(
-                store.clone(),
-                committee_store.clone(),
-                checkpoint_store.clone(),
-            );
-            let (_trusted_peer_change_tx, trusted_peer_change_rx) =
-                watch::channel(Default::default());
-            let (_p2p_network, _discovery_handle, _state_sync_handle) =
-                sui_node::SuiNode::create_p2p_network(
-                    &config,
-                    state_sync_store,
-                    trusted_peer_change_rx,
-                    &prometheus_registry,
-                )
-                .expect("could not create p2p network");
-
-            while watermark > highest_synced_checkpoint_seq {
-                tokio::time::sleep(Duration::from_secs(1)).await;
-                highest_synced_checkpoint_seq = checkpoint_store
-                    .get_highest_synced_checkpoint_seq_number()
-                    .expect("Could not get highest checkpoint")
-                    .expect("Could not get highest checkpoint");
-            }
-            println!("Done downloading");
-        }
+        sw_state.handle_download(watermark, &config).await;
     }
 
     if args.execute {
@@ -195,21 +76,23 @@ async fn main() {
                 .insert(obj.id(), (obj.compute_object_reference(), obj.clone()));
         }
 
-        let mut protocol_config = epoch_store.protocol_config();
-        let mut move_vm = epoch_store.move_vm();
-        let mut epoch_start_config = epoch_store.epoch_start_config();
-        let mut reference_gas_price = epoch_store.reference_gas_price();
+        let mut protocol_config = sw_state.epoch_store.protocol_config();
+        let mut move_vm = sw_state.epoch_store.move_vm();
+        let mut epoch_start_config = sw_state.epoch_store.epoch_start_config();
+        let mut reference_gas_price = sw_state.epoch_store.reference_gas_price();
 
         let genesis_seq = genesis.checkpoint().into_summary_and_sequence().0;
 
-        let highest_synced_seq = match checkpoint_store
+        let highest_synced_seq = match sw_state
+            .checkpoint_store
             .get_highest_synced_checkpoint_seq_number()
             .expect("error")
         {
             Some(highest) => highest,
             None => 0,
         };
-        let highest_executed_seq = match checkpoint_store
+        let highest_executed_seq = match sw_state
+            .checkpoint_store
             .get_highest_executed_checkpoint_seq_number()
             .expect("error")
         {
@@ -222,7 +105,8 @@ async fn main() {
         let now = Instant::now();
         let mut num_tx: usize = 0;
         for checkpoint_seq in genesis_seq..highest_synced_seq {
-            let checkpoint_summary = checkpoint_store
+            let checkpoint_summary = sw_state
+                .checkpoint_store
                 .get_checkpoint_by_sequence_number(checkpoint_seq)
                 .expect("Cannot get checkpoint")
                 .expect("Checkpoint is None");
@@ -232,13 +116,15 @@ async fn main() {
             }
 
             let (_seq, summary) = checkpoint_summary.into_summary_and_sequence();
-            let contents = checkpoint_store
+            let contents = sw_state
+                .checkpoint_store
                 .get_checkpoint_contents(&summary.content_digest)
                 .expect("Contents must exist")
                 .expect("Contents must exist");
             num_tx += contents.size();
             for tx_digest in contents.iter() {
-                let tx = store
+                let tx = sw_state
+                    .store
                     .get_transaction_block(&tx_digest.transaction)
                     .expect("Transaction exists")
                     .expect("Transaction exists");
@@ -306,7 +192,7 @@ async fn main() {
                         gas_status,
                         &epoch_start_config.epoch_data(),
                         protocol_config,
-                        metrics.clone(),
+                        sw_state.metrics.clone(),
                         false,
                         &HashSet::new(),
                     );
@@ -340,8 +226,9 @@ async fn main() {
                 let new_epoch_start_state = latest_state.into_epoch_start_state();
                 let next_epoch_committee = new_epoch_start_state.get_sui_committee();
                 let next_epoch = next_epoch_committee.epoch();
-                let last_checkpoint = checkpoint_store
-                    .get_epoch_last_checkpoint(epoch_store.epoch())
+                let last_checkpoint = sw_state
+                    .checkpoint_store
+                    .get_epoch_last_checkpoint(sw_state.epoch_store.epoch())
                     .expect("Error loading last checkpoint for current epoch")
                     .expect("Could not load last checkpoint for current epoch");
                 println!(
@@ -350,19 +237,19 @@ async fn main() {
                 );
                 let epoch_start_configuration =
                     EpochStartConfiguration::new(new_epoch_start_state, *last_checkpoint.digest());
-                assert_eq!(epoch_store.epoch() + 1, next_epoch);
-                epoch_store = epoch_store.new_at_next_epoch(
+                assert_eq!(sw_state.epoch_store.epoch() + 1, next_epoch);
+                sw_state.epoch_store = sw_state.epoch_store.new_at_next_epoch(
                     config.protocol_public_key(),
                     next_epoch_committee,
                     epoch_start_configuration,
-                    store.clone(),
+                    sw_state.store.clone(),
                     &config.expensive_safety_check_config,
                 );
-                println!("New epoch store has epoch {}", epoch_store.epoch());
-                protocol_config = epoch_store.protocol_config();
-                move_vm = epoch_store.move_vm();
-                epoch_start_config = epoch_store.epoch_start_config();
-                reference_gas_price = epoch_store.reference_gas_price();
+                println!("New epoch store has epoch {}", sw_state.epoch_store.epoch());
+                protocol_config = sw_state.epoch_store.protocol_config();
+                move_vm = sw_state.epoch_store.move_vm();
+                epoch_start_config = sw_state.epoch_store.epoch_start_config();
+                reference_gas_price = sw_state.epoch_store.reference_gas_price();
             }
         } // for loop over checkpoints
 
