@@ -1337,12 +1337,13 @@ impl IndexerStore for PgIndexerStore {
         object_deletion_latency: Histogram,
     ) -> Result<(), IndexerError> {
         transactional_blocking!(&self.blocking_cp, |conn| {
-            // update epoch transaction count
+            // update epoch transaction count within an epoch;
+            // do no update after end-of-epoch commit to avoid double counting
             let sql = "UPDATE epochs e1
-SET epoch_total_transactions = e2.epoch_total_transactions + $1
-FROM epochs e2
-WHERE e1.epoch = e2.epoch
-  AND e1.epoch = $2;";
+                        SET epoch_total_transactions = e2.epoch_total_transactions + $1
+                        FROM epochs e2
+                        WHERE e1.epoch = e2.epoch
+                        AND e1.epoch = $2 AND e1.last_checkpoint_id IS NULL;";
             diesel::sql_query(sql)
                 .bind::<BigInt, _>(checkpoint.transactions.len() as i64)
                 .bind::<BigInt, _>(checkpoint.epoch)
@@ -1492,9 +1493,24 @@ WHERE e1.epoch = e2.epoch
                     .map_err(IndexerError::from)
                     .context("Failed writing recipients to PostgresDB")?;
             }
+            // add a comment
             Ok::<(), IndexerError>(())
         })?;
         Ok(())
+    }
+
+    async fn count_network_transaction_previous_epoch(
+        &self,
+        epoch: i64,
+    ) -> Result<i64, IndexerError> {
+        read_only_blocking!(&self.blocking_cp, |conn| {
+            checkpoints::table
+                .filter(checkpoints::epoch.eq(epoch - 1))
+                .select(max(checkpoints::network_total_transactions))
+                .first::<Option<i64>>(conn)
+                .map(|o| o.unwrap_or(0))
+        })
+        .context("Failed to count network transactions in previous epoch")
     }
 
     async fn persist_epoch(&self, data: &TemporaryEpochStore) -> Result<(), IndexerError> {
@@ -1510,8 +1526,8 @@ WHERE e1.epoch = e2.epoch
                 .advance_epoch(&data.new_epoch, last_epoch_cp_id)
                 .await?;
         }
-        let epoch = data.new_epoch.epoch;
-        info!("Persisting epoch {}", epoch);
+        let last_epoch_number = data.new_epoch.epoch;
+        info!("Persisting epoch {}", last_epoch_number);
 
         transactional_blocking!(&self.blocking_cp, |conn| {
             if let Some(last_epoch) = &data.last_epoch {
@@ -1522,6 +1538,8 @@ WHERE e1.epoch = e2.epoch
                     .set((
                         epochs::last_checkpoint_id.eq(excluded(epochs::last_checkpoint_id)),
                         epochs::epoch_end_timestamp.eq(excluded(epochs::epoch_end_timestamp)),
+                        epochs::epoch_total_transactions
+                            .eq(excluded(epochs::epoch_total_transactions)),
                         epochs::protocol_version.eq(excluded(epochs::protocol_version)),
                         epochs::next_epoch_version.eq(excluded(epochs::next_epoch_version)),
                         epochs::next_epoch_committee.eq(excluded(epochs::next_epoch_committee)),
@@ -1544,11 +1562,6 @@ WHERE e1.epoch = e2.epoch
                     ))
                     .execute(conn)?;
             }
-            diesel::insert_into(epochs::table)
-                .values(&data.new_epoch)
-                .on_conflict_do_nothing()
-                .execute(conn)?;
-
             diesel::insert_into(system_states::table)
                 .values(&data.system_state)
                 .on_conflict_do_nothing()
@@ -1559,7 +1572,15 @@ WHERE e1.epoch = e2.epoch
                 .on_conflict_do_nothing()
                 .execute(conn)
         })?;
-        info!("Persisted epoch {}", epoch);
+        // split new epoch commit to a different to avoid error of
+        // "could not serialize access due to read/write dependencies among transactions"
+        transactional_blocking!(&self.blocking_cp, |conn| {
+            diesel::insert_into(epochs::table)
+            .values(&data.new_epoch)
+            .on_conflict_do_nothing()
+            .execute(conn)
+        })?;
+        info!("Persisted epoch {}", last_epoch_number);
         Ok(())
     }
 
