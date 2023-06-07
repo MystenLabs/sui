@@ -8,7 +8,7 @@ warning[W09004]: unnecessary trailing semicolon
   │         │     A trailing ';' in an expression block implicitly adds a '()' value after the semicolon. That '()' value will not be reachable
   │         Any code after this expression will not be reached
   │
-  = This warning can be suppressed with with '#[allow(unused_trailing_semi)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+  = This warning can be suppressed with '#[allow(unused_trailing_semi)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 warning[W09004]: unnecessary trailing semicolon
   ┌─ tests/move_check/liveness/trailing_semi.move:9:16
@@ -20,7 +20,7 @@ warning[W09004]: unnecessary trailing semicolon
   │         │      A trailing ';' in an expression block implicitly adds a '()' value after the semicolon. That '()' value will not be reachable
   │         Any code after this expression will not be reached
   │
-  = This warning can be suppressed with with '#[allow(unused_trailing_semi)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+  = This warning can be suppressed with '#[allow(unused_trailing_semi)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 warning[W09004]: unnecessary trailing semicolon
    ┌─ tests/move_check/liveness/trailing_semi.move:15:19
@@ -32,7 +32,7 @@ warning[W09004]: unnecessary trailing semicolon
    │           │       A trailing ';' in an expression block implicitly adds a '()' value after the semicolon. That '()' value will not be reachable
    │           Any code after this expression will not be reached
    │
-   = This warning can be suppressed with with '#[allow(unused_trailing_semi)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = This warning can be suppressed with '#[allow(unused_trailing_semi)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 warning[W09004]: unnecessary trailing semicolon
    ┌─ tests/move_check/liveness/trailing_semi.move:21:20
@@ -44,7 +44,7 @@ warning[W09004]: unnecessary trailing semicolon
    │           │        A trailing ';' in an expression block implicitly adds a '()' value after the semicolon. That '()' value will not be reachable
    │           Any code after this expression will not be reached
    │
-   = This warning can be suppressed with with '#[allow(unused_trailing_semi)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = This warning can be suppressed with '#[allow(unused_trailing_semi)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 warning[W09004]: unnecessary trailing semicolon
    ┌─ tests/move_check/liveness/trailing_semi.move:29:19
@@ -56,7 +56,7 @@ warning[W09004]: unnecessary trailing semicolon
    │             │     A trailing ';' in an expression block implicitly adds a '()' value after the semicolon. That '()' value will not be reachable
    │             Any code after this expression will not be reached
    │
-   = This warning can be suppressed with with '#[allow(unused_trailing_semi)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = This warning can be suppressed with '#[allow(unused_trailing_semi)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 warning[W09004]: unnecessary trailing semicolon
    ┌─ tests/move_check/liveness/trailing_semi.move:43:14
@@ -72,7 +72,7 @@ warning[W09004]: unnecessary trailing semicolon
    │ │              A trailing ';' in an expression block implicitly adds a '()' value after the semicolon. That '()' value will not be reachable
    │ ╰─────────────' Any code after this expression will not be reached
    │  
-   = This warning can be suppressed with with '#[allow(unused_trailing_semi)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = This warning can be suppressed with '#[allow(unused_trailing_semi)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 warning[W09004]: unnecessary trailing semicolon
    ┌─ tests/move_check/liveness/trailing_semi.move:52:24
@@ -84,7 +84,7 @@ warning[W09004]: unnecessary trailing semicolon
    │                 │      A trailing ';' in an expression block implicitly adds a '()' value after the semicolon. That '()' value will not be reachable
    │                 Any code after this expression will not be reached
    │
-   = This warning can be suppressed with with '#[allow(unused_trailing_semi)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = This warning can be suppressed with '#[allow(unused_trailing_semi)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 warning[W09004]: unnecessary trailing semicolon
    ┌─ tests/move_check/liveness/trailing_semi.move:54:23
@@ -96,7 +96,7 @@ warning[W09004]: unnecessary trailing semicolon
    │                 │     A trailing ';' in an expression block implicitly adds a '()' value after the semicolon. That '()' value will not be reachable
    │                 Any code after this expression will not be reached
    │
-   = This warning can be suppressed with with '#[allow(unused_trailing_semi)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = This warning can be suppressed with '#[allow(unused_trailing_semi)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 warning[W09004]: unnecessary trailing semicolon
    ┌─ tests/move_check/liveness/trailing_semi.move:55:14
@@ -112,5 +112,5 @@ warning[W09004]: unnecessary trailing semicolon
    │ │              A trailing ';' in an expression block implicitly adds a '()' value after the semicolon. That '()' value will not be reachable
    │ ╰─────────────' Any code after this expression will not be reached
    │  
-   = This warning can be suppressed with with '#[allow(unused_trailing_semi)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = This warning can be suppressed with '#[allow(unused_trailing_semi)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 

@@ -4,5 +4,5 @@ warning[W09005]: dead or unreachable code
 8 │         x = 5;
   │         ^^^^^ Unreachable code. This statement (and any following statements) will not be executed.
   │
-  = This warning can be suppressed with with '#[allow(dead_code)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+  = This warning can be suppressed with '#[allow(dead_code)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 

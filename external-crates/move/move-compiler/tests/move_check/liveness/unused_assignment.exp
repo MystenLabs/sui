@@ -4,7 +4,7 @@ warning[W09003]: unused assignment
 3 │         let x = 0;
   │             ^ Unused assignment for variable 'x'. Consider removing, replacing with '_', or prefixing with '_' (e.g., '_x')
   │
-  = This warning can be suppressed with with '#[allow(unused_assignment)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+  = This warning can be suppressed with '#[allow(unused_assignment)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 warning[W09003]: unused assignment
   ┌─ tests/move_check/liveness/unused_assignment.move:7:13
@@ -12,7 +12,7 @@ warning[W09003]: unused assignment
 7 │         let x = 0;
   │             ^ Unused assignment for variable 'x'. Consider removing, replacing with '_', or prefixing with '_' (e.g., '_x')
   │
-  = This warning can be suppressed with with '#[allow(unused_assignment)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+  = This warning can be suppressed with '#[allow(unused_assignment)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 warning[W09003]: unused assignment
   ┌─ tests/move_check/liveness/unused_assignment.move:8:9
@@ -20,7 +20,7 @@ warning[W09003]: unused assignment
 8 │         x = 0;
   │         ^ Unused assignment for variable 'x'. Consider removing, replacing with '_', or prefixing with '_' (e.g., '_x')
   │
-  = This warning can be suppressed with with '#[allow(unused_assignment)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+  = This warning can be suppressed with '#[allow(unused_assignment)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 warning[W09003]: unused assignment
    ┌─ tests/move_check/liveness/unused_assignment.move:13:17
@@ -28,7 +28,7 @@ warning[W09003]: unused assignment
 13 │             let x = 0;
    │                 ^ Unused assignment for variable 'x'. Consider removing, replacing with '_', or prefixing with '_' (e.g., '_x')
    │
-   = This warning can be suppressed with with '#[allow(unused_assignment)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = This warning can be suppressed with '#[allow(unused_assignment)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 warning[W09003]: unused assignment
    ┌─ tests/move_check/liveness/unused_assignment.move:21:13
@@ -36,7 +36,7 @@ warning[W09003]: unused assignment
 21 │             x = 0;
    │             ^ Unused assignment for variable 'x'. Consider removing, replacing with '_', or prefixing with '_' (e.g., '_x')
    │
-   = This warning can be suppressed with with '#[allow(unused_assignment)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = This warning can be suppressed with '#[allow(unused_assignment)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 warning[W09003]: unused assignment
    ┌─ tests/move_check/liveness/unused_assignment.move:26:13
@@ -44,7 +44,7 @@ warning[W09003]: unused assignment
 26 │         let x = 0;
    │             ^ Unused assignment for variable 'x'. Consider removing, replacing with '_', or prefixing with '_' (e.g., '_x')
    │
-   = This warning can be suppressed with with '#[allow(unused_assignment)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = This warning can be suppressed with '#[allow(unused_assignment)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 warning[W09003]: unused assignment
    ┌─ tests/move_check/liveness/unused_assignment.move:28:13
@@ -52,7 +52,7 @@ warning[W09003]: unused assignment
 28 │             x = 1;
    │             ^ Unused assignment for variable 'x'. Consider removing, replacing with '_', or prefixing with '_' (e.g., '_x')
    │
-   = This warning can be suppressed with with '#[allow(unused_assignment)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = This warning can be suppressed with '#[allow(unused_assignment)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 warning[W09003]: unused assignment
    ┌─ tests/move_check/liveness/unused_assignment.move:30:13
@@ -60,7 +60,7 @@ warning[W09003]: unused assignment
 30 │             x = 2;
    │             ^ Unused assignment for variable 'x'. Consider removing, replacing with '_', or prefixing with '_' (e.g., '_x')
    │
-   = This warning can be suppressed with with '#[allow(unused_assignment)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = This warning can be suppressed with '#[allow(unused_assignment)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 warning[W09003]: unused assignment
    ┌─ tests/move_check/liveness/unused_assignment.move:41:13
@@ -68,5 +68,5 @@ warning[W09003]: unused assignment
 41 │             x = 1;
    │             ^ Unused assignment for variable 'x'. Consider removing, replacing with '_', or prefixing with '_' (e.g., '_x')
    │
-   = This warning can be suppressed with with '#[allow(unused_assignment)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = This warning can be suppressed with '#[allow(unused_assignment)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
