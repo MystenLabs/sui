@@ -615,6 +615,7 @@ mod tests {
 
         #[tokio::test]
         async fn test_get_coins_iterator_typed_store_error() {
+            // Validate that we handle and return an error message when we encounter an unexpected error
             let owner = get_test_owner();
             let coin_type = get_test_coin_type(get_test_package_id());
             let mut mock_state = MockState::new();
@@ -750,6 +751,7 @@ mod tests {
 
         #[tokio::test]
         async fn test_get_balance_execution_error() {
+            // Validate that we handle and return an error message when we encounter an unexpected error
             let owner = get_test_owner();
             let coin_type = get_test_coin_type(get_test_package_id());
             let mut mock_state = MockState::new();
