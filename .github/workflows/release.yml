@@ -43,15 +43,16 @@ jobs:
       - name: Clean up tag name
         shell: bash
         run: |
-          echo "refs/tags/devnet-v1.1.0" | sed s/"refs\/tags\/"//
-          echo "sui_tag=$(echo ${{ env.TAG_NAME }}) | sed s/'refs\/tags\/'//" >> $GITHUB_ENV
+          echo "sui_tag=$(echo ${{ env.TAG_NAME }} | sed s/'refs\/tags\/'//)" >> $GITHUB_ENV
 
       - name: Checking out ${{ env.sui_tag }}
+        if: ${{ env.sui_tag != 'main' }}
         uses: actions/checkout@v3
         with:
           ref: ${{ env.sui_tag }}
 
       - name: cargo build (release)
+        if: ${{ env.sui_tag != 'main' }}
         id: build
         run: |
           cargo build --release
@@ -64,6 +65,7 @@ jobs:
           echo BIN_SUI_INDEXER="target/release/sui-indexer" >> $GITHUB_OUTPUT
 
       - name: Upload release artifacts
+        if: ${{ env.sui_tag != 'main' }}
         uses: actions/upload-artifact@v3
         with:
           name: sui-binaries
@@ -76,6 +78,7 @@ jobs:
             ${{ steps.build.outputs.BIN_SUI_INDEXER }}
 
       - name: Publish binaries for ${{ env.sui_tag }} release
+        if: ${{ env.sui_tag != 'main' }}
         uses: softprops/action-gh-release@v1
         with:
           tag_name: ${{ env.sui_tag }}
