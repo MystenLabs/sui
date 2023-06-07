@@ -487,8 +487,6 @@ impl<T: Cache> CertificateStore<T> {
     /// Retrieves all the certificates with round >= the provided round.
     /// The result is returned with certificates sorted in round asc order
     pub fn after_round(&self, round: Round) -> StoreResult<Vec<Certificate>> {
-        // Skip to a row at or before the requested round.
-        // TODO: Add a more efficient seek method to typed store.
         let digests = self
             .certificate_id_by_round
             .iter_with_bounds(Some((round, AuthorityIdentifier::default())), None)
@@ -515,8 +513,6 @@ impl<T: Cache> CertificateStore<T> {
         &self,
         round: Round,
     ) -> StoreResult<BTreeMap<Round, Vec<AuthorityIdentifier>>> {
-        // Skip to a row at or before the requested round.
-        // TODO: Add a more efficient seek method to typed store.
         let iter = self
             .certificate_id_by_round
             .iter_with_bounds(Some((round, AuthorityIdentifier::default())), None);
