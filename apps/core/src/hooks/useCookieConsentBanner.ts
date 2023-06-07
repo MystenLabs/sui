@@ -14,7 +14,7 @@ export function useCookieConsentBanner<T>(
     storageInstance: PersistableStorage<T>,
     options: CookieConsentConfig
 ) {
-    const { data: productAnayticsConfig } = useProductAnalyticsConfig();
+    const { data: productAnalyticsConfig } = useProductAnalyticsConfig();
 
     useEffect(() => {
         if (productAnalyticsConfig) {
