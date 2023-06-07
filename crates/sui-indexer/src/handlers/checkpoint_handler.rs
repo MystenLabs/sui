@@ -718,14 +718,21 @@ where
 
             let event = event.as_ref();
 
+            let last_epoch = system_state.epoch as i64 - 1;
+            let network_tx_count_prev_epoch = self
+                .state
+                .count_network_transaction_previous_epoch(last_epoch)
+                .await?;
+
             Some(TemporaryEpochStore {
                 last_epoch: Some(DBEpochInfo {
-                    epoch: system_state.epoch as i64 - 1,
+                    epoch: last_epoch,
                     first_checkpoint_id: 0,
                     last_checkpoint_id: Some(checkpoint.sequence_number as i64),
                     epoch_start_timestamp: 0,
                     epoch_end_timestamp: Some(checkpoint.timestamp_ms as i64),
-                    epoch_total_transactions: 0,
+                    epoch_total_transactions: checkpoint.network_total_transactions as i64
+                        - network_tx_count_prev_epoch,
                     next_epoch_version: Some(
                         end_of_epoch_data.next_epoch_protocol_version.as_u64() as i64,
                     ),
