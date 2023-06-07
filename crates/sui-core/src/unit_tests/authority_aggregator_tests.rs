@@ -767,6 +767,7 @@ async fn test_handle_transaction_panic() {
 
 #[tokio::test]
 async fn test_handle_transaction_response() {
+    telemetry_subscribers::init_for_testing();
     let mut authorities = BTreeMap::new();
     let mut clients = BTreeMap::new();
     let mut authority_keys = Vec::new();
