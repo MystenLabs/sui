@@ -23,3 +23,5 @@ CHANGELOG.md
 /narwhal/primary/src/block_waiter.rs @akichidis
 
 /crates/sui-core/src/consensus_adapter.rs @laura-makdah
+
+apps/* @MystenLabs/fe-and-apps
