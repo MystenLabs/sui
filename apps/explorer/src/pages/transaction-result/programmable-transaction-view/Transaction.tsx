@@ -69,10 +69,9 @@ function MoveCall({ data }: TransactionProps<MoveCallSuiTransaction>) {
                 )}
                 {typeArgs && (
                     <span className="break-all">
-                        , type_arguments: {typeArgs}
+                        , type_arguments: [{typeArgs.join(', ')}]
                     </span>
                 )}
-                )
             </Text>
         </TransactionContent>
     );
