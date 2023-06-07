@@ -58,6 +58,8 @@ members = [
     "testing-infra/module-generation",
     "testing-infra/test-generation",
     "testing-infra/transactional-test-runner",
+    "testing-infra/enum-compat-util",
+    "testing-infra/move-proc-macros",
     "tools/move-bytecode-utils",
     "tools/move-bytecode-viewer",
     "tools/move-cli",

@@ -200,6 +200,7 @@ elliptic-curve-594e8ee84c453af0 = { package = "elliptic-curve", version = "0.13"
 elliptic-curve-5ef9efb8ec2df382 = { package = "elliptic-curve", version = "0.12", default-features = false, features = ["arithmetic", "digest", "hazmat", "sec1"] }
 encode_unicode-dff4ba8e3ae991db = { package = "encode_unicode", version = "1" }
 endian-type = { version = "0.1", default-features = false }
+enum-compat-util = { path = "../../external-crates/move/testing-infra/enum-compat-util", default-features = false }
 ethnum = { version = "1", default-features = false }
 event-listener = { version = "2", default-features = false }
 expect-test = { version = "1", default-features = false }
@@ -901,6 +902,7 @@ elliptic-curve-594e8ee84c453af0 = { package = "elliptic-curve", version = "0.13"
 elliptic-curve-5ef9efb8ec2df382 = { package = "elliptic-curve", version = "0.12", default-features = false, features = ["arithmetic", "digest", "hazmat", "sec1"] }
 encode_unicode-dff4ba8e3ae991db = { package = "encode_unicode", version = "1" }
 endian-type = { version = "0.1", default-features = false }
+enum-compat-util = { path = "../../external-crates/move/testing-infra/enum-compat-util", default-features = false }
 enum_dispatch = { version = "0.3", default-features = false }
 ethnum = { version = "1", default-features = false }
 event-listener = { version = "2", default-features = false }
@@ -1075,6 +1077,7 @@ move-ir-to-bytecode-syntax = { path = "../../external-crates/move/move-ir-compil
 move-ir-types = { path = "../../external-crates/move/move-ir/types", default-features = false }
 move-model = { path = "../../external-crates/move/move-model", default-features = false }
 move-package = { path = "../../external-crates/move/tools/move-package", default-features = false }
+move-proc-macros = { path = "../../external-crates/move/testing-infra/move-proc-macros", default-features = false }
 move-prover = { path = "../../external-crates/move/move-prover", default-features = false }
 move-prover-boogie-backend = { path = "../../external-crates/move/move-prover/boogie-backend", default-features = false }
 move-read-write-set-types = { path = "../../external-crates/move/tools/read-write-set/types", default-features = false }
@@ -1687,3 +1690,4 @@ windows_x86_64_msvc-c8eced492e86ede7 = { package = "windows_x86_64_msvc", versio
 winreg = { version = "0.10", default-features = false }
 
 ### END HAKARI SECTION
+

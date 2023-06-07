@@ -2921,6 +2921,13 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c34f04666d835ff5d62e058c3995147c06f42fe86ff053337632bca83e42702d"
 
 [[package]]
+name = "enum-compat-util"
+version = "0.1.0"
+dependencies = [
+ "serde_yaml",
+]
+
+[[package]]
 name = "enum_dispatch"
 version = "0.3.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4842,7 +4849,9 @@ name = "move-binary-format"
 version = "0.0.3"
 dependencies = [
  "anyhow",
+ "enum-compat-util",
  "move-core-types",
+ "move-proc-macros",
  "once_cell",
  "ref-cast",
  "serde 1.0.152",
@@ -5003,8 +5012,10 @@ dependencies = [
  "anyhow",
  "arbitrary",
  "bcs",
+ "enum-compat-util",
  "ethnum",
  "hex",
+ "move-proc-macros",
  "num",
  "once_cell",
  "primitive-types",
@@ -5205,6 +5216,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "move-proc-macros"
+version = "0.1.0"
+dependencies = [
+ "enum-compat-util",
+ "proc-macro2 1.0.58",
+ "quote 1.0.26",
+ "syn 2.0.16",
+]
+
+[[package]]
 name = "move-prover"
 version = "0.1.0"
 dependencies = [
@@ -5283,10 +5304,12 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "bcs",
+ "enum-compat-util",
  "hex",
  "move-binary-format",
  "move-bytecode-utils",
  "move-core-types",
+ "move-proc-macros",
  "once_cell",
  "serde 1.0.152",
 ]
@@ -12561,6 +12584,7 @@ dependencies = [
  "encode_unicode 1.0.0",
  "encoding_rs",
  "endian-type",
+ "enum-compat-util",
  "enum_dispatch",
  "errno 0.2.8",
  "errno 0.3.1",
@@ -12750,6 +12774,7 @@ dependencies = [
  "move-ir-types",
  "move-model",
  "move-package",
+ "move-proc-macros",
  "move-prover",
  "move-prover-boogie-backend",
  "move-read-write-set-types",
