@@ -24,4 +24,4 @@ CHANGELOG.md
 
 /crates/sui-core/src/consensus_adapter.rs @laura-makdah
 
-apps/* @MystenLabs/fe-and-apps
+apps/ @MystenLabs/fe-and-apps
