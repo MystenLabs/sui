@@ -43,8 +43,8 @@ function useHistoricalGasPrices() {
         queryKey: ['get', 'last 30 epochs gas price'],
         queryFn: async () => {
             // TODO: update this to get the gas price from the epoch itself rather than the previous one
-            // once this is deployed https://github.com/MystenLabs/sui/pull/11388
-            // every epoch contains the gas price for the next one
+            // once this is done https://mysten.atlassian.net/browse/PI-6
+            // currently every epoch contains the gas price for the next one
             const epochs = [
                 ...(
                     await rpc.getEpochs({
@@ -59,7 +59,12 @@ function useHistoricalGasPrices() {
             return epochs.map((anEpoch) => ({
                 epoch: Number(anEpoch.epoch) + 1,
                 referenceGasPrice: anEpoch.endOfEpochInfo?.referenceGasPrice
-                    ? BigInt(anEpoch.endOfEpochInfo?.referenceGasPrice)
+                    ? // ? BigInt(anEpoch.endOfEpochInfo?.referenceGasPrice)
+                      BigInt(
+                          Math.random() > 0.5
+                              ? Math.round(Math.random() * 100)
+                              : 1
+                      )
                     : null,
                 date: anEpoch.endOfEpochInfo?.epochEndTimestamp
                     ? new Date(
