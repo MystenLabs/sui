@@ -37,13 +37,14 @@ use crate::{with_tracing, SuiRpcModule};
 use mockall::automock;
 
 pub struct CoinReadApi {
-    internal: Arc<dyn CoinReadInternal + Send + Sync>,
+    // Trait object w/ Box as we do not need to share this across multiple threads
+    internal: Box<dyn CoinReadInternal + Send + Sync>,
 }
 
 impl CoinReadApi {
     pub fn new(state: Arc<AuthorityState>, metrics: Arc<JsonRpcMetrics>) -> Self {
         Self {
-            internal: Arc::new(CoinReadInternalService::new(state, metrics)),
+            internal: Box::new(CoinReadInternalImpl::new(state, metrics)),
         }
     }
 }
@@ -233,9 +234,11 @@ impl CoinReadApiServer for CoinReadApi {
     }
 }
 
+/// State trait to capture subset of AuthorityState used by CoinReadApi
+/// This allows us to also mock AuthorityState for testing
 #[cfg_attr(test, automock)]
 #[async_trait]
-pub trait StateServiceWrapper {
+pub trait State {
     fn get_object_read(&self, object_id: &ObjectID) -> SuiResult<ObjectRead>;
     async fn get_object(&self, object_id: &ObjectID) -> SuiResult<Option<Object>>;
     fn find_publish_txn_digest(&self, package_id: ObjectID) -> SuiResult<TransactionDigest>;
@@ -262,18 +265,19 @@ pub trait StateServiceWrapper {
     ) -> SuiResult<Arc<HashMap<TypeTag, TotalBalance>>>;
 }
 
-pub struct AuthorityStateWrapper {
+/// We set StateImpl as a wrapper over Arc<AuthorityState> primarily due to the need to pass Arc<AuthorityState> to find_package_object_id
+pub struct StateImpl {
     state: Arc<AuthorityState>,
 }
 
-impl AuthorityStateWrapper {
+impl StateImpl {
     pub fn new(state: Arc<AuthorityState>) -> Self {
         Self { state }
     }
 }
 
 #[async_trait]
-impl StateServiceWrapper for AuthorityStateWrapper {
+impl State for StateImpl {
     fn get_object_read(&self, object_id: &ObjectID) -> SuiResult<ObjectRead> {
         self.state.get_object_read(object_id)
     }
@@ -384,10 +388,12 @@ async fn find_package_object_id(
     .await?
 }
 
+/// CoinReadInternal trait to capture logic of interactions with AuthorityState and metrics
+/// This allows us to also mock internal implementation for testing
 #[cfg_attr(test, automock)]
 #[async_trait]
 pub trait CoinReadInternal {
-    fn get_state(&self) -> Arc<dyn StateServiceWrapper + Send + Sync>;
+    fn get_state(&self) -> Arc<dyn State + Send + Sync>;
     async fn get_coins_iterator(
         &self,
         owner: SuiAddress,
@@ -402,23 +408,24 @@ pub trait CoinReadInternal {
     async fn get_treasury_cap(&self, coin_struct: StructTag) -> SuiApiResult<TreasuryCap>;
 }
 
-pub struct CoinReadInternalService {
-    state: Arc<dyn StateServiceWrapper + Send + Sync>,
+pub struct CoinReadInternalImpl {
+    // Trait object w/ Arc as we have methods that require sharing this across multiple threads
+    state: Arc<dyn State + Send + Sync>,
     pub metrics: Arc<JsonRpcMetrics>,
 }
 
-impl CoinReadInternalService {
+impl CoinReadInternalImpl {
     pub fn new(state: Arc<AuthorityState>, metrics: Arc<JsonRpcMetrics>) -> Self {
         Self {
-            state: Arc::new(AuthorityStateWrapper::new(state)),
+            state: Arc::new(StateImpl::new(state)),
             metrics,
         }
     }
 }
 
 #[async_trait]
-impl CoinReadInternal for CoinReadInternalService {
-    fn get_state(&self) -> Arc<dyn StateServiceWrapper + Send + Sync> {
+impl CoinReadInternal for CoinReadInternalImpl {
+    fn get_state(&self) -> Arc<dyn State + Send + Sync> {
         self.state.clone()
     }
 
@@ -537,7 +544,7 @@ mod tests {
             let coin_type = "0x2::invalid::struct::tag";
             let mock_internal = MockCoinReadInternal::new();
             let coin_read_api = CoinReadApi {
-                internal: Arc::new(mock_internal),
+                internal: Box::new(mock_internal),
             };
 
             let response = coin_read_api
@@ -560,7 +567,7 @@ mod tests {
             let coin_type = "0x2::sui:🤵";
             let mock_internal = MockCoinReadInternal::new();
             let coin_read_api = CoinReadApi {
-                internal: Arc::new(mock_internal),
+                internal: Box::new(mock_internal),
             };
 
             let response = coin_read_api
@@ -581,16 +588,16 @@ mod tests {
         async fn test_get_coins_iterator_index_store_not_available() {
             let owner = get_test_owner();
             let coin_type = get_test_coin_type(get_test_package_id());
-            let mut mock_state = MockStateServiceWrapper::new();
+            let mut mock_state = MockState::new();
             mock_state
                 .expect_get_owned_coins()
                 .returning(move |_, _, _, _| Err(SuiError::IndexStoreNotAvailable));
-            let internal = CoinReadInternalService {
+            let internal = CoinReadInternalImpl {
                 state: Arc::new(mock_state),
                 metrics: Arc::new(JsonRpcMetrics::new_for_tests()),
             };
             let coin_read_api = CoinReadApi {
-                internal: Arc::new(internal),
+                internal: Box::new(internal),
             };
 
             let response = coin_read_api
@@ -612,18 +619,18 @@ mod tests {
         async fn test_get_coins_iterator_typed_store_error() {
             let owner = get_test_owner();
             let coin_type = get_test_coin_type(get_test_package_id());
-            let mut mock_state = MockStateServiceWrapper::new();
+            let mut mock_state = MockState::new();
             mock_state
                 .expect_get_owned_coins()
                 .returning(move |_, _, _, _| {
                     Err(TypedStoreError::RocksDBError("mock rocksdb error".to_string()).into())
                 });
-            let internal = CoinReadInternalService {
+            let internal = CoinReadInternalImpl {
                 state: Arc::new(mock_state),
                 metrics: Arc::new(JsonRpcMetrics::new_for_tests()),
             };
             let coin_read_api = CoinReadApi {
-                internal: Arc::new(internal),
+                internal: Box::new(internal),
             };
 
             let response = coin_read_api
@@ -648,7 +655,7 @@ mod tests {
             let owner = get_test_owner();
             let object_id = get_test_package_id();
             let (_, _, _, _, treasury_cap_object) = get_test_treasury_cap_peripherals(object_id);
-            let mut mock_state = MockStateServiceWrapper::new();
+            let mut mock_state = MockState::new();
             mock_state.expect_get_object().returning(move |obj_id| {
                 if obj_id == &object_id {
                     Ok(Some(treasury_cap_object.clone()))
@@ -656,12 +663,12 @@ mod tests {
                     panic!("should not be called with any other object id")
                 }
             });
-            let internal = CoinReadInternalService {
+            let internal = CoinReadInternalImpl {
                 state: Arc::new(mock_state),
                 metrics: Arc::new(JsonRpcMetrics::new_for_tests()),
             };
             let coin_read_api = CoinReadApi {
-                internal: Arc::new(internal),
+                internal: Box::new(internal),
             };
 
             let response = coin_read_api
@@ -682,16 +689,16 @@ mod tests {
         async fn test_object_not_found() {
             let owner = get_test_owner();
             let object_id = ObjectID::random();
-            let mut mock_state = MockStateServiceWrapper::new();
+            let mut mock_state = MockState::new();
             mock_state.expect_get_object().returning(move |_| Ok(None));
 
-            let internal = CoinReadInternalService {
+            let internal = CoinReadInternalImpl {
                 state: Arc::new(mock_state),
                 metrics: Arc::new(JsonRpcMetrics::new_for_tests()),
             };
 
             let coin_read_api = CoinReadApi {
-                internal: Arc::new(internal),
+                internal: Box::new(internal),
             };
 
             let response = coin_read_api
@@ -718,16 +725,16 @@ mod tests {
         async fn test_get_balance_index_store_not_available() {
             let owner = get_test_owner();
             let coin_type = get_test_coin_type(get_test_package_id());
-            let mut mock_state = MockStateServiceWrapper::new();
+            let mut mock_state = MockState::new();
             mock_state
                 .expect_get_balance()
                 .returning(move |_, _| Err(SuiError::IndexStoreNotAvailable));
-            let internal = CoinReadInternalService {
+            let internal = CoinReadInternalImpl {
                 state: Arc::new(mock_state),
                 metrics: Arc::new(JsonRpcMetrics::new_for_tests()),
             };
             let coin_read_api = CoinReadApi {
-                internal: Arc::new(internal),
+                internal: Box::new(internal),
             };
 
             let response = coin_read_api
@@ -748,16 +755,16 @@ mod tests {
         async fn test_get_balance_execution_error() {
             let owner = get_test_owner();
             let coin_type = get_test_coin_type(get_test_package_id());
-            let mut mock_state = MockStateServiceWrapper::new();
+            let mut mock_state = MockState::new();
             mock_state
                 .expect_get_balance()
                 .returning(move |_, _| Err(SuiError::ExecutionError("mock db error".to_string())));
-            let internal = CoinReadInternalService {
+            let internal = CoinReadInternalImpl {
                 state: Arc::new(mock_state),
                 metrics: Arc::new(JsonRpcMetrics::new_for_tests()),
             };
             let coin_read_api = CoinReadApi {
-                internal: Arc::new(internal),
+                internal: Box::new(internal),
             };
 
             let response = coin_read_api
@@ -791,7 +798,7 @@ mod tests {
             };
             let treasury_cap_object =
                 Object::treasury_cap_for_testing(input_coin_struct.clone(), treasury_cap);
-            let mut mock_state = MockStateServiceWrapper::new();
+            let mut mock_state = MockState::new();
             // return TreasuryCap instead of CoinMetadata to set up test
             mock_state
                 .expect_find_package_object()
@@ -803,12 +810,12 @@ mod tests {
                         panic!("should not be called with any other object id")
                     }
                 });
-            let internal = CoinReadInternalService {
+            let internal = CoinReadInternalImpl {
                 state: Arc::new(mock_state),
                 metrics: Arc::new(JsonRpcMetrics::new_for_tests()),
             };
             let coin_read_api = CoinReadApi {
-                internal: Arc::new(internal),
+                internal: Box::new(internal),
             };
 
             let response = coin_read_api.get_coin_metadata(coin_name.clone()).await;
@@ -829,7 +836,7 @@ mod tests {
             let coin_type = "0x2::sui::SUI";
             let mock_internal = MockCoinReadInternal::new();
             let coin_read_api = CoinReadApi {
-                internal: Arc::new(mock_internal),
+                internal: Box::new(mock_internal),
             };
 
             let response = coin_read_api.get_total_supply(coin_type.to_string()).await;
@@ -843,7 +850,7 @@ mod tests {
             let package_id = get_test_package_id();
             let (coin_name, _, treasury_cap_struct, _, treasury_cap_object) =
                 get_test_treasury_cap_peripherals(package_id);
-            let mut mock_state = MockStateServiceWrapper::new();
+            let mut mock_state = MockState::new();
             mock_state
                 .expect_find_package_object()
                 .with(predicate::always(), predicate::eq(treasury_cap_struct))
@@ -854,12 +861,12 @@ mod tests {
                         panic!("should not be called with any other object id")
                     }
                 });
-            let internal = CoinReadInternalService {
+            let internal = CoinReadInternalImpl {
                 state: Arc::new(mock_state),
                 metrics: Arc::new(JsonRpcMetrics::new_for_tests()),
             };
             let coin_read_api = CoinReadApi {
-                internal: Arc::new(internal),
+                internal: Box::new(internal),
             };
 
             let response = coin_read_api.get_total_supply(coin_name.clone()).await;
@@ -884,7 +891,7 @@ mod tests {
             };
             let coin_metadata_object =
                 Object::coin_metadata_for_testing(input_coin_struct.clone(), coin_metadata);
-            let mut mock_state = MockStateServiceWrapper::new();
+            let mut mock_state = MockState::new();
             mock_state
                 .expect_find_package_object()
                 .with(predicate::always(), predicate::eq(treasury_cap_struct))
@@ -895,12 +902,12 @@ mod tests {
                         panic!("should not be called with any other object id")
                     }
                 });
-            let internal = CoinReadInternalService {
+            let internal = CoinReadInternalImpl {
                 state: Arc::new(mock_state),
                 metrics: Arc::new(JsonRpcMetrics::new_for_tests()),
             };
             let coin_read_api = CoinReadApi {
-                internal: Arc::new(internal),
+                internal: Box::new(internal),
             };
 
             let response = coin_read_api.get_total_supply(coin_name.clone()).await;
