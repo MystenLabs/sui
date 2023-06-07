@@ -3,7 +3,6 @@
 use super::cluster::{new_wallet_context_from_cluster, Cluster};
 use async_trait::async_trait;
 use fastcrypto::encoding::{Encoding, Hex};
-use mysten_metrics::spawn_monitored_task;
 use std::collections::HashMap;
 use std::env;
 use std::sync::Arc;
@@ -42,19 +41,7 @@ impl FaucetClientFactory {
                 .await
                 .unwrap();
 
-                let faucet = Arc::new(simple_faucet);
-                let faucet_batch = faucet.clone();
-
-                spawn_monitored_task!(async move {
-                    loop {
-                        faucet_batch
-                            .batch_transfer_gases()
-                            .await
-                            .expect("unexpected unable to batch transfer");
-                    }
-                });
-
-                Arc::new(LocalFaucetClient::new(faucet))
+                Arc::new(LocalFaucetClient::new(simple_faucet))
             }
         }
     }

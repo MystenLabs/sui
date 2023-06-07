@@ -31,7 +31,7 @@ use uuid::Uuid;
 
 const CONCURRENCY_LIMIT: usize = 30;
 
-struct AppState<F = SimpleFaucet> {
+struct AppState<F = Arc<SimpleFaucet>> {
     faucet: F,
     config: FaucetConfig,
 }
@@ -81,8 +81,6 @@ async fn main() -> Result<(), anyhow::Error> {
         config,
     });
 
-    let batching_thread_app_state = Arc::clone(&app_state);
-
     // TODO: restrict access if needed
     let cors = CorsLayer::new()
         .allow_methods(vec![Method::GET, Method::POST])
@@ -116,17 +114,6 @@ async fn main() -> Result<(), anyhow::Error> {
             // Every config.wal_retry_interval (Default: 300 seconds) we try to clear the wal coins
             tokio::time::sleep(Duration::from_secs(wal_retry_interval)).await;
             app_state.faucet.retry_wal_coins().await.unwrap();
-        }
-    });
-
-    spawn_monitored_task!(async move {
-        info!("Starting task to handle batch faucet requests.");
-        loop {
-            batching_thread_app_state
-                .faucet
-                .batch_transfer_gases()
-                .await
-                .unwrap();
         }
     });
 
