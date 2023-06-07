@@ -137,15 +137,13 @@ impl ConsensusStore {
         // start from the previous table first to ensure we haven't missed anything.
         let mut sub_dags = self
             .committed_sub_dags_by_index
-            .unbounded_iter()
-            .skip_to(from)?
+            .iter_with_bounds(Some(*from), None)
             .map(|(_, sub_dag)| ConsensusCommit::V1(sub_dag))
             .collect::<Vec<ConsensusCommit>>();
 
         sub_dags.extend(
             self.committed_sub_dags_by_index_v2
-                .unbounded_iter()
-                .skip_to(from)?
+                .iter_with_bounds(Some(*from), None)
                 .map(|(_, sub_dag)| sub_dag)
                 .collect::<Vec<ConsensusCommit>>(),
         );

@@ -7,7 +7,7 @@ use prometheus::{register_int_counter_with_registry, IntCounter, Registry};
 use std::collections::HashMap;
 use std::num::NonZeroUsize;
 use std::sync::Arc;
-use std::{cmp::Ordering, collections::BTreeMap, iter};
+use std::{collections::BTreeMap, iter};
 use sui_macros::fail_point;
 use tap::Tap;
 
@@ -489,22 +489,11 @@ impl<T: Cache> CertificateStore<T> {
     pub fn after_round(&self, round: Round) -> StoreResult<Vec<Certificate>> {
         // Skip to a row at or before the requested round.
         // TODO: Add a more efficient seek method to typed store.
-        let mut iter = self.certificate_id_by_round.unbounded_iter();
-        if round > 0 {
-            iter = iter.skip_to(&(round - 1, AuthorityIdentifier::default()))?;
-        }
-
-        let mut digests = Vec::new();
-        for ((r, _), d) in iter {
-            match r.cmp(&round) {
-                Ordering::Equal | Ordering::Greater => {
-                    digests.push(d);
-                }
-                Ordering::Less => {
-                    continue;
-                }
-            }
-        }
+        let digests = self
+            .certificate_id_by_round
+            .iter_with_bounds(Some((round, AuthorityIdentifier::default())), None)
+            .map(|(_, digest)| digest)
+            .collect::<Vec<CertificateDigest>>();
 
         // Fetch all those certificates from main storage, return an error if any one is missing.
         self.certificates_by_id
@@ -528,16 +517,12 @@ impl<T: Cache> CertificateStore<T> {
     ) -> StoreResult<BTreeMap<Round, Vec<AuthorityIdentifier>>> {
         // Skip to a row at or before the requested round.
         // TODO: Add a more efficient seek method to typed store.
-        let mut iter = self.certificate_id_by_round.unbounded_iter();
-        if round > 0 {
-            iter = iter.skip_to(&(round - 1, AuthorityIdentifier::default()))?;
-        }
+        let iter = self
+            .certificate_id_by_round
+            .iter_with_bounds(Some((round, AuthorityIdentifier::default())), None);
 
         let mut result = BTreeMap::<Round, Vec<AuthorityIdentifier>>::new();
         for ((r, origin), _) in iter {
-            if r < round {
-                continue;
-            }
             result.entry(r).or_default().push(origin);
         }
         Ok(result)
