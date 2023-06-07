@@ -1,4 +1,3 @@
-use crate::syncoexec::MemoryBackedStore;
 use clap::*;
 use std::collections::HashSet;
 use std::path::PathBuf;
@@ -16,13 +15,15 @@ use sui_core::epoch::epoch_metrics::EpochMetrics;
 use sui_core::module_cache_metrics::ResolverMetrics;
 use sui_core::signature_verifier::SignatureVerifierMetrics;
 use sui_core::storage::RocksDbStore;
-use sui_core::transaction_input_checker::get_gas_status;
+use sui_core::transaction_input_checker::get_gas_status_no_epoch_store_experimental;
 use sui_node;
 use sui_node::metrics;
+use sui_simple_fullnode::MemoryBackedStore;
 use sui_types::message_envelope::Message;
 use sui_types::messages::InputObjectKind;
 use sui_types::messages::InputObjects;
 use sui_types::messages::TransactionDataAPI;
+use sui_types::messages::TransactionKind;
 use sui_types::metrics::LimitsMetrics;
 use sui_types::multiaddr::Multiaddr;
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
@@ -32,8 +33,6 @@ use sui_types::temporary_store::TemporaryStore;
 use tokio::sync::watch;
 use tokio::time::Duration;
 use typed_store::rocks::default_db_options;
-
-pub mod syncoexec;
 
 const GIT_REVISION: &str = {
     if let Some(revision) = option_env!("GIT_REVISION") {
@@ -196,10 +195,12 @@ async fn main() {
                 .insert(obj.id(), (obj.compute_object_reference(), obj.clone()));
         }
 
+        let mut protocol_config = epoch_store.protocol_config();
+        let mut move_vm = epoch_store.move_vm();
+        let mut epoch_start_config = epoch_store.epoch_start_config();
+        let mut reference_gas_price = epoch_store.reference_gas_price();
+
         let genesis_seq = genesis.checkpoint().into_summary_and_sequence().0;
-        // let mut num_tx : usize = 0;
-        // let mut num_tx_prev = num_tx;
-        // let mut now = Instant::now();
 
         let highest_synced_seq = match checkpoint_store
             .get_highest_synced_checkpoint_seq_number()
@@ -217,43 +218,6 @@ async fn main() {
         };
         println!("Highest synced {}", highest_synced_seq);
         println!("Highest executed {}", highest_executed_seq);
-        // quick sanity check
-        // while let Some(checkpoint_summary) = checkpoint_store
-        //     .get_checkpoint_by_sequence_number(checkpoint_seq)
-        //     .expect("Cannot get checkpoint")
-        // {
-        //     if checkpoint_seq % 50000 == 0 {
-        //         println!("{}", checkpoint_seq);
-        //     }
-        //     checkpoint_seq += 1;
-
-        //     let (seq, _summary) = checkpoint_summary.into_summary_and_sequence();
-        //     let contents = checkpoint_store
-        //         .get_checkpoint_contents(&_summary.content_digest)
-        //         .expect("Contents must exist");
-        //     if contents == None {
-        //         println!(
-        //             "Reached end of available checkpoints at seq nr {}",
-        //             checkpoint_seq
-        //         );
-        //         return;
-        //     }
-
-        //     let full_contents = checkpoint_store
-        //         .get_full_checkpoint_contents_by_sequence_number(checkpoint_seq)
-        //         .expect("Cannot get full checkpoint contents");
-        //     if full_contents == None {
-        //         print!("reached end of full checkpoints at seq {}", checkpoint_seq);
-        //         return;
-        //     }
-        //     for tx_digest in contents.unwrap().iter() {
-        //         // println!("Digest: {:?}", tx_digest);
-        //         let tx = store
-        //             .get_transaction_block(&tx_digest.transaction)
-        //             .expect("Transaction exists")
-        //             .expect("Transaction exists");
-        //     }
-        // }
 
         let now = Instant::now();
         let mut num_tx: usize = 0;
@@ -296,10 +260,15 @@ async fn main() {
                     input_object_data.push(obj.1.clone());
                 }
 
-                let gas_status =
-                    get_gas_status(&input_object_data, tx_data.gas(), &epoch_store, &tx_data)
-                        .await
-                        .expect("Could not get gas");
+                let gas_status = get_gas_status_no_epoch_store_experimental(
+                    &input_object_data,
+                    tx_data.gas(),
+                    protocol_config,
+                    reference_gas_price,
+                    &tx_data,
+                )
+                .await
+                .expect("Could not get gas");
 
                 let input_objects = InputObjects::new(
                     input_object_kinds
@@ -314,10 +283,15 @@ async fn main() {
                     &memory_store,
                     input_objects,
                     *tx.digest(),
-                    epoch_store.protocol_config(),
+                    protocol_config,
                 );
 
                 let (kind, signer, gas) = tx_data.execution_parts();
+
+                if let TransactionKind::ChangeEpoch(_) = kind {
+                    println!("Change epoch at checkpoint {}", checkpoint_seq)
+                    // check if this is the last transaction of the epoch
+                }
 
                 let (inner_temp_store, effects, _execution_error) =
                     execution_engine::execute_transaction_to_effects::<execution_mode::Normal, _>(
@@ -328,10 +302,10 @@ async fn main() {
                         &gas,
                         *tx.digest(),
                         transaction_dependencies,
-                        epoch_store.move_vm(),
+                        move_vm,
                         gas_status,
-                        &epoch_store.epoch_start_config().epoch_data(),
-                        epoch_store.protocol_config(),
+                        &epoch_start_config.epoch_data(),
+                        protocol_config,
                         metrics.clone(),
                         false,
                         &HashSet::new(),
@@ -370,6 +344,10 @@ async fn main() {
                     .get_epoch_last_checkpoint(epoch_store.epoch())
                     .expect("Error loading last checkpoint for current epoch")
                     .expect("Could not load last checkpoint for current epoch");
+                println!(
+                    "Last checkpoint sequence number: {}",
+                    last_checkpoint.sequence_number(),
+                );
                 let epoch_start_configuration =
                     EpochStartConfiguration::new(new_epoch_start_state, *last_checkpoint.digest());
                 assert_eq!(epoch_store.epoch() + 1, next_epoch);
@@ -381,6 +359,10 @@ async fn main() {
                     &config.expensive_safety_check_config,
                 );
                 println!("New epoch store has epoch {}", epoch_store.epoch());
+                protocol_config = epoch_store.protocol_config();
+                move_vm = epoch_store.move_vm();
+                epoch_start_config = epoch_store.epoch_start_config();
+                reference_gas_price = epoch_store.reference_gas_price();
             }
         } // for loop over checkpoints
 

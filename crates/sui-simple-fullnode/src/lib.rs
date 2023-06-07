@@ -1,20 +1,25 @@
 use sui_types::storage::get_module_by_id;
 
-use sui_types::{base_types::{ObjectID, ObjectRef, VersionNumber}, object::Object, storage::{ParentSync, BackingPackageStore, ChildObjectResolver, ObjectStore}, error::{SuiResult, SuiError}};
-use move_core_types::{language_storage::ModuleId, resolver::ModuleResolver};
-use move_bytecode_utils::module_cache::GetModule;
-use move_binary_format::CompiledModule;
-use std::collections::HashMap;
 use anyhow::Result;
+use move_binary_format::CompiledModule;
+use move_bytecode_utils::module_cache::GetModule;
+use move_core_types::{language_storage::ModuleId, resolver::ModuleResolver};
+use std::collections::HashMap;
+use sui_types::{
+    base_types::{ObjectID, ObjectRef, VersionNumber},
+    error::{SuiError, SuiResult},
+    object::Object,
+    storage::{BackingPackageStore, ChildObjectResolver, ObjectStore, ParentSync},
+};
 
 pub struct MemoryBackedStore {
-    pub objects : HashMap<ObjectID, (ObjectRef, Object)>    
+    pub objects: HashMap<ObjectID, (ObjectRef, Object)>,
 }
 
 impl MemoryBackedStore {
     pub fn new() -> MemoryBackedStore {
         MemoryBackedStore {
-            objects : HashMap::new()
+            objects: HashMap::new(),
         }
     }
 }
@@ -33,7 +38,7 @@ impl BackingPackageStore for MemoryBackedStore {
     }
 }
 
-impl ChildObjectResolver for MemoryBackedStore { 
+impl ChildObjectResolver for MemoryBackedStore {
     fn read_child_object(&self, _parent: &ObjectID, child: &ObjectID) -> SuiResult<Option<Object>> {
         Ok(self.objects.get(child).map(|v| v.1.clone()))
     }
@@ -60,7 +65,7 @@ impl ObjectStore for &MemoryBackedStore {
                 }
             })
             .clone())
-    } 
+    }
 }
 
 impl ModuleResolver for MemoryBackedStore {
