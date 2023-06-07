@@ -69,13 +69,16 @@ export class PersistableStorage<T> implements Storage<T> {
     }
 
     #getAmplitudeCookies() {
-        return document.cookie
-            .split('; ')
-            .filter((cookie) => cookie.startsWith(AMP_COOKIE_PREFIX));
+        return typeof document !== 'undefined'
+            ? document.cookie
+                  .split('; ')
+                  .filter((cookie) => cookie.startsWith(AMP_COOKIE_PREFIX))
+            : [];
     }
 
     #removeAmplitudeCookies() {
-        for (const cookie of this.#getAmplitudeCookies()) {
+        const amplitudeCookies = this.#getAmplitudeCookies();
+        for (const cookie of amplitudeCookies) {
             document.cookie = `${cookie}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/;`;
         }
     }
