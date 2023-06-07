@@ -11,7 +11,7 @@ use std::path::PathBuf;
 use sui_config::node::{
     default_enable_index_processing, default_end_of_epoch_broadcast_channel_capacity,
     AuthorityKeyPairWithPath, AuthorityStorePruningConfig, DBCheckpointConfig,
-    ExpensiveSafetyCheckConfig, KeyPairWithPath, StateArchiveConfig,
+    ExpensiveSafetyCheckConfig, Genesis, KeyPairWithPath, StateArchiveConfig,
     DEFAULT_GRPC_CONCURRENCY_LIMIT,
 };
 use sui_config::p2p::{P2pConfig, SeedPeer};
@@ -160,7 +160,14 @@ pub struct FullnodeConfigBuilder {
     supported_protocol_versions: Option<SupportedProtocolVersions>,
     db_checkpoint_config: Option<DBCheckpointConfig>,
     expensive_safety_check_config: Option<ExpensiveSafetyCheckConfig>,
+    db_path: Option<PathBuf>,
+    network_address: Option<Multiaddr>,
+    json_rpc_address: Option<SocketAddr>,
+    metrics_address: Option<SocketAddr>,
+    admin_interface_port: Option<u16>,
+    genesis: Option<Genesis>,
     p2p_external_address: Option<Multiaddr>,
+    p2p_listen_address: Option<SocketAddr>,
 }
 
 impl FullnodeConfigBuilder {
@@ -203,8 +210,43 @@ impl FullnodeConfigBuilder {
         self
     }
 
+    pub fn with_db_path(mut self, db_path: PathBuf) -> Self {
+        self.db_path = Some(db_path);
+        self
+    }
+
+    pub fn with_network_address(mut self, network_address: Multiaddr) -> Self {
+        self.network_address = Some(network_address);
+        self
+    }
+
+    pub fn with_json_rpc_address(mut self, json_rpc_address: SocketAddr) -> Self {
+        self.json_rpc_address = Some(json_rpc_address);
+        self
+    }
+
+    pub fn with_metrics_address(mut self, metrics_address: SocketAddr) -> Self {
+        self.metrics_address = Some(metrics_address);
+        self
+    }
+
+    pub fn with_admin_interface_port(mut self, admin_interface_port: u16) -> Self {
+        self.admin_interface_port = Some(admin_interface_port);
+        self
+    }
+
+    pub fn with_genesis(mut self, genesis: Genesis) -> Self {
+        self.genesis = Some(genesis);
+        self
+    }
+
     pub fn with_p2p_external_address(mut self, p2p_external_address: Multiaddr) -> Self {
         self.p2p_external_address = Some(p2p_external_address);
+        self
+    }
+
+    pub fn with_p2p_listen_address(mut self, p2p_listen_address: SocketAddr) -> Self {
+        self.p2p_listen_address = Some(p2p_listen_address);
         self
     }
 
@@ -227,13 +269,7 @@ impl FullnodeConfigBuilder {
         let config_directory = self
             .config_directory
             .unwrap_or_else(|| tempfile::tempdir().unwrap().into_path());
-        let db_path = config_directory.join(FULL_NODE_DB_PATH).join(key_path);
 
-        let external_address = if self.p2p_external_address.is_none() {
-            Some(validator_config.p2p_address.clone())
-        } else {
-            self.p2p_external_address
-        };
         let p2p_config = {
             let seed_peers = network_config
                 .validator_configs
@@ -247,13 +283,21 @@ impl FullnodeConfigBuilder {
                 .collect();
 
             P2pConfig {
-                listen_address: validator_config.p2p_listen_address.unwrap_or_else(|| {
-                    validator_config
-                        .p2p_address
-                        .udp_multiaddr_to_listen_address()
-                        .unwrap()
-                }),
-                external_address,
+                listen_address: if self.p2p_listen_address.is_some() {
+                    self.p2p_listen_address.unwrap()
+                } else {
+                    validator_config.p2p_listen_address.unwrap_or_else(|| {
+                        validator_config
+                            .p2p_address
+                            .udp_multiaddr_to_listen_address()
+                            .unwrap()
+                    })
+                },
+                external_address: if self.p2p_external_address.is_none() {
+                    Some(validator_config.p2p_address.clone())
+                } else {
+                    self.p2p_external_address
+                },
                 seed_peers,
                 ..Default::default()
             }
@@ -277,15 +321,40 @@ impl FullnodeConfigBuilder {
                 validator_config.network_key_pair,
             )),
 
-            db_path,
-            network_address: validator_config.network_address,
-            metrics_address: local_ip_utils::new_local_tcp_socket_for_testing(),
-            admin_interface_port: local_ip_utils::get_available_port(&localhost),
-            json_rpc_address,
+            db_path: if self.db_path.is_some() {
+                self.db_path.unwrap()
+            } else {
+                config_directory.join(FULL_NODE_DB_PATH).join(key_path)
+            },
+            network_address: if self.network_address.is_some() {
+                self.network_address.unwrap()
+            } else {
+                validator_config.network_address
+            },
+            metrics_address: if self.metrics_address.is_some() {
+                self.metrics_address.unwrap()
+            } else {
+                local_ip_utils::new_local_tcp_socket_for_testing()
+            },
+            admin_interface_port: if self.admin_interface_port.is_some() {
+                self.admin_interface_port.unwrap()
+            } else {
+                local_ip_utils::get_available_port(&localhost)
+            },
+
+            json_rpc_address: if self.json_rpc_address.is_some() {
+                self.json_rpc_address.unwrap()
+            } else {
+                json_rpc_address
+            },
             consensus_config: None,
             enable_event_processing: true, // This is unused.
             enable_index_processing: default_enable_index_processing(),
-            genesis: sui_config::node::Genesis::new(network_config.genesis.clone()),
+            genesis: if self.genesis.is_some() {
+                self.genesis.unwrap()
+            } else {
+                sui_config::node::Genesis::new(network_config.genesis.clone())
+            },
             grpc_load_shed: None,
             grpc_concurrency_limit: None,
             p2p_config,

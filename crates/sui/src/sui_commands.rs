@@ -16,6 +16,7 @@ use std::io::{stderr, stdout, Write};
 use std::num::NonZeroUsize;
 use std::path::{Path, PathBuf};
 use std::{fs, io};
+use sui_config::node::Genesis;
 use sui_config::p2p::SeedPeer;
 use sui_config::{
     sui_config_dir, Config, PersistedConfig, FULL_NODE_DB_PATH, SUI_CLIENT_CONFIG,
@@ -459,6 +460,13 @@ async fn genesis(
             let ssfn_config = FullnodeConfigBuilder::new()
                 .with_config_directory(FULL_NODE_DB_PATH.into())
                 .with_p2p_external_address(ssfn.p2p_address)
+                .with_p2p_listen_address("0.0.0.0:8084".parse().unwrap())
+                .with_db_path(PathBuf::from("/opt/sui/db/authorities_db/full_node_db"))
+                .with_network_address("/ip4/0.0.0.0/tcp/8080/http".parse().unwrap())
+                .with_metrics_address("0.0.0.0:9184".parse().unwrap())
+                .with_admin_interface_port(1337)
+                .with_json_rpc_address("0.0.0.0:9000".parse().unwrap())
+                .with_genesis(Genesis::new_from_file("/opt/sui/config/genesis.blob"))
                 .build(&mut OsRng, &network_config);
             ssfn_nodes.push(ssfn_config.clone());
             ssfn_config.save(path)?;
