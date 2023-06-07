@@ -27,6 +27,7 @@ once_cell.workspace = true
 parking_lot.workspace = true
 prometheus.workspace = true
 rand.workspace = true
+reqwest.workspace = true
 rocksdb.workspace = true
 scopeguard.workspace = true
 serde.workspace = true
