@@ -142,6 +142,7 @@ pub fn program(
     }
     for (key, s) in gscripts {
         let G::Script {
+            warning_filter: _warning_filter,
             package_name,
             attributes: _attributes,
             loc: _loc,
@@ -182,6 +183,7 @@ fn module(
 ) -> Option<AnnotatedCompiledUnit> {
     let mut context = Context::new(compilation_env, Some(&ident));
     let G::ModuleDefinition {
+        warning_filter: _warning_filter,
         package_name: _package_name,
         attributes: _attributes,
         is_source_module: _is_source_module,
@@ -483,6 +485,7 @@ fn struct_def(
     sdef: H::StructDefinition,
 ) -> IR::StructDefinition {
     let H::StructDefinition {
+        warning_filter: _warning_filter,
         index: _index,
         attributes: _attributes,
         abilities: abs,
@@ -606,6 +609,7 @@ fn function(
     fdef: G::Function,
 ) -> ((IR::FunctionName, IR::Function), CollectedInfo) {
     let G::Function {
+        warning_filter: _warning_filter,
         index: _index,
         attributes,
         visibility: v,

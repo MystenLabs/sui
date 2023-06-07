@@ -5,6 +5,8 @@ warning[W09002]: unused variable
   │
 2 │ public fun foo(x: u64): u64 {
   │                ^ Unused parameter 'x'. Consider removing or prefixing with an underscore: '_x'
+  │
+  = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 Command `disassemble --package Test --name m`:
 // Move bytecode v6
@@ -22,4 +24,6 @@ warning[W09002]: unused variable
   │
 2 │ public fun foo(x: u64): u64 {
   │                ^ Unused parameter 'x'. Consider removing or prefixing with an underscore: '_x'
+  │
+  = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 

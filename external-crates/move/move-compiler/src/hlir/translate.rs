@@ -209,6 +209,7 @@ fn module(
     mdef: T::ModuleDefinition,
 ) -> (ModuleIdent, H::ModuleDefinition) {
     let T::ModuleDefinition {
+        warning_filter,
         package_name,
         attributes,
         is_source_module,
@@ -218,14 +219,16 @@ fn module(
         functions: tfunctions,
         constants: tconstants,
     } = mdef;
-
+    context.env.add_warning_filter_scope(warning_filter.clone());
     let structs = tstructs.map(|name, s| struct_def(context, name, s));
 
     let constants = tconstants.map(|name, c| constant(context, name, c));
     let functions = tfunctions.map(|name, f| function(context, name, f));
+    context.env.pop_warning_filter_scope();
     (
         module_ident,
         H::ModuleDefinition {
+            warning_filter,
             package_name,
             attributes,
             is_source_module,
@@ -250,6 +253,7 @@ fn scripts(
 
 fn script(context: &mut Context, tscript: T::Script) -> H::Script {
     let T::Script {
+        warning_filter,
         package_name,
         attributes,
         loc,
@@ -257,9 +261,12 @@ fn script(context: &mut Context, tscript: T::Script) -> H::Script {
         function_name,
         function: tfunction,
     } = tscript;
+    context.env.add_warning_filter_scope(warning_filter.clone());
     let constants = tconstants.map(|name, c| constant(context, name, c));
     let function = function(context, function_name, tfunction);
+    context.env.pop_warning_filter_scope();
     H::Script {
+        warning_filter,
         package_name,
         attributes,
         loc,
@@ -277,6 +284,7 @@ fn function(context: &mut Context, _name: FunctionName, f: T::Function) -> H::Fu
     assert!(context.has_empty_locals());
     assert!(context.tmp_counter == 0);
     let T::Function {
+        warning_filter,
         index,
         attributes,
         visibility,
@@ -285,9 +293,12 @@ fn function(context: &mut Context, _name: FunctionName, f: T::Function) -> H::Fu
         acquires,
         body,
     } = f;
+    context.env.add_warning_filter_scope(warning_filter.clone());
     let signature = function_signature(context, signature);
     let body = function_body(context, &signature, body);
+    context.env.pop_warning_filter_scope();
     H::Function {
+        warning_filter,
         index,
         attributes,
         visibility,
@@ -373,12 +384,14 @@ fn function_body_defined(
 
 fn constant(context: &mut Context, _name: ConstantName, cdef: T::Constant) -> H::Constant {
     let T::Constant {
+        warning_filter,
         index,
         attributes,
         loc,
         signature: tsignature,
         value: tvalue,
     } = cdef;
+    context.env.add_warning_filter_scope(warning_filter.clone());
     let signature = base_type(context, tsignature);
     let eloc = tvalue.exp.loc;
     let tseq = {
@@ -392,7 +405,9 @@ fn constant(context: &mut Context, _name: ConstantName, cdef: T::Constant) -> H:
         return_type: H::Type_::base(signature.clone()),
     };
     let (locals, body) = function_body_defined(context, &function_signature, eloc, tseq);
+    context.env.pop_warning_filter_scope();
     H::Constant {
+        warning_filter,
         index,
         attributes,
         loc,
@@ -411,14 +426,18 @@ fn struct_def(
     sdef: N::StructDefinition,
 ) -> H::StructDefinition {
     let N::StructDefinition {
+        warning_filter,
         index,
         attributes,
         abilities,
         type_parameters,
         fields,
     } = sdef;
+    context.env.add_warning_filter_scope(warning_filter.clone());
     let fields = struct_fields(context, fields);
+    context.env.pop_warning_filter_scope();
     H::StructDefinition {
+        warning_filter,
         index,
         attributes,
         abilities,

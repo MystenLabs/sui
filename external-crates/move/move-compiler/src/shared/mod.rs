@@ -4,7 +4,10 @@
 
 use crate::{
     command_line as cli,
-    diagnostics::{codes::Severity, Diagnostic, Diagnostics},
+    diagnostics::{
+        codes::{Severity, WarningFilter, WARNING_FILTER_ATTR},
+        Diagnostic, Diagnostics, WarningFilters,
+    },
     naming::ast::ModuleDefinition,
 };
 use clap::*;
@@ -173,6 +176,8 @@ pub type AttributeDeriver = dyn Fn(&mut CompilationEnv, &mut ModuleDefinition);
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CompilationEnv {
     flags: Flags,
+    // filters warnings when added.
+    warning_filter: Vec<WarningFilters>,
     diags: Diagnostics,
     // TODO(tzakian): Remove the global counter and use this counter instead
     // pub counter: u64,
@@ -182,16 +187,40 @@ impl CompilationEnv {
     pub fn new(flags: Flags) -> Self {
         Self {
             flags,
+            warning_filter: vec![],
             diags: Diagnostics::new(),
         }
     }
 
-    pub fn add_diag(&mut self, diag: Diagnostic) {
-        self.diags.add(diag)
+    pub fn add_diag(&mut self, mut diag: Diagnostic) {
+        let is_filtered = self
+            .warning_filter
+            .last()
+            .map(|filter| filter.is_filtered(&diag))
+            .unwrap_or(false);
+        if !is_filtered {
+            // add help to suppress warning, if applicable
+            // TODO do we want a centralized place for tips like this?
+            if diag.info().severity() == Severity::Warning {
+                let possible_filter =
+                    WarningFilter::Code(diag.info().category(), diag.info().code());
+                if let Some(filter_name) = possible_filter.to_str() {
+                    let help = format!(
+                        "This warning can be suppressed with '#[{}({})]' \
+                        applied to the 'module' or module member ('const', 'fun', or 'struct')",
+                        WARNING_FILTER_ATTR, filter_name
+                    );
+                    diag.add_note(help)
+                }
+            }
+            self.diags.add(diag)
+        }
     }
 
     pub fn add_diags(&mut self, diags: Diagnostics) {
-        self.diags.extend(diags)
+        for diag in diags.into_vec() {
+            self.add_diag(diag)
+        }
     }
 
     pub fn has_warnings_or_errors(&self) -> bool {
@@ -233,6 +262,25 @@ impl CompilationEnv {
             .map(|s| s == Severity::Warning)
             .unwrap_or(true));
         final_diags
+    }
+
+    /// Add a new filter for warnings
+    pub fn add_warning_filter_scope(&mut self, mut filter: WarningFilters) {
+        // This essentially "clones" the current filter into the next scope. This should be
+        // efficient enough since the diag_filter vec should be only about 2 or 3 elements deep
+        // and the size of the filter should only be relatively small (at most 10 or so elements)
+        debug_assert!(
+            self.warning_filter.len() <= 3,
+            "TODO If triggered this TODO you might want to make this more efficient"
+        );
+        if let Some(cur_filter) = self.warning_filter.last() {
+            filter.union(&cur_filter)
+        }
+        self.warning_filter.push(filter)
+    }
+
+    pub fn pop_warning_filter_scope(&mut self) {
+        self.warning_filter.pop().unwrap();
     }
 
     pub fn flags(&self) -> &Flags {
@@ -410,6 +458,8 @@ pub mod known_attributes {
     use once_cell::sync::Lazy;
     use std::{collections::BTreeSet, fmt};
 
+    use crate::diagnostics::codes::WARNING_FILTER_ATTR;
+
     #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
     pub enum AttributePosition {
         AddressBlock,
@@ -428,6 +478,7 @@ pub mod known_attributes {
         Testing(TestingAttribute),
         Verification(VerificationAttribute),
         Native(NativeAttribute),
+        Diagnostic(DiagnosticAttribute),
     }
 
     #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -450,6 +501,11 @@ pub mod known_attributes {
     pub enum NativeAttribute {
         // It is a fake native function that actually compiles to a bytecode instruction
         BytecodeInstruction,
+    }
+
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+    pub enum DiagnosticAttribute {
+        Allow,
     }
 
     impl fmt::Display for AttributePosition {
@@ -482,6 +538,7 @@ pub mod known_attributes {
                 NativeAttribute::BYTECODE_INSTRUCTION => {
                     Self::Native(NativeAttribute::BytecodeInstruction)
                 }
+                DiagnosticAttribute::ALLOW => Self::Diagnostic(DiagnosticAttribute::Allow),
                 _ => return None,
             })
         }
@@ -491,6 +548,7 @@ pub mod known_attributes {
                 Self::Testing(a) => a.name(),
                 Self::Verification(a) => a.name(),
                 Self::Native(a) => a.name(),
+                Self::Diagnostic(a) => a.name(),
             }
         }
 
@@ -499,6 +557,7 @@ pub mod known_attributes {
                 Self::Testing(a) => a.expected_positions(),
                 Self::Verification(a) => a.expected_positions(),
                 Self::Native(a) => a.expected_positions(),
+                Self::Diagnostic(a) => a.expected_positions(),
             }
         }
     }
@@ -525,7 +584,7 @@ pub mod known_attributes {
 
         pub fn expected_positions(&self) -> &'static BTreeSet<AttributePosition> {
             static TEST_ONLY_POSITIONS: Lazy<BTreeSet<AttributePosition>> = Lazy::new(|| {
-                IntoIterator::into_iter([
+                BTreeSet::from([
                     AttributePosition::AddressBlock,
                     AttributePosition::Module,
                     AttributePosition::Use,
@@ -534,12 +593,11 @@ pub mod known_attributes {
                     AttributePosition::Struct,
                     AttributePosition::Function,
                 ])
-                .collect()
             });
             static TEST_POSITIONS: Lazy<BTreeSet<AttributePosition>> =
-                Lazy::new(|| IntoIterator::into_iter([AttributePosition::Function]).collect());
+                Lazy::new(|| BTreeSet::from([AttributePosition::Function]));
             static EXPECTED_FAILURE_POSITIONS: Lazy<BTreeSet<AttributePosition>> =
-                Lazy::new(|| IntoIterator::into_iter([AttributePosition::Function]).collect());
+                Lazy::new(|| BTreeSet::from([AttributePosition::Function]));
             match self {
                 TestingAttribute::TestOnly => &TEST_ONLY_POSITIONS,
                 TestingAttribute::Test => &TEST_POSITIONS,
@@ -569,7 +627,7 @@ pub mod known_attributes {
 
         pub fn expected_positions(&self) -> &'static BTreeSet<AttributePosition> {
             static VERIFY_ONLY_POSITIONS: Lazy<BTreeSet<AttributePosition>> = Lazy::new(|| {
-                IntoIterator::into_iter([
+                BTreeSet::from([
                     AttributePosition::AddressBlock,
                     AttributePosition::Module,
                     AttributePosition::Use,
@@ -578,7 +636,6 @@ pub mod known_attributes {
                     AttributePosition::Struct,
                     AttributePosition::Function,
                 ])
-                .collect()
             });
             match self {
                 Self::VerifyOnly => &VERIFY_ONLY_POSITIONS,
@@ -600,6 +657,31 @@ pub mod known_attributes {
                 Lazy::new(|| IntoIterator::into_iter([AttributePosition::Function]).collect());
             match self {
                 NativeAttribute::BytecodeInstruction => &BYTECODE_INSTRUCTION_POSITIONS,
+            }
+        }
+    }
+
+    impl DiagnosticAttribute {
+        pub const ALLOW: &'static str = WARNING_FILTER_ATTR;
+
+        pub const fn name(&self) -> &str {
+            match self {
+                DiagnosticAttribute::Allow => Self::ALLOW,
+            }
+        }
+
+        pub fn expected_positions(&self) -> &'static BTreeSet<AttributePosition> {
+            static ALLOW_WARNING_POSITIONS: Lazy<BTreeSet<AttributePosition>> = Lazy::new(|| {
+                BTreeSet::from([
+                    AttributePosition::Module,
+                    AttributePosition::Script,
+                    AttributePosition::Constant,
+                    AttributePosition::Struct,
+                    AttributePosition::Function,
+                ])
+            });
+            match self {
+                DiagnosticAttribute::Allow => &ALLOW_WARNING_POSITIONS,
             }
         }
     }

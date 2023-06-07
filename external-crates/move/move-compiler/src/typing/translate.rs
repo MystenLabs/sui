@@ -58,6 +58,7 @@ fn module(
     assert!(context.current_script_constants.is_none());
     context.current_module = Some(ident);
     let N::ModuleDefinition {
+        warning_filter,
         package_name,
         attributes,
         is_source_module,
@@ -67,13 +68,16 @@ fn module(
         functions: nfunctions,
         constants: nconstants,
     } = mdef;
+    context.env.add_warning_filter_scope(warning_filter.clone());
     structs
         .iter_mut()
         .for_each(|(_, _, s)| struct_def(context, s));
     let constants = nconstants.map(|name, c| constant(context, name, c));
     let functions = nfunctions.map(|name, f| function(context, name, f, false));
     assert!(context.constraints.is_empty());
+    context.env.pop_warning_filter_scope();
     T::ModuleDefinition {
+        warning_filter,
         package_name,
         attributes,
         is_source_module,
@@ -99,6 +103,7 @@ fn script(context: &mut Context, nscript: N::Script) -> T::Script {
     assert!(context.current_script_constants.is_none());
     context.current_module = None;
     let N::Script {
+        warning_filter,
         package_name,
         attributes,
         loc,
@@ -106,11 +111,14 @@ fn script(context: &mut Context, nscript: N::Script) -> T::Script {
         function_name,
         function: nfunction,
     } = nscript;
+    context.env.add_warning_filter_scope(warning_filter.clone());
     context.bind_script_constants(&nconstants);
     let constants = nconstants.map(|name, c| constant(context, name, c));
     let function = function(context, function_name, nfunction, true);
     context.current_script_constants = None;
+    context.env.pop_warning_filter_scope();
     T::Script {
+        warning_filter,
         package_name,
         attributes,
         loc,
@@ -132,6 +140,7 @@ fn function(
 ) -> T::Function {
     let loc = name.loc();
     let N::Function {
+        warning_filter,
         index,
         attributes,
         visibility,
@@ -140,6 +149,7 @@ fn function(
         body: n_body,
         acquires,
     } = f;
+    context.env.add_warning_filter_scope(warning_filter.clone());
     assert!(context.constraints.is_empty());
     context.reset_for_module_item();
     context.current_function = Some(name);
@@ -165,7 +175,9 @@ fn function(
 
     let body = function_body(context, &acquires, n_body);
     context.current_function = None;
+    context.env.pop_warning_filter_scope();
     T::Function {
+        warning_filter,
         index,
         attributes,
         visibility,
@@ -231,12 +243,14 @@ fn constant(context: &mut Context, _name: ConstantName, nconstant: N::Constant) 
     context.reset_for_module_item();
 
     let N::Constant {
+        warning_filter,
         index,
         attributes,
         loc,
         signature,
         value: nvalue,
     } = nconstant;
+    context.env.add_warning_filter_scope(warning_filter.clone());
 
     // Don't need to add base type constraint, as it is checked in `check_valid_constant::signature`
     let mut signature = core::instantiate(context, signature);
@@ -264,8 +278,10 @@ fn constant(context: &mut Context, _name: ConstantName, nconstant: N::Constant) 
     expand::exp(context, &mut value);
 
     check_valid_constant::exp(context, &value);
+    context.env.pop_warning_filter_scope();
 
     T::Constant {
+        warning_filter,
         index,
         attributes,
         loc,
@@ -502,6 +518,9 @@ mod check_valid_constant {
 fn struct_def(context: &mut Context, s: &mut N::StructDefinition) {
     assert!(context.constraints.is_empty());
     context.reset_for_module_item();
+    context
+        .env
+        .add_warning_filter_scope(s.warning_filter.clone());
 
     let field_map = match &mut s.fields {
         N::StructFields::Native(_) => return,
@@ -543,8 +562,8 @@ fn struct_def(context: &mut Context, s: &mut N::StructDefinition) {
     for (_field_loc, _field_, idx_ty) in field_map.iter_mut() {
         expand::type_(context, &mut idx_ty.1);
     }
-
     check_type_params_usage(context, &s.type_parameters, field_map);
+    context.env.pop_warning_filter_scope();
 }
 
 fn check_type_params_usage(
