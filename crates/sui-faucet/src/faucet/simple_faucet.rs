@@ -761,7 +761,7 @@ impl SimpleFaucet {
 
         let mut address_coins_map: HashMap<SuiAddress, Vec<OwnedObjectRef>> = HashMap::new();
         created.iter().for_each(|created_coin_owner_ref| {
-            let owner = created_coin_owner_ref.owner.clone();
+            let owner = created_coin_owner_ref.owner;
             let coin_obj_ref = created_coin_owner_ref.clone();
 
             // Insert the coins into the map based on the destination address
@@ -1034,8 +1034,10 @@ mod tests {
     async fn test_batch_transfer_interface() {
         let test_cluster = TestClusterBuilder::new().build().await.unwrap();
         let context = test_cluster.wallet;
-        let mut config = FaucetConfig::default();
-        config.ttl_expiration = 10;
+        let config = FaucetConfig {
+            ttl_expiration: 10,
+            ..Default::default()
+        };
         let prom_registry = Registry::new();
         let tmp = tempfile::tempdir().unwrap();
         let faucet = SimpleFaucet::new(
@@ -1111,13 +1113,16 @@ mod tests {
         )
         .await;
 
-        let all_errors = status_results.iter().all(|status_result| {
-            if let Err(_) = status_result {
-                true // If it's an error, return true
-            } else {
-                false // If it's not an error, return false
-            }
-        });
+        let all_errors =
+            status_results.iter().all(
+                |status_result| {
+                    if status_result.is_err() {
+                        true
+                    } else {
+                        false
+                    }
+                },
+            );
 
         assert!(all_errors);
     }

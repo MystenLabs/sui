@@ -143,7 +143,7 @@ async fn health() -> &'static str {
     "OK"
 }
 
-/// handler for batch_request_gas reqesuts
+/// handler for batch_request_gas requests
 async fn batch_request_gas(
     Extension(state): Extension<Arc<AppState>>,
     Json(payload): Json<FaucetRequest>,
