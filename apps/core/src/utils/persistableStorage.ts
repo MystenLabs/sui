@@ -5,6 +5,8 @@ import { CookieStorage } from '@amplitude/analytics-client-common';
 import { MemoryStorage } from '@amplitude/analytics-core';
 import { CookieStorageOptions, type Storage } from '@amplitude/analytics-types';
 
+export const AMP_COOKIE_PREFIX = 'AMP_';
+
 /**
  * A custom storage mechanism for Amplitude that stores device
  * data in memory until we persist the storage to cookies. This
@@ -25,7 +27,7 @@ export class PersistableStorage<T> implements Storage<T> {
             ...options,
         });
         this.#memoryStorage = new MemoryStorage<T>();
-        this.#isPersisted = false;
+        this.#isPersisted = this.#getAmplitudeCookies().length > 0;
     }
 
     async isEnabled(): Promise<boolean> {
@@ -50,6 +52,8 @@ export class PersistableStorage<T> implements Storage<T> {
 
     async reset(): Promise<void> {
         this.#getActiveStorage().reset();
+        this.#removeAmplitudeCookies();
+        this.#isPersisted = false;
     }
 
     persist() {
@@ -57,10 +61,24 @@ export class PersistableStorage<T> implements Storage<T> {
         for (const [key, value] of this.#memoryStorage.memoryStorage) {
             this.#cookieStorage.set(key, value);
         }
-        this.#memoryStorage.reset();
     }
 
     #getActiveStorage() {
         return this.#isPersisted ? this.#cookieStorage : this.#memoryStorage;
+    }
+
+    #getAmplitudeCookies() {
+        return typeof document !== 'undefined'
+            ? document.cookie
+                  .split('; ')
+                  .filter((cookie) => cookie.startsWith(AMP_COOKIE_PREFIX))
+            : [];
+    }
+
+    #removeAmplitudeCookies() {
+        const amplitudeCookies = this.#getAmplitudeCookies();
+        for (const cookie of amplitudeCookies) {
+            document.cookie = `${cookie}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/;`;
+        }
     }
 }
