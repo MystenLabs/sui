@@ -81,7 +81,7 @@ export async function fetchKiosk(
   // TODO: Replace the `getAllDynamicFields` with a paginated
   // response, once we have better RPC support for
   // type filtering & batch fetching.
-  // This can't work otherwise.
+  // This can't work with pagination currently.
   const data = await getAllDynamicFields(provider, kioskId, pagination);
 
   const listings: KioskListing[] = [];
