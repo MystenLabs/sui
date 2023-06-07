@@ -61,7 +61,6 @@ export class PersistableStorage<T> implements Storage<T> {
         for (const [key, value] of this.#memoryStorage.memoryStorage) {
             this.#cookieStorage.set(key, value);
         }
-        this.#memoryStorage.reset();
     }
 
     #getActiveStorage() {
