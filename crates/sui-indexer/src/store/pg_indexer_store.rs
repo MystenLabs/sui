@@ -1493,6 +1493,7 @@ impl IndexerStore for PgIndexerStore {
                     .map_err(IndexerError::from)
                     .context("Failed writing recipients to PostgresDB")?;
             }
+            // add a comment
             Ok::<(), IndexerError>(())
         })?;
         Ok(())
