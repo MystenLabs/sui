@@ -363,24 +363,21 @@ where
             Err(err) => {
                 debug!(
                     ?tx_digest,
-                    "Encountered error while attempting conflicting transaction: {:?}", err
+                    ?conflicting_tx_digest,
+                    "Encountered error while attempting conflicting transaction: {:?}",
+                    err
                 );
-                let err = Err(Some(QuorumDriverError::ObjectsDoubleUsed {
+                Err(Some(QuorumDriverError::ObjectsDoubleUsed {
                     conflicting_txes: conflicting_tx_digests,
                     retried_tx: None,
                     retried_tx_success: None,
-                }));
-                debug!(
-                    ?tx_digest,
-                    "Non retryable error when getting original tx cert: {err:?}"
-                );
-                err
+                }))
             }
             Ok(success) => {
                 debug!(
                     ?tx_digest,
                     ?conflicting_tx_digest,
-                    "Retried conflicting transaction success: {}",
+                    "Retried conflicting transaction. Success: {}",
                     success
                 );
                 if success {

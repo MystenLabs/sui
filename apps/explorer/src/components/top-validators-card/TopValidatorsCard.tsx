@@ -54,7 +54,7 @@ const validatorsTable = (
                             />
                         )}
 
-                        <ValidatorLink address={address} />
+                        <ValidatorLink address={address} label={name} />
                     </div>
                 </HighlightedTableCol>
             ),

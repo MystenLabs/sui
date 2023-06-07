@@ -767,6 +767,7 @@ async fn test_handle_transaction_panic() {
 
 #[tokio::test]
 async fn test_handle_transaction_response() {
+    telemetry_subscribers::init_for_testing();
     let mut authorities = BTreeMap::new();
     let mut clients = BTreeMap::new();
     let mut authority_keys = Vec::new();
@@ -1860,6 +1861,89 @@ async fn test_handle_overload_response() {
         },
     )
     .await;
+}
+
+#[tokio::test]
+async fn test_early_exit_with_too_many_conflicts() {
+    let mut authorities = BTreeMap::new();
+    let mut clients = BTreeMap::new();
+    let mut authority_keys = Vec::new();
+    for _ in 0..4 {
+        let (_, sec): (_, AuthorityKeyPair) = get_key_pair();
+        let name: AuthorityName = sec.public().into();
+        authorities.insert(name, 1);
+        authority_keys.push((name, sec));
+        clients.insert(name, HandleTransactionTestAuthorityClient::new());
+    }
+
+    let (sender, sender_kp): (_, AccountKeyPair) = get_key_pair();
+    let txn = make_transfer_sui_transaction(
+        random_object_ref(),
+        SuiAddress::default(),
+        None,
+        sender,
+        &sender_kp,
+        666, // this is a dummy value which does not matter
+    );
+
+    // Now we have 3 conflicting transactions each with 1 stake. There is no hope to get quorum for any of them.
+    // So we expect to exit early before getting the final response (from whom is still sleeping).
+    set_tx_info_response_with_error(
+        &mut clients,
+        authority_keys.iter().take(1),
+        SuiError::ObjectLockConflict {
+            obj_ref: random_object_ref(),
+            pending_transaction: TransactionDigest::random(),
+        },
+    );
+    set_tx_info_response_with_error(
+        &mut clients,
+        authority_keys.iter().skip(1).take(1),
+        SuiError::ObjectLockConflict {
+            obj_ref: random_object_ref(),
+            pending_transaction: TransactionDigest::random(),
+        },
+    );
+    set_tx_info_response_with_error(
+        &mut clients,
+        authority_keys.iter().skip(2).take(1),
+        SuiError::ObjectLockConflict {
+            obj_ref: random_object_ref(),
+            pending_transaction: TransactionDigest::random(),
+        },
+    );
+    set_tx_info_response_with_error(
+        &mut clients,
+        authority_keys.iter().skip(3).take(1),
+        SuiError::TooManyTransactionsPendingExecution {
+            queue_len: 100,
+            threshold: 100,
+        },
+    );
+    // Make one validator sleep for very long time
+    clients
+        .get_mut(&authority_keys.get(3).unwrap().0)
+        .unwrap()
+        .set_sleep_duration_before_responding(Duration::from_secs(60));
+
+    let agg = get_genesis_agg(authorities.clone(), clients.clone());
+    // Expect to exit early without waiting for the sleeping one.
+    tokio::time::timeout(
+        Duration::from_secs(3),
+        assert_resp_err(
+            &agg,
+            txn.clone(),
+            |e| {
+                matches!(
+                    e,
+                    AggregatorProcessTransactionError::FatalConflictingTransaction { .. }
+                )
+            },
+            |_e| true,
+        ),
+    )
+    .await
+    .unwrap();
 }
 
 #[tokio::test]
