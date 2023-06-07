@@ -580,8 +580,8 @@ async function purchaseItem(itemId, opts) {
     );
   }
 
-  const ownedKiosk = txb.object(kioskCap.content.fields.for);
-  const ownedKioskCap = txb.objectRef({ ...kioskCap });
+  const ownedKiosk = kioskCap.content.fields.for;
+  const ownedKioskCap = kioskCap.objectId;
   const { item, canTransfer } = purchaseAndResolvePolicies(
     txb,
     itemInfo.data.type,
@@ -842,6 +842,6 @@ function formatAmount(amount) {
 }
 
 process.on('uncaughtException', (err) => {
-  console.error(err.message);
+  console.error(err);
   process.exit(1);
 });
