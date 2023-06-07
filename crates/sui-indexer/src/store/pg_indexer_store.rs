@@ -1337,12 +1337,13 @@ impl IndexerStore for PgIndexerStore {
         object_deletion_latency: Histogram,
     ) -> Result<(), IndexerError> {
         transactional_blocking!(&self.blocking_cp, |conn| {
-            // update epoch transaction count
+            // update epoch transaction count within an epoch;
+            // do no update after end-of-epoch commit to avoid double counting
             let sql = "UPDATE epochs e1
-SET epoch_total_transactions = e2.epoch_total_transactions + $1
-FROM epochs e2
-WHERE e1.epoch = e2.epoch
-  AND e1.epoch = $2;";
+                        SET epoch_total_transactions = e2.epoch_total_transactions + $1
+                        FROM epochs e2
+                        WHERE e1.epoch = e2.epoch
+                        AND e1.epoch = $2 AND e1.last_checkpoint_id IS NULL;";
             diesel::sql_query(sql)
                 .bind::<BigInt, _>(checkpoint.transactions.len() as i64)
                 .bind::<BigInt, _>(checkpoint.epoch)
@@ -1497,6 +1498,20 @@ WHERE e1.epoch = e2.epoch
         Ok(())
     }
 
+    async fn count_network_transaction_previous_epoch(
+        &self,
+        epoch: i64,
+    ) -> Result<i64, IndexerError> {
+        read_only_blocking!(&self.blocking_cp, |conn| {
+            checkpoints::table
+                .filter(checkpoints::epoch.eq(epoch - 1))
+                .select(max(checkpoints::network_total_transactions))
+                .first::<Option<i64>>(conn)
+                .map(|o| o.unwrap_or(0))
+        })
+        .context("Failed to count network transactions in previous epoch")
+    }
+
     async fn persist_epoch(&self, data: &TemporaryEpochStore) -> Result<(), IndexerError> {
         // MUSTFIX(gegaowp): temporarily disable the epoch advance logic.
         // let last_epoch_cp_id = if data.last_epoch.is_none() {
@@ -1510,8 +1525,8 @@ WHERE e1.epoch = e2.epoch
                 .advance_epoch(&data.new_epoch, last_epoch_cp_id)
                 .await?;
         }
-        let epoch = data.new_epoch.epoch;
-        info!("Persisting epoch {}", epoch);
+        let last_epoch_number = data.new_epoch.epoch;
+        info!("Persisting epoch {}", last_epoch_number);
 
         transactional_blocking!(&self.blocking_cp, |conn| {
             if let Some(last_epoch) = &data.last_epoch {
@@ -1559,7 +1574,7 @@ WHERE e1.epoch = e2.epoch
                 .on_conflict_do_nothing()
                 .execute(conn)
         })?;
-        info!("Persisted epoch {}", epoch);
+        info!("Persisted epoch {}", last_epoch_number);
         Ok(())
     }
 
