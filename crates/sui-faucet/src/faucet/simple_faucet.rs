@@ -55,6 +55,8 @@ pub struct SimpleFaucet {
     request_consumer: Mutex<Receiver<(Uuid, SuiAddress, Vec<u64>)>>,
     batch_request_size: u64,
     task_id_cache: Mutex<TtlCache<Uuid, BatchSendStatus>>,
+    ttl_expiration: u64,
+    coin_amount: u64,
 }
 
 enum GasCoinResponse {
@@ -69,7 +71,7 @@ enum GasCoinResponse {
 const DEFAULT_GAS_COMPUTATION_BUCKET: u64 = 10_000_000;
 const LOCK_TIMEOUT: Duration = Duration::from_secs(10);
 const RECV_TIMEOUT: Duration = Duration::from_secs(5);
-const BATCH_TIMEOUT: Duration = Duration::from_secs(15);
+const BATCH_TIMEOUT: Duration = Duration::from_secs(10);
 
 impl SimpleFaucet {
     pub async fn new(
@@ -139,6 +141,8 @@ impl SimpleFaucet {
             batch_request_size: config.batch_request_size,
             // Max faucet requests times 10 minutes worth of requests to hold onto at max.
             task_id_cache: TtlCache::new(config.max_request_per_second as usize * 60 * 10).into(),
+            ttl_expiration: config.ttl_expiration,
+            coin_amount: config.amount,
         };
 
         // Retrying all the pending transactions from the WAL, before continuing.  Ignore return
@@ -793,8 +797,7 @@ impl SimpleFaucet {
                 .map(|coin| CoinInfo {
                     id: coin.object_id(),
                     transfer_tx_digest: res.digest,
-                    // Grab this from config later
-                    amount: 100000000,
+                    amount: self.coin_amount,
                 })
                 .collect();
 
@@ -806,7 +809,7 @@ impl SimpleFaucet {
                         sent: transferred_gases,
                     }),
                 },
-                Duration::from_secs(300),
+                Duration::from_secs(self.ttl_expiration),
             );
         }
 
@@ -853,7 +856,7 @@ impl Faucet for SimpleFaucet {
         recipient: SuiAddress,
         amounts: &[u64],
     ) -> Result<FaucetReceipt, FaucetError> {
-        info!(?recipient, uuid = ?id, "Getting faucet requests");
+        info!(?recipient, uuid = ?id, ?amounts, "Getting faucet requests");
 
         let (digest, coin_ids) = self.transfer_gases(amounts, recipient, id).await?;
 
@@ -900,7 +903,7 @@ impl Faucet for SimpleFaucet {
                 status: BatchSendStatusType::INPROGRESS,
                 transferred_gas_objects: None,
             },
-            Duration::from_secs(300),
+            Duration::from_secs(self.ttl_expiration),
         );
         Ok(BatchFaucetReceipt {
             task: id.to_string(),
@@ -1027,7 +1030,97 @@ mod tests {
         );
     }
 
-    // TODO: write a test for testing the batch function
+    #[tokio::test]
+    async fn test_batch_transfer_interface() {
+        let test_cluster = TestClusterBuilder::new().build().await.unwrap();
+        let context = test_cluster.wallet;
+        let mut config = FaucetConfig::default();
+        config.ttl_expiration = 10;
+        let prom_registry = Registry::new();
+        let tmp = tempfile::tempdir().unwrap();
+        let faucet = SimpleFaucet::new(
+            context,
+            &prom_registry,
+            &tmp.path().join("faucet.wal"),
+            config,
+        )
+        .await
+        .unwrap();
+
+        let amounts = &vec![1; 1];
+        // Create a vector containing five randomly generated addresses
+        let target_addresses: Vec<SuiAddress> = (0..5)
+            .map(|_| SuiAddress::random_for_testing_only())
+            .collect();
+
+        let response = futures::future::join_all(
+            target_addresses
+                .iter()
+                .map(|address| faucet.batch_send(Uuid::new_v4(), *address, amounts)),
+        )
+        .await
+        .into_iter()
+        .map(|res| res.unwrap())
+        .collect::<Vec<BatchFaucetReceipt>>();
+
+        // Assert that all of these return in progress
+        let status_results = futures::future::join_all(
+            response
+                .clone()
+                .iter()
+                .map(|task| faucet.get_batch_send_status(Uuid::parse_str(&task.task).unwrap())),
+        )
+        .await
+        .into_iter()
+        .map(|res| res.unwrap())
+        .collect::<Vec<BatchSendStatus>>();
+
+        for status in status_results {
+            assert_eq!(status.status, BatchSendStatusType::INPROGRESS);
+        }
+
+        // Transfer the gases
+        faucet
+            .batch_transfer_gases()
+            .await
+            .expect("Batch transfer failed.");
+
+        // Assert that all of these are SUCCEEDED
+        let status_results = futures::future::join_all(
+            response
+                .clone()
+                .iter()
+                .map(|task| faucet.get_batch_send_status(Uuid::parse_str(&task.task).unwrap())),
+        )
+        .await
+        .into_iter()
+        .map(|res| res.unwrap())
+        .collect::<Vec<BatchSendStatus>>();
+
+        for status in status_results {
+            assert_eq!(status.status, BatchSendStatusType::SUCCEEDED);
+        }
+
+        // Check that TTL cache expires
+        tokio::time::sleep(Duration::from_secs(10)).await;
+        let status_results = futures::future::join_all(
+            response
+                .clone()
+                .iter()
+                .map(|task| faucet.get_batch_send_status(Uuid::parse_str(&task.task).unwrap())),
+        )
+        .await;
+
+        let all_errors = status_results.iter().all(|status_result| {
+            if let Err(_) = status_result {
+                true // If it's an error, return true
+            } else {
+                false // If it's not an error, return false
+            }
+        });
+
+        assert!(all_errors);
+    }
 
     #[tokio::test]
     async fn test_discard_invalid_gas() {

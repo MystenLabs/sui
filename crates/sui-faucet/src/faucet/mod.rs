@@ -36,7 +36,7 @@ pub struct BatchSendStatus {
     pub transferred_gas_objects: Option<FaucetReceipt>,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 #[serde(rename_all = "UPPERCASE")]
 pub enum BatchSendStatusType {
     INPROGRESS,
@@ -108,6 +108,9 @@ pub struct FaucetConfig {
 
     #[clap(long, default_value_t = 500)]
     pub batch_request_size: u64,
+
+    #[clap(long, default_value_t = 300)]
+    pub ttl_expiration: u64,
 }
 
 impl Default for FaucetConfig {
@@ -124,6 +127,7 @@ impl Default for FaucetConfig {
             wal_retry_interval: 300,
             max_request_queue_length: 10000,
             batch_request_size: 500,
+            ttl_expiration: 300,
         }
     }
 }
