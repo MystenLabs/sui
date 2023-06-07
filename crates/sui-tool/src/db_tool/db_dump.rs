@@ -4,6 +4,7 @@
 use anyhow::{anyhow, Ok};
 use clap::{Parser, ValueEnum};
 use comfy_table::{Cell, ContentArrangement, Row, Table};
+use itertools::Itertools;
 use rocksdb::MultiThreaded;
 use std::collections::{BTreeMap, HashMap};
 use std::path::PathBuf;
@@ -181,6 +182,24 @@ pub fn duplicate_objects_summary(db_path: PathBuf) -> (usize, usize, usize, usiz
 pub fn compact(db_path: PathBuf) -> anyhow::Result<()> {
     let perpetual = Arc::new(AuthorityPerpetualTables::open(&db_path, None));
     AuthorityStorePruner::compact(&perpetual)?;
+    Ok(())
+}
+
+pub fn traverse(db_path: PathBuf) -> anyhow::Result<()> {
+    let perpetual_tables = AuthorityPerpetualTables::open_readonly(&db_path);
+    let mut count = 0;
+    for (_, group) in &perpetual_tables
+        .objects
+        .unbounded_iter()
+        .group_by(|(k, _)| *k)
+    {
+        if let Some((_, value)) = group.last() {
+            if value.migrate().into_inner() == StoreObject::Wrapped {
+                count += 1;
+            }
+        }
+    }
+    println!("wrapped object count is {:?}", count);
     Ok(())
 }
 

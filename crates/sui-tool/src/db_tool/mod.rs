@@ -3,7 +3,7 @@
 
 use self::db_dump::{dump_table, duplicate_objects_summary, list_tables, table_summary, StoreName};
 use self::index_search::{search_index, SearchRange};
-use crate::db_tool::db_dump::{compact, print_table_metadata};
+use crate::db_tool::db_dump::{compact, print_table_metadata, traverse};
 use anyhow::bail;
 use clap::Parser;
 use std::path::{Path, PathBuf};
@@ -33,6 +33,7 @@ pub enum DbToolCommand {
     ResetDB,
     RewindCheckpointExecution(RewindCheckpointExecutionOptions),
     Compact,
+    Traverse,
 }
 
 #[derive(Parser)]
@@ -171,6 +172,7 @@ pub fn execute_db_tool_command(db_path: PathBuf, cmd: DbToolCommand) -> anyhow::
             }
             Ok(())
         }
+        DbToolCommand::Traverse => traverse(db_path),
     }
 }
 
