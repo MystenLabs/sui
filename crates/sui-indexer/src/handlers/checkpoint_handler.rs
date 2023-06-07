@@ -724,6 +724,10 @@ where
                 .count_network_transaction_previous_epoch(last_epoch)
                 .await?;
 
+            info!(
+                "previous count {} with current count {} transactions",
+                network_tx_count_prev_epoch, checkpoint.network_total_transactions
+            );
             Some(TemporaryEpochStore {
                 last_epoch: Some(DBEpochInfo {
                     epoch: last_epoch,
