@@ -7,8 +7,7 @@ import { KioskListing } from '@mysten/kiosk';
 import { useWalletKit } from '@mysten/wallet-kit';
 import { formatSui, mistToSui } from '../utils/utils';
 import { ItemLockedBadge } from './Kiosk/ItemLockedBadge';
-import DEFAULT_IMAGE from '../assets/empty-image.svg';
-
+import { DEFAULT_IMAGE } from '../utils/constants';
 export interface DisplayObject {
   listing?: KioskListing | null;
   item: OwnedObjectType;

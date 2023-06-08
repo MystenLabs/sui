@@ -1,8 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { DEFAULT_IMAGE } from '../utils/constants';
 import { OwnedObjectType } from './Inventory/OwnedObjects';
-import DEFAULT_IMAGE from '../assets/empty-image.svg';
+
 
 export function DisplayObjectThumbnail({ item }: { item: OwnedObjectType }) {
   return (
