@@ -14,34 +14,35 @@ const alertStyles = cva(
         variants: {
             mode: {
                 warning:
-                    'border-solid border bg-issue-light border-issue-dark/20 text-issue-dark',
+                    'border-solid border bg-warning-light border-warning-dark/20 text-warning-dark',
                 success:
                     'border-solid border bg-success-light border-success-dark/20 text-success-dark',
                 loading: 'bg-steel text-white border-warning-dark/20',
+                issue: 'border-solid border bg-issue-light border-issue-dark/20 text-issue-dark',
             },
         },
         defaultVariants: {
-            mode: 'warning',
+            mode: 'issue',
         },
     }
 );
 
 export interface AlertProps extends VariantProps<typeof alertStyles> {
     children: ReactNode;
-    mode?: 'warning' | 'loading' | 'success';
 }
 
 const modeToIcon = {
     warning: <Info16 className="h-3.5 w-3.5" />,
+    issue: <Info16 className="h-3.5 w-3.5" />,
     success: <CheckStroke16 className="h-3 w-3" />,
     loading: <LoadingIndicator color="inherit" />,
 };
 
-export default function Alert({ children, mode = 'warning' }: AlertProps) {
+export default function Alert({ children, mode = 'issue' }: AlertProps) {
     return (
         <div className={alertStyles({ mode })}>
-            {modeToIcon[mode]}
-            <div className="break-words flex-1">{children}</div>
+            {(mode && modeToIcon[mode]) || null}
+            <div className="break-words flex-1 text-left">{children}</div>
         </div>
     );
 }

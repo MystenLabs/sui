@@ -53,7 +53,7 @@ export function TransactionRequest({ txRequest }: TransactionRequestProps) {
         transaction: data,
         currentAddress: addressForTransaction,
     });
-    const { clientIdentifier, notificationModal } = useQredoTransaction();
+    const { clientIdentifier, notificationModal } = useQredoTransaction(true);
     if (!signer) {
         return null;
     }

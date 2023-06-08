@@ -136,7 +136,7 @@ export function AddressInput({
             {meta.touched ? (
                 <div className="mt-3 w-full">
                     <Alert
-                        mode={meta.error || warningData ? 'warning' : 'success'}
+                        mode={meta.error || warningData ? 'issue' : 'success'}
                     >
                         {warningData === RecipientWarningType.OBJECT ? (
                             <>
