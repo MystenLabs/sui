@@ -14,6 +14,7 @@ export interface NumberInputProps<Values> extends FieldProps<string, Values> {
     suffix?: string;
     prefix?: string;
     autoFocus?: boolean;
+    'data-testid'?: string;
 }
 
 function NumberInput<FormValues>({
@@ -27,12 +28,14 @@ function NumberInput<FormValues>({
     prefix,
     suffix,
     autoFocus,
+    'data-testid': testId,
 }: NumberInputProps<FormValues>) {
     const disabled =
         forcedDisabled !== undefined ? forcedDisabled : isSubmitting;
     return (
         <NumericFormat
             valueIsNumericString
+            data-testid={testId}
             {...{
                 className,
                 placeholder,

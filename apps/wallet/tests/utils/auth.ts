@@ -20,3 +20,23 @@ export async function createWallet(page: Page, extensionUrl: string) {
         .click();
     await page.getByRole('link', { name: /Open Sui Wallet/ }).click();
 }
+
+export async function importWallet(
+    page: Page,
+    extensionUrl: string,
+    mnemonic: string[]
+) {
+    await page.goto(extensionUrl);
+    await page.getByRole('link', { name: /Get Started/ }).click();
+    await page.getByRole('link', { name: /Import an Existing Wallet/ }).click();
+    const inputs = await page.locator('input[type=password]');
+    const inputsCount = await inputs.count();
+    for (let i = 0; i < inputsCount; i++) {
+        await inputs.nth(i).fill(mnemonic[i]);
+    }
+    await page.getByRole('button', { name: /Continue/ }).click();
+    await page.getByLabel('Create Password').fill(PASSWORD);
+    await page.getByLabel('Confirm Password').fill(PASSWORD);
+    await page.getByRole('button', { name: /Import/ }).click();
+    await page.getByRole('link', { name: /Open Sui Wallet/ }).click();
+}
