@@ -15,7 +15,7 @@ use crate::effects::{TransactionEffects, TransactionEffectsAPI};
 use crate::error::SuiResult;
 use crate::gas::GasCostSummary;
 use crate::message_envelope::{Envelope, Message, TrustedEnvelope, VerifiedEnvelope};
-use crate::signature::{AuxVerifyData, GenericSignature};
+use crate::signature::{GenericSignature, VerifyParams};
 use crate::storage::ReadStore;
 use crate::sui_serde::AsProtocolVersion;
 use crate::sui_serde::BigInt;
@@ -160,7 +160,7 @@ impl Message for CheckpointSummary {
         CheckpointDigest::new(default_hash(self))
     }
 
-    fn verify(&self, verify_params: &AuxVerifyData) -> SuiResult {
+    fn verify(&self, verify_params: &VerifyParams) -> SuiResult {
         // Signatures over CheckpointSummaries from other epochs are not valid.
         if let Some(sig_epoch) = verify_params.epoch {
             fp_ensure!(

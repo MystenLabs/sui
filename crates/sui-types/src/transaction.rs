@@ -15,7 +15,7 @@ use crate::messages_checkpoint::CheckpointTimestamp;
 use crate::messages_consensus::ConsensusCommitPrologue;
 use crate::object::{MoveObject, Object, Owner};
 use crate::programmable_transaction_builder::ProgrammableTransactionBuilder;
-use crate::signature::{AuthenticatorTrait, AuxVerifyData, GenericSignature};
+use crate::signature::{AuthenticatorTrait, GenericSignature, VerifyParams};
 use crate::{
     SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION, SUI_FRAMEWORK_PACKAGE_ID,
     SUI_SYSTEM_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
@@ -1752,7 +1752,7 @@ impl Message for SenderSignedData {
         TransactionDigest::new(default_hash(&self.intent_message().value))
     }
 
-    fn verify(&self, verify_params: &AuxVerifyData) -> SuiResult {
+    fn verify(&self, verify_params: &VerifyParams) -> SuiResult {
         fp_ensure!(
             self.0.len() == 1,
             SuiError::UserInputError {

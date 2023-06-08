@@ -13,7 +13,7 @@ use crate::execution_status::ExecutionStatus;
 use crate::gas::GasCostSummary;
 use crate::message_envelope::{Envelope, Message, TrustedEnvelope, VerifiedEnvelope};
 use crate::object::Owner;
-use crate::signature::AuxVerifyData;
+use crate::signature::VerifyParams;
 use crate::storage::{DeleteKind, WriteKind};
 use crate::transaction::{Transaction, TransactionDataAPI, VersionedProtocolMessage};
 pub use effects_v1::TransactionEffectsV1;
@@ -84,7 +84,7 @@ impl Message for TransactionEffects {
         TransactionEffectsDigest::new(default_hash(self))
     }
 
-    fn verify(&self, _verify_params: &AuxVerifyData) -> SuiResult {
+    fn verify(&self, _verify_params: &VerifyParams) -> SuiResult {
         Ok(())
     }
 }

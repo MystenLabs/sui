@@ -10,7 +10,7 @@ use crate::crypto::{
 use crate::error::{SuiError, SuiResult};
 use crate::executable_transaction::CertificateProof;
 use crate::messages_checkpoint::CheckpointSequenceNumber;
-use crate::signature::AuxVerifyData;
+use crate::signature::VerifyParams;
 use crate::transaction::VersionedProtocolMessage;
 use fastcrypto::traits::KeyPair;
 use once_cell::sync::OnceCell;
@@ -64,7 +64,7 @@ pub trait Message {
     /// Verify the internal data consistency of this message.
     /// In some cases, such as user signed transaction, we also need
     /// to verify the user signature here.
-    fn verify(&self, verify_params: &AuxVerifyData) -> SuiResult;
+    fn verify(&self, verify_params: &VerifyParams) -> SuiResult;
 }
 
 #[derive(Clone, Debug, Eq, Serialize, Deserialize)]
@@ -149,13 +149,13 @@ impl<T: Message> Envelope<T, EmptySignInfo> {
         }
     }
 
-    pub fn verify_signature(&self, verify_params: &AuxVerifyData) -> SuiResult {
+    pub fn verify_signature(&self, verify_params: &VerifyParams) -> SuiResult {
         self.data.verify(verify_params)
     }
 
     pub fn verify_with_params(
         self,
-        verify_params: &AuxVerifyData,
+        verify_params: &VerifyParams,
     ) -> SuiResult<VerifiedEnvelope<T, EmptySignInfo>> {
         self.verify_signature(verify_params)?;
         Ok(VerifiedEnvelope::<T, EmptySignInfo>::new_from_verified(
@@ -164,7 +164,7 @@ impl<T: Message> Envelope<T, EmptySignInfo> {
     }
 
     pub fn verify(self) -> SuiResult<VerifiedEnvelope<T, EmptySignInfo>> {
-        self.verify_with_params(&AuxVerifyData::default())
+        self.verify_with_params(&VerifyParams::default())
     }
 }
 
@@ -202,7 +202,7 @@ where
     pub fn verify_signature(
         &self,
         committee: &Committee,
-        verify_params: &AuxVerifyData,
+        verify_params: &VerifyParams,
     ) -> SuiResult {
         let mut verify_params = verify_params.clone();
         verify_params.epoch = Some(self.auth_sig().epoch);
@@ -214,7 +214,7 @@ where
     pub fn verify_with_params(
         self,
         committee: &Committee,
-        verify_params: &AuxVerifyData,
+        verify_params: &VerifyParams,
     ) -> SuiResult<VerifiedEnvelope<T, AuthoritySignInfo>> {
         self.verify_signature(committee, verify_params)?;
         Ok(VerifiedEnvelope::<T, AuthoritySignInfo>::new_from_verified(
@@ -226,7 +226,7 @@ where
         self,
         committee: &Committee,
     ) -> SuiResult<VerifiedEnvelope<T, AuthoritySignInfo>> {
-        self.verify_with_params(committee, &AuxVerifyData::default())
+        self.verify_with_params(committee, &VerifyParams::default())
     }
 }
 
@@ -279,7 +279,7 @@ where
     pub fn verify_signature(
         &self,
         committee: &Committee,
-        verify_params: &AuxVerifyData,
+        verify_params: &VerifyParams,
     ) -> SuiResult {
         let mut verify_params = verify_params.clone();
         verify_params.epoch = Some(self.auth_sig().epoch);
@@ -291,7 +291,7 @@ where
     pub fn verify_with_params(
         self,
         committee: &Committee,
-        verify_params: &AuxVerifyData,
+        verify_params: &VerifyParams,
     ) -> SuiResult<VerifiedEnvelope<T, AuthorityQuorumSignInfo<S>>> {
         self.verify_signature(committee, verify_params)?;
         Ok(VerifiedEnvelope::<T, AuthorityQuorumSignInfo<S>>::new_from_verified(self))
@@ -301,7 +301,7 @@ where
         self,
         committee: &Committee,
     ) -> SuiResult<VerifiedEnvelope<T, AuthorityQuorumSignInfo<S>>> {
-        self.verify_with_params(committee, &AuxVerifyData::default())
+        self.verify_with_params(committee, &VerifyParams::default())
     }
 
     pub fn verify_committee_sigs_only(
