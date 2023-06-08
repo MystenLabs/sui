@@ -6,15 +6,17 @@ use prometheus_http_query::Client;
 use std::fs::File;
 use std::io::Read;
 use sui_metric_checker::query::{instant_query, range_query};
-use sui_metric_checker::{fails_threshold_condition, timestamp_to_unix_seconds, Config, QueryType};
+use sui_metric_checker::{
+    fails_threshold_condition, timestamp_string_to_unix_seconds, Config, QueryType,
+};
 
 #[derive(Parser)]
-#[clap(name = "Prometheus Query")]
 pub struct Opts {
     #[clap(long, required = true)]
     api_user: String,
     #[clap(long, required = true)]
     api_key: String,
+    // Path to the config file
     #[clap(long, required = true)]
     config: String,
     // URL of the Prometheus server, defaults to gateway for dev environments
@@ -50,12 +52,12 @@ async fn main() -> Result<(), anyhow::Error> {
                     &auth_header,
                     client.clone(),
                     &query.query,
-                    timestamp_to_unix_seconds(
+                    timestamp_string_to_unix_seconds(
                         &query
                             .start
                             .expect("Start timestamp is required for range query"),
                     )?,
-                    timestamp_to_unix_seconds(
+                    timestamp_string_to_unix_seconds(
                         &query
                             .end
                             .expect("End timestamp is required for range query"),
@@ -70,11 +72,11 @@ async fn main() -> Result<(), anyhow::Error> {
             if fails_threshold_condition(
                 queried_value,
                 validate_result.threshold,
-                &validate_result.condition,
+                &validate_result.failure_condition,
             )? {
                 failed_queries.push(format!(
                     "Query {} returned value of {queried_value} which is {} {}",
-                    query.query, validate_result.condition, validate_result.threshold
+                    query.query, validate_result.failure_condition, validate_result.threshold
                 ));
             }
         }

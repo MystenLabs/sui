@@ -1,6 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::unix_seconds_to_timestamp;
+use crate::unix_seconds_to_timestamp_string;
 use anyhow::anyhow;
 use base64::{engine::general_purpose, Engine};
 use prometheus_http_query::Client;
@@ -76,8 +76,8 @@ pub async fn range_query(
         let avg = if count > 0 { sum / count as f64 } else { 0.0 };
         debug!(
             "Got average value {avg} over time range {} - {}",
-            unix_seconds_to_timestamp(start),
-            unix_seconds_to_timestamp(end)
+            unix_seconds_to_timestamp_string(start),
+            unix_seconds_to_timestamp_string(end)
         );
         Ok(avg)
     } else {
