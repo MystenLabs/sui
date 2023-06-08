@@ -62,16 +62,13 @@ export function fromSerializedSignature(
   const signatureScheme =
     SIGNATURE_FLAG_TO_SCHEME[bytes[0] as keyof typeof SIGNATURE_FLAG_TO_SCHEME];
 
-  const PublicKey = (function () {
-    switch (signatureScheme) {
-      case 'ED25519':
-        return Ed25519PublicKey;
-      case 'Secp256k1':
-        return Secp256k1PublicKey;
-      case 'Secp256r1':
-        return Secp256r1PublicKey;
-    }
-  })();
+  const SIGNATURE_SCHEME_TO_PUBLIC_KEY = {
+    ED25519: Ed25519PublicKey,
+    Secp256k1: Secp256k1PublicKey,
+    Secp256r1: Secp256r1PublicKey,
+  };
+
+  const PublicKey = SIGNATURE_SCHEME_TO_PUBLIC_KEY[signatureScheme];
 
   const signature = bytes.slice(1, bytes.length - PublicKey.SIZE);
   const pubkeyBytes = bytes.slice(1 + signature.length);
