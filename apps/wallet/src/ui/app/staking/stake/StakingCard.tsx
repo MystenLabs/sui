@@ -49,7 +49,6 @@ import { useSigner, useCoinsReFetchingConfig } from '_hooks';
 import { Coin } from '_redux/slices/sui-objects/Coin';
 import { MIN_NUMBER_SUI_TO_STAKE } from '_src/shared/constants';
 import { FEATURES } from '_src/shared/experimentation/features';
-import { trackEvent } from '_src/shared/plausible';
 
 import type { FormikHelpers } from 'formik';
 
@@ -147,9 +146,6 @@ function StakingCard() {
             if (!validatorAddress || !amount || !tokenTypeArg || !signer) {
                 throw new Error('Failed, missing required field');
             }
-            trackEvent('Stake', {
-                props: { validator: validatorAddress },
-            });
             const sentryTransaction = Sentry.startTransaction({
                 name: 'stake',
             });

@@ -6,7 +6,6 @@ import { useState } from 'react';
 
 import DisconnectApp from './DisconnectApp';
 import ExternalLink from '_components/external-link';
-import { trackEvent } from '_src/shared/plausible';
 import { getDAppUrl } from '_src/shared/utils';
 
 import st from './SuiApp.module.scss';
@@ -91,11 +90,6 @@ export function SuiApp({
                     href={appUrl?.toString() ?? link}
                     title={name}
                     className={st.ecosystemApp}
-                    onClick={() => {
-                        trackEvent('AppOpen', {
-                            props: { name, source: 'AppPage' },
-                        });
-                    }}
                 >
                     {AppDetails}
                 </ExternalLink>

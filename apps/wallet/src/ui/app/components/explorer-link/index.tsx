@@ -8,7 +8,6 @@ import {
     useExplorerLink,
 } from '../../hooks/useExplorerLink';
 import ExternalLink from '_components/external-link';
-import { trackEvent } from '_src/shared/plausible';
 
 import type { ReactNode } from 'react';
 
@@ -36,16 +35,7 @@ function ExplorerLink({
     }
 
     return (
-        <ExternalLink
-            href={explorerHref}
-            className={className}
-            title={title}
-            onClick={() => {
-                if (track) {
-                    trackEvent('ViewExplorerAccount');
-                }
-            }}
-        >
+        <ExternalLink href={explorerHref} className={className} title={title}>
             <>
                 {children}{' '}
                 {showIcon && <ArrowUpRight16 className={st.explorerIcon} />}

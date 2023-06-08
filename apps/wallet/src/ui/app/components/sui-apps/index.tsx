@@ -16,7 +16,6 @@ import { Text } from '_app/shared/text';
 import { ExplorerLinkType } from '_components/explorer-link/ExplorerLinkType';
 import { useAppSelector } from '_hooks';
 import { FEATURES } from '_src/shared/experimentation/features';
-import { trackEvent } from '_src/shared/plausible';
 import { prepareLinkToCompare } from '_src/shared/utils';
 
 import st from './Playground.module.scss';
@@ -58,9 +57,6 @@ function AppsPlayGround() {
                             View your account on Sui Explorer <ArrowUpRight16 />
                         </div>
                     }
-                    onClick={() => {
-                        trackEvent('ViewExplorerAccount');
-                    }}
                 />
             </div>
 

@@ -9,7 +9,6 @@ import { useMemo } from 'react';
 import { LargeButton } from '_app/shared/LargeButton';
 import { DelegatedAPY } from '_app/shared/delegated-apy';
 import { useGetDelegatedStake } from '_app/staking/useGetDelegatedStake';
-import { trackEvent } from '_src/shared/plausible';
 
 export function TokenIconLink({
     accountAddress,
@@ -45,9 +44,6 @@ export function TokenIconLink({
     return (
         <LargeButton
             to="/stake"
-            onClick={() => {
-                trackEvent('StakingFromHome');
-            }}
             loading={isLoading || queryResult.isLoading}
             before={<WalletActionStake24 />}
             center

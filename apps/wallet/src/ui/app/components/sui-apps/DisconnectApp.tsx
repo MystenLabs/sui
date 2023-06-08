@@ -17,7 +17,6 @@ import { type DAppEntry } from './SuiApp';
 import Overlay from '_components/overlay';
 import { useAppSelector } from '_hooks';
 import { permissionsSelectors } from '_redux/slices/permissions';
-import { trackEvent } from '_src/shared/plausible';
 
 export interface DisconnectAppProps
     extends Omit<DAppEntry, 'description' | 'tags'> {
@@ -54,9 +53,6 @@ function DisconnectApp({
             if (!origin) {
                 throw new Error('Failed, origin not found');
             }
-            trackEvent('AppDisconnect', {
-                props: { source: 'AppPage' },
-            });
             await backgroundClient.disconnectApp(origin, accountsToDisconnect);
             await backgroundClient.sendGetPermissionRequests();
         },

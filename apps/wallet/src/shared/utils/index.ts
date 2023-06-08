@@ -8,7 +8,6 @@ import { useLocation } from 'react-router-dom';
 import Browser from 'webextension-polyfill';
 
 import { getUrlWithDeviceId } from '../analytics/amplitude';
-import { trackPageview, trackEvent } from '../plausible';
 import { useAppSelector } from '_hooks';
 import { setAttributes } from '_src/shared/experimentation/features';
 
@@ -32,17 +31,6 @@ export function usePageView() {
         if (growthBook) {
             setAttributes({ apiEnv, customRPC });
         }
-
-        trackPageview({
-            url: location.pathname,
-        });
-        // Send a network event to Plausible with the page and url params
-        trackEvent('PageByNetwork', {
-            props: {
-                name: activeNetwork,
-                source: `${location.pathname}${location.search}`,
-            },
-        });
     }, [activeNetwork, location, growthBook, apiEnv, customRPC]);
 }
 

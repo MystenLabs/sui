@@ -21,7 +21,6 @@ import BottomMenuLayout, {
 import { Text } from '_app/shared/text';
 import { ActiveCoinsCard } from '_components/active-coins-card';
 import Overlay from '_components/overlay';
-import { trackEvent } from '_src/shared/plausible';
 import { QredoActionIgnoredByUser } from '_src/ui/app/QredoSigner';
 import { getSignerOperationErrorMessage } from '_src/ui/app/helpers/errorMessages';
 import { useSigner } from '_src/ui/app/hooks';
@@ -63,10 +62,6 @@ function TransferCoinPage() {
                 name: 'send-tokens',
             });
             try {
-                trackEvent('TransferCoins', {
-                    props: { coinType: coinType! },
-                });
-
                 return signer.signAndExecuteTransactionBlock(
                     {
                         transactionBlock: transaction,
