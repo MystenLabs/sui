@@ -7,7 +7,7 @@ use clap::*;
 use std::net::SocketAddr;
 use std::path::Path;
 use sui_config::Config;
-use sui_config::SUI_KEYSTORE_FILENAME;
+use sui_config::{PersistedConfig, SUI_KEYSTORE_FILENAME, SUI_NETWORK_CONFIG};
 use sui_indexer::test_utils::start_test_indexer;
 use sui_indexer::IndexerConfig;
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
@@ -15,6 +15,7 @@ use sui_sdk::sui_client_config::{SuiClientConfig, SuiEnv};
 use sui_sdk::wallet_context::WalletContext;
 use sui_swarm::memory::Swarm;
 use sui_swarm_config::genesis_config::GenesisConfig;
+use sui_swarm_config::network_config::NetworkConfig;
 use sui_types::base_types::SuiAddress;
 use sui_types::crypto::KeypairTraits;
 use sui_types::crypto::SuiKeyPair;
@@ -179,13 +180,31 @@ impl Cluster for LocalNewCluster {
                 .expect("Unable to parse indexer address")
         });
 
-        let mut cluster_builder = TestClusterBuilder::new()
-            .set_genesis_config(genesis_config)
-            .enable_fullnode_events();
+        let mut cluster_builder = TestClusterBuilder::new().enable_fullnode_events();
 
-        if let Some(epoch_duration_ms) = options.epoch_duration_ms {
-            cluster_builder = cluster_builder.with_epoch_duration_ms(epoch_duration_ms);
+        // Check if we already have a config directory that is passed
+        if let Some(config_dir) = options.config_dir.clone() {
+            // Load the config of the Sui authority.
+            let network_config_path = config_dir.join(SUI_NETWORK_CONFIG);
+
+            let network_config: NetworkConfig = PersistedConfig::read(&network_config_path)
+                .map_err(|err| {
+                    err.context(format!(
+                        "Cannot open Sui network config file at {:?}",
+                        network_config_path
+                    ))
+                })?;
+
+            cluster_builder = cluster_builder.set_network_config(network_config);
+            cluster_builder = cluster_builder.with_config_dir(config_dir);
+        } else {
+            cluster_builder = cluster_builder.set_genesis_config(genesis_config);
+
+            if let Some(epoch_duration_ms) = options.epoch_duration_ms {
+                cluster_builder = cluster_builder.with_epoch_duration_ms(epoch_duration_ms);
+            }
         }
+
         if let Some(rpc_port) = fullnode_port {
             cluster_builder = cluster_builder.with_fullnode_rpc_port(rpc_port);
         }

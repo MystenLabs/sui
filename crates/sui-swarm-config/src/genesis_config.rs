@@ -201,6 +201,17 @@ impl GenesisConfig {
             });
         }
 
+        // Build an extra faucet address with allocation for sui-test-validator
+        let (address, keypair) = get_key_pair_from_rng(&mut rng);
+        // Prepend to account_keys because we read from index 0 sui-cluster
+        keys.insert(0, keypair);
+        let faucet_allocation = TokenAllocation {
+            recipient_address: address,
+            amount_mist: DEFAULT_GAS_AMOUNT,
+            staked_with_validator: None,
+        };
+        allocations.push(faucet_allocation);
+
         Ok((keys, allocations))
     }
 }
