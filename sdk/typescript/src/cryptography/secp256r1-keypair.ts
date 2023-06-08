@@ -135,7 +135,7 @@ export class Secp256r1Keypair implements Keypair {
     // We use HDKey which is hardcoded to use Secp256k1 but since we only need the 32 bytes for the private key it's okay to use here as well.
     const privateKey = HDKey.fromMasterSeed(mnemonicToSeed(mnemonics)).derive(
       path,
-    ).privateKey  ;
+    ).privateKey;
     return Secp256r1Keypair.fromSecretKey(privateKey!);
   }
 
