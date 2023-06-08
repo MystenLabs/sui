@@ -4,7 +4,6 @@
 import { DEFAULT_IMAGE } from '../utils/constants';
 import { OwnedObjectType } from './Inventory/OwnedObjects';
 
-
 export function DisplayObjectThumbnail({ item }: { item: OwnedObjectType }) {
   return (
     <div className="flex gap-5 items-center ">
