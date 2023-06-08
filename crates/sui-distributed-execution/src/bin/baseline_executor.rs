@@ -1,24 +1,13 @@
 use clap::*;
-use std::collections::HashSet;
 use std::path::PathBuf;
 use std::time::Instant;
-use sui_adapter::execution_engine;
-use sui_adapter::execution_mode;
 use sui_config::{Config, NodeConfig};
 use sui_core::authority::epoch_start_configuration::EpochStartConfiguration;
-use sui_core::transaction_input_checker::get_gas_status_no_epoch_store_experimental;
-use sui_simple_fullnode::MemoryBackedStore;
-use sui_simple_fullnode::SequenceWorkerState;
-use sui_types::message_envelope::Message;
-use sui_types::messages::InputObjectKind;
-use sui_types::messages::InputObjects;
-use sui_types::messages::TransactionDataAPI;
-use sui_types::messages::TransactionKind;
+use sui_distributed_execution::{ExecutionWorkerState, SequenceWorkerState};
 use sui_types::multiaddr::Multiaddr;
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
 use sui_types::sui_system_state::get_sui_system_state;
 use sui_types::sui_system_state::SuiSystemStateTrait;
-use sui_types::temporary_store::TemporaryStore;
 
 const GIT_REVISION: &str = {
     if let Some(revision) = option_env!("GIT_REVISION") {
@@ -69,12 +58,9 @@ async fn main() {
     }
 
     if args.execute {
-        let mut memory_store = MemoryBackedStore::new();
-        for obj in genesis.objects() {
-            memory_store
-                .objects
-                .insert(obj.id(), (obj.compute_object_reference(), obj.clone()));
-        }
+        let mut ew_state = ExecutionWorkerState::new();
+        ew_state.init_store(genesis);
+        // let mut memory_store = MemoryBackedStore::new();
 
         let mut protocol_config = sw_state.epoch_store.protocol_config();
         let mut move_vm = sw_state.epoch_store.move_vm();
@@ -83,22 +69,7 @@ async fn main() {
 
         let genesis_seq = genesis.checkpoint().into_summary_and_sequence().0;
 
-        let highest_synced_seq = match sw_state
-            .checkpoint_store
-            .get_highest_synced_checkpoint_seq_number()
-            .expect("error")
-        {
-            Some(highest) => highest,
-            None => 0,
-        };
-        let highest_executed_seq = match sw_state
-            .checkpoint_store
-            .get_highest_executed_checkpoint_seq_number()
-            .expect("error")
-        {
-            Some(highest) => highest,
-            None => 0,
-        };
+        let (highest_synced_seq, highest_executed_seq) = sw_state.get_watermarks();
         println!("Highest synced {}", highest_synced_seq);
         println!("Highest executed {}", highest_executed_seq);
 
@@ -128,100 +99,24 @@ async fn main() {
                     .get_transaction_block(&tx_digest.transaction)
                     .expect("Transaction exists")
                     .expect("Transaction exists");
-                let tx_data = tx.data().transaction_data();
-                let input_object_kinds = tx_data
-                    .input_objects()
-                    .expect("Cannot get input object kinds");
-                // println!("Digest: {:?}", tx_digest);
 
-                let mut input_object_data = Vec::new();
-                for kind in &input_object_kinds {
-                    let obj = match kind {
-                        InputObjectKind::MovePackage(id)
-                        | InputObjectKind::SharedMoveObject { id, .. }
-                        | InputObjectKind::ImmOrOwnedMoveObject((id, _, _)) => {
-                            memory_store.objects.get(&id).expect("Object missing?")
-                        }
-                    };
-                    input_object_data.push(obj.1.clone());
-                }
-
-                let gas_status = get_gas_status_no_epoch_store_experimental(
-                    &input_object_data,
-                    tx_data.gas(),
-                    protocol_config,
-                    reference_gas_price,
-                    &tx_data,
-                )
-                .await
-                .expect("Could not get gas");
-
-                let input_objects = InputObjects::new(
-                    input_object_kinds
-                        .into_iter()
-                        .zip(input_object_data.into_iter())
-                        .collect(),
-                );
-                let shared_object_refs = input_objects.filter_shared_objects();
-                let transaction_dependencies = input_objects.transaction_dependencies();
-
-                let temporary_store = TemporaryStore::new(
-                    &memory_store,
-                    input_objects,
-                    *tx.digest(),
-                    protocol_config,
-                );
-
-                let (kind, signer, gas) = tx_data.execution_parts();
-
-                if let TransactionKind::ChangeEpoch(_) = kind {
-                    println!("Change epoch at checkpoint {}", checkpoint_seq)
-                    // check if this is the last transaction of the epoch
-                }
-
-                let (inner_temp_store, effects, _execution_error) =
-                    execution_engine::execute_transaction_to_effects::<execution_mode::Normal, _>(
-                        shared_object_refs,
-                        temporary_store,
-                        kind,
-                        signer,
-                        &gas,
-                        *tx.digest(),
-                        transaction_dependencies,
-                        move_vm,
-                        gas_status,
-                        &epoch_start_config.epoch_data(),
-                        protocol_config,
+                ew_state
+                    .execute_tx(
+                        &tx,
+                        tx_digest,
+                        checkpoint_seq,
+                        &protocol_config,
+                        &move_vm,
+                        &epoch_start_config,
+                        reference_gas_price,
                         sw_state.metrics.clone(),
-                        false,
-                        &HashSet::new(),
-                    );
-
-                // Critical check: are the effects the same?
-                if effects.digest() != tx_digest.effects {
-                    println!("Effects mismatch at checkpoint {}", checkpoint_seq);
-                    let old_effects = tx_digest.effects;
-                    println!("Past effects: {:?}", old_effects);
-                    println!("New effects: {:?}", effects);
-                }
-                assert!(
-                    effects.digest() == tx_digest.effects,
-                    "Effects digest mismatch"
-                );
-
-                // And now we mutate the store.
-                // First delete:
-                for obj_del in &inner_temp_store.deleted {
-                    memory_store.objects.remove(obj_del.0);
-                }
-                for (obj_add_id, (oref, obj, _)) in inner_temp_store.written {
-                    memory_store.objects.insert(obj_add_id, (oref, obj));
-                }
+                    )
+                    .await;
             }
 
             if summary.end_of_epoch_data.is_some() {
                 println!("END OF EPOCH at checkpoint {}", checkpoint_seq);
-                let latest_state = get_sui_system_state(&&memory_store)
+                let latest_state = get_sui_system_state(&&ew_state.memory_store)
                     .expect("Read Sui System State object cannot fail");
                 let new_epoch_start_state = latest_state.into_epoch_start_state();
                 let next_epoch_committee = new_epoch_start_state.get_sui_committee();

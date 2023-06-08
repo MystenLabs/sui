@@ -1,5 +1,5 @@
 [package]
-name = "sui-simple-fullnode"
+name = "sui-distributed-execution"
 version = "0.1.0"
 edition = "2021"
 
