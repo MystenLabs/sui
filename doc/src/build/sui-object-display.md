@@ -30,10 +30,10 @@ The following represents the template the `init` function defines:
 ```json
 {
     "name": "{name}",
-    "link": "https://suifrens.com/capy/{id}",
+    "link": "https://sui-heroes.io/hero/{id}",
     "image_url": "ipfs://{img_url}",
     "description": "A true Hero of the Sui ecosystem!",
-    "project_url": "https://suifrens.com",
+    "project_url": "https://sui-heroes.io",
     "creator": "Unknown Sui Fan"
 }
 ```
@@ -84,13 +84,13 @@ module examples::my_hero {
             // For `name` one can use the `Hero.name` property
             utf8(b"{name}"),
             // For `link` one can build a URL using an `id` property
-            utf8(b"https://suifrens.com/capy/{id}"),
+            utf8(b"https://sui-heroes.io/hero/{id}"),
             // For `image_url` use an IPFS template + `img_url` property.
             utf8(b"ipfs://{img_url}"),
             // Description is static for all `Hero` objects.
             utf8(b"A true Hero of the Sui ecosystem!"),
             // Project URL is usually static
-            utf8(b"https://suifrens.com"),
+            utf8(b"https://sui-heroes.io"),
             // Creator field can be any
             utf8(b"Unknown Sui Fan")
         ];
