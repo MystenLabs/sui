@@ -19,19 +19,15 @@ export function openInNewTab() {
     return Browser.tabs.create({ url: MAIN_UI_URL });
 }
 
-export function usePageView() {
-    const location = useLocation();
+export function useGrowthbookAttributes() {
     const { apiEnv, customRPC } = useAppSelector((state) => state.app);
-    // Use customRPC url if apiEnv is customRPC
-    const activeNetwork =
-        customRPC && apiEnv === 'customRPC' ? customRPC : apiEnv.toUpperCase();
     const growthBook = useGrowthBook();
 
     useEffect(() => {
         if (growthBook) {
             setAttributes({ apiEnv, customRPC });
         }
-    }, [activeNetwork, location, growthBook, apiEnv, customRPC]);
+    }, [growthBook, apiEnv, customRPC]);
 }
 
 export function isValidUrl(url: string | null) {
