@@ -5,11 +5,12 @@ import { fromB64, toB64 } from '@mysten/bcs';
 import { Ed25519PublicKey } from './ed25519-publickey';
 import { PublicKey } from './publickey';
 import { Secp256k1PublicKey } from './secp256k1-publickey';
+import { Secp256r1PublicKey } from './secp256r1-publickey';
 
 /**
  * A keypair used for signing transactions.
  */
-export type SignatureScheme = 'ED25519' | 'Secp256k1';
+export type SignatureScheme = 'ED25519' | 'Secp256k1' | 'Secp256r1';
 
 /**
  * Pair of signature and corresponding public key
@@ -31,11 +32,13 @@ export type SerializedSignature = string;
 export const SIGNATURE_SCHEME_TO_FLAG = {
   ED25519: 0x00,
   Secp256k1: 0x01,
+  Secp256r1: 0x02,
 };
 
 export const SIGNATURE_FLAG_TO_SCHEME = {
   0x00: 'ED25519',
   0x01: 'Secp256k1',
+  0x02: 'Secp256r1',
 } as const;
 
 export function toSerializedSignature({
@@ -59,8 +62,13 @@ export function fromSerializedSignature(
   const signatureScheme =
     SIGNATURE_FLAG_TO_SCHEME[bytes[0] as keyof typeof SIGNATURE_FLAG_TO_SCHEME];
 
-  const PublicKey =
-    signatureScheme === 'ED25519' ? Ed25519PublicKey : Secp256k1PublicKey;
+  const SIGNATURE_SCHEME_TO_PUBLIC_KEY = {
+    ED25519: Ed25519PublicKey,
+    Secp256k1: Secp256k1PublicKey,
+    Secp256r1: Secp256r1PublicKey,
+  };
+
+  const PublicKey = SIGNATURE_SCHEME_TO_PUBLIC_KEY[signatureScheme];
 
   const signature = bytes.slice(1, bytes.length - PublicKey.SIZE);
   const pubkeyBytes = bytes.slice(1 + signature.length);

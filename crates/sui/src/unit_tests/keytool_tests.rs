@@ -35,6 +35,7 @@ use sui_types::transaction::TransactionData;
 use sui_types::transaction::TEST_ONLY_GAS_UNIT_FOR_TRANSFER;
 use tempfile::TempDir;
 use tokio::test;
+
 const TEST_MNEMONIC: &str = "result crisp session latin must fruit genuine question prevent start coconut brave speak student dismiss";
 
 #[test]
@@ -239,6 +240,47 @@ async fn test_mnemonics_secp256k1() -> Result<(), anyhow::Error> {
         assert_eq!(SuiAddress::from(&kp.public()), addr);
         assert!(keystore.addresses().contains(&addr));
     }
+    Ok(())
+}
+
+#[test]
+async fn test_mnemonics_secp256r1() -> Result<(), anyhow::Error> {
+    // Test case matches with /mysten/sui/sdk/typescript/test/unit/cryptography/secp256r1-keypair.test.ts
+    const TEST_CASES: [[&str; 3]; 3] = [
+        [
+            "act wing dilemma glory episode region allow mad tourist humble muffin oblige",
+            "AiWmZXUcFpUF75H082F2RVJAABS5kcrvb8o09IPH9yUw",
+            "0x4a822457f1970468d38dae8e63fb60eefdaa497d74d781f581ea2d137ec36f3a",
+        ],
+        [
+            "flag rebel cabbage captain minimum purpose long already valley horn enrich salt",
+            "AjaB6aLp4fQabx4NglfGz2Bf01TGKArV80NEOnqDwqNN",
+            "0xcd43ecb9dd32249ff5748f5e4d51855b01c9b1b8bbe7f8638bb8ab4cb463b920",
+        ],
+        [
+            "area renew bar language pudding trial small host remind supreme cabbage era",
+            "AtSIEzVpJv+bJH3XptEq63vsuK+te1KRSY7JsiuJfcdK",
+            "0x0d9047b7e7b698cc09c955ea97b0c68c2be7fb3aebeb59edcc84b1fb87e0f28e",
+        ],
+    ];
+
+    for t in TEST_CASES {
+        let mut keystore = Keystore::from(InMemKeystore::new_insecure_for_tests(0));
+        KeyToolCommand::Import {
+            mnemonic_phrase: t[0].to_string(),
+            key_scheme: SignatureScheme::Secp256r1,
+            derivation_path: None,
+        }
+        .execute(&mut keystore)
+        .await?;
+
+        let kp = SuiKeyPair::decode_base64(t[1]).unwrap();
+        println!("{:?}", kp.public().encode_base64());
+        let addr = SuiAddress::from_str(t[2]).unwrap();
+        assert_eq!(SuiAddress::from(&kp.public()), addr);
+        assert!(keystore.addresses().contains(&addr));
+    }
+
     Ok(())
 }
 
