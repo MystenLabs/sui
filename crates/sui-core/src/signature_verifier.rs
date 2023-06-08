@@ -18,7 +18,7 @@ use sui_types::{
     error::{SuiError, SuiResult},
     message_envelope::Message,
     messages_checkpoint::SignedCheckpointSummary,
-    signature::AuxVerifyData,
+    signature::VerifyParams,
     transaction::{CertifiedTransaction, VerifiedCertificate},
     zk_login_util::OAuthProviderContent,
 };
@@ -293,7 +293,7 @@ impl SignatureVerifier {
         self.signed_data_cache
             .is_verified(signed_tx.full_message_digest(), || {
                 let oauth_provider_jwk = self.oauth_provider_jwk.read().clone();
-                let aux_data = AuxVerifyData::new(None, oauth_provider_jwk);
+                let aux_data = VerifyParams::new(None, oauth_provider_jwk);
                 signed_tx.verify(&aux_data)
             })
     }
@@ -380,7 +380,7 @@ pub fn batch_verify_all_certificates_and_checkpoints(
 ) -> SuiResult {
     // certs.data() is assumed to be verified already by the caller.
 
-    let verify_params = AuxVerifyData::new(Some(committee.epoch()), Default::default());
+    let verify_params = VerifyParams::new(Some(committee.epoch()), Default::default());
     for ckpt in checkpoints {
         ckpt.data().verify(&verify_params)?;
     }
@@ -395,7 +395,7 @@ pub fn batch_verify_certificates(
 ) -> Vec<SuiResult> {
     // certs.data() is assumed to be verified already by the caller.
 
-    let verify_params = AuxVerifyData::new(None, Default::default());
+    let verify_params = VerifyParams::new(None, Default::default());
     match batch_verify(committee, certs, &[]) {
         Ok(_) => vec![Ok(()); certs.len()],
 

@@ -17,7 +17,7 @@ use sui_sdk::rpc_types::SuiExecutionStatus;
 use sui_types::base_types::SuiAddress;
 use sui_types::crypto::{DefaultHash, SignatureScheme, ToFromBytes};
 use sui_types::error::SuiError;
-use sui_types::signature::{AuxVerifyData, GenericSignature};
+use sui_types::signature::{GenericSignature, VerifyParams};
 use sui_types::transaction::{Transaction, TransactionData, TransactionDataAPI};
 
 use crate::errors::Error;
@@ -112,7 +112,7 @@ pub async fn combine(
             &[&*flag, &*sig_bytes, &*pub_key].concat(),
         )?],
     );
-    signed_tx.verify_signature(&AuxVerifyData::default())?;
+    signed_tx.verify_signature(&VerifyParams::default())?;
     let signed_tx_bytes = bcs::to_bytes(&signed_tx)?;
 
     Ok(ConstructionCombineResponse {

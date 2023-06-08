@@ -5,7 +5,7 @@ use crate::{
     base_types::SuiAddress,
     crypto::{Signature, SignatureScheme, SuiSignature},
     error::SuiError,
-    signature::{AuthenticatorTrait, AuxVerifyData},
+    signature::{AuthenticatorTrait, VerifyParams},
     zk_login_util::{AddressParams, DEFAULT_WHITELIST},
 };
 use fastcrypto::rsa::Encoding as OtherEncoding;
@@ -90,7 +90,7 @@ impl AuthenticatorTrait for ZkLoginAuthenticator {
         &self,
         intent_msg: &IntentMessage<T>,
         author: SuiAddress,
-        aux_verify_data: &AuxVerifyData,
+        aux_verify_data: &VerifyParams,
     ) -> Result<(), SuiError>
     where
         T: Serialize,

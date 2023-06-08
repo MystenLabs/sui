@@ -10,7 +10,7 @@ use crate::{
     },
     multisig::{as_indices, MultiSig, MAX_SIGNER_IN_MULTISIG},
     multisig_legacy::{bitmap_to_u16, MultiSigLegacy, MultiSigPublicKeyLegacy},
-    signature::{AuthenticatorTrait, AuxVerifyData, GenericSignature},
+    signature::{AuthenticatorTrait, GenericSignature, VerifyParams},
     utils::keys,
 };
 use fastcrypto::{
@@ -53,25 +53,25 @@ fn multisig_scenarios() {
     let multi_sig1 =
         MultiSig::combine(vec![sig1.clone(), sig2.clone()], multisig_pk.clone()).unwrap();
     assert!(multi_sig1
-        .verify_secure_generic(&msg, addr, &AuxVerifyData::default())
+        .verify_secure_generic(&msg, addr, &VerifyParams::default())
         .is_ok());
 
     let multi_sig2 =
         MultiSig::combine(vec![sig1.clone(), sig3.clone()], multisig_pk.clone()).unwrap();
     assert!(multi_sig2
-        .verify_secure_generic(&msg, addr, &AuxVerifyData::default())
+        .verify_secure_generic(&msg, addr, &VerifyParams::default())
         .is_ok());
 
     let multi_sig3 =
         MultiSig::combine(vec![sig2.clone(), sig3.clone()], multisig_pk.clone()).unwrap();
     assert!(multi_sig3
-        .verify_secure_generic(&msg, addr, &AuxVerifyData::default())
+        .verify_secure_generic(&msg, addr, &VerifyParams::default())
         .is_ok());
 
     // 1 of 3 signature verify fails.
     let multi_sig4 = MultiSig::combine(vec![sig2.clone()], multisig_pk).unwrap();
     assert!(multi_sig4
-        .verify_secure_generic(&msg, addr, &AuxVerifyData::default())
+        .verify_secure_generic(&msg, addr, &VerifyParams::default())
         .is_err());
 
     // Incorrect address fails.
@@ -85,7 +85,7 @@ fn multisig_scenarios() {
     .unwrap();
     let multisig5 = MultiSig::combine(vec![sig1.clone(), sig2.clone()], multisig_pk_1).unwrap();
     assert!(multisig5
-        .verify_secure_generic(&msg, addr, &AuxVerifyData::default())
+        .verify_secure_generic(&msg, addr, &VerifyParams::default())
         .is_err());
 
     // Create a MultiSig pubkey of pk1 (weight = 1), pk2 (weight = 2), pk3 (weight = 3), threshold 3.
@@ -111,7 +111,7 @@ fn multisig_scenarios() {
     let multi_sig_6 =
         MultiSig::combine(vec![sig1.clone(), sig2.clone()], multisig_pk_2.clone()).unwrap();
     assert!(multi_sig_6
-        .verify_secure_generic(&msg, addr_2, &AuxVerifyData::default())
+        .verify_secure_generic(&msg, addr_2, &VerifyParams::default())
         .is_ok());
 
     // providing the same sig twice fails.
@@ -121,7 +121,7 @@ fn multisig_scenarios() {
     let multi_sig_7 =
         MultiSig::combine(vec![sig2.clone(), sig1.clone()], multisig_pk_2.clone()).unwrap();
     assert!(multi_sig_7
-        .verify_secure_generic(&msg, addr_2, &AuxVerifyData::default())
+        .verify_secure_generic(&msg, addr_2, &VerifyParams::default())
         .is_err());
 
     // Change position for sig2 and sig1 is not ok with legacy using roaring bitmap.
@@ -134,13 +134,13 @@ fn multisig_scenarios() {
     // sig3 itself (3 of 6) verifies ok.
     let multi_sig_8 = MultiSig::combine(vec![sig3.clone()], multisig_pk_2.clone()).unwrap();
     assert!(multi_sig_8
-        .verify_secure_generic(&msg, addr_2, &AuxVerifyData::default())
+        .verify_secure_generic(&msg, addr_2, &VerifyParams::default())
         .is_ok());
 
     // sig2 itself (2 of 6) verifies fail.
     let multi_sig_9 = MultiSig::combine(vec![sig2.clone()], multisig_pk_2.clone()).unwrap();
     assert!(multi_sig_9
-        .verify_secure_generic(&msg, addr_2, &AuxVerifyData::default())
+        .verify_secure_generic(&msg, addr_2, &VerifyParams::default())
         .is_err());
 
     // A bad sig in the multisig fails, even though sig2 and sig3 verifies and weights meets threshold.
@@ -155,7 +155,7 @@ fn multisig_scenarios() {
     );
     let multi_sig_9 = MultiSig::combine(vec![bad_sig, sig2, sig3], multisig_pk_2).unwrap();
     assert!(multi_sig_9
-        .verify_secure_generic(&msg, addr_2, &AuxVerifyData::default())
+        .verify_secure_generic(&msg, addr_2, &VerifyParams::default())
         .is_err());
 
     // Wrong bitmap verifies fail.
@@ -166,7 +166,7 @@ fn multisig_scenarios() {
         bytes: OnceCell::new(),
     };
     assert!(multi_sig_10
-        .verify_secure_generic(&msg, addr_2, &AuxVerifyData::default())
+        .verify_secure_generic(&msg, addr_2, &VerifyParams::default())
         .is_err());
 }
 
@@ -282,7 +282,7 @@ fn single_sig_port_works() {
     );
     let sig = Signature::new_secure(&msg, &kp);
     assert!(sig
-        .verify_secure_generic(&msg, addr, &AuxVerifyData::default())
+        .verify_secure_generic(&msg, addr, &VerifyParams::default())
         .is_ok());
 }
 
@@ -391,7 +391,7 @@ fn test_max_sig() {
     sigs.remove(0);
     let multisig = MultiSig::combine(sigs, high_threshold_pk).unwrap();
     assert!(multisig
-        .verify_secure_generic(&msg, address, &AuxVerifyData::default())
+        .verify_secure_generic(&msg, address, &VerifyParams::default())
         .is_err());
 
     // multisig_pk with max weights for each pk with threshold is 1x max weight verifies ok.
@@ -405,7 +405,7 @@ fn test_max_sig() {
     let sig = Signature::new_secure(&msg, &keys[0]);
     let multisig = MultiSig::combine(vec![sig; 1], low_threshold_pk).unwrap();
     assert!(multisig
-        .verify_secure_generic(&msg, address, &AuxVerifyData::default())
+        .verify_secure_generic(&msg, address, &VerifyParams::default())
         .is_ok());
 }
 

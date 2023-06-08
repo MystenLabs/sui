@@ -28,7 +28,7 @@ use sui_types::sui_system_state::SuiSystemState;
 use sui_types::{base_types::*, committee::*, fp_ensure};
 use sui_types::{
     error::{SuiError, SuiResult},
-    signature::AuxVerifyData,
+    signature::VerifyParams,
     transaction::*,
     zk_login_util::OAuthProviderContent,
 };
@@ -273,7 +273,7 @@ impl<C: Clone> SafeClient<C> {
                             cert,
                         );
                         let verify_params =
-                            AuxVerifyData::new(None, self.oauth_provider_jwks.clone());
+                            VerifyParams::new(None, self.oauth_provider_jwks.clone());
                         ct.verify_signature(&committee, &verify_params)
                             .tap_err(|e| {
                                 // TODO: We show the below messages for debugging purposes re. incident #267. When this is fixed, we should remove them again.

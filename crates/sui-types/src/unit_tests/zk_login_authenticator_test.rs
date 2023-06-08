@@ -4,7 +4,7 @@
 use std::str::FromStr;
 use std::sync::Arc;
 
-use crate::signature::{AuthenticatorTrait, AuxVerifyData};
+use crate::signature::{AuthenticatorTrait, VerifyParams};
 use crate::utils::{make_transaction, make_zklogin_tx};
 use crate::{
     base_types::SuiAddress,
@@ -37,7 +37,7 @@ fn zklogin_authenticator_scenarios() {
 
     // Construct the required info required to verify a zk login authenticator
     // in authority server (i.e. epoch and default JWK).
-    let aux_verify_data = AuxVerifyData::new(Some(0), parsed.clone());
+    let aux_verify_data = VerifyParams::new(Some(0), parsed.clone());
 
     // Verify passes.
     assert!(authenticator
@@ -51,7 +51,7 @@ fn zklogin_authenticator_scenarios() {
         .collect();
 
     // correct kid can no longer be found
-    let aux_verify_data = AuxVerifyData::new(Some(9999), parsed);
+    let aux_verify_data = VerifyParams::new(Some(9999), parsed);
 
     // Verify fails.
     assert!(authenticator
