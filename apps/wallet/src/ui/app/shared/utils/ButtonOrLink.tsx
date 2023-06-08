@@ -28,7 +28,10 @@ export const ButtonOrLink = forwardRef<
                 <div className="contents !text-transparent invisible">
                     {children}
                 </div>
-                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 flex">
+                <div
+                    data-testid="loading-indicator"
+                    className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 flex"
+                >
                     <LoadingIndicator color="inherit" />
                 </div>
             </>

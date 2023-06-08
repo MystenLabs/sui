@@ -62,6 +62,7 @@ function MenuListItem({
     }
     return (
         <Component
+            data-testid={title}
             className="flex flex-nowrap items-center px-1 py-4.5 first:pt-3 last:pb-3 gap-5 no-underline overflow-hidden group cursor-pointer"
             to={to}
             onClick={onClick}

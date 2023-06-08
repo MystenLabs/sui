@@ -63,7 +63,10 @@ export function CoinItem({
                             {formatted}
                         </Text>
                     ) : (
-                        <div className="flex flex-col justify-end items-end gap-1.5">
+                        <div
+                            data-testid={coinType}
+                            className="flex flex-col justify-end items-end gap-1.5"
+                        >
                             <Text
                                 variant="body"
                                 color="gray-90"
