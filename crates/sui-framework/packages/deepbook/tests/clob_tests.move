@@ -28,7 +28,7 @@ module deepbook::clob_test {
     const E_ORDER_CANNOT_BE_FULLY_FILLED: u64 = 9;
     const CLIENT_ID_ALICE: u64 = 0;
     const CLIENT_ID_BOB: u64 = 1;
-    const SELF_MATCHING_PREVENTION_DEFAULT: u64 = 0;
+    const SELF_MATCHING_PREVENTION_DEFAULT: u8 = 0;
 
     #[test] fun test_full_transaction() { let _ = test_full_transaction_(scenario()); }
 
