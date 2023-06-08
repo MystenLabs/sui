@@ -372,7 +372,6 @@ impl SuiNode {
             config.state_debug_dump_config.clone(),
         )
         .await;
-        state.reaccumulate_state_hash();
         // ensure genesis txn was executed
         if epoch_store.epoch() == 0 {
             let txn = &genesis.transaction();
@@ -989,6 +988,12 @@ impl SuiNode {
                 .state
                 .get_sui_system_state_object_during_reconfig()
                 .expect("Read Sui System State object cannot fail");
+            {
+                let prev_epoch = latest_system_state.epoch() - 1;
+                let accumulator = self.state.database.get_root_state(prev_epoch);
+                self.state.reaccumulate_state_hash_v2(accumulator);
+                //self.state.reaccumulate_state_hash();
+            }
 
             #[cfg(msim)]
             if !self.sim_safe_mode_expected.load(Ordering::Relaxed) {
