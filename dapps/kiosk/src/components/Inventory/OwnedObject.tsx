@@ -24,7 +24,7 @@ export function OwnedObject({
     <DisplayObject item={object}>
       <>
         <Button
-          className="bg-gray-200"
+          className="bg-gray-200 hover:bg-primary hover:text-white"
           loading={placeToKioskMutation.isLoading}
           onClick={() => placeToKioskMutation.mutate(object)}
         >
@@ -34,7 +34,7 @@ export function OwnedObject({
           className="border-gray-400 bg-transparent hover:bg-primary hover:text-white"
           onClick={() => listFn(object)}
         >
-          Sell in Kiosk
+          List For Sale
         </Button>
       </>
     </DisplayObject>
