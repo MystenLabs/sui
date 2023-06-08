@@ -4,6 +4,7 @@
 import {
   JsonRpcProvider,
   ObjectId,
+  PaginationArguments,
   SharedObjectRef,
   SuiObjectRef,
   SuiObjectResponse,
@@ -185,4 +186,32 @@ export function getRulePackageAddress(
     return environment.address;
   }
   return rulesPackageAddresses[environment.env];
+}
+
+/**
+ * A helper to fetch all DF pages.
+ * We need that to fetch the kiosk DFs consistently, until we have
+ * RPC calls that allow filtering of Type / batch fetching of spec
+ */
+export async function getAllDynamicFields(
+  provider: JsonRpcProvider,
+  parentId: ObjectId,
+  pagination: PaginationArguments<string>,
+) {
+  let hasNextPage = true;
+  let cursor = undefined;
+  const data: DynamicFieldInfo[] = [];
+
+  while (hasNextPage) {
+    const result = await provider.getDynamicFields({
+      parentId,
+      limit: pagination.limit || undefined,
+      cursor,
+    });
+    data.push(...result.data);
+    hasNextPage = result.hasNextPage;
+    cursor = result.nextCursor;
+  }
+
+  return data;
 }
