@@ -43,11 +43,13 @@ export function useCreateKioskMutation({ onSuccess, onError }: MutationParams) {
 
   return useMutation({
     mutationFn: () => {
+      if (!currentAccount?.address)
+        throw new Error('You need to connect your wallet!');
       const tx = new TransactionBlock();
       const kiosk_cap = createKioskAndShare(tx);
       tx.transferObjects(
         [kiosk_cap],
-        tx.pure(currentAccount?.address, 'address'),
+        tx.pure(currentAccount.address, 'address'),
       );
       return signAndExecute({ tx });
     },

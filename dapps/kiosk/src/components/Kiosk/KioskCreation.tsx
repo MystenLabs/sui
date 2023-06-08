@@ -1,12 +1,16 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { toast } from 'react-hot-toast';
 import { useCreateKioskMutation } from '../../mutations/kiosk';
 import { Button } from '../Base/Button';
 
 export function KioskCreation({ onCreate }: { onCreate: () => void }) {
   const createKiosk = useCreateKioskMutation({
-    onSuccess: onCreate,
+    onSuccess: () => {
+      onCreate();
+      toast.success('Kiosk created successfully');
+    },
   });
 
   return (
