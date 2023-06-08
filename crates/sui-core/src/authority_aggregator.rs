@@ -1133,7 +1133,7 @@ where
                     let display_name = validator_display_names.get(&name).unwrap_or(&name.concise().to_string()).clone();
                     Box::pin(async move {
                         match self.handle_process_transaction_response(
-                            tx_digest, &mut state, response, name, weight,
+                            transaction_ref, &mut state, response, name, weight,
                         ) {
                             Ok(Some(result)) => {
                                 self.record_process_transaction_metrics(tx_digest, &state);
@@ -1316,16 +1316,17 @@ where
 
     fn handle_process_transaction_response(
         &self,
-        tx_digest: &TransactionDigest,
+        original_transaction: &VerifiedTransaction,
         state: &mut ProcessTransactionState,
         response: SuiResult<PlainTransactionInfoResponse>,
         name: AuthorityName,
         weight: StakeUnit,
     ) -> SuiResult<Option<ProcessTransactionResult>> {
+        let tx_digest = original_transaction.digest();
         match response {
             Ok(PlainTransactionInfoResponse::Signed(signed)) => {
                 debug!(?tx_digest, name=?name.concise(), weight, "Received signed transaction from validator handle_transaction");
-                self.handle_transaction_response_with_signed(state, signed)
+                self.handle_transaction_response_with_signed(state, original_transaction, signed)
                     .tap_ok(|opt_cert| {
                         if let Some(cert) = opt_cert.as_ref() {
                             debug!(?tx_digest, ?cert, "Collected tx certificate for digest")
@@ -1370,6 +1371,7 @@ where
     fn handle_transaction_response_with_signed(
         &self,
         state: &mut ProcessTransactionState,
+        original_tx: &VerifiedTransaction,
         plain_tx: SignedTransaction,
     ) -> SuiResult<Option<ProcessTransactionResult>> {
         match state.tx_signatures.insert(plain_tx.clone()) {
@@ -1397,7 +1399,11 @@ where
                 let ct_digest = ct.digest();
                 debug!(?ct, ?ct_bytes, ?ct_digest, "Collected tx certificate");
                 Ok(Some(ProcessTransactionResult::Certified(
-                    ct.verify(&self.committee)?,
+                    // We do not verify the user sig here, because we know we are starting out with
+                    // a VerifiedTransaction. Because transaction may use a stateful authenticator
+                    // (such as zklogin) it is possible (though unlikely) that we may not be able
+                    // to replicate the verification decision that was made by the authorities.
+                    ct.verify_committee_sigs_only(&self.committee, original_tx)?,
                 )))
             }
         }

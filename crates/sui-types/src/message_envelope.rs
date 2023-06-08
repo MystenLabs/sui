@@ -7,7 +7,7 @@ use crate::crypto::{
     AuthorityKeyPair, AuthorityQuorumSignInfo, AuthoritySignInfo, AuthoritySignInfoTrait,
     AuthoritySignature, AuthorityStrongQuorumSignInfo, EmptySignInfo, Signer,
 };
-use crate::error::SuiResult;
+use crate::error::{SuiError, SuiResult};
 use crate::executable_transaction::CertificateProof;
 use crate::messages_checkpoint::CheckpointSequenceNumber;
 use crate::signature::AuxVerifyData;
@@ -302,6 +302,24 @@ where
         committee: &Committee,
     ) -> SuiResult<VerifiedEnvelope<T, AuthorityQuorumSignInfo<S>>> {
         self.verify_with_params(committee, &AuxVerifyData::default())
+    }
+
+    pub fn verify_committee_sigs_only(
+        self,
+        committee: &Committee,
+        original_data: &VerifiedEnvelope<T, EmptySignInfo>,
+    ) -> SuiResult<VerifiedEnvelope<T, AuthorityQuorumSignInfo<S>>>
+    where
+        <T as Message>::DigestType: PartialEq,
+    {
+        if self.digest() != original_data.digest() {
+            return Err(SuiError::InvalidSignature {
+                error: "original_data must have same digest as cert".to_string(),
+            });
+        }
+        self.auth_signature
+            .verify_secure(self.data(), Intent::sui_app(T::SCOPE), committee)?;
+        Ok(VerifiedEnvelope::<T, AuthorityQuorumSignInfo<S>>::new_from_verified(self))
     }
 }
 
