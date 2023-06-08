@@ -82,7 +82,7 @@ export function KioskItem({
         {!listing && !isGuest && (
           <>
             <Button
-              className="border-transparent py-2 px-4bg-gray-200 hover:bg-primary hover:text-white disabled:opacity-30 "
+              className="border-transparent hover:bg-primary hover:text-white disabled:opacity-30 "
               loading={takeMutation.isLoading}
               disabled={item.isLocked}
               onClick={() => takeMutation.mutate(item)}
