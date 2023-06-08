@@ -28,6 +28,7 @@ prometheus = "0.13.3"
 itertools = "0.10.5"
 zstd = "0.12.3"
 url = "2.3.1"
+clap = "4.3.2"
 
 sui-simulator = { path = "../sui-simulator" }
 sui-types = { path = "../sui-types" }

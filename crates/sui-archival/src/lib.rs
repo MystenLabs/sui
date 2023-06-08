@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 #![allow(dead_code)]
 
+pub mod reader;
 pub mod writer;
 
-mod reader;
 #[cfg(test)]
 mod tests;
 
