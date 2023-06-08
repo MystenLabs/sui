@@ -14,7 +14,7 @@ const alertStyles = cva(
         variants: {
             mode: {
                 warning:
-                    'border-solid border bg-warning-light border-waring-dark/20 text-warning-dark',
+                    'border-solid border bg-warning-light border-warning-dark/20 text-warning-dark',
                 success:
                     'border-solid border bg-success-light border-success-dark/20 text-success-dark',
                 loading: 'bg-steel text-white border-warning-dark/20',
@@ -42,7 +42,7 @@ export default function Alert({ children, mode = 'issue' }: AlertProps) {
     return (
         <div className={alertStyles({ mode })}>
             {(mode && modeToIcon[mode]) || null}
-            <div className="break-words flex-1">{children}</div>
+            <div className="break-words flex-1 text-left">{children}</div>
         </div>
     );
 }

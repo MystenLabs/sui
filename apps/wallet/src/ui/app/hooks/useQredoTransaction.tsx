@@ -23,6 +23,12 @@ export function useQredoTransaction(preventModalDismiss?: boolean) {
             preventClose={preventModalDismiss}
             body={
                 <div className="flex flex-col gap-2.5 text-center items-center relative">
+                    {preventModalDismiss ? (
+                        <Alert mode="warning">
+                            Don't close this window until the transaction is
+                            completed
+                        </Alert>
+                    ) : null}
                     <div className="bg-[url('_assets/images/qredo.png')] h-14 w-14 bg-cover" />
                     <div className="text-steel">
                         <LoadingIndicator color="inherit" />
@@ -35,12 +41,7 @@ export function useQredoTransaction(preventModalDismiss?: boolean) {
                         custody approvals have been performed the transaction
                         will complete.
                     </Text>
-                    {preventModalDismiss ? (
-                        <Alert mode="warning">
-                            Please keep the wallet open until the transaction is
-                            completed
-                        </Alert>
-                    ) : (
+                    {!preventModalDismiss ? (
                         <Button
                             text="Close"
                             onClick={() => {
@@ -50,7 +51,7 @@ export function useQredoTransaction(preventModalDismiss?: boolean) {
                                 setQredoTransactionID(null);
                             }}
                         />
-                    )}
+                    ) : null}
                 </div>
             }
             onClose={() => {
