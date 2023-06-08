@@ -1,11 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useOnScreen } from '@mysten/core';
+import { formatDate, useOnScreen } from '@mysten/core';
 import { IntentScope, fromB64 } from '@mysten/sui.js';
 import { useMemo, useRef } from 'react';
 
 import { toUtf8OrB64 } from '_src/shared/utils';
+import LoadingIndicator from '_src/ui/app/components/loading/LoadingIndicator';
 import { TxnIcon } from '_src/ui/app/components/transactions-card/TxnIcon';
 import { useGetQredoTransaction } from '_src/ui/app/hooks/useGetQredoTransaction';
 import { Text } from '_src/ui/app/shared/text';
@@ -59,7 +60,7 @@ export function QredoTransaction({
                     }
                 />
             </div>
-            <div className="flex flex-col gap-1">
+            <div className="flex flex-col gap-1 overflow-hidden">
                 {isLoading ? (
                     <>
                         <div className="bg-sui-lightest h-3 w-20 rounded" />
@@ -81,12 +82,32 @@ export function QredoTransaction({
                             #{data.txID}
                         </Text>
                         {isSignMessage && messageToSign ? (
-                            <div className="break-all">
+                            <div className="break-words line-clamp-3 overflow-hidden">
                                 <Text color="gray-80" weight="normal">
                                     {messageToSign}
                                 </Text>
                             </div>
                         ) : null}
+                        {data.timestamps.created ? (
+                            <Text
+                                color="steel-dark"
+                                variant="subtitleSmallExtra"
+                                weight="medium"
+                            >
+                                {formatDate(data.timestamps.created * 1000, [
+                                    'month',
+                                    'day',
+                                    'hour',
+                                    'minute',
+                                ])}
+                            </Text>
+                        ) : null}
+                        <div className="flex items-center gap-1.5 text-issue">
+                            <Text weight="medium" variant="pBodySmall">
+                                Check status in Qredo app
+                            </Text>
+                            <LoadingIndicator color="inherit" />
+                        </div>
                     </>
                 ) : (
                     <Text color="gray-80">
