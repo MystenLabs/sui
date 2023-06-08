@@ -64,6 +64,21 @@ pub struct Config {
     pub queries: Vec<Query>,
 }
 
+// Used to  mock now() in tests and use consistent now() return values across
+// queries in performance checks.
+pub trait NowProvider {
+    fn now() -> DateTime<Utc>;
+}
+
+pub struct UtcNowProvider;
+
+// Basic implementation of NowProvider that returns current time in UTC.
+impl NowProvider for UtcNowProvider {
+    fn now() -> DateTime<Utc> {
+        Utc::now()
+    }
+}
+
 // Convert timestamp string to unix seconds.
 // Accepts the following time formats
 //  - "%Y-%m-%d %H:%M:%S" (UTC)
@@ -71,7 +86,9 @@ pub struct Config {
 //  - "now"
 //  - "now-1h"
 //  - "now-30m 10s"
-pub fn timestamp_string_to_unix_seconds(timestamp: &str) -> Result<i64, anyhow::Error> {
+pub fn timestamp_string_to_unix_seconds<N: NowProvider>(
+    timestamp: &str,
+) -> Result<i64, anyhow::Error> {
     let now_regex = Regex::new(r"^now(-.*)?$").unwrap();
     let relative_time_regex = Regex::new(r"^now-([\dsmh ]+)$").unwrap();
 
@@ -79,7 +96,7 @@ pub fn timestamp_string_to_unix_seconds(timestamp: &str) -> Result<i64, anyhow::
         if let Some(capture) = relative_time_regex.captures(timestamp) {
             if let Some(relative_timestamp) = capture.get(1) {
                 let duration = parse_duration(relative_timestamp.as_str())?;
-                let now = Utc::now();
+                let now = N::now();
                 let new_datetime = now.checked_sub_signed(Duration::from_std(duration)?);
 
                 if let Some(datetime) = new_datetime {
@@ -90,7 +107,7 @@ pub fn timestamp_string_to_unix_seconds(timestamp: &str) -> Result<i64, anyhow::
             }
         }
 
-        return Ok(Utc::now().timestamp());
+        return Ok(N::now().timestamp());
     }
 
     if let Ok(datetime) = NaiveDateTime::parse_from_str(timestamp, "%Y-%m-%d %H:%M:%S") {
@@ -105,11 +122,11 @@ pub fn fails_threshold_condition(
     queried_value: f64,
     threshold: f64,
     failure_condition: &Condition,
-) -> Result<bool, anyhow::Error> {
+) -> bool {
     match failure_condition {
-        Condition::Greater => Ok(queried_value > threshold),
-        Condition::Equal => Ok(queried_value == threshold),
-        Condition::Less => Ok(queried_value < threshold),
+        Condition::Greater => queried_value > threshold,
+        Condition::Equal => queried_value == threshold,
+        Condition::Less => queried_value < threshold,
     }
 }
 
@@ -122,24 +139,33 @@ fn unix_seconds_to_timestamp_string(unix_seconds: i64) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use chrono::TimeZone;
+
+    struct MockNowProvider;
+
+    impl NowProvider for MockNowProvider {
+        fn now() -> DateTime<Utc> {
+            Utc.timestamp_opt(1628553600, 0).unwrap()
+        }
+    }
 
     #[test]
     fn test_parse_timestamp_string_to_unix_seconds() {
         let timestamp = "2021-08-10 00:00:00";
-        let unix_seconds = timestamp_string_to_unix_seconds(timestamp).unwrap();
+        let unix_seconds = timestamp_string_to_unix_seconds::<MockNowProvider>(timestamp).unwrap();
         assert_eq!(unix_seconds, 1628553600);
 
         let timestamp = "now";
-        let unix_seconds = timestamp_string_to_unix_seconds(timestamp).unwrap();
-        assert_eq!(unix_seconds, Utc::now().timestamp());
+        let unix_seconds = timestamp_string_to_unix_seconds::<MockNowProvider>(timestamp).unwrap();
+        assert_eq!(unix_seconds, 1628553600);
 
         let timestamp = "now-1h";
-        let unix_seconds = timestamp_string_to_unix_seconds(timestamp).unwrap();
-        assert_eq!(unix_seconds, Utc::now().timestamp() - 3600);
+        let unix_seconds = timestamp_string_to_unix_seconds::<MockNowProvider>(timestamp).unwrap();
+        assert_eq!(unix_seconds, 1628553600 - 3600);
 
         let timestamp = "now-30m 10s";
-        let unix_seconds = timestamp_string_to_unix_seconds(timestamp).unwrap();
-        assert_eq!(unix_seconds, Utc::now().timestamp() - 1810);
+        let unix_seconds = timestamp_string_to_unix_seconds::<MockNowProvider>(timestamp).unwrap();
+        assert_eq!(unix_seconds, 1628553600 - 1810);
     }
 
     #[test]
