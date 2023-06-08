@@ -12,6 +12,7 @@ import {
   attachListingsAndPrices,
   attachLockedItems,
   extractKioskData,
+  getAllDynamicFields,
   getKioskObject,
 } from '../utils';
 import { Kiosk } from '../types';
@@ -77,10 +78,11 @@ export async function fetchKiosk(
   pagination: PaginationArguments<string>,
   options: FetchKioskOptions,
 ): Promise<PagedKioskData> {
-  const { data, nextCursor, hasNextPage } = await provider.getDynamicFields({
-    parentId: kioskId,
-    ...pagination,
-  });
+  // TODO: Replace the `getAllDynamicFields` with a paginated
+  // response, once we have better RPC support for
+  // type filtering & batch fetching.
+  // This can't work with pagination currently.
+  const data = await getAllDynamicFields(provider, kioskId, pagination);
 
   const listings: KioskListing[] = [];
   const lockedItemIds: ObjectId[] = [];
@@ -113,7 +115,7 @@ export async function fetchKiosk(
 
   return {
     data: kioskData,
-    nextCursor,
-    hasNextPage,
+    nextCursor: null,
+    hasNextPage: false,
   };
 }

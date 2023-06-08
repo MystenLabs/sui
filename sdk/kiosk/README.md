@@ -33,20 +33,14 @@ const provider = new JsonRpcProvider(
 const getKiosk = async () => {
   const kioskAddress = `0xSomeKioskAddress`;
 
-  const {
-    data: res,
-    nextCursor,
-    hasNextPage,
-  } = await fetchKiosk(
+  const { data } = await fetchKiosk(
     provider,
     kioskAddress,
-    { limit: 100 },
+    {}, // empty pagination, currently disabled.
     { withListingPrices: true, withKioskFields: true },
-  ); // could also add `cursor` for pagination
+  );
 
-  console.log(res); // { items: [],  itemIds: [],  listingIds: [], kiosk: {...} }
-  console.log(nextCursor); // null
-  console.log(hasNextPage); // false
+  console.log(data); // { items: [],  itemIds: [],  listingIds: [], kiosk: {...} }
 };
 ```
 
