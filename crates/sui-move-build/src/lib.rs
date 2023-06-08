@@ -16,7 +16,6 @@ use move_binary_format::{
 };
 use move_bytecode_utils::{layout::SerdeLayoutBuilder, module_cache::GetModule};
 use move_compiler::{
-    cfgir::visitor::SimpleAbsInt,
     compiled_unit::{
         AnnotatedCompiledModule, AnnotatedCompiledScript, CompiledUnitEnum, NamedCompiledModule,
     },
@@ -122,7 +121,7 @@ impl BuildConfig {
         let build_plan = BuildPlan::create(resolution_graph)?;
         let mut fn_info = None;
         let compiled_pkg = build_plan.compile_with_driver(writer, |compiler| {
-            let (files, units_res) = compiler.add_visitors(sui_visitors()).build()?;
+            let (files, units_res) = compiler.build()?;
             match units_res {
                 Ok((units, warning_diags)) => {
                     report_warnings(&files, warning_diags);
@@ -216,10 +215,6 @@ pub fn build_from_resolution_graph(
         dependency_ids,
         path,
     })
-}
-
-pub fn sui_visitors() -> Vec<move_compiler::command_line::compiler::Visitor> {
-    vec![move_compiler::sui_mode::id_leak::IDLeakVerifier::visitor()]
 }
 
 impl CompiledPackage {
