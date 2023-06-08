@@ -160,10 +160,15 @@ where
         // Note: since EffectsCert is not stored today, we need to gather that from validators
         // (and maybe store it for caching purposes)
 
-        let transaction = request
-            .transaction
-            .verify()
+        let epoch_store = self.validator_state.load_epoch_store_one_call_per_task();
+
+        let transaction = request.transaction;
+        let transaction = epoch_store
+            .signature_verifier
+            .verify_tx(transaction.data())
+            .map(|_| VerifiedTransaction::new_from_verified(transaction))
             .map_err(QuorumDriverError::InvalidUserSignature)?;
+
         let (_in_flight_metrics_guards, good_response_metrics) = self.update_metrics(&transaction);
         let tx_digest = *transaction.digest();
         debug!(?tx_digest, "TO Received transaction execution request.");
