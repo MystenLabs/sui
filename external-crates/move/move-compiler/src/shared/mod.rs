@@ -6,7 +6,7 @@ use crate::{
     cfgir::visitor::AbsIntVisitorFn,
     command_line as cli,
     diagnostics::{
-        codes::{Severity, WarningFilter, WARNING_FILTER_ATTR},
+        codes::{Category, Severity, WarningFilter, WARNING_FILTER_ATTR},
         Diagnostic, Diagnostics, WarningFilters,
     },
     naming::ast::ModuleDefinition,
@@ -204,9 +204,11 @@ impl CompilationEnv {
         if !is_filtered {
             // add help to suppress warning, if applicable
             // TODO do we want a centralized place for tips like this?
-            if diag.info().severity() == Severity::Warning {
-                let possible_filter =
-                    WarningFilter::Code(diag.info().category(), diag.info().code());
+            if diag.info().severity() == Severity::Warning && !diag.info().is_external() {
+                let possible_filter = WarningFilter::Code(
+                    Category::try_from(diag.info().category()).unwrap(),
+                    diag.info().code(),
+                );
                 if let Some(filter_name) = possible_filter.to_str() {
                     let help = format!(
                         "This warning can be suppressed with '#[{}({})]' \

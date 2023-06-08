@@ -236,7 +236,7 @@ fn script(context: &mut Context, hscript: H::Script) -> G::Script {
     } = hscript;
     context.env.add_warning_filter_scope(warning_filter.clone());
     let constants = hconstants.map(|name, c| constant(context, None, name, c));
-    let function = function(context, function_name, hfunction);
+    let function = function(context, None, function_name, hfunction);
     context.env.pop_warning_filter_scope();
     G::Script {
         warning_filter,

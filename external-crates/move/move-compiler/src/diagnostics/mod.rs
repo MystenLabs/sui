@@ -61,9 +61,9 @@ pub enum WarningFilters {
     All,
     /// Remove all diags of this category
     Specified {
-        category: BTreeSet<Category>,
+        category: BTreeSet</* category */ u8>,
         /// Remove specific diags
-        codes: BTreeSet<(Category, /* code */ u8)>,
+        codes: BTreeSet<(/* category */ u8, /* code */ u8)>,
     },
     /// No filter
     Empty,
@@ -424,11 +424,13 @@ impl WarningFilters {
             WarningFilters::Specified { category, codes } => match filter {
                 WarningFilter::All => *self = WarningFilters::All,
                 WarningFilter::Category(cat) => {
+                    let cat = cat as u8;
                     category.insert(cat);
                     // remove any codes now covered by this category
                     codes.retain(|(codes_cat, _)| codes_cat != &cat);
                 }
                 WarningFilter::Code(cat, code) => {
+                    let cat = cat as u8;
                     // no need to add the filter if already covered by the category
                     if !category.contains(&cat) {
                         codes.insert((cat, code));
@@ -479,12 +481,13 @@ impl AstDebug for WarningFilters {
             )),
             WarningFilters::Specified { category, codes } => {
                 w.write(&format!("#[{}(", WARNING_FILTER_ATTR,));
-                let items = category.iter().copied().map(WarningFilter::Category).chain(
-                    codes
-                        .iter()
-                        .copied()
-                        .map(|(cat, code)| WarningFilter::Code(cat, code)),
-                );
+                let items = category
+                    .iter()
+                    .copied()
+                    .map(|cat| WarningFilter::Category(Category::try_from(cat).unwrap()))
+                    .chain(codes.iter().copied().map(|(cat, code)| {
+                        WarningFilter::Code(Category::try_from(cat).unwrap(), code)
+                    }));
                 w.list(items, ",", |w, filter| {
                     w.write(filter.to_str().unwrap());
                     false

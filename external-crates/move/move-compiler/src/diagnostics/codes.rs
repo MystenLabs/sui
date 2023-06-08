@@ -93,6 +93,16 @@ macro_rules! codes {
             $($cat,)*
         }
 
+        impl TryFrom<u8> for Category {
+            type Error = ();
+            fn try_from(value: u8) -> Result<Self, Self::Error> {
+                match () {
+                    $(_ if value == (Category::$cat as u8) => Ok(Category::$cat),)*
+                    _ => Err(()),
+                }
+            }
+        }
+
         $(
             #[derive(PartialEq, Eq, Clone, Copy, Debug, Hash)]
             #[repr(u8)]
@@ -357,7 +367,7 @@ impl DiagnosticInfo {
         self.severity
     }
 
-    pub fn category(&self) -> Category {
+    pub fn category(&self) -> u8 {
         self.category
     }
 
@@ -367,6 +377,10 @@ impl DiagnosticInfo {
 
     pub fn message(&self) -> &'static str {
         self.message
+    }
+
+    pub fn is_external(&self) -> bool {
+        self.external_prefix.is_some()
     }
 }
 
