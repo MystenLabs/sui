@@ -132,14 +132,11 @@ export class Secp256r1Keypair implements Keypair {
     if (!isValidBIP32Path(path)) {
       throw new Error('Invalid derivation path');
     }
-    const key = HDKey.fromMasterSeed(mnemonicToSeed(mnemonics)).derive(path);
-    if (key.publicKey == null || key.privateKey == null) {
-      throw new Error('Invalid key');
-    }
-    // Since the HDKey is made for secp256k1 it won't work it we use the key.publicKey here,
-    // but it works if we only use the secret key and derive the public key from that.
-    // TODO: Find a better way to do this.
-    return Secp256r1Keypair.fromSecretKey(key.privateKey);
+    // We use HDKey which is hardcoded to use Secp256k1 but since we only need the 32 bytes for the private key it's okay to use here as well.
+    const privateKey = HDKey.fromMasterSeed(mnemonicToSeed(mnemonics)).derive(
+      path,
+    ).privateKey;
+    return Secp256r1Keypair.fromSecretKey(privateKey);
   }
 
   export(): ExportedKeypair {
