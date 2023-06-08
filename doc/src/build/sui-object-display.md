@@ -13,13 +13,14 @@ Sui Full nodes process all objects of the type `T` by matching the `Display` def
 ## Display properties
 
 The basic set of properties suggested includes:
-**name** - A name for the object. The name is displayed when users view the object.
-**description** - A description for the object. The description is displayed when users view the object.
-**link** - A link to the object to use in an application.
-**image_url** - A URL or a blob with the image for the object.
-**thumbnail_url** - A URL to a **smaller** image to use in wallets, explorers, and other products as a preview.
-**project_url** - A link to a website associated with the object or creator.
-**creator** - A string that indicates the object creator.
+
+- `name` - A name for the object. The name is displayed when users view the object.
+- `description` - A description for the object. The description is displayed when users view the object.
+- `link` - A link to the object to use in an application.
+- `image_url` - A URL or a blob with the image for the object.
+- `thumbnail_url` - A URL to a **smaller** image to use in wallets, explorers, and other products as a preview.
+- `project_url` - A link to a website associated with the object or creator.
+- `creator` - A string that indicates the object creator.
 
 
 ### An example Sui Hero module
@@ -29,10 +30,10 @@ The following represents the template the `init` function defines:
 ```json
 {
     "name": "{name}",
-    "link": "https://sui-heroes.io/hero/{id}",
+    "link": "https://suifrens.com/capy/{id}",
     "image_url": "ipfs://{img_url}",
     "description": "A true Hero of the Sui ecosystem!",
-    "project_url": "https://sui-heroes.io",
+    "project_url": "https://suifrens.com",
     "creator": "Unknown Sui Fan"
 }
 ```
@@ -83,13 +84,13 @@ module examples::my_hero {
             // For `name` one can use the `Hero.name` property
             utf8(b"{name}"),
             // For `link` one can build a URL using an `id` property
-            utf8(b"https://sui-heroes.io/hero/{id}"),
+            utf8(b"https://suifrens.com/capy/{id}"),
             // For `image_url` use an IPFS template + `img_url` property.
             utf8(b"ipfs://{img_url}"),
             // Description is static for all `Hero` objects.
             utf8(b"A true Hero of the Sui ecosystem!"),
             // Project URL is usually static
-            utf8(b"https://sui-heroes.io"),
+            utf8(b"https://suifrens.com"),
             // Creator field can be any
             utf8(b"Unknown Sui Fan")
         ];
