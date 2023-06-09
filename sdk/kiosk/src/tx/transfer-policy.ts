@@ -8,6 +8,7 @@ import {
   ObjectArgument,
   RulesEnvironmentParam,
   TRANSFER_POLICY_MODULE,
+  TRANSFER_POLICY_TYPE,
 } from '../types';
 
 /**
@@ -27,7 +28,7 @@ export function createTransferPolicy(
 
   tx.moveCall({
     target: `0x2::transfer::public_share_object`,
-    typeArguments: [itemType],
+    typeArguments: [`${TRANSFER_POLICY_TYPE}<${itemType}>`],
     arguments: [transferPolicy],
   });
 
