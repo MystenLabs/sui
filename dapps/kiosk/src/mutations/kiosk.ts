@@ -8,6 +8,7 @@ import { OwnedObjectType } from '../components/Inventory/OwnedObjects';
 import { TransactionBlock } from '@mysten/sui.js';
 import {
   Kiosk,
+  createKioskAndShare,
   delist,
   list,
   place,
@@ -32,6 +33,30 @@ const defaultOnError = (e: Error) => {
   if (typeof e === 'string') toast.error(e);
   else toast.error(e?.message);
 };
+
+/**
+ * Create a new kiosk.
+ */
+export function useCreateKioskMutation({ onSuccess, onError }: MutationParams) {
+  const { currentAccount } = useWalletKit();
+  const { signAndExecute } = useTransactionExecution();
+
+  return useMutation({
+    mutationFn: () => {
+      if (!currentAccount?.address)
+        throw new Error('You need to connect your wallet!');
+      const tx = new TransactionBlock();
+      const kiosk_cap = createKioskAndShare(tx);
+      tx.transferObjects(
+        [kiosk_cap],
+        tx.pure(currentAccount.address, 'address'),
+      );
+      return signAndExecute({ tx });
+    },
+    onSuccess,
+    onError: onError || defaultOnError,
+  });
+}
 
 /**
  * Place & List or List for sale in kiosk.

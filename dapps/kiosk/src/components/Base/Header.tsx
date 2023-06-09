@@ -1,12 +1,17 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import FindKiosk from '../Kiosk/FindKiosk';
 import { SuiConnectButton } from './SuiConnectButton';
+import { Button } from './Button';
+import classNames from 'classnames';
 
 export function Header() {
   const navigate = useNavigate();
+
+  const location = useLocation();
+  const isHome = location.pathname === '/';
 
   return (
     <div className="border-b border-gray-400">
@@ -17,8 +22,12 @@ export function Header() {
         >
           Kiosk demo
         </button>
-        <button
-          className="mr-2 bg-transparent ease-in-out duration-300 rounded border border-transparent py-2 px-4 "
+        <Button
+          className={classNames(
+            !isHome && '!bg-gray-100',
+            'mr-2 bg-transparent ease-in-out duration-300 rounded border border-transparent py-2 px-4',
+          )}
+          disabled={isHome}
           onClick={() => navigate('/')}
         >
           <svg
@@ -35,7 +44,7 @@ export function Header() {
             <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
             <polyline points="9 22 9 12 15 12 15 22"></polyline>
           </svg>
-        </button>
+        </Button>
         <FindKiosk />
         <div className="ml-auto my-3 md:my-1">
           <SuiConnectButton></SuiConnectButton>

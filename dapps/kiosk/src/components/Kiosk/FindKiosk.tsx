@@ -6,10 +6,10 @@ import { useNavigate, useParams } from 'react-router-dom';
 import classnames from 'classnames';
 
 export default function FindKiosk() {
-  const [searchKiosk, setSearchKioskId] = useState<string>('');
-  const navigate = useNavigate();
-
   const { kioskId } = useParams();
+
+  const [searchKiosk, setSearchKioskId] = useState<string>(kioskId || '');
+  const navigate = useNavigate();
 
   const viewKiosk = (e?: FormEvent<HTMLFormElement>) => {
     if (!searchKiosk || viewingSearchKiosk) return;
@@ -43,7 +43,7 @@ export default function FindKiosk() {
             className="bg-gray-100 border lg:min-w-[600px] text-gray-900 placeholder:text-gray-500 text-sm rounded rounded-r-none
              focus:ring-transparent 
             focus:border-primary block w-full p-2.5 outline-primary"
-            placeholder="Search for a kiosk..."
+            placeholder="Enter a Sui Kiosk ID to search for a kiosk..."
             required
           />
         </div>
@@ -55,7 +55,7 @@ export default function FindKiosk() {
           )}
           disabled={!canSearch}
         >
-          Visit
+          Search
         </button>
       </div>
     </form>

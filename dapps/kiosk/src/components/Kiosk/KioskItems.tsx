@@ -9,14 +9,14 @@ import { Loading } from '../Base/Loading';
 import { toast } from 'react-hot-toast';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useKiosk, useOwnedKiosk } from '../../hooks/kiosk';
+import { KioskNotFound } from './KioskNotFound';
 
 export function KioskItems({ kioskId }: { kioskId?: string }) {
   const location = useLocation();
+  const isKioskPage = location.pathname.startsWith('/kiosk/');
 
   const { data: walletKiosk } = useOwnedKiosk();
   const ownedKiosk = walletKiosk?.kioskId;
-
-  const isKioskPage = location.pathname.startsWith('/kiosk/');
 
   // checks if this is an owned kiosk.
   // We are depending on currentAccount too, as this is what triggers the `getOwnedKioskCap()` function to change
@@ -41,11 +41,12 @@ export function KioskItems({ kioskId }: { kioskId?: string }) {
     toast.error(
       'The requested kiosk was not found. You either supplied a wrong kiosk Id or the RPC call failed.',
     );
-    navigate('/');
   }, [navigate, isError]);
 
   const kioskItems = kioskData?.items || [];
   const kioskListings = kioskData?.listings || {};
+
+  if (isError && isKioskPage) return <KioskNotFound />;
 
   if (isLoading) return <Loading />;
 

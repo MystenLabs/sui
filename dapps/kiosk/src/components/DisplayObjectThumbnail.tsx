@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { DEFAULT_IMAGE } from '../utils/constants';
 import { OwnedObjectType } from './Inventory/OwnedObjects';
 
 export function DisplayObjectThumbnail({ item }: { item: OwnedObjectType }) {
@@ -11,6 +12,8 @@ export function DisplayObjectThumbnail({ item }: { item: OwnedObjectType }) {
           src={item.display.image_url}
           className="object-contain object-center w-full h-full"
           alt="Thumbnail of the object"
+          // @ts-ignore-next-line simple way to just default on error. Not recommended for production.
+          onError={(e) => (e.target.src = DEFAULT_IMAGE)}
         ></img>
       </div>
       <div>

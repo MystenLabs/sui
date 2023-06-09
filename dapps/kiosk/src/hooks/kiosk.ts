@@ -105,6 +105,7 @@ export function useKiosk(kioskId: string | undefined | null) {
         items,
       };
     },
+    retry: false,
     select: ({
       items,
       kioskData,
