@@ -6,6 +6,7 @@ use crate::metrics::FaucetMetrics;
 use async_recursion::async_recursion;
 use async_trait::async_trait;
 use mysten_metrics::spawn_monitored_task;
+use parking_lot;
 use prometheus::Registry;
 use shared_crypto::intent::Intent;
 use std::collections::HashMap;
@@ -62,7 +63,7 @@ pub struct SimpleFaucet {
     coin_amount: u64,
     /// Shuts down the batch transfer task. Used only in testing.
     #[allow(unused)]
-    batch_transfer_shutdown: Mutex<Option<oneshot::Sender<()>>>,
+    batch_transfer_shutdown: parking_lot::Mutex<Option<oneshot::Sender<()>>>,
 }
 
 impl fmt::Debug for SimpleFaucet {
@@ -142,7 +143,7 @@ impl SimpleFaucet {
                     .unwrap();
             }
         }
-        let (tx_batch_transfer_shutdown, mut rx_batch_transfer_shutdown) = oneshot::channel();
+        let (batch_transfer_shutdown, mut rx_batch_transfer_shutdown) = oneshot::channel();
 
         let faucet = Self {
             wallet,
@@ -155,10 +156,11 @@ impl SimpleFaucet {
             // request_consumer: Mutex::new(receiver),
             batch_request_size: config.batch_request_size,
             // Max faucet requests times 10 minutes worth of requests to hold onto at max.
+            // Note that the cache holds onto a Uuid for [ttl_expiration] in from every update in status with both INPROGRESS and SUCCEEDED
             task_id_cache: TtlCache::new(config.max_request_per_second as usize * 60 * 10).into(),
             ttl_expiration: config.ttl_expiration,
             coin_amount: config.amount,
-            batch_transfer_shutdown: Mutex::new(Some(tx_batch_transfer_shutdown)),
+            batch_transfer_shutdown: parking_lot::Mutex::new(Some(batch_transfer_shutdown)),
         };
 
         let arc_faucet = Arc::new(faucet);
@@ -166,12 +168,27 @@ impl SimpleFaucet {
         spawn_monitored_task!(async move {
             info!("Starting task to handle batch faucet requests.");
             loop {
-                batch_transfer_gases(
+                match batch_transfer_gases(
                     batch_clone.clone(),
                     &mut receiver,
                     &mut rx_batch_transfer_shutdown,
                 )
-                .await;
+                .await
+                {
+                    Ok(response) => {
+                        if response == TransactionDigest::ZERO {
+                            error!("Some error occured during batch transferring");
+                        } else {
+                            info!(
+                                "Batch transfer completed with transaction digest: {:?}",
+                                response
+                            );
+                        }
+                    }
+                    Err(err) => {
+                        error!("{:?}", err);
+                    }
+                }
             }
         });
         // Retrying all the pending transactions from the WAL, before continuing.  Ignore return
@@ -705,13 +722,43 @@ impl SimpleFaucet {
     }
 
     #[cfg(test)]
-    pub(crate) fn shutdown_execution_for_test(&self) {
+    pub(crate) fn shutdown_batch_send_task(&self) {
         self.batch_transfer_shutdown
             .lock()
             .take()
             .unwrap()
             .send(())
             .unwrap();
+    }
+
+    #[cfg(test)]
+    pub fn wallet_mut(&mut self) -> &mut WalletContext {
+        &mut self.wallet
+    }
+
+    #[cfg(test)]
+    pub fn teardown(self) -> WalletContext {
+        self.wallet
+    }
+
+    #[cfg(test)]
+    async fn drain_gas_queue(&mut self, expected_gas_count: usize) -> HashSet<ObjectID> {
+        use tokio::sync::mpsc::error::TryRecvError;
+        let mut consumer = self.consumer.lock().await;
+        let mut candidates = HashSet::new();
+        let mut i = 0;
+        loop {
+            let coin_id = consumer
+                .try_recv()
+                .unwrap_or_else(|e| panic!("Expect the {}th candidate but got {}", i, e));
+            candidates.insert(coin_id);
+            i += 1;
+            if i == expected_gas_count {
+                assert_eq!(consumer.try_recv().unwrap_err(), TryRecvError::Empty);
+                break;
+            }
+        }
+        candidates
     }
 }
 
@@ -838,9 +885,7 @@ pub async fn batch_transfer_gases(
     let faucet = if let Some(faucet) = weak_faucet.upgrade() {
         faucet
     } else {
-        // Terminate the execution if authority has already shutdown, even if there can be more
-        // items in rx_ready_certificates.
-        info!("Authority state has shutdown. Exiting ...");
+        info!("Faucet has shut down already. Exiting ...");
         return Ok(TransactionDigest::ZERO);
     };
 
@@ -869,11 +914,15 @@ pub async fn batch_transfer_gases(
         ?uuid,
         "Batch transfer attemped of size: {:?}", total_requests
     );
-
+    let mut total_sui_needed: u64 = 0;
+    for (_, _, amounts) in &requests {
+        let sum: u64 = amounts.iter().sum();
+        total_sui_needed += sum;
+    }
     // This loop is utilized to grab a coin that is large enough for the request
     loop {
         let gas_coin_response = faucet
-            .prepare_gas_coin(requests.len() as u64 + gas_cost, uuid)
+            .prepare_gas_coin(total_sui_needed + gas_cost, uuid)
             .await;
 
         match gas_coin_response {
@@ -951,38 +1000,6 @@ mod tests {
 
     use super::*;
 
-    pub async fn drain_gas_queue(
-        faucet: &mut SimpleFaucet,
-        expected_gas_count: usize,
-    ) -> HashSet<ObjectID> {
-        use tokio::sync::mpsc::error::TryRecvError;
-        let mut consumer = faucet.consumer.lock().await;
-        let mut candidates = HashSet::new();
-        let mut i = 0;
-        loop {
-            let coin_id = consumer
-                .try_recv()
-                .unwrap_or_else(|e| panic!("Expect the {}th candidate but got {}", i, e));
-            candidates.insert(coin_id);
-            i += 1;
-            if i == expected_gas_count {
-                assert_eq!(consumer.try_recv().unwrap_err(), TryRecvError::Empty);
-                break;
-            }
-        }
-        candidates
-    }
-
-    #[cfg(test)]
-    pub fn wallet_mut(faucet: &mut SimpleFaucet) -> &mut WalletContext {
-        &mut faucet.wallet
-    }
-
-    #[cfg(test)]
-    pub fn teardown(faucet: SimpleFaucet) -> WalletContext {
-        faucet.wallet
-    }
-
     #[tokio::test]
     async fn simple_faucet_basic_interface_should_work() {
         telemetry_subscribers::init_for_testing();
@@ -999,14 +1016,17 @@ mod tests {
         )
         .await
         .unwrap();
+        faucet.shutdown_batch_send_task();
+
+        let faucet = Arc::try_unwrap(faucet).unwrap();
 
         let available = faucet.metrics.total_available_coins.get();
         let discarded = faucet.metrics.total_discarded_coins.get();
 
-        // test_basic_interface(faucet.clone()).await;
+        test_basic_interface(&faucet).await;
 
-        // assert_eq!(available, faucet.metrics.total_available_coins.get());
-        // assert_eq!(discarded, faucet.metrics.total_discarded_coins.get());
+        assert_eq!(available, faucet.metrics.total_available_coins.get());
+        assert_eq!(discarded, faucet.metrics.total_discarded_coins.get());
     }
 
     #[tokio::test]
@@ -1032,7 +1052,7 @@ mod tests {
         let available = faucet.metrics.total_available_coins.get();
         let faucet_unwrapped = &mut Arc::try_unwrap(faucet).unwrap();
 
-        let candidates = drain_gas_queue(faucet_unwrapped, gases.len()).await;
+        let candidates = faucet_unwrapped.drain_gas_queue(gases.len()).await;
 
         assert_eq!(available as usize, candidates.len());
         assert_eq!(
@@ -1079,8 +1099,8 @@ mod tests {
 
         // After all transfer requests settle, we still have the original candidates gas in queue.
         let available = faucet.metrics.total_available_coins.get();
-        let faucet_unwrapped = &mut Arc::try_unwrap(faucet).unwrap();
-        let candidates = drain_gas_queue(faucet_unwrapped, gases.len()).await;
+        let faucet_unwrapped: &mut SimpleFaucet = &mut Arc::try_unwrap(faucet).unwrap();
+        let candidates = faucet_unwrapped.drain_gas_queue(gases.len()).await;
         assert_eq!(available as usize, candidates.len());
         assert_eq!(
             candidates, gases,
@@ -1093,10 +1113,7 @@ mod tests {
     async fn test_batch_transfer_interface() {
         let test_cluster = TestClusterBuilder::new().build().await.unwrap();
         let context = test_cluster.wallet;
-        let config = FaucetConfig {
-            ttl_expiration: 10,
-            ..Default::default()
-        };
+        let config = Default::default();
         let prom_registry = Registry::new();
         let tmp = tempfile::tempdir().unwrap();
         let faucet = SimpleFaucet::new(
@@ -1140,21 +1157,67 @@ mod tests {
             assert_eq!(status.status, BatchSendStatusType::INPROGRESS);
         }
 
-        // Assert that all of these are SUCCEEDED
-        let status_results = futures::future::join_all(
-            response
-                .clone()
+        let mut status_results;
+        loop {
+            // Assert that all of these are SUCCEEDED
+            status_results =
+                futures::future::join_all(response.clone().iter().map(|task| {
+                    faucet.get_batch_send_status(Uuid::parse_str(&task.task).unwrap())
+                }))
+                .await
+                .into_iter()
+                .map(|res| res.unwrap())
+                .collect::<Vec<BatchSendStatus>>();
+
+            if status_results[0].status == BatchSendStatusType::SUCCEEDED {
+                break;
+            }
+            info!(
+                "Trying to get status again... current is: {:?}",
+                status_results[0].status
+            );
+        }
+        for status in status_results {
+            assert_eq!(status.status, BatchSendStatusType::SUCCEEDED);
+        }
+    }
+
+    #[tokio::test]
+    async fn test_ttl_cache_expires_after_duration() {
+        let test_cluster = TestClusterBuilder::new().build().await.unwrap();
+        let context = test_cluster.wallet;
+        // We set it to a fast expiration for the purposes of testing and so these requests don't have time to pass
+        // through the batch process.
+        let config = FaucetConfig {
+            ttl_expiration: 1,
+            ..Default::default()
+        };
+        let prom_registry = Registry::new();
+        let tmp = tempfile::tempdir().unwrap();
+        let faucet = SimpleFaucet::new(
+            context,
+            &prom_registry,
+            &tmp.path().join("faucet.wal"),
+            config,
+        )
+        .await
+        .unwrap();
+
+        let amounts = &vec![1; 1];
+        // Create a vector containing five randomly generated addresses
+        let target_addresses: Vec<SuiAddress> = (0..5)
+            .map(|_| SuiAddress::random_for_testing_only())
+            .collect();
+
+        let response = futures::future::join_all(
+            target_addresses
                 .iter()
-                .map(|task| faucet.get_batch_send_status(Uuid::parse_str(&task.task).unwrap())),
+                .map(|address| faucet.batch_send(Uuid::new_v4(), *address, amounts)),
         )
         .await
         .into_iter()
         .map(|res| res.unwrap())
-        .collect::<Vec<BatchSendStatus>>();
-
-        for status in status_results {
-            assert_eq!(status.status, BatchSendStatusType::SUCCEEDED);
-        }
+        .collect::<Vec<BatchFaucetReceipt>>();
 
         // Check that TTL cache expires
         tokio::time::sleep(Duration::from_secs(10)).await;
@@ -1201,10 +1264,8 @@ mod tests {
         )
         .await
         .unwrap();
+        let faucet: &mut SimpleFaucet = &mut Arc::try_unwrap(faucet).unwrap();
 
-        let faucet_clone = Arc::clone(&faucet);
-        let cloned = &mut Arc::try_unwrap(faucet_clone).unwrap();
-        let wallet_mut = wallet_mut(cloned);
         // Now we transfer one gas out
         let res = SuiClientCommands::PayAllSui {
             input_coins: vec![*bad_gas.id()],
@@ -1213,7 +1274,7 @@ mod tests {
             serialize_unsigned_transaction: false,
             serialize_signed_transaction: false,
         }
-        .execute(wallet_mut)
+        .execute(faucet.wallet_mut())
         .await
         .unwrap();
 
@@ -1242,8 +1303,11 @@ mod tests {
         // Note `gases` does not contain the bad gas.
         let available = faucet.metrics.total_available_coins.get();
         let discarded = faucet.metrics.total_discarded_coins.get();
-        let faucet_unwrapped = &mut Arc::try_unwrap(faucet).unwrap();
-        let candidates = drain_gas_queue(faucet_unwrapped, gases.len()).await;
+        println!(
+            "gases: {:?}, avail: {available:?} disc: {discarded:?}",
+            gases
+        );
+        let candidates = faucet.drain_gas_queue(gases.len()).await;
         assert_eq!(available as usize, candidates.len());
         assert_eq!(discarded, 1);
         assert_eq!(
@@ -1361,7 +1425,7 @@ mod tests {
 
         let tmp = tempfile::tempdir().unwrap();
         let prom_registry = Registry::new();
-        let mut faucet = SimpleFaucet::new(
+        let faucet = SimpleFaucet::new(
             context,
             &prom_registry,
             &tmp.path().join("faucet.wal"),
@@ -1369,10 +1433,11 @@ mod tests {
         )
         .await
         .unwrap();
+        let faucet: &mut SimpleFaucet = &mut Arc::try_unwrap(faucet).unwrap();
 
         // Ask for a value higher than tiny coin + DEFAULT_GAS_COMPUTATION_BUCKET
         let number_of_coins = gases.len();
-        let amounts = &vec![tiny_value + 1; number_of_coins - 1];
+        let amounts = &vec![tiny_value + 1; number_of_coins];
         // We traverse the the list ten times, which must trigger the tiny gas to be examined and then discarded
         futures::future::join_all((0..10).map(|_| {
             faucet.send(
@@ -1392,9 +1457,10 @@ mod tests {
         // Verify that the tiny gas is not in the queue.
         tokio::task::yield_now().await;
         let discarded = faucet.metrics.total_discarded_coins.get();
-        let faucet_unwrapped = &mut Arc::try_unwrap(faucet).unwrap();
 
-        let candidates = drain_gas_queue(faucet_unwrapped, gases.len()).await;
+        info!("discarded: {:?}", discarded);
+        let candidates = faucet.drain_gas_queue(gases.len() - 1).await;
+
         assert_eq!(discarded, 1);
         assert!(candidates.get(&tiny_coin_id).is_none());
     }
@@ -1543,7 +1609,7 @@ mod tests {
         let prom_registry = Registry::new();
         let config = FaucetConfig::default();
 
-        let mut faucet = SimpleFaucet::new(
+        let faucet = SimpleFaucet::new(
             context,
             &prom_registry,
             &tmp.path().join("faucet.wal"),
@@ -1586,7 +1652,7 @@ mod tests {
 
         let faucet_unwrapped = Arc::try_unwrap(faucet).unwrap();
 
-        let kept_context = teardown(faucet_unwrapped);
+        let kept_context = faucet_unwrapped.teardown();
 
         // Simulate a faucet restart and check that it clears the WAL
         let prom_registry_new = Registry::new();
@@ -1604,18 +1670,18 @@ mod tests {
         assert!(restarted_wal.log.is_empty())
     }
 
-    // async fn test_basic_interface(faucet: &impl Faucet) {
-    //     let recipient = SuiAddress::random_for_testing_only();
-    //     let amounts = vec![1, 2, 3];
+    async fn test_basic_interface(faucet: &impl Faucet) {
+        let recipient = SuiAddress::random_for_testing_only();
+        let amounts = vec![1, 2, 3];
 
-    //     let FaucetReceipt { sent } = faucet
-    //         .send(Uuid::new_v4(), recipient, &amounts)
-    //         .await
-    //         .unwrap();
-    //     let mut actual_amounts: Vec<u64> = sent.iter().map(|c| c.amount).collect();
-    //     actual_amounts.sort_unstable();
-    //     assert_eq!(actual_amounts, amounts);
-    // }
+        let FaucetReceipt { sent } = faucet
+            .send(Uuid::new_v4(), recipient, &amounts)
+            .await
+            .unwrap();
+        let mut actual_amounts: Vec<u64> = sent.iter().map(|c| c.amount).collect();
+        actual_amounts.sort_unstable();
+        assert_eq!(actual_amounts, amounts);
+    }
 
     async fn get_current_gases(address: SuiAddress, context: &mut WalletContext) -> Vec<GasCoin> {
         // Get the latest list of gas

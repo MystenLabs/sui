@@ -27,6 +27,7 @@ ttl_cache = "0.5.1"
 eyre = "0.6.8"
 rocksdb = "0.21.0"
 tempfile = "3.3.0"
+parking_lot = "0.12.1"
 
 sui = { path = "../sui" }
 sui-node = { path = "../sui-node" }
