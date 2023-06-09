@@ -2,6 +2,7 @@
 source: crates/sui-swarm-config/tests/snapshot_tests.rs
 expression: genesis_config
 ---
+ssfn_config_info: ~
 validator_config_info: ~
 parameters:
   chain_start_timestamp_ms: 0
