@@ -306,6 +306,10 @@
 				]
 			},
 			{
+				"label": "RPC Best Practices",
+				"fileName": "build/rpc-best-practices"
+			},
+			{
 				"label": "Developer Cheat Sheet",
 				"fileName": "build/dev_cheat_sheet"
 			}
