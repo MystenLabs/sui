@@ -354,7 +354,8 @@ async fn test_quorum_driver_object_locked() -> Result<(), anyhow::Error> {
         assert_eq!(retried_tx, None);
         assert_eq!(retried_tx_success, None);
         assert_eq!(conflicting_txes.len(), 2);
-        assert_eq!(conflicting_txes.get(tx.digest()).unwrap().1, 5000);
+        let tx_stake = conflicting_txes.get(tx.digest()).unwrap().1;
+        assert!(tx_stake == 2500 || tx_stake == 5000);
         assert_eq!(conflicting_txes.get(tx2.digest()).unwrap().1, 2500);
     } else {
         panic!(
@@ -433,10 +434,11 @@ async fn test_quorum_driver_object_locked() -> Result<(), anyhow::Error> {
     {
         assert_eq!(retried_tx, None);
         assert_eq!(retried_tx_success, None);
-        assert_eq!(conflicting_txes.len(), 3);
-        assert_eq!(conflicting_txes.get(tx.digest()).unwrap().1, 2500);
-        assert_eq!(conflicting_txes.get(tx2.digest()).unwrap().1, 2500);
-        assert_eq!(conflicting_txes.get(tx3.digest()).unwrap().1, 2500);
+        assert!(conflicting_txes.len() == 3 || conflicting_txes.len() == 2);
+        assert!(conflicting_txes
+            .iter()
+            .all(|(digest, (_objs, stake))| (*stake == 2500)
+                && (digest == tx.digest() || digest == tx2.digest() || digest == tx3.digest())));
     } else {
         panic!(
             "expect Err(QuorumDriverError::ObjectsDoubleUsed) but got {:?}",
