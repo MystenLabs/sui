@@ -26,7 +26,10 @@ use move_command_line_common::{
 };
 use move_compiler::{
     compiled_unit::AnnotatedCompiledUnit,
-    diagnostics::{Diagnostics, FilesSourceText},
+    diagnostics::{
+        codes::{DiagnosticCode, UnusedItem},
+        Diagnostics, FilesSourceText, WarningFilters,
+    },
     shared::NumericalAddress,
     FullyCompiledProgram,
 };
@@ -614,6 +617,18 @@ pub fn compile_source_units(
 
     use move_compiler::PASS_COMPILATION;
     let named_address_mapping = state.named_address_mapping.clone();
+    // txn testing framework test code includes private unused functions and unused struct types on
+    // purpose and generating warnings for all of them does not make much sense (and there would be
+    // a lot of them!) so let's suppress them function warnings, so let's suppress these
+    let mut filtered_codes = BTreeSet::new();
+    let unused_fn_info = UnusedItem::Function.into_info();
+    let unused_type_info = UnusedItem::StructType.into_info();
+    filtered_codes.insert((unused_fn_info.category(), unused_fn_info.code()));
+    filtered_codes.insert((unused_type_info.category(), unused_type_info.code()));
+    let warning_filter = WarningFilters::Specified {
+        category: BTreeSet::new(),
+        codes: filtered_codes,
+    };
     let (mut files, comments_and_compiler_res) = move_compiler::Compiler::from_files(
         vec![file_name.as_ref().to_str().unwrap().to_owned()],
         state.source_files().cloned().collect::<Vec<_>>(),
@@ -621,7 +636,7 @@ pub fn compile_source_units(
     )
     .set_pre_compiled_lib_opt(state.pre_compiled_deps)
     .set_flags(move_compiler::Flags::empty().set_sources_shadow_deps(true))
-    .run::<PASS_COMPILATION>()?;
+    .run_with_warning_filter::<PASS_COMPILATION>(Some(warning_filter))?;
     let units_or_diags = comments_and_compiler_res
         .map(|(_comments, move_compiler)| move_compiler.into_compiled_units());
 

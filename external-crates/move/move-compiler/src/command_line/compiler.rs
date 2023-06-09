@@ -215,6 +215,16 @@ impl<'a> Compiler<'a> {
         FilesSourceText,
         Result<(CommentMap, SteppedCompiler<'a, TARGET>), Diagnostics>,
     )> {
+        self.run_with_warning_filter(None)
+    }
+
+    pub fn run_with_warning_filter<const TARGET: Pass>(
+        self,
+        warning_filter: Option<WarningFilters>,
+    ) -> anyhow::Result<(
+        FilesSourceText,
+        Result<(CommentMap, SteppedCompiler<'a, TARGET>), Diagnostics>,
+    )> {
         let Self {
             maps,
             targets,
@@ -231,6 +241,9 @@ impl<'a> Compiler<'a> {
             &compiled_module_named_address_mapping,
         )?;
         let mut compilation_env = CompilationEnv::new(flags, visitors);
+        if let Some(filter) = warning_filter {
+            compilation_env.add_warning_filter_scope(filter);
+        }
         let (source_text, pprog_and_comments_res) =
             parse_program(&mut compilation_env, maps, targets, deps)?;
         let res: Result<_, Diagnostics> = pprog_and_comments_res.and_then(|(pprog, comments)| {
