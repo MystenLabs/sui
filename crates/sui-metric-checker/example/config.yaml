@@ -1,0 +1,32 @@
+queries:
+  # ***** Validator ******
+  # Check current epoch
+  - query: 'max(current_epoch{network="private-testnet"})'
+    type: Instant
+  # Narwhal batch execution latency - p50
+  - query: 'histogram_quantile(0.50, sum by(le) (rate(batch_execution_latency_bucket{network="private-testnet"}[15m])))'
+    type: !Range
+      start: "now-8h"
+      end: "now"
+      step: 60.0
+    validate_result:
+      threshold: 3.0
+      failure_condition: Greater
+  # TPS
+  - query: 'avg(rate(total_transaction_effects{network="private-testnet"}[5m]))'
+    type: !Range
+      start: "now-8h"
+      end: "now"
+      step: 60.0
+    validate_result:
+      threshold: 5000.0
+      failure_condition: Less
+  # CPS
+  - query: 'avg (rate(batch_size_sum{network="private-testnet"}[5m]))'
+    type: !Range
+      start: "now-8h"
+      end: "now"
+      step: 60.0
+    validate_result:
+      threshold: 5000.0
+      failure_condition: Less

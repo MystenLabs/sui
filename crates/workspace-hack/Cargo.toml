@@ -280,7 +280,7 @@ httpdate = { version = "1", default-features = false }
 humansize = { version = "1", default-features = false }
 humantime = { version = "2", default-features = false }
 hyper = { version = "0.14", features = ["full"] }
-hyper-rustls = { version = "0.23", features = ["http2", "webpki-tokio"] }
+hyper-rustls-2b5c6dc72f624058 = { package = "hyper-rustls", version = "0.23", features = ["http2", "webpki-tokio"] }
 hyper-timeout = { version = "0.4", default-features = false }
 idna = { version = "0.3", default-features = false }
 ignore = { version = "0.4", default-features = false }
@@ -460,6 +460,7 @@ primeorder = { version = "0.13", default-features = false }
 primitive-types = { version = "0.10", features = ["impl-serde"] }
 proc-macro2-dff4ba8e3ae991db = { package = "proc-macro2", version = "1", features = ["span-locations"] }
 prometheus = { version = "0.13" }
+prometheus-http-query = { version = "0.6", default-features = false, features = ["rustls-tls"] }
 proptest = { version = "1" }
 prost = { version = "0.11" }
 prost-types = { version = "0.11" }
@@ -545,7 +546,8 @@ serde_spanned = { version = "0.6", default-features = false, features = ["serde"
 serde_test = { version = "1", default-features = false }
 serde_urlencoded = { version = "0.7", default-features = false }
 serde_with = { version = "2", features = ["hex"] }
-serde_yaml = { version = "0.8", default-features = false }
+serde_yaml-274715c4dabd11b0 = { package = "serde_yaml", version = "0.9", default-features = false }
+serde_yaml-c38e5c1d305a1b54 = { package = "serde_yaml", version = "0.8", default-features = false }
 sha-1-274715c4dabd11b0 = { package = "sha-1", version = "0.9", default-features = false }
 sha-1-93f6ce9d446188ac = { package = "sha-1", version = "0.10" }
 sha1 = { version = "0.10" }
@@ -614,7 +616,7 @@ tinyvec_macros = { version = "0.1", default-features = false }
 tokio = { version = "1", features = ["full", "test-util", "tracing"] }
 tokio-io-timeout = { version = "1", default-features = false }
 tokio-retry = { version = "0.3", default-features = false }
-tokio-rustls = { version = "0.23" }
+tokio-rustls-2b5c6dc72f624058 = { package = "tokio-rustls", version = "0.23" }
 tokio-stream = { version = "0.1", features = ["net", "sync"] }
 tokio-util = { version = "0.7", features = ["codec", "compat", "io"] }
 toml-ca01ad9e24f5d932 = { package = "toml", version = "0.7", features = ["preserve_order"] }
@@ -661,9 +663,10 @@ unicode-normalization = { version = "0.1" }
 unicode-segmentation = { version = "1", default-features = false }
 unicode-width = { version = "0.1" }
 universal-hash = { version = "0.5", default-features = false }
+unsafe-libyaml = { version = "0.2", default-features = false }
 unsigned-varint = { version = "0.7", default-features = false, features = ["std"] }
 untrusted = { version = "0.7", default-features = false }
-url = { version = "2" }
+url = { version = "2", features = ["serde"] }
 utf8parse = { version = "0.2" }
 uuid = { version = "1", features = ["fast-rng", "v4"] }
 vec_map = { version = "0.8", default-features = false }
@@ -1000,7 +1003,7 @@ httpdate = { version = "1", default-features = false }
 humansize = { version = "1", default-features = false }
 humantime = { version = "2", default-features = false }
 hyper = { version = "0.14", features = ["full"] }
-hyper-rustls = { version = "0.23", features = ["http2", "webpki-tokio"] }
+hyper-rustls-2b5c6dc72f624058 = { package = "hyper-rustls", version = "0.23", features = ["http2", "webpki-tokio"] }
 hyper-timeout = { version = "0.4", default-features = false }
 ident_case = { version = "1", default-features = false }
 idna = { version = "0.3", default-features = false }
@@ -1216,6 +1219,7 @@ proc-macro-hack = { version = "0.5", default-features = false }
 proc-macro2-9fbad63c4bcf4a8f = { package = "proc-macro2", version = "0.4" }
 proc-macro2-dff4ba8e3ae991db = { package = "proc-macro2", version = "1", features = ["span-locations"] }
 prometheus = { version = "0.13" }
+prometheus-http-query = { version = "0.6", default-features = false, features = ["rustls-tls"] }
 proptest = { version = "1" }
 proptest-derive = { version = "0.3", default-features = false }
 prost = { version = "0.11" }
@@ -1318,7 +1322,8 @@ serde_test = { version = "1", default-features = false }
 serde_urlencoded = { version = "0.7", default-features = false }
 serde_with = { version = "2", features = ["hex"] }
 serde_with_macros = { version = "2", default-features = false }
-serde_yaml = { version = "0.8", default-features = false }
+serde_yaml-274715c4dabd11b0 = { package = "serde_yaml", version = "0.9", default-features = false }
+serde_yaml-c38e5c1d305a1b54 = { package = "serde_yaml", version = "0.8", default-features = false }
 sha-1-274715c4dabd11b0 = { package = "sha-1", version = "0.9", default-features = false }
 sha-1-93f6ce9d446188ac = { package = "sha-1", version = "0.10" }
 sha1 = { version = "0.10" }
@@ -1397,7 +1402,7 @@ tokio = { version = "1", features = ["full", "test-util", "tracing"] }
 tokio-io-timeout = { version = "1", default-features = false }
 tokio-macros = { version = "2", default-features = false }
 tokio-retry = { version = "0.3", default-features = false }
-tokio-rustls = { version = "0.23" }
+tokio-rustls-2b5c6dc72f624058 = { package = "tokio-rustls", version = "0.23" }
 tokio-stream = { version = "0.1", features = ["net", "sync"] }
 tokio-util = { version = "0.7", features = ["codec", "compat", "io"] }
 toml-ca01ad9e24f5d932 = { package = "toml", version = "0.7", features = ["preserve_order"] }
@@ -1449,10 +1454,11 @@ unicode-width = { version = "0.1" }
 unicode-xid-6f8ce4dd05d13bba = { package = "unicode-xid", version = "0.2" }
 unicode-xid-c65f7effa3be6d31 = { package = "unicode-xid", version = "0.1" }
 universal-hash = { version = "0.5", default-features = false }
+unsafe-libyaml = { version = "0.2", default-features = false }
 unsigned-varint = { version = "0.7", default-features = false, features = ["std"] }
 untrusted = { version = "0.7", default-features = false }
 unzip-n = { version = "0.1", default-features = false }
-url = { version = "2" }
+url = { version = "2", features = ["serde"] }
 utf8parse = { version = "0.2" }
 uuid = { version = "1", features = ["fast-rng", "v4"] }
 variant_count = { version = "1", default-features = false }
@@ -1500,6 +1506,7 @@ encoding_rs = { version = "0.8" }
 errno-468e82937335b1c9 = { package = "errno", version = "0.3", default-features = false }
 errno-6f8ce4dd05d13bba = { package = "errno", version = "0.2", default-features = false }
 findshlibs = { version = "0.10", default-features = false }
+hyper-rustls-adf3d7031871b0af = { package = "hyper-rustls", version = "0.24", default-features = false }
 iana-time-zone = { version = "0.1", default-features = false, features = ["fallback"] }
 inferno = { version = "0.11", default-features = false, features = ["nameattr"] }
 ipnet = { version = "2" }
@@ -1528,6 +1535,7 @@ signal-hook-registry = { version = "1", default-features = false }
 str_stack = { version = "0.1", default-features = false }
 symbolic-common = { version = "10", default-features = false }
 symbolic-demangle = { version = "10", default-features = false, features = ["cpp", "rust"] }
+tokio-rustls-adf3d7031871b0af = { package = "tokio-rustls", version = "0.24" }
 web-sys = { version = "0.3", default-features = false, features = ["Worker"] }
 
 [target.aarch64-apple-darwin.build-dependencies]
@@ -1542,6 +1550,7 @@ encoding_rs = { version = "0.8" }
 errno-468e82937335b1c9 = { package = "errno", version = "0.3", default-features = false }
 errno-6f8ce4dd05d13bba = { package = "errno", version = "0.2", default-features = false }
 findshlibs = { version = "0.10", default-features = false }
+hyper-rustls-adf3d7031871b0af = { package = "hyper-rustls", version = "0.24", default-features = false }
 iana-time-zone = { version = "0.1", default-features = false, features = ["fallback"] }
 inferno = { version = "0.11", default-features = false, features = ["nameattr"] }
 ipnet = { version = "2" }
@@ -1571,6 +1580,7 @@ signal-hook-registry = { version = "1", default-features = false }
 str_stack = { version = "0.1", default-features = false }
 symbolic-common = { version = "10", default-features = false }
 symbolic-demangle = { version = "10", default-features = false, features = ["cpp", "rust"] }
+tokio-rustls-adf3d7031871b0af = { package = "tokio-rustls", version = "0.24" }
 web-sys = { version = "0.3", default-features = false, features = ["Worker"] }
 
 [target.x86_64-unknown-linux-gnu.dependencies]
@@ -1580,6 +1590,7 @@ cpufeatures = { version = "0.2", default-features = false }
 debugid = { version = "0.8", default-features = false }
 encoding_rs = { version = "0.8" }
 findshlibs = { version = "0.10", default-features = false }
+hyper-rustls-adf3d7031871b0af = { package = "hyper-rustls", version = "0.24", default-features = false }
 iana-time-zone = { version = "0.1", default-features = false, features = ["fallback"] }
 inferno = { version = "0.11", default-features = false, features = ["nameattr"] }
 ipnet = { version = "2" }
@@ -1609,6 +1620,7 @@ signal-hook-registry = { version = "1", default-features = false }
 str_stack = { version = "0.1", default-features = false }
 symbolic-common = { version = "10", default-features = false }
 symbolic-demangle = { version = "10", default-features = false, features = ["cpp", "rust"] }
+tokio-rustls-adf3d7031871b0af = { package = "tokio-rustls", version = "0.24" }
 web-sys = { version = "0.3", default-features = false, features = ["Worker"] }
 
 [target.x86_64-unknown-linux-gnu.build-dependencies]
@@ -1619,6 +1631,7 @@ cpufeatures = { version = "0.2", default-features = false }
 debugid = { version = "0.8", default-features = false }
 encoding_rs = { version = "0.8" }
 findshlibs = { version = "0.10", default-features = false }
+hyper-rustls-adf3d7031871b0af = { package = "hyper-rustls", version = "0.24", default-features = false }
 iana-time-zone = { version = "0.1", default-features = false, features = ["fallback"] }
 inferno = { version = "0.11", default-features = false, features = ["nameattr"] }
 ipnet = { version = "2" }
@@ -1649,6 +1662,7 @@ signal-hook-registry = { version = "1", default-features = false }
 str_stack = { version = "0.1", default-features = false }
 symbolic-common = { version = "10", default-features = false }
 symbolic-demangle = { version = "10", default-features = false, features = ["cpp", "rust"] }
+tokio-rustls-adf3d7031871b0af = { package = "tokio-rustls", version = "0.24" }
 web-sys = { version = "0.3", default-features = false, features = ["Worker"] }
 
 [target.x86_64-pc-windows-msvc.dependencies]
@@ -1660,6 +1674,7 @@ crossterm_winapi-c38e5c1d305a1b54 = { package = "crossterm_winapi", version = "0
 encode_unicode-468e82937335b1c9 = { package = "encode_unicode", version = "0.3" }
 encoding_rs = { version = "0.8" }
 error-code = { version = "2", default-features = false }
+hyper-rustls-adf3d7031871b0af = { package = "hyper-rustls", version = "0.24", default-features = false }
 ipnet = { version = "2" }
 ntapi = { version = "0.4" }
 once_cell = { version = "1", default-features = false, features = ["unstable"] }
@@ -1668,6 +1683,7 @@ rand_chacha-6f8ce4dd05d13bba = { package = "rand_chacha", version = "0.2", defau
 raw-cpuid = { version = "10", default-features = false }
 schannel = { version = "0.1", default-features = false }
 str-buf = { version = "1", default-features = false }
+tokio-rustls-adf3d7031871b0af = { package = "tokio-rustls", version = "0.24" }
 web-sys = { version = "0.3", default-features = false, features = ["Worker"] }
 widestring = { version = "0.5" }
 winapi = { version = "0.3", default-features = false, features = ["basetsd", "cfg", "combaseapi", "consoleapi", "errhandlingapi", "evntrace", "fileapi", "handleapi", "heapapi", "ifdef", "impl-debug", "impl-default", "in6addr", "inaddr", "ioapiset", "iphlpapi", "knownfolders", "libloaderapi", "lmaccess", "lmapibuf", "lmcons", "memoryapi", "minwinbase", "minwindef", "namedpipeapi", "netioapi", "ntdef", "ntlsa", "ntsecapi", "ntstatus", "objbase", "objidl", "oleauto", "pdh", "powerbase", "processenv", "processthreadsapi", "profileapi", "psapi", "rpcdce", "securitybaseapi", "shellapi", "shlobj", "std", "stringapiset", "synchapi", "sysinfoapi", "timezoneapi", "wbemcli", "winbase", "wincon", "windef", "winerror", "winioctl", "winnt", "winreg", "winsock2", "winuser", "ws2ipdef", "ws2tcpip", "wtypesbase"] }
@@ -1691,6 +1707,7 @@ ctor = { version = "0.1", default-features = false }
 encode_unicode-468e82937335b1c9 = { package = "encode_unicode", version = "0.3" }
 encoding_rs = { version = "0.8" }
 error-code = { version = "2", default-features = false }
+hyper-rustls-adf3d7031871b0af = { package = "hyper-rustls", version = "0.24", default-features = false }
 ipnet = { version = "2" }
 ntapi = { version = "0.4" }
 once_cell = { version = "1", default-features = false, features = ["unstable"] }
@@ -1699,6 +1716,7 @@ rand_chacha-6f8ce4dd05d13bba = { package = "rand_chacha", version = "0.2", defau
 raw-cpuid = { version = "10", default-features = false }
 schannel = { version = "0.1", default-features = false }
 str-buf = { version = "1", default-features = false }
+tokio-rustls-adf3d7031871b0af = { package = "tokio-rustls", version = "0.24" }
 vcpkg = { version = "0.2", default-features = false }
 web-sys = { version = "0.3", default-features = false, features = ["Worker"] }
 widestring = { version = "0.5" }
