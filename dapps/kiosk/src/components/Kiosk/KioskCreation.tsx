@@ -37,7 +37,7 @@ export function KioskCreation({ onCreate }: { onCreate: () => void }) {
           .
         </p>
         <p className="pb-3">
-          When you click Create Kiosk, your wallet opens. Click{' '}
+          When you click <strong>Create Kiosk</strong>, your wallet opens. Click{' '}
           <strong>Approve</strong> to allow the app to create a kiosk for the
           connected wallet address.
         </p>
