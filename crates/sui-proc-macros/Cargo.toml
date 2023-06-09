@@ -17,4 +17,4 @@ proc-macro2 = "1"
 sui-enum-compat-util = { path = "../sui-enum-compat-util" }
 
 [target.'cfg(msim)'.dependencies]
-msim-macros = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "f2c31421e273eca7e97c563c7e07b81b5afa2d3a", package = "msim-macros" }
+msim-macros = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "e4b1466fbe8212ee113e88022df5b4bfd966a689", package = "msim-macros" }

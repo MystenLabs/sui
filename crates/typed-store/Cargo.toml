@@ -46,4 +46,4 @@ uint = "0.9.4"
 # Most packages should depend on sui-simulator instead of directly on msim, but for typed-store
 # that creates a circular dependency.
 [target.'cfg(msim)'.dependencies]
-msim = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "f2c31421e273eca7e97c563c7e07b81b5afa2d3a", package = "msim" }
+msim = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "e4b1466fbe8212ee113e88022df5b4bfd966a689", package = "msim" }
