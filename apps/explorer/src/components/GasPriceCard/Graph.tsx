@@ -1,18 +1,24 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { formatDate } from '@mysten/core';
 import { AxisBottom } from '@visx/axis';
 import { curveLinear } from '@visx/curve';
 import { localPoint } from '@visx/event';
+import { MarkerCircle } from '@visx/marker';
+import { ParentSize } from '@visx/responsive';
 import { scaleLinear } from '@visx/scale';
 import { AreaClosed, LinePath } from '@visx/shape';
 import clsx from 'clsx';
 import { bisector, extent } from 'd3-array';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { throttle } from 'throttle-debounce';
-import { MarkerCircle } from '@visx/marker';
 
+import { ErrorBoundary } from '../error-boundary/ErrorBoundary';
 import { type EpochGasInfo } from './types';
+import { type UnitsType, useGasPriceFormat } from './utils';
+
+import { Text } from '~/ui/Text';
 
 function formatXLabel(epoch: number) {
     return String(epoch);
@@ -22,7 +28,7 @@ export function isDefined(d: EpochGasInfo) {
     return d.date !== null && d.referenceGasPrice !== null;
 }
 
-const SIDE_MARGIN = 30;
+const SIDE_MARGIN = 15;
 
 const bisectEpoch = bisector(({ epoch }: EpochGasInfo) => epoch).center;
 
@@ -74,16 +80,73 @@ function AxisRight({ scale, left }: AxisRightProps<number>) {
     );
 }
 
+export type GraphWithTooltipProps = {
+    data: EpochGasInfo[];
+    unit: UnitsType;
+};
+export function GraphWithTooltip({ data, unit }: GraphWithTooltipProps) {
+    const [hoveredElement, setHoveredElement] = useState<EpochGasInfo | null>(
+        null
+    );
+    const [tooltipX, setTooltipX] = useState(0);
+    const formattedHoveredPrice = useGasPriceFormat(
+        hoveredElement?.referenceGasPrice ?? null,
+        unit
+    );
+    const formattedHoveredDate = hoveredElement?.date
+        ? formatDate(hoveredElement?.date, ['month', 'day'])
+        : '-';
+    return (
+        <div className="relative flex flex-1 self-stretch">
+            <div
+                className={clsx(
+                    'absolute top-0 z-10 flex -translate-x-[1px] -translate-y-[calc(100%-10px)] flex-col flex-nowrap gap-0.5 whitespace-nowrap rounded-md rounded-bl-none border border-solid border-gray-45 bg-gray-90 px-2 py-1.5',
+                    hoveredElement?.date ? 'visible' : 'invisible'
+                )}
+                style={{ left: tooltipX }}
+            >
+                <Text variant="caption/semibold" color="white">
+                    <div className="whitespace-nowrap">
+                        {formattedHoveredPrice
+                            ? `${formattedHoveredPrice} ${unit}`
+                            : '-'}
+                    </div>
+                </Text>
+                <Text variant="subtitleSmallExtra/medium" color="white">
+                    Epoch {hoveredElement?.epoch}, {formattedHoveredDate}
+                </Text>
+            </div>
+            <div className="relative flex-1 self-stretch">
+                <ErrorBoundary>
+                    <ParentSize className="absolute">
+                        {(parent) => (
+                            <Graph
+                                width={parent.width}
+                                height={parent.height}
+                                data={data}
+                                onHoverElement={(data) => {
+                                    setHoveredElement(data?.value || null);
+                                    setTooltipX(data?.x || 0);
+                                }}
+                            />
+                        )}
+                    </ParentSize>
+                </ErrorBoundary>
+            </div>
+        </div>
+    );
+}
+
 export type GraphProps = {
     data: EpochGasInfo[];
     width: number;
     height: number;
-    onHoverElement: (value: EpochGasInfo | null) => void;
+    onHoverElement: (params: { value: EpochGasInfo; x: number } | null) => void;
 };
 export function Graph({ data, width, height, onHoverElement }: GraphProps) {
     // remove not defined data (graph displays better and helps with hovering/selecting hovered element)
     const adjData = useMemo(() => data.filter(isDefined), [data]);
-    const graphTop = 15;
+    const graphTop = 10;
     const graphButton = Math.max(height - 45, 0);
     const xScale = useMemo(
         () =>
@@ -96,14 +159,18 @@ export function Graph({ data, width, height, onHoverElement }: GraphProps) {
             }),
         [width, adjData]
     );
-    const yScale = useMemo(() => {
-        return scaleLinear<number>({
-            domain: extent(adjData, ({ referenceGasPrice }) =>
-                referenceGasPrice !== null ? Number(referenceGasPrice) : null
-            ) as number[],
-            range: [graphButton, graphTop],
-        });
-    }, [adjData, graphTop, graphButton]);
+    const yScale = useMemo(
+        () =>
+            scaleLinear<number>({
+                domain: extent(adjData, ({ referenceGasPrice }) =>
+                    referenceGasPrice !== null
+                        ? Number(referenceGasPrice)
+                        : null
+                ) as number[],
+                range: [graphButton, graphTop],
+            }),
+        [adjData, graphTop, graphButton]
+    );
     const [isTooltipVisible, setIsTooltipVisible] = useState(false);
     const [tooltipX, setTooltipX] = useState(SIDE_MARGIN);
     const [tooltipY, setTooltipY] = useState(height);
@@ -111,8 +178,10 @@ export function Graph({ data, width, height, onHoverElement }: GraphProps) {
         null
     );
     useEffect(() => {
-        onHoverElement(hoveredElement);
-    }, [onHoverElement, hoveredElement]);
+        onHoverElement(
+            hoveredElement ? { value: hoveredElement, x: tooltipX } : null
+        );
+    }, [onHoverElement, hoveredElement, tooltipX]);
     const handleTooltip = useCallback(
         (x: number) => {
             const xEpoch = xScale.invert(x);
@@ -150,7 +219,7 @@ export function Graph({ data, width, height, onHoverElement }: GraphProps) {
     const lastElementY = adjData.length
         ? yScale(Number(adjData[adjData.length - 1].referenceGasPrice))
         : null;
-    if (height < 30 || width < 50) {
+    if (height < 60 || width < 100) {
         return null;
     }
     return (
@@ -247,7 +316,7 @@ export function Graph({ data, width, height, onHoverElement }: GraphProps) {
                 fillOpacity="0.1"
                 stroke="none"
             />
-            <AxisRight left={width - 30} scale={yScale} />
+            <AxisRight left={width - SIDE_MARGIN / 2} scale={yScale} />
             <AxisBottom
                 top={Math.max(height - 30, 0)}
                 orientation="bottom"
@@ -263,7 +332,7 @@ export function Graph({ data, width, height, onHoverElement }: GraphProps) {
                 tickFormat={(epoch) => formatXLabel(epoch as number)}
                 hideTicks
                 hideAxisLine
-                numTicks={totalTicks}
+                tickValues={xScale.ticks(totalTicks).filter(Number.isInteger)}
             />
             <MarkerCircle
                 id="marker-circle"
