@@ -90,7 +90,7 @@
         "@types/react": "^18.0.35",
         "@types/react-dom": "^18.0.11",
         "@types/topojson-client": "^3.1.1",
-        "@vitejs/plugin-react": "^3.1.0",
+        "@vitejs/plugin-react": "^4.0.0",
         "@vitest/ui": "^0.30.1",
         "autoprefixer": "^10.4.14",
         "eslint": "^8.38.0",
