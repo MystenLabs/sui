@@ -64,7 +64,7 @@ pub(crate) enum PlanError {
     NotAStringArray(&'static str),
 
     #[error("TOML Parsing Error: {0}")]
-    TOML(#[from] toml::de::Error),
+    Toml(#[from] toml::de::Error),
 
     #[error("IO Error: {0}")]
     IO(#[from] io::Error),
@@ -89,12 +89,7 @@ impl CutPlan {
         }
 
         impl Walker {
-            fn walk(
-                &mut self,
-                src: &PathBuf,
-                dst: &PathBuf,
-                suffix: &Option<String>,
-            ) -> PlanResult<()> {
+            fn walk(&mut self, src: &Path, dst: &Path, suffix: &Option<String>) -> PlanResult<()> {
                 self.try_insert_package(src, dst, suffix)?;
 
                 for entry in fs::read_dir(src)? {
@@ -113,13 +108,13 @@ impl CutPlan {
 
             fn try_insert_package(
                 &mut self,
-                src: &PathBuf,
-                dst: &PathBuf,
+                src: &Path,
+                dst: &Path,
                 suffix: &Option<String>,
             ) -> PlanResult<()> {
                 let toml = src.join("Cargo.toml");
 
-                let Some(pkg_name) = package_name(&toml)? else {
+                let Some(pkg_name) = package_name(toml)? else {
                     return Ok(())
                 };
 
@@ -140,8 +135,8 @@ impl CutPlan {
                     pkg_name,
                     CutPackage {
                         dst_name: dst_name.clone(),
-                        src_path: src.clone(),
-                        dst_path: dst.clone(),
+                        src_path: src.to_path_buf(),
+                        dst_path: dst.to_path_buf(),
                         ws_state: self.ws.state(src)?,
                     },
                 );
@@ -197,12 +192,12 @@ impl Workspace {
     fn read<P: AsRef<Path>>(root: P) -> PlanResult<Self> {
         let path = root.as_ref().join("Cargo.toml");
         if !path.exists() {
-            return Err(PlanError::NoWorkspace(path.to_owned()));
+            return Err(PlanError::NoWorkspace(path));
         }
 
         let toml = toml::de::from_str::<Value>(&fs::read_to_string(&path)?)?;
         let Some(workspace) = toml.get("workspace") else {
-            return Err(PlanError::NoWorkspace(path.to_owned()));
+            return Err(PlanError::NoWorkspace(path));
         };
 
         let members = toml_path_array_to_set(root.as_ref(), workspace, "members")?;
@@ -213,9 +208,10 @@ impl Workspace {
 
     /// Determine the state of the path insofar as whether it is a direct member or exclude of this
     /// `Workspace`.
-    fn state(&self, path: &PathBuf) -> PlanResult<WorkspaceState> {
+    fn state<P: AsRef<Path>>(&self, path: P) -> PlanResult<WorkspaceState> {
+        let path = path.as_ref();
         match (self.members.contains(path), self.exclude.contains(path)) {
-            (true, true) => Err(PlanError::WorkspaceConflict(path.clone())),
+            (true, true) => Err(PlanError::WorkspaceConflict(path.to_path_buf())),
 
             (true, false) => Ok(WorkspaceState::Member),
             (false, true) => Ok(WorkspaceState::Exclude),
@@ -240,7 +236,7 @@ fn discover_root(mut cwd: PathBuf) -> Option<PathBuf> {
         }
     }
 
-    return None;
+    None
 }
 
 /// Read `[field]` from `table`, as an array of strings, and interpret as a set of paths,

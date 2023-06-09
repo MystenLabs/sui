@@ -67,7 +67,7 @@ impl FromStr for Directory {
     type Err = DirectoryParseError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let mut parts = s.split(":");
+        let mut parts = s.split(':');
 
         let Some(src_part) = parts.next() else {
             return Err(DirectoryParseError::NoSrc(s.to_string()))
