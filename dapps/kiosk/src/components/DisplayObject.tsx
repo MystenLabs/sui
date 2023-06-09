@@ -7,7 +7,7 @@ import { KioskListing } from '@mysten/kiosk';
 import { useWalletKit } from '@mysten/wallet-kit';
 import { formatSui, mistToSui } from '../utils/utils';
 import { ItemLockedBadge } from './Kiosk/ItemLockedBadge';
-
+import { DEFAULT_IMAGE } from '../utils/constants';
 export interface DisplayObject {
   listing?: KioskListing | null;
   item: OwnedObjectType;
@@ -30,6 +30,8 @@ export function DisplayObject({
           src={item.display.image_url}
           className="object-cover aspect-auto h-full w-full mx-auto"
           alt="The display of the object"
+          // @ts-ignore-next-line simple way to just default on error. Not recommended for production.
+          onError={(e) => (e.target.src = DEFAULT_IMAGE)}
         ></img>
       </div>
 
@@ -49,6 +51,8 @@ export function DisplayObject({
             {price} SUI
           </div>
         )}
+
+        <p className="text-xs break-words text-gray-400 py-3">{item.type}</p>
         {item.isLocked && <ItemLockedBadge />}
 
         {/* button actions */}

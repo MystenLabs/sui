@@ -35,9 +35,11 @@ export function ListPrice({
         </div>
         <div>
           <label className="font-medium mb-1 block text-sm">
-            Listing price (in MIST) ({Number(price) / Number(MIST_PER_SUI)} SUI)
+            Listing price (in SUI)
           </label>
           <input
+            type="number"
+            min="0"
             value={price}
             className="block w-full rounded border border-primary bg-white p-2.5 text-sm outline-primary focus:border-gray-500"
             placeholder="The amount in SUI"
@@ -52,7 +54,7 @@ export function ListPrice({
             onClick={() =>
               placeAndListToKioskMutation.mutate({
                 item,
-                price,
+                price: (Number(price) * Number(MIST_PER_SUI)).toString(),
                 shouldPlace: listAndPlace,
               })
             }

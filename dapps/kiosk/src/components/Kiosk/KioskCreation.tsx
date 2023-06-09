@@ -1,45 +1,53 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { createKioskAndShare } from '@mysten/kiosk';
-import { TransactionBlock } from '@mysten/sui.js';
-import { useTransactionExecution } from '../../hooks/useTransactionExecution';
-import { useWalletKit } from '@mysten/wallet-kit';
-import { useState } from 'react';
-import { Loading } from '../Base/Loading';
+import { toast } from 'react-hot-toast';
+import { useCreateKioskMutation } from '../../mutations/kiosk';
+import { Button } from '../Base/Button';
 
 export function KioskCreation({ onCreate }: { onCreate: () => void }) {
-  const { signAndExecute } = useTransactionExecution();
-  const { currentAccount } = useWalletKit();
-  const [loading, setLoading] = useState<boolean>(false);
-
-  const createNewKiosk = async () => {
-    if (!currentAccount?.address) return;
-    setLoading(true);
-
-    const tx = new TransactionBlock();
-    const kiosk_cap = createKioskAndShare(tx);
-
-    tx.transferObjects(
-      [kiosk_cap],
-      tx.pure(currentAccount?.address, 'address'),
-    );
-
-    await signAndExecute({ tx });
-    onCreate();
-    setLoading(false);
-  };
-
-  if (loading) return <Loading />;
+  const createKiosk = useCreateKioskMutation({
+    onSuccess: () => {
+      onCreate();
+      toast.success('Kiosk created successfully');
+    },
+  });
 
   return (
-    <div className="min-h-[70vh] flex items-center justify-center gap-4 mt-6 text-center">
-      <div>
-        <h2 className="font-bold text-2xl">You don't have a kiosk yet.</h2>
-        <p>Create your kiosk to start trading.</p>
-        <button onClick={createNewKiosk} className="mt-8">
-          Create your Kiosk
-        </button>
+    <div className="min-h-[70vh] container py-24 gap-4 mt-6">
+      <div className="lg:w-7/12 mx-auto">
+        <h2 className="font-bold text-3xl mb-6">Create a Sui Kiosk</h2>
+        <p className="pb-3">
+          <strong>There’s no kiosk for your address yet.</strong> Create a kiosk
+          to store your digital assets and list them for sale on the Sui
+          network. Anyone can view your kiosk and the assets you place in it.
+        </p>
+        <p className="pb-3">
+          The demo app works only on <strong>Sui Testnet.</strong> Make sure
+          that your wallet connects to Testnet and that you have at least 1 SUI
+          to cover gas fees. You can get test SUI tokens using{' '}
+          <a
+            href="https://docs.sui.io/build/faucet"
+            target="_blank"
+            rel="noreferrer"
+            className="underline"
+          >
+            the faucet
+          </a>
+          .
+        </p>
+        <p className="pb-3">
+          When you click <strong>Create Kiosk</strong>, your wallet opens. Click{' '}
+          <strong>Approve</strong> to allow the app to create a kiosk for the
+          connected wallet address.
+        </p>
+        <Button
+          loading={createKiosk.isLoading}
+          onClick={() => createKiosk.mutate()}
+          className="mt-3 px-12 bg-primary text-white"
+        >
+          Create Kiosk
+        </Button>
       </div>
     </div>
   );
