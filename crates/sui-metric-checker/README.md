@@ -2,48 +2,17 @@ The `sui-metric-checker` crate is used for querying prometheus metrics and valid
 
 ## Guide
 
-Example usage:
+### Example Usage
 
 ```
 RUST_LOG=debug cargo run --package sui-metric-checker --bin sui-metric-checker  -- --api-key xxxxxxxx --api-user xxxx_metrics --config checks.yaml --url https://xxxx.sui.io/prometheus
 ```
 
-Example `.yaml` contents:
+### Example Config
 
-```
-  # Check current epoch
-  - query: 'max(current_epoch{network="private-testnet"})'
-    type: "Instant"
-  # Narwhal batch execution latency - p50
-  - query: 'histogram_quantile(0.50, sum by(le) (rate(batch_execution_latency_bucket{network="private-testnet"}[15m])))'
-    type: "Range"
-    validate_result:
-      threshold: 3.0
-      failure_condition: Greater
-    start: "now-11h"
-    end: "now-3h"
-    step: 60.0
-  # TPS
-  - query: 'avg(rate(total_transaction_effects{network="private-testnet"}[5m]))'
-    type: "Range"
-    validate_result:
-      threshold: 5500.0
-      failure_condition: Less
-    start: "now-11h"
-    end: "now-3h"
-    step: 60.0
-  # CPS
-  - query: 'avg (rate(batch_size_sum{network="private-testnet"}[5m]))'
-    type: "Range"
-    validate_result:
-      threshold: 5500.0
-      failure_condition: Less
-    start: "now-11h"
-    end: "now-3h"
-    step: 60.0
-```
+[example/config.yaml](example/config.yaml#L1-L32)
 
-Example error output:
+### Example Error Output
 
 ```
 Error: Following queries failed to meet threshold conditions: [

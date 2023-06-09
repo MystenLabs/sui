@@ -7,7 +7,6 @@ use once_cell::sync::Lazy;
 use prometheus_http_query::Client;
 use std::fs::File;
 use std::io::Read;
-use std::sync::Mutex;
 use std::time::Duration;
 use sui_metric_checker::query::{instant_query_with_retries, range_query_with_retries};
 use sui_metric_checker::{
@@ -34,16 +33,8 @@ struct UtcNowOnceProvider {}
 
 impl NowProvider for UtcNowOnceProvider {
     fn now() -> DateTime<Utc> {
-        static NOW: Lazy<Mutex<Option<DateTime<Utc>>>> = Lazy::new(|| Mutex::new(None));
-
-        let mut now = NOW.lock().unwrap();
-        if let Some(value) = *now {
-            value
-        } else {
-            let value = Utc::now();
-            *now = Some(value);
-            value
-        }
+        static NOW: Lazy<DateTime<Utc>> = Lazy::new(Utc::now);
+        *NOW
     }
 }
 
@@ -76,22 +67,14 @@ async fn main() -> Result<(), anyhow::Error> {
             QueryType::Instant => {
                 instant_query_with_retries(&auth_header, client.clone(), &query.query, 3).await
             }
-            QueryType::Range => {
+            QueryType::Range { start, end, step } => {
                 range_query_with_retries(
                     &auth_header,
                     client.clone(),
                     &query.query,
-                    timestamp_string_to_unix_seconds::<UtcNowOnceProvider>(
-                        &query
-                            .start
-                            .expect("Start timestamp is required for range query"),
-                    )?,
-                    timestamp_string_to_unix_seconds::<UtcNowOnceProvider>(
-                        &query
-                            .end
-                            .expect("End timestamp is required for range query"),
-                    )?,
-                    query.step.expect("Step is required for range query"),
+                    timestamp_string_to_unix_seconds::<UtcNowOnceProvider>(&start)?,
+                    timestamp_string_to_unix_seconds::<UtcNowOnceProvider>(&end)?,
+                    step,
                     3,
                 )
                 .await

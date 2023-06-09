@@ -3,7 +3,6 @@
 use anyhow::anyhow;
 use chrono::{DateTime, Duration, NaiveDateTime, Utc};
 use humantime::parse_duration;
-use regex::Regex;
 use serde::Deserialize;
 use strum_macros::Display;
 
@@ -12,7 +11,18 @@ pub mod query;
 #[derive(Debug, Display, Deserialize, PartialEq)]
 pub enum QueryType {
     Instant,
-    Range,
+    Range {
+        // Both start & end accepts specific time formats
+        //  - "%Y-%m-%d %H:%M:%S" (UTC)
+        // Or relative time + offset, i.e.
+        //  - "now"
+        //  - "now-1h"
+        //  - "now-30m 10s"
+        start: String,
+        end: String,
+        // Query resolution step width as float number of seconds
+        step: f64,
+    },
 }
 
 #[derive(Debug, Display, Deserialize, PartialEq)]
@@ -43,20 +53,12 @@ pub struct QueryResultValidation {
 pub struct Query {
     // PromQL query to exeute
     pub query: String,
-    // Type of query to execute
+    // Type of query to execute - Instant or Range.
     #[serde(rename = "type")]
     pub query_type: QueryType,
+    // Optional validation rules for the query result, otherwise the query result
+    // is just to be printed in debug logs.
     pub validate_result: Option<QueryResultValidation>,
-    // Both start & end accepts specific time formats
-    //  - "%Y-%m-%d %H:%M:%S" (UTC)
-    // Or relative time + offset, i.e.
-    //  - "now"
-    //  - "now-1h"
-    //  - "now-30m 10s"
-    pub start: Option<String>,
-    pub end: Option<String>,
-    // Query resolution step width as float number of seconds
-    pub step: Option<f64>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -89,21 +91,16 @@ impl NowProvider for UtcNowProvider {
 pub fn timestamp_string_to_unix_seconds<N: NowProvider>(
     timestamp: &str,
 ) -> Result<i64, anyhow::Error> {
-    let now_regex = Regex::new(r"^now(-.*)?$").unwrap();
-    let relative_time_regex = Regex::new(r"^now-([\dsmh ]+)$").unwrap();
+    if timestamp.starts_with("now") {
+        if let Some(relative_timestamp) = timestamp.strip_prefix("now-") {
+            let duration = parse_duration(relative_timestamp)?;
+            let now = N::now();
+            let new_datetime = now.checked_sub_signed(Duration::from_std(duration)?);
 
-    if now_regex.is_match(timestamp) {
-        if let Some(capture) = relative_time_regex.captures(timestamp) {
-            if let Some(relative_timestamp) = capture.get(1) {
-                let duration = parse_duration(relative_timestamp.as_str())?;
-                let now = N::now();
-                let new_datetime = now.checked_sub_signed(Duration::from_std(duration)?);
-
-                if let Some(datetime) = new_datetime {
-                    return Ok(datetime.timestamp());
-                } else {
-                    return Err(anyhow!("Unable to calculate time offset"));
-                }
+            if let Some(datetime) = new_datetime {
+                return Ok(datetime.timestamp());
+            } else {
+                return Err(anyhow!("Unable to calculate time offset"));
             }
         }
 
@@ -180,39 +177,37 @@ mod tests {
         let config = r#"
             queries:
               - query: 'max(current_epoch{network="testnet"})'
-                type: "Instant"
+                type: Instant
 
               - query: 'histogram_quantile(0.50, sum by(le) (rate(round_latency{network="testnet"}[15m])))'
-                type: "Range"
+                type: !Range 
+                  start: "now-1h"
+                  end: "now"
+                  step: 60.0
                 validate_result:
                   threshold: 3.0
                   failure_condition: Greater
-                start: "now-1h"
-                end: "now"
-                step: 60.0
         "#;
 
         let config: Config = serde_yaml::from_str(config).unwrap();
 
         let expected_range_query = Query {
             query: "histogram_quantile(0.50, sum by(le) (rate(round_latency{network=\"testnet\"}[15m])))".to_string(),
-            query_type: QueryType::Range,
+            query_type: QueryType::Range {
+                start: "now-1h".to_string(),
+                end: "now".to_string(),
+                step: 60.0,
+            },
             validate_result: Some(QueryResultValidation {
                 threshold: 3.0,
                 failure_condition: Condition::Greater,
             }),
-            start: Some("now-1h".to_string()),
-            end: Some("now".to_string()),
-            step: Some(60.0),
         };
 
         let expected_instant_query = Query {
             query: "max(current_epoch{network=\"testnet\"})".to_string(),
             query_type: QueryType::Instant,
             validate_result: None,
-            start: None,
-            end: None,
-            step: None,
         };
 
         let expected_queries = vec![expected_instant_query, expected_range_query];
