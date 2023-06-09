@@ -34,7 +34,8 @@ CREATE TABLE objects
     object_status          object_status NOT NULL,
     has_public_transfer    BOOLEAN       NOT NULL,
     storage_rebate         BIGINT        NOT NULL,
-    bcs                    bcs_bytes[]   NOT NULL
+    bcs                    bcs_bytes[]   NOT NULL,
+    object_json            TEXT          NOT NULL
 );
 CREATE INDEX objects_owner_address ON objects (owner_type, owner_address);
 CREATE INDEX objects_tx_digest ON objects (previous_transaction);
@@ -58,6 +59,7 @@ CREATE TABLE objects_history
     has_public_transfer    BOOLEAN       NOT NULL,
     storage_rebate         BIGINT        NOT NULL,
     bcs                    bcs_bytes[]   NOT NULL,
+    object_json            TEXT          NOT NULL,
     CONSTRAINT objects_history_pk PRIMARY KEY (object_id, version, checkpoint)
 ) PARTITION BY RANGE (checkpoint);
 CREATE INDEX objects_history_checkpoint_index ON objects_history (checkpoint);

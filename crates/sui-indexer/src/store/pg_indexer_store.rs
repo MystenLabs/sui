@@ -135,6 +135,7 @@ impl PgIndexerStore {
                     objects_history::has_public_transfer,
                     objects_history::storage_rebate,
                     objects_history::bcs,
+                    objects_history::object_json,
                 ))
                 .filter(objects_history::object_id.eq(object_id.to_string()))
                 .filter(objects_history::version.eq(version.value() as i64))
@@ -174,6 +175,7 @@ impl PgIndexerStore {
                     objects_history::has_public_transfer,
                     objects_history::storage_rebate,
                     objects_history::bcs,
+                    objects_history::object_json,
                 ))
                 .filter(objects_history::object_id.eq(id.to_string()))
                 .filter(objects_history::version.le(version.value() as i64))
@@ -619,6 +621,7 @@ impl IndexerStore for PgIndexerStore {
                         objects_history::has_public_transfer,
                         objects_history::storage_rebate,
                         objects_history::bcs,
+                        objects_history::object_json,
                     ))
                     .filter(objects_history::object_id.eq(object_id.to_string()))
                     .filter(objects_history::version.eq(version.value() as i64))
@@ -1728,7 +1731,7 @@ fn persist_transaction_object_changes(
                 .execute(conn)
                 .map_err(|e| {
                     IndexerError::PostgresWriteError(format!(
-                        "Failed writing mutated objects to PostgresDB with error: {:?}",
+                        "Failed writing mutated objects to PostgresDB with meter with error: {:?}",
                         e
                     ))
                 })?;

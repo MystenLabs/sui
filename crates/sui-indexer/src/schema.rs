@@ -175,6 +175,7 @@ diesel::table! {
         has_public_transfer -> Bool,
         storage_rebate -> Int8,
         bcs -> Array<Nullable<BcsBytes>>,
+        object_json -> Text,
     }
 }
 
@@ -201,6 +202,7 @@ diesel::table! {
         has_public_transfer -> Bool,
         storage_rebate -> Int8,
         bcs -> Array<Nullable<BcsBytes>>,
+        object_json -> Text,
     }
 }
 

@@ -614,12 +614,12 @@ where
                     .get(&tx.digest)
                     .unwrap_or(&vec![])
                     .iter()
-                    .map(|(status, o)| {
+                    .map(|(status, sui_obj_data)| {
                         Object::from(
                             checkpoint.epoch,
                             Some(checkpoint.sequence_number),
                             status,
-                            o,
+                            sui_obj_data,
                         )
                     })
                     .collect::<Vec<_>>();
@@ -882,7 +882,7 @@ pub async fn fetch_changed_objects(
         http_client
             .try_multi_get_past_objects(
                 wanted_past_object_request,
-                Some(SuiObjectDataOptions::bcs_lossless()),
+                Some(SuiObjectDataOptions::bcs_lossless().with_content()),
             )
             .map(move |resp| (resp, wanted_past_object_statuses))
     }))

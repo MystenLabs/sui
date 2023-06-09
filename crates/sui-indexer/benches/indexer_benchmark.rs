@@ -169,6 +169,7 @@ fn create_object(sequence_number: i64) -> DBObject {
                 .contents()
                 .to_vec(),
         )],
+        object_json: String::new(),
     }
 }
 criterion_group! {

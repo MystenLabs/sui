@@ -969,6 +969,7 @@ pub mod pg_integration_test {
                 has_public_transfer: false,
                 storage_rebate: 0,
                 bcs: vec![],
+                object_json: "".to_string(),
             })
             .collect::<Vec<_>>();
 
@@ -1030,6 +1031,7 @@ pub mod pg_integration_test {
                 has_public_transfer: false,
                 storage_rebate: 0,
                 bcs: vec![NamedBcsBytes("object".to_string(), vec![1u8, 2u8, 3u8])],
+                object_json: "".to_string(),
             })
             .collect::<Vec<_>>();
 
