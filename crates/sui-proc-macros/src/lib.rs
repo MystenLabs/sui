@@ -193,6 +193,12 @@ pub fn sim_test(args: TokenStream, item: TokenStream) -> TokenStream {
     let arg_parser = Punctuated::<syn::Meta, Token![,]>::parse_terminated;
     let args = arg_parser.parse(args).unwrap().into_iter();
 
+    let ignore = input
+        .attrs
+        .iter()
+        .find(|attr| attr.path().is_ident("ignore"))
+        .map_or(quote! {}, |_| quote! { #[ignore] });
+
     let result = if cfg!(msim) {
         let sig = &input.sig;
         let return_type = &sig.output;
@@ -200,6 +206,7 @@ pub fn sim_test(args: TokenStream, item: TokenStream) -> TokenStream {
         quote! {
             #[::sui_simulator::sim_test(crate = "sui_simulator", #(#args)*)]
             #[::sui_macros::init_static_initializers]
+            #ignore
             #sig {
                 async fn body_fn() #return_type { #body }
 
@@ -226,6 +233,7 @@ pub fn sim_test(args: TokenStream, item: TokenStream) -> TokenStream {
         let body = &input.block;
         quote! {
             #[tokio::test]
+            #ignore
             #sig {
                 if std::env::var("SUI_SKIP_SIMTESTS").is_ok() {
                     println!("not running test {} in `cargo test`: SUI_SKIP_SIMTESTS is set", stringify!(#fn_name));
