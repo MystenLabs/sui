@@ -26,6 +26,54 @@ const SIDE_MARGIN = 30;
 
 const bisectEpoch = bisector(({ epoch }: EpochGasInfo) => epoch).center;
 
+type AxisRightProps<Output> = {
+    left: number;
+    scale: ReturnType<typeof scaleLinear<Output>>;
+};
+
+function AxisRight({ scale, left }: AxisRightProps<number>) {
+    let ticks = scale.nice(6).ticks(6);
+    return (
+        <g>
+            <g>
+                {ticks
+                    .filter(
+                        (_, index) =>
+                            (index + 1) % 2 === 0 || ticks.length === 1
+                    )
+                    .map((value) => (
+                        <text
+                            key={value}
+                            x={left}
+                            y={scale(value)}
+                            textAnchor="end"
+                            alignmentBaseline="middle"
+                            className="fill-steel font-sans text-subtitleSmall font-medium"
+                        >
+                            {value}
+                        </text>
+                    ))}
+            </g>
+            <g>
+                {ticks
+                    .filter(
+                        (_, index) =>
+                            (index + 1) % 2 !== 0 && ticks.length !== 1
+                    )
+                    .map((value) => (
+                        <circle
+                            key={value}
+                            cx={left}
+                            cy={scale(value)}
+                            r="1"
+                            className="fill-steel"
+                        />
+                    ))}
+            </g>
+        </g>
+    );
+}
+
 export type GraphProps = {
     data: EpochGasInfo[];
     width: number;
@@ -35,7 +83,7 @@ export type GraphProps = {
 export function Graph({ data, width, height, onHoverElement }: GraphProps) {
     // remove not defined data (graph displays better and helps with hovering/selecting hovered element)
     const adjData = useMemo(() => data.filter(isDefined), [data]);
-    const graphTop = 0;
+    const graphTop = 15;
     const graphButton = Math.max(height - 45, 0);
     const xScale = useMemo(
         () =>
@@ -49,12 +97,10 @@ export function Graph({ data, width, height, onHoverElement }: GraphProps) {
         [width, adjData]
     );
     const yScale = useMemo(() => {
-        const [min, max] = extent(adjData, ({ referenceGasPrice }) =>
-            referenceGasPrice !== null ? Number(referenceGasPrice) : null
-        );
-        console.log([(min || 0) * 0.95, (max || 0) * 1.05]);
         return scaleLinear<number>({
-            domain: [(min || 0) * 0.75, (max || 0) * 1.05],
+            domain: extent(adjData, ({ referenceGasPrice }) =>
+                referenceGasPrice !== null ? Number(referenceGasPrice) : null
+            ) as number[],
             range: [graphButton, graphTop],
         });
     }, [adjData, graphTop, graphButton]);
@@ -104,17 +150,16 @@ export function Graph({ data, width, height, onHoverElement }: GraphProps) {
     const lastElementY = adjData.length
         ? yScale(Number(adjData[adjData.length - 1].referenceGasPrice))
         : null;
+    if (height < 30 || width < 50) {
+        return null;
+    }
     return (
-        <svg
-            width={width}
-            height={height}
-            className="stroke-steel-dark/80 transition hover:stroke-hero"
-        >
+        <svg width={width} height={height}>
             <line
                 x1={0}
-                y1={graphTop - 5}
+                y1={Math.max(graphTop - 5, 0)}
                 x2={0}
-                y2={height - 10}
+                y2={Math.max(height - 20, 0)}
                 className={clsx(
                     'stroke-steel/30 transition-all ease-ease-out-cubic',
                     isTooltipVisible ? 'opacity-100' : 'opacity-0'
@@ -202,15 +247,17 @@ export function Graph({ data, width, height, onHoverElement }: GraphProps) {
                 fillOpacity="0.1"
                 stroke="none"
             />
+            <AxisRight left={width - 30} scale={yScale} />
             <AxisBottom
-                top={height - 30}
+                top={Math.max(height - 30, 0)}
                 orientation="bottom"
                 tickLabelProps={{
                     fontFamily: 'none',
                     fontSize: 'none',
                     stroke: 'none',
                     fill: 'none',
-                    className: 'text-subtitle font-medium fill-steel font-sans',
+                    className:
+                        'text-subtitleSmall font-medium fill-steel font-sans',
                 }}
                 scale={xScale}
                 tickFormat={(epoch) => formatXLabel(epoch as number)}
@@ -218,11 +265,16 @@ export function Graph({ data, width, height, onHoverElement }: GraphProps) {
                 hideAxisLine
                 numTicks={totalTicks}
             />
-            <MarkerCircle id="marker-circle" fill="#333" size={0.5} refX={1} />
+            <MarkerCircle
+                id="marker-circle"
+                className="fill-steel"
+                size={1}
+                refX={1}
+            />
             <LinePath
                 data={adjData}
                 x={(d) => xScale(d.epoch)}
-                y={height - 5}
+                y={Math.max(height - 5, 0)}
                 stroke="transparent"
                 markerStart="url(#marker-circle)"
                 markerMid="url(#marker-circle)"
