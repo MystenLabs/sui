@@ -104,7 +104,7 @@ export async function getOwnedKiosks(
     ...(options?.pagination || {}),
   });
 
-  // get unique kioskIds.
+  // get kioskIds from the OwnerCaps.
   const kioskIdList = data?.map(
     (x: SuiObjectResponse) => getObjectFields(x)?.for,
   );
