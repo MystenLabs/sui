@@ -195,15 +195,17 @@ pub fn sim_test(args: TokenStream, item: TokenStream) -> TokenStream {
 
     let result = if cfg!(msim) {
         let sig = &input.sig;
+        let return_type = &sig.output;
         let body = &input.block;
         quote! {
             #[::sui_simulator::sim_test(crate = "sui_simulator", #(#args)*)]
             #[::sui_macros::init_static_initializers]
             #sig {
-                let ret = { #body };
+                async fn body_fn() #return_type { #body }
 
-                #[allow(unreachable_code)]
-                {
+                let ret = body_fn().await;
+
+                ::sui_simulator::task::shutdown_all_nodes();
 
                 // all node handles should have been dropped after the above block exits, but task
                 // shutdown is asynchronous, so we need a brief delay before checking for leaks.
@@ -216,7 +218,6 @@ pub fn sim_test(args: TokenStream, item: TokenStream) -> TokenStream {
                 );
 
                 ret
-                }
             }
         }
     } else {

@@ -4,7 +4,7 @@
 use futures::future::join_all;
 use std::net::SocketAddr;
 use std::num::NonZeroUsize;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use jsonrpsee::http_client::{HttpClient, HttpClientBuilder};
@@ -372,6 +372,8 @@ pub struct RandomNodeRestarter {
     kill_interval: Uniform<Duration>,
     // How long should we wait before restarting them.
     restart_delay: Uniform<Duration>,
+
+    task_handle: Mutex<Option<JoinHandle<()>>>,
 }
 
 impl RandomNodeRestarter {
@@ -380,6 +382,7 @@ impl RandomNodeRestarter {
             test_cluster,
             kill_interval: Uniform::new(Duration::from_secs(10), Duration::from_secs(11)),
             restart_delay: Uniform::new(Duration::from_secs(1), Duration::from_secs(2)),
+            task_handle: Default::default(),
         }
     }
 
@@ -393,12 +396,14 @@ impl RandomNodeRestarter {
         self
     }
 
-    pub fn run(&self) -> JoinHandle<()> {
+    pub fn run(&self) {
         let test_cluster = self.test_cluster.clone();
         let kill_interval = self.kill_interval;
         let restart_delay = self.restart_delay;
         let validators = self.test_cluster.get_validator_pubkeys();
-        tokio::task::spawn(async move {
+        let mut task_handle = self.task_handle.lock().unwrap();
+        assert!(task_handle.is_none());
+        task_handle.replace(tokio::task::spawn(async move {
             loop {
                 let delay = kill_interval.sample(&mut OsRng);
                 info!("Sleeping {delay:?} before killing a validator");
@@ -414,7 +419,15 @@ impl RandomNodeRestarter {
                 info!("Starting validator {:?}", validator.concise());
                 test_cluster.start_node(validator).await;
             }
-        })
+        }));
+    }
+}
+
+impl Drop for RandomNodeRestarter {
+    fn drop(&mut self) {
+        if let Some(handle) = self.task_handle.lock().unwrap().take() {
+            handle.abort();
+        }
     }
 }
 
