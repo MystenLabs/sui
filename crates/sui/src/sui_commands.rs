@@ -381,7 +381,6 @@ async fn genesis(
     let network_path = sui_config_dir.join(SUI_NETWORK_CONFIG);
     let genesis_path = sui_config_dir.join(SUI_GENESIS_FILENAME);
 
-    // genesis_conf is read from genesis.yaml - that's the place we probably want to grab the new ssfn configs from
     let mut genesis_conf = match from_config {
         Some(path) => PersistedConfig::read(&path)?,
         None => {
@@ -453,8 +452,8 @@ async fn genesis(
 
     fullnode_config.save(sui_config_dir.join(SUI_FULLNODE_CONFIG))?;
     let mut ssfn_nodes = vec![];
-    if ssfn_info.is_some() {
-        for (i, ssfn) in ssfn_info.unwrap().into_iter().enumerate() {
+    if let Some(ssfn_info) = ssfn_info {
+        for (i, ssfn) in ssfn_info.into_iter().enumerate() {
             let path = sui_config_dir.join(sui_config::ssfn_config_file(i));
             // join base fullnode config with each SsfnGenesisConfig entry
             let ssfn_config = FullnodeConfigBuilder::new()

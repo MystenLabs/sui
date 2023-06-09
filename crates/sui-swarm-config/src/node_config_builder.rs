@@ -283,21 +283,17 @@ impl FullnodeConfigBuilder {
                 .collect();
 
             P2pConfig {
-                listen_address: if self.p2p_listen_address.is_some() {
-                    self.p2p_listen_address.unwrap()
-                } else {
+                listen_address: self.p2p_listen_address.unwrap_or_else(|| {
                     validator_config.p2p_listen_address.unwrap_or_else(|| {
                         validator_config
                             .p2p_address
                             .udp_multiaddr_to_listen_address()
                             .unwrap()
                     })
-                },
-                external_address: if self.p2p_external_address.is_none() {
-                    Some(validator_config.p2p_address.clone())
-                } else {
-                    self.p2p_external_address
-                },
+                }),
+                external_address: self
+                    .p2p_external_address
+                    .or(Some(validator_config.p2p_address.clone())),
                 seed_peers,
                 ..Default::default()
             }
@@ -320,41 +316,25 @@ impl FullnodeConfigBuilder {
             network_key_pair: KeyPairWithPath::new(SuiKeyPair::Ed25519(
                 validator_config.network_key_pair,
             )),
-
-            db_path: if self.db_path.is_some() {
-                self.db_path.unwrap()
-            } else {
-                config_directory.join(FULL_NODE_DB_PATH).join(key_path)
-            },
-            network_address: if self.network_address.is_some() {
-                self.network_address.unwrap()
-            } else {
-                validator_config.network_address
-            },
-            metrics_address: if self.metrics_address.is_some() {
-                self.metrics_address.unwrap()
-            } else {
-                local_ip_utils::new_local_tcp_socket_for_testing()
-            },
-            admin_interface_port: if self.admin_interface_port.is_some() {
-                self.admin_interface_port.unwrap()
-            } else {
-                local_ip_utils::get_available_port(&localhost)
-            },
-
-            json_rpc_address: if self.json_rpc_address.is_some() {
-                self.json_rpc_address.unwrap()
-            } else {
-                json_rpc_address
-            },
+            db_path: self
+                .db_path
+                .unwrap_or(config_directory.join(FULL_NODE_DB_PATH).join(key_path)),
+            network_address: self
+                .network_address
+                .unwrap_or(validator_config.network_address),
+            metrics_address: self
+                .metrics_address
+                .unwrap_or(local_ip_utils::new_local_tcp_socket_for_testing()),
+            admin_interface_port: self
+                .admin_interface_port
+                .unwrap_or(local_ip_utils::get_available_port(&localhost)),
+            json_rpc_address: self.json_rpc_address.unwrap_or(json_rpc_address),
             consensus_config: None,
             enable_event_processing: true, // This is unused.
             enable_index_processing: default_enable_index_processing(),
-            genesis: if self.genesis.is_some() {
-                self.genesis.unwrap()
-            } else {
-                sui_config::node::Genesis::new(network_config.genesis.clone())
-            },
+            genesis: self.genesis.unwrap_or(sui_config::node::Genesis::new(
+                network_config.genesis.clone(),
+            )),
             grpc_load_shed: None,
             grpc_concurrency_limit: None,
             p2p_config,
