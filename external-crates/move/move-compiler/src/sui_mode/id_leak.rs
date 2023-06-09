@@ -5,10 +5,10 @@ use move_ir_types::location::*;
 
 use crate::{
     cfgir::{
+        self,
         absint::JoinResult,
         visitor::{
-             LocalState, SimpleAbsInt, SimpleAbsIntConstructor, SimpleDomain,
-            SimpleExecutionContext,
+            LocalState, SimpleAbsInt, SimpleAbsIntConstructor, SimpleDomain, SimpleExecutionContext,
         },
         CFGContext, MemberName,
     },
@@ -60,6 +60,7 @@ impl SimpleAbsIntConstructor for IDLeakVerifier {
     type AI<'a> = IDLeakVerifierAI<'a>;
 
     fn new<'a>(
+        _program: &'a cfgir::ast::Program,
         context: &'a CFGContext<'a>,
         _init_state: &mut <Self::AI<'a> as SimpleAbsInt>::State,
     ) -> Option<Self::AI<'a>> {

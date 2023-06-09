@@ -6,7 +6,7 @@ mod state;
 
 use super::{
     absint::*,
-    cfg::{BlockCFG, ReverseBlockCFG, CFG},
+    cfg::{MutForwardCFG, MutReverseCFG, ReverseCFG, CFG},
     locals,
 };
 use crate::{
@@ -31,10 +31,9 @@ struct Liveness {
 }
 
 impl Liveness {
-    fn new(cfg: &super::cfg::ReverseBlockCFG) -> Self {
+    fn new(cfg: &MutReverseCFG) -> Self {
         let states = cfg
             .blocks()
-            .iter()
             .map(|(lbl, block)| {
                 let init = block.iter().map(|_| LivenessState::initial()).collect();
                 (*lbl, init)
@@ -69,10 +68,10 @@ impl AbstractInterpreter for Liveness {}
 //**************************************************************************************************
 
 fn analyze(
-    cfg: &mut BlockCFG,
+    cfg: &mut MutForwardCFG,
     infinite_loop_starts: &BTreeSet<Label>,
 ) -> (FinalInvariants, PerCommandStates) {
-    let reverse = &mut ReverseBlockCFG::new(cfg, infinite_loop_starts);
+    let reverse = &mut ReverseCFG::new(cfg, infinite_loop_starts);
     let initial_state = LivenessState::initial();
     let mut liveness = Liveness::new(reverse);
     let (final_invariants, errors) = liveness.analyze_function(reverse, initial_state);
@@ -170,7 +169,7 @@ fn exp_list_item(state: &mut LivenessState, item: &ExpListItem) {
 pub fn last_usage(
     compilation_env: &mut CompilationEnv,
     context: &super::CFGContext,
-    cfg: &mut BlockCFG,
+    cfg: &mut MutForwardCFG,
 ) {
     let super::CFGContext {
         locals,
@@ -414,7 +413,7 @@ mod last_usage {
 pub fn release_dead_refs(
     context: &super::CFGContext,
     locals_pre_states: &BTreeMap<Label, locals::state::LocalStates>,
-    cfg: &mut BlockCFG,
+    cfg: &mut MutForwardCFG,
 ) {
     let super::CFGContext {
         locals,
@@ -438,7 +437,7 @@ pub fn release_dead_refs(
 }
 
 fn build_forward_intersections(
-    cfg: &BlockCFG,
+    cfg: &MutForwardCFG,
     final_invariants: &FinalInvariants,
 ) -> ForwardIntersections {
     cfg.blocks()

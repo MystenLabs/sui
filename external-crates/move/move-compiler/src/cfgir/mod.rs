@@ -5,7 +5,7 @@
 pub mod absint;
 pub mod ast;
 mod borrows;
-pub(crate) mod cfg;
+pub mod cfg;
 mod liveness;
 mod locals;
 mod remove_no_ops;
@@ -15,9 +15,8 @@ pub mod visitor;
 mod optimize;
 
 use crate::{
-    diagnostics::Diagnostics,
     expansion::ast::{AbilitySet, ModuleIdent},
-    hlir::ast::*,
+    hlir::ast::{FunctionSignature, Label, SingleType, Var},
     parser::ast::StructName,
     shared::{unique_map::UniqueMap, CompilationEnv, Name},
 };
@@ -44,19 +43,13 @@ pub enum MemberName {
 pub fn refine_inference_and_verify(
     env: &mut CompilationEnv,
     context: &CFGContext,
-    cfg: &mut BlockCFG,
+    cfg: &mut MutForwardCFG,
 ) {
     liveness::last_usage(env, context, cfg);
     let locals_states = locals::verify(env, context, cfg);
 
     liveness::release_dead_refs(context, &locals_states, cfg);
     borrows::verify(env, context, cfg);
-    let mut ds = Diagnostics::new();
-    for visitor in &env.visitors().abs_int {
-        let mut f = visitor.borrow_mut();
-        ds.extend(f.verify(context, cfg));
-    }
-    env.add_diags(ds)
 }
 
 impl MemberName {

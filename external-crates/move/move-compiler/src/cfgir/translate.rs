@@ -6,9 +6,10 @@ use crate::{
     cfgir::{
         self,
         ast::{self as G, BasicBlock, BasicBlocks, BlockInfo},
-        cfg::BlockCFG,
+        cfg::{ImmForwardCFG, MutForwardCFG},
     },
     diag,
+    diagnostics::Diagnostics,
     expansion::ast::{AbilitySet, ModuleIdent},
     hlir::ast::{self as H, Label, Value, Value_, Var},
     parser::ast::{ConstantName, FunctionName, StructName},
@@ -164,7 +165,9 @@ pub fn program(
     let modules = modules(&mut context, hmodules);
     let scripts = scripts(&mut context, hscripts);
 
-    G::Program { modules, scripts }
+    let program = G::Program { modules, scripts };
+    visit_program(&mut context, &program);
+    program
 }
 
 fn modules(
@@ -301,7 +304,8 @@ fn constant_(
     initial_block(context, block);
     let (start, mut blocks, block_info) = context.finish_blocks();
 
-    let (mut cfg, infinite_loop_starts, errors) = BlockCFG::new(start, &mut blocks, &block_info);
+    let binfo = block_info.iter().map(|(lbl, info)| (lbl, info));
+    let (mut cfg, infinite_loop_starts, errors) = MutForwardCFG::new(start, &mut blocks, binfo);
     assert!(infinite_loop_starts.is_empty(), "{}", ICE_MSG);
     assert!(errors.is_empty(), "{}", ICE_MSG);
 
@@ -459,8 +463,9 @@ fn function_body(
             initial_block(context, body);
             let (start, mut blocks, block_info) = context.finish_blocks();
 
+            let binfo = block_info.iter().map(|(lbl, info)| (lbl, info));
             let (mut cfg, infinite_loop_starts, diags) =
-                BlockCFG::new(start, &mut blocks, &block_info);
+                MutForwardCFG::new(start, &mut blocks, binfo);
             context.env.add_diags(diags);
 
             let function_context = super::CFGContext {
@@ -478,17 +483,14 @@ fn function_body(
                 cfgir::optimize(signature, &locals, &mut cfg);
             }
 
-            let loop_heads = block_info
+            let block_info = block_info
                 .into_iter()
-                .filter(|(lbl, info)| {
-                    matches!(info, BlockInfo::LoopHead(_)) && blocks.contains_key(lbl)
-                })
-                .map(|(lbl, _info)| lbl)
+                .filter(|(lbl, _info)| blocks.contains_key(lbl))
                 .collect();
             GB::Defined {
                 locals,
                 start,
-                loop_heads,
+                block_info,
                 blocks,
             }
         }
@@ -696,4 +698,71 @@ fn command(context: &Context, sp!(_, hc_): &mut H::Command) {
             panic!("ICE unexpected jump before translation to jumps")
         }
     }
+}
+
+fn visit_program(context: &mut Context, prog: &G::Program) {
+    if context.env.visitors().abs_int.is_empty() {
+        return;
+    }
+
+    for (mident, mdef) in prog.modules.key_cloned_iter() {
+        visit_module(context, prog, mident, mdef)
+    }
+
+    for script in prog.scripts.values() {
+        visit_script(context, prog, script)
+    }
+}
+
+fn visit_module(
+    context: &mut Context,
+    prog: &G::Program,
+    mident: ModuleIdent,
+    mdef: &G::ModuleDefinition,
+) {
+    for (name, fdef) in mdef.functions.key_cloned_iter() {
+        visit_function(context, prog, Some(mident), name, fdef)
+    }
+}
+
+fn visit_script(context: &mut Context, prog: &G::Program, script: &G::Script) {
+    visit_function(context, prog, None, script.function_name, &script.function)
+}
+
+fn visit_function(
+    context: &mut Context,
+    prog: &G::Program,
+    mident: Option<ModuleIdent>,
+    name: FunctionName,
+    fdef: &G::Function,
+) {
+    let G::Function {
+        warning_filter: _,
+        index: _,
+        attributes: _,
+        visibility: _,
+        entry: _,
+        signature,
+        acquires,
+        body,
+    } = fdef;
+    let G::FunctionBody_::Defined { locals, start, blocks, block_info } = &body.value else {
+        return
+    };
+    let (cfg, infinite_loop_starts) = ImmForwardCFG::new(*start, blocks, block_info.iter());
+    let function_context = super::CFGContext {
+        module: mident,
+        member: cfgir::MemberName::Function(name.0),
+        struct_declared_abilities: &context.struct_declared_abilities,
+        signature,
+        acquires,
+        locals: &locals,
+        infinite_loop_starts: &infinite_loop_starts,
+    };
+    let mut ds = Diagnostics::new();
+    for visitor in &context.env.visitors().abs_int {
+        let mut v = visitor.borrow_mut();
+        ds.extend(v.verify(prog, &function_context, &cfg));
+    }
+    context.env.add_diags(ds)
 }

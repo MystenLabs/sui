@@ -211,7 +211,7 @@ pub struct Label(pub usize);
 // Commands
 //**************************************************************************************************
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 #[allow(clippy::large_enum_variant)]
 pub enum Command_ {
     Assign(Vec<LValue>, Box<Exp>),
@@ -239,7 +239,7 @@ pub enum Command_ {
 }
 pub type Command = Spanned<Command_>;
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum LValue_ {
     Ignore,
     Var(Var, Box<SingleType>),
@@ -258,7 +258,7 @@ pub enum UnitCase {
     FromUser,
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct ModuleCall {
     pub module: ModuleIdent,
     pub name: FunctionName,
@@ -310,7 +310,7 @@ pub enum MoveOpAnnotation {
     InferredNoCopy,
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum UnannotatedExp_ {
     Unit {
         case: UnitCase,
@@ -350,7 +350,7 @@ pub enum UnannotatedExp_ {
     UnresolvedError,
 }
 pub type UnannotatedExp = Spanned<UnannotatedExp_>;
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Exp {
     pub ty: Type,
     pub exp: UnannotatedExp,
@@ -359,7 +359,7 @@ pub fn exp(ty: Type, exp: UnannotatedExp) -> Exp {
     Exp { ty, exp }
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum ExpListItem {
     Single(Exp, Box<SingleType>),
     Splat(Loc, Exp, Vec<SingleType>),

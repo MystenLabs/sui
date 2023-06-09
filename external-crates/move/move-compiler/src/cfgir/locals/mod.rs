@@ -113,7 +113,7 @@ impl<'a> AbstractInterpreter for LocalsSafety<'a> {}
 pub fn verify(
     compilation_env: &mut CompilationEnv,
     context: &super::CFGContext,
-    cfg: &super::cfg::BlockCFG,
+    cfg: &super::cfg::MutForwardCFG,
 ) -> BTreeMap<Label, LocalStates> {
     let super::CFGContext {
         struct_declared_abilities,

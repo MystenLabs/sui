@@ -81,7 +81,7 @@ impl AbstractInterpreter for BorrowSafety {}
 pub fn verify(
     compilation_env: &mut CompilationEnv,
     context: &super::CFGContext,
-    cfg: &super::cfg::BlockCFG,
+    cfg: &super::cfg::MutForwardCFG,
 ) -> BTreeMap<Label, BorrowState> {
     let super::CFGContext {
         signature,

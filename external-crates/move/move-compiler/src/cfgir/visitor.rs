@@ -5,8 +5,9 @@ use std::{collections::BTreeMap, fmt::Debug};
 
 use crate::{
     cfgir::{
+        self,
         absint::{AbstractDomain, AbstractInterpreter, JoinResult, TransferFunctions},
-        cfg::BlockCFG,
+        cfg::ImmForwardCFG,
         CFGContext,
     },
     command_line::compiler::Visitor,
@@ -21,7 +22,12 @@ use move_ir_types::location::*;
 pub type AbsIntVisitorObj = Box<dyn AbstractInterpreterVisitor>;
 
 pub trait AbstractInterpreterVisitor {
-    fn verify(&mut self, context: &CFGContext, cfg: &BlockCFG) -> Diagnostics;
+    fn verify(
+        &mut self,
+        program: &cfgir::ast::Program,
+        context: &CFGContext,
+        cfg: &ImmForwardCFG,
+    ) -> Diagnostics;
 }
 
 impl<V: AbstractInterpreterVisitor + 'static> From<V> for AbsIntVisitorObj {
@@ -157,19 +163,23 @@ pub trait SimpleAbsIntConstructor: Sized {
     /// Given the initial state/domain, construct a new abstract interpreter.
     /// Return None if it should not be run given this context
     fn new<'a>(
+        program: &'a cfgir::ast::Program,
         context: &'a CFGContext<'a>,
         init_state: &mut <Self::AI<'a> as SimpleAbsInt>::State,
     ) -> Option<Self::AI<'a>>;
 
-    fn verify(&mut self, context: &CFGContext, cfg: &BlockCFG) -> Diagnostics {
+    fn verify(
+        &mut self,
+        program: &cfgir::ast::Program,
+        context: &CFGContext,
+        cfg: &ImmForwardCFG,
+    ) -> Diagnostics {
         let mut locals = context
             .locals
             .key_cloned_iter()
             .map(|(v, _)| {
-                (
-                    v,
-                    LocalState::Unavailable(v.0.loc, UnavailableReason::Unassigned),
-                )
+                let unassigned = LocalState::Unavailable(v.0.loc, UnavailableReason::Unassigned);
+                (v, unassigned)
             })
             .collect::<BTreeMap<_, _>>();
         for (param, _) in &context.signature.parameters {
@@ -182,7 +192,7 @@ pub trait SimpleAbsIntConstructor: Sized {
             );
         }
         let mut init_state = <Self::AI<'_> as SimpleAbsInt>::State::new(context, locals);
-        let Some(mut ai) = Self::new(context, &mut init_state) else {
+        let Some(mut ai) = Self::new(program, context, &mut init_state) else {
             return Diagnostics::new();
         };
         let (final_state, ds) = ai.analyze_function(cfg, init_state);
@@ -449,7 +459,12 @@ impl<V: SimpleAbsInt> TransferFunctions for V {
 impl<V: SimpleAbsInt> AbstractInterpreter for V {}
 
 impl<V: SimpleAbsIntConstructor> AbstractInterpreterVisitor for V {
-    fn verify(&mut self, context: &CFGContext, cfg: &BlockCFG) -> Diagnostics {
-        SimpleAbsIntConstructor::verify(self, context, cfg)
+    fn verify(
+        &mut self,
+        program: &cfgir::ast::Program,
+        context: &CFGContext,
+        cfg: &ImmForwardCFG,
+    ) -> Diagnostics {
+        SimpleAbsIntConstructor::verify(self, program, context, cfg)
     }
 }
