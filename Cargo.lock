@@ -172,7 +172,7 @@ dependencies = [
  "anemo-build",
  "anemo-tower",
  "anyhow",
- "clap 4.1.4",
+ "clap 4.3.1",
  "mysten-network",
  "rand 0.8.5",
  "sui-types",
@@ -201,7 +201,7 @@ dependencies = [
  "anemo",
  "anemo-tower",
  "bytes",
- "clap 4.1.4",
+ "clap 4.3.1",
  "dashmap",
  "rand 0.8.5",
  "tokio",
@@ -243,10 +243,59 @@ dependencies = [
 ]
 
 [[package]]
-name = "anyhow"
-version = "1.0.69"
+name = "anstream"
+version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "224afbd727c3d6e4b90103ece64b8d1b67fbb1973b1046c2281eed3f3803f800"
+checksum = "0ca84f3628370c59db74ee214b3263d58f9aadd9b4fe7e711fd87dc452b7f163"
+dependencies = [
+ "anstyle",
+ "anstyle-parse",
+ "anstyle-query",
+ "anstyle-wincon",
+ "colorchoice",
+ "is-terminal",
+ "utf8parse",
+]
+
+[[package]]
+name = "anstyle"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "41ed9a86bf92ae6580e0a31281f65a1b1d867c0cc68d5346e2ae128dddfa6a7d"
+
+[[package]]
+name = "anstyle-parse"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e765fd216e48e067936442276d1d57399e37bce53c264d6fefbe298080cb57ee"
+dependencies = [
+ "utf8parse",
+]
+
+[[package]]
+name = "anstyle-query"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5ca11d4be1bab0c8bc8734a9aa7bf4ee8316d462a08c6ac5052f888fef5b494b"
+dependencies = [
+ "windows-sys 0.48.0",
+]
+
+[[package]]
+name = "anstyle-wincon"
+version = "1.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "180abfa45703aebe0093f79badacc01b8fd4ea2e35118747e5811127f926e188"
+dependencies = [
+ "anstyle",
+ "windows-sys 0.48.0",
+]
+
+[[package]]
+name = "anyhow"
+version = "1.0.71"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9c7d0618f0e0b7e8ff11427422b64564d5fb0be1940354bfe2e0529b18a9d9b8"
 dependencies = [
  "backtrace",
 ]
@@ -1724,17 +1773,26 @@ dependencies = [
 
 [[package]]
 name = "clap"
-version = "4.1.4"
+version = "4.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f13b9c79b5d1dd500d20ef541215a6423c75829ef43117e1b4d17fd8af0b5d76"
+checksum = "b4ed2379f8603fa2b7509891660e802b88c70a79a6427a70abb5968054de2c28"
 dependencies = [
- "bitflags",
- "clap_derive 4.1.0",
- "clap_lex 0.3.1",
- "is-terminal",
+ "clap_builder",
+ "clap_derive 4.3.1",
  "once_cell",
+]
+
+[[package]]
+name = "clap_builder"
+version = "4.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "72394f3339a76daf211e57d4bcb374410f3965dcc606dd0e03738c7888766980"
+dependencies = [
+ "anstream",
+ "anstyle",
+ "bitflags",
+ "clap_lex 0.5.0",
  "strsim 0.10.0",
- "termcolor",
 ]
 
 [[package]]
@@ -1752,15 +1810,14 @@ dependencies = [
 
 [[package]]
 name = "clap_derive"
-version = "4.1.0"
+version = "4.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "684a277d672e91966334af371f1a7b5833f9aa00b07c84e92fbce95e00208ce8"
+checksum = "59e9ef9a08ee1c0e1f2e162121665ac45ac3783b0f897db7244ae75ad9a8f65b"
 dependencies = [
  "heck 0.4.0",
- "proc-macro-error",
  "proc-macro2 1.0.58",
  "quote 1.0.26",
- "syn 1.0.107",
+ "syn 2.0.16",
 ]
 
 [[package]]
@@ -1774,12 +1831,9 @@ dependencies = [
 
 [[package]]
 name = "clap_lex"
-version = "0.3.1"
+version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "783fe232adfca04f90f56201b26d79682d4cd2625e0bc7290b95123afe558ade"
-dependencies = [
- "os_str_bytes",
-]
+checksum = "2da6da31387c7e4ef160ffab6d5e7f00c42626fe39aea70a7b0f1773f7dd6c1b"
 
 [[package]]
 name = "clear_on_drop"
@@ -1827,6 +1881,12 @@ name = "collectable"
 version = "0.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "08abddbaad209601e53c7dd4308d8c04c06f17bb7df006434e586a22b83be45a"
+
+[[package]]
+name = "colorchoice"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "acbf1af155f9b9ef647e42cdc158db4b64a1b61f743629225fde6f3e0be2a7c7"
 
 [[package]]
 name = "colored"
@@ -1884,7 +1944,7 @@ dependencies = [
  "serde 1.0.152",
  "serde-hjson",
  "serde_json",
- "toml",
+ "toml 0.5.10",
  "yaml-rust",
 ]
 
@@ -2559,7 +2619,7 @@ dependencies = [
  "petgraph 0.6.2",
  "rayon",
  "serde 1.0.152",
- "toml",
+ "toml 0.5.10",
 ]
 
 [[package]]
@@ -3609,7 +3669,7 @@ dependencies = [
  "smallvec",
  "static_assertions",
  "target-spec",
- "toml",
+ "toml 0.5.10",
 ]
 
 [[package]]
@@ -3624,7 +3684,7 @@ dependencies = [
  "guppy-workspace-hack",
  "semver 1.0.16",
  "serde 1.0.152",
- "toml",
+ "toml 0.5.10",
 ]
 
 [[package]]
@@ -3675,7 +3735,7 @@ dependencies = [
  "serde 1.0.152",
  "tabular",
  "target-spec",
- "toml",
+ "toml 0.5.10",
  "toml_edit 0.15.0",
  "twox-hash",
 ]
@@ -4716,7 +4776,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c493c09323068c01e54c685f7da41a9ccf9219735c3766fbfd6099806ea08fbc"
 dependencies = [
  "serde 1.0.152",
- "toml",
+ "toml 0.5.10",
 ]
 
 [[package]]
@@ -5210,7 +5270,7 @@ dependencies = [
  "serde_yaml",
  "sha2 0.9.9",
  "tempfile",
- "toml",
+ "toml 0.5.10",
  "walkdir",
  "whoami",
 ]
@@ -5258,7 +5318,7 @@ dependencies = [
  "serde_json",
  "simplelog",
  "tokio",
- "toml",
+ "toml 0.5.10",
 ]
 
 [[package]]
@@ -5538,7 +5598,7 @@ dependencies = [
  "socket2 0.4.9",
  "tap",
  "tokio-util 0.7.7",
- "toml",
+ "toml 0.5.10",
  "tracing",
  "tracing-subscriber 0.3.16",
 ]
@@ -6179,7 +6239,7 @@ dependencies = [
  "nexlint",
  "regex",
  "serde 1.0.152",
- "toml",
+ "toml 0.5.10",
 ]
 
 [[package]]
@@ -7171,7 +7231,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e17d47ce914bf4de440332250b0edd23ce48c005f59fab39d3335866b114f11a"
 dependencies = [
  "thiserror",
- "toml",
+ "toml 0.5.10",
 ]
 
 [[package]]
@@ -8529,6 +8589,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "serde_spanned"
+version = "0.6.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "93107647184f6027e3b7dcb2e11034cf95ffa1e3a682c67951963ac69c1c007d"
+dependencies = [
+ "serde 1.0.152",
+]
+
+[[package]]
 name = "serde_test"
 version = "1.0.152"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -9499,6 +9568,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "sui-execution-cut"
+version = "0.1.0"
+dependencies = [
+ "clap 4.3.1",
+ "expect-test",
+ "tempfile",
+ "thiserror",
+ "toml 0.7.4",
+ "workspace-hack",
+]
+
+[[package]]
 name = "sui-faucet"
 version = "1.4.0"
 dependencies = [
@@ -10095,7 +10176,7 @@ dependencies = [
  "async-recursion",
  "async-trait",
  "bcs",
- "clap 4.1.4",
+ "clap 4.3.1",
  "colored",
  "futures",
  "jsonrpsee",
@@ -10553,7 +10634,7 @@ dependencies = [
  "anemo-cli",
  "anyhow",
  "bcs",
- "clap 4.1.4",
+ "clap 4.3.1",
  "colored",
  "comfy-table",
  "eyre",
@@ -11051,22 +11132,22 @@ checksum = "222a222a5bfe1bba4a77b45ec488a741b3cb8872e5e499451fd7d0129c9c7c3d"
 
 [[package]]
 name = "thiserror"
-version = "1.0.38"
+version = "1.0.40"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6a9cd18aa97d5c45c6603caea1da6628790b37f7a34b6ca89522331c5180fed0"
+checksum = "978c9a314bd8dc99be594bc3c175faaa9794be04a5a5e153caba6915336cebac"
 dependencies = [
  "thiserror-impl",
 ]
 
 [[package]]
 name = "thiserror-impl"
-version = "1.0.38"
+version = "1.0.40"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1fb327af4685e4d03fa8cbcf1716380da910eeb2bb8be417e7f9fd3fb164f36f"
+checksum = "f9456a42c5b0d803c8cd86e73dd7cc9edd429499f37a3550d286d5e86720569f"
 dependencies = [
  "proc-macro2 1.0.58",
  "quote 1.0.26",
- "syn 1.0.107",
+ "syn 2.0.16",
 ]
 
 [[package]]
@@ -11306,10 +11387,32 @@ dependencies = [
 ]
 
 [[package]]
+name = "toml"
+version = "0.7.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d6135d499e69981f9ff0ef2167955a5333c35e36f6937d382974566b3d5b94ec"
+dependencies = [
+ "indexmap",
+ "serde 1.0.152",
+ "serde_spanned",
+ "toml_datetime 0.6.2",
+ "toml_edit 0.19.10",
+]
+
+[[package]]
 name = "toml_datetime"
 version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4553f467ac8e3d374bc9a177a26801e5d0f9b211aa1673fb137a403afd1c9cf5"
+
+[[package]]
+name = "toml_datetime"
+version = "0.6.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5a76a9312f5ba4c2dec6b9161fdf25d87ad8a09256ccea5a556fef03c706a10f"
+dependencies = [
+ "serde 1.0.152",
+]
 
 [[package]]
 name = "toml_edit"
@@ -11332,7 +11435,20 @@ dependencies = [
  "combine",
  "indexmap",
  "itertools",
- "toml_datetime",
+ "toml_datetime 0.5.1",
+]
+
+[[package]]
+name = "toml_edit"
+version = "0.19.10"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2380d56e8670370eee6566b0bfd4265f65b3f432e8c6d85623f728d4fa31f739"
+dependencies = [
+ "indexmap",
+ "serde 1.0.152",
+ "serde_spanned",
+ "toml_datetime 0.6.2",
+ "winnow",
 ]
 
 [[package]]
@@ -12345,6 +12461,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1a515f5799fe4961cb532f983ce2b23082366b898e52ffbce459c86f67c8378a"
 
 [[package]]
+name = "winnow"
+version = "0.4.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "61de7bac303dc551fe038e2b3cef0f571087a47571ea6e79a87692ac99b99699"
+dependencies = [
+ "memchr",
+]
+
+[[package]]
 name = "winreg"
 version = "0.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -12376,6 +12501,11 @@ dependencies = [
  "anemo-tower",
  "anes",
  "ansi_term",
+ "anstream",
+ "anstyle",
+ "anstyle-parse",
+ "anstyle-query",
+ "anstyle-wincon",
  "anyhow",
  "arbitrary",
  "arc-swap",
@@ -12483,16 +12613,18 @@ dependencies = [
  "clang-sys",
  "clap 2.34.0",
  "clap 3.2.23",
- "clap 4.1.4",
+ "clap 4.3.1",
+ "clap_builder",
  "clap_derive 3.2.18",
- "clap_derive 4.1.0",
+ "clap_derive 4.3.1",
  "clap_lex 0.2.4",
- "clap_lex 0.3.1",
+ "clap_lex 0.5.0",
  "clear_on_drop",
  "clipboard-win",
  "codespan",
  "codespan-reporting",
  "collectable",
+ "colorchoice",
  "colored",
  "colored-diff",
  "combine",
@@ -13016,6 +13148,7 @@ dependencies = [
  "serde_json",
  "serde_path_to_error",
  "serde_repr",
+ "serde_spanned",
  "serde_test",
  "serde_urlencoded",
  "serde_with",
@@ -13109,10 +13242,13 @@ dependencies = [
  "tokio-rustls",
  "tokio-stream",
  "tokio-util 0.7.4",
- "toml",
- "toml_datetime",
+ "toml 0.5.10",
+ "toml 0.7.4",
+ "toml_datetime 0.5.1",
+ "toml_datetime 0.6.2",
  "toml_edit 0.14.4",
  "toml_edit 0.15.0",
+ "toml_edit 0.19.10",
  "tonic",
  "tonic-build",
  "tonic-health",
@@ -13193,6 +13329,7 @@ dependencies = [
  "windows-targets 0.48.0",
  "windows_x86_64_msvc 0.42.2",
  "windows_x86_64_msvc 0.48.0",
+ "winnow",
  "winreg",
  "wyz",
  "x509-parser",

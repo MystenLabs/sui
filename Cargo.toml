@@ -143,6 +143,7 @@ members = [
     "narwhal/types",
     "narwhal/worker",
     "sui-execution",
+    "sui-execution/cut",
     "sui-execution/latest/sui-adapter",
     "sui-execution/latest/sui-move-natives",
     "sui-execution/latest/sui-verifier",

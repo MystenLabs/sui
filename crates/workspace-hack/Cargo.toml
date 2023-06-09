@@ -32,6 +32,10 @@ anemo-cli = { git = "https://github.com/mystenlabs/anemo.git", rev = "0f0ae8d8f2
 anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "0f0ae8d8f222820a20b586088ea7a2941478a159", default-features = false }
 anes = { version = "0.1" }
 ansi_term = { version = "0.12", default-features = false }
+anstream = { version = "0.3" }
+anstyle = { version = "1" }
+anstyle-parse = { version = "0.2" }
+anstyle-query = { version = "1", default-features = false }
 anyhow = { version = "1", features = ["backtrace"] }
 arbitrary = { version = "1", default-features = false, features = ["derive_arbitrary"] }
 arc-swap = { version = "1", default-features = false, features = ["serde"] }
@@ -122,12 +126,14 @@ cipher = { version = "0.4", default-features = false, features = ["block-padding
 clap-164d15cefe24d7eb = { package = "clap", version = "4", features = ["derive"] }
 clap-7b89eefb6aaa9bf3 = { package = "clap", version = "3", features = ["derive"] }
 clap-f595c2ba2a3f28df = { package = "clap", version = "2" }
-clap_lex-468e82937335b1c9 = { package = "clap_lex", version = "0.3", default-features = false }
+clap_builder = { version = "4", default-features = false, features = ["color", "help", "std", "suggestions", "usage"] }
 clap_lex-6f8ce4dd05d13bba = { package = "clap_lex", version = "0.2", default-features = false }
+clap_lex-d8f496e17d97b5cb = { package = "clap_lex", version = "0.5", default-features = false }
 clear_on_drop = { version = "0.2", default-features = false }
 codespan = { version = "0.11", default-features = false, features = ["serialization"] }
 codespan-reporting = { version = "0.11", default-features = false, features = ["serialization"] }
 collectable = { version = "0.0.2", default-features = false }
+colorchoice = { version = "1", default-features = false }
 colored = { version = "2", default-features = false }
 colored-diff = { version = "0.2", default-features = false }
 combine = { version = "4" }
@@ -535,6 +541,7 @@ serde-value = { version = "0.7", default-features = false }
 serde_bytes = { version = "0.11" }
 serde_json = { version = "1", features = ["alloc", "arbitrary_precision", "preserve_order", "raw_value", "unbounded_depth"] }
 serde_path_to_error = { version = "0.1", default-features = false }
+serde_spanned = { version = "0.6", default-features = false, features = ["serde"] }
 serde_test = { version = "1", default-features = false }
 serde_urlencoded = { version = "0.7", default-features = false }
 serde_with = { version = "2", features = ["hex"] }
@@ -610,10 +617,13 @@ tokio-retry = { version = "0.3", default-features = false }
 tokio-rustls = { version = "0.23" }
 tokio-stream = { version = "0.1", features = ["net", "sync"] }
 tokio-util = { version = "0.7", features = ["codec", "compat", "io"] }
-toml = { version = "0.5", features = ["preserve_order"] }
-toml_datetime = { version = "0.5", default-features = false }
+toml-ca01ad9e24f5d932 = { package = "toml", version = "0.7", features = ["preserve_order"] }
+toml-d8f496e17d97b5cb = { package = "toml", version = "0.5", features = ["preserve_order"] }
+toml_datetime-3b31131e45eafb45 = { package = "toml_datetime", version = "0.6", default-features = false, features = ["serde"] }
+toml_datetime-d8f496e17d97b5cb = { package = "toml_datetime", version = "0.5", default-features = false }
 toml_edit-3575ec1268b04181 = { package = "toml_edit", version = "0.15" }
 toml_edit-582f2526e08bb6a0 = { package = "toml_edit", version = "0.14", features = ["easy"] }
+toml_edit-cdcf2f9584511fe6 = { package = "toml_edit", version = "0.19", features = ["serde"] }
 tonic = { version = "0.8", features = ["tls"] }
 tonic-health = { version = "0.8" }
 tower = { version = "0.4", features = ["full"] }
@@ -669,6 +679,7 @@ web-sys = { version = "0.3", default-features = false, features = ["AddEventList
 webpki = { version = "0.22", default-features = false, features = ["std"] }
 webpki-roots = { version = "0.22", default-features = false }
 whoami = { version = "1" }
+winnow = { version = "0.4" }
 wyz = { version = "0.2", default-features = false, features = ["alloc"] }
 x509-parser = { version = "0.14" }
 xml-rs = { version = "0.8", default-features = false }
@@ -700,6 +711,10 @@ anemo-cli = { git = "https://github.com/mystenlabs/anemo.git", rev = "0f0ae8d8f2
 anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "0f0ae8d8f222820a20b586088ea7a2941478a159", default-features = false }
 anes = { version = "0.1" }
 ansi_term = { version = "0.12", default-features = false }
+anstream = { version = "0.3" }
+anstyle = { version = "1" }
+anstyle-parse = { version = "0.2" }
+anstyle-query = { version = "1", default-features = false }
 anyhow = { version = "1", features = ["backtrace"] }
 arbitrary = { version = "1", default-features = false, features = ["derive_arbitrary"] }
 arc-swap = { version = "1", default-features = false, features = ["serde"] }
@@ -807,14 +822,16 @@ clang-sys = { version = "1", default-features = false, features = ["clang_6_0", 
 clap-164d15cefe24d7eb = { package = "clap", version = "4", features = ["derive"] }
 clap-7b89eefb6aaa9bf3 = { package = "clap", version = "3", features = ["derive"] }
 clap-f595c2ba2a3f28df = { package = "clap", version = "2" }
+clap_builder = { version = "4", default-features = false, features = ["color", "help", "std", "suggestions", "usage"] }
 clap_derive-164d15cefe24d7eb = { package = "clap_derive", version = "4" }
 clap_derive-7b89eefb6aaa9bf3 = { package = "clap_derive", version = "3" }
-clap_lex-468e82937335b1c9 = { package = "clap_lex", version = "0.3", default-features = false }
 clap_lex-6f8ce4dd05d13bba = { package = "clap_lex", version = "0.2", default-features = false }
+clap_lex-d8f496e17d97b5cb = { package = "clap_lex", version = "0.5", default-features = false }
 clear_on_drop = { version = "0.2", default-features = false }
 codespan = { version = "0.11", default-features = false, features = ["serialization"] }
 codespan-reporting = { version = "0.11", default-features = false, features = ["serialization"] }
 collectable = { version = "0.0.2", default-features = false }
+colorchoice = { version = "1", default-features = false }
 colored = { version = "2", default-features = false }
 colored-diff = { version = "0.2", default-features = false }
 combine = { version = "4" }
@@ -1296,6 +1313,7 @@ serde_derive_internals = { version = "0.26", default-features = false }
 serde_json = { version = "1", features = ["alloc", "arbitrary_precision", "preserve_order", "raw_value", "unbounded_depth"] }
 serde_path_to_error = { version = "0.1", default-features = false }
 serde_repr = { version = "0.1", default-features = false }
+serde_spanned = { version = "0.6", default-features = false, features = ["serde"] }
 serde_test = { version = "1", default-features = false }
 serde_urlencoded = { version = "0.7", default-features = false }
 serde_with = { version = "2", features = ["hex"] }
@@ -1382,10 +1400,13 @@ tokio-retry = { version = "0.3", default-features = false }
 tokio-rustls = { version = "0.23" }
 tokio-stream = { version = "0.1", features = ["net", "sync"] }
 tokio-util = { version = "0.7", features = ["codec", "compat", "io"] }
-toml = { version = "0.5", features = ["preserve_order"] }
-toml_datetime = { version = "0.5", default-features = false }
+toml-ca01ad9e24f5d932 = { package = "toml", version = "0.7", features = ["preserve_order"] }
+toml-d8f496e17d97b5cb = { package = "toml", version = "0.5", features = ["preserve_order"] }
+toml_datetime-3b31131e45eafb45 = { package = "toml_datetime", version = "0.6", default-features = false, features = ["serde"] }
+toml_datetime-d8f496e17d97b5cb = { package = "toml_datetime", version = "0.5", default-features = false }
 toml_edit-3575ec1268b04181 = { package = "toml_edit", version = "0.15" }
 toml_edit-582f2526e08bb6a0 = { package = "toml_edit", version = "0.14", features = ["easy"] }
+toml_edit-cdcf2f9584511fe6 = { package = "toml_edit", version = "0.19", features = ["serde"] }
 tonic = { version = "0.8", features = ["tls"] }
 tonic-build = { version = "0.8" }
 tonic-health = { version = "0.8" }
@@ -1455,6 +1476,7 @@ webpki = { version = "0.22", default-features = false, features = ["std"] }
 webpki-roots = { version = "0.22", default-features = false }
 which = { version = "4", default-features = false }
 whoami = { version = "1" }
+winnow = { version = "0.4" }
 wyz = { version = "0.2", default-features = false, features = ["alloc"] }
 x509-parser = { version = "0.14" }
 xml-rs = { version = "0.8", default-features = false }
@@ -1630,6 +1652,7 @@ symbolic-demangle = { version = "10", default-features = false, features = ["cpp
 web-sys = { version = "0.3", default-features = false, features = ["Worker"] }
 
 [target.x86_64-pc-windows-msvc.dependencies]
+anstyle-wincon = { version = "1", default-features = false }
 clipboard-win = { version = "4", default-features = false }
 cpufeatures = { version = "0.2", default-features = false }
 crossterm_winapi-274715c4dabd11b0 = { package = "crossterm_winapi", version = "0.9", default-features = false }
@@ -1659,6 +1682,7 @@ windows_x86_64_msvc-c8eced492e86ede7 = { package = "windows_x86_64_msvc", versio
 winreg = { version = "0.10", default-features = false }
 
 [target.x86_64-pc-windows-msvc.build-dependencies]
+anstyle-wincon = { version = "1", default-features = false }
 clipboard-win = { version = "4", default-features = false }
 cpufeatures = { version = "0.2", default-features = false }
 crossterm_winapi-274715c4dabd11b0 = { package = "crossterm_winapi", version = "0.9", default-features = false }
