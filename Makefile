@@ -33,7 +33,7 @@ $(CACHE_DIR)/bin/rustup: $(CACHE_DIR)/bin/rustup-init
 $(OUT_DIR)/sui-node: $(CACHE_DIR)/bin/rustup
 	$(call toolchain,' \
 		source "/home/build/cache/x86_64/cargo/env" \
-		&& export RUSTFLAGS='-C target-feature=+crt-static' \
+		&& export RUSTFLAGS="-C target-feature=+crt-static" \
 		&& cargo build \
 			--target x86_64-unknown-linux-gnu \
 			--locked \
