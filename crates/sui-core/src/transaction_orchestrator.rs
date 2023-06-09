@@ -6,13 +6,15 @@ Transaction Orchestrator is a Node component that utilizes Quorum Driver to
 submit transactions to validators for finality, and proactively executes
 finalized transactions locally, when possible.
 */
-use crate::authority::AuthorityState;
+use crate::authority::{AuthorityState, EffectsNotifyRead};
 use crate::authority_aggregator::{AuthAggMetrics, AuthorityAggregator};
 use crate::authority_client::{AuthorityAPI, NetworkAuthorityClient};
 use crate::quorum_driver::reconfig_observer::{OnsiteReconfigObserver, ReconfigObserver};
 use crate::quorum_driver::{QuorumDriverHandler, QuorumDriverHandlerBuilder, QuorumDriverMetrics};
 use crate::safe_client::SafeClientMetricsBase;
-use mysten_common::sync::notify_read::{NotifyRead, Registration};
+use futures::future::{select, Either, Future};
+use futures::FutureExt;
+use mysten_common::sync::notify_read::NotifyRead;
 use mysten_metrics::histogram::{Histogram, HistogramVec};
 use mysten_metrics::spawn_monitored_task;
 use mysten_metrics::{TX_TYPE_SHARED_OBJ_TX, TX_TYPE_SINGLE_WRITER_TX};
@@ -183,6 +185,14 @@ where
                     .start_timer(),
             )
         };
+
+        // TODO: refactor all the gauge and timer metrics with `monitored_scope`
+        let wait_for_finality_gauge = self.metrics.wait_for_finality_in_flight.clone();
+        wait_for_finality_gauge.inc();
+        let _wait_for_finality_gauge = scopeguard::guard(wait_for_finality_gauge, |in_flight| {
+            in_flight.dec();
+        });
+
         let ticket = self.submit(transaction.clone()).await.map_err(|e| {
             warn!(?tx_digest, "QuorumDriverInternalError: {e:?}");
             QuorumDriverError::QuorumDriverInternalError(e)
@@ -198,12 +208,21 @@ where
             ticket,
         ).await else {
             debug!(?tx_digest, "Timeout waiting for transaction finality.");
+            self.metrics.wait_for_finality_timeout.inc();
             return Err(QuorumDriverError::TimeoutBeforeFinality);
         };
+
         drop(_txn_finality_timer);
+        drop(_wait_for_finality_gauge);
+        self.metrics.wait_for_finality_finished.inc();
+
         match result {
-            Err(err) => Err(err),
-            Ok(response) => {
+            Err(err) => {
+                warn!(?tx_digest, "QuorumDriverInternalError: {err:?}");
+                Err(QuorumDriverError::QuorumDriverInternalError(err))
+            }
+            Ok(Err(err)) => Err(err),
+            Ok(Ok(response)) => {
                 good_response_metrics.inc();
                 let QuorumDriverResponse {
                     effects_cert,
@@ -246,11 +265,12 @@ where
         }
     }
 
-    /// Submits the transaction for execution queue, returns a Future to be awaited
+    /// Submits the transaction to Quorum Driver for execution.
+    /// Returns an awaitable Future.
     async fn submit(
         &self,
         transaction: VerifiedTransaction,
-    ) -> SuiResult<Registration<TransactionDigest, QuorumDriverResult>> {
+    ) -> SuiResult<impl Future<Output = SuiResult<QuorumDriverResult>> + '_> {
         let tx_digest = *transaction.digest();
         let ticket = self.notifier.register_one(&tx_digest);
         if self
@@ -260,10 +280,31 @@ where
         {
             debug!(?tx_digest, "no pending request in flight, submitting.");
             self.quorum_driver()
-                .submit_transaction_no_ticket(transaction)
+                .submit_transaction_no_ticket(transaction.clone())
                 .await?;
         }
-        Ok(ticket)
+        // It's possible that the transaction effects is already stored in DB at this point.
+        // So we also subscribe to that. If we hear from `effects_await` first, it means
+        // the ticket misses the previous notification, and we want to ask quorum driver
+        // to form a certificate for us again, to serve this request.
+        let effects_await = self
+            .validator_state
+            .database
+            .notify_read_executed_effects(vec![tx_digest]);
+        let qd = self.clone_quorum_driver();
+        Ok(async move {
+            match select(ticket, effects_await.boxed()).await {
+                Either::Left((quorum_driver_response, _)) => Ok(quorum_driver_response),
+                Either::Right((_, unfinished_quorum_driver_task)) => {
+                    debug!(
+                        ?tx_digest,
+                        "Effects are available in DB, use quorum driver to get a certificate"
+                    );
+                    qd.submit_transaction_no_ticket(transaction).await?;
+                    Ok(unfinished_quorum_driver_task.await)
+                }
+            }
+        })
     }
 
     #[instrument(name = "tx_orchestrator_execute_finalized_tx_locally_with_timeout", level = "debug", skip_all, fields(tx_digest = ?transaction.digest()), err)]
@@ -289,6 +330,7 @@ where
         if validator_state.is_tx_already_executed(tx_digest)? {
             return Ok(());
         }
+        metrics.local_execution_in_flight.inc();
         let _metrics_guard =
             scopeguard::guard(metrics.local_execution_in_flight.clone(), |in_flight| {
                 in_flight.dec();
@@ -470,6 +512,10 @@ pub struct TransactionOrchestratorMetrics {
     req_in_flight_single_writer: GenericGauge<AtomicI64>,
     req_in_flight_shared_object: GenericGauge<AtomicI64>,
 
+    wait_for_finality_in_flight: GenericGauge<AtomicI64>,
+    wait_for_finality_finished: GenericCounter<AtomicU64>,
+    wait_for_finality_timeout: GenericCounter<AtomicU64>,
+
     local_execution_in_flight: GenericGauge<AtomicI64>,
     local_execution_success: GenericCounter<AtomicU64>,
     local_execution_timeout: GenericCounter<AtomicU64>,
@@ -551,6 +597,24 @@ impl TransactionOrchestratorMetrics {
             good_response_shared_object,
             req_in_flight_single_writer,
             req_in_flight_shared_object,
+            wait_for_finality_in_flight: register_int_gauge_with_registry!(
+                "tx_orchestrator_wait_for_finality_in_flight",
+                "Number of in flight txns Transaction Orchestrator are waiting for finality for",
+                registry,
+            )
+            .unwrap(),
+            wait_for_finality_finished: register_int_counter_with_registry!(
+                "tx_orchestrator_wait_for_finality_fnished",
+                "Total number of txns Transaction Orchestrator gets responses from Quorum Driver before timeout, either success or failure",
+                registry,
+            )
+            .unwrap(),
+            wait_for_finality_timeout: register_int_counter_with_registry!(
+                "tx_orchestrator_wait_for_finality_timeout",
+                "Total number of txns timing out in waiting for finality Transaction Orchestrator handles",
+                registry,
+            )
+            .unwrap(),
             local_execution_in_flight: register_int_gauge_with_registry!(
                 "tx_orchestrator_local_execution_in_flight",
                 "Number of local execution txns in flights Transaction Orchestrator handles",
