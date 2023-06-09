@@ -53,6 +53,10 @@ pub fn validator_config_file(i: usize) -> String {
     format!("validator-config-{}.yaml", i)
 }
 
+pub fn ssfn_config_file(i: usize) -> String {
+    format!("ssfn-config-{}.yaml", i)
+}
+
 pub trait Config
 where
     Self: DeserializeOwned + Serialize,

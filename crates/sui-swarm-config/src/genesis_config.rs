@@ -19,6 +19,12 @@ use sui_types::crypto::{
 use sui_types::multiaddr::Multiaddr;
 use tracing::info;
 
+// All information needed to build a NodeConfig for a state sync fullnode.
+#[derive(Serialize, Deserialize, Debug)]
+pub struct SsfnGenesisConfig {
+    pub p2p_address: Multiaddr,
+}
+
 // All information needed to build a NodeConfig for a validator.
 #[derive(Serialize, Deserialize)]
 pub struct ValidatorGenesisConfig {
@@ -154,6 +160,7 @@ impl ValidatorGenesisConfigBuilder {
 
 #[derive(Serialize, Deserialize, Default)]
 pub struct GenesisConfig {
+    pub ssfn_config_info: Option<Vec<SsfnGenesisConfig>>,
     pub validator_config_info: Option<Vec<ValidatorGenesisConfig>>,
     pub parameters: GenesisCeremonyParameters,
     pub accounts: Vec<AccountConfig>,
@@ -309,6 +316,7 @@ impl GenesisConfig {
 
         // Make a new genesis configuration.
         GenesisConfig {
+            ssfn_config_info: None,
             validator_config_info: Some(validator_config_info),
             parameters,
             accounts: vec![account_config],
