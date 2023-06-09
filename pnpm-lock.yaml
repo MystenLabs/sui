@@ -304,8 +304,8 @@ importers:
         specifier: ^3.1.1
         version: 3.1.1
       '@vitejs/plugin-react':
-        specifier: ^3.1.0
-        version: 3.1.0(vite@4.2.3)
+        specifier: ^4.0.0
+        version: 4.0.0(vite@4.2.3)
       '@vitest/ui':
         specifier: ^0.30.1
         version: 0.30.1
@@ -638,8 +638,8 @@ importers:
         specifier: ^5.59.8
         version: 5.59.8(eslint@8.38.0)(typescript@5.0.4)
       '@vitejs/plugin-react':
-        specifier: ^3.1.0
-        version: 3.1.0(vite@4.2.3)
+        specifier: ^4.0.0
+        version: 4.0.0(vite@4.2.3)
       concurrently:
         specifier: ^8.0.1
         version: 8.0.1
@@ -807,8 +807,8 @@ importers:
         specifier: ^5.59.8
         version: 5.59.8(eslint@8.38.0)(typescript@5.0.4)
       '@vitejs/plugin-react':
-        specifier: ^3.1.0
-        version: 3.1.0(vite@4.2.3)
+        specifier: ^4.0.0
+        version: 4.0.0(vite@4.2.3)
       autoprefixer:
         specifier: ^10.4.14
         version: 10.4.14(postcss@8.4.24)
@@ -874,8 +874,8 @@ importers:
         specifier: ^18.0.11
         version: 18.0.11
       '@vitejs/plugin-react':
-        specifier: ^3.1.0
-        version: 3.1.0(vite@4.2.3)
+        specifier: ^4.0.0
+        version: 4.0.0(vite@4.2.3)
       autoprefixer:
         specifier: ^10.4.14
         version: 10.4.14(postcss@8.4.24)
@@ -914,8 +914,8 @@ importers:
         specifier: ^18.0.11
         version: 18.0.11
       '@vitejs/plugin-react':
-        specifier: ^3.1.0
-        version: 3.1.0(vite@4.2.3)
+        specifier: ^4.0.0
+        version: 4.0.0(vite@4.2.3)
       autoprefixer:
         specifier: ^10.4.14
         version: 10.4.14(postcss@8.4.24)
@@ -1282,8 +1282,8 @@ importers:
         version: 5.0.4
     devDependencies:
       '@vitejs/plugin-react':
-        specifier: ^3.1.0
-        version: 3.1.0(vite@4.2.3)
+        specifier: ^4.0.0
+        version: 4.0.0(vite@4.2.3)
       vite:
         specifier: ^4.2.3
         version: 4.2.3(@types/node@18.15.11)(sass@1.62.0)
@@ -7578,6 +7578,21 @@ packages:
       - supports-color
     dev: true
 
+  /@vitejs/plugin-react@4.0.0(vite@4.2.3):
+    resolution: {integrity: sha512-HX0XzMjL3hhOYm+0s95pb0Z7F8O81G7joUHgfDd/9J/ZZf5k4xX6QAMFkKsHFxaHlf6X7GD7+XuaZ66ULiJuhQ==}
+    engines: {node: ^14.18.0 || >=16.0.0}
+    peerDependencies:
+      vite: ^4.2.0
+    dependencies:
+      '@babel/core': 7.21.4
+      '@babel/plugin-transform-react-jsx-self': 7.21.0(@babel/core@7.21.4)
+      '@babel/plugin-transform-react-jsx-source': 7.19.6(@babel/core@7.21.4)
+      react-refresh: 0.14.0
+      vite: 4.2.3(@types/node@18.15.11)(sass@1.62.0)
+    transitivePeerDependencies:
+      - supports-color
+    dev: true
+
   /@vitest/expect@0.30.1:
     resolution: {integrity: sha512-c3kbEtN8XXJSeN81iDGq29bUzSjQhjES2WR3aColsS4lPGbivwLtas4DNUe0jD9gg/FYGIteqOenfU95EFituw==}
     dependencies:
@@ -13821,11 +13836,13 @@ packages:
 
   /jsesc@0.5.0:
     resolution: {integrity: sha512-uZz5UnB7u4T9LvwmFqXii7pZSouaRPorGs5who1Ip7VO0wxanFvBL7GkM6dTHlgX+jhBApRetaWpnDabOeTcnA==}
+    hasBin: true
     dev: true
 
   /jsesc@2.5.2:
     resolution: {integrity: sha512-OYu7XEzjkCQ3C5Ps3QIZsQfNpqoJyZZA99wd9aWd05NCtC5pWOkShK2mkL6HXQR6/Cy2lbNdPlZBpuQHXE63gA==}
     engines: {node: '>=4'}
+    hasBin: true
     dev: true
 
   /json-buffer@3.0.0:
