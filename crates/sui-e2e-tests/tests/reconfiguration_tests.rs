@@ -383,7 +383,7 @@ async fn test_reconfig_with_failing_validator() {
             .unwrap(),
     );
 
-    let _restarter_handle = test_cluster
+    test_cluster
         .random_node_restarter()
         .with_kill_interval_secs(2, 4)
         .with_restart_delay_secs(2, 4)
