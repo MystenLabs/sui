@@ -214,7 +214,6 @@ pub trait IndexerStore {
     ) -> Result<usize, IndexerError>;
     async fn persist_object_changes(
         &self,
-        checkpoint: &Checkpoint,
         tx_object_changes: &[TransactionObjectChanges],
         object_mutation_latency: Histogram,
         object_deletion_latency: Histogram,
@@ -235,6 +234,10 @@ pub trait IndexerStore {
     ) -> Result<(), IndexerError>;
 
     async fn persist_epoch(&self, data: &TemporaryEpochStore) -> Result<(), IndexerError>;
+    async fn get_network_total_transactions_previous_epoch(
+        &self,
+        epoch: i64,
+    ) -> Result<i64, IndexerError>;
 
     async fn get_epochs(
         &self,
