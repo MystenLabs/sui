@@ -8,6 +8,7 @@ edition = "2021"
 
 [dependencies]
 anyhow = "1.0.71"
+backoff = "0.4.0"
 base64 = "0.21.2"
 chrono = "0.4.26"
 clap = { version = "4.3.0", features = ["derive"] }

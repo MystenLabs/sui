@@ -1,4 +1,4 @@
-The `sui-metric-checker` crate is used for querying prometheus metrics and validating the results. It will primarly be used to check for performance regressions in nightly deployments. Requires `api_key`, `api_user` & prometheus `url` which can be found in `sui-ops` repo or by asking the PE team.
+The `sui-metric-checker` crate is used for querying prometheus metrics and validating the results. It will primarily be used to check for performance regressions in nightly deployments. Requires `api_key`, `api_user` & prometheus `url` which can be found in `sui-ops` repo or by asking the PE team.
 
 ## Guide
 

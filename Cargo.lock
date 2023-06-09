@@ -9913,6 +9913,7 @@ name = "sui-metric-checker"
 version = "0.0.0"
 dependencies = [
  "anyhow",
+ "backoff",
  "base64 0.21.2",
  "chrono",
  "clap 4.3.1",

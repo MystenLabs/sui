@@ -5,71 +5,7 @@ use anyhow::anyhow;
 use base64::{engine::general_purpose, Engine};
 use prometheus_http_query::Client;
 use reqwest::header::{HeaderValue, AUTHORIZATION};
-use std::time::Duration;
-use tokio::time::sleep;
 use tracing::debug;
-
-const INITIAL_BACKOFF: Duration = Duration::from_secs(1);
-const MAX_BACKOFF: Duration = Duration::from_secs(5);
-
-pub async fn instant_query_with_retries(
-    auth_header: &str,
-    client: Client,
-    query: &str,
-    max_retries: u32,
-) -> Result<f64, anyhow::Error> {
-    let mut retries = 0;
-    let mut backoff = INITIAL_BACKOFF;
-
-    loop {
-        match instant_query(auth_header, client.clone(), query).await {
-            Ok(value) => return Ok(value),
-            Err(error) => {
-                if retries >= max_retries {
-                    return Err(anyhow!("After {max_retries} retry attempts - {error}"));
-                }
-                retries += 1;
-                debug!("Query \"{query}\" failed, retry attempt {retries}");
-                sleep(backoff).await;
-                backoff *= 2;
-                if backoff > MAX_BACKOFF {
-                    backoff = MAX_BACKOFF;
-                }
-            }
-        }
-    }
-}
-
-pub async fn range_query_with_retries(
-    auth_header: &str,
-    client: Client,
-    query: &str,
-    start: i64,
-    end: i64,
-    step: f64,
-    max_retries: u32,
-) -> Result<f64, anyhow::Error> {
-    let mut retries = 0;
-    let mut backoff = INITIAL_BACKOFF;
-
-    loop {
-        match range_query(auth_header, client.clone(), query, start, end, step).await {
-            Ok(value) => return Ok(value),
-            Err(error) => {
-                if retries >= max_retries {
-                    return Err(anyhow!("After {max_retries} retry attempts - {error}"));
-                }
-                retries += 1;
-                debug!("Query \"{query}\" failed, retry attempt {retries}");
-                sleep(backoff).await;
-                backoff *= 2;
-                if backoff > MAX_BACKOFF {
-                    backoff = MAX_BACKOFF;
-                }
-            }
-        }
-    }
-}
 
 pub async fn instant_query(
     auth_header: &str,
