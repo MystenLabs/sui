@@ -23,7 +23,7 @@ pub(crate) struct Args {
     pub feature: String,
 
     /// Root of repository -- all source and destination paths must be within this path, and it must
-    /// contain the repo's [workspace] configuration.  Defaults to the parent of the working
+    /// contain the repo's `workspace` configuration.  Defaults to the parent of the working
     /// directory that contains a .git directory.
     pub root: Option<PathBuf>,
 

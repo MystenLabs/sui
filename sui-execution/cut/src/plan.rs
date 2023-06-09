@@ -12,7 +12,7 @@ use toml::value::Value;
 use crate::args::Args;
 
 /// Description of where packages should be copied to, what their new names should be, and whether
-/// they should be added to the [workspace] `members` or `exclude` fields.
+/// they should be added to the `workspace` `members` or `exclude` fields.
 #[derive(Debug)]
 pub(crate) struct CutPlan(BTreeMap<String, CutPackage>);
 
@@ -34,7 +34,7 @@ pub(crate) enum WorkspaceState {
     Unknown,
 }
 
-/// Relevant contents of a Cargo.toml [workspace] section.
+/// Relevant contents of a Cargo.toml `workspace` section.
 #[derive(Debug)]
 struct Workspace {
     /// Canonicalized paths of workspace members
@@ -186,8 +186,8 @@ impl CutPlan {
 }
 
 impl Workspace {
-    /// Read `members` and `exclude` from the [workspace] section of the `Cargo.toml` file in
-    /// directory `root`.  Fails if there isn't a manifest, it doesn't contain a [workspace]
+    /// Read `members` and `exclude` from the `workspace` section of the `Cargo.toml` file in
+    /// directory `root`.  Fails if there isn't a manifest, it doesn't contain a `workspace`
     /// section, or the relevant fields are not formatted as expected.
     fn read<P: AsRef<Path>>(root: P) -> PlanResult<Self> {
         let path = root.as_ref().join("Cargo.toml");
