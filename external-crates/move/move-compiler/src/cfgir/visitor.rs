@@ -18,34 +18,21 @@ use crate::{
 };
 use move_ir_types::location::*;
 
-pub type AbsIntVisitorFn = Box<dyn FnMut(&CFGContext, &BlockCFG) -> Diagnostics>;
+pub type AbsIntVisitorObj = Box<dyn AbstractInterpreterVisitor>;
 
-/// A trait for custom abstract interpreter visitors. Use `SimpleAbsIntVisitor` if extensive custom
-/// logic is not needed. For example, if just visiting specific function calls,
-/// `SimpleAbsIntVisitor` should be sufficient.
-pub trait AbsIntVisitor: AbstractInterpreter + Sized {
-    /// Called to initialize the abstract state before any code is visited
-    fn init_state(context: &CFGContext) -> <Self as TransferFunctions>::State;
+pub trait AbstractInterpreterVisitor {
+    fn verify(&mut self, context: &CFGContext, cfg: &BlockCFG) -> Diagnostics;
+}
 
-    /// Construct an abstract interpreter pass given the initial state
-    fn new(context: &CFGContext, init_state: &mut <Self as TransferFunctions>::State) -> Self;
+impl<V: AbstractInterpreterVisitor + 'static> From<V> for AbsIntVisitorObj {
+    fn from(value: V) -> Self {
+        Box::new(value)
+    }
+}
 
-    /// A hook for an additional processing after visiting all codes. The `final_states` are the
-    /// pre-states for each block (keyed by the label for the block). The `diags` are collected from
-    /// all code visited
-    fn finish(
-        &mut self,
-        final_states: BTreeMap<Label, <Self as TransferFunctions>::State>,
-        diags: Diagnostics,
-    ) -> Diagnostics;
-
-    fn visitor() -> Visitor {
-        Visitor::AbsIntVisitor(Box::new(|context, cfg| {
-            let mut init_state = Self::init_state(context);
-            let mut ai = Self::new(context, &mut init_state);
-            let (final_state, ds) = ai.analyze_function(cfg, init_state);
-            ai.finish(final_state, ds)
-        }))
+impl<V: AbstractInterpreterVisitor + 'static> From<V> for Visitor {
+    fn from(value: V) -> Self {
+        Visitor::AbsIntVisitor(Box::new(value))
     }
 }
 
@@ -165,16 +152,16 @@ impl<V: SimpleDomain> AbstractDomain for V {
 /// Trait for simple abstract interpreter passes. Custom hooks can be implemented with additional
 /// logic as needed. The provided implementation will do all of the plumbing of abstract values
 /// through the expressions, commands, and locals.
-pub trait SimpleAbsInt: Sized {
-    type State: SimpleDomain;
-    /// The execution context local to a command
-    type ExecutionContext: SimpleExecutionContext;
-
+pub trait SimpleAbsIntConstructor: Sized {
+    type AI<'a>: Sized + SimpleAbsInt;
     /// Given the initial state/domain, construct a new abstract interpreter.
     /// Return None if it should not be run given this context
-    fn new(context: &CFGContext, init_state: &mut Self::State) -> Option<Self>;
+    fn new<'a>(
+        context: &'a CFGContext<'a>,
+        init_state: &mut <Self::AI<'a> as SimpleAbsInt>::State,
+    ) -> Option<Self::AI<'a>>;
 
-    fn verify(context: &CFGContext, cfg: &BlockCFG) -> Diagnostics {
+    fn verify(&mut self, context: &CFGContext, cfg: &BlockCFG) -> Diagnostics {
         let mut locals = context
             .locals
             .key_cloned_iter()
@@ -190,21 +177,23 @@ pub trait SimpleAbsInt: Sized {
                 *param,
                 LocalState::Available(
                     param.0.loc,
-                    <<Self as SimpleAbsInt>::State as SimpleDomain>::Value::default(),
+                    <<Self::AI<'_> as SimpleAbsInt>::State as SimpleDomain>::Value::default(),
                 ),
             );
         }
-        let mut init_state = Self::State::new(context, locals);
+        let mut init_state = <Self::AI<'_> as SimpleAbsInt>::State::new(context, locals);
         let Some(mut ai) = Self::new(context, &mut init_state) else {
             return Diagnostics::new();
         };
         let (final_state, ds) = ai.analyze_function(cfg, init_state);
         ai.finish(final_state, ds)
     }
+}
 
-    fn visitor() -> Visitor {
-        Visitor::AbsIntVisitor(Box::new(|context, cfg| Self::verify(context, cfg)))
-    }
+pub trait SimpleAbsInt: Sized {
+    type State: SimpleDomain;
+    /// The execution context local to a command
+    type ExecutionContext: SimpleExecutionContext;
 
     /// A hook for an additional processing after visiting all codes. The `final_states` are the
     /// pre-states for each block (keyed by the label for the block). The `diags` are collected from
@@ -458,3 +447,9 @@ impl<V: SimpleAbsInt> TransferFunctions for V {
     }
 }
 impl<V: SimpleAbsInt> AbstractInterpreter for V {}
+
+impl<V: SimpleAbsIntConstructor> AbstractInterpreterVisitor for V {
+    fn verify(&mut self, context: &CFGContext, cfg: &BlockCFG) -> Diagnostics {
+        SimpleAbsIntConstructor::verify(self, context, cfg)
+    }
+}

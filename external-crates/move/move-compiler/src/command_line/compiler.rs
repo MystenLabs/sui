@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    cfgir::{self, visitor::AbsIntVisitorFn},
+    cfgir::{self, visitor::AbsIntVisitorObj},
     command_line::{DEFAULT_OUTPUT_DIR, MOVE_COMPILED_INTERFACES_DIR},
     compiled_unit,
     compiled_unit::AnnotatedCompiledUnit,
@@ -86,7 +86,7 @@ pub struct FullyCompiledProgram {
 }
 
 pub enum Visitor {
-    AbsIntVisitor(AbsIntVisitorFn),
+    AbsIntVisitor(AbsIntVisitorObj),
 }
 
 //**************************************************************************************************
@@ -847,8 +847,8 @@ fn run(
 // traits
 //**************************************************************************************************
 
-impl From<AbsIntVisitorFn> for Visitor {
-    fn from(f: AbsIntVisitorFn) -> Self {
+impl From<AbsIntVisitorObj> for Visitor {
+    fn from(f: AbsIntVisitorObj) -> Self {
         Self::AbsIntVisitor(f)
     }
 }

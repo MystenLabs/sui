@@ -54,7 +54,7 @@ pub fn refine_inference_and_verify(
     let mut ds = Diagnostics::new();
     for visitor in &env.visitors().abs_int {
         let mut f = visitor.borrow_mut();
-        ds.extend(f(context, cfg));
+        ds.extend(f.verify(context, cfg));
     }
     env.add_diags(ds)
 }

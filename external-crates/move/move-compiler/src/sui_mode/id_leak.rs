@@ -6,7 +6,10 @@ use move_ir_types::location::*;
 use crate::{
     cfgir::{
         absint::JoinResult,
-        visitor::{LocalState, SimpleAbsInt, SimpleDomain, SimpleExecutionContext},
+        visitor::{
+             LocalState, SimpleAbsInt, SimpleAbsIntConstructor, SimpleDomain,
+            SimpleExecutionContext,
+        },
         CFGContext, MemberName,
     },
     diag,
@@ -28,8 +31,9 @@ use super::{
 // types
 //**************************************************************************************************
 
-pub struct IDLeakVerifier {
-    declared_abilities: UniqueMap<StructName, AbilitySet>,
+pub struct IDLeakVerifier;
+pub struct IDLeakVerifierAI<'a> {
+    declared_abilities: &'a UniqueMap<StructName, AbilitySet>,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -52,11 +56,13 @@ pub struct State {
 // impls
 //**************************************************************************************************
 
-impl<'a> SimpleAbsInt for IDLeakVerifier {
-    type State = State;
-    type ExecutionContext = ExecutionContext;
+impl SimpleAbsIntConstructor for IDLeakVerifier {
+    type AI<'a> = IDLeakVerifierAI<'a>;
 
-    fn new(context: &CFGContext, _init_state: &mut State) -> Option<Self> {
+    fn new<'a>(
+        context: &'a CFGContext<'a>,
+        _init_state: &mut <Self::AI<'a> as SimpleAbsInt>::State,
+    ) -> Option<Self::AI<'a>> {
         let Some(module) = &context.module else {
             return None
         };
@@ -68,14 +74,15 @@ impl<'a> SimpleAbsInt for IDLeakVerifier {
                 return None;
             }
         }
-        // TODO find a way to pass in the CFGContext to remove the clones
-        let declared_abilities = context
-            .struct_declared_abilities
-            .get(module)
-            .unwrap()
-            .clone();
-        Some(IDLeakVerifier { declared_abilities })
+
+        let declared_abilities = context.struct_declared_abilities.get(module).unwrap();
+        Some(IDLeakVerifierAI { declared_abilities })
     }
+}
+
+impl<'a> SimpleAbsInt for IDLeakVerifierAI<'a> {
+    type State = State;
+    type ExecutionContext = ExecutionContext;
 
     fn finish(&mut self, _final_states: BTreeMap<Label, State>, diags: Diagnostics) -> Diagnostics {
         diags

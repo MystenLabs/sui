@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    cfgir::visitor::AbsIntVisitorFn,
+    cfgir::visitor::AbsIntVisitorObj,
     command_line as cli,
     diagnostics::{
         codes::{Category, Severity, WarningFilter, WARNING_FILTER_ATTR},
@@ -464,7 +464,7 @@ impl Flags {
 //**************************************************************************************************
 
 pub struct Visitors {
-    pub abs_int: Vec<RefCell<AbsIntVisitorFn>>,
+    pub abs_int: Vec<RefCell<AbsIntVisitorObj>>,
 }
 
 impl Visitors {
