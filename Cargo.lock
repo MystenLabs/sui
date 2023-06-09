@@ -1831,15 +1831,6 @@ dependencies = [
 
 [[package]]
 name = "clap_lex"
-version = "0.3.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "783fe232adfca04f90f56201b26d79682d4cd2625e0bc7290b95123afe558ade"
-dependencies = [
- "os_str_bytes",
-]
-
-[[package]]
-name = "clap_lex"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2da6da31387c7e4ef160ffab6d5e7f00c42626fe39aea70a7b0f1773f7dd6c1b"
@@ -9585,6 +9576,7 @@ dependencies = [
  "tempfile",
  "thiserror",
  "toml 0.7.4",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -12509,6 +12501,11 @@ dependencies = [
  "anemo-tower",
  "anes",
  "ansi_term",
+ "anstream",
+ "anstyle",
+ "anstyle-parse",
+ "anstyle-query",
+ "anstyle-wincon",
  "anyhow",
  "arbitrary",
  "arc-swap",
@@ -12617,15 +12614,17 @@ dependencies = [
  "clap 2.34.0",
  "clap 3.2.23",
  "clap 4.3.1",
+ "clap_builder",
  "clap_derive 3.2.18",
  "clap_derive 4.3.1",
  "clap_lex 0.2.4",
- "clap_lex 0.3.1",
+ "clap_lex 0.5.0",
  "clear_on_drop",
  "clipboard-win",
  "codespan",
  "codespan-reporting",
  "collectable",
+ "colorchoice",
  "colored",
  "colored-diff",
  "combine",
@@ -13149,6 +13148,7 @@ dependencies = [
  "serde_json",
  "serde_path_to_error",
  "serde_repr",
+ "serde_spanned",
  "serde_test",
  "serde_urlencoded",
  "serde_with",
@@ -13243,9 +13243,12 @@ dependencies = [
  "tokio-stream",
  "tokio-util 0.7.4",
  "toml 0.5.10",
+ "toml 0.7.4",
  "toml_datetime 0.5.1",
+ "toml_datetime 0.6.2",
  "toml_edit 0.14.4",
  "toml_edit 0.15.0",
+ "toml_edit 0.19.10",
  "tonic",
  "tonic-build",
  "tonic-health",
@@ -13326,6 +13329,7 @@ dependencies = [
  "windows-targets 0.48.0",
  "windows_x86_64_msvc 0.42.2",
  "windows_x86_64_msvc 0.48.0",
+ "winnow",
  "winreg",
  "wyz",
  "x509-parser",

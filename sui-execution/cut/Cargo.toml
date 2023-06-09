@@ -10,6 +10,7 @@ publish = false
 clap = { version = "4.3.1", features = ["derive"] }
 thiserror = "1.0.40"
 toml = { version = "0.7.4", features = ["preserve_order"] }
+workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
 
 [dev-dependencies]
 expect-test = "1.4.0"
