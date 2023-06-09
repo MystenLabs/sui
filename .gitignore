@@ -1,3 +1,6 @@
+# Toolchain
+cache
+
 # IDE
 **/.history/
 **/.vscode/
@@ -61,3 +64,4 @@ yarn-error.log*
 # misc
 *.key
 .env
+.bash_history

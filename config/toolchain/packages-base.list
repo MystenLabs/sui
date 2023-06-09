@@ -16,6 +16,7 @@ wget
 libarchive-tools
 libc-dev
 libelf-dev
+libclang-dev
 libfaketime
 libncurses-dev
 libssl-dev
