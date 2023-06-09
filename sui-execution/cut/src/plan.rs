@@ -361,7 +361,7 @@ mod tests {
         let toml = tmp.path().join("Cargo.toml");
 
         fs::write(
-            &toml,
+            toml,
             r#"
               [workspace]
             "#,
@@ -379,7 +379,7 @@ mod tests {
         let toml = tmp.path().join("Cargo.toml");
 
         fs::write(
-            &toml,
+            toml,
             r#"
               [workspace]
               members = [1, 2, 3]
@@ -397,7 +397,7 @@ mod tests {
         let toml = tmp.path().join("Cargo.toml");
 
         fs::write(
-            &toml,
+            toml,
             r#"
               [workspace]
               members = ["i_dont_exist"]
@@ -480,7 +480,7 @@ mod tests {
         fs::create_dir(tmp.path().join("foo")).unwrap();
 
         fs::write(
-            &tmp.path().join("Cargo.toml"),
+            tmp.path().join("Cargo.toml"),
             r#"
               [workspace]
               members = ["foo"]
@@ -490,7 +490,7 @@ mod tests {
         .unwrap();
 
         fs::write(
-            &tmp.path().join("foo/Cargo.toml"),
+            tmp.path().join("foo/Cargo.toml"),
             r#"
               [package]
               name = "foo"
@@ -511,7 +511,7 @@ mod tests {
         .unwrap_err();
 
         expect!["Both member and exclude of [workspace]: $PATH/foo"]
-            .assert_eq(&scrub_path(&format!("{}", err), &tmp.path().to_owned()));
+            .assert_eq(&scrub_path(&format!("{}", err), tmp.path()));
     }
 
     #[test]
@@ -520,16 +520,16 @@ mod tests {
         fs::create_dir_all(tmp.path().join("foo/bar-latest")).unwrap();
         fs::create_dir_all(tmp.path().join("baz/bar")).unwrap();
 
-        fs::write(&tmp.path().join("Cargo.toml"), "[workspace]").unwrap();
+        fs::write(tmp.path().join("Cargo.toml"), "[workspace]").unwrap();
 
         fs::write(
-            &tmp.path().join("foo/bar-latest/Cargo.toml"),
+            tmp.path().join("foo/bar-latest/Cargo.toml"),
             r#"package.name = "bar-latest""#,
         )
         .unwrap();
 
         fs::write(
-            &tmp.path().join("baz/bar/Cargo.toml"),
+            tmp.path().join("baz/bar/Cargo.toml"),
             r#"package.name = "bar""#,
         )
         .unwrap();
@@ -554,7 +554,7 @@ mod tests {
         .unwrap_err();
 
         expect!["Packages 'bar-latest' and 'bar' map to the same cut package name"]
-            .assert_eq(&scrub_path(&format!("{}", err), &tmp.path().to_owned()));
+            .assert_eq(&scrub_path(&format!("{}", err), tmp.path()));
     }
 
     #[test]
@@ -563,16 +563,16 @@ mod tests {
         fs::create_dir_all(tmp.path().join("foo/bar")).unwrap();
         fs::create_dir_all(tmp.path().join("baz/bar")).unwrap();
 
-        fs::write(&tmp.path().join("Cargo.toml"), "[workspace]").unwrap();
+        fs::write(tmp.path().join("Cargo.toml"), "[workspace]").unwrap();
 
         fs::write(
-            &tmp.path().join("foo/bar/Cargo.toml"),
+            tmp.path().join("foo/bar/Cargo.toml"),
             r#"package.name = "foo-bar""#,
         )
         .unwrap();
 
         fs::write(
-            &tmp.path().join("baz/bar/Cargo.toml"),
+            tmp.path().join("baz/bar/Cargo.toml"),
             r#"package.name = "baz-bar""#,
         )
         .unwrap();
@@ -597,17 +597,17 @@ mod tests {
         .unwrap_err();
 
         expect!["Packages 'foo-bar' and 'baz-bar' map to the same cut package path"]
-            .assert_eq(&scrub_path(&format!("{}", err), &tmp.path().to_owned()));
+            .assert_eq(&scrub_path(&format!("{}", err), tmp.path()));
     }
 
     /// Print with pretty-printed debug formatting, with repo paths scrubbed out for consistency.
     fn debug_for_test<T: fmt::Debug>(x: &T) -> String {
-        scrub_path(&format!("{x:#?}"), &repo_root())
+        scrub_path(&format!("{x:#?}"), repo_root())
     }
 
     /// Display with repo paths scrubbed out for consistency.
     fn display_for_test<T: fmt::Display>(x: &T) -> String {
-        scrub_path(&format!("{x}"), &repo_root())
+        scrub_path(&format!("{x}"), repo_root())
     }
 
     fn scrub_path<P: AsRef<Path>>(x: &str, p: P) -> String {
