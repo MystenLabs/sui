@@ -15,7 +15,7 @@ use sui_types::{
     error::ExecutionError,
     execution::{ExecutionState, TypeLayoutStore},
     execution_mode::ExecutionResult,
-    gas::SuiGasStatus,
+    gas::GasCharger,
     metrics::LimitsMetrics,
     temporary_store::{InnerTemporaryStore, TemporaryStore},
     transaction::{ProgrammableTransaction, TransactionKind},
@@ -37,8 +37,7 @@ pub trait Executor {
         // Transaction Inputs
         temporary_store: TemporaryStore,
         shared_object_refs: Vec<ObjectRef>,
-        gas_status: SuiGasStatus,
-        gas: &[ObjectRef],
+        gas_charger: &mut GasCharger,
         // Transaction
         transaction_kind: TransactionKind,
         transaction_signer: SuiAddress,
@@ -63,8 +62,7 @@ pub trait Executor {
         // Transaction Inputs
         temporary_store: TemporaryStore,
         shared_object_refs: Vec<ObjectRef>,
-        gas_status: SuiGasStatus,
-        gas: &[ObjectRef],
+        gas_charger: &mut GasCharger,
         // Transaction
         transaction_kind: TransactionKind,
         transaction_signer: SuiAddress,
@@ -84,7 +82,7 @@ pub trait Executor {
         // Genesis State
         state_view: &mut dyn ExecutionState,
         tx_context: &mut TxContext,
-        gas_status: &mut SuiGasStatus,
+        gas_charger: &mut GasCharger,
         // Transaction
         pt: ProgrammableTransaction,
     ) -> Result<(), ExecutionError>;

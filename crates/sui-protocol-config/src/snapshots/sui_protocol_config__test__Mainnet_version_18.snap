@@ -21,6 +21,7 @@ feature_flags:
   consensus_transaction_ordering: ByGasPrice
   simplified_unwrap_then_delete: true
   upgraded_multisig_supported: true
+  txn_base_cost_as_multiplier: true
 max_tx_size_bytes: 131072
 max_input_objects: 2048
 max_size_written_objects: 5000000
@@ -71,7 +72,7 @@ object_runtime_max_num_cached_objects: 1000
 object_runtime_max_num_cached_objects_system_tx: 16000
 object_runtime_max_num_store_entries: 1000
 object_runtime_max_num_store_entries_system_tx: 16000
-base_tx_cost_fixed: 2000
+base_tx_cost_fixed: 1000
 package_publish_cost_fixed: 1000
 base_tx_cost_per_byte: 0
 package_publish_cost_per_byte: 80

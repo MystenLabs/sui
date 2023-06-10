@@ -1626,20 +1626,6 @@ impl AuthorityStore {
         }
 
         let executor = old_epoch_store.executor();
-        let chain_identifier = old_epoch_store.get_chain_identifier();
-
-        let protocol_version = ProtocolVersion::new(
-            self.get_sui_system_state_object()
-                .expect("Read sui system state object cannot fail")
-                .protocol_version(),
-        );
-        let protocol_config =
-            ProtocolConfig::get_for_version(protocol_version, chain_identifier.chain());
-        // Prior to gas model v2, SUI conservation is not guaranteed.
-        if protocol_config.gas_model_version() <= 1 {
-            return Ok(());
-        }
-
         info!("Starting SUI conservation check. This may take a while..");
         let cur_time = Instant::now();
         let mut pending_objects = vec![];
