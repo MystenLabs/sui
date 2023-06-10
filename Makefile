@@ -13,11 +13,26 @@ default: \
 
 # TODO: Eliminate rustup ASAP which has very weak supply chain integrity
 # Favor signed/reproducible rust toolchain such as that from arch or debian
-$(CACHE_DIR)/bin/rustup-init:
+$(FETCH_DIR)/rustup-init:
 	$(call toolchain,' \
 		mkdir -p $(CACHE_DIR)/bin; \
-		wget "$(RUSTUPINIT_URL)" -O $@; \
+		curl "$(RUSTUPINIT_URL)" --output $@; \
 		chmod +x $@; \
+	')
+
+$(FETCH_DIR)/rocksdb.tgz:
+	@$(call fetch_file,$(ROCKSDB_URL),$(ROCKSDB_HASH))
+
+$(CACHE_DIR)/rocksdb/Makefile: \
+	$(FETCH_DIR)/rocksdb.tgz
+	tar -xzf $< -C $(CACHE_DIR)/
+	mv $(CACHE_DIR)/facebook-rocksdb* $(dir $@)
+
+$(CACHE_DIR)/lib/librocksdb.a: $(CACHE_DIR)/rocksdb/Makefile
+	$(call toolchain,' \
+		$(MAKE) \
+			--directory=$(CACHE_DIR)/rocksdb \
+			static_lib \
 	')
 
 $(CACHE_DIR)/bin/rustup: $(CACHE_DIR)/bin/rustup-init

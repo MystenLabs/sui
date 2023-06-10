@@ -1,5 +1,6 @@
 # Toolchain
 cache
+fetch
 
 # IDE
 **/.history/
