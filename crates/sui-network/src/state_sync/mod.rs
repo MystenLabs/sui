@@ -48,6 +48,7 @@
 //! of the newly synchronized checkpoint so that it can help other peers synchronize.
 
 use anemo::{types::PeerEvent, PeerId, Request, Response, Result};
+use anyhow::anyhow;
 use futures::{stream::FuturesOrdered, FutureExt, StreamExt};
 use rand::Rng;
 use std::sync::atomic::{AtomicU64, Ordering};

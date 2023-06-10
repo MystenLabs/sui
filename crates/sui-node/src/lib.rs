@@ -384,7 +384,6 @@ impl SuiNode {
             epoch_store.epoch_start_state(),
         )
         .expect("Initial trusted peers must be set");
-
         let state_archive_handle = if let Some(remote_store_config) =
             &config.state_archive_write_config.object_store_config
         {
