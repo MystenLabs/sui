@@ -233,7 +233,7 @@ async fn check_gas(
         }
 
         // check balance and coins consistency
-        let cost_table = SuiCostTable::new(protocol_config);
+        let cost_table = SuiCostTable::new(protocol_config, reference_gas_price);
         cost_table.check_gas_balance(gas_object, more_gas_objects, gas_budget, gas_price)?;
         Ok(SuiGasStatus::new_with_budget(
             gas_budget,

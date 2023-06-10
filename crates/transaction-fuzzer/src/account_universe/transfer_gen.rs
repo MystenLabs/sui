@@ -232,9 +232,7 @@ pub fn gas_price_selection_strategy() -> impl Strategy<Value = u64> {
 pub fn gas_budget_selection_strategy() -> impl Strategy<Value = u64> {
     prop_oneof![
         Just(0u64),
-        Just(PROTOCOL_CONFIG.base_tx_cost_fixed() - 1),
-        Just(PROTOCOL_CONFIG.base_tx_cost_fixed()),
-        Just(PROTOCOL_CONFIG.base_tx_cost_fixed() + 1),
+        PROTOCOL_CONFIG.base_tx_cost_fixed() / 2..=PROTOCOL_CONFIG.base_tx_cost_fixed() * 2000,
         1_000_000u64..=3_000_000,
         Just(PROTOCOL_CONFIG.max_tx_gas() - 1),
         Just(PROTOCOL_CONFIG.max_tx_gas()),
@@ -367,7 +365,7 @@ impl RunInfo {
         let enough_computation_gas = p2p.gas >= p2p.gas_price * P2P_COMPUTE_GAS_USAGE;
         let enough_to_succeed = payer_balance as u128 >= to_deduct;
         let gas_budget_too_high = p2p.gas > PROTOCOL_CONFIG.max_tx_gas();
-        let gas_budget_too_low = p2p.gas < PROTOCOL_CONFIG.base_tx_cost_fixed();
+        let gas_budget_too_low = p2p.gas < PROTOCOL_CONFIG.base_tx_cost_fixed() * rgp;
         let not_enough_gas = p2p.gas < p2p_success_gas(p2p.gas_price);
         let gas_price_too_low = p2p.gas_price < rgp;
         let gas_price_too_high = p2p.gas_price >= PROTOCOL_CONFIG.max_gas_price();
@@ -429,7 +427,8 @@ impl AUTransactionGen for P2PTransferGenRandomGasRandomPriceRandomSponsorship {
         let signed_txn = self.sponsorship.sign_transaction(&account_triple, tx_data);
         let payer = self.sponsorship.sponsor(&mut account_triple);
         // *sender.current_balances.last().unwrap();
-        let run_info = RunInfo::new(gas_balance, exec.get_reference_gas_price(), self);
+        let rgp = exec.get_reference_gas_price();
+        let run_info = RunInfo::new(gas_balance, rgp, self);
         let status = match run_info {
             RunInfo {
                 enough_max_gas: true,
@@ -479,7 +478,7 @@ impl AUTransactionGen for P2PTransferGenRandomGasRandomPriceRandomSponsorship {
             } => Err(SuiError::UserInputError {
                 error: UserInputError::GasBudgetTooLow {
                     gas_budget: self.gas,
-                    min_budget: PROTOCOL_CONFIG.base_tx_cost_fixed(),
+                    min_budget: PROTOCOL_CONFIG.base_tx_cost_fixed() * rgp,
                 },
             }),
             RunInfo {

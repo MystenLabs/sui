@@ -83,16 +83,16 @@ pub enum SuiCostTable {
 }
 
 impl SuiCostTable {
-    pub fn new(config: &ProtocolConfig) -> Self {
+    pub fn new(config: &ProtocolConfig, gas_price: u64) -> Self {
         if config.gas_model_version() <= 1 {
             Self::V1(SuiCostTableV1::new(config))
         } else {
-            Self::V2(SuiCostTableV2::new(config))
+            Self::V2(SuiCostTableV2::new(config, gas_price))
         }
     }
 
-    pub fn new_for_testing() -> Self {
-        Self::new(&ProtocolConfig::get_for_max_version())
+    pub fn new_for_testing(gas_price: u64) -> Self {
+        Self::new(&ProtocolConfig::get_for_max_version(), gas_price)
     }
 
     pub fn unmetered(config: &ProtocolConfig) -> Self {

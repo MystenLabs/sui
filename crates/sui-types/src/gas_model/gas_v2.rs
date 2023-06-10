@@ -124,9 +124,16 @@ impl std::fmt::Debug for SuiCostTable {
 }
 
 impl SuiCostTable {
-    pub(crate) fn new(c: &ProtocolConfig) -> Self {
+    pub(crate) fn new(c: &ProtocolConfig, gas_price: u64) -> Self {
+        // gas_price here is the Reference Gas Price, however we may decide
+        // to change it to be the price passed in the transaction
+        let min_transaction_cost = if c.txn_base_cost_as_multiplier() {
+            c.base_tx_cost_fixed() * gas_price
+        } else {
+            c.base_tx_cost_fixed()
+        };
         Self {
-            min_transaction_cost: c.base_tx_cost_fixed(),
+            min_transaction_cost,
             max_gas_budget: c.max_tx_gas(),
             package_publish_per_byte_cost: c.package_publish_cost_per_byte(),
             object_read_per_byte_cost: c.obj_access_cost_read_per_byte(),
@@ -252,7 +259,7 @@ impl SuiGasStatus {
         } else {
             gas_budget
         };
-        let sui_cost_table = SuiCostTable::new(config);
+        let sui_cost_table = SuiCostTable::new(config, gas_price);
         let gas_rounding_step = config.gas_rounding_step_as_option();
         Self::new(
             GasStatus::new_v2(
