@@ -197,6 +197,17 @@ module deepbook::clob_test {
         next_tx(&mut test, alice);
         {
             let pool = test::take_shared<Pool<SUI, USD>>(&mut test);
+            let clock = test::take_shared<Clock>(&mut test);
+            let (prices, depth) = clob::get_level2_book_status_bid_side(
+                &pool,
+                1 * FLOAT_SCALING,
+                15 * FLOAT_SCALING,
+                &clock
+            );
+            let prices_cmp = vector::empty<u64>();
+            let depth_cmp = vector::empty<u64>();
+            assert_eq(prices, prices_cmp);
+            assert_eq(depth, depth_cmp);
             let account_cap = test::take_from_address<AccountCap>(&test, alice);
             let account_cap_user = object::id(&account_cap);
             let (base_custodian, quote_custodian) = clob::borrow_mut_custodian(&mut pool);
@@ -211,6 +222,7 @@ module deepbook::clob_test {
             clob::test_inject_limit_order(&mut pool, 3 * FLOAT_SCALING, 1000, true, &account_cap, ctx(&mut test));
             clob::test_inject_limit_order(&mut pool, 2 * FLOAT_SCALING, 1000, true, &account_cap, ctx(&mut test));
             clob::test_inject_limit_order_with_expiration(&mut pool, 2 * FLOAT_SCALING, 1000, true, 0, &account_cap, ctx(&mut test));
+            test::return_shared(clock);
             test::return_shared(pool);
             test::return_to_address<AccountCap>(alice, account_cap);
         };
@@ -254,6 +266,17 @@ module deepbook::clob_test {
         next_tx(&mut test, alice);
         {
             let pool = test::take_shared<Pool<SUI, USD>>(&mut test);
+            let clock = test::take_shared<Clock>(&mut test);
+            let (prices, depth) = clob::get_level2_book_status_ask_side(
+                &pool,
+                1 * FLOAT_SCALING,
+                15 * FLOAT_SCALING,
+                &clock
+            );
+            let prices_cmp = vector::empty<u64>();
+            let depth_cmp = vector::empty<u64>();
+            assert_eq(prices, prices_cmp);
+            assert_eq(depth, depth_cmp);
             let account_cap = test::take_from_address<AccountCap>(&test, alice);
             let account_cap_user = object::id(&account_cap);
             let (base_custodian, quote_custodian) = clob::borrow_mut_custodian(&mut pool);
@@ -269,6 +292,7 @@ module deepbook::clob_test {
             clob::test_inject_limit_order(&mut pool, 2 * FLOAT_SCALING, 1000, false, &account_cap, ctx(&mut test));
             clob::test_inject_limit_order_with_expiration(&mut pool, 2 * FLOAT_SCALING, 1000, false, 0, &account_cap, ctx(&mut test));
             test::return_shared(pool);
+            test::return_shared(clock);
             test::return_to_address<AccountCap>(alice, account_cap);
         };
         // test get_level2_book_status_ask_side
