@@ -6,6 +6,7 @@ use clap::Parser;
 use plan::CutPlan;
 
 mod args;
+mod path;
 mod plan;
 
 fn main() {
