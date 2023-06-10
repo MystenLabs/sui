@@ -3,6 +3,7 @@
 
 import { describe, it, expect } from "vitest";
 import { BCS, getRustConfig, getSuiMoveConfig } from "../src/index";
+import { serde } from "./utils";
 
 describe("BCS: Config", () => {
   it("should work with Rust config", () => {
@@ -54,9 +55,3 @@ describe("BCS: Config", () => {
     expect(serde(bcs, "Option[array[string]]", value_2)).toEqual(value_2);
   });
 });
-
-function serde(bcs, type, data) {
-  let ser = bcs.ser(type, data).toString("hex");
-  let de = bcs.de(type, ser, "hex");
-  return de;
-}
