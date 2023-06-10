@@ -3,6 +3,7 @@
 
 import { describe, it, expect } from "vitest";
 import { BCS, getSuiMoveConfig } from "../src/index";
+import { serde } from "./utils";
 
 describe("BCS: Inline struct definitions", () => {
   it("should de/serialize inline definition", () => {
@@ -46,9 +47,3 @@ describe("BCS: Inline struct definitions", () => {
     expect(sr).toEqual({ b0: { a0: 0 } });
   });
 });
-
-function serde(bcs, type, data) {
-  let ser = bcs.ser(type, data).toString("hex");
-  let de = bcs.de(type, ser, "hex");
-  return de;
-}

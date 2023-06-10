@@ -3,6 +3,7 @@
 
 import { describe, it, expect } from "vitest";
 import { BCS, getSuiMoveConfig } from "../src/index";
+import { serde } from "./utils";
 
 describe("BCS: Array type", () => {
   it.skip("should support destructured type name in ser/de", () => {
@@ -114,9 +115,3 @@ describe("BCS: Array type", () => {
     expect(serde(bcs, ["VecMap", ["Option", "string"], ["vector", "string"]], value)).toEqual(value);
   });
 });
-
-function serde(bcs, type, data) {
-  let ser = bcs.ser(type, data).toString("hex");
-  let de = bcs.de(type, ser, "hex");
-  return de;
-}

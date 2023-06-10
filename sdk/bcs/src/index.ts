@@ -974,7 +974,8 @@ export class BCS {
           let { name: innerName, params: innerParams } = this.parseTypeName(
             typeMap[name]
           );
-          this.getTypeInterface(innerName)._decodeRaw.call(
+
+          return this.getTypeInterface(innerName)._decodeRaw.call(
             this,
             reader,
             innerParams,
