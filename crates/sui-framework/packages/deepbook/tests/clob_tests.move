@@ -206,6 +206,7 @@ module deepbook::clob_test {
             custodian::test_increase_user_available_balance<USD>(quote_custodian, account_cap_user, alice_deposit_USDC);
             clob::test_inject_limit_order(&mut pool, 5 * FLOAT_SCALING, 500, true, &account_cap, ctx(&mut test));
             clob::test_inject_limit_order(&mut pool, 5 * FLOAT_SCALING, 500, true, &account_cap, ctx(&mut test));
+            clob::test_inject_limit_order_with_expiration(&mut pool, 4_500_000_000, 500, true, 0, &account_cap, ctx(&mut test));
             clob::test_inject_limit_order(&mut pool, 4 * FLOAT_SCALING, 500, true, &account_cap, ctx(&mut test));
             clob::test_inject_limit_order(&mut pool, 4 * FLOAT_SCALING, 500, true, &account_cap, ctx(&mut test));
             clob::test_inject_limit_order(&mut pool, 3 * FLOAT_SCALING, 1000, true, &account_cap, ctx(&mut test));
@@ -265,6 +266,7 @@ module deepbook::clob_test {
             clob::test_inject_limit_order(&mut pool, 5 * FLOAT_SCALING, 500, false, &account_cap, ctx(&mut test));
             clob::test_inject_limit_order(&mut pool, 4 * FLOAT_SCALING, 500, false, &account_cap, ctx(&mut test));
             clob::test_inject_limit_order(&mut pool, 4 * FLOAT_SCALING, 500, false, &account_cap, ctx(&mut test));
+            clob::test_inject_limit_order_with_expiration(&mut pool, 4_500_000_000, 500, false, 0, &account_cap, ctx(&mut test));
             clob::test_inject_limit_order(&mut pool, 3 * FLOAT_SCALING, 1000, false, &account_cap, ctx(&mut test));
             clob::test_inject_limit_order(&mut pool, 2 * FLOAT_SCALING, 1000, false, &account_cap, ctx(&mut test));
             clob::test_inject_limit_order_with_expiration(&mut pool, 2 * FLOAT_SCALING, 1000, false, 0, &account_cap, ctx(&mut test));
