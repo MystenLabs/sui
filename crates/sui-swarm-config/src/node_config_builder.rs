@@ -149,7 +149,8 @@ impl ValidatorConfigBuilder {
             transaction_deny_config: Default::default(),
             certificate_deny_config: Default::default(),
             state_debug_dump_config: Default::default(),
-            state_archive_config: StateArchiveConfig::default(),
+            state_archive_write_config: StateArchiveConfig::default(),
+            state_archive_read_config: vec![],
         }
     }
 
@@ -376,7 +377,8 @@ impl FullnodeConfigBuilder {
             transaction_deny_config: Default::default(),
             certificate_deny_config: Default::default(),
             state_debug_dump_config: Default::default(),
-            state_archive_config: StateArchiveConfig::default(),
+            state_archive_write_config: StateArchiveConfig::default(),
+            state_archive_read_config: vec![],
         }
     }
 }
