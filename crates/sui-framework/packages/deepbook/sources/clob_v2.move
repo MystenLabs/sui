@@ -73,8 +73,8 @@ module deepbook::clob_v2 {
     const MIN_PRICE: u64 = 0;
     const MAX_PRICE: u64 = ((1u128 << 64 - 1) as u64);
     const TIMESTAMP_INF: u64 = ((1u128 << 64 - 1) as u64);
-    const REFERENCE_TAKER_FEE_RATE: u64 = 5_000_000;
-    const REFERENCE_MAKER_REBATE_RATE: u64 = 2_500_000;
+    const REFERENCE_TAKER_FEE_RATE: u64 = 2_500_000;
+    const REFERENCE_MAKER_REBATE_RATE: u64 = 1_500_000;
     const FEE_AMOUNT_FOR_CREATE_POOL: u64 = 100 * 1_000_000_000; // 100 SUI
     const PREVENT_SELF_MATCHING_DEFAULT: u8 = 0;
 
