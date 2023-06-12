@@ -36,6 +36,7 @@ type AxisRightProps<Output> = {
     left: number;
     scale: ReturnType<typeof scaleLinear<Output>>;
     selectedUnit: UnitsType;
+    isHovered: boolean;
 };
 
 function GasPriceValue({
@@ -57,7 +58,12 @@ function GasPriceValue({
         </text>
     );
 }
-function AxisRight({ scale, left, selectedUnit }: AxisRightProps<number>) {
+function AxisRight({
+    scale,
+    left,
+    selectedUnit,
+    isHovered,
+}: AxisRightProps<number>) {
     let ticks = scale.nice(6).ticks(6);
     return (
         <g>
@@ -70,7 +76,7 @@ function AxisRight({ scale, left, selectedUnit }: AxisRightProps<number>) {
                     .map((value) => (
                         <GasPriceValue
                             key={value}
-                            {...{ scale, left, value, selectedUnit }}
+                            {...{ scale, left, value, selectedUnit, isHovered }}
                         />
                     ))}
             </g>
@@ -86,7 +92,10 @@ function AxisRight({ scale, left, selectedUnit }: AxisRightProps<number>) {
                             cx={left}
                             cy={scale(value)}
                             r="1"
-                            className="fill-steel"
+                            className={clsx(
+                                'fill-steel transition-all ease-ease-out-cubic',
+                                isHovered ? 'opacity-100' : 'opacity-0'
+                            )}
                         />
                     ))}
             </g>
@@ -342,6 +351,7 @@ export function Graph({
                 left={width - SIDE_MARGIN / 2}
                 scale={yScale}
                 selectedUnit={selectedUnit}
+                isHovered={isTooltipVisible}
             />
             <AxisBottom
                 top={Math.max(height - 30, 0)}
@@ -374,6 +384,10 @@ export function Graph({
                 markerStart="url(#marker-circle)"
                 markerMid="url(#marker-circle)"
                 markerEnd="url(#marker-circle)"
+                className={clsx(
+                    'transition-all ease-ease-out-cubic',
+                    isTooltipVisible ? 'opacity-100' : 'opacity-0'
+                )}
             />
             <rect
                 x={0}
