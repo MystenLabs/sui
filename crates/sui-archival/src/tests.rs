@@ -1,10 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::writer::ArchiveWriterV1;
-use crate::{
-    read_manifest, write_manifest, FileCompression, Manifest, StorageFormat, EPOCH_DIR_PREFIX,
-};
+use crate::writer::ArchiveWriter;
+use crate::{read_manifest, write_manifest, Manifest, EPOCH_DIR_PREFIX};
 use anyhow::Result;
 use object_store::path::Path;
 use object_store::DynObjectStore;
@@ -15,13 +13,14 @@ use std::time::Duration;
 use sui_macros::sim_test;
 use sui_storage::object_store::util::path_to_filesystem;
 use sui_storage::object_store::{ObjectStoreConfig, ObjectStoreType};
+use sui_storage::{FileCompression, StorageFormat};
 use sui_swarm_config::test_utils::{empty_contents, CommitteeFixture};
 use sui_types::messages_checkpoint::VerifiedCheckpoint;
 use sui_types::storage::SharedInMemoryStore;
 use tempfile::tempdir;
 
 struct TestState {
-    archive_writer: ArchiveWriterV1,
+    archive_writer: ArchiveWriter,
     local_path: PathBuf,
     remote_path: PathBuf,
     local_store: Arc<DynObjectStore>,
@@ -71,7 +70,7 @@ async fn setup_checkpoint_writer(temp_dir: PathBuf) -> anyhow::Result<TestState>
         ..Default::default()
     };
     let committee = CommitteeFixture::generate(rand::rngs::OsRng, 0, 4);
-    let archive_writer = ArchiveWriterV1::new(
+    let archive_writer = ArchiveWriter::new(
         local_store_config.clone(),
         remote_store_config.clone(),
         FileCompression::Zstd,
