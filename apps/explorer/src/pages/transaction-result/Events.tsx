@@ -5,6 +5,7 @@ import { Disclosure } from '@headlessui/react';
 import { ChevronRight12 } from '@mysten/icons';
 import {
     formatAddress,
+    parseStructTag,
     type SuiEvent,
     type TransactionEvents,
 } from '@mysten/sui.js';
@@ -16,24 +17,6 @@ import { CopyToClipboard } from '~/ui/CopyToClipboard';
 import { Divider } from '~/ui/Divider';
 import { ObjectLink } from '~/ui/InternalLink';
 import { Text } from '~/ui/Text';
-
-function formatTypeName(typeName: string) {
-    const split = typeName.split('<');
-    if (split.length <= 1) {
-        return split[0];
-    }
-
-    return `${split[0]}<...>`;
-}
-
-function formatType(type: string) {
-    const split = type.split('::');
-    const p0 = formatAddress(split[0]);
-    const p1 = split[1];
-    const p2 = formatTypeName(split.slice(2).join('::'));
-
-    return [p0, p1, p2].join('::');
-}
 
 function EventRow({ title, children }: { title: string; children: ReactNode }) {
     return (
@@ -48,17 +31,32 @@ function EventRow({ title, children }: { title: string; children: ReactNode }) {
     );
 }
 
-function Event({ event }: { event: SuiEvent }) {
+function Event({ event, divider }: { event: SuiEvent; divider: boolean }) {
+    const { address, module, name } = parseStructTag(event.type);
+    const objectLinkLabel = [formatAddress(address), module, name].join('::');
+
     return (
         <div>
             <div className="flex flex-col gap-3">
                 <EventRow title="Type">
-                    <div className="flex gap-1">
+                    <Text variant="pBody/medium" color="steel-darker">
+                        {objectLinkLabel}
+                    </Text>
+                </EventRow>
+
+                <EventRow title="Event Emitter">
+                    <div className="flex items-center gap-1">
                         <ObjectLink
-                            objectId={`${event.packageId}?module=${event.transactionModule}`}
-                            label={formatType(event.type)}
+                            objectId={event.packageId}
+                            queryStrings={{ module: event.transactionModule }}
+                            label={`${formatAddress(event.packageId)}::${
+                                event.transactionModule
+                            }`}
                         />
-                        <CopyToClipboard copyText={event.type} />
+                        <CopyToClipboard
+                            color="steel"
+                            copyText={event.packageId}
+                        />
                     </div>
                 </EventRow>
 
@@ -73,7 +71,7 @@ function Event({ event }: { event: SuiEvent }) {
                                     variant="body/semibold"
                                     color="steel-dark"
                                 >
-                                    View Event Data
+                                    {open ? 'Hide' : 'View'} Event Data
                                 </Text>
 
                                 <ChevronRight12
@@ -84,7 +82,7 @@ function Event({ event }: { event: SuiEvent }) {
                                 />
                             </Disclosure.Button>
 
-                            <Disclosure.Panel>
+                            <Disclosure.Panel className="rounded-lg border border-transparent bg-white p-5">
                                 <SyntaxHighlighter
                                     code={JSON.stringify(event, null, 2)}
                                     language="json"
@@ -95,9 +93,11 @@ function Event({ event }: { event: SuiEvent }) {
                 </Disclosure>
             </div>
 
-            <div className="my-6">
-                <Divider />
-            </div>
+            {divider && (
+                <div className="my-6">
+                    <Divider />
+                </div>
+            )}
         </div>
     );
 }
@@ -109,8 +109,12 @@ interface EventsProps {
 export function Events({ events }: EventsProps) {
     return (
         <div>
-            {events.map((event, idx) => (
-                <Event key={idx} event={event} />
+            {events.map((event, index) => (
+                <Event
+                    key={event.type}
+                    event={event}
+                    divider={index !== events.length - 1}
+                />
             ))}
         </div>
     );
