@@ -2,6 +2,7 @@
 
 [move]
 version = 0
+manifest_digest = "6DF52ED8DD301E9689CF4329C4765A048E0669FC794CE7DAC182AEE352FC099D"
 
 dependencies = [
   { name = "OtherDep", addr_subst = { "A" = "B" } },

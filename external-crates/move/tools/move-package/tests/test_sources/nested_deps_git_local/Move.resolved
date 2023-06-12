@@ -57,6 +57,10 @@ ResolvedGraph {
             "MoveStdlib",
             "NestedDeps",
         },
+        manifest_digest: Some(
+            "0C5D381E36019E1585333C288C833EF07C2E0AC0CD76B1326E88A6765714C247",
+        ),
+        deps_digest: None,
     },
     build_options: BuildConfig {
         dev_mode: true,

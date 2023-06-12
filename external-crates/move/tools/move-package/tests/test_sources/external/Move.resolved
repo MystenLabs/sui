@@ -53,6 +53,10 @@ ResolvedGraph {
             "ADep",
             "Root",
         },
+        manifest_digest: Some(
+            "0ABB58AD694B4D8B2FDA8F544B570B7BB6CFA84038FCCC4EA87236568A056D62",
+        ),
+        deps_digest: None,
     },
     build_options: BuildConfig {
         dev_mode: true,

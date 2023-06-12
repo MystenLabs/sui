@@ -10,7 +10,7 @@ use std::{
 };
 
 use crate::{
-    source_package::parsed_manifest::{CustomDepInfo, DependencyKind, GitInfo, SourceManifest},
+    source_package::parsed_manifest::{CustomDepInfo, DependencyKind, GitInfo},
     BuildConfig,
 };
 
@@ -24,16 +24,18 @@ pub mod resolution_graph;
 pub mod resolving_table;
 
 pub fn download_dependency_repos<Progress: Write>(
-    manifest: &SourceManifest,
+    manifest_string: String,
+    lock_string: Option<String>,
     build_options: &BuildConfig,
     root_path: &Path,
     progress_output: &mut Progress,
 ) -> Result<()> {
     let mut dependency_cache = DependencyCache::new(build_options.skip_fetch_latest_git_deps);
 
-    let graph = DependencyGraph::new(
-        manifest,
+    let (graph, _) = DependencyGraph::get(
         root_path.to_path_buf(),
+        manifest_string,
+        lock_string,
         &mut dependency_cache,
         progress_output,
     )?;

@@ -76,6 +76,10 @@ ResolvedGraph {
             "C",
             "Root",
         },
+        manifest_digest: Some(
+            "E34EE93EB1C18B3B97CC2297679AE706FD805BBDCA9448CEDBD39C9C8BD5B1AA",
+        ),
+        deps_digest: None,
     },
     build_options: BuildConfig {
         dev_mode: true,

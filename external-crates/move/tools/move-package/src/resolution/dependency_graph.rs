@@ -16,13 +16,18 @@ use std::{
 use crate::{
     package_hooks,
     source_package::{
-        manifest_parser::{parse_dependency, parse_move_manifest_from_file, parse_substitution},
+        layout::SourcePackageLayout,
+        manifest_parser::{
+            parse_dependency, parse_move_manifest_from_file, parse_move_manifest_string,
+            parse_source_manifest, parse_substitution,
+        },
         parsed_manifest as PM,
     },
 };
 
 use super::{
     dependency_cache::DependencyCache,
+    digest::{digest_str, hashed_files_digest},
     local_path,
     lock_file::{schema, LockFile},
 };
@@ -82,6 +87,11 @@ pub struct DependencyGraph {
     /// Packages that are transitive dependencies regardless of mode (the transitive closure of
     /// `DependencyMode::Always` edges in `package_graph`).
     pub always_deps: BTreeSet<PM::PackageName>,
+
+    /// A hash of the manifest file content this lock file was generated from, if any.
+    pub manifest_digest: Option<String>,
+    /// A hash of all the dependencies (their lock file content) this lock file depends on, if any.
+    pub deps_digest: Option<String>,
 }
 
 #[derive(Debug, Clone, Eq)]
@@ -153,6 +163,8 @@ impl DependencyGraph {
         root_path: PathBuf,
         dependency_cache: &mut DependencyCache,
         progress_output: &mut Progress,
+        manifest_digest: Option<String>,
+        deps_digest: Option<String>,
     ) -> Result<DependencyGraph> {
         let mut graph = DependencyGraph {
             root_path: root_path.clone(),
@@ -160,6 +172,8 @@ impl DependencyGraph {
             package_graph: DiGraphMap::new(),
             package_table: BTreeMap::new(),
             always_deps: BTreeSet::new(),
+            manifest_digest,
+            deps_digest,
         };
 
         // Ensure there's always a root node, even if it has no edges.
@@ -217,6 +231,69 @@ impl DependencyGraph {
         Ok(graph)
     }
 
+    /// Get a graph from the Move.lock file, if Move.lock file is present and up-to-date
+    /// (additionally returning false), otherwise compute a new graph based on the content of the
+    /// Move.toml (manifest) file (additionally returning true).
+    pub fn get<Progress: Write>(
+        root_path: PathBuf,
+        manifest_string: String,
+        lock_string: Option<String>,
+        dependency_cache: &mut DependencyCache,
+        progress_output: &mut Progress,
+    ) -> Result<(DependencyGraph, bool)> {
+        let toml_manifest = parse_move_manifest_string(manifest_string.clone())?;
+        let manifest = parse_source_manifest(toml_manifest)?;
+
+        // compute digests eagerly as even if we can't reuse existing lock file, they need to become
+        // part of the newly computed dependency graph
+        let new_manifest_digest = digest_str(manifest_string.into_bytes().as_slice());
+        let new_deps_digest = dependency_digest(
+            root_path.clone(),
+            &manifest,
+            dependency_cache,
+            progress_output,
+        )?;
+
+        if let Some(lock_contents) = lock_string {
+            let (manifest_digest_opt, deps_digest_opt) = schema::read_header(&lock_contents)?;
+
+            // check if manifest file and dependencies haven't changed and we can use existing lock
+            // file to create the dependency graph
+            if let Some(manifest_digest) = manifest_digest_opt {
+                // manifest digest exists in the lock file
+                if manifest_digest == new_manifest_digest {
+                    // manifest file hasn't changed
+                    if let Some(deps_digest) = deps_digest_opt {
+                        // dependencies digest exists in the lock file
+                        if Some(deps_digest) == new_deps_digest {
+                            // dependencies have not changed
+                            return Ok((
+                                Self::read_from_lock(
+                                    root_path,
+                                    manifest.package.name,
+                                    &mut lock_contents.as_bytes(),
+                                )?,
+                                false,
+                            ));
+                        }
+                    }
+                }
+            }
+        }
+
+        Ok((
+            DependencyGraph::new(
+                &manifest,
+                root_path.to_path_buf(),
+                dependency_cache,
+                progress_output,
+                Some(new_manifest_digest),
+                new_deps_digest,
+            )?,
+            true,
+        ))
+    }
+
     /// Create a dependency graph by reading a lock file.
     ///
     /// The lock file is expected to contain a complete picture of the package's transitive
@@ -233,7 +310,7 @@ impl DependencyGraph {
         let mut package_graph = DiGraphMap::new();
         let mut package_table = BTreeMap::new();
 
-        let packages = schema::Packages::read(lock)?;
+        let (packages, (manifest_digest, deps_digest)) = schema::Packages::read(lock)?;
 
         // Ensure there's always a root node, even if it has no edges.
         package_graph.add_node(root_package);
@@ -369,6 +446,8 @@ impl DependencyGraph {
             package_graph,
             package_table,
             always_deps: BTreeSet::new(),
+            manifest_digest,
+            deps_digest,
         };
 
         graph.check_consistency()?;
@@ -382,7 +461,11 @@ impl DependencyGraph {
     /// This operation fails, writing nothing, if the graph contains a cycle, and can fail with an
     /// undefined output if it cannot be represented in a TOML file.
     pub fn write_to_lock(&self, install_dir: PathBuf) -> Result<LockFile> {
-        let lock = LockFile::new(install_dir)?;
+        let lock = LockFile::new(
+            install_dir,
+            self.manifest_digest.clone(),
+            self.deps_digest.clone(),
+        )?;
         let mut writer = BufWriter::new(&*lock);
 
         self.write_dependencies_to_lock(self.root_package, &mut writer)?;
@@ -473,6 +556,8 @@ impl DependencyGraph {
 
             // Will be recalculated for the larger graph.
             always_deps: _,
+            manifest_digest: _,
+            deps_digest: _,
         } = extension;
 
         if !self.package_graph.contains_node(ext_root) {
@@ -1341,4 +1426,67 @@ fn pkg_deps_equal<'a>(
         .symmetric_difference(&other_edges)
         .partition(|dep| pkg_edges.contains(dep));
     (pkg_deps, other_deps)
+}
+
+/// Computes dependency hashes but may return None if information about some dependencies is not
+/// available.
+fn dependency_hashes<Progress: Write>(
+    root_path: PathBuf,
+    dependency_cache: &mut DependencyCache,
+    dependencies: &PM::Dependencies,
+    progress_output: &mut Progress,
+) -> Result<Option<Vec<String>>> {
+    let mut hashed_lock_files = Vec::new();
+
+    for (pkg_name, dep) in dependencies {
+        let internal_dep = match dep {
+            // bail if encountering external dependency that would require running the external
+            // resolver
+            // TODO: should we consider handling this here?
+            PM::Dependency::External(_) => return Ok(None),
+            PM::Dependency::Internal(d) => d,
+        };
+
+        dependency_cache
+            .download_and_update_if_remote(*pkg_name, &internal_dep.kind, progress_output)
+            .with_context(|| format!("Fetching '{}'", *pkg_name))?;
+        let pkg_path = root_path.join(local_path(&internal_dep.kind));
+
+        let Ok(lock_contents) = std::fs::read_to_string(pkg_path.join(SourcePackageLayout::Lock.path())) else {
+            return Ok(None);
+        };
+        hashed_lock_files.push(digest_str(lock_contents.as_bytes()));
+    }
+
+    Ok(Some(hashed_lock_files))
+}
+
+/// Computes a digest of all dependencies in a manifest file but may return None if information
+/// about some dependencies is not available.
+fn dependency_digest<Progress: Write>(
+    root_path: PathBuf,
+    manifest: &PM::SourceManifest,
+    dependency_cache: &mut DependencyCache,
+    progress_output: &mut Progress,
+) -> Result<Option<String>> {
+    let Some(mut dep_hashes) = dependency_hashes(
+                            root_path.clone(),
+                            dependency_cache,
+                            &manifest.dependencies,
+                            progress_output,
+    )? else {
+        return Ok(None);
+    };
+
+    let Some(dev_dep_hashes) = dependency_hashes(
+                                root_path,
+                                dependency_cache,
+                                &manifest.dev_dependencies,
+                                progress_output,
+    )? else {
+        return Ok(None);
+    };
+
+    dep_hashes.extend(dev_dep_hashes);
+    Ok(Some(hashed_files_digest(dep_hashes)))
 }

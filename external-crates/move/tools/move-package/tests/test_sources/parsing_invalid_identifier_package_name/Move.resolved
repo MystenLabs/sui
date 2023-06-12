@@ -9,6 +9,12 @@ ResolvedGraph {
         always_deps: {
             "®´∑œ",
         },
+        manifest_digest: Some(
+            "F85E4EDBC095AC28132481BE5C69A6D293D2B9FAA23DA828A6B6F6AF0F204E65",
+        ),
+        deps_digest: Some(
+            "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855",
+        ),
     },
     build_options: BuildConfig {
         dev_mode: true,

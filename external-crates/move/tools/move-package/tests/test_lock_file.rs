@@ -16,7 +16,7 @@ fn commit() {
     let lock_path = pkg.path().join("Move.lock");
 
     {
-        let mut lock = LockFile::new(pkg.path().to_path_buf()).unwrap();
+        let mut lock = LockFile::new(pkg.path().to_path_buf(), None, None).unwrap();
         writeln!(lock, "# Write and commit").unwrap();
         lock.commit(&lock_path).unwrap();
     }
@@ -44,7 +44,7 @@ fn discard() {
     let pkg = create_test_package().unwrap();
 
     {
-        let mut lock = LockFile::new(pkg.path().to_path_buf()).unwrap();
+        let mut lock = LockFile::new(pkg.path().to_path_buf(), None, None).unwrap();
         writeln!(lock, "# Write but don't commit").unwrap();
     }
 

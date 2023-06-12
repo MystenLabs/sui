@@ -32,8 +32,15 @@ fn no_dep_graph() {
 
     let manifest = parse_move_manifest_from_file(&pkg).expect("Loading manifest");
     let mut dependency_cache = DependencyCache::new(/* skip_fetch_latest_git_deps */ true);
-    let graph = DependencyGraph::new(&manifest, pkg, &mut dependency_cache, &mut std::io::sink())
-        .expect("Creating DependencyGraph");
+    let graph = DependencyGraph::new(
+        &manifest,
+        pkg,
+        &mut dependency_cache,
+        &mut std::io::sink(),
+        None,
+        None,
+    )
+    .expect("Creating DependencyGraph");
 
     assert!(
         graph.package_graph.contains_node(graph.root_package),
@@ -99,7 +106,7 @@ fn lock_file_missing_dependency() {
     let pkg = one_dep_test_package();
 
     let commit = tmp.path().join("Move.lock");
-    let lock = LockFile::new(pkg.clone()).expect("Creating new lock file");
+    let lock = LockFile::new(pkg.clone(), None, None).expect("Creating new lock file");
 
     // Write a reference to a dependency that there isn't package information for.
     writeln!(&*lock, r#"dependencies = [{{ name = "OtherDep" }}]"#).unwrap();
@@ -126,8 +133,15 @@ fn always_deps() {
 
     let manifest = parse_move_manifest_from_file(&pkg).expect("Loading manifest");
     let mut dependency_cache = DependencyCache::new(/* skip_fetch_latest_git_deps */ true);
-    let graph = DependencyGraph::new(&manifest, pkg, &mut dependency_cache, &mut std::io::sink())
-        .expect("Creating DependencyGraph");
+    let graph = DependencyGraph::new(
+        &manifest,
+        pkg,
+        &mut dependency_cache,
+        &mut std::io::sink(),
+        None,
+        None,
+    )
+    .expect("Creating DependencyGraph");
 
     assert_eq!(
         graph.always_deps,
@@ -384,8 +398,15 @@ fn immediate_dependencies() {
 
     let manifest = parse_move_manifest_from_file(&pkg).expect("Loading manifest");
     let mut dependency_cache = DependencyCache::new(/* skip_fetch_latest_git_deps */ true);
-    let graph = DependencyGraph::new(&manifest, pkg, &mut dependency_cache, &mut std::io::sink())
-        .expect("Creating DependencyGraph");
+    let graph = DependencyGraph::new(
+        &manifest,
+        pkg,
+        &mut dependency_cache,
+        &mut std::io::sink(),
+        None,
+        None,
+    )
+    .expect("Creating DependencyGraph");
 
     let r = Symbol::from("Root");
     let a = Symbol::from("A");

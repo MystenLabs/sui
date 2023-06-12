@@ -31,7 +31,6 @@ use crate::{
         build_plan::BuildPlan, compiled_package::CompiledPackage, model_builder::ModelBuilder,
     },
     package_lock::PackageLock,
-    source_package::manifest_parser,
 };
 
 #[derive(Debug, Parser, Clone, Serialize, Deserialize, Eq, PartialEq, PartialOrd, Default)]
@@ -138,14 +137,12 @@ impl BuildConfig {
 
     pub fn download_deps_for_package<W: Write>(&self, path: &Path, writer: &mut W) -> Result<()> {
         let path = SourcePackageLayout::try_find_root(path)?;
-        let toml_manifest =
-            self.parse_toml_manifest(path.join(SourcePackageLayout::Manifest.path()))?;
+        let manifest_string =
+            std::fs::read_to_string(path.join(SourcePackageLayout::Manifest.path()))?;
+        let lock_string = std::fs::read_to_string(path.join(SourcePackageLayout::Lock.path())).ok();
         let _mutx = PackageLock::lock(); // held until function returns
 
-        // This should be locked as it inspects the environment for `MOVE_HOME` which could
-        // possibly be set by a different process in parallel.
-        let manifest = manifest_parser::parse_source_manifest(toml_manifest)?;
-        resolution::download_dependency_repos(&manifest, self, &path, writer)?;
+        resolution::download_dependency_repos(manifest_string, lock_string, self, &path, writer)?;
         Ok(())
     }
 
@@ -158,29 +155,28 @@ impl BuildConfig {
             self.dev_mode = true;
         }
         let path = SourcePackageLayout::try_find_root(path)?;
-        let toml_manifest =
-            self.parse_toml_manifest(path.join(SourcePackageLayout::Manifest.path()))?;
+        let manifest_string =
+            std::fs::read_to_string(path.join(SourcePackageLayout::Manifest.path()))?;
+        let lock_string = std::fs::read_to_string(path.join(SourcePackageLayout::Lock.path())).ok();
         let _mutx = PackageLock::lock(); // held until function returns
 
-        // This should be locked as it inspects the environment for `MOVE_HOME` which could
-        // possibly be set by a different process in parallel.
-        let manifest = manifest_parser::parse_source_manifest(toml_manifest)?;
-
         let mut dependency_cache = DependencyCache::new(self.skip_fetch_latest_git_deps);
-        let dependency_graph =
-            DependencyGraph::new(&manifest, path.clone(), &mut dependency_cache, writer)?;
+        let (dependency_graph, modified) = DependencyGraph::get(
+            path.clone(),
+            manifest_string,
+            lock_string,
+            &mut dependency_cache,
+            writer,
+        )?;
 
-        let install_dir = self.install_dir.as_ref().unwrap_or(&path).to_owned();
-        let lock = dependency_graph.write_to_lock(install_dir)?;
-        if let Some(lock_path) = &self.lock_file {
-            lock.commit(lock_path)?;
+        if modified {
+            let install_dir = self.install_dir.as_ref().unwrap_or(&path).to_owned();
+            let lock = dependency_graph.write_to_lock(install_dir)?;
+            if let Some(lock_path) = &self.lock_file {
+                lock.commit(lock_path)?;
+            }
         }
 
         ResolvedGraph::resolve(dependency_graph, self, &mut dependency_cache, writer)
-    }
-
-    fn parse_toml_manifest(&self, path: PathBuf) -> Result<toml::Value> {
-        let manifest_string = std::fs::read_to_string(path)?;
-        manifest_parser::parse_move_manifest_string(manifest_string)
     }
 }

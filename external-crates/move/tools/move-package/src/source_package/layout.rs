@@ -17,6 +17,7 @@ pub enum SourcePackageLayout {
     Scripts,
     Examples,
     Manifest,
+    Lock,
     DocTemplates,
 }
 
@@ -24,6 +25,7 @@ impl SourcePackageLayout {
     /// A Move source package is laid out on-disk as
     /// a_move_package
     /// ├── Move.toml      (required)
+    /// ├── Move.lock      (optional)
     /// ├── sources        (required)
     /// ├── examples       (optional, dev mode)
     /// ├── scripts        (optional)
@@ -53,6 +55,7 @@ impl SourcePackageLayout {
         match self {
             Self::Sources => "sources",
             Self::Manifest => "Move.toml",
+            Self::Lock => "Move.lock",
             Self::Tests => "tests",
             Self::Scripts => "scripts",
             Self::Examples => "examples",
@@ -68,7 +71,8 @@ impl SourcePackageLayout {
             | Self::Scripts
             | Self::Examples
             | Self::Specifications
-            | Self::DocTemplates => true,
+            | Self::DocTemplates
+            | Self::Lock => true,
         }
     }
 }

@@ -30,6 +30,10 @@ ResolvedGraph {
             "OtherDep",
             "Root",
         },
+        manifest_digest: Some(
+            "5D172B35863F3E290860CC7CD5D02FA7195D005ABC6668E1EC2EC84D7D096481",
+        ),
+        deps_digest: None,
     },
     build_options: BuildConfig {
         dev_mode: true,
