@@ -4,6 +4,10 @@
 const ELLIPSIS = '\u{2026}';
 
 export function formatAddress(address: string) {
+  if (address.length <= 6) {
+    return address;
+  }
+
   const offset = address.startsWith('0x') ? 2 : 0;
 
   return `0x${address.slice(offset, offset + 4)}${ELLIPSIS}${address.slice(
