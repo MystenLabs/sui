@@ -6,7 +6,6 @@ use crate::metrics::FaucetMetrics;
 use async_recursion::async_recursion;
 use async_trait::async_trait;
 use mysten_metrics::spawn_monitored_task;
-use parking_lot;
 use prometheus::Registry;
 use shared_crypto::intent::Intent;
 use std::collections::HashMap;
@@ -169,7 +168,7 @@ impl SimpleFaucet {
             info!("Starting task to handle batch faucet requests.");
             loop {
                 match batch_transfer_gases(
-                    batch_clone.clone(),
+                    &batch_clone,
                     &mut receiver,
                     &mut rx_batch_transfer_shutdown,
                 )
@@ -841,7 +840,6 @@ pub async fn batch_gather(
     let mut counter = 0;
     // We take the first 500 items off the queue.
     while counter < batch_request_size - 1 {
-        // We do need a timeout here or else it waits forever and gets stuck in this loop
         let request = request_consumer.recv().await;
         match request {
             Some(req) => {
@@ -860,7 +858,7 @@ pub async fn batch_gather(
 
 // Function to process the batch send of the mcsp queue
 pub async fn batch_transfer_gases(
-    weak_faucet: Weak<SimpleFaucet>,
+    weak_faucet: &Weak<SimpleFaucet>,
     request_consumer: &mut Receiver<(Uuid, SuiAddress, Vec<u64>)>,
     rx_batch_transfer_shutdown: &mut oneshot::Receiver<()>,
 ) -> Result<TransactionDigest, FaucetError> {
@@ -882,9 +880,7 @@ pub async fn batch_transfer_gases(
         }
     };
 
-    let faucet = if let Some(faucet) = weak_faucet.upgrade() {
-        faucet
-    } else {
+    let Some(faucet) = weak_faucet.upgrade() else {
         info!("Faucet has shut down already. Exiting ...");
         return Ok(TransactionDigest::ZERO);
     };
@@ -897,14 +893,9 @@ pub async fn batch_transfer_gases(
     {
         Ok(_) => {}
         Err(_) => {
-            warn!("Batch timeout elapsed while waiting.");
+            info!("Batch timeout elapsed while waiting.");
         }
     };
-
-    // Early exiting this function if there is nothing to batch.
-    if requests.is_empty() {
-        return Ok(TransactionDigest::ZERO);
-    }
 
     let total_requests = requests.len();
     let gas_cost = faucet.get_gas_cost().await?;
@@ -1048,7 +1039,7 @@ mod tests {
         )
         .await
         .unwrap();
-
+        faucet.shutdown_batch_send_task();
         let available = faucet.metrics.total_available_coins.get();
         let faucet_unwrapped = &mut Arc::try_unwrap(faucet).unwrap();
 
@@ -1099,6 +1090,8 @@ mod tests {
 
         // After all transfer requests settle, we still have the original candidates gas in queue.
         let available = faucet.metrics.total_available_coins.get();
+        faucet.shutdown_batch_send_task();
+
         let faucet_unwrapped: &mut SimpleFaucet = &mut Arc::try_unwrap(faucet).unwrap();
         let candidates = faucet_unwrapped.drain_gas_queue(gases.len()).await;
         assert_eq!(available as usize, candidates.len());
@@ -1229,17 +1222,7 @@ mod tests {
         )
         .await;
 
-        let all_errors =
-            status_results.iter().all(
-                |status_result| {
-                    if status_result.is_err() {
-                        true
-                    } else {
-                        false
-                    }
-                },
-            );
-
+        let all_errors = status_results.iter().all(Result::is_err);
         assert!(all_errors);
     }
 
@@ -1264,6 +1247,8 @@ mod tests {
         )
         .await
         .unwrap();
+        faucet.shutdown_batch_send_task();
+
         let faucet: &mut SimpleFaucet = &mut Arc::try_unwrap(faucet).unwrap();
 
         // Now we transfer one gas out
@@ -1433,6 +1418,8 @@ mod tests {
         )
         .await
         .unwrap();
+        faucet.shutdown_batch_send_task();
+
         let faucet: &mut SimpleFaucet = &mut Arc::try_unwrap(faucet).unwrap();
 
         // Ask for a value higher than tiny coin + DEFAULT_GAS_COMPUTATION_BUCKET
@@ -1649,6 +1636,7 @@ mod tests {
         wal.set_in_flight(coin_id, false)
             .expect("Unable to set in flight status to false.");
         drop(wal);
+        faucet.shutdown_batch_send_task();
 
         let faucet_unwrapped = Arc::try_unwrap(faucet).unwrap();
 
@@ -1669,6 +1657,8 @@ mod tests {
         let restarted_wal = faucet_restarted.wal.lock().await;
         assert!(restarted_wal.log.is_empty())
     }
+
+    // TODO: add test on the number of sui tokens sent out and the amounts of the tokens sent out in a batch sui txn
 
     async fn test_basic_interface(faucet: &impl Faucet) {
         let recipient = SuiAddress::random_for_testing_only();
