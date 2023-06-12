@@ -154,7 +154,7 @@
         "react-hot-toast": "^2.4.0",
         "react-number-format": "^5.1.4",
         "react-redux": "^8.0.5",
-        "react-router-dom": "^6.10.0",
+        "react-router-dom": "^6.12.1",
         "react-textarea-autosize": "^8.4.1",
         "rxjs": "^7.8.0",
         "semver": "^7.4.0",

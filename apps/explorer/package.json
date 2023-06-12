@@ -65,7 +65,7 @@
         "react-hook-form": "^7.43.9",
         "react-hot-toast": "^2.4.0",
         "react-resizable-panels": "^0.0.39",
-        "react-router-dom": "^6.10.0",
+        "react-router-dom": "^6.12.1",
         "throttle-debounce": "^5.0.0",
         "topojson-client": "^3.1.0",
         "vite-plugin-rewrite-all": "^1.0.1",
