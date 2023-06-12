@@ -17,12 +17,5 @@ for pr_number in $(git log --grep "\[x\]" --pretty=oneline --abbrev-commit origi
 do
     pr_body=$(gh api -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" /repos/MystenLabs/sui/pulls/"${pr_number}" --jq ".body")
     release_notes="${pr_body#*### Release notes}"
-    printf 'PR: %s\n' "$pr_number"
-    echo "================"
-    if [ -z "${release_notes}" ]
-    then
-        echo "No release notes found"
-    else
-        echo "${release_notes}"
-    fi
+    echo "https://github.com/MystenLabs/sui/pull/${pr_number}: ${release_notes}"
 done
