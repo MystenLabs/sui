@@ -54,20 +54,11 @@ function Event({ event }: { event: SuiEvent }) {
             <div className="flex flex-col gap-3">
                 <EventRow title="Type">
                     <div className="flex gap-1">
-                        <Text variant="pBody/medium" color="steel-darker">
-                            {formatType(event.type)}
-                        </Text>
-                        <CopyToClipboard copyText={event.type} />
-                    </div>
-                </EventRow>
-
-                <EventRow title="Module">
-                    <div className="flex gap-1">
                         <ObjectLink
                             objectId={`${event.packageId}?module=${event.transactionModule}`}
-                            label={event.transactionModule}
+                            label={formatType(event.type)}
                         />
-                        <CopyToClipboard copyText={event.packageId} />
+                        <CopyToClipboard copyText={event.type} />
                     </div>
                 </EventRow>
 
