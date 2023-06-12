@@ -19,12 +19,12 @@ use serde::{Deserialize, Serialize};
 use std::io::{BufWriter, Cursor, Read, Seek, SeekFrom, Write};
 use std::ops::Range;
 use std::sync::Arc;
+use sui_storage::blob::{Blob, BlobEncoding};
 use sui_storage::object_store::util::{get, put};
-use sui_storage::{compute_sha3_checksum, Blob, Encoding, FileCompression, SHA3_BYTES};
+use sui_storage::{compute_sha3_checksum, SHA3_BYTES};
 
-/// The following describes the format of checkpoint (*.chk) and summary (*.sum) files used for
-/// persisting checkpoint contents and summaries respectively. Files are committed to local store by
-/// duration or file size. Committed files are synced with the remote store continuously. Files are
+/// Checkpoints and summaries are persisted as blob files. Files are committed to local store
+/// by duration or file size. Committed files are synced with the remote store continuously. Files are
 /// optionally compressed with the zstd compression format. Filenames follow the format
 /// <checkpoint_seq_num>.<suffix> where `checkpoint_seq_num` is the first checkpoint present in that
 /// file. MANIFEST is the index and source of truth for all files present in the archive.
@@ -45,7 +45,7 @@ use sui_storage::{compute_sha3_checksum, Blob, Encoding, FileCompression, SHA3_B
 ///     - epoch_1/
 ///        - 101000.chk
 ///        - ...
-/// Checkpoint File Disk Format
+/// Blob File Disk Format
 ///┌──────────────────────────────┐
 ///│       magic <4 byte>         │
 ///├──────────────────────────────┤
@@ -54,35 +54,14 @@ use sui_storage::{compute_sha3_checksum, Blob, Encoding, FileCompression, SHA3_B
 ///│    file compression <1 byte> │
 // ├──────────────────────────────┤
 ///│ ┌──────────────────────────┐ │
-///│ │   CheckpointContent 1    │ │
+///│ │         Blob 1           │ │
 ///│ ├──────────────────────────┤ │
 ///│ │          ...             │ │
 ///│ ├──────────────────────────┤ │
-///│ │  CheckpointContent N     │ │
+///│ │        Blob N            │ │
 ///│ └──────────────────────────┘ │
 ///└──────────────────────────────┘
-/// CheckpointContent
-///┌───────────────┬───────────────────┬──────────────┐
-///│ len <uvarint> │ encoding <1 byte> │ data <bytes> │
-///└───────────────┴───────────────────┴──────────────┘
-///
-/// Summary File Disk Format
-///┌──────────────────────────────┐
-///│       magic <4 byte>         │
-///├──────────────────────────────┤
-///│  storage format <1 byte>     │
-// ├──────────────────────────────┤
-// │  file compression <1 byte>   │
-// ├──────────────────────────────┤
-///│ ┌──────────────────────────┐ │
-///│ │   CheckpointSummary 1    │ │
-///│ ├──────────────────────────┤ │
-///│ │          ...             │ │
-///│ ├──────────────────────────┤ │
-///│ │   CheckpointSummary N    │ │
-///│ └──────────────────────────┘ │
-///└──────────────────────────────┘
-/// CheckpointSummary
+/// Blob
 ///┌───────────────┬───────────────────┬──────────────┐
 ///│ len <uvarint> │ encoding <1 byte> │ data <bytes> │
 ///└───────────────┴───────────────────┴──────────────┘
@@ -108,14 +87,6 @@ const MANIFEST_FILENAME: &str = "MANIFEST";
     Copy, Clone, Debug, Eq, PartialEq, Serialize, Deserialize, TryFromPrimitive, IntoPrimitive,
 )]
 #[repr(u8)]
-pub enum StorageFormat {
-    Blob = 0,
-}
-
-#[derive(
-    Copy, Clone, Debug, Eq, PartialEq, Serialize, Deserialize, TryFromPrimitive, IntoPrimitive,
-)]
-#[repr(u8)]
 pub enum FileType {
     CheckpointContent = 0,
     CheckpointSummary,
@@ -126,8 +97,6 @@ pub struct FileMetadata {
     pub file_type: FileType,
     pub epoch_num: u64,
     pub checkpoint_seq_range: Range<u64>,
-    pub file_compression: FileCompression,
-    pub storage_format: StorageFormat,
     pub sha3_digest: [u8; 32],
 }
 
@@ -250,20 +219,15 @@ impl CheckpointUpdates {
 
 pub fn create_file_metadata(
     file_path: &std::path::Path,
-    file_compression: FileCompression,
     file_type: FileType,
-    storage_format: StorageFormat,
     epoch_num: u64,
     checkpoint_seq_range: Range<u64>,
 ) -> Result<FileMetadata> {
-    file_compression.compress(file_path)?;
     let sha3_digest = compute_sha3_checksum(file_path)?;
     let file_metadata = FileMetadata {
         file_type,
         epoch_num,
         checkpoint_seq_range,
-        file_compression,
-        storage_format,
         sha3_digest,
     };
     Ok(file_metadata)
@@ -304,7 +268,7 @@ pub async fn write_manifest(manifest: Manifest, remote_store: Arc<DynObjectStore
     let path = Path::from(MANIFEST_FILENAME);
     let mut buf = BufWriter::new(vec![]);
     buf.write_u32::<BigEndian>(MANIFEST_FILE_MAGIC)?;
-    let blob = Blob::encode(&manifest, Encoding::Bcs)?;
+    let blob = Blob::encode(&manifest, BlobEncoding::Bcs)?;
     blob.write(&mut buf)?;
     buf.flush()?;
     let mut hasher = Sha3_256::default();

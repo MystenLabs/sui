@@ -23,9 +23,9 @@ use std::num::NonZeroUsize;
 use std::path::PathBuf;
 use std::sync::Arc;
 use sui_core::authority::authority_store_tables::{AuthorityPerpetualTables, LiveObject};
+use sui_storage::blob::{Blob, BlobEncoding, BLOB_ENCODING_BYTES};
 use sui_storage::object_store::util::{copy_file, delete_recursively, path_to_filesystem};
 use sui_storage::object_store::ObjectStoreConfig;
-use sui_storage::{Blob, Encoding, BLOB_ENCODING_BYTES};
 use sui_types::base_types::{ObjectID, ObjectRef};
 use tokio::sync::mpsc;
 use tokio::sync::mpsc::{Receiver, Sender};
@@ -183,7 +183,7 @@ impl LiveObjectSetWriterV1 {
         Ok(())
     }
     async fn write_object(&mut self, object: &LiveObject) -> Result<()> {
-        let blob = Blob::encode(object, Encoding::Bcs)?;
+        let blob = Blob::encode(object, BlobEncoding::Bcs)?;
         let mut blob_size = blob.data.len().required_space();
         blob_size += BLOB_ENCODING_BYTES;
         blob_size += blob.data.len();

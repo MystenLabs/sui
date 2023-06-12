@@ -43,8 +43,7 @@ use mysten_metrics::{spawn_monitored_task, RegistryService};
 use mysten_network::server::ServerBuilder;
 use narwhal_network::metrics::MetricsMakeCallbackHandler;
 use narwhal_network::metrics::{NetworkConnectionMetrics, NetworkMetrics};
-use sui_archival::writer::ArchiveWriterV1;
-use sui_archival::StorageFormat;
+use sui_archival::writer::ArchiveWriter;
 use sui_config::node::DBCheckpointConfig;
 use sui_config::node_config_metrics::NodeConfigMetrics;
 use sui_config::{ConsensusConfig, NodeConfig};
@@ -94,7 +93,7 @@ use sui_network::discovery::TrustedPeerChangeEvent;
 use sui_network::state_sync;
 use sui_protocol_config::{ProtocolConfig, SupportedProtocolVersions};
 use sui_storage::object_store::{ObjectStoreConfig, ObjectStoreType};
-use sui_storage::{FileCompression, IndexStore};
+use sui_storage::{FileCompression, IndexStore, StorageFormat};
 use sui_types::base_types::{AuthorityName, EpochId, TransactionDigest};
 use sui_types::committee::Committee;
 use sui_types::crypto::KeypairTraits;
@@ -389,7 +388,7 @@ impl SuiNode {
                     directory: Some(config.archive_path()),
                     ..Default::default()
                 };
-                let archive_writer = ArchiveWriterV1::new(
+                let archive_writer = ArchiveWriter::new(
                     local_store_config,
                     remote_store_config.clone(),
                     FileCompression::Zstd,

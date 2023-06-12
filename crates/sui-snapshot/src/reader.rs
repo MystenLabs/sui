@@ -24,9 +24,9 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use sui_core::authority::authority_store_tables::{AuthorityPerpetualTables, LiveObject};
 use sui_core::authority::AuthorityStore;
+use sui_storage::blob::{Blob, BlobEncoding};
 use sui_storage::object_store::util::{copy_file, copy_files, path_to_filesystem};
 use sui_storage::object_store::ObjectStoreConfig;
-use sui_storage::{Blob, Encoding};
 use sui_types::base_types::{ObjectDigest, ObjectID, ObjectRef, SequenceNumber};
 use tokio::sync::Mutex;
 
@@ -390,7 +390,7 @@ impl LiveObjectIter {
         self.reader.read_exact(&mut data)?;
         let blob = Blob {
             data,
-            encoding: Encoding::try_from(encoding)?,
+            encoding: BlobEncoding::try_from(encoding)?,
         };
         blob.decode()
     }
