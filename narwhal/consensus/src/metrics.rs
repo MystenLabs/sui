@@ -36,13 +36,22 @@ pub struct ConsensusMetrics {
     /// The time it takes for a certificate from the moment it gets created
     /// up to the moment it gets committed.
     pub certificate_commit_latency: Histogram,
-    /// When a certificate is received on an odd round, we check
-    /// about the previous (even) round leader. We do have three possible cases which
-    /// are tagged as values of the label "outcome":
-    /// * not_found: the leader certificate has not been found at all
-    /// * not_enough_support: when the leader certificate has been found but there was not enough support
-    /// * elected: when the leader certificate has been found and had enough support
+    /// On every even round we expect a leader to be elected and committed. However, this is not
+    /// always the case and this metric gives more insight. The metric follows the commit path, so
+    /// all the nodes are expected to report the same results. For every leader of each round the
+    /// output can be one of the following:
+    /// * committed: the leader has been found and its subdag will get committed - no matter if the leader
+    /// is committed on its time or not (part of recursion)
+    /// * not_found: the leader has not been found on the commit path and doesn't get committed
+    /// * no_path: the leader exists but there is no path that leads to it
     pub leader_election: IntCounterVec,
+    /// Under normal circumstances every odd round should trigger leader election for its previous
+    /// even round. We consider a "hit" in this case when the leader has been elected when the network
+    /// has not moved to the next even round (so latency is still in the expected range). If the network
+    /// has moved to the next even round and the leader has not been elected/committed, then we consider
+    /// this a "miss". The leader might be committed later on, but we don't consider this a case where
+    /// the leader has been committed "on time".
+    pub leader_commit_accuracy: IntCounterVec,
     /// Count leader certificates committed, and whether the leader has strong support.
     pub leader_commits: IntCounterVec,
 }
@@ -100,6 +109,12 @@ impl ConsensusMetrics {
                 "certificate_commit_latency",
                 "The time it takes for a certificate from the moment it gets created up to the moment it gets committed.",
                 LATENCY_SEC_BUCKETS.to_vec(),
+                registry
+            ).unwrap(),
+            leader_commit_accuracy: register_int_counter_vec_with_registry!(
+                "leader_commit_accuracy",
+                "Whether a leader commit has been triggered on time - meaning that network hasn't progress to the next even round before it got committed",
+                &["outcome", "authority"],
                 registry
             ).unwrap(),
             leader_election: register_int_counter_vec_with_registry!(

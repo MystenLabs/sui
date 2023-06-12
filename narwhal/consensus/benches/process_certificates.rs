@@ -59,7 +59,6 @@ pub fn process_certificates(c: &mut Criterion) {
             store: store.consensus_store,
             metrics,
             last_successful_leader_election_timestamp: Instant::now(),
-            last_leader_election: Default::default(),
             max_inserted_certificate_round: 0,
             num_sub_dags_per_schedule: 100,
         };
