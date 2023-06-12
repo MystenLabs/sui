@@ -18,6 +18,7 @@ tracing = "0.1.36"
 
 sui-adapter = { path = "../sui-adapter" }
 sui-config = { path = "../sui-config" }
+sui-move-natives = { path = "../sui-move-natives" }
 sui-types = { path = "../sui-types" }
 sui-core = { path = "../sui-core" }
 sui-node = { path = "../sui-node" }

@@ -27,6 +27,7 @@ use sui_core::signature_verifier::SignatureVerifierMetrics;
 use sui_core::storage::RocksDbStore;
 use sui_node::metrics;
 use sui_types::metrics::LimitsMetrics;
+use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemState;
 use sui_types::sui_system_state::SuiSystemStateTrait;
 use sui_types::temporary_store::TemporaryStore;
 use sui_types::{
@@ -38,6 +39,17 @@ use sui_types::{
 use tokio::sync::watch;
 use tokio::time::Duration;
 use typed_store::rocks::default_db_options;
+
+#[derive(Debug)]
+pub struct EpochStartMessage(
+    pub ProtocolConfig,
+    pub Arc<EpochStartConfiguration>,
+    pub u64,
+);
+#[derive(Debug)]
+pub struct EpochEndMessage(pub EpochStartSystemState);
+#[derive(Debug)]
+pub struct TransactionMessage(pub VerifiedTransaction, pub ExecutionDigests, pub u64);
 
 pub struct SequenceWorkerState {
     // config: NodeConfig,
