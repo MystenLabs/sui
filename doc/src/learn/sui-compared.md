@@ -34,7 +34,7 @@ But the process of submitting a transaction is a bit more involved. That little 
 
  1. Sender broadcasts a transaction to all Sui validators.
  1. Sui validators send individual votes on this transaction to the sender.
- 1. Each vote has a certain weight since each validator has weight based upon the rules of [Proof of Stake](https://en.wikipedia.org/wiki/Proof_of_work).
+ 1. Each vote has a certain weight since each validator has weight based upon the rules of [Proof of Stake](https://en.wikipedia.org/wiki/Proof_of_stake).
  1. Sender collects a Byzantine-resistant-majority of these votes into a *certificate* and broadcasts it to all Sui validators. 
  1. The validators execute the transaction and sign the results. When the client receives a Byzantine-resistant-majority of the results *finality* is reached, i.e., assurance the transaction will not be dropped (revoked).
  1. Optionally, the sender assembles the votes to a certificate detailing the effects of the transaction.
