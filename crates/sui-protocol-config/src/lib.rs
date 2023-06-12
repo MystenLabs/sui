@@ -272,8 +272,6 @@ pub struct ProtocolConfig {
 
     // ==== Transaction input limits ====
     /// Maximum serialized size of a transaction (in bytes).
-    // NOTE: This value should be kept in sync with the corresponding value in
-    // sdk/typescript/src/builder/TransactionData.ts
     max_tx_size_bytes: Option<u64>,
 
     /// Maximum number of input objects to a transaction. Enforced by the transaction input checker

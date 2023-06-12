@@ -14,6 +14,7 @@ import {
   SuiMoveNormalizedType,
   SuiObjectRef,
   SUI_TYPE_ARG,
+  ProtocolConfig,
 } from '../types';
 import {
   Transactions,
@@ -29,6 +30,7 @@ import {
   Inputs,
   isMutableSharedObjectInput,
   ObjectCallArg,
+  PureCallArg,
 } from './Inputs';
 import { getPureSerializationType, isTxContext } from './serializer';
 import {
@@ -38,6 +40,13 @@ import {
 import { TRANSACTION_TYPE, create, WellKnownEncoding } from './utils';
 
 type TransactionResult = TransactionArgument & TransactionArgument[];
+
+const DefaultOfflineLimits = {
+  maxPureArgumentSize: 16 * 1024,
+  maxTxGas: 50_000_000_000,
+  maxGasObjects: 256,
+  maxTxSizeBytes: 128 * 1024,
+} satisfies Limits;
 
 function createTransactionResult(index: number): TransactionResult {
   const baseResult: TransactionArgument = { kind: 'Result', index };
@@ -85,25 +94,30 @@ function createTransactionResult(index: number): TransactionResult {
   }) as TransactionResult;
 }
 
-function expectProvider(
-  provider: JsonRpcProvider | undefined,
-): JsonRpcProvider {
-  if (!provider) {
+function expectProvider(options: BuildOptions): JsonRpcProvider {
+  if (!options.provider) {
     throw new Error(
       `No provider passed to Transaction#build, but transaction data was not sufficient to build offline.`,
     );
   }
 
-  return provider;
+  return options.provider;
 }
 
 const TRANSACTION_BRAND = Symbol.for('@mysten/transaction');
 
-// The maximum number of gas objects that can be selected for one transaction.
-const MAX_GAS_OBJECTS = 256;
+const LIMITS = {
+  // The maximum gas that is allowed.
+  maxTxGas: 'max_tx_gas',
+  // The maximum number of gas objects that can be selected for one transaction.
+  maxGasObjects: 'max_gas_payment_objects',
+  // The maximum size (in bytes) that the transaction can be:
+  maxTxSizeBytes: 'max_tx_size_bytes',
+  // The maximum size (in bytes) that pure arguments can be:
+  maxPureArgumentSize: 'max_pure_argument_size',
+} as const;
 
-// The maximum gas that is allowed.
-const MAX_GAS = 50_000_000_000;
+type Limits = Partial<Record<keyof typeof LIMITS, number>>;
 
 // An amount of gas (in gas units) that is added to transactions as an overhead to ensure transactions do not fail.
 const GAS_SAFE_OVERHEAD = 1000n;
@@ -119,6 +133,10 @@ const chunk = <T>(arr: T[], size: number): T[][] =>
 interface BuildOptions {
   provider?: JsonRpcProvider;
   onlyTransactionKind?: boolean;
+  /** Define a protocol config to build against, instead of having it fetched from the provider at build time. */
+  protocolConfig?: ProtocolConfig;
+  /** Define limits that are used when building the transaction. In general, we recommend using the protocol configuration instead of defining limits. */
+  limits?: Limits;
 }
 
 /**
@@ -206,11 +224,6 @@ export class TransactionBlock {
     this.#blockData.gasConfig.owner = owner;
   }
   setGasPayment(payments: SuiObjectRef[]) {
-    if (payments.length >= MAX_GAS_OBJECTS) {
-      throw new Error(
-        `Payment objects exceed maximum amount ${MAX_GAS_OBJECTS}`,
-      );
-    }
     this.#blockData.gasConfig.payment = payments.map((payment) =>
       mask(payment, SuiObjectRef),
     );
@@ -366,13 +379,49 @@ export class TransactionBlock {
     return JSON.stringify(this.#blockData.snapshot());
   }
 
+  #getConfig(
+    key: keyof typeof LIMITS,
+    { protocolConfig, limits }: BuildOptions,
+  ) {
+    // Use the limits definition if that exists:
+    if (limits && typeof limits[key] === 'number') {
+      return limits[key]!;
+    }
+
+    if (!protocolConfig) {
+      return DefaultOfflineLimits[key];
+    }
+
+    // Fallback to protocol config:
+    const attribute = protocolConfig?.attributes[LIMITS[key]];
+    if (!attribute) {
+      throw new Error(`Missing expected protocol config: "${LIMITS[key]}"`);
+    }
+
+    const value =
+      'u64' in attribute
+        ? attribute.u64
+        : 'u32' in attribute
+        ? attribute.u32
+        : attribute.f64;
+
+    if (!value) {
+      throw new Error(
+        `Unexpected protocol config value found for: "${LIMITS[key]}"`,
+      );
+    }
+
+    // NOTE: Technically this is not a safe conversion, but we know all of the values in protocol config are safe
+    return Number(value);
+  }
+
   /** Build the transaction to BCS bytes. */
-  async build({
-    provider,
-    onlyTransactionKind,
-  }: BuildOptions = {}): Promise<Uint8Array> {
-    await this.#prepare({ provider, onlyTransactionKind });
-    return this.#blockData.build({ onlyTransactionKind });
+  async build(options: BuildOptions = {}): Promise<Uint8Array> {
+    await this.#prepare(options);
+    return this.#blockData.build({
+      maxSizeBytes: this.#getConfig('maxTxSizeBytes', options),
+      onlyTransactionKind: options.onlyTransactionKind,
+    });
   }
 
   /** Derive transaction digest */
@@ -385,16 +434,39 @@ export class TransactionBlock {
     return this.#blockData.getDigest();
   }
 
+  #validate(options: BuildOptions) {
+    const maxPureArgumentSize = this.#getConfig('maxPureArgumentSize', options);
+    // Validate all inputs are the correct size:
+    this.#blockData.inputs.forEach((input, index) => {
+      if (is(input.value, PureCallArg)) {
+        if (input.value.Pure.length > maxPureArgumentSize) {
+          throw new Error(
+            `Input at index ${index} is too large, max pure input size is ${maxPureArgumentSize} bytes, got ${input.value.Pure.length} bytes`,
+          );
+        }
+      }
+    });
+  }
+
   // The current default is just picking _all_ coins we can which may not be ideal.
-  async #prepareGasPayment({ provider, onlyTransactionKind }: BuildOptions) {
+  async #prepareGasPayment(options: BuildOptions) {
+    if (this.#blockData.gasConfig.payment) {
+      const maxGasObjects = this.#getConfig('maxGasObjects', options);
+      if (this.#blockData.gasConfig.payment.length > maxGasObjects) {
+        throw new Error(
+          `Payment objects exceed maximum amount: ${maxGasObjects}`,
+        );
+      }
+    }
+
     // Early return if the payment is already set:
-    if (onlyTransactionKind || this.#blockData.gasConfig.payment) {
+    if (options.onlyTransactionKind || this.#blockData.gasConfig.payment) {
       return;
     }
 
     const gasOwner = this.#blockData.gasConfig.owner ?? this.#blockData.sender;
 
-    const coins = await expectProvider(provider).getCoins({
+    const coins = await expectProvider(options).getCoins({
       owner: gasOwner!,
       coinType: SUI_TYPE_ARG,
     });
@@ -416,7 +488,7 @@ export class TransactionBlock {
 
         return !matchingInput;
       })
-      .slice(0, MAX_GAS_OBJECTS - 1)
+      .slice(0, this.#getConfig('maxGasObjects', options) - 1)
       .map((coin) => ({
         objectId: coin.coinObjectId,
         digest: coin.digest,
@@ -430,15 +502,15 @@ export class TransactionBlock {
     this.setGasPayment(paymentCoins);
   }
 
-  async #prepareGasPrice({ provider, onlyTransactionKind }: BuildOptions) {
-    if (onlyTransactionKind || this.#blockData.gasConfig.price) {
+  async #prepareGasPrice(options: BuildOptions) {
+    if (options.onlyTransactionKind || this.#blockData.gasConfig.price) {
       return;
     }
 
-    this.setGasPrice(await expectProvider(provider).getReferenceGasPrice());
+    this.setGasPrice(await expectProvider(options).getReferenceGasPrice());
   }
 
-  async #prepareTransactions(provider?: JsonRpcProvider) {
+  async #prepareTransactions(options: BuildOptions) {
     const { inputs, transactions } = this.#blockData;
 
     const moveModulesToResolve: MoveCallTransaction[] = [];
@@ -527,7 +599,7 @@ export class TransactionBlock {
             moveCall.target.split('::');
 
           const normalized = await expectProvider(
-            provider,
+            options,
           ).getNormalizedMoveFunction({
             package: normalizeSuiObjectId(packageId),
             module: moduleName,
@@ -605,7 +677,7 @@ export class TransactionBlock {
       const objects = (
         await Promise.all(
           objectChunks.map((chunk) =>
-            expectProvider(provider).multiGetObjects({
+            expectProvider(options).multiGetObjects({
               ids: chunk,
               options: { showOwner: true },
             }),
@@ -659,27 +731,32 @@ export class TransactionBlock {
    * Prepare the transaction by valdiating the transaction data and resolving all inputs
    * so that it can be built into bytes.
    */
-  async #prepare({ provider, onlyTransactionKind }: BuildOptions) {
-    if (!onlyTransactionKind && !this.#blockData.sender) {
+  async #prepare(options: BuildOptions) {
+    if (!options.onlyTransactionKind && !this.#blockData.sender) {
       throw new Error('Missing transaction sender');
     }
 
+    if (!options.protocolConfig && !options.limits && options.provider) {
+      options.protocolConfig = await options.provider.getProtocolConfig();
+    }
+
     await Promise.all([
-      this.#prepareGasPrice({ provider, onlyTransactionKind }),
-      this.#prepareTransactions(provider),
+      this.#prepareGasPrice(options),
+      this.#prepareTransactions(options),
     ]);
 
-    if (!onlyTransactionKind) {
-      await this.#prepareGasPayment({ provider, onlyTransactionKind });
+    if (!options.onlyTransactionKind) {
+      await this.#prepareGasPayment(options);
 
       if (!this.#blockData.gasConfig.budget) {
         const dryRunResult = await expectProvider(
-          provider,
+          options,
         ).dryRunTransactionBlock({
           transactionBlock: this.#blockData.build({
+            maxSizeBytes: this.#getConfig('maxTxSizeBytes', options),
             overrides: {
               gasConfig: {
-                budget: String(MAX_GAS),
+                budget: String(this.#getConfig('maxTxGas', options)),
                 payment: [],
               },
             },
@@ -711,5 +788,8 @@ export class TransactionBlock {
         );
       }
     }
+
+    // Perform final validation on the transaction:
+    this.#validate(options);
   }
 }
