@@ -13,17 +13,16 @@ else
     new_branch=$2
 fi
 
-for commit in $(git log --grep "\[x\]" --pretty=oneline --abbrev-commit origin/"${new_branch}"...origin/"${prev_branch}")
+for pr_number in $(git log --grep "\[x\]" --pretty=oneline --abbrev-commit origin/"${new_branch}"...origin/"${prev_branch}" ":(exclude)apps" ":(exclude)dapps" ":(exclude)sdk" ":(exclude).changeset" | grep -o '#[0-9]\+' | grep -o '[0-9]\+')
 do
-    regex='.*\(#([0-9]+)\).*'
-    if [[ $commit =~ $regex ]]; then
-        pr_number="${BASH_REMATCH[1]}"
-        pr_body=$(gh api -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" /repos/MystenLabs/sui/pulls/"${pr_number}" --jq ".body")
-        release_notes="${pr_body#*### Release notes}"
-        printf 'PR: \t%s\n' "$pr_number"
-        echo "================"
+    pr_body=$(gh api -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" /repos/MystenLabs/sui/pulls/"${pr_number}" --jq ".body")
+    release_notes="${pr_body#*### Release notes}"
+    printf 'PR: %s\n' "$pr_number"
+    echo "================"
+    if [ -z "${release_notes}" ]
+    then
+        echo "No release notes found"
+    else
         echo "${release_notes}"
     fi
 done
-
-
