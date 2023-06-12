@@ -10,7 +10,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 13;
+const MAX_PROTOCOL_VERSION: u64 = 14;
 
 // Record history of protocol version allocations here:
 //
@@ -40,7 +40,9 @@ const MAX_PROTOCOL_VERSION: u64 = 13;
 // Version 12: Changes to deepbook in framework to add API for querying marketplace.
 //             Change NW Batch to use versioned metadata field.
 //             Changes to sui-system package to add PTB-friendly unstake function, and minor cleanup.
-// Version 13: Introduce a config variable to allow charging of computation to be either
+// Version 13: System package change deprecating `0xdee9::clob` and `0xdee9::custodian`, replaced by
+//             `0xdee9::clob_v2` and `0xdee9::custodian_v2`.
+// Version 14: Introduce a config variable to allow charging of computation to be either
 //             bucket base or rounding up. The presence of `gas_rounding_step` (or `None`)
 //             decides whether rounding is applied or not.
 //             Add reordering of user transactions by gas price after consensus.
@@ -1218,7 +1220,8 @@ impl ProtocolConfig {
                 }
                 cfg
             }
-            13 => {
+            13 => Self::get_for_version_impl(version - 1, chain),
+            14 => {
                 let mut cfg = Self::get_for_version_impl(version - 1, chain);
                 cfg.gas_rounding_step = Some(1_000);
                 cfg.feature_flags.consensus_transaction_ordering =
