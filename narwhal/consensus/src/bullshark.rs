@@ -311,12 +311,6 @@ impl Bullshark {
     }
 
     fn report_leader_on_time_metrics(&mut self, certificate_round: Round, state: &ConsensusState) {
-        // Under normal circumstances every odd round should trigger leader election for its previous
-        // even round. We consider a "hit" in this case when the leader has been elected when the network
-        // has not moved to the next even round (so latency it's still in the expected range). If the network
-        // has moved to the next even round and the leader has not been elected/committed, then we consider
-        // this a "miss". The leader might be committed later on, but we don't consider this a case where
-        // the leader has been committed "on time".
         if certificate_round > self.max_inserted_certificate_round
             && certificate_round % 2 == 0
             && certificate_round > 2
@@ -326,12 +320,12 @@ impl Bullshark {
 
             if state.last_round.committed_round < previous_leader_round {
                 self.metrics
-                    .leader_commit_on_time
-                    .with_label_values(&["missed", authority.hostname()])
+                    .leader_commit_accuracy
+                    .with_label_values(&["miss", authority.hostname()])
                     .inc();
             } else {
                 self.metrics
-                    .leader_commit_on_time
+                    .leader_commit_accuracy
                     .with_label_values(&["hit", authority.hostname()])
                     .inc();
             }

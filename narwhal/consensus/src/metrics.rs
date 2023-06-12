@@ -47,11 +47,11 @@ pub struct ConsensusMetrics {
     pub leader_election: IntCounterVec,
     /// Under normal circumstances every odd round should trigger leader election for its previous
     /// even round. We consider a "hit" in this case when the leader has been elected when the network
-    /// has not moved to the next even round (so latency it's still in the expected range). If the network
+    /// has not moved to the next even round (so latency is still in the expected range). If the network
     /// has moved to the next even round and the leader has not been elected/committed, then we consider
     /// this a "miss". The leader might be committed later on, but we don't consider this a case where
     /// the leader has been committed "on time".
-    pub leader_commit_on_time: IntCounterVec,
+    pub leader_commit_accuracy: IntCounterVec,
     /// Count leader certificates committed, and whether the leader has strong support.
     pub leader_commits: IntCounterVec,
 }
@@ -111,8 +111,8 @@ impl ConsensusMetrics {
                 LATENCY_SEC_BUCKETS.to_vec(),
                 registry
             ).unwrap(),
-            leader_commit_on_time: register_int_counter_vec_with_registry!(
-                "leader_commit_on_time",
+            leader_commit_accuracy: register_int_counter_vec_with_registry!(
+                "leader_commit_accuracy",
                 "Whether a leader commit has been triggered on time - meaning that network hasn't progress to the next even round before it got committed",
                 &["outcome", "authority"],
                 registry
