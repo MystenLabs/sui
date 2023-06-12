@@ -9,21 +9,15 @@ import {
   TANSTACK_OWNED_KIOSK_KEY,
 } from '../utils/constants';
 import { useRpc } from '../context/RpcClientContext';
+import { ObjectId, SuiAddress, SuiObjectResponse } from '@mysten/sui.js';
 import {
-  ObjectId,
-  SuiAddress,
-  SuiObjectResponse,
-  getObjectFields,
-  getObjectId,
-} from '@mysten/sui.js';
-import {
-  KIOSK_OWNER_CAP,
   Kiosk,
   KioskData,
   KioskItem,
   KioskListing,
   fetchKiosk,
   getKioskObject,
+  getOwnedKiosks,
 } from '@mysten/kiosk';
 import { parseObjectDisplays, processKioskListings } from '../utils/utils';
 import { OwnedObjectType } from '../components/Inventory/OwnedObjects';
@@ -44,28 +38,21 @@ export function useOwnedKiosk() {
   return useQuery({
     queryKey: [TANSTACK_OWNED_KIOSK_KEY, currentAccount?.address],
     refetchOnMount: false,
+    retry: false,
     queryFn: async (): Promise<{
       kioskId: SuiAddress | null;
       kioskCap: SuiAddress | null;
     } | null> => {
       if (!currentAccount?.address) return null;
-      const ownedKiosks = await provider.getOwnedObjects({
-        owner: currentAccount.address,
-        filter: { StructType: `${KIOSK_OWNER_CAP}` },
-        options: {
-          showContent: true,
-        },
-      });
-      // gather a list of owned kiosk Ids, and kioskCaps.
-      // we will only use the first one.
-      const kioskIdList = ownedKiosks?.data?.map(
-        (x) => getObjectFields(x)?.for,
+
+      const { kioskOwnerCaps, kioskIds } = await getOwnedKiosks(
+        provider,
+        currentAccount.address,
       );
-      const kioskOwnerCaps = ownedKiosks?.data.map((x) => getObjectId(x));
 
       return {
-        kioskId: kioskIdList[0],
-        kioskCap: kioskOwnerCaps[0],
+        kioskId: kioskIds[0],
+        kioskCap: kioskOwnerCaps[0]?.objectId,
       };
     },
   });

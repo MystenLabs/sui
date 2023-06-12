@@ -1,7 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { TransactionArgument } from '@mysten/sui.js';
+import {
+  ObjectDigest,
+  ObjectId,
+  ObjectType,
+  PaginatedObjectsResponse,
+  TransactionArgument,
+} from '@mysten/sui.js';
 import { ObjectArgument } from '.';
 
 /** The Kiosk module. */
@@ -63,4 +69,71 @@ export type PurchaseAndResolvePoliciesResponse = {
 export type PurchaseOptionalParams = {
   ownedKiosk?: ObjectArgument;
   ownedKioskCap?: ObjectArgument;
+};
+
+/**
+ * A dynamic field `Listing { ID, isExclusive }` attached to the Kiosk.
+ * Holds a `u64` value - the price of the item.
+ */
+export type KioskListing = {
+  /** The ID of the Item */
+  objectId: ObjectId;
+  /**
+   * Whether or not there's a `PurchaseCap` issued. `true` means that
+   * the listing is controlled by some logic and can't be purchased directly.
+   *
+   * TODO: consider renaming the field for better indication.
+   */
+  isExclusive: boolean;
+  /** The ID of the listing */
+  listingId: ObjectId;
+  price?: string;
+};
+
+/**
+ * A dynamic field `Item { ID }` attached to the Kiosk.
+ * Holds an Item `T`. The type of the item is known upfront.
+ */
+export type KioskItem = {
+  /** The ID of the Item */
+  objectId: ObjectId;
+  /** The type of the Item */
+  type: ObjectType;
+  /** Whether the item is Locked (there must be a `Lock` Dynamic Field) */
+  isLocked: boolean;
+  /** Optional listing */
+  listing?: KioskListing;
+};
+/**
+ * Aggregated data from the Kiosk.
+ */
+export type KioskData = {
+  items: KioskItem[];
+  itemIds: ObjectId[];
+  listingIds: ObjectId[];
+  kiosk?: Kiosk;
+  extensions: any[]; // type will be defined on later versions of the SDK.
+};
+
+export type PagedKioskData = {
+  data: KioskData;
+  nextCursor: string | null;
+  hasNextPage: boolean;
+};
+
+export type FetchKioskOptions = {
+  withKioskFields?: boolean;
+  withListingPrices?: boolean;
+};
+
+export type OwnedKiosks = {
+  kioskOwnerCaps: KioskOwnerCap[];
+  kioskIds: ObjectId[];
+} & Omit<PaginatedObjectsResponse, 'data'>;
+
+export type KioskOwnerCap = {
+  objectId: ObjectId;
+  kioskId: ObjectId;
+  digest: ObjectDigest;
+  version: string;
 };
