@@ -7,6 +7,7 @@ module deepbook::critbit {
     use deepbook::math::{count_leading_zeros};
 
     friend deepbook::clob;
+    friend deepbook::clob_v2;
 
     // <<<<<<<<<<<<<<<<<<<<<<<< Error codes <<<<<<<<<<<<<<<<<<<<<<<<
     const ENotImplemented: u64 = 1;
