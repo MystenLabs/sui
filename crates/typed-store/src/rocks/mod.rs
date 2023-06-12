@@ -2124,7 +2124,6 @@ impl Default for ReadWriteOptions {
         }
     }
 }
-
 // TODO: refactor this into a builder pattern, where rocksdb::Options are
 // generated after a call to build().
 #[derive(Default, Clone)]
