@@ -14,6 +14,7 @@ export interface ImageModalProps extends Omit<ModalProps, 'children'> {
     subtitle: string;
     alt: string;
     src: string;
+    moderate?: boolean;
 }
 
 export function ImageModal({
@@ -23,11 +24,15 @@ export function ImageModal({
     title,
     subtitle,
     src,
+    // NOTE: Leave false only if ImageModal is paired with an Image component
+    moderate = false,
 }: ImageModalProps) {
     return (
         <Modal open={open} onClose={onClose}>
             <div className="flex flex-col gap-5">
-                <Image alt={alt} src={src} rounded="none" />
+                {/* Moderation is disabled inside the modal so if a user clicks to open 
+                    an unblurred image the experience is consistent */}
+                <Image alt={alt} src={src} rounded="none" moderate={moderate} />
                 <Heading variant="heading2/semibold" color="sui-light" truncate>
                     {title}
                 </Heading>

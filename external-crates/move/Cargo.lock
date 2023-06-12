@@ -1467,6 +1467,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "enum-compat-util"
+version = "0.1.0"
+dependencies = [
+ "serde_yaml",
+]
+
+[[package]]
 name = "environmental"
 version = "1.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2838,7 +2845,9 @@ version = "0.0.3"
 dependencies = [
  "anyhow",
  "arbitrary",
+ "enum-compat-util",
  "move-core-types",
+ "move-proc-macros",
  "once_cell",
  "proptest",
  "proptest-derive",
@@ -3017,8 +3026,10 @@ dependencies = [
  "anyhow",
  "arbitrary",
  "bcs",
+ "enum-compat-util",
  "ethnum",
  "hex",
+ "move-proc-macros",
  "num 0.4.0",
  "once_cell",
  "primitive-types 0.10.1",
@@ -3265,6 +3276,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "move-proc-macros"
+version = "0.1.0"
+dependencies = [
+ "enum-compat-util",
+ "proc-macro2 1.0.56",
+ "quote 1.0.26",
+ "syn 2.0.13",
+]
+
+[[package]]
 name = "move-prover"
 version = "0.1.0"
 dependencies = [
@@ -3358,10 +3379,12 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "bcs",
+ "enum-compat-util",
  "hex",
  "move-binary-format",
  "move-bytecode-utils",
  "move-core-types",
+ "move-proc-macros",
  "once_cell",
  "serde 1.0.159",
 ]

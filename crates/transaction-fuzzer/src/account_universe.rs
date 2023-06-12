@@ -8,7 +8,6 @@ use crate::executor::{ExecutionResult, Executor};
 use once_cell::sync::Lazy;
 use proptest::{prelude::*, strategy::Union};
 use std::{fmt, sync::Arc};
-use sui_adapter::type_layout_resolver::TypeLayoutResolver;
 use sui_types::{storage::ObjectStore, transaction::VerifiedTransaction};
 
 mod account;
@@ -130,13 +129,14 @@ pub fn assert_accounts_match(
     let state = executor.state.clone();
     let store = state.db();
     let epoch_store = state.load_epoch_store_one_call_per_task();
-    let move_vm = epoch_store.move_vm();
-    let mut layout_resolver = TypeLayoutResolver::new(move_vm, store.as_ref());
+    let mut layout_resolver = epoch_store
+        .executor()
+        .type_layout_resolver(Box::new(store.as_ref()));
     for (idx, account) in universe.accounts().iter().enumerate() {
         for (balance_idx, acc_object) in account.current_coins.iter().enumerate() {
             let object = store.get_object(&acc_object.id()).unwrap().unwrap();
             let total_sui_value =
-                object.get_total_sui(&mut layout_resolver).unwrap() - object.storage_rebate;
+                object.get_total_sui(layout_resolver.as_mut()).unwrap() - object.storage_rebate;
             let account_balance_i = account.current_balances[balance_idx];
             prop_assert_eq!(
                 account_balance_i,

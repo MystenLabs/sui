@@ -1,21 +1,16 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { ObjectOwner, bcs } from '@mysten/sui.js';
-
-/**
- * The Kiosk object fields (for BCS queries).
- */
-export type Kiosk = {
-  id: string;
-  profits: string;
-  owner: string;
-  itemCount: number;
-  allowExtensions: boolean;
-};
+import { bcs } from '@mysten/sui.js';
+import {
+  KIOSK_PURCHASE_CAP,
+  KIOSK_TYPE,
+  TRANSFER_POLICY_CREATED_EVENT,
+  TRANSFER_POLICY_TYPE,
+} from './types';
 
 // Register the `Kiosk` struct for faster queries.
-bcs.registerStructType('0x2::kiosk::Kiosk', {
+bcs.registerStructType(KIOSK_TYPE, {
   id: 'address',
   profits: 'u64',
   owner: 'address',
@@ -23,44 +18,20 @@ bcs.registerStructType('0x2::kiosk::Kiosk', {
   allowExtensions: 'bool',
 });
 
-/**
- * PurchaseCap object fields (for BCS queries).
- */
-export type PurchaseCap = {
-  id: string;
-  kioskId: string;
-  itemId: string;
-  minPrice: string;
-};
-
 // Register the `PurchaseCap` for faster queries.
-bcs.registerStructType('0x2::kiosk::PurchaseCap', {
+bcs.registerStructType(KIOSK_PURCHASE_CAP, {
   id: 'address',
   kioskId: 'address',
   itemId: 'address',
   minPrice: 'u64',
 });
 
-/** Event emitted when a TransferPolicy is created. */
-export type TransferPolicyCreated = {
-  id: string;
-};
-
 // Register the `TransferPolicyCreated` event data.
-bcs.registerStructType('0x2::transfer_policy::TransferPolicyCreated', {
+bcs.registerStructType(TRANSFER_POLICY_CREATED_EVENT, {
   id: 'address',
 });
 
-/** The `TransferPolicy` object */
-export type TransferPolicy = {
-  id: string;
-  type: string;
-  balance: string;
-  rules: string[];
-  owner: ObjectOwner;
-};
-
-bcs.registerStructType('0x2::transfer_policy::TransferPolicy', {
+bcs.registerStructType(TRANSFER_POLICY_TYPE, {
   id: 'address',
   balance: 'u64',
   rules: ['vector', 'string'],

@@ -3,6 +3,7 @@
 
 import { describe, it, expect } from "vitest";
 import { BCS, getSuiMoveConfig } from "../src/index";
+import { serde } from "./utils";
 
 describe("BCS: Aliases", () => {
   it("should support type aliases", () => {
@@ -38,9 +39,3 @@ describe("BCS: Aliases", () => {
     expect(error).toBeInstanceOf(Error);
   });
 });
-
-function serde(bcs, type, data) {
-  let ser = bcs.ser(type, data).toString("hex");
-  let de = bcs.de(type, ser, "hex");
-  return de;
-}

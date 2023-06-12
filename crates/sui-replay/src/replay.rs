@@ -20,8 +20,6 @@ use std::collections::{BTreeMap, HashSet};
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::Mutex;
-use sui_adapter::adapter;
-use sui_adapter::execution_engine::execute_transaction_to_effects_impl;
 use sui_config::node::ExpensiveSafetyCheckConfig;
 use sui_core::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use sui_core::authority::epoch_start_configuration::EpochStartConfiguration;
@@ -32,6 +30,7 @@ use sui_core::authority::TemporaryStore;
 use sui_core::epoch::epoch_metrics::EpochMetrics;
 use sui_core::module_cache_metrics::ResolverMetrics;
 use sui_core::signature_verifier::SignatureVerifierMetrics;
+use sui_execution::Executor;
 use sui_framework::BuiltInFramework;
 use sui_json_rpc_types::SuiTransactionBlockEffects;
 use sui_json_rpc_types::SuiTransactionBlockEffectsAPI;
@@ -46,7 +45,6 @@ use sui_types::digests::TransactionDigest;
 use sui_types::error::ExecutionError;
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
-use sui_types::execution_mode;
 use sui_types::gas::SuiGasStatus;
 use sui_types::metrics::LimitsMetrics;
 use sui_types::object::{Data, Object, Owner};
@@ -70,11 +68,11 @@ pub struct ExecutionSandboxState {
     pub transaction_info: OnChainTransactionInfo,
     /// All the obejcts that are required for the execution of the transaction
     pub required_objects: Vec<Object>,
-    /// Temporary store from executing this locally in `execute_transaction_to_effects_impl`
+    /// Temporary store from executing this locally in `execute_transaction_to_effects`
     pub local_exec_temporary_store: Option<InnerTemporaryStore>,
-    /// Effects from executing this locally in `execute_transaction_to_effects_impl`
+    /// Effects from executing this locally in `execute_transaction_to_effects`
     pub local_exec_effects: SuiTransactionBlockEffects,
-    /// Status from executing this locally in `execute_transaction_to_effects_impl`
+    /// Status from executing this locally in `execute_transaction_to_effects`
     pub local_exec_status: Result<(), ExecutionError>,
 }
 
@@ -429,8 +427,10 @@ impl LocalExec {
         tx_digest: &TransactionDigest,
         input_objects: InputObjects,
         protocol_config: &ProtocolConfig,
-    ) -> TemporaryStore<&mut LocalExec> {
-        TemporaryStore::new(self, input_objects, *tx_digest, protocol_config)
+    ) -> TemporaryStore {
+        // Wrap `&mut self` in an `Arc` because of `TemporaryStore`'s interface, not because it will
+        // be shared across multiple threads
+        TemporaryStore::new(Arc::new(self), input_objects, *tx_digest, protocol_config)
     }
 
     pub async fn multi_download_and_store(
@@ -672,26 +672,27 @@ impl LocalExec {
         let temporary_store =
             self.to_temporary_store(tx_digest, InputObjects::new(input_objects), protocol_config);
 
-        // We could probably cache the VM per protocol config
-        let move_vm = get_vm(protocol_config, expensive_safety_check_config)?;
+        // We could probably cache the executor per protocol config
+        let executor = get_executor(protocol_config, expensive_safety_check_config);
 
         // All prep done
-        let res = execute_transaction_to_effects_impl::<execution_mode::Normal, _>(
-            tx_info.shared_object_refs.clone(),
-            temporary_store,
-            override_transaction_kind.unwrap_or(tx_info.kind.clone()),
-            tx_info.sender,
-            &tx_info.gas.clone(),
-            *tx_digest,
-            tx_info.dependencies.clone().into_iter().collect(),
-            &move_vm,
-            gas_status,
-            &tx_info.executed_epoch,
-            epoch_start_timestamp,
+        let expensive_checks = true;
+        let certificate_deny_set = HashSet::new();
+        let res = executor.execute_transaction_to_effects(
             protocol_config,
             metrics,
-            true,
-            &HashSet::new(),
+            expensive_checks,
+            &certificate_deny_set,
+            &tx_info.executed_epoch,
+            epoch_start_timestamp,
+            temporary_store,
+            tx_info.shared_object_refs.clone(),
+            gas_status,
+            &tx_info.gas,
+            override_transaction_kind.unwrap_or(tx_info.kind.clone()),
+            tx_info.sender,
+            *tx_digest,
+            tx_info.dependencies.clone().into_iter().collect(),
         );
 
         let all_required_objects = self.storage.all_objects();
@@ -873,7 +874,7 @@ impl LocalExec {
     }
 
     /// Must be called after `init_for_execution`
-    /// This executes from `sui_adapter::execution_engine::execute_transaction_to_effects_impl`
+    /// This executes from `sui_adapter::execution_engine::execute_transaction_to_effects`
     pub async fn execution_engine_execute(
         &mut self,
         tx_digest: &TransactionDigest,
@@ -1647,7 +1648,7 @@ impl ParentSync for LocalExec {
 }
 
 impl ResourceResolver for LocalExec {
-    type Error = ReplayEngineError;
+    type Error = SuiError;
 
     /// In this case we might need to download a Move object on the fly which was not present in the
     /// modified at versions list because packages are immutable
@@ -1655,12 +1656,12 @@ impl ResourceResolver for LocalExec {
         &self,
         address: &AccountAddress,
         typ: &StructTag,
-    ) -> Result<Option<Vec<u8>>, Self::Error> {
+    ) -> SuiResult<Option<Vec<u8>>> {
         fn inner(
             self_: &LocalExec,
             address: &AccountAddress,
             typ: &StructTag,
-        ) -> Result<Option<Vec<u8>>, ReplayEngineError> {
+        ) -> SuiResult<Option<Vec<u8>>> {
             // If package not present fetch it from the network or some remote location
             let Some(object) = self_.get_or_download_object(
                 &ObjectID::from(*address),false /* we expect a Move obj*/)? else {
@@ -1697,15 +1698,12 @@ impl ResourceResolver for LocalExec {
 }
 
 impl ModuleResolver for LocalExec {
-    type Error = ReplayEngineError;
+    type Error = SuiError;
 
     /// This fetches a module which must already be present in the store
     /// We do not download
-    fn get_module(&self, module_id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
-        fn inner(
-            self_: &LocalExec,
-            module_id: &ModuleId,
-        ) -> Result<Option<Vec<u8>>, ReplayEngineError> {
+    fn get_module(&self, module_id: &ModuleId) -> SuiResult<Option<Vec<u8>>> {
+        fn inner(self_: &LocalExec, module_id: &ModuleId) -> SuiResult<Option<Vec<u8>>> {
             Ok(self_
                 .get_package(&ObjectID::from(*module_id.address()))
                 .map_err(ReplayEngineError::from)?
@@ -1730,9 +1728,9 @@ impl ModuleResolver for LocalExec {
 }
 
 impl ModuleResolver for &mut LocalExec {
-    type Error = ReplayEngineError;
+    type Error = SuiError;
 
-    fn get_module(&self, module_id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
+    fn get_module(&self, module_id: &ModuleId) -> SuiResult<Option<Vec<u8>>> {
         // Recording event here will be double-counting since its already recorded in the get_module fn
         (**self).get_module(module_id)
     }
@@ -1741,7 +1739,7 @@ impl ModuleResolver for &mut LocalExec {
 impl ObjectStore for LocalExec {
     /// The object must be present in store by normal process we used to backfill store in init
     /// We dont download if not present
-    fn get_object(&self, object_id: &ObjectID) -> Result<Option<Object>, SuiError> {
+    fn get_object(&self, object_id: &ObjectID) -> SuiResult<Option<Object>> {
         let res = Ok(self.storage.live_objects_store.get(object_id).cloned());
         self.exec_store_events
             .lock()
@@ -1759,7 +1757,7 @@ impl ObjectStore for LocalExec {
         &self,
         object_id: &ObjectID,
         version: VersionNumber,
-    ) -> Result<Option<Object>, SuiError> {
+    ) -> SuiResult<Option<Object>> {
         let res = Ok(self
             .storage
             .live_objects_store
@@ -1786,7 +1784,7 @@ impl ObjectStore for LocalExec {
 }
 
 impl ObjectStore for &mut LocalExec {
-    fn get_object(&self, object_id: &ObjectID) -> Result<Option<Object>, SuiError> {
+    fn get_object(&self, object_id: &ObjectID) -> SuiResult<Option<Object>> {
         // Recording event here will be double-counting since its already recorded in the get_module fn
         (**self).get_object(object_id)
     }
@@ -1795,18 +1793,18 @@ impl ObjectStore for &mut LocalExec {
         &self,
         object_id: &ObjectID,
         version: VersionNumber,
-    ) -> Result<Option<Object>, SuiError> {
+    ) -> SuiResult<Option<Object>> {
         // Recording event here will be double-counting since its already recorded in the get_module fn
         (**self).get_object_by_key(object_id, version)
     }
 }
 
 impl GetModule for LocalExec {
-    type Error = ReplayEngineError;
+    type Error = SuiError;
     type Item = CompiledModule;
 
-    fn get_module_by_id(&self, id: &ModuleId) -> anyhow::Result<Option<Self::Item>, Self::Error> {
-        let res = get_module_by_id(self, id).map_err(|e| e.into());
+    fn get_module_by_id(&self, id: &ModuleId) -> SuiResult<Option<Self::Item>> {
+        let res = get_module_by_id(self, id);
 
         self.exec_store_events
             .lock()
@@ -1821,20 +1819,17 @@ impl GetModule for LocalExec {
 
 // <--------------------- Util functions ----------------------->
 
-pub fn get_vm(
+pub fn get_executor(
     protocol_config: &ProtocolConfig,
     expensive_safety_check_config: ExpensiveSafetyCheckConfig,
-) -> Result<Arc<adapter::MoveVM>, ReplayEngineError> {
-    let native_functions = sui_move_natives::all_natives(/* disable silent */ false);
-    let move_vm = Arc::new(
-        adapter::new_move_vm(
-            native_functions.clone(),
-            protocol_config,
-            expensive_safety_check_config.enable_move_vm_paranoid_checks(),
-        )
-        .expect("We defined natives to not fail here"),
-    );
-    Ok(move_vm)
+) -> Arc<dyn Executor + Send + Sync> {
+    let silent = true;
+    sui_execution::executor(
+        protocol_config,
+        expensive_safety_check_config.enable_move_vm_paranoid_checks(),
+        silent,
+    )
+    .expect("Creating an executor should not fail here")
 }
 
 async fn prep_network(

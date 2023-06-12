@@ -93,50 +93,6 @@ pub trait BackingPackageStore {
         self.get_package_object(package_id)
             .map(|opt_obj| opt_obj.and_then(|obj| obj.data.try_into_package()))
     }
-    /// Returns Ok(<object for each package id in `package_ids`>) if all package IDs in
-    /// `package_id` were found. If any package in `package_ids` was not found it returns a list
-    /// of any package ids that are unable to be found>).
-    fn get_package_objects<'a>(
-        &self,
-        package_ids: impl IntoIterator<Item = &'a ObjectID>,
-    ) -> SuiResult<PackageFetchResults<Object>> {
-        let package_objects: Vec<Result<Object, ObjectID>> = package_ids
-            .into_iter()
-            .map(|id| match self.get_package_object(id) {
-                Ok(None) => Ok(Err(*id)),
-                Ok(Some(o)) => Ok(Ok(o)),
-                Err(x) => Err(x),
-            })
-            .collect::<SuiResult<_>>()?;
-
-        let (fetched, failed_to_fetch): (Vec<_>, Vec<_>) =
-            package_objects.into_iter().partition_result();
-        if !failed_to_fetch.is_empty() {
-            Ok(Err(failed_to_fetch))
-        } else {
-            Ok(Ok(fetched))
-        }
-    }
-    fn get_packages<'a>(
-        &self,
-        package_ids: impl IntoIterator<Item = &'a ObjectID>,
-    ) -> SuiResult<PackageFetchResults<MovePackage>> {
-        let objects = self.get_package_objects(package_ids)?;
-        Ok(objects.and_then(|objects| {
-            let (packages, failed): (Vec<_>, Vec<_>) = objects
-                .into_iter()
-                .map(|obj| {
-                    let obj_id = obj.id();
-                    obj.data.try_into_package().ok_or(obj_id)
-                })
-                .partition_result();
-            if !failed.is_empty() {
-                Err(failed)
-            } else {
-                Ok(packages)
-            }
-        }))
-    }
 }
 
 impl<S: BackingPackageStore> BackingPackageStore for std::sync::Arc<S> {
@@ -145,16 +101,62 @@ impl<S: BackingPackageStore> BackingPackageStore for std::sync::Arc<S> {
     }
 }
 
-impl<S: BackingPackageStore> BackingPackageStore for &S {
+impl<S: ?Sized + BackingPackageStore> BackingPackageStore for &S {
     fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<Object>> {
         BackingPackageStore::get_package_object(*self, package_id)
     }
 }
 
-impl<S: BackingPackageStore> BackingPackageStore for &mut S {
+impl<S: ?Sized + BackingPackageStore> BackingPackageStore for &mut S {
     fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<Object>> {
         BackingPackageStore::get_package_object(*self, package_id)
     }
+}
+
+/// Returns Ok(<object for each package id in `package_ids`>) if all package IDs in
+/// `package_id` were found. If any package in `package_ids` was not found it returns a list
+/// of any package ids that are unable to be found>).
+pub fn get_package_objects<'a>(
+    store: &impl BackingPackageStore,
+    package_ids: impl IntoIterator<Item = &'a ObjectID>,
+) -> SuiResult<PackageFetchResults<Object>> {
+    let package_objects: Vec<Result<Object, ObjectID>> = package_ids
+        .into_iter()
+        .map(|id| match store.get_package_object(id) {
+            Ok(None) => Ok(Err(*id)),
+            Ok(Some(o)) => Ok(Ok(o)),
+            Err(x) => Err(x),
+        })
+        .collect::<SuiResult<_>>()?;
+
+    let (fetched, failed_to_fetch): (Vec<_>, Vec<_>) =
+        package_objects.into_iter().partition_result();
+    if !failed_to_fetch.is_empty() {
+        Ok(Err(failed_to_fetch))
+    } else {
+        Ok(Ok(fetched))
+    }
+}
+
+pub fn get_packages<'a>(
+    store: &impl BackingPackageStore,
+    package_ids: impl IntoIterator<Item = &'a ObjectID>,
+) -> SuiResult<PackageFetchResults<MovePackage>> {
+    let objects = get_package_objects(store, package_ids)?;
+    Ok(objects.and_then(|objects| {
+        let (packages, failed): (Vec<_>, Vec<_>) = objects
+            .into_iter()
+            .map(|obj| {
+                let obj_id = obj.id();
+                obj.data.try_into_package().ok_or(obj_id)
+            })
+            .partition_result();
+        if !failed.is_empty() {
+            Err(failed)
+        } else {
+            Ok(packages)
+        }
+    }))
 }
 
 pub fn get_module<S: BackingPackageStore>(
@@ -236,6 +238,8 @@ pub trait ReadStore {
 
     fn get_highest_synced_checkpoint(&self) -> Result<VerifiedCheckpoint, Self::Error>;
 
+    fn get_lowest_available_checkpoint(&self) -> Result<CheckpointSequenceNumber, Self::Error>;
+
     fn get_full_checkpoint_contents_by_sequence_number(
         &self,
         sequence_number: CheckpointSequenceNumber,
@@ -287,6 +291,10 @@ impl<T: ReadStore> ReadStore for &T {
 
     fn get_highest_synced_checkpoint(&self) -> Result<VerifiedCheckpoint, Self::Error> {
         ReadStore::get_highest_synced_checkpoint(*self)
+    }
+
+    fn get_lowest_available_checkpoint(&self) -> Result<CheckpointSequenceNumber, Self::Error> {
+        ReadStore::get_lowest_available_checkpoint(*self)
     }
 
     fn get_full_checkpoint_contents_by_sequence_number(
@@ -394,6 +402,8 @@ pub struct InMemoryStore {
     events: HashMap<TransactionEventsDigest, TransactionEvents>,
 
     epoch_to_committee: Vec<Committee>,
+
+    lowest_checkpoint_number: CheckpointSequenceNumber,
 }
 
 impl InMemoryStore {
@@ -442,6 +452,17 @@ impl InMemoryStore {
         self.highest_synced_checkpoint
             .as_ref()
             .and_then(|(_, digest)| self.get_checkpoint_by_digest(digest))
+    }
+
+    pub fn get_lowest_available_checkpoint(&self) -> CheckpointSequenceNumber {
+        self.lowest_checkpoint_number
+    }
+
+    pub fn set_lowest_available_checkpoint(
+        &mut self,
+        checkpoint_seq_num: CheckpointSequenceNumber,
+    ) {
+        self.lowest_checkpoint_number = checkpoint_seq_num;
     }
 
     pub fn get_checkpoint_contents(
@@ -620,6 +641,10 @@ impl ReadStore for SharedInMemoryStore {
             .cloned()
             .expect("storage should have been initialized with genesis checkpoint")
             .pipe(Ok)
+    }
+
+    fn get_lowest_available_checkpoint(&self) -> Result<CheckpointSequenceNumber, Self::Error> {
+        Ok(self.inner().get_lowest_available_checkpoint())
     }
 
     fn get_full_checkpoint_contents_by_sequence_number(

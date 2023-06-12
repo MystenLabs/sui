@@ -126,12 +126,12 @@ async fn test_fullnode_wal_log() -> Result<(), anyhow::Error> {
     .await
     .unwrap_or_else(|e| panic!("Failed to execute transaction {:?}: {:?}", digest, e));
 
-    let validator_addresses = test_cluster.get_validator_addresses();
+    let validator_addresses = test_cluster.get_validator_pubkeys();
     assert_eq!(validator_addresses.len(), 4);
 
     // Stop 2 validators and we lose quorum
-    test_cluster.stop_validator(validator_addresses[0]);
-    test_cluster.stop_validator(validator_addresses[1]);
+    test_cluster.stop_node(&validator_addresses[0]);
+    test_cluster.stop_node(&validator_addresses[1]);
 
     let txn = txns.swap_remove(0);
     // Expect tx to fail
@@ -148,7 +148,7 @@ async fn test_fullnode_wal_log() -> Result<(), anyhow::Error> {
     assert_eq!(pending_txes, vec![txn.clone()]);
 
     // Bring up 1 validator, we obtain quorum again and tx should succeed
-    test_cluster.start_validator(validator_addresses[0]).await;
+    test_cluster.start_node(&validator_addresses[0]).await;
     tokio::task::yield_now().await;
     execute_with_orchestrator(
         &orchestrator,

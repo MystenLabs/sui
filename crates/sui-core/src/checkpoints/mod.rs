@@ -87,10 +87,10 @@ pub struct BuilderCheckpointSummary {
 #[derive(DBMapUtils)]
 pub struct CheckpointStore {
     /// Maps checkpoint contents digest to checkpoint contents
-    checkpoint_content: DBMap<CheckpointContentsDigest, CheckpointContents>,
+    pub(crate) checkpoint_content: DBMap<CheckpointContentsDigest, CheckpointContents>,
 
     /// Maps checkpoint contents digest to checkpoint sequence number
-    checkpoint_sequence_by_contents_digest:
+    pub(crate) checkpoint_sequence_by_contents_digest:
         DBMap<CheckpointContentsDigest, CheckpointSequenceNumber>,
 
     /// Stores entire checkpoint contents from state sync, indexed by sequence number, for
@@ -101,14 +101,14 @@ pub struct CheckpointStore {
     /// Stores certified checkpoints
     pub(crate) certified_checkpoints: DBMap<CheckpointSequenceNumber, TrustedCheckpoint>,
     /// Map from checkpoint digest to certified checkpoint
-    checkpoint_by_digest: DBMap<CheckpointDigest, TrustedCheckpoint>,
+    pub(crate) checkpoint_by_digest: DBMap<CheckpointDigest, TrustedCheckpoint>,
 
     /// A map from epoch ID to the sequence number of the last checkpoint in that epoch.
     epoch_last_checkpoint_map: DBMap<EpochId, CheckpointSequenceNumber>,
 
     /// Watermarks used to determine the highest verified, fully synced, and
     /// fully executed checkpoints
-    watermarks: DBMap<CheckpointWatermark, (CheckpointSequenceNumber, CheckpointDigest)>,
+    pub(crate) watermarks: DBMap<CheckpointWatermark, (CheckpointSequenceNumber, CheckpointDigest)>,
 }
 
 impl CheckpointStore {
@@ -275,6 +275,16 @@ impl CheckpointStore {
             return Ok(None);
         };
         self.get_checkpoint_by_digest(&highest_executed.1)
+    }
+
+    pub fn get_highest_pruned_checkpoint_seq_number(
+        &self,
+    ) -> Result<CheckpointSequenceNumber, TypedStoreError> {
+        Ok(self
+            .watermarks
+            .get(&CheckpointWatermark::HighestPruned)?
+            .unwrap_or_default()
+            .0)
     }
 
     pub fn get_checkpoint_contents(
@@ -497,6 +507,7 @@ pub enum CheckpointWatermark {
     HighestVerified,
     HighestSynced,
     HighestExecuted,
+    HighestPruned,
 }
 
 pub struct CheckpointBuilder {

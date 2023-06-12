@@ -81,6 +81,12 @@ impl ReadStore for RocksDbStore {
             })
     }
 
+    fn get_lowest_available_checkpoint(&self) -> Result<CheckpointSequenceNumber, Self::Error> {
+        self.checkpoint_store
+            .get_highest_pruned_checkpoint_seq_number()
+            .map(|seq| seq + 1)
+    }
+
     fn get_full_checkpoint_contents_by_sequence_number(
         &self,
         sequence_number: CheckpointSequenceNumber,

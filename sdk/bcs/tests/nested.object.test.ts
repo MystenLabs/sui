@@ -3,6 +3,7 @@
 
 import { describe, it, expect } from "vitest";
 import { BCS, getSuiMoveConfig } from "../src/index";
+import { serde } from "./utils";
 
 describe("BCS: Nested temp object", () => {
   it("should support object as a type", () => {
@@ -73,9 +74,3 @@ describe("BCS: Nested temp object", () => {
     expect(serde(bcs, "Option", value)).toEqual(value);
   });
 });
-
-function serde(bcs, type, data) {
-  let ser = bcs.ser(type, data).toString("hex");
-  let de = bcs.de(type, ser, "hex");
-  return de;
-}

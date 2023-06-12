@@ -411,7 +411,6 @@ where
                 let mut object_changes_commit_res = self
                     .state
                     .persist_object_changes(
-                        &checkpoint,
                         &object_changes,
                         self.metrics.object_mutation_db_commit_latency.clone(),
                         self.metrics.object_deletion_db_commit_latency.clone(),
@@ -429,7 +428,6 @@ where
                     object_changes_commit_res = self
                         .state
                         .persist_object_changes(
-                            &checkpoint,
                             &object_changes,
                             self.metrics.object_mutation_db_commit_latency.clone(),
                             self.metrics.object_deletion_db_commit_latency.clone(),
@@ -476,7 +474,6 @@ where
                     }
                     epoch_db_guard.stop_and_record();
                     self.metrics.total_epoch_committed.inc();
-                    info!("Epoch {} committed.", indexed_epoch.new_epoch.epoch);
                 }
             } else {
                 // sleep for 1 sec to avoid occupying the mutex, as this happens once per epoch / day
@@ -718,14 +715,20 @@ where
 
             let event = event.as_ref();
 
+            let last_epoch = system_state.epoch as i64 - 1;
+            let network_tx_count_prev_epoch = self
+                .state
+                .get_network_total_transactions_previous_epoch(last_epoch)
+                .await?;
             Some(TemporaryEpochStore {
                 last_epoch: Some(DBEpochInfo {
-                    epoch: system_state.epoch as i64 - 1,
+                    epoch: last_epoch,
                     first_checkpoint_id: 0,
                     last_checkpoint_id: Some(checkpoint.sequence_number as i64),
                     epoch_start_timestamp: 0,
                     epoch_end_timestamp: Some(checkpoint.timestamp_ms as i64),
-                    epoch_total_transactions: 0,
+                    epoch_total_transactions: checkpoint.network_total_transactions as i64
+                        - network_tx_count_prev_epoch,
                     next_epoch_version: Some(
                         end_of_epoch_data.next_epoch_protocol_version.as_u64() as i64,
                     ),

@@ -1,5 +1,11 @@
 # @mysten/sui.js
 
+## 0.35.1
+
+### Patch Changes
+
+- 09d77325a9: Add new SuiNS Toolkit package.
+
 ## 0.35.0
 
 ### Minor Changes

@@ -17,9 +17,13 @@
         "preview": "vite preview",
         "storybook": "storybook dev",
         "build-storybook": "storybook build",
-        "preview-storybook": "pnpm dlx serve ./storybook-static"
+        "preview-storybook": "pnpm dlx serve ./storybook-static",
+        "ampli": "ampli",
+        "pull-amplitude": "ampli pull web && node prependLicense.mjs && prettier -w ampli.json src/utils/analytics/ampli/index.ts"
     },
     "dependencies": {
+        "@amplitude/analytics-browser": "^1.10.3",
+        "@amplitude/analytics-types": "^0.20.0",
         "@floating-ui/react": "^0.23.0",
         "@fontsource/inter": "^4.5.15",
         "@fontsource/red-hat-mono": "^4.5.12",
@@ -61,13 +65,14 @@
         "react-hook-form": "^7.43.9",
         "react-hot-toast": "^2.4.0",
         "react-resizable-panels": "^0.0.39",
-        "react-router-dom": "^6.10.0",
+        "react-router-dom": "^6.12.1",
         "throttle-debounce": "^5.0.0",
         "topojson-client": "^3.1.0",
         "vite-plugin-rewrite-all": "^1.0.1",
         "zod": "^3.21.4"
     },
     "devDependencies": {
+        "@amplitude/ampli": "^1.31.5",
         "@babel/core": "^7.21.4",
         "@playwright/test": "^1.32.3",
         "@storybook/addon-a11y": "7.0.4",
@@ -85,7 +90,7 @@
         "@types/react": "^18.0.35",
         "@types/react-dom": "^18.0.11",
         "@types/topojson-client": "^3.1.1",
-        "@vitejs/plugin-react": "^3.1.0",
+        "@vitejs/plugin-react": "^4.0.0",
         "@vitest/ui": "^0.30.1",
         "autoprefixer": "^10.4.14",
         "eslint": "^8.38.0",
@@ -95,7 +100,7 @@
         "happy-dom": "^9.5.0",
         "onchange": "^7.1.0",
         "playwright": "^1.32.3",
-        "postcss": "^8.4.19",
+        "postcss": "^8.4.24",
         "prettier": "^2.8.7",
         "prettier-plugin-tailwindcss": "^0.2.7",
         "start-server-and-test": "^2.0.0",
@@ -103,7 +108,7 @@
         "tailwindcss": "^3.3.1",
         "tsconfig-paths": "^4.2.0",
         "typescript": "^5.0.4",
-        "vite": "^4.2.1",
+        "vite": "^4.2.3",
         "vite-plugin-svgr": "^2.4.0",
         "vitest": "^0.30.1"
     },

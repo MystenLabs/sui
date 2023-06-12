@@ -62,6 +62,7 @@ export function TransactionCard({
 
     return (
         <Link
+            data-testid="link-to-txn"
             to={`/receipt?${new URLSearchParams({
                 txdigest: getTransactionDigest(txn),
             }).toString()}`}

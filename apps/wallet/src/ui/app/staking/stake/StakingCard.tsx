@@ -351,9 +351,7 @@ function StakingCard() {
                                 {(unstake || touched.amount) &&
                                 errors.amount ? (
                                     <div className="mt-2 flex flex-col flex-nowrap">
-                                        <Alert mode="warning">
-                                            {errors.amount}
-                                        </Alert>
+                                        <Alert>{errors.amount}</Alert>
                                     </div>
                                 ) : null}
 

@@ -17,12 +17,12 @@ serde = { version = "1.0.140", features = ["derive"] }
 
 move-binary-format.workspace = true
 move-bytecode-utils.workspace = true
-move-bytecode-verifier.workspace = true
 move-core-types.workspace = true
 move-vm-config.workspace = true
-move-vm-runtime.workspace = true
 move-vm-types.workspace = true
 
+move-bytecode-verifier = { path = "../../../external-crates/move/move-bytecode-verifier" }
+move-vm-runtime = { path = "../../../external-crates/move/move-vm/runtime" }
 sui-move-natives = { path = "../sui-move-natives", package = "sui-move-natives-latest" }
 sui-verifier = { path = "../sui-verifier", package = "sui-verifier-latest" }
 

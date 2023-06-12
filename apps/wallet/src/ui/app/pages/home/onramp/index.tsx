@@ -62,7 +62,7 @@ export function Onramp() {
 
                 {!!error && (
                     <div className="mt-2">
-                        <Alert mode="warning">
+                        <Alert>
                             An unexpected error occurred. Please try again
                             later.
                         </Alert>

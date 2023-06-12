@@ -38,7 +38,7 @@ pub(crate) struct ChildObjectEffect {
 
 struct Inner<'a> {
     // used for loading child objects
-    resolver: Box<dyn ChildObjectResolver + 'a>,
+    resolver: &'a dyn ChildObjectResolver,
     // cached objects from the resolver. An object might be in this map but not in the store
     // if it's existence was queried, but the value was not used.
     cached_objects: BTreeMap<ObjectID, Option<MoveObject>>,
@@ -193,7 +193,7 @@ impl<'a> Inner<'a> {
 
 impl<'a> ObjectStore<'a> {
     pub(super) fn new(
-        resolver: Box<dyn ChildObjectResolver + 'a>,
+        resolver: &'a dyn ChildObjectResolver,
         is_metered: bool,
         constants: LocalProtocolConfig,
         metrics: Arc<LimitsMetrics>,

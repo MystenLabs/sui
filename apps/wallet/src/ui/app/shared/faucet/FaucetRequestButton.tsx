@@ -33,6 +33,7 @@ function FaucetRequestButton({
 
     return mutation.enabled ? (
         <Button
+            data-testid="faucet-request-button"
             variant={variant}
             size={size}
             disabled={isRateLimited}

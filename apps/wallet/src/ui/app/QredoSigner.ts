@@ -136,7 +136,7 @@ export class QredoSigner extends WalletSigner {
     };
 
     signAndExecuteTransactionBlock: WalletSigner['signAndExecuteTransactionBlock'] =
-        async ({ transactionBlock }, clientIdentifier) => {
+        async ({ transactionBlock, options }, clientIdentifier) => {
             let txInfo = await this.#createQredoTransaction(
                 messageWithIntent(
                     IntentScope.TransactionData,
@@ -177,7 +177,10 @@ export class QredoSigner extends WalletSigner {
                     `Digest is not set in Qredo transaction ${txInfo.txID}`
                 );
             }
-            return { digest: txInfo.txHash };
+            return this.provider.waitForTransactionBlock({
+                digest: txInfo.txHash,
+                options: options,
+            });
         };
 
     connect(provider: JsonRpcProvider): WalletSigner {

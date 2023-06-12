@@ -11,4 +11,6 @@ warning[W09001]: unused alias
   │
 8 │     use 0x2::Y as Z;
   │                   ^ Unused 'use' of alias 'Z'. Consider removing it
+  │
+  = This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 

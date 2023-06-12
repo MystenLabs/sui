@@ -2,10 +2,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::consensus::{ConsensusState, Dag};
-use config::Committee;
+use crate::metrics::ConsensusMetrics;
+use config::{Authority, Committee};
 use std::collections::HashSet;
+use std::sync::Arc;
 use tracing::debug;
-use types::{Certificate, CertificateAPI, CertificateDigest, HeaderAPI, Round};
+use types::{Certificate, CertificateAPI, HeaderAPI, Round};
 
 /// Order the past leaders that we didn't already commit.
 pub fn order_leaders<'a, LeaderElector>(
@@ -13,9 +15,10 @@ pub fn order_leaders<'a, LeaderElector>(
     leader: &Certificate,
     state: &'a ConsensusState,
     get_leader: LeaderElector,
+    metrics: Arc<ConsensusMetrics>,
 ) -> Vec<Certificate>
 where
-    LeaderElector: Fn(&Committee, Round, &'a Dag) -> Option<&'a (CertificateDigest, Certificate)>,
+    LeaderElector: Fn(&Committee, Round, &'a Dag) -> (Authority, Option<&'a Certificate>),
 {
     let mut to_commit = vec![leader.clone()];
     let mut leader = leader;
@@ -25,17 +28,40 @@ where
         .step_by(2)
     {
         // Get the certificate proposed by the previous leader.
-        let (_, prev_leader) = match get_leader(committee, r, &state.dag) {
-            Some(x) => x,
-            None => continue,
+        let (prev_leader, authority) = match get_leader(committee, r, &state.dag) {
+            (authority, Some(x)) => (x, authority),
+            (authority, None) => {
+                metrics
+                    .leader_election
+                    .with_label_values(&["not_found", authority.hostname()])
+                    .inc();
+
+                continue;
+            }
         };
 
         // Check whether there is a path between the last two leaders.
         if linked(leader, prev_leader, &state.dag) {
             to_commit.push(prev_leader.clone());
             leader = prev_leader;
+        } else {
+            metrics
+                .leader_election
+                .with_label_values(&["no_path", authority.hostname()])
+                .inc();
         }
     }
+
+    // Now just report all the found leaders
+    to_commit.iter().for_each(|certificate| {
+        let authority = committee.authority(&certificate.origin()).unwrap();
+
+        metrics
+            .leader_election
+            .with_label_values(&["committed", authority.hostname()])
+            .inc();
+    });
+
     to_commit
 }
 

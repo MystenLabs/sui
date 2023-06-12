@@ -28,6 +28,7 @@ import {
 } from '_payloads/transactions';
 import Permissions from '_src/background/Permissions';
 import Transactions from '_src/background/Transactions';
+import { FEATURES, growthbook } from '_src/shared/experimentation/features';
 import { isQredoConnectPayload } from '_src/shared/messaging/messages/payloads/QredoConnect';
 import {
     isSignMessageRequest,
@@ -171,6 +172,12 @@ export class ContentScriptConnection extends Connection {
                     )
                 );
             } else if (isQredoConnectPayload(payload, 'connect')) {
+                if (!growthbook.ready) {
+                    await growthbook.loadFeatures();
+                }
+                if (growthbook.isOff(FEATURES.WALLET_QREDO)) {
+                    throw new Error('This feature is not implemented yet.');
+                }
                 await requestUserApproval(payload.args, this, msg);
             } else {
                 throw new Error(

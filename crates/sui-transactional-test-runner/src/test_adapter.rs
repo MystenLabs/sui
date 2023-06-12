@@ -326,7 +326,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                 )
                 .unwrap(),
             ),
-            storage: Arc::new(InMemoryStorage::new(objects)),
+            storage: InMemoryStorage::new(objects),
             compiled_state: CompiledState::new(
                 named_address_mapping,
                 pre_compiled_deps,
@@ -1082,10 +1082,15 @@ impl<'a> SuiTestAdapter<'a> {
         let mut gas_status = if transaction.inner().is_system_tx() {
             SuiGasStatus::new_unmetered(&self.protocol_config)
         } else {
+            let gas_rounding_step = self
+                .protocol_config
+                .gas_rounding_step_as_option()
+                .unwrap_or(1u64);
             SuiCostTable::new(&self.protocol_config).into_gas_status_for_testing(
                 gas_budget,
                 self.gas_price,
                 self.protocol_config.storage_gas_price(),
+                gas_rounding_step,
             )
         };
         // Unmetered is set in the transaction run without metering. NB that this will still keep
@@ -1138,7 +1143,8 @@ impl<'a> SuiTestAdapter<'a> {
             .value
             .clone();
         let (kind, signer, gas) = transaction_data.execution_parts();
-
+        // TODO: Support different epochs in transactional tests.
+        let epoch_data = EpochData::new_test();
         let (
             inner,
             effects,
@@ -1157,7 +1163,7 @@ impl<'a> SuiTestAdapter<'a> {
             },
             */
             execution_error,
-        ) = execution_engine::execute_transaction_to_effects::<execution_mode::Normal, _>(
+        ) = execution_engine::execute_transaction_to_effects::<execution_mode::Normal>(
             shared_object_refs,
             temporary_store,
             kind,
@@ -1167,8 +1173,8 @@ impl<'a> SuiTestAdapter<'a> {
             transaction_dependencies,
             &self.vm,
             gas_status,
-            // TODO: Support different epochs in transactional tests.
-            &EpochData::new_test(),
+            &epoch_data.epoch_id(),
+            epoch_data.epoch_start_timestamp(),
             &self.protocol_config,
             self.metrics.clone(),
             false, // enable_expensive_checks

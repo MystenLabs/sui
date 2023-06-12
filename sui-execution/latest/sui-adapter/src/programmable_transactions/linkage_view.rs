@@ -15,16 +15,18 @@ use move_core_types::{
 };
 use sui_types::{
     base_types::ObjectID,
-    error::{ExecutionError, SuiError},
+    error::{ExecutionError, SuiError, SuiResult},
+    execution::SuiResolver,
     move_package::{MovePackage, TypeOrigin, UpgradeInfo},
+    object::Object,
     storage::BackingPackageStore,
 };
 
 /// Exposes module and linkage resolution to the Move runtime.  The first by delegating to
-/// `StorageView` and the second via linkage information that is loaded from a move package.
-pub struct LinkageView<S> {
-    /// Immutable access to the store for the transaction.
-    state_view: S,
+/// `resolver` and the second via linkage information that is loaded from a move package.
+pub struct LinkageView<'state> {
+    /// Interface to resolve packages, modules and resources directly from the store.
+    resolver: Box<dyn SuiResolver + 'state>,
     /// Information used to change module and type identities during linkage.
     linkage_info: LinkageInfo,
     /// Cache containing the type origin information from every package that has been set as the
@@ -48,7 +50,6 @@ pub enum LinkageInfo {
     Universal,
     /// Linkage provided by the package found at `storage_id` whose module self-addresses are
     /// `runtime_id`.
-    /// Linkage information derived from a specific
     Set(PackageLinkage),
 }
 
@@ -61,10 +62,10 @@ pub struct PackageLinkage {
 
 pub struct SavedLinkage(PackageLinkage);
 
-impl<S> LinkageView<S> {
-    pub fn new(state_view: S, linkage_info: LinkageInfo) -> Self {
+impl<'state> LinkageView<'state> {
+    pub fn new(resolver: Box<dyn SuiResolver + 'state>, linkage_info: LinkageInfo) -> Self {
         Self {
-            state_view,
+            resolver,
             linkage_info,
             type_origin_cache: RefCell::new(HashMap::new()),
             past_contexts: RefCell::new(HashSet::new()),
@@ -178,10 +179,6 @@ impl<S> LinkageView<S> {
         Ok(runtime_id)
     }
 
-    pub fn storage(&self) -> &S {
-        &self.state_view
-    }
-
     pub fn original_package_id(&self) -> Option<AccountAddress> {
         if let LinkageInfo::Set(linkage) = &self.linkage_info {
             Some(linkage.runtime_id)
@@ -243,7 +240,7 @@ impl From<&MovePackage> for PackageLinkage {
     }
 }
 
-impl<S: BackingPackageStore> LinkageResolver for LinkageView<S> {
+impl<'state> LinkageResolver for LinkageView<'state> {
     type Error = SuiError;
 
     fn link_context(&self) -> AccountAddress {
@@ -308,7 +305,7 @@ impl<S: BackingPackageStore> LinkageResolver for LinkageView<S> {
         }
 
         let storage_id = ObjectID::from(*self.relocate(runtime_id)?.address());
-        let Some(package) = self.state_view.get_package(&storage_id)? else {
+        let Some(package) = self.resolver.get_package(&storage_id)? else {
             invariant_violation!(
                 "Missing dependent package in store: {storage_id}",
             )
@@ -335,22 +332,28 @@ impl<S: BackingPackageStore> LinkageResolver for LinkageView<S> {
 
 /** Remaining implementations delegated to state_view *************************/
 
-impl<S: ResourceResolver> ResourceResolver for LinkageView<S> {
-    type Error = <S as ResourceResolver>::Error;
+impl<'state> ResourceResolver for LinkageView<'state> {
+    type Error = SuiError;
 
     fn get_resource(
         &self,
         address: &AccountAddress,
         typ: &StructTag,
     ) -> Result<Option<Vec<u8>>, Self::Error> {
-        self.state_view.get_resource(address, typ)
+        self.resolver.get_resource(address, typ)
     }
 }
 
-impl<S: ModuleResolver> ModuleResolver for LinkageView<S> {
-    type Error = <S as ModuleResolver>::Error;
+impl<'state> ModuleResolver for LinkageView<'state> {
+    type Error = SuiError;
 
     fn get_module(&self, id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
-        self.state_view.get_module(id)
+        self.resolver.get_module(id)
+    }
+}
+
+impl<'state> BackingPackageStore for LinkageView<'state> {
+    fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<Object>> {
+        self.resolver.get_package_object(package_id)
     }
 }

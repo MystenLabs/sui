@@ -7,6 +7,7 @@ module deepbook::math {
     const FLOAT_SCALING_U128: u128 = 1_000_000_000;
 
     friend deepbook::clob;
+    friend deepbook::clob_v2;
     friend deepbook::critbit;
 
     // <<<<<<<<<<<<<<<<<<<<<<<< Error codes <<<<<<<<<<<<<<<<<<<<<<<<
@@ -42,6 +43,12 @@ module deepbook::math {
         let (is_round_down, result) = unsafe_mul_round(x, y);
         assert!(result > 0, EUnderflow);
         (is_round_down, result)
+    }
+
+    // divide two floating numbers
+    public(friend) fun unsafe_div(x: u64, y: u64): u64 {
+        let (_, result) = unsafe_div_round(x, y);
+        result
     }
 
     // divide two floating numbers
@@ -147,13 +154,13 @@ module deepbook::math {
     #[test]
     #[expected_failure(abort_code = EUnderflow)]
     fun test_mul_underflow() {
-        mul(99_999_999, 1);
+        mul(999_999_999, 1);
     }
 
     #[test]
     #[expected_failure(abort_code = EUnderflow)]
     fun test_mul_round_check_underflow() {
-        mul_round(99_999_999, 1);
+        mul_round(999_999_999, 1);
     }
 
     #[test]
@@ -164,6 +171,22 @@ module deepbook::math {
         (is_round, result) = unsafe_mul_round(9_999_999_999, 1);
         assert_eq(is_round, true);
         assert_eq(result, 9);
+        (is_round, result) = mul_round(9_999_999_999, 1);
+        assert_eq(is_round, true);
+        assert_eq(result, 9);
+    }
+
+    #[test]
+    fun test_div() {
+        let (is_round, result) = unsafe_div_round(1, 1_000_000_000);
+        assert_eq(is_round, false);
+        assert_eq(result, 1);
+        (is_round, result) = unsafe_div_round(1, 9_999_999_999);
+        assert_eq(is_round, true);
+        assert_eq(result, 0);
+        (is_round, result) = unsafe_div_round(1, 999_999_999);
+        assert_eq(is_round, true);
+        assert_eq(result, 1);
     }
 
     #[test]
@@ -175,6 +198,9 @@ module deepbook::math {
         assert_eq(is_round, true);
         assert_eq(result, 0);
         (is_round, result) = unsafe_div_round(1, 999_999_999);
+        assert_eq(is_round, true);
+        assert_eq(result, 1);
+        (is_round, result) = div_round(1, 999_999_999);
         assert_eq(is_round, true);
         assert_eq(result, 1);
     }

@@ -6,8 +6,6 @@ use crate::authority::AuthorityStore;
 use crate::transaction_signing_filter;
 use std::collections::{BTreeMap, HashSet};
 use std::sync::Arc;
-use sui_adapter::adapter::default_verifier_config;
-use sui_adapter::adapter::run_metered_move_bytecode_verifier;
 use sui_config::transaction_deny_config::TransactionDenyConfig;
 use sui_macros::checked_arithmetic;
 use sui_protocol_config::ProtocolConfig;
@@ -27,7 +25,6 @@ use sui_types::{
     object::{Object, Owner},
 };
 use sui_types::{SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION};
-use sui_verifier::meter::SuiVerifierMeter;
 use tracing::instrument;
 
 checked_arithmetic! {
@@ -66,7 +63,7 @@ pub async fn check_transaction_input(
     epoch_store: &AuthorityPerEpochStore,
     transaction: &TransactionData,
     transaction_deny_config: &TransactionDenyConfig,
-    metrics: &Arc<BytecodeVerifierMetrics>
+    metrics: &Arc<BytecodeVerifierMetrics>,
 ) -> SuiResult<(SuiGasStatus, InputObjects)> {
     transaction.check_version_supported(epoch_store.protocol_config())?;
     transaction.validity_check(epoch_store.protocol_config())?;
@@ -92,7 +89,7 @@ pub async fn check_transaction_input_with_given_gas(
     epoch_store: &AuthorityPerEpochStore,
     transaction: &TransactionData,
     gas_object: Object,
-    metrics: &Arc<BytecodeVerifierMetrics>
+    metrics: &Arc<BytecodeVerifierMetrics>,
 ) -> SuiResult<(SuiGasStatus, InputObjects)> {
     transaction.check_version_supported(epoch_store.protocol_config())?;
     transaction.validity_check_no_gas_check(epoch_store.protocol_config())?;
@@ -124,7 +121,11 @@ pub(crate) async fn check_dev_inspect_input(
         TransactionKind::ChangeEpoch(_)
         | TransactionKind::Genesis(_)
         | TransactionKind::ConsensusCommitPrologue(_) => {
-            return Err(UserInputError::Unsupported(format!("Transaction kind {} is not supported in dev-inspect", kind)).into())
+            return Err(UserInputError::Unsupported(format!(
+                "Transaction kind {} is not supported in dev-inspect",
+                kind
+            ))
+            .into())
         }
     }
     let mut input_objects = kind.input_objects()?;
@@ -205,7 +206,8 @@ async fn check_gas(
             }
             .into());
         }
-        if protocol_config.gas_model_version() >= 4 && gas_price >= protocol_config.max_gas_price() {
+        if protocol_config.gas_model_version() >= 4 && gas_price >= protocol_config.max_gas_price()
+        {
             return Err(UserInputError::GasPriceTooHigh {
                 max_gas_price: protocol_config.max_gas_price(),
             }
@@ -410,36 +412,46 @@ fn check_one_object(
 pub fn check_non_system_packages_to_be_published(
     transaction: &TransactionData,
     protocol_config: &ProtocolConfig,
-    metrics: &Arc<BytecodeVerifierMetrics>
+    metrics: &Arc<BytecodeVerifierMetrics>,
 ) -> UserInputResult<()> {
-    // Only meter non-system TXes
-    if !transaction.is_system_tx() {
-        // We use a custom config with metering enabled
-        let metered_verifier_config =
-            default_verifier_config(protocol_config, true /* enable metering */);
-        // Use the same meter for all packages
-        let mut meter = SuiVerifierMeter::new(&metered_verifier_config);
-        if let TransactionKind::ProgrammableTransaction(pt) = transaction.kind() {
-            // Measure time for verifying all packages in the PTB
-            let shared_meter_verifier_timer = metrics.verifier_runtime_per_ptb_success_latency.start_timer();
-            let verifier_status = pt.non_system_packages_to_be_published()
-                .try_for_each(|q| run_metered_move_bytecode_verifier(q, protocol_config, &metered_verifier_config, &mut meter, metrics))
-                .map_err(|e| UserInputError::PackageVerificationTimedout { err: e.to_string() });
-
-            match verifier_status {
-                Ok(_) => {
-                    // Success: stop and record the success timer
-                    shared_meter_verifier_timer.stop_and_record();
-                },
-                Err(err) => {
-                    // Failure: redirect the success timers output to the failure timer and
-                    // discard the success timer
-                    metrics.verifier_runtime_per_ptb_timeout_latency.observe(shared_meter_verifier_timer.stop_and_discard());
-                    return Err(err);
-                }
-            };
-        }
+    // Only meter non-system programmable transaction blocks
+    if transaction.is_system_tx() {
+        return Ok(());
     }
+
+    let TransactionKind::ProgrammableTransaction(pt) = transaction.kind() else {
+        return Ok(());
+    };
+
+    // We use a custom config with metering enabled
+    let is_metered = true;
+    // Use the same verifier and meter for all packages
+    let mut verifier = sui_execution::verifier(protocol_config, is_metered, metrics);
+
+    // Measure time for verifying all packages in the PTB
+    let shared_meter_verifier_timer = metrics
+        .verifier_runtime_per_ptb_success_latency
+        .start_timer();
+
+    let verifier_status = pt
+        .non_system_packages_to_be_published()
+        .try_for_each(|module_bytes| verifier.meter_module_bytes(protocol_config, module_bytes))
+        .map_err(|e| UserInputError::PackageVerificationTimedout { err: e.to_string() });
+
+    match verifier_status {
+        Ok(_) => {
+            // Success: stop and record the success timer
+            shared_meter_verifier_timer.stop_and_record();
+        }
+        Err(err) => {
+            // Failure: redirect the success timers output to the failure timer and
+            // discard the success timer
+            metrics
+                .verifier_runtime_per_ptb_timeout_latency
+                .observe(shared_meter_verifier_timer.stop_and_discard());
+            return Err(err);
+        }
+    };
 
     Ok(())
 }

@@ -4,12 +4,12 @@
 
 use crate::{
     create_file_metadata, read_manifest, write_manifest, CheckpointUpdates, FileCompression,
-    FileMetadata, FileType, Manifest, CHECKPOINT_FILE_MAGIC, CHECKPOINT_FILE_SUFFIX,
+    FileMetadata, FileType, Manifest, StorageFormat, CHECKPOINT_FILE_MAGIC, CHECKPOINT_FILE_SUFFIX,
     EPOCH_DIR_PREFIX, MAGIC_BYTES, SUMMARY_FILE_MAGIC, SUMMARY_FILE_SUFFIX,
 };
 use anyhow::Result;
 use anyhow::{anyhow, Context};
-use byteorder::{BigEndian, ByteOrder};
+use byteorder::{BigEndian, ByteOrder, WriteBytesExt};
 use object_store::DynObjectStore;
 use prometheus::{register_int_gauge_with_registry, IntGauge, Registry};
 use std::fs;
@@ -29,6 +29,7 @@ use sui_types::storage::{ReadStore, WriteStore};
 use tokio::sync::mpsc;
 use tokio::sync::mpsc::{Receiver, Sender};
 use tokio::time::Instant;
+use tracing::debug;
 
 pub struct ArchiveMetrics {
     pub latest_checkpoint_archived: IntGauge,
@@ -58,6 +59,7 @@ struct CheckpointWriter {
     sender: Sender<CheckpointUpdates>,
     checkpoint_buf_offset: usize,
     file_compression: FileCompression,
+    storage_format: StorageFormat,
     manifest: Manifest,
     last_commit_instant: Instant,
     commit_duration: Duration,
@@ -68,6 +70,7 @@ impl CheckpointWriter {
     fn new(
         root_dir_path: PathBuf,
         file_compression: FileCompression,
+        storage_format: StorageFormat,
         sender: Sender<CheckpointUpdates>,
         manifest: Manifest,
         commit_duration: Duration,
@@ -85,12 +88,16 @@ impl CheckpointWriter {
             checkpoint_sequence_num,
             CHECKPOINT_FILE_SUFFIX,
             CHECKPOINT_FILE_MAGIC,
+            storage_format,
+            file_compression,
         )?;
         let summary_file = Self::next_file(
             &epoch_dir,
             checkpoint_sequence_num,
             SUMMARY_FILE_SUFFIX,
             SUMMARY_FILE_MAGIC,
+            storage_format,
+            file_compression,
         )?;
         Ok(CheckpointWriter {
             root_dir_path,
@@ -101,13 +108,28 @@ impl CheckpointWriter {
             checkpoint_buf_offset: 0,
             sender,
             file_compression,
+            storage_format,
             manifest,
             last_commit_instant: Instant::now(),
             commit_duration,
             commit_file_size,
         })
     }
+
     pub async fn write(
+        &mut self,
+        checkpoint_contents: CheckpointContents,
+        checkpoint_summary: Checkpoint,
+    ) -> Result<()> {
+        match self.storage_format {
+            StorageFormat::Blob => {
+                self.write_as_blob(checkpoint_contents, checkpoint_summary)
+                    .await
+            }
+        }
+    }
+
+    pub async fn write_as_blob(
         &mut self,
         checkpoint_contents: CheckpointContents,
         checkpoint_summary: Checkpoint,
@@ -174,6 +196,7 @@ impl CheckpointWriter {
             &file_path,
             self.file_compression,
             FileType::CheckpointContent,
+            self.storage_format,
             self.epoch_num,
             self.checkpoint_range.clone(),
         )?;
@@ -192,6 +215,7 @@ impl CheckpointWriter {
             &file_path,
             self.file_compression,
             FileType::CheckpointSummary,
+            self.storage_format,
             self.epoch_num,
             self.checkpoint_range.clone(),
         )?;
@@ -217,6 +241,8 @@ impl CheckpointWriter {
         checkpoint_sequence_num: u64,
         suffix: &str,
         magic_bytes: u32,
+        storage_format: StorageFormat,
+        file_compression: FileCompression,
     ) -> Result<File> {
         let next_file_path = dir_path.join(format!("{checkpoint_sequence_num}.{suffix}"));
         let mut f = File::create(next_file_path.clone())?;
@@ -226,6 +252,8 @@ impl CheckpointWriter {
         drop(f);
         f = OpenOptions::new().append(true).open(next_file_path)?;
         f.seek(SeekFrom::Start(n as u64))?;
+        f.write_u8(storage_format.into())?;
+        f.write_u8(file_compression.into())?;
         Ok(f)
     }
     fn create_new_files(&mut self) -> Result<()> {
@@ -234,6 +262,8 @@ impl CheckpointWriter {
             self.checkpoint_range.start,
             CHECKPOINT_FILE_SUFFIX,
             CHECKPOINT_FILE_MAGIC,
+            self.storage_format,
+            self.file_compression,
         )?;
         self.checkpoint_buf_offset = MAGIC_BYTES;
         self.wbuf = BufWriter::new(f);
@@ -242,6 +272,8 @@ impl CheckpointWriter {
             self.checkpoint_range.start,
             SUMMARY_FILE_SUFFIX,
             SUMMARY_FILE_MAGIC,
+            self.storage_format,
+            self.file_compression,
         )?;
         self.summary_wbuf = BufWriter::new(f);
         Ok(())
@@ -271,6 +303,7 @@ impl CheckpointWriter {
 /// simultaneously uploading them to a remote object store
 pub struct ArchiveWriterV1 {
     file_compression: FileCompression,
+    storage_format: StorageFormat,
     local_staging_dir_root: PathBuf,
     local_object_store: Arc<DynObjectStore>,
     remote_object_store: Arc<DynObjectStore>,
@@ -284,12 +317,14 @@ impl ArchiveWriterV1 {
         local_store_config: ObjectStoreConfig,
         remote_store_config: ObjectStoreConfig,
         file_compression: FileCompression,
+        storage_format: StorageFormat,
         commit_duration: Duration,
         commit_file_size: usize,
         registry: &Registry,
     ) -> Result<Self> {
         Ok(ArchiveWriterV1 {
             file_compression,
+            storage_format,
             remote_object_store: remote_store_config.make()?,
             local_object_store: local_store_config.make()?,
             local_staging_dir_root: local_store_config.directory.context("Missing local dir")?,
@@ -308,10 +343,10 @@ impl ArchiveWriterV1 {
         let (kill_sender, _) = tokio::sync::broadcast::channel::<()>(1);
         tokio::spawn(Self::start_tailing_checkpoints(
             self.remote_object_store.clone(),
-            self.local_object_store.clone(),
             self.local_staging_dir_root.clone(),
             store,
             self.file_compression,
+            self.storage_format,
             self.commit_duration,
             self.commit_file_size,
             sender,
@@ -330,10 +365,10 @@ impl ArchiveWriterV1 {
 
     async fn start_tailing_checkpoints<S>(
         remote_object_store: Arc<DynObjectStore>,
-        local_object_store: Arc<DynObjectStore>,
         local_staging_root_dir: PathBuf,
         store: S,
         file_compression: FileCompression,
+        storage_format: StorageFormat,
         commit_duration: Duration,
         commit_file_size: usize,
         sender: Sender<CheckpointUpdates>,
@@ -353,18 +388,15 @@ impl ArchiveWriterV1 {
             // Start from genesis
             Manifest::new(0, 0)
         } else {
-            read_manifest(
-                local_staging_root_dir.clone(),
-                local_object_store.clone(),
-                remote_object_store.clone(),
-            )
-            .await
-            .expect("Failed to read manifest")
+            read_manifest(remote_object_store.clone())
+                .await
+                .expect("Failed to read manifest")
         };
         let mut checkpoint_sequence_number = manifest.next_checkpoint_seq_num();
         let mut writer = CheckpointWriter::new(
             local_staging_root_dir,
             file_compression,
+            storage_format,
             sender,
             manifest,
             commit_duration,
@@ -422,10 +454,8 @@ impl ArchiveWriterV1 {
                         .await
                         .expect("Syncing checkpoint content should not fail");
 
-                        let manifest_file_path = checkpoint_updates.manifest_file_path();
                         write_manifest(
                             checkpoint_updates.manifest,
-                            manifest_file_path,
                             remote_object_store.clone()
                         )
                         .await
@@ -475,6 +505,7 @@ impl ArchiveWriterV1 {
         from: Arc<DynObjectStore>,
         to: Arc<DynObjectStore>,
     ) -> Result<()> {
+        debug!("Syncing archive file to remote: {:?}", path);
         copy_file(path.clone(), path.clone(), from, to).await?;
         fs::remove_file(path_to_filesystem(dir, &path)?)?;
         Ok(())

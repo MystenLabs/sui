@@ -1,6 +1,6 @@
 ---
 source: crates/sui-protocol-config/src/lib.rs
-expression: "ProtocolConfig::get_for_version(cur, Chain::Unknown)"
+expression: "ProtocolConfig::get_for_version(cur, *chain_id)"
 ---
 version: 12
 feature_flags:

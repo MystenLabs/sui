@@ -127,7 +127,7 @@ export function DelegationDetailCard({
     if (isError || errorValidators) {
         return (
             <div className="p-2">
-                <Alert mode="warning">
+                <Alert>
                     <div className="mb-1 font-semibold">
                         Something went wrong
                     </div>

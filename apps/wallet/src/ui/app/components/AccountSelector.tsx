@@ -37,7 +37,7 @@ export function AccountSelector() {
             <ButtonConnectedTo
                 text={buttonText}
                 onClick={copyToAddress}
-                iconAfter={<Copy12 />}
+                iconAfter={<Copy12 data-testid="copy-address" />}
                 bgOnHover="grey"
             />
         );

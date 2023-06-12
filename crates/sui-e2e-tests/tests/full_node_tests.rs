@@ -56,7 +56,7 @@ use tracing::info;
 #[sim_test]
 async fn test_full_node_follows_txes() -> Result<(), anyhow::Error> {
     let mut test_cluster = TestClusterBuilder::new().build().await?;
-    let fullnode = test_cluster.start_fullnode().await.sui_node;
+    let fullnode = test_cluster.spawn_new_fullnode().await.sui_node;
 
     let context = &mut test_cluster.wallet;
 
@@ -87,7 +87,7 @@ async fn test_full_node_follows_txes() -> Result<(), anyhow::Error> {
 #[sim_test]
 async fn test_full_node_shared_objects() -> Result<(), anyhow::Error> {
     let mut test_cluster = TestClusterBuilder::new().build().await?;
-    let handle = test_cluster.start_fullnode().await;
+    let handle = test_cluster.spawn_new_fullnode().await;
 
     let context = &mut test_cluster.wallet;
 
@@ -458,7 +458,7 @@ async fn test_full_node_cold_sync() -> Result<(), anyhow::Error> {
     sleep(Duration::from_millis(1000)).await;
 
     // Start a new fullnode that is not on the write path
-    let fullnode = test_cluster.start_fullnode().await.sui_node;
+    let fullnode = test_cluster.spawn_new_fullnode().await.sui_node;
 
     wait_for_tx(digest, fullnode.state()).await;
 
@@ -479,7 +479,7 @@ async fn test_full_node_sync_flood() -> Result<(), anyhow::Error> {
     let mut test_cluster = TestClusterBuilder::new().build().await?;
 
     // Start a new fullnode that is not on the write path
-    let fullnode = test_cluster.start_fullnode().await.sui_node;
+    let fullnode = test_cluster.spawn_new_fullnode().await.sui_node;
 
     let context = test_cluster.wallet;
 
@@ -572,7 +572,7 @@ async fn test_full_node_sub_and_query_move_event_ok() -> Result<(), anyhow::Erro
         .await?;
 
     // Start a new fullnode that is not on the write path
-    let fullnode = test_cluster.start_fullnode().await;
+    let fullnode = test_cluster.spawn_new_fullnode().await;
 
     let node = fullnode.sui_node;
     let ws_client = fullnode.ws_client;
@@ -761,7 +761,7 @@ async fn test_full_node_event_query_by_module_ok() {
 #[sim_test]
 async fn test_full_node_transaction_orchestrator_basic() -> Result<(), anyhow::Error> {
     let mut test_cluster = TestClusterBuilder::new().build().await?;
-    let fullnode = test_cluster.start_fullnode().await.sui_node;
+    let fullnode = test_cluster.spawn_new_fullnode().await.sui_node;
 
     let context = &mut test_cluster.wallet;
     let transaction_orchestrator = fullnode.with(|node| {
@@ -1155,7 +1155,7 @@ async fn test_full_node_bootstrap_from_snapshot() -> Result<(), anyhow::Error> {
 async fn test_pass_back_clock_object() -> Result<(), anyhow::Error> {
     let mut test_cluster = TestClusterBuilder::new().build().await?;
     let rgp = test_cluster.get_reference_gas_price().await;
-    let fullnode = test_cluster.start_fullnode().await.sui_node;
+    let fullnode = test_cluster.spawn_new_fullnode().await.sui_node;
 
     let context = &mut test_cluster.wallet;
 

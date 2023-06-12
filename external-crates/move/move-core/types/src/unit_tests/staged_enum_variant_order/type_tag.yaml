@@ -1,0 +1,12 @@
+---
+0: Bool
+1: U8
+2: U64
+3: U128
+4: Address
+5: Signer
+6: Vector
+7: Struct
+8: U16
+9: U32
+10: U256

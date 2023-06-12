@@ -283,6 +283,7 @@ export function SendTokenForm({
                                         </div>
 
                                         <InputWithAction
+                                            data-testid="coin-amount-input"
                                             type="numberInput"
                                             name="amount"
                                             placeholder="0.00"

@@ -10,7 +10,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 12;
+const MAX_PROTOCOL_VERSION: u64 = 13;
 
 // Record history of protocol version allocations here:
 //
@@ -39,7 +39,11 @@ const MAX_PROTOCOL_VERSION: u64 = 12;
 // Version 11: Introduce `std::type_name::get_with_original_ids` to the system frameworks. Bound max depth of values within the VM.
 // Version 12: Changes to deepbook in framework to add API for querying marketplace.
 //             Change NW Batch to use versioned metadata field.
-//             Changes to sui-system package to add PTB-friendly unstake function.
+//             Changes to sui-system package to add PTB-friendly unstake function, and minor cleanup.
+// Version 13: Introduce a config variable to allow charging of computation to be either
+//             bucket base or rounding up. The presence of `gas_rounding_step` (or `None`)
+//             decides whether rounding is applied or not.
+//             Add reordering of user transactions by gas price after consensus.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -205,10 +209,30 @@ struct FeatureFlags {
     // Enable zklogin auth
     #[serde(skip_serializing_if = "is_false")]
     zklogin_auth: bool,
+
+    // How we order transactions coming out of consensus before sending to execution.
+    #[serde(skip_serializing_if = "ConsensusTransactionOrdering::is_none")]
+    consensus_transaction_ordering: ConsensusTransactionOrdering,
 }
 
 fn is_false(b: &bool) -> bool {
     !b
+}
+
+/// Ordering mechanism for transactions in one Narwhal consensus output.
+#[derive(Default, Copy, Clone, Serialize, Debug)]
+pub enum ConsensusTransactionOrdering {
+    /// No ordering. Transactions are processed in the order they appear in the consensus output.
+    #[default]
+    None,
+    /// Order transactions by gas price, highest first.
+    ByGasPrice,
+}
+
+impl ConsensusTransactionOrdering {
+    pub fn is_none(&self) -> bool {
+        matches!(self, ConsensusTransactionOrdering::None)
+    }
 }
 
 /// Constants that change the behavior of the protocol.
@@ -305,6 +329,9 @@ pub struct ProtocolConfig {
 
     /// The max computation bucket for gas. This is the max that can be charged for computation.
     max_gas_computation_bucket: Option<u64>,
+
+    // Define the value used to round up computation gas charges
+    gas_rounding_step: Option<u64>,
 
     /// Maximum number of nested loops. Enforced by the Move bytecode verifier.
     max_loop_depth: Option<u64>,
@@ -739,6 +766,10 @@ impl ProtocolConfig {
     pub fn zklogin_auth(&self) -> bool {
         self.feature_flags.zklogin_auth
     }
+
+    pub fn consensus_transaction_ordering(&self) -> ConsensusTransactionOrdering {
+        self.feature_flags.consensus_transaction_ordering
+    }
 }
 
 #[cfg(not(msim))]
@@ -1088,6 +1119,8 @@ impl ProtocolConfig {
                 max_move_identifier_len: None,
                 max_move_value_depth: None,
 
+                gas_rounding_step: None,
+
                 // When adding a new constant, set it to None in the earliest version, like this:
                 // new_constant: None,
             },
@@ -1178,8 +1211,18 @@ impl ProtocolConfig {
                 cfg.feature_flags.narwhal_versioned_metadata = true;
                 if chain != Chain::Mainnet {
                     cfg.feature_flags.commit_root_state_digest = true;
+                }
+
+                if chain != Chain::Mainnet && chain != Chain::Testnet {
                     cfg.feature_flags.zklogin_auth = true;
                 }
+                cfg
+            }
+            13 => {
+                let mut cfg = Self::get_for_version_impl(version - 1, chain);
+                cfg.gas_rounding_step = Some(1_000);
+                cfg.feature_flags.consensus_transaction_ordering =
+                    ConsensusTransactionOrdering::ByGasPrice;
                 cfg
             }
             // Use this template when making changes:
@@ -1339,12 +1382,21 @@ mod test {
         println!("! IMPORTANT: never update snapshots from this test. only add new versions! !");
         println!("!                                                                          !");
         println!("============================================================================\n");
-        for i in MIN_PROTOCOL_VERSION..=MAX_PROTOCOL_VERSION {
-            let cur = ProtocolVersion::new(i);
-            assert_yaml_snapshot!(
-                format!("version_{}", cur.as_u64()),
-                ProtocolConfig::get_for_version(cur, Chain::Unknown)
-            );
+        for chain_id in &[Chain::Unknown, Chain::Mainnet, Chain::Testnet] {
+            // make Chain::Unknown snapshots compatible with pre-chain-id snapshots so that we
+            // don't break the release-time compatibility tests. Once Chain Id configs have been
+            // released everywhere, we can remove this and only test Mainnet and Testnet
+            let chain_str = match chain_id {
+                Chain::Unknown => "".to_string(),
+                _ => format!("{:?}_", chain_id),
+            };
+            for i in MIN_PROTOCOL_VERSION..=MAX_PROTOCOL_VERSION {
+                let cur = ProtocolVersion::new(i);
+                assert_yaml_snapshot!(
+                    format!("{}version_{}", chain_str, cur.as_u64()),
+                    ProtocolConfig::get_for_version(cur, *chain_id)
+                );
+            }
         }
     }
 

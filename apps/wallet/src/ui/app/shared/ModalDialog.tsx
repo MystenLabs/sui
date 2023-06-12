@@ -11,6 +11,7 @@ export type ModalDialogProps = {
     title?: ReactNode;
     body?: ReactNode;
     footer?: ReactNode;
+    preventClose?: boolean;
     onClose: () => void;
 };
 
@@ -19,6 +20,7 @@ export function ModalDialog({
     title,
     body,
     footer,
+    preventClose,
     onClose,
 }: ModalDialogProps) {
     useEffect(() => {
@@ -28,17 +30,25 @@ export function ModalDialog({
             if (e.key === 'Escape' && isOpen) {
                 e.stopImmediatePropagation();
                 e.preventDefault();
-                onClose();
+                if (!preventClose) {
+                    onClose();
+                }
             }
         };
         if (isOpen) {
             window.addEventListener('keydown', handler, true);
         }
         return () => window.removeEventListener('keydown', handler, true);
-    }, [onClose, isOpen]);
+    }, [onClose, isOpen, preventClose]);
     return (
         <Transition show={isOpen} as={Fragment}>
-            <Dialog onClose={onClose}>
+            <Dialog
+                onClose={() => {
+                    if (!preventClose) {
+                        onClose();
+                    }
+                }}
+            >
                 <Transition.Child
                     as={Fragment}
                     enter="ease-out duration-300"

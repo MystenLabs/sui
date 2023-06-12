@@ -3,9 +3,9 @@
 
 import { type CheckpointPage } from '@mysten/sui.js/src/types/checkpoints';
 
-import { TxTableCol } from '../transactions/TxCardUtils';
 import { TxTimeType } from '../tx-time/TxTimeType';
 
+import { HighlightedTableCol } from '~/components/Table/HighlightedTableCol';
 import { CheckpointLink, CheckpointSequenceLink } from '~/ui/InternalLink';
 import { Text } from '~/ui/Text';
 
@@ -13,26 +13,18 @@ import { Text } from '~/ui/Text';
 export const genTableDataFromCheckpointsData = (data: CheckpointPage) => ({
     data: data?.data.map((checkpoint) => ({
         digest: (
-            <TxTableCol isHighlightedOnHover>
+            <HighlightedTableCol first>
                 <CheckpointLink digest={checkpoint.digest} />
-            </TxTableCol>
+            </HighlightedTableCol>
         ),
-        time: (
-            <TxTableCol>
-                <TxTimeType timestamp={Number(checkpoint.timestampMs)} />
-            </TxTableCol>
-        ),
+        time: <TxTimeType timestamp={Number(checkpoint.timestampMs)} />,
         sequenceNumber: (
-            <TxTableCol>
-                <CheckpointSequenceLink sequence={checkpoint.sequenceNumber} />
-            </TxTableCol>
+            <CheckpointSequenceLink sequence={checkpoint.sequenceNumber} />
         ),
         transactionBlockCount: (
-            <TxTableCol>
-                <Text variant="bodySmall/medium" color="steel-darker">
-                    {checkpoint.transactions.length}
-                </Text>
-            </TxTableCol>
+            <Text variant="bodySmall/medium" color="steel-darker">
+                {checkpoint.transactions.length}
+            </Text>
         ),
     })),
     columns: [

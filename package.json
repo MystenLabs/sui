@@ -13,6 +13,8 @@
     "sdk": "pnpm --filter ./sdk/typescript",
     "bcs": "pnpm --filter ./sdk/bcs",
     "kiosk": "pnpm --filter ./sdk/kiosk",
+    "suins": "pnpm --filter ./sdk/suins-toolkit",
+    "deepbook": "pnpm --filter ./sdk/deepbook",
     "changeset-version": "pnpm changeset version && pnpm sdk codegen:version"
   },
   "pnpm": {

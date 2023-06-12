@@ -97,6 +97,10 @@ export function QredoConnectInfoPage() {
                                     value={data.service}
                                 />
                                 <LabelValueItem
+                                    label="Organization"
+                                    value={data.organization || '-'}
+                                />
+                                <LabelValueItem
                                     label="Token"
                                     value={data.partialToken}
                                 />

@@ -686,6 +686,15 @@ Deprecated since v1.0.0, use <code><a href="clob.md#0xdee9_clob_OrderFilledV2">O
 
 
 
+<a name="0xdee9_clob_DEPRECATED"></a>
+
+
+
+<pre><code><b>const</b> <a href="clob.md#0xdee9_clob_DEPRECATED">DEPRECATED</a>: u64 = 0;
+</code></pre>
+
+
+
 <a name="0xdee9_clob_EInsufficientBaseCoin"></a>
 
 
@@ -1009,7 +1018,7 @@ Deprecated since v1.0.0, use <code><a href="clob.md#0xdee9_clob_OrderFilledV2">O
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="clob.md#0xdee9_clob_create_account">create_account</a>(ctx: &<b>mut</b> <a href="../../../.././build/Sui/docs/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="custodian.md#0xdee9_custodian_AccountCap">custodian::AccountCap</a>
+<pre><code><b>public</b> <b>fun</b> <a href="clob.md#0xdee9_clob_create_account">create_account</a>(_ctx: &<b>mut</b> <a href="../../../.././build/Sui/docs/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="custodian.md#0xdee9_custodian_AccountCap">custodian::AccountCap</a>
 </code></pre>
 
 
@@ -1018,8 +1027,8 @@ Deprecated since v1.0.0, use <code><a href="clob.md#0xdee9_clob_OrderFilledV2">O
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="clob.md#0xdee9_clob_create_account">create_account</a>(ctx: &<b>mut</b> TxContext): AccountCap {
-    mint_account_cap(ctx)
+<pre><code><b>public</b> <b>fun</b> <a href="clob.md#0xdee9_clob_create_account">create_account</a>(_ctx: &<b>mut</b> TxContext): AccountCap {
+    <b>abort</b> <a href="clob.md#0xdee9_clob_DEPRECATED">DEPRECATED</a>
 }
 </code></pre>
 
@@ -1100,7 +1109,7 @@ Deprecated since v1.0.0, use <code><a href="clob.md#0xdee9_clob_OrderFilledV2">O
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="clob.md#0xdee9_clob_create_pool">create_pool</a>&lt;BaseAsset, QuoteAsset&gt;(tick_size: u64, lot_size: u64, creation_fee: <a href="../../../.././build/Sui/docs/coin.md#0x2_coin_Coin">coin::Coin</a>&lt;<a href="../../../.././build/Sui/docs/sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, ctx: &<b>mut</b> <a href="../../../.././build/Sui/docs/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+<pre><code><b>public</b> <b>fun</b> <a href="clob.md#0xdee9_clob_create_pool">create_pool</a>&lt;BaseAsset, QuoteAsset&gt;(_tick_size: u64, _lot_size: u64, _creation_fee: <a href="../../../.././build/Sui/docs/coin.md#0x2_coin_Coin">coin::Coin</a>&lt;<a href="../../../.././build/Sui/docs/sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, _ctx: &<b>mut</b> <a href="../../../.././build/Sui/docs/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -1110,20 +1119,12 @@ Deprecated since v1.0.0, use <code><a href="clob.md#0xdee9_clob_OrderFilledV2">O
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="clob.md#0xdee9_clob_create_pool">create_pool</a>&lt;BaseAsset, QuoteAsset&gt;(
-    tick_size: u64,
-    lot_size: u64,
-    creation_fee: Coin&lt;SUI&gt;,
-    ctx: &<b>mut</b> TxContext,
+    _tick_size: u64,
+    _lot_size: u64,
+    _creation_fee: Coin&lt;SUI&gt;,
+    _ctx: &<b>mut</b> TxContext,
 ) {
-    <b>assert</b>!(<a href="../../../.././build/Sui/docs/coin.md#0x2_coin_value">coin::value</a>(&creation_fee) == <a href="clob.md#0xdee9_clob_FEE_AMOUNT_FOR_CREATE_POOL">FEE_AMOUNT_FOR_CREATE_POOL</a>, <a href="clob.md#0xdee9_clob_EInvalidFee">EInvalidFee</a>);
-    <a href="clob.md#0xdee9_clob_create_pool_">create_pool_</a>&lt;BaseAsset, QuoteAsset&gt;(
-        <a href="clob.md#0xdee9_clob_REFERENCE_TAKER_FEE_RATE">REFERENCE_TAKER_FEE_RATE</a>,
-        <a href="clob.md#0xdee9_clob_REFERENCE_MAKER_REBATE_RATE">REFERENCE_MAKER_REBATE_RATE</a>,
-        tick_size,
-        lot_size,
-        <a href="../../../.././build/Sui/docs/coin.md#0x2_coin_into_balance">coin::into_balance</a>(creation_fee),
-        ctx
-    )
+    <b>abort</b> <a href="clob.md#0xdee9_clob_DEPRECATED">DEPRECATED</a>
 }
 </code></pre>
 
@@ -1391,16 +1392,17 @@ Deprecated since v1.0.0, use <code><a href="clob.md#0xdee9_clob_OrderFilledV2">O
                 <a href="clob.md#0xdee9_clob_emit_order_canceled">emit_order_canceled</a>&lt;BaseAsset, QuoteAsset&gt;(pool_id, maker_order);
             } <b>else</b> {
                 // Calculate how much quote asset (maker_quote_quantity) is required, including the commission, <b>to</b> fill the maker order.
-                <b>let</b> (flag, maker_quote_quantity) = clob_math::mul_round(
+                <b>let</b> maker_quote_quantity_without_commission = clob_math::mul(
                     maker_base_quantity,
                     maker_order.price
                 );
-                <b>if</b> (flag) maker_quote_quantity = maker_quote_quantity + 1;
-                (flag, maker_quote_quantity) = clob_math::mul_round(
-                    maker_quote_quantity,
-                    <a href="clob.md#0xdee9_clob_FLOAT_SCALING">FLOAT_SCALING</a> + pool.taker_fee_rate
+                <b>let</b> (is_round_down, taker_commission)  = clob_math::unsafe_mul_round(
+                    maker_quote_quantity_without_commission,
+                    pool.taker_fee_rate
                 );
-                <b>if</b> (flag) maker_quote_quantity = maker_quote_quantity + 1;
+                <b>if</b> (is_round_down)  taker_commission = taker_commission + 1;
+
+                <b>let</b> maker_quote_quantity = maker_quote_quantity_without_commission + taker_commission;
 
                 // Total base quantity filled.
                 <b>let</b> filled_base_quantity: u64;
@@ -1409,22 +1411,19 @@ Deprecated since v1.0.0, use <code><a href="clob.md#0xdee9_clob_OrderFilledV2">O
                 // Total quote quantity paid by taker.
                 // filled_quote_quantity_without_commission * (<a href="clob.md#0xdee9_clob_FLOAT_SCALING">FLOAT_SCALING</a> + taker_fee_rate) = filled_quote_quantity
                 <b>let</b> filled_quote_quantity_without_commission: u64;
-                <b>if</b> (taker_quote_quantity_remaining &gt;= maker_quote_quantity) {
+                <b>if</b> (taker_quote_quantity_remaining &gt; maker_quote_quantity) {
                     filled_quote_quantity = maker_quote_quantity;
-                    (_, filled_quote_quantity_without_commission) = clob_math::div_round(
-                        filled_quote_quantity,
-                        <a href="clob.md#0xdee9_clob_FLOAT_SCALING">FLOAT_SCALING</a> + pool.taker_fee_rate
-                    );
+                    filled_quote_quantity_without_commission = maker_quote_quantity_without_commission;
                     filled_base_quantity = maker_base_quantity;
                 } <b>else</b> {
                     terminate_loop = <b>true</b>;
                     // <b>if</b> not enough quote quantity <b>to</b> pay for taker commission, then no quantity will be filled
-                    (_, filled_quote_quantity_without_commission) = clob_math::unsafe_div_round(
+                    filled_quote_quantity_without_commission = clob_math::unsafe_div(
                         taker_quote_quantity_remaining,
                         <a href="clob.md#0xdee9_clob_FLOAT_SCALING">FLOAT_SCALING</a> + pool.taker_fee_rate
                     );
                     // filled_base_quantity = 0 is permitted since filled_quote_quantity_without_commission can be 0
-                    (_, filled_base_quantity) = clob_math::unsafe_div_round(
+                    filled_base_quantity = clob_math::unsafe_div(
                         filled_quote_quantity_without_commission,
                         maker_order.price
                     );
@@ -1454,9 +1453,6 @@ Deprecated since v1.0.0, use <code><a href="clob.md#0xdee9_clob_OrderFilledV2">O
 
                 // maker in ask side, decrease maker's locked base asset, increase maker's available quote asset
                 taker_quote_quantity_remaining = taker_quote_quantity_remaining - filled_quote_quantity;
-                <b>if</b> (taker_quote_quantity_remaining == 0) {
-                    terminate_loop = <b>true</b>;
-                };
                 <b>let</b> locked_base_balance = <a href="custodian.md#0xdee9_custodian_decrease_user_locked_balance">custodian::decrease_user_locked_balance</a>&lt;BaseAsset&gt;(
                     &<b>mut</b> pool.base_custodian,
                     maker_order.owner,
@@ -1581,10 +1577,9 @@ Deprecated since v1.0.0, use <code><a href="clob.md#0xdee9_clob_OrderFilledV2">O
                 <b>let</b> filled_base_quantity =
                     <b>if</b> (taker_base_quantity_remaining &gt; maker_base_quantity) { maker_base_quantity }
                     <b>else</b> { taker_base_quantity_remaining };
-                // filled_quote_quantity <b>to</b> maker,  no need <b>to</b> round up
+
                 <b>let</b> filled_quote_quantity = clob_math::mul(filled_base_quantity, maker_order.price);
 
-                // rebate_fee <b>to</b> maker, no need <b>to</b> round up
                 // <b>if</b> maker_rebate = 0 due <b>to</b> underflow, maker will not receive a rebate
                 <b>let</b> maker_rebate = clob_math::unsafe_mul(filled_quote_quantity, pool.maker_rebate_rate);
                 // <b>if</b> taker_commission = 0 due <b>to</b> underflow, round it up <b>to</b> 1
@@ -1722,10 +1717,9 @@ Deprecated since v1.0.0, use <code><a href="clob.md#0xdee9_clob_OrderFilledV2">O
                 <b>let</b> filled_base_quantity =
                     <b>if</b> (taker_base_quantity_remaining &gt;= maker_base_quantity) { maker_base_quantity }
                     <b>else</b> { taker_base_quantity_remaining };
-                // filled_quote_quantity from maker, need <b>to</b> round up, but do in decrease stage
+
                 <b>let</b> filled_quote_quantity = clob_math::mul(filled_base_quantity, maker_order.price);
 
-                // rebate_fee <b>to</b> maker, no need <b>to</b> round up
                 // <b>if</b> maker_rebate = 0 due <b>to</b> underflow, maker will not receive a rebate
                 <b>let</b> maker_rebate = clob_math::unsafe_mul(filled_quote_quantity, pool.maker_rebate_rate);
                 // <b>if</b> taker_commission = 0 due <b>to</b> underflow, round it up <b>to</b> 1

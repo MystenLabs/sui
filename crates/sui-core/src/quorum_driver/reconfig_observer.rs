@@ -114,7 +114,12 @@ impl ReconfigObserver<NetworkAuthorityClient> for OnsiteReconfigObserver {
                     continue;
                 }
                 Err(RecvError::Closed) => {
-                    panic!("Do not expect the channel to be closed")
+                    // Closing the channel only happens in simtest when a node is shut down.
+                    if cfg!(msim) {
+                        return;
+                    } else {
+                        panic!("Do not expect the channel to be closed")
+                    }
                 }
             }
         }

@@ -14,7 +14,7 @@ interface UseImageProps {
 export function useImage({ src = '', moderate = true }: UseImageProps) {
     const [status, setStatus] = useState<Status>('loading');
     const formatted = src?.replace(/^ipfs:\/\//, 'https://ipfs.io/ipfs/');
-    const { data: allowed, isFetched } = useImageMod({
+    const { data: moderation, isFetched } = useImageMod({
         url: formatted,
         enabled: moderate,
     });
@@ -45,7 +45,7 @@ export function useImage({ src = '', moderate = true }: UseImageProps) {
         return () => cleanup();
     }, [load]);
 
-    return { nsfw: !allowed, url: formatted, status, ref };
+    return { moderation, url: formatted, status, ref };
 }
 
 export default useImage;

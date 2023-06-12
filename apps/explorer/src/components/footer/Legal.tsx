@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { useProductAnalyticsConfig } from '@mysten/core';
+
 import { legalLinks } from './footerLinks';
 
 import { Link } from '~/ui/Link';
@@ -19,6 +21,8 @@ export function LegalText() {
 }
 
 export function LegalLinks() {
+    const { data: productAnalyticsConfig } = useProductAnalyticsConfig();
+
     return (
         <ul className="flex flex-col gap-3 md:flex-row md:gap-8">
             {legalLinks.map(({ title, href }) => (
@@ -33,6 +37,18 @@ export function LegalLinks() {
                     </Link>
                 </li>
             ))}
+            {productAnalyticsConfig?.mustProvideCookieConsent && (
+                <li className="flex items-center justify-center">
+                    <Link variant="text" data-cc="c-settings">
+                        <Text
+                            variant="subtitleSmall/medium"
+                            color="steel-darker"
+                        >
+                            Manage Cookies
+                        </Text>
+                    </Link>
+                </li>
+            )}
         </ul>
     );
 }

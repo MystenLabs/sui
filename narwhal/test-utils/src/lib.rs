@@ -881,6 +881,7 @@ impl<R: rand::RngCore + rand::CryptoRng> Builder<R> {
                 self.stake.pop_front().unwrap_or(1),
                 a.address.clone(),
                 a.network_public_key(),
+                a.address.to_string(),
             );
         }
         let committee = committee_builder.build();

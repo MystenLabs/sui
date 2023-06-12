@@ -24,7 +24,7 @@ export function SignMessageRequest({ request }: SignMessageRequestProps) {
     );
     const signer = useSigner(request.tx.accountAddress);
     const dispatch = useAppDispatch();
-    const { clientIdentifier, notificationModal } = useQredoTransaction();
+    const { clientIdentifier, notificationModal } = useQredoTransaction(true);
 
     return (
         <UserApproveContainer

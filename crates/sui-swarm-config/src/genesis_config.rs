@@ -10,14 +10,20 @@ use serde::{Deserialize, Serialize};
 use sui_config::genesis::{GenesisCeremonyParameters, TokenAllocation};
 use sui_config::node::{DEFAULT_COMMISSION_RATE, DEFAULT_VALIDATOR_GAS_PRICE};
 use sui_config::{local_ip_utils, Config};
-use sui_genesis_builder::validator_info::ValidatorInfo;
+use sui_genesis_builder::validator_info::{GenesisValidatorInfo, ValidatorInfo};
 use sui_types::base_types::SuiAddress;
 use sui_types::crypto::{
-    get_key_pair_from_rng, AccountKeyPair, AuthorityKeyPair, AuthorityPublicKeyBytes,
-    NetworkKeyPair, NetworkPublicKey, PublicKey, SuiKeyPair,
+    generate_proof_of_possession, get_key_pair_from_rng, AccountKeyPair, AuthorityKeyPair,
+    AuthorityPublicKeyBytes, NetworkKeyPair, NetworkPublicKey, PublicKey, SuiKeyPair,
 };
 use sui_types::multiaddr::Multiaddr;
 use tracing::info;
+
+// All information needed to build a NodeConfig for a state sync fullnode.
+#[derive(Serialize, Deserialize, Debug)]
+pub struct SsfnGenesisConfig {
+    pub p2p_address: Multiaddr,
+}
 
 // All information needed to build a NodeConfig for a validator.
 #[derive(Serialize, Deserialize)]
@@ -44,14 +50,14 @@ pub struct ValidatorGenesisConfig {
 }
 
 impl ValidatorGenesisConfig {
-    pub fn to_validator_info(&self, name: String) -> ValidatorInfo {
+    pub fn to_validator_info(&self, name: String) -> GenesisValidatorInfo {
         let protocol_key: AuthorityPublicKeyBytes = self.key_pair.public().into();
         let account_key: PublicKey = self.account_key_pair.public();
         let network_key: NetworkPublicKey = self.network_key_pair.public().clone();
         let worker_key: NetworkPublicKey = self.worker_key_pair.public().clone();
         let network_address = self.network_address.clone();
 
-        ValidatorInfo {
+        let info = ValidatorInfo {
             name,
             protocol_key,
             worker_key,
@@ -66,7 +72,18 @@ impl ValidatorGenesisConfig {
             description: String::new(),
             image_url: String::new(),
             project_url: String::new(),
+        };
+        let proof_of_possession =
+            generate_proof_of_possession(&self.key_pair, (&self.account_key_pair.public()).into());
+        GenesisValidatorInfo {
+            info,
+            proof_of_possession,
         }
+    }
+
+    /// Use validator public key as validator name.
+    pub fn to_validator_info_with_random_name(&self) -> GenesisValidatorInfo {
+        self.to_validator_info(self.key_pair.public().to_string())
     }
 }
 
@@ -143,6 +160,7 @@ impl ValidatorGenesisConfigBuilder {
 
 #[derive(Serialize, Deserialize, Default)]
 pub struct GenesisConfig {
+    pub ssfn_config_info: Option<Vec<SsfnGenesisConfig>>,
     pub validator_config_info: Option<Vec<ValidatorGenesisConfig>>,
     pub parameters: GenesisCeremonyParameters,
     pub accounts: Vec<AccountConfig>,
@@ -298,6 +316,7 @@ impl GenesisConfig {
 
         // Make a new genesis configuration.
         GenesisConfig {
+            ssfn_config_info: None,
             validator_config_info: Some(validator_config_info),
             parameters,
             accounts: vec![account_config],

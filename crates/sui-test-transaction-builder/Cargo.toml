@@ -10,6 +10,7 @@ edition = "2021"
 bcs = "0.1.4"
 
 shared-crypto = { path = "../shared-crypto" }
+sui-genesis-builder = { path = "../sui-genesis-builder" }
 sui-move-build = { path = "../sui-move-build" }
 sui-types = { path = "../sui-types" }
 

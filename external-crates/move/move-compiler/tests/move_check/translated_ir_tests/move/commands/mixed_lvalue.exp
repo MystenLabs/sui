@@ -3,12 +3,16 @@ warning[W09003]: unused assignment
    │
 11 │         let r_ref = &mut r;
    │             ^^^^^ Unused assignment for variable 'r_ref'. Consider removing, replacing with '_', or prefixing with '_' (e.g., '_r_ref')
+   │
+   = This warning can be suppressed with '#[allow(unused_assignment)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 warning[W09003]: unused assignment
    ┌─ tests/move_check/translated_ir_tests/move/commands/mixed_lvalue.move:12:13
    │
 12 │         let s = S { f: 0 };
    │             ^ Unused assignment for variable 's'. Consider removing, replacing with '_', or prefixing with '_' (e.g., '_s')
+   │
+   = This warning can be suppressed with '#[allow(unused_assignment)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 error[E01009]: invalid assignment
    ┌─ tests/move_check/translated_ir_tests/move/commands/mixed_lvalue.move:14:19

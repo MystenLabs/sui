@@ -6,7 +6,7 @@
  * the README. Manual needs to be correct for the best DevX.
  */
 
-import { describe, it, expect } from "vitest";
+import { describe, it } from "vitest";
 import { SUI_ADDRESS_LENGTH } from "../../typescript/src";
 import {
   BCS,
@@ -37,7 +37,7 @@ describe("BCS: README Examples", () => {
         value: 1000000n,
       })
       .toBytes();
-  
+
     let coin = bcs.de("Coin", bytes);
 
     // serialization: Object into bytes
