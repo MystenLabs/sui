@@ -227,7 +227,7 @@ impl SuiNode {
     }
 
     #[cfg(not(msim))]
-    async fn fetch_jwk() -> SuiResult<Vec<(String, Arc<OAuthProviderContent>)>> {
+    async fn fetch_jwk() -> SuiResult<Vec<(String, OAuthProviderContent)>> {
         let client = reqwest::Client::new();
         let response = client
             .get("https://www.googleapis.com/oauth2/v2/certs")
@@ -243,7 +243,7 @@ impl SuiNode {
     }
 
     #[cfg(msim)]
-    async fn fetch_jwk() -> SuiResult<Vec<(String, Arc<OAuthProviderContent>)>> {
+    async fn fetch_jwk() -> SuiResult<Vec<(String, OAuthProviderContent)>> {
         parse_jwks(sui_types::zk_login_util::DEFAULT_JWK_BYTES)
     }
 

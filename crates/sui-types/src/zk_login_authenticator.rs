@@ -2,9 +2,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::{
-    base_types::SuiAddress,
+    base_types::{EpochId, SuiAddress},
     crypto::{Signature, SignatureScheme, SuiSignature},
-    error::SuiError,
+    error::{SuiError, SuiResult},
     signature::{AuthenticatorTrait, VerifyParams},
     zk_login_util::{AddressParams, DEFAULT_WHITELIST},
 };
@@ -85,13 +85,23 @@ impl Hash for ZkLoginAuthenticator {
 }
 
 impl AuthenticatorTrait for ZkLoginAuthenticator {
+    fn verify_epoch(&self, epoch: EpochId) -> SuiResult {
+        // Verify the max epoch in aux inputs is <= the current epoch of authority.
+        if self.aux_inputs.get_max_epoch() <= epoch {
+            return Err(SuiError::InvalidSignature {
+                error: "Invalid max epoch".to_string(),
+            });
+        }
+        Ok(())
+    }
+
     /// Verify an intent message of a transaction with an zk login authenticator.
-    fn verify_secure_generic<T>(
+    fn verify_claims<T>(
         &self,
         intent_msg: &IntentMessage<T>,
         author: SuiAddress,
         aux_verify_data: &VerifyParams,
-    ) -> Result<(), SuiError>
+    ) -> SuiResult
     where
         T: Serialize,
     {
@@ -101,13 +111,6 @@ impl AuthenticatorTrait for ZkLoginAuthenticator {
             return Err(SuiError::InvalidAddress);
         }
         let aux_inputs = &self.aux_inputs;
-
-        // Verify the max epoch in aux inputs is <= the current epoch of authority.
-        if aux_inputs.get_max_epoch() <= aux_verify_data.epoch.unwrap_or(0) {
-            return Err(SuiError::InvalidSignature {
-                error: "Invalid max epoch".to_string(),
-            });
-        }
 
         if !is_claim_supported(aux_inputs.get_claim_name()) {
             return Err(SuiError::InvalidSignature {

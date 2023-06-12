@@ -10,7 +10,9 @@ use crate::crypto::{
     ToFromBytes,
 };
 use crate::digests::{CertificateDigest, SenderSignedDataDigest};
-use crate::message_envelope::{Envelope, Message, TrustedEnvelope, VerifiedEnvelope};
+use crate::message_envelope::{
+    AuthenticatedMessage, Envelope, Message, TrustedEnvelope, VerifiedEnvelope,
+};
 use crate::messages_checkpoint::CheckpointTimestamp;
 use crate::messages_consensus::ConsensusCommitPrologue;
 use crate::object::{MoveObject, Object, Owner};
@@ -1752,7 +1754,17 @@ impl Message for SenderSignedData {
         TransactionDigest::new(default_hash(&self.intent_message().value))
     }
 
-    fn verify(&self, verify_params: &VerifyParams) -> SuiResult {
+    fn verify_epoch(&self, epoch: EpochId) -> SuiResult {
+        for sig in &self.inner().tx_signatures {
+            sig.verify_epoch(epoch)?;
+        }
+
+        Ok(())
+    }
+}
+
+impl AuthenticatedMessage for SenderSignedData {
+    fn verify_message_signature(&self, verify_params: &VerifyParams) -> SuiResult {
         fp_ensure!(
             self.0.len() == 1,
             SuiError::UserInputError {
@@ -1787,7 +1799,7 @@ impl Message for SenderSignedData {
 
         // Verify all present signatures.
         for (signer, signature) in present_sigs {
-            signature.verify_secure_generic(self.intent_message(), signer, verify_params)?;
+            signature.verify_claims(self.intent_message(), signer, verify_params)?;
         }
         Ok(())
     }

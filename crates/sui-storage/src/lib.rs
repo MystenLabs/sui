@@ -208,7 +208,7 @@ where
             )
         });
 
-    checkpoint.verify_signature(&committee).map_err(|e| {
+    checkpoint.verify_signatures(&committee).map_err(|e| {
         debug!("error verifying checkpoint: {e}");
         checkpoint.clone()
     })?;

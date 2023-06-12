@@ -80,7 +80,7 @@ fn test_authority_signature_intent() {
     );
     let tx = Transaction::from_data(data, Intent::sui_transaction(), vec![signature]);
     let tx1 = tx.clone();
-    assert!(tx.verify().is_ok());
+    assert!(tx.verify(&Default::default()).is_ok());
 
     // Create an intent with signed data.
     let intent_bcs = bcs::to_bytes(tx1.intent_message()).unwrap();

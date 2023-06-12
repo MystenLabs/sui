@@ -447,7 +447,7 @@ impl TestCluster {
                 })
                 .map(|client| {
                     let cert = certificate.clone();
-                    async move { client.handle_certificate_v2(cert.into()).await }
+                    async move { client.handle_certificate_v2(cert).await }
                 })
                 .collect();
 
