@@ -7,8 +7,6 @@ The topic provides best practices for configuring your RPC settings to ensure a 
 - Use dedicated nodes / shared services rather than public endpoints for production apps. The public endpoints maintained by Mysten Labs are rate-limited, and support only approximately 100 requests per 30 seconds. You should not use public endpointsin production applications with high traffic volume.
 - You can either run your own Full nodes, or outsource this to a professional infrastructure provider (preferred for apps that have high traffic). You can find a list of reliable RPC endpoint providers for Sui on the [Sui Dev Portal](https://sui.io/developers?tools=RPC).
 
-**Note:** If you have an urgent need finding a provider, contact us and we can provide assistance.
-
 ## RPC provisioning guidance
 
 Consider the following when working with a provider:
