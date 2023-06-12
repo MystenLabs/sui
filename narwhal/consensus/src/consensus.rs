@@ -7,14 +7,14 @@
 use crate::bullshark::Bullshark;
 use crate::utils::gc_round;
 use crate::{metrics::ConsensusMetrics, ConsensusError, SequenceNumber};
-use config::{AuthorityIdentifier, Committee};
+use config::{Authority, AuthorityIdentifier, Committee};
 use fastcrypto::hash::Hash;
 use mysten_metrics::metered_channel;
 use mysten_metrics::spawn_logged_monitored_task;
+use parking_lot::RwLock;
 use rand::prelude::SliceRandom;
 use rand::rngs::StdRng;
 use rand::SeedableRng;
-use std::collections::HashSet;
 use std::{
     cmp::{max, Ordering},
     collections::{BTreeMap, BTreeSet, HashMap},
@@ -35,22 +35,22 @@ pub mod consensus_tests;
 /// The representation of the DAG in memory.
 pub type Dag = BTreeMap<Round, HashMap<AuthorityIdentifier, (CertificateDigest, Certificate)>>;
 
-#[derive(Default)]
+#[derive(Default, Clone, Debug)]
 pub struct LeaderSwapTable {
     /// The round on which the leader swap table get into effect.
     _round: Round,
     /// The list of `f` (by stake) authorities with best scores as those defined by the provided `ReputationScores`.
     /// Those authorities will be used in the position of the `bad_nodes` on the final leader schedule.
-    good_nodes: Vec<AuthorityIdentifier>,
+    good_nodes: Vec<Authority>,
     /// The set of `f` (by stake) authorities with the worst scores as those defined by the provided `ReputationScores`.
     /// Every time where such authority is elected as leader on the schedule, it will swapped by one
     /// of the authorities of the `good_nodes`.
-    bad_nodes: HashSet<AuthorityIdentifier>,
+    bad_nodes: HashMap<AuthorityIdentifier, Authority>,
 }
 
 impl LeaderSwapTable {
     // constructs a new table based on the provided reputation scores.
-    pub fn new(committee: &Committee, round: Round, reputation_scores: ReputationScores) -> Self {
+    pub fn new(committee: &Committee, round: Round, reputation_scores: &ReputationScores) -> Self {
         assert!(reputation_scores.final_of_schedule, "Only reputation scores that have been calculated on the end of a schedule are accepted");
 
         // calculating the good nodes
@@ -69,11 +69,10 @@ impl LeaderSwapTable {
                 .rev(),
         )
         .into_iter()
-        .collect::<HashSet<AuthorityIdentifier>>();
+        .map(|authority| (authority.id(), authority))
+        .collect::<HashMap<AuthorityIdentifier, Authority>>();
 
         debug!("Reputation scores on round {round}: {reputation_scores:?}");
-        debug!("Good nodes: {good_nodes:?}");
-        debug!("Bad nodes: {bad_nodes:?}");
 
         Self {
             _round: round,
@@ -90,12 +89,8 @@ impl LeaderSwapTable {
     /// we want to give to all the good nodes equal opportunity to get swapped with bad nodes and not
     /// have one node with enough stake end up swapping bad nodes more frequently than the others on
     /// the final schedule.
-    pub fn swap(
-        &self,
-        leader: &AuthorityIdentifier,
-        leader_round: Round,
-    ) -> Option<AuthorityIdentifier> {
-        if self.bad_nodes.contains(leader) {
+    pub fn swap(&self, leader: &AuthorityIdentifier, leader_round: Round) -> Option<Authority> {
+        if self.bad_nodes.contains_key(leader) {
             let mut seed_bytes = [0u8; 32];
             seed_bytes[32 - 8..].copy_from_slice(&leader_round.to_le_bytes());
             let mut rng = StdRng::from_seed(seed_bytes);
@@ -108,11 +103,11 @@ impl LeaderSwapTable {
             trace!(
                 "Swapping bad leader {} -> {} for round {}",
                 leader,
-                good_node,
+                good_node.id(),
                 leader_round
             );
 
-            return Some(*good_node);
+            return Some(good_node.to_owned());
         }
         None
     }
@@ -123,7 +118,7 @@ impl LeaderSwapTable {
     fn retrieve_first_nodes(
         committee: &Committee,
         authorities: impl Iterator<Item = (AuthorityIdentifier, u64)>,
-    ) -> Vec<AuthorityIdentifier> {
+    ) -> Vec<Authority> {
         let mut filtered_authorities = Vec::new();
 
         let mut stake = 0;
@@ -135,10 +130,93 @@ impl LeaderSwapTable {
             if committee.reached_validity(stake) {
                 break;
             }
-            filtered_authorities.push(authority_id);
+            filtered_authorities.push(committee.authority_safe(&authority_id).to_owned());
         }
 
         filtered_authorities
+    }
+}
+
+/// The LeaderSchedule is responsible for producing the leader schedule across an epoch. It provides
+/// methods to derive the leader of a round based on the provided leader swap table. This struct can
+/// be cloned and shared freely as the internal parts are atomically updated.
+#[derive(Clone)]
+pub struct LeaderSchedule {
+    pub committee: Committee,
+    pub leader_swap_table: Arc<RwLock<LeaderSwapTable>>,
+}
+
+impl LeaderSchedule {
+    pub fn new(committee: Committee, table: LeaderSwapTable) -> Self {
+        Self {
+            committee,
+            leader_swap_table: Arc::new(RwLock::new(table)),
+        }
+    }
+
+    /// Atomically updates the leader swap table with the new provided one. Any leader queried from
+    /// now on will get calculated according to this swap table until a new one is provided again.
+    pub fn update_leader_swap_table(&self, table: LeaderSwapTable) {
+        trace!("Updating swap table {:?}", table);
+
+        let mut write = self.leader_swap_table.write();
+        *write = table;
+    }
+
+    /// Returns the leader for the provided round. Keep in mind that this method will return a leader
+    /// according to the provided LeaderSwapTable. Providing a different table can potentially produce
+    /// a different leader for the same round.
+    pub fn leader(&self, round: Round) -> Authority {
+        assert_eq!(
+            round % 2,
+            0,
+            "We should never attempt to do a leader election for odd rounds"
+        );
+
+        // TODO: split the leader election logic for testing from the production code.
+        cfg_if::cfg_if! {
+        if #[cfg(test)] {
+            // We apply round robin in leader election. Since we expect round to be an even number,
+            // 2, 4, 6, 8... it can't work well for leader election as we'll omit leaders. Thus
+            // we can always divide by 2 to get a monotonically incremented sequence,
+            // 2/2 = 1, 4/2 = 2, 6/2 = 3, 8/2 = 4  etc, and then do minus 1 so we can always
+            // start with base zero 0.
+            let next_leader = (round/2 - 1) as usize % self.committee.size();
+            let authorities = self.committee.authorities().collect::<Vec<_>>();
+
+            let leader: Authority = (*authorities.get(next_leader).unwrap()).clone();
+            let table = self.leader_swap_table.read();
+
+            table.swap(&leader.id(), round).unwrap_or(leader)
+        } else {
+            // Elect the leader in a stake-weighted choice seeded by the round
+            let leader = self.committee.leader(round);
+
+            let table = self.leader_swap_table.read();
+            table.swap(&leader.id(), round).unwrap_or(leader)
+        }
+        }
+    }
+
+    /// Returns the certificate originated by the leader of the specified round (if any). The Authority
+    /// leader of the round is always returned and that's irrespective of whether the certificate exists
+    /// as that's deterministically determined. The provided `leader_swap_table` is being used to determine
+    /// any overrides that need to be performed to the original schedule.
+    pub fn leader_certificate<'a>(
+        &self,
+        round: Round,
+        dag: &'a Dag,
+    ) -> (Authority, Option<&'a Certificate>) {
+        // Note: this function is often called with even rounds only. While we do not aim at random selection
+        // yet (see issue https://github.com/MystenLabs/sui/issues/5182), repeated calls to this function
+        // should still pick from the whole roster of leaders.
+        let leader = self.leader(round);
+
+        // Return its certificate and the certificate's digest.
+        match dag.get(&round).and_then(|x| x.get(&leader.id())) {
+            None => (leader, None),
+            Some((_, certificate)) => (leader, Some(certificate)),
+        }
     }
 }
 

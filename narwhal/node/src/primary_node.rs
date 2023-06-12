@@ -5,7 +5,7 @@ use crate::{try_join_all, FuturesUnordered, NodeError};
 use anemo::PeerId;
 use config::{AuthorityIdentifier, Committee, Parameters, WorkerCache};
 use consensus::bullshark::Bullshark;
-use consensus::consensus::ConsensusRound;
+use consensus::consensus::{ConsensusRound, LeaderSchedule, LeaderSwapTable};
 use consensus::dag::Dag;
 use consensus::metrics::{ChannelMetrics, ConsensusMetrics};
 use consensus::Consensus;
@@ -245,7 +245,8 @@ impl PrimaryNodeInner {
         let mut handles = Vec::new();
         let (tx_consensus_round_updates, rx_consensus_round_updates) =
             watch::channel(ConsensusRound::new(0, 0));
-        let dag = if !internal_consensus {
+
+        let (dag, leader_schedule) = if !internal_consensus {
             debug!("Consensus is disabled: the primary will run w/o Bullshark");
             let consensus_metrics = Arc::new(ConsensusMetrics::new(registry));
             let (handle, dag) = Dag::new(
@@ -257,9 +258,13 @@ impl PrimaryNodeInner {
 
             handles.push(handle);
 
-            Some(Arc::new(dag))
+            // TODO: this will be removed anyways once the external consensus stuff are removed.
+            (
+                Some(Arc::new(dag)),
+                LeaderSchedule::new(committee.clone(), LeaderSwapTable::default()),
+            )
         } else {
-            let consensus_handles = Self::spawn_consensus(
+            let (consensus_handles, leader_schedule) = Self::spawn_consensus(
                 authority.id(),
                 worker_cache.clone(),
                 committee.clone(),
@@ -278,7 +283,7 @@ impl PrimaryNodeInner {
 
             handles.extend(consensus_handles);
 
-            None
+            (None, leader_schedule)
         };
 
         // TODO: the same set of variables are sent to primary, consensus and downstream
@@ -306,6 +311,7 @@ impl PrimaryNodeInner {
             tx_shutdown,
             tx_committed_certificates,
             registry,
+            leader_schedule,
         );
         handles.extend(primary_handles);
 
@@ -327,7 +333,7 @@ impl PrimaryNodeInner {
         tx_committed_certificates: metered_channel::Sender<(Round, Vec<Certificate>)>,
         tx_consensus_round_updates: watch::Sender<ConsensusRound>,
         registry: &Registry,
-    ) -> SubscriberResult<Vec<JoinHandle<()>>>
+    ) -> SubscriberResult<(Vec<JoinHandle<()>>, LeaderSchedule)>
     where
         PublicKey: VerifyingKey,
         State: ExecutionState + Send + Sync + 'static,
@@ -356,6 +362,12 @@ impl PrimaryNodeInner {
             .recovered_consensus_output
             .inc_by(num_sub_dags);
 
+        // TODO: restore the LeaderSchedule when recovering from storage to ensure that the correct one
+        // will be used
+        // Using a LeaderSwapTable::default() will make the leader schedule algorithm work as originally -
+        // no swaps will happen if we don't update them.
+        let leader_schedule = LeaderSchedule::new(committee.clone(), LeaderSwapTable::default());
+
         // Spawn the consensus core who only sequences transactions.
         let ordering_engine = Bullshark::new(
             committee.clone(),
@@ -363,6 +375,7 @@ impl PrimaryNodeInner {
             protocol_config.clone(),
             consensus_metrics.clone(),
             Self::CONSENSUS_SCHEDULE_CHANGE_SUB_DAGS,
+            leader_schedule.clone(),
         );
         let consensus_handles = Consensus::spawn(
             committee.clone(),
@@ -393,10 +406,12 @@ impl PrimaryNodeInner {
             restored_consensus_output,
         )?;
 
-        Ok(executor_handles
+        let handles = executor_handles
             .into_iter()
             .chain(std::iter::once(consensus_handles))
-            .collect())
+            .collect();
+
+        Ok((handles, leader_schedule))
     }
 }
 

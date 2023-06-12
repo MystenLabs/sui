@@ -5896,6 +5896,7 @@ dependencies = [
  "narwhal-storage",
  "narwhal-test-utils",
  "narwhal-types",
+ "parking_lot 0.12.1",
  "pprof",
  "prometheus",
  "rand 0.8.5",

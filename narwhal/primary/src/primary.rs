@@ -27,7 +27,7 @@ use anemo_tower::{
 };
 use async_trait::async_trait;
 use config::{Authority, AuthorityIdentifier, Committee, Parameters, WorkerCache};
-use consensus::consensus::ConsensusRound;
+use consensus::consensus::{ConsensusRound, LeaderSchedule};
 use consensus::dag::Dag;
 use crypto::traits::EncodeDecodeBase64;
 use crypto::{KeyPair, NetworkKeyPair, NetworkPublicKey, Signature};
@@ -115,6 +115,7 @@ impl Primary {
         tx_shutdown: &mut PreSubscribedBroadcastSender,
         tx_committed_certificates: Sender<(Round, Vec<Certificate>)>,
         registry: &Registry,
+        leader_schedule: LeaderSchedule,
     ) -> Vec<JoinHandle<()>> {
         // Write the parameters to the logs.
         parameters.tracing();
@@ -501,6 +502,7 @@ impl Primary {
             tx_narwhal_round_updates,
             rx_committed_own_headers,
             node_metrics,
+            leader_schedule,
         );
 
         let mut handles = vec![

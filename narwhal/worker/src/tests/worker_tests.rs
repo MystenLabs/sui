@@ -6,7 +6,7 @@ use crate::LocalNarwhalClient;
 use crate::{metrics::initialise_metrics, TrivialTransactionValidator};
 use async_trait::async_trait;
 use bytes::Bytes;
-use consensus::consensus::ConsensusRound;
+use consensus::consensus::{ConsensusRound, LeaderSchedule, LeaderSwapTable};
 use consensus::{dag::Dag, metrics::ConsensusMetrics};
 use fastcrypto::{
     encoding::{Encoding, Hex},
@@ -434,6 +434,7 @@ async fn get_network_peers_from_admin_server() {
         &mut tx_shutdown,
         tx_feedback,
         &Registry::new(),
+        LeaderSchedule::new(committee.clone(), LeaderSwapTable::default()),
     );
 
     // Wait for tasks to start
@@ -559,6 +560,7 @@ async fn get_network_peers_from_admin_server() {
         &mut tx_shutdown_2,
         tx_feedback_2,
         &Registry::new(),
+        LeaderSchedule::new(committee.clone(), LeaderSwapTable::default()),
     );
 
     // Wait for tasks to start

@@ -11,12 +11,12 @@ use std::num::NonZeroUsize;
 use std::sync::Arc;
 use storage::NodeStorage;
 use telemetry_subscribers::TelemetryGuards;
-use test_utils::latest_protocol_version;
+use test_utils::{latest_protocol_version, mock_certificate};
 use test_utils::{temp_dir, CommitteeFixture};
 use tokio::sync::watch;
 
 use crate::bullshark::Bullshark;
-use crate::consensus::{ConsensusRound, LeaderSwapTable};
+use crate::consensus::{ConsensusRound, Dag, LeaderSchedule, LeaderSwapTable};
 use crate::consensus_utils::NUM_SUB_DAGS_PER_SCHEDULE;
 use crate::metrics::ConsensusMetrics;
 use crate::Consensus;
@@ -74,12 +74,14 @@ async fn test_consensus_recovery_with_bullshark() {
 
     let gc_depth = 50;
     let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
+    let leader_schedule = LeaderSchedule::new(committee.clone(), LeaderSwapTable::default());
     let bullshark = Bullshark::new(
         committee.clone(),
         consensus_store.clone(),
         latest_protocol_version(),
         metrics.clone(),
         NUM_SUB_DAGS_PER_SCHEDULE,
+        leader_schedule.clone(),
     );
 
     let consensus_handle = Consensus::spawn(
@@ -145,7 +147,7 @@ async fn test_consensus_recovery_with_bullshark() {
         let last_round = *last_committed.get(&id).unwrap();
 
         // For the leader of round 6 we expect to have last committed round of 6.
-        if id == Bullshark::leader_authority(&committee, 6).id() {
+        if id == leader_schedule.leader(6).id() {
             assert_eq!(last_round, 6);
         } else {
             // For the others should be 5.
@@ -176,6 +178,7 @@ async fn test_consensus_recovery_with_bullshark() {
         latest_protocol_version(),
         metrics.clone(),
         NUM_SUB_DAGS_PER_SCHEDULE,
+        LeaderSchedule::new(committee.clone(), LeaderSwapTable::default()),
     );
 
     let consensus_handle = Consensus::spawn(
@@ -246,6 +249,7 @@ async fn test_consensus_recovery_with_bullshark() {
         latest_protocol_version(),
         metrics.clone(),
         NUM_SUB_DAGS_PER_SCHEDULE,
+        LeaderSchedule::new(committee.clone(), LeaderSwapTable::default()),
     );
 
     let _consensus_handle = Consensus::spawn(
@@ -331,7 +335,7 @@ async fn test_leader_swap_table() {
         scores.add_score(*id, score as u64);
     }
 
-    let table = LeaderSwapTable::new(&committee, 2, scores);
+    let table = LeaderSwapTable::new(&committee, 2, &scores);
 
     // Only one bad authority should be calculated since all have equal stake
     assert_eq!(table.bad_nodes.len(), 1);
@@ -366,12 +370,12 @@ async fn test_leader_swap_table() {
     }
 
     // We expect the first 3 authorities (f) to be amongst the bad nodes
-    let table = LeaderSwapTable::new(&committee, 2, scores);
+    let table = LeaderSwapTable::new(&committee, 2, &scores);
 
     assert_eq!(table.bad_nodes.len(), 3);
-    assert!(table.bad_nodes.contains(&authority_ids[0]));
-    assert!(table.bad_nodes.contains(&authority_ids[1]));
-    assert!(table.bad_nodes.contains(&authority_ids[2]));
+    assert!(table.bad_nodes.contains_key(&authority_ids[0]));
+    assert!(table.bad_nodes.contains_key(&authority_ids[1]));
+    assert!(table.bad_nodes.contains_key(&authority_ids[2]));
 
     // now first three should be swapped, whereas the others should not return anything
     for (index, id) in authority_ids.iter().enumerate() {
@@ -384,6 +388,70 @@ async fn test_leader_swap_table() {
             assert!(table.swap(id, index as Round).is_none());
         }
     }
+}
+
+#[tokio::test]
+async fn test_leader_schedule() {
+    // GIVEN
+    let fixture = CommitteeFixture::builder().build();
+    let committee = fixture.committee();
+
+    // the authority ids
+    let authority_ids: Vec<AuthorityIdentifier> = fixture.authorities().map(|a| a.id()).collect();
+
+    // Create a leader schedule with a default swap table, so no authority will be swapped.
+    let schedule = LeaderSchedule::new(committee.clone(), LeaderSwapTable::default());
+
+    // Call the leader for round 2. It should give us the validator of position 0
+    let original_leader = authority_ids[0];
+    let leader_2 = schedule.leader(2);
+
+    assert_eq!(leader_2.id(), original_leader);
+
+    // Now update the scores to consider the authority of position 0 as slow
+    let mut scores = ReputationScores::new(&committee);
+    scores.final_of_schedule = true;
+    for (score, id) in authority_ids.iter().enumerate() {
+        scores.add_score(*id, score as u64);
+    }
+
+    // Update the schedule
+    let table = LeaderSwapTable::new(&committee, 2, &scores);
+    schedule.update_leader_swap_table(table.clone());
+
+    // Now call the leader for round 2 again. It should be swapped with another node
+    let leader_2 = schedule.leader(2);
+
+    // The returned leader should not be the one of position 0
+    assert_ne!(leader_2.id(), original_leader);
+
+    // The returned leader should be the one returned by the swap table when using the
+    let swapped_leader = table.swap(&original_leader, 2).unwrap().id();
+    assert_eq!(leader_2.id(), table.swap(&original_leader, 2).unwrap().id());
+
+    // Now create an empty DAG
+    let mut dag = Dag::new();
+
+    // Now try to retrieve the leader's certificate
+    let (leader_authority, leader_certificate) = schedule.leader_certificate(2, &dag);
+    assert_eq!(leader_authority.id(), swapped_leader);
+    assert!(leader_certificate.is_none());
+
+    // Populate the leader's certificate and try again
+    let (digest, certificate) = mock_certificate(
+        &committee,
+        &latest_protocol_version(),
+        leader_authority.id(),
+        2,
+        BTreeSet::new(),
+    );
+    dag.entry(2)
+        .or_default()
+        .insert(leader_authority.id(), (digest, certificate.clone()));
+
+    let (leader_authority, leader_certificate_result) = schedule.leader_certificate(2, &dag);
+    assert_eq!(leader_authority.id(), swapped_leader);
+    assert_eq!(certificate, leader_certificate_result.unwrap().clone());
 }
 
 fn setup_tracing() -> TelemetryGuards {
