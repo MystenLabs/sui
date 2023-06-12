@@ -9,6 +9,8 @@ import {
   SuiObjectResponse,
   getObjectFields,
   getObjectId,
+  getObjectVersion,
+  isValidSuiAddress,
 } from '@mysten/sui.js';
 import {
   attachListingsAndPrices,
@@ -86,7 +88,7 @@ export async function getOwnedKiosks(
     pagination?: PaginationArguments<string>;
   },
 ): Promise<OwnedKiosks> {
-  if (!address)
+  if (!isValidSuiAddress(address))
     return {
       nextCursor: null,
       hasNextPage: false,
@@ -97,7 +99,7 @@ export async function getOwnedKiosks(
   // fetch owned kiosk caps, paginated.
   const { data, hasNextPage, nextCursor } = await provider.getOwnedObjects({
     owner: address,
-    filter: { StructType: `${KIOSK_OWNER_CAP}` },
+    filter: { StructType: KIOSK_OWNER_CAP },
     options: {
       showContent: true,
     },
@@ -113,6 +115,8 @@ export async function getOwnedKiosks(
     nextCursor,
     hasNextPage,
     kioskOwnerCaps: data.map((x, idx) => ({
+      digest: x?.data?.digest || '',
+      version: getObjectVersion(x),
       objectId: getObjectId(x),
       kioskId: kioskIdList[idx],
     })),

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import {
+  ObjectDigest,
   ObjectId,
   ObjectType,
   PaginatedObjectsResponse,
@@ -133,4 +134,6 @@ export type OwnedKiosks = {
 export type KioskOwnerCap = {
   objectId: ObjectId;
   kioskId: ObjectId;
+  digest: ObjectDigest;
+  version: number | string | undefined;
 };
