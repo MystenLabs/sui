@@ -1828,7 +1828,7 @@ where
         } else {
             None
         };
-        let mut readopts = ReadOptions::default();
+        let mut readopts = self.opts.readopts();
         if let Some(lower_bound) = lower_bound {
             let key_buf = be_fix_int_ser(&lower_bound).unwrap();
             readopts.set_iterate_lower_bound(key_buf);
@@ -1874,7 +1874,7 @@ where
         } else {
             None
         };
-        let mut readopts = ReadOptions::default();
+        let mut readopts = self.opts.readopts();
 
         let lower_bound = range.start_bound();
         let upper_bound = range.end_bound();
