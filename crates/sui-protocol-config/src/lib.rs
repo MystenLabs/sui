@@ -10,7 +10,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 12;
+const MAX_PROTOCOL_VERSION: u64 = 13;
 
 // Record history of protocol version allocations here:
 //
@@ -40,7 +40,8 @@ const MAX_PROTOCOL_VERSION: u64 = 12;
 // Version 12: Changes to deepbook in framework to add API for querying marketplace.
 //             Change NW Batch to use versioned metadata field.
 //             Changes to sui-system package to add PTB-friendly unstake function, and minor cleanup.
-
+// Version 13: System package change deprecating `0xdee9::clob` and `0xdee9::custodian`, replaced by
+//             `0xdee9::clob_v2` and `0xdee9::custodian_v2`.
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
 
@@ -1185,6 +1186,7 @@ impl ProtocolConfig {
                 }
                 cfg
             }
+            13 => Self::get_for_version_impl(version - 1, chain),
             // Use this template when making changes:
             //
             //     // modify an existing constant.
