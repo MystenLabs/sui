@@ -1,20 +1,34 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::env;
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 use thiserror::Error;
 use toml::value::Value;
+use toml_edit::{Document, Item};
 
 use crate::args::Args;
+use crate::path::{self, deep_copy, normalize_path, path_relative_to, shortest_new_prefix};
 
 /// Description of where packages should be copied to, what their new names should be, and whether
 /// they should be added to the `workspace` `members` or `exclude` fields.
 #[derive(Debug)]
-pub(crate) struct CutPlan(BTreeMap<String, CutPackage>);
+pub(crate) struct CutPlan {
+    /// Root of the repository, where the `Cargo.toml` containing the `workspace` configuration is
+    /// found.
+    root: PathBuf,
+
+    /// New directories that need to be created.  Used to clean-up copied packages on roll-back.  If
+    /// multiple nested directories must be created, only contains their shortest common prefix.
+    directories: BTreeSet<PathBuf>,
+
+    /// Mapping from the names of existing packages to be cut, to the details of where they will be
+    /// copied to.
+    packages: BTreeMap<String, CutPackage>,
+}
 
 /// Details for an individual copied package in the feature being cut.
 #[derive(Debug, PartialEq, Eq)]
@@ -60,11 +74,23 @@ pub(crate) enum Error {
     #[error("Packages '{0}' and '{1}' map to the same cut package path")]
     PackageConflictPath(String, String),
 
+    #[error("Cutting package '{0}' will overwrite existing path: {}", .1.display())]
+    ExistingPackage(String, PathBuf),
+
     #[error("Expected '{0}' field to be an array of strings")]
     NotAStringArray(&'static str),
 
+    #[error("Cannot represent path as a TOML string: {}", .0.display())]
+    PathToTomlStr(PathBuf),
+
+    #[error("Path Error: {0}")]
+    Path(#[from] path::Error),
+
     #[error("TOML Parsing Error: {0}")]
     Toml(#[from] toml::de::Error),
+
+    #[error("TOML Editing Error: {0}")]
+    TomlEdit(#[from] toml_edit::TomlError),
 
     #[error("IO Error: {0}")]
     IO(#[from] io::Error),
@@ -73,7 +99,9 @@ pub(crate) enum Error {
 type Result<T> = std::result::Result<T, Error>;
 
 impl CutPlan {
-    /// Scan `args.directories` looking for `args.packages` to produce a new plan.
+    /// Scan `args.directories` looking for `args.packages` to produce a new plan.  The resulting
+    /// plan is guaranteed not to contain any duplicate packages (by name or path), or overwrite any
+    /// existing packages.  Returns an error if it's not possible to construct such a plan.
     pub(crate) fn discover(args: Args) -> Result<Self> {
         let cwd = env::current_dir()?;
 
@@ -81,26 +109,50 @@ impl CutPlan {
             return Err(Error::NoRoot);
         };
 
+        let root = fs::canonicalize(root)?;
+
         struct Walker {
             feature: String,
             ws: Workspace,
             planned_packages: BTreeMap<String, CutPackage>,
             pending_packages: HashSet<String>,
+            make_directories: BTreeSet<PathBuf>,
         }
 
         impl Walker {
-            fn walk(&mut self, src: &Path, dst: &Path, suffix: &Option<String>) -> Result<()> {
+            fn walk(
+                &mut self,
+                src: &Path,
+                dst: &Path,
+                suffix: &Option<String>,
+                mut fresh_parent: bool,
+            ) -> Result<()> {
                 self.try_insert_package(src, dst, suffix)?;
+
+                // Figure out whether the parent directory was already created, or whether this
+                // directory needs to be created.
+                if !fresh_parent && !dst.exists() {
+                    self.make_directories.insert(dst.to_owned());
+                    fresh_parent = true;
+                }
 
                 for entry in fs::read_dir(src)? {
                     let entry = entry?;
-                    if entry.file_type()?.is_dir() {
-                        self.walk(
-                            &src.join(entry.file_name()),
-                            &dst.join(entry.file_name()),
-                            suffix,
-                        )?;
+                    if !entry.file_type()?.is_dir() {
+                        continue;
                     }
+
+                    // Skip `target` directories.
+                    if entry.file_name() == "target" {
+                        continue;
+                    }
+
+                    self.walk(
+                        &src.join(entry.file_name()),
+                        &dst.join(entry.file_name()),
+                        suffix,
+                        fresh_parent,
+                    )?;
                 }
 
                 Ok(())
@@ -131,33 +183,55 @@ impl CutPlan {
                 dst_name.push('-');
                 dst_name.push_str(&self.feature);
 
+                let dst_path = dst.to_path_buf();
+                if dst_path.exists() {
+                    return Err(Error::ExistingPackage(pkg_name, dst_path));
+                }
+
                 self.planned_packages.insert(
                     pkg_name,
                     CutPackage {
-                        dst_name: dst_name.clone(),
+                        dst_name,
+                        dst_path,
                         src_path: src.to_path_buf(),
-                        dst_path: dst.to_path_buf(),
                         ws_state: self.ws.state(src)?,
                     },
                 );
 
                 Ok(())
             }
-
-            fn finish(self) -> BTreeMap<String, CutPackage> {
-                self.planned_packages
-            }
         }
 
         let mut walker = Walker {
             feature: args.feature,
-            ws: Workspace::read(root)?,
+            ws: Workspace::read(&root)?,
             planned_packages: BTreeMap::new(),
             pending_packages: args.packages.into_iter().collect(),
+            make_directories: BTreeSet::new(),
         };
 
         for dir in args.directories {
-            walker.walk(&fs::canonicalize(dir.src)?, &dir.dst, &dir.suffix)?;
+            // Remove redundant `..` components from the destination path to avoid creating
+            // directories we may not need at the destination.  E.g. a destination path of
+            //
+            //   foo/../bar
+            //
+            // Should only create the directory `bar`, not also the directory `foo`.
+            let dst_path = normalize_path(&dir.dst)?;
+
+            // Check whether any parent directories need to be made as part of this iteration of the
+            // cut.
+            let fresh_parent = shortest_new_prefix(&dst_path).map_or(false, |pfx| {
+                walker.make_directories.insert(pfx);
+                true
+            });
+
+            walker.walk(
+                &fs::canonicalize(dir.src)?,
+                &dst_path,
+                &dir.suffix,
+                fresh_parent,
+            )?;
         }
 
         // Emit warnings for packages that were not found
@@ -165,7 +239,11 @@ impl CutPlan {
             eprintln!("WARNING: Package '{pending}' not found during scan.");
         }
 
-        let packages = walker.finish();
+        let Walker {
+            planned_packages: packages,
+            make_directories: directories,
+            ..
+        } = walker;
 
         //  Check for conflicts in the resulting plan
         let mut rev_name = HashMap::new();
@@ -181,7 +259,211 @@ impl CutPlan {
             }
         }
 
-        Ok(Self(packages))
+        Ok(Self {
+            root,
+            packages,
+            directories,
+        })
+    }
+
+    /// Copy the packages according to this plan.  On success, all the packages will be copied to
+    /// their destinations, and their dependencies will be fixed up.  On failure, pending changes
+    /// are rolled back.
+    pub(crate) fn execute(&self) -> Result<()> {
+        self.execute_().map_err(|e| {
+            self.rollback();
+            e
+        })
+    }
+    fn execute_(&self) -> Result<()> {
+        for package in self.packages.values() {
+            self.copy_package(package)?
+        }
+
+        for package in self.packages.values() {
+            self.update_package(package)?
+        }
+
+        // Update the workspace at the end, so that if there is any problem before that, rollback
+        // will leave the state clean.
+        self.update_workspace()
+    }
+
+    /// Copy the contents of `package` from its `src_path` to its `dst_path`, unchanged.
+    fn copy_package(&self, package: &CutPackage) -> Result<()> {
+        // Copy everything in the directory as-is, except for any "target" directories
+        deep_copy(&package.src_path, &package.dst_path, &mut |src| {
+            src.is_file() || !src.ends_with("target")
+        })?;
+
+        Ok(())
+    }
+
+    /// Fix the contents of the copied package's `Cargo.toml`: name altered to match
+    /// `package.dst_name` and local relative-path-based dependencies are updated to account for the
+    /// copied package's new location.  Assumes that all copied files exist (but may not contain
+    /// up-to-date information).
+    fn update_package(&self, package: &CutPackage) -> Result<()> {
+        let path = package.dst_path.join("Cargo.toml");
+        let mut toml = fs::read_to_string(&path)?.parse::<Document>()?;
+
+        // Update the package name
+        toml["package"]["name"] = toml_edit::value(&package.dst_name);
+
+        // Fix-up references to any kind of dependency (dependencies, dev-dependencies,
+        // build-dependencies, target-specific dependencies).
+        self.update_dependencies(&package.src_path, &package.dst_path, toml.as_table_mut())?;
+
+        if let Some(targets) = toml.get_mut("target").and_then(Item::as_table_like_mut) {
+            for (_, target) in targets.iter_mut() {
+                if let Some(target) = target.as_table_like_mut() {
+                    self.update_dependencies(&package.src_path, &package.dst_path, target)?;
+                };
+            }
+        };
+
+        fs::write(&path, toml.to_string())?;
+        Ok(())
+    }
+
+    /// Find all dependency tables in `table`, part of a manifest at `dst_path/Cargo.toml`
+    /// (originally at `src_path/Cargo.toml`), and fix (relative) paths to account for the change in
+    /// the package's location.
+    fn update_dependencies(
+        &self,
+        src_path: impl AsRef<Path>,
+        dst_path: impl AsRef<Path>,
+        table: &mut dyn toml_edit::TableLike,
+    ) -> Result<()> {
+        for field in ["dependencies", "dev-dependencies", "build-dependencies"] {
+            let Some(deps) = table.get_mut(field).and_then(Item::as_table_like_mut) else {
+                continue
+            };
+
+            for (dep_name, dep) in deps.iter_mut() {
+                self.update_dependency(&src_path, &dst_path, dep_name, dep)?
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Update an individual dependency from a copied package manifest.  Only local path-based
+    /// dependencies are updated:
+    ///
+    ///     Dep = { path = "..." }
+    ///
+    /// If `Dep` is another package to be copied as part of this plan, the path is updated to the
+    /// location it is copied to.  Otherwise, its location (a relative path) is updated to account
+    /// for the fact that the copied package is at a new location.
+    fn update_dependency(
+        &self,
+        src_path: impl AsRef<Path>,
+        dst_path: impl AsRef<Path>,
+        dep_name: toml_edit::KeyMut,
+        dep: &mut Item,
+    ) -> Result<()> {
+        let Some(dep) = dep.as_table_like_mut() else {
+            return Ok(())
+        };
+
+        // If the dep has an explicit package name, use that as the key for finding package
+        // information, rather than the field name of the dep.
+        let dep_pkg = self.packages.get(
+            dep.get("package")
+                .and_then(Item::as_str)
+                .unwrap_or_else(|| dep_name.get()),
+        );
+
+        // Only path-based dependencies need to be updated.
+        let Some(path) = dep.get_mut("path") else {
+            return Ok(())
+        };
+
+        if let Some(dep_pkg) = dep_pkg {
+            // Dependency is for a package that was cut, redirect to the cut package.
+            *path = toml_edit::value(path_to_toml_value(dst_path, &dep_pkg.dst_path)?);
+            if dep_name.get() != dep_pkg.dst_name {
+                dep.insert("package", toml_edit::value(&dep_pkg.dst_name));
+            }
+        } else if let Some(rel_dep_path) = path.as_str() {
+            // Dependency is for an existing (non-cut) local package, fix up its (relative) path to
+            // now be relative to its cut location.
+            let dep_path = src_path.as_ref().join(rel_dep_path);
+            *path = toml_edit::value(path_to_toml_value(dst_path, dep_path)?);
+        }
+
+        Ok(())
+    }
+
+    /// Add entries to the `members` and `exclude` arrays in the root manifest's `workspace` table.
+    fn update_workspace(&self) -> Result<()> {
+        let path = self.root.join("Cargo.toml");
+        if !path.exists() {
+            return Err(Error::NoWorkspace(path));
+        }
+
+        let mut toml = fs::read_to_string(&path)?.parse::<Document>()?;
+        for package in self.packages.values() {
+            match package.ws_state {
+                WorkspaceState::Unknown => {
+                    continue;
+                }
+
+                WorkspaceState::Member => {
+                    // This assumes that there is a "workspace.members" section, which is a fair
+                    // assumption in our repo.
+                    let Some(members) = toml["workspace"]["members"].as_array_mut() else {
+                        return Err(Error::NotAStringArray("members"));
+                    };
+
+                    let pkg_path = path_to_toml_value(&self.root, &package.dst_path)?;
+                    members.push(pkg_path);
+                }
+
+                WorkspaceState::Exclude => {
+                    // This assumes that there is a "workspace.exclude" section, which is a fair
+                    // assumption in our repo.
+                    let Some(exclude) = toml["workspace"]["exclude"].as_array_mut() else {
+                        return Err(Error::NotAStringArray("exclude"));
+                    };
+
+                    let pkg_path = path_to_toml_value(&self.root, &package.dst_path)?;
+                    exclude.push(pkg_path);
+                }
+            };
+        }
+
+        if let Some(members) = toml
+            .get_mut("workspace")
+            .and_then(|w| w.get_mut("members"))
+            .and_then(|m| m.as_array_mut())
+        {
+            format_array_of_strings(members)
+        }
+
+        if let Some(exclude) = toml
+            .get_mut("workspace")
+            .and_then(|w| w.get_mut("exclude"))
+            .and_then(|m| m.as_array_mut())
+        {
+            format_array_of_strings(exclude)
+        }
+
+        fs::write(&path, toml.to_string())?;
+        Ok(())
+    }
+
+    /// Attempt to clean-up the partial results of executing a plan, by deleting the directories
+    /// that the plan would have created.  Swallows and prints errors to make sure as much clean-up
+    /// as possible is done -- this function is typically called when some other error has occurred,
+    /// so it's unclear what it's starting state would be.
+    fn rollback(&self) {
+        for dir in &self.directories {
+            if let Err(e) = fs::remove_dir_all(dir) {
+                eprintln!("Rollback Error deleting {}: {e}", dir.display());
+            }
+        }
     }
 }
 
@@ -265,6 +547,42 @@ fn toml_path_array_to_set<P: AsRef<Path>>(
     }
 
     Ok(set)
+}
+
+/// Represent `path` as a TOML value, by first describing it as a relative path (relative to
+/// `root`), and then converting it to a String.  Fails if either `root` or `path` are not real
+/// paths (cannot be canonicalized), or the resulting relative path cannot be represented as a
+/// String.
+fn path_to_toml_value<P, Q>(root: P, path: Q) -> Result<toml_edit::Value>
+where
+    P: AsRef<Path>,
+    Q: AsRef<Path>,
+{
+    let path = path_relative_to(root, path)?;
+    let Some(repr) = path.to_str() else {
+        return Err(Error::PathToTomlStr(path));
+    };
+
+    Ok(repr.into())
+}
+
+/// Format a TOML array of strings: Splits elements over multiple lines, indents them, sorts them,
+/// and adds a trailing comma.
+fn format_array_of_strings(array: &mut toml_edit::Array) {
+    let mut items: Vec<_> = array.iter().cloned().collect();
+    items.sort_by(|i, j| i.as_str().cmp(&j.as_str()));
+
+    array.set_trailing_comma(true);
+    array.set_trailing("\n");
+    array.clear();
+
+    for mut item in items {
+        let decor = item.decor_mut();
+        decor.set_prefix("\n    ");
+        decor.set_suffix("");
+
+        array.push_formatted(item);
+    }
 }
 
 fn package_name<P: AsRef<Path>>(path: P) -> Result<Option<String>> {
@@ -443,39 +761,116 @@ mod tests {
         .unwrap();
 
         expect![[r#"
-            CutPlan(
-                {
+            CutPlan {
+                root: "$PATH",
+                directories: {
+                    "$PATH/sui-execution/cut-cut",
+                    "$PATH/sui-execution/cut-move-core",
+                    "$PATH/sui-execution/exec-cut",
+                },
+                packages: {
                     "move-core-types": CutPackage {
                         dst_name: "move-core-types-feature",
                         src_path: "$PATH/external-crates/move/move-core/types",
-                        dst_path: "$PATH/sui-execution/cut/../cut-move-core/types",
+                        dst_path: "$PATH/sui-execution/cut-move-core/types",
                         ws_state: Exclude,
                     },
                     "sui-adapter-latest": CutPackage {
                         dst_name: "sui-adapter-feature",
                         src_path: "$PATH/sui-execution/latest/sui-adapter",
-                        dst_path: "$PATH/sui-execution/cut/../exec-cut/sui-adapter",
+                        dst_path: "$PATH/sui-execution/exec-cut/sui-adapter",
                         ws_state: Member,
                     },
                     "sui-execution-cut": CutPackage {
                         dst_name: "sui-execution-cut-feature",
                         src_path: "$PATH/sui-execution/cut",
-                        dst_path: "$PATH/sui-execution/cut/../cut-cut",
+                        dst_path: "$PATH/sui-execution/cut-cut",
                         ws_state: Member,
                     },
                     "sui-verifier-latest": CutPackage {
                         dst_name: "sui-verifier-feature",
                         src_path: "$PATH/sui-execution/latest/sui-verifier",
-                        dst_path: "$PATH/sui-execution/cut/../exec-cut/sui-verifier",
+                        dst_path: "$PATH/sui-execution/exec-cut/sui-verifier",
                         ws_state: Member,
                     },
                 },
-            )"#]]
+            }"#]]
         .assert_eq(&debug_for_test(&plan));
     }
 
     #[test]
-    fn test_cut_plan_worksplace_conflict() {
+    fn test_cut_plan_discover_new_top_level_destination() {
+        let cut = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+
+        // Create a plan where all the new packages are gathered into a single top-level destination
+        // directory, and expect that the resulting plan's `directories` only contains one entry.
+        let plan = CutPlan::discover(Args {
+            feature: "feature".to_string(),
+            root: None,
+            directories: vec![
+                Directory {
+                    src: cut.join("../latest"),
+                    dst: cut.join("../feature"),
+                    suffix: Some("-latest".to_string()),
+                },
+                Directory {
+                    src: cut.clone(),
+                    dst: cut.join("../feature/cut"),
+                    suffix: None,
+                },
+                Directory {
+                    src: cut.join("../../external-crates/move"),
+                    dst: cut.join("../feature/move"),
+                    suffix: None,
+                },
+            ],
+            packages: vec![
+                "move-core-types".to_string(),
+                "sui-adapter-latest".to_string(),
+                "sui-execution-cut".to_string(),
+                "sui-verifier-latest".to_string(),
+            ],
+        })
+        .unwrap();
+
+        expect![[r#"
+            CutPlan {
+                root: "$PATH",
+                directories: {
+                    "$PATH/sui-execution/feature",
+                },
+                packages: {
+                    "move-core-types": CutPackage {
+                        dst_name: "move-core-types-feature",
+                        src_path: "$PATH/external-crates/move/move-core/types",
+                        dst_path: "$PATH/sui-execution/feature/move/move-core/types",
+                        ws_state: Exclude,
+                    },
+                    "sui-adapter-latest": CutPackage {
+                        dst_name: "sui-adapter-feature",
+                        src_path: "$PATH/sui-execution/latest/sui-adapter",
+                        dst_path: "$PATH/sui-execution/feature/sui-adapter",
+                        ws_state: Member,
+                    },
+                    "sui-execution-cut": CutPackage {
+                        dst_name: "sui-execution-cut-feature",
+                        src_path: "$PATH/sui-execution/cut",
+                        dst_path: "$PATH/sui-execution/feature/cut",
+                        ws_state: Member,
+                    },
+                    "sui-verifier-latest": CutPackage {
+                        dst_name: "sui-verifier-feature",
+                        src_path: "$PATH/sui-execution/latest/sui-verifier",
+                        dst_path: "$PATH/sui-execution/feature/sui-verifier",
+                        ws_state: Member,
+                    },
+                },
+            }"#]]
+        .assert_eq(&debug_for_test(&plan));
+    }
+
+    #[test]
+    fn test_cut_plan_workspace_conflict() {
         let tmp = tempdir().unwrap();
         fs::create_dir(tmp.path().join("foo")).unwrap();
 
@@ -510,8 +905,10 @@ mod tests {
         })
         .unwrap_err();
 
-        expect!["Both member and exclude of [workspace]: $PATH/foo"]
-            .assert_eq(&scrub_path(&format!("{}", err), tmp.path()));
+        expect!["Both member and exclude of [workspace]: $PATH/foo"].assert_eq(&scrub_path(
+            &format!("{}", err),
+            fs::canonicalize(tmp.path()).unwrap(),
+        ));
     }
 
     #[test]
@@ -554,7 +951,7 @@ mod tests {
         .unwrap_err();
 
         expect!["Packages 'bar-latest' and 'bar' map to the same cut package name"]
-            .assert_eq(&scrub_path(&format!("{}", err), tmp.path()));
+            .assert_eq(&format!("{}", err));
     }
 
     #[test]
@@ -597,22 +994,229 @@ mod tests {
         .unwrap_err();
 
         expect!["Packages 'foo-bar' and 'baz-bar' map to the same cut package path"]
+            .assert_eq(&format!("{}", err));
+    }
+
+    #[test]
+    fn test_cut_plan_existing_package() {
+        let tmp = tempdir().unwrap();
+        fs::create_dir_all(tmp.path().join("foo/bar")).unwrap();
+        fs::create_dir_all(tmp.path().join("baz/bar")).unwrap();
+
+        fs::write(tmp.path().join("Cargo.toml"), "[workspace]").unwrap();
+
+        fs::write(
+            tmp.path().join("foo/bar/Cargo.toml"),
+            r#"package.name = "foo-bar""#,
+        )
+        .unwrap();
+
+        fs::write(
+            tmp.path().join("baz/bar/Cargo.toml"),
+            r#"package.name = "baz-bar""#,
+        )
+        .unwrap();
+
+        let err = CutPlan::discover(Args {
+            feature: "feature".to_string(),
+            root: Some(tmp.path().to_owned()),
+            directories: vec![Directory {
+                src: tmp.path().join("foo"),
+                dst: tmp.path().join("baz"),
+                suffix: None,
+            }],
+            packages: vec!["foo-bar".to_string()],
+        })
+        .unwrap_err();
+
+        expect!["Cutting package 'foo-bar' will overwrite existing path: $PATH/baz/bar"]
             .assert_eq(&scrub_path(&format!("{}", err), tmp.path()));
+    }
+
+    #[test]
+    fn test_cut_plan_execute_and_rollback() {
+        let tmp = tempdir().unwrap();
+        let root = tmp.path().to_owned();
+
+        fs::create_dir_all(root.join("crates/foo/../bar/../baz/../qux/../quy")).unwrap();
+
+        fs::write(
+            root.join("Cargo.toml"),
+            vec![
+                r#"[workspace]"#,
+                r#"members = ["crates/foo"]"#,
+                r#"exclude = ["#,
+                r#"    "crates/bar","#,
+                r#"    "crates/qux","#,
+                r#"]"#,
+            ]
+            .join("\n"),
+        )
+        .unwrap();
+
+        fs::write(
+            root.join("crates/foo/Cargo.toml"),
+            r#"package.name = "foo-latest""#,
+        )
+        .unwrap();
+
+        fs::write(
+            root.join("crates/bar/Cargo.toml"),
+            vec![
+                r#"[package]"#,
+                r#"name = "bar""#,
+                r#""#,
+                r#"[dependencies]"#,
+                r#"foo = { path = "../foo", package = "foo-latest" }"#,
+                r#""#,
+                r#"[dev-dependencies]"#,
+                r#"baz = { path = "../baz" }"#,
+                r#"quy = { path = "../quy" }"#,
+            ]
+            .join("\n"),
+        )
+        .unwrap();
+
+        fs::write(
+            root.join("crates/baz/Cargo.toml"),
+            vec![
+                r#"[package]"#,
+                r#"name = "baz""#,
+                r#""#,
+                r#"[dependencies]"#,
+                r#"acme = "1.0.0""#,
+                r#""#,
+                r#"[build-dependencies]"#,
+                r#"bar = { path = "../bar" }"#,
+            ]
+            .join("\n"),
+        )
+        .unwrap();
+
+        fs::write(
+            root.join("crates/qux/Cargo.toml"),
+            vec![
+                r#"[package]"#,
+                r#"name = "qux""#,
+                r#""#,
+                r#"[target.'cfg(unix)'.dependencies]"#,
+                r#"bar = { path = "../bar" }"#,
+                r#""#,
+                r#"[target.'cfg(target_arch = "x86_64")'.build-dependencies]"#,
+                r#"foo = { path = "../foo", package = "foo-latest" }"#,
+            ]
+            .join("\n"),
+        )
+        .unwrap();
+
+        fs::write(
+            root.join("crates/quy/Cargo.toml"),
+            vec![r#"[package]"#, r#"name = "quy""#].join("\n"),
+        )
+        .unwrap();
+
+        let plan = CutPlan::discover(Args {
+            feature: "cut".to_string(),
+            root: Some(tmp.path().to_owned()),
+            directories: vec![Directory {
+                src: root.join("crates"),
+                dst: root.join("cut"),
+                suffix: Some("-latest".to_owned()),
+            }],
+            packages: vec![
+                "foo-latest".to_string(),
+                "bar".to_string(),
+                "baz".to_string(),
+                "qux".to_string(),
+            ],
+        })
+        .unwrap();
+
+        plan.execute().unwrap();
+
+        assert!(!root.join("cut/quy").exists());
+
+        expect![[r#"
+            [workspace]
+            members = [
+                "crates/foo",
+                "cut/foo",
+            ]
+            exclude = [
+                "crates/bar",
+                "crates/qux",
+                "cut/bar",
+                "cut/qux",
+            ]
+
+            ---
+            package.name = "foo-cut"
+
+            ---
+            [package]
+            name = "bar-cut"
+
+            [dependencies]
+            foo = { path = "../foo", package = "foo-cut" }
+
+            [dev-dependencies]
+            baz = { path = "../baz", package = "baz-cut" }
+            quy = { path = "../../crates/quy" }
+
+            ---
+            [package]
+            name = "baz-cut"
+
+            [dependencies]
+            acme = "1.0.0"
+
+            [build-dependencies]
+            bar = { path = "../bar", package = "bar-cut" }
+
+            ---
+            [package]
+            name = "qux-cut"
+
+            [target.'cfg(unix)'.dependencies]
+            bar = { path = "../bar", package = "bar-cut" }
+
+            [target.'cfg(target_arch = "x86_64")'.build-dependencies]
+            foo = { path = "../foo", package = "foo-cut" }
+        "#]]
+        .assert_eq(&read_files([
+            root.join("Cargo.toml"),
+            root.join("cut/foo/Cargo.toml"),
+            root.join("cut/bar/Cargo.toml"),
+            root.join("cut/baz/Cargo.toml"),
+            root.join("cut/qux/Cargo.toml"),
+        ]));
+
+        plan.rollback();
+        assert!(!root.join("cut").exists())
     }
 
     /// Print with pretty-printed debug formatting, with repo paths scrubbed out for consistency.
     fn debug_for_test<T: fmt::Debug>(x: &T) -> String {
-        scrub_path(&format!("{x:#?}"), repo_root())
+        scrub_path(&format!("{x:#?}"), fs::canonicalize(repo_root()).unwrap())
     }
 
     /// Display with repo paths scrubbed out for consistency.
     fn display_for_test<T: fmt::Display>(x: &T) -> String {
-        scrub_path(&format!("{x}"), repo_root())
+        scrub_path(&format!("{x}"), fs::canonicalize(repo_root()).unwrap())
+    }
+
+    /// Read multiple files into one string.
+    fn read_files<P: AsRef<Path>>(paths: impl IntoIterator<Item = P>) -> String {
+        let contents: Vec<_> = paths
+            .into_iter()
+            .map(|p| fs::read_to_string(p).unwrap())
+            .collect();
+
+        contents.join("\n---\n")
     }
 
     fn scrub_path<P: AsRef<Path>>(x: &str, p: P) -> String {
-        let canonical = fs::canonicalize(p).unwrap();
-        let path = canonical.into_os_string().into_string().unwrap();
+        let path = p.as_ref().as_os_str().to_os_string().into_string().unwrap();
         x.replace(&path, "$PATH")
     }
 
