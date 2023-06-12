@@ -36,16 +36,16 @@ export class JsonRpcClient {
     const req = { method, args };
 
     const response = await this.request(method, args);
-    const [err] = validate(response, struct);
 
-    if (err) {
-      console.warn(
-        new RPCValidationError({
+    if (process.env.NODE_ENV === 'test') {
+      const [err] = validate(response, struct);
+      if (err) {
+        throw new RPCValidationError({
           req,
           result: response,
           cause: err,
-        }),
-      );
+        });
+      }
     }
 
     return response;

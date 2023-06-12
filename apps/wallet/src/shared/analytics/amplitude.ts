@@ -13,7 +13,7 @@ export const persistableStorage = new PersistableStorage<UserSession>();
 
 export async function initAmplitude() {
     ampli.load({
-        environment: process.env.NODE_ENV ?? 'development',
+        environment: IS_PROD_ENV ? 'production' : 'development',
         // Flip this if you'd like to test Amplitude locally
         disabled: !IS_PROD_ENV,
         client: {
