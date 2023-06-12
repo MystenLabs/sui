@@ -35,7 +35,7 @@ use mysten_metrics::{spawn_monitored_task, GaugeGuard};
 use std::fmt::Write;
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::messages_safe_client::PlainTransactionInfoResponse;
-use sui_types::transaction::{Transaction, VerifiedCertificate};
+use sui_types::transaction::{CertifiedTransaction, Transaction};
 
 use self::reconfig_observer::ReconfigObserver;
 
@@ -49,7 +49,7 @@ const TX_MAX_RETRY_TIMES: u8 = 10;
 #[derive(Clone)]
 pub struct QuorumDriverTask {
     pub transaction: Transaction,
-    pub tx_cert: Option<VerifiedCertificate>,
+    pub tx_cert: Option<CertifiedTransaction>,
     pub retry_times: u8,
     pub next_retry_after: Instant,
 }
@@ -126,7 +126,7 @@ impl<A: Clone> QuorumDriver<A> {
     async fn enqueue_again_maybe(
         &self,
         transaction: Transaction,
-        tx_cert: Option<VerifiedCertificate>,
+        tx_cert: Option<CertifiedTransaction>,
         old_retry_times: u8,
     ) -> SuiResult<()> {
         if old_retry_times >= self.max_retry_times {
@@ -394,13 +394,13 @@ where
 
     pub(crate) async fn process_certificate(
         &self,
-        certificate: VerifiedCertificate,
+        certificate: CertifiedTransaction,
     ) -> Result<QuorumDriverResponse, Option<QuorumDriverError>> {
         let auth_agg = self.validators.load();
         let _cert_guard = GaugeGuard::acquire(&auth_agg.metrics.inflight_certificates);
         let tx_digest = *certificate.digest();
         let (effects, events, objects) = auth_agg
-            .process_certificate(certificate.clone().into_inner())
+            .process_certificate(certificate.clone())
             .instrument(tracing::debug_span!("aggregator_process_cert", ?tx_digest))
             .await
             .map_err(|agg_err| match agg_err {
@@ -471,7 +471,7 @@ where
                 let result = self
                     .validators
                     .load()
-                    .process_certificate(cert.into_inner())
+                    .process_certificate(cert)
                     .await
                     .tap_ok(|_resp| {
                         debug!(
@@ -491,10 +491,10 @@ where
                 // We only try it once.
                 return Ok(result.is_ok());
             }
-            PlainTransactionInfoResponse::Signed(signed) => signed
-                .verify(&self.clone_committee())?
-                .into_unsigned()
-                .into_inner(),
+            PlainTransactionInfoResponse::Signed(signed) => {
+                signed.verify_committee_sigs_only(&self.clone_committee())?;
+                signed.into_unsigned()
+            }
             PlainTransactionInfoResponse::ExecutedWithoutCert(transaction, _, _) => transaction,
         };
         // Now ask validators to execute this transaction.
@@ -734,7 +734,7 @@ where
         quorum_driver: Arc<QuorumDriver<A>>,
         transaction: Transaction,
         err: Option<QuorumDriverError>,
-        tx_cert: Option<VerifiedCertificate>,
+        tx_cert: Option<CertifiedTransaction>,
         old_retry_times: u8,
         action: &'static str,
     ) {

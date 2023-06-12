@@ -54,7 +54,7 @@ use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemS
 use sui_types::temporary_store::InnerTemporaryStore;
 use sui_types::transaction::{
     CertifiedTransaction, InputObjectKind, InputObjects, SenderSignedData, Transaction,
-    TransactionData, TransactionDataAPI, TransactionKind, VerifiedTransaction,
+    TransactionData, TransactionDataAPI, TransactionKind, VerifiedCertificate, VerifiedTransaction,
 };
 use sui_types::DEEPBOOK_PACKAGE_ID;
 use tracing::info;
@@ -851,15 +851,17 @@ impl LocalExec {
         let mut committee = authority_state.clone_committee_for_testing();
         committee.epoch = executed_epoch;
         let certificate = CertifiedTransaction::new(
-            sender_signed_tx.into_message(),
+            sender_signed_tx.clone().into_message(),
             vec![auth_vote.clone()],
             &committee,
         )
-        .unwrap()
-        .verify(&committee)
         .unwrap();
 
-        let certificate = &VerifiedExecutableTransaction::new_from_certificate(certificate.clone());
+        certificate.verify_committee_sigs_only(&committee).unwrap();
+
+        let certificate = &VerifiedExecutableTransaction::new_from_certificate(
+            VerifiedCertificate::new_unchecked(certificate.clone()),
+        );
 
         let new_tx_digest = certificate.digest();
 

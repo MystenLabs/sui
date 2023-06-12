@@ -232,7 +232,7 @@ async fn execute_owned_on_first_three_authorities(
     do_transaction(&authority_clients[2], txn).await;
     let cert = extract_cert(authority_clients, committee, txn.digest())
         .await
-        .verify(committee)
+        .verify_authenticated(committee, &Default::default())
         .unwrap();
     do_cert(&authority_clients[0], &cert).await;
     do_cert(&authority_clients[1], &cert).await;
@@ -264,7 +264,7 @@ async fn execute_shared_on_first_three_authorities(
     do_transaction(&authority_clients[2], txn).await;
     let cert = extract_cert(authority_clients, committee, txn.digest())
         .await
-        .verify(committee)
+        .verify_authenticated(committee, &Default::default())
         .unwrap();
     do_cert_with_shared_objects(&authority_clients[0].authority_client().state, &cert).await;
     do_cert_with_shared_objects(&authority_clients[1].authority_client().state, &cert).await;
@@ -444,7 +444,7 @@ async fn try_sign_on_first_three_authorities(
     }
     extract_cert(authority_clients, committee, txn.digest())
         .await
-        .verify(committee)
+        .verify_authenticated(committee, &Default::default())
 }
 
 #[tokio::test(flavor = "current_thread", start_paused = true)]

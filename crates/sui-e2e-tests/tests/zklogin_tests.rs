@@ -2,18 +2,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use sui_core::authority_client::AuthorityAPI;
-use sui_macros::sim_test;
 use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::error::{SuiError, SuiResult};
-use sui_types::transaction::VerifiedTransaction;
-use sui_types::utils::make_zklogin_tx;
 use sui_types::utils::{get_zklogin_user_address, make_zklogin_tx, sign_zklogin_tx};
 use test_cluster::TestClusterBuilder;
 
-use sui_core::{authority_aggregator::AuthorityAggregatorBuilder, authority_client::AuthorityAPI};
+use sui_core::authority_client::AuthorityAPI;
 use sui_macros::sim_test;
-use sui_types::object::generate_test_gas_objects;
 
 async fn do_zklogin_test() -> SuiResult {
     let test_cluster = TestClusterBuilder::new().build().await;
@@ -63,7 +58,7 @@ async fn test_zklogin_feature_allow() {
 
 #[sim_test]
 async fn zklogin_end_to_end_test() {
-    let mut test_cluster = TestClusterBuilder::new().build().await.unwrap();
+    let mut test_cluster = TestClusterBuilder::new().build().await;
     let rgp = test_cluster.get_reference_gas_price().await;
     let sender = test_cluster.get_address_0();
 
@@ -98,9 +93,7 @@ async fn zklogin_end_to_end_test() {
 
     let (_, signed_txn, _) = sign_zklogin_tx(txn);
 
-    context
-        .execute_transaction_must_succeed(VerifiedTransaction::new_unchecked(signed_txn))
-        .await;
+    context.execute_transaction_must_succeed(signed_txn).await;
 
     assert!(context
         .get_gas_objects_owned_by_address(zklogin_addr, None)

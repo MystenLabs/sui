@@ -6,7 +6,7 @@ use fastcrypto_zkp::bn254::zk_login::OAuthProvider;
 use once_cell::sync::Lazy;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, hash::Hash, sync::Arc};
+use std::{collections::HashMap, hash::Hash};
 
 // Used in tests or anywhere that fetching up to date JWKs is not possible.
 pub const DEFAULT_JWK_BYTES: &[u8] = r#"{
@@ -106,7 +106,7 @@ fn trim(str: String) -> String {
 
 /// Parse the JWK bytes received from the oauth provider keys endpoint into a map from kid to
 /// OAuthProviderContent.
-pub fn parse_jwks(json_bytes: &[u8]) -> SuiResult<Vec<(String, Arc<OAuthProviderContent>)>> {
+pub fn parse_jwks(json_bytes: &[u8]) -> SuiResult<Vec<(String, OAuthProviderContent)>> {
     let json_str = String::from_utf8_lossy(json_bytes);
     let parsed_list: Result<serde_json::Value, serde_json::Error> = serde_json::from_str(&json_str);
     if let Ok(parsed_list) = parsed_list {
@@ -119,7 +119,7 @@ pub fn parse_jwks(json_bytes: &[u8]) -> SuiResult<Vec<(String, Arc<OAuthProvider
                 if parsed.alg == "RS256" && parsed.my_use == "sig" && parsed.kty == "RSA" {
                     ret.push((
                         parsed.kid.clone(),
-                        Arc::new(OAuthProviderContent::from_reader(parsed)),
+                        OAuthProviderContent::from_reader(parsed),
                     ));
                 }
             }

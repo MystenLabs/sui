@@ -11,9 +11,10 @@ use crate::error::{SuiError, SuiResult};
 use crate::event::Event;
 use crate::execution_status::ExecutionStatus;
 use crate::gas::GasCostSummary;
-use crate::message_envelope::{Envelope, Message, TrustedEnvelope, VerifiedEnvelope};
+use crate::message_envelope::{
+    Envelope, Message, TrustedEnvelope, UnauthenticatedMessage, VerifiedEnvelope,
+};
 use crate::object::Owner;
-use crate::signature::VerifyParams;
 use crate::storage::{DeleteKind, WriteKind};
 use crate::transaction::{Transaction, TransactionDataAPI, VersionedProtocolMessage};
 pub use effects_v1::TransactionEffectsV1;
@@ -84,10 +85,14 @@ impl Message for TransactionEffects {
         TransactionEffectsDigest::new(default_hash(self))
     }
 
-    fn verify(&self, _verify_params: &VerifyParams) -> SuiResult {
+    fn verify_epoch(&self, _: EpochId) -> SuiResult {
+        // Authorities are allowed to re-sign effects from prior epochs, so we do not verify the
+        // epoch here.
         Ok(())
     }
 }
+
+impl UnauthenticatedMessage for TransactionEffects {}
 
 impl Default for TransactionEffects {
     fn default() -> Self {

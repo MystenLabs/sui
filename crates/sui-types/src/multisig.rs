@@ -26,7 +26,7 @@ use std::{
 };
 
 use crate::{
-    base_types::SuiAddress,
+    base_types::{EpochId, SuiAddress},
     crypto::{PublicKey, Signature},
     error::SuiError,
 };
@@ -75,7 +75,11 @@ impl Hash for MultiSig {
 }
 
 impl AuthenticatorTrait for MultiSig {
-    fn verify_secure_generic<T>(
+    fn verify_epoch(&self, _: EpochId) -> Result<(), SuiError> {
+        Ok(())
+    }
+
+    fn verify_claims<T>(
         &self,
         value: &IntentMessage<T>,
         author: SuiAddress,
