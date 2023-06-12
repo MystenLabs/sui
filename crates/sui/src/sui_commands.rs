@@ -459,6 +459,7 @@ async fn genesis(
             let ssfn_config = FullnodeConfigBuilder::new()
                 .with_config_directory(FULL_NODE_DB_PATH.into())
                 .with_p2p_external_address(ssfn.p2p_address)
+                .with_network_key_pair(ssfn.network_key_pair)
                 .with_p2p_listen_address("0.0.0.0:8084".parse().unwrap())
                 .with_db_path(PathBuf::from("/opt/sui/db/authorities_db/full_node_db"))
                 .with_network_address("/ip4/0.0.0.0/tcp/8080/http".parse().unwrap())
