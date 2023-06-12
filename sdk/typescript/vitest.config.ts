@@ -9,7 +9,9 @@ export default defineConfig({
     maxThreads: 8,
     hookTimeout: 1000000,
     testTimeout: 1000000,
-    setupFiles: ['./test/utils/setup.ts'],
+    env: {
+      NODE_ENV: 'test',
+    },
   },
   resolve: {
     alias: {
