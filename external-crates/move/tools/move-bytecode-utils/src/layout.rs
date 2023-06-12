@@ -33,6 +33,17 @@ const SIGNER: &str = "Signer";
 /// Name of the Move `u256` type in the serde registry
 const U256_SERDE_NAME: &str = "u256";
 
+/// The maximal value depth that we allow creating a layout for.
+const MAX_VALUE_DEPTH: u64 = 128;
+
+macro_rules! check_depth {
+    ($depth:expr) => {
+        if $depth > MAX_VALUE_DEPTH {
+            anyhow::bail!("Exceeded max value recursion depth when creating struct layout")
+        }
+    };
+}
+
 /// Type for building a registry of serde-reflection friendly struct layouts for Move types.
 /// The layouts created by this type are intended to be passed to the serde-generate tool to create
 /// struct bindings for Move types in source languages that use Move-based services.
@@ -115,26 +126,28 @@ impl<'a, T: GetModule> SerdeLayoutBuilder<'a, T> {
     }
 
     /// Add layouts for all types used in `t` to the registry
-    pub fn build_type_layout(&mut self, t: TypeTag) -> Result<Format, T::Error> {
-        self.build_normalized_type_layout(&Type::from(t), &Vec::new())
+    pub fn build_type_layout(&mut self, t: TypeTag) -> Result<Format> {
+        self.build_normalized_type_layout(&Type::from(t), &Vec::new(), 0)
     }
 
     /// Add layouts for all types used in `t` to the registry
-    pub fn build_struct_layout(&mut self, s: &StructTag) -> Result<Format, T::Error> {
+    pub fn build_struct_layout(&mut self, s: &StructTag) -> Result<Format> {
         let serde_type_args = s
             .type_params
             .iter()
             .map(|t| self.build_type_layout(t.clone()))
-            .collect::<Result<Vec<Format>, T::Error>>()?;
-        self.build_struct_layout_(&s.module_id(), &s.name, &serde_type_args)
+            .collect::<Result<Vec<Format>>>()?;
+        self.build_struct_layout_(&s.module_id(), &s.name, &serde_type_args, 0)
     }
 
     fn build_normalized_type_layout(
         &mut self,
         t: &Type,
         input_type_args: &[Format],
-    ) -> Result<Format, T::Error> {
+        depth: u64,
+    ) -> Result<Format> {
         use Type::*;
+        check_depth!(depth);
         Ok(match t {
             Bool => Format::Bool,
             U8 => Format::U8,
@@ -153,19 +166,21 @@ impl<'a, T: GetModule> SerdeLayoutBuilder<'a, T> {
             } => {
                 let serde_type_args = type_arguments
                     .iter()
-                    .map(|t| self.build_normalized_type_layout(t, input_type_args))
-                    .collect::<Result<Vec<Format>, T::Error>>()?;
+                    .map(|t| self.build_normalized_type_layout(t, input_type_args, depth + 1))
+                    .collect::<Result<Vec<Format>>>()?;
                 let declaring_module = ModuleId::new(*address, module.clone());
-                self.build_struct_layout_(&declaring_module, name, &serde_type_args)?
+                self.build_struct_layout_(&declaring_module, name, &serde_type_args, depth + 1)?
             }
             Vector(inner_t) => {
                 if matches!(inner_t.as_ref(), U8) {
                     // specialize vector<u8> as bytes
                     Format::Bytes
                 } else {
-                    Format::Seq(Box::new(
-                        self.build_normalized_type_layout(inner_t, input_type_args)?,
-                    ))
+                    Format::Seq(Box::new(self.build_normalized_type_layout(
+                        inner_t,
+                        input_type_args,
+                        depth + 1,
+                    )?))
                 }
             }
             TypeParameter(i) => input_type_args[*i as usize].clone(),
@@ -178,13 +193,17 @@ impl<'a, T: GetModule> SerdeLayoutBuilder<'a, T> {
         module_id: &ModuleId,
         name: &Identifier,
         type_arguments: &[Format],
-    ) -> Result<Format, T::Error> {
+        depth: u64,
+    ) -> Result<Format> {
+        check_depth!(depth);
+
         // build a human-readable name for the struct type. this should do the same thing as
         // StructTag::display(), but it's not easy to use that code here
 
         let declaring_module = self
             .module_resolver
-            .get_module_by_id(module_id)?
+            .get_module_by_id(module_id)
+            .map_err(|e| anyhow::format_err!("{:?}", e))?
             .expect("Failed to resolve module");
         let def = declaring_module
             .borrow()
@@ -206,15 +225,12 @@ impl<'a, T: GetModule> SerdeLayoutBuilder<'a, T> {
         let generics: Vec<String> = type_arguments
             .iter()
             .zip(normalized_struct.type_parameters.iter())
-            .filter_map(|(type_arg, type_param)| {
-                if self.config.ignore_phantom_types && type_param.is_phantom {
-                    // do not include phantom type arguments in the struct key, since they do not affect the struct layout
-                    None
-                } else {
-                    Some(print_format_type(type_arg))
-                }
+            .filter(|(_, type_param)| {
+                // do not include phantom type arguments in the struct key, since they do not affect the struct layout
+                !(self.config.ignore_phantom_types && type_param.is_phantom)
             })
-            .collect();
+            .map(|(type_arg, _)| print_format_type(type_arg, depth))
+            .collect::<Result<_>>()?;
         let mut struct_key = String::new();
         if !self.config.omit_addresses {
             write!(
@@ -252,7 +268,7 @@ impl<'a, T: GetModule> SerdeLayoutBuilder<'a, T> {
                 // check for conflicts (e.g., 0x1::M::T and 0x2::M::T that both get stripped to M::T because
                 // omit_addresses is on)
                 if old_struct.clone()
-                    != self.generate_serde_struct(normalized_struct, type_arguments)?
+                    != self.generate_serde_struct(normalized_struct, type_arguments, depth)?
                 {
                     panic!(
                         "Name conflict: multiple structs with name {}, but different addresses",
@@ -262,7 +278,8 @@ impl<'a, T: GetModule> SerdeLayoutBuilder<'a, T> {
             }
         } else {
             // not found--generate and update registry
-            let serde_struct = self.generate_serde_struct(normalized_struct, type_arguments)?;
+            let serde_struct =
+                self.generate_serde_struct(normalized_struct, type_arguments, depth)?;
             self.registry.insert(struct_key.clone(), serde_struct);
         }
 
@@ -273,24 +290,27 @@ impl<'a, T: GetModule> SerdeLayoutBuilder<'a, T> {
         &mut self,
         normalized_struct: Struct,
         type_arguments: &[Format],
-    ) -> Result<ContainerFormat, T::Error> {
+        depth: u64,
+    ) -> Result<ContainerFormat> {
+        check_depth!(depth);
         let fields = normalized_struct
             .fields
             .iter()
             .map(|f| {
-                self.build_normalized_type_layout(&f.type_, type_arguments)
+                self.build_normalized_type_layout(&f.type_, type_arguments, depth)
                     .map(|value| Named {
                         name: f.name.to_string(),
                         value,
                     })
             })
-            .collect::<Result<Vec<Named<Format>>, T::Error>>()?;
+            .collect::<Result<Vec<Named<Format>>>>()?;
         Ok(ContainerFormat::Struct(fields))
     }
 }
 
-fn print_format_type(t: &Format) -> String {
-    match t {
+fn print_format_type(t: &Format, depth: u64) -> Result<String> {
+    check_depth!(depth);
+    Ok(match t {
         Format::TypeName(s) => s.to_string(),
         Format::Bool => "bool".to_string(),
         Format::U8 => "u8".to_string(),
@@ -299,9 +319,9 @@ fn print_format_type(t: &Format) -> String {
         Format::U64 => "u64".to_string(),
         Format::U128 => "u128".to_string(),
         Format::Bytes => "vector<u8>".to_string(),
-        Format::Seq(inner) => format!("vector<{}>", print_format_type(inner)),
+        Format::Seq(inner) => format!("vector<{}>", print_format_type(inner, depth + 1)?),
         v => unimplemented!("Printing format value {:?}", v),
-    }
+    })
 }
 
 pub enum TypeLayoutBuilder {}
@@ -319,29 +339,31 @@ impl TypeLayoutBuilder {
     /// Panics if `resolver` cannot resolve a module whose types are referenced directly or
     /// transitively by `t`
     pub fn build_with_types(t: &TypeTag, resolver: &impl GetModule) -> Result<MoveTypeLayout> {
-        Self::build(t, resolver, LayoutType::WithTypes)
+        Self::build(t, resolver, LayoutType::WithTypes, 0)
     }
 
     /// Construct a WithFields `TypeLayout` with fields from `t`.
     /// Panics if `resolver` cannot resolve a module whose types are referenced directly or
     /// transitively by `t`.
     pub fn build_with_fields(t: &TypeTag, resolver: &impl GetModule) -> Result<MoveTypeLayout> {
-        Self::build(t, resolver, LayoutType::WithFields)
+        Self::build(t, resolver, LayoutType::WithFields, 0)
     }
 
     /// Construct a runtime `TypeLayout` from `t`.
     /// Panics if `resolver` cannot resolve a module whose types are referenced directly or
     /// transitively by `t`.
     pub fn build_runtime(t: &TypeTag, resolver: &impl GetModule) -> Result<MoveTypeLayout> {
-        Self::build(t, resolver, LayoutType::Runtime)
+        Self::build(t, resolver, LayoutType::Runtime, 0)
     }
 
     fn build(
         t: &TypeTag,
         resolver: &impl GetModule,
         layout_type: LayoutType,
+        depth: u64,
     ) -> Result<MoveTypeLayout> {
         use TypeTag::*;
+        check_depth!(depth);
         Ok(match t {
             Bool => MoveTypeLayout::Bool,
             U8 => MoveTypeLayout::U8,
@@ -352,12 +374,18 @@ impl TypeLayoutBuilder {
             U256 => MoveTypeLayout::U256,
             Address => MoveTypeLayout::Address,
             Signer => bail!("Type layouts cannot contain signer"),
-            Vector(elem_t) => {
-                MoveTypeLayout::Vector(Box::new(Self::build(elem_t, resolver, layout_type)?))
-            }
-            Struct(s) => {
-                MoveTypeLayout::Struct(StructLayoutBuilder::build(s, resolver, layout_type)?)
-            }
+            Vector(elem_t) => MoveTypeLayout::Vector(Box::new(Self::build(
+                elem_t,
+                resolver,
+                layout_type,
+                depth + 1,
+            )?)),
+            Struct(s) => MoveTypeLayout::Struct(StructLayoutBuilder::build(
+                s,
+                resolver,
+                layout_type,
+                depth + 1,
+            )?),
         })
     }
 
@@ -367,8 +395,10 @@ impl TypeLayoutBuilder {
         type_arguments: &[MoveTypeLayout],
         resolver: &impl GetModule,
         layout_type: LayoutType,
+        depth: u64,
     ) -> Result<MoveTypeLayout> {
         use SignatureToken::*;
+        check_depth!(depth);
         Ok(match s {
             Vector(t) => MoveTypeLayout::Vector(Box::new(Self::build_from_signature_token(
                 m,
@@ -376,6 +406,7 @@ impl TypeLayoutBuilder {
                 type_arguments,
                 resolver,
                 layout_type,
+                depth + 1,
             )?)),
             Struct(shi) => MoveTypeLayout::Struct(StructLayoutBuilder::build_from_handle_idx(
                 m,
@@ -383,6 +414,7 @@ impl TypeLayoutBuilder {
                 vec![],
                 resolver,
                 layout_type,
+                depth + 1,
             )?),
             StructInstantiation(shi, type_actuals) => {
                 let actual_layouts = type_actuals
@@ -394,6 +426,7 @@ impl TypeLayoutBuilder {
                             type_arguments,
                             resolver,
                             layout_type,
+                            depth + 1,
                         )
                     })
                     .collect::<Result<Vec<_>>>()?;
@@ -403,6 +436,7 @@ impl TypeLayoutBuilder {
                     actual_layouts,
                     resolver,
                     layout_type,
+                    depth + 1,
                 )?)
             }
             TypeParameter(i) => type_arguments[*i as usize].clone(),
@@ -422,11 +456,11 @@ impl TypeLayoutBuilder {
 
 impl StructLayoutBuilder {
     pub fn build_runtime(s: &StructTag, resolver: &impl GetModule) -> Result<MoveStructLayout> {
-        Self::build(s, resolver, LayoutType::Runtime)
+        Self::build(s, resolver, LayoutType::Runtime, 0)
     }
 
     pub fn build_with_fields(s: &StructTag, resolver: &impl GetModule) -> Result<MoveStructLayout> {
-        Self::build(s, resolver, LayoutType::WithFields)
+        Self::build(s, resolver, LayoutType::WithFields, 0)
     }
 
     /// Construct an expanded `TypeLayout` from `s`.
@@ -436,11 +470,13 @@ impl StructLayoutBuilder {
         s: &StructTag,
         resolver: &impl GetModule,
         layout_type: LayoutType,
+        depth: u64,
     ) -> Result<MoveStructLayout> {
+        check_depth!(depth);
         let type_arguments = s
             .type_params
             .iter()
-            .map(|t| TypeLayoutBuilder::build(t, resolver, layout_type))
+            .map(|t| TypeLayoutBuilder::build(t, resolver, layout_type, depth))
             .collect::<Result<Vec<MoveTypeLayout>>>()?;
         Self::build_from_name(
             &s.module_id(),
@@ -448,6 +484,7 @@ impl StructLayoutBuilder {
             type_arguments,
             resolver,
             layout_type,
+            depth,
         )
     }
 
@@ -457,7 +494,9 @@ impl StructLayoutBuilder {
         type_arguments: Vec<MoveTypeLayout>,
         resolver: &impl GetModule,
         layout_type: LayoutType,
+        depth: u64,
     ) -> Result<MoveStructLayout> {
+        check_depth!(depth);
         let s_handle = m.struct_handle_at(s.struct_handle);
         if s_handle.type_parameters.len() != type_arguments.len() {
             bail!("Wrong number of type arguments for struct")
@@ -476,6 +515,7 @@ impl StructLayoutBuilder {
                             &type_arguments,
                             resolver,
                             layout_type,
+                            depth,
                         )
                     })
                     .collect::<Result<Vec<MoveTypeLayout>>>()?;
@@ -519,7 +559,9 @@ impl StructLayoutBuilder {
         type_arguments: Vec<MoveTypeLayout>,
         resolver: &impl GetModule,
         layout_type: LayoutType,
+        depth: u64,
     ) -> Result<MoveStructLayout> {
+        check_depth!(depth);
         let module = match resolver.get_module_by_id(declaring_module) {
             Err(_) | Ok(None) => bail!("Could not find module"),
             Ok(Some(m)) => m,
@@ -534,7 +576,14 @@ impl StructLayoutBuilder {
                     declaring_module
                 )
             })?;
-        Self::build_from_definition(module.borrow(), def, type_arguments, resolver, layout_type)
+        Self::build_from_definition(
+            module.borrow(),
+            def,
+            type_arguments,
+            resolver,
+            layout_type,
+            depth,
+        )
     }
 
     fn build_from_handle_idx(
@@ -543,10 +592,12 @@ impl StructLayoutBuilder {
         type_arguments: Vec<MoveTypeLayout>,
         resolver: &impl GetModule,
         layout_type: LayoutType,
+        depth: u64,
     ) -> Result<MoveStructLayout> {
+        check_depth!(depth);
         if let Some(def) = m.find_struct_def(s) {
             // declared internally
-            Self::build_from_definition(m, def, type_arguments, resolver, layout_type)
+            Self::build_from_definition(m, def, type_arguments, resolver, layout_type, depth)
         } else {
             let handle = m.struct_handle_at(s);
             let name = m.identifier_at(handle.name);
@@ -558,6 +609,7 @@ impl StructLayoutBuilder {
                 type_arguments,
                 resolver,
                 layout_type,
+                depth,
             )
         }
     }
