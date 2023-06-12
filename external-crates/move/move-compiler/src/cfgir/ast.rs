@@ -14,7 +14,7 @@ use crate::{
 use move_core_types::value::MoveValue;
 use move_ir_types::location::*;
 use move_symbol_pool::Symbol;
-use std::collections::{BTreeMap, BTreeSet, VecDeque};
+use std::collections::{BTreeMap, VecDeque};
 
 // HLIR + Unstructured Control Flow + CFG
 
@@ -82,19 +82,19 @@ pub struct Constant {
 // Functions
 //**************************************************************************************************
 
-#[derive(PartialEq, Debug, Clone)]
+#[derive(PartialEq, Eq, Debug, Clone)]
 pub enum FunctionBody_ {
     Native,
     Defined {
         locals: UniqueMap<Var, SingleType>,
         start: Label,
-        loop_heads: BTreeSet<Label>,
+        block_info: BTreeMap<Label, BlockInfo>,
         blocks: BasicBlocks,
     },
 }
 pub type FunctionBody = Spanned<FunctionBody_>;
 
-#[derive(PartialEq, Debug, Clone)]
+#[derive(PartialEq, Eq, Debug, Clone)]
 pub struct Function {
     pub warning_filter: WarningFilters,
     // index in the original order as defined in the source file
@@ -115,7 +115,7 @@ pub type BasicBlocks = BTreeMap<Label, BasicBlock>;
 
 pub type BasicBlock = VecDeque<Command>;
 
-#[derive(Clone, Copy, Debug)]
+#[derive(PartialEq, Eq, Debug, Clone, Copy)]
 pub enum LoopEnd {
     // If the generated loop end block was not used
     Unused,
@@ -123,13 +123,13 @@ pub enum LoopEnd {
     Target(Label),
 }
 
-#[derive(Clone, Debug)]
+#[derive(PartialEq, Eq, Debug, Clone, Copy)]
 pub struct LoopInfo {
     pub is_loop_stmt: bool,
     pub loop_end: LoopEnd,
 }
 
-#[derive(Clone, Debug)]
+#[derive(PartialEq, Eq, Debug, Clone, Copy)]
 pub enum BlockInfo {
     LoopHead(LoopInfo),
     Other,
@@ -361,7 +361,7 @@ impl AstDebug for (FunctionName, &Function) {
             FunctionBody_::Defined {
                 locals,
                 start,
-                loop_heads,
+                block_info,
                 blocks,
             } => w.block(|w| {
                 w.write("locals:");
@@ -373,10 +373,11 @@ impl AstDebug for (FunctionName, &Function) {
                     })
                 });
                 w.new_line();
-                w.writeln("loop heads:");
+                w.writeln("block info:");
                 w.indent(4, |w| {
-                    for loop_head in loop_heads {
-                        w.writeln(&format!("{}", loop_head))
+                    for (lbl, info) in block_info {
+                        w.writeln(&format!("{lbl}: "));
+                        info.ast_debug(w);
                     }
                 });
                 w.writeln(&format!("start={}", start.0));
@@ -402,5 +403,38 @@ impl AstDebug for (&Label, &BasicBlock) {
     fn ast_debug(&self, w: &mut AstWriter) {
         w.write(&format!("label {}:", (self.0).0));
         w.indent(4, |w| w.semicolon(self.1, |w, cmd| cmd.ast_debug(w)))
+    }
+}
+
+impl AstDebug for BlockInfo {
+    fn ast_debug(&self, w: &mut AstWriter) {
+        match self {
+            BlockInfo::LoopHead(i) => i.ast_debug(w),
+            BlockInfo::Other => w.write("non-loop head"),
+        }
+    }
+}
+
+impl AstDebug for LoopInfo {
+    fn ast_debug(&self, w: &mut AstWriter) {
+        let Self {
+            is_loop_stmt,
+            loop_end,
+        } = self;
+        w.write(&format!(
+            "{{ is_loop_stmt: {}, end: ",
+            if *is_loop_stmt { "true" } else { "false" }
+        ));
+        loop_end.ast_debug(w);
+        w.write(" }}")
+    }
+}
+
+impl AstDebug for LoopEnd {
+    fn ast_debug(&self, w: &mut AstWriter) {
+        match self {
+            LoopEnd::Unused => w.write("unused end"),
+            LoopEnd::Target(lbl) => w.write(&format!("{lbl}")),
+        }
     }
 }

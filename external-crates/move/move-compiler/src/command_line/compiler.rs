@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    cfgir,
+    cfgir::{self, visitor::AbsIntVisitorObj},
     command_line::{DEFAULT_OUTPUT_DIR, MOVE_COMPILED_INTERFACES_DIR},
     compiled_unit,
     compiled_unit::AnnotatedCompiledUnit,
@@ -42,6 +42,7 @@ pub struct Compiler<'a> {
     pre_compiled_lib: Option<&'a FullyCompiledProgram>,
     compiled_module_named_address_mapping: BTreeMap<CompiledModuleId, String>,
     flags: Flags,
+    visitors: Vec<Visitor>,
 }
 
 pub struct SteppedCompiler<'a, const P: Pass> {
@@ -82,6 +83,10 @@ pub struct FullyCompiledProgram {
     pub hlir: hlir::ast::Program,
     pub cfgir: cfgir::ast::Program,
     pub compiled: Vec<AnnotatedCompiledUnit>,
+}
+
+pub enum Visitor {
+    AbsIntVisitor(AbsIntVisitorObj),
 }
 
 //**************************************************************************************************
@@ -130,6 +135,7 @@ impl<'a> Compiler<'a> {
             pre_compiled_lib: None,
             compiled_module_named_address_mapping: BTreeMap::new(),
             flags: Flags::empty(),
+            visitors: vec![],
         }
     }
 
@@ -193,6 +199,16 @@ impl<'a> Compiler<'a> {
         self
     }
 
+    pub fn add_visitor(mut self, pass: impl Into<Visitor>) -> Self {
+        self.visitors.push(pass.into());
+        self
+    }
+
+    pub fn add_visitors(mut self, passes: impl IntoIterator<Item = Visitor>) -> Self {
+        self.visitors.extend(passes);
+        self
+    }
+
     pub fn run<const TARGET: Pass>(
         self,
     ) -> anyhow::Result<(
@@ -207,13 +223,14 @@ impl<'a> Compiler<'a> {
             pre_compiled_lib,
             compiled_module_named_address_mapping,
             flags,
+            visitors,
         } = self;
         generate_interface_files_for_deps(
             &mut deps,
             interface_files_dir_opt,
             &compiled_module_named_address_mapping,
         )?;
-        let mut compilation_env = CompilationEnv::new(flags);
+        let mut compilation_env = CompilationEnv::new(flags, visitors);
         let (source_text, pprog_and_comments_res) =
             parse_program(&mut compilation_env, maps, targets, deps)?;
         let res: Result<_, Diagnostics> = pprog_and_comments_res.and_then(|(pprog, comments)| {
@@ -823,5 +840,15 @@ fn run(
             )
         }
         PassResult::Compilation(_, _) => unreachable!("ICE Pass::Compilation is >= all passes"),
+    }
+}
+
+//**************************************************************************************************
+// traits
+//**************************************************************************************************
+
+impl From<AbsIntVisitorObj> for Visitor {
+    fn from(f: AbsIntVisitorObj) -> Self {
+        Self::AbsIntVisitor(f)
     }
 }

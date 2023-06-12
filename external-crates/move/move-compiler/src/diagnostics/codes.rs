@@ -17,27 +17,29 @@ pub enum Severity {
 #[derive(PartialEq, Eq, Clone, Debug, Hash)]
 pub struct DiagnosticInfo {
     severity: Severity,
-    category: Category,
+    category: u8,
     code: u8,
     message: &'static str,
+    external_prefix: Option<&'static str>,
 }
 
-pub trait DiagnosticCode: Copy {
+pub(crate) trait DiagnosticCode: Copy {
     const CATEGORY: Category;
 
-    fn severity(self) -> Severity;
+    fn severity(&self) -> Severity;
 
-    fn code_and_message(self) -> (u8, &'static str);
+    fn code_and_message(&self) -> (u8, &'static str);
 
     fn into_info(self) -> DiagnosticInfo {
         let severity = self.severity();
-        let category = Self::CATEGORY;
+        let category = Self::CATEGORY as u8;
         let (code, message) = self.code_and_message();
         DiagnosticInfo {
             severity,
             category,
             code,
             message,
+            external_prefix: None,
         }
     }
 }
@@ -60,6 +62,27 @@ pub const WARNING_FILTER_ATTR: &str = "allow";
 // Categories and Codes
 //**************************************************************************************************
 
+/// A custom DiagnosticInfo.
+/// The diagnostic will get rendered as
+/// `"[{external_prefix}{severity}{category}{code}] {message}"`.
+/// Note, this will will panic if `category > 99`
+pub const fn custom(
+    external_prefix: &'static str,
+    severity: Severity,
+    category: u8,
+    code: u8,
+    message: &'static str,
+) -> DiagnosticInfo {
+    assert!(category <= 99);
+    DiagnosticInfo {
+        severity,
+        category,
+        code,
+        message,
+        external_prefix: Some(external_prefix),
+    }
+}
+
 macro_rules! codes {
     ($($cat:ident: [
         $($code:ident: { msg: $code_msg:literal, severity:$sev:ident $(,)? }),* $(,)?
@@ -68,6 +91,16 @@ macro_rules! codes {
         #[repr(u8)]
         pub enum Category {
             $($cat,)*
+        }
+
+        impl TryFrom<u8> for Category {
+            type Error = ();
+            fn try_from(value: u8) -> Result<Self, Self::Error> {
+                match () {
+                    $(_ if value == (Category::$cat as u8) => Ok(Category::$cat),)*
+                    _ => Err(()),
+                }
+            }
         }
 
         $(
@@ -86,7 +119,7 @@ macro_rules! codes {
                     Category::$cat
                 };
 
-                fn severity(self) -> Severity {
+                fn severity(&self) -> Severity {
                     match self {
                         Self::DontStartAtZeroPlaceholder =>
                             panic!("ICE do not use placeholder error code"),
@@ -94,8 +127,8 @@ macro_rules! codes {
                     }
                 }
 
-                fn code_and_message(self) -> (u8, &'static str) {
-                    let code = self as u8;
+                fn code_and_message(&self) -> (u8, &'static str) {
+                    let code = *self as u8;
                     debug_assert!(code > 0);
                     match self {
                         Self::DontStartAtZeroPlaceholder =>
@@ -314,32 +347,40 @@ impl DiagnosticInfo {
             category,
             code,
             message,
+            external_prefix,
         } = self;
         let sev_prefix = match severity {
             Severity::BlockingError | Severity::NonblockingError => "E",
             Severity::Warning => "W",
             Severity::Bug => "ICE",
         };
-        let cat_prefix: u8 = category as u8;
-        debug_assert!(cat_prefix <= 99);
-        let string_code = format!("{}{:02}{:03}", sev_prefix, cat_prefix, code);
+        debug_assert!(category <= 99);
+        let string_code = if let Some(ext) = external_prefix {
+            format!("{ext}{sev_prefix}{category:02}{code:03}")
+        } else {
+            format!("{sev_prefix}{category:02}{code:03}")
+        };
         (string_code, message)
-    }
-
-    pub fn message(&self) -> &'static str {
-        self.message
     }
 
     pub fn severity(&self) -> Severity {
         self.severity
     }
 
-    pub fn category(&self) -> Category {
+    pub fn category(&self) -> u8 {
         self.category
     }
 
     pub fn code(&self) -> u8 {
         self.code
+    }
+
+    pub fn message(&self) -> &'static str {
+        self.message
+    }
+
+    pub fn is_external(&self) -> bool {
+        self.external_prefix.is_some()
     }
 }
 
