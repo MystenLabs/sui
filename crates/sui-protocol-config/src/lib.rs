@@ -1220,10 +1220,7 @@ impl ProtocolConfig {
                 }
                 cfg
             }
-            13 => {
-                let cfg = Self::get_for_version_impl(version - 1, chain);
-                cfg
-            }
+            13 => Self::get_for_version_impl(version - 1, chain),
             14 => {
                 let mut cfg = Self::get_for_version_impl(version - 1, chain);
                 cfg.gas_rounding_step = Some(1_000);
