@@ -53,26 +53,26 @@ pub enum SuiGasStatus {
 
 impl SuiGasStatus {
     pub fn new_with_budget(gas_budget: u64, gas_price: u64, config: &ProtocolConfig) -> Self {
-        match config.gas_model_version() {
-            1 => Self::V1(SuiGasStatusV1::new_with_budget(
+        if config.gas_model_version() <= 1 {
+            Self::V1(SuiGasStatusV1::new_with_budget(
                 gas_budget,
                 gas_price,
                 config,
-            )),
-            2 | 3 | 4 | 5 => Self::V2(SuiGasStatusV2::new_with_budget(
+            ))
+        } else {
+            Self::V2(SuiGasStatusV2::new_with_budget(
                 gas_budget,
                 gas_price,
                 config,
-            )),
-            _ => panic!("unknown gas model version"),
+            ))
         }
     }
 
     pub fn new_unmetered(config: &ProtocolConfig) -> Self {
-        match config.gas_model_version() {
-            1 => Self::V1(SuiGasStatusV1::new_unmetered()),
-            2 | 3 | 4 | 5 => Self::V2(SuiGasStatusV2::new_unmetered()),
-            _ => panic!("unknown gas model version"),
+        if config.gas_model_version() <= 1 {
+            Self::V1(SuiGasStatusV1::new_unmetered())
+        } else {
+            Self::V2(SuiGasStatusV2::new_unmetered())
         }
     }
 }
@@ -84,10 +84,10 @@ pub enum SuiCostTable {
 
 impl SuiCostTable {
     pub fn new(config: &ProtocolConfig) -> Self {
-        match config.gas_model_version() {
-            1 => Self::V1(SuiCostTableV1::new(config)),
-            2 | 3 | 4 | 5 => Self::V2(SuiCostTableV2::new(config)),
-            _ => panic!("unknown gas model version"),
+        if config.gas_model_version() <= 1 {
+            Self::V1(SuiCostTableV1::new(config))
+        } else {
+            Self::V2(SuiCostTableV2::new(config))
         }
     }
 
@@ -96,10 +96,10 @@ impl SuiCostTable {
     }
 
     pub fn unmetered(config: &ProtocolConfig) -> Self {
-        match config.gas_model_version() {
-            1 => Self::V1(SuiCostTableV1::unmetered()),
-            2 | 3 | 4 | 5 => Self::V2(SuiCostTableV2::unmetered()),
-            _ => panic!("unknown gas model version"),
+        if config.gas_model_version() <= 1 {
+            Self::V1(SuiCostTableV1::unmetered())
+        } else {
+            Self::V2(SuiCostTableV2::unmetered())
         }
     }
 
@@ -149,6 +149,7 @@ impl SuiCostTable {
         gas_budget: u64,
         gas_price: u64,
         storage_price: u64,
+        gas_rounding_step: u64,
     ) -> SuiGasStatus {
         match self {
             Self::V1(cost_table) => SuiGasStatus::V1(SuiGasStatusV1::new_for_testing(
@@ -161,6 +162,7 @@ impl SuiCostTable {
                 gas_budget,
                 gas_price,
                 storage_price,
+                gas_rounding_step,
                 cost_table,
             )),
         }
