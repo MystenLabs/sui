@@ -35,9 +35,29 @@ const bisectEpoch = bisector(({ epoch }: EpochGasInfo) => epoch).center;
 type AxisRightProps<Output> = {
     left: number;
     scale: ReturnType<typeof scaleLinear<Output>>;
+    selectedUnit: UnitsType;
 };
 
-function AxisRight({ scale, left }: AxisRightProps<number>) {
+function GasPriceValue({
+    value,
+    selectedUnit,
+    scale,
+    left,
+}: AxisRightProps<number> & { value: number }) {
+    const valueUnit = useGasPriceFormat(BigInt(value), selectedUnit);
+    return (
+        <text
+            x={left}
+            y={scale(value)}
+            textAnchor="end"
+            alignmentBaseline="middle"
+            className="fill-steel font-sans text-subtitleSmall font-medium"
+        >
+            {valueUnit}
+        </text>
+    );
+}
+function AxisRight({ scale, left, selectedUnit }: AxisRightProps<number>) {
     let ticks = scale.nice(6).ticks(6);
     return (
         <g>
@@ -48,16 +68,10 @@ function AxisRight({ scale, left }: AxisRightProps<number>) {
                             (index + 1) % 2 === 0 || ticks.length === 1
                     )
                     .map((value) => (
-                        <text
+                        <GasPriceValue
                             key={value}
-                            x={left}
-                            y={scale(value)}
-                            textAnchor="end"
-                            alignmentBaseline="middle"
-                            className="fill-steel font-sans text-subtitleSmall font-medium"
-                        >
-                            {value}
-                        </text>
+                            {...{ scale, left, value, selectedUnit }}
+                        />
                     ))}
             </g>
             <g>
@@ -124,6 +138,7 @@ export function GraphWithTooltip({ data, unit }: GraphWithTooltipProps) {
                                 width={parent.width}
                                 height={parent.height}
                                 data={data}
+                                selectedUnit={unit}
                                 onHoverElement={(data) => {
                                     setHoveredElement(data?.value || null);
                                     setTooltipX(data?.x || 0);
@@ -141,9 +156,16 @@ export type GraphProps = {
     data: EpochGasInfo[];
     width: number;
     height: number;
+    selectedUnit: UnitsType;
     onHoverElement: (params: { value: EpochGasInfo; x: number } | null) => void;
 };
-export function Graph({ data, width, height, onHoverElement }: GraphProps) {
+export function Graph({
+    data,
+    width,
+    height,
+    onHoverElement,
+    selectedUnit,
+}: GraphProps) {
     // remove not defined data (graph displays better and helps with hovering/selecting hovered element)
     const adjData = useMemo(() => data.filter(isDefined), [data]);
     const graphTop = 10;
@@ -316,7 +338,11 @@ export function Graph({ data, width, height, onHoverElement }: GraphProps) {
                 fillOpacity="0.1"
                 stroke="none"
             />
-            <AxisRight left={width - SIDE_MARGIN / 2} scale={yScale} />
+            <AxisRight
+                left={width - SIDE_MARGIN / 2}
+                scale={yScale}
+                selectedUnit={selectedUnit}
+            />
             <AxisBottom
                 top={Math.max(height - 30, 0)}
                 orientation="bottom"
