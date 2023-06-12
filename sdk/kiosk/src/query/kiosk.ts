@@ -115,7 +115,7 @@ export async function getOwnedKiosks(
     nextCursor,
     hasNextPage,
     kioskOwnerCaps: data.map((x, idx) => ({
-      digest: x?.data?.digest || '',
+      digest: x?.data?.digest,
       version: getObjectVersion(x),
       objectId: getObjectId(x),
       kioskId: kioskIdList[idx],
