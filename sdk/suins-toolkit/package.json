@@ -35,7 +35,7 @@
         "test": "vitest"
     },
     "devDependencies": {
-        "@faker-js/faker": "^7.6.0",
+        "@faker-js/faker": "^8.0.2",
         "eslint": "^8.38.0",
         "eslint-config-prettier": "^8.8.0",
         "eslint-config-react-app": "^7.0.1",
