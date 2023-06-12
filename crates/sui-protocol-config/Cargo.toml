@@ -13,6 +13,7 @@ tracing = "0.1.36"
 serde_with = "2.1.0"
 sui-protocol-config-macros = { path = "../sui-protocol-config-macros" }
 schemars = { version = "0.8.10", features = ["either"] }
+insta = "1.21.1"
 
 [dev-dependencies]
 insta = { version = "1.21.1", features = ["redactions", "yaml"] }
