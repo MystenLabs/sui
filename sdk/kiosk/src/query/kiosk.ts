@@ -6,10 +6,9 @@ import {
   ObjectId,
   PaginationArguments,
   SuiAddress,
+  SuiObjectData,
   SuiObjectResponse,
   getObjectFields,
-  getObjectId,
-  getObjectVersion,
   isValidSuiAddress,
 } from '@mysten/sui.js';
 import {
@@ -111,13 +110,19 @@ export async function getOwnedKiosks(
     (x: SuiObjectResponse) => getObjectFields(x)?.for,
   );
 
+  // clean up data that might have an error in them.
+  // only return valid objects.
+  const filteredData = data
+    .filter((x) => 'data' in x)
+    .map((x) => x.data) as SuiObjectData[];
+
   return {
     nextCursor,
     hasNextPage,
-    kioskOwnerCaps: data.map((x, idx) => ({
-      digest: x?.data?.digest,
-      version: getObjectVersion(x),
-      objectId: getObjectId(x),
+    kioskOwnerCaps: filteredData.map((x, idx) => ({
+      digest: x.digest,
+      version: x.version,
+      objectId: x.objectId,
       kioskId: kioskIdList[idx],
     })),
     kioskIds: kioskIdList,

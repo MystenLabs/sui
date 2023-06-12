@@ -134,6 +134,6 @@ export type OwnedKiosks = {
 export type KioskOwnerCap = {
   objectId: ObjectId;
   kioskId: ObjectId;
-  digest: ObjectDigest | undefined;
-  version: number | string | undefined;
+  digest: ObjectDigest;
+  version: string;
 };
