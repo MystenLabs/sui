@@ -61,9 +61,9 @@ pub enum WarningFilters {
     All,
     /// Remove all diags of this category
     Specified {
-        category: BTreeSet<Category>,
+        category: BTreeSet</* category */ u8>,
         /// Remove specific diags
-        codes: BTreeSet<(Category, /* code */ u8)>,
+        codes: BTreeSet<(/* category */ u8, /* code */ u8)>,
     },
     /// No filter
     Empty,
@@ -184,7 +184,7 @@ fn render_diagnostic(
     let mut diag = csr::diagnostic::Diagnostic::new(info.severity().into_codespan_severity());
     let (code, message) = info.render();
     diag = diag.with_code(code);
-    diag = diag.with_message(message);
+    diag = diag.with_message(message.to_string());
     diag = diag.with_labels(vec![mk_lbl(LabelStyle::Primary, primary_label)]);
     diag = diag.with_labels(
         secondary_labels
@@ -282,13 +282,13 @@ impl Diagnostics {
 
 impl Diagnostic {
     pub fn new(
-        code: impl DiagnosticCode,
+        code: impl Into<DiagnosticInfo>,
         (loc, label): (Loc, impl ToString),
         secondary_labels: impl IntoIterator<Item = (Loc, impl ToString)>,
         notes: impl IntoIterator<Item = impl ToString>,
     ) -> Self {
         Diagnostic {
-            info: code.into_info(),
+            info: code.into(),
             primary_label: (loc, label.to_string()),
             secondary_labels: secondary_labels
                 .into_iter()
@@ -298,8 +298,8 @@ impl Diagnostic {
         }
     }
 
-    pub fn set_code(mut self, code: impl DiagnosticCode) -> Self {
-        self.info = code.into_info();
+    pub fn set_code(mut self, code: impl Into<DiagnosticInfo>) -> Self {
+        self.info = code.into();
         self
     }
 
@@ -424,11 +424,13 @@ impl WarningFilters {
             WarningFilters::Specified { category, codes } => match filter {
                 WarningFilter::All => *self = WarningFilters::All,
                 WarningFilter::Category(cat) => {
+                    let cat = cat as u8;
                     category.insert(cat);
                     // remove any codes now covered by this category
                     codes.retain(|(codes_cat, _)| codes_cat != &cat);
                 }
                 WarningFilter::Code(cat, code) => {
+                    let cat = cat as u8;
                     // no need to add the filter if already covered by the category
                     if !category.contains(&cat) {
                         codes.insert((cat, code));
@@ -479,12 +481,13 @@ impl AstDebug for WarningFilters {
             )),
             WarningFilters::Specified { category, codes } => {
                 w.write(&format!("#[{}(", WARNING_FILTER_ATTR,));
-                let items = category.iter().copied().map(WarningFilter::Category).chain(
-                    codes
-                        .iter()
-                        .copied()
-                        .map(|(cat, code)| WarningFilter::Code(cat, code)),
-                );
+                let items = category
+                    .iter()
+                    .copied()
+                    .map(|cat| WarningFilter::Category(Category::try_from(cat).unwrap()))
+                    .chain(codes.iter().copied().map(|(cat, code)| {
+                        WarningFilter::Code(Category::try_from(cat).unwrap(), code)
+                    }));
                 w.list(items, ",", |w, filter| {
                     w.write(filter.to_str().unwrap());
                     false
@@ -493,5 +496,11 @@ impl AstDebug for WarningFilters {
             }
             WarningFilters::Empty => (),
         }
+    }
+}
+
+impl<C: DiagnosticCode> From<C> for DiagnosticInfo {
+    fn from(value: C) -> Self {
+        value.into_info()
     }
 }

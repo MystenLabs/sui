@@ -8,10 +8,9 @@ use super::absint::*;
 use crate::{
     diagnostics::Diagnostics,
     hlir::ast::*,
-    parser::ast::{BinOp_, StructName},
+    parser::ast::BinOp_,
     shared::{unique_map::UniqueMap, CompilationEnv},
 };
-use move_ir_types::location::*;
 use state::{Value, *};
 use std::collections::BTreeMap;
 
@@ -81,11 +80,16 @@ impl AbstractInterpreter for BorrowSafety {}
 
 pub fn verify(
     compilation_env: &mut CompilationEnv,
-    signature: &FunctionSignature,
-    acquires: &BTreeMap<StructName, Loc>,
-    locals: &UniqueMap<Var, SingleType>,
-    cfg: &super::cfg::BlockCFG,
+    context: &super::CFGContext,
+    cfg: &super::cfg::MutForwardCFG,
 ) -> BTreeMap<Label, BorrowState> {
+    let super::CFGContext {
+        signature,
+        acquires,
+        locals,
+        ..
+    } = context;
+    let acquires = *acquires;
     // check for existing errors
     let has_errors = compilation_env.has_errors();
     let mut initial_state = BorrowState::initial(locals, acquires.clone(), has_errors);

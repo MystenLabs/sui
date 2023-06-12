@@ -351,7 +351,7 @@ fn add_move_lang_diagnostics(env: &mut GlobalEnv, diags: Diagnostics) {
     for (severity, msg, primary_label, secondary_labels, notes) in diags.into_codespan_format() {
         let diag = Diagnostic::new(severity)
             .with_labels(vec![mk_label(true, primary_label)])
-            .with_message(msg)
+            .with_message(msg.to_string())
             .with_labels(
                 secondary_labels
                     .into_iter()
