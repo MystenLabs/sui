@@ -1106,7 +1106,8 @@ mod tests {
     async fn test_batch_transfer_interface() {
         let test_cluster = TestClusterBuilder::new().build().await.unwrap();
         let context = test_cluster.wallet;
-        let config = Default::default();
+        let config: FaucetConfig = Default::default();
+        let coin_amount = config.amount;
         let prom_registry = Registry::new();
         let tmp = tempfile::tempdir().unwrap();
         let faucet = SimpleFaucet::new(
@@ -1118,7 +1119,8 @@ mod tests {
         .await
         .unwrap();
 
-        let amounts = &vec![1; 1];
+        let amounts = &vec![coin_amount; 1];
+
         // Create a vector containing five randomly generated addresses
         let target_addresses: Vec<SuiAddress> = (0..5)
             .map(|_| SuiAddress::random_for_testing_only())
@@ -1658,7 +1660,75 @@ mod tests {
         assert!(restarted_wal.log.is_empty())
     }
 
-    // TODO: add test on the number of sui tokens sent out and the amounts of the tokens sent out in a batch sui txn
+    #[tokio::test]
+    async fn test_amounts_transferred_on_batch() {
+        let test_cluster = TestClusterBuilder::new().build().await.unwrap();
+        let context = test_cluster.wallet;
+        let config: FaucetConfig = Default::default();
+
+        let prom_registry = Registry::new();
+        let tmp = tempfile::tempdir().unwrap();
+        let amount_to_send = config.amount;
+
+        let faucet = SimpleFaucet::new(
+            context,
+            &prom_registry,
+            &tmp.path().join("faucet.wal"),
+            config,
+        )
+        .await
+        .unwrap();
+
+        // Create a vector containing two randomly generated addresses
+        let target_addresses: Vec<SuiAddress> = (0..2)
+            .map(|_| SuiAddress::random_for_testing_only())
+            .collect();
+
+        // Send 2 coins of 1 sui each. We
+        let coins_sent = 2;
+        let amounts = &vec![amount_to_send; coins_sent];
+
+        // Send a request
+        let response = futures::future::join_all(
+            target_addresses
+                .iter()
+                .map(|address| faucet.batch_send(Uuid::new_v4(), *address, amounts)),
+        )
+        .await
+        .into_iter()
+        .map(|res| res.unwrap())
+        .collect::<Vec<BatchFaucetReceipt>>();
+
+        let mut status_results;
+        loop {
+            // Assert that all of these are SUCCEEDED
+            status_results =
+                futures::future::join_all(response.clone().iter().map(|task| {
+                    faucet.get_batch_send_status(Uuid::parse_str(&task.task).unwrap())
+                }))
+                .await
+                .into_iter()
+                .map(|res| res.unwrap())
+                .collect::<Vec<BatchSendStatus>>();
+
+            if status_results[0].status == BatchSendStatusType::SUCCEEDED {
+                break;
+            }
+            info!(
+                "Trying to get status again... current is: {:?}",
+                status_results[0].status
+            );
+        }
+
+        for status in status_results {
+            assert_eq!(status.status, BatchSendStatusType::SUCCEEDED);
+            let amounts = status.transferred_gas_objects.unwrap().sent;
+            assert_eq!(amounts.len(), coins_sent);
+            for amt in amounts {
+                assert_eq!(amt.amount, amount_to_send);
+            }
+        }
+    }
 
     async fn test_basic_interface(faucet: &impl Faucet) {
         let recipient = SuiAddress::random_for_testing_only();
