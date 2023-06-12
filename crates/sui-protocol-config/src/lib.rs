@@ -43,6 +43,7 @@ const MAX_PROTOCOL_VERSION: u64 = 13;
 // Version 13: Introduce a config variable to allow charging of computation to be either
 //             bucket base or rounding up. The presence of `gas_rounding_step` (or `None`)
 //             decides whether rounding is applied or not.
+//             Add reordering of user transactions by gas price after consensus.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -208,10 +209,30 @@ struct FeatureFlags {
     // Enable zklogin auth
     #[serde(skip_serializing_if = "is_false")]
     zklogin_auth: bool,
+
+    // How we order transactions coming out of consensus before sending to execution.
+    #[serde(skip_serializing_if = "ConsensusTransactionOrdering::is_none")]
+    consensus_transaction_ordering: ConsensusTransactionOrdering,
 }
 
 fn is_false(b: &bool) -> bool {
     !b
+}
+
+/// Ordering mechanism for transactions in one Narwhal consensus output.
+#[derive(Default, Copy, Clone, Serialize, Debug)]
+pub enum ConsensusTransactionOrdering {
+    /// No ordering. Transactions are processed in the order they appear in the consensus output.
+    #[default]
+    None,
+    /// Order transactions by gas price, highest first.
+    ByGasPrice,
+}
+
+impl ConsensusTransactionOrdering {
+    pub fn is_none(&self) -> bool {
+        matches!(self, ConsensusTransactionOrdering::None)
+    }
 }
 
 /// Constants that change the behavior of the protocol.
@@ -745,6 +766,10 @@ impl ProtocolConfig {
     pub fn zklogin_auth(&self) -> bool {
         self.feature_flags.zklogin_auth
     }
+
+    pub fn consensus_transaction_ordering(&self) -> ConsensusTransactionOrdering {
+        self.feature_flags.consensus_transaction_ordering
+    }
 }
 
 #[cfg(not(msim))]
@@ -1196,6 +1221,8 @@ impl ProtocolConfig {
             13 => {
                 let mut cfg = Self::get_for_version_impl(version - 1, chain);
                 cfg.gas_rounding_step = Some(1_000);
+                cfg.feature_flags.consensus_transaction_ordering =
+                    ConsensusTransactionOrdering::ByGasPrice;
                 cfg
             }
             // Use this template when making changes:

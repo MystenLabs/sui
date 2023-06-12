@@ -1973,6 +1973,10 @@ impl CertifiedTransaction {
         let hash = digest.finalize();
         CertificateDigest::new(hash.into())
     }
+
+    pub fn gas_price(&self) -> u64 {
+        self.data().transaction_data().gas_price()
+    }
 }
 
 pub type VerifiedCertificate = VerifiedEnvelope<SenderSignedData, AuthorityStrongQuorumSignInfo>;

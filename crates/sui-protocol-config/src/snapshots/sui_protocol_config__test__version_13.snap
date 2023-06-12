@@ -1,6 +1,6 @@
 ---
 source: crates/sui-protocol-config/src/lib.rs
-expression: "ProtocolConfig::get_for_version(cur, Chain::Unknown)"
+expression: "ProtocolConfig::get_for_version(cur, *chain_id)"
 ---
 version: 13
 feature_flags:
@@ -20,6 +20,7 @@ feature_flags:
   no_extraneous_module_bytes: true
   narwhal_versioned_metadata: true
   zklogin_auth: true
+  consensus_transaction_ordering: ByGasPrice
 max_tx_size_bytes: 131072
 max_input_objects: 2048
 max_size_written_objects: 5000000
