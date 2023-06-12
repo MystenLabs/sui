@@ -88,14 +88,26 @@ describe('JSON-RPC Client', () => {
     ).rejects.toThrowError();
   });
 
-  it('requestWithType should call console.warn', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    const client = new JsonRpcClient(MOCK_ENDPOINT);
-    await client.requestWithType(
-      'sui_getOwnedObjectsByAddress',
-      ['0xfail'],
-      GetOwnedObjectsResponse,
-    );
-    expect(warn).toHaveBeenCalled();
+  describe('outside of tests', () => {
+    beforeAll(() => {
+      process.env.NODE_ENV = 'production';
+    });
+
+    afterAll(() => {
+      process.env.NODE_ENV = 'test';
+    });
+
+    it('requestWithType should not throw', async () => {
+      process.env.NODE_ENV = 'production';
+      const client = new JsonRpcClient(MOCK_ENDPOINT);
+
+      const result = await client.requestWithType(
+        'sui_getOwnedObjectsByAddress',
+        ['0xfail'],
+        GetOwnedObjectsResponse,
+      );
+
+      expect(result[0].type).toEqual('moveObject');
+    });
   });
 });
