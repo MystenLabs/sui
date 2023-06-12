@@ -20,7 +20,7 @@ use sui_config::{
     FULL_NODE_DB_PATH,
 };
 use sui_protocol_config::SupportedProtocolVersions;
-use sui_types::crypto::{AuthorityKeyPair, AuthorityPublicKeyBytes, SuiKeyPair};
+use sui_types::crypto::{AuthorityKeyPair, AuthorityPublicKeyBytes, NetworkKeyPair, SuiKeyPair};
 use sui_types::multiaddr::Multiaddr;
 
 /// This builder contains information that's not included in ValidatorGenesisConfig for building
@@ -168,6 +168,7 @@ pub struct FullnodeConfigBuilder {
     genesis: Option<Genesis>,
     p2p_external_address: Option<Multiaddr>,
     p2p_listen_address: Option<SocketAddr>,
+    network_key_pair: Option<KeyPairWithPath>,
 }
 
 impl FullnodeConfigBuilder {
@@ -250,6 +251,14 @@ impl FullnodeConfigBuilder {
         self
     }
 
+    pub fn with_network_key_pair(mut self, network_key_pair: Option<NetworkKeyPair>) -> Self {
+        if let Some(network_key_pair) = network_key_pair {
+            self.network_key_pair =
+                Some(KeyPairWithPath::new(SuiKeyPair::Ed25519(network_key_pair)));
+        }
+        self
+    }
+
     pub fn build<R: rand::RngCore + rand::CryptoRng>(
         self,
         rng: &mut R,
@@ -313,8 +322,8 @@ impl FullnodeConfigBuilder {
             worker_key_pair: KeyPairWithPath::new(SuiKeyPair::Ed25519(
                 validator_config.worker_key_pair,
             )),
-            network_key_pair: KeyPairWithPath::new(SuiKeyPair::Ed25519(
-                validator_config.network_key_pair,
+            network_key_pair: self.network_key_pair.unwrap_or(KeyPairWithPath::new(
+                SuiKeyPair::Ed25519(validator_config.network_key_pair),
             )),
             db_path: self
                 .db_path
