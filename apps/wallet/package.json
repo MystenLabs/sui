@@ -66,7 +66,7 @@
         "@types/git-rev-sync": "^2.0.0",
         "@types/node": "^18.15.11",
         "@types/react": "^18.0.35",
-        "@types/react-dom": "^18.0.11",
+        "@types/react-dom": "^18.2.5",
         "@types/semver": "^7.3.13",
         "@types/throttle-debounce": "^5.0.0",
         "@types/uuid": "^9.0.1",
