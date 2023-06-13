@@ -140,8 +140,7 @@ async fn batch_request_gas(
     info!(uuid = ?id, "Got new gas request.");
     let result = match payload {
         FaucetRequest::FixedAmountRequest(requests) => {
-            // We spawn a tokio task for this such that connection drop will not interrupt
-            // it and impact the recycling of coins
+            // TODO: get ride of this task spawning since recycled coins are now handled by the batching task.
             spawn_monitored_task!(async move {
                 state
                     .faucet

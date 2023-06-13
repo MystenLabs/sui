@@ -55,7 +55,6 @@ pub struct SimpleFaucet {
     pub metrics: FaucetMetrics,
     pub wal: Mutex<WriteAheadLog>,
     request_producer: Sender<(Uuid, SuiAddress, Vec<u64>)>,
-    // request_consumer: Mutex<Receiver<(Uuid, SuiAddress, Vec<u64>)>>,
     batch_request_size: u64,
     task_id_cache: Mutex<TtlCache<Uuid, BatchSendStatus>>,
     ttl_expiration: u64,
@@ -65,10 +64,17 @@ pub struct SimpleFaucet {
     batch_transfer_shutdown: parking_lot::Mutex<Option<oneshot::Sender<()>>>,
 }
 
+/// We do not just derive(Debug) because WalletContext and the WriteAheadLog do not implement Debug / are also hard
+/// to implement Debug.
 impl fmt::Debug for SimpleFaucet {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.debug_struct("SimpleFaucet")
             .field("faucet_wallet", &self.active_address)
+            .field("producer", &self.producer)
+            .field("consumer", &self.consumer)
+            .field("batch_request_size", &self.batch_request_size)
+            .field("ttl_expiration", &self.ttl_expiration)
+            .field("coin_amount", &self.coin_amount)
             .finish()
     }
 }
@@ -176,7 +182,7 @@ impl SimpleFaucet {
                 {
                     Ok(response) => {
                         if response == TransactionDigest::ZERO {
-                            error!("Some error occured during batch transferring");
+                            info!("Batch transfer incomplete due to faucet shutting down.");
                         } else {
                             info!(
                                 "Batch transfer completed with transaction digest: {:?}",
@@ -569,8 +575,7 @@ impl SimpleFaucet {
         amounts: &[u64],
         budget: u64,
     ) -> Result<TransactionData, anyhow::Error> {
-        let recipients: Vec<SuiAddress> =
-            std::iter::repeat(recipient).take(amounts.len()).collect();
+        let recipients = vec![recipient; amounts.len()];
         let client = self.wallet.get_client().await?;
         client
             .transaction_builder()
@@ -626,11 +631,11 @@ impl SimpleFaucet {
     ) -> Result<TransactionData, anyhow::Error> {
         let gas_payment = self.wallet.get_object_ref(coin_id).await?;
         let gas_price = self.wallet.get_reference_gas_price().await?;
+        // TODO (Jian): change to make this more efficient by changing impl to one Splitcoin, and many TransferObjects
         let pt = {
             let mut builder = ProgrammableTransactionBuilder::new();
             for (_uuid, recipient, amounts) in batch_requests {
-                let recipients: Vec<SuiAddress> =
-                    std::iter::repeat(recipient).take(amounts.len()).collect();
+                let recipients = vec![recipient; amounts.len()];
                 builder.pay_sui(recipients, amounts)?;
             }
             builder.finish()
@@ -875,7 +880,7 @@ pub async fn batch_transfer_gases(
             };
         }
         _ = rx_batch_transfer_shutdown => {
-            info!("Shutdown signal received. Exiting executor ...");
+            info!("Shutdown signal received. Exiting faucet ...");
             return Ok(TransactionDigest::ZERO);
         }
     };
@@ -1119,7 +1124,7 @@ mod tests {
         .await
         .unwrap();
 
-        let amounts = &vec![coin_amount; 1];
+        let amounts = &vec![coin_amount];
 
         // Create a vector containing five randomly generated addresses
         let target_addresses: Vec<SuiAddress> = (0..5)
