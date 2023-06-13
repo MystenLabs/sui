@@ -22,10 +22,10 @@ fi
 
 echo
 echo "Building sui-node docker image"
-echo "Dockerfile: \t$DOCKERFILE"
-echo "docker context: $REPO_ROOT"
-echo "build date: \t$BUILD_DATE"
-echo "git revision: \t$GIT_REVISION"
+echo -e "Dockerfile: \t$DOCKERFILE"
+echo -e "docker context: \t$REPO_ROOT"
+echo -e "build date: \t$BUILD_DATE"
+echo -e "git revision: \t$GIT_REVISION"
 echo
 
 docker build -f "$DOCKERFILE" "$REPO_ROOT" \
