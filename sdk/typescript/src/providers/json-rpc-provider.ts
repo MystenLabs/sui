@@ -380,6 +380,7 @@ export class JsonRpcProvider {
     if (!input.id || !isValidSuiObjectId(normalizeSuiObjectId(input.id))) {
       throw new Error('Invalid Sui Object id');
     }
+
     return await this.client.requestWithType(
       'sui_getObject',
       [input.id, input.options],

@@ -25,8 +25,8 @@ function Fail({ objID }: { objID: string | undefined }) {
 }
 
 export function ObjectResult() {
-    const { id: objID } = useParams();
-    const { data, isLoading, isError, isFetched } = useGetObject(objID!);
+    const { id, version } = useParams();
+    const { data, isLoading, isError, isFetched } = useGetObject(id, version);
 
     if (isLoading) {
         return (
@@ -37,12 +37,12 @@ export function ObjectResult() {
     }
 
     if (isError) {
-        return <Fail objID={objID} />;
+        return <Fail objID={id} />;
     }
 
     // TODO: Handle status better NotExists, Deleted, Other
     if (data.error || (isFetched && !data)) {
-        return <Fail objID={objID} />;
+        return <Fail objID={id} />;
     }
 
     const resp = translate(data);
@@ -60,7 +60,7 @@ export function ObjectResult() {
                     {isPackage ? (
                         <PkgView data={resp} />
                     ) : (
-                        <TokenView data={data} />
+                        <TokenView data={data} version={version} />
                     )}
                 </div>
             </ErrorBoundary>

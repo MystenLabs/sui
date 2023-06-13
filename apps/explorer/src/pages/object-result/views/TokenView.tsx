@@ -33,7 +33,13 @@ import {
     parseObjectType,
 } from '~/utils/objectUtils';
 
-export function TokenView({ data }: { data: SuiObjectResponse }) {
+export function TokenView({
+    data,
+    version,
+}: {
+    data: SuiObjectResponse;
+    version?: string;
+}) {
     const display = getObjectDisplay(data)?.data;
     const imgUrl = parseImageURL(display);
     const objOwner = getObjectOwner(data);
@@ -210,7 +216,7 @@ export function TokenView({ data }: { data: SuiObjectResponse }) {
                     </TabPanel>
                 </TabPanels>
             </TabGroup>
-            <ObjectFieldsCard id={objectId} />
+            <ObjectFieldsCard id={objectId} version={version} />
             <DynamicFieldsCard id={objectId} />
             <TransactionBlocksForAddress address={objectId} isObject />
         </div>

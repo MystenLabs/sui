@@ -21,10 +21,11 @@ import { ListItem, VerticalList } from '~/ui/VerticalList';
 
 interface ObjectFieldsProps {
     id: string;
+    version?: string;
 }
 
-export function ObjectFieldsCard({ id }: ObjectFieldsProps) {
-    const { data, isLoading, isError } = useGetObject(id);
+export function ObjectFieldsCard({ id, version }: ObjectFieldsProps) {
+    const { data, isLoading, isError } = useGetObject(id, version);
     const [query, setQuery] = useState('');
     const [activeFieldName, setActiveFieldName] = useState('');
     const objectType = getObjectType(data!);

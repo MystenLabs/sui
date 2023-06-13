@@ -36,7 +36,7 @@ export const router = sentryCreateBrowserRouter([
         children: [
             { path: '/', element: <Home /> },
             { path: 'recent', element: <Recent /> },
-            { path: 'object/:id', element: <ObjectResult /> },
+            { path: 'object/:id/:version?', element: <ObjectResult /> },
             { path: 'checkpoint/:id', element: <CheckpointDetail /> },
             { path: 'epoch/current', element: <EpochDetail /> },
             { path: 'txblock/:id', element: <TransactionResult /> },
