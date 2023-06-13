@@ -15,7 +15,21 @@ describe("BCS: Serde", () => {
 
     expect(serde(bcs, "u16", "10000").toString(10)).toEqual("10000");
     expect(serde(bcs, "u32", "10000").toString(10)).toEqual("10000");
-    expect(serde(bcs, "u256", "10000").toString(10)).toEqual("10000");
+    expect(
+      serde(
+        bcs,
+        "u128",
+        "154386538175093611946334810",
+      ).toString(10),
+    ).toEqual("154386538175093611946334810");
+
+    expect(
+      serde(
+        bcs,
+        "u256",
+        "154386538175093611946334810000000000000000000000122",
+      ).toString(10),
+    ).toEqual("154386538175093611946334810000000000000000000000122");
 
     expect(bcs.ser("u256", "100000").toString("hex")).toEqual(
       "a086010000000000000000000000000000000000000000000000000000000000"

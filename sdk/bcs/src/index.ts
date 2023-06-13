@@ -146,7 +146,7 @@ export class BcsReader {
   read128(): string {
     let value1 = BigInt(this.read64());
     let value2 = BigInt(this.read64());
-    let result = value2.toString(16) + value1.toString(16).padStart(8, "0");
+    let result = value2.toString(16) + value1.toString(16).padStart(16, "0");
 
     return BigInt("0x" + result).toString(10);
   }
@@ -157,7 +157,7 @@ export class BcsReader {
   read256(): string {
     let value1 = BigInt(this.read128());
     let value2 = BigInt(this.read128());
-    let result = value2.toString(16) + value1.toString(16).padStart(16, "0");
+    let result = value2.toString(16) + value1.toString(16).padStart(32, "0");
 
     return BigInt("0x" + result).toString(10);
   }
