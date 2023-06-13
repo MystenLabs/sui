@@ -25,9 +25,9 @@ export default function SingleKiosk() {
     ownedKiosk?.caps && ownedKiosk.caps.length > 1 && selected;
 
   useEffect(() => {
-    if (isLoading) return;
+    if (isLoading || selected) return;
     setSelected(ownedKiosk?.caps[0]);
-  }, [isLoading, ownedKiosk?.caps, setSelected]);
+  }, [isLoading, selected, ownedKiosk?.caps, setSelected]);
 
   if (isLoading) return <Loading />;
 

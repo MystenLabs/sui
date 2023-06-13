@@ -7,9 +7,13 @@ import { Loading } from '../components/Base/Loading';
 import { useOwnedKiosk } from '../hooks/kiosk';
 import { WalletNotConnected } from '../components/Base/WalletNotConnected';
 import { KioskCreation } from '../components/Kiosk/KioskCreation';
+import { useEffect, useState } from 'react';
+import { KioskOwnerCap } from '@mysten/kiosk';
+import { KioskSelector } from '../components/Kiosk/KioskSelector';
 
 function Home() {
-	const { currentAccount } = useWalletKit();
+  const { currentAccount } = useWalletKit();
+  const [selected, setSelected] = useState<KioskOwnerCap | undefined>();
 
   const {
     data: ownedKiosk,
@@ -17,8 +21,19 @@ function Home() {
     refetch: refetchOwnedKiosk,
   } = useOwnedKiosk(currentAccount?.address);
 
-	// Return loading state.
-	if (isLoading) return <Loading />;
+  // show kiosk selector in the following conditions:
+  // 1. It's an address lookup.
+  // 2. The address has more than 1 kiosks.
+  const showKioskSelector =
+    ownedKiosk?.caps && ownedKiosk.caps.length > 1 && selected;
+
+  useEffect(() => {
+    if (isLoading || selected) return;
+    setSelected(ownedKiosk?.caps[0]);
+  }, [isLoading, selected, ownedKiosk?.caps, setSelected]);
+
+  // Return loading state.
+  if (isLoading) return <Loading />;
 
 	// Return wallet not connected state.
 	if (!currentAccount?.address) return <WalletNotConnected />;
@@ -26,12 +41,23 @@ function Home() {
 	// if the account doesn't have a kiosk.
 	if (!ownedKiosk?.kioskId) return <KioskCreation onCreate={refetchOwnedKiosk} />;
 
-	// kiosk management screen.
-	return (
-		<div className="container">
-			{ownedKiosk?.kioskCap && currentAccount?.address && <KioskData />}
-		</div>
-	);
+  // kiosk management screen.
+  return (
+    <div className="container">
+      {showKioskSelector && (
+        <div className="px-4">
+          <KioskSelector
+            caps={ownedKiosk.caps}
+            selected={selected}
+            setSelected={setSelected}
+          />
+        </div>
+      )}
+      {selected && currentAccount?.address && (
+        <KioskData kioskId={selected.kioskId} />
+      )}
+    </div>
+  );
 }
 
 export default Home;

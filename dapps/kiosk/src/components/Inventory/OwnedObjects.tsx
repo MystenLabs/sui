@@ -8,13 +8,20 @@ import { ListPrice } from '../Modals/ListPrice';
 import { Loading } from '../Base/Loading';
 import { useOwnedObjects } from '../../hooks/useOwnedObjects';
 import { toast } from 'react-hot-toast';
+import { ObjectId } from '@mysten/sui.js';
 
 export type OwnedObjectType = KioskItem & {
 	display: Record<string, string>;
 };
 
-export function OwnedObjects({ address }: { address: string }) {
-	const [modalItem, setModalItem] = useState<OwnedObjectType | null>(null);
+export function OwnedObjects({
+  address,
+  kioskId,
+}: {
+  address: string;
+  kioskId: ObjectId;
+}) {
+  const [modalItem, setModalItem] = useState<OwnedObjectType | null>(null);
 
 	const {
 		data: ownedObjects,
@@ -33,6 +40,7 @@ export function OwnedObjects({ address }: { address: string }) {
         ?.filter((x) => !!x.display && !!x.display.image_url)
         .map((item) => (
           <OwnedObject
+            kioskId={kioskId}
             key={item.objectId}
             object={item}
             onListSuccess={() => {
@@ -45,18 +53,19 @@ export function OwnedObjects({ address }: { address: string }) {
           />
         ))}
 
-			{modalItem && (
-				<ListPrice
-					item={modalItem}
-					listAndPlace
-					onSuccess={() => {
-						toast.success('Item listed for sale successfully!');
-						getOwnedObjects();
-						setModalItem(null); // replace modal.
-					}}
-					closeModal={() => setModalItem(null)}
-				/>
-			)}
-		</div>
-	);
+      {modalItem && (
+        <ListPrice
+          kioskId={kioskId}
+          item={modalItem}
+          listAndPlace
+          onSuccess={() => {
+            toast.success('Item listed for sale successfully!');
+            getOwnedObjects();
+            setModalItem(null); // replace modal.
+          }}
+          closeModal={() => setModalItem(null)}
+        />
+      )}
+    </div>
+  );
 }

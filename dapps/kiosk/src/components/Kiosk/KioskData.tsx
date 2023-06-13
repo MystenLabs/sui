@@ -5,21 +5,19 @@ import { useWalletKit } from '@mysten/wallet-kit';
 import { Tab } from '@headlessui/react';
 import { OwnedObjects } from '../Inventory/OwnedObjects';
 import { KioskItems } from './KioskItems';
-import { formatAddress } from '@mysten/sui.js';
+import { ObjectId, formatAddress } from '@mysten/sui.js';
 import { ExplorerLink } from '../Base/ExplorerLink';
 import { formatSui, mistToSui } from '../../utils/utils';
 import { toast } from 'react-hot-toast';
-import { useKioskDetails, useOwnedKiosk } from '../../hooks/kiosk';
+import { useKioskDetails } from '../../hooks/kiosk';
 import { Loading } from '../Base/Loading';
 import { useQueryClient } from '@tanstack/react-query';
 import { TANSTACK_KIOSK_DATA_KEY } from '../../utils/constants';
 import { Button } from '../Base/Button';
 import { useWithdrawMutation } from '../../mutations/kiosk';
 
-export function KioskData() {
+export function KioskData({ kioskId }: { kioskId: ObjectId }) {
   const { currentAccount } = useWalletKit();
-  const { data: ownedKiosk } = useOwnedKiosk(currentAccount?.address);
-  const kioskId = ownedKiosk?.kioskId;
 
 	const { data: kiosk, isLoading } = useKioskDetails(kioskId);
 
@@ -77,7 +75,10 @@ export function KioskData() {
           </Tab.Panel>
           <Tab.Panel>
             {currentAccount && (
-              <OwnedObjects address={currentAccount.address}></OwnedObjects>
+              <OwnedObjects
+                kioskId={kioskId}
+                address={currentAccount.address}
+              ></OwnedObjects>
             )}
           </Tab.Panel>
         </Tab.Panels>

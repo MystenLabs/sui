@@ -45,50 +45,54 @@ export function KioskItems({ kioskId }: { kioskId?: string }) {
 	const kioskItems = kioskData?.items || [];
 	const kioskListings = kioskData?.listings || {};
 
-	if (isError && isKioskPage) return <KioskNotFound />;
+  if (!kioskId)
+    return <div className="py-12">Supply a kiosk ID to continue.</div>;
+
+  if (isError && isKioskPage) return <KioskNotFound />;
 
 	if (isLoading) return <Loading />;
 
-	if (kioskItems.length === 0)
-		return <div className="py-12">The kiosk you are viewing is empty!</div>;
+  if (!kioskId || kioskItems.length === 0)
+    return <div className="py-12">The kiosk you are viewing is empty!</div>;
 
-	return (
-		<div className="mt-12">
-			{
-				// We're hiding this when we've clicked "view kiosk" for our own kiosk.
-				isOwnedKiosk() && isKioskPage && (
-					<div className="bg-yellow-300 text-black rounded px-3 py-2 mb-6">
-						You're viewing your own kiosk
-					</div>
-				)
-			}
-			<div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-5">
-				{kioskId &&
-					kioskItems.map((item: OwnedObjectType) => (
-						<KioskItemCmp
-							key={item.objectId}
-							kioskId={kioskId}
-							item={item}
-							isGuest={!isOwnedKiosk()}
-							onSuccess={() => {
-								getKioskData();
-							}}
-							listing={kioskListings && kioskListings[item.objectId]}
-							listFn={(item: OwnedObjectType) => setModalItem(item)}
-						/>
-					))}
-				{modalItem && (
-					<ListPrice
-						item={modalItem}
-						onSuccess={() => {
-							toast.success('Item listed successfully.');
-							getKioskData(); // replace with single kiosk Item search here and replace
-							setModalItem(null); // replace modal.
-						}}
-						closeModal={() => setModalItem(null)}
-					/>
-				)}
-			</div>
-		</div>
-	);
+  return (
+    <div className="mt-12">
+      {
+        // We're hiding this when we've clicked "view kiosk" for our own kiosk.
+        isOwnedKiosk() && isKioskPage && (
+          <div className="bg-yellow-300 text-black rounded px-3 py-2 mb-6">
+            You're viewing your own kiosk
+          </div>
+        )
+      }
+      <div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-5">
+        {kioskItems.map((item: OwnedObjectType) => (
+          <KioskItemCmp
+            key={item.objectId}
+            kioskId={kioskId}
+            item={item}
+            isGuest={!isOwnedKiosk()}
+            hasKiosk={!!walletKiosk?.kioskId}
+            onSuccess={() => {
+              getKioskData();
+            }}
+            listing={kioskListings && kioskListings[item.objectId]}
+            listFn={(item: OwnedObjectType) => setModalItem(item)}
+          />
+        ))}
+        {modalItem && (
+          <ListPrice
+            kioskId={kioskId}
+            item={modalItem}
+            onSuccess={() => {
+              toast.success('Item listed successfully.');
+              getKioskData(); // replace with single kiosk Item search here and replace
+              setModalItem(null); // replace modal.
+            }}
+            closeModal={() => setModalItem(null)}
+          />
+        )}
+      </div>
+    </div>
+  );
 }

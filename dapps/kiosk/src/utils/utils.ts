@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { KioskListing } from '@mysten/kiosk';
+import { KioskListing, KioskOwnerCap } from '@mysten/kiosk';
 import {
 	MIST_PER_SUI,
 	ObjectId,
@@ -47,4 +47,15 @@ export const formatSui = (amount: number) => {
 		minimumFractionDigits: 2,
 		maximumFractionDigits: 5,
 	}).format(amount);
+};
+
+/**
+ * Finds an active owner cap for a kioskId based on the
+ * address owned kiosks.
+ */
+export const findActiveCap = (
+  caps: KioskOwnerCap[],
+  kioskId: ObjectId,
+): KioskOwnerCap | undefined => {
+  return caps.find((x) => x.kioskId === kioskId);
 };
