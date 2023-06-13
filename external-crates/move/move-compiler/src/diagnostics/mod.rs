@@ -27,7 +27,7 @@ use std::{
     ops::Range,
 };
 
-use self::codes::WARNING_FILTER_ATTR;
+use self::codes::{UnusedItem, WARNING_FILTER_ATTR};
 
 //**************************************************************************************************
 // Types
@@ -437,6 +437,18 @@ impl WarningFilters {
                     }
                 }
             },
+        }
+    }
+
+    pub fn unused_warnings_filter() -> Self {
+        let mut filtered_codes = BTreeSet::new();
+        let unused_fn_info = UnusedItem::Function.into_info();
+        let unused_type_info = UnusedItem::StructType.into_info();
+        filtered_codes.insert((unused_fn_info.category(), unused_fn_info.code()));
+        filtered_codes.insert((unused_type_info.category(), unused_type_info.code()));
+        WarningFilters::Specified {
+            category: BTreeSet::new(),
+            codes: filtered_codes,
         }
     }
 }

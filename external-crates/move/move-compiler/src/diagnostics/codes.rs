@@ -265,8 +265,8 @@ codes!(
         DeadCode: { msg: "dead or unreachable code", severity: Warning },
         StructTypeParam: { msg: "unused struct type parameter", severity: Warning },
         Attribute: { msg: "unused attribute", severity: Warning },
-        StructType: { msg: "unused struct type", severity: Warning },
-        Function: { msg: "unused (private) function", severity: Warning },
+        StructType: { msg: "uninitialized struct type", severity: Warning },
+        Function: { msg: "unused function", severity: Warning },
     ],
     Attributes: [
         Duplicate: { msg: "invalid duplicate attribute", severity: NonblockingError },

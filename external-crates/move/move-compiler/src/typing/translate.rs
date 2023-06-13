@@ -57,6 +57,10 @@ fn module(
 ) -> T::ModuleDefinition {
     assert!(context.current_script_constants.is_none());
     context.current_module = Some(ident);
+    // reset called functions and packed types sets so that they can be populated with values from
+    // this module only
+    context.called_fns.clear();
+    context.packed_types.clear();
     let N::ModuleDefinition {
         warning_filter,
         package_name,
@@ -1427,6 +1431,7 @@ fn exp_inner(context: &mut Context, sp!(eloc, ne_): N::Exp) -> T::Exp {
                     .env
                     .add_diag(diag!(TypeSafety::Visibility, (eloc, msg)));
             }
+            context.packed_types.insert(n.value());
             (bt, TE::Pack(m, n, targs, tfields))
         }
 
@@ -2055,6 +2060,9 @@ fn module_call(
         parameter_types: params_ty_list,
         acquires,
     };
+    if Some(m) == context.current_module {
+        context.called_fns.insert(f.value());
+    }
     (ret_ty, T::UnannotatedExp_::ModuleCall(Box::new(call)))
 }
 
@@ -2274,154 +2282,50 @@ fn make_arg_types<S: std::fmt::Display, F: Fn() -> S>(
 
 /// Generates warnings for unused struct types and unused (private) functions.
 fn gen_unused_warnings(context: &mut Context, ident: ModuleIdent, mdef: &T::ModuleDefinition) {
-    let mut packed_types = BTreeSet::new();
-    let mut called_fns = BTreeSet::new();
-
-    for (_, _, fun) in &mdef.functions {
-        let sp!(_, body) = &fun.body;
-        if let T::FunctionBody_::Defined(seq) = body {
-            for item in seq {
-                let sp!(_, seq_item) = item;
-                seq_item_collect_used(&seq_item, &ident, &mut called_fns, &mut packed_types)
-            }
-        }
-    }
-
-    context
-        .env
-        .add_warning_filter_scope(mdef.warning_filter.clone());
-
-    for (loc, name, fun) in &mdef.functions {
+    if context.compiled_module_names.contains(&ident) {
+        // generate warnings only for modules compiled in this pass rather than for all modules
+        // including pre-compiled libraries for which we do not have the right type of data
+        // collected (as they are not actually compiled here)
         context
             .env
-            .add_warning_filter_scope(fun.warning_filter.clone());
-        if !called_fns.contains(name) {
-            // TODO: postponing handling of friend functions until we decide what to do with them
-            // vis-a-vis ideas around package-private
-            if let Visibility::Internal = fun.visibility {
-                if fun.entry.is_none() {
-                    let msg = "This function should be used or deleted.";
-                    context
-                        .env
-                        .add_diag(diag!(UnusedItem::Function, (loc, msg)))
-                }
-            }
-        }
-        context.env.pop_warning_filter_scope();
-    }
+            .add_warning_filter_scope(mdef.warning_filter.clone());
 
-    for (loc, name, struct_def) in &mdef.structs {
-        context
-            .env
-            .add_warning_filter_scope(struct_def.warning_filter.clone());
-        if !packed_types.contains(name) {
-            let msg = "This struct type should be used or deleted.";
+        for (loc, name, fun) in &mdef.functions {
             context
                 .env
-                .add_diag(diag!(UnusedItem::StructType, (loc, msg)))
+                .add_warning_filter_scope(fun.warning_filter.clone());
+            if !context.called_fns.contains(name)
+                && fun.entry.is_none()
+                && matches!(fun.visibility, Visibility::Internal)
+            {
+                // TODO: postponing handling of friend functions until we decide what to do with them
+                // vis-a-vis ideas around package-private
+                let msg = format!(
+                    "The non-'public', non-'entry' function '{name}' is never called. \
+                           Consider removing it."
+                );
+                context
+                    .env
+                    .add_diag(diag!(UnusedItem::Function, (loc, msg)))
+            }
+            context.env.pop_warning_filter_scope();
         }
+
+        for (loc, name, struct_def) in &mdef.structs {
+            context
+                .env
+                .add_warning_filter_scope(struct_def.warning_filter.clone());
+            if !context.packed_types.contains(name) {
+                let msg = format!(
+                    "The struct type '{name}' is never instantiated. Consider removing it."
+                );
+                context
+                    .env
+                    .add_diag(diag!(UnusedItem::StructType, (loc, msg)))
+            }
+            context.env.pop_warning_filter_scope();
+        }
+
         context.env.pop_warning_filter_scope();
-    }
-
-    context.env.pop_warning_filter_scope();
-}
-
-/// Helper function to collect information on types used and functions called in a module.
-fn seq_item_collect_used(
-    seq_item: &T::SequenceItem_,
-    ident: &ModuleIdent,
-    called_fns: &mut BTreeSet<Symbol>,
-    packed_types: &mut BTreeSet<Symbol>,
-) {
-    use T::SequenceItem_ as S;
-
-    match seq_item {
-        S::Seq(exp) => exp_collect_used(&exp, ident, called_fns, packed_types),
-        S::Bind(_, _, exp) => exp_collect_used(&exp, ident, called_fns, packed_types),
-        S::Declare(_) => (),
-    }
-}
-
-/// Helper function to collect information on types used and functions called in a module.
-fn exp_collect_used(
-    unannotated_exp: &T::Exp,
-    ident: &ModuleIdent,
-    called_fns: &mut BTreeSet<Symbol>,
-    packed_types: &mut BTreeSet<Symbol>,
-) {
-    use T::UnannotatedExp_ as E;
-
-    let sp!(_, exp) = &unannotated_exp.exp;
-    match exp {
-        E::ModuleCall(c) => {
-            if &c.module == ident {
-                called_fns.insert(c.name.value());
-            }
-            exp_collect_used(&c.arguments, ident, called_fns, packed_types);
-        }
-        E::Builtin(_, exp) => exp_collect_used(&exp, ident, called_fns, packed_types),
-        E::Vector(_, _, _, exp) => exp_collect_used(&exp, ident, called_fns, packed_types),
-        E::IfElse(exp1, exp2, exp3) => {
-            exp_collect_used(&exp1, ident, called_fns, packed_types);
-            exp_collect_used(&exp2, ident, called_fns, packed_types);
-            exp_collect_used(&exp3, ident, called_fns, packed_types);
-        }
-        E::While(exp1, exp2) => {
-            exp_collect_used(&exp1, ident, called_fns, packed_types);
-            exp_collect_used(&exp2, ident, called_fns, packed_types);
-        }
-        E::Loop { has_break: _, body } => exp_collect_used(&body, ident, called_fns, packed_types),
-        E::Block(seq) => {
-            for item in seq {
-                let sp!(_, seq_item) = item;
-                seq_item_collect_used(&seq_item, &ident, called_fns, packed_types)
-            }
-        }
-        E::Assign(_, _, exp) => exp_collect_used(&exp, ident, called_fns, packed_types),
-        E::Mutate(exp1, exp2) => {
-            exp_collect_used(&exp1, ident, called_fns, packed_types);
-            exp_collect_used(&exp2, ident, called_fns, packed_types);
-        }
-        E::Return(exp) => exp_collect_used(&exp, ident, called_fns, packed_types),
-        E::Abort(exp) => exp_collect_used(&exp, ident, called_fns, packed_types),
-        E::Dereference(exp) => exp_collect_used(&exp, ident, called_fns, packed_types),
-        E::UnaryExp(_, exp) => exp_collect_used(&exp, ident, called_fns, packed_types),
-        E::BinopExp(exp1, _, _, exp2) => {
-            exp_collect_used(&exp1, ident, called_fns, packed_types);
-            exp_collect_used(&exp2, ident, called_fns, packed_types);
-        }
-        E::Pack(_, name, _, fields) => {
-            packed_types.insert(name.value());
-            for (_, _, (_, (_, exp))) in fields {
-                exp_collect_used(&exp, ident, called_fns, packed_types);
-            }
-        }
-        E::ExpList(list) => {
-            for item in list {
-                match item {
-                    T::ExpListItem::Single(exp, _) => {
-                        exp_collect_used(&exp, ident, called_fns, packed_types)
-                    }
-                    T::ExpListItem::Splat(_, exp, _) => {
-                        exp_collect_used(&exp, ident, called_fns, packed_types)
-                    }
-                }
-            }
-        }
-        E::Borrow(_, exp, _) => exp_collect_used(&exp, ident, called_fns, packed_types),
-        E::TempBorrow(_, exp) => exp_collect_used(&exp, ident, called_fns, packed_types),
-        E::Cast(exp, _) => exp_collect_used(&exp, ident, called_fns, packed_types),
-        E::Annotate(exp, _) => exp_collect_used(&exp, ident, called_fns, packed_types),
-        E::Unit { .. }
-        | E::Value(_)
-        | E::Move { .. }
-        | E::Copy { .. }
-        | E::Use(_)
-        | E::Constant(..)
-        | E::Break
-        | E::Continue
-        | E::BorrowLocal(..)
-        | E::Spec(..)
-        | E::UnresolvedError => (),
     }
 }
