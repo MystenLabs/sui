@@ -984,7 +984,7 @@ module deepbook::clob_test {
         next_tx(&mut test, alice);
         {
             let pool = test::take_shared<Pool<SUI, USD>>(&mut test);
-            let account_cap = test::take_from_address<AccountCap>(&test, alice);
+            let account_cap = test::take_from_sender<AccountCap>(&test);
             let clock = test::take_shared<Clock>(&mut test);
             clob::place_limit_order<SUI, USD>(
                 &mut pool,
