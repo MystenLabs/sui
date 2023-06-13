@@ -152,7 +152,7 @@
         "react-dom": "^18.2.0",
         "react-error-boundary": "^3.1.4",
         "react-hot-toast": "^2.4.0",
-        "react-number-format": "^5.1.4",
+        "react-number-format": "^5.2.2",
         "react-redux": "^8.0.5",
         "react-router-dom": "^6.12.1",
         "react-textarea-autosize": "^8.4.1",
