@@ -22,7 +22,7 @@ use std::{
 };
 use storage::{CertificateStore, ConsensusStore};
 use tokio::{sync::watch, task::JoinHandle};
-use tracing::{debug, info, instrument};
+use tracing::{debug, info, instrument, trace};
 use types::{
     Certificate, CertificateAPI, CertificateDigest, CommittedSubDag, ConditionalBroadcastReceiver,
     ConsensusCommit, HeaderAPI, ReputationScores, Round, Timestamp,
@@ -48,6 +48,10 @@ impl LeaderSwapTable {
 
         let good_nodes = Self::good_nodes(&reputation_scores, committee);
         let bad_nodes = Self::bad_nodes(&reputation_scores, committee);
+
+        debug!("Reputation scores: {:?}", reputation_scores);
+        debug!("Good nodes: {:?}", good_nodes);
+        debug!("Bad nodes: {:?}", bad_nodes);
 
         Self {
             good_nodes,
@@ -76,6 +80,14 @@ impl LeaderSwapTable {
                 .good_nodes
                 .choose(&mut rng)
                 .expect("There should be at least one good node available");
+
+            trace!(
+                "Swapping bad leader {} -> {} for round {}",
+                leader,
+                good_node,
+                leader_round
+            );
+
             return Some(*good_node);
         }
         None
@@ -87,21 +99,8 @@ impl LeaderSwapTable {
         committee: &Committee,
     ) -> Vec<AuthorityIdentifier> {
         let authorities = reputation_scores.authorities_by_score_desc();
-        let mut good_authorities = Vec::new();
 
-        let mut stake = 0;
-        for (authority_id, _score) in authorities.iter() {
-            stake += committee.stake_by_id(*authority_id);
-
-            // if by adding the authority we have reached validity, then we exit so we make sure that
-            // we gather < f + 1
-            if committee.reached_validity(stake) {
-                break;
-            }
-            good_authorities.push(*authority_id);
-        }
-
-        good_authorities
+        Self::retrieve_first_f_nodes(committee, authorities.into_iter())
     }
 
     /// Retrieves the f by stake nodes with the worst scores
@@ -110,23 +109,37 @@ impl LeaderSwapTable {
         committee: &Committee,
     ) -> HashSet<AuthorityIdentifier> {
         let authorities = reputation_scores.authorities_by_score_desc();
-        let mut bad_authorities = HashSet::new();
+
+        // we revert the sorted authorities to score ascending so we get the first f low scorers
+        let bad_authorities =
+            Self::retrieve_first_f_nodes(committee, authorities.into_iter().rev());
+        bad_authorities
+            .into_iter()
+            .collect::<HashSet<AuthorityIdentifier>>()
+    }
+
+    // Retrieves the first f by stake nodes provided by the iterator `authorities`. It's the
+    // caller's responsibility to ensure that the elements of the `authorities` input is already
+    // sorted.
+    fn retrieve_first_f_nodes(
+        committee: &Committee,
+        authorities: impl Iterator<Item = (AuthorityIdentifier, u64)>,
+    ) -> Vec<AuthorityIdentifier> {
+        let mut filtered_authorities = Vec::new();
 
         let mut stake = 0;
-
-        // important: we reverse the scores so we start from the lowest (worst) ones
-        for (authority_id, _score) in authorities.iter().rev() {
-            stake += committee.stake_by_id(*authority_id);
+        for (authority_id, _score) in authorities {
+            stake += committee.stake_by_id(authority_id);
 
             // if by adding the authority we have reached validity, then we exit so we make sure that
-            // we always gather < f + 1
+            // we gather < f + 1
             if committee.reached_validity(stake) {
                 break;
             }
-            bad_authorities.insert(*authority_id);
+            filtered_authorities.push(authority_id);
         }
 
-        bad_authorities
+        filtered_authorities
     }
 }
 
