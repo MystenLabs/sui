@@ -1,40 +1,24 @@
 use clap::*;
-use std::collections::HashSet;
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::time::Instant;
 use sui_adapter::adapter;
-use sui_adapter::execution_engine;
-use sui_adapter::execution_mode;
 use sui_config::{Config, NodeConfig};
-use sui_core::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use sui_core::authority::epoch_start_configuration::EpochStartConfiguration;
 use sui_distributed_execution::EpochEndMessage;
-use sui_distributed_execution::EpochStartMessage;
 use sui_distributed_execution::ExecutionWorkerState;
 use sui_distributed_execution::SequenceWorkerState;
-use sui_distributed_execution::TransactionMessage;
 use sui_move_natives;
-use sui_node;
-use sui_node::metrics;
-use sui_protocol_config::SupportedProtocolVersions;
-use sui_types::message_envelope::Message;
-use sui_types::messages::InputObjectKind;
-use sui_types::messages::InputObjects;
+use sui_protocol_config::ProtocolConfig;
+use sui_types::epoch_data::EpochData;
 use sui_types::messages::TransactionDataAPI;
 use sui_types::messages::TransactionKind;
-use sui_types::metrics::LimitsMetrics;
 use sui_types::multiaddr::Multiaddr;
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
 use sui_types::sui_system_state::get_sui_system_state;
 use sui_types::sui_system_state::SuiSystemStateTrait;
-use sui_types::temporary_store::TemporaryStore;
 use tokio::signal;
 use tokio::sync::mpsc;
-use tokio::sync::watch;
-use tokio::time::Duration;
-use tracing::{error, info};
-use typed_store::rocks::default_db_options;
+use tokio::time::Instant;
 
 const GIT_REVISION: &str = {
     if let Some(revision) = option_env!("GIT_REVISION") {
@@ -61,29 +45,27 @@ struct Args {
     #[clap(long)]
     pub config_path: PathBuf,
 
+    /// Specifies the watermark up to which I will download checkpoints
+    #[clap(long)]
+    download: Option<u64>,
+
+    /// Specifies whether I will execute or not
+    #[clap(long)]
+    execute: bool,
+
     #[clap(long, help = "Specify address to listen on")]
     listen_address: Option<Multiaddr>,
 }
+
 #[tokio::main]
 async fn main() {
     let args = Args::parse();
-    let mut config = NodeConfig::load(&args.config_path).unwrap();
-    let genesis = config.genesis().expect("Could not load genesis");
+    let config = NodeConfig::load(&args.config_path).unwrap();
+    let genesis = Arc::new(config.genesis().expect("Could not load genesis"));
     let mut sw_state = SequenceWorkerState::new(&config).await;
+    let metrics_clone = sw_state.metrics.clone();
     let mut ew_state = ExecutionWorkerState::new();
-    ew_state.init_store(genesis);
-
-    assert!(
-        config.supported_protocol_versions.is_none(),
-        "supported_protocol_versions cannot be read from the config file"
-    );
-    config.supported_protocol_versions = Some(SupportedProtocolVersions::SYSTEM_DEFAULT);
-
-    info!("Sui Node version: {VERSION}");
-    info!(
-        "Supported protocol versions: {:?}",
-        config.supported_protocol_versions
-    );
+    ew_state.init_store(&genesis);
 
     let (epoch_start_sender, mut epoch_start_receiver) = mpsc::channel(32);
     let (tx_sender, mut tx_receiver) = mpsc::channel(1000);
@@ -91,6 +73,8 @@ async fn main() {
 
     // Sequence Worker
     tokio::spawn(async move {
+        let config = NodeConfig::load(&args.config_path).unwrap();
+        let genesis = Arc::new(config.genesis().expect("Could not load genesis"));
         let genesis_seq = genesis.checkpoint().into_summary_and_sequence().0;
 
         let (highest_synced_seq, highest_executed_seq) = sw_state.get_watermarks();
@@ -105,7 +89,7 @@ async fn main() {
         epoch_start_sender
             .send(sui_distributed_execution::EpochStartMessage(
                 protocol_config.clone(),
-                epoch_start_config.clone(),
+                epoch_start_config.epoch_data(),
                 reference_gas_price,
             ))
             .await
@@ -118,8 +102,8 @@ async fn main() {
                 .expect("Cannot get checkpoint")
                 .expect("Checkpoint is None");
 
-            if checkpoint_seq % 1000 == 0 {
-                println!("{}", checkpoint_seq);
+            if checkpoint_seq % 10000 == 0 {
+                println!("Sending checkpoint {}", checkpoint_seq);
             }
 
             let (_seq, summary) = checkpoint_summary.into_summary_and_sequence();
@@ -128,6 +112,15 @@ async fn main() {
                 .get_checkpoint_contents(&summary.content_digest)
                 .expect("Contents must exist")
                 .expect("Contents must exist");
+
+            if contents.size() > 1 {
+                println!(
+                    "Checkpoint {} has {} transactions",
+                    checkpoint_seq,
+                    contents.size()
+                );
+            }
+
             for tx_digest in contents.iter() {
                 let tx = sw_state
                     .store
@@ -137,15 +130,20 @@ async fn main() {
 
                 tx_sender
                     .send(sui_distributed_execution::TransactionMessage(
-                        tx,
+                        tx.clone(),
                         tx_digest.clone(),
                         checkpoint_seq,
                     ))
                     .await
                     .expect("Sending doesn't work");
 
-                if summary.end_of_epoch_data.is_some() {
+                if let TransactionKind::ChangeEpoch(_) = tx.data().transaction_data().kind() {
                     // wait for epoch end message from execution worker
+                    println!(
+                        "Waiting for epoch end message. Checkpoint_seq: {}",
+                        checkpoint_seq
+                    );
+
                     let EpochEndMessage(new_epoch_start_state) = epoch_end_receiver
                         .recv()
                         .await
@@ -180,7 +178,7 @@ async fn main() {
                     epoch_start_sender
                         .send(sui_distributed_execution::EpochStartMessage(
                             protocol_config.clone(),
-                            epoch_start_config.clone(),
+                            epoch_start_config.epoch_data(),
                             reference_gas_price,
                         ))
                         .await
@@ -188,23 +186,35 @@ async fn main() {
                 }
             }
         }
+        println!("Sequence worker finished");
     });
 
     // Execution Worker
     tokio::spawn(async move {
+        let mut epoch_data: EpochData;
+        let mut protocol_config: ProtocolConfig;
+        let mut reference_gas_price: u64;
         // Wait for epoch start message
         let sui_distributed_execution::EpochStartMessage(
-            protocol_config,
-            epoch_start_config,
-            reference_gas_price,
+            protocol_config_,
+            epoch_data_,
+            reference_gas_price_,
         ) = epoch_start_receiver.recv().await.unwrap();
+        println!("Got epoch start message");
+
+        protocol_config = protocol_config_;
+        epoch_data = epoch_data_;
+        reference_gas_price = reference_gas_price_;
+
         let native_functions = sui_move_natives::all_natives(/* silent */ true);
-        let move_vm = Arc::new(
+        let mut move_vm = Arc::new(
             adapter::new_move_vm(native_functions.clone(), &protocol_config, false)
                 .expect("We defined natives to not fail here"),
         );
-        let epoch_start_config = Arc::new(epoch_start_config);
 
+        // start timer for TPS computation
+        let now = Instant::now();
+        let mut num_tx: usize = 0;
         // receive txs
         while let Some(sui_distributed_execution::TransactionMessage(
             tx,
@@ -219,13 +229,19 @@ async fn main() {
                     checkpoint_seq,
                     &protocol_config,
                     &move_vm,
-                    &epoch_start_config,
+                    &epoch_data,
                     reference_gas_price,
-                    sw_state.metrics.clone(),
+                    metrics_clone.clone(),
                 )
                 .await;
 
+            num_tx += 1;
+            if checkpoint_seq % 10000 == 0 {
+                println!("Executed {}", checkpoint_seq);
+            }
+
             if let TransactionKind::ChangeEpoch(_) = tx.data().transaction_data().kind() {
+                // First send end of epoch message to sequence worker
                 println!("END OF EPOCH at checkpoint {}", checkpoint_seq);
                 let latest_state = get_sui_system_state(&&ew_state.memory_store)
                     .expect("Read Sui System State object cannot fail");
@@ -234,10 +250,32 @@ async fn main() {
                     .send(sui_distributed_execution::EpochEndMessage(
                         new_epoch_start_state,
                     ))
-                    .await;
-                break;
+                    .await
+                    .expect("Sending doesn't work");
+
+                // Then wait for start epoch message from sequence worker and update local state
+                let sui_distributed_execution::EpochStartMessage(
+                    protocol_config_,
+                    epoch_data_,
+                    reference_gas_price_,
+                ) = epoch_start_receiver.recv().await.unwrap();
+                move_vm = Arc::new(
+                    adapter::new_move_vm(native_functions.clone(), &protocol_config, false)
+                        .expect("We defined natives to not fail here"),
+                );
+                protocol_config = protocol_config_;
+                epoch_data = epoch_data_;
+                reference_gas_price = reference_gas_price_;
             }
         }
+
+        // print TPS
+        let elapsed = now.elapsed();
+        println!(
+            "Execution worker TPS: {}",
+            1000.0 * num_tx as f64 / elapsed.as_millis() as f64
+        );
+        println!("Execution worker finished");
     });
 
     // wait for SIGINT on the main thread

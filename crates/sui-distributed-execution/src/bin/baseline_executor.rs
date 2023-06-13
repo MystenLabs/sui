@@ -107,7 +107,7 @@ async fn main() {
                         checkpoint_seq,
                         &protocol_config,
                         &move_vm,
-                        &epoch_start_config,
+                        &epoch_start_config.epoch_data(),
                         reference_gas_price,
                         sw_state.metrics.clone(),
                     )

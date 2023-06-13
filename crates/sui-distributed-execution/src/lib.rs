@@ -5,6 +5,7 @@ use sui_config::NodeConfig;
 use sui_core::transaction_input_checker::get_gas_status_no_epoch_store_experimental;
 use sui_protocol_config::ProtocolConfig;
 use sui_types::base_types::ExecutionDigests;
+use sui_types::epoch_data::EpochData;
 use sui_types::message_envelope::Message;
 use sui_types::messages::{InputObjectKind, InputObjects, TransactionDataAPI, VerifiedTransaction};
 use sui_types::storage::get_module_by_id;
@@ -41,11 +42,7 @@ use tokio::time::Duration;
 use typed_store::rocks::default_db_options;
 
 #[derive(Debug)]
-pub struct EpochStartMessage(
-    pub ProtocolConfig,
-    pub Arc<EpochStartConfiguration>,
-    pub u64,
-);
+pub struct EpochStartMessage(pub ProtocolConfig, pub EpochData, pub u64);
 #[derive(Debug)]
 pub struct EpochEndMessage(pub EpochStartSystemState);
 #[derive(Debug)]
@@ -206,24 +203,13 @@ impl SequenceWorkerState {
 
 pub struct ExecutionWorkerState {
     pub memory_store: MemoryBackedStore,
-    // protocol_config: &'a ProtocolConfig,
-    // move_vm: &'a Arc<MoveVM>,
-    // epoch_start_config: &'a Arc<EpochStartConfiguration>,
-    // reference_gas_price: u64,
 }
 
 impl ExecutionWorkerState {
     pub fn new(// protocol_config: &'a ProtocolConfig,
-        // move_vm: &'a Arc<MoveVM>,
-        // epoch_start_config: &'a Arc<EpochStartConfiguration>,
-        // reference_gas_price: u64,
     ) -> Self {
         Self {
             memory_store: MemoryBackedStore::new(),
-            // protocol_config,
-            // move_vm,
-            // epoch_start_config,
-            // reference_gas_price,
         }
     }
 
@@ -242,7 +228,7 @@ impl ExecutionWorkerState {
         checkpoint_seq: u64,
         protocol_config: &ProtocolConfig,
         move_vm: &Arc<MoveVM>,
-        epoch_start_config: &Arc<EpochStartConfiguration>,
+        epoch_data: &EpochData,
         reference_gas_price: u64,
         metrics: Arc<LimitsMetrics>,
     ) {
@@ -301,7 +287,7 @@ impl ExecutionWorkerState {
                 transaction_dependencies,
                 move_vm,
                 gas_status,
-                &epoch_start_config.epoch_data(),
+                epoch_data,
                 protocol_config,
                 metrics.clone(),
                 false,
