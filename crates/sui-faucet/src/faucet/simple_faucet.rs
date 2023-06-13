@@ -811,9 +811,13 @@ impl Faucet for SimpleFaucet {
         amounts: &[u64],
     ) -> Result<BatchFaucetReceipt, FaucetError> {
         info!(?recipient, uuid = ?id, "Getting faucet request");
-        self.request_producer
+        if self
+            .request_producer
             .try_send((id, recipient, amounts.to_vec()))
-            .expect("producer queue is full");
+            .is_err()
+        {
+            return Err(FaucetError::BatchSendQueueFull);
+        }
         let mut task_map = self.task_id_cache.lock().await;
         task_map.insert(
             id,
@@ -842,20 +846,14 @@ pub async fn batch_gather(
     requests: &mut Vec<(Uuid, SuiAddress, Vec<u64>)>,
     batch_request_size: u64,
 ) -> Result<(), FaucetError> {
-    let mut counter = 0;
-    // We take the first 500 items off the queue.
-    while counter < batch_request_size - 1 {
-        let request = request_consumer.recv().await;
-        match request {
-            Some(req) => {
-                requests.push(req);
-                counter += 1;
-            }
-            None => {
-                // Fail with error logging, so that we can continue, but we should never reach here.
-                error!("Empty request stored in request consumer queue.");
-            }
-        }
+    // Gather the rest of the batch after the first item has been taken.
+    for _ in 1..batch_request_size {
+        let Some(req)  = request_consumer.recv().await else {
+            error!("Request consumer queue closed");
+            return Err(FaucetError::ChannelClosed);
+        };
+
+        requests.push(req);
     }
 
     Ok(())
@@ -872,7 +870,7 @@ pub async fn batch_transfer_gases(
     tokio::select! {
         first_req = request_consumer.recv() => {
             if let Some((uuid, address, amounts)) = first_req {
-            requests.push((uuid, address, amounts));
+                requests.push((uuid, address, amounts));
             } else {
                 // Should only happen after the Faucet has shut down
                 info!("No more faucet requests will be received. Exiting batch faucet task ...");
@@ -890,16 +888,14 @@ pub async fn batch_transfer_gases(
         return Ok(TransactionDigest::ZERO);
     };
 
-    match timeout(
+    if timeout(
         BATCH_TIMEOUT,
         batch_gather(request_consumer, &mut requests, faucet.batch_request_size),
     )
     .await
+    .is_err()
     {
-        Ok(_) => {}
-        Err(_) => {
-            info!("Batch timeout elapsed while waiting.");
-        }
+        info!("Batch timeout elapsed while waiting.");
     };
 
     let total_requests = requests.len();
@@ -908,13 +904,13 @@ pub async fn batch_transfer_gases(
     let uuid = Uuid::new_v4();
     info!(
         ?uuid,
-        "Batch transfer attemped of size: {:?}", total_requests
+        "Batch transfer attempted of size: {:?}", total_requests
     );
-    let mut total_sui_needed: u64 = 0;
-    for (_, _, amounts) in &requests {
-        let sum: u64 = amounts.iter().sum();
-        total_sui_needed += sum;
-    }
+    let total_sui_needed: u64 = requests
+        .iter()
+        .map(|(_, _, amounts)| amounts)
+        .flatten()
+        .sum();
     // This loop is utilized to grab a coin that is large enough for the request
     loop {
         let gas_coin_response = faucet

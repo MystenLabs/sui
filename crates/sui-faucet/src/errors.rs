@@ -31,6 +31,12 @@ pub enum FaucetError {
     #[error("Coin Transfer Failed `{0}`")]
     Transfer(String),
 
+    #[error("Too many coins in the batch queue. Please try again later.")]
+    BatchSendQueueFull,
+
+    #[error("Request consumer queue closed.")]
+    ChannelClosed,
+
     #[error("Internal error: {0}")]
     Internal(String),
 }
