@@ -38,8 +38,8 @@ export function useOwnedKiosk(address: SuiAddress | undefined) {
     retry: false,
     queryFn: async (): Promise<{
       caps: KioskOwnerCap[];
-      kioskId: SuiAddress | null;
-      kioskCap: SuiAddress | null;
+      kioskId: SuiAddress | undefined;
+      kioskCap: SuiAddress | undefined;
     } | null> => {
       if (!address) return null;
 
