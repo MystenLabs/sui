@@ -8,14 +8,17 @@ import clsx from 'clsx';
 import { useMemo, useState } from 'react';
 
 import { ErrorBoundary } from '../error-boundary/ErrorBoundary';
-import { Graph, isDefined } from './Graph';
-import { type EpochGasInfo } from './types';
+import { Graph } from './Graph';
+import {
+    type EpochGasInfo,
+    type GraphDurationsType,
+    type UnitsType,
+} from './types';
 import {
     GRAPH_DURATIONS,
     GRAPH_DURATIONS_MAP,
-    type GraphDurationsType,
     UNITS,
-    type UnitsType,
+    isDefined,
     useGasPriceFormat,
 } from './utils';
 
@@ -50,12 +53,7 @@ function useHistoricalGasPrices() {
                 epoch: Number(anEpoch.epoch) + 1,
                 referenceGasPrice: anEpoch.endOfEpochInfo?.referenceGasPrice
                     ? BigInt(anEpoch.endOfEpochInfo?.referenceGasPrice)
-                    : //   BigInt(
-                      //       Math.random() > 0.5
-                      //           ? Math.round(Math.random() * 1000)
-                      //           : 1
-                      //   )
-                      null,
+                    : null,
                 date: anEpoch.endOfEpochInfo?.epochEndTimestamp
                     ? new Date(
                           Number(anEpoch.endOfEpochInfo?.epochEndTimestamp)

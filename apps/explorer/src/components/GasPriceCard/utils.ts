@@ -4,10 +4,10 @@
 import { CoinFormat, formatBalance } from '@mysten/core';
 import { SUI_DECIMALS } from '@mysten/sui.js';
 
+import { type EpochGasInfo, type GraphDurationsType } from './types';
+
 export const UNITS = ['MIST', 'SUI'] as const;
-export type UnitsType = (typeof UNITS)[number];
 export const GRAPH_DURATIONS = ['7 Epochs', '30 Epochs'] as const;
-export type GraphDurationsType = (typeof GRAPH_DURATIONS)[number];
 export const GRAPH_DURATIONS_MAP: Record<GraphDurationsType, number> = {
     '7 Epochs': 7,
     '30 Epochs': 30,
@@ -24,4 +24,8 @@ export function useGasPriceFormat(
               CoinFormat.FULL
           )
         : null;
+}
+
+export function isDefined(d: EpochGasInfo) {
+    return d.date !== null && d.referenceGasPrice !== null;
 }

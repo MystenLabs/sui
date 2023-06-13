@@ -1,147 +1,26 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { formatDate } from '@mysten/core';
 import { AxisBottom } from '@visx/axis';
 import { curveLinear } from '@visx/curve';
 import { localPoint } from '@visx/event';
 import { MarkerCircle } from '@visx/marker';
 import { scaleLinear } from '@visx/scale';
 import { AreaClosed, LinePath } from '@visx/shape';
-import {
-    useTooltip,
-    useTooltipInPortal,
-    useTooltipPosition,
-} from '@visx/tooltip';
+import { useTooltip, useTooltipInPortal } from '@visx/tooltip';
 import clsx from 'clsx';
 import { bisector, extent } from 'd3-array';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { throttle } from 'throttle-debounce';
 
-import { type EpochGasInfo } from './types';
-import { type UnitsType, useGasPriceFormat } from './utils';
-
-import { Text } from '~/ui/Text';
-
-function formatXLabel(epoch: number) {
-    return String(epoch);
-}
-
-export function isDefined(d: EpochGasInfo) {
-    return d.date !== null && d.referenceGasPrice !== null;
-}
+import { GraphAxisRight } from './GraphAxisRight';
+import { GraphTooltipContent } from './GraphTooltipContent';
+import { type UnitsType, type EpochGasInfo } from './types';
+import { isDefined } from './utils';
 
 const SIDE_MARGIN = 15;
 
 const bisectEpoch = bisector(({ epoch }: EpochGasInfo) => epoch).center;
-
-type AxisRightProps<Output> = {
-    left: number;
-    scale: ReturnType<typeof scaleLinear<Output>>;
-    selectedUnit: UnitsType;
-    isHovered: boolean;
-};
-
-function GasPriceValue({
-    value,
-    selectedUnit,
-    scale,
-    left,
-}: AxisRightProps<number> & { value: number }) {
-    const valueUnit = useGasPriceFormat(BigInt(value), selectedUnit);
-    return (
-        <text
-            x={left}
-            y={scale(value)}
-            textAnchor="end"
-            alignmentBaseline="middle"
-            className="fill-steel font-sans text-subtitleSmall font-medium"
-        >
-            {valueUnit}
-        </text>
-    );
-}
-function AxisRight({
-    scale,
-    left,
-    selectedUnit,
-    isHovered,
-}: AxisRightProps<number>) {
-    let ticks = scale.nice(6).ticks(6);
-    return (
-        <g>
-            <g>
-                {ticks
-                    .filter(
-                        (_, index) =>
-                            (index + 1) % 2 === 0 || ticks.length === 1
-                    )
-                    .map((value) => (
-                        <GasPriceValue
-                            key={value}
-                            {...{ scale, left, value, selectedUnit, isHovered }}
-                        />
-                    ))}
-            </g>
-            <g>
-                {ticks
-                    .filter(
-                        (_, index) =>
-                            (index + 1) % 2 !== 0 && ticks.length !== 1
-                    )
-                    .map((value) => (
-                        <circle
-                            key={value}
-                            cx={left}
-                            cy={scale(value)}
-                            r="1"
-                            className={clsx(
-                                'fill-steel transition-all ease-ease-out-cubic',
-                                isHovered ? 'opacity-100' : 'opacity-0'
-                            )}
-                        />
-                    ))}
-            </g>
-        </g>
-    );
-}
-
-type GraphTooltipProps = {
-    hoveredElement: EpochGasInfo;
-    unit: UnitsType;
-};
-function GraphTooltip({ hoveredElement, unit }: GraphTooltipProps) {
-    const formattedHoveredPrice = useGasPriceFormat(
-        hoveredElement?.referenceGasPrice ?? null,
-        unit
-    );
-    const formattedHoveredDate = hoveredElement?.date
-        ? formatDate(hoveredElement?.date, ['month', 'day'])
-        : '-';
-    const { isFlippedHorizontally } = useTooltipPosition();
-    return (
-        <div
-            className={clsx(
-                'flex w-fit -translate-y-[calc(100%-10px)] flex-col flex-nowrap gap-0.5 whitespace-nowrap rounded-md border border-solid border-gray-45 bg-gray-90 px-2 py-1.5',
-                hoveredElement?.date ? 'visible' : 'invisible',
-                isFlippedHorizontally
-                    ? '-translate-x-[1px] rounded-bl-none'
-                    : 'translate-x-[1px] rounded-br-none'
-            )}
-        >
-            <Text variant="caption/semibold" color="white">
-                <div className="whitespace-nowrap">
-                    {formattedHoveredPrice
-                        ? `${formattedHoveredPrice} ${unit}`
-                        : '-'}
-                </div>
-            </Text>
-            <Text variant="subtitleSmallExtra/medium" color="white">
-                Epoch {hoveredElement?.epoch}, {formattedHoveredDate}
-            </Text>
-        </div>
-    );
-}
 
 export type GraphProps = {
     data: EpochGasInfo[];
@@ -237,23 +116,23 @@ export function Graph({ data, width, height, selectedUnit }: GraphProps) {
             className="relative h-full w-full overflow-hidden"
             ref={containerRef}
         >
-            {/* {tooltipOpen && tooltipData ? ( */}
-            <TooltipInPortal
-                key={Math.random()} // needed for bounds to update correctly
-                offsetLeft={0}
-                offsetTop={0}
-                left={tooltipLeft}
-                top={0}
-                className="pointer-events-none absolute z-10 h-0 w-max overflow-visible"
-                unstyled
-                detectBounds
-            >
-                <GraphTooltip
-                    hoveredElement={tooltipData!}
-                    unit={selectedUnit}
-                />
-            </TooltipInPortal>
-            {/* ) : null} */}
+            {tooltipOpen && tooltipData ? (
+                <TooltipInPortal
+                    key={Math.random()} // needed for bounds to update correctly
+                    offsetLeft={0}
+                    offsetTop={0}
+                    left={tooltipLeft}
+                    top={0}
+                    className="pointer-events-none absolute z-10 h-0 w-max overflow-visible"
+                    unstyled
+                    detectBounds
+                >
+                    <GraphTooltipContent
+                        hoveredElement={tooltipData!}
+                        unit={selectedUnit}
+                    />
+                </TooltipInPortal>
+            ) : null}
             <svg width={width} height={height}>
                 <line
                     x1={0}
@@ -261,7 +140,7 @@ export function Graph({ data, width, height, selectedUnit }: GraphProps) {
                     x2={0}
                     y2={Math.max(height - 20, 0)}
                     className={clsx(
-                        'stroke-steel/30 transition-all ease-ease-out-cubic',
+                        'stroke-steel/30',
                         tooltipOpen ? 'opacity-100' : 'opacity-0'
                     )}
                     strokeWidth="1"
@@ -273,7 +152,7 @@ export function Graph({ data, width, height, selectedUnit }: GraphProps) {
                     x2={width}
                     y2={0}
                     className={clsx(
-                        'stroke-steel/30 transition-all ease-ease-out-cubic',
+                        'stroke-steel/30',
                         tooltipOpen ? 'opacity-100' : 'opacity-0'
                     )}
                     strokeWidth="1"
@@ -347,7 +226,7 @@ export function Graph({ data, width, height, selectedUnit }: GraphProps) {
                     fillOpacity="0.1"
                     stroke="none"
                 />
-                <AxisRight
+                <GraphAxisRight
                     left={width - SIDE_MARGIN / 2}
                     scale={yScale}
                     selectedUnit={selectedUnit}
@@ -365,7 +244,7 @@ export function Graph({ data, width, height, selectedUnit }: GraphProps) {
                             'text-subtitleSmall font-medium fill-steel font-sans',
                     }}
                     scale={xScale}
-                    tickFormat={(epoch) => formatXLabel(epoch as number)}
+                    tickFormat={String}
                     hideTicks
                     hideAxisLine
                     tickValues={xScale
