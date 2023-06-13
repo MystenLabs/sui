@@ -59,7 +59,9 @@ impl LeaderSwapTable {
     /// with a good performer. If not, then the method returns None. Otherwise the leader to swap with
     /// is returned instead. The `leader_round` represents the DAG round on which the provided AuthorityIdentifier
     /// is a leader on and is used as a seed to random function in order to calculate the good node that
-    /// will swap for that round the bad node.
+    /// will swap for that round the bad node. We are intentionally not doing weighted randomness as
+    /// we want to give to all the good nodes equal opportunity to get swapped with bad nodes and not
+    /// have one node with enough stake dominating on the final schedule.
     pub fn swap(
         &self,
         leader: &AuthorityIdentifier,
