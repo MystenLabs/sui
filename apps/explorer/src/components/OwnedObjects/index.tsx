@@ -1,10 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import {
-    useGetOriginByteKioskContents,
-    useGetOwnedObjects,
-} from '@mysten/core';
+import { useGetKioskContents, useGetOwnedObjects } from '@mysten/core';
 import { useMemo, useState } from 'react';
 
 import OwnedObject from './OwnedObject';
@@ -23,7 +20,7 @@ export function OwnedObjects({ id }: { id: string }) {
     const ownedObjects = useGetOwnedObjects(id, {
         MatchNone: [{ StructType: '0x2::coin::Coin' }],
     });
-    const { data: kioskContents } = useGetOriginByteKioskContents(id);
+    const { data: kioskContents } = useGetKioskContents(id);
 
     const { data, isError, isFetching, pagination } =
         useCursorPagination(ownedObjects);
