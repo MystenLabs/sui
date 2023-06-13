@@ -1,13 +1,16 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::reader::ArchiveReader;
 use crate::writer::ArchiveWriter;
-use crate::{read_manifest, write_manifest, Manifest, EPOCH_DIR_PREFIX};
-use anyhow::Result;
-use object_store::path::Path;
+use crate::{read_manifest, write_manifest, Manifest};
+use anyhow::{Context, Result};
+use more_asserts as ma;
 use object_store::DynObjectStore;
 use prometheus::Registry;
+use std::num::NonZeroUsize;
 use std::path::PathBuf;
+use std::sync::atomic::AtomicU64;
 use std::sync::Arc;
 use std::time::Duration;
 use sui_macros::sim_test;
@@ -15,12 +18,13 @@ use sui_storage::object_store::util::path_to_filesystem;
 use sui_storage::object_store::{ObjectStoreConfig, ObjectStoreType};
 use sui_storage::{FileCompression, StorageFormat};
 use sui_swarm_config::test_utils::{empty_contents, CommitteeFixture};
-use sui_types::messages_checkpoint::VerifiedCheckpoint;
-use sui_types::storage::SharedInMemoryStore;
+use sui_types::messages_checkpoint::{VerifiedCheckpoint, VerifiedCheckpointContents};
+use sui_types::storage::{ReadStore, SharedInMemoryStore};
 use tempfile::tempdir;
 
 struct TestState {
     archive_writer: ArchiveWriter,
+    archive_reader: ArchiveReader,
     local_path: PathBuf,
     remote_path: PathBuf,
     local_store: Arc<DynObjectStore>,
@@ -56,7 +60,7 @@ async fn write_new_checkpoints_to_store(
     Ok(ordered_checkpoints.last().cloned())
 }
 
-async fn setup_checkpoint_writer(temp_dir: PathBuf) -> anyhow::Result<TestState> {
+async fn setup_test_state(temp_dir: PathBuf) -> anyhow::Result<TestState> {
     let local_path = temp_dir.join("local_dir");
     let remote_path = temp_dir.join("remote_dir");
     let local_store_config = ObjectStoreConfig {
@@ -80,10 +84,14 @@ async fn setup_checkpoint_writer(temp_dir: PathBuf) -> anyhow::Result<TestState>
         &Registry::default(),
     )
     .await?;
+
+    let archive_reader =
+        ArchiveReader::new(remote_store_config.clone(), NonZeroUsize::new(2).unwrap())?;
     let local_store = local_store_config.make()?;
     let remote_store = remote_store_config.make()?;
     Ok(TestState {
         archive_writer,
+        archive_reader,
         local_path,
         remote_path,
         local_store,
@@ -104,11 +112,8 @@ async fn insert_checkpoints_and_verify_manifest(
         if test_state.remote_path.join("MANIFEST").exists() {
             if let Ok(manifest) = read_manifest(test_state.remote_store.clone()).await {
                 for file in manifest.files().into_iter() {
-                    let dir_prefix = Path::from(format!("{}{}", EPOCH_DIR_PREFIX, file.epoch_num));
-                    let file_path = path_to_filesystem(
-                        test_state.remote_path.clone(),
-                        &file.file_path(&dir_prefix),
-                    )?;
+                    let file_path =
+                        path_to_filesystem(test_state.remote_path.clone(), &file.file_path())?;
                     assert!(file_path.exists());
                 }
 
@@ -138,7 +143,7 @@ async fn insert_checkpoints_and_verify_manifest(
 #[sim_test]
 async fn test_archive_basic() -> Result<(), anyhow::Error> {
     let test_store = SharedInMemoryStore::default();
-    let test_state = setup_checkpoint_writer(temp_dir()).await?;
+    let test_state = setup_test_state(temp_dir()).await?;
     let _kill = test_state.archive_writer.start(test_store.clone())?;
     insert_checkpoints_and_verify_manifest(&test_state, test_store, None).await?;
     Ok(())
@@ -147,14 +152,14 @@ async fn test_archive_basic() -> Result<(), anyhow::Error> {
 #[sim_test]
 async fn test_archive_resumes() -> Result<(), anyhow::Error> {
     let test_store = SharedInMemoryStore::default();
-    let test_state = setup_checkpoint_writer(temp_dir()).await?;
+    let test_state = setup_test_state(temp_dir()).await?;
     let kill = test_state.archive_writer.start(test_store.clone())?;
     let prev_checkpoint =
         insert_checkpoints_and_verify_manifest(&test_state, test_store.clone(), None).await?;
 
     // Kill the archive writer so we can restart it again
     drop(kill);
-    let test_state = setup_checkpoint_writer(temp_dir()).await?;
+    let test_state = setup_test_state(temp_dir()).await?;
     let _kill = test_state.archive_writer.start(test_store.clone())?;
     insert_checkpoints_and_verify_manifest(&test_state, test_store, prev_checkpoint).await?;
 
@@ -173,5 +178,60 @@ async fn test_manifest_serde() -> Result<()> {
     write_manifest(original_manifest.clone(), remote_store.clone()).await?;
     let downloaded_manifest = read_manifest(remote_store).await?;
     assert_eq!(downloaded_manifest, original_manifest);
+    Ok(())
+}
+
+#[sim_test]
+async fn test_archive_reader_e2e() -> Result<(), anyhow::Error> {
+    let test_store = SharedInMemoryStore::default();
+    let mut test_state = setup_test_state(temp_dir()).await?;
+    let _kill = test_state.archive_writer.start(test_store.clone())?;
+    let mut latest_archived_checkpoint_seq_num = 0;
+    while latest_archived_checkpoint_seq_num < 10 {
+        insert_checkpoints_and_verify_manifest(&test_state, test_store.clone(), None).await?;
+        let new_latest_archived_checkpoint_seq_num = test_state
+            .archive_reader
+            .latest_available_checkpoint()
+            .await?;
+        ma::assert_ge!(
+            new_latest_archived_checkpoint_seq_num,
+            latest_archived_checkpoint_seq_num
+        );
+        latest_archived_checkpoint_seq_num = new_latest_archived_checkpoint_seq_num;
+        tokio::time::sleep(Duration::from_secs(1)).await;
+    }
+    ma::assert_ge!(latest_archived_checkpoint_seq_num, 10);
+    let genesis_checkpoint = test_store
+        .get_checkpoint_by_sequence_number(0)?
+        .context("Missing genesis checkpoint")?;
+    let genesis_checkpoint_content = test_store
+        .get_full_checkpoint_contents_by_sequence_number(0)?
+        .context("Missing genesis checkpoint")?;
+    let read_store = SharedInMemoryStore::default();
+    read_store.inner_mut().insert_genesis_state(
+        genesis_checkpoint,
+        VerifiedCheckpointContents::new_unchecked(genesis_checkpoint_content),
+        test_state.committee.committee().to_owned(),
+    );
+    let counter = Arc::new(AtomicU64::new(0));
+    test_state.archive_reader.sync_manifest_once().await?;
+    test_state
+        .archive_reader
+        .read(
+            read_store.clone(),
+            0..(latest_archived_checkpoint_seq_num + 1),
+            counter,
+        )
+        .await?;
+    ma::assert_ge!(
+        read_store
+            .get_highest_verified_checkpoint()?
+            .sequence_number,
+        latest_archived_checkpoint_seq_num
+    );
+    ma::assert_ge!(
+        read_store.get_highest_synced_checkpoint()?.sequence_number,
+        latest_archived_checkpoint_seq_num
+    );
     Ok(())
 }

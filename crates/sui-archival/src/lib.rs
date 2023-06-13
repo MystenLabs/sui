@@ -4,6 +4,7 @@
 
 pub mod writer;
 
+mod reader;
 #[cfg(test)]
 mod tests;
 
@@ -101,7 +102,8 @@ pub struct FileMetadata {
 }
 
 impl FileMetadata {
-    pub fn file_path(&self, dir_path: &Path) -> Path {
+    pub fn file_path(&self) -> Path {
+        let dir_path = Path::from(format!("{}{}", EPOCH_DIR_PREFIX, self.epoch_num));
         match self.file_type {
             FileType::CheckpointContent => dir_path.child(&*format!(
                 "{}.{CHECKPOINT_FILE_SUFFIX}",
@@ -199,18 +201,10 @@ impl CheckpointUpdates {
         }
     }
     pub fn content_file_path(&self) -> Path {
-        self.checkpoint_file_metadata.file_path(&Path::from(format!(
-            "{}{}",
-            EPOCH_DIR_PREFIX,
-            self.manifest.epoch_num()
-        )))
+        self.checkpoint_file_metadata.file_path()
     }
     pub fn summary_file_path(&self) -> Path {
-        self.summary_file_metadata.file_path(&Path::from(format!(
-            "{}{}",
-            EPOCH_DIR_PREFIX,
-            self.manifest.epoch_num()
-        )))
+        self.summary_file_metadata.file_path()
     }
     pub fn manifest_file_path(&self) -> Path {
         Path::from(MANIFEST_FILENAME)
