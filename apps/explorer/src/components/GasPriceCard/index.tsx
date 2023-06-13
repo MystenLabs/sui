@@ -3,10 +3,12 @@
 
 import { useGetReferenceGasPrice, useRpcClient } from '@mysten/core';
 import { useQuery } from '@tanstack/react-query';
+import { ParentSize } from '@visx/responsive';
 import clsx from 'clsx';
 import { useMemo, useState } from 'react';
 
-import { GraphWithTooltip, isDefined } from './Graph';
+import { ErrorBoundary } from '../error-boundary/ErrorBoundary';
+import { Graph, isDefined } from './Graph';
 import { type EpochGasInfo } from './types';
 import {
     GRAPH_DURATIONS,
@@ -184,10 +186,20 @@ export function GasPriceCard({
                             </Text>
                         </div>
                     ) : graphEpochs?.length ? (
-                        <GraphWithTooltip
-                            data={graphEpochs}
-                            unit={selectedUnit}
-                        />
+                        <div className="relative flex-1 self-stretch">
+                            <ErrorBoundary>
+                                <ParentSize className="absolute">
+                                    {(parent) => (
+                                        <Graph
+                                            width={parent.width}
+                                            height={parent.height}
+                                            data={graphEpochs}
+                                            selectedUnit={selectedUnit}
+                                        />
+                                    )}
+                                </ParentSize>
+                            </ErrorBoundary>
+                        </div>
                     ) : (
                         <Text color="steel" variant="body/medium">
                             No historical data available
