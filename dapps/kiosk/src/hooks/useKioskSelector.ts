@@ -1,3 +1,6 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 import { KioskOwnerCap } from '@mysten/kiosk';
 import { SuiAddress } from '@mysten/sui.js';
 import { useEffect, useState } from 'react';
