@@ -418,8 +418,8 @@ importers:
         specifier: ^6.28.2
         version: 6.28.2
       '@ledgerhq/hw-transport-webhid':
-        specifier: ^6.27.13
-        version: 6.27.13
+        specifier: ^6.27.15
+        version: 6.27.15
       '@ledgerhq/hw-transport-webusb':
         specifier: ^6.27.13
         version: 6.27.13
@@ -4177,13 +4177,25 @@ packages:
   /@ledgerhq/devices@8.0.1:
     resolution: {integrity: sha512-8uuyR8DGowYBLatur+MyJtRJ8RYDWSFFqGnNmgBBdlRG6VPf9vjhrFZlmYqukWesPwkZNZstP475W4TS+j6EFw==}
     dependencies:
-      '@ledgerhq/errors': 6.12.4
+      '@ledgerhq/errors': 6.12.6
       '@ledgerhq/logs': 6.10.1
       rxjs: 6.6.7
       semver: 7.5.1
 
+  /@ledgerhq/devices@8.0.3:
+    resolution: {integrity: sha512-Q7/vqkGELSBuwFafFoTqlHIRyOjw8JqbSgiQwe2R38xN0RKtKIh+5E6UfMKyoExiq+SrQg0IC8P2LS+XdjOHLw==}
+    dependencies:
+      '@ledgerhq/errors': 6.12.6
+      '@ledgerhq/logs': 6.10.1
+      rxjs: 6.6.7
+      semver: 7.5.1
+    dev: false
+
   /@ledgerhq/errors@6.12.4:
     resolution: {integrity: sha512-qi5poMrcIuFuivdzRjjQsNp7rRwUA5v3eo6D4yEy+l+w8wT4d4JtQ5u1TbrlGfFHfgLq7Lv6dsvh2ooLyWTyfg==}
+
+  /@ledgerhq/errors@6.12.6:
+    resolution: {integrity: sha512-D+r2B09vaRO06wfGoss+rNgwqWSoK0bCtsaJWzlD2hv1zxTtucqVtSztbRFypIqxWTCb3ix5Nh2dWHEJVTp2Xw==}
 
   /@ledgerhq/hw-transport-mocker@6.27.13:
     resolution: {integrity: sha512-GYik5D45/U8SIkVUeaio6KV6xkIf73v+i6gegMbUFO712x+TgkG/EH1fpF6+sTwLmNxqjaTyi8LYqYeZNW0GMg==}
@@ -4192,12 +4204,12 @@ packages:
       '@ledgerhq/logs': 6.10.1
     dev: true
 
-  /@ledgerhq/hw-transport-webhid@6.27.13:
-    resolution: {integrity: sha512-VDQ8i08Atc7QQJ1+JE+EtuKoxBNL+ySyxMnzVAABMzhy6LGCwxzfNKP7Pb9vZNruWyRYVNCN3RiNPCMmiCDd1g==}
+  /@ledgerhq/hw-transport-webhid@6.27.15:
+    resolution: {integrity: sha512-xhtFy/SNttvBna8t1ZiP74K6Lj8uDhp0W+Zjvwz4IS6tS9gWZbKUB7scbrNrJep6Q77Of1bzDXrswyaoxFZrUg==}
     dependencies:
-      '@ledgerhq/devices': 8.0.1
-      '@ledgerhq/errors': 6.12.4
-      '@ledgerhq/hw-transport': 6.28.2
+      '@ledgerhq/devices': 8.0.3
+      '@ledgerhq/errors': 6.12.6
+      '@ledgerhq/hw-transport': 6.28.4
       '@ledgerhq/logs': 6.10.1
     dev: false
 
@@ -4216,6 +4228,14 @@ packages:
       '@ledgerhq/devices': 8.0.1
       '@ledgerhq/errors': 6.12.4
       events: 3.3.0
+
+  /@ledgerhq/hw-transport@6.28.4:
+    resolution: {integrity: sha512-fB2H92YQjidmae2GFCmOGPwkZWk0lvTu0tlLlzfiY0wRheAG+DEgjnqhdU8wmydkPLIj0WUjRgldtnJtg/a2iQ==}
+    dependencies:
+      '@ledgerhq/devices': 8.0.3
+      '@ledgerhq/errors': 6.12.6
+      events: 3.3.0
+    dev: false
 
   /@ledgerhq/logs@6.10.1:
     resolution: {integrity: sha512-z+ILK8Q3y+nfUl43ctCPuR4Y2bIxk/ooCQFwZxhtci1EhAtMDzMAx2W25qx8G1PPL9UUOdnUax19+F0OjXoj4w==}
