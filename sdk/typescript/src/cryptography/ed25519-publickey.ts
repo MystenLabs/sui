@@ -77,4 +77,11 @@ export class Ed25519PublicKey {
       bytesToHex(blake2b(tmp, { dkLen: 32 })).slice(0, SUI_ADDRESS_LENGTH * 2),
     );
   }
+
+  /**
+   * Return the Sui address associated with this Ed25519 public key
+   */
+  flag(): number {
+    return SIGNATURE_SCHEME_TO_FLAG['ED25519'];
+  }
 }

@@ -147,9 +147,15 @@ pub enum KeyToolCommand {
         weights: Vec<WeightUnit>,
     },
 
-    /// Provides a list of signatures (`flag || sig || pk` encoded in Base64), threshold, a list of public keys.
-    /// Returns a valid MultiSig and its sender address. The result can be used as signature field for `sui client execute-signed-tx`.
-    /// The number of sigs must be greater than the threshold. The number of sigs must be smaller than the number of pks.
+    /// Provides a list of participating signatures (`flag || sig || pk` encoded in Base64),
+    /// threshold, a list of all public keys and a list of their weights that define the
+    /// MultiSig address. Returns a valid MultiSig signature and its sender address. The
+    /// result can be used as signature field for `sui client execute-signed-tx`. The sum
+    /// of weights of all signatures must be >= the threshold.
+    ///
+    /// The order of `sigs` must be the same as the order of `pks`.
+    /// e.g. for [pk1, pk2, pk3, pk4, pk5], [sig1, sig2, sig5] is valid, but
+    /// [sig2, sig1, sig5] is invalid.
     MultiSigCombinePartialSig {
         #[clap(long, multiple_occurrences = false, multiple_values = true)]
         sigs: Vec<Signature>,
@@ -534,7 +540,7 @@ impl KeyToolCommand {
             KeyToolCommand::DecodeMultiSig { multisig } => {
                 let pks = multisig.get_pk().pubkeys();
                 let sigs = multisig.get_sigs();
-                let bitmap = multisig.get_bitmap();
+                let bitmap = multisig.get_indices()?;
                 println!(
                     "All pubkeys: {:?}, threshold: {:?}",
                     pks.iter()
