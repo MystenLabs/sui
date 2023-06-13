@@ -70,12 +70,6 @@ impl AuthorityStorePruningMetrics {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
-enum DeletionMethod {
-    RangeDelete,
-    PointDelete,
-}
-
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum PruningMode {
     Objects,
@@ -89,7 +83,6 @@ impl AuthorityStorePruner {
         perpetual_db: &Arc<AuthorityPerpetualTables>,
         objects_lock_table: &Arc<RwLockTable<ObjectContentDigest>>,
         checkpoint_number: CheckpointSequenceNumber,
-        deletion_method: DeletionMethod,
         metrics: Arc<AuthorityStorePruningMetrics>,
         indirect_objects_threshold: usize,
     ) -> anyhow::Result<()> {
@@ -122,29 +115,23 @@ impl AuthorityStorePruner {
             }
         }
 
-        match deletion_method {
-            DeletionMethod::RangeDelete => {
-                let mut updates: HashMap<ObjectID, (VersionNumber, VersionNumber)> = HashMap::new();
-                for effects in transaction_effects {
-                    for (object_id, seq_number) in effects.modified_at_versions() {
-                        updates
-                            .entry(*object_id)
-                            .and_modify(|range| {
-                                *range = (min(range.0, *seq_number), max(range.1, *seq_number))
-                            })
-                            .or_insert((*seq_number, *seq_number));
-                    }
-                }
-                for (object_id, (min_version, max_version)) in updates {
-                    let start_range = ObjectKey(object_id, min_version);
-                    let end_range = ObjectKey(object_id, (max_version.value() + 1).into());
-                    wb.delete_range(&perpetual_db.objects, &start_range, &end_range)?;
-                }
-            }
-            DeletionMethod::PointDelete => {
-                wb.delete_batch(&perpetual_db.objects, object_keys_to_prune)?;
+        let mut updates: HashMap<ObjectID, (VersionNumber, VersionNumber)> = HashMap::new();
+        for effects in transaction_effects {
+            for (object_id, seq_number) in effects.modified_at_versions() {
+                updates
+                    .entry(*object_id)
+                    .and_modify(|range| {
+                        *range = (min(range.0, *seq_number), max(range.1, *seq_number))
+                    })
+                    .or_insert((*seq_number, *seq_number));
             }
         }
+        for (object_id, (min_version, max_version)) in updates {
+            let start_range = ObjectKey(object_id, min_version);
+            let end_range = ObjectKey(object_id, (max_version.value() + 1).into());
+            wb.delete_range(&perpetual_db.objects, &start_range, &end_range)?;
+        }
+
         if !indirect_objects.is_empty() {
             let ref_count_update = indirect_objects
                 .iter()
@@ -328,11 +315,6 @@ impl AuthorityStorePruner {
         indirect_objects_threshold: usize,
     ) -> anyhow::Result<()> {
         let mut checkpoint_number = starting_checkpoint_number;
-        let deletion_method = if config.use_range_deletion {
-            DeletionMethod::RangeDelete
-        } else {
-            DeletionMethod::PointDelete
-        };
         let current_epoch = checkpoint_store
             .get_highest_executed_checkpoint()?
             .map(|c| c.epoch())
@@ -376,7 +358,6 @@ impl AuthorityStorePruner {
                             perpetual_db,
                             objects_lock_table,
                             checkpoint_number,
-                            deletion_method,
                             metrics.clone(),
                             indirect_objects_threshold,
                         )
@@ -405,7 +386,6 @@ impl AuthorityStorePruner {
                         perpetual_db,
                         objects_lock_table,
                         checkpoint_number,
-                        deletion_method,
                         metrics.clone(),
                         indirect_objects_threshold,
                     )
@@ -569,7 +549,7 @@ mod tests {
     use std::{collections::HashSet, sync::Arc};
     use tracing::log::{error, info};
 
-    use crate::authority::authority_store_pruner::{AuthorityStorePruningMetrics, DeletionMethod};
+    use crate::authority::authority_store_pruner::AuthorityStorePruningMetrics;
     use crate::authority::authority_store_tables::AuthorityPerpetualTables;
     use crate::authority::authority_store_types::{
         get_store_object_pair, ObjectContentDigest, StoreData, StoreObject, StoreObjectPair,
@@ -726,7 +706,6 @@ mod tests {
         num_versions_per_object: u64,
         num_object_versions_to_retain: u64,
         total_unique_object_ids: u32,
-        deletion_method: DeletionMethod,
     ) -> Vec<ObjectKey> {
         let registry = Registry::default();
         let metrics = AuthorityStorePruningMetrics::new(&registry);
@@ -742,17 +721,9 @@ mod tests {
             let mut effects = TransactionEffects::default();
             *effects.modified_at_versions_mut_for_testing() =
                 to_delete.into_iter().map(|o| (o.0, o.1)).collect();
-            AuthorityStorePruner::prune_objects(
-                vec![effects],
-                &db,
-                &lock_table(),
-                0,
-                deletion_method,
-                metrics,
-                1,
-            )
-            .await
-            .unwrap();
+            AuthorityStorePruner::prune_objects(vec![effects], &db, &lock_table(), 0, metrics, 1)
+                .await
+                .unwrap();
             to_keep
         };
         tokio::time::sleep(Duration::from_secs(3)).await;
@@ -762,25 +733,18 @@ mod tests {
     #[tokio::test]
     async fn test_pruning() {
         let path = tempfile::tempdir().unwrap().into_path();
-        let to_keep = run_pruner(&path, 3, 2, 1000, DeletionMethod::PointDelete).await;
+        let to_keep = run_pruner(&path, 3, 2, 1000).await;
         assert_eq!(
             HashSet::from_iter(to_keep),
             get_keys_after_pruning(&path).unwrap()
         );
-        run_pruner(
-            &tempfile::tempdir().unwrap().into_path(),
-            3,
-            2,
-            1000,
-            DeletionMethod::RangeDelete,
-        )
-        .await;
+        run_pruner(&tempfile::tempdir().unwrap().into_path(), 3, 2, 1000).await;
     }
 
     #[tokio::test]
     async fn test_ref_count_pruning() {
         let path = tempfile::tempdir().unwrap().into_path();
-        run_pruner(&path, 3, 2, 1000, DeletionMethod::RangeDelete).await;
+        run_pruner(&path, 3, 2, 1000).await;
         {
             let perpetual_db = AuthorityPerpetualTables::open(&path, None);
             let count = perpetual_db.indirect_move_objects.keys().count();
@@ -789,7 +753,7 @@ mod tests {
         }
 
         let path = tempfile::tempdir().unwrap().into_path();
-        run_pruner(&path, 3, 0, 1000, DeletionMethod::RangeDelete).await;
+        run_pruner(&path, 3, 0, 1000).await;
         {
             let perpetual_db = AuthorityPerpetualTables::open(&path, None);
             perpetual_db.indirect_move_objects.flush().unwrap();
@@ -859,7 +823,6 @@ mod tests {
             &perpetual_db,
             &lock_table(),
             0,
-            DeletionMethod::RangeDelete,
             metrics,
             0,
         )
@@ -896,7 +859,6 @@ mod tests {
             &perpetual_db,
             &lock_table(),
             0,
-            DeletionMethod::RangeDelete,
             metrics,
             1,
         )
@@ -932,7 +894,6 @@ mod tests {
             &perpetual_db,
             &lock_table(),
             0,
-            DeletionMethod::RangeDelete,
             metrics,
             1,
         )

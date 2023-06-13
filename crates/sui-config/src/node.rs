@@ -443,9 +443,6 @@ pub struct AuthorityStorePruningConfig {
     pub max_checkpoints_in_batch: usize,
     /// maximum number of transaction in the pruning batch
     pub max_transactions_in_batch: usize,
-    /// pruner deletion method. If set to `true`, range deletion is utilized (recommended).
-    /// Use `false` for point deletes.
-    pub use_range_deletion: bool,
     /// enables periodic background compaction for old SST files whose last modified time is
     /// older than `periodic_compaction_threshold_days` days.
     /// That ensures that all sst files eventually go through the compaction process
@@ -468,7 +465,6 @@ impl Default for AuthorityStorePruningConfig {
             pruning_run_delay_seconds,
             max_checkpoints_in_batch: 10,
             max_transactions_in_batch: 1000,
-            use_range_deletion: true,
             periodic_compaction_threshold_days: None,
             num_epochs_to_retain_for_checkpoints: None,
         }
@@ -487,7 +483,6 @@ impl AuthorityStorePruningConfig {
             pruning_run_delay_seconds,
             max_checkpoints_in_batch: 10,
             max_transactions_in_batch: 1000,
-            use_range_deletion: true,
             periodic_compaction_threshold_days: None,
             num_epochs_to_retain_for_checkpoints: None,
         }
@@ -503,7 +498,6 @@ impl AuthorityStorePruningConfig {
             pruning_run_delay_seconds,
             max_checkpoints_in_batch: 10,
             max_transactions_in_batch: 1000,
-            use_range_deletion: true,
             periodic_compaction_threshold_days: None,
             num_epochs_to_retain_for_checkpoints: None,
         }
