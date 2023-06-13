@@ -688,10 +688,10 @@ impl SimpleFaucet {
             let number_of_coins = amounts.len();
             // Get or insert sui_address into request count
             let index = *request_count.entry(addy).or_insert(0);
-            // If the number of objects don't match the number of coins panic
-            let coins_created_for_address = address_coins_map.entry(addy).or_insert_with(|| {
-                panic!("No entries found for address: {}", addy);
-            });
+
+            // The address coin map should contain the coins transferred in the given request.
+            let coins_created_for_address = address_coins_map.entry(addy).or_insert_with(Vec::new);
+
             if number_of_coins as u64 + index > coins_created_for_address.len() as u64 {
                 panic!("Less coins created expected than number requested");
             }
