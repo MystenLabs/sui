@@ -50,6 +50,8 @@ import {
   purchaseAndResolvePolicies,
   mainnetEnvironment,
   testnetEnvironment,
+  KIOSK_OWNER_CAP,
+  KIOSK_LISTING
 } from '@mysten/kiosk';
 
 /**
@@ -548,7 +550,7 @@ async function purchaseItem(itemId, opts) {
     queryTransferPolicy(provider, itemInfo.data.type),
     provider.getDynamicFieldObject({
       parentId: kioskId,
-      name: { type: '0x2::kiosk::Listing', value: { id: itemId, is_exclusive: false } },
+      name: { type: KIOSK_LISTING, value: { id: itemId, is_exclusive: false } },
     }),
   ]);
 
@@ -745,7 +747,7 @@ async function findKioskCap(address) {
 
   const objects = await provider.getOwnedObjects({
     owner: sender,
-    filter: { StructType: '0x2::kiosk::KioskOwnerCap' },
+    filter: { StructType: KIOSK_OWNER_CAP },
     options: { showContent: true },
   });
 
