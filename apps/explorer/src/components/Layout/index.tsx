@@ -10,7 +10,7 @@ import { WalletKitProvider } from '@mysten/wallet-kit';
 import { useQuery } from '@tanstack/react-query';
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import { Fragment, useMemo } from 'react';
-import { Toaster } from 'react-hot-toast';
+import { resolveValue, Toaster, type ToastType } from 'react-hot-toast';
 import { Outlet, ScrollRestoration } from 'react-router-dom';
 
 import { usePageView } from '../../hooks/usePageView';
@@ -18,9 +18,14 @@ import Footer from '../footer/Footer';
 import Header from '../header/Header';
 
 import { NetworkContext, useNetwork } from '~/context';
-import { Banner } from '~/ui/Banner';
+import { Banner, type BannerProps } from '~/ui/Banner';
 import { persistableStorage } from '~/utils/analytics/amplitude';
 import { DefaultRpcClient, Network } from '~/utils/api/DefaultRpcClient';
+
+const toastVariants: Partial<Record<ToastType, BannerProps['variant']>> = {
+    success: 'positive',
+    error: 'error',
+};
 
 export function Layout() {
     const [network, setNetwork] = useNetwork();
@@ -95,18 +100,18 @@ export function Layout() {
                             }}
                             toastOptions={{
                                 duration: 4000,
-                                success: {
-                                    icon: null,
-                                    className:
-                                        '!bg-success-light !text-success-dark',
-                                },
-                                error: {
-                                    icon: null,
-                                    className:
-                                        '!bg-issue-light !text-issue-dark',
-                                },
                             }}
-                        />
+                        >
+                            {(toast) => (
+                                <Banner
+                                    shadow
+                                    border
+                                    variant={toastVariants[toast.type]}
+                                >
+                                    {resolveValue(toast.message, toast)}
+                                </Banner>
+                            )}
+                        </Toaster>
                         <ReactQueryDevtools />
                     </NetworkContext.Provider>
                 </RpcClientContext.Provider>
