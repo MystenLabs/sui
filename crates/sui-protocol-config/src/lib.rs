@@ -10,7 +10,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 15;
+const MAX_PROTOCOL_VERSION: u64 = 16;
 
 // Record history of protocol version allocations here:
 //
@@ -47,6 +47,7 @@ const MAX_PROTOCOL_VERSION: u64 = 15;
 //             decides whether rounding is applied or not.
 // Version 15: Add reordering of user transactions by gas price after consensus.
 //             Add `sui::table_vec::drop` to the framework via a system package upgrade.
+// Version 16: Add self-matching prevention for deepbook.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -1246,6 +1247,7 @@ impl ProtocolConfig {
                     ConsensusTransactionOrdering::ByGasPrice;
                 cfg
             }
+            16 => Self::get_for_version_impl(version - 1, chain),
             // Use this template when making changes:
             //
             //     // modify an existing constant.
