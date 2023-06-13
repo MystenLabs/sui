@@ -55,7 +55,7 @@ export const formatSui = (amount: number) => {
  * address owned kiosks.
  */
 export const findActiveCap = (
-  caps: KioskOwnerCap[],
+  caps: KioskOwnerCap[] = [],
   kioskId: ObjectId,
 ): KioskOwnerCap | undefined => {
   return caps.find(

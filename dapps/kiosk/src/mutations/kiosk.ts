@@ -79,7 +79,7 @@ export function usePlaceAndListMutation({
       kioskId: ObjectId;
     }) => {
       // find active kiosk cap.
-      const cap = findActiveCap(ownedKiosk?.caps || [], kioskId);
+      const cap = findActiveCap(ownedKiosk?.caps, kioskId);
 
       if (!cap || !currentAccount?.address)
         throw new Error('Missing account, kiosk or kiosk cap');
@@ -121,7 +121,7 @@ export function usePlaceMutation({ onSuccess, onError }: MutationParams) {
       kioskId: string;
     }) => {
       // find active kiosk cap.
-      const cap = findActiveCap(ownedKiosk?.caps || [], kioskId);
+      const cap = findActiveCap(ownedKiosk?.caps, kioskId);
 
       if (!cap || !currentAccount?.address)
         throw new Error('Missing account, kiosk or kiosk cap');
@@ -147,7 +147,7 @@ export function useWithdrawMutation({ onError, onSuccess }: MutationParams) {
   return useMutation({
     mutationFn: (kiosk: Kiosk) => {
       // find active kiosk cap.
-      const cap = findActiveCap(ownedKiosk?.caps || [], kiosk.id);
+      const cap = findActiveCap(ownedKiosk?.caps, kiosk.id);
 
       if (!cap || !currentAccount?.address)
         throw new Error('Missing account, kiosk or kiosk cap');
@@ -186,7 +186,7 @@ export function useTakeMutation({ onSuccess, onError }: MutationParams) {
       kioskId: string;
     }) => {
       // find active kiosk cap.
-      const cap = findActiveCap(ownedKiosk?.caps || [], kioskId);
+      const cap = findActiveCap(ownedKiosk?.caps, kioskId);
 
       if (!cap || !currentAccount?.address)
         throw new Error('Missing account, kiosk or kiosk cap');
@@ -223,7 +223,7 @@ export function useDelistMutation({ onSuccess, onError }: MutationParams) {
       kioskId: string;
     }) => {
       // find active kiosk cap.
-      const cap = findActiveCap(ownedKiosk?.caps || [], kioskId);
+      const cap = findActiveCap(ownedKiosk?.caps, kioskId);
 
       if (!cap || !currentAccount?.address)
         throw new Error('Missing account, kiosk or kiosk cap');
