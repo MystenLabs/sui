@@ -77,4 +77,11 @@ export class Secp256r1PublicKey implements PublicKey {
       bytesToHex(blake2b(tmp, { dkLen: 32 })).slice(0, SUI_ADDRESS_LENGTH * 2),
     );
   }
+
+  /**
+   * Return the Sui address associated with this Secp256r1 public key
+   */
+  flag(): number {
+    return SIGNATURE_SCHEME_TO_FLAG['Secp256r1'];
+  }
 }

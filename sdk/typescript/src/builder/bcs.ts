@@ -16,6 +16,11 @@ export const OBJECT_ARG = 'ObjectArg';
 export const PROGRAMMABLE_TX_BLOCK = 'ProgrammableTransaction';
 export const PROGRAMMABLE_CALL_INNER = 'ProgrammableMoveCall';
 export const TRANSACTION_INNER = 'Transaction';
+export const COMPRESSED_SIGNATURE = 'CompressedSignature';
+export const PUBLIC_KEY = 'PublicKey';
+export const MULTISIG_PUBLIC_KEY = 'MultiSigPublicKey';
+export const MULTISIG_PK_MAP = 'MultiSigPkMap';
+export const MULTISIG = 'MultiSig';
 
 export const ENUM_KIND = 'EnumKind';
 
@@ -31,7 +36,12 @@ export const PROGRAMMABLE_CALL = 'SimpleProgrammableMoveCall';
 
 export type Option<T> = { some: T } | { none: true };
 
-export const builder = new BCS(bcs)
+export const builder = new BCS(bcs);
+registerFixedArray(builder, 'FixedArray[64]', 64);
+registerFixedArray(builder, 'FixedArray[33]', 33);
+registerFixedArray(builder, 'FixedArray[32]', 32);
+
+builder
   .registerStructType(PROGRAMMABLE_TX_BLOCK, {
     inputs: [VECTOR, CALL_ARG],
     transactions: [VECTOR, TRANSACTION],
@@ -95,8 +105,30 @@ export const builder = new BCS(bcs)
       packageId: BCS.ADDRESS,
       ticket: ARGUMENT,
     },
+  })
+  .registerEnumType(COMPRESSED_SIGNATURE, {
+    ED25519: ['FixedArray[64]', 'u8'],
+    Secp256k1: ['FixedArray[64]', 'u8'],
+    Secp256r1: ['FixedArray[64]', 'u8'],
+  })
+  .registerEnumType(PUBLIC_KEY, {
+    ED25519: ['FixedArray[32]', 'u8'],
+    Secp256k1: ['FixedArray[33]', 'u8'],
+    Secp256r1: ['FixedArray[33]', 'u8'],
+  })
+  .registerStructType(MULTISIG_PK_MAP, {
+    pubKey: PUBLIC_KEY,
+    weight: BCS.U8,
+  })
+  .registerStructType(MULTISIG_PUBLIC_KEY, {
+    pk_map: [VECTOR, MULTISIG_PK_MAP],
+    threshold: BCS.U16,
+  })
+  .registerStructType(MULTISIG, {
+    sigs: [VECTOR, COMPRESSED_SIGNATURE],
+    bitmap: BCS.U16,
+    multisig_pk: MULTISIG_PUBLIC_KEY,
   });
-
 /**
  * Utilities for better decoding.
  */
@@ -219,3 +251,61 @@ builder.registerType(
     return data.target.split('::').length === 3;
   },
 );
+
+function registerFixedArray(bcs: BCS, name: string, length: number) {
+  bcs.registerType(
+    name,
+    function encode(this: BCS, writer, data, typeParams, typeMap) {
+      if (data.length !== length) {
+        throw new Error(
+          `Expected fixed array of length ${length}, got ${data.length}`,
+        );
+      }
+
+      if (typeParams.length !== 1) {
+        throw new Error(
+          `Expected one type parameter in a fixed array, got ${typeParams.length}`,
+        );
+      }
+
+      let [type] =
+        typeof typeParams[0] === 'string' ? [typeParams[0], []] : typeParams[0];
+
+      for (let piece of data) {
+        this.getTypeInterface(type)._encodeRaw.call(
+          this,
+          writer,
+          piece,
+          typeParams,
+          typeMap,
+        );
+      }
+
+      return writer;
+    },
+    function decode(this: BCS, reader, typeParams, typeMap) {
+      if (typeParams.length !== 1) {
+        throw new Error(
+          `Expected one type parameter in a fixed array, got ${typeParams.length}`,
+        );
+      }
+
+      let result: any = [];
+      let [type] =
+        typeof typeParams[0] === 'string' ? [typeParams[0], []] : typeParams[0];
+
+      for (let i = 0; i < length; i++) {
+        result.push(
+          this.getTypeInterface(type)._decodeRaw.call(
+            this,
+            reader,
+            typeParams,
+            typeMap,
+          ),
+        );
+      }
+
+      return result;
+    },
+  );
+}
