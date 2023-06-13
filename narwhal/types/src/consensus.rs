@@ -172,7 +172,7 @@ impl ReputationScores {
             match a2.1.cmp(&a1.1) {
                 Ordering::Equal => {
                     // we resolve the score equality deterministically by ordering in authority
-                    // identifier order ascending.
+                    // identifier order descending.
                     a2.0.cmp(&a1.0)
                 }
                 result => result,
