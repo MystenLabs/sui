@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import {
-    useGetOriginByteKioskContents,
+    useGetKioskContents,
     isSuiNSName,
     useRpcClient,
     useSuiNSEnabled,
@@ -50,7 +50,7 @@ export function TransferNFTForm({
     const navigate = useNavigate();
     const { clientIdentifier, notificationModal } = useQredoTransaction();
 
-    const kioskContents = useGetOriginByteKioskContents(activeAddress);
+    const kioskContents = useGetKioskContents(activeAddress);
     const transferKioskItem = useTransferKioskItem({ objectId, objectType });
     const isContainedInKiosk = kioskContents?.data?.some(
         (kioskItem) => kioskItem.data?.objectId === objectId
@@ -93,7 +93,7 @@ export function TransferNFTForm({
         },
         onSuccess: (response) => {
             queryClient.invalidateQueries(['object', objectId]);
-            queryClient.invalidateQueries(['originbyte-kiosk-contents']);
+            queryClient.invalidateQueries(['get-kiosk-contents']);
             queryClient.invalidateQueries(['get-owned-objects']);
             return navigate(
                 `/receipt?${new URLSearchParams({
