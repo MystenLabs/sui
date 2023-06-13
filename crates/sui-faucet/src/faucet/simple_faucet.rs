@@ -607,10 +607,10 @@ impl SimpleFaucet {
             .created()
             .to_vec();
         if created.len() != number_of_coins {
-            panic!(
+            return Err(FaucetError::CoinAmountTransferredIncorrect(format!(
                 "PaySui Transaction should create exact {:?} new coins, but got {:?}",
                 number_of_coins, created
-            );
+            )));
         }
         assert!(created
             .iter()
@@ -693,7 +693,11 @@ impl SimpleFaucet {
             let coins_created_for_address = address_coins_map.entry(addy).or_insert_with(Vec::new);
 
             if number_of_coins as u64 + index > coins_created_for_address.len() as u64 {
-                panic!("Less coins created expected than number requested");
+                return Err(FaucetError::CoinAmountTransferredIncorrect(format!(
+                    "PaySui Transaction should create exact {:?} new coins, but got {:?}",
+                    number_of_coins as u64 + index,
+                    coins_created_for_address.len()
+                )));
             }
             let coins_slice =
                 &mut coins_created_for_address[index as usize..(index as usize + number_of_coins)];
@@ -906,11 +910,7 @@ pub async fn batch_transfer_gases(
         ?uuid,
         "Batch transfer attempted of size: {:?}", total_requests
     );
-    let total_sui_needed: u64 = requests
-        .iter()
-        .map(|(_, _, amounts)| amounts)
-        .flatten()
-        .sum();
+    let total_sui_needed: u64 = requests.iter().flat_map(|(_, _, amounts)| amounts).sum();
     // This loop is utilized to grab a coin that is large enough for the request
     loop {
         let gas_coin_response = faucet
