@@ -32,6 +32,31 @@ Quick reference on best practices for Sui Network developers.
 - Use the [`sui::test_utils`](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/packages/sui-framework/sources/test/test_utils.move#L5) module for better test error messages via `assert_eq`, debug printing via `print`, and test-only destruction via `destroy`.
 - Use `sui move test --coverage` to compute code coverage information for your tests, and `sui move coverage source --module <name>` to see uncovered lines highlighted in red. Push coverage all the way to 100% if feasible.
 
+#### Declaring test modules as friends
+
+Consider the following module:
+
+```move
+module package::mod {
+    fun foo() {}
+}
+```
+
+If the function `mod::foo()` should not be `public`ly accessible and, for any reason, needs to be tested/used in tests outside
+of `package::mod`, declare the test module - e.g. `test_mod` - a `friend` of the function's module in `package::mod`, and
+change the function's declaration to be `public(friend)`:
+
+```move
+module package::mod {
+    friend package::test_mod;
+
+    public(friend) fun foo() {}
+}
+```
+
+As mentioned above, the signatures of `public(friend)` functions can be changed at will in future package versions.
+Note that, in this case, commands such as `sui move build`/`sui move coverage` will need the addition of the `--test` flag.
+
 # Apps
 
 - For optimal performance and data consistency, apps should submit writes and reads for the same full node. In the TS SDK, this means that apps should use the wallet's [`signTransactionBlock`](https://sui-wallet-kit.vercel.app/) API, then submit the transaction via a call to [`execute_transactionBlock`](https://docs.sui.io/sui-jsonrpc#sui_executeTransactionBlock) on the app's full node, *not* use the wallet's `signAndExecuteTransactionBlock` API. This ensures read-after-write-consistency--reads from the app's full node will reflect writes from the transaction right away instead of waiting for a checkpoint.
