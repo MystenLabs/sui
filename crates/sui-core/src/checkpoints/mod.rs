@@ -1431,6 +1431,7 @@ mod tests {
     use async_trait::async_trait;
     use std::collections::{BTreeMap, HashMap};
     use std::ops::Deref;
+    use sui_macros::simtest;
     use sui_types::base_types::{ObjectID, SequenceNumber, TransactionEffectsDigest};
     use sui_types::crypto::Signature;
     use sui_types::effects::TransactionEffects;
@@ -1440,7 +1441,7 @@ mod tests {
     use sui_types::transaction::{GenesisObject, VerifiedTransaction};
     use tokio::sync::mpsc;
 
-    #[tokio::test]
+    #[sim_test]
     pub async fn checkpoint_builder_test() {
         let state = TestAuthorityBuilder::new().build().await;
 
@@ -1509,7 +1510,8 @@ mod tests {
             mpsc::channel::<CertifiedCheckpointSummary>(10);
         let store = Box::new(store);
 
-        let checkpoint_store = CheckpointStore::new(&std::env::temp_dir());
+        let ckpt_dir = tempfile::tempdir().unwrap();
+        let checkpoint_store = CheckpointStore::new(ckpt_dir.path());
 
         let accumulator = StateAccumulator::new(state.database.clone());
 
