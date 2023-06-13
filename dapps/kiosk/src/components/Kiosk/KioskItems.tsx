@@ -10,20 +10,24 @@ import { toast } from 'react-hot-toast';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useKiosk, useOwnedKiosk } from '../../hooks/kiosk';
 import { KioskNotFound } from './KioskNotFound';
+import { useWalletKit } from '@mysten/wallet-kit';
+import { normalizeSuiAddress } from '@mysten/sui.js';
 
 export function KioskItems({ kioskId }: { kioskId?: string }) {
-	const location = useLocation();
-	const isKioskPage = location.pathname.startsWith('/kiosk/');
+  const location = useLocation();
+  const isKioskPage = location.pathname.startsWith('/kiosk/');
+  const { currentAccount } = useWalletKit();
 
-	const { data: walletKiosk } = useOwnedKiosk();
-	const ownedKiosk = walletKiosk?.kioskId;
+  const { data: walletKiosk } = useOwnedKiosk(currentAccount?.address);
 
-	// checks if this is an owned kiosk.
-	// We are depending on currentAccount too, as this is what triggers the `getOwnedKioskCap()` function to change
-	// using endsWith because we support it with both 0x prefix and without.
-	const isOwnedKiosk = () => {
-		return ownedKiosk?.endsWith(kioskId || '~');
-	};
+  // checks if this is an owned kiosk.
+  // We are depending on currentAccount too, as this is what triggers the `getOwnedKioskCap()` function to change
+  // using endsWith because we support it with both 0x prefix and without.
+  const isOwnedKiosk = () => {
+    return walletKiosk?.caps?.find(
+      (x) => kioskId && normalizeSuiAddress(x.kioskId).endsWith(kioskId),
+    );
+  };
 
 	const [modalItem, setModalItem] = useState<OwnedObjectType | null>(null);
 

@@ -57,9 +57,13 @@ export function useCreateKioskMutation({ onSuccess, onError }: MutationParams) {
 /**
  * Place & List or List for sale in kiosk.
  */
-export function usePlaceAndListMutation({ onSuccess, onError }: MutationParams) {
-	const { data: ownedKiosk } = useOwnedKiosk();
-	const { signAndExecute } = useTransactionExecution();
+export function usePlaceAndListMutation({
+  onSuccess,
+  onError,
+}: MutationParams) {
+  const { currentAccount } = useWalletKit();
+  const { data: ownedKiosk } = useOwnedKiosk(currentAccount?.address);
+  const { signAndExecute } = useTransactionExecution();
 
 	return useMutation({
 		mutationFn: ({
@@ -91,8 +95,9 @@ export function usePlaceAndListMutation({ onSuccess, onError }: MutationParams) 
  * Mutation to place an item in the kiosk.
  */
 export function usePlaceMutation({ onSuccess, onError }: MutationParams) {
-	const { data: ownedKiosk } = useOwnedKiosk();
-	const { signAndExecute } = useTransactionExecution();
+  const { currentAccount } = useWalletKit();
+  const { data: ownedKiosk } = useOwnedKiosk(currentAccount?.address);
+  const { signAndExecute } = useTransactionExecution();
 
 	return useMutation({
 		mutationFn: (item: OwnedObjectType) => {
@@ -113,9 +118,9 @@ export function usePlaceMutation({ onSuccess, onError }: MutationParams) {
  * Withdraw profits from kiosk
  */
 export function useWithdrawMutation({ onError, onSuccess }: MutationParams) {
-	const { currentAccount } = useWalletKit();
-	const { data: ownedKiosk } = useOwnedKiosk();
-	const { signAndExecute } = useTransactionExecution();
+  const { currentAccount } = useWalletKit();
+  const { data: ownedKiosk } = useOwnedKiosk(currentAccount?.address);
+  const { signAndExecute } = useTransactionExecution();
 
 	return useMutation({
 		mutationFn: (kiosk: Kiosk) => {
@@ -138,9 +143,9 @@ export function useWithdrawMutation({ onError, onSuccess }: MutationParams) {
  * Mutation to take an item from the kiosk.
  */
 export function useTakeMutation({ onSuccess, onError }: MutationParams) {
-	const { data: ownedKiosk } = useOwnedKiosk();
-	const { currentAccount } = useWalletKit();
-	const { signAndExecute } = useTransactionExecution();
+  const { currentAccount } = useWalletKit();
+  const { data: ownedKiosk } = useOwnedKiosk(currentAccount?.address);
+  const { signAndExecute } = useTransactionExecution();
 
 	return useMutation({
 		mutationFn: (item: OwnedObjectType) => {
@@ -165,9 +170,9 @@ export function useTakeMutation({ onSuccess, onError }: MutationParams) {
  * Mutation to delist an item.
  */
 export function useDelistMutation({ onSuccess, onError }: MutationParams) {
-	const { data: ownedKiosk } = useOwnedKiosk();
-	const { currentAccount } = useWalletKit();
-	const { signAndExecute } = useTransactionExecution();
+  const { currentAccount } = useWalletKit();
+  const { data: ownedKiosk } = useOwnedKiosk(currentAccount?.address);
+  const { signAndExecute } = useTransactionExecution();
 
 	return useMutation({
 		mutationFn: (item: OwnedObjectType) => {
@@ -189,11 +194,14 @@ export function useDelistMutation({ onSuccess, onError }: MutationParams) {
 /**
  * Mutation to delist an item.
  */
-export function usePurchaseItemMutation({ onSuccess, onError }: MutationParams) {
-	const { data: ownedKiosk } = useOwnedKiosk();
-	const { currentAccount } = useWalletKit();
-	const { signAndExecute } = useTransactionExecution();
-	const provider = useRpc();
+export function usePurchaseItemMutation({
+  onSuccess,
+  onError,
+}: MutationParams) {
+  const { currentAccount } = useWalletKit();
+  const { data: ownedKiosk } = useOwnedKiosk(currentAccount?.address);
+  const { signAndExecute } = useTransactionExecution();
+  const provider = useRpc();
 
 	return useMutation({
 		mutationFn: async ({ item, kioskId }: { item: OwnedObjectType; kioskId: string }) => {

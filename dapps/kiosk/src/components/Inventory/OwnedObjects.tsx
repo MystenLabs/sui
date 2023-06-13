@@ -26,22 +26,24 @@ export function OwnedObjects({ address }: { address: string }) {
 
 	if (isLoading) return <Loading />;
 
-	return (
-		<div className="grid grid-cols-2 lg:grid-cols-4 gap-5">
-			{/* Only shows item with an image_url to make it easier to understand the flows. */}
-			{ownedObjects
-				?.filter((x) => !!x.display && !!x.display.image_url)
-				.map((item) => (
-					<OwnedObject
-						key={item.objectId}
-						object={item}
-						onListSuccess={() => {
-							toast.success('Item listed successfully.');
-							getOwnedObjects();
-						}}
-						listFn={(selectedItem: OwnedObjectType) => setModalItem(selectedItem)}
-					/>
-				))}
+  return (
+    <div className="grid grid-cols-2 lg:grid-cols-4 gap-5 pt-12">
+      {/* Only shows item with an image_url to make it easier to understand the flows. */}
+      {ownedObjects
+        ?.filter((x) => !!x.display && !!x.display.image_url)
+        .map((item) => (
+          <OwnedObject
+            key={item.objectId}
+            object={item}
+            onListSuccess={() => {
+              toast.success('Item listed successfully.');
+              getOwnedObjects();
+            }}
+            listFn={(selectedItem: OwnedObjectType) =>
+              setModalItem(selectedItem)
+            }
+          />
+        ))}
 
 			{modalItem && (
 				<ListPrice

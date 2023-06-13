@@ -11,7 +11,11 @@ import { KioskCreation } from '../components/Kiosk/KioskCreation';
 function Home() {
 	const { currentAccount } = useWalletKit();
 
-	const { data: ownedKiosk, isLoading, refetch: refetchOwnedKiosk } = useOwnedKiosk();
+  const {
+    data: ownedKiosk,
+    isLoading,
+    refetch: refetchOwnedKiosk,
+  } = useOwnedKiosk(currentAccount?.address);
 
 	// Return loading state.
 	if (isLoading) return <Loading />;

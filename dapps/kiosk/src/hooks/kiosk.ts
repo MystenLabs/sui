@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 /* eslint-disable @tanstack/query/exhaustive-deps */
 
-import { useWalletKit } from '@mysten/wallet-kit';
 import { useQuery } from '@tanstack/react-query';
 import {
 	TANSTACK_KIOSK_DATA_KEY,
@@ -12,13 +11,14 @@ import {
 import { useRpc } from '../context/RpcClientContext';
 import { ObjectId, SuiAddress, SuiObjectResponse } from '@mysten/sui.js';
 import {
-	Kiosk,
-	KioskData,
-	KioskItem,
-	KioskListing,
-	fetchKiosk,
-	getKioskObject,
-	getOwnedKiosks,
+  Kiosk,
+  KioskData,
+  KioskItem,
+  KioskListing,
+  KioskOwnerCap,
+  fetchKiosk,
+  getKioskObject,
+  getOwnedKiosks,
 } from '@mysten/kiosk';
 import { parseObjectDisplays, processKioskListings } from '../utils/utils';
 import { OwnedObjectType } from '../components/Inventory/OwnedObjects';
@@ -29,28 +29,32 @@ export type KioskFnType = (item: OwnedObjectType, price?: string) => Promise<voi
  * A helper to get user's kiosks.
  * If the user doesn't have a kiosk, the return is an object with null values.
  */
-export function useOwnedKiosk() {
-	const { currentAccount } = useWalletKit();
-	const provider = useRpc();
+export function useOwnedKiosk(address: SuiAddress | undefined) {
+  const provider = useRpc();
 
-	return useQuery({
-		refetchOnMount: false,
-		retry: false,
-		queryKey: [TANSTACK_OWNED_KIOSK_KEY, currentAccount?.address],
-		queryFn: async (): Promise<{
-			kioskId: SuiAddress | null;
-			kioskCap: SuiAddress | null;
-		} | null> => {
-			if (!currentAccount?.address) return null;
+  return useQuery({
+    queryKey: [TANSTACK_OWNED_KIOSK_KEY, address],
+    refetchOnMount: false,
+    retry: false,
+    queryFn: async (): Promise<{
+      caps: KioskOwnerCap[];
+      kioskId: SuiAddress | null;
+      kioskCap: SuiAddress | null;
+    } | null> => {
+      if (!address) return null;
 
-			const { kioskOwnerCaps, kioskIds } = await getOwnedKiosks(provider, currentAccount.address);
+      const { kioskOwnerCaps, kioskIds } = await getOwnedKiosks(
+        provider,
+        address,
+      );
 
-			return {
-				kioskId: kioskIds[0],
-				kioskCap: kioskOwnerCaps[0]?.objectId,
-			};
-		},
-	});
+      return {
+        caps: kioskOwnerCaps,
+        kioskId: kioskIds[0],
+        kioskCap: kioskOwnerCaps[0]?.objectId,
+      };
+    },
+  });
 }
 
 /**

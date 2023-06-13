@@ -17,9 +17,9 @@ import { Button } from '../Base/Button';
 import { useWithdrawMutation } from '../../mutations/kiosk';
 
 export function KioskData() {
-	const { currentAccount } = useWalletKit();
-	const { data: ownedKiosk } = useOwnedKiosk();
-	const kioskId = ownedKiosk?.kioskId;
+  const { currentAccount } = useWalletKit();
+  const { data: ownedKiosk } = useOwnedKiosk(currentAccount?.address);
+  const kioskId = ownedKiosk?.kioskId;
 
 	const { data: kiosk, isLoading } = useKioskDetails(kioskId);
 
@@ -66,31 +66,22 @@ export function KioskData() {
 				)}
 			</div>
 
-			<Tab.Group vertical defaultIndex={0}>
-				<Tab.List>
-					<Tab className="tab-title">My Kiosk</Tab>
-					<Tab className="tab-title">My Wallet</Tab>
-				</Tab.List>
-				<Tab.Panels>
-					<Tab.Panel>
-						<p className="pt-6 lg:w-6/12">
-							Your kiosk holds the items displayed here. You can perform the following actions:{' '}
-							<strong>Take from kiosk</strong>, <strong>List for sale</strong>, and{' '}
-							<strong>Remove listing</strong>. You are charged a gas fee for each action you take.
-						</p>
-						{kioskId && <KioskItems kioskId={kioskId}></KioskItems>}
-					</Tab.Panel>
-					<Tab.Panel>
-						<p className="py-6 lg:w-6/12">
-							To add an item to your kiosk, click <strong>Place in kiosk</strong>. To add an item
-							and list it for sale, click <strong>List for sale</strong>. You can also add an item
-							and then list it after you add it. You are changed a gas fee each time you place,
-							list, or remove an item.
-						</p>
-						{currentAccount && <OwnedObjects address={currentAccount.address}></OwnedObjects>}
-					</Tab.Panel>
-				</Tab.Panels>
-			</Tab.Group>
-		</div>
-	);
+      <Tab.Group vertical defaultIndex={0}>
+        <Tab.List>
+          <Tab className="tab-title">My Kiosk</Tab>
+          <Tab className="tab-title">My Wallet</Tab>
+        </Tab.List>
+        <Tab.Panels>
+          <Tab.Panel>
+            {kioskId && <KioskItems kioskId={kioskId}></KioskItems>}
+          </Tab.Panel>
+          <Tab.Panel>
+            {currentAccount && (
+              <OwnedObjects address={currentAccount.address}></OwnedObjects>
+            )}
+          </Tab.Panel>
+        </Tab.Panels>
+      </Tab.Group>
+    </div>
+  );
 }
