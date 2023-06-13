@@ -310,7 +310,6 @@ pub fn reset_db_to_genesis(path: &Path) -> anyhow::Result<()> {
     //   num-epochs-to-retain: 18446744073709551615
     //   max-checkpoints-in-batch: 10
     //   max-transactions-in-batch: 1000
-    //   use-range-deletion: true
     let perpetual_db = AuthorityPerpetualTables::open_tables_read_write(
         path.join("store").join("perpetual"),
         MetricConf::default(),
