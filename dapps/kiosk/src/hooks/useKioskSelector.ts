@@ -3,12 +3,12 @@ import { SuiAddress } from '@mysten/sui.js';
 import { useEffect, useState } from 'react';
 import { useOwnedKiosk } from './kiosk';
 
-export function useKioskSelector(kioskId: SuiAddress | undefined) {
+export function useKioskSelector(address: SuiAddress | undefined) {
   const [selected, setSelected] = useState<KioskOwnerCap | undefined>();
 
   // tries to find an owned kiosk for the supplied id.
   // will fail if it's a direct kioskId and pass it down directly.
-  const { data: ownedKiosk, isLoading } = useOwnedKiosk(kioskId);
+  const { data: ownedKiosk, isLoading } = useOwnedKiosk(address);
 
   // show kiosk selector in the following conditions:
   // 1. It's an address lookup.
@@ -17,6 +17,11 @@ export function useKioskSelector(kioskId: SuiAddress | undefined) {
     ownedKiosk?.caps && ownedKiosk.caps.length > 1 && selected;
 
   useEffect(() => {
+    // reset when kiosk caps change,
+    // (on logout / or if a cap is transferred away).
+    if (!ownedKiosk?.caps.find((x) => x.objectId === selected?.objectId))
+      setSelected(ownedKiosk?.caps[0]);
+
     if (isLoading || selected) return;
     setSelected(ownedKiosk?.caps[0]);
   }, [isLoading, selected, ownedKiosk?.caps, setSelected]);

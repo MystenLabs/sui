@@ -20,7 +20,7 @@ function Home() {
   } = useOwnedKiosk(currentAccount?.address);
 
   const { selected, setSelected, showKioskSelector } = useKioskSelector(
-    ownedKiosk?.kioskId,
+    currentAccount?.address,
   );
 
   // Return loading state.

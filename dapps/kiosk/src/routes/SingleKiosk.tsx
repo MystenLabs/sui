@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useParams } from 'react-router-dom';
+
 import { KioskItems } from '../components/Kiosk/KioskItems';
 import { Loading } from '../components/Base/Loading';
 import { useOwnedKiosk } from '../hooks/kiosk';

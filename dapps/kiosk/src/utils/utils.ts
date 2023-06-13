@@ -3,11 +3,12 @@
 
 import { KioskListing, KioskOwnerCap } from '@mysten/kiosk';
 import {
-	MIST_PER_SUI,
-	ObjectId,
-	SuiObjectResponse,
-	getObjectDisplay,
-	getObjectId,
+  MIST_PER_SUI,
+  ObjectId,
+  SuiObjectResponse,
+  getObjectDisplay,
+  getObjectId,
+  normalizeSuiAddress,
 } from '@mysten/sui.js';
 // Parse the display of a list of objects into a simple {object_id: display} map
 // to use throughout the app.
@@ -57,5 +58,7 @@ export const findActiveCap = (
   caps: KioskOwnerCap[],
   kioskId: ObjectId,
 ): KioskOwnerCap | undefined => {
-  return caps.find((x) => x.kioskId === kioskId);
+  return caps.find(
+    (x) => normalizeSuiAddress(x.kioskId) === normalizeSuiAddress(kioskId),
+  );
 };
