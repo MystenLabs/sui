@@ -161,7 +161,7 @@ impl NamedAddressMaps {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PackagePaths<Path: Into<Symbol> = Symbol, NamedAddress: Into<Symbol> = Symbol> {
-    pub name: Option<Symbol>,
+    pub name: Option<(Symbol, PackageConfig)>,
     pub paths: Vec<Path>,
     pub named_address_map: BTreeMap<NamedAddress, NumericalAddress>,
 }
@@ -181,17 +181,23 @@ pub struct CompilationEnv {
     warning_filter: Vec<WarningFilters>,
     diags: Diagnostics,
     visitors: Visitors,
+    package_configs: BTreeMap<Symbol, PackageConfig>,
     // TODO(tzakian): Remove the global counter and use this counter instead
     // pub counter: u64,
 }
 
 impl CompilationEnv {
-    pub fn new(flags: Flags, visitors: Vec<cli::compiler::Visitor>) -> Self {
+    pub fn new(
+        flags: Flags,
+        visitors: Vec<cli::compiler::Visitor>,
+        package_configs: BTreeMap<Symbol, PackageConfig>,
+    ) -> Self {
         Self {
             flags,
             warning_filter: vec![],
             diags: Diagnostics::new(),
             visitors: Visitors::new(visitors),
+            package_configs,
         }
     }
 
@@ -294,6 +300,14 @@ impl CompilationEnv {
 
     pub fn visitors(&self) -> &Visitors {
         &self.visitors
+    }
+
+    pub fn package_config(&self, package: Option<Symbol>) -> Option<&PackageConfig> {
+        if let Some(name) = package {
+            self.package_configs.get(&name)
+        } else {
+            None
+        }
     }
 }
 
@@ -456,6 +470,23 @@ impl Flags {
 
     pub fn bytecode_version(&self) -> Option<u32> {
         self.bytecode_version
+    }
+}
+
+//**************************************************************************************************
+// Package Level Config
+//**************************************************************************************************
+
+#[derive(PartialEq, Eq, Clone, Debug)]
+pub struct PackageConfig {
+    pub warning_filter: WarningFilters,
+}
+
+impl Default for PackageConfig {
+    fn default() -> Self {
+        Self {
+            warning_filter: WarningFilters::Empty,
+        }
     }
 }
 

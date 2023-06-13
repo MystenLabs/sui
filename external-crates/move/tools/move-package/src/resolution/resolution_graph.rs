@@ -4,6 +4,7 @@
 
 use anyhow::{bail, Context, Result};
 use move_command_line_common::files::{find_move_filenames, FileHash};
+use move_compiler::shared::PackageConfig;
 use move_core_types::account_address::AccountAddress;
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -438,6 +439,10 @@ impl Package {
             .into_iter()
             .map(FileName::from)
             .collect())
+    }
+
+    pub(crate) fn compiler_config(&self) -> PackageConfig {
+        PackageConfig::default()
     }
 }
 

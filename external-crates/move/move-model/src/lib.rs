@@ -121,7 +121,7 @@ pub fn run_model_builder_with_options_and_compilation_flags<
     env.set_extension(options);
 
     // Step 1: parse the program to get comments and a separation of targets and dependencies.
-    let (files, comments_and_compiler_res) = Compiler::from_package_paths(move_sources, deps)
+    let (files, comments_and_compiler_res) = Compiler::from_package_paths(move_sources, deps)?
         .set_flags(flags)
         .set_warning_filter(warning_filter)
         .run::<PASS_PARSER>()?;

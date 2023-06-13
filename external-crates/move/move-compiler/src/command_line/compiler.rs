@@ -12,7 +12,7 @@ use crate::{
     parser::{comments::*, *},
     shared::{
         CompilationEnv, Flags, IndexedPackagePath, NamedAddressMap, NamedAddressMaps,
-        NumericalAddress, PackagePaths,
+        NumericalAddress, PackageConfig, PackagePaths,
     },
     to_bytecode, typing, unit_test, verification,
 };
@@ -44,6 +44,7 @@ pub struct Compiler<'a> {
     flags: Flags,
     visitors: Vec<Visitor>,
     warning_filter: Option<WarningFilters>,
+    package_configs: BTreeMap<Symbol, PackageConfig>,
 }
 
 pub struct SteppedCompiler<'a, const P: Pass> {
@@ -98,11 +99,12 @@ impl<'a> Compiler<'a> {
     pub fn from_package_paths<Paths: Into<Symbol>, NamedAddress: Into<Symbol>>(
         targets: Vec<PackagePaths<Paths, NamedAddress>>,
         deps: Vec<PackagePaths<Paths, NamedAddress>>,
-    ) -> Self {
+    ) -> anyhow::Result<Self> {
         fn indexed_scopes(
             maps: &mut NamedAddressMaps,
+            package_configs: &mut BTreeMap<Symbol, PackageConfig>,
             all_pkgs: Vec<PackagePaths<impl Into<Symbol>, impl Into<Symbol>>>,
-        ) -> Vec<IndexedPackagePath> {
+        ) -> anyhow::Result<Vec<IndexedPackagePath>> {
             let mut idx_paths = vec![];
             for PackagePaths {
                 name,
@@ -110,6 +112,13 @@ impl<'a> Compiler<'a> {
                 named_address_map,
             } in all_pkgs
             {
+                let name = if let Some((name, config)) = name {
+                    let prev = package_configs.insert(name, config);
+                    anyhow::ensure!(prev.is_none(), "Duplicate package entry for '{name}'");
+                    Some(name)
+                } else {
+                    None
+                };
                 let idx = maps.insert(
                     named_address_map
                         .into_iter()
@@ -122,13 +131,14 @@ impl<'a> Compiler<'a> {
                     named_address_map: idx,
                 }))
             }
-            idx_paths
+            Ok(idx_paths)
         }
         let mut maps = NamedAddressMaps::new();
-        let targets = indexed_scopes(&mut maps, targets);
-        let deps = indexed_scopes(&mut maps, deps);
+        let mut package_configs = BTreeMap::new();
+        let targets = indexed_scopes(&mut maps, &mut package_configs, targets)?;
+        let deps = indexed_scopes(&mut maps, &mut package_configs, deps)?;
 
-        Self {
+        Ok(Self {
             maps,
             targets,
             deps,
@@ -138,7 +148,8 @@ impl<'a> Compiler<'a> {
             flags: Flags::empty(),
             visitors: vec![],
             warning_filter: None,
-        }
+            package_configs,
+        })
     }
 
     pub fn from_files<Paths: Into<Symbol>, NamedAddress: Into<Symbol> + Clone>(
@@ -156,7 +167,7 @@ impl<'a> Compiler<'a> {
             paths: deps,
             named_address_map,
         }];
-        Self::from_package_paths(targets, deps)
+        Self::from_package_paths(targets, deps).unwrap()
     }
 
     pub fn set_flags(mut self, flags: Flags) -> Self {
@@ -232,13 +243,14 @@ impl<'a> Compiler<'a> {
             flags,
             visitors,
             warning_filter,
+            package_configs,
         } = self;
         generate_interface_files_for_deps(
             &mut deps,
             interface_files_dir_opt,
             &compiled_module_named_address_mapping,
         )?;
-        let mut compilation_env = CompilationEnv::new(flags, visitors);
+        let mut compilation_env = CompilationEnv::new(flags, visitors, package_configs);
         if let Some(filter) = warning_filter {
             compilation_env.add_warning_filter_scope(filter);
         }
@@ -448,7 +460,7 @@ pub fn construct_pre_compiled_lib<Paths: Into<Symbol>, NamedAddress: Into<Symbol
     flags: Flags,
 ) -> anyhow::Result<Result<FullyCompiledProgram, (FilesSourceText, Diagnostics)>> {
     let (files, pprog_and_comments_res) =
-        Compiler::from_package_paths(targets, Vec::<PackagePaths<Paths, NamedAddress>>::new())
+        Compiler::from_package_paths(targets, Vec::<PackagePaths<Paths, NamedAddress>>::new())?
             .set_interface_files_dir_opt(interface_files_dir_opt)
             .set_flags(flags)
             .run::<PASS_PARSER>()?;
