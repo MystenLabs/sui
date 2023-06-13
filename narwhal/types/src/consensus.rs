@@ -7,6 +7,7 @@ use config::{AuthorityIdentifier, Committee};
 use enum_dispatch::enum_dispatch;
 use fastcrypto::hash::Hash;
 use serde::{Deserialize, Serialize};
+use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::mpsc;
@@ -157,6 +158,28 @@ impl ReputationScores {
 
     pub fn all_zero(&self) -> bool {
         !self.scores_per_authority.values().any(|e| *e > 0)
+    }
+
+    // Returns the authorities in score descending order.
+    pub fn authorities_by_score_desc(&self) -> Vec<(AuthorityIdentifier, u64)> {
+        let mut authorities: Vec<_> = self
+            .scores_per_authority
+            .iter()
+            .map(|(authority, score)| (*authority, *score))
+            .collect();
+
+        authorities.sort_by(|a1, a2| {
+            match a2.1.cmp(&a1.1) {
+                Ordering::Equal => {
+                    // we resolve the score equality deterministically by ordering in authority
+                    // identifier order ascending.
+                    a1.0.cmp(&a2.0)
+                }
+                result => result,
+            }
+        });
+
+        authorities
     }
 }
 

@@ -11,6 +11,10 @@ use config::{AuthorityIdentifier, Committee};
 use fastcrypto::hash::Hash;
 use mysten_metrics::metered_channel;
 use mysten_metrics::spawn_logged_monitored_task;
+use rand::prelude::SliceRandom;
+use rand::rngs::StdRng;
+use rand::SeedableRng;
+use std::collections::HashSet;
 use std::{
     cmp::{max, Ordering},
     collections::{BTreeMap, BTreeSet, HashMap},
@@ -21,7 +25,7 @@ use tokio::{sync::watch, task::JoinHandle};
 use tracing::{debug, info, instrument};
 use types::{
     Certificate, CertificateAPI, CertificateDigest, CommittedSubDag, ConditionalBroadcastReceiver,
-    ConsensusCommit, HeaderAPI, Round, Timestamp,
+    ConsensusCommit, HeaderAPI, ReputationScores, Round, Timestamp,
 };
 
 #[cfg(test)]
@@ -30,6 +34,99 @@ pub mod consensus_tests;
 
 /// The representation of the DAG in memory.
 pub type Dag = BTreeMap<Round, HashMap<AuthorityIdentifier, (CertificateDigest, Certificate)>>;
+
+#[derive(Default)]
+pub struct LeaderSwapTable {
+    pub good_nodes: Vec<AuthorityIdentifier>,
+    pub bad_nodes: HashSet<AuthorityIdentifier>,
+}
+
+impl LeaderSwapTable {
+    // constructs a new table based on the provided reputation scores.
+    pub fn new(committee: &Committee, reputation_scores: ReputationScores) -> Self {
+        assert!(reputation_scores.final_of_schedule, "Only reputation scores that have been calculated on the end of a schedule are accepted");
+
+        let good_nodes = Self::good_nodes(&reputation_scores, committee);
+        let bad_nodes = Self::bad_nodes(&reputation_scores, committee);
+
+        Self {
+            good_nodes,
+            bad_nodes,
+        }
+    }
+
+    /// Checks whether the provided leader is a bad performer and needs to be swapped for the schedule
+    /// with a good performer. If not, then the method returns None. Otherwise the leader to swap with
+    /// is returned instead. The `leader_round` represents the DAG round on which the provided AuthorityIdentifier
+    /// is a leader on and is used as a seed to random function in order to calculate the good node that
+    /// will swap for that round the bad node.
+    pub fn swap(
+        &self,
+        leader: &AuthorityIdentifier,
+        leader_round: Round,
+    ) -> Option<AuthorityIdentifier> {
+        if self.bad_nodes.contains(leader) {
+            let mut seed_bytes = [0u8; 32];
+            seed_bytes[32 - 8..].copy_from_slice(&leader_round.to_le_bytes());
+            let mut rng = StdRng::from_seed(seed_bytes);
+
+            let good_node = self
+                .good_nodes
+                .choose(&mut rng)
+                .expect("There should be at least one good node available");
+            return Some(*good_node);
+        }
+        None
+    }
+
+    /// Retrieves the f by stake nodes with the best scores.
+    fn good_nodes(
+        reputation_scores: &ReputationScores,
+        committee: &Committee,
+    ) -> Vec<AuthorityIdentifier> {
+        let authorities = reputation_scores.authorities_by_score_desc();
+        let mut good_authorities = Vec::new();
+
+        let mut stake = 0;
+        for (authority_id, _score) in authorities.iter() {
+            stake += committee.stake_by_id(*authority_id);
+
+            // if by adding the authority we have reached validity, then we exit so we make sure that
+            // we gather < f + 1
+            if committee.reached_validity(stake) {
+                break;
+            }
+            good_authorities.push(*authority_id);
+        }
+
+        good_authorities
+    }
+
+    /// Retrieves the f by stake nodes with the worst scores
+    fn bad_nodes(
+        reputation_scores: &ReputationScores,
+        committee: &Committee,
+    ) -> HashSet<AuthorityIdentifier> {
+        let authorities = reputation_scores.authorities_by_score_desc();
+        let mut bad_authorities = HashSet::new();
+
+        let mut stake = 0;
+
+        // important: we reverse the scores so we start from the lowest (worst) ones
+        for (authority_id, _score) in authorities.iter().rev() {
+            stake += committee.stake_by_id(*authority_id);
+
+            // if by adding the authority we have reached validity, then we exit so we make sure that
+            // we always gather < f + 1
+            if committee.reached_validity(stake) {
+                break;
+            }
+            bad_authorities.insert(*authority_id);
+        }
+
+        bad_authorities
+    }
+}
 
 /// The state that needs to be persisted for crash-recovery.
 pub struct ConsensusState {
@@ -42,6 +139,9 @@ pub struct ConsensusState {
     pub last_committed: HashMap<AuthorityIdentifier, Round>,
     /// The last committed sub dag. If value is None, it means that we haven't committed any sub dag yet.
     pub last_committed_sub_dag: Option<CommittedSubDag>,
+    /// Holds the set of good and bad nodes - as per the last calculated reputation scores - and
+    /// performs a necessary swap to ensure that only good leaders will be elected
+    pub leader_swap_table: LeaderSwapTable,
     /// Keeps the latest committed certificate (and its parents) for every authority. Anything older
     /// must be regularly cleaned up through the function `update`.
     pub dag: Dag,
@@ -55,6 +155,7 @@ impl ConsensusState {
             last_round: ConsensusRound::default(),
             gc_depth,
             last_committed: Default::default(),
+            leader_swap_table: Default::default(),
             dag: Default::default(),
             last_committed_sub_dag: None,
             metrics,
@@ -110,6 +211,7 @@ impl ConsensusState {
             last_round,
             last_committed: recovered_last_committed,
             last_committed_sub_dag,
+            leader_swap_table: Default::default(),
             dag,
             metrics,
         }
