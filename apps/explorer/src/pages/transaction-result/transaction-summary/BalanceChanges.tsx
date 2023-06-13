@@ -102,7 +102,7 @@ function BalanceChangeCard({
                 ) : null
             }
         >
-            <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-2">
                 {changes.map((change, index) => (
                     <TransactionBlockCardSection key={index}>
                         <BalanceChangeEntry change={change} />

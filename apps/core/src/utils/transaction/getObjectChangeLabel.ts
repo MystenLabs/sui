@@ -4,11 +4,11 @@
 import { SuiObjectChangeTypes } from './types';
 
 export const ObjectChangeLabels = {
-    created: 'Create',
-    mutated: 'Update',
+    created: 'Created',
+    mutated: 'Updated',
     transferred: 'Transfer',
     published: 'Publish',
-    deleted: 'Delete',
+    deleted: 'Deleted',
     wrapped: 'Wrap',
 };
 
