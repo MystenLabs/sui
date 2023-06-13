@@ -28,6 +28,8 @@ move-core-types.workspace = true
 move-symbol-pool.workspace = true
 move-transactional-test-runner.workspace = true
 
+move-stdlib = { path = "../../external-crates/move/move-stdlib" }
+move-vm-runtime = { path = "../../external-crates/move/move-vm/runtime" }
 sui-adapter = { path = "../../sui-execution/latest/sui-adapter", package = "sui-adapter-latest"}
 sui-config = { path = "../sui-config" }
 sui-swarm-config = { path = "../sui-swarm-config" }
