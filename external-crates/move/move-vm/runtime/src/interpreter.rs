@@ -424,9 +424,15 @@ impl Interpreter {
             ty_args,
         )
         .map_err(|e| match function.module_id() {
-            Some(id) => e
-                .at_code_offset(function.index(), 0)
-                .finish(Location::Module(id.clone())),
+            Some(id) => {
+                let e = if cfg!(feature = "testing") || cfg!(feature = "stacktrace") {
+                    e.with_exec_state(self.get_internal_state())
+                } else {
+                    e
+                };
+                e.at_code_offset(function.index(), 0)
+                    .finish(Location::Module(id.clone()))
+            }
             None => {
                 let err = PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
                     .with_message("Unexpected native function not located in a module".to_owned());
