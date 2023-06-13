@@ -89,6 +89,7 @@ pub use generated::{
 };
 pub use server::GetCheckpointAvailabilityResponse;
 pub use server::GetCheckpointSummaryRequest;
+use sui_storage::verify_checkpoint;
 
 use self::{metrics::Metrics, server::CheckpointContentsDownloadLimitLayer};
 
@@ -1043,77 +1044,6 @@ where
         .cleanup_old_checkpoints(*checkpoint.sequence_number());
 
     Ok(())
-}
-
-fn verify_checkpoint<S>(
-    current: &VerifiedCheckpoint,
-    store: S,
-    checkpoint: Checkpoint,
-) -> Result<VerifiedCheckpoint, Checkpoint>
-where
-    S: WriteStore,
-    <S as ReadStore>::Error: std::error::Error,
-{
-    assert_eq!(
-        *checkpoint.sequence_number(),
-        current.sequence_number().saturating_add(1)
-    );
-
-    if Some(*current.digest()) != checkpoint.previous_digest {
-        debug!(
-            current_checkpoint_seq = current.sequence_number(),
-            current_digest =% current.digest(),
-            checkpoint_seq = checkpoint.sequence_number(),
-            checkpoint_digest =% checkpoint.digest(),
-            checkpoint_previous_digest =? checkpoint.previous_digest,
-            "checkpoint not on same chain"
-        );
-        return Err(checkpoint);
-    }
-
-    let current_epoch = current.epoch();
-    if checkpoint.epoch() != current_epoch && checkpoint.epoch() != current_epoch.saturating_add(1)
-    {
-        debug!(
-            checkpoint_seq = checkpoint.sequence_number(),
-            checkpoint_epoch = checkpoint.epoch(),
-            current_checkpoint_seq = current.sequence_number(),
-            current_epoch = current_epoch,
-            "cannot verify checkpoint with too high of an epoch",
-        );
-        return Err(checkpoint);
-    }
-
-    if checkpoint.epoch() == current_epoch.saturating_add(1)
-        && current.next_epoch_committee().is_none()
-    {
-        debug!(
-            checkpoint_seq = checkpoint.sequence_number(),
-            checkpoint_epoch = checkpoint.epoch(),
-            current_checkpoint_seq = current.sequence_number(),
-            current_epoch = current_epoch,
-            "next checkpoint claims to be from the next epoch but the latest verified \
-            checkpoint does not indicate that it is the last checkpoint of an epoch"
-        );
-        return Err(checkpoint);
-    }
-
-    let committee = store
-        .get_committee(checkpoint.epoch())
-        .expect("store operation should not fail")
-        .unwrap_or_else(|| {
-            panic!(
-                "BUG: should have committee for epoch {} before we try to verify checkpoint {}",
-                checkpoint.epoch(),
-                checkpoint.sequence_number()
-            )
-        });
-
-    checkpoint.verify_signature(&committee).map_err(|e| {
-        debug!("error verifying checkpoint: {e}");
-        checkpoint.clone()
-    })?;
-    Ok(VerifiedCheckpoint::new_unchecked(checkpoint))
 }
 
 async fn sync_checkpoint_contents<S>(
