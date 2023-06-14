@@ -65,8 +65,10 @@ export function validatorsTableData(
                         logo: validator.imageUrl,
                     },
                     stake: totalStake,
-                    // show the rolling average apy even if its zero, otherwise show -- for no data
-                    apy: formatPercentageDisplay(apy, '--', isApyApproxZero),
+                    apy: {
+                        apy,
+                        isApyApproxZero,
+                    },
                     nextEpochGasPrice: validator.nextEpochGasPrice,
                     commission: Number(validator.commissionRate) / 100,
                     img: img,
@@ -147,11 +149,17 @@ export function validatorsTableData(
                 header: 'APY',
                 accessorKey: 'apy',
                 enableSorting: true,
+                sortingFn: (a: any, b: any, colId: string) =>
+                    a.getValue(colId)?.apy < b.getValue(colId)?.apy ? -1 : 1,
                 cell: (props: any) => {
-                    const apy = props.getValue();
+                    const { apy, isApyApproxZero } = props.getValue();
                     return (
                         <Text variant="bodySmall/medium" color="steel-darker">
-                            {apy}
+                            {formatPercentageDisplay(
+                                apy,
+                                '--',
+                                isApyApproxZero
+                            )}
                         </Text>
                     );
                 },
