@@ -70,7 +70,9 @@ export function TransactionView({
                             </TabPanel>
                         )}
                         <TabPanel>
-                            <Signatures transaction={transaction} />
+                            <div className="mt-10">
+                                <Signatures transaction={transaction} />
+                            </div>
                         </TabPanel>
                     </TabPanels>
                 </TabGroup>

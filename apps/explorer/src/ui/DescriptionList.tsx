@@ -20,9 +20,29 @@ const DescriptionItemStyles = cva(
     }
 );
 
-type DescriptionItemStylesProps = VariantProps<typeof DescriptionItemStyles>;
+const DescriptionItemLabelStyles = cva(
+    ['w-full flex-shrink-0 text-pBody font-medium text-steel-darker'],
+    {
+        variants: {
+            labelWidth: {
+                md: 'md:w-40',
+                sm: 'md:w-28',
+            },
+        },
+        defaultVariants: {
+            labelWidth: 'md',
+        },
+    }
+);
 
-export interface DescriptionItemProps extends DescriptionItemStylesProps {
+type DescriptionItemStylesProps = VariantProps<typeof DescriptionItemStyles>;
+type DescriptionItemLabelStylesProps = VariantProps<
+    typeof DescriptionItemLabelStyles
+>;
+
+export interface DescriptionItemProps
+    extends DescriptionItemStylesProps,
+        DescriptionItemLabelStylesProps {
     title: string | ReactNode;
     children: ReactNode;
 }
@@ -30,11 +50,12 @@ export interface DescriptionItemProps extends DescriptionItemStylesProps {
 export function DescriptionItem({
     title,
     align,
+    labelWidth,
     children,
 }: DescriptionItemProps) {
     return (
         <div className={DescriptionItemStyles({ align })}>
-            <dt className="w-full flex-shrink-0 text-pBody font-medium text-steel-darker md:w-40">
+            <dt className={DescriptionItemLabelStyles({ labelWidth })}>
                 {title}
             </dt>
             <dd className="ml-0 min-w-0 flex-1 leading-none">{children}</dd>
