@@ -150,7 +150,7 @@
         "mitt": "^3.0.0",
         "react": "^18.2.0",
         "react-dom": "^18.2.0",
-        "react-error-boundary": "^3.1.4",
+        "react-error-boundary": "^4.0.10",
         "react-hot-toast": "^2.4.0",
         "react-number-format": "^5.2.2",
         "react-redux": "^8.0.5",
