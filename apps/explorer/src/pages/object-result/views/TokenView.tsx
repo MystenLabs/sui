@@ -21,6 +21,7 @@ import { LinkOrTextDescriptionItem } from '../LinkOrTextDescriptionItem';
 import { DynamicFieldsCard } from '~/components/Object/DynamicFieldsCard';
 import { ObjectFieldsCard } from '~/components/Object/ObjectFieldsCard';
 import TransactionBlocksForAddress from '~/components/TransactionBlocksForAddress/TransactionBlocksForAddress';
+import { useResolveVideo } from '~/hooks/useResolveVideo';
 import { DescriptionList, DescriptionItem } from '~/ui/DescriptionList';
 import { AddressLink, ObjectLink, TransactionLink } from '~/ui/InternalLink';
 import { Link } from '~/ui/Link';
@@ -46,8 +47,9 @@ export function TokenView({ data }: { data: SuiObjectResponse }) {
         SUI_TYPE_ARG,
         CoinFormat.FULL
     );
-
     const [fileType, setFileType] = useState<undefined | string>(undefined);
+
+    const video = useResolveVideo(data);
 
     useEffect(() => {
         const controller = new AbortController();
@@ -195,12 +197,15 @@ export function TokenView({ data }: { data: SuiObjectResponse }) {
                                     <div className="flex flex-row flex-nowrap gap-5">
                                         <ObjectDetails
                                             image={imgUrl}
+                                            video={video}
                                             name={
                                                 name ||
                                                 display?.description ||
                                                 trimStdLibPrefix(objectType)
                                             }
-                                            type={fileType ?? ''}
+                                            type={
+                                                video ? 'Video' : fileType ?? ''
+                                            }
                                             variant="large"
                                         />
                                     </div>

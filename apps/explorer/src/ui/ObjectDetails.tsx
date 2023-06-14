@@ -1,16 +1,17 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-import { ArrowUpRight16 } from '@mysten/icons';
+import { ArrowUpRight16, MediaPlay16 } from '@mysten/icons';
 import { cva } from 'class-variance-authority';
+import clsx from 'clsx';
 import { useState } from 'react';
 
 import { Heading } from './Heading';
 import { ObjectLink } from './InternalLink';
-import { ImageModal } from './Modal/ImageModal';
+import { ObjectModal } from './Modal/ObjectModal';
 import { Text } from './Text';
 import { Image } from './image/Image';
 
-const imageStyles = cva(['cursor-pointer z-0 flex-shrink-0'], {
+const imageStyles = cva(['cursor-pointer z-0 flex-shrink-0 relative'], {
     variants: {
         size: {
             small: 'h-16 w-16',
@@ -31,6 +32,7 @@ const textStyles = cva(['flex min-w-0 flex-col flex-nowrap'], {
 export interface ObjectDetailsProps {
     id?: string;
     image?: string;
+    video?: string | null;
     name?: string;
     type: string;
     variant: 'small' | 'large';
@@ -40,6 +42,7 @@ export function ObjectDetails({
     id,
     image = '',
     name = '',
+    video,
     type,
     variant = 'small',
 }: ObjectDetailsProps) {
@@ -49,12 +52,13 @@ export function ObjectDetails({
 
     return (
         <div className="flex items-center gap-3.75 overflow-auto">
-            <ImageModal
+            <ObjectModal
                 open={open}
                 onClose={close}
                 title={name}
                 subtitle={type}
                 src={image}
+                video={video}
                 alt={name}
             />
             <div className={imageStyles({ size: variant })}>
@@ -64,6 +68,16 @@ export function ObjectDetails({
                     alt={name}
                     src={image}
                 />
+                {video && (
+                    <div className="pointer-events-none absolute bottom-2 right-2 z-10 flex items-center justify-center rounded-full opacity-80">
+                        <MediaPlay16
+                            className={clsx({
+                                'h-8 w-8': variant === 'large',
+                                'h-5 w-5': variant === 'small',
+                            })}
+                        />
+                    </div>
+                )}
             </div>
             <div className={textStyles({ size: variant })}>
                 {variant === 'large' ? (
