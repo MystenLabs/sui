@@ -234,12 +234,31 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4b46cbb362ab8752921c97e041f5e366ee6297bd428a31275b9fcf1e380f7299"
 
 [[package]]
+name = "ansi-str"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1cf4578926a981ab0ca955dc023541d19de37112bc24c1a197bd806d3d86ad1d"
+dependencies = [
+ "ansitok",
+]
+
+[[package]]
 name = "ansi_term"
 version = "0.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d52a9bb7ec0cf484c551830a7ce27bd20d67eac647e1befb56b0be4ee39a55d2"
 dependencies = [
  "winapi",
+]
+
+[[package]]
+name = "ansitok"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "220044e6a1bb31ddee4e3db724d29767f352de47445a6cd75e1a173142136c83"
+dependencies = [
+ "nom 7.1.2",
+ "vte",
 ]
 
 [[package]]
@@ -1436,6 +1455,12 @@ dependencies = [
  "sha2 0.9.9",
  "sha3 0.9.1",
 ]
+
+[[package]]
+name = "bytecount"
+version = "0.6.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2c676a478f63e9fa2dd5368a42f28bba0d6c560b775f38583c8bbaa7fcd67c9c"
 
 [[package]]
 name = "bytemuck"
@@ -4277,6 +4302,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "json_to_table"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e233e3750bac7edc04e1e1b03741cd1e37b59a8aff781fbed41cbcca79b2b06e"
+dependencies = [
+ "serde_json",
+ "tabled",
+]
+
+[[package]]
 name = "jsonrpsee"
 version = "0.16.2"
 source = "git+https://github.com/wlmyng/jsonrpsee.git?rev=b1b300784795f6a64d0fcdf8f03081a9bc38bde8#b1b300784795f6a64d0fcdf8f03081a9bc38bde8"
@@ -6637,6 +6672,19 @@ dependencies = [
  "elliptic-curve 0.13.4",
  "primeorder",
  "sha2 0.10.6",
+]
+
+[[package]]
+name = "papergrid"
+version = "0.9.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ae7891b22598926e4398790c8fe6447930c72a67d36d983a49d6ce682ce83290"
+dependencies = [
+ "ansi-str",
+ "ansitok",
+ "bytecount",
+ "fnv",
+ "unicode-width",
 ]
 
 [[package]]
@@ -9054,6 +9102,7 @@ dependencies = [
  "git-version",
  "inquire",
  "jemalloc-ctl",
+ "json_to_table",
  "move-bytecode-verifier",
  "move-core-types",
  "move-package",
@@ -9090,6 +9139,7 @@ dependencies = [
  "sui-swarm-config",
  "sui-types",
  "sui-verifier-latest",
+ "tabled",
  "tap",
  "telemetry-subscribers",
  "tempfile",
@@ -10826,6 +10876,32 @@ dependencies = [
  "once_cell",
  "rayon",
  "winapi",
+]
+
+[[package]]
+name = "tabled"
+version = "0.12.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "994ca3cfbe91dd1756a82a605a150fd7c9d9196cddc7af0612c1999cef224588"
+dependencies = [
+ "ansi-str",
+ "ansitok",
+ "papergrid",
+ "tabled_derive",
+ "unicode-width",
+]
+
+[[package]]
+name = "tabled_derive"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "99f688a08b54f4f02f0a3c382aefdb7884d3d69609f785bd253dc033243e3fe4"
+dependencies = [
+ "heck 0.4.0",
+ "proc-macro-error",
+ "proc-macro2 1.0.58",
+ "quote 1.0.26",
+ "syn 1.0.107",
 ]
 
 [[package]]
