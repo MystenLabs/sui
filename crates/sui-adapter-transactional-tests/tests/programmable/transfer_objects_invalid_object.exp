@@ -9,7 +9,7 @@ mutated: object(0,2)
 gas summary: computation_cost: 1000000, storage_cost: 6148400,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 2 'programmable'. lines 39-42:
-Error: TransferObjects, MergeCoin, and Publish cannot have empty arguments. If MakeMoveVec has empty arguments, it must have a type specified
+Error: Error checking transaction input objects: EmptyCommandInput
 
 task 3 'programmable'. lines 43-47:
 Error: Transaction Effects Status: Invalid command argument at 0. The type of the value does not match the expected type

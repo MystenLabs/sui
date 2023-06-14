@@ -3543,6 +3543,7 @@ name = "move-transactional-test-runner"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "clap 3.2.23",
  "colored",
  "datatest-stable",
@@ -3570,6 +3571,7 @@ dependencies = [
  "rayon",
  "regex",
  "tempfile",
+ "tokio",
 ]
 
 [[package]]

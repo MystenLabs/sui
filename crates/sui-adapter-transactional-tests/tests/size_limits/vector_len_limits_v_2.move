@@ -3,7 +3,7 @@
 
 // Test limits on length of vectors
 
-//# init --addresses Test=0x0 --max-gas 100000000000000
+//# init --addresses Test=0x0 --max-gas 100000000000000 --protocol-version 2
 
 //# publish
 
@@ -26,8 +26,6 @@ module Test::M1 {
         vector::destroy_empty(v);
     }
 }
-
-// tests below all fail with OOG on realistic prices
 
 // push below ven len limit should succeed
 //# run Test::M1::push_n_items --args 1 --gas-budget 100000000000000
