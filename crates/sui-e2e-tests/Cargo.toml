@@ -47,6 +47,7 @@ sui-protocol-config = { path = "../sui-protocol-config" }
 sui-types = { path = "../sui-types" }
 sui-move-build = { path = "../sui-move-build" }
 sui-swarm-config = { path = "../sui-swarm-config" }
+sui-swarm = { path = "../sui-swarm" }
 sui-test-transaction-builder = { path = "../sui-test-transaction-builder" }
 sui-config = { path = "../sui-config" }
 sui-json-rpc-types = { path = "../sui-json-rpc-types" }

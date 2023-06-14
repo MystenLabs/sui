@@ -252,7 +252,6 @@ mod test {
         test_simulated_load(TestInitData::new(&test_cluster).await, 120).await;
     }
 
-    #[ignore]
     #[sim_test(config = "test_config()")]
     async fn test_simulated_load_checkpoint_pruning() {
         let test_cluster = build_test_cluster(4, 1000).await;
