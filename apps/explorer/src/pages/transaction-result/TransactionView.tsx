@@ -21,6 +21,7 @@ import { Signatures } from './Signatures';
 import styles from './TransactionResult.module.css';
 
 import { useBreakpoint } from '~/hooks/useBreakpoint';
+import { Events } from '~/pages/transaction-result/Events';
 import { TransactionData } from '~/pages/transaction-result/TransactionData';
 import { TransactionSummary } from '~/pages/transaction-result/transaction-summary';
 import { Banner } from '~/ui/Banner';
@@ -35,8 +36,7 @@ export function TransactionView({
 }) {
     const isMediumOrAbove = useBreakpoint('md');
 
-    // todo: reimplement events tab
-    const hasEvents = false;
+    const hasEvents = !!transaction.events?.length;
 
     const txError = getExecutionStatusError(transaction);
 
@@ -62,6 +62,13 @@ export function TransactionView({
                                 <TransactionSummary transaction={transaction} />
                             </div>
                         </TabPanel>
+                        {hasEvents && (
+                            <TabPanel>
+                                <div className="mt-10">
+                                    <Events events={transaction.events!} />
+                                </div>
+                            </TabPanel>
+                        )}
                         <TabPanel>
                             <Signatures transaction={transaction} />
                         </TabPanel>
