@@ -11,8 +11,8 @@ use crate::{
 use move_core_types::vm_status::StatusCode;
 use std::iter;
 use sui_cost_tables::bytecode_tables::{
-    initial_cost_schedule_v1, initial_cost_schedule_v2, initial_cost_schedule_v3, GasStatus,
-    ZERO_COST_SCHEDULE,
+    initial_cost_schedule_v1, initial_cost_schedule_v2, initial_cost_schedule_v3,
+    initial_cost_schedule_v4, GasStatus, ZERO_COST_SCHEDULE,
 };
 use sui_cost_tables::units_types::CostTable;
 use sui_protocol_config::*;
@@ -156,8 +156,10 @@ fn cost_table_for_version(config: &ProtocolConfig) -> CostTable {
         initial_cost_schedule_v1()
     } else if gas_model == 4 {
         initial_cost_schedule_v2()
-    } else {
+    } else if gas_model == 5 {
         initial_cost_schedule_v3()
+    } else {
+        initial_cost_schedule_v4()
     }
 }
 

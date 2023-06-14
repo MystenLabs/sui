@@ -1222,6 +1222,7 @@ impl ProtocolConfig {
             14 => {
                 let mut cfg = Self::get_for_version_impl(version - 1, chain);
                 cfg.gas_rounding_step = Some(1_000);
+                cfg.gas_model_version = Some(6);
                 cfg.feature_flags.consensus_transaction_ordering =
                     ConsensusTransactionOrdering::ByGasPrice;
                 cfg
