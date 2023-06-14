@@ -9,13 +9,13 @@ import {
 import { useParams } from 'react-router-dom';
 
 import { ErrorBoundary } from '../../components/error-boundary/ErrorBoundary';
-import { TransactionsForAddress } from '../../components/transactions/TransactionsForAddress';
 
 import { OwnedCoins } from '~/components/OwnedCoins';
 import { OwnedObjects } from '~/components/OwnedObjects';
 import { Heading } from '~/ui/Heading';
 import { LoadingSpinner } from '~/ui/LoadingSpinner';
 import { PageHeader } from '~/ui/PageHeader';
+import TransactionBlocksForAddress, { FILTER_VALUES } from '~/components/TransactionBlocksForAddress/TransactionBlocksForAddress';
 
 function AddressResult({ address }: { address: string }) {
     const { data: domainName } = useResolveSuiNSName(address);
@@ -45,9 +45,9 @@ function AddressResult({ address }: { address: string }) {
             <div>
                 <ErrorBoundary>
                     <div className="mt-2">
-                        <TransactionsForAddress
+                        <TransactionBlocksForAddress
                             address={address}
-                            type="address"
+                            filter={FILTER_VALUES.FROMORTO}
                         />
                     </div>
                 </ErrorBoundary>

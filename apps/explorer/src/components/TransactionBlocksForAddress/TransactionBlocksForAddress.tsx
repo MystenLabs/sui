@@ -19,6 +19,7 @@ import { TableCard } from '~/ui/TableCard';
 export enum FILTER_VALUES {
     INPUT = 'InputObject',
     CHANGED = 'ChangedObject',
+    FROMORTO = 'FromOrToAddress'
 }
 
 type TransactionBlocksForAddressProps = {
@@ -41,12 +42,14 @@ type TransactionBlocksForAddressActionType = {
 type PageStateByFilterMap = {
     InputObject: number;
     ChangedObject: number;
+    FromOrToAddress: number;
 };
 
-const FILTER_OPTIONS = [
+const OBJECT_FILTER_OPTIONS = [
     { label: 'Input Objects', value: 'InputObject' },
     { label: 'Updated Objects', value: 'ChangedObject' },
 ];
+
 
 const reducer = (
     state: PageStateByFilterMap,
@@ -82,6 +85,7 @@ function TransactionBlocksForAddress({
     const [currentPageState, dispatch] = useReducer(reducer, {
         InputObject: 0,
         ChangedObject: 0,
+        FromOrToAddress: 0
     });
 
     const {
@@ -115,7 +119,7 @@ function TransactionBlocksForAddress({
                         value={filterValue}
                         onChange={setFilterValue}
                     >
-                        {FILTER_OPTIONS.map((filter) => (
+                        {OBJECT_FILTER_OPTIONS.map((filter) => (
                             <RadioOption
                                 key={filter.value}
                                 value={filter.value}
@@ -160,7 +164,7 @@ function TransactionBlocksForAddress({
                             if (
                                 data &&
                                 currentPageState[filterValue] ===
-                                    data?.pages.length - 1 &&
+                                data?.pages.length - 1 &&
                                 !isLoading &&
                                 !isFetching
                             ) {
