@@ -1,5 +1,20 @@
 # @mysten/sui.js
 
+## 0.36.0
+
+### Minor Changes
+
+- 3ea9adb71a: Add multisig support
+- 1cfb1c9da3: The `TransactionBlock` builder now uses the protocol config from the chain when constructing and validating transactions, instead of using hard-coded limits. If you wish to perform signing offline (without a provider), you can either define a `protocolConfig` option when building a transaction, or explicitly set `limits`, which will be used instead of the protocol config.
+- fb3bb9118a: Remove logging of RPCValidation errors when typescript types do not match RPC response types
+
+### Patch Changes
+
+- 1cfb1c9da3: Added `getProtocolConfig()` method to the provider.
+- Updated dependencies [ca5c72815d]
+- Updated dependencies [fdb569464e]
+  - @mysten/bcs@0.7.2
+
 ## 0.35.1
 
 ### Patch Changes
