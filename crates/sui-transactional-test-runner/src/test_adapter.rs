@@ -323,9 +323,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                 .with_protocol_config(protocol_config)
                 .build()
                 .await;
-            for o in objects {
-                state.insert_genesis_object(o).await;
-            }
+            state.insert_genesis_objects(&objects).await;
             state
         };
         let mut test_adapter = Self {

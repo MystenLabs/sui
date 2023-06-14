@@ -687,7 +687,7 @@ impl AuthorityState {
     ) -> SuiResult<HandleTransactionResponse> {
         fp_ensure!(
             !transaction.is_system_tx(),
-            dbg!(SuiError::InvalidSystemTransaction)
+            SuiError::InvalidSystemTransaction
         );
 
         let tx_digest = *transaction.digest();
@@ -701,7 +701,7 @@ impl AuthorityState {
         // CRITICAL! Validators should never sign an external system transaction.
         fp_ensure!(
             !transaction.is_system_tx(),
-            dbg!(SuiError::InvalidSystemTransaction)
+            SuiError::InvalidSystemTransaction
         );
 
         let _metrics_guard = self.metrics.handle_transaction_latency.start_timer();
