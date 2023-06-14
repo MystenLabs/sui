@@ -94,7 +94,7 @@ use sui_network::state_sync;
 use sui_protocol_config::{ProtocolConfig, SupportedProtocolVersions};
 use sui_storage::object_store::{ObjectStoreConfig, ObjectStoreType};
 use sui_storage::{FileCompression, IndexStore, StorageFormat};
-use sui_types::base_types::{AuthorityName, EpochId, TransactionDigest};
+use sui_types::base_types::{AuthorityName, EpochId};
 use sui_types::committee::Committee;
 use sui_types::crypto::KeypairTraits;
 use sui_types::error::{SuiError, SuiResult};
@@ -640,15 +640,6 @@ impl SuiNode {
     pub async fn close_epoch_for_testing(&self) -> SuiResult {
         let epoch_store = self.state.epoch_store_for_testing();
         self.close_epoch(&epoch_store).await
-    }
-
-    pub fn is_transaction_executed_in_checkpoint(
-        &self,
-        digest: &TransactionDigest,
-    ) -> SuiResult<bool> {
-        self.state
-            .database
-            .is_transaction_executed_in_checkpoint(digest)
     }
 
     fn create_p2p_network(

@@ -2295,8 +2295,20 @@ impl AuthorityState {
     pub fn get_transaction_checkpoint_sequence(
         &self,
         digest: &TransactionDigest,
-    ) -> SuiResult<Option<(EpochId, CheckpointSequenceNumber)>> {
-        self.database.get_transaction_checkpoint(digest)
+        epoch_store: &AuthorityPerEpochStore,
+    ) -> SuiResult<Option<CheckpointSequenceNumber>> {
+        if epoch_store.per_epoch_finalized_txns_enabled() {
+            epoch_store.get_transaction_checkpoint(digest)
+        } else {
+            match self
+                .database
+                .deprecated_get_transaction_checkpoint(digest)?
+            {
+                Some((epoch_id, seq_num)) if epoch_id == epoch_store.epoch() => Ok(Some(seq_num)),
+                Some(_) => Ok(None),
+                None => Ok(None),
+            }
+        }
     }
 
     pub fn get_checkpoint_by_sequence_number(
@@ -2311,9 +2323,10 @@ impl AuthorityState {
     pub fn get_transaction_checkpoint(
         &self,
         digest: &TransactionDigest,
+        epoch_store: &AuthorityPerEpochStore,
     ) -> SuiResult<Option<VerifiedCheckpoint>> {
-        let checkpoint = self.database.get_transaction_checkpoint(digest)?;
-        let Some((_, checkpoint)) = checkpoint else { return Ok(None); };
+        let checkpoint = self.get_transaction_checkpoint_sequence(digest, epoch_store)?;
+        let Some(checkpoint) = checkpoint else { return Ok(None); };
         let checkpoint = self
             .checkpoint_store
             .get_checkpoint_by_sequence_number(checkpoint)?;
@@ -2657,8 +2670,22 @@ impl AuthorityState {
     pub fn multi_get_transaction_checkpoint(
         &self,
         digests: &[TransactionDigest],
-    ) -> SuiResult<Vec<Option<(EpochId, CheckpointSequenceNumber)>>> {
-        self.database.multi_get_transaction_checkpoint(digests)
+        epoch_store: &AuthorityPerEpochStore,
+    ) -> SuiResult<Vec<Option<CheckpointSequenceNumber>>> {
+        if epoch_store.per_epoch_finalized_txns_enabled() {
+            epoch_store.multi_get_transaction_checkpoint(digests)
+        } else {
+            Ok(self
+                .database
+                .deprecated_multi_get_transaction_checkpoint(digests)?
+                .iter()
+                .map(|opt| match opt {
+                    Some((epoch_id, seq_num)) if *epoch_id == epoch_store.epoch() => Some(*seq_num),
+                    Some(_) => None,
+                    None => None,
+                })
+                .collect())
+        }
     }
 
     pub fn multi_get_events(
@@ -3815,9 +3842,14 @@ impl AuthorityState {
             pending_certificates,
         );
         for digest in pending_certificates {
-            if self
+            if epoch_store.per_epoch_finalized_txns_enabled() {
+                if epoch_store.is_transaction_executed_in_checkpoint(&digest)? {
+                    info!("Not reverting pending consensus transaction {:?} - it was included in checkpoint", digest);
+                    continue;
+                }
+            } else if self
                 .database
-                .is_transaction_executed_in_checkpoint(&digest)?
+                .deprecated_is_transaction_executed_in_checkpoint(&digest)?
             {
                 info!("Not reverting pending consensus transaction {:?} - it was included in checkpoint", digest);
                 continue;
