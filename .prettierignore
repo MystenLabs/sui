@@ -5,6 +5,7 @@
 !/sdk
 !/dapps
 !/.config
+!/*.js
 
 # Ignroe generated icons
 /apps/icons/src

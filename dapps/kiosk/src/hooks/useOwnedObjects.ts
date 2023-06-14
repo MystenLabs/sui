@@ -1,5 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+/* eslint-disable @tanstack/query/exhaustive-deps */
 
 import { useQuery } from '@tanstack/react-query';
 import { useRpc } from '../context/RpcClientContext';

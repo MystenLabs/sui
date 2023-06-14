@@ -9,6 +9,7 @@ test('subscribeTransaction', async () => {
   const toolbox = await setup();
 
   expect(
+    // eslint-disable-next-line no-async-promise-executor
     new Promise(async (resolve) => {
       await toolbox.provider.subscribeTransaction({
         filter: { FromAddress: toolbox.address() },
