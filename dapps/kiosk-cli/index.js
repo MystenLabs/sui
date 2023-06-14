@@ -50,7 +50,7 @@ import {
   purchaseAndResolvePolicies,
   mainnetEnvironment,
   testnetEnvironment,
-  KIOSK_OWNER_CAP,
+  getOwnedKiosks,
   KIOSK_LISTING
 } from '@mysten/kiosk';
 
@@ -269,7 +269,7 @@ async function showKioskContents({ id, address }) {
     if (kioskCap == null) {
       throw new Error(`No Kiosk found for ${sender}`);
     }
-    kioskId = kioskCap.content.fields.for;
+    kioskId = kioskCap.kioskId;
   }
 
   const {
@@ -342,7 +342,7 @@ async function placeItem(itemId) {
   const txb = new TransactionBlock();
   const capArg = txb.objectRef({ ...kioskCap });
   const itemArg = txb.objectRef({ ...item.data });
-  const kioskArg = txb.object(kioskCap.content.fields.for);
+  const kioskArg = txb.object(kioskCap.kioskId);
 
   place(txb, item.data.type, kioskArg, capArg, itemArg);
 
@@ -388,7 +388,7 @@ async function lockItem(itemId) {
   const capArg = txb.objectRef({ ...kioskCap });
   const itemArg = txb.objectRef({ ...item.data });
   const policyArg = txb.object(policy.id);
-  const kioskArg = txb.object(kioskCap.content.fields.for);
+  const kioskArg = txb.object(kioskCap.kioskId);
 
   lock(txb, item.data.type, kioskArg, capArg, policyArg, itemArg);
 
@@ -423,7 +423,7 @@ async function takeItem(itemId, { address }) {
   }
 
   const txb = new TransactionBlock();
-  const kioskArg = txb.object(kioskCap.content.fields.for);
+  const kioskArg = txb.object(kioskCap.kioskId);
   const capArg = txb.objectRef({ ...kioskCap });
   const taken = take(txb, item.data.type, kioskArg, capArg, itemId);
 
@@ -454,7 +454,7 @@ async function listItem(itemId, amount) {
   }
 
   const txb = new TransactionBlock();
-  const kioskArg = txb.object(kioskCap.content.fields.for);
+  const kioskArg = txb.object(kioskCap.kioskId);
   const capArg = txb.objectRef({ ...kioskCap });
   list(txb, item.data.type, kioskArg, capArg, itemId, amount);
 
@@ -483,7 +483,7 @@ async function delistItem(itemId) {
   }
 
   const txb = new TransactionBlock();
-  const kioskArg = txb.object(kioskCap.content.fields.for);
+  const kioskArg = txb.object(kioskCap.kioskId);
   const capArg = txb.objectRef({ ...kioskCap });
   delist(txb, item.data.type, kioskArg, capArg, itemId);
 
@@ -582,7 +582,7 @@ async function purchaseItem(itemId, opts) {
     );
   }
 
-  const ownedKiosk = kioskCap.content.fields.for;
+  const ownedKiosk = kioskCap.kioskId;
   const ownedKioskCap = kioskCap.objectId;
   const { item, canTransfer } = purchaseAndResolvePolicies(
     txb,
@@ -690,7 +690,7 @@ async function withdrawAll() {
     throw new Error('No Kiosk found for sender; use `new` to create one');
   }
 
-  const kioskId = kioskCap.content.fields.for;
+  const kioskId = kioskCap.kioskId;
   const txb = new TransactionBlock();
   const kioskArg = txb.object(kioskId);
   const capArg = txb.objectRef({ ...kioskCap });
@@ -745,22 +745,13 @@ async function findKioskCap(address) {
     throw new Error(`Invalid address "${sender}"`);
   }
 
-  const objects = await provider.getOwnedObjects({
-    owner: sender,
-    filter: { StructType: KIOSK_OWNER_CAP },
-    options: { showContent: true },
-  });
+  const { kioskOwnerCaps } = await getOwnedKiosks(provider, sender);
 
-  let [kioskCap] = objects.data;
-  if (!kioskCap) {
+  if (kioskOwnerCaps.length === 0) {
     throw new Error(`No Kiosk found for "${sender}"`);
   }
 
-  if ('error' in kioskCap || !('data' in kioskCap)) {
-    throw new Error(`Error fetching Kiosk: ${kioskCap.error}`);
-  }
-
-  return kioskCap.data;
+  return kioskOwnerCaps[0];
 }
 
 /**
