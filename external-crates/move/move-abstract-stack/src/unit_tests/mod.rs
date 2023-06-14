@@ -27,6 +27,7 @@ fn test_simple_push_pop() {
     s.push(1).unwrap();
     assert!(!s.is_empty());
     assert_eq!(s.len(), 1);
+    s.assert_run_lengths([1]);
     assert_eq!(s.pop(), Ok(1));
     assert!(s.is_empty());
     assert_eq!(s.len(), 0);
@@ -36,6 +37,7 @@ fn test_simple_push_pop() {
     s.push(3).unwrap();
     assert!(!s.is_empty());
     assert_eq!(s.len(), 3);
+    s.assert_run_lengths([1, 1, 1]);
     assert_eq!(s.pop(), Ok(3));
     assert_eq!(s.pop(), Ok(2));
     assert_eq!(s.pop(), Ok(1));
@@ -47,6 +49,7 @@ fn test_simple_push_pop() {
     s.push_n(3, 3).unwrap();
     assert!(!s.is_empty());
     assert_eq!(s.len(), 6);
+    s.assert_run_lengths([1, 2, 3]);
     assert_eq!(s.pop(), Ok(3));
     assert_eq!(s.pop(), Ok(3));
     assert_eq!(s.pop(), Ok(3));
@@ -61,6 +64,7 @@ fn test_simple_push_pop() {
     s.push_n(3, 3).unwrap();
     assert!(!s.is_empty());
     assert_eq!(s.len(), 6);
+    s.assert_run_lengths([1, 2, 3]);
     assert_eq!(s.pop_eq_n(nonzero(3)), Ok(3));
     assert_eq!(s.pop_eq_n(nonzero(2)), Ok(2));
     assert_eq!(s.pop_eq_n(nonzero(1)), Ok(1));
@@ -74,6 +78,7 @@ fn test_simple_push_pop() {
     s.push(3).unwrap();
     s.push(3).unwrap();
     assert!(!s.is_empty());
+    s.assert_run_lengths([1, 2, 3]);
     assert_eq!(s.len(), 6);
     assert_eq!(s.pop_eq_n(nonzero(3)), Ok(3));
     assert_eq!(s.pop_eq_n(nonzero(2)), Ok(2));
@@ -85,6 +90,7 @@ fn test_simple_push_pop() {
     s.push_n(2, 2).unwrap();
     s.push_n(3, 3).unwrap();
     assert!(!s.is_empty());
+    s.assert_run_lengths([1, 2, 3]);
     assert_eq!(s.len(), 6);
     s.pop_any_n(nonzero(6)).unwrap();
     assert_eq!(s.len(), 0);
@@ -97,6 +103,7 @@ fn test_simple_push_pop() {
     s.push(3).unwrap();
     s.push(3).unwrap();
     assert!(!s.is_empty());
+    s.assert_run_lengths([1, 2, 3]);
     assert_eq!(s.len(), 6);
     s.pop_any_n(nonzero(4)).unwrap();
     s.pop_any_n(nonzero(2)).unwrap();
@@ -114,9 +121,11 @@ fn test_not_eq() {
     s.push(3).unwrap();
     s.push(3).unwrap();
     assert_eq!(s.len(), 6);
+    s.assert_run_lengths([1, 2, 3]);
     assert_eq!(s.pop_eq_n(nonzero(4)), Err(AbsStackError::ElementNotEqual));
     assert_eq!(s.pop_eq_n(nonzero(5)), Err(AbsStackError::ElementNotEqual));
     assert_eq!(s.len(), 6);
+    s.assert_run_lengths([1, 2, 3]);
 }
 
 #[test]
@@ -129,18 +138,35 @@ fn test_not_enough_values() {
     s.push(3).unwrap();
     s.push(3).unwrap();
     assert_eq!(s.len(), 6);
+    s.assert_run_lengths([1, 2, 3]);
     assert_eq!(s.pop_eq_n(nonzero(7)), Err(AbsStackError::NotEnoughValues));
     assert_eq!(s.pop_any_n(nonzero(7)), Err(AbsStackError::NotEnoughValues));
     assert_eq!(s.len(), 6);
+    s.assert_run_lengths([1, 2, 3]);
 }
 
 #[test]
 fn test_exhaustive() {
+    fn run_lengths(bits: &[bool]) -> Vec<u64> {
+        let mut cur = bits[0];
+        let mut runs = vec![0];
+        for bit in bits.iter().copied() {
+            if cur == bit {
+                let last = runs.last_mut().unwrap();
+                *last += 1;
+            } else {
+                cur = bit;
+                runs.push(1);
+            }
+        }
+        runs
+    }
     fn push_pop(bits: &[bool]) {
         let mut s = AbsStack::new();
         for bit in bits.iter().copied() {
             s.push(bit).unwrap();
         }
+        s.assert_run_lengths(run_lengths(bits));
 
         for bit in bits.iter().copied().rev() {
             assert_eq!(s.pop(), Ok(bit));
@@ -162,6 +188,7 @@ fn test_exhaustive() {
         }
         s.push_n(push_cur, push_count).unwrap();
         assert_eq!(s.len(), bits.len() as u64);
+        s.assert_run_lengths(run_lengths(bits));
 
         let mut n = bits.len() as u64;
         for bit in bits.iter().copied().rev() {
@@ -180,6 +207,9 @@ fn test_exhaustive() {
         }
         assert_eq!(s.len(), bits.len() as u64);
         assert_eq!(s_no_eq.len(), bits.len() as u64);
+        let rl = run_lengths(bits);
+        s.assert_run_lengths(&rl);
+        s_no_eq.assert_run_lengths(&rl);
 
         let mut pop_cur = false;
         let mut pop_count = 0;
@@ -229,6 +259,9 @@ fn test_exhaustive() {
         s_no_eq.push_n(push_cur, push_count).unwrap();
         assert_eq!(s.len(), bits.len() as u64);
         assert_eq!(s_no_eq.len(), bits.len() as u64);
+        let rl = run_lengths(bits);
+        s.assert_run_lengths(&rl);
+        s_no_eq.assert_run_lengths(&rl);
 
         let mut pop_cur = false;
         let mut pop_count = 0;

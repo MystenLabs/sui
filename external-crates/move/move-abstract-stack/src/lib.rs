@@ -115,9 +115,7 @@ impl<T: Eq + Clone + Debug> AbsStack<T> {
         }
         let mut rem: u64 = n;
         while rem > 0 {
-            let Some((count, _last)) = self.values.last_mut() else {
-                return Err(AbsStackError::EmptyStack)
-            };
+            let (count, _last) = self.values.last_mut().unwrap();
             debug_assert!(*count > 0);
             match (*count).cmp(&rem) {
                 Ordering::Less | Ordering::Equal => {
@@ -132,6 +130,24 @@ impl<T: Eq + Clone + Debug> AbsStack<T> {
         }
         self.len -= n;
         Ok(())
+    }
+
+    #[cfg(test)]
+    pub(crate) fn assert_run_lengths<'a, Items, Item>(&self, lengths: Items)
+    where
+        Item: std::borrow::Borrow<u64>,
+        Items: IntoIterator<Item = Item>,
+        <Items as IntoIterator>::IntoIter: ExactSizeIterator,
+    {
+        let lengths_iter = lengths.into_iter();
+        assert_eq!(self.values.len(), lengths_iter.len());
+        let mut sum = 0;
+        for ((actual, _), expected) in self.values.iter().zip(lengths_iter) {
+            let expected = expected.borrow();
+            assert_eq!(actual, expected);
+            sum += *expected;
+        }
+        assert_eq!(self.len, sum);
     }
 }
 
