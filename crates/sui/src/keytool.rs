@@ -110,7 +110,7 @@ pub enum KeyToolCommand {
         #[clap(long)]
         base64pk: String,
     },
-    /// Add a new key to sui.keystore based on the input mnemonic phrase, the key scheme flag {ed25519 | secp256k1 | secp256r1}
+    /// Add a new key to sui.keystore uisng either the input mnemonic phrase or a private key (from the Wallet), the key scheme flag {ed25519 | secp256k1 | secp256r1}
     /// and an optional derivation path, default to m/44'/784'/0'/0'/0' for ed25519 or m/54'/784'/0'/0/0 for secp256k1
     /// or m/74'/784'/0'/0/0 for secp256r1. Supports mnemonic phrase of word length 12, 15, 18`, 21, 24.
     Import {
@@ -351,13 +351,15 @@ impl KeyToolCommand {
                         keystore.add_key(skp)?;
                         println!("Private key imported successfully.")
                     } else {
-                        println!("Cannot decode base64 from private key. Importing failed.")
+                        return Err(anyhow!(
+                            "Cannot decode base64 from private key. Importing failed."
+                        ));
                     }
                 } else if input_string.starts_with("0x") && input_string.len() != 66 {
-                    println!(
-                        "Private key is malformed. Expected length of 66 but got {}",
+                    return Err(anyhow!(
+                        "Private key is malformed. Expected key length of 66 but got {}",
                         input_string.len()
-                    )
+                    ));
                 } else {
                     keystore.import_from_mnemonic(&input_string, key_scheme, derivation_path)?;
                     println!("Mnemonic imported successfully.")

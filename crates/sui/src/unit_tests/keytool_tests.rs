@@ -215,7 +215,7 @@ async fn test_private_keys_ed25519() -> Result<(), anyhow::Error> {
             "0x81aaefa4a883e72e8b6ccd3bec307e25fe3d79b14e43b778695c55dcec42f4f0",
         ],
     ];
-
+    // assert correctness
     for t in TEST_CASES {
         let mut keystore = Keystore::from(InMemKeystore::new_insecure_for_tests(0));
         KeyToolCommand::Import {
@@ -230,6 +230,20 @@ async fn test_private_keys_ed25519() -> Result<(), anyhow::Error> {
         assert_eq!(SuiAddress::from(&kp.public()), addr);
         assert!(keystore.addresses().contains(&addr));
     }
+
+    // assert failure when private key is malformed
+    for t in TEST_CASES {
+        let mut keystore = Keystore::from(InMemKeystore::new_insecure_for_tests(0));
+        let output = KeyToolCommand::Import {
+            input_string: t[0][..25].to_string(),
+            key_scheme: SignatureScheme::ED25519,
+            derivation_path: None,
+        }
+        .execute(&mut keystore)
+        .await;
+        assert!(output.is_err());
+    }
+
     Ok(())
 }
 
