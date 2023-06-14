@@ -1,5 +1,9 @@
 lockfileVersion: '6.0'
 
+settings:
+  autoInstallPeers: true
+  excludeLinksFromLockfile: false
+
 overrides:
   node-notifier: 10.0.0
   async: 3.2.2
@@ -171,6 +175,9 @@ importers:
         specifier: ^3.0.1
         version: 3.0.1
       '@visx/geo':
+        specifier: ^3.0.0
+        version: 3.0.0(react@18.2.0)
+      '@visx/marker':
         specifier: ^3.0.0
         version: 3.0.0(react@18.2.0)
       '@visx/responsive':
@@ -7817,6 +7824,19 @@ packages:
       react: ^16.0.0-0 || ^17.0.0-0 || ^18.0.0-0
     dependencies:
       '@types/react': 18.0.35
+      classnames: 2.3.2
+      prop-types: 15.8.1
+      react: 18.2.0
+    dev: false
+
+  /@visx/marker@3.0.0(react@18.2.0):
+    resolution: {integrity: sha512-TbxGD3CAmE7BvCA/gPLvhSOcThpM27slnWtDev2E/uHetubJC/02PNb/qe512dCTX1kcJpuWu2s0FsBLYSq0gA==}
+    peerDependencies:
+      react: ^16.0.0-0 || ^17.0.0-0 || ^18.0.0-0
+    dependencies:
+      '@types/react': 18.0.35
+      '@visx/group': 3.0.0(react@18.2.0)
+      '@visx/shape': 3.0.0(react@18.2.0)
       classnames: 2.3.2
       prop-types: 15.8.1
       react: 18.2.0

@@ -2,39 +2,36 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { AxisBottom } from '@visx/axis';
-import { curveNatural } from '@visx/curve';
+import { curveLinear } from '@visx/curve';
 import { localPoint } from '@visx/event';
+import { MarkerCircle } from '@visx/marker';
 import { scaleLinear } from '@visx/scale';
-import { LinePath } from '@visx/shape';
+import { AreaClosed, LinePath } from '@visx/shape';
+import { useTooltip, useTooltipInPortal } from '@visx/tooltip';
 import clsx from 'clsx';
 import { bisector, extent } from 'd3-array';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { throttle } from 'throttle-debounce';
 
-import { type EpochGasInfo } from './types';
+import { GraphAxisRight } from './GraphAxisRight';
+import { GraphTooltipContent } from './GraphTooltipContent';
+import { type UnitsType, type EpochGasInfo } from './types';
+import { isDefined } from './utils';
 
-function formatXLabel(epoch: number) {
-    return String(epoch);
-}
-
-export function isDefined(d: EpochGasInfo) {
-    return d.date !== null && d.referenceGasPrice !== null;
-}
-
-const SIDE_MARGIN = 30;
+const SIDE_MARGIN = 15;
 
 const bisectEpoch = bisector(({ epoch }: EpochGasInfo) => epoch).center;
 
 export type GraphProps = {
     data: EpochGasInfo[];
+    selectedUnit: UnitsType;
     width: number;
     height: number;
-    onHoverElement: (value: EpochGasInfo | null) => void;
 };
-export function Graph({ data, width, height, onHoverElement }: GraphProps) {
+export function Graph({ data, width, height, selectedUnit }: GraphProps) {
     // remove not defined data (graph displays better and helps with hovering/selecting hovered element)
     const adjData = useMemo(() => data.filter(isDefined), [data]);
-    const graphTop = 15;
+    const graphTop = 10;
     const graphButton = Math.max(height - 45, 0);
     const xScale = useMemo(
         () =>
@@ -54,29 +51,37 @@ export function Graph({ data, width, height, onHoverElement }: GraphProps) {
                     referenceGasPrice !== null
                         ? Number(referenceGasPrice)
                         : null
-                ) as [number, number],
+                ) as number[],
                 range: [graphButton, graphTop],
             }),
         [adjData, graphTop, graphButton]
     );
-    const [isTooltipVisible, setIsTooltipVisible] = useState(false);
-    const [tooltipX, setTooltipX] = useState(SIDE_MARGIN);
-    const [hoveredElement, setHoveredElement] = useState<EpochGasInfo | null>(
-        null
-    );
-    useEffect(() => {
-        onHoverElement(hoveredElement);
-    }, [onHoverElement, hoveredElement]);
+    const { TooltipInPortal, containerRef } = useTooltipInPortal({
+        scroll: true,
+    });
+    const {
+        tooltipOpen,
+        hideTooltip,
+        showTooltip,
+        tooltipData,
+        tooltipLeft,
+        tooltipTop,
+    } = useTooltip<EpochGasInfo>({
+        tooltipLeft: 0,
+        tooltipTop: 0,
+    });
     const handleTooltip = useCallback(
         (x: number) => {
             const xEpoch = xScale.invert(x);
             const epochIndex = bisectEpoch(adjData, xEpoch, 0);
             const selectedEpoch = adjData[epochIndex];
-            setTooltipX(xScale(selectedEpoch.epoch));
-            setHoveredElement(selectedEpoch);
-            setIsTooltipVisible(true);
+            showTooltip({
+                tooltipData: selectedEpoch,
+                tooltipLeft: xScale(selectedEpoch.epoch),
+                tooltipTop: yScale(Number(selectedEpoch.referenceGasPrice)),
+            });
         },
-        [xScale, adjData]
+        [xScale, adjData, yScale, showTooltip]
     );
     const [handleTooltipThrottled, setHandleTooltipThrottled] =
         useState<ReturnType<typeof throttle>>();
@@ -94,66 +99,202 @@ export function Graph({ data, width, height, onHoverElement }: GraphProps) {
         adjData.length,
         totalMaxTicksForWidth < 1 ? 1 : totalMaxTicksForWidth
     );
+    const firstElementY = adjData.length
+        ? yScale(Number(adjData[0].referenceGasPrice))
+        : null;
+    const lastElementX = adjData.length
+        ? xScale(adjData[adjData.length - 1].epoch)
+        : null;
+    const lastElementY = adjData.length
+        ? yScale(Number(adjData[adjData.length - 1].referenceGasPrice))
+        : null;
+    if (height < 60 || width < 100) {
+        return null;
+    }
     return (
-        <svg
-            width={width}
-            height={height}
-            className="stroke-steel-dark/80 transition hover:stroke-hero"
+        <div
+            className="relative h-full w-full overflow-hidden"
+            ref={containerRef}
         >
-            <line
-                x1={0}
-                y1={graphTop - 5}
-                x2={0}
-                y2={graphButton + 10}
-                className={clsx(
-                    'stroke-gray-60 transition-all ease-ease-out-cubic',
-                    isTooltipVisible ? 'opacity-100' : 'opacity-0'
-                )}
-                strokeWidth="1"
-                transform={`translate(${tooltipX})`}
-            />
-            <LinePath<EpochGasInfo>
-                curve={curveNatural}
-                data={adjData}
-                x={(d) => xScale(d.epoch)}
-                y={(d) => yScale(Number(d.referenceGasPrice!))}
-                width="1"
-            />
-            <AxisBottom
-                top={height - 30}
-                orientation="bottom"
-                tickLabelProps={{
-                    fontFamily: 'none',
-                    fontSize: 'none',
-                    stroke: 'none',
-                    fill: 'none',
-                    className: 'text-subtitle font-medium fill-steel font-sans',
-                }}
-                scale={xScale}
-                tickFormat={(epoch) => formatXLabel(epoch as number)}
-                hideTicks
-                hideAxisLine
-                numTicks={totalTicks}
-            />
-            <rect
-                x={SIDE_MARGIN}
-                y={graphTop - 5}
-                width={Math.max(0, width - SIDE_MARGIN * 2)}
-                height={Math.max(0, graphButton - graphTop + 5)}
-                fill="transparent"
-                stroke="none"
-                onMouseEnter={(e) => {
-                    handleTooltipThrottled?.(localPoint(e)?.x || SIDE_MARGIN);
-                }}
-                onMouseMove={(e) => {
-                    handleTooltipThrottled?.(localPoint(e)?.x || SIDE_MARGIN);
-                }}
-                onMouseLeave={() => {
-                    handleTooltipThrottled?.cancel({ upcomingOnly: true });
-                    setIsTooltipVisible(false);
-                    setHoveredElement(null);
-                }}
-            />
-        </svg>
+            {tooltipOpen && tooltipData ? (
+                <TooltipInPortal
+                    key={Math.random()} // needed for bounds to update correctly
+                    offsetLeft={0}
+                    offsetTop={0}
+                    left={tooltipLeft}
+                    top={0}
+                    className="pointer-events-none absolute z-10 h-0 w-max overflow-visible"
+                    unstyled
+                    detectBounds
+                >
+                    <GraphTooltipContent
+                        hoveredElement={tooltipData!}
+                        unit={selectedUnit}
+                    />
+                </TooltipInPortal>
+            ) : null}
+            <svg width={width} height={height}>
+                <line
+                    x1={0}
+                    y1={Math.max(graphTop - 5, 0)}
+                    x2={0}
+                    y2={Math.max(height - 20, 0)}
+                    className={clsx(
+                        'stroke-steel/30',
+                        tooltipOpen ? 'opacity-100' : 'opacity-0'
+                    )}
+                    strokeWidth="1"
+                    transform={tooltipLeft ? `translate(${tooltipLeft})` : ''}
+                />
+                <line
+                    x1={0}
+                    y1={0}
+                    x2={width}
+                    y2={0}
+                    className={clsx(
+                        'stroke-steel/30',
+                        tooltipOpen ? 'opacity-100' : 'opacity-0'
+                    )}
+                    strokeWidth="1"
+                    transform={tooltipTop ? `translate(0, ${tooltipTop})` : ''}
+                />
+                <LinePath<EpochGasInfo>
+                    curve={curveLinear}
+                    data={adjData}
+                    x={(d) => xScale(d.epoch)}
+                    y={(d) => yScale(Number(d.referenceGasPrice!))}
+                    stroke="#F2BD24"
+                    width="1"
+                    fillRule="nonzero"
+                />
+                <AreaClosed<EpochGasInfo>
+                    curve={curveLinear}
+                    data={adjData}
+                    yScale={yScale}
+                    x={(d) => xScale(d.epoch)}
+                    y={(d) => yScale(Number(d.referenceGasPrice!))}
+                    fill="#F2BD24"
+                    fillOpacity="0.1"
+                    stroke="transparent"
+                />
+                {firstElementY !== null ? (
+                    <>
+                        <rect
+                            x="0"
+                            y={firstElementY}
+                            width={SIDE_MARGIN}
+                            fill="#F2BD24"
+                            fillOpacity="0.1"
+                            stroke="transparent"
+                            height={graphButton - firstElementY}
+                        />
+                        <line
+                            x1="0"
+                            y1={firstElementY}
+                            x2={SIDE_MARGIN}
+                            y2={firstElementY}
+                            stroke="#F2BD24"
+                        />
+                    </>
+                ) : null}
+                {lastElementX !== null && lastElementY !== null ? (
+                    <>
+                        <rect
+                            x={lastElementX}
+                            y={lastElementY}
+                            width={SIDE_MARGIN}
+                            fill="#F2BD24"
+                            fillOpacity="0.1"
+                            stroke="transparent"
+                            height={graphButton - lastElementY}
+                        />
+                        <line
+                            x1={lastElementX}
+                            y1={lastElementY}
+                            x2={lastElementX + SIDE_MARGIN}
+                            y2={lastElementY}
+                            stroke="#F2BD24"
+                        />
+                    </>
+                ) : null}
+                <rect
+                    x={0}
+                    y={graphButton}
+                    width={width}
+                    height={Math.max(height - graphButton, 0)}
+                    fill="#F2BD24"
+                    fillOpacity="0.1"
+                    stroke="none"
+                />
+                <GraphAxisRight
+                    left={width - SIDE_MARGIN / 2}
+                    scale={yScale}
+                    selectedUnit={selectedUnit}
+                    isHovered={tooltipOpen}
+                />
+                <AxisBottom
+                    top={Math.max(height - 30, 0)}
+                    orientation="bottom"
+                    tickLabelProps={{
+                        fontFamily: 'none',
+                        fontSize: 'none',
+                        stroke: 'none',
+                        fill: 'none',
+                        className:
+                            'text-subtitleSmall font-medium fill-steel font-sans',
+                    }}
+                    scale={xScale}
+                    tickFormat={String}
+                    hideTicks
+                    hideAxisLine
+                    tickValues={xScale
+                        .ticks(totalTicks)
+                        .filter(Number.isInteger)}
+                />
+                <MarkerCircle
+                    id="marker-circle"
+                    className="fill-steel"
+                    size={1}
+                    refX={1}
+                />
+                <LinePath
+                    data={adjData}
+                    x={(d) => xScale(d.epoch)}
+                    y={Math.max(height - 5, 0)}
+                    stroke="transparent"
+                    markerStart="url(#marker-circle)"
+                    markerMid="url(#marker-circle)"
+                    markerEnd="url(#marker-circle)"
+                    className={clsx(
+                        'transition-all ease-ease-out-cubic',
+                        tooltipOpen ? 'opacity-100' : 'opacity-0'
+                    )}
+                />
+                <rect
+                    x={0}
+                    y={graphTop}
+                    width={width}
+                    height={Math.max(height - graphTop, 0)}
+                    fill="transparent"
+                    stroke="none"
+                    onMouseEnter={(e) => {
+                        handleTooltipThrottled?.(
+                            localPoint(e)?.x || SIDE_MARGIN
+                        );
+                    }}
+                    onMouseMove={(e) => {
+                        handleTooltipThrottled?.(
+                            localPoint(e)?.x || SIDE_MARGIN
+                        );
+                    }}
+                    onMouseLeave={() => {
+                        handleTooltipThrottled?.cancel({
+                            upcomingOnly: true,
+                        });
+                        hideTooltip();
+                    }}
+                />
+            </svg>
+        </div>
     );
 }
