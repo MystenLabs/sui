@@ -151,6 +151,7 @@ export function SelectValidatorCard() {
 					{data &&
 						validatorList.map((validator) => (
 							<div
+								data-testid="validator-list-item"
 								className="cursor-pointer w-full relative"
 								key={validator.address}
 								onClick={() => selectValidator(validator.address)}
@@ -171,6 +172,7 @@ export function SelectValidatorCard() {
 			{selectedValidator && (
 				<Menu stuckClass="staked-cta" className="w-full px-0 pb-5 mx-0 -bottom-5">
 					<Button
+						data-testid="select-validator-cta"
 						size="tall"
 						variant="primary"
 						to={`/stake/new?address=${encodeURIComponent(selectedValidator)}`}

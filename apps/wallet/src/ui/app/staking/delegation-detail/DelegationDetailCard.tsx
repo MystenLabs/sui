@@ -202,6 +202,7 @@ export function DelegationDetailCard({ validatorAddress, stakedId }: DelegationD
 
 							{Boolean(totalStake) && delegationId && (
 								<Button
+									data-testid="unstake-button"
 									size="tall"
 									variant="outline"
 									to={stakeByValidatorAddress + '&unstake=true'}

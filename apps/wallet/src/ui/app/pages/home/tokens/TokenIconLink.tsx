@@ -31,6 +31,7 @@ export function TokenIconLink({ accountAddress }: { accountAddress: SuiAddress }
 
 	return (
 		<LargeButton
+			data-testid="stake-and-earn-button"
 			to="/stake"
 			onClick={() => {
 				trackEvent('StakingFromHome');

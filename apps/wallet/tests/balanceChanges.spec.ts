@@ -55,8 +55,6 @@ test('send 20 SUI to an address', async ({ page, extensionUrl }) => {
 
 	await importWallet(page, extensionUrl, currentWalletMnemonic);
 
-	await page.getByTestId('copy-address').click();
-
 	await requestingSuiFromFaucet(originAddress);
 	await expect(page.getByTestId('coin-balance')).not.toHaveText('0SUI');
 
