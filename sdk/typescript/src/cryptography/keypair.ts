@@ -15,6 +15,11 @@ export type ExportedKeypair = {
   privateKey: string;
 };
 
+export type SuiKeyPair = {
+  suiPrivateKey: string;
+  suiAddress: string;
+};
+
 /**
  * A keypair used for signing transactions.
  */
