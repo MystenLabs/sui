@@ -372,7 +372,6 @@ move-stackless-bytecode = { path = "../../external-crates/move/move-prover/bytec
 move-stackless-bytecode-interpreter = { path = "../../external-crates/move/move-prover/interpreter", default-features = false }
 move-stdlib = { path = "../../external-crates/move/move-stdlib", default-features = false, features = ["testing"] }
 move-symbol-pool = { path = "../../external-crates/move/move-symbol-pool" }
-move-table-extension = { path = "../../external-crates/move/extensions/move-table-extension", default-features = false }
 move-transactional-test-runner = { path = "../../external-crates/move/testing-infra/transactional-test-runner", default-features = false }
 move-unit-test = { path = "../../external-crates/move/tools/move-unit-test", default-features = false }
 move-vm-config = { path = "../../external-crates/move/move-vm/config", default-features = false }
@@ -1107,7 +1106,6 @@ move-stackless-bytecode = { path = "../../external-crates/move/move-prover/bytec
 move-stackless-bytecode-interpreter = { path = "../../external-crates/move/move-prover/interpreter", default-features = false }
 move-stdlib = { path = "../../external-crates/move/move-stdlib", default-features = false, features = ["testing"] }
 move-symbol-pool = { path = "../../external-crates/move/move-symbol-pool" }
-move-table-extension = { path = "../../external-crates/move/extensions/move-table-extension", default-features = false }
 move-transactional-test-runner = { path = "../../external-crates/move/testing-infra/transactional-test-runner", default-features = false }
 move-unit-test = { path = "../../external-crates/move/tools/move-unit-test", default-features = false }
 move-vm-config = { path = "../../external-crates/move/move-vm/config", default-features = false }
@@ -1730,4 +1728,3 @@ windows_x86_64_msvc-c8eced492e86ede7 = { package = "windows_x86_64_msvc", versio
 winreg = { version = "0.10", default-features = false }
 
 ### END HAKARI SECTION
-

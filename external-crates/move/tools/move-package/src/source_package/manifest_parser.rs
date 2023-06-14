@@ -2,7 +2,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{package_hooks, source_package::parsed_manifest as PM, Architecture};
+use crate::{package_hooks, source_package::parsed_manifest as PM};
 use anyhow::{anyhow, bail, format_err, Context, Result};
 use move_core_types::account_address::{AccountAddress, AccountAddressParseError};
 use move_symbol_pool::symbol::Symbol;
@@ -204,7 +204,6 @@ pub fn parse_build_info(tval: TV) -> Result<PM::BuildInfo> {
                     .remove("language_version")
                     .map(parse_version)
                     .transpose()?,
-                architecture: table.remove("arch").map(parse_architecture).transpose()?,
             })
         }
         x => bail!(
@@ -498,10 +497,6 @@ fn parse_version(tval: TV) -> Result<PM::Version> {
             .parse::<u64>()
             .context("Invalid bugfix version")?,
     ))
-}
-
-fn parse_architecture(tval: TV) -> Result<Architecture> {
-    Architecture::try_parse_from_str(tval.as_str().unwrap())
 }
 
 fn parse_digest(tval: TV) -> Result<PM::PackageDigest> {
