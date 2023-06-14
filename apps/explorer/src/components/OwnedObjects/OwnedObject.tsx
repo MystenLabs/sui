@@ -3,6 +3,7 @@
 
 import { type SuiObjectResponse, getObjectDisplay } from '@mysten/sui.js';
 
+import { useResolveVideo } from '~/hooks/useResolveVideo';
 import { ObjectDetails } from '~/ui/ObjectDetails';
 import { parseObjectType } from '~/utils/objectUtils';
 import { trimStdLibPrefix } from '~/utils/stringUtils';
@@ -12,7 +13,9 @@ type OwnedObjectTypes = {
 };
 
 function OwnedObject({ obj }: OwnedObjectTypes): JSX.Element {
+    const video = useResolveVideo(obj);
     const displayMeta = getObjectDisplay(obj).data;
+
     return (
         <ObjectDetails
             variant="small"
@@ -20,6 +23,7 @@ function OwnedObject({ obj }: OwnedObjectTypes): JSX.Element {
             type={trimStdLibPrefix(parseObjectType(obj))}
             name={displayMeta?.name ?? displayMeta?.description}
             image={displayMeta?.image_url}
+            video={video}
         />
     );
 }
