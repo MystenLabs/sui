@@ -79,7 +79,7 @@
         "@storybook/addon-essentials": "7.0.4",
         "@storybook/addons": "7.0.4",
         "@storybook/react": "7.0.4",
-        "@storybook/react-vite": "7.0.4",
+        "@storybook/react-vite": "7.0.20",
         "@storybook/theming": "7.0.4",
         "@tanstack/eslint-plugin-query": "^4.29.4",
         "@testing-library/dom": "^9.2.0",
