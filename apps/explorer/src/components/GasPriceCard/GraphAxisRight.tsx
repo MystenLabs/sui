@@ -40,15 +40,14 @@ export function GraphAxisRight({
     selectedUnit,
     isHovered,
 }: AxisRightProps<number>) {
-    let ticks = scale.nice(6).ticks(6);
+    let ticks = Array.from(
+        new Set(scale.nice(6).ticks(6).map(Math.floor)).values()
+    );
     return (
         <g>
             <g>
                 {ticks
-                    .filter(
-                        (_, index) =>
-                            (index + 1) % 2 === 0 || ticks.length === 1
-                    )
+                    .filter((_, index) => index % 2 !== 0 || ticks.length <= 3)
                     .map((value) => (
                         <GasPriceValue
                             key={value}
@@ -58,10 +57,7 @@ export function GraphAxisRight({
             </g>
             <g>
                 {ticks
-                    .filter(
-                        (_, index) =>
-                            (index + 1) % 2 !== 0 && ticks.length !== 1
-                    )
+                    .filter((_, index) => index % 2 === 0 && ticks.length > 3)
                     .map((value) => (
                         <circle
                             key={value}
