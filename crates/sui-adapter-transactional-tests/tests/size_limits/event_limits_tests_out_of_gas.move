@@ -3,7 +3,7 @@
 
 // Test limits on number and sizes of emitted events
 
-//# init --addresses Test=0x0 --max-gas 100000000000000
+//# init --addresses Test=0x0
 
 //# publish
 
@@ -53,27 +53,14 @@ module Test::M1 {
         };
     }
 }
-// Check count limits
-// emit below event count limit should succeed
-//# run Test::M1::emit_n_small_events --args 1 --gas-budget 100000000000000 --summarize
 
-// emit at event count limit should succeed
-//# run Test::M1::emit_n_small_events --args 256 --gas-budget 100000000000000 --summarize
+// Check if we run out of gas before hitting limits
 
-// emit above event count limit should fail
-//# run Test::M1::emit_n_small_events --args 257 --gas-budget 100000000000000
+// Can't emit above event count limit without running out of gas
+//# run Test::M1::emit_n_small_events --args 257 --gas-budget 1000000000
 
 // emit above event count limit should fail
-//# run Test::M1::emit_n_small_events --args 300 --gas-budget 100000000000000
-
-// emit below event size limit should succeed
-//# run Test::M1::emit_event_with_size --args 200000 --gas-budget 100000000000000 --summarize
-
-// emit at event size limit should succeed
-//# run Test::M1::emit_event_with_size --args 256000 --gas-budget 100000000000000 --summarize
-
-// emit above event size limit should succeed
-//# run Test::M1::emit_event_with_size --args 256001 --gas-budget 100000000000000 --summarize
+//# run Test::M1::emit_n_small_events --args 300 --gas-budget 1000000000
 
 // emit above event size limit should fail
-//# run Test::M1::emit_event_with_size --args 259000 --gas-budget 100000000000000
+//# run Test::M1::emit_event_with_size --args 259000 --gas-budget 1000000000

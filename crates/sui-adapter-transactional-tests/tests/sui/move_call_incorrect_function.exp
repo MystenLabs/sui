@@ -6,8 +6,7 @@ mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 3420000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 2 'run'. lines 16-18:
-Error: Transaction Effects Status: Move Bytecode Verification Error. Please run the Bytecode Verifier for more information.
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: VMVerificationOrDeserializationError, source: Some(VMError { major_status: LINKER_ERROR, sub_status: None, message: Some("Cannot find link context _ in store"), exec_state: None, location: Undefined, indices: [], offsets: [] }), command: Some(0) } }
+Error: Error checking transaction input objects: DependentPackageNotFound { package_id: 0x0000000000000000000000000000000000000000000000000000000000000242 }
 
 task 3 'run'. lines 19-19:
 Error: Transaction Effects Status: Function Not Found.

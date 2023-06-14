@@ -5487,6 +5487,7 @@ name = "move-transactional-test-runner"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "clap 3.2.23",
  "colored",
  "move-binary-format",
@@ -5512,6 +5513,7 @@ dependencies = [
  "rayon",
  "regex",
  "tempfile",
+ "tokio",
 ]
 
 [[package]]
@@ -10759,6 +10761,7 @@ name = "sui-transactional-test-runner"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "bcs",
  "bimap",
  "clap 3.2.23",
@@ -10772,16 +10775,20 @@ dependencies = [
  "move-symbol-pool",
  "move-transactional-test-runner",
  "move-vm-runtime",
+ "msim",
  "once_cell",
  "prometheus",
  "rand 0.8.5",
- "sui-adapter-latest",
+ "sui-config",
  "sui-core",
  "sui-framework",
- "sui-move-natives-latest",
+ "sui-json-rpc",
+ "sui-json-rpc-types",
  "sui-protocol-config",
+ "sui-swarm-config",
  "sui-types",
  "tempfile",
+ "tokio",
  "workspace-hack",
 ]
 

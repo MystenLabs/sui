@@ -60,8 +60,8 @@ pub enum ParsedValue<Extra: ParsableValue = ()> {
     Custom(Extra),
 }
 
-pub trait ParsableValue: Sized {
-    type ConcreteValue;
+pub trait ParsableValue: Sized + Send {
+    type ConcreteValue: Send;
     fn parse_value<'a, I: Iterator<Item = (ValueToken, &'a str)>>(
         parser: &mut Parser<'a, ValueToken, I>,
     ) -> Option<anyhow::Result<Self>>;

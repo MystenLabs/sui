@@ -17,7 +17,8 @@ regex = "1.1.9"
 rayon = "1.5.0"
 clap = { version = "3.1.8", features = ["derive"] }
 tempfile = "3.2.0"
-
+async-trait = "0.1.61"
+tokio = "1.27.0"
 
 move-stackless-bytecode-interpreter = { path = "../../move-prover/interpreter" }
 move-bytecode-verifier = { path = "../../move-bytecode-verifier" }
