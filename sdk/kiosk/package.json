@@ -37,15 +37,7 @@
     "@mysten/sui.js": "workspace:*"
   },
   "devDependencies": {
-    "eslint": "^8.38.0",
-    "prettier": "^2.8.7",
     "tsup": "^6.7.0",
     "typescript": "^5.0.4"
-  },
-  "prettier": {
-    "printWidth": 80,
-    "semi": true,
-    "singleQuote": true,
-    "trailingComma": "all"
   }
 }

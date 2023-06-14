@@ -43,6 +43,7 @@ Sentry.init({
             ) {
                 return null;
             }
+            // eslint-disable-next-line no-empty
         } catch (e) {}
 
         return event;

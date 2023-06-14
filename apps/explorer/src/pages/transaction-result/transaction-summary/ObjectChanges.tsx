@@ -148,7 +148,7 @@ function ObjectDetail({
         ItemLabels.type,
     ];
 
-    if (!!display?.data)
+    if (display?.data)
         return <ObjectDisplay display={display} objectId={objectId} />;
 
     return (

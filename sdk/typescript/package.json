@@ -44,12 +44,6 @@
     "size": "size-limit",
     "analyze": "size-limit --why"
   },
-  "prettier": {
-    "printWidth": 80,
-    "semi": true,
-    "singleQuote": true,
-    "trailingComma": "all"
-  },
   "bugs": {
     "url": "https://github.com/MystenLabs/sui/issues/new"
   },
@@ -72,12 +66,7 @@
     "@types/node": "^18.15.11",
     "@types/tmp": "^0.2.3",
     "cross-env": "^7.0.3",
-    "eslint": "^8.38.0",
-    "eslint-config-prettier": "^8.8.0",
-    "eslint-config-react-app": "^7.0.1",
-    "eslint-plugin-prettier": "^4.2.1",
     "msw": "^1.2.1",
-    "prettier": "^2.8.7",
     "size-limit": "^8.2.4",
     "tmp": "^0.2.1",
     "ts-node": "^10.9.1",

@@ -1,6 +1,6 @@
 packages:
-  - "sdk/**"
-  - "apps/**"
-  - "dapps/sponsored-transactions"
-  - "dapps/offline-signer-helper"
-  - "dapps/kiosk"
+    - 'sdk/**'
+    - 'apps/**'
+    - 'dapps/sponsored-transactions'
+    - 'dapps/offline-signer-helper'
+    - 'dapps/kiosk'

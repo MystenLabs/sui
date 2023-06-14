@@ -1,0 +1,33 @@
+# ignore everything by default
+/*
+# Enable prettier for apps, dapps and sdk
+!/apps
+!/sdk
+!/dapps
+!/.config
+!/*.js
+
+# Ignroe generated icons
+/apps/icons/src
+
+# Ignore packages that didn't use prettier yet (will be enabled in a future PR)
+/sdk/bcs
+/sdk/wallet-adapter
+/dapps/offline-signer-helper
+/dapps/sponsored-transactions
+
+# ignore generated files
+npm-debug.log*
+package-lock.json
+yarn-debug.log*
+.next/
+.swc/
+build/
+coverage/
+dist/
+out/
+playwright-report/
+storybook-static/
+sdk/wallet-adapter/site/pages/
+CHANGELOG.md
+
