@@ -67,7 +67,6 @@
         "eslint": "^8.38.0",
         "eslint-config-prettier": "^8.8.0",
         "eslint-plugin-prettier": "^4.2.1",
-        "prettier": "^2.8.7",
         "size-limit": "^8.2.4",
         "tsup": "^6.7.0",
         "typescript": "^5.0.4",

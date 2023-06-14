@@ -95,7 +95,6 @@
         "postcss": "^8.4.24",
         "postcss-loader": "^7.2.4",
         "postcss-preset-env": "^8.3.1",
-        "prettier": "^2.8.7",
         "sass": "^1.62.0",
         "sass-loader": "^13.2.2",
         "storybook": "7.0.4",
