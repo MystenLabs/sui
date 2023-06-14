@@ -5,7 +5,7 @@ import { type DisplayFieldsResponse } from '@mysten/sui.js';
 import { useState } from 'react';
 
 import { ObjectLink } from '~/ui/InternalLink';
-import { ImageModal } from '~/ui/Modal/ImageModal';
+import { ObjectModal } from '~/ui/Modal/ObjectModal';
 import { Image } from '~/ui/image/Image';
 
 export function ObjectDisplay({
@@ -20,7 +20,7 @@ export function ObjectDisplay({
     const { description, name, image_url: imageUrl } = display.data ?? {};
     return (
         <div className="group relative w-32">
-            <ImageModal
+            <ObjectModal
                 open={open}
                 onClose={() => handleOpen(false)}
                 title={name ?? description ?? ''}

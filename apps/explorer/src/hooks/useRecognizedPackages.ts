@@ -4,20 +4,21 @@
 import { useFeatureValue } from '@growthbook/growthbook-react';
 import { SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_ADDRESS } from '@mysten/sui.js';
 
-import useAppSelector from './useAppSelector';
-import { API_ENV } from '_src/shared/api-env';
+import { useNetwork } from '~/context';
+import { Network } from '~/utils/api/DefaultRpcClient';
 
 const DEFAULT_RECOGNIZED_PACKAGES = [SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_ADDRESS];
 
 export function useRecognizedPackages() {
-    const apiEnv = useAppSelector((app) => app.app.apiEnv);
+    const [network] = useNetwork();
+
     const recognizedPackages = useFeatureValue(
         'recognized-packages',
         DEFAULT_RECOGNIZED_PACKAGES
     );
 
     // Our recognized package list is currently only available on mainnet
-    return apiEnv === API_ENV.mainnet
+    return network === Network.MAINNET
         ? recognizedPackages
         : DEFAULT_RECOGNIZED_PACKAGES;
 }
