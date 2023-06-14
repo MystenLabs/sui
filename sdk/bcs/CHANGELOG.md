@@ -1,5 +1,12 @@
 # Change Log
 
+## 0.7.2
+
+### Patch Changes
+
+- ca5c72815d: Fix a bcs decoding bug for u128 and u256 values
+- fdb569464e: Fixes an issue with a top level generic in a nested vector
+
 ## 0.7.1
 
 ### Patch Changes
