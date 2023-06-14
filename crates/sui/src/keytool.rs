@@ -114,7 +114,7 @@ pub enum KeyToolCommand {
     /// and an optional derivation path, default to m/44'/784'/0'/0'/0' for ed25519 or m/54'/784'/0'/0/0 for secp256k1
     /// or m/74'/784'/0'/0/0 for secp256r1. Supports mnemonic phrase of word length 12, 15, 18`, 21, 24.
     Import {
-        mnemonic_phrase: String,
+        input_string: String,
         key_scheme: SignatureScheme,
         derivation_path: Option<DerivationPath>,
     },
@@ -339,36 +339,35 @@ impl KeyToolCommand {
             }
 
             KeyToolCommand::Import {
-                mnemonic_phrase,
+                input_string,
                 key_scheme,
                 derivation_path,
             } => {
-                let address =
-                    keystore.import_from_mnemonic(&mnemonic_phrase, key_scheme, derivation_path)?;
-                info!("Key imported for address [{address}]");
+                // check if it is a private key or a mnemonic
+                if input_string.starts_with("0x") && input_string.len() == 66 {
+                    let base64 = convert_string_to_base64(input_string)?;
+                    let skp = SuiKeyPair::decode_base64(&base64);
+                    if let Ok(skp) = skp {
+                        keystore.add_key(skp)?;
+                        println!("Private key imported successfully.")
+                    } else {
+                        println!("Cannot decode base64 from private key. Importing failed.")
+                    }
+                } else if input_string.starts_with("0x") && input_string.len() != 66 {
+                    println!(
+                        "Private key is malformed. Expected length of 66 but got {}",
+                        input_string.len()
+                    )
+                } else {
+                    keystore.import_from_mnemonic(&input_string, key_scheme, derivation_path)?;
+                    println!("Mnemonic imported successfully.")
+                }
             }
 
-            KeyToolCommand::Convert { value } => match Base64::decode(&value) {
-                Ok(decoded) => {
-                    assert_eq!(decoded.len(), 33);
-                    info!(
-                        "Wallet formatted private key: 0x{}",
-                        Hex::encode(&decoded[1..])
-                    );
-                }
-                Err(_) => match Hex::decode(&value) {
-                    Ok(decoded) => {
-                        assert_eq!(decoded.len(), 32);
-                        let mut res = Vec::new();
-                        res.extend_from_slice(&[SignatureScheme::ED25519.flag()]);
-                        res.extend_from_slice(&decoded);
-                        info!("Keystore formatted private key: {:?}", Base64::encode(&res));
-                    }
-                    Err(_) => {
-                        info!("Invalid private key format");
-                    }
-                },
-            },
+            KeyToolCommand::Convert { value } => {
+                let base64 = convert_string_to_base64(value)?;
+                println!("Converted private key to base64: {:?}", base64);
+            }
 
             KeyToolCommand::Base64PubKeyToAddress { base64_key } => {
                 let pk = PublicKey::decode_base64(&base64_key)
@@ -638,6 +637,31 @@ impl KeyToolCommand {
             }
         }
         Ok(())
+    }
+}
+
+fn convert_string_to_base64(value: String) -> Result<String, anyhow::Error> {
+    match Base64::decode(&value) {
+        Ok(decoded) => {
+            assert_eq!(decoded.len(), 33);
+            let hex_encoded = Hex::encode(&decoded[1..]);
+            info!("Wallet formatted private key: 0x{}", hex_encoded);
+            Ok(hex_encoded)
+        }
+        Err(_) => match Hex::decode(&value) {
+            Ok(decoded) => {
+                assert_eq!(decoded.len(), 32);
+                let mut res = Vec::new();
+                res.extend_from_slice(&[SignatureScheme::ED25519.flag()]);
+                res.extend_from_slice(&decoded);
+                info!("Keystore formatted private key: {:?}", Base64::encode(&res));
+                Ok(Base64::encode(&res))
+            }
+            Err(_) => {
+                info!("Invalid private key format");
+                Err(anyhow!("Invalid private key format"))
+            }
+        },
     }
 }
 
