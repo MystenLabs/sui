@@ -49,12 +49,28 @@ module move_building_blocks::objects {
         }
     }
 
-    public fun wrap_child(object: &mut Object, child: Child) {
-        unwrap_child(object);
+    public fun create_and_wrap_child(object: &mut Object, delete_old_child: bool, ctx: &mut TxContext) {
+        let child = new_child(ctx);
+        wrap_child(object, child, delete_old_child, ctx);
+    }
+
+    public fun wrap_child(object: &mut Object, child: Child, delete_old_child: bool, ctx: &TxContext) {
+        if (delete_old_child) {
+            unwrap_and_delete_child(object)
+        } else {
+            unwrap_child(object, ctx)
+        };
         option::fill(&mut object.wrapped, child);
     }
 
-    public fun unwrap_child(object: &mut Object) {
+    public fun unwrap_child(object: &mut Object, ctx: &TxContext) {
+        if (option::is_some(&object.wrapped)) {
+            let old_child = option::extract(&mut object.wrapped);
+            transfer::transfer(old_child, tx_context::sender(ctx));
+        }
+    }
+
+    public fun unwrap_child_and_add_to_table(object: &mut Object) {
         if (option::is_some(&object.wrapped)) {
             let old_child = option::extract(&mut object.wrapped);
             let index = ((table::length(&object.table) + 1) as u8);
@@ -62,10 +78,10 @@ module move_building_blocks::objects {
         }
     }
 
-    public fun unwrap_and_burn_child(object: &mut Object) {
+    public fun unwrap_and_delete_child(object: &mut Object) {
         if (option::is_some(&object.wrapped)) {
             let old_child = option::extract(&mut object.wrapped);
-            burn_child(old_child)
+            delete_child(old_child)
         }
     }
 
@@ -93,10 +109,10 @@ module move_building_blocks::objects {
         }
     }
 
-    public fun table_burn_child(object: &mut Object, index: u8, dice: u8) {
+    public fun table_delete_child(object: &mut Object, index: u8, dice: u8) {
         if (table::contains(&object.table, index) && dice % 5 == 0) {
             let child = table::remove(&mut object.table, index);
-            burn_child(child);
+            delete_child(child);
         }
     }
 
@@ -114,7 +130,7 @@ module move_building_blocks::objects {
         }
     }
 
-    fun burn_child(child: Child) {
+    fun delete_child(child: Child) {
         let Child { id } = child;
         object::delete(id);
     }
