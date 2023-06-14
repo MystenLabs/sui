@@ -1,23 +1,26 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import {
-    CoinFormat,
-    formatBalance,
-    formatDate,
-    useGetReferenceGasPrice,
-    useRpcClient,
-} from '@mysten/core';
-import { Info12 } from '@mysten/icons';
-import { SUI_DECIMALS } from '@mysten/sui.js';
+import { useGetReferenceGasPrice, useRpcClient } from '@mysten/core';
 import { useQuery } from '@tanstack/react-query';
 import { ParentSize } from '@visx/responsive';
 import clsx from 'clsx';
 import { useMemo, useState } from 'react';
 
 import { ErrorBoundary } from '../error-boundary/ErrorBoundary';
-import { Graph, isDefined } from './Graph';
-import { type EpochGasInfo } from './types';
+import { Graph } from './Graph';
+import {
+    type EpochGasInfo,
+    type GraphDurationsType,
+    type UnitsType,
+} from './types';
+import {
+    GRAPH_DURATIONS,
+    GRAPH_DURATIONS_MAP,
+    UNITS,
+    isDefined,
+    useGasPriceFormat,
+} from './utils';
 
 import { Card } from '~/ui/Card';
 import { FilterList } from '~/ui/FilterList';
@@ -26,16 +29,6 @@ import { ListboxSelect } from '~/ui/ListboxSelect';
 import { LoadingSpinner } from '~/ui/LoadingSpinner';
 import { Stats } from '~/ui/Stats';
 import { Text } from '~/ui/Text';
-import { Tooltip } from '~/ui/Tooltip';
-
-const UNITS = ['MIST', 'SUI'] as const;
-type UnitsType = (typeof UNITS)[number];
-const GRAPH_DURATIONS = ['7 EPOCHS', '30 EPOCHS'] as const;
-type GraphDurationsType = (typeof GRAPH_DURATIONS)[number];
-const GRAPH_DURATIONS_MAP: Record<GraphDurationsType, number> = {
-    '7 EPOCHS': 7,
-    '30 EPOCHS': 30,
-};
 
 function useHistoricalGasPrices() {
     const rpc = useRpcClient();
@@ -43,8 +36,8 @@ function useHistoricalGasPrices() {
         queryKey: ['get', 'last 30 epochs gas price'],
         queryFn: async () => {
             // TODO: update this to get the gas price from the epoch itself rather than the previous one
-            // once this is deployed https://github.com/MystenLabs/sui/pull/11388
-            // every epoch contains the gas price for the next one
+            // once this is done https://mysten.atlassian.net/browse/PI-6
+            // currently every epoch contains the gas price for the next one
             const epochs = [
                 ...(
                     await rpc.getEpochs({
@@ -92,16 +85,6 @@ function useGasPriceAverage(totalEpochs: number) {
     return { ...historicalData, data: average };
 }
 
-function useGasPriceFormat(gasPrice: bigint | null, unit: 'MIST' | 'SUI') {
-    return gasPrice !== null
-        ? formatBalance(
-              gasPrice,
-              unit === 'MIST' ? 0 : SUI_DECIMALS,
-              CoinFormat.FULL
-          )
-        : null;
-}
-
 // TODO: Delete this prop once we roll out the SUI token card
 export function GasPriceCard({
     useLargeSpacing,
@@ -135,7 +118,7 @@ export function GasPriceCard({
         selectedUnit
     );
     const [selectedGraphDuration, setSelectedGraphsDuration] =
-        useState<GraphDurationsType>('30 EPOCHS');
+        useState<GraphDurationsType>('30 Epochs');
     const graphEpochs = useMemo(
         () =>
             historicalData?.slice(
@@ -143,35 +126,27 @@ export function GasPriceCard({
             ) || [],
         [historicalData, selectedGraphDuration]
     );
-    const [hoveredElement, setHoveredElement] = useState<EpochGasInfo | null>(
-        null
-    );
-    const formattedHoveredPrice = useGasPriceFormat(
-        hoveredElement?.referenceGasPrice ?? null,
-        selectedUnit
-    );
-    const formattedHoveredDate = hoveredElement?.date
-        ? formatDate(hoveredElement?.date, ['month', 'day'])
-        : '-';
     return (
-        <Card spacing="lg" height="full">
+        <Card spacing="none" height="full" bg="white" border="gray45">
             <div
                 className={clsx(
                     'flex h-full flex-col',
                     useLargeSpacing ? 'gap-8' : 'gap-5'
                 )}
             >
-                <div className="flex gap-2.5">
-                    <div className="flex flex-grow flex-nowrap items-center gap-1 text-steel">
+                <div className="flex items-center gap-2.5 p-6 pb-0">
+                    <div className="flex flex-grow flex-wrap items-center gap-2 text-steel">
                         <Heading
                             variant="heading4/semibold"
                             color="steel-darker"
                         >
                             Reference Gas Price
                         </Heading>
-                        <Tooltip tip="Transaction sent at RGP will process promptly during regular network operations">
-                            <Info12 className="h-3.5 w-3.5" />
-                        </Tooltip>
+                        <ListboxSelect
+                            value={selectedGraphDuration}
+                            options={GRAPH_DURATIONS}
+                            onSelect={setSelectedGraphsDuration}
+                        />
                     </div>
                     <FilterList<UnitsType>
                         lessSpacing
@@ -181,7 +156,7 @@ export function GasPriceCard({
                         onChange={setSelectedUnit}
                     />
                 </div>
-                <div className="flex gap-6 lg:max-xl:gap-12">
+                <div className="flex gap-6 px-6 lg:max-xl:gap-12">
                     <Stats label="Current" postfix={selectedUnit} size="sm">
                         {formattedCurrentGasPrice}
                     </Stats>
@@ -195,7 +170,12 @@ export function GasPriceCard({
                         </Stats>
                     ) : null}
                 </div>
-                <div className="flex min-h-[180px] flex-1 flex-col items-center justify-center overflow-hidden rounded-xl bg-white pt-2">
+                <div
+                    className={clsx(
+                        'flex min-h-[180px] flex-1 flex-col items-center justify-center rounded-b-xl transition-colors',
+                        !graphEpochs?.length && 'bg-gray-40'
+                    )}
+                >
                     {isDataLoading ? (
                         <div className="flex flex-col items-center gap-1">
                             <LoadingSpinner />
@@ -203,60 +183,21 @@ export function GasPriceCard({
                                 loading data
                             </Text>
                         </div>
-                    ) : historicalData?.length ? (
-                        <>
-                            <div className="flex flex-row self-stretch pr-2">
-                                <div
-                                    className={clsx(
-                                        'ml-3 mt-1 flex min-w-0 flex-col flex-nowrap gap-0.5 rounded-md border border-solid border-gray-45 px-2 py-1.5',
-                                        hoveredElement?.date
-                                            ? 'visible'
-                                            : 'invisible'
+                    ) : graphEpochs?.length ? (
+                        <div className="relative flex-1 self-stretch">
+                            <ErrorBoundary>
+                                <ParentSize className="absolute">
+                                    {(parent) => (
+                                        <Graph
+                                            width={parent.width}
+                                            height={parent.height}
+                                            data={graphEpochs}
+                                            selectedUnit={selectedUnit}
+                                        />
                                     )}
-                                >
-                                    <Text
-                                        variant="caption/semibold"
-                                        color="hero-dark"
-                                        truncate
-                                    >
-                                        {formattedHoveredPrice
-                                            ? `${formattedHoveredPrice} ${selectedUnit}`
-                                            : '-'}
-                                    </Text>
-                                    <Text
-                                        variant="subtitleSmallExtra/medium"
-                                        color="steel-darker"
-                                    >
-                                        Epoch {hoveredElement?.epoch},{' '}
-                                        {formattedHoveredDate}
-                                    </Text>
-                                </div>
-                                <div className="flex-1" />
-                                <ListboxSelect
-                                    value={selectedGraphDuration}
-                                    options={GRAPH_DURATIONS}
-                                    onSelect={setSelectedGraphsDuration}
-                                />
-                            </div>
-                            <div className="relative flex-1 self-stretch">
-                                <ErrorBoundary>
-                                    {historicalData ? (
-                                        <ParentSize className="absolute">
-                                            {(parent) => (
-                                                <Graph
-                                                    width={parent.width}
-                                                    height={parent.height}
-                                                    data={graphEpochs}
-                                                    onHoverElement={
-                                                        setHoveredElement
-                                                    }
-                                                />
-                                            )}
-                                        </ParentSize>
-                                    ) : null}
-                                </ErrorBoundary>
-                            </div>
-                        </>
+                                </ParentSize>
+                            </ErrorBoundary>
+                        </div>
                     ) : (
                         <Text color="steel" variant="body/medium">
                             No historical data available
