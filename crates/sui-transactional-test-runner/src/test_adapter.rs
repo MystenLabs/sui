@@ -1133,14 +1133,14 @@ impl<'a> SuiTestAdapter<'a> {
                 })
             }
             ExecutionStatus::Failure { error, command } => {
-                let execution_msg = error_opt
-                    .map(|e| format!("Execution Error: {e}"))
-                    .unwrap_or_else(|| {
-                        assert!(with_shared);
-                        format!(
-                            "Cannot return execution error with shared objects. Debug of error: {error:?} at command {command:?}"
-                        )
-                    });
+                let execution_msg = if with_shared {
+                    format!(
+                        "Cannot return execution error with shared objects. \
+                        Debug of error: {error:?} at command {command:?}"
+                    )
+                } else {
+                    format!("Execution Error: {}", error_opt.unwrap())
+                };
                 Err(anyhow::anyhow!(self.stabilize_str(format!(
                     "Transaction Effects Status: {error}\n{execution_msg}",
                 ))))

@@ -30,7 +30,6 @@ move-transactional-test-runner.workspace = true
 
 move-stdlib = { path = "../../external-crates/move/move-stdlib" }
 move-vm-runtime = { path = "../../external-crates/move/move-vm/runtime" }
-sui-adapter = { path = "../../sui-execution/latest/sui-adapter", package = "sui-adapter-latest"}
 sui-config = { path = "../sui-config" }
 sui-swarm-config = { path = "../sui-swarm-config" }
 sui-core = { path = "../sui-core", features = ["test-utils"] }
@@ -40,3 +39,6 @@ sui-types = { path = "../sui-types", features = ["test-utils"]}
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 sui-json-rpc-types = { path = "../sui-json-rpc-types" }
 sui-json-rpc = { path = "../sui-json-rpc" }
+
+[target.'cfg(msim)'.dependencies]
+msim = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "e4b1466fbe8212ee113e88022df5b4bfd966a689", package = "msim" }
