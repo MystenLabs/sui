@@ -9485,7 +9485,6 @@ dependencies = [
  "telemetry-subscribers",
  "tempfile",
  "test-fuzz",
- "test-utils",
  "thiserror",
  "tokio",
  "tokio-retry",
