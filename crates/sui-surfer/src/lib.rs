@@ -23,7 +23,7 @@ mod surfer_state;
 mod surfer_task;
 
 const VALIDATOR_COUNT: usize = 7;
-const EPOCH_DURATION_MS: u64 = 120000;
+const EPOCH_DURATION_MS: u64 = 15000;
 
 const ACCOUNT_NUM: usize = 20;
 const GAS_OBJECT_COUNT: usize = 3;
