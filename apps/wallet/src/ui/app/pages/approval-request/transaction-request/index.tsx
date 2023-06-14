@@ -16,6 +16,7 @@ import {
     useTransactionData,
     useTransactionDryRun,
 } from '_hooks';
+import { SummaryCard } from '_pages/approval-request/transaction-request/SummaryCard';
 import { type TransactionApprovalRequest } from '_payloads/transactions/ApprovalRequest';
 import { respondToTransactionRequest } from '_redux/slices/transaction-requests';
 import { useQredoTransaction } from '_src/ui/app/hooks/useQredoTransaction';
@@ -57,6 +58,7 @@ export function TransactionRequest({ txRequest }: TransactionRequestProps) {
     if (!signer) {
         return null;
     }
+
     return (
         <>
             <UserApproveContainer
@@ -96,6 +98,9 @@ export function TransactionRequest({ txRequest }: TransactionRequestProps) {
                     />
                 </div>
                 <section className="flex flex-col gap-4">
+                    <SummaryCard header="Transaction Summary" initialExpanded>
+                        <div>Hello</div>
+                    </SummaryCard>
                     <GasFees
                         sender={addressForTransaction}
                         transaction={transaction}

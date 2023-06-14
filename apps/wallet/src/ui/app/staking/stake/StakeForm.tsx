@@ -96,6 +96,7 @@ function StakeForm({
                 header={
                     <div className="p-2.5 w-full flex bg-white">
                         <Field
+                            data-testid="stake-amount-input"
                             component={NumberInput}
                             allowNegative={false}
                             name="amount"

@@ -256,6 +256,7 @@ export function DelegationDetailCard({
 
                             {Boolean(totalStake) && delegationId && (
                                 <Button
+                                    data-testid="unstake-button"
                                     size="tall"
                                     variant="outline"
                                     to={

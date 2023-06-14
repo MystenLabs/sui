@@ -169,6 +169,7 @@ export function StakeCard({
 
     return (
         <Link
+            data-testid="stake-card"
             to={`/stake/delegation-detail?${new URLSearchParams({
                 validator: validatorAddress,
                 staked: stakedSuiId,

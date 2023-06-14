@@ -44,6 +44,7 @@ export function TokenIconLink({
 
     return (
         <LargeButton
+            data-testid="stake-and-earn-button"
             to="/stake"
             onClick={() => {
                 trackEvent('StakingFromHome');
