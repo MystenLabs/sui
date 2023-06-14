@@ -139,7 +139,7 @@ fn run_test(
     let targets: Vec<String> = vec![path.to_str().unwrap().to_owned()];
 
     let warning_filter = if suppress_unused {
-        Some(WarningFilters::unused_warnings_filter())
+        Some(WarningFilters::unused_function_warnings_filter())
     } else {
         None
     };
@@ -150,7 +150,8 @@ fn run_test(
         default_testing_addresses(),
     )
     .set_flags(flags)
-    .run_with_warning_filter::<PASS_PARSER>(warning_filter)?;
+    .set_warning_filter(warning_filter)
+    .run::<PASS_PARSER>()?;
     let diags = move_check_for_errors(comments_and_compiler_res);
 
     let has_diags = !diags.is_empty();

@@ -1,8 +1,0 @@
-warning[W09008]: uninitialized struct type
-  ┌─ tests/move_check/typing/uninstantiated_types.move:2:12
-  │
-2 │     struct UnusedType has drop {}
-  │            ^^^^^^^^^^ The struct type 'UnusedType' is never instantiated. Consider removing it.
-  │
-  = This warning can be suppressed with '#[allow(unused_struct_type)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-

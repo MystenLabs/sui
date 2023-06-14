@@ -80,12 +80,8 @@ pub struct Context<'env> {
 
     loop_info: LoopInfo,
 
-    /// names of modules compiled in this pass (excludes modules coming from pre-compiled libraries)
-    pub compiled_module_names: BTreeSet<ModuleIdent>,
-    /// collects all called functions per module
+    /// collects all called functions in the current module
     pub called_fns: BTreeSet<Symbol>,
-    /// collects all used (instantiated) types per module
-    pub packed_types: BTreeSet<Symbol>,
 }
 
 impl<'env> Context<'env> {
@@ -126,18 +122,6 @@ impl<'env> Context<'env> {
         }))
         .unwrap();
 
-        let compiled_module_names = BTreeSet::from_iter(
-            prog.modules
-                .key_cloned_iter()
-                .filter_map(|(mident, mdef)| {
-                    if mdef.is_source_module {
-                        Some(mident)
-                    } else {
-                        None
-                    }
-                })
-                .collect::<Vec<_>>(),
-        );
         Context {
             subst: Subst::empty(),
             current_module: None,
@@ -149,9 +133,7 @@ impl<'env> Context<'env> {
             loop_info: LoopInfo(LoopInfo_::NotInLoop),
             modules,
             env,
-            compiled_module_names,
             called_fns: BTreeSet::new(),
-            packed_types: BTreeSet::new(),
         }
     }
 

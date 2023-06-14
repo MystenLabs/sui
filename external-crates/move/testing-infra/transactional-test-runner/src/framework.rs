@@ -625,7 +625,8 @@ pub fn compile_source_units(
     )
     .set_pre_compiled_lib_opt(state.pre_compiled_deps)
     .set_flags(move_compiler::Flags::empty().set_sources_shadow_deps(true))
-    .run_with_warning_filter::<PASS_COMPILATION>(Some(warning_filter))?;
+    .set_warning_filter(Some(warning_filter))
+    .run::<PASS_COMPILATION>()?;
     let units_or_diags = comments_and_compiler_res
         .map(|(_comments, move_compiler)| move_compiler.into_compiled_units());
 

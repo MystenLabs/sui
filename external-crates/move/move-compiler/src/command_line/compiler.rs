@@ -43,6 +43,7 @@ pub struct Compiler<'a> {
     compiled_module_named_address_mapping: BTreeMap<CompiledModuleId, String>,
     flags: Flags,
     visitors: Vec<Visitor>,
+    warning_filter: Option<WarningFilters>,
 }
 
 pub struct SteppedCompiler<'a, const P: Pass> {
@@ -136,6 +137,7 @@ impl<'a> Compiler<'a> {
             compiled_module_named_address_mapping: BTreeMap::new(),
             flags: Flags::empty(),
             visitors: vec![],
+            warning_filter: None,
         }
     }
 
@@ -209,18 +211,13 @@ impl<'a> Compiler<'a> {
         self
     }
 
-    pub fn run<const TARGET: Pass>(
-        self,
-    ) -> anyhow::Result<(
-        FilesSourceText,
-        Result<(CommentMap, SteppedCompiler<'a, TARGET>), Diagnostics>,
-    )> {
-        self.run_with_warning_filter(None)
+    pub fn set_warning_filter(mut self, filter: Option<WarningFilters>) -> Self {
+        self.warning_filter = filter;
+        self
     }
 
-    pub fn run_with_warning_filter<const TARGET: Pass>(
+    pub fn run<const TARGET: Pass>(
         self,
-        warning_filter: Option<WarningFilters>,
     ) -> anyhow::Result<(
         FilesSourceText,
         Result<(CommentMap, SteppedCompiler<'a, TARGET>), Diagnostics>,
@@ -234,6 +231,7 @@ impl<'a> Compiler<'a> {
             compiled_module_named_address_mapping,
             flags,
             visitors,
+            warning_filter,
         } = self;
         generate_interface_files_for_deps(
             &mut deps,

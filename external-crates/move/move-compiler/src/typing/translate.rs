@@ -56,11 +56,9 @@ fn module(
     mdef: N::ModuleDefinition,
 ) -> T::ModuleDefinition {
     assert!(context.current_script_constants.is_none());
+    assert!(context.called_fns.is_empty());
+
     context.current_module = Some(ident);
-    // reset called functions and packed types sets so that they can be populated with values from
-    // this module only
-    context.called_fns.clear();
-    context.packed_types.clear();
     let N::ModuleDefinition {
         warning_filter,
         package_name,
@@ -91,7 +89,10 @@ fn module(
         constants,
         functions,
     };
-    gen_unused_warnings(context, ident, &typed_module);
+    gen_unused_warnings(context, &typed_module);
+    // reset called functions set so that it's ready to be be populated with values from
+    // a single module only
+    context.called_fns.clear();
     typed_module
 }
 
@@ -1431,7 +1432,6 @@ fn exp_inner(context: &mut Context, sp!(eloc, ne_): N::Exp) -> T::Exp {
                     .env
                     .add_diag(diag!(TypeSafety::Visibility, (eloc, msg)));
             }
-            context.packed_types.insert(n.value());
             (bt, TE::Pack(m, n, targs, tfields))
         }
 
@@ -2060,7 +2060,7 @@ fn module_call(
         parameter_types: params_ty_list,
         acquires,
     };
-    if Some(m) == context.current_module {
+    if context.is_current_module(&m) {
         context.called_fns.insert(f.value());
     }
     (ret_ty, T::UnannotatedExp_::ModuleCall(Box::new(call)))
@@ -2281,11 +2281,11 @@ fn make_arg_types<S: std::fmt::Display, F: Fn() -> S>(
 //**************************************************************************************************
 
 /// Generates warnings for unused struct types and unused (private) functions.
-fn gen_unused_warnings(context: &mut Context, ident: ModuleIdent, mdef: &T::ModuleDefinition) {
-    if context.compiled_module_names.contains(&ident) {
+fn gen_unused_warnings(context: &mut Context, mdef: &T::ModuleDefinition) {
+    if mdef.is_source_module {
         // generate warnings only for modules compiled in this pass rather than for all modules
-        // including pre-compiled libraries for which we do not have the right type of data
-        // collected (as they are not actually compiled here)
+        // including pre-compiled libraries for which we do not have source code available and
+        // cannot be analyzed in this pass
         context
             .env
             .add_warning_filter_scope(mdef.warning_filter.clone());
@@ -2307,21 +2307,6 @@ fn gen_unused_warnings(context: &mut Context, ident: ModuleIdent, mdef: &T::Modu
                 context
                     .env
                     .add_diag(diag!(UnusedItem::Function, (loc, msg)))
-            }
-            context.env.pop_warning_filter_scope();
-        }
-
-        for (loc, name, struct_def) in &mdef.structs {
-            context
-                .env
-                .add_warning_filter_scope(struct_def.warning_filter.clone());
-            if !context.packed_types.contains(name) {
-                let msg = format!(
-                    "The struct type '{name}' is never instantiated. Consider removing it."
-                );
-                context
-                    .env
-                    .add_diag(diag!(UnusedItem::StructType, (loc, msg)))
             }
             context.env.pop_warning_filter_scope();
         }

@@ -440,12 +440,10 @@ impl WarningFilters {
         }
     }
 
-    pub fn unused_warnings_filter() -> Self {
-        let mut filtered_codes = BTreeSet::new();
+    pub fn unused_function_warnings_filter() -> Self {
         let unused_fn_info = UnusedItem::Function.into_info();
-        let unused_type_info = UnusedItem::StructType.into_info();
-        filtered_codes.insert((unused_fn_info.category(), unused_fn_info.code()));
-        filtered_codes.insert((unused_type_info.category(), unused_type_info.code()));
+        let filtered_codes =
+            BTreeSet::from([(unused_fn_info.category() as u8, unused_fn_info.code())]);
         WarningFilters::Specified {
             category: BTreeSet::new(),
             codes: filtered_codes,
