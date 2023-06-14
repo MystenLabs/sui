@@ -9351,6 +9351,7 @@ dependencies = [
  "futures",
  "jsonrpsee",
  "move-core-types",
+ "mysten-metrics",
  "prometheus",
  "reqwest",
  "serde 1.0.152",
@@ -9633,6 +9634,7 @@ dependencies = [
  "futures",
  "http",
  "mysten-metrics",
+ "parking_lot 0.12.1",
  "prometheus",
  "rocksdb",
  "scopeguard",
@@ -9654,6 +9656,7 @@ dependencies = [
  "tower",
  "tower-http 0.3.5",
  "tracing",
+ "ttl_cache",
  "typed-store",
  "typed-store-derive",
  "uuid",
@@ -11821,6 +11824,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3528ecfd12c466c6f163363caf2d02a71161dd5e1cc6ae7b34207ea2d42d81ed"
 
 [[package]]
+name = "ttl_cache"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4189890526f0168710b6ee65ceaedf1460c48a14318ceec933cb26baa492096a"
+dependencies = [
+ "linked-hash-map",
+]
+
+[[package]]
 name = "tui"
 version = "0.17.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -13370,6 +13382,7 @@ dependencies = [
  "tracing-subscriber 0.2.25",
  "tracing-subscriber 0.3.16",
  "try-lock",
+ "ttl_cache",
  "tui",
  "twox-hash",
  "typed-arena",

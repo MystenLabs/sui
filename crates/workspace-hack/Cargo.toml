@@ -641,6 +641,7 @@ tracing-serde = { version = "0.1", default-features = false }
 tracing-subscriber-468e82937335b1c9 = { package = "tracing-subscriber", version = "0.3", default-features = false, features = ["ansi", "env-filter", "json", "smallvec", "time"] }
 tracing-subscriber-6f8ce4dd05d13bba = { package = "tracing-subscriber", version = "0.2", default-features = false }
 try-lock = { version = "0.2", default-features = false }
+ttl_cache = { version = "0.5" }
 tui = { version = "0.17" }
 twox-hash = { version = "1", default-features = false }
 typed-arena = { version = "2" }
@@ -1430,6 +1431,7 @@ tracing-serde = { version = "0.1", default-features = false }
 tracing-subscriber-468e82937335b1c9 = { package = "tracing-subscriber", version = "0.3", default-features = false, features = ["ansi", "env-filter", "json", "smallvec", "time"] }
 tracing-subscriber-6f8ce4dd05d13bba = { package = "tracing-subscriber", version = "0.2", default-features = false }
 try-lock = { version = "0.2", default-features = false }
+ttl_cache = { version = "0.5" }
 tui = { version = "0.17" }
 twox-hash = { version = "1", default-features = false }
 typed-arena = { version = "2" }
