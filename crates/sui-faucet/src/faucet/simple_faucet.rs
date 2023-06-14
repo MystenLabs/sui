@@ -1165,6 +1165,8 @@ mod tests {
                 .map(|res| res.unwrap())
                 .collect::<Vec<BatchSendStatus>>();
 
+            // All requests are submitted and picked up by the same batch, so one success in the test
+            // will guarantee all success.
             if status_results[0].status == BatchSendStatusType::SUCCEEDED {
                 break;
             }
@@ -1712,6 +1714,8 @@ mod tests {
                 .map(|res| res.unwrap())
                 .collect::<Vec<BatchSendStatus>>();
 
+            // All requests are submitted and picked up by the same batch, so one success in the test
+            // will guarantee all success.
             if status_results[0].status == BatchSendStatusType::SUCCEEDED {
                 break;
             }
