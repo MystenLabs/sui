@@ -77,6 +77,7 @@ function NFTDetailsPage() {
                                     objectId={nftId!}
                                     size="lg"
                                     borderRadius="xl"
+                                    playable
                                 />
                                 {nftId ? (
                                     <Link
