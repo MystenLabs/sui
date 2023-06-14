@@ -30,7 +30,7 @@ export function InputsCard({ inputs }: InputsCardProps) {
         >
             <div
                 data-testid="inputs-card-content"
-                className="flex flex-col gap-3"
+                className="flex flex-col gap-2"
             >
                 {Object.entries(input).map(([key, value]) => {
                     let renderValue;

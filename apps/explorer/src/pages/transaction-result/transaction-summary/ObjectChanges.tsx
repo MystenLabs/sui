@@ -14,6 +14,7 @@ import {
     type SuiObjectChangePublished,
     type SuiObjectChange,
     type DisplayFieldsResponse,
+    parseStructTag,
 } from '@mysten/sui.js';
 import clsx from 'clsx';
 import { type ReactNode } from 'react';
@@ -84,10 +85,10 @@ function Item({
 
 function ObjectDetailPanel({
     panelContent,
-    objectId,
+    headerContent,
 }: {
     panelContent: ReactNode;
-    objectId?: string;
+    headerContent?: ReactNode;
 }) {
     return (
         <div>
@@ -112,8 +113,7 @@ function ObjectDetailPanel({
                                     />
                                 </div>
                             </Disclosure.Button>
-
-                            {objectId && <ObjectLink objectId={objectId} />}
+                            {headerContent}
                         </div>
 
                         <Disclosure.Panel>
@@ -139,9 +139,8 @@ function ObjectDetail({
 }) {
     const separator = '::';
     const objectTypeSplit = objectType?.split(separator) || [];
-    const packageId = objectTypeSplit[0];
-    const moduleName = objectTypeSplit[1];
     const typeName = objectTypeSplit.slice(2).join(separator);
+    const { address, module, name } = parseStructTag(objectType);
 
     const objectDetailLabels = [
         ItemLabels.package,
@@ -154,15 +153,22 @@ function ObjectDetail({
 
     return (
         <ObjectDetailPanel
-            objectId={objectId}
+            headerContent={
+                <div className="flex items-center">
+                    <Text mono variant="body/medium" color="steel-dark">
+                        {name}:
+                    </Text>
+                    {objectId && <ObjectLink objectId={objectId} />}
+                </div>
+            }
             panelContent={
                 <div className="mt-2 flex flex-col gap-2">
                     {objectDetailLabels.map((label) => (
                         <Item
                             key={label}
                             label={label}
-                            packageId={packageId}
-                            moduleName={moduleName}
+                            packageId={address}
+                            moduleName={module}
                             typeName={typeName}
                         />
                     ))}
@@ -254,7 +260,7 @@ function ObjectChangeEntries({
             >
                 <div
                     className={clsx(
-                        'flex max-h-[300px] gap-3 overflow-y-auto',
+                        'flex max-h-[300px] gap-2 overflow-y-auto',
                         { 'flex-row': isDisplay, 'flex-col': !isDisplay }
                     )}
                 >
