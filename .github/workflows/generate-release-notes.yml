@@ -1,7 +1,7 @@
 name: Generate Release Notes
 
 on:
-  workflow_call:
+  workflow_dispatch:
     inputs:
       previous_branch:
         description: 'Previous Release Branch (releases/sui-vX.X.X-release)'
@@ -9,14 +9,6 @@ on:
         required: true
       new_branch:
         description: 'New Release Branch (releases/sui-vX.X.X-release)'
-        type: string
-        required: true
-  workflow_dispatch:
-    inputs:
-      previous_branch:
-        type: string
-        required: true
-      new_branch:
         type: string
         required: true
 
