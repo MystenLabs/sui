@@ -1,4 +1,4 @@
-name: Release Notes Checker
+name: Release Notes PR Checker
 
 on:
   pull_request:
@@ -20,6 +20,7 @@ jobs:
 
     steps:
       - name: Check Pull Request Description
+        shell: bash
         run: |
           PR_NUMBER=$(jq --raw-output .pull_request.number "$GITHUB_EVENT_PATH")
           DESCRIPTION=$(curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
