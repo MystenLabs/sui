@@ -9,6 +9,7 @@ use crate::{
         codes::{Category, Severity, WarningFilter, WARNING_FILTER_ATTR},
         Diagnostic, Diagnostics, WarningFilters,
     },
+    editions::{Edition, Flavor},
     naming::ast::ModuleDefinition,
 };
 use clap::*;
@@ -362,12 +363,6 @@ pub struct Flags {
     )]
     verify: bool,
 
-    /// Compilation flavor.
-    #[clap(
-        long = cli::FLAVOR,
-    )]
-    flavor: String,
-
     /// Bytecode version.
     #[clap(
         long = cli::BYTECODE_VERSION,
@@ -395,7 +390,6 @@ impl Flags {
             test: false,
             verify: false,
             shadow: false,
-            flavor: "".to_string(),
             bytecode_version: None,
             keep_testing_functions: false,
         }
@@ -406,7 +400,6 @@ impl Flags {
             test: true,
             verify: false,
             shadow: false,
-            flavor: "".to_string(),
             bytecode_version: None,
             keep_testing_functions: false,
         }
@@ -417,16 +410,8 @@ impl Flags {
             test: false,
             verify: true,
             shadow: true, // allows overlapping between sources and deps
-            flavor: "".to_string(),
             bytecode_version: None,
             keep_testing_functions: false,
-        }
-    }
-
-    pub fn set_flavor(self, flavor: impl ToString) -> Self {
-        Self {
-            flavor: flavor.to_string(),
-            ..self
         }
     }
 
@@ -464,10 +449,6 @@ impl Flags {
         self.shadow
     }
 
-    pub fn has_flavor(&self, flavor: &str) -> bool {
-        self.flavor == flavor
-    }
-
     pub fn bytecode_version(&self) -> Option<u32> {
         self.bytecode_version
     }
@@ -480,12 +461,16 @@ impl Flags {
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub struct PackageConfig {
     pub warning_filter: WarningFilters,
+    pub flavor: Flavor,
+    pub edition: Edition,
 }
 
 impl Default for PackageConfig {
     fn default() -> Self {
         Self {
             warning_filter: WarningFilters::Empty,
+            flavor: Flavor::GlobalStorage,
+            edition: Edition::Legacy,
         }
     }
 }

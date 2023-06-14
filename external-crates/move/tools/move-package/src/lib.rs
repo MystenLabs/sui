@@ -11,6 +11,7 @@ pub mod source_package;
 
 use anyhow::Result;
 use clap::*;
+use move_compiler::editions::{Edition, Flavor};
 use move_core_types::account_address::AccountAddress;
 use move_model::model::GlobalEnv;
 use resolution::{
@@ -78,6 +79,14 @@ pub struct BuildConfig {
     /// Skip fetching latest git dependencies
     #[clap(long = "skip-fetch-latest-git-deps", global = true)]
     pub skip_fetch_latest_git_deps: bool,
+
+    /// Default flavor for move compilation, if not specified in the package's config
+    #[clap(long = "default-move-flavor", global = true)]
+    pub default_flavor: Option<Flavor>,
+
+    /// Default edition for move compilation, if not specified in the package's config
+    #[clap(long = "default-move-edition", global = true)]
+    pub default_edition: Option<Edition>,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, PartialOrd)]
