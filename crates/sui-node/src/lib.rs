@@ -1240,6 +1240,22 @@ impl SuiNode {
                 }
             };
             *self.validator_components.lock().await = new_validator_components;
+
+            #[cfg(msim)]
+            if !matches!(
+                self.config
+                    .authority_store_pruning_config
+                    .num_epochs_to_retain_for_checkpoints,
+                None | Some(u64::MAX) | Some(0)
+            ) {
+                self.state
+                .prune_checkpoints_for_eligible_epochs(
+                    self.config.clone(),
+                    sui_core::authority::authority_store_pruner::AuthorityStorePruningMetrics::new_for_test(),
+                )
+                .await?;
+            }
+
             info!("Reconfiguration finished");
         }
     }

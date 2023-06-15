@@ -68,6 +68,10 @@ impl AuthorityStorePruningMetrics {
         };
         Arc::new(this)
     }
+
+    pub fn new_for_test() -> Arc<Self> {
+        Self::new(&Registry::new())
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
