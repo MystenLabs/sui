@@ -178,7 +178,7 @@ dependencies = [
  "anemo-build",
  "anemo-tower",
  "anyhow",
- "clap 4.3.1",
+ "clap 4.3.3",
  "mysten-network",
  "rand 0.8.5",
  "sui-types",
@@ -207,7 +207,7 @@ dependencies = [
  "anemo",
  "anemo-tower",
  "bytes",
- "clap 4.3.1",
+ "clap 4.3.3",
  "dashmap",
  "rand 0.8.5",
  "tokio",
@@ -1780,20 +1780,20 @@ dependencies = [
 
 [[package]]
 name = "clap"
-version = "4.3.1"
+version = "4.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b4ed2379f8603fa2b7509891660e802b88c70a79a6427a70abb5968054de2c28"
+checksum = "ca8f255e4b8027970e78db75e78831229c9815fdbfa67eb1a1b777a62e24b4a0"
 dependencies = [
  "clap_builder",
- "clap_derive 4.3.1",
+ "clap_derive 4.3.2",
  "once_cell",
 ]
 
 [[package]]
 name = "clap_builder"
-version = "4.3.1"
+version = "4.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "72394f3339a76daf211e57d4bcb374410f3965dcc606dd0e03738c7888766980"
+checksum = "acd4f3c17c83b0ba34ffbc4f8bbd74f079413f747f84a6f89292f138057e36ab"
 dependencies = [
  "anstream",
  "anstyle",
@@ -1817,9 +1817,9 @@ dependencies = [
 
 [[package]]
 name = "clap_derive"
-version = "4.3.1"
+version = "4.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "59e9ef9a08ee1c0e1f2e162121665ac45ac3783b0f897db7244ae75ad9a8f65b"
+checksum = "b8cd2b2a819ad6eec39e8f1d6b53001af1e5469f8c177579cdaeb313115b825f"
 dependencies = [
  "heck 0.4.0",
  "proc-macro2 1.0.58",
@@ -9612,7 +9612,7 @@ dependencies = [
 name = "sui-execution-cut"
 version = "0.1.0"
 dependencies = [
- "clap 4.3.1",
+ "clap 4.3.3",
  "expect-test",
  "tempfile",
  "thiserror",
@@ -9940,7 +9940,7 @@ dependencies = [
  "backoff",
  "base64 0.21.2",
  "chrono",
- "clap 4.3.1",
+ "clap 4.3.3",
  "humantime",
  "once_cell",
  "prometheus-http-query",
@@ -10242,7 +10242,7 @@ dependencies = [
  "async-recursion",
  "async-trait",
  "bcs",
- "clap 4.3.1",
+ "clap 4.3.3",
  "colored",
  "futures",
  "jsonrpsee",
@@ -10501,6 +10501,7 @@ dependencies = [
  "bcs",
  "byteorder",
  "bytes",
+ "clap 4.3.3",
  "criterion",
  "eyre",
  "futures",
@@ -10700,13 +10701,14 @@ dependencies = [
  "anemo-cli",
  "anyhow",
  "bcs",
- "clap 4.3.1",
+ "clap 4.3.3",
  "colored",
  "comfy-table",
  "eyre",
  "fastcrypto",
  "futures",
  "hex",
+ "indicatif",
  "itertools",
  "move-binary-format",
  "move-bytecode-utils",
@@ -10721,6 +10723,7 @@ dependencies = [
  "similar",
  "strum",
  "strum_macros",
+ "sui-archival",
  "sui-config",
  "sui-core",
  "sui-framework",
@@ -12723,10 +12726,10 @@ dependencies = [
  "clang-sys",
  "clap 2.34.0",
  "clap 3.2.23",
- "clap 4.3.1",
+ "clap 4.3.3",
  "clap_builder",
  "clap_derive 3.2.18",
- "clap_derive 4.3.1",
+ "clap_derive 4.3.2",
  "clap_lex 0.2.4",
  "clap_lex 0.5.0",
  "clear_on_drop",
