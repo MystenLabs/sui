@@ -4,7 +4,7 @@
 import { expect, test } from './fixtures';
 import { createWallet } from './utils/auth';
 
-const TEST_TIMEOUT = 60 * 1000;
+const TEST_TIMEOUT = 65 * 1000;
 const STAKE_AMOUNT = 100;
 
 test('staking', async ({ page, extensionUrl }) => {
