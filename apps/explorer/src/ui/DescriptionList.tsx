@@ -5,7 +5,7 @@ import { cva, type VariantProps } from 'class-variance-authority';
 
 import type { ReactNode } from 'react';
 
-const DescriptionItemStyles = cva(
+const descriptionItemStyles = cva(
     ['flex flex-col gap-2 md:flex-row md:gap-10'],
     {
         variants: {
@@ -20,7 +20,7 @@ const DescriptionItemStyles = cva(
     }
 );
 
-const DescriptionItemLabelStyles = cva(
+const descriptionItemLabelStyles = cva(
     ['w-full flex-shrink-0 text-pBody font-medium text-steel-darker'],
     {
         variants: {
@@ -35,9 +35,9 @@ const DescriptionItemLabelStyles = cva(
     }
 );
 
-type DescriptionItemStylesProps = VariantProps<typeof DescriptionItemStyles>;
+type DescriptionItemStylesProps = VariantProps<typeof descriptionItemStyles>;
 type DescriptionItemLabelStylesProps = VariantProps<
-    typeof DescriptionItemLabelStyles
+    typeof descriptionItemLabelStyles
 >;
 
 export interface DescriptionItemProps
@@ -54,8 +54,8 @@ export function DescriptionItem({
     children,
 }: DescriptionItemProps) {
     return (
-        <div className={DescriptionItemStyles({ align })}>
-            <dt className={DescriptionItemLabelStyles({ labelWidth })}>
+        <div className={descriptionItemStyles({ align })}>
+            <dt className={descriptionItemLabelStyles({ labelWidth })}>
                 {title}
             </dt>
             <dd className="ml-0 min-w-0 flex-1 leading-none">{children}</dd>
