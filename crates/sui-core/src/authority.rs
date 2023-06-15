@@ -2,16 +2,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeMap;
-use std::path::{Path, PathBuf};
-use std::time::{Duration, Instant};
-use std::{collections::HashMap, fs, pin::Pin, sync::Arc, thread};
-
+use crate::authority::authority_store_types::{StoreObject, StoreObjectWrapper};
 use anyhow::anyhow;
 use arc_swap::{ArcSwap, Guard};
 use chrono::prelude::*;
 use fastcrypto::encoding::Base58;
 use fastcrypto::encoding::Encoding;
+use fastcrypto::hash::MultisetHash;
+use futures::stream::FuturesUnordered;
 use itertools::Itertools;
 use move_binary_format::CompiledModule;
 use move_core_types::language_storage::ModuleId;
@@ -26,6 +24,12 @@ use prometheus::{
 };
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
+use std::fs::File;
+use std::io::Write;
+use std::path::{Path, PathBuf};
+use std::time::{Duration, Instant};
+use std::{collections::HashMap, fs, pin::Pin, sync::Arc, thread};
 use sui_config::node::StateDebugDumpConfig;
 use tap::{TapFallible, TapOptional};
 use tokio::sync::mpsc::unbounded_channel;
@@ -4027,6 +4031,17 @@ impl AuthorityState {
     }
 
     #[cfg(test)]
+    pub(crate) fn iter_live_object_set_for_testing(
+        &self,
+    ) -> impl Iterator<Item = authority_store_tables::LiveObject> + '_ {
+        let include_wrapped_object = !self
+            .epoch_store_for_testing()
+            .protocol_config()
+            .simplified_unwrap_then_delete();
+        self.database.iter_live_object_set(include_wrapped_object)
+    }
+
+    #[cfg(test)]
     pub(crate) fn shutdown_execution_for_test(&self) {
         self.tx_execution_shutdown
             .lock()
@@ -4274,12 +4289,6 @@ pub mod framework_injection {
             .collect()
     }
 }
-
-use crate::authority::authority_store_types::{StoreObject, StoreObjectWrapper};
-use fastcrypto::hash::MultisetHash;
-use futures::stream::FuturesUnordered;
-use std::fs::File;
-use std::io::Write;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct NodeStateDump {

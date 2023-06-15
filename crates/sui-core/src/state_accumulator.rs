@@ -429,18 +429,19 @@ impl StateAccumulator {
     /// Returns the result of accumulating the live object set, without side effects
     pub fn accumulate_live_object_set(&self, include_wrapped_tombstone: bool) -> Accumulator {
         let mut acc = Accumulator::default();
-        for live_object in self.authority_store.iter_live_object_set() {
+        for live_object in self
+            .authority_store
+            .iter_live_object_set(include_wrapped_tombstone)
+        {
             match live_object {
                 LiveObject::Normal(object) => {
                     acc.insert(object.compute_object_reference().2);
                 }
                 LiveObject::Wrapped(key) => {
-                    if include_wrapped_tombstone {
-                        acc.insert(
-                            bcs::to_bytes(&WrappedObject::new(key.0, key.1))
-                                .expect("Failed to serialize WrappedObject"),
-                        );
-                    }
+                    acc.insert(
+                        bcs::to_bytes(&WrappedObject::new(key.0, key.1))
+                            .expect("Failed to serialize WrappedObject"),
+                    );
                 }
             }
         }

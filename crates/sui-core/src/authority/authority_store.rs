@@ -1607,8 +1607,12 @@ impl AuthorityStore {
         get_sui_system_state(self.perpetual_tables.as_ref())
     }
 
-    pub fn iter_live_object_set(&self) -> impl Iterator<Item = LiveObject> + '_ {
-        self.perpetual_tables.iter_live_object_set()
+    pub fn iter_live_object_set(
+        &self,
+        include_wrapped_object: bool,
+    ) -> impl Iterator<Item = LiveObject> + '_ {
+        self.perpetual_tables
+            .iter_live_object_set(include_wrapped_object)
     }
 
     pub fn expensive_check_sui_conservation(
@@ -1641,7 +1645,7 @@ impl AuthorityStore {
         let package_cache = PackageObjectCache::new(self.clone());
         let (mut total_sui, mut total_storage_rebate) = thread::scope(|s| {
             let pending_tasks = FuturesUnordered::new();
-            for o in self.iter_live_object_set() {
+            for o in self.iter_live_object_set(false) {
                 match o {
                     LiveObject::Normal(object) => {
                         pending_objects.push(object);
@@ -1670,7 +1674,9 @@ impl AuthorityStore {
                             }));
                         }
                     }
-                    LiveObject::Wrapped(_) => (),
+                    LiveObject::Wrapped(_) => {
+                        unreachable!("Explicitly asked to not include wrapped tombstones")
+                    }
                 }
             }
             pending_tasks.into_iter().fold((0, 0), |init, result| {

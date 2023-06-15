@@ -7,6 +7,7 @@ mod sim_only_tests {
     use sui_core::authority::authority_store_tables::LiveObject;
     use sui_json_rpc_types::{SuiTransactionBlockEffects, SuiTransactionBlockEffectsAPI};
     use sui_macros::sim_test;
+    use sui_node::SuiNode;
     use sui_protocol_config::{ProtocolConfig, ProtocolVersion, SupportedProtocolVersions};
     use sui_types::base_types::ObjectID;
     use test_utils::network::{TestCluster, TestClusterBuilder};
@@ -33,23 +34,23 @@ mod sim_only_tests {
         let (package_id, object_id) = publish_package_and_create_parent_object(&test_cluster).await;
 
         create_and_wrap_child(&test_cluster, package_id, object_id).await;
-        assert_eq!(count_wrapped_tombstones(&test_cluster), 0);
+        assert_eq!(count_fullnode_wrapped_tombstones(&test_cluster), 0);
 
         let effects = unwrap_and_delete_child(&test_cluster, package_id, object_id).await;
         assert!(effects.unwrapped_then_deleted().is_empty());
         // Only include gas and object.
         assert_eq!(effects.modified_at_versions().len(), 2);
-        assert_eq!(count_wrapped_tombstones(&test_cluster), 0);
+        assert_eq!(count_fullnode_wrapped_tombstones(&test_cluster), 0);
 
         let child = create_owned_child(&test_cluster, package_id).await;
         wrap_child(&test_cluster, package_id, object_id, child).await;
-        assert_eq!(count_wrapped_tombstones(&test_cluster), 1);
+        assert_eq!(count_fullnode_wrapped_tombstones(&test_cluster), 1);
 
         let effects = unwrap_and_delete_child(&test_cluster, package_id, object_id).await;
         // modified_at_versions includes: gas, object, child.
         assert_eq!(effects.modified_at_versions().len(), 3);
         assert_eq!(effects.unwrapped_then_deleted().len(), 1);
-        assert_eq!(count_wrapped_tombstones(&test_cluster), 0);
+        assert_eq!(count_fullnode_wrapped_tombstones(&test_cluster), 0);
         assert!(test_cluster
             .get_object_or_tombstone_from_fullnode_store(child)
             .await
@@ -64,25 +65,25 @@ mod sim_only_tests {
         test_cluster.trigger_reconfiguration().await;
 
         create_and_wrap_child(&test_cluster, package_id, object_id).await;
-        assert_eq!(count_wrapped_tombstones(&test_cluster), 0);
+        assert_eq!(count_fullnode_wrapped_tombstones(&test_cluster), 0);
 
         let effects = unwrap_and_delete_child(&test_cluster, package_id, object_id).await;
         // This is where it becomes different after the protocol upgrade.
         assert_eq!(effects.unwrapped_then_deleted().len(), 1);
         // Only include gas and object.
         assert_eq!(effects.modified_at_versions().len(), 2);
-        assert_eq!(count_wrapped_tombstones(&test_cluster), 0);
+        assert_eq!(count_fullnode_wrapped_tombstones(&test_cluster), 0);
 
         let child_id = create_owned_child(&test_cluster, package_id).await;
         wrap_child(&test_cluster, package_id, object_id, child_id).await;
-        assert_eq!(count_wrapped_tombstones(&test_cluster), 1);
+        assert_eq!(count_fullnode_wrapped_tombstones(&test_cluster), 1);
 
         let effects = unwrap_and_delete_child(&test_cluster, package_id, object_id).await;
         // This is also different after the protocol upgrade.
         // modified_at_versions only include gas and object, does not include child.
         assert_eq!(effects.modified_at_versions().len(), 2);
         assert_eq!(effects.unwrapped_then_deleted().len(), 1);
-        assert_eq!(count_wrapped_tombstones(&test_cluster), 0);
+        assert_eq!(count_fullnode_wrapped_tombstones(&test_cluster), 0);
         assert!(test_cluster
             .get_object_or_tombstone_from_fullnode_store(child_id)
             .await
@@ -112,7 +113,7 @@ mod sim_only_tests {
 
         let child_id = create_owned_child(&test_cluster, package_id).await;
         wrap_child(&test_cluster, package_id, object_id, child_id).await;
-        assert_eq!(count_wrapped_tombstones(&test_cluster), 1);
+        assert_eq!(count_fullnode_wrapped_tombstones(&test_cluster), 1);
 
         // At this point, we should have a wrapped tombstone in the db of every node.
 
@@ -129,20 +130,10 @@ mod sim_only_tests {
         for (idx, validator) in test_cluster.swarm.validator_nodes().enumerate() {
             validator.get_node_handle().unwrap().with(|node| {
                 let db = node.state().db();
-                assert_eq!(
-                    db.iter_live_object_set()
-                        .filter(|o| matches!(o, LiveObject::Wrapped(_)))
-                        .count(),
-                    1
-                );
+                assert_eq!(count_wrapped_tombstone(&node), 1);
                 if idx % 2 == 0 {
                     db.remove_all_versions_of_object(child_id);
-                    assert_eq!(
-                        db.iter_live_object_set()
-                            .filter(|o| matches!(o, LiveObject::Wrapped(_)))
-                            .count(),
-                        0
-                    );
+                    assert_eq!(count_wrapped_tombstone(&node), 0);
                 }
             })
         }
@@ -290,10 +281,21 @@ mod sim_only_tests {
         effects
     }
 
-    fn count_wrapped_tombstones(test_cluster: &TestCluster) -> usize {
-        let fullnode_db = test_cluster.fullnode_handle.sui_node.state().db();
-        fullnode_db
-            .iter_live_object_set()
+    fn count_fullnode_wrapped_tombstones(test_cluster: &TestCluster) -> usize {
+        test_cluster
+            .fullnode_handle
+            .sui_node
+            .with(|node| count_wrapped_tombstone(node))
+    }
+
+    fn count_wrapped_tombstone(node: &SuiNode) -> usize {
+        let include_wrapped_tombstones = !node
+            .state()
+            .epoch_store_for_testing()
+            .protocol_config()
+            .simplified_unwrap_then_delete();
+        let db = node.state().db();
+        db.iter_live_object_set(include_wrapped_tombstones)
             .filter(|o| matches!(o, LiveObject::Wrapped(_)))
             .count()
     }
