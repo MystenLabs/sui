@@ -4,6 +4,7 @@
 #[test_only]
 #[allow(unused_use)]
 module sui::test_scenarioTests {
+    use sui::dynamic_field as df;
     use sui::object;
     use sui::test_scenario::Self as ts;
     use sui::transfer;
@@ -461,7 +462,7 @@ module sui::test_scenarioTests {
     }
 
     #[test]
-    #[expected_failure(abort_code = ts::EInvalidSharedOrImmutableUsage)]
+    #[expected_failure(abort_code = transfer::ESharedObjectOperationNotSupported)]
     fun test_invalid_shared_usage() {
         let sender = @0x0;
         let scenario = ts::begin(sender);
@@ -728,8 +729,8 @@ module sui::test_scenarioTests {
         abort 42
     }
 
-        #[test]
-    #[expected_failure(abort_code = ts::EInvalidSharedOrImmutableUsage)]
+    #[test]
+    #[expected_failure(abort_code = df::EFieldDoesNotExist)]
     fun test_dynamic_object_field_shared_misuse() {
         let sender = @0x0;
         let scenario = ts::begin(sender);

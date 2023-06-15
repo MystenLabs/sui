@@ -149,7 +149,7 @@ module Test::M {
 //# run Test::M::two_obj_vec_destroy --sender A --args vector[object(10,0),object(11,0)]
 
 
-// create a shared object and try to pass it as a single element of a vector (failure)
+// create a shared object and try to pass it as a single element of a vector
 
 //# run Test::M::mint_shared --sender A --args 42
 

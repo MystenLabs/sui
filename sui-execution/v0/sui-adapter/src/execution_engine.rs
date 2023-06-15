@@ -5,7 +5,6 @@ pub use checked::*;
 
 #[sui_macros::with_checked_arithmetic]
 mod checked {
-
     use crate::gas_charger::GasCharger;
     use crate::programmable_transactions;
     use crate::temporary_store::TemporaryStore;
@@ -24,6 +23,7 @@ mod checked {
     use sui_types::effects::TransactionEffects;
     use sui_types::error::{ExecutionError, ExecutionErrorKind};
     use sui_types::execution::is_certificate_denied;
+    use sui_types::execution::DeletedSharedObjects;
     use sui_types::execution_mode::{self, ExecutionMode};
     use sui_types::execution_status::ExecutionStatus;
     use sui_types::gas::GasCostSummary;
@@ -69,6 +69,7 @@ mod checked {
         metrics: Arc<LimitsMetrics>,
         enable_expensive_checks: bool,
         certificate_deny_set: &HashSet<TransactionDigest>,
+        _deleted_shared_objects: DeletedSharedObjects,
     ) -> (
         InnerTemporaryStore,
         TransactionEffects,
@@ -101,6 +102,7 @@ mod checked {
             metrics,
             enable_expensive_checks,
             deny_cert,
+            false,
         );
 
         let status = if let Err(error) = &execution_result {
@@ -213,6 +215,7 @@ mod checked {
         metrics: Arc<LimitsMetrics>,
         enable_expensive_checks: bool,
         deny_cert: bool,
+        contains_deleted_input: bool,
     ) -> (
         GasCostSummary,
         Result<Mode::ExecutionResults, ExecutionError>,
@@ -232,6 +235,11 @@ mod checked {
         let result = gas_charger.charge_input_objects(temporary_store);
         let mut result = result.and_then(|()| {
             let mut execution_result = if deny_cert {
+                Err(ExecutionError::new(
+                    ExecutionErrorKind::CertificateDenied,
+                    None,
+                ))
+            } else if contains_deleted_input {
                 Err(ExecutionError::new(
                     ExecutionErrorKind::CertificateDenied,
                     None,

@@ -847,6 +847,7 @@ fn create_genesis_transaction(
                 metrics,
                 expensive_checks,
                 &certificate_deny_set,
+                BTreeMap::new(),
                 &epoch_data.epoch_id(),
                 epoch_data.epoch_start_timestamp(),
                 input_objects,

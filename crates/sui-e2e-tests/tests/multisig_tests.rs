@@ -41,7 +41,7 @@ async fn test_upgraded_multisig_feature_deny() {
 
     let err = do_upgraded_multisig_test().await.unwrap_err();
 
-    assert!(matches!(err, SuiError::UnsupportedFeatureError { .. }));
+    assert!(matches!(err, SuiError::UserInputError { .. }));
 }
 
 #[sim_test]

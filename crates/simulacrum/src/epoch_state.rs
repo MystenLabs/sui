@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeMap;
 use std::{collections::HashSet, sync::Arc};
 
 use anyhow::Result;
@@ -113,6 +114,7 @@ impl EpochState {
             self.limits_metrics.clone(),
             false,           // enable_expensive_checks
             &HashSet::new(), // certificate_deny_set
+            BTreeMap::new(),
             &self.epoch_start_state.epoch(),
             self.epoch_start_state.epoch_start_timestamp_ms(),
             input_objects,

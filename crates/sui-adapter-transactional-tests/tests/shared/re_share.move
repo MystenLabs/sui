@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// tests that shared objects can
+// tests that shared objects can be re-shared as shared objects
 
 //# init --addresses t1=0x0 t2=0x0
 
@@ -21,27 +21,19 @@ module t2::o2 {
         transfer::public_share_object(o)
     }
 
-    public entry fun consume_o2(o2: Obj2) {
-        let Obj2 { id } = o2;
-        object::delete(id);
+    public entry fun re_share_o2(o2: Obj2) {
+        transfer::public_share_object(o2)
+    }
+
+    public entry fun re_share_non_public_o2(o2: Obj2) {
+        transfer::share_object(o2)
     }
 }
-
-//# publish --dependencies t2
-
-module t1::o1 {
-    use t2::o2::{Self, Obj2};
-
-    public entry fun consume_o2(o2: Obj2) {
-        o2::consume_o2(o2);
-    }
-}
-
 
 //# run t2::o2::create
 
-//# view-object 3,0
+//# view-object 2,0
 
-//# run t1::o1::consume_o2 --args object(3,0)
+//# run t2::o2::re_share_o2 --args object(2,0)
 
-//# run t2::o2::consume_o2 --args object(3,0)
+//# run t2::o2::re_share_non_public_o2 --args object(2,0)

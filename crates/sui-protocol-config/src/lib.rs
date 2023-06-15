@@ -62,7 +62,7 @@ const MAX_PROTOCOL_VERSION: u64 = 26;
 // Version 19: Changes to sui-system package to enable liquid staking.
 //             Add limit for total size of events.
 //             Increase limit for number of events emitted to 1024.
-// Version 20: Enabling the flag `narwhal_new_leader_election_schedule` for the new narwhal leader
+// Version 20: Enables the flag `narwhal_new_leader_election_schedule` for the new narwhal leader
 //             schedule algorithm for enhanced fault tolerance and sets the bad node stake threshold
 //             value. Both values are set for all the environments except mainnet.
 // Version 21: ZKLogin known providers.
@@ -260,6 +260,10 @@ struct FeatureFlags {
     // If true minimum txn charge is a multiplier of the gas price
     #[serde(skip_serializing_if = "is_false")]
     txn_base_cost_as_multiplier: bool,
+
+    // If true, the ability to delete shared objects is in effect
+    #[serde(skip_serializing_if = "is_false")]
+    shared_object_deletion: bool,
 
     // If true, then the new algorithm for the leader election schedule will be used
     #[serde(skip_serializing_if = "is_false")]
@@ -898,6 +902,10 @@ impl ProtocolConfig {
         self.feature_flags.txn_base_cost_as_multiplier
     }
 
+    pub fn shared_object_deletion(&self) -> bool {
+        self.feature_flags.shared_object_deletion
+    }
+
     pub fn narwhal_new_leader_election_schedule(&self) -> bool {
         self.feature_flags.narwhal_new_leader_election_schedule
     }
@@ -1468,6 +1476,10 @@ impl ProtocolConfig {
                         cfg.max_jwk_votes_per_validator_per_epoch = Some(240);
                         cfg.max_age_of_jwk_in_epochs = Some(1);
                     }
+
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        cfg.feature_flags.shared_object_deletion = true;
+                    }
                 }
                 25 => {
                     // Enable zkLogin for all providers in all networks.
@@ -1540,7 +1552,6 @@ impl ProtocolConfig {
     pub fn set_enable_jwk_consensus_updates_for_testing(&mut self, val: bool) {
         self.feature_flags.enable_jwk_consensus_updates = val
     }
-
     pub fn set_upgraded_multisig_for_testing(&mut self, val: bool) {
         self.feature_flags.upgraded_multisig_supported = val
     }

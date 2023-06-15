@@ -5,6 +5,7 @@ pub use checked::*;
 
 #[sui_macros::with_checked_arithmetic]
 mod checked {
+    use std::collections::BTreeSet;
     use std::{
         borrow::Borrow,
         collections::{BTreeMap, HashMap},
@@ -582,6 +583,7 @@ mod checked {
             let gas_id_opt = gas.object_metadata.as_ref().map(|info| info.id());
             let mut loaded_runtime_objects = BTreeMap::new();
             let mut additional_writes = BTreeMap::new();
+            let mut by_value_shared_objects = BTreeSet::new();
             for input in inputs.into_iter().chain(std::iter::once(gas)) {
                 let InputValue {
                     object_metadata: Some(InputObjectMetadata::InputObject {
@@ -602,13 +604,8 @@ mod checked {
                 );
                 if let Some(Value::Object(object_value)) = value {
                     add_additional_write(&mut additional_writes, owner, object_value)?;
-                } else {
-                    // The object has been taken by value.
-                    if owner.is_shared() {
-                        // TODO: This would be a case of wrapping shared object, once we support
-                        // shared object deletion. We should report error below.
-                        unreachable!("Passing shared object by value should not be allowed yet");
-                    }
+                } else if owner.is_shared() {
+                    by_value_shared_objects.insert(id);
                 }
             }
             // check for unused values
@@ -684,6 +681,17 @@ mod checked {
                 remaining_events.is_empty(),
                 "Events should be taken after every Move call"
             );
+
+            for id in by_value_shared_objects {
+                if !writes.contains_key(&id) && !deleted_object_ids.contains_key(&id)
+                //&& !additional_transfer_object_vals.contains(id)
+                {
+                    return Err(ExecutionError::new(
+                        ExecutionErrorKind::SharedObjectOperationNotAllowed,
+                        Some(format!("Wrapping shared object {} not allowed", id).into()),
+                    ));
+                }
+            }
 
             loaded_runtime_objects.extend(loaded_child_objects);
 

@@ -28,10 +28,12 @@ use move_core_types::language_storage::ModuleId;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use std::collections::{BTreeMap, HashMap};
-use std::convert::Infallible;
+use std::convert::{Infallible, Into};
 use std::fmt::{Display, Formatter};
 use std::sync::Arc;
 use tap::Pipe;
+
+pub const SHARED_OBJECT_MARKER_VERSION: VersionNumber = VersionNumber::from_u64(0);
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Serialize, Deserialize)]
 pub enum WriteKind {

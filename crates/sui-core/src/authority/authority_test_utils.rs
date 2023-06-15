@@ -4,6 +4,7 @@
 
 use crate::checkpoints::CheckpointServiceNoop;
 use crate::consensus_handler::SequencedConsensusTransaction;
+use core::default::Default;
 use fastcrypto::hash::MultisetHash;
 use fastcrypto::traits::KeyPair;
 use move_core_types::account_address::AccountAddress;
@@ -301,6 +302,66 @@ pub fn init_certified_transaction(
     .unwrap()
     .verify_authenticated(epoch_store.committee(), &Default::default())
     .unwrap()
+}
+
+pub async fn certify_shared_obj_transaction_no_execution(
+    authority: &AuthorityState,
+    transaction: Transaction,
+) -> Result<VerifiedCertificate, SuiError> {
+    let epoch_store = authority.load_epoch_store_one_call_per_task();
+    let transaction = authority.verify_transaction(transaction).unwrap();
+    let response = authority
+        .handle_transaction(&epoch_store, transaction.clone())
+        .await?;
+    let vote = response.status.into_signed_for_testing();
+
+    // Collect signatures from a quorum of authorities
+    let committee = authority.clone_committee_for_testing();
+    let certificate =
+        CertifiedTransaction::new(transaction.into_message(), vec![vote.clone()], &committee)
+            .unwrap()
+            .verify_authenticated(&committee, &Default::default())
+            .unwrap();
+
+    send_consensus_no_execution(authority, &certificate).await;
+
+    Ok(certificate)
+}
+
+pub async fn enqueue_all_and_execute_all(
+    authority: &AuthorityState,
+    certificates: Vec<VerifiedCertificate>,
+) -> Result<Vec<(TransactionEffects, Option<ExecutionError>)>, SuiError> {
+    authority
+        .enqueue_certificates_for_execution(
+            certificates.clone(),
+            &authority.epoch_store_for_testing(),
+        )
+        .unwrap();
+
+    let mut output = Vec::new();
+    for cert in certificates {
+        let (result, execution_error_opt) = authority.try_execute_for_test(&cert).await?;
+        let effects = result.inner().data().clone();
+        output.push((effects, execution_error_opt));
+    }
+    Ok(output)
+}
+
+pub async fn execute_sequenced_certificate_to_effects(
+    authority: &AuthorityState,
+    certificate: VerifiedCertificate,
+) -> Result<(TransactionEffects, Option<ExecutionError>), SuiError> {
+    authority
+        .enqueue_certificates_for_execution(
+            vec![certificate.clone()],
+            &authority.epoch_store_for_testing(),
+        )
+        .unwrap();
+
+    let (result, execution_error_opt) = authority.try_execute_for_test(&certificate).await?;
+    let effects = result.inner().data().clone();
+    Ok((effects, execution_error_opt))
 }
 
 pub async fn send_consensus(authority: &AuthorityState, cert: &VerifiedCertificate) {

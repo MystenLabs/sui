@@ -248,36 +248,47 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
             pre_compiled_deps.is_some(),
             "Must populate 'pre_compiled_deps' with Sui framework"
         );
-        let (additional_mapping, account_names, protocol_config) = match task_opt.map(|t| t.command)
-        {
-            Some((
-                InitCommand { named_addresses },
-                SuiInitArgs {
-                    accounts,
-                    protocol_version,
-                    max_gas,
-                },
-            )) => {
-                let map = verify_and_create_named_address_mapping(named_addresses).unwrap();
-                let accounts = accounts
-                    .map(|v| v.into_iter().collect::<BTreeSet<_>>())
-                    .unwrap_or_default();
-                let mut protocol_config = if let Some(protocol_version) = protocol_version {
-                    ProtocolConfig::get_for_version(protocol_version.into(), Chain::Unknown)
-                } else {
-                    ProtocolConfig::get_for_max_version_UNSAFE()
-                };
-                if let Some(mx_tx_gas_override) = max_gas {
-                    protocol_config.set_max_tx_gas_for_testing(mx_tx_gas_override)
+        let (additional_mapping, account_names, protocol_config, version) =
+            match task_opt.map(|t| t.command) {
+                Some((
+                    InitCommand { named_addresses },
+                    SuiInitArgs {
+                        accounts,
+                        protocol_version,
+                        max_gas,
+                    },
+                )) => {
+                    let map = verify_and_create_named_address_mapping(named_addresses).unwrap();
+                    let accounts = accounts
+                        .map(|v| v.into_iter().collect::<BTreeSet<_>>())
+                        .unwrap_or_default();
+                    let version;
+                    let mut protocol_config = if let Some(protocol_version) = protocol_version {
+                        version = protocol_version.into();
+                        ProtocolConfig::get_for_version(protocol_version.into(), Chain::Unknown)
+                    } else {
+                        version = ProtocolVersion::MAX;
+                        ProtocolConfig::get_for_max_version_UNSAFE()
+                    };
+                    if let Some(mx_tx_gas_override) = max_gas {
+                        protocol_config.set_max_tx_gas_for_testing(mx_tx_gas_override)
+                    }
+                    (map, accounts, protocol_config, version)
                 }
-                (map, accounts, protocol_config)
-            }
-            None => (
-                BTreeMap::new(),
-                BTreeSet::new(),
-                ProtocolConfig::get_for_max_version_UNSAFE(),
-            ),
-        };
+                None => {
+                    let protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
+                    (
+                        BTreeMap::new(),
+                        BTreeSet::new(),
+                        protocol_config,
+                        ProtocolVersion::MAX,
+                    )
+                }
+            };
+
+        if version != 20.into() {
+            protocol_config.shared_object_deletion();
+        }
 
         let mut named_address_mapping = NAMED_ADDRESSES.clone();
 
@@ -1190,10 +1201,7 @@ impl<'a> SuiTestAdapter<'a> {
             }
             ExecutionStatus::Failure { error, command } => {
                 let execution_msg = if with_shared {
-                    format!(
-                        "Cannot return execution error with shared objects. \
-                        Debug of error: {error:?} at command {command:?}"
-                    )
+                    format!("Debug of error: {error:?} at command {command:?}")
                 } else {
                     format!("Execution Error: {}", error_opt.unwrap())
                 };

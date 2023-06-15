@@ -1371,6 +1371,7 @@
                 "package_upgrades": true,
                 "receive_objects": false,
                 "scoring_decision_with_validity_cutoff": true,
+                "shared_object_deletion": false,
                 "simple_conservation_checks": false,
                 "simplified_unwrap_then_delete": false,
                 "txn_base_cost_as_multiplier": false,

@@ -204,6 +204,8 @@ CommandArgumentError:
       InvalidObjectByValue: UNIT
     10:
       InvalidObjectByMutRef: UNIT
+    11:
+      SharedObjectOperationNotAllowed: UNIT
 CompressedSignature:
   ENUM:
     0:
@@ -397,6 +399,8 @@ ExecutionFailureStatus:
       CertificateDenied: UNIT
     30:
       SuiMoveVerificationTimedout: UNIT
+    31:
+      SharedObjectOperationNotAllowed: UNIT
 ExecutionStatus:
   ENUM:
     0:

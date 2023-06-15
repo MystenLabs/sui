@@ -41,6 +41,39 @@ async fn shared_object_transaction() {
         .await;
 }
 
+/// Delete a shared object as the object owner
+#[sim_test]
+async fn shared_object_deletion() {
+    let test_cluster = TestClusterBuilder::new()
+        //.with_protocol_version(21.into())
+        .build()
+        .await;
+
+    let (package, counter) = publish_basics_package_and_make_counter(&test_cluster.wallet).await;
+    let package_id = package.0;
+    let counter_id = counter.0;
+    let counter_initial_shared_version = counter.1;
+
+    // Make a transaction to delete the counter.
+    let transaction = test_cluster
+        .test_transaction_builder()
+        .await
+        .call_counter_delete(package_id, counter_id, counter_initial_shared_version)
+        .build();
+    let effects = test_cluster
+        .sign_and_execute_transaction(&transaction)
+        .await
+        .effects
+        .unwrap();
+
+    assert_eq!(effects.deleted().len(), 1);
+    assert_eq!(effects.shared_objects().len(), 1);
+
+    // assert the shared object was deleted
+    let deleted_obj_id = effects.deleted()[0].object_id;
+    assert_eq!(deleted_obj_id, counter_id);
+}
+
 /// End-to-end shared transaction test for a Sui validator. It does not test the client or wallet,
 /// but tests the end-to-end flow from Sui to consensus.
 #[sim_test]

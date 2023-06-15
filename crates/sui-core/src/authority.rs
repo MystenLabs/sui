@@ -1200,18 +1200,22 @@ impl AuthorityState {
         let _metrics_guard = self.metrics.prepare_certificate_latency.start_timer();
 
         // check_certificate_input also checks shared object locks when loading the shared objects.
-        let (gas_status, input_objects) = transaction_input_checker::check_certificate_input(
-            &self.database,
-            epoch_store,
-            certificate,
-        )?;
+
+        let (gas_status, input_objects, deleted_shared_objects) =
+            transaction_input_checker::check_certificate_input(
+                &self.database,
+                epoch_store,
+                certificate,
+            )?;
 
         let owned_object_refs = input_objects.filter_owned_objects();
         self.check_owned_locks(&owned_object_refs).await?;
         let tx_digest = *certificate.digest();
         let protocol_config = epoch_store.protocol_config();
+
         let transaction_data = &certificate.data().intent_message().value;
         let (kind, signer, gas) = transaction_data.execution_parts();
+
         let (inner_temp_store, effects, execution_error_opt) =
             epoch_store.executor().execute_transaction_to_effects(
                 &self.database,
@@ -1222,6 +1226,7 @@ impl AuthorityState {
                 self.expensive_safety_check_config
                     .enable_deep_per_tx_sui_conservation_check(),
                 self.certificate_deny_config.certificate_deny_set(),
+                deleted_shared_objects,
                 &epoch_store.epoch_start_config().epoch_data().epoch_id(),
                 epoch_store
                     .epoch_start_config()
@@ -1322,6 +1327,7 @@ impl AuthorityState {
                 self.metrics.limits_metrics.clone(),
                 expensive_checks,
                 self.certificate_deny_config.certificate_deny_set(),
+                BTreeMap::new(),
                 &epoch_store.epoch_start_config().epoch_data().epoch_id(),
                 epoch_store
                     .epoch_start_config()

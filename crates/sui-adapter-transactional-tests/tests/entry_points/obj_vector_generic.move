@@ -146,14 +146,14 @@ module Test::M {
 //# run Test::M::two_obj_vec_destroy_any --sender A --type-args Test::M::Any --args vector[object(9,0),object(10,0)]
 
 
-// create a shared object and try to pass it as a single element of a vector (failure)
+// create a shared object and try to pass it as a single element of a vector
 
 //# run Test::M::mint_shared_any --sender A --type-args Test::M::Any --args 42
 
 //# run Test::M::obj_vec_destroy_any --sender A --type-args Test::M::Any --args vector[object(12,0)]
 
 
-// create an object and pass it both by-value and as element of a vector (failure)
+// create an object and pass it both by-value and as element of a vector
 
 //# run Test::M::mint_any --sender A --type-args Test::M::Any --args 42
 

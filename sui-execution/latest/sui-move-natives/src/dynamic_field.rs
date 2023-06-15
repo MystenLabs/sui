@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::transfer::{object_is_shared, E_SHARED_OBJECT_OPERATION_NOT_SUPPORTED};
 use crate::{
     get_nested_struct_field, get_object_id,
     object_runtime::{object_store::ObjectResult, ObjectRuntime},
@@ -230,6 +231,13 @@ pub fn add_child_object(
             .dynamic_field_add_child_object_struct_tag_cost_per_byte
             * struct_tag_size.into()
     );
+
+    if object_is_shared(context, &child)? {
+        return Ok(NativeResult::err(
+            context.gas_used(),
+            E_SHARED_OBJECT_OPERATION_NOT_SUPPORTED,
+        ));
+    }
 
     let object_runtime: &mut ObjectRuntime = context.extensions_mut().get_mut();
     object_runtime.add_child_object(

@@ -3,6 +3,7 @@
 
 use std::{collections::HashSet, sync::Arc};
 use sui_protocol_config::ProtocolConfig;
+use sui_types::execution::DeletedSharedObjects;
 use sui_types::storage::BackingStore;
 use sui_types::{
     base_types::{ObjectRef, SuiAddress, TxContext},
@@ -29,6 +30,7 @@ pub trait Executor {
         metrics: Arc<LimitsMetrics>,
         enable_expensive_checks: bool,
         certificate_deny_set: &HashSet<TransactionDigest>,
+        deleted_shared_objects: DeletedSharedObjects,
         // Epoch
         epoch_id: &EpochId,
         epoch_timestamp_ms: u64,

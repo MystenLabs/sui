@@ -376,7 +376,7 @@ mod tests {
 
 #[cfg(test)]
 mod test {
-    use std::collections::HashSet;
+    use std::collections::{BTreeMap, HashSet};
     use std::sync::Arc;
     use sui_config::genesis::Genesis;
     use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
@@ -434,6 +434,7 @@ mod test {
                 metrics,
                 expensive_checks,
                 &certificate_deny_set,
+                BTreeMap::new(),
                 &epoch.epoch_id(),
                 epoch.epoch_start_timestamp(),
                 input_objects,
