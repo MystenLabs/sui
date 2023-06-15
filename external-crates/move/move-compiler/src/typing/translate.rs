@@ -9,10 +9,14 @@ use super::{
 use crate::{
     diag,
     diagnostics::{codes::*, Diagnostic},
-    expansion::ast::{Fields, ModuleIdent, Value_, Visibility},
+    expansion::ast::{AttributeName_, Fields, ModuleIdent, Value_, Visibility},
     naming::ast::{self as N, TParam, TParamID, Type, TypeName_, Type_},
     parser::ast::{Ability_, BinOp_, ConstantName, Field, FunctionName, StructName, UnaryOp_},
-    shared::{unique_map::UniqueMap, *},
+    shared::{
+        known_attributes::{KnownAttribute, TestingAttribute},
+        unique_map::UniqueMap,
+        *,
+    },
     typing::ast as T,
     FullyCompiledProgram,
 };
@@ -2291,6 +2295,13 @@ fn gen_unused_warnings(context: &mut Context, mdef: &T::ModuleDefinition) {
             .add_warning_filter_scope(mdef.warning_filter.clone());
 
         for (loc, name, fun) in &mdef.functions {
+            if fun.attributes.iter().any(|(_, n, _)| {
+                n == &AttributeName_::Known(KnownAttribute::Testing(TestingAttribute::Test))
+            }) {
+                // functions with #[test] attribute are implicitly used
+                continue;
+            }
+
             context
                 .env
                 .add_warning_filter_scope(fun.warning_filter.clone());
