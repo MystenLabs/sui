@@ -13,8 +13,13 @@ import type { DAppEntry } from '_src/ui/app/components/sui-apps/SuiApp';
 
 import st from './AppsPage.module.scss';
 
+type FilterTag = {
+    name: string;
+    link: string;
+};
+
 function AppsPage() {
-    const defaultFilterTags = [
+    const defaultFilterTags: FilterTag[] = [
         {
             name: 'Connections',
             link: 'apps/connected',
@@ -26,7 +31,7 @@ function AppsPage() {
     ];
     const ecosystemApps =
         useFeature<DAppEntry[]>(FEATURES.WALLET_DAPPS).value ?? [];
-    const uniqueAppTags = new Set();
+    const uniqueAppTags = new Set<FilterTag>();
 
     ecosystemApps.forEach((app) => {
         app.tags.forEach((tag) => {
@@ -43,7 +48,7 @@ function AppsPage() {
         <div className={st.container}>
             <Content>
                 <section>
-                    <FiltersPortal tags={allFilterTags as Props[]} />
+                    <FiltersPortal tags={allFilterTags} />
                     <Routes>
                         <Route path="/" element={<AppsPlayGround />} />
                         <Route
