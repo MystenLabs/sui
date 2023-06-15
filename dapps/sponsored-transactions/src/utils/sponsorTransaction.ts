@@ -1,13 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { Ed25519Keypair, RawSigner, TransactionBlock } from "@mysten/sui.js";
-import { provider } from "./rpc";
+import { Ed25519Keypair, RawSigner, TransactionBlock } from '@mysten/sui.js';
+import { provider } from './rpc';
 
 // This simulates what a server would do to sponsor a transaction
 export async function sponsorTransaction(
   sender: string,
-  transactionKindBytes: Uint8Array
+  transactionKindBytes: Uint8Array,
 ) {
   // Rather than do gas pool management, we just spin out a new keypair to sponsor the transaction with:
   const keypair = new Ed25519Keypair();

@@ -15,7 +15,7 @@ npm install @mysten/wallet-kit
 At the root of your application, you can then set up the wallet kit provider:
 
 ```tsx
-import { WalletKitProvider } from "@mysten/wallet-kit";
+import { WalletKitProvider } from '@mysten/wallet-kit';
 
 export function App() {
   return <WalletKitProvider>{/* Your application... */}</WalletKitProvider>;
@@ -27,14 +27,14 @@ export function App() {
 You can then add a **Connect Wallet** button to your page:
 
 ```tsx
-import { ConnectButton, useWalletKit } from "@mysten/wallet-kit";
-import { formatAddress } from "@mysten/sui.js";
+import { ConnectButton, useWalletKit } from '@mysten/wallet-kit';
+import { formatAddress } from '@mysten/sui.js';
 
 function ConnectToWallet() {
   const { currentAccount } = useWalletKit();
   return (
     <ConnectButton
-      connectText={"Connect Wallet"}
+      connectText={'Connect Wallet'}
       connectedText={`Connected: ${formatAddress(currentAccount.address)}`}
     />
   );
@@ -44,8 +44,8 @@ function ConnectToWallet() {
 To get access to the currently connected wallet, use the `useWalletKit()` hook to interact with the wallet, such as proposing transactions:
 
 ```tsx
-import { TransactionBlock } from "@mysten/sui.js";
-import { useWalletKit } from "@mysten/wallet-kit";
+import { TransactionBlock } from '@mysten/sui.js';
+import { useWalletKit } from '@mysten/wallet-kit';
 
 export function SendTransaction() {
   const { signAndExecuteTransactionBlock } = useWalletKit();
@@ -53,12 +53,12 @@ export function SendTransaction() {
   const handleClick = async () => {
     const tx = new TransactionBlock();
     tx.moveCall({
-      target: "0x2::devnet_nft::mint",
+      target: '0x2::devnet_nft::mint',
       arguments: [
-        tx.pure("some name"),
-        tx.pure("some description"),
+        tx.pure('some name'),
+        tx.pure('some description'),
         tx.pure(
-          "https://cdn.britannica.com/94/194294-138-B2CF7780/overview-capybara.jpg?w=800&h=450&c=crop"
+          'https://cdn.britannica.com/94/194294-138-B2CF7780/overview-capybara.jpg?w=800&h=450&c=crop',
         ),
       ],
     });

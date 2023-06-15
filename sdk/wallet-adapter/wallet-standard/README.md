@@ -9,18 +9,18 @@ A suite of standard utilities for implementing wallets and libraries based on th
 You need to create a class that represents your wallet. You can use the `Wallet` interface from `@mysten/wallet-standard` to help ensure your class adheres to the standard.
 
 ```typescript
-import { Wallet, SUI_DEVNET_CHAIN } from "@mysten/wallet-standard";
+import { Wallet, SUI_DEVNET_CHAIN } from '@mysten/wallet-standard';
 
 class YourWallet implements Wallet {
   get version() {
     // Return the version of the Wallet Standard this implements (in this case, 1.0.0).
-    return "1.0.0";
+    return '1.0.0';
   }
   get name() {
-    return "Wallet Name";
+    return 'Wallet Name';
   }
   get icon() {
-    return "some-icon-data-url";
+    return 'some-icon-data-url';
   }
 
   // Return the Sui chains that your wallet supports.
@@ -107,7 +107,7 @@ The last requirement of the wallet interface is to expose an `acccounts` interfa
 The accounts can use the `ReadonlyWalletAccount` class to easily construct an account matching the required interface.
 
 ```typescript
-import { ReadonlyWalletAccount } from "@mysten/wallet-standard";
+import { ReadonlyWalletAccount } from '@mysten/wallet-standard';
 
 class YourWallet implements Wallet {
   get accounts() {
@@ -122,8 +122,8 @@ class YourWallet implements Wallet {
           chains: [SUI_DEVNET_CHAIN],
           // The features that this account supports. This can be a subset of the wallet's supported features.
           // These features must exist on the wallet as well.
-          features: ["sui:signAndExecuteTransactionBlock"],
-        })
+          features: ['sui:signAndExecuteTransactionBlock'],
+        }),
     );
   }
 }
@@ -134,7 +134,7 @@ class YourWallet implements Wallet {
 Once you have a compatible interface for your wallet, you can register it using the `registerWallet` function.
 
 ```typescript
-import { registerWallet } from "@mysten/wallet-standard";
+import { registerWallet } from '@mysten/wallet-standard';
 
 registerWallet(new YourWallet());
 ```

@@ -4,13 +4,13 @@
 import {
   WalletAdapter,
   WalletAdapterEvents,
-} from "@mysten/wallet-adapter-base";
+} from '@mysten/wallet-adapter-base';
 import {
   StandardWalletAdapterWallet,
   SuiSignAndExecuteTransactionBlockVersion,
   SuiSignTransactionBlockVersion,
-} from "@mysten/wallet-standard";
-import mitt from "mitt";
+} from '@mysten/wallet-standard';
+import mitt from 'mitt';
 
 export interface StandardWalletAdapterConfig {
   wallet: StandardWalletAdapterWallet;
@@ -21,14 +21,14 @@ type WalletAdapterEventsMap = {
 };
 
 const suiSignTransactionBlockLatestVersion: SuiSignTransactionBlockVersion =
-  "1.0.0";
+  '1.0.0';
 const suiSignAndExecuteTransactionBlockLatestVersion: SuiSignAndExecuteTransactionBlockVersion =
-  "1.0.0";
+  '1.0.0';
 
 function isFeatureCompatible(featureVersion: string, adapterVersion: string) {
-  const [featureMajor] = featureVersion.split(".");
-  const [adapterMajor] = adapterVersion.split(".");
-  return +adapterMajor === +featureMajor;
+  const [featureMajor] = featureVersion.split('.');
+  const [adapterMajor] = adapterVersion.split('.');
+  return Number(adapterMajor) === Number(featureMajor);
 }
 
 export class StandardWalletAdapter implements WalletAdapter {
@@ -65,8 +65,8 @@ export class StandardWalletAdapter implements WalletAdapter {
       this.connecting = true;
 
       this.#walletEventUnsubscribe = this.#wallet.features[
-        "standard:events"
-      ].on("change", async ({ accounts }) => {
+        'standard:events'
+      ].on('change', async ({ accounts }) => {
         if (accounts) {
           this.connected = accounts.length > 0;
           await this.#notifyChanged();
@@ -74,11 +74,11 @@ export class StandardWalletAdapter implements WalletAdapter {
       });
 
       if (!this.#wallet.accounts.length) {
-        await this.#wallet.features["standard:connect"].connect();
+        await this.#wallet.features['standard:connect'].connect();
       }
 
       if (!this.#wallet.accounts.length) {
-        throw new Error("No wallet accounts found");
+        throw new Error('No wallet accounts found');
       }
 
       this.connected = true;
@@ -89,8 +89,8 @@ export class StandardWalletAdapter implements WalletAdapter {
   }
 
   async disconnect() {
-    if (this.#wallet.features["standard:disconnect"]) {
-      await this.#wallet.features["standard:disconnect"].disconnect();
+    if (this.#wallet.features['standard:disconnect']) {
+      await this.#wallet.features['standard:disconnect'].disconnect();
     }
     this.connected = false;
     this.connecting = false;
@@ -100,46 +100,46 @@ export class StandardWalletAdapter implements WalletAdapter {
     }
   }
 
-  signMessage: WalletAdapter["signMessage"] = (messageInput) => {
-    return this.#wallet.features["sui:signMessage"].signMessage(messageInput);
+  signMessage: WalletAdapter['signMessage'] = (messageInput) => {
+    return this.#wallet.features['sui:signMessage'].signMessage(messageInput);
   };
 
-  signTransactionBlock: WalletAdapter["signTransactionBlock"] = (
-    transactionInput
+  signTransactionBlock: WalletAdapter['signTransactionBlock'] = (
+    transactionInput,
   ) => {
-    const version = this.#wallet.features["sui:signTransactionBlock"].version;
+    const version = this.#wallet.features['sui:signTransactionBlock'].version;
     if (!isFeatureCompatible(version, suiSignTransactionBlockLatestVersion)) {
       throw new Error(
-        `Version mismatch, signTransaction feature version ${version} is not compatible with version ${suiSignTransactionBlockLatestVersion}`
+        `Version mismatch, signTransaction feature version ${version} is not compatible with version ${suiSignTransactionBlockLatestVersion}`,
       );
     }
     return this.#wallet.features[
-      "sui:signTransactionBlock"
+      'sui:signTransactionBlock'
     ].signTransactionBlock(transactionInput);
   };
 
-  signAndExecuteTransactionBlock: WalletAdapter["signAndExecuteTransactionBlock"] =
+  signAndExecuteTransactionBlock: WalletAdapter['signAndExecuteTransactionBlock'] =
     (transactionInput) => {
       const version =
-        this.#wallet.features["sui:signAndExecuteTransactionBlock"].version;
+        this.#wallet.features['sui:signAndExecuteTransactionBlock'].version;
       if (
         !isFeatureCompatible(
           version,
-          suiSignAndExecuteTransactionBlockLatestVersion
+          suiSignAndExecuteTransactionBlockLatestVersion,
         )
       ) {
         throw new Error(
-          `Version mismatch, signAndExecuteTransactionBlock feature version ${version} is not compatible with version ${suiSignAndExecuteTransactionBlockLatestVersion}`
+          `Version mismatch, signAndExecuteTransactionBlock feature version ${version} is not compatible with version ${suiSignAndExecuteTransactionBlockLatestVersion}`,
         );
       }
       return this.#wallet.features[
-        "sui:signAndExecuteTransactionBlock"
+        'sui:signAndExecuteTransactionBlock'
       ].signAndExecuteTransactionBlock(transactionInput);
     };
 
   on: <E extends keyof WalletAdapterEvents>(
     event: E,
-    callback: WalletAdapterEvents[E]
+    callback: WalletAdapterEvents[E],
   ) => () => void = (event, callback) => {
     this.#events.on(event, callback);
     return () => {
@@ -148,7 +148,7 @@ export class StandardWalletAdapter implements WalletAdapter {
   };
 
   async #notifyChanged() {
-    this.#events.emit("change", {
+    this.#events.emit('change', {
       connected: this.connected,
       accounts: await this.getAccounts(),
     });

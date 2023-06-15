@@ -6,16 +6,16 @@ import {
   resolveAdapters,
   WalletAdapter,
   isWalletProvider,
-} from "@mysten/wallet-adapter-base";
-import { localStorageAdapter, StorageAdapter } from "./storage";
+} from '@mysten/wallet-adapter-base';
+import { localStorageAdapter, StorageAdapter } from './storage';
 import {
   SuiSignAndExecuteTransactionBlockInput,
   SuiSignMessageInput,
   SuiSignTransactionBlockInput,
   WalletAccount,
-} from "@mysten/wallet-standard";
+} from '@mysten/wallet-standard';
 
-export * from "./storage";
+export * from './storage';
 
 export interface WalletKitCoreOptions {
   adapters: WalletAdapterList;
@@ -25,11 +25,11 @@ export interface WalletKitCoreOptions {
 }
 
 export enum WalletKitCoreConnectionStatus {
-  DISCONNECTED = "DISCONNECTED",
-  CONNECTING = "CONNECTING",
-  CONNECTED = "CONNECTED",
+  DISCONNECTED = 'DISCONNECTED',
+  CONNECTING = 'CONNECTING',
+  CONNECTED = 'CONNECTED',
   // TODO: Figure out if this is really a separate status, or is just a piece of state alongside the `disconnected` state:
-  ERROR = "ERROR",
+  ERROR = 'ERROR',
 }
 
 export interface InternalWalletKitCoreState {
@@ -60,42 +60,42 @@ export interface WalletKitCore {
   selectAccount(account: WalletAccount): void;
   disconnect(): Promise<void>;
   signMessage(
-    messageInput: OptionalProperties<SuiSignMessageInput, "account">
-  ): ReturnType<WalletAdapter["signMessage"]>;
+    messageInput: OptionalProperties<SuiSignMessageInput, 'account'>,
+  ): ReturnType<WalletAdapter['signMessage']>;
   signTransactionBlock: (
     transactionInput: OptionalProperties<
       SuiSignTransactionBlockInput,
-      "chain" | "account"
-    >
-  ) => ReturnType<WalletAdapter["signTransactionBlock"]>;
+      'chain' | 'account'
+    >,
+  ) => ReturnType<WalletAdapter['signTransactionBlock']>;
   signAndExecuteTransactionBlock: (
     transactionInput: OptionalProperties<
       SuiSignAndExecuteTransactionBlockInput,
-      "chain" | "account"
-    >
-  ) => ReturnType<WalletAdapter["signAndExecuteTransactionBlock"]>;
+      'chain' | 'account'
+    >,
+  ) => ReturnType<WalletAdapter['signAndExecuteTransactionBlock']>;
 }
 
 export type SubscribeHandler = (state: WalletKitCoreState) => void;
 export type Unsubscribe = () => void;
 
-const SUI_WALLET_NAME = "Sui Wallet";
+const SUI_WALLET_NAME = 'Sui Wallet';
 
-const RECENT_WALLET_STORAGE = "wallet-kit:last-wallet";
+const RECENT_WALLET_STORAGE = 'wallet-kit:last-wallet';
 
 function waitToBeVisible() {
-  if (!document || document.visibilityState === "visible") {
+  if (!document || document.visibilityState === 'visible') {
     return Promise.resolve();
   }
   let promiseResolve: (() => void) | null = null;
   const promise = new Promise<void>((r) => (promiseResolve = r));
   const callback = () => {
-    if (promiseResolve && document.visibilityState === "visible") {
+    if (promiseResolve && document.visibilityState === 'visible') {
       promiseResolve();
-      document.removeEventListener("visibilitychange", callback);
+      document.removeEventListener('visibilitychange', callback);
     }
   };
-  document.addEventListener("visibilitychange", callback);
+  document.addEventListener('visibilitychange', callback);
   return promise;
 }
 
@@ -151,7 +151,9 @@ export function createWalletKitCore({
     subscriptions.forEach((handler) => {
       try {
         handler(state);
-      } catch {}
+      } catch {
+        /* ignore error */
+      }
     });
   }
 
@@ -172,11 +174,11 @@ export function createWalletKitCore({
   const providers = adapters.filter(isWalletProvider);
   if (providers.length) {
     providers.map((provider) =>
-      provider.on("changed", () => {
+      provider.on('changed', () => {
         setState({
           wallets: sortWallets(resolveAdapters(adapters), preferredWallets),
         });
-      })
+      }),
     );
   }
 
@@ -189,7 +191,9 @@ export function createWalletKitCore({
         if (lastWalletName) {
           walletKit.connect(lastWalletName);
         }
-      } catch {}
+      } catch {
+        /* ignore error */
+      }
     },
 
     getState() {
@@ -202,7 +206,9 @@ export function createWalletKitCore({
       // Immediately invoke the handler with the current state to make it compatible with Svelte stores:
       try {
         handler(state);
-      } catch {}
+      } catch {
+        /* ignore error */
+      }
 
       return () => {
         subscriptions.delete(handler);
@@ -234,7 +240,7 @@ export function createWalletKitCore({
           walletEventUnsubscribe();
         }
         walletEventUnsubscribe = currentWallet.on(
-          "change",
+          'change',
           ({ connected, accounts }) => {
             // when undefined connected hasn't changed
             if (connected === false) {
@@ -246,13 +252,13 @@ export function createWalletKitCore({
                   internalState.currentAccount &&
                   !accounts.find(
                     ({ address }) =>
-                      address === internalState.currentAccount?.address
+                      address === internalState.currentAccount?.address,
                   )
                     ? accounts[0]
                     : internalState.currentAccount,
               });
             }
-          }
+          },
         );
         try {
           setState({ status: WalletKitCoreConnectionStatus.CONNECTING });
@@ -260,14 +266,16 @@ export function createWalletKitCore({
           setState({ status: WalletKitCoreConnectionStatus.CONNECTED });
           try {
             await storageAdapter.set(storageKey, currentWallet.name);
-          } catch {}
+          } catch {
+            /* ignore error */
+          }
           // TODO: Rather than using this method, we should just standardize the wallet properties on the adapter itself:
           const accounts = await currentWallet.getAccounts();
           // TODO: Implement account selection:
 
           setState({ accounts, currentAccount: accounts[0] ?? null });
         } catch (e) {
-          console.log("Wallet connection error", e);
+          console.log('Wallet connection error', e);
 
           setState({ status: WalletKitCoreConnectionStatus.ERROR });
         }
@@ -278,12 +286,14 @@ export function createWalletKitCore({
 
     async disconnect() {
       if (!internalState.currentWallet) {
-        console.warn("Attempted to `disconnect` but no wallet was connected.");
+        console.warn('Attempted to `disconnect` but no wallet was connected.');
         return;
       }
       try {
         await storageAdapter.del(storageKey);
-      } catch {}
+      } catch {
+        /* ignore error */
+      }
       await internalState.currentWallet.disconnect();
       disconnected();
     },
@@ -291,7 +301,7 @@ export function createWalletKitCore({
     signMessage(messageInput) {
       if (!internalState.currentWallet || !internalState.currentAccount) {
         throw new Error(
-          "No wallet is currently connected, cannot call `signMessage`."
+          'No wallet is currently connected, cannot call `signMessage`.',
         );
       }
 
@@ -304,7 +314,7 @@ export function createWalletKitCore({
     async signTransactionBlock(transactionInput) {
       if (!internalState.currentWallet || !internalState.currentAccount) {
         throw new Error(
-          "No wallet is currently connected, cannot call `signTransaction`."
+          'No wallet is currently connected, cannot call `signTransaction`.',
         );
       }
       const {
@@ -312,7 +322,7 @@ export function createWalletKitCore({
         chain = internalState.currentAccount.chains[0],
       } = transactionInput;
       if (!chain) {
-        throw new Error("Missing chain");
+        throw new Error('Missing chain');
       }
       return internalState.currentWallet.signTransactionBlock({
         ...transactionInput,
@@ -324,7 +334,7 @@ export function createWalletKitCore({
     async signAndExecuteTransactionBlock(transactionInput) {
       if (!internalState.currentWallet || !internalState.currentAccount) {
         throw new Error(
-          "No wallet is currently connected, cannot call `signAndExecuteTransactionBlock`."
+          'No wallet is currently connected, cannot call `signAndExecuteTransactionBlock`.',
         );
       }
       const {
@@ -332,7 +342,7 @@ export function createWalletKitCore({
         chain = internalState.currentAccount.chains[0],
       } = transactionInput;
       if (!chain) {
-        throw new Error("Missing chain");
+        throw new Error('Missing chain');
       }
       return internalState.currentWallet.signAndExecuteTransactionBlock({
         ...transactionInput,

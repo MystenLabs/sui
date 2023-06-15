@@ -1,9 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { ComponentProps } from "react";
+import { ComponentProps } from 'react';
 
-export function BackIcon(props: ComponentProps<"svg">) {
+export function BackIcon(props: ComponentProps<'svg'>) {
   return (
     <svg
       width={24}
@@ -20,7 +20,7 @@ export function BackIcon(props: ComponentProps<"svg">) {
   );
 }
 
-export function CloseIcon(props: ComponentProps<"svg">) {
+export function CloseIcon(props: ComponentProps<'svg'>) {
   return (
     <svg
       width={10}
@@ -37,7 +37,7 @@ export function CloseIcon(props: ComponentProps<"svg">) {
   );
 }
 
-export function SuiIcon(props: ComponentProps<"svg">) {
+export function SuiIcon(props: ComponentProps<'svg'>) {
   return (
     <svg
       width={28}
@@ -57,7 +57,7 @@ export function SuiIcon(props: ComponentProps<"svg">) {
   );
 }
 
-export function CheckIcon(props: ComponentProps<"svg">) {
+export function CheckIcon(props: ComponentProps<'svg'>) {
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"
@@ -74,7 +74,7 @@ export function CheckIcon(props: ComponentProps<"svg">) {
   );
 }
 
-export function ChevronIcon(props: ComponentProps<"svg">) {
+export function ChevronIcon(props: ComponentProps<'svg'>) {
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"

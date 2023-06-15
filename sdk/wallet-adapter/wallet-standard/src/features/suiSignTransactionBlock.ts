@@ -1,11 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import type { SignedTransaction, TransactionBlock } from "@mysten/sui.js";
-import type { IdentifierString, WalletAccount } from "@wallet-standard/core";
+import type { SignedTransaction, TransactionBlock } from '@mysten/sui.js';
+import type { IdentifierString, WalletAccount } from '@wallet-standard/core';
 
 /** The latest API version of the signTransactionBlock API. */
-export type SuiSignTransactionBlockVersion = "1.0.0";
+export type SuiSignTransactionBlockVersion = '1.0.0';
 
 /**
  * A Wallet Standard feature for signing a transaction, and returning the
@@ -13,7 +13,7 @@ export type SuiSignTransactionBlockVersion = "1.0.0";
  */
 export type SuiSignTransactionBlockFeature = {
   /** Namespace for the feature. */
-  "sui:signTransactionBlock": {
+  'sui:signTransactionBlock': {
     /** Version of the feature API. */
     version: SuiSignTransactionBlockVersion;
     signTransactionBlock: SuiSignTransactionBlockMethod;
@@ -21,7 +21,7 @@ export type SuiSignTransactionBlockFeature = {
 };
 
 export type SuiSignTransactionBlockMethod = (
-  input: SuiSignTransactionBlockInput
+  input: SuiSignTransactionBlockInput,
 ) => Promise<SuiSignTransactionBlockOutput>;
 
 /** Input for signing transactions. */

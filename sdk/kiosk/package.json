@@ -28,10 +28,14 @@
     "build:tsup": "tsup ./src/index.ts --format esm,cjs --sourcemap",
     "build:types": "tsc --build",
     "test": "echo \"Error: no test specified\"",
-    "lint": "eslint --max-warnings=0 ./src/**/**",
-    "prettier:fix": "prettier --write .",
     "pre-commit": "pnpm prettier:fix && pnpm lint && pnpm build",
-    "prepublishOnly": "pnpm build"
+    "prepublishOnly": "pnpm build",
+    "prettier:check": "prettier -c --ignore-unknown .",
+    "prettier:fix": "prettier -w --ignore-unknown .",
+    "eslint:check": "eslint --max-warnings=0 .",
+    "eslint:fix": "pnpm run eslint:check --fix",
+    "lint": "pnpm run eslint:check && pnpm run prettier:check",
+    "lint:fix": "pnpm run eslint:fix && pnpm run prettier:fix"
   },
   "dependencies": {
     "@mysten/sui.js": "workspace:*"

@@ -1,14 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { ComponentProps, ReactNode, useState } from "react";
-import { ConnectModal } from "./ConnectModal";
-import { Button } from "./utils/ui";
-import { useWalletKit } from "./WalletKitContext";
-import { Menu } from "@headlessui/react";
-import { formatAddress } from "@mysten/sui.js";
-import { styled } from "@stitches/react";
-import { CheckIcon, ChevronIcon } from "./utils/icons";
+import { ComponentProps, ReactNode, useState } from 'react';
+import { ConnectModal } from './ConnectModal';
+import { Button } from './utils/ui';
+import { useWalletKit } from './WalletKitContext';
+import { Menu } from '@headlessui/react';
+import { formatAddress } from '@mysten/sui.js';
+import { styled } from '@stitches/react';
+import { CheckIcon, ChevronIcon } from './utils/icons';
 
 interface ConnectButtonProps extends ComponentProps<typeof Button> {
   connectText?: ReactNode;
@@ -16,53 +16,53 @@ interface ConnectButtonProps extends ComponentProps<typeof Button> {
 }
 
 const MenuItems = styled(Menu.Items, {
-  position: "absolute",
+  position: 'absolute',
   right: 0,
-  marginTop: "$1",
+  marginTop: '$1',
   width: 180,
   maxHeight: 200,
-  overflow: "scroll",
-  borderRadius: "$buttonLg",
-  backgroundColor: "$background",
-  color: "$textDark",
-  boxShadow: "$button",
+  overflow: 'scroll',
+  borderRadius: '$buttonLg',
+  backgroundColor: '$background',
+  color: '$textDark',
+  boxShadow: '$button',
   zIndex: 10,
-  padding: "$2",
-  display: "flex",
-  flexDirection: "column",
-  gap: "$2",
+  padding: '$2',
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '$2',
 });
 
-const Account = styled("button", {
+const Account = styled('button', {
   border: 0,
-  display: "flex",
-  justifyContent: "space-between",
-  alignItems: "center",
-  backgroundColor: "white",
-  fontFamily: "$mono",
-  padding: "$2",
-  color: "#758F9E",
-  cursor: "pointer",
-  textAlign: "left",
+  display: 'flex',
+  justifyContent: 'space-between',
+  alignItems: 'center',
+  backgroundColor: 'white',
+  fontFamily: '$mono',
+  padding: '$2',
+  color: '#758F9E',
+  cursor: 'pointer',
+  textAlign: 'left',
   fontSize: 14,
   borderRadius: 3,
 
-  "&:hover": {
-    color: "#0284AD",
-    backgroundColor: "#E1F3FF80",
+  '&:hover': {
+    color: '#0284AD',
+    backgroundColor: '#E1F3FF80',
   },
 
   variants: {
     active: {
       true: {
-        color: "#007195",
+        color: '#007195',
       },
     },
   },
 });
 
 export function ConnectButton({
-  connectText = "Connect Wallet",
+  connectText = 'Connect Wallet',
   connectedText,
   ...props
 }: ConnectButtonProps) {
@@ -75,18 +75,18 @@ export function ConnectButton({
       {currentAccount ? (
         <Menu
           as="div"
-          style={{ position: "relative", display: "inline-block" }}
+          style={{ position: 'relative', display: 'inline-block' }}
         >
           <Menu.Button
             as={Button}
             color="connected"
             size="lg"
             css={{
-              fontFamily: "$mono",
-              display: "inline-flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              gap: "$2",
+              fontFamily: '$mono',
+              display: 'inline-flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              gap: '$2',
             }}
             type="button"
           >
@@ -113,14 +113,14 @@ export function ConnectButton({
                 marginTop: 4,
                 marginBottom: 4,
                 height: 1,
-                background: "#F3F6F8",
+                background: '#F3F6F8',
                 flexShrink: 0,
               }}
             />
 
             <Menu.Item>
               <Account
-                css={{ fontFamily: "$sans" }}
+                css={{ fontFamily: '$sans' }}
                 onClick={() => disconnect()}
               >
                 Disconnect

@@ -7,16 +7,8 @@
 !/.config
 !/*.js
 
-# Ignroe generated icons
-/apps/icons/src
-
-# Ignore packages that didn't use prettier yet (will be enabled in a future PR)
-/sdk/bcs
-/sdk/wallet-adapter
-/dapps/offline-signer-helper
-/dapps/sponsored-transactions
-
 # ignore generated files
+/apps/icons/src
 npm-debug.log*
 package-lock.json
 yarn-debug.log*

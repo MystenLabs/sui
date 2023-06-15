@@ -151,7 +151,7 @@ export function attachListingsAndPrices(
     {},
   );
 
-  kioskData.items.map((item) => {
+  kioskData.items.forEach((item) => {
     item.listing = itemListings[item.objectId] || undefined;
   });
 }
@@ -173,7 +173,7 @@ export function attachLockedItems(
   );
 
   // parse lockedItemIds and attach their locked status.
-  kioskData.items.map((item) => {
+  kioskData.items.forEach((item) => {
     item.isLocked = lockedStatuses[item.objectId] || false;
   });
 }

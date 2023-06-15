@@ -5,13 +5,13 @@ import {
   SignedTransaction,
   SuiTransactionBlockResponse,
   TransactionBlock,
-} from "@mysten/sui.js";
-import { ConnectButton, useWalletKit } from "@mysten/wallet-kit";
-import { ComponentProps, ReactNode, useMemo, useState } from "react";
-import { provider } from "./utils/rpc";
-import { sponsorTransaction } from "./utils/sponsorTransaction";
+} from '@mysten/sui.js';
+import { ConnectButton, useWalletKit } from '@mysten/wallet-kit';
+import { ComponentProps, ReactNode, useMemo, useState } from 'react';
+import { provider } from './utils/rpc';
+import { sponsorTransaction } from './utils/sponsorTransaction';
 
-const Button = (props: ComponentProps<"button">) => (
+const Button = (props: ComponentProps<'button'>) => (
   <button
     className="bg-indigo-600 text-sm font-medium text-white rounded-lg px-4 py-3 disabled:cursor-not-allowed disabled:opacity-60"
     {...props}
@@ -40,7 +40,7 @@ export function App() {
   const { currentAccount, signTransactionBlock } = useWalletKit();
   const [loading, setLoading] = useState(false);
   const [sponsoredTx, setSponsoredTx] = useState<SignedTransaction | null>(
-    null
+    null,
   );
   const [signedTx, setSignedTx] = useState<SignedTransaction | null>(null);
   const [executedTx, setExecutedTx] =
@@ -78,7 +78,7 @@ export function App() {
                   });
                   const sponsoredBytes = await sponsorTransaction(
                     currentAccount!.address,
-                    bytes
+                    bytes,
                   );
                   setSponsoredTx(sponsoredBytes);
                 } finally {
@@ -102,7 +102,7 @@ export function App() {
                 try {
                   const signed = await signTransactionBlock({
                     transactionBlock: TransactionBlock.from(
-                      sponsoredTx!.transactionBlockBytes
+                      sponsoredTx!.transactionBlockBytes,
                     ),
                   });
                   setSignedTx(signed);

@@ -1,15 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { WalletAdapterProvider } from "@mysten/wallet-adapter-base";
+import { WalletAdapterProvider } from '@mysten/wallet-adapter-base';
 import {
   isStandardWalletAdapterCompatibleWallet,
   StandardWalletAdapterWallet,
   Wallets,
   getWallets,
-} from "@mysten/wallet-standard";
-import { StandardWalletAdapter } from "./StandardWalletAdapter";
-import mitt, { Emitter } from "mitt";
+} from '@mysten/wallet-standard';
+import { StandardWalletAdapter } from './StandardWalletAdapter';
+import mitt, { Emitter } from 'mitt';
 
 type Events = {
   changed: void;
@@ -18,8 +18,8 @@ type Events = {
 export { StandardWalletAdapter };
 
 // These are the default features that the adapter will check for:
-export const DEFAULT_FEATURES: (keyof StandardWalletAdapterWallet["features"])[] =
-  ["sui:signAndExecuteTransactionBlock"];
+export const DEFAULT_FEATURES: (keyof StandardWalletAdapterWallet['features'])[] =
+  ['sui:signAndExecuteTransactionBlock'];
 
 export class WalletStandardAdapterProvider implements WalletAdapterProvider {
   #wallets: Wallets;
@@ -33,12 +33,12 @@ export class WalletStandardAdapterProvider implements WalletAdapterProvider {
     this.#events = mitt();
     this.#features = features ?? DEFAULT_FEATURES;
 
-    this.#wallets.on("register", () => {
-      this.#events.emit("changed");
+    this.#wallets.on('register', () => {
+      this.#events.emit('changed');
     });
 
-    this.#wallets.on("unregister", () => {
-      this.#events.emit("changed");
+    this.#wallets.on('unregister', () => {
+      this.#events.emit('changed');
     });
   }
 
@@ -46,7 +46,7 @@ export class WalletStandardAdapterProvider implements WalletAdapterProvider {
     const filtered = this.#wallets
       .get()
       .filter((wallet) =>
-        isStandardWalletAdapterCompatibleWallet(wallet, this.#features)
+        isStandardWalletAdapterCompatibleWallet(wallet, this.#features),
       ) as StandardWalletAdapterWallet[];
 
     filtered.forEach((wallet) => {
@@ -60,7 +60,7 @@ export class WalletStandardAdapterProvider implements WalletAdapterProvider {
 
   on<T extends keyof Events>(
     eventName: T,
-    callback: (data: Events[T]) => void
+    callback: (data: Events[T]) => void,
   ) {
     this.#events.on(eventName, callback);
     return () => {

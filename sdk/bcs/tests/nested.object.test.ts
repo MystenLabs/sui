@@ -1,35 +1,35 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { describe, it, expect } from "vitest";
-import { BCS, getSuiMoveConfig } from "../src/index";
-import { serde } from "./utils";
+import { describe, it, expect } from 'vitest';
+import { BCS, getSuiMoveConfig } from '../src/index';
+import { serde } from './utils';
 
-describe("BCS: Nested temp object", () => {
-  it("should support object as a type", () => {
+describe('BCS: Nested temp object', () => {
+  it('should support object as a type', () => {
     const bcs = new BCS(getSuiMoveConfig());
-    const value = { name: { boop: "beep", beep: "100" } };
+    const value = { name: { boop: 'beep', beep: '100' } };
 
-    bcs.registerStructType("Beep", {
+    bcs.registerStructType('Beep', {
       name: {
         boop: BCS.STRING,
         beep: BCS.U64,
       },
     });
 
-    expect(serde(bcs, "Beep", value)).toEqual(value);
+    expect(serde(bcs, 'Beep', value)).toEqual(value);
   });
 
-  it("should support enum invariant as an object", () => {
+  it('should support enum invariant as an object', () => {
     const bcs = new BCS(getSuiMoveConfig());
     const value = {
       user: {
-        name: "Bob",
+        name: 'Bob',
         age: 20,
       },
     };
 
-    bcs.registerEnumType("AccountType", {
+    bcs.registerEnumType('AccountType', {
       system: null,
       user: {
         name: BCS.STRING,
@@ -37,15 +37,15 @@ describe("BCS: Nested temp object", () => {
       },
     });
 
-    expect(serde(bcs, "AccountType", value)).toEqual(value);
+    expect(serde(bcs, 'AccountType', value)).toEqual(value);
   });
 
-  it("should support a nested schema", () => {
+  it('should support a nested schema', () => {
     const bcs = new BCS(getSuiMoveConfig());
     const value = {
       some: {
         account: {
-          user: "Bob",
+          user: 'Bob',
           age: 20,
         },
         meta: {
@@ -56,7 +56,7 @@ describe("BCS: Nested temp object", () => {
       },
     };
 
-    bcs.registerEnumType("Option", {
+    bcs.registerEnumType('Option', {
       none: null,
       some: {
         account: {
@@ -71,6 +71,6 @@ describe("BCS: Nested temp object", () => {
       },
     });
 
-    expect(serde(bcs, "Option", value)).toEqual(value);
+    expect(serde(bcs, 'Option', value)).toEqual(value);
   });
 });

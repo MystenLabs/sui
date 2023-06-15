@@ -12,6 +12,6 @@
     { "path": "../wallet-standard" },
     { "path": "../adapters/base-adapter" },
     { "path": "../adapters/wallet-standard-adapter" },
-    { "path": "../adapters/unsafe-burner" },
+    { "path": "../adapters/unsafe-burner" }
   ]
 }

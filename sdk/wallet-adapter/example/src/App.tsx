@@ -1,11 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import "./App.css";
-import { ConnectButton, useWalletKit } from "@mysten/wallet-kit";
-import { TransactionBlock } from "@mysten/sui.js";
-import { useEffect } from "react";
-import { QredoConnectButton } from "./QredoConnectButton";
+import './App.css';
+import { ConnectButton, useWalletKit } from '@mysten/wallet-kit';
+import { TransactionBlock } from '@mysten/sui.js';
+import { useEffect } from 'react';
+import { QredoConnectButton } from './QredoConnectButton';
 
 function App() {
   const {
@@ -47,7 +47,7 @@ function App() {
               await signAndExecuteTransactionBlock({
                 transactionBlock: txb,
                 options: { showEffects: true },
-              })
+              }),
             );
           }}
         >
@@ -59,8 +59,8 @@ function App() {
           onClick={async () => {
             console.log(
               await signMessage({
-                message: new TextEncoder().encode("Message to sign"),
-              })
+                message: new TextEncoder().encode('Message to sign'),
+              }),
             );
           }}
         >

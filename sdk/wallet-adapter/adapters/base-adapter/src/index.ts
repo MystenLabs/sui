@@ -5,13 +5,13 @@ import {
   SignedTransaction,
   SuiTransactionBlockResponse,
   SignedMessage,
-} from "@mysten/sui.js";
+} from '@mysten/sui.js';
 import {
   SuiSignTransactionBlockInput,
   SuiSignAndExecuteTransactionBlockInput,
   WalletAccount,
   SuiSignMessageInput,
-} from "@mysten/wallet-standard";
+} from '@mysten/wallet-standard';
 
 export interface WalletAdapterEvents {
   change(changes: {
@@ -32,17 +32,17 @@ export interface WalletAdapter {
   disconnect: () => Promise<void>;
   on: <E extends keyof WalletAdapterEvents>(
     event: E,
-    callback: WalletAdapterEvents[E]
+    callback: WalletAdapterEvents[E],
   ) => () => void;
   signMessage(messageInput: SuiSignMessageInput): Promise<SignedMessage>;
   signTransactionBlock(
-    transactionInput: SuiSignTransactionBlockInput
+    transactionInput: SuiSignTransactionBlockInput,
   ): Promise<SignedTransaction>;
   /**
    * Suggest a transaction for the user to sign. Supports all valid transaction types.
    */
   signAndExecuteTransactionBlock(
-    transactionInput: SuiSignAndExecuteTransactionBlockInput
+    transactionInput: SuiSignAndExecuteTransactionBlockInput,
   ): Promise<SuiTransactionBlockResponse>;
 
   getAccounts: () => Promise<readonly WalletAccount[]>;
@@ -59,8 +59,8 @@ export interface WalletAdapterProvider {
   get(): WalletAdapter[];
   /** Detect changes to the list of wallet adapters. */
   on(
-    eventName: "changed",
-    callback: () => void
+    eventName: 'changed',
+    callback: () => void,
   ): WalletAdapterProviderUnsubscribe;
 }
 
@@ -68,13 +68,13 @@ export type WalletAdapterOrProvider = WalletAdapterProvider | WalletAdapter;
 export type WalletAdapterList = WalletAdapterOrProvider[];
 
 export function isWalletAdapter(
-  wallet: WalletAdapterOrProvider
+  wallet: WalletAdapterOrProvider,
 ): wallet is WalletAdapter {
-  return "connect" in wallet;
+  return 'connect' in wallet;
 }
 
 export function isWalletProvider(
-  wallet: WalletAdapterOrProvider
+  wallet: WalletAdapterOrProvider,
 ): wallet is WalletAdapterProvider {
   return !isWalletAdapter(wallet);
 }

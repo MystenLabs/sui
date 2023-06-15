@@ -1,9 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { SignedTransaction, TransactionBlock } from "@mysten/sui.js";
-import { ConnectButton, useWalletKit } from "@mysten/wallet-kit";
-import { useState } from "react";
+import { SignedTransaction, TransactionBlock } from '@mysten/sui.js';
+import { ConnectButton, useWalletKit } from '@mysten/wallet-kit';
+import { useState } from 'react';
 
 export function App() {
   const { currentAccount, signTransactionBlock } = useWalletKit();
@@ -18,8 +18,8 @@ export function App() {
         <ConnectButton
           className={
             currentAccount
-              ? "!bg-white !text-gray-900"
-              : "!bg-indigo-600 !text-white"
+              ? '!bg-white !text-gray-900'
+              : '!bg-indigo-600 !text-white'
           }
         />
       </div>
@@ -42,7 +42,7 @@ export function App() {
                 const formData = new FormData(e.currentTarget);
                 const signed = await signTransactionBlock({
                   transactionBlock: TransactionBlock.from(
-                    formData.get("bytes") as string
+                    formData.get('bytes') as string,
                   ),
                 });
                 setSignedTx(signed);

@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { CopyContainer, Description, Heading } from "./utils/ui";
+import { CopyContainer, Description, Heading } from './utils/ui';
 
 export function WhatIsAWallet() {
   return (

@@ -1,11 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import type { SignedMessage } from "@mysten/sui.js";
-import type { WalletAccount } from "@wallet-standard/core";
+import type { SignedMessage } from '@mysten/sui.js';
+import type { WalletAccount } from '@wallet-standard/core';
 
 /** The latest API version of the signMessage API. */
-export type SuiSignMessageVersion = "1.0.0";
+export type SuiSignMessageVersion = '1.0.0';
 
 /**
  * A Wallet Standard feature for signing a personal message, and returning the
@@ -13,7 +13,7 @@ export type SuiSignMessageVersion = "1.0.0";
  */
 export type SuiSignMessageFeature = {
   /** Namespace for the feature. */
-  "sui:signMessage": {
+  'sui:signMessage': {
     /** Version of the feature API. */
     version: SuiSignMessageVersion;
     signMessage: SuiSignMessageMethod;
@@ -21,7 +21,7 @@ export type SuiSignMessageFeature = {
 };
 
 export type SuiSignMessageMethod = (
-  input: SuiSignMessageInput
+  input: SuiSignMessageInput,
 ) => Promise<SuiSignMessageOutput>;
 
 /** Input for signing messages. */

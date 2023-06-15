@@ -1,58 +1,58 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { styled } from "./stitches";
-import { Title } from "./utils/Dialog";
-import { SuiIcon } from "./utils/icons";
-import { Truncate, Panel } from "./utils/ui";
-import { useWalletKit } from "./WalletKitContext";
+import { styled } from './stitches';
+import { Title } from './utils/Dialog';
+import { SuiIcon } from './utils/icons';
+import { Truncate, Panel } from './utils/ui';
+import { useWalletKit } from './WalletKitContext';
 
 const Container = styled(Panel, {
-  background: "$background",
-  height: "100%",
+  background: '$background',
+  height: '100%',
 
-  "@md": {
-    background: "$backgroundAccent",
+  '@md': {
+    background: '$backgroundAccent',
   },
 });
 
-const ListContainer = styled("div", {
-  marginTop: "$6",
-  display: "flex",
-  flexDirection: "column",
-  gap: "$1",
+const ListContainer = styled('div', {
+  marginTop: '$6',
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '$1',
 });
 
-const WalletItem = styled("button", {
-  background: "none",
-  display: "flex",
-  padding: "$2",
-  gap: "$2",
-  alignItems: "center",
-  cursor: "pointer",
-  color: "$textDark",
-  border: "none",
-  fontWeight: "$button",
-  fontSize: "$md",
-  borderRadius: "$wallet",
+const WalletItem = styled('button', {
+  background: 'none',
+  display: 'flex',
+  padding: '$2',
+  gap: '$2',
+  alignItems: 'center',
+  cursor: 'pointer',
+  color: '$textDark',
+  border: 'none',
+  fontWeight: '$button',
+  fontSize: '$md',
+  borderRadius: '$wallet',
 
   variants: {
     selected: {
       true: {
-        background: "$background",
-        boxShadow: "$wallet",
+        background: '$background',
+        boxShadow: '$wallet',
       },
     },
   },
 });
 
-const WalletIcon = styled("img", {
+const WalletIcon = styled('img', {
   flexShrink: 0,
-  background: "white",
+  background: 'white',
   width: 28,
   height: 28,
   borderRadius: 6,
-  objectFit: "cover",
+  objectFit: 'cover',
 });
 
 interface Props {
@@ -60,7 +60,7 @@ interface Props {
   onChange(selected: string): void;
 }
 
-export const SELECTED_GETTING_STARTED = "@@internal/getting-started";
+export const SELECTED_GETTING_STARTED = '@@internal/getting-started';
 
 export function WalletList({ selected, onChange }: Props) {
   const { wallets } = useWalletKit();
@@ -73,7 +73,7 @@ export function WalletList({ selected, onChange }: Props) {
         {wallets.length === 0 ? (
           <WalletItem
             onClick={() => onChange(SELECTED_GETTING_STARTED)}
-            selected={{ "@initial": false, "@md": true }}
+            selected={{ '@initial': false, '@md': true }}
           >
             <SuiIcon />
             <Truncate>Sui Wallet</Truncate>

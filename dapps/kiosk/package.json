@@ -7,9 +7,12 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "lint": "eslint ./src/**/**",
-    "lint:fix": "eslint ./src/**/** --fix",
-    "prettier:fix": "prettier --write .",
+    "prettier:check": "prettier -c --ignore-unknown .",
+    "prettier:fix": "prettier -w --ignore-unknown .",
+    "eslint:check": "eslint --max-warnings=0 .",
+    "eslint:fix": "pnpm run eslint:check --fix",
+    "lint": "pnpm run eslint:check && pnpm run prettier:check",
+    "lint:fix": "pnpm run eslint:fix && pnpm run prettier:fix",
     "precommit": "pnpm prettier:fix && pnpm lint"
   },
   "dependencies": {

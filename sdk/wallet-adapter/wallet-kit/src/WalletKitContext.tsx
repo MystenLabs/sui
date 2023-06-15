@@ -9,15 +9,15 @@ import {
   useMemo,
   useRef,
   useSyncExternalStore,
-} from "react";
+} from 'react';
 import {
   createWalletKitCore,
   WalletKitCore,
   WalletKitCoreOptions,
   WalletKitCoreState,
-} from "@mysten/wallet-kit-core";
-import { WalletStandardAdapterProvider } from "@mysten/wallet-adapter-wallet-standard";
-import { UnsafeBurnerWalletAdapter } from "@mysten/wallet-adapter-unsafe-burner";
+} from '@mysten/wallet-kit-core';
+import { WalletStandardAdapterProvider } from '@mysten/wallet-adapter-wallet-standard';
+import { UnsafeBurnerWalletAdapter } from '@mysten/wallet-adapter-unsafe-burner';
 
 export const WalletKitContext = createContext<WalletKitCore | null>(null);
 
@@ -47,7 +47,8 @@ export function WalletKitProvider({
         new WalletStandardAdapterProvider({ features }),
         ...(enableUnsafeBurner ? [new UnsafeBurnerWalletAdapter()] : []),
       ],
-    [configuredAdapters]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [configuredAdapters],
   );
 
   const walletKitRef = useRef<WalletKitCore | null>(null);
@@ -64,12 +65,13 @@ export function WalletKitProvider({
   const { wallets } = useSyncExternalStore(
     walletKitRef.current.subscribe,
     walletKitRef.current.getState,
-    walletKitRef.current.getState
+    walletKitRef.current.getState,
   );
   useEffect(() => {
     if (!disableAutoConnect) {
       walletKitRef.current?.autoconnect();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [wallets]);
 
   return (
@@ -82,12 +84,12 @@ export function WalletKitProvider({
 type UseWalletKit = WalletKitCoreState &
   Pick<
     WalletKitCore,
-    | "connect"
-    | "disconnect"
-    | "selectAccount"
-    | "signMessage"
-    | "signTransactionBlock"
-    | "signAndExecuteTransactionBlock"
+    | 'connect'
+    | 'disconnect'
+    | 'selectAccount'
+    | 'signMessage'
+    | 'signTransactionBlock'
+    | 'signAndExecuteTransactionBlock'
   >;
 
 export function useWalletKit(): UseWalletKit {
@@ -95,14 +97,14 @@ export function useWalletKit(): UseWalletKit {
 
   if (!walletKit) {
     throw new Error(
-      "You must call `useWalletKit` within the of the `WalletKitProvider`."
+      'You must call `useWalletKit` within the of the `WalletKitProvider`.',
     );
   }
 
   const state = useSyncExternalStore(
     walletKit.subscribe,
     walletKit.getState,
-    walletKit.getState
+    walletKit.getState,
   );
 
   return useMemo(
@@ -115,6 +117,6 @@ export function useWalletKit(): UseWalletKit {
       selectAccount: walletKit.selectAccount,
       ...state,
     }),
-    [walletKit, state]
+    [walletKit, state],
   );
 }

@@ -8,6 +8,6 @@
   "references": [
     { "path": "../base-adapter" },
     { "path": "../../wallet-standard" },
-    { "path": "../../../typescript" },
+    { "path": "../../../typescript" }
   ]
 }

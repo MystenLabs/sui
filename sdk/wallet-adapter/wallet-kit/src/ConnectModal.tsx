@@ -1,69 +1,69 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { Dialog } from "@headlessui/react";
-import { useEffect, useState } from "react";
-import { styled } from "./stitches";
-import { Button, Panel } from "./utils/ui";
-import { BackIcon } from "./utils/icons";
-import { WhatIsAWallet } from "./WhatIsAWallet";
-import { Body, CloseButton, Content, Overlay, Title } from "./utils/Dialog";
-import { SELECTED_GETTING_STARTED, WalletList } from "./WalletList";
-import { GettingStarted } from "./GettingStarted";
-import { useWalletKit } from "./WalletKitContext";
+import { Dialog } from '@headlessui/react';
+import { useEffect, useState } from 'react';
+import { styled } from './stitches';
+import { Button, Panel } from './utils/ui';
+import { BackIcon } from './utils/icons';
+import { WhatIsAWallet } from './WhatIsAWallet';
+import { Body, CloseButton, Content, Overlay, Title } from './utils/Dialog';
+import { SELECTED_GETTING_STARTED, WalletList } from './WalletList';
+import { GettingStarted } from './GettingStarted';
+import { useWalletKit } from './WalletKitContext';
 
 export interface ConnectModalProps {
   open: boolean;
   onClose(): void;
 }
 
-const BackButton = styled("button", {
-  position: "absolute",
-  cursor: "pointer",
-  top: "$4",
-  left: "$4",
-  display: "flex",
-  border: "none",
-  alignItems: "center",
-  justifyContent: "center",
-  color: "$icon",
-  backgroundColor: "transparent",
+const BackButton = styled('button', {
+  position: 'absolute',
+  cursor: 'pointer',
+  top: '$4',
+  left: '$4',
+  display: 'flex',
+  border: 'none',
+  alignItems: 'center',
+  justifyContent: 'center',
+  color: '$icon',
+  backgroundColor: 'transparent',
 
-  "@md": {
-    display: "none",
+  '@md': {
+    display: 'none',
   },
 });
 
-const BodyCopy = styled("div", {
-  padding: "$10",
-  display: "flex",
-  flexDirection: "column",
-  justifyContent: "center",
-  alignItems: "center",
+const BodyCopy = styled('div', {
+  padding: '$10',
+  display: 'flex',
+  flexDirection: 'column',
+  justifyContent: 'center',
+  alignItems: 'center',
   flex: 1,
 });
 
-const SelectedWalletIcon = styled("img", {
-  background: "white",
-  objectFit: "cover",
+const SelectedWalletIcon = styled('img', {
+  background: 'white',
+  objectFit: 'cover',
   width: 72,
   height: 72,
   borderRadius: 16,
 });
 
-const ButtonContainer = styled("div", {
-  position: "absolute",
-  bottom: "$8",
-  right: "$8",
-  marginTop: "$4",
+const ButtonContainer = styled('div', {
+  position: 'absolute',
+  bottom: '$8',
+  right: '$8',
+  marginTop: '$4',
 });
 
-const LeftPanel = styled("div", {
-  display: "flex",
-  flexDirection: "column",
-  width: "100%",
+const LeftPanel = styled('div', {
+  display: 'flex',
+  flexDirection: 'column',
+  width: '100%',
   flex: 1,
-  "@md": {
+  '@md': {
     flex: 0,
     minWidth: 240,
   },
@@ -71,32 +71,32 @@ const LeftPanel = styled("div", {
   variants: {
     hasSelected: {
       true: {
-        display: "none",
-        "@md": {
-          display: "block",
+        display: 'none',
+        '@md': {
+          display: 'block',
         },
       },
     },
   },
 });
 
-const OpeningWalletTitle = styled("div", {
-  marginTop: "$3",
-  marginBottom: "$1",
-  color: "$textDark",
-  fontSize: "$xl",
-  fontWeight: "$title",
+const OpeningWalletTitle = styled('div', {
+  marginTop: '$3',
+  marginBottom: '$1',
+  color: '$textDark',
+  fontSize: '$xl',
+  fontWeight: '$title',
 });
 
-const ConnectionText = styled("div", {
-  fontSize: "$xs",
+const ConnectionText = styled('div', {
+  fontSize: '$xs',
   variants: {
     isError: {
       true: {
-        color: "$issue",
+        color: '$issue',
       },
       false: {
-        color: "$textLight",
+        color: '$textLight',
       },
     },
   },
@@ -105,23 +105,23 @@ const ConnectionText = styled("div", {
   },
 });
 
-const MobileInfoButton = styled("button", {
-  background: "$backgroundAccent",
-  textAlign: "center",
-  width: "100%",
-  padding: "$4",
-  border: "none",
-  color: "$textLight",
-  fontWeight: "$button",
-  fontFamily: "$sans",
-  cursor: "pointer",
+const MobileInfoButton = styled('button', {
+  background: '$backgroundAccent',
+  textAlign: 'center',
+  width: '100%',
+  padding: '$4',
+  border: 'none',
+  color: '$textLight',
+  fontWeight: '$button',
+  fontFamily: '$sans',
+  cursor: 'pointer',
 
-  "@md": {
-    display: "none",
+  '@md': {
+    display: 'none',
   },
 });
 
-const SELECTED_INFO = "@@internal/what-is-wallet";
+const SELECTED_INFO = '@@internal/what-is-wallet';
 
 export function ConnectModal({ open, onClose }: ConnectModalProps) {
   const { connect, currentWallet, isConnected, isError } = useWalletKit();
@@ -137,6 +137,7 @@ export function ConnectModal({ open, onClose }: ConnectModalProps) {
     if (isConnected && currentWallet?.name === selected) {
       onClose();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentWallet, selected, isConnected]);
 
   return (
@@ -164,7 +165,7 @@ export function ConnectModal({ open, onClose }: ConnectModalProps) {
 
             {!selected || selected === SELECTED_INFO ? (
               <>
-                <Title css={{ textAlign: "center" }}>What is a Wallet</Title>
+                <Title css={{ textAlign: 'center' }}>What is a Wallet</Title>
 
                 <BodyCopy>
                   <WhatIsAWallet />
@@ -176,8 +177,8 @@ export function ConnectModal({ open, onClose }: ConnectModalProps) {
                 <OpeningWalletTitle>Opening {selected}</OpeningWalletTitle>
                 <ConnectionText isError={isError}>
                   {isError
-                    ? "Connection failed"
-                    : "Confirm connection in the wallet..."}
+                    ? 'Connection failed'
+                    : 'Confirm connection in the wallet...'}
                 </ConnectionText>
 
                 {isError && (
@@ -190,7 +191,7 @@ export function ConnectModal({ open, onClose }: ConnectModalProps) {
               </BodyCopy>
             ) : (
               <>
-                <Title css={{ textAlign: "center" }}>
+                <Title css={{ textAlign: 'center' }}>
                   Get Started with Sui
                 </Title>
 

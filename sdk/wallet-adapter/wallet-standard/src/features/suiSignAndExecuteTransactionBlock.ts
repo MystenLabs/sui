@@ -5,11 +5,11 @@ import type {
   ExecuteTransactionRequestType,
   SuiTransactionBlockResponse,
   SuiTransactionBlockResponseOptions,
-} from "@mysten/sui.js";
-import type { SuiSignTransactionBlockInput } from "./suiSignTransactionBlock";
+} from '@mysten/sui.js';
+import type { SuiSignTransactionBlockInput } from './suiSignTransactionBlock';
 
 /** The latest API version of the signAndExecuteTransactionBlock API. */
-export type SuiSignAndExecuteTransactionBlockVersion = "1.0.0";
+export type SuiSignAndExecuteTransactionBlockVersion = '1.0.0';
 
 /**
  * A Wallet Standard feature for signing a transaction, and submitting it to the
@@ -18,7 +18,7 @@ export type SuiSignAndExecuteTransactionBlockVersion = "1.0.0";
  */
 export type SuiSignAndExecuteTransactionBlockFeature = {
   /** Namespace for the feature. */
-  "sui:signAndExecuteTransactionBlock": {
+  'sui:signAndExecuteTransactionBlock': {
     /** Version of the feature API. */
     version: SuiSignAndExecuteTransactionBlockVersion;
     signAndExecuteTransactionBlock: SuiSignAndExecuteTransactionBlockMethod;
@@ -26,7 +26,7 @@ export type SuiSignAndExecuteTransactionBlockFeature = {
 };
 
 export type SuiSignAndExecuteTransactionBlockMethod = (
-  input: SuiSignAndExecuteTransactionBlockInput
+  input: SuiSignAndExecuteTransactionBlockInput,
 ) => Promise<SuiSignAndExecuteTransactionBlockOutput>;
 
 /** Input for signing and sending transactions. */
