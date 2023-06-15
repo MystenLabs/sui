@@ -42,6 +42,10 @@ pub(crate) struct Args {
     /// location, including any suffixes)
     #[arg(short, long = "package")]
     pub packages: Vec<String>,
+
+    /// Don't execute the cut, just display it.
+    #[arg(long)]
+    pub dry_run: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

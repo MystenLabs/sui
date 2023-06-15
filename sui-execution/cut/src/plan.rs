@@ -4,6 +4,7 @@
 use anyhow::{bail, Context, Result};
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::env;
+use std::fmt;
 use std::fs;
 use std::path::{Path, PathBuf};
 use thiserror::Error;
@@ -501,6 +502,55 @@ impl Workspace {
     }
 }
 
+impl fmt::Display for CutPlan {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        writeln!(f, "Copying packages in: {}", self.root.display())?;
+
+        fn write_package(
+            root: &Path,
+            name: &str,
+            pkg: &CutPackage,
+            f: &mut fmt::Formatter<'_>,
+        ) -> fmt::Result {
+            let dst_path = pkg.dst_path.strip_prefix(root).unwrap_or(&pkg.dst_path);
+
+            let src_path = pkg.src_path.strip_prefix(root).unwrap_or(&pkg.src_path);
+
+            writeln!(f, " - to:   {}", pkg.dst_name)?;
+            writeln!(f, "         {}", dst_path.display())?;
+            writeln!(f, "   from: {name}")?;
+            writeln!(f, "         {}", src_path.display())?;
+            Ok(())
+        }
+
+        writeln!(f)?;
+        writeln!(f, "new [workspace] members:")?;
+        for (name, package) in &self.packages {
+            if package.ws_state == WorkspaceState::Member {
+                write_package(&self.root, name, package, f)?
+            }
+        }
+
+        writeln!(f)?;
+        writeln!(f, "new [workspace] excludes:")?;
+        for (name, package) in &self.packages {
+            if package.ws_state == WorkspaceState::Exclude {
+                write_package(&self.root, name, package, f)?
+            }
+        }
+
+        writeln!(f)?;
+        writeln!(f, "other packages:")?;
+        for (name, package) in &self.packages {
+            if package.ws_state == WorkspaceState::Unknown {
+                write_package(&self.root, name, package, f)?
+            }
+        }
+
+        Ok(())
+    }
+}
+
 /// Find the root of the git repository containing `cwd`, if it exists, return `None` otherwise.
 /// This function only searches prefixes of the provided path for the git repo, so if the path is
 /// given as a relative path within the repository, the root will not be found.
@@ -736,6 +786,7 @@ mod tests {
         let cut = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
 
         let plan = CutPlan::discover(Args {
+            dry_run: false,
             feature: "feature".to_string(),
             root: None,
             directories: vec![
@@ -809,6 +860,7 @@ mod tests {
         // Create a plan where all the new packages are gathered into a single top-level destination
         // directory, and expect that the resulting plan's `directories` only contains one entry.
         let plan = CutPlan::discover(Args {
+            dry_run: false,
             feature: "feature".to_string(),
             root: None,
             directories: vec![
@@ -898,6 +950,7 @@ mod tests {
         .unwrap();
 
         let err = CutPlan::discover(Args {
+            dry_run: false,
             feature: "feature".to_string(),
             root: Some(tmp.path().to_owned()),
             directories: vec![Directory {
@@ -934,6 +987,7 @@ mod tests {
         .unwrap();
 
         let err = CutPlan::discover(Args {
+            dry_run: false,
             feature: "feature".to_string(),
             root: Some(tmp.path().to_owned()),
             directories: vec![
@@ -977,6 +1031,7 @@ mod tests {
         .unwrap();
 
         let err = CutPlan::discover(Args {
+            dry_run: false,
             feature: "feature".to_string(),
             root: Some(tmp.path().to_owned()),
             directories: vec![
@@ -1020,6 +1075,7 @@ mod tests {
         .unwrap();
 
         let err = CutPlan::discover(Args {
+            dry_run: false,
             feature: "feature".to_string(),
             root: Some(tmp.path().to_owned()),
             directories: vec![Directory {
@@ -1118,6 +1174,7 @@ mod tests {
         .unwrap();
 
         let plan = CutPlan::discover(Args {
+            dry_run: false,
             feature: "cut".to_string(),
             root: Some(tmp.path().to_owned()),
             directories: vec![Directory {
