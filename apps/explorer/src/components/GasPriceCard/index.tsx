@@ -156,7 +156,7 @@ export function GasPriceCard({
                         onChange={setSelectedUnit}
                     />
                 </div>
-                <div className="flex gap-6 px-6 lg:max-xl:gap-12">
+                <div className="flex flex-wrap gap-6 px-6 lg:max-xl:gap-12">
                     <Stats label="Current" postfix={selectedUnit} size="sm">
                         {formattedCurrentGasPrice}
                     </Stats>

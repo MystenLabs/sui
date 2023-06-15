@@ -57,7 +57,7 @@ export function ListboxSelect<T extends string>({
                                         </span>
                                         {selected ? (
                                             <Check12
-                                                className="h-4 w-4 text-success"
+                                                className="h-4 w-4 text-steel-darker"
                                                 aria-hidden="true"
                                             />
                                         ) : null}
