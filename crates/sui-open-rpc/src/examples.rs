@@ -1350,10 +1350,18 @@ impl RpcExampleProvider {
                 type_: StructTag::from_str("0x3::test::Test<0x3::test::Test>").unwrap(),
                 parsed_json: serde_json::Value::String("some_value".to_string()),
                 bcs: vec![],
-                timestamp_ms: None,
+                timestamp_ms: Some(self.rng.gen_range(1686050621271..1686680000000)),
             })
             .collect();
-
+        let ev_query = EventFilter::MoveModule {
+            package: ObjectID::new(self.rng.gen()),
+            module: Identifier::from_str("test").unwrap(),
+        };
+        let ti_query = EventFilter::TimeRange {
+            start_time: 1686050221271,
+            end_time: 1686690000000
+        };
+        let query = vec![ev_query, ti_query];
         let result = EventPage {
             data,
             next_cursor,
@@ -1364,13 +1372,7 @@ impl RpcExampleProvider {
             vec![ExamplePairing::new(
                 "Returns the events for a specified query criteria.",
                 vec![
-                    (
-                        "query",
-                        json!(EventFilter::MoveModule {
-                            package: ObjectID::new(self.rng.gen()),
-                            module: Identifier::from_str("test").unwrap(),
-                        }),
-                    ),
+                    ("query", json!(query)),
                     ("cursor", json!(cursor)),
                     ("limit", json!(100)),
                     ("descending_order", json!(false)),
