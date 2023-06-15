@@ -47,10 +47,10 @@ body,
     .home-page-grid-container-with-sui-token {
         grid-template-areas:
             'tps'
-            'sui-token'
             'epoch'
             'gas-price'
             'node-map'
+            'sui-token'
             'network'
             'checkpoint'
             'activity'
