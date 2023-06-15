@@ -63,6 +63,7 @@ impl Payload for SharedCounterTestPayload {
             rand::thread_rng().gen_range(0..self.max_tip_amount)
         };
         let gas_price = rgp + gas_price_increment;
+        info!("counter_id = {:?}", self.counter_id);
         TestTransactionBuilder::new(self.gas.1, self.gas.0, gas_price)
             .call_counter_increment(
                 self.package_id,
@@ -94,9 +95,9 @@ impl SharedCounterWorkloadBuilder {
         let target_qps = (workload_weight * target_qps as f32) as u64;
         let num_workers = (workload_weight * num_workers as f32).ceil() as u64;
         let max_ops = target_qps * in_flight_ratio;
-        let shared_counter_ratio =
-            1.0 - (std::cmp::min(shared_counter_hotness_factor, 100) as f32 / 100.0);
-        let num_shared_counters = (max_ops as f32 * shared_counter_ratio) as u64;
+        // let shared_counter_ratio =
+        //     1.0 - (std::cmp::min(shared_counter_hotness_factor, 100) as f32 / 100.0);
+        let num_shared_counters = max_ops;
         if num_shared_counters == 0 || num_workers == 0 {
             None
         } else {
@@ -248,9 +249,10 @@ impl Workload<dyn Payload> for SharedCounterWorkload {
         for g in self.payload_gas.iter() {
             // pick a random counter from the pool
             let counter_ref = self
-                .counters
-                .choose(&mut rand::thread_rng())
-                .expect("Failed to get a random counter from the pool");
+                .counters[0];
+                // .counters
+                // .choose(&mut rand::thread_rng())
+                // .expect("Failed to get a random counter from the pool");
             shared_payloads.push(Box::new(SharedCounterTestPayload {
                 package_id: self.basics_package_id.unwrap(),
                 counter_id: counter_ref.0,
