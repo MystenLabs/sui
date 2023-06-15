@@ -23,6 +23,7 @@ test('staking', async ({ page, extensionUrl }) => {
 	await expect(page.getByTestId('loading-indicator')).not.toBeVisible({
 		timeout: TEST_TIMEOUT,
 	});
+	await expect(page.getByText(/Stake failed/i)).not.toBeVisible();
 	await expect(page.getByTestId('overlay-title')).toHaveText('Transaction');
 
 	await page.getByTestId('close-icon').click();
@@ -39,5 +40,6 @@ test('staking', async ({ page, extensionUrl }) => {
 	await expect(page.getByTestId('loading-indicator')).not.toBeVisible({
 		timeout: TEST_TIMEOUT,
 	});
+	await expect(page.getByText(/Unstake failed/i)).not.toBeVisible();
 	await expect(page.getByTestId('overlay-title')).toHaveText('Transaction');
 });
