@@ -18,6 +18,7 @@ import { prepareLinkToCompare } from '_src/shared/utils';
 import st from './Playground.module.scss';
 
 function AppsPlayGround() {
+    const ecosystemApps = useFeature<DAppEntry[]>(FEATURES.WALLET_DAPPS).value;
     const location = useLocation();
     const [tagFilter, setTagFilter] = useState<string | null>(null);
 
@@ -27,14 +28,15 @@ function AppsPlayGround() {
         setTagFilter(filterValue);
     }, [location]);
 
-    let ecosystemApps =
-        useFeature<DAppEntry[]>(FEATURES.WALLET_DAPPS).value ?? [];
+    const filteredEcosystemApps = useMemo(() => {
+        if (!ecosystemApps) {
+            return [];
+        } else if (tagFilter) {
+            return ecosystemApps.filter((app) => !app.tags.includes(tagFilter));
+        }
+        return ecosystemApps;
+    }, [ecosystemApps, tagFilter]);
 
-    if (tagFilter) {
-        ecosystemApps = ecosystemApps.filter(
-            (app) => !app.tags.includes(tagFilter)
-        );
-    }
     const allPermissions = useAppSelector(permissionsSelectors.selectAll);
     const linkToPermissionID = useMemo(() => {
         const map = new Map<string, string>();
@@ -58,7 +60,7 @@ function AppsPlayGround() {
                 </Heading>
             </div>
 
-            {ecosystemApps?.length ? (
+            {filteredEcosystemApps?.length ? (
                 <div className="p-4 bg-gray-40 rounded-xl">
                     <Text variant="pBodySmall" color="gray-75" weight="normal">
                         Apps below are actively curated but do not indicate any
@@ -68,9 +70,9 @@ function AppsPlayGround() {
                 </div>
             ) : null}
 
-            {ecosystemApps?.length ? (
+            {filteredEcosystemApps?.length ? (
                 <div className={st.apps}>
-                    {ecosystemApps.map((app) => (
+                    {filteredEcosystemApps.map((app) => (
                         <SuiApp
                             key={app.link}
                             {...app}
