@@ -22,10 +22,11 @@ use rusoto_kms::{Kms, KmsClient, SignRequest};
 use serde::Serialize;
 use serde_json::json;
 use shared_crypto::intent::{Intent, IntentMessage};
-use std::fmt::{Debug, Formatter, Display};
-use std::{fs, convert};
+use std::fmt::Write;
+use std::fmt::{Debug, Display, Formatter};
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
+use std::{convert, fs};
 use sui_keys::key_derive::generate_new_key;
 use sui_keys::keypair_file::{
     read_authority_keypair_from_file, read_keypair_from_file, write_authority_keypair_to_file,
@@ -43,7 +44,6 @@ use sui_types::transaction::TransactionData;
 use sui_types::zk_login_authenticator::ZkLoginAuthenticator;
 use sui_types::zk_login_util::AddressParams;
 use tracing::info;
-use std::fmt::Write;
 
 use json_to_table::{json_to_table, Orientation};
 
@@ -241,7 +241,7 @@ pub enum KeyToolCommand {
 }
 
 impl KeyToolCommand {
-    pub async fn execute(self, keystore: &mut Keystore) -> Result<KeyToolCmdResult, anyhow::Error> {
+    pub async fn execute(self, keystore: &mut Keystore) -> Result<CommandOutput, anyhow::Error> {
         let cmd_result = Ok(match self {
             // KeyToolCommand::Generate {
             //     key_scheme,
@@ -296,13 +296,17 @@ impl KeyToolCommand {
             //     store_and_print_keypair((&keypair.public()).into(), keypair)
             // }
             KeyToolCommand::List => {
-                let keys = keystore.keys().into_iter().map(|key| Key {
-                    sui_address: Into::<SuiAddress>::into(&key).to_string(),
-                    public_base64_key: key.encode_base64(),
-                    scheme: key.scheme().to_string()
-                }).collect::<Vec<_>>();
-                
-                KeyToolCmdResult::List(keys)
+                let keys = keystore
+                    .keys()
+                    .into_iter()
+                    .map(|key| Key {
+                        sui_address: Into::<SuiAddress>::into(&key).to_string(),
+                        public_base64_key: key.encode_base64(),
+                        key_scheme: key.scheme().to_string(),
+                    })
+                    .collect::<Vec<_>>();
+
+                CommandOutput::List(keys)
             }
             // KeyToolCommand::Sign {
             //     address,
@@ -333,42 +337,25 @@ impl KeyToolCommand {
             //         sui_signature.encode_base64()
             //     );
             // }
-
             KeyToolCommand::Import {
                 input_string,
                 key_scheme,
                 derivation_path,
             } => {
-                    // sui address: 0xfd233cd9a5dd7e577f16fa523427c75fbc382af1583c39fdf1c6747d2ed807a3
-                    // private key: 0xeea84be738c59f56ee94dae8fd5a68082d4579ed38548d6ec4017da6c5619bf3 
-                    if input_string.starts_with("0x") && input_string.len() == 66 {
-                        let base64 = convert_private_key_to_base64(input_string)?;
-                        let skp = SuiKeyPair::decode_base64(&base64);
-                        if let Ok(skp) = skp {
-                            let pk = skp.public();
-                            keystore.add_key(skp)?;
-                            KeyToolCmdResult::Import( Key {
-                                sui_address: Into::<SuiAddress>::into(&pk).to_string(),
-                                public_base64_key: base64,
-                                scheme: pk.scheme().to_string()})
-                        }
-                        else {
-                            KeyToolCmdResult::Error("Cannot decode base64 from private key".to_string())
-                        }
-                    } else {
-                        let sui_address = keystore.import_from_mnemonic(&input_string, key_scheme, derivation_path)?;
-                        let pk = keystore.get_key(&sui_address)?;
-                            KeyToolCmdResult::Import( Key {
-                                sui_address: sui_address.to_string(),
-                                public_base64_key: pk.encode_base64(),
-                                scheme: pk.public().scheme().to_string()
-                            })
-                    }
+                let scheme = key_scheme.to_string();
+                let sui_address =
+                    keystore.import_from_mnemonic(&input_string, key_scheme, derivation_path)?;
+                let pk = keystore.get_key(&sui_address)?;
+                CommandOutput::Import(Key {
+                    sui_address: sui_address.to_string(),
+                    public_base64_key: pk.public().encode_base64().to_string(),
+                    key_scheme: scheme,
+                })
             }
 
             KeyToolCommand::Convert { value } => {
                 let result = convert_private_key_to_base64(value)?;
-                KeyToolCmdResult::ConvertedPrivateKey(result)
+                CommandOutput::ConvertedPrivateKey(result)
             }
 
             // KeyToolCommand::Base64PubKeyToAddress { base64_key } => {
@@ -637,38 +624,36 @@ impl KeyToolCommand {
             //         sig.encode_base64()
             //     );
             // }
-        
-        // Ok(())
-        _ => todo!()
-            });
-        
+
+            // Ok(())
+            _ => todo!(),
+        });
+
         cmd_result
     }
 }
 
-fn convert_private_key_to_base64(value: String) -> Result<String, anyhow::Error>{
+fn convert_private_key_to_base64(value: String) -> Result<String, anyhow::Error> {
     match Base64::decode(&value) {
+        Ok(decoded) => {
+            if decoded.len() != 33 {
+                return Err(anyhow!(format!("Private key is malformed and cannot base64 decode it. Expected 33 length but got {}", decoded.len())));
+            }
+            Ok(Hex::encode(&decoded[1..]))
+        }
+        Err(_) => match Hex::decode(&value) {
             Ok(decoded) => {
-                if decoded.len() != 33 {
-                    return Err(anyhow!(format!("Private key is malformed and cannot base64 decode it. Expected 33 length but got {}", decoded.len())))
+                if decoded.len() != 32 {
+                    return Err(anyhow!(format!("Private key is malformed and cannot hex decode it. Expected 32 length but got {}", decoded.len())));
                 }
-                Ok(Hex::encode(&decoded[1..]))
-            },
-            Err(_) => match Hex::decode(&value) {
-                Ok(decoded) => {
-                    if decoded.len() != 32 {
-                        return Err(anyhow!(format!("Private key is malformed and cannot hex decode it. Expected 32 length but got {}", decoded.len())))
-                    }
-                    let mut res = Vec::new();
-                    res.extend_from_slice(&[SignatureScheme::ED25519.flag()]);
-                    res.extend_from_slice(&decoded);
-                    Ok(Base64::encode(&res))
-                }
-                Err(_) => {
-                    Err(anyhow!("Invalid private key format".to_string()))
-                }
-            },
-}
+                let mut res = Vec::new();
+                res.extend_from_slice(&[SignatureScheme::ED25519.flag()]);
+                res.extend_from_slice(&decoded);
+                Ok(Base64::encode(&res))
+            }
+            Err(_) => Err(anyhow!("Invalid private key format".to_string())),
+        },
+    }
 }
 
 fn store_and_print_keypair(address: SuiAddress, keypair: SuiKeyPair) {
@@ -685,47 +670,40 @@ fn store_and_print_keypair(address: SuiAddress, keypair: SuiKeyPair) {
     );
 }
 
-fn format_to_table(obj: &KeyToolCmdResult) -> String{
-    let table = json_to_table(&json![obj]).collapse().to_string();//array_orientation(Orientation::Column).with(tabled::settings::Style::sharp()).to_string();
-    table
-}
-
-impl Display for KeyToolCmdResult {
+impl Display for CommandOutput {
     fn fmt(&self, formatter: &mut Formatter<'_>) -> std::fmt::Result {
-        let mut writer = String::new();
-        match self {
-            _ => {
-                let table = format_to_table(self);
-                write!(formatter, "{}", table);
-            }
-        }
-
-        write!(formatter, "{}", writer.trim_end_matches('\n'))
-
+        let json_obj = json![self];
+        let mut table = json_to_table(&json_obj);
+        table.with(tabled::settings::Style::rounded());
+        table.object_orientation(Orientation::Row);
+        // table.array_orientation(Orientation::Row);
+        // if table.count_tables() <= 3 {
+        //     table.transpose
+        // }
+        write!(formatter, "{}", table)
     }
-
 }
+
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Key {
     sui_address: String,
     public_base64_key: String,
-    scheme: String
+    key_scheme: String,
 }
-
 
 #[derive(Serialize)]
 #[serde(untagged)]
-pub enum KeyToolCmdResult {
+pub enum CommandOutput {
     GenerateZkLoginAddress(SuiAddress),
     List(Vec<Key>),
     ConvertedPrivateKey(String),
     Import(Key),
     Error(String),
-    Warning(String)
+    Warning(String),
 }
 
-impl KeyToolCmdResult {
+impl CommandOutput {
     pub fn print(&self, pretty: bool) {
         let line = if pretty {
             format!("{self}")
@@ -742,7 +720,7 @@ impl KeyToolCmdResult {
 }
 
 // when --json flag is used, any output result is transformed into a JSON pretty string and sent to std output
-impl Debug for KeyToolCmdResult {
+impl Debug for CommandOutput {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let s = unwrap_err_to_string(|| match self {
             _ => Ok(serde_json::to_string_pretty(self)?),
