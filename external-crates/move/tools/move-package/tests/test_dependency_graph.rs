@@ -14,7 +14,9 @@ use move_package::{
         dependency_graph::{DependencyGraph, DependencyMode},
         lock_file::LockFile,
     },
-    source_package::manifest_parser::parse_move_manifest_from_file,
+    source_package::{
+        manifest_parser::parse_move_manifest_from_file, parsed_manifest::DependencyKind,
+    },
 };
 use move_symbol_pool::Symbol;
 
@@ -33,6 +35,7 @@ fn no_dep_graph() {
     let manifest = parse_move_manifest_from_file(&pkg).expect("Loading manifest");
     let mut dependency_cache = DependencyCache::new(/* skip_fetch_latest_git_deps */ true);
     let graph = DependencyGraph::new(
+        &DependencyKind::default(),
         &manifest,
         pkg,
         &mut dependency_cache,
@@ -137,6 +140,7 @@ fn always_deps() {
     let manifest = parse_move_manifest_from_file(&pkg).expect("Loading manifest");
     let mut dependency_cache = DependencyCache::new(/* skip_fetch_latest_git_deps */ true);
     let graph = DependencyGraph::new(
+        &DependencyKind::default(),
         &manifest,
         pkg,
         &mut dependency_cache,
@@ -417,6 +421,7 @@ fn immediate_dependencies() {
     let manifest = parse_move_manifest_from_file(&pkg).expect("Loading manifest");
     let mut dependency_cache = DependencyCache::new(/* skip_fetch_latest_git_deps */ true);
     let graph = DependencyGraph::new(
+        &DependencyKind::default(),
         &manifest,
         pkg,
         &mut dependency_cache,

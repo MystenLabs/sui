@@ -7,7 +7,7 @@ use move_package::{
     resolution::{
         dependency_cache::DependencyCache, dependency_graph as DG, resolution_graph as RG,
     },
-    source_package::manifest_parser as MP,
+    source_package::{manifest_parser as MP, parsed_manifest as PM},
     BuildConfig,
 };
 use std::{collections::BTreeMap, path::PathBuf};
@@ -27,8 +27,16 @@ fn test_additonal_addresses() {
 
     let mut dependency_cache = DependencyCache::new(/* skip_fetch_latest_git_deps */ true);
     let mut sink = std::io::sink();
-    let dg =
-        DG::DependencyGraph::new(&pm, path, &mut dependency_cache, &mut sink, None, None).unwrap();
+    let dg = DG::DependencyGraph::new(
+        &PM::DependencyKind::default(),
+        &pm,
+        path,
+        &mut dependency_cache,
+        &mut sink,
+        None,
+        None,
+    )
+    .unwrap();
 
     assert!(RG::ResolvedGraph::resolve(
         dg.clone(),
@@ -67,8 +75,16 @@ fn test_additonal_addresses_already_assigned_same_value() {
 
     let mut dependency_cache = DependencyCache::new(/* skip_fetch_latest_git_deps */ true);
     let mut sink = std::io::sink();
-    let dg =
-        DG::DependencyGraph::new(&pm, path, &mut dependency_cache, &mut sink, None, None).unwrap();
+    let dg = DG::DependencyGraph::new(
+        &PM::DependencyKind::default(),
+        &pm,
+        path,
+        &mut dependency_cache,
+        &mut sink,
+        None,
+        None,
+    )
+    .unwrap();
 
     assert!(RG::ResolvedGraph::resolve(
         dg,
@@ -96,8 +112,16 @@ fn test_additonal_addresses_already_assigned_different_value() {
 
     let mut dependency_cache = DependencyCache::new(/* skip_fetch_latest_git_deps */ true);
     let mut sink = std::io::sink();
-    let dg =
-        DG::DependencyGraph::new(&pm, path, &mut dependency_cache, &mut sink, None, None).unwrap();
+    let dg = DG::DependencyGraph::new(
+        &PM::DependencyKind::default(),
+        &pm,
+        path,
+        &mut dependency_cache,
+        &mut sink,
+        None,
+        None,
+    )
+    .unwrap();
 
     assert!(RG::ResolvedGraph::resolve(
         dg,

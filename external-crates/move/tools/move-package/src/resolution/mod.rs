@@ -33,6 +33,7 @@ pub fn download_dependency_repos<Progress: Write>(
     let mut dependency_cache = DependencyCache::new(build_options.skip_fetch_latest_git_deps);
 
     let (graph, _) = DependencyGraph::get(
+        &DependencyKind::default(),
         root_path.to_path_buf(),
         manifest_string,
         lock_string,

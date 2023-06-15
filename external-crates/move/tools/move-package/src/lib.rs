@@ -19,7 +19,7 @@ use resolution::{
     resolution_graph::ResolvedGraph,
 };
 use serde::{Deserialize, Serialize};
-use source_package::layout::SourcePackageLayout;
+use source_package::{layout::SourcePackageLayout, parsed_manifest::DependencyKind};
 use std::{
     collections::BTreeMap,
     io::Write,
@@ -162,6 +162,7 @@ impl BuildConfig {
 
         let mut dependency_cache = DependencyCache::new(self.skip_fetch_latest_git_deps);
         let (dependency_graph, modified) = DependencyGraph::get(
+            &DependencyKind::default(),
             path.clone(),
             manifest_string,
             lock_string,
