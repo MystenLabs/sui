@@ -5,7 +5,7 @@ import { cva, type VariantProps } from 'class-variance-authority';
 
 import type { ReactNode } from 'react';
 
-const DescriptionItemStyles = cva(
+const descriptionItemStyles = cva(
     ['flex flex-col gap-2 md:flex-row md:gap-10'],
     {
         variants: {
@@ -20,9 +20,29 @@ const DescriptionItemStyles = cva(
     }
 );
 
-type DescriptionItemStylesProps = VariantProps<typeof DescriptionItemStyles>;
+const descriptionItemLabelStyles = cva(
+    ['w-full flex-shrink-0 text-pBody font-medium text-steel-darker'],
+    {
+        variants: {
+            labelWidth: {
+                md: 'md:w-40',
+                sm: 'md:w-28',
+            },
+        },
+        defaultVariants: {
+            labelWidth: 'md',
+        },
+    }
+);
 
-export interface DescriptionItemProps extends DescriptionItemStylesProps {
+type DescriptionItemStylesProps = VariantProps<typeof descriptionItemStyles>;
+type DescriptionItemLabelStylesProps = VariantProps<
+    typeof descriptionItemLabelStyles
+>;
+
+export interface DescriptionItemProps
+    extends DescriptionItemStylesProps,
+        DescriptionItemLabelStylesProps {
     title: string | ReactNode;
     children: ReactNode;
 }
@@ -30,11 +50,12 @@ export interface DescriptionItemProps extends DescriptionItemStylesProps {
 export function DescriptionItem({
     title,
     align,
+    labelWidth,
     children,
 }: DescriptionItemProps) {
     return (
-        <div className={DescriptionItemStyles({ align })}>
-            <dt className="w-full flex-shrink-0 text-pBody font-medium text-steel-darker md:w-40">
+        <div className={descriptionItemStyles({ align })}>
+            <dt className={descriptionItemLabelStyles({ labelWidth })}>
                 {title}
             </dt>
             <dd className="ml-0 min-w-0 flex-1 leading-none">{children}</dd>

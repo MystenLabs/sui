@@ -10,26 +10,13 @@ import {
     type TransactionEvents,
 } from '@mysten/sui.js';
 import clsx from 'clsx';
-import { type ReactNode } from 'react';
 
 import { SyntaxHighlighter } from '~/components/SyntaxHighlighter';
 import { CopyToClipboard } from '~/ui/CopyToClipboard';
+import { DescriptionItem } from '~/ui/DescriptionList';
 import { Divider } from '~/ui/Divider';
 import { ObjectLink } from '~/ui/InternalLink';
 import { Text } from '~/ui/Text';
-
-function EventRow({ title, children }: { title: string; children: ReactNode }) {
-    return (
-        <div className="flex flex-col gap-2 md:flex-row md:gap-10">
-            <dt className="w-full flex-shrink-0 text-pBody font-medium text-steel-darker md:w-28">
-                {title}
-            </dt>
-            <dd className="ml-0 min-w-0 flex-1 break-words break-all leading-none">
-                {children}
-            </dd>
-        </div>
-    );
-}
 
 function Event({ event, divider }: { event: SuiEvent; divider: boolean }) {
     const { address, module, name } = parseStructTag(event.type);
@@ -38,13 +25,13 @@ function Event({ event, divider }: { event: SuiEvent; divider: boolean }) {
     return (
         <div>
             <div className="flex flex-col gap-3">
-                <EventRow title="Type">
+                <DescriptionItem title="Type" labelWidth="sm">
                     <Text variant="pBody/medium" color="steel-darker">
                         {objectLinkLabel}
                     </Text>
-                </EventRow>
+                </DescriptionItem>
 
-                <EventRow title="Event Emitter">
+                <DescriptionItem title="Event Emitter" labelWidth="sm">
                     <div className="flex items-center gap-1">
                         <ObjectLink
                             objectId={event.packageId}
@@ -58,7 +45,7 @@ function Event({ event, divider }: { event: SuiEvent; divider: boolean }) {
                             copyText={event.packageId}
                         />
                     </div>
-                </EventRow>
+                </DescriptionItem>
 
                 <Disclosure>
                     {({ open }) => (

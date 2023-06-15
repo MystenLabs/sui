@@ -31,18 +31,22 @@ function SignaturePanel({
                 <Tab>{title}</Tab>
             </TabList>
             <DescriptionList>
-                <DescriptionItem title="Scheme">
+                <DescriptionItem title="Scheme" align="start" labelWidth="sm">
                     <Text variant="pBody/medium" color="steel-darker">
                         {signature.signatureScheme}
                     </Text>
                 </DescriptionItem>
-                <DescriptionItem title="Address">
+                <DescriptionItem title="Address" align="start" labelWidth="sm">
                     <AddressLink
                         noTruncate
                         address={signature.pubKey.toSuiAddress()}
                     />
                 </DescriptionItem>
-                <DescriptionItem title="Signature">
+                <DescriptionItem
+                    title="Signature"
+                    align="start"
+                    labelWidth="sm"
+                >
                     <Text variant="pBody/medium" color="steel-darker">
                         {toB64(signature.signature)}
                     </Text>
