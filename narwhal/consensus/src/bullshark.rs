@@ -179,7 +179,7 @@ impl Bullshark {
         // If it is the case, we can commit the leader. But first, we need to recursively go back to
         // the last committed leader, and commit all preceding leaders in the right order. Committing
         // a leader block means committing all its dependencies.
-        if stake < self.committee.validity_threshold() {
+        if stake < self.committee.quorum_threshold() {
             debug!("Leader {:?} does not have enough support", leader);
             return Ok((Outcome::NotEnoughSupportForLeader, Vec::new()));
         }
