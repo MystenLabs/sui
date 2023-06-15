@@ -110,7 +110,7 @@ pub enum KeyToolCommand {
         #[clap(long)]
         base64pk: String,
     },
-    /// Add a new key to sui.keystore uisng either the input mnemonic phrase or a private key (from the Wallet), the key scheme flag {ed25519 | secp256k1 | secp256r1}
+    /// Add a new key to sui.keystore using either the input mnemonic phrase or a private key (from the Wallet), the key scheme flag {ed25519 | secp256k1 | secp256r1}
     /// and an optional derivation path, default to m/44'/784'/0'/0'/0' for ed25519 or m/54'/784'/0'/0/0 for secp256k1
     /// or m/74'/784'/0'/0/0 for secp256r1. Supports mnemonic phrase of word length 12, 15, 18`, 21, 24.
     Import {
@@ -343,32 +343,32 @@ impl KeyToolCommand {
                 key_scheme,
                 derivation_path,
             } => {
-                // check if it is a private key or a mnemonic
-                if input_string.starts_with("0x") && input_string.len() == 66 {
+                // check if it is a private key
+                if input_string.starts_with("0x") {
+                    if input_string.len() != 66 {
+                        return Err(anyhow!(
+                            "Private key is malformed. Expected key length of 66 but got {}",
+                            input_string.len()
+                        ));
+                    }
                     let base64 = convert_string_to_base64(input_string)?;
-                    let skp = SuiKeyPair::decode_base64(&base64);
-                    if let Ok(skp) = skp {
-                        keystore.add_key(skp)?;
-                        println!("Private key imported successfully.")
-                    } else {
+                    let Ok(skp) = SuiKeyPair::decode_base64(&base64) else {
                         return Err(anyhow!(
                             "Cannot decode base64 from private key. Importing failed."
                         ));
-                    }
-                } else if input_string.starts_with("0x") && input_string.len() != 66 {
-                    return Err(anyhow!(
-                        "Private key is malformed. Expected key length of 66 but got {}",
-                        input_string.len()
-                    ));
+                    };
+                    keystore.add_key(skp)?;
+                    eprintln!("Private key imported successfully.")
                 } else {
                     keystore.import_from_mnemonic(&input_string, key_scheme, derivation_path)?;
-                    println!("Mnemonic imported successfully.")
+                    eprintln!("Mnemonic imported successfully.")
                 }
             }
 
             KeyToolCommand::Convert { value } => {
                 let base64 = convert_string_to_base64(value)?;
-                println!("Converted private key to base64: {:?}", base64);
+                eprintln!("Successfully converted private key to base64.");
+                println!("{base64}");
             }
 
             KeyToolCommand::Base64PubKeyToAddress { base64_key } => {
