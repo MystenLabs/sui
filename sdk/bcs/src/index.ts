@@ -1422,10 +1422,10 @@ export class BCS {
     }
 
     let typeName = name.slice(0, l_bound);
-    let params = name
-      .slice(l_bound + 1, name.length - r_bound - 1)
-      .split(",")
-      .map((e) => e.trim());
+    let params = splitGenericParameters(
+      name.slice(l_bound + 1, name.length - r_bound - 1),
+      this.schema.genericSeparators
+    );
 
     return { name: typeName, params };
   }
@@ -1626,4 +1626,31 @@ export function getSuiMoveConfig(): BcsConfig {
     addressLength: SUI_ADDRESS_LENGTH,
     addressEncoding: "hex",
   };
+}
+
+export function splitGenericParameters(str: string, genericSeparators: [string, string] = ["<", ">"]) {
+  const [left, right] = genericSeparators;
+  const tok = [];
+  let word = "";
+  let nestedAngleBrackets = 0;
+
+  for (let i = 0; i < str.length; i++) {
+    const char = str[i];
+    if (char === left) {
+      nestedAngleBrackets++;
+    }
+    if (char === right) {
+      nestedAngleBrackets--;
+    }
+    if (nestedAngleBrackets === 0 && char === ',') {
+      tok.push(word.trim());
+      word = '';
+      continue;
+    }
+    word += char;
+  }
+
+  tok.push(word.trim());
+
+  return tok;
 }

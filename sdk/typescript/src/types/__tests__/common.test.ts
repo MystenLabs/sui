@@ -16,7 +16,9 @@ describe('parseStructTag', () => {
     `);
 
     expect(
-      parseStructTag('0x2::foo::bar<0x3::baz::qux<0x4::nested::result>, bool>'),
+      parseStructTag(
+        '0x2::foo::bar<0x3::baz::qux<0x4::nested::result, 0x4::nested::other>, bool>',
+      ),
     ).toMatchInlineSnapshot(`
       {
         "address": "0x0000000000000000000000000000000000000000000000000000000000000002",
@@ -32,6 +34,12 @@ describe('parseStructTag', () => {
                 "address": "0x0000000000000000000000000000000000000000000000000000000000000004",
                 "module": "nested",
                 "name": "result",
+                "typeParams": [],
+              },
+              {
+                "address": "0x0000000000000000000000000000000000000000000000000000000000000004",
+                "module": "nested",
+                "name": "other",
                 "typeParams": [],
               },
             ],
