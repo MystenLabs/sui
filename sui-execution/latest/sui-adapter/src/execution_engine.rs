@@ -114,6 +114,7 @@ pub fn execute_transaction_to_effects<Mode: ExecutionMode>(
 
     let is_epoch_change = matches!(transaction_kind, TransactionKind::ChangeEpoch(_));
 
+    // todo: if deny_cert I think the intention here will be to call create_effects_without_execution instead of execute_transaction_to_effects
     let deny_cert = is_certificate_denied(&transaction_digest, certificate_deny_set);
     let (gas_cost_summary, execution_result) = execute_transaction::<Mode>(
         &mut temporary_store,
@@ -202,6 +203,87 @@ pub fn execute_transaction_to_effects<Mode: ExecutionMode>(
     (inner, effects, execution_result)
 }
 
+#[instrument(name = "create_effects_without_execution", level = "debug", skip_all)]
+pub fn create_effects_without_execution<Mode: ExecutionMode>(
+    shared_object_refs: Vec<ObjectRef>,
+    mut temporary_store: TemporaryStore<'_>,
+    transaction_kind: TransactionKind,
+    transaction_signer: SuiAddress,
+    gas: &[ObjectRef],
+    transaction_digest: TransactionDigest,
+    mut transaction_dependencies: BTreeSet<TransactionDigest>,
+    move_vm: &Arc<MoveVM>,
+    gas_status: SuiGasStatus,
+    epoch_id: &EpochId,
+    epoch_timestamp_ms: u64,
+    protocol_config: &ProtocolConfig,
+    enable_expensive_checks: bool,
+) -> (
+    InnerTemporaryStore,
+    TransactionEffects,
+    Result<Mode::ExecutionResults, ExecutionError>,
+) {
+    let mut tx_ctx = TxContext::new_from_components(
+        &transaction_signer,
+        &transaction_digest,
+        epoch_id,
+        epoch_timestamp_ms,
+    );
+
+    let is_epoch_change = matches!(transaction_kind, TransactionKind::ChangeEpoch(_));
+
+    let err = ExecutionError::new(
+        ExecutionErrorKind::CertificateDenied,
+        None,
+    );
+    let (status, command) = err.to_execution_status();
+    let status = ExecutionStatus::new_failure(status, command);
+
+    let mut execution_result = Err(err);
+
+    let gas_cost_summary = tx_handle_non_execution::<Mode>(
+        &mut temporary_store,
+        transaction_kind,
+        gas,
+        &mut tx_ctx,
+        move_vm,
+        gas_status,
+        protocol_config,
+        enable_expensive_checks,
+        &mut execution_result,
+    );
+
+    #[skip_checked_arithmetic]
+    trace!(
+        tx_digest = ?transaction_digest,
+        computation_gas_cost = gas_cost_summary.computation_cost,
+        storage_gas_cost = gas_cost_summary.storage_cost,
+        storage_gas_rebate = gas_cost_summary.storage_rebate,
+        "Finished execution of transaction with status {:?}",
+        status
+    );
+
+    // Remove from dependencies the generic hash
+    transaction_dependencies.remove(&TransactionDigest::genesis());
+
+    if enable_expensive_checks && !Mode::allow_arbitrary_function_calls() {
+        temporary_store
+            .check_ownership_invariants(&transaction_signer, gas, is_epoch_change)
+            .unwrap()
+    } // else, in dev inspect mode and anything goes--don't check
+
+    let (inner, effects) = temporary_store.to_effects(
+        shared_object_refs,
+        &transaction_digest,
+        transaction_dependencies.into_iter().collect(),
+        gas_cost_summary,
+        status,
+        gas,
+        *epoch_id,
+    );
+    (inner, effects, execution_result)
+}
+
 fn charge_gas_for_object_read(
     temporary_store: &TemporaryStore<'_>,
     gas_status: &mut SuiGasStatus,
@@ -216,6 +298,98 @@ fn charge_gas_for_object_read(
         .sum();
     gas_status.charge_storage_read(total_size)
 }
+
+#[instrument(name = "tx_handle_non_execution", level = "debug", skip_all)]
+fn tx_handle_non_execution<Mode: ExecutionMode>(
+    temporary_store: &mut TemporaryStore<'_>,
+    transaction_kind: TransactionKind,
+    gas: &[ObjectRef],
+    tx_ctx: &mut TxContext,
+    move_vm: &Arc<MoveVM>,
+    mut gas_status: SuiGasStatus,
+    protocol_config: &ProtocolConfig,
+    enable_expensive_checks: bool,
+    result: &mut Result<Mode::ExecutionResults, ExecutionError>,
+) -> GasCostSummary
+{
+    // First smash gas into the first coin if more than 1 was provided
+    let gas_object_ref = match temporary_store.smash_gas(gas) {
+        Ok(obj_ref) => obj_ref,
+        Err(_) => gas[0], // this cannot fail, but we use gas[0] anyway
+    };
+    // At this point no charge has been applied yet
+    debug_assert!(
+        gas_status.gas_used() == 0
+            && gas_status.storage_rebate() == 0
+            && gas_status.storage_gas_units() == 0,
+        "No gas charges must be applied yet"
+    );
+    let is_genesis_tx = matches!(transaction_kind, TransactionKind::Genesis(_));
+    let advance_epoch_gas_summary = transaction_kind.get_advance_epoch_tx_gas_summary();
+
+    // We must charge object read here during transaction execution, because if this fails
+    // we must still ensure an effect is committed and all objects versions incremented
+    let _ = charge_gas_for_object_read(temporary_store, &mut gas_status);
+
+    if protocol_config.gas_model_version() > 1 {
+        // We always go through the gas charging process, but for system transaction, we don't pass
+        // the gas object ID since it's not a valid object.
+        // TODO: Ideally we should make gas object ref None in the first place.
+        let gas_object_id = if gas_status.is_unmetered() {
+            None
+        } else {
+            Some(gas_object_ref.0)
+        };
+        let cost_summary =
+            temporary_store.charge_gas(gas_object_id, &mut gas_status, result, gas);
+        // === begin SUI conservation checks ===
+        // For advance epoch transaction, we need to provide epoch rewards and rebates as extra
+        // information provided to check_sui_conserved, because we mint rewards, and burn
+        // the rebates. We also need to pass in the unmetered_storage_rebate because storage
+        // rebate is not reflected in the storage_rebate of gas summary. This is a bit confusing.
+        // We could probably clean up the code a bit.
+        // Put all the storage rebate accumulated in the system transaction
+        // to the 0x5 object so that it's not lost.
+        temporary_store.conserve_unmetered_storage_rebate(gas_status.unmetered_storage_rebate());
+        if !is_genesis_tx && !Mode::allow_arbitrary_values() {
+            // ensure that this transaction did not create or destroy SUI, try to recover if the check fails
+            let conservation_result = {
+                let mut layout_resolver = TypeLayoutResolver::new(move_vm, Box::new(&*temporary_store));
+                temporary_store.check_sui_conserved(advance_epoch_gas_summary, &mut layout_resolver, enable_expensive_checks)
+            };
+            if let Err(_conservation_err) = conservation_result {
+                // conservation violated. try to avoid panic by dumping all writes, charging for gas, re-checking
+                // conservation, and surfacing an aborted transaction with an invariant violation if all of that works
+                temporary_store.reset(gas, &mut gas_status);
+                temporary_store.charge_gas(gas_object_id, &mut gas_status, result, gas);
+                // check conservation once more more
+                let mut layout_resolver = TypeLayoutResolver::new(move_vm, Box::new(&*temporary_store));
+                if let Err(recovery_err) = temporary_store.check_sui_conserved(advance_epoch_gas_summary, &mut layout_resolver, enable_expensive_checks) {
+                    // if we still fail, it's a problem with gas
+                    // charging that happens even in the "aborted" case--no other option but panic.
+                    // we will create or destroy SUI otherwise
+                    panic!(
+                        "SUI conservation fail in tx block {}: {}\nGas status is {}\nTx was ",
+                        tx_ctx.digest(),
+                        recovery_err,
+                        gas_status.summary()
+                    )
+                }
+            }
+        } // else, we're in the genesis transaction which mints the SUI supply, and hence does not satisfy SUI conservation, or
+          // we're in the non-production dev inspect mode which allows us to violate conservation
+          // === end SUI conservation checks ===
+        cost_summary
+    } else {
+        // legacy code before gas v2, leave it alone
+        if !gas_status.is_unmetered() {
+            temporary_store.charge_gas_legacy(gas_object_ref.0, &mut gas_status, result, gas);
+        }
+        let cost_summary = gas_status.summary();
+        cost_summary
+    }
+}
+
 
 #[instrument(name = "tx_execute", level = "debug", skip_all)]
 fn execute_transaction<Mode: ExecutionMode>(
