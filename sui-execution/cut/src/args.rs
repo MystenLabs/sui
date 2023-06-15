@@ -1,9 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use anyhow::{self, bail, Result};
 use clap::Parser;
 use std::env;
-use std::io;
 use std::path::PathBuf;
 use std::str::FromStr;
 use thiserror::Error;
@@ -53,28 +53,25 @@ pub(crate) struct Directory {
 
 #[derive(Error, Debug)]
 pub(crate) enum DirectoryParseError {
-    #[error("Can't parse an existing source directory from {0}")]
+    #[error("Can't parse an existing source directory from '{0}'")]
     NoSrc(String),
 
-    #[error("Can't parse a destination directory from {0}")]
+    #[error("Can't parse a destination directory from '{0}'")]
     NoDst(String),
-
-    #[error("IO Error: {0}")]
-    IO(#[from] io::Error),
 }
 
 impl FromStr for Directory {
-    type Err = DirectoryParseError;
+    type Err = anyhow::Error;
 
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
+    fn from_str(s: &str) -> Result<Self> {
         let mut parts = s.split(':');
 
         let Some(src_part) = parts.next() else {
-            return Err(DirectoryParseError::NoSrc(s.to_string()))
+            bail!(DirectoryParseError::NoSrc(s.to_string()))
         };
 
         let Some(dst_part) = parts.next() else {
-            return Err(DirectoryParseError::NoDst(s.to_string()))
+            bail!(DirectoryParseError::NoDst(s.to_string()))
         };
 
         let suffix = parts.next().map(|sfx| sfx.to_string());
@@ -84,7 +81,7 @@ impl FromStr for Directory {
         let dst = cwd.join(dst_part);
 
         if !src.is_dir() {
-            return Err(DirectoryParseError::NoSrc(src_part.to_string()));
+            bail!(DirectoryParseError::NoSrc(src_part.to_string()));
         }
 
         Ok(Self { src, dst, suffix })
@@ -93,6 +90,8 @@ impl FromStr for Directory {
 
 #[cfg(test)]
 mod tests {
+    use expect_test::expect;
+
     use super::*;
 
     #[test]
@@ -137,20 +136,21 @@ mod tests {
     fn test_directory_parsing_no_dst() {
         // Source directory relative to CARGO_MANIFEST_DIR
         let err = Directory::from_str("src").unwrap_err();
-        assert!(matches!(err, DirectoryParseError::NoDst(_)), "{err:?}")
+        expect!["Can't parse a destination directory from 'src'"].assert_eq(&format!("{err}"));
     }
 
     #[test]
     fn test_directory_parsing_src_non_existent() {
         // Source directory relative to CARGO_MANIFEST_DIR
         let err = Directory::from_str("i_dont_exist:dst").unwrap_err();
-        assert!(matches!(err, DirectoryParseError::NoSrc(_)), "{err:?}")
+        expect!["Can't parse an existing source directory from 'i_dont_exist'"]
+            .assert_eq(&format!("{err}"));
     }
 
     #[test]
     fn test_directory_parsing_empty() {
         // Source directory relative to CARGO_MANIFEST_DIR
         let err = Directory::from_str("").unwrap_err();
-        assert!(matches!(err, DirectoryParseError::NoDst(_)), "{err:?}")
+        expect!["Can't parse a destination directory from ''"].assert_eq(&format!("{err}"));
     }
 }
