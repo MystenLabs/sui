@@ -35,6 +35,9 @@ function SignaturePanel({
                     <Text variant="pBody/medium" color="steel-darker">
                         {signature.signatureScheme}
                     </Text>
+                    <Text variant="pBody/medium" color="steel-darker">
+                        {signature.signatureScheme}
+                    </Text>
                 </DescriptionItem>
                 <DescriptionItem title="Address" align="start" labelWidth="sm">
                     <AddressLink
