@@ -7,7 +7,7 @@ use fastcrypto::ed25519::Ed25519KeyPair;
 use fastcrypto::encoding::{decode_bytes_hex, Base64, Encoding, Hex};
 use fastcrypto::hash::HashFunction;
 use fastcrypto::secp256k1::recoverable::Secp256k1Sig;
-use fastcrypto::traits::KeyPair;
+use fastcrypto::traits::{KeyPair, ToFromBytes};
 use fastcrypto_zkp::bn254::api::Bn254Fr;
 use fastcrypto_zkp::bn254::poseidon::PoseidonWrapper;
 use fastcrypto_zkp::bn254::zk_login::OAuthProvider;
@@ -343,25 +343,33 @@ impl KeyToolCommand {
                 key_scheme,
                 derivation_path,
             } => {
-                // check if it is a private key
+                // check if input is a private key -- should start with 0x
                 if input_string.starts_with("0x") {
-                    if input_string.len() != 66 {
-                        return Err(anyhow!(
-                            "Private key is malformed. Expected key length of 66 but got {}",
-                            input_string.len()
-                        ));
+                    let bytes = Hex::decode(&input_string)
+                        .or_else(|_| Err(anyhow!("Private key is malformed. Importing failed")))?;
+                    match key_scheme {
+                        SignatureScheme::ED25519 => {
+                            let kp = Ed25519KeyPair::from_bytes(&bytes).or_else(|_| Err(anyhow!(
+                                "Cannot decode ed25519 keypair from private key. Importing failed."
+                            )))?;
+                            let skp = SuiKeyPair::Ed25519(kp);
+                            let address = Into::<SuiAddress>::into(&skp.public()).to_string();
+                            keystore.add_key(skp)?;
+                            eprintln!("Private key imported successfully.");
+                            println!("{address}")
+                        }
+                        _ => return Err(anyhow!(
+                            "Only ed25519 signature scheme is supported for private keys at the moment."
+                        ))
                     }
-                    let base64 = convert_string_to_base64(input_string)?;
-                    let Ok(skp) = SuiKeyPair::decode_base64(&base64) else {
-                        return Err(anyhow!(
-                            "Cannot decode base64 from private key. Importing failed."
-                        ));
-                    };
-                    keystore.add_key(skp)?;
-                    eprintln!("Private key imported successfully.")
                 } else {
-                    keystore.import_from_mnemonic(&input_string, key_scheme, derivation_path)?;
-                    eprintln!("Mnemonic imported successfully.")
+                    let address = keystore.import_from_mnemonic(
+                        &input_string,
+                        key_scheme,
+                        derivation_path,
+                    )?;
+                    eprintln!("Mnemonic imported successfully.");
+                    println!("{address}")
                 }
             }
 
