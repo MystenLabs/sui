@@ -12999,6 +12999,7 @@ dependencies = [
  "mockall_derive",
  "more-asserts",
  "move-abigen",
+ "move-abstract-stack",
  "move-binary-format",
  "move-borrow-graph",
  "move-bytecode-source-map",
