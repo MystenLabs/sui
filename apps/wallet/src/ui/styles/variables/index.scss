@@ -3,9 +3,9 @@
 @forward './sizing' as sizing-*;
 
 @function use($variable) {
-    @return var(#{$variable});
+	@return var(#{$variable});
 }
 
 @mixin set($variable, $value) {
-    #{$variable}: $value;
+	#{$variable}: $value;
 }

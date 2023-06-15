@@ -9,10 +9,10 @@ import permissions from './slices/permissions';
 import transactionRequests from './slices/transaction-requests';
 
 const rootReducer = combineReducers({
-    account,
-    app,
-    permissions,
-    transactionRequests,
+	account,
+	app,
+	permissions,
+	transactionRequests,
 });
 
 export type RootState = ReturnType<typeof rootReducer>;

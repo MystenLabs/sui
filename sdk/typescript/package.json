@@ -1,92 +1,97 @@
 {
-  "name": "@mysten/sui.js",
-  "author": "Mysten Labs <build@mystenlabs.com>",
-  "description": "Sui TypeScript API(Work in Progress)",
-  "version": "0.36.0",
-  "license": "Apache-2.0",
-  "files": [
-    "dist",
-    "src",
-    "CHANGELOG.md"
-  ],
-  "engines": {
-    "node": ">=16"
-  },
-  "main": "./dist/index.js",
-  "module": "./dist/index.mjs",
-  "types": "./dist/index.d.ts",
-  "exports": {
-    ".": {
-      "types": "./dist/index.d.ts",
-      "source": "./src/index.ts",
-      "import": "./dist/index.mjs",
-      "require": "./dist/index.js"
-    }
-  },
-  "scripts": {
-    "clean": "rm -rf tsconfig.tsbuildinfo ./dist",
-    "codegen:version": "node genversion.mjs",
-    "dev": "pnpm build:tsup --watch",
-    "build": "node genversion.mjs && pnpm build:types && pnpm build:tsup",
-    "build:tsup": "tsup ./src/index.ts --format esm,cjs --sourcemap --env.NODE_ENV=production",
-    "build:types": "tsc --build",
-    "doc": "typedoc",
-    "vitest": "vitest",
-    "test": "pnpm test:typecheck && pnpm test:unit",
-    "test:typecheck": "tsc -p ./test",
-    "test:unit": "vitest run unit __tests__",
-    "test:e2e": "wait-on http://127.0.0.1:9123 -l --timeout 120000 && vitest run e2e",
-    "test:e2e:nowait": "vitest run e2e",
-    "prepare:e2e": "cargo build --bin sui-test-validator --bin sui --profile dev && cross-env RUST_LOG=info,sui=error,anemo_tower=warn,consensus=off cargo run --bin sui-test-validator",
-    "lint": "eslint --max-warnings=0 src test",
-    "prettier:fix": "prettier --write .",
-    "prepublishOnly": "pnpm build",
-    "size": "size-limit",
-    "analyze": "size-limit --why"
-  },
-  "bugs": {
-    "url": "https://github.com/MystenLabs/sui/issues/new"
-  },
-  "publishConfig": {
-    "access": "public"
-  },
-  "size-limit": [
-    {
-      "path": "dist/index.js",
-      "limit": "100 KB"
-    },
-    {
-      "path": "dist/index.mjs",
-      "limit": "100 KB"
-    }
-  ],
-  "devDependencies": {
-    "@iarna/toml": "^2.2.5",
-    "@size-limit/preset-small-lib": "^8.2.4",
-    "@types/node": "^18.15.11",
-    "@types/tmp": "^0.2.3",
-    "cross-env": "^7.0.3",
-    "msw": "^1.2.1",
-    "size-limit": "^8.2.4",
-    "tmp": "^0.2.1",
-    "ts-node": "^10.9.1",
-    "ts-retry-promise": "^0.7.0",
-    "tsup": "^6.7.0",
-    "typedoc": "^0.24.1",
-    "typescript": "^5.0.4",
-    "vite": "^4.2.3",
-    "vitest": "^0.32.0",
-    "wait-on": "^7.0.1"
-  },
-  "dependencies": {
-    "@mysten/bcs": "workspace:*",
-    "@noble/curves": "^1.0.0",
-    "@noble/hashes": "^1.3.0",
-    "@open-rpc/client-js": "^1.8.1",
-    "@scure/bip32": "^1.3.0",
-    "@scure/bip39": "^1.2.0",
-    "@suchipi/femver": "^1.0.0",
-    "superstruct": "^1.0.3",
-    "tweetnacl": "^1.0.3"
-  }
+	"name": "@mysten/sui.js",
+	"author": "Mysten Labs <build@mystenlabs.com>",
+	"description": "Sui TypeScript API(Work in Progress)",
+	"version": "0.36.0",
+	"license": "Apache-2.0",
+	"files": [
+		"dist",
+		"src",
+		"CHANGELOG.md"
+	],
+	"engines": {
+		"node": ">=16"
+	},
+	"main": "./dist/index.js",
+	"module": "./dist/index.mjs",
+	"types": "./dist/index.d.ts",
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"source": "./src/index.ts",
+			"import": "./dist/index.mjs",
+			"require": "./dist/index.js"
+		}
+	},
+	"scripts": {
+		"clean": "rm -rf tsconfig.tsbuildinfo ./dist",
+		"codegen:version": "node genversion.mjs",
+		"dev": "pnpm build:tsup --watch",
+		"build": "node genversion.mjs && pnpm build:types && pnpm build:tsup",
+		"build:tsup": "tsup ./src/index.ts --format esm,cjs --sourcemap --env.NODE_ENV=production",
+		"build:types": "tsc --build",
+		"doc": "typedoc",
+		"vitest": "vitest",
+		"test": "pnpm test:typecheck && pnpm test:unit",
+		"test:typecheck": "tsc -p ./test",
+		"test:unit": "vitest run unit __tests__",
+		"test:e2e": "wait-on http://127.0.0.1:9123 -l --timeout 120000 && vitest run e2e",
+		"test:e2e:nowait": "vitest run e2e",
+		"prepare:e2e": "cargo build --bin sui-test-validator --bin sui --profile dev && cross-env RUST_LOG=info,sui=error,anemo_tower=warn,consensus=off cargo run --bin sui-test-validator",
+		"prettier:fix": "prettier --write .",
+		"prepublishOnly": "pnpm build",
+		"size": "size-limit",
+		"analyze": "size-limit --why",
+		"prettier:check": "prettier -c --ignore-unknown .",
+		"prettier:fix": "prettier -w --ignore-unknown .",
+		"eslint:check": "eslint --max-warnings=0 .",
+		"eslint:fix": "pnpm run eslint:check --fix",
+		"lint": "pnpm run eslint:check && pnpm run prettier:check",
+		"lint:fix": "pnpm run eslint:fix && pnpm run prettier:fix"
+	},
+	"bugs": {
+		"url": "https://github.com/MystenLabs/sui/issues/new"
+	},
+	"publishConfig": {
+		"access": "public"
+	},
+	"size-limit": [
+		{
+			"path": "dist/index.js",
+			"limit": "100 KB"
+		},
+		{
+			"path": "dist/index.mjs",
+			"limit": "100 KB"
+		}
+	],
+	"devDependencies": {
+		"@iarna/toml": "^2.2.5",
+		"@size-limit/preset-small-lib": "^8.2.4",
+		"@types/node": "^18.15.11",
+		"@types/tmp": "^0.2.3",
+		"cross-env": "^7.0.3",
+		"msw": "^1.2.1",
+		"size-limit": "^8.2.4",
+		"tmp": "^0.2.1",
+		"ts-node": "^10.9.1",
+		"ts-retry-promise": "^0.7.0",
+		"tsup": "^6.7.0",
+		"typedoc": "^0.24.1",
+		"typescript": "^5.0.4",
+		"vite": "^4.2.3",
+		"vitest": "^0.32.0",
+		"wait-on": "^7.0.1"
+	},
+	"dependencies": {
+		"@mysten/bcs": "workspace:*",
+		"@noble/curves": "^1.0.0",
+		"@noble/hashes": "^1.3.0",
+		"@open-rpc/client-js": "^1.8.1",
+		"@scure/bip32": "^1.3.0",
+		"@scure/bip39": "^1.2.0",
+		"@suchipi/femver": "^1.0.0",
+		"superstruct": "^1.0.3",
+		"tweetnacl": "^1.0.3"
+	}
 }

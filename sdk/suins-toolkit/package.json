@@ -29,10 +29,14 @@
         "build": "pnpm build:types && pnpm build:tsup",
         "build:tsup": "tsup ./src/index.ts --format esm,cjs --sourcemap",
         "build:types": "tsc --build",
-        "lint": "eslint --max-warnings=0 src tests",
-        "prettier:fix": "prettier --write .",
         "prepublishOnly": "pnpm build",
-        "test": "vitest"
+        "test": "vitest",
+        "prettier:check": "prettier -c --ignore-unknown .",
+        "prettier:fix": "prettier -w --ignore-unknown .",
+        "eslint:check": "eslint --max-warnings=0 .",
+        "eslint:fix": "pnpm run eslint:check --fix",
+        "lint": "pnpm run eslint:check && pnpm run prettier:check",
+        "lint:fix": "pnpm run eslint:fix && pnpm run prettier:fix"
     },
     "devDependencies": {
         "@faker-js/faker": "^8.0.2",

@@ -7,15 +7,12 @@ import type { BasePayload, Payload } from '_payloads';
 import type { ApprovalRequest } from '_payloads/transactions/ApprovalRequest';
 
 export interface GetTransactionRequestsResponse extends BasePayload {
-    type: 'get-transaction-requests-response';
-    txRequests: ApprovalRequest[];
+	type: 'get-transaction-requests-response';
+	txRequests: ApprovalRequest[];
 }
 
 export function isGetTransactionRequestsResponse(
-    payload: Payload
+	payload: Payload,
 ): payload is GetTransactionRequestsResponse {
-    return (
-        isBasePayload(payload) &&
-        payload.type === 'get-transaction-requests-response'
-    );
+	return isBasePayload(payload) && payload.type === 'get-transaction-requests-response';
 }

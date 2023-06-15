@@ -5,8 +5,8 @@ import { describe, it, expect } from 'vitest';
 import { parseStructTag, normalizeStructTag } from '../common';
 
 describe('parseStructTag', () => {
-  it('parses struct tags correctly', () => {
-    expect(parseStructTag('0x2::foo::bar')).toMatchInlineSnapshot(`
+	it('parses struct tags correctly', () => {
+		expect(parseStructTag('0x2::foo::bar')).toMatchInlineSnapshot(`
       {
         "address": "0x0000000000000000000000000000000000000000000000000000000000000002",
         "module": "foo",
@@ -15,11 +15,9 @@ describe('parseStructTag', () => {
       }
     `);
 
-    expect(
-      parseStructTag(
-        '0x2::foo::bar<0x3::baz::qux<0x4::nested::result, 0x4::nested::other>, bool>',
-      ),
-    ).toMatchInlineSnapshot(`
+		expect(
+			parseStructTag('0x2::foo::bar<0x3::baz::qux<0x4::nested::result, 0x4::nested::other>, bool>'),
+		).toMatchInlineSnapshot(`
       {
         "address": "0x0000000000000000000000000000000000000000000000000000000000000002",
         "module": "foo",
@@ -48,17 +46,17 @@ describe('parseStructTag', () => {
         ],
       }
     `);
-  });
+	});
 });
 
 describe('normalizeStructTag', () => {
-  it('normalizes package addresses', () => {
-    expect(normalizeStructTag('0x2::kiosk::Item')).toEqual(
-      '0x0000000000000000000000000000000000000000000000000000000000000002::kiosk::Item',
-    );
+	it('normalizes package addresses', () => {
+		expect(normalizeStructTag('0x2::kiosk::Item')).toEqual(
+			'0x0000000000000000000000000000000000000000000000000000000000000002::kiosk::Item',
+		);
 
-    expect(normalizeStructTag('0x2::foo::bar<0x3::another::package>')).toEqual(
-      '0x0000000000000000000000000000000000000000000000000000000000000002::foo::bar<0x0000000000000000000000000000000000000000000000000000000000000003::another::package>',
-    );
-  });
+		expect(normalizeStructTag('0x2::foo::bar<0x3::another::package>')).toEqual(
+			'0x0000000000000000000000000000000000000000000000000000000000000002::foo::bar<0x0000000000000000000000000000000000000000000000000000000000000003::another::package>',
+		);
+	});
 });

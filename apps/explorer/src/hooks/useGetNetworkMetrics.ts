@@ -5,12 +5,12 @@ import { useRpcClient } from '@mysten/core';
 import { useQuery } from '@tanstack/react-query';
 
 export function useGetNetworkMetrics() {
-    const rpc = useRpcClient();
-    return useQuery({
-        queryKey: ['home', 'metrics'],
-        queryFn: () => rpc.getNetworkMetrics(),
-        cacheTime: 24 * 60 * 60 * 1000,
-        staleTime: Infinity,
-        retry: 5,
-    });
+	const rpc = useRpcClient();
+	return useQuery({
+		queryKey: ['home', 'metrics'],
+		queryFn: () => rpc.getNetworkMetrics(),
+		cacheTime: 24 * 60 * 60 * 1000,
+		staleTime: Infinity,
+		retry: 5,
+	});
 }

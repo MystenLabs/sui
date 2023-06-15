@@ -15,55 +15,47 @@ import { useDeriveNextAccountMutation } from '_src/ui/app/hooks/useDeriveNextAcc
 import { Button } from '_src/ui/app/shared/ButtonUI';
 
 export function AccountsSettings() {
-    const backUrl = useNextMenuUrl(true, '/');
-    const importPrivateKeyUrl = useNextMenuUrl(true, '/import-private-key');
-    const accounts = useAccounts();
-    const createAccountMutation = useDeriveNextAccountMutation();
-    const navigate = useNavigate();
-    const appType = useAppSelector((state) => state.app.appType);
-    const connectLedgerModalUrl = useNextMenuUrl(
-        true,
-        '/accounts/connect-ledger-modal'
-    );
+	const backUrl = useNextMenuUrl(true, '/');
+	const importPrivateKeyUrl = useNextMenuUrl(true, '/import-private-key');
+	const accounts = useAccounts();
+	const createAccountMutation = useDeriveNextAccountMutation();
+	const navigate = useNavigate();
+	const appType = useAppSelector((state) => state.app.appType);
+	const connectLedgerModalUrl = useNextMenuUrl(true, '/accounts/connect-ledger-modal');
 
-    return (
-        <MenuLayout title="Accounts" back={backUrl}>
-            <div className="flex flex-col gap-3">
-                {accounts.map((account) => (
-                    <Account key={account.address} account={account} />
-                ))}
-                <Button
-                    variant="outline"
-                    size="tall"
-                    text="Create New Account"
-                    loading={createAccountMutation.isLoading}
-                    onClick={() => createAccountMutation.mutate()}
-                />
-                <Button
-                    variant="outline"
-                    size="tall"
-                    text="Import Private Key"
-                    to={importPrivateKeyUrl}
-                />
-                <Button
-                    variant="outline"
-                    size="tall"
-                    text="Connect Ledger Wallet"
-                    before={<LockedLockIcon />}
-                    onClick={async () => {
-                        if (appType === AppType.popup) {
-                            const { origin, pathname } = window.location;
-                            await Browser.tabs.create({
-                                url: `${origin}${pathname}#${connectLedgerModalUrl}`,
-                            });
-                            window.close();
-                        } else {
-                            navigate(connectLedgerModalUrl);
-                        }
-                    }}
-                />
-                <Outlet />
-            </div>
-        </MenuLayout>
-    );
+	return (
+		<MenuLayout title="Accounts" back={backUrl}>
+			<div className="flex flex-col gap-3">
+				{accounts.map((account) => (
+					<Account key={account.address} account={account} />
+				))}
+				<Button
+					variant="outline"
+					size="tall"
+					text="Create New Account"
+					loading={createAccountMutation.isLoading}
+					onClick={() => createAccountMutation.mutate()}
+				/>
+				<Button variant="outline" size="tall" text="Import Private Key" to={importPrivateKeyUrl} />
+				<Button
+					variant="outline"
+					size="tall"
+					text="Connect Ledger Wallet"
+					before={<LockedLockIcon />}
+					onClick={async () => {
+						if (appType === AppType.popup) {
+							const { origin, pathname } = window.location;
+							await Browser.tabs.create({
+								url: `${origin}${pathname}#${connectLedgerModalUrl}`,
+							});
+							window.close();
+						} else {
+							navigate(connectLedgerModalUrl);
+						}
+					}}
+				/>
+				<Outlet />
+			</div>
+		</MenuLayout>
+	);
 }

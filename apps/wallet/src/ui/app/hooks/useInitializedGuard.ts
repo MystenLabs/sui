@@ -8,21 +8,19 @@ import useAppSelector from './useAppSelector';
 import { useRestrictedGuard } from './useRestrictedGuard';
 
 export default function useInitializedGuard(initializedRequired: boolean) {
-    const restricted = useRestrictedGuard();
+	const restricted = useRestrictedGuard();
 
-    const isInitialized = useAppSelector(
-        ({ account }) => account.isInitialized
-    );
-    const loading = isInitialized === null;
-    const navigate = useNavigate();
-    const guardAct = useMemo(
-        () => !restricted && !loading && initializedRequired !== isInitialized,
-        [loading, initializedRequired, isInitialized, restricted]
-    );
-    useEffect(() => {
-        if (guardAct) {
-            navigate(isInitialized ? '/' : '/welcome', { replace: true });
-        }
-    }, [guardAct, isInitialized, navigate]);
-    return loading || guardAct;
+	const isInitialized = useAppSelector(({ account }) => account.isInitialized);
+	const loading = isInitialized === null;
+	const navigate = useNavigate();
+	const guardAct = useMemo(
+		() => !restricted && !loading && initializedRequired !== isInitialized,
+		[loading, initializedRequired, isInitialized, restricted],
+	);
+	useEffect(() => {
+		if (guardAct) {
+			navigate(isInitialized ? '/' : '/welcome', { replace: true });
+		}
+	}, [guardAct, isInitialized, navigate]);
+	return loading || guardAct;
 }

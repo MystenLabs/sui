@@ -11,28 +11,28 @@ import PageLayout from '_pages/layout';
 import { usePageView } from '_shared/utils';
 
 interface Props {
-    disableNavigation?: boolean;
+	disableNavigation?: boolean;
 }
 
 const HomePage = ({ disableNavigation }: Props) => {
-    const initChecking = useInitializedGuard(true);
-    const lockedChecking = useLockedGuard(false);
-    const guardChecking = initChecking || lockedChecking;
+	const initChecking = useInitializedGuard(true);
+	const lockedChecking = useLockedGuard(false);
+	const guardChecking = initChecking || lockedChecking;
 
-    usePageView();
-    return (
-        <PageLayout>
-            <Loading loading={guardChecking}>
-                <PageMainLayout
-                    bottomNavEnabled={!disableNavigation}
-                    dappStatusEnabled={!disableNavigation}
-                    topNavMenuEnabled={!disableNavigation}
-                >
-                    <Outlet />
-                </PageMainLayout>
-            </Loading>
-        </PageLayout>
-    );
+	usePageView();
+	return (
+		<PageLayout>
+			<Loading loading={guardChecking}>
+				<PageMainLayout
+					bottomNavEnabled={!disableNavigation}
+					dappStatusEnabled={!disableNavigation}
+					topNavMenuEnabled={!disableNavigation}
+				>
+					<Outlet />
+				</PageMainLayout>
+			</Loading>
+		</PageLayout>
+	);
 };
 
 export default HomePage;

@@ -3,13 +3,10 @@
 
 import { type SuiEvent } from '@mysten/sui.js';
 
-export function getValidatorMoveEvent(
-    validatorsEvent: SuiEvent[],
-    validatorAddress: string
-) {
-    const event = validatorsEvent.find(
-        ({ parsedJson }) => parsedJson!.validator_address === validatorAddress
-    );
+export function getValidatorMoveEvent(validatorsEvent: SuiEvent[], validatorAddress: string) {
+	const event = validatorsEvent.find(
+		({ parsedJson }) => parsedJson!.validator_address === validatorAddress,
+	);
 
-    return event && event.parsedJson;
+	return event && event.parsedJson;
 }

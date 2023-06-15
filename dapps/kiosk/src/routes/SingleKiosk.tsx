@@ -6,17 +6,17 @@ import { useEffect } from 'react';
 import { KioskItems } from '../components/Kiosk/KioskItems';
 
 export default function SingleKiosk() {
-  const { kioskId } = useParams();
-  const navigate = useNavigate();
+	const { kioskId } = useParams();
+	const navigate = useNavigate();
 
-  useEffect(() => {
-    if (kioskId) return;
-    navigate('/');
-  }, [navigate, kioskId]);
+	useEffect(() => {
+		if (kioskId) return;
+		navigate('/');
+	}, [navigate, kioskId]);
 
-  return (
-    <div className="container">
-      <KioskItems kioskId={kioskId}></KioskItems>
-    </div>
-  );
+	return (
+		<div className="container">
+			<KioskItems kioskId={kioskId}></KioskItems>
+		</div>
+	);
 }

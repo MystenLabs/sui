@@ -9,23 +9,23 @@ import { parseObjectType } from '~/utils/objectUtils';
 import { trimStdLibPrefix } from '~/utils/stringUtils';
 
 type OwnedObjectTypes = {
-    obj: SuiObjectResponse;
+	obj: SuiObjectResponse;
 };
 
 function OwnedObject({ obj }: OwnedObjectTypes): JSX.Element {
-    const video = useResolveVideo(obj);
-    const displayMeta = getObjectDisplay(obj).data;
+	const video = useResolveVideo(obj);
+	const displayMeta = getObjectDisplay(obj).data;
 
-    return (
-        <ObjectDetails
-            variant="small"
-            id={obj.data?.objectId}
-            type={trimStdLibPrefix(parseObjectType(obj))}
-            name={displayMeta?.name ?? displayMeta?.description}
-            image={displayMeta?.image_url}
-            video={video}
-        />
-    );
+	return (
+		<ObjectDetails
+			variant="small"
+			id={obj.data?.objectId}
+			type={trimStdLibPrefix(parseObjectType(obj))}
+			name={displayMeta?.name ?? displayMeta?.description}
+			image={displayMeta?.image_url}
+			video={video}
+		/>
+	);
 }
 
 export default OwnedObject;
