@@ -1657,7 +1657,8 @@ impl LocalExec {
         self.multi_download_and_store(&loaded_child_refs).await?;
         tokio::task::yield_now().await;
 
-        Ok(InputObjects::new(input_objs))
+        // todo: Laura populate the deleted inputs if any
+        Ok(InputObjects::new(input_objs, vec![]))
     }
 }
 

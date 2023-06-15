@@ -21,7 +21,7 @@ use sui_types::messages_checkpoint::ECMHLiveObjectSetDigest;
 use sui_types::object::Owner;
 use sui_types::storage::{
     get_module, BackingPackageStore, ChildObjectResolver, MarkerValue, ObjectKey, ObjectStore,
-    ReceivedMarkerQuery,
+    ReceivedMarkerQuery, SHARED_OBJECT_MARKER_VERSION,
 };
 use sui_types::sui_system_state::get_sui_system_state;
 use sui_types::{base_types::SequenceNumber, fp_bail, fp_ensure, storage::ParentSync};
@@ -42,6 +42,7 @@ use super::{authority_store_tables::AuthorityPerpetualTables, *};
 use mysten_common::sync::notify_read::NotifyRead;
 use sui_storage::package_object_cache::PackageObjectCache;
 use sui_types::effects::{TransactionEffects, TransactionEvents};
+use sui_types::execution::DeletedSharedObjects;
 use sui_types::gas_coin::TOTAL_SUPPLY_MIST;
 use typed_store::rocks::util::is_ref_count_value;
 
@@ -400,6 +401,26 @@ impl AuthorityStore {
             .contains_key(digest)?)
     }
 
+    pub fn get_deleted_shared_object_last_digest(
+        &self,
+        object_id: &ObjectID,
+        epoch_id: EpochId,
+    ) -> Result<Option<TransactionDigest>, TypedStoreError> {
+        let object_key = (
+            epoch_id,
+            ObjectKey(*object_id, SHARED_OBJECT_MARKER_VERSION),
+        );
+
+        match self
+            .perpetual_tables
+            .object_per_epoch_marker_table
+            .get(&object_key)?
+        {
+            Some(MarkerValue::SharedDeleted(digest)) => Ok(Some(digest)),
+            _ => Ok(None),
+        }
+    }
+
     /// Returns future containing the state hash for the given epoch
     /// once available
     pub async fn notify_read_root_state_hash(
@@ -679,6 +700,13 @@ impl AuthorityStore {
                         epoch_store.epoch(),
                     )?;
                 versioned_results.push((*idx, is_available));
+            }
+            // if the object is an already deleted shared object, mark it as available to continue execution
+            else if self
+                .get_deleted_shared_object_last_digest(&input_key.id(), epoch_store.epoch())?
+                .is_some()
+            {
+                versioned_results.push((*idx, true));
             } else {
                 versioned_results.push((*idx, false));
             }
@@ -726,6 +754,68 @@ impl AuthorityStore {
     pub async fn execution_lock_for_reconfiguration(&self) -> ExecutionLockWriteGuard {
         self.execution_lock.write().await
     }
+
+    // TODO(tzakian)[SOD]
+    // /// When making changes, please see if get_input_object_keys() above needs
+    // /// similar changes as well.
+    // ///
+    // /// Before this function is invoked, TransactionManager must ensure all depended
+    // /// objects are present. Thus any missing object will panic.
+    // pub fn check_sequenced_input_objects(
+    //     &self,
+    //     digest: &TransactionDigest,
+    //     objects: &[InputObjectKind],
+    //     epoch_store: &AuthorityPerEpochStore,
+    // ) -> Result<(Vec<(InputObjectKind, Object)>, DeletedSharedObjects), SuiError> {
+    //     let shared_locks_cell: OnceCell<HashMap<_, _>> = OnceCell::new();
+    //     let mut deleted_shared_objects = Vec::new();
+    //     let mut result = Vec::new();
+    //     for kind in objects.iter() {
+    //         match kind {
+    //             InputObjectKind::SharedMoveObject { id, .. } => {
+    //                 let shared_locks = shared_locks_cell.get_or_try_init(|| {
+    //                     Ok::<HashMap<ObjectID, SequenceNumber>, SuiError>(
+    //                         epoch_store.get_shared_locks(digest)?.into_iter().collect(),
+    //                     )
+    //                 })?;
+    //                 // If we can't find the locked version, it means
+    //                 // 1. either we have a bug that skips shared object version assignment
+    //                 // 2. or we have some DB corruption
+    //                 let version = shared_locks.get(id).unwrap_or_else(|| {
+    //                     panic!(
+    //                         "Shared object locks should have been set. tx_digset: {:?}, obj id: {:?}",
+    //                         digest, id
+    //                     )
+    //                 });
+    //
+    //                 match self.get_object_by_key(id, *version)? {
+    //                     Some(obj) => result.push((*kind, obj)),
+    //                     None => {
+    //                         // If the object was deleted by a concurrently certified tx then return this separately
+    //                         let epoch = epoch_store.committee().epoch;
+    //                         if let Some(dependency) = self.get_deleted_shared_object_last_digest(id, epoch)? {
+    //                             deleted_shared_objects.push((*id, *version, dependency));
+    //                         } else {
+    //                             panic!("All dependencies of tx {:?} should have been executed now, but Shared Object id: {}, version: {} is absent", digest, *id, *version);
+    //                         }
+    //                     }
+    //                 };
+    //
+    //             }
+    //             InputObjectKind::MovePackage(id) => result.push((*kind, self.get_object(id)?.unwrap_or_else(|| {
+    //                 panic!("All dependencies of tx {:?} should have been executed now, but Move Package id: {} is absent", digest, id);
+    //             }))),
+    //             InputObjectKind::ImmOrOwnedMoveObject(objref) => {
+    //                 result.push((*kind, self.get_object_by_key(&objref.0, objref.1)?.unwrap_or_else(|| {
+    //                     panic!("All dependencies of tx {:?} should have been executed now, but Immutable or Owned Object id: {}, version: {} is absent", digest, objref.0, objref.1);
+    //                 })))
+    //             }
+    //         };
+    //     }
+    //
+    //     Ok((result, deleted_shared_objects))
+    // }
+    //
 
     // Methods to mutate the store
 
@@ -918,6 +1008,17 @@ impl AuthorityStore {
             iter::once((transaction_digest, transaction.serializable_ref())),
         )?;
 
+        // If there were any deleted shared objects as input to this transaction, update the marker table with our digest to be used as dependency of
+        // the next transaction that takes this object as an input
+        for (obj_id, _) in inner_temporary_store.deleted_shared_object_keys.clone() {
+            let object_key = (epoch_id, ObjectKey(obj_id, SHARED_OBJECT_MARKER_VERSION));
+
+            write_batch.insert_batch(
+                &self.perpetual_tables.object_per_epoch_marker_table,
+                iter::once((object_key, MarkerValue::SharedDeleted(*transaction_digest))),
+            )?;
+        }
+
         // Add batched writes for objects and locks.
         let effects_digest = effects.digest();
         self.update_objects_and_locks(
@@ -992,7 +1093,8 @@ impl AuthorityStore {
         epoch_id: EpochId,
     ) -> SuiResult {
         let InnerTemporaryStore {
-            input_objects: _,
+            input_objects,
+            deleted_shared_object_keys: _,
             mutable_inputs,
             written,
             events,
@@ -1037,14 +1139,35 @@ impl AuthorityStore {
                     MarkerValue::Received,
                 )
             })
-            .chain(deleted.into_iter().map(|(object_id, version)| {
+            .chain(deleted.clone().into_iter().map(|(object_id, version)| {
                 (
                     (epoch_id, ObjectKey(object_id, version)),
                     MarkerValue::OwnedDeleted,
                 )
             }));
 
-        // Insert each received and deleted object into the objects marker table
+        // get shared deleted objects and write them to the object marker table
+        write_batch.insert_batch(
+            &self.perpetual_tables.object_per_epoch_marker_table,
+            deleted
+                .iter()
+                .filter(|(object_id, _)| {
+                    if let Some(object) = input_objects.get(object_id) {
+                        return object.is_shared();
+                    }
+                    false
+                })
+                .map(|(object_id, _)| {
+                    (
+                        (
+                            epoch_id,
+                            ObjectKey(*object_id, SHARED_OBJECT_MARKER_VERSION),
+                        ),
+                        MarkerValue::SharedDeleted(*transaction.digest()),
+                    )
+                }),
+        )?;
+
         write_batch.insert_batch(
             &self.perpetual_tables.object_per_epoch_marker_table,
             markers_to_place,
@@ -1160,12 +1283,6 @@ impl AuthorityStore {
     }
 
     /// Acquires a lock for a transaction on the given objects if they have all been initialized previously
-    /// to None state.  It is also OK if they have been set to the same transaction.
-    /// The locks are all set to the given transaction digest.
-    /// Returns UserInputError::ObjectNotFound if no lock record can be found for one of the objects.
-    /// Returns UserInputError::ObjectVersionUnavailableForConsumption if one of the objects is not locked at the given version.
-    /// Returns SuiError::ObjectLockConflict if one of the objects is locked by a different transaction in the same epoch.
-    /// Returns SuiError::ObjectLockedAtFutureEpoch if one of the objects is locked in a future epoch (bug).
     pub(crate) async fn acquire_transaction_locks(
         &self,
         epoch: EpochId,

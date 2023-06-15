@@ -23,6 +23,8 @@ pub trait SuiResolver: ResourceResolver<Error = SuiError> + BackingPackageStore 
     fn as_backing_package_store(&self) -> &dyn BackingPackageStore;
 }
 
+pub type DeletedSharedObjects = Vec<(ObjectID, SequenceNumber, TransactionDigest)>;
+
 impl<T> SuiResolver for T
 where
     T: ResourceResolver<Error = SuiError>,

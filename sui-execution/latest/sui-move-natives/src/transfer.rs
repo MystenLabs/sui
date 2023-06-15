@@ -3,8 +3,8 @@
 
 use super::object_runtime::{ObjectRuntime, TransferResult};
 use crate::{
-    get_receiver_object_id, get_tag_and_layouts, object_runtime::object_store::ObjectResult,
-    NativesCostTable,
+    get_object_id, get_receiver_object_id, get_tag_and_layouts,
+    object_runtime::object_store::ObjectResult, NativesCostTable,
 };
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_core_types::{
@@ -104,6 +104,8 @@ pub fn receive_object_internal(
     Ok(NativeResult::ok(context.gas_used(), smallvec![child]))
 }
 
+pub const E_SHARED_OBJECT_OPERATION_NOT_SUPPORTED: u64 = 1;
+
 #[derive(Clone, Debug)]
 pub struct TransferInternalCostParams {
     pub transfer_transfer_internal_cost_base: InternalGas,
@@ -135,10 +137,22 @@ pub fn transfer_internal(
     let ty = ty_args.pop().unwrap();
     let recipient = pop_arg!(args, AccountAddress);
     let obj = args.pop_back().unwrap();
-    let owner = Owner::AddressOwner(recipient.into());
-    object_runtime_transfer(context, owner, ty, obj)?;
+    let object_is_shared = object_is_shared(context, &obj)?;
 
-    Ok(NativeResult::ok(context.gas_used(), smallvec![]))
+    let owner = Owner::AddressOwner(recipient.into());
+    let transfer_result = object_runtime_transfer(context, owner, ty, obj)?;
+
+    let cost = context.gas_used();
+    if object_is_shared {
+        Ok(match transfer_result {
+            // New means the ID was created in this transaction
+            // SameOwner means the object was previously shared and was re-shared
+            TransferResult::New | TransferResult::SameOwner => NativeResult::ok(cost, smallvec![]),
+            TransferResult::OwnerChanged => NativeResult::err(cost, E_SHARED_NON_NEW_OBJECT),
+        })
+    } else {
+        Ok(NativeResult::ok(cost, smallvec![]))
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -171,6 +185,14 @@ pub fn freeze_object(
 
     let ty = ty_args.pop().unwrap();
     let obj = args.pop_back().unwrap();
+
+    if object_is_shared(context, &obj)? {
+        return Ok(NativeResult::err(
+            context.gas_used(),
+            E_SHARED_OBJECT_OPERATION_NOT_SUPPORTED,
+        ));
+    }
+
     object_runtime_transfer(context, Owner::Immutable, ty, obj)?;
 
     Ok(NativeResult::ok(context.gas_used(), smallvec![]))
@@ -219,12 +241,23 @@ pub fn share_object(
     let cost = context.gas_used();
     Ok(match transfer_result {
         // New means the ID was created in this transaction
-        // SameOwner means the object was previously shared and was re-shared; since
-        // shared objects cannot be taken by-value in the adapter, this can only
-        // happen via test_scenario
+        // SameOwner means the object was previously shared and was re-shared
         TransferResult::New | TransferResult::SameOwner => NativeResult::ok(cost, smallvec![]),
         TransferResult::OwnerChanged => NativeResult::err(cost, E_SHARED_NON_NEW_OBJECT),
     })
+}
+
+pub fn object_is_shared(context: &mut NativeContext, obj: &Value) -> PartialVMResult<bool> {
+    let obj_runtime: &mut ObjectRuntime = context.extensions_mut().get_mut();
+    let id: ObjectID = get_object_id(obj.copy_value()?)?
+        .value_as::<AccountAddress>()?
+        .into();
+
+    Ok(obj_runtime
+        .state
+        .input_objects
+        .get(&id)
+        .is_some_and(|owner| owner.is_shared()))
 }
 
 fn object_runtime_transfer(

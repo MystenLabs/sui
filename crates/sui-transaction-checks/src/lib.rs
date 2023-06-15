@@ -17,6 +17,7 @@ mod checked {
     use sui_types::digests::TransactionDigest;
     use sui_types::error::{UserInputError, UserInputResult};
     use sui_types::executable_transaction::VerifiedExecutableTransaction;
+    use sui_types::execution::DeletedSharedObjects;
     use sui_types::metrics::BytecodeVerifierMetrics;
     use sui_types::signature::GenericSignature;
     use sui_types::storage::ObjectStore;
@@ -88,7 +89,9 @@ mod checked {
         // Runs verifier, which could be expensive.
         check_non_system_packages_to_be_published(transaction, protocol_config, metrics)?;
 
-        let objects = check_input_objects(store, &input_objects, protocol_config)?;
+        let inputs = check_input_objects(store, &input_objects, protocol_config)?;
+        let objects: Vec<Object> = inputs.iter().map(|(_, o)| o.clone()).collect();
+
         let gas_status = get_gas_status(
             &objects,
             transaction.gas(),
@@ -96,7 +99,7 @@ mod checked {
             reference_gas_price,
             transaction,
         )?;
-        let input_objects = check_objects(transaction, input_objects, objects)?;
+        let input_objects = check_objects(transaction, inputs, Vec::new())?;
         check_receiving_objects(
             store,
             &receiving_objects,
@@ -120,12 +123,15 @@ mod checked {
         transaction.validity_check_no_gas_check(protocol_config)?;
         check_non_system_packages_to_be_published(transaction, protocol_config, metrics)?;
         let receiving_objects = transaction.receiving_objects();
-        let mut input_objects = transaction.input_objects()?;
-        let mut objects = check_input_objects(store, &input_objects, protocol_config)?;
+        let input_object_kinds = transaction.input_objects()?;
+        let mut inputs = check_input_objects(store, &input_object_kinds, protocol_config)?;
 
         let gas_object_ref = gas_object.compute_object_reference();
-        input_objects.push(InputObjectKind::ImmOrOwnedMoveObject(gas_object_ref));
-        objects.push(gas_object);
+        inputs.push((
+            InputObjectKind::ImmOrOwnedMoveObject(gas_object_ref),
+            gas_object,
+        ));
+        let objects: Vec<Object> = inputs.iter().map(|(_, o)| o.clone()).collect();
 
         let gas_status = get_gas_status(
             &objects,
@@ -134,7 +140,7 @@ mod checked {
             reference_gas_price,
             transaction,
         )?;
-        let input_objects = check_objects(transaction, input_objects, objects)?;
+        let input_objects = check_objects(transaction, inputs, Vec::new())?;
         check_receiving_objects(
             store,
             &receiving_objects,
@@ -207,7 +213,9 @@ mod checked {
             .into());
         }
         let mut input_objects = kind.input_objects()?;
-        let mut objects = check_input_objects(store, &input_objects, config)?;
+        let inputs = check_input_objects(store, &input_objects, config)?;
+        let mut objects: Vec<Object> = inputs.iter().map(|(_, o)| o.clone()).collect();
+
         let mut used_objects: HashSet<SuiAddress> = HashSet::new();
         for object in &objects {
             if !object.is_immutable() {
@@ -222,7 +230,8 @@ mod checked {
         }
         input_objects.push(InputObjectKind::ImmOrOwnedMoveObject(gas_object_ref));
         objects.push(gas_object);
-        let input_objects = InputObjects::new(input_objects.into_iter().zip(objects).collect());
+        let input_objects =
+            InputObjects::new(input_objects.into_iter().zip(objects).collect(), Vec::new());
         Ok((gas_object_ref, input_objects))
     }
 
@@ -360,7 +369,7 @@ mod checked {
         object_store: &S,
         objects: &[InputObjectKind],
         protocol_config: &ProtocolConfig,
-    ) -> Result<Vec<Object>, SuiError> {
+    ) -> Result<Vec<(InputObjectKind, Object)>, SuiError> {
         let mut result = Vec::new();
 
         fp_ensure!(
@@ -382,7 +391,7 @@ mod checked {
                 }
             }
             .ok_or_else(|| SuiError::from(kind.object_not_found_error()))?;
-            result.push(obj);
+            result.push((*kind, obj));
         }
         Ok(result)
     }
@@ -476,12 +485,12 @@ mod checked {
     #[instrument(level = "trace", skip_all)]
     pub fn check_objects(
         transaction: &TransactionData,
-        input_objects: Vec<InputObjectKind>,
-        objects: Vec<Object>,
+        inputs: Vec<(InputObjectKind, Object)>,
+        deleted_shared_objects: DeletedSharedObjects,
     ) -> UserInputResult<InputObjects> {
         // We require that mutable objects cannot show up more than once.
         let mut used_objects: HashSet<SuiAddress> = HashSet::new();
-        for object in objects.iter() {
+        for (_, object) in inputs.iter() {
             if !object.is_immutable() {
                 fp_ensure!(
                     used_objects.insert(object.id().into()),
@@ -493,9 +502,17 @@ mod checked {
         }
 
         // Gather all objects and errors.
-        let mut all_objects = Vec::with_capacity(input_objects.len());
+        let mut all_objects = Vec::with_capacity(inputs.len());
 
-        for (object_kind, object) in input_objects.into_iter().zip(objects) {
+        for (object_kind, object) in inputs {
+            // We skip checking a deleted shared object because it no longer exists
+            if deleted_shared_objects
+                .iter()
+                .any(|obj| obj.0 == object.id())
+            {
+                continue;
+            }
+
             // For Gas Object, we check the object is owned by gas owner
             // TODO: this is a quadratic check and though limits are low we should do it differently
             let owner_address = if transaction
@@ -517,7 +534,7 @@ mod checked {
             return Err(UserInputError::ObjectInputArityViolation);
         }
 
-        Ok(InputObjects::new(all_objects))
+        Ok(InputObjects::new(all_objects, deleted_shared_objects))
     }
 
     /// Check one object against a reference

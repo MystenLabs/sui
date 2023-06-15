@@ -26,6 +26,9 @@ module sui::transfer {
     /// be constructed in the transaction they are created.
     const ESharedNonNewObject: u64 = 0;
 
+    /// Shared object operations such as wrapping, freezing, and converting to owned are not allowed.
+    const ESharedObjectOperationNotSupported: u64 = 1;
+
     /// Transfer ownership of `obj` to `recipient`. `obj` must have the `key` attribute,
     /// which (in turn) ensures that `obj` has a globally unique ID. Note that if the recipient
     /// address represents an object ID, the `obj` sent will be inaccessible after the transfer
@@ -97,10 +100,10 @@ module sui::transfer {
 
     spec freeze_object_impl {
         pragma opaque;
-        // never aborts as it requires object by-value and:
+        // aborts if shared object:
         // - it's OK to freeze whether object is fresh or owned
-        // - shared or immutable object cannot be passed by value
-        aborts_if [abstract] false;
+        // - immutable object cannot be passed by value
+        aborts_if [abstract] sui::prover::shared(obj);
         modifies [abstract] global<object::Ownership>(object::id(obj).bytes);
         ensures [abstract] exists<object::Ownership>(object::id(obj).bytes);
         ensures [abstract] global<object::Ownership>(object::id(obj).bytes).status == prover::IMMUTABLE;
@@ -121,10 +124,10 @@ module sui::transfer {
 
     spec transfer_impl {
         pragma opaque;
-        // never aborts as it requires object by-value and:
+        // aborts if shared object:
         // - it's OK to transfer whether object is fresh or already owned
-        // - shared or immutable object cannot be passed by value
-        aborts_if [abstract] false;
+        // - immutable object cannot be passed by value
+        aborts_if [abstract] sui::prover::shared(obj);
         modifies [abstract] global<object::Ownership>(object::id(obj).bytes);
         ensures [abstract] exists<object::Ownership>(object::id(obj).bytes);
         ensures [abstract] global<object::Ownership>(object::id(obj).bytes).owner == recipient;

@@ -353,6 +353,7 @@ pub trait TransactionEffectsAPI {
     fn transaction_digest(&self) -> &TransactionDigest;
 
     fn gas_cost_summary(&self) -> &GasCostSummary;
+    fn lamport_version(&self) -> SequenceNumber;
 
     // All of these should be #[cfg(test)], but they are used by tests in other crates, and
     // dependencies don't get built with cfg(test) set as far as I can tell.

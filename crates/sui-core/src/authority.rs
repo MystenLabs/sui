@@ -27,6 +27,7 @@ use prometheus::{
 };
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
+use std::cmp::max;
 use std::collections::BTreeMap;
 use std::fs::File;
 use std::io::Write;
@@ -37,7 +38,7 @@ use std::{
     fs,
     pin::Pin,
     sync::Arc,
-    thread,
+    thread, vec,
 };
 use sui_config::node::{OverloadThresholdConfig, StateDebugDumpConfig};
 use sui_config::NodeConfig;
@@ -1151,6 +1152,15 @@ impl AuthorityState {
         Ok((effects, execution_error_opt))
     }
 
+    /// new function to generate next version of deleted shared object
+    fn get_next_version(
+        &self,
+        effects: &TransactionEffects,
+        smeared_version: SequenceNumber,
+    ) -> SequenceNumber {
+        max(effects.lamport_version(), smeared_version.next())
+    }
+
     async fn commit_cert_and_notify(
         &self,
         certificate: &VerifiedExecutableTransaction,
@@ -1169,7 +1179,7 @@ impl AuthorityState {
 
         // If commit_certificate returns an error, tx_guard will be dropped and the certificate
         // will be persisted in the log for later recovery.
-        let output_keys: Vec<_> = inner_temporary_store
+        let mut output_keys: Vec<_> = inner_temporary_store
             .written
             .iter()
             .map(|(id, obj)| {
@@ -1183,6 +1193,37 @@ impl AuthorityState {
                 }
             })
             .collect();
+
+        let deleted: HashMap<_, _> = effects
+            .deleted()
+            .iter()
+            .map(|oref| (oref.0, oref.1))
+            .collect();
+
+        // add deleted shared objects to the outputkeys that then get sent to notify_commit
+        let deleted_output_keys = deleted
+            .iter()
+            .filter(|(id, _)| {
+                inner_temporary_store
+                    .input_objects
+                    .get(id)
+                    .is_some_and(|obj| obj.is_shared())
+            })
+            .map(|(id, seq)| InputKey::VersionedObject {
+                id: *id,
+                version: *seq,
+            });
+        output_keys.extend(deleted_output_keys);
+
+        // add transactions that operate on deleted shared objects to the outputkeys that then get sent to notify_commit
+        for (id, seq) in inner_temporary_store.deleted_shared_object_keys.iter() {
+            let next_version = self.get_next_version(effects, *seq);
+            let key = InputKey::VersionedObject {
+                id: *id,
+                version: next_version,
+            };
+            output_keys.push(key);
+        }
 
         self.commit_certificate(inner_temporary_store, certificate, effects, epoch_store)
             .await?;
@@ -1266,8 +1307,10 @@ impl AuthorityState {
         self.check_owned_locks(&owned_object_refs).await?;
         let tx_digest = *certificate.digest();
         let protocol_config = epoch_store.protocol_config();
+
         let transaction_data = &certificate.data().intent_message().value;
         let (kind, signer, gas) = transaction_data.execution_parts();
+
         let (inner_temp_store, effects, execution_error_opt) =
             epoch_store.executor().execute_transaction_to_effects(
                 &self.database,

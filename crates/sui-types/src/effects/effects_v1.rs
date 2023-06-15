@@ -100,6 +100,10 @@ impl TransactionEffectsAPI for TransactionEffectsV1 {
     fn into_status(self) -> ExecutionStatus {
         self.status
     }
+    fn executed_epoch(&self) -> EpochId {
+        self.executed_epoch
+    }
+
     fn modified_at_versions(&self) -> Vec<(ObjectID, SequenceNumber)> {
         self.modified_at_versions.clone()
     }
@@ -145,12 +149,9 @@ impl TransactionEffectsAPI for TransactionEffectsV1 {
     fn events_digest(&self) -> Option<&TransactionEventsDigest> {
         self.events_digest.as_ref()
     }
+
     fn dependencies(&self) -> &[TransactionDigest] {
         &self.dependencies
-    }
-
-    fn executed_epoch(&self) -> EpochId {
-        self.executed_epoch
     }
 
     fn transaction_digest(&self) -> &TransactionDigest {
@@ -159,6 +160,10 @@ impl TransactionEffectsAPI for TransactionEffectsV1 {
 
     fn gas_cost_summary(&self) -> &GasCostSummary {
         &self.gas_used
+    }
+
+    fn lamport_version(&self) -> SequenceNumber {
+        self.gas_object().0 .1
     }
 
     fn status_mut_for_testing(&mut self) -> &mut ExecutionStatus {
