@@ -1359,7 +1359,7 @@ impl RpcExampleProvider {
         };
         let ti_query = EventFilter::TimeRange {
             start_time: 1686050221271,
-            end_time: 1686690000000
+            end_time: 1686690000000,
         };
         let query = vec![ev_query, ti_query];
         let result = EventPage {
