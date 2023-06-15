@@ -25,13 +25,17 @@ function Event({ event, divider }: { event: SuiEvent; divider: boolean }) {
     return (
         <div>
             <div className="flex flex-col gap-3">
-                <DescriptionItem title="Type" labelWidth="sm">
+                <DescriptionItem title="Type" align="start" labelWidth="sm">
                     <Text variant="pBody/medium" color="steel-darker">
                         {objectLinkLabel}
                     </Text>
                 </DescriptionItem>
 
-                <DescriptionItem title="Event Emitter" labelWidth="sm">
+                <DescriptionItem
+                    title="Event Emitter"
+                    align="start"
+                    labelWidth="sm"
+                >
                     <div className="flex items-center gap-1">
                         <ObjectLink
                             objectId={event.packageId}
