@@ -5,7 +5,7 @@ import { useFeature } from '@growthbook/growthbook-react';
 import { Route, Routes } from 'react-router-dom';
 
 import { Content } from '_app/shared/bottom-menu-layout';
-import FiltersPortal, { type Props } from '_components/filters-tags';
+import FiltersPortal from '_components/filters-tags';
 import AppsPlayGround, { ConnectedAppsCard } from '_components/sui-apps';
 import { FEATURES } from '_src/shared/experimentation/features';
 
