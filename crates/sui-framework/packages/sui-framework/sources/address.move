@@ -66,7 +66,7 @@ module sui::address {
 
     /// Length of a Sui address in bytes
     public fun length(): u64 {
-        LENGTH
+        0
     }
 
     /// Largest possible address

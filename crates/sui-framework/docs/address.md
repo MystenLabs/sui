@@ -262,7 +262,7 @@ Length of a Sui address in bytes
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="address.md#0x2_address_length">length</a>(): u64 {
-    <a href="address.md#0x2_address_LENGTH">LENGTH</a>
+    0
 }
 </code></pre>
 
