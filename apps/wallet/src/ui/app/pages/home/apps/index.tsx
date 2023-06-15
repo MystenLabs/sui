@@ -41,8 +41,8 @@ function AppsPage() {
 
     return (
         <div className={st.container}>
-            <Content className="hello">
-                <section className="hello">
+            <Content>
+                <section>
                     <FiltersPortal tags={allFilterTags as Props[]} />
                     <Routes>
                         <Route path="/" element={<AppsPlayGround />} />
