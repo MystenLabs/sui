@@ -1,14 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { Image32 } from '@mysten/icons';
+import { Image32, MediaPlay16 } from '@mysten/icons';
 import { cva } from 'class-variance-authority';
 import cl from 'classnames';
 import { useState } from 'react';
 
 import type { VariantProps } from 'class-variance-authority';
 
-const nftImageStyles = cva('overflow-hidden bg-gray-40', {
+const nftImageStyles = cva('overflow-hidden bg-gray-40 relative', {
     variants: {
         animateHover: {
             true: [
@@ -42,6 +42,7 @@ const nftImageStyles = cva('overflow-hidden bg-gray-40', {
 
 export interface NftImageProps extends VariantProps<typeof nftImageStyles> {
     src: string | null;
+    video?: string | null;
     name: string | null;
     title?: string;
     showLabel?: boolean;
@@ -55,6 +56,7 @@ export function NftImage({
     animateHover,
     borderRadius,
     size,
+    video,
 }: NftImageProps) {
     const [error, setError] = useState(false);
     const imgCls = cl(
@@ -96,6 +98,12 @@ export function NftImage({
                     title={title}
                     onError={() => setError(true)}
                 />
+            )}
+
+            {video && (
+                <div className="pointer-events-none absolute bottom-2 right-2 z-10 flex items-center justify-center rounded-full opacity-80 text-black">
+                    <MediaPlay16 className="h-8 w-8" />
+                </div>
             )}
         </div>
     );
