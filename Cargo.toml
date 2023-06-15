@@ -2,7 +2,6 @@
 resolver = "2"
 
 exclude = [
-    "external-crates/move/extensions/move-table-extension",
     "external-crates/move/move-binary-format",
     "external-crates/move/move-binary-format/serializer-tests",
     "external-crates/move/move-borrow-graph",

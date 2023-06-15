@@ -1,3 +1,0 @@
-build -v --arch ethereum
-> touch Move.toml
-build -v --arch ethereum

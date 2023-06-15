@@ -70,7 +70,7 @@ pub struct Package {
 impl ResolvedGraph {
     pub fn resolve<Progress: Write>(
         graph: DG::DependencyGraph,
-        mut build_options: BuildConfig,
+        build_options: BuildConfig,
         dependency_cache: &mut DependencyCache,
         progress_output: &mut Progress,
     ) -> Result<ResolvedGraph> {
@@ -198,12 +198,6 @@ impl ResolvedGraph {
                             .join(", "),
                     )
                 }
-            }
-        }
-
-        if build_options.architecture.is_none() {
-            if let Some(info) = &root_package.source_package.build {
-                build_options.architecture = info.architecture;
             }
         }
 

@@ -1,5 +1,0 @@
-Command `build -v --arch ethereum`:
-COMPILING Foo to Yul
-GENERATING EVM bytecote from Yul
-Command `build -v --arch ethereum`:
-CACHED Foo

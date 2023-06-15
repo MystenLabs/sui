@@ -5467,22 +5467,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "move-table-extension"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "bcs",
- "better_any",
- "move-binary-format",
- "move-core-types",
- "move-vm-runtime",
- "move-vm-types",
- "once_cell",
- "sha3 0.9.1",
- "smallvec",
-]
-
-[[package]]
 name = "move-transactional-test-runner"
 version = "0.1.0"
 dependencies = [
@@ -5537,7 +5521,6 @@ dependencies = [
  "move-stackless-bytecode-interpreter",
  "move-stdlib",
  "move-symbol-pool",
- "move-table-extension",
  "move-vm-runtime",
  "move-vm-test-utils",
  "move-vm-types",
@@ -13036,7 +13019,6 @@ dependencies = [
  "move-stackless-bytecode-interpreter",
  "move-stdlib",
  "move-symbol-pool",
- "move-table-extension",
  "move-transactional-test-runner",
  "move-unit-test",
  "move-vm-config",
