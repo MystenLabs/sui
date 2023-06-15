@@ -76,7 +76,8 @@ body,
                 'tps         gas-price'
                 'epoch       gas-price'
                 'node-map    node-map'
-                'sui-token   network'
+                'sui-token   sui-token'
+                'network     network'
                 'activity    activity'
                 'validators  validators'
                 'packages    packages';
