@@ -346,12 +346,10 @@ impl KeyToolCommand {
                 // check if input is a private key -- should start with 0x
                 if input_string.starts_with("0x") {
                     let bytes = Hex::decode(&input_string)
-                        .or_else(|_| Err(anyhow!("Private key is malformed. Importing failed")))?;
+                        .map_err(|_| anyhow!("Private key is malformed. Importing failed"))?;
                     match key_scheme {
                         SignatureScheme::ED25519 => {
-                            let kp = Ed25519KeyPair::from_bytes(&bytes).or_else(|_| Err(anyhow!(
-                                "Cannot decode ed25519 keypair from private key. Importing failed."
-                            )))?;
+                            let kp = Ed25519KeyPair::from_bytes(&bytes).map_err(|_| anyhow!("Cannot decode ed25519 keypair from the private key. Import failed."))?;
                             let skp = SuiKeyPair::Ed25519(kp);
                             let address = Into::<SuiAddress>::into(&skp.public()).to_string();
                             keystore.add_key(skp)?;
