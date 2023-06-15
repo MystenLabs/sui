@@ -14,10 +14,7 @@ import { PreviewTransfer } from './PreviewTransfer';
 import { SendTokenForm } from './SendTokenForm';
 import { createTokenTransferTransaction } from './utils/transaction';
 import { Button } from '_app/shared/ButtonUI';
-import BottomMenuLayout, {
-    Content,
-    Menu,
-} from '_app/shared/bottom-menu-layout';
+import BottomMenuLayout, { Content, Menu } from '_app/shared/bottom-menu-layout';
 import { Text } from '_app/shared/text';
 import { ActiveCoinsCard } from '_components/active-coins-card';
 import Overlay from '_components/overlay';
@@ -31,160 +28,152 @@ import { useQredoTransaction } from '_src/ui/app/hooks/useQredoTransaction';
 import type { SubmitProps } from './SendTokenForm';
 
 function TransferCoinPage() {
-    const [searchParams] = useSearchParams();
-    const coinType = searchParams.get('type');
-    const [showTransactionPreview, setShowTransactionPreview] =
-        useState<boolean>(false);
-    const [formData, setFormData] = useState<SubmitProps>();
-    const navigate = useNavigate();
-    const { data: coinMetadata } = useCoinMetadata(coinType);
-    const signer = useSigner();
-    const address = useActiveAddress();
-    const queryClient = useQueryClient();
-    const { clientIdentifier, notificationModal } = useQredoTransaction();
+	const [searchParams] = useSearchParams();
+	const coinType = searchParams.get('type');
+	const [showTransactionPreview, setShowTransactionPreview] = useState<boolean>(false);
+	const [formData, setFormData] = useState<SubmitProps>();
+	const navigate = useNavigate();
+	const { data: coinMetadata } = useCoinMetadata(coinType);
+	const signer = useSigner();
+	const address = useActiveAddress();
+	const queryClient = useQueryClient();
+	const { clientIdentifier, notificationModal } = useQredoTransaction();
 
-    const transaction = useMemo(() => {
-        if (!coinType || !signer || !formData || !address) return null;
+	const transaction = useMemo(() => {
+		if (!coinType || !signer || !formData || !address) return null;
 
-        return createTokenTransferTransaction({
-            coinType,
-            coinDecimals: coinMetadata?.decimals ?? 0,
-            ...formData,
-        });
-    }, [formData, signer, coinType, address, coinMetadata?.decimals]);
+		return createTokenTransferTransaction({
+			coinType,
+			coinDecimals: coinMetadata?.decimals ?? 0,
+			...formData,
+		});
+	}, [formData, signer, coinType, address, coinMetadata?.decimals]);
 
-    const executeTransfer = useMutation({
-        mutationFn: async () => {
-            if (!transaction || !signer) {
-                throw new Error('Missing data');
-            }
+	const executeTransfer = useMutation({
+		mutationFn: async () => {
+			if (!transaction || !signer) {
+				throw new Error('Missing data');
+			}
 
-            const sentryTransaction = Sentry.startTransaction({
-                name: 'send-tokens',
-            });
-            try {
-                trackEvent('TransferCoins', {
-                    props: { coinType: coinType! },
-                });
+			const sentryTransaction = Sentry.startTransaction({
+				name: 'send-tokens',
+			});
+			try {
+				trackEvent('TransferCoins', {
+					props: { coinType: coinType! },
+				});
 
-                return signer.signAndExecuteTransactionBlock(
-                    {
-                        transactionBlock: transaction,
-                        options: {
-                            showInput: true,
-                            showEffects: true,
-                            showEvents: true,
-                        },
-                    },
-                    clientIdentifier
-                );
-            } catch (error) {
-                if (!(error instanceof QredoActionIgnoredByUser)) {
-                    sentryTransaction.setTag('failure', true);
-                }
-                throw error;
-            } finally {
-                sentryTransaction.finish();
-            }
-        },
-        onSuccess: (response) => {
-            queryClient.invalidateQueries(['get-coins']);
-            queryClient.invalidateQueries(['coin-balance']);
-            const receiptUrl = `/receipt?txdigest=${encodeURIComponent(
-                getTransactionDigest(response)
-            )}&from=transactions`;
-            return navigate(receiptUrl);
-        },
-        onError: (error) => {
-            if (error instanceof QredoActionIgnoredByUser) {
-                navigate('/');
-            } else {
-                toast.error(
-                    <div className="max-w-xs overflow-hidden flex flex-col">
-                        <small className="text-ellipsis overflow-hidden">
-                            {getSignerOperationErrorMessage(error)}
-                        </small>
-                    </div>
-                );
-            }
-        },
-    });
+				return signer.signAndExecuteTransactionBlock(
+					{
+						transactionBlock: transaction,
+						options: {
+							showInput: true,
+							showEffects: true,
+							showEvents: true,
+						},
+					},
+					clientIdentifier,
+				);
+			} catch (error) {
+				if (!(error instanceof QredoActionIgnoredByUser)) {
+					sentryTransaction.setTag('failure', true);
+				}
+				throw error;
+			} finally {
+				sentryTransaction.finish();
+			}
+		},
+		onSuccess: (response) => {
+			queryClient.invalidateQueries(['get-coins']);
+			queryClient.invalidateQueries(['coin-balance']);
+			const receiptUrl = `/receipt?txdigest=${encodeURIComponent(
+				getTransactionDigest(response),
+			)}&from=transactions`;
+			return navigate(receiptUrl);
+		},
+		onError: (error) => {
+			if (error instanceof QredoActionIgnoredByUser) {
+				navigate('/');
+			} else {
+				toast.error(
+					<div className="max-w-xs overflow-hidden flex flex-col">
+						<small className="text-ellipsis overflow-hidden">
+							{getSignerOperationErrorMessage(error)}
+						</small>
+					</div>,
+				);
+			}
+		},
+	});
 
-    if (!coinType) {
-        return <Navigate to="/" replace={true} />;
-    }
+	if (!coinType) {
+		return <Navigate to="/" replace={true} />;
+	}
 
-    return (
-        <Overlay
-            showModal={true}
-            title={showTransactionPreview ? 'Review & Send' : 'Send Coins'}
-            closeOverlay={() => navigate('/')}
-        >
-            <div className="flex flex-col w-full mt-2.5">
-                {showTransactionPreview && formData ? (
-                    <BottomMenuLayout>
-                        <Content>
-                            <PreviewTransfer
-                                coinType={coinType}
-                                amount={formData.amount}
-                                to={formData.to}
-                                approximation={formData.isPayAllSui}
-                                gasBudget={formData.gasBudgetEst}
-                            />
-                        </Content>
-                        <Menu
-                            stuckClass="sendCoin-cta"
-                            className="w-full px-0 pb-0 mx-0 gap-2.5"
-                        >
-                            <Button
-                                type="button"
-                                variant="secondary"
-                                onClick={() => setShowTransactionPreview(false)}
-                                text="Back"
-                                before={<ArrowLeft16 />}
-                            />
+	return (
+		<Overlay
+			showModal={true}
+			title={showTransactionPreview ? 'Review & Send' : 'Send Coins'}
+			closeOverlay={() => navigate('/')}
+		>
+			<div className="flex flex-col w-full mt-2.5">
+				{showTransactionPreview && formData ? (
+					<BottomMenuLayout>
+						<Content>
+							<PreviewTransfer
+								coinType={coinType}
+								amount={formData.amount}
+								to={formData.to}
+								approximation={formData.isPayAllSui}
+								gasBudget={formData.gasBudgetEst}
+							/>
+						</Content>
+						<Menu stuckClass="sendCoin-cta" className="w-full px-0 pb-0 mx-0 gap-2.5">
+							<Button
+								type="button"
+								variant="secondary"
+								onClick={() => setShowTransactionPreview(false)}
+								text="Back"
+								before={<ArrowLeft16 />}
+							/>
 
-                            <Button
-                                type="button"
-                                variant="primary"
-                                onClick={() => executeTransfer.mutateAsync()}
-                                text="Send Now"
-                                disabled={coinType === null}
-                                after={<ArrowRight16 />}
-                                loading={executeTransfer.isLoading}
-                            />
-                        </Menu>
-                    </BottomMenuLayout>
-                ) : (
-                    <>
-                        <div className="mb-7 flex flex-col gap-2.5">
-                            <div className="pl-1.5">
-                                <Text
-                                    variant="caption"
-                                    color="steel"
-                                    weight="semibold"
-                                >
-                                    Select all Coins
-                                </Text>
-                            </div>
-                            <ActiveCoinsCard activeCoinType={coinType} />
-                        </div>
+							<Button
+								type="button"
+								variant="primary"
+								onClick={() => executeTransfer.mutateAsync()}
+								text="Send Now"
+								disabled={coinType === null}
+								after={<ArrowRight16 />}
+								loading={executeTransfer.isLoading}
+							/>
+						</Menu>
+					</BottomMenuLayout>
+				) : (
+					<>
+						<div className="mb-7 flex flex-col gap-2.5">
+							<div className="pl-1.5">
+								<Text variant="caption" color="steel" weight="semibold">
+									Select all Coins
+								</Text>
+							</div>
+							<ActiveCoinsCard activeCoinType={coinType} />
+						</div>
 
-                        <SendTokenForm
-                            onSubmit={(formData) => {
-                                setShowTransactionPreview(true);
-                                setFormData(formData);
-                            }}
-                            coinType={coinType}
-                            initialAmount={formData?.amount || ''}
-                            initialTo={formData?.to || ''}
-                        />
-                    </>
-                )}
-            </div>
-            {notificationModal}
-        </Overlay>
-    );
+						<SendTokenForm
+							onSubmit={(formData) => {
+								setShowTransactionPreview(true);
+								setFormData(formData);
+							}}
+							coinType={coinType}
+							initialAmount={formData?.amount || ''}
+							initialTo={formData?.to || ''}
+						/>
+					</>
+				)}
+			</div>
+			{notificationModal}
+		</Overlay>
+	);
 }
 
 export default TransferCoinPage;

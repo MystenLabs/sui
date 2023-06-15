@@ -8,9 +8,9 @@ import { App } from './App';
 import './index.css';
 
 ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
-  <React.StrictMode>
-    <WalletKitProvider enableUnsafeBurner>
-      <App />
-    </WalletKitProvider>
-  </React.StrictMode>,
+	<React.StrictMode>
+		<WalletKitProvider enableUnsafeBurner>
+			<App />
+		</WalletKitProvider>
+	</React.StrictMode>,
 );

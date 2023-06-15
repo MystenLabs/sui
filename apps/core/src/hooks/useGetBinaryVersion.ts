@@ -6,9 +6,9 @@ import { useQuery } from '@tanstack/react-query';
 
 // Current API version is the same as the binary version
 export function useGetBinaryVersion() {
-    const rpc = useRpcClient();
-    return useQuery({
-        queryKey: ['binary-version'],
-        queryFn: () => rpc.getRpcApiVersion(),
-    });
+	const rpc = useRpcClient();
+	return useQuery({
+		queryKey: ['binary-version'],
+		queryFn: () => rpc.getRpcApiVersion(),
+	});
 }

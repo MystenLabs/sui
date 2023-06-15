@@ -20,21 +20,21 @@ const bcs = new BCS(getSuiMoveConfig());
 // registering types so we can use them
 bcs.registerAlias('UID', BCS.ADDRESS);
 bcs.registerEnumType('Option<T>', {
-  none: null,
-  some: 'T',
+	none: null,
+	some: 'T',
 });
 bcs.registerStructType('Coin', {
-  id: 'UID',
-  value: BCS.U64,
+	id: 'UID',
+	value: BCS.U64,
 });
 
 // deserialization: BCS bytes into Coin
 let bcsBytes = bcs
-  .ser('Coin', {
-    id: '0000000000000000000000000000000000000000000000000000000000000001',
-    value: 1000000n,
-  })
-  .toBytes();
+	.ser('Coin', {
+		id: '0000000000000000000000000000000000000000000000000000000000000001',
+		value: 1000000n,
+	})
+	.toBytes();
 let coin = bcs.de('Coin', bcsBytes, 'hex');
 
 // serialization: Object into bytes - an Option with <T = Coin>
@@ -66,22 +66,22 @@ import { BCS } from '@mysten/bcs';
 
 const SUI_ADDRESS_LENGTH = 32;
 const bcs = new BCS({
-  vectorType: 'vector<T>',
-  addressLength: SUI_ADDRESS_LENGTH,
-  addressEncoding: 'hex',
-  genericSeparators: ['<', '>'],
-  types: {
-    // define schema in the initializer
-    structs: {
-      User: {
-        name: BCS.STRING,
-        age: BCS.U8,
-      },
-    },
-    enums: {},
-    aliases: { hex: BCS.HEX },
-  },
-  withPrimitives: true,
+	vectorType: 'vector<T>',
+	addressLength: SUI_ADDRESS_LENGTH,
+	addressEncoding: 'hex',
+	genericSeparators: ['<', '>'],
+	types: {
+		// define schema in the initializer
+		structs: {
+			User: {
+				name: BCS.STRING,
+				age: BCS.U8,
+			},
+		},
+		enums: {},
+		aliases: { hex: BCS.HEX },
+	},
+	withPrimitives: true,
 });
 
 let bytes = bcs.ser('User', { name: 'Adam', age: '30' }).toString('base64');
@@ -154,26 +154,22 @@ let _u128 = bcs.ser(BCS.U128, '100000010000001000000').toString('base64');
 
 // Other types
 let _bool = bcs.ser(BCS.BOOL, true).toString('hex');
-let _addr = bcs
-  .ser(BCS.ADDRESS, '0000000000000000000000000000000000000001')
-  .toBytes();
+let _addr = bcs.ser(BCS.ADDRESS, '0000000000000000000000000000000000000001').toBytes();
 let _str = bcs.ser(BCS.STRING, 'this is an ascii string').toBytes();
 
 // Vectors (vector<T>)
 let _u8_vec = bcs.ser(['vector', BCS.U8], [1, 2, 3, 4, 5, 6, 7]).toBytes();
 let _bool_vec = bcs.ser(['vector', BCS.BOOL], [true, true, false]).toBytes();
-let _str_vec = bcs
-  .ser('vector<bool>', ['string1', 'string2', 'string3'])
-  .toBytes();
+let _str_vec = bcs.ser('vector<bool>', ['string1', 'string2', 'string3']).toBytes();
 
 // Even vector of vector (...of vector) is an option
 let _matrix = bcs
-  .ser('vector<vector<u8>>', [
-    [0, 0, 0],
-    [1, 1, 1],
-    [2, 2, 2],
-  ])
-  .toBytes();
+	.ser('vector<vector<u8>>', [
+		[0, 0, 0],
+		[1, 1, 1],
+		[2, 2, 2],
+	])
+	.toBytes();
 ```
 
 ## Ser/de and formatting
@@ -243,25 +239,25 @@ const bcs = new BCS(getSuiMoveConfig());
 
 // register a custom type (it becomes available for using)
 bcs.registerStructType('Balance', {
-  value: BCS.U64,
+	value: BCS.U64,
 });
 
 bcs.registerStructType('Coin', {
-  id: BCS.ADDRESS,
-  // reference another registered type
-  balance: 'Balance',
+	id: BCS.ADDRESS,
+	// reference another registered type
+	balance: 'Balance',
 });
 
 // value passed into ser function has to have the same
 // structure as the definition
 let _bytes = bcs
-  .ser('Coin', {
-    id: '0x0000000000000000000000000000000000000000000000000000000000000005',
-    balance: {
-      value: 100000000n,
-    },
-  })
-  .toBytes();
+	.ser('Coin', {
+		id: '0x0000000000000000000000000000000000000000000000000000000000000005',
+		balance: {
+			value: 100000000n,
+		},
+	})
+	.toBytes();
 ```
 
 ## Using Generics
@@ -277,35 +273,35 @@ const bcs = new BCS(getSuiMoveConfig());
 // T -> type parameter which has to be passed in `ser()` or `de()` methods
 // If you're not familiar with generics, treat them as type Templates
 bcs.registerStructType(['Container', 'T'], {
-  contents: 'T',
+	contents: 'T',
 });
 
 // When serializing, we have to pass the type to use for `T`
 bcs
-  .ser(['Container', BCS.U8], {
-    contents: 100,
-  })
-  .toString('hex');
+	.ser(['Container', BCS.U8], {
+		contents: 100,
+	})
+	.toString('hex');
 
 // Reusing the same Container type with different contents.
 // Mind that generics need to be passed as Array after the main type.
 bcs
-  .ser(['Container', ['vector', BCS.BOOL]], {
-    contents: [true, false, true],
-  })
-  .toString('hex');
+	.ser(['Container', ['vector', BCS.BOOL]], {
+		contents: [true, false, true],
+	})
+	.toString('hex');
 
 // Using multiple generics - you can use any string for convenience and
 // readability. See how we also use array notation for a field definition.
 bcs.registerStructType(['VecMap', 'Key', 'Val'], {
-  keys: ['vector', 'Key'],
-  values: ['vector', 'Val'],
+	keys: ['vector', 'Key'],
+	values: ['vector', 'Val'],
 });
 
 // To serialize VecMap, we can use:
 bcs.ser(['VecMap', BCS.STRING, BCS.STRING], {
-  keys: ['key1', 'key2', 'key3'],
-  values: ['value1', 'value2', 'value3'],
+	keys: ['key1', 'key2', 'key3'],
+	values: ['value1', 'value2', 'value3'],
 });
 ```
 
@@ -319,35 +315,35 @@ import { BCS, getSuiMoveConfig } from '@mysten/bcs';
 const bcs = new BCS(getSuiMoveConfig());
 
 bcs.registerEnumType('Option<T>', {
-  none: null,
-  some: 'T',
+	none: null,
+	some: 'T',
 });
 
 bcs.registerEnumType('TransactionType', {
-  single: 'vector<u8>',
-  batch: 'vector<vector<u8>>',
+	single: 'vector<u8>',
+	batch: 'vector<vector<u8>>',
 });
 
 // any truthy value marks empty in struct value
 let _optionNone = bcs.ser('Option<TransactionType>', {
-  none: true,
+	none: true,
 });
 
 // some now contains a value of type TransactionType
 let _optionTx = bcs.ser('Option<TransactionType>', {
-  some: {
-    single: [1, 2, 3, 4, 5, 6],
-  },
+	some: {
+		single: [1, 2, 3, 4, 5, 6],
+	},
 });
 
 // same type signature but a different enum invariant - batch
 let _optionTxBatch = bcs.ser('Option<TransactionType>', {
-  some: {
-    batch: [
-      [1, 2, 3, 4, 5, 6],
-      [1, 2, 3, 4, 5, 6],
-    ],
-  },
+	some: {
+		batch: [
+			[1, 2, 3, 4, 5, 6],
+			[1, 2, 3, 4, 5, 6],
+		],
+	},
 });
 ```
 
@@ -364,8 +360,8 @@ const bcs = new BCS(getSuiMoveConfig());
 
 // Some value we want to serialize
 const coin = {
-  id: '0000000000000000000000000000000000000000000000000000000000000005',
-  value: 1111333333222n,
+	id: '0000000000000000000000000000000000000000000000000000000000000005',
+	value: 1111333333222n,
 };
 
 // Instead of defining a type we pass struct schema as the first argument
@@ -417,14 +413,14 @@ bcs.registerAlias('UID', BCS.ADDRESS);
 
 // Simply follow the definition onchain
 bcs.registerStructType('Metadata', {
-  name: BCS.STRING,
+	name: BCS.STRING,
 });
 
 // Same for the main object that we intend to read
 bcs.registerStructType('ChainObject', {
-  id: 'UID',
-  owner: BCS.ADDRESS,
-  meta: 'Metadata',
+	id: 'UID',
+	owner: BCS.ADDRESS,
+	meta: 'Metadata',
 });
 ```
 

@@ -10,8 +10,8 @@ import { SuiSignMessageFeature } from './suiSignMessage';
  * Wallet Standard features that are unique to Sui, and that all Sui wallets are expected to implement.
  */
 export type SuiFeatures = SuiSignTransactionBlockFeature &
-  SuiSignAndExecuteTransactionBlockFeature &
-  SuiSignMessageFeature;
+	SuiSignAndExecuteTransactionBlockFeature &
+	SuiSignMessageFeature;
 
 export type WalletWithSuiFeatures = WalletWithFeatures<SuiFeatures>;
 

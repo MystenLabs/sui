@@ -12,22 +12,20 @@ export type SuiSignMessageVersion = '1.0.0';
  * message bytes that were signed, and message signature.
  */
 export type SuiSignMessageFeature = {
-  /** Namespace for the feature. */
-  'sui:signMessage': {
-    /** Version of the feature API. */
-    version: SuiSignMessageVersion;
-    signMessage: SuiSignMessageMethod;
-  };
+	/** Namespace for the feature. */
+	'sui:signMessage': {
+		/** Version of the feature API. */
+		version: SuiSignMessageVersion;
+		signMessage: SuiSignMessageMethod;
+	};
 };
 
-export type SuiSignMessageMethod = (
-  input: SuiSignMessageInput,
-) => Promise<SuiSignMessageOutput>;
+export type SuiSignMessageMethod = (input: SuiSignMessageInput) => Promise<SuiSignMessageOutput>;
 
 /** Input for signing messages. */
 export interface SuiSignMessageInput {
-  message: Uint8Array;
-  account: WalletAccount;
+	message: Uint8Array;
+	account: WalletAccount;
 }
 
 /** Output of signing messages. */

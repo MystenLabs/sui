@@ -7,14 +7,14 @@ import configProd from './configs/webpack/webpack.config.prod';
 import type { Configuration } from 'webpack';
 
 const configMap: Record<string, () => Promise<Configuration>> = {
-    development: configDev,
-    production: configProd,
+	development: configDev,
+	production: configProd,
 };
 
 const nodeEnv: string = process.env.NODE_ENV || '';
 
 if (!configMap[nodeEnv]) {
-    throw new Error(`Config not found for NODE_ENV='${nodeEnv}'`);
+	throw new Error(`Config not found for NODE_ENV='${nodeEnv}'`);
 }
 
 export default configMap[nodeEnv];

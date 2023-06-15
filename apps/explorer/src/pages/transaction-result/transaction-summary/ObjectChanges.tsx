@@ -3,371 +3,306 @@
 
 import { Disclosure } from '@headlessui/react';
 import {
-    ObjectChangeLabels,
-    type SuiObjectChangeWithDisplay,
-    type ObjectChangesByOwner,
-    type ObjectChangeSummary,
-    type SuiObjectChangeTypes,
+	ObjectChangeLabels,
+	type SuiObjectChangeWithDisplay,
+	type ObjectChangesByOwner,
+	type ObjectChangeSummary,
+	type SuiObjectChangeTypes,
 } from '@mysten/core';
 import { ChevronRight12 } from '@mysten/icons';
 import {
-    type SuiObjectChangePublished,
-    type SuiObjectChange,
-    type DisplayFieldsResponse,
-    parseStructTag,
+	type SuiObjectChangePublished,
+	type SuiObjectChange,
+	type DisplayFieldsResponse,
+	parseStructTag,
 } from '@mysten/sui.js';
 import clsx from 'clsx';
 import { type ReactNode } from 'react';
 
 import { ObjectDisplay } from './ObjectDisplay';
 
-import {
-    ExpandableList,
-    ExpandableListControl,
-    ExpandableListItems,
-} from '~/ui/ExpandableList';
+import { ExpandableList, ExpandableListControl, ExpandableListItems } from '~/ui/ExpandableList';
 import { AddressLink, ObjectLink } from '~/ui/InternalLink';
 import { Text } from '~/ui/Text';
-import {
-    TransactionBlockCard,
-    TransactionBlockCardSection,
-} from '~/ui/TransactionBlockCard';
+import { TransactionBlockCard, TransactionBlockCardSection } from '~/ui/TransactionBlockCard';
 
 enum ItemLabels {
-    package = 'Package',
-    module = 'Module',
-    type = 'Type',
+	package = 'Package',
+	module = 'Module',
+	type = 'Type',
 }
 
 const DEFAULT_ITEMS_TO_SHOW = 5;
 
 function Item({
-    label,
-    packageId,
-    moduleName,
-    typeName,
+	label,
+	packageId,
+	moduleName,
+	typeName,
 }: {
-    label: ItemLabels;
-    packageId?: string;
-    moduleName?: string;
-    typeName?: string;
+	label: ItemLabels;
+	packageId?: string;
+	moduleName?: string;
+	typeName?: string;
 }) {
-    return (
-        <div
-            className={clsx(
-                'flex justify-between gap-10',
-                label === ItemLabels.type ? 'items-start' : 'items-center'
-            )}
-        >
-            <Text variant="pBody/medium" color="steel-dark">
-                {label}
-            </Text>
+	return (
+		<div
+			className={clsx(
+				'flex justify-between gap-10',
+				label === ItemLabels.type ? 'items-start' : 'items-center',
+			)}
+		>
+			<Text variant="pBody/medium" color="steel-dark">
+				{label}
+			</Text>
 
-            {label === ItemLabels.package && packageId && (
-                <ObjectLink objectId={packageId} />
-            )}
-            {label === ItemLabels.module && (
-                <ObjectLink
-                    objectId={`${packageId}?module=${moduleName}`}
-                    label={moduleName}
-                />
-            )}
-            {label === ItemLabels.type && (
-                <div className="break-all text-right">
-                    <Text variant="pBody/medium" color="steel-darker">
-                        {typeName}
-                    </Text>
-                </div>
-            )}
-        </div>
-    );
+			{label === ItemLabels.package && packageId && <ObjectLink objectId={packageId} />}
+			{label === ItemLabels.module && (
+				<ObjectLink objectId={`${packageId}?module=${moduleName}`} label={moduleName} />
+			)}
+			{label === ItemLabels.type && (
+				<div className="break-all text-right">
+					<Text variant="pBody/medium" color="steel-darker">
+						{typeName}
+					</Text>
+				</div>
+			)}
+		</div>
+	);
 }
 
 function ObjectDetailPanel({
-    panelContent,
-    headerContent,
+	panelContent,
+	headerContent,
 }: {
-    panelContent: ReactNode;
-    headerContent?: ReactNode;
+	panelContent: ReactNode;
+	headerContent?: ReactNode;
 }) {
-    return (
-        <div>
-            <Disclosure>
-                {({ open }) => (
-                    <>
-                        <div className="flex flex-wrap items-center justify-between">
-                            <Disclosure.Button>
-                                <div className="flex items-center gap-0.5">
-                                    <Text
-                                        variant="pBody/medium"
-                                        color="steel-dark"
-                                    >
-                                        Object
-                                    </Text>
+	return (
+		<div>
+			<Disclosure>
+				{({ open }) => (
+					<>
+						<div className="flex flex-wrap items-center justify-between">
+							<Disclosure.Button>
+								<div className="flex items-center gap-0.5">
+									<Text variant="pBody/medium" color="steel-dark">
+										Object
+									</Text>
 
-                                    <ChevronRight12
-                                        className={clsx(
-                                            'h-3 w-3 text-steel-dark',
-                                            open && 'rotate-90'
-                                        )}
-                                    />
-                                </div>
-                            </Disclosure.Button>
-                            {headerContent}
-                        </div>
+									<ChevronRight12
+										className={clsx('h-3 w-3 text-steel-dark', open && 'rotate-90')}
+									/>
+								</div>
+							</Disclosure.Button>
+							{headerContent}
+						</div>
 
-                        <Disclosure.Panel>
-                            <div className="flex flex-col gap-2">
-                                {panelContent}
-                            </div>
-                        </Disclosure.Panel>
-                    </>
-                )}
-            </Disclosure>
-        </div>
-    );
+						<Disclosure.Panel>
+							<div className="flex flex-col gap-2">{panelContent}</div>
+						</Disclosure.Panel>
+					</>
+				)}
+			</Disclosure>
+		</div>
+	);
 }
 
 function ObjectDetail({
-    objectType,
-    objectId,
-    display,
+	objectType,
+	objectId,
+	display,
 }: {
-    objectType: string;
-    objectId: string;
-    display?: DisplayFieldsResponse;
+	objectType: string;
+	objectId: string;
+	display?: DisplayFieldsResponse;
 }) {
-    const separator = '::';
-    const objectTypeSplit = objectType?.split(separator) || [];
-    const typeName = objectTypeSplit.slice(2).join(separator);
-    const { address, module, name } = parseStructTag(objectType);
+	const separator = '::';
+	const objectTypeSplit = objectType?.split(separator) || [];
+	const typeName = objectTypeSplit.slice(2).join(separator);
+	const { address, module, name } = parseStructTag(objectType);
 
-    const objectDetailLabels = [
-        ItemLabels.package,
-        ItemLabels.module,
-        ItemLabels.type,
-    ];
+	const objectDetailLabels = [ItemLabels.package, ItemLabels.module, ItemLabels.type];
 
-    if (display?.data)
-        return <ObjectDisplay display={display} objectId={objectId} />;
+	if (display?.data) return <ObjectDisplay display={display} objectId={objectId} />;
 
-    return (
-        <ObjectDetailPanel
-            headerContent={
-                <div className="flex items-center">
-                    <Text mono variant="body/medium" color="steel-dark">
-                        {name}:
-                    </Text>
-                    {objectId && <ObjectLink objectId={objectId} />}
-                </div>
-            }
-            panelContent={
-                <div className="mt-2 flex flex-col gap-2">
-                    {objectDetailLabels.map((label) => (
-                        <Item
-                            key={label}
-                            label={label}
-                            packageId={address}
-                            moduleName={module}
-                            typeName={typeName}
-                        />
-                    ))}
-                </div>
-            }
-        />
-    );
+	return (
+		<ObjectDetailPanel
+			headerContent={
+				<div className="flex items-center">
+					<Text mono variant="body/medium" color="steel-dark">
+						{name}:
+					</Text>
+					{objectId && <ObjectLink objectId={objectId} />}
+				</div>
+			}
+			panelContent={
+				<div className="mt-2 flex flex-col gap-2">
+					{objectDetailLabels.map((label) => (
+						<Item
+							key={label}
+							label={label}
+							packageId={address}
+							moduleName={module}
+							typeName={typeName}
+						/>
+					))}
+				</div>
+			}
+		/>
+	);
 }
 
 interface ObjectChangeEntriesProps {
-    type: SuiObjectChangeTypes;
-    changeEntries: SuiObjectChange[];
-    isDisplay?: boolean;
+	type: SuiObjectChangeTypes;
+	changeEntries: SuiObjectChange[];
+	isDisplay?: boolean;
 }
 
-function ObjectChangeEntries({
-    changeEntries,
-    type,
-    isDisplay,
-}: ObjectChangeEntriesProps) {
-    const title = ObjectChangeLabels[type];
-    let expandableItems = [];
+function ObjectChangeEntries({ changeEntries, type, isDisplay }: ObjectChangeEntriesProps) {
+	const title = ObjectChangeLabels[type];
+	let expandableItems = [];
 
-    if (type === 'published') {
-        expandableItems = (changeEntries as SuiObjectChangePublished[]).map(
-            ({ packageId, modules }) => (
-                <ObjectDetailPanel
-                    key={packageId}
-                    panelContent={
-                        <div className="mt-2 flex flex-col gap-2">
-                            <Item
-                                label={ItemLabels.package}
-                                packageId={packageId}
-                            />
-                            {modules.map((moduleName, index) => (
-                                <Item
-                                    key={index}
-                                    label={ItemLabels.module}
-                                    moduleName={moduleName}
-                                    packageId={packageId}
-                                />
-                            ))}
-                        </div>
-                    }
-                />
-            )
-        );
-    } else {
-        expandableItems = (changeEntries as SuiObjectChangeWithDisplay[]).map(
-            (change) =>
-                'objectId' in change && change.display ? (
-                    <ObjectDisplay
-                        key={change.objectId}
-                        objectId={change.objectId}
-                        display={change.display}
-                    />
-                ) : (
-                    'objectId' in change && (
-                        <ObjectDetail
-                            key={change.objectId}
-                            objectId={change.objectId}
-                            objectType={change.objectType}
-                            display={change.display}
-                        />
-                    )
-                )
-        );
-    }
+	if (type === 'published') {
+		expandableItems = (changeEntries as SuiObjectChangePublished[]).map(
+			({ packageId, modules }) => (
+				<ObjectDetailPanel
+					key={packageId}
+					panelContent={
+						<div className="mt-2 flex flex-col gap-2">
+							<Item label={ItemLabels.package} packageId={packageId} />
+							{modules.map((moduleName, index) => (
+								<Item
+									key={index}
+									label={ItemLabels.module}
+									moduleName={moduleName}
+									packageId={packageId}
+								/>
+							))}
+						</div>
+					}
+				/>
+			),
+		);
+	} else {
+		expandableItems = (changeEntries as SuiObjectChangeWithDisplay[]).map((change) =>
+			'objectId' in change && change.display ? (
+				<ObjectDisplay key={change.objectId} objectId={change.objectId} display={change.display} />
+			) : (
+				'objectId' in change && (
+					<ObjectDetail
+						key={change.objectId}
+						objectId={change.objectId}
+						objectType={change.objectType}
+						display={change.display}
+					/>
+				)
+			),
+		);
+	}
 
-    return (
-        <TransactionBlockCardSection
-            title={
-                <Text
-                    variant="body/semibold"
-                    color={
-                        title === ObjectChangeLabels.created
-                            ? 'success-dark'
-                            : 'steel-darker'
-                    }
-                >
-                    {title}
-                </Text>
-            }
-        >
-            <ExpandableList
-                items={expandableItems}
-                defaultItemsToShow={DEFAULT_ITEMS_TO_SHOW}
-                itemsLabel="Objects"
-            >
-                <div
-                    className={clsx(
-                        'flex max-h-[300px] gap-2 overflow-y-auto',
-                        { 'flex-row': isDisplay, 'flex-col': !isDisplay }
-                    )}
-                >
-                    <ExpandableListItems />
-                </div>
+	return (
+		<TransactionBlockCardSection
+			title={
+				<Text
+					variant="body/semibold"
+					color={title === ObjectChangeLabels.created ? 'success-dark' : 'steel-darker'}
+				>
+					{title}
+				</Text>
+			}
+		>
+			<ExpandableList
+				items={expandableItems}
+				defaultItemsToShow={DEFAULT_ITEMS_TO_SHOW}
+				itemsLabel="Objects"
+			>
+				<div
+					className={clsx('flex max-h-[300px] gap-2 overflow-y-auto', {
+						'flex-row': isDisplay,
+						'flex-col': !isDisplay,
+					})}
+				>
+					<ExpandableListItems />
+				</div>
 
-                {changeEntries.length > DEFAULT_ITEMS_TO_SHOW && (
-                    <div className="pt-4">
-                        <ExpandableListControl />
-                    </div>
-                )}
-            </ExpandableList>
-        </TransactionBlockCardSection>
-    );
+				{changeEntries.length > DEFAULT_ITEMS_TO_SHOW && (
+					<div className="pt-4">
+						<ExpandableListControl />
+					</div>
+				)}
+			</ExpandableList>
+		</TransactionBlockCardSection>
+	);
 }
 
 interface ObjectChangeEntriesCardsProps {
-    data: ObjectChangesByOwner;
-    type: SuiObjectChangeTypes;
+	data: ObjectChangesByOwner;
+	type: SuiObjectChangeTypes;
 }
 
-export function ObjectChangeEntriesCards({
-    data,
-    type,
-}: ObjectChangeEntriesCardsProps) {
-    if (!data) return null;
+export function ObjectChangeEntriesCards({ data, type }: ObjectChangeEntriesCardsProps) {
+	if (!data) return null;
 
-    return (
-        <>
-            {Object.entries(data).map(([ownerAddress, changes]) => {
-                const renderFooter = [
-                    'AddressOwner',
-                    'ObjectOwner',
-                    'Shared',
-                ].includes(changes.ownerType);
-                return (
-                    <TransactionBlockCard
-                        key={ownerAddress}
-                        title="Changes"
-                        size="sm"
-                        shadow
-                        footer={
-                            renderFooter && (
-                                <div className="flex flex-wrap items-center justify-between">
-                                    <Text
-                                        variant="pBody/medium"
-                                        color="steel-dark"
-                                    >
-                                        Owner
-                                    </Text>
+	return (
+		<>
+			{Object.entries(data).map(([ownerAddress, changes]) => {
+				const renderFooter = ['AddressOwner', 'ObjectOwner', 'Shared'].includes(changes.ownerType);
+				return (
+					<TransactionBlockCard
+						key={ownerAddress}
+						title="Changes"
+						size="sm"
+						shadow
+						footer={
+							renderFooter && (
+								<div className="flex flex-wrap items-center justify-between">
+									<Text variant="pBody/medium" color="steel-dark">
+										Owner
+									</Text>
 
-                                    {changes.ownerType === 'AddressOwner' && (
-                                        <AddressLink address={ownerAddress} />
-                                    )}
+									{changes.ownerType === 'AddressOwner' && <AddressLink address={ownerAddress} />}
 
-                                    {changes.ownerType === 'ObjectOwner' && (
-                                        <ObjectLink objectId={ownerAddress} />
-                                    )}
+									{changes.ownerType === 'ObjectOwner' && <ObjectLink objectId={ownerAddress} />}
 
-                                    {changes.ownerType === 'Shared' && (
-                                        <ObjectLink
-                                            objectId={ownerAddress}
-                                            label="Shared"
-                                        />
-                                    )}
-                                </div>
-                            )
-                        }
-                    >
-                        <div className="flex flex-col gap-4">
-                            {!!changes.changesWithDisplay.length && (
-                                <ObjectChangeEntries
-                                    changeEntries={changes.changesWithDisplay}
-                                    type={type}
-                                    isDisplay
-                                />
-                            )}
-                            {!!changes.changes.length && (
-                                <ObjectChangeEntries
-                                    changeEntries={changes.changes}
-                                    type={type}
-                                />
-                            )}
-                        </div>
-                    </TransactionBlockCard>
-                );
-            })}
-        </>
-    );
+									{changes.ownerType === 'Shared' && (
+										<ObjectLink objectId={ownerAddress} label="Shared" />
+									)}
+								</div>
+							)
+						}
+					>
+						<div className="flex flex-col gap-4">
+							{!!changes.changesWithDisplay.length && (
+								<ObjectChangeEntries
+									changeEntries={changes.changesWithDisplay}
+									type={type}
+									isDisplay
+								/>
+							)}
+							{!!changes.changes.length && (
+								<ObjectChangeEntries changeEntries={changes.changes} type={type} />
+							)}
+						</div>
+					</TransactionBlockCard>
+				);
+			})}
+		</>
+	);
 }
 
 interface ObjectChangesProps {
-    objectSummary: ObjectChangeSummary;
+	objectSummary: ObjectChangeSummary;
 }
 
 export function ObjectChanges({ objectSummary }: ObjectChangesProps) {
-    if (!objectSummary) return null;
+	if (!objectSummary) return null;
 
-    return (
-        <>
-            {Object.entries(objectSummary).map(([type, changes]) => (
-                <ObjectChangeEntriesCards
-                    key={type}
-                    type={type as SuiObjectChangeTypes}
-                    data={changes}
-                />
-            ))}
-        </>
-    );
+	return (
+		<>
+			{Object.entries(objectSummary).map(([type, changes]) => (
+				<ObjectChangeEntriesCards key={type} type={type as SuiObjectChangeTypes} data={changes} />
+			))}
+		</>
+	);
 }

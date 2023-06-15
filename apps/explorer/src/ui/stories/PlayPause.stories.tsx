@@ -6,17 +6,17 @@ import { type Meta, type StoryObj } from '@storybook/react';
 import { PlayPause, type PlayPauseProps } from '../PlayPause';
 
 export default {
-    component: PlayPause,
+	component: PlayPause,
 } as Meta;
 
 export const Paused: StoryObj<PlayPauseProps> = {
-    args: {
-        paused: false,
-    },
+	args: {
+		paused: false,
+	},
 };
 
 export const Unpaused: StoryObj<PlayPauseProps> = {
-    args: {
-        paused: true,
-    },
+	args: {
+		paused: true,
+	},
 };

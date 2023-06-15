@@ -6,20 +6,20 @@ import { type Meta, type StoryObj } from '@storybook/react';
 import { TableHeader, type TableHeaderProps } from '../TableHeader';
 
 export default {
-    component: TableHeader,
+	component: TableHeader,
 } as Meta;
 
 export const Default: StoryObj<TableHeaderProps> = {
-    args: {
-        children: 'Table Header',
-        after: 'After Content',
-    },
+	args: {
+		children: 'Table Header',
+		after: 'After Content',
+	},
 };
 
 export const WithSubtext: StoryObj<TableHeaderProps> = {
-    args: {
-        children: 'Table Header',
-        subText: 'Subtext',
-        after: 'After Content',
-    },
+	args: {
+		children: 'Table Header',
+		subText: 'Subtext',
+		after: 'After Content',
+	},
 };

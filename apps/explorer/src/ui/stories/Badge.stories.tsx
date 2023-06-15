@@ -6,19 +6,19 @@ import { type Meta, type StoryObj } from '@storybook/react';
 import { Badge, type BadgeProps } from '../Badge';
 
 export default {
-    component: Badge,
+	component: Badge,
 } as Meta;
 
 export const Current: StoryObj<BadgeProps> = {
-    render: (props) => <Badge {...props}>Badge</Badge>,
+	render: (props) => <Badge {...props}>Badge</Badge>,
 };
 
 export const Success: StoryObj<BadgeProps> = {
-    ...Current,
-    args: { variant: 'success' },
+	...Current,
+	args: { variant: 'success' },
 };
 
 export const Failure: StoryObj<BadgeProps> = {
-    ...Current,
-    args: { variant: 'failure' },
+	...Current,
+	args: { variant: 'failure' },
 };

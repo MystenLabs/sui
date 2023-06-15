@@ -15,7 +15,14 @@
         "kiosk": "pnpm --filter ./sdk/kiosk",
         "suins": "pnpm --filter ./sdk/suins-toolkit",
         "deepbook": "pnpm --filter ./sdk/deepbook",
-        "changeset-version": "pnpm changeset version && pnpm sdk codegen:version"
+        "changeset-version": "pnpm changeset version && pnpm sdk codegen:version",
+        "prettier:check": "prettier -c --ignore-unknown .",
+		"prettier:fix": "prettier -w --ignore-unknown .",
+		"prettier:fix:watch": "onchange '**' -i -f add -f change -j 5 -- prettier -w --ignore-unknown {{file}}",
+		"eslint:check": "eslint --max-warnings=0 .",
+		"eslint:fix": "pnpm run eslint:check --fix",
+		"lint": "pnpm run eslint:check && pnpm run prettier:check",
+		"lint:fix": "pnpm run eslint:fix && pnpm run prettier:fix"
     },
     "pnpm": {
         "overrides": {
@@ -40,6 +47,7 @@
         "eslint-config-react-app": "^7.0.1",
         "eslint-plugin-header": "^3.1.1",
         "eslint-plugin-prettier": "^4.2.1",
+        "eslint-plugin-tsdoc": "^0.2.17",
         "eslint-plugin-unused-imports": "^2.0.0",
         "prettier": "^2.8.7",
         "prettier-plugin-tailwindcss": "^0.2.7",

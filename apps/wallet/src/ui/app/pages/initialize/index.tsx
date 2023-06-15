@@ -10,17 +10,17 @@ import PageLayout from '_pages/layout';
 import st from './InitializePage.module.scss';
 
 const InitializePage = () => {
-    const { pathname } = useLocation();
-    const checkingInitialized = useInitializedGuard(
-        /^\/initialize\/backup(-imported)?(\/)?$/.test(pathname)
-    );
-    return (
-        <PageLayout forceFullscreen={true} className={st.container}>
-            <Loading loading={checkingInitialized}>
-                <Outlet />
-            </Loading>
-        </PageLayout>
-    );
+	const { pathname } = useLocation();
+	const checkingInitialized = useInitializedGuard(
+		/^\/initialize\/backup(-imported)?(\/)?$/.test(pathname),
+	);
+	return (
+		<PageLayout forceFullscreen={true} className={st.container}>
+			<Loading loading={checkingInitialized}>
+				<Outlet />
+			</Loading>
+		</PageLayout>
+	);
 };
 
 export default InitializePage;

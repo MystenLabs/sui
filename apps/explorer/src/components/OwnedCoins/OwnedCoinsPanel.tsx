@@ -9,38 +9,35 @@ import CoinItem from './CoinItem';
 import { LoadingSpinner } from '~/ui/LoadingSpinner';
 
 type CoinsPanelProps = {
-    coinType: string;
-    id: string;
+	coinType: string;
+	id: string;
 };
 
 function CoinsPanel({ coinType, id }: CoinsPanelProps): JSX.Element {
-    const containerRef = useRef(null);
-    const { isIntersecting } = useOnScreen(containerRef);
-    const { data, isLoading, isFetching, fetchNextPage, hasNextPage } =
-        useGetCoins(coinType, id);
+	const containerRef = useRef(null);
+	const { isIntersecting } = useOnScreen(containerRef);
+	const { data, isLoading, isFetching, fetchNextPage, hasNextPage } = useGetCoins(coinType, id);
 
-    const isSpinnerVisible = hasNextPage || isLoading || isFetching;
+	const isSpinnerVisible = hasNextPage || isLoading || isFetching;
 
-    useEffect(() => {
-        if (isIntersecting && hasNextPage && !isFetching) {
-            fetchNextPage();
-        }
-    }, [isIntersecting, hasNextPage, isFetching, fetchNextPage]);
+	useEffect(() => {
+		if (isIntersecting && hasNextPage && !isFetching) {
+			fetchNextPage();
+		}
+	}, [isIntersecting, hasNextPage, isFetching, fetchNextPage]);
 
-    return (
-        <div>
-            {data &&
-                data.pages.map((page) =>
-                    page.data.map((coin) => (
-                        <CoinItem key={coin.coinObjectId} coin={coin} />
-                    ))
-                )}
-            {isSpinnerVisible && (
-                <div ref={containerRef}>
-                    <LoadingSpinner />
-                </div>
-            )}
-        </div>
-    );
+	return (
+		<div>
+			{data &&
+				data.pages.map((page) =>
+					page.data.map((coin) => <CoinItem key={coin.coinObjectId} coin={coin} />),
+				)}
+			{isSpinnerVisible && (
+				<div ref={containerRef}>
+					<LoadingSpinner />
+				</div>
+			)}
+		</div>
+	);
 }
 export default CoinsPanel;

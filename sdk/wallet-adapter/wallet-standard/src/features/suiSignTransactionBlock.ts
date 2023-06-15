@@ -12,23 +12,23 @@ export type SuiSignTransactionBlockVersion = '1.0.0';
  * serialized transaction and transaction signature.
  */
 export type SuiSignTransactionBlockFeature = {
-  /** Namespace for the feature. */
-  'sui:signTransactionBlock': {
-    /** Version of the feature API. */
-    version: SuiSignTransactionBlockVersion;
-    signTransactionBlock: SuiSignTransactionBlockMethod;
-  };
+	/** Namespace for the feature. */
+	'sui:signTransactionBlock': {
+		/** Version of the feature API. */
+		version: SuiSignTransactionBlockVersion;
+		signTransactionBlock: SuiSignTransactionBlockMethod;
+	};
 };
 
 export type SuiSignTransactionBlockMethod = (
-  input: SuiSignTransactionBlockInput,
+	input: SuiSignTransactionBlockInput,
 ) => Promise<SuiSignTransactionBlockOutput>;
 
 /** Input for signing transactions. */
 export interface SuiSignTransactionBlockInput {
-  transactionBlock: TransactionBlock;
-  account: WalletAccount;
-  chain: IdentifierString;
+	transactionBlock: TransactionBlock;
+	account: WalletAccount;
+	chain: IdentifierString;
 }
 
 /** Output of signing transactions. */

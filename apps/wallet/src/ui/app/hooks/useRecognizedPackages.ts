@@ -10,14 +10,9 @@ import { API_ENV } from '_src/shared/api-env';
 const DEFAULT_RECOGNIZED_PACKAGES = [SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_ADDRESS];
 
 export function useRecognizedPackages() {
-    const apiEnv = useAppSelector((app) => app.app.apiEnv);
-    const recognizedPackages = useFeatureValue(
-        'recognized-packages',
-        DEFAULT_RECOGNIZED_PACKAGES
-    );
+	const apiEnv = useAppSelector((app) => app.app.apiEnv);
+	const recognizedPackages = useFeatureValue('recognized-packages', DEFAULT_RECOGNIZED_PACKAGES);
 
-    // Our recognized package list is currently only available on mainnet
-    return apiEnv === API_ENV.mainnet
-        ? recognizedPackages
-        : DEFAULT_RECOGNIZED_PACKAGES;
+	// Our recognized package list is currently only available on mainnet
+	return apiEnv === API_ENV.mainnet ? recognizedPackages : DEFAULT_RECOGNIZED_PACKAGES;
 }

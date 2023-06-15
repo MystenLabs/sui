@@ -12,21 +12,21 @@ You need to create a class that represents your wallet. You can use the `Wallet`
 import { Wallet, SUI_DEVNET_CHAIN } from '@mysten/wallet-standard';
 
 class YourWallet implements Wallet {
-  get version() {
-    // Return the version of the Wallet Standard this implements (in this case, 1.0.0).
-    return '1.0.0';
-  }
-  get name() {
-    return 'Wallet Name';
-  }
-  get icon() {
-    return 'some-icon-data-url';
-  }
+	get version() {
+		// Return the version of the Wallet Standard this implements (in this case, 1.0.0).
+		return '1.0.0';
+	}
+	get name() {
+		return 'Wallet Name';
+	}
+	get icon() {
+		return 'some-icon-data-url';
+	}
 
-  // Return the Sui chains that your wallet supports.
-  get chains() {
-    return [SUI_DEVNET_CHAIN];
-  }
+	// Return the Sui chains that your wallet supports.
+	get chains() {
+		return [SUI_DEVNET_CHAIN];
+	}
 }
 ```
 
@@ -110,22 +110,22 @@ The accounts can use the `ReadonlyWalletAccount` class to easily construct an ac
 import { ReadonlyWalletAccount } from '@mysten/wallet-standard';
 
 class YourWallet implements Wallet {
-  get accounts() {
-    // Assuming we already have some internal representation of accounts:
-    return someWalletAccounts.map(
-      (walletAccount) =>
-        // Return
-        new ReadonlyWalletAccount({
-          address: walletAccount.suiAddress,
-          publicKey: walletAccount.pubkey,
-          // The Sui chains that your wallet supports.
-          chains: [SUI_DEVNET_CHAIN],
-          // The features that this account supports. This can be a subset of the wallet's supported features.
-          // These features must exist on the wallet as well.
-          features: ['sui:signAndExecuteTransactionBlock'],
-        }),
-    );
-  }
+	get accounts() {
+		// Assuming we already have some internal representation of accounts:
+		return someWalletAccounts.map(
+			(walletAccount) =>
+				// Return
+				new ReadonlyWalletAccount({
+					address: walletAccount.suiAddress,
+					publicKey: walletAccount.pubkey,
+					// The Sui chains that your wallet supports.
+					chains: [SUI_DEVNET_CHAIN],
+					// The features that this account supports. This can be a subset of the wallet's supported features.
+					// These features must exist on the wallet as well.
+					features: ['sui:signAndExecuteTransactionBlock'],
+				}),
+		);
+	}
 }
 ```
 

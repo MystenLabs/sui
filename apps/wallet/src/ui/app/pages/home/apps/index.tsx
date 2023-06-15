@@ -10,33 +10,30 @@ import AppsPlayGround, { ConnectedAppsCard } from '_components/sui-apps';
 import st from './AppsPage.module.scss';
 
 function AppsPage() {
-    const filterTags = [
-        {
-            name: 'Playground',
-            link: 'apps',
-        },
-        {
-            name: 'Active Connections',
-            link: 'apps/connected',
-        },
-    ];
+	const filterTags = [
+		{
+			name: 'Playground',
+			link: 'apps',
+		},
+		{
+			name: 'Active Connections',
+			link: 'apps/connected',
+		},
+	];
 
-    return (
-        <div className={st.container}>
-            <Content>
-                <section>
-                    <FiltersPortal tags={filterTags} />
-                    <Routes>
-                        <Route path="/" element={<AppsPlayGround />} />
-                        <Route
-                            path="/connected"
-                            element={<ConnectedAppsCard />}
-                        />
-                    </Routes>
-                </section>
-            </Content>
-        </div>
-    );
+	return (
+		<div className={st.container}>
+			<Content>
+				<section>
+					<FiltersPortal tags={filterTags} />
+					<Routes>
+						<Route path="/" element={<AppsPlayGround />} />
+						<Route path="/connected" element={<ConnectedAppsCard />} />
+					</Routes>
+				</section>
+			</Content>
+		</div>
+	);
 }
 
 export default AppsPage;
