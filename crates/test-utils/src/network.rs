@@ -290,13 +290,14 @@ impl TestCluster {
                 handle.with_async(|node| async {
                     let mut retries = 0;
                     loop {
-                        if node.state().epoch_store_for_testing().epoch() == target_epoch {
+                        let epoch = node.state().epoch_store_for_testing().epoch();
+                        if epoch == target_epoch {
                             break;
                         }
                         tokio::time::sleep(Duration::from_secs(1)).await;
                         retries += 1;
                         if retries % 5 == 0 {
-                            tracing::warn!(validator=?node.state().name.concise(), "Waiting for {:?} seconds for epoch change", retries);
+                            tracing::warn!(validator=?node.state().name.concise(), "Waiting for {:?} seconds to reach epoch {:?}. Currently at epoch {:?}", retries, target_epoch, epoch);
                         }
                     }
                 })
@@ -442,6 +443,7 @@ pub struct TestClusterBuilder {
     fullnode_supported_protocol_versions_config: Option<ProtocolVersionsConfig>,
     db_checkpoint_config_validators: DBCheckpointConfig,
     db_checkpoint_config_fullnodes: DBCheckpointConfig,
+    num_unpruned_validators: Option<usize>,
 }
 
 impl TestClusterBuilder {
@@ -456,6 +458,7 @@ impl TestClusterBuilder {
             fullnode_supported_protocol_versions_config: None,
             db_checkpoint_config_validators: DBCheckpointConfig::default(),
             db_checkpoint_config_fullnodes: DBCheckpointConfig::default(),
+            num_unpruned_validators: None,
         }
     }
 
@@ -563,6 +566,11 @@ impl TestClusterBuilder {
         self
     }
 
+    pub fn with_num_unpruned_validators(mut self, n: usize) -> Self {
+        self.num_unpruned_validators = Some(n);
+        self
+    }
+
     pub fn with_accounts(mut self, accounts: Vec<AccountConfig>) -> Self {
         self.get_or_init_genesis_config().accounts = accounts;
         self
@@ -632,6 +640,9 @@ impl TestClusterBuilder {
         }
         if let Some(fullnode_rpc_port) = self.fullnode_rpc_port {
             builder = builder.with_fullnode_rpc_port(fullnode_rpc_port);
+        }
+        if let Some(num_unpruned_validators) = self.num_unpruned_validators {
+            builder = builder.with_num_unpruned_validators(num_unpruned_validators);
         }
 
         let mut swarm = builder.build();
