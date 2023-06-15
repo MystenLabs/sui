@@ -59,6 +59,7 @@ fn no_dep_graph_from_lock() {
         pkg,
         Symbol::from("Root"),
         &mut File::open(&snapshot).expect("Opening snapshot"),
+        None,
     )
     .expect("Reading DependencyGraph");
 
@@ -82,6 +83,7 @@ fn lock_file_roundtrip() {
         pkg,
         Symbol::from("Root"),
         &mut File::open(&snapshot).expect("Opening snapshot"),
+        None,
     )
     .expect("Reading DependencyGraph");
 
@@ -116,6 +118,7 @@ fn lock_file_missing_dependency() {
         pkg,
         Symbol::from("Root"),
         &mut File::open(&commit).expect("Opening empty lock file"),
+        None
     ) else {
         panic!("Expected reading dependencies to fail.");
     };
@@ -163,6 +166,7 @@ fn always_deps_from_lock() {
         pkg,
         Symbol::from("Root"),
         &mut File::open(&snapshot).expect("Opening snapshot"),
+        None,
     )
     .expect("Creating DependencyGraph");
 
@@ -184,6 +188,7 @@ fn merge_simple() {
         tmp.path().to_path_buf(),
         Symbol::from("Root"),
         &mut A_LOCK.as_bytes(),
+        None,
     )
     .expect("Reading outer");
 
@@ -195,6 +200,7 @@ fn merge_simple() {
         tmp.path().to_path_buf(),
         Symbol::from("A"),
         &mut EMPTY_LOCK.as_bytes(),
+        None,
     )
     .expect("Reading inner");
 
@@ -221,6 +227,7 @@ fn merge_into_root() {
         tmp.path().to_path_buf(),
         Symbol::from("Root"),
         &mut EMPTY_LOCK.as_bytes(),
+        None,
     )
     .expect("Reading outer");
 
@@ -233,6 +240,7 @@ fn merge_into_root() {
         tmp.path().to_path_buf(),
         Symbol::from("Root"),
         &mut A_LOCK.as_bytes(),
+        None,
     )
     .expect("Reading inner");
 
@@ -259,6 +267,7 @@ fn merge_detached() {
         tmp.path().to_path_buf(),
         Symbol::from("Root"),
         &mut EMPTY_LOCK.as_bytes(),
+        None,
     )
     .expect("Reading outer");
 
@@ -270,6 +279,7 @@ fn merge_detached() {
         tmp.path().to_path_buf(),
         Symbol::from("OtherDep"),
         &mut EMPTY_LOCK.as_bytes(),
+        None,
     )
     .expect("Reading inner");
 
@@ -287,6 +297,7 @@ fn merge_after_calculating_always_deps() {
         tmp.path().to_path_buf(),
         Symbol::from("Root"),
         &mut A_LOCK.as_bytes(),
+        None,
     )
     .expect("Reading outer");
 
@@ -294,6 +305,7 @@ fn merge_after_calculating_always_deps() {
         tmp.path().to_path_buf(),
         Symbol::from("A"),
         &mut EMPTY_LOCK.as_bytes(),
+        None,
     )
     .expect("Reading inner");
 
@@ -311,6 +323,7 @@ fn merge_overlapping() {
         tmp.path().to_path_buf(),
         Symbol::from("Root"),
         &mut AB_LOCK.as_bytes(),
+        None,
     )
     .expect("Reading outer");
 
@@ -322,6 +335,7 @@ fn merge_overlapping() {
         tmp.path().to_path_buf(),
         Symbol::from("B"),
         &mut A_LOCK.as_bytes(),
+        None,
     )
     .expect("Reading inner");
 
@@ -343,6 +357,7 @@ fn merge_overlapping_different_deps() {
         tmp.path().to_path_buf(),
         Symbol::from("Root"),
         &mut A_DEP_B_LOCK.as_bytes(),
+        None,
     )
     .expect("Reading outer");
 
@@ -354,6 +369,7 @@ fn merge_overlapping_different_deps() {
         tmp.path().to_path_buf(),
         Symbol::from("B"),
         &mut A_LOCK.as_bytes(),
+        None,
     )
     .expect("Reading inner");
 
@@ -371,6 +387,7 @@ fn merge_cyclic() {
         tmp.path().to_path_buf(),
         Symbol::from("Root"),
         &mut AB_LOCK.as_bytes(),
+        None,
     )
     .expect("Reading outer");
 
@@ -382,6 +399,7 @@ fn merge_cyclic() {
         tmp.path().to_path_buf(),
         Symbol::from("B"),
         &mut ROOT_LOCK.as_bytes(),
+        None,
     )
     .expect("Reading inner");
 

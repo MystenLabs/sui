@@ -159,6 +159,345 @@ impl DependencyGraph {
     /// `progress_output` is an output stream that is written to while generating the graph, to
     /// provide human-readable progress updates.
     pub fn new<Progress: Write>(
+        root_manifest: &PM::SourceManifest,
+        root_path: PathBuf,
+        dependency_cache: &mut DependencyCache,
+        progress_output: &mut Progress,
+        manifest_digest: Option<String>,
+        deps_digest: Option<String>,
+    ) -> Result<DependencyGraph> {
+        let mut combined_graph = DependencyGraph {
+            root_path: root_path.clone(),
+            root_package: root_manifest.package.name,
+            package_graph: DiGraphMap::new(),
+            package_table: BTreeMap::new(),
+            always_deps: BTreeSet::new(),
+            manifest_digest,
+            deps_digest,
+        };
+
+        // collect sub-graphs for "regular" and "dev" dependencies
+        let (dep_graphs, dep_graphs_external, overrides) = DependencyGraph::collect_graphs(
+            &mut combined_graph,
+            root_manifest.package.name,
+            root_path.clone(),
+            DependencyMode::Always,
+            &root_manifest.dependencies,
+            dependency_cache,
+            progress_output,
+        )?;
+        let (dev_dep_graphs, dev_dep_graphs_external, dev_overrides) =
+            DependencyGraph::collect_graphs(
+                &mut combined_graph,
+                root_manifest.package.name,
+                root_path.clone(),
+                DependencyMode::DevOnly,
+                &root_manifest.dev_dependencies,
+                dependency_cache,
+                progress_output,
+            )?;
+
+        DependencyGraph::create_combined_graph(
+            &mut combined_graph,
+            dep_graphs,
+            dep_graphs_external,
+            dev_dep_graphs,
+            dev_dep_graphs_external,
+            &overrides,
+            &dev_overrides,
+            root_manifest.package.name,
+        )?;
+
+        combined_graph.check_acyclic()?;
+        combined_graph.discover_always_deps();
+
+        Ok(combined_graph)
+    }
+
+    pub fn collect_graphs<Progress: Write>(
+        combined_graph: &mut DependencyGraph,
+        parent_pkg: PM::PackageName,
+        root_path: PathBuf,
+        mode: DependencyMode,
+        dependencies: &PM::Dependencies,
+        dependency_cache: &mut DependencyCache,
+        progress_output: &mut Progress,
+    ) -> Result<(
+        BTreeMap<PM::PackageName, (DependencyGraph, Option<Symbol>)>,
+        BTreeMap<PM::PackageName, (DependencyGraph, Option<Symbol>)>,
+        BTreeMap<Symbol, Package>,
+    )> {
+        let mut overrides = BTreeMap::new();
+        let mut dep_graphs = BTreeMap::new();
+        let mut dep_graphs_external = BTreeMap::new();
+        for (dep_pkg_name, dep) in dependencies {
+            let (pkg_graph, override_pkg, resolver) = DependencyGraph::new_for_dep(
+                combined_graph,
+                dep,
+                mode,
+                parent_pkg,
+                *dep_pkg_name,
+                root_path.clone(),
+                dependency_cache,
+                progress_output,
+            )?;
+            if resolver.is_some() {
+                dep_graphs_external.insert(*dep_pkg_name, (pkg_graph, resolver));
+            } else {
+                dep_graphs.insert(*dep_pkg_name, (pkg_graph, resolver));
+            }
+            if let Some(p) = override_pkg {
+                overrides.insert(*dep_pkg_name, p);
+            }
+        }
+        Ok((dep_graphs, dep_graphs_external, overrides))
+    }
+
+    pub fn create_combined_graph(
+        combined_graph: &mut DependencyGraph,
+        dep_graphs: BTreeMap<PM::PackageName, (DependencyGraph, Option<Symbol>)>,
+        dep_graphs_external: BTreeMap<PM::PackageName, (DependencyGraph, Option<Symbol>)>,
+        dev_dep_graphs: BTreeMap<PM::PackageName, (DependencyGraph, Option<Symbol>)>,
+        dev_dep_graphs_external: BTreeMap<PM::PackageName, (DependencyGraph, Option<Symbol>)>,
+        overrides: &BTreeMap<Symbol, Package>,
+        dev_overrides: &BTreeMap<Symbol, Package>,
+        root_package: PM::PackageName,
+    ) -> Result<()> {
+        // process internally resolved packages first so that we have a graph with all internally
+        // resolved dependencies that we can than use to verify externally resolved dependencies
+        DependencyGraph::combine(
+            combined_graph,
+            dep_graphs,
+            DependencyMode::Always,
+            overrides,
+            dev_overrides,
+            root_package,
+        )?;
+        DependencyGraph::combine(
+            combined_graph,
+            dev_dep_graphs,
+            DependencyMode::DevOnly,
+            overrides,
+            dev_overrides,
+            root_package,
+        )?;
+
+        DependencyGraph::combine(
+            combined_graph,
+            dep_graphs_external,
+            DependencyMode::Always,
+            overrides,
+            dev_overrides,
+            root_package,
+        )?;
+        DependencyGraph::combine(
+            combined_graph,
+            dev_dep_graphs_external,
+            DependencyMode::DevOnly,
+            overrides,
+            dev_overrides,
+            root_package,
+        )?;
+
+        Ok(())
+    }
+
+    fn combine(
+        combined_graph: &mut DependencyGraph,
+        dep_graphs: BTreeMap<PM::PackageName, (DependencyGraph, Option<Symbol>)>,
+        mode: DependencyMode,
+        overrides: &BTreeMap<Symbol, Package>,
+        dev_overrides: &BTreeMap<Symbol, Package>,
+        root_package: PM::PackageName,
+    ) -> Result<()> {
+        // populate package table while resolving potential dependency conflicts
+        for (graph, resolver) in dep_graphs.values() {
+            for (pkg_name, new_pkg) in &graph.package_table {
+                if let Some(existing_pkg) = graph.package_table.get(&pkg_name) {
+                    // package with a given name already exists in the combined graph
+                    if new_pkg == existing_pkg {
+                        // same package - no need to do anything else unless package is externally
+                        // resolved in which case we need to make sure that the dependencies of the
+                        // existing package and dependencies of the externally resolved package are
+                        // the same
+                        if let Some(r) = resolver {
+                            let (self_deps, ext_deps) = pkg_deps_equal(
+                                *pkg_name,
+                                &combined_graph.package_graph,
+                                &graph.package_graph,
+                            );
+                            if self_deps != ext_deps {
+                                bail!(
+                                    "Conflicting dependencies found for '{}' during external resolution by '{}':\n{}{}",
+                                    *pkg_name,
+                                    r, // safe because we are combining externally resolved graph
+                                    format_deps("\nExternal dependencies not found:", self_deps),
+                                    format_deps("\nNew external dependencies:", ext_deps),
+                                );
+                            }
+                        }
+                        continue;
+                    } else {
+                        // package being inserted different from existing package
+                        if let Some(override_pkg) = DependencyGraph::get_dep_override(
+                            root_package,
+                            &pkg_name,
+                            overrides,
+                            dev_overrides,
+                            mode == DependencyMode::DevOnly,
+                        )? {
+                            if override_pkg == new_pkg {
+                                // override (inserted before graph combining even started) holds
+                                continue;
+                            }
+                        }
+                        // no override exists
+                        bail!(
+                            "Conflicting dependencies found:\n{0} = {1}\n{0} = {2}",
+                            pkg_name,
+                            PackageWithResolverTOML(existing_pkg),
+                            PackageWithResolverTOML(new_pkg),
+                        );
+                    }
+                } else {
+                    // a package with a given name does not exist in the graph yet
+                    combined_graph
+                        .package_table
+                        .insert(*pkg_name, new_pkg.clone());
+                }
+            }
+        }
+
+        // add all the remaining edges
+        for (graph, _) in dep_graphs.values() {
+            for (from, to, dep) in graph.package_graph.all_edges() {
+                combined_graph.package_graph.add_edge(from, to, dep.clone());
+            }
+        }
+        Ok(())
+    }
+
+    /// Helper function to get overrides for "regular" dependencies (`dev_only` is false) or "dev"
+    /// dependencies (`dev_only` is true).
+    fn get_dep_override<'a>(
+        root_pkg_name: PM::PackageName,
+        pkg_name: &PM::PackageName,
+        overrides: &'a BTreeMap<Symbol, Package>,
+        dev_overrides: &'a BTreeMap<Symbol, Package>,
+        dev_only: bool,
+    ) -> Result<Option<&'a Package>> {
+        // for "regular" dependencies override can come only from "regular" dependencies section,
+        // but for "dev" dependencies override can come from "regular" or "dev" dependencies section
+        if let Some(pkg) = overrides.get(pkg_name) {
+            // "regular" dependencies section case
+            if let Some(_) = dev_overrides.get(pkg_name) {
+                bail!(
+                    "Conflicting \"regular\" and \"dev\" overrides of {} in {}",
+                    pkg_name,
+                    root_pkg_name
+                );
+            }
+            return Ok(Some(pkg));
+        } else if dev_only {
+            // "dev" dependencies section case
+            if let Some(dev_pkg) = dev_overrides.get(pkg_name) {
+                return Ok(Some(dev_pkg));
+            }
+        }
+        Ok(None)
+    }
+
+    pub fn new_for_dep<Progress: Write>(
+        combined_graph: &mut DependencyGraph,
+        dep: &PM::Dependency,
+        mode: DependencyMode,
+        parent_pkg: PM::PackageName,
+        dep_pkg_name: PM::PackageName,
+        dep_pkg_path: PathBuf,
+        dependency_cache: &mut DependencyCache,
+        progress_output: &mut Progress,
+    ) -> Result<(DependencyGraph, Option<Package>, Option<Symbol>)> {
+        let (pkg_graph, override_pkg, resolver) = match dep {
+            PM::Dependency::Internal(d) => {
+                let PM::InternalDependency {
+                    kind,
+                    version,
+                    subst,
+                    digest,
+                    dep_override,
+                } = d;
+                dependency_cache
+                    .download_and_update_if_remote(dep_pkg_name, kind, progress_output)
+                    .with_context(|| format!("Fetching '{}'", dep_pkg_name))?;
+                let pkg_path = dep_pkg_path.join(local_path(kind));
+                let manifest_string =
+                    std::fs::read_to_string(pkg_path.join(SourcePackageLayout::Manifest.path()))?;
+                let lock_string =
+                    std::fs::read_to_string(pkg_path.join(SourcePackageLayout::Lock.path())).ok();
+                let (pkg_graph, _) = DependencyGraph::get(
+                    pkg_path.clone(),
+                    manifest_string,
+                    lock_string,
+                    dependency_cache,
+                    progress_output,
+                )?;
+
+                let dep_pkg = Package {
+                    kind: kind.clone(),
+                    version: version.clone(),
+                    resolver: None,
+                    overridden_path: false,
+                };
+                // insert a given directly-dependent package to the combined graph (it may not be
+                // present in the sub-graphs)
+                combined_graph
+                    .package_table
+                    .insert(dep_pkg_name, dep_pkg.clone());
+                let override_pkg = if d.dep_override { Some(dep_pkg) } else { None };
+                // insert an edge from parent package to the dependent package
+                combined_graph.package_graph.add_edge(
+                    parent_pkg,
+                    dep_pkg_name,
+                    Dependency {
+                        mode,
+                        subst: subst.clone(),
+                        digest: digest.clone(),
+                        dep_override: *dep_override,
+                    },
+                );
+
+                (pkg_graph, override_pkg, None)
+            }
+            PM::Dependency::External(resolver) => {
+                // insert an edge from parent package to the dependent package
+                combined_graph.package_graph.add_edge(
+                    parent_pkg,
+                    dep_pkg_name,
+                    Dependency {
+                        mode,
+                        subst: None,
+                        digest: None,
+                        dep_override: false,
+                    },
+                );
+                (
+                    DependencyGraph::get_external(
+                        mode,
+                        parent_pkg,
+                        dep_pkg_name,
+                        *resolver,
+                        &dep_pkg_path,
+                        progress_output,
+                    )?,
+                    None,
+                    Some(*resolver),
+                )
+            }
+        };
+        Ok((pkg_graph, override_pkg, resolver))
+    }
+
+    pub fn new_old<Progress: Write>(
         root_package: &PM::SourceManifest,
         root_path: PathBuf,
         dependency_cache: &mut DependencyCache,
@@ -253,7 +592,6 @@ impl DependencyGraph {
             dependency_cache,
             progress_output,
         )?;
-
         if let Some(lock_contents) = lock_string {
             let (manifest_digest_opt, deps_digest_opt) = schema::read_header(&lock_contents)?;
 
@@ -272,6 +610,7 @@ impl DependencyGraph {
                                     root_path,
                                     manifest.package.name,
                                     &mut lock_contents.as_bytes(),
+                                    None,
                                 )?,
                                 false,
                             ));
@@ -306,6 +645,7 @@ impl DependencyGraph {
         root_path: PathBuf,
         root_package: PM::PackageName,
         lock: &mut impl Read,
+        resolver: Option<Symbol>,
     ) -> Result<DependencyGraph> {
         let mut package_graph = DiGraphMap::new();
         let mut package_table = BTreeMap::new();
@@ -382,7 +722,7 @@ impl DependencyGraph {
             let pkg = Package {
                 kind: source.kind,
                 version: source.version,
-                resolver: None,
+                resolver,
                 overridden_path: false,
             };
 
@@ -860,16 +1200,14 @@ impl DependencyGraph {
     /// Sends progress updates to `progress_output`, including stderr from the resolver, and
     /// captures stdout, which is assumed to be a lock file containing the result of package
     /// resolution.
-    fn resolve_externally<Progress: Write>(
-        &mut self,
+    fn get_external<Progress: Write>(
         mode: DependencyMode,
         from: PM::PackageName,
         to: PM::PackageName,
         resolver: Symbol,
         package_path: &Path,
-        overrides: &BTreeMap<PM::PackageName, Package>,
         progress_output: &mut Progress,
-    ) -> Result<()> {
+    ) -> Result<DependencyGraph> {
         let mode_label = if mode == DependencyMode::DevOnly {
             "dev-dependencies"
         } else {
@@ -919,10 +1257,27 @@ impl DependencyGraph {
             package_path.to_path_buf(),
             from,
             &mut output.stdout.as_slice(),
+            Some(resolver),
         )
         .with_context(|| {
             format!("Parsing response from '{resolver}' for dependency '{to}' of package '{from}'")
         })?;
+
+        Ok(sub_graph)
+    }
+
+    fn resolve_externally<Progress: Write>(
+        &mut self,
+        mode: DependencyMode,
+        from: PM::PackageName,
+        to: PM::PackageName,
+        resolver: Symbol,
+        package_path: &Path,
+        overrides: &BTreeMap<PM::PackageName, Package>,
+        progress_output: &mut Progress,
+    ) -> Result<()> {
+        let sub_graph =
+            DependencyGraph::get_external(mode, from, to, resolver, package_path, progress_output)?;
 
         self.merge(from, to, sub_graph, resolver, overrides)
             .with_context(|| {
