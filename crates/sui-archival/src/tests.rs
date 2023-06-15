@@ -1,8 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::writer::ArchiveWriterV1;
-use crate::{read_manifest, FileCompression, EPOCH_DIR_PREFIX};
+use crate::writer::ArchiveWriter;
+use crate::{read_manifest, EPOCH_DIR_PREFIX};
 use object_store::path::Path;
 use object_store::DynObjectStore;
 use prometheus::Registry;
@@ -16,9 +16,10 @@ use sui_swarm_config::test_utils::{empty_contents, CommitteeFixture};
 use sui_types::messages_checkpoint::VerifiedCheckpoint;
 use sui_types::storage::SharedInMemoryStore;
 use tempfile::tempdir;
+use sui_storage::{FileCompression, StorageFormat};
 
 struct TestState {
-    archive_writer: ArchiveWriterV1,
+    archive_writer: ArchiveWriter,
     local_path: PathBuf,
     remote_path: PathBuf,
     local_store: Arc<DynObjectStore>,
@@ -68,10 +69,11 @@ async fn setup_checkpoint_writer(temp_dir: PathBuf) -> anyhow::Result<TestState>
         ..Default::default()
     };
     let committee = CommitteeFixture::generate(rand::rngs::OsRng, 0, 4);
-    let archive_writer = ArchiveWriterV1::new(
+    let archive_writer = ArchiveWriter::new(
         local_store_config.clone(),
         remote_store_config.clone(),
         FileCompression::Zstd,
+        StorageFormat::Blob,
         Duration::from_secs(10),
         20,
         &Registry::default(),
@@ -99,18 +101,13 @@ async fn insert_checkpoints_and_verify_manifest(
     let mut num_verified_iterations = 0;
     loop {
         if test_state.remote_path.join("MANIFEST").exists() {
-            if let Ok(manifest) = read_manifest(
-                test_state.local_path.clone(),
-                test_state.local_store.clone(),
-                test_state.remote_store.clone(),
-            )
-            .await
+            if let Ok(manifest) = read_manifest(test_state.remote_store.clone()).await
             {
                 for file in manifest.files().into_iter() {
                     let dir_prefix = Path::from(format!("{}{}", EPOCH_DIR_PREFIX, file.epoch_num));
                     let file_path = path_to_filesystem(
                         test_state.remote_path.clone(),
-                        &file.file_path(&dir_prefix),
+                        &file.file_path(),
                     )?;
                     assert!(file_path.exists());
                 }
@@ -142,7 +139,7 @@ async fn insert_checkpoints_and_verify_manifest(
 async fn test_archive_basic() -> Result<(), anyhow::Error> {
     let test_store = SharedInMemoryStore::default();
     let test_state = setup_checkpoint_writer(temp_dir()).await?;
-    let _kill = test_state.archive_writer.start(test_store.clone())?;
+    let _kill = test_state.archive_writer.start(test_store.clone()).await?;
     insert_checkpoints_and_verify_manifest(&test_state, test_store, None).await?;
     Ok(())
 }
@@ -151,14 +148,14 @@ async fn test_archive_basic() -> Result<(), anyhow::Error> {
 async fn test_archive_resumes() -> Result<(), anyhow::Error> {
     let test_store = SharedInMemoryStore::default();
     let test_state = setup_checkpoint_writer(temp_dir()).await?;
-    let kill = test_state.archive_writer.start(test_store.clone())?;
+    let kill = test_state.archive_writer.start(test_store.clone()).await?;
     let prev_checkpoint =
         insert_checkpoints_and_verify_manifest(&test_state, test_store.clone(), None).await?;
 
     // Kill the archive writer so we can restart it again
     drop(kill);
     let test_state = setup_checkpoint_writer(temp_dir()).await?;
-    let _kill = test_state.archive_writer.start(test_store.clone())?;
+    let _kill = test_state.archive_writer.start(test_store.clone()).await?;
     insert_checkpoints_and_verify_manifest(&test_state, test_store, prev_checkpoint).await?;
 
     Ok(())
