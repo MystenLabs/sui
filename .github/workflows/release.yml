@@ -90,4 +90,5 @@ jobs:
             ${{ steps.build.outputs.BIN_SUI_TEST_VALIDATOR }}
             ${{ steps.build.outputs.BIN_SUI_INDEXER }}
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Have to use a Personal Access Token (PAT), based on https://tinyurl.com/2by2ntdr
+          GITHUB_TOKEN: ${{ secrets.GH_RELEASE_BUILDS_TOKEN }}
