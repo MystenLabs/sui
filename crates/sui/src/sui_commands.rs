@@ -36,6 +36,7 @@ use sui_swarm_config::network_config::NetworkConfig;
 use sui_swarm_config::network_config_builder::ConfigBuilder;
 use sui_swarm_config::node_config_builder::FullnodeConfigBuilder;
 use sui_types::crypto::{SignatureScheme, SuiKeyPair};
+use sui_types::multiaddr::{Multiaddr, Protocol};
 use tracing::info;
 
 #[allow(clippy::large_enum_variant)]
@@ -454,7 +455,10 @@ async fn genesis(
     let mut ssfn_nodes = vec![];
     if let Some(ssfn_info) = ssfn_info {
         for (i, ssfn) in ssfn_info.into_iter().enumerate() {
-            let path = sui_config_dir.join(sui_config::ssfn_config_file(i));
+            let path = sui_config_dir.join(multiaddr_to_filename(
+                ssfn.p2p_address.clone(),
+                sui_config::ssfn_config_file(i),
+            ));
             // join base fullnode config with each SsfnGenesisConfig entry
             let ssfn_config = FullnodeConfigBuilder::new()
                 .with_config_directory(FULL_NODE_DB_PATH.into())
@@ -487,7 +491,10 @@ async fn genesis(
             .into_iter()
             .enumerate()
         {
-            let path = sui_config_dir.join(sui_config::validator_config_file(i));
+            let path = sui_config_dir.join(multiaddr_to_filename(
+                validator.network_address.clone(),
+                sui_config::validator_config_file(i),
+            ));
             let mut val_p2p = validator.p2p_config.clone();
             val_p2p.seed_peers = ssfn_seed_peers.clone();
             validator.p2p_config = val_p2p;
@@ -499,7 +506,10 @@ async fn genesis(
             .into_iter()
             .enumerate()
         {
-            let path = sui_config_dir.join(sui_config::validator_config_file(i));
+            let path = sui_config_dir.join(multiaddr_to_filename(
+                validator.network_address.clone(),
+                sui_config::validator_config_file(i),
+            ));
             validator.save(path)?;
         }
     }
@@ -626,3 +636,45 @@ fn read_line() -> Result<String, anyhow::Error> {
     io::stdin().read_line(&mut s)?;
     Ok(s.trim_end().to_string())
 }
+
+fn multiaddr_to_filename(address: Multiaddr, default: String) -> String {
+    let mut h = None;
+    let mut p = None;
+
+    for component in address.iter() {
+        match component {
+            Protocol::Ip4(ip) => h = Some(ip.to_string()),
+            Protocol::Ip6(ip) => h = Some(ip.to_string()),
+            Protocol::Dns(dns) => h = Some(dns.to_string()),
+            Protocol::Udp(port) | Protocol::Tcp(port) => p = Some(port.to_string()),
+            _ => (),
+        }
+    }
+
+    match (h, p) {
+        (Some(hostname), Some(port)) => {
+            let file_name = format!("{}:{}.yaml", hostname, port);
+            file_name
+        }
+        _ => default,
+    }
+}
+
+// fn multiaddr_to_filename1(mut address: Multiaddr, default: String) -> String {
+//     let port = address.pop();
+//     let hostname = address.pop();
+//     let h = match hostname {
+//         Some(Protocol::Ip4(ip)) => ip.to_string(),
+//         Some(Protocol::Ip6(ip)) => ip.to_string(),
+//         Some(Protocol::Dns(dns)) => dns.to_string(),
+//         _ => return default,
+//     };
+
+//     let p = match port {
+//         Some(Protocol::Udp(port)) => port.to_string(),
+//         Some(Protocol::Tcp(port)) => port.to_string(),
+//         _ => return default,
+//     };
+
+//     format!("{h}:{p}.yaml")
+// }
