@@ -35,10 +35,10 @@ body,
         grid-template-areas:
             'tps'
             'epoch'
-            'network'
-            'checkpoint'
             'gas-price'
             'node-map'
+            'network'
+            'checkpoint'
             'activity'
             'validators'
             'packages';
@@ -47,12 +47,12 @@ body,
     .home-page-grid-container-with-sui-token {
         grid-template-areas:
             'tps'
-            'sui-token'
             'epoch'
-            'network'
-            'checkpoint'
             'gas-price'
             'node-map'
+            'sui-token'
+            'network'
+            'checkpoint'
             'activity'
             'validators'
             'packages';
@@ -62,11 +62,10 @@ body,
         .home-page-grid-container {
             @apply grid-cols-[200px,auto];
             grid-template-areas:
-                'tps         tps'
-                'network     network'
+                'tps         gas-price'
                 'epoch       gas-price'
-                'checkpoint  gas-price'
                 'node-map    node-map'
+                'network     network'
                 'activity    activity'
                 'validators  validators'
                 'packages    packages';
@@ -74,11 +73,36 @@ body,
 
         .home-page-grid-container-with-sui-token {
             grid-template-areas:
-                'tps         sui-token'
-                'network     network'
+                'tps         gas-price'
                 'epoch       gas-price'
-                'checkpoint  gas-price'
                 'node-map    node-map'
+                'sui-token   sui-token'
+                'network     network'
+                'activity    activity'
+                'validators  validators'
+                'packages    packages';
+        }
+    }
+
+    @screen md {
+        .home-page-grid-container {
+            @apply grid-cols-[300px,auto];
+            grid-template-areas:
+                'tps         gas-price'
+                'epoch       gas-price'
+                'node-map    node-map'
+                'network     network'
+                'activity    activity'
+                'validators  validators'
+                'packages    packages';
+        }
+
+        .home-page-grid-container-with-sui-token {
+            grid-template-areas:
+                'tps         gas-price'
+                'epoch       gas-price'
+                'node-map    node-map'
+                'sui-token   network'
                 'activity    activity'
                 'validators  validators'
                 'packages    packages';
@@ -87,26 +111,22 @@ body,
 
     @screen lg {
         .home-page-grid-container {
-            @apply grid-cols-[200px,390px,auto];
+            @apply grid-cols-[200px,454px,auto];
             grid-template-areas:
-                'tps        network    network'
-                'epoch      gas-price  gas-price'
-                'checkpoint gas-price  gas-price'
-                'node-map   node-map   node-map'
-                'activity   activity   activity'
-                'validators validators validators'
-                'packages   packages   packages';
+                'tps        gas-price node-map'
+                'epoch      gas-price node-map'
+                'epoch      gas-price network'
+                'activity   activity  validators'
+                'activity   activity  packages';
         }
 
         .home-page-grid-container-with-sui-token {
             grid-template-areas:
-                'tps        sui-token  network'
-                'epoch      gas-price  gas-price'
-                'checkpoint gas-price  gas-price'
-                'node-map   node-map   node-map'
-                'activity   activity   activity'
-                'validators validators validators'
-                'packages   packages   packages';
+                'tps        gas-price node-map'
+                'epoch      gas-price node-map'
+                'epoch      sui-token network'
+                'activity   activity  validators'
+                'activity   activity  packages';
         }
     }
 
@@ -114,18 +134,18 @@ body,
         .home-page-grid-container {
             @apply grid-cols-[200px,454px,auto];
             grid-template-areas:
-                'tps        gas-price network'
+                'tps        gas-price node-map'
                 'epoch      gas-price node-map'
-                'checkpoint gas-price node-map'
+                'epoch      gas-price network'
                 'activity   activity  validators'
                 'activity   activity  packages';
         }
 
         .home-page-grid-container-with-sui-token {
             grid-template-areas:
-                'tps        sui-token network'
+                'tps        gas-price node-map'
                 'epoch      gas-price node-map'
-                'checkpoint gas-price node-map'
+                'epoch      sui-token network'
                 'activity   activity  validators'
                 'activity   activity  packages';
         }
