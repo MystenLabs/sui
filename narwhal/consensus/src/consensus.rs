@@ -21,6 +21,7 @@ use std::{
     sync::Arc,
 };
 use storage::{CertificateStore, ConsensusStore};
+use sui_protocol_config::ProtocolConfig;
 use tokio::{sync::watch, task::JoinHandle};
 use tracing::{debug, info, instrument, trace};
 use types::{
@@ -152,6 +153,29 @@ impl LeaderSchedule {
             committee,
             leader_swap_table: Arc::new(RwLock::new(table)),
         }
+    }
+
+    pub fn from_store(
+        committee: Committee,
+        store: Arc<ConsensusStore>,
+        protocol_config: ProtocolConfig,
+    ) -> Self {
+        // restore the final ReputationScores to create a LeaderSwapTable. If not found then fallback
+        // to default swap table.
+        // Only try to restore when the new leader election schedule is enabled, other fallback to
+        // default swap table, which basically means there will be no swaps.
+        let table = if protocol_config.narwhal_new_leader_election_schedule() {
+            store
+                .read_latest_commit_with_final_reputation_scores()
+                .map_or(LeaderSwapTable::default(), |commit| {
+                    LeaderSwapTable::new(&committee, &commit.reputation_score())
+                })
+        } else {
+            LeaderSwapTable::default()
+        };
+
+        // create the schedule
+        Self::new(committee, table)
     }
 
     /// Atomically updates the leader swap table with the new provided one. Any leader queried from
