@@ -54,7 +54,7 @@ const keypair = Ed25519Keypair.deriveKeypair(
 const address = keypair.getPublicKey().toSuiAddress();
 ```
 
-In CLI one can import a mnemonic or a private key from the wallet:
+You can use the CLI to import a mnemonic or a private key from the wallet:
 ```bash
 # imports an account using this mnemonic, the ed25519 signature scheme, and (an optional) derivation path
 sui keytool import "TEST_MNEMONIC" ed25519 "m/44'/784'/0'/0'/0'" 
