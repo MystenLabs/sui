@@ -5,25 +5,22 @@ use crate::*;
 
 #[test]
 fn test_empty_stack() {
-    let mut empty = AbsStack::<usize>::new();
+    let mut empty = AbstractStack::<usize>::new();
     assert!(empty.is_empty());
 
     // pop on empty stack
-    assert_eq!(empty.pop(), Err(AbsStackError::EmptyStack));
-    assert_eq!(empty.pop_any_n(nonzero(1)), Err(AbsStackError::EmptyStack));
-    assert_eq!(
-        empty.pop_any_n(nonzero(100)),
-        Err(AbsStackError::EmptyStack)
-    );
-    assert_eq!(empty.pop_eq_n(nonzero(12)), Err(AbsStackError::EmptyStack));
-    assert_eq!(empty.pop_eq_n(nonzero(112)), Err(AbsStackError::EmptyStack));
+    assert_eq!(empty.pop(), Err(AbsStackError::Underflow));
+    assert_eq!(empty.pop_any_n(nonzero(1)), Err(AbsStackError::Underflow));
+    assert_eq!(empty.pop_any_n(nonzero(100)), Err(AbsStackError::Underflow));
+    assert_eq!(empty.pop_eq_n(nonzero(12)), Err(AbsStackError::Underflow));
+    assert_eq!(empty.pop_eq_n(nonzero(112)), Err(AbsStackError::Underflow));
 
     assert!(empty.is_empty());
 }
 
 #[test]
 fn test_simple_push_pop() {
-    let mut s = AbsStack::new();
+    let mut s = AbstractStack::new();
     s.push(1).unwrap();
     assert!(!s.is_empty());
     assert_eq!(s.len(), 1);
@@ -113,7 +110,7 @@ fn test_simple_push_pop() {
 
 #[test]
 fn test_not_eq() {
-    let mut s = AbsStack::new();
+    let mut s = AbstractStack::new();
     s.push(1).unwrap();
     s.push(2).unwrap();
     s.push(2).unwrap();
@@ -130,7 +127,7 @@ fn test_not_eq() {
 
 #[test]
 fn test_not_enough_values() {
-    let mut s = AbsStack::new();
+    let mut s = AbstractStack::new();
     s.push(1).unwrap();
     s.push(2).unwrap();
     s.push(2).unwrap();
@@ -139,8 +136,8 @@ fn test_not_enough_values() {
     s.push(3).unwrap();
     assert_eq!(s.len(), 6);
     s.assert_run_lengths([1, 2, 3]);
-    assert_eq!(s.pop_eq_n(nonzero(7)), Err(AbsStackError::NotEnoughValues));
-    assert_eq!(s.pop_any_n(nonzero(7)), Err(AbsStackError::NotEnoughValues));
+    assert_eq!(s.pop_eq_n(nonzero(7)), Err(AbsStackError::Underflow));
+    assert_eq!(s.pop_any_n(nonzero(7)), Err(AbsStackError::Underflow));
     assert_eq!(s.len(), 6);
     s.assert_run_lengths([1, 2, 3]);
 }
@@ -162,7 +159,7 @@ fn test_exhaustive() {
         runs
     }
     fn push_pop(bits: &[bool]) {
-        let mut s = AbsStack::new();
+        let mut s = AbstractStack::new();
         for bit in bits.iter().copied() {
             s.push(bit).unwrap();
         }
@@ -174,7 +171,7 @@ fn test_exhaustive() {
         assert!(s.is_empty())
     }
     fn pushn_pop(bits: &[bool]) {
-        let mut s = AbsStack::new();
+        let mut s = AbstractStack::new();
         let mut push_cur = false;
         let mut push_count = 0;
         for bit in bits.iter().copied() {
@@ -199,8 +196,8 @@ fn test_exhaustive() {
         assert!(s.is_empty())
     }
     fn push_popn(bits: &[bool]) {
-        let mut s = AbsStack::new();
-        let mut s_no_eq = AbsStack::new();
+        let mut s = AbstractStack::new();
+        let mut s_no_eq = AbstractStack::new();
         for bit in bits {
             s.push(*bit).unwrap();
             s_no_eq.push(*bit).unwrap();
@@ -237,8 +234,8 @@ fn test_exhaustive() {
         assert!(s_no_eq.is_empty());
     }
     fn pushn_popn(bits: &[bool]) {
-        let mut s = AbsStack::new();
-        let mut s_no_eq = AbsStack::new();
+        let mut s = AbstractStack::new();
+        let mut s_no_eq = AbstractStack::new();
         let mut push_cur = false;
         let mut push_count = 0;
         let mut n = 0;

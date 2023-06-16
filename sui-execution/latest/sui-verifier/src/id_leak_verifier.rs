@@ -12,7 +12,7 @@
 //! 2. Written into a mutable reference
 //! 3. Added to a vector
 //! 4. Passed to a function cal::;
-use move_abstract_stack::AbsStack;
+use move_abstract_stack::AbstractStack;
 use move_binary_format::{
     binary_views::{BinaryIndexedView, FunctionView},
     errors::PartialVMError,
@@ -188,7 +188,7 @@ impl AbstractDomain for AbstractState {
 struct IDLeakAnalysis<'a> {
     binary_view: &'a BinaryIndexedView<'a>,
     function_view: &'a FunctionView<'a>,
-    stack: AbsStack<AbstractValue>,
+    stack: AbstractStack<AbstractValue>,
 }
 
 impl<'a> IDLeakAnalysis<'a> {
@@ -196,7 +196,7 @@ impl<'a> IDLeakAnalysis<'a> {
         Self {
             binary_view,
             function_view,
-            stack: AbsStack::new(),
+            stack: AbstractStack::new(),
         }
     }
 
@@ -427,7 +427,7 @@ fn execute_inner(
 
         // These bytecodes produce references, and hence cannot be ID.
         Bytecode::MutBorrowLoc(_)
-        | Bytecode::ImmBorrowLoc(_) => verifier.stack_push(AbstractValue::Other).unwrap(),
+        | Bytecode::ImmBorrowLoc(_) => verifier.stack_push(AbstractValue::Other)?,
 
         | Bytecode::MutBorrowField(_)
         | Bytecode::MutBorrowFieldGeneric(_)

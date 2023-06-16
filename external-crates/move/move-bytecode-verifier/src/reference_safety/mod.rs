@@ -18,7 +18,7 @@ use crate::{
     },
 };
 use abstract_state::{AbstractState, AbstractValue};
-use move_abstract_stack::AbsStack;
+use move_abstract_stack::AbstractStack;
 use move_binary_format::{
     binary_views::{BinaryIndexedView, FunctionView},
     errors::{PartialVMError, PartialVMResult},
@@ -38,7 +38,7 @@ struct ReferenceSafetyAnalysis<'a> {
     resolver: &'a BinaryIndexedView<'a>,
     function_view: &'a FunctionView<'a>,
     name_def_map: &'a HashMap<IdentifierIndex, FunctionDefinitionIndex>,
-    stack: AbsStack<AbstractValue>,
+    stack: AbstractStack<AbstractValue>,
 }
 
 impl<'a> ReferenceSafetyAnalysis<'a> {
@@ -51,7 +51,7 @@ impl<'a> ReferenceSafetyAnalysis<'a> {
             resolver,
             function_view,
             name_def_map,
-            stack: AbsStack::new(),
+            stack: AbstractStack::new(),
         }
     }
 

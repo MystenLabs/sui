@@ -8,7 +8,7 @@
 use std::num::NonZeroU64;
 
 use crate::meter::{Meter, Scope};
-use move_abstract_stack::AbsStack;
+use move_abstract_stack::AbstractStack;
 use move_binary_format::{
     binary_views::{BinaryIndexedView, FunctionView},
     control_flow_graph::ControlFlowGraph,
@@ -53,7 +53,7 @@ struct TypeSafetyChecker<'a> {
     resolver: &'a BinaryIndexedView<'a>,
     function_view: &'a FunctionView<'a>,
     locals: Locals<'a>,
-    stack: AbsStack<SignatureToken>,
+    stack: AbstractStack<SignatureToken>,
 }
 
 impl<'a> TypeSafetyChecker<'a> {
@@ -63,7 +63,7 @@ impl<'a> TypeSafetyChecker<'a> {
             resolver,
             function_view,
             locals,
-            stack: AbsStack::new(),
+            stack: AbstractStack::new(),
         }
     }
 
@@ -103,10 +103,19 @@ impl<'a> TypeSafetyChecker<'a> {
     }
 
     fn charge_ty(&mut self, meter: &mut impl Meter, ty: &SignatureToken) -> PartialVMResult<()> {
+        self.charge_ty_(meter, ty, 1)
+    }
+
+    fn charge_ty_(
+        &mut self,
+        meter: &mut impl Meter,
+        ty: &SignatureToken,
+        n: u64,
+    ) -> PartialVMResult<()> {
         meter.add_items(
             Scope::Function,
             TYPE_NODE_COST,
-            ty.preorder_traversal().count(),
+            ty.preorder_traversal().count() * (n as usize),
         )
     }
 
@@ -828,7 +837,7 @@ fn verify_instr(
                     .stack
                     .pop_eq_n(num_to_pop)
                     .map(|t| element_type != &t)
-                    .unwrap_or(false);
+                    .unwrap_or(true);
                 if is_mismatched {
                     return Err(verifier.error(StatusCode::TYPE_MISMATCH, offset));
                 }

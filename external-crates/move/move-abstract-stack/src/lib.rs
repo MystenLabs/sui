@@ -12,12 +12,12 @@ use std::num::NonZeroU64;
 
 #[derive(Default, Debug)]
 /// An abstract value that compresses runs of the same value to reduce space usage
-pub struct AbsStack<T> {
+pub struct AbstractStack<T> {
     values: Vec<(u64, T)>,
     len: u64,
 }
 
-impl<T: Eq + Clone + Debug> AbsStack<T> {
+impl<T: Eq + Clone + Debug> AbstractStack<T> {
     /// Creates an empty stack
     pub fn new() -> Self {
         Self {
@@ -77,15 +77,12 @@ impl<T: Eq + Clone + Debug> AbsStack<T> {
         self.pop_eq_n(NonZeroU64::new(1).unwrap())
     }
 
-    /// Pops n values single value off the stack, erroring if non enough items or if the n items are
+    /// Pops n values off the stack, erroring if there are not enough items or if the n items are
     /// not equal
     pub fn pop_eq_n(&mut self, n: NonZeroU64) -> Result<T, AbsStackError> {
         let n: u64 = n.get();
-        if self.is_empty() {
-            return Err(AbsStackError::EmptyStack);
-        }
-        if n > self.len {
-            return Err(AbsStackError::NotEnoughValues);
+        if self.is_empty() || n > self.len {
+            return Err(AbsStackError::Underflow);
         }
         let (count, last) = self.values.last_mut().unwrap();
         debug_assert!(*count > 0);
@@ -107,11 +104,8 @@ impl<T: Eq + Clone + Debug> AbsStack<T> {
     /// Pop any n items off the stack. Unlike `pop_n`, items do not have to be equal
     pub fn pop_any_n(&mut self, n: NonZeroU64) -> Result<(), AbsStackError> {
         let n: u64 = n.get();
-        if self.is_empty() {
-            return Err(AbsStackError::EmptyStack);
-        }
-        if n > self.len {
-            return Err(AbsStackError::NotEnoughValues);
+        if self.is_empty() || n > self.len {
+            return Err(AbsStackError::Underflow);
         }
         let mut rem: u64 = n;
         while rem > 0 {
@@ -124,7 +118,7 @@ impl<T: Eq + Clone + Debug> AbsStack<T> {
                 }
                 Ordering::Greater => {
                     *count -= rem;
-                    rem = 0;
+                    break;
                 }
             }
         }
@@ -154,8 +148,7 @@ impl<T: Eq + Clone + Debug> AbsStack<T> {
 #[derive(Eq, PartialEq, PartialOrd, Ord, Clone, Copy, Debug)]
 pub enum AbsStackError {
     ElementNotEqual,
-    EmptyStack,
-    NotEnoughValues,
+    Underflow,
     Overflow,
 }
 
@@ -165,14 +158,11 @@ impl fmt::Display for AbsStackError {
             AbsStackError::ElementNotEqual => {
                 write!(f, "Popped element is not equal to specified item")
             }
-            AbsStackError::EmptyStack => {
-                write!(f, "Unexpected empty stack")
-            }
-            AbsStackError::NotEnoughValues => {
+            AbsStackError::Underflow => {
                 write!(f, "Popped more values than are on the stack")
             }
             AbsStackError::Overflow => {
-                write!(f, "Too many elements on the stack")
+                write!(f, "Pushed too many elements on the stack")
             }
         }
     }
