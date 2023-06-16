@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
-    collections::{BTreeMap, BTreeSet},
+    collections::{BTreeMap, BTreeSet, VecDeque},
     fs::{self, File},
     io::Write,
     path::PathBuf,
@@ -34,10 +34,12 @@ fn no_dep_graph() {
 
     let manifest = parse_move_manifest_from_file(&pkg).expect("Loading manifest");
     let mut dependency_cache = DependencyCache::new(/* skip_fetch_latest_git_deps */ true);
+    let mut internal_dependencies = VecDeque::new();
     let graph = DependencyGraph::new(
         &DependencyKind::default(),
         &manifest,
         pkg,
+        &mut internal_dependencies,
         &mut dependency_cache,
         &mut std::io::sink(),
         None,
@@ -139,10 +141,12 @@ fn always_deps() {
 
     let manifest = parse_move_manifest_from_file(&pkg).expect("Loading manifest");
     let mut dependency_cache = DependencyCache::new(/* skip_fetch_latest_git_deps */ true);
+    let mut internal_dependencies = VecDeque::new();
     let graph = DependencyGraph::new(
         &DependencyKind::default(),
         &manifest,
         pkg,
+        &mut internal_dependencies,
         &mut dependency_cache,
         &mut std::io::sink(),
         None,
@@ -420,10 +424,12 @@ fn immediate_dependencies() {
 
     let manifest = parse_move_manifest_from_file(&pkg).expect("Loading manifest");
     let mut dependency_cache = DependencyCache::new(/* skip_fetch_latest_git_deps */ true);
+    let mut internal_dependencies = VecDeque::new();
     let graph = DependencyGraph::new(
         &DependencyKind::default(),
         &manifest,
         pkg,
+        &mut internal_dependencies,
         &mut dependency_cache,
         &mut std::io::sink(),
         None,

@@ -10,7 +10,10 @@ use move_package::{
     source_package::{manifest_parser as MP, parsed_manifest as PM},
     BuildConfig,
 };
-use std::{collections::BTreeMap, path::PathBuf};
+use std::{
+    collections::{BTreeMap, VecDeque},
+    path::PathBuf,
+};
 use tempfile::tempdir;
 
 #[test]
@@ -26,11 +29,13 @@ fn test_additonal_addresses() {
     let pm = MP::parse_move_manifest_from_file(&path).unwrap();
 
     let mut dependency_cache = DependencyCache::new(/* skip_fetch_latest_git_deps */ true);
+    let mut internal_dependencies = VecDeque::new();
     let mut sink = std::io::sink();
     let dg = DG::DependencyGraph::new(
         &PM::DependencyKind::default(),
         &pm,
         path,
+        &mut internal_dependencies,
         &mut dependency_cache,
         &mut sink,
         None,
@@ -74,11 +79,13 @@ fn test_additonal_addresses_already_assigned_same_value() {
     let pm = MP::parse_move_manifest_from_file(&path).unwrap();
 
     let mut dependency_cache = DependencyCache::new(/* skip_fetch_latest_git_deps */ true);
+    let mut internal_dependencies = VecDeque::new();
     let mut sink = std::io::sink();
     let dg = DG::DependencyGraph::new(
         &PM::DependencyKind::default(),
         &pm,
         path,
+        &mut internal_dependencies,
         &mut dependency_cache,
         &mut sink,
         None,
@@ -111,11 +118,13 @@ fn test_additonal_addresses_already_assigned_different_value() {
     let pm = MP::parse_move_manifest_from_file(&path).unwrap();
 
     let mut dependency_cache = DependencyCache::new(/* skip_fetch_latest_git_deps */ true);
+    let mut internal_dependencies = VecDeque::new();
     let mut sink = std::io::sink();
     let dg = DG::DependencyGraph::new(
         &PM::DependencyKind::default(),
         &pm,
         path,
+        &mut internal_dependencies,
         &mut dependency_cache,
         &mut sink,
         None,

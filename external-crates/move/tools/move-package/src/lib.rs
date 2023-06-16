@@ -21,7 +21,7 @@ use resolution::{
 use serde::{Deserialize, Serialize};
 use source_package::{layout::SourcePackageLayout, parsed_manifest::DependencyKind};
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, VecDeque},
     io::Write,
     path::{Path, PathBuf},
 };
@@ -161,11 +161,13 @@ impl BuildConfig {
         let _mutx = PackageLock::lock(); // held until function returns
 
         let mut dependency_cache = DependencyCache::new(self.skip_fetch_latest_git_deps);
+        let mut internal_dependencies = VecDeque::new();
         let (dependency_graph, modified) = DependencyGraph::get(
             &DependencyKind::default(),
             path.clone(),
             manifest_string,
             lock_string,
+            &mut internal_dependencies,
             &mut dependency_cache,
             writer,
         )?;

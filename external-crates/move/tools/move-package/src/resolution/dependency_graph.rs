@@ -6,7 +6,7 @@ use colored::Colorize;
 use move_symbol_pool::Symbol;
 use petgraph::{algo, prelude::DiGraphMap, Direction};
 use std::{
-    collections::{btree_map::Entry, BTreeMap, BTreeSet},
+    collections::{btree_map::Entry, BTreeMap, BTreeSet, VecDeque},
     fmt,
     io::{BufWriter, Read, Write},
     path::{Path, PathBuf},
@@ -162,6 +162,7 @@ impl DependencyGraph {
         parent: &PM::DependencyKind,
         root_manifest: &PM::SourceManifest,
         root_path: PathBuf,
+        internal_dependencies: &mut VecDeque<(PM::PackageName, PM::InternalDependency)>,
         dependency_cache: &mut DependencyCache,
         progress_output: &mut Progress,
         manifest_digest: Option<String>,
@@ -174,6 +175,7 @@ impl DependencyGraph {
             root_path.clone(),
             DependencyMode::Always,
             &root_manifest.dependencies,
+            internal_dependencies,
             dependency_cache,
             progress_output,
         )?;
@@ -183,6 +185,7 @@ impl DependencyGraph {
             root_path.clone(),
             DependencyMode::DevOnly,
             &root_manifest.dev_dependencies,
+            internal_dependencies,
             dependency_cache,
             progress_output,
         )?;
@@ -347,6 +350,7 @@ impl DependencyGraph {
         root_path: PathBuf,
         mode: DependencyMode,
         dependencies: &PM::Dependencies,
+        internal_dependencies: &mut VecDeque<(PM::PackageName, PM::InternalDependency)>,
         dependency_cache: &mut DependencyCache,
         progress_output: &mut Progress,
     ) -> Result<(
@@ -363,9 +367,16 @@ impl DependencyGraph {
                 parent_pkg,
                 *dep_pkg_name,
                 root_path.clone(),
+                internal_dependencies,
                 dependency_cache,
                 progress_output,
-            )?;
+            )
+            .with_context(|| {
+                format!(
+                    "Failed to resolve dependencies for package '{}'",
+                    parent_pkg
+                )
+            })?;
             if resolver.is_some() {
                 dep_graphs_external.insert(*dep_pkg_name, (pkg_graph, resolver));
             } else {
@@ -401,7 +412,9 @@ impl DependencyGraph {
                             );
                             if self_deps != ext_deps {
                                 bail!(
-                                    "Conflicting dependencies found for '{}' during external resolution by '{}':\n{}{}",
+                                    "When resolving dependencies for package {},\
+                                     conflicting dependencies found for '{}' during external resolution by '{}':\n{}{}",
+                                    root_package,
                                     *pkg_name,
                                     r, // safe because we are combining externally resolved graph
                                     format_deps("\nExternal dependencies not found:", self_deps),
@@ -427,7 +440,9 @@ impl DependencyGraph {
                         }
                         // no override exists
                         bail!(
-                            "Conflicting dependencies found:\n{0} = {1}\n{0} = {2}",
+                            "When resolving dependencies for package {0}, \
+                             conflicting dependencies found:\n{1} = {2}\n{1} = {3}",
+                            root_package,
                             pkg_name,
                             PackageWithResolverTOML(existing_pkg),
                             PackageWithResolverTOML(new_pkg),
@@ -488,27 +503,38 @@ impl DependencyGraph {
         parent_pkg: PM::PackageName,
         dep_pkg_name: PM::PackageName,
         dep_pkg_path: PathBuf,
+        internal_dependencies: &mut VecDeque<(PM::PackageName, PM::InternalDependency)>,
         dependency_cache: &mut DependencyCache,
         progress_output: &mut Progress,
     ) -> Result<(DependencyGraph, Option<Symbol>)> {
         let (pkg_graph, resolver) = match dep {
             PM::Dependency::Internal(d) => {
+                DependencyGraph::check_for_dep_cycles(
+                    d.clone(),
+                    dep_pkg_name,
+                    internal_dependencies,
+                )?;
                 dependency_cache
                     .download_and_update_if_remote(dep_pkg_name, &d.kind, progress_output)
                     .with_context(|| format!("Fetching '{}'", dep_pkg_name))?;
                 let pkg_path = dep_pkg_path.join(local_path(&d.kind));
                 let manifest_string =
-                    std::fs::read_to_string(pkg_path.join(SourcePackageLayout::Manifest.path()))?;
+                    std::fs::read_to_string(pkg_path.join(SourcePackageLayout::Manifest.path()))
+                        .with_context(|| format!("Parsing manifest for '{}'", dep_pkg_name))?;
                 let lock_string =
                     std::fs::read_to_string(pkg_path.join(SourcePackageLayout::Lock.path())).ok();
+                // save dependency for cycle detection
+                internal_dependencies.push_front((dep_pkg_name, d.clone()));
                 let (mut pkg_graph, _) = DependencyGraph::get(
                     &d.kind,
                     pkg_path.clone(),
                     manifest_string,
                     lock_string,
+                    internal_dependencies,
                     dependency_cache,
                     progress_output,
                 )?;
+                internal_dependencies.pop_front();
                 // reroot all packages to normalize local paths across all graphs
                 for (_, p) in pkg_graph.package_table.iter_mut() {
                     p.kind.reroot(parent)?;
@@ -528,6 +554,31 @@ impl DependencyGraph {
             }
         };
         Ok((pkg_graph, resolver))
+    }
+
+    /// Cycle detection to avoid infinite recursion due to the way we construct internally resolved
+    /// sub-graphs, expecting to end recursion at leaf packages that have no dependencies.
+    fn check_for_dep_cycles(
+        dep: PM::InternalDependency,
+        dep_pkg_name: PM::PackageName,
+        internal_dependencies: &mut VecDeque<(PM::PackageName, PM::InternalDependency)>,
+    ) -> Result<()> {
+        if internal_dependencies.contains(&(dep_pkg_name, dep.clone())) {
+            let (mut processed_name, mut processed_dep) = internal_dependencies.pop_back().unwrap();
+            while processed_name != dep_pkg_name || processed_dep != dep {
+                (processed_name, processed_dep) = internal_dependencies.pop_back().unwrap();
+            }
+            // now the queue contains all intermediate dependencies
+            let mut msg = "Found cycle between packages: ".to_string();
+            msg.push_str(format!("{} -> ", dep_pkg_name).as_str());
+            while !internal_dependencies.is_empty() {
+                let (p, _) = internal_dependencies.pop_back().unwrap();
+                msg.push_str(format!("{} -> ", p).as_str());
+            }
+            msg.push_str(format!("{}", dep_pkg_name).as_str());
+            bail!(msg);
+        }
+        Ok(())
     }
 
     pub fn new_old<Progress: Write>(
@@ -611,6 +662,7 @@ impl DependencyGraph {
         root_path: PathBuf,
         manifest_string: String,
         lock_string: Option<String>,
+        internal_dependencies: &mut VecDeque<(PM::PackageName, PM::InternalDependency)>,
         dependency_cache: &mut DependencyCache,
         progress_output: &mut Progress,
     ) -> Result<(DependencyGraph, bool)> {
@@ -659,6 +711,7 @@ impl DependencyGraph {
                 parent,
                 &manifest,
                 root_path.to_path_buf(),
+                internal_dependencies,
                 dependency_cache,
                 progress_output,
                 Some(new_manifest_digest),
