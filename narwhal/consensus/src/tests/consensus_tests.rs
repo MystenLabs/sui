@@ -6,10 +6,11 @@
 use config::AuthorityIdentifier;
 use fastcrypto::hash::Hash;
 use prometheus::Registry;
-use std::collections::BTreeSet;
+use std::collections::{BTreeSet, HashMap};
 use std::num::NonZeroUsize;
 use std::sync::Arc;
-use storage::NodeStorage;
+use storage::{ConsensusStore, NodeStorage};
+use sui_protocol_config::ProtocolConfig;
 use telemetry_subscribers::TelemetryGuards;
 use test_utils::{latest_protocol_version, mock_certificate};
 use test_utils::{temp_dir, CommitteeFixture};
@@ -22,7 +23,8 @@ use crate::metrics::ConsensusMetrics;
 use crate::Consensus;
 use crate::NUM_SHUTDOWN_RECEIVERS;
 use types::{
-    Certificate, CertificateAPI, HeaderAPI, PreSubscribedBroadcastSender, ReputationScores, Round,
+    Certificate, CertificateAPI, CommittedSubDag, HeaderAPI, PreSubscribedBroadcastSender,
+    ReputationScores, Round,
 };
 
 /// This test is trying to compare the output of the Consensus algorithm when:
@@ -461,6 +463,54 @@ async fn test_leader_schedule() {
     let (leader_authority, leader_certificate_result) = schedule.leader_certificate(2, &dag);
     assert_eq!(leader_authority.id(), swapped_leader);
     assert_eq!(certificate, leader_certificate_result.unwrap().clone());
+}
+
+#[tokio::test]
+async fn test_leader_schedule_from_store() {
+    // GIVEN
+    let fixture = CommitteeFixture::builder().build();
+    let committee = fixture.committee();
+    let authority_ids: Vec<AuthorityIdentifier> = fixture.authorities().map(|a| a.id()).collect();
+    let store = Arc::new(ConsensusStore::new_for_tests());
+
+    // Create a leader schedule with a default swap table, so no authority will be swapped and find the leader at
+    // position 2. We expect the leader of round 2 to be the authority of position 0 , since round robin is used
+    // in tests.
+    let schedule = LeaderSchedule::new(committee.clone(), LeaderSwapTable::default());
+    let leader_2 = schedule.leader(2);
+    assert_eq!(leader_2.id(), authority_ids[0]);
+
+    // AND we add some a commit with a final score where the validator 0 is expected to be the lowest score one.
+    let mut scores = ReputationScores::new(&committee);
+    scores.final_of_schedule = true;
+    for (score, id) in fixture.authorities().map(|a| a.id()).enumerate() {
+        scores.add_score(id, score as u64);
+    }
+
+    let sub_dag = CommittedSubDag::new(vec![], Certificate::default(), 0, scores, None);
+
+    store
+        .write_consensus_state(&HashMap::new(), &sub_dag)
+        .unwrap();
+
+    // WHEN flag is disabled for the new schedule algorithm
+    let protocol_config = ProtocolConfig::get_for_max_version();
+    let schedule = LeaderSchedule::from_store(committee.clone(), store.clone(), protocol_config);
+
+    // THEN the default should be returned. In this case we detect since good/bad nodes will be empty
+    assert!(schedule.leader_swap_table.read().good_nodes.is_empty());
+    assert!(schedule.leader_swap_table.read().bad_nodes.is_empty());
+
+    // WHEN flag is enabled for the new schedule algorithm
+    let mut protocol_config = ProtocolConfig::get_for_max_version();
+    protocol_config.set_narwhal_new_leader_election_schedule(true);
+    let schedule = LeaderSchedule::from_store(committee, store, protocol_config);
+
+    // THEN the stored schedule should be returned and eventually the low score leader should be
+    // swapped with a high score one.
+    let new_leader_2 = schedule.leader(2);
+
+    assert_ne!(leader_2.id(), new_leader_2.id());
 }
 
 fn setup_tracing() -> TelemetryGuards {
