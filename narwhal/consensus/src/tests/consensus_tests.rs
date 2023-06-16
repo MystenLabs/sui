@@ -74,7 +74,11 @@ async fn test_consensus_recovery_with_bullshark() {
 
     let gc_depth = 50;
     let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
-    let leader_schedule = LeaderSchedule::new(committee.clone(), LeaderSwapTable::default());
+    let leader_schedule = LeaderSchedule::from_store(
+        committee.clone(),
+        consensus_store.clone(),
+        latest_protocol_version(),
+    );
     let bullshark = Bullshark::new(
         committee.clone(),
         consensus_store.clone(),
@@ -172,13 +176,18 @@ async fn test_consensus_recovery_with_bullshark() {
     let consensus_store = storage.consensus_store;
     let certificate_store = storage.certificate_store;
 
+    let leader_schedule = LeaderSchedule::from_store(
+        committee.clone(),
+        consensus_store.clone(),
+        latest_protocol_version(),
+    );
     let bullshark = Bullshark::new(
         committee.clone(),
         consensus_store.clone(),
         latest_protocol_version(),
         metrics.clone(),
         NUM_SUB_DAGS_PER_SCHEDULE,
-        LeaderSchedule::new(committee.clone(), LeaderSwapTable::default()),
+        leader_schedule,
     );
 
     let consensus_handle = Consensus::spawn(
