@@ -10,6 +10,7 @@ import Browser from 'webextension-polyfill';
 
 import NetworkEnv from '../NetworkEnv';
 import { Window } from '../Window';
+import { getStoredAccountsPublicInfo } from '../keyring/accounts';
 import { requestUserApproval } from '../qredo';
 import { Connection } from './Connection';
 import { createMessage } from '_messages';
@@ -65,7 +66,7 @@ export class ContentScriptConnection extends Connection {
 		try {
 			if (isGetAccount(payload)) {
 				const { accounts } = await this.ensurePermissions(['viewAccount']);
-				this.sendAccounts(accounts, msg.id);
+				await this.sendAccounts(accounts, msg.id);
 			} else if (isHasPermissionRequest(payload)) {
 				this.send(
 					createMessage<HasPermissionsResponse>(
@@ -229,12 +230,16 @@ export class ContentScriptConnection extends Connection {
 		this.send(createMessage(error, responseForID));
 	}
 
-	private sendAccounts(accounts: SuiAddress[], responseForID?: string) {
+	private async sendAccounts(accounts: SuiAddress[], responseForID?: string) {
+		const allAccountsPublicInfo = await getStoredAccountsPublicInfo();
 		this.send(
 			createMessage<GetAccountResponse>(
 				{
 					type: 'get-account-response',
-					accounts,
+					accounts: accounts.map((anAddress) => ({
+						address: anAddress,
+						publicKey: allAccountsPublicInfo[anAddress]?.publicKey || null,
+					})),
 				},
 				responseForID,
 			),

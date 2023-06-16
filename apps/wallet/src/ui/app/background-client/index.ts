@@ -25,6 +25,7 @@ import { setActiveOrigin, changeActiveNetwork } from '_redux/slices/app';
 import { setPermissions } from '_redux/slices/permissions';
 import { setTransactionRequests } from '_redux/slices/transaction-requests';
 import { type SerializedLedgerAccount } from '_src/background/keyring/LedgerAccount';
+import { type AccountsPublicInfoUpdates } from '_src/background/keyring/accounts';
 import { type QredoConnectIdentity } from '_src/background/qredo/types';
 import {
 	isQredoConnectPayload,
@@ -404,6 +405,18 @@ export class BackgroundClient {
 					type: 'qredo-connect',
 					method: 'rejectQredoConnection',
 					args,
+				}),
+			).pipe(take(1)),
+		);
+	}
+
+	public updateAccountsPublicInfo(updates: AccountsPublicInfoUpdates) {
+		return lastValueFrom(
+			this.sendMessage(
+				createMessage<KeyringPayload<'updateAccountPublicInfo'>>({
+					type: 'keyring',
+					method: 'updateAccountPublicInfo',
+					args: { updates },
 				}),
 			).pipe(take(1)),
 		);

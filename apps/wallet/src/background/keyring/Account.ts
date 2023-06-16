@@ -25,6 +25,7 @@ export interface Account {
 	readonly type: AccountType;
 	readonly address: SuiAddress;
 	toJSON(): SerializedAccount;
+	getPublicKey(): string | null;
 }
 
 export function isImportedOrDerivedAccount(
