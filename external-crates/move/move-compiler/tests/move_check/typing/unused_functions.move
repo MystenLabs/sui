@@ -4,7 +4,6 @@ module 0x42::unused_functions {
     }
 
     // make sure that defining a function after its use does not matter
-    #[aaa]
     fun unused_private() {}
 
     fun used_private() {}

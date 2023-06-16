@@ -112,6 +112,7 @@ module games::hero {
 
     // --- Initialization
 
+    #[allow(unused_function)]
     /// On module publish, sender creates a new game. But once it is published,
     /// anyone create a new game with a `new_game` function.
     fun init(ctx: &mut TxContext) {

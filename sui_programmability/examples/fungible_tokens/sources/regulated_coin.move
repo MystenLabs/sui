@@ -127,6 +127,7 @@ module abc::abc {
     /// For when address has been banned and someone is trying to access the balance
     const EAddressBanned: u64 = 2;
 
+    #[allow(unused_function)]
     /// Create the Abc currency and send the AbcTreasuryCap to the creator
     /// as well as the first (and empty) balance of the RegulatedCoin<Abc>.
     ///
@@ -264,14 +265,10 @@ module abc::abc {
 
     // === Private implementations accessors and type morphing ===
 
+    #[allow(unused_function)]
     fun borrow(coin: &RCoin<Abc>): &Balance<Abc> { rcoin::borrow(Abc {}, coin) }
     fun borrow_mut(coin: &mut RCoin<Abc>): &mut Balance<Abc> { rcoin::borrow_mut(Abc {}, coin) }
     fun zero(creator: address, ctx: &mut TxContext): RCoin<Abc> { rcoin::zero(Abc {}, creator, ctx) }
-
-    fun into_balance(coin: RCoin<Abc>): Balance<Abc> { rcoin::into_balance(Abc {}, coin) }
-    fun from_balance(balance: Balance<Abc>, creator: address, ctx: &mut TxContext): RCoin<Abc> {
-        rcoin::from_balance(Abc {}, balance, creator, ctx)
-    }
 
     // === Testing utilities ===
 
@@ -298,46 +295,9 @@ module abc::tests {
     use abc::abc::{Self, Abc, AbcTreasuryCap, Registry};
     use rc::regulated_coin::{Self as rcoin, RegulatedCoin as RCoin};
 
-    use sui::coin::{Coin};
     use sui::test_scenario::{Self, Scenario, next_tx, ctx};
 
     // === Test handlers; this trick helps reusing scenarios ==
-
-    fun test_minting() {
-        let scenario = scenario();
-        test_minting_(&mut scenario);
-        test_scenario::end(scenario);
-    }
-    fun test_creation() {
-        let scenario = scenario();
-        test_creation_(&mut scenario);
-        test_scenario::end(scenario);
-    }
-    fun test_transfer() {
-        let scenario = scenario();
-        test_transfer_(&mut scenario);
-        test_scenario::end(scenario);
-    }
-    fun test_burn() {
-        let scenario = scenario();
-        test_burn_(&mut scenario);
-        test_scenario::end(scenario);
-    }
-    fun test_take() {
-        let scenario = scenario();
-        test_take_(&mut scenario);
-        test_scenario::end(scenario);
-    }
-    fun test_put_back() {
-        let scenario = scenario();
-        test_put_back_(&mut scenario);
-        test_scenario::end(scenario);
-    }
-    fun test_ban() {
-        let scenario = scenario();
-        test_ban_(&mut scenario);
-        test_scenario::end(scenario);
-    }
 
     #[test]
     #[expected_failure(abort_code = abc::abc::EAddressBanned)]
@@ -450,82 +410,6 @@ module abc::tests {
             test_scenario::return_shared(reg);
             test_scenario::return_to_sender(test, coin);
         };
-    }
-
-    // Admin burns 100,000 of `RCoin<Abc>`
-    fun test_burn_(test: &mut Scenario) {
-        let (admin, _, _) = people();
-
-        test_transfer_(test);
-
-        next_tx(test, admin);
-        {
-            let coin = test_scenario::take_from_sender<RCoin<Abc>>(test);
-            let treasury_cap = test_scenario::take_from_sender<AbcTreasuryCap>(test);
-
-            abc::burn(&mut treasury_cap, &mut coin, 100000);
-
-            assert!(rcoin::value(&coin) == 400000, 4);
-
-            test_scenario::return_to_sender(test, treasury_cap);
-            test_scenario::return_to_sender(test, coin);
-        };
-    }
-
-    // User1 cashes 100,000 of his `RegulatedCoin` into a `Coin`;
-    // User1 sends Coin<Abc> it to `user2`.
-    fun test_take_(test: &mut Scenario) {
-        let (_, user1, user2) = people();
-
-        test_transfer_(test);
-
-        next_tx(test, user1);
-        {
-            let coin = test_scenario::take_from_sender<RCoin<Abc>>(test);
-            let reg = test_scenario::take_shared<Registry>(test);
-            let reg_ref = &mut reg;
-
-            abc::take(reg_ref, &mut coin, 100000, ctx(test));
-
-            assert!(abc::swapped_amount(reg_ref) == 100000, 5);
-            assert!(rcoin::value(&coin) == 400000, 5);
-
-            test_scenario::return_shared( reg);
-            test_scenario::return_to_sender(test, coin);
-        };
-
-        next_tx(test, user1);
-        {
-            let coin = test_scenario::take_from_sender<Coin<Abc>>(test);
-            sui::transfer::public_transfer(coin, user2);
-        };
-    }
-
-    // User2 sends his `Coin<Abc>` to `admin`.
-    // Admin puts this coin to his RegulatedCoin balance.
-    fun test_put_back_(test: &mut Scenario) {
-        let (admin, _, user2) = people();
-
-        test_take_(test);
-
-        next_tx(test, user2);
-        {
-            let coin = test_scenario::take_from_sender<Coin<Abc>>(test);
-            sui::transfer::public_transfer(coin, admin);
-        };
-
-        next_tx(test, admin);
-        {
-            let coin = test_scenario::take_from_sender<Coin<Abc>>(test);
-            let reg_coin = test_scenario::take_from_sender<RCoin<Abc>>(test);
-            let reg = test_scenario::take_shared<Registry>(test);
-            let reg_ref = &mut reg;
-
-            abc::put_back(reg_ref, &mut reg_coin, coin, ctx(test));
-
-            test_scenario::return_to_sender(test, reg_coin);
-            test_scenario::return_shared(reg);
-        }
     }
 
     // Admin bans user1 by adding his address to the registry.

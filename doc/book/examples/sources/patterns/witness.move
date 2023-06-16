@@ -33,6 +33,7 @@ module examples::peace_guardian {
     /// This type is intended to be used only once.
     struct PEACE has drop {}
 
+    #[allow(unused_function)]
     /// Module initializer is the best way to ensure that the
     /// code is called only once. With `Witness` pattern it is
     /// often the best practice.

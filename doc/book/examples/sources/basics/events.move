@@ -42,6 +42,7 @@ module examples::donuts_with_events {
 
     // ====== Functions ======
 
+    #[allow(unused_function)]
     fun init(ctx: &mut TxContext) {
         transfer::transfer(ShopOwnerCap {
             id: object::new(ctx)

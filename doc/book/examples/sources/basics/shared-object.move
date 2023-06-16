@@ -28,6 +28,7 @@ module examples::donuts {
         balance: Balance<SUI>
     }
 
+    #[allow(unused_function)]
     /// Init function is often ideal place for initializing
     /// a shared object as it is called only once.
     ///
