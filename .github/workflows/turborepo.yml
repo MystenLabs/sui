@@ -24,7 +24,7 @@ jobs:
         run: pnpm audit --prod --audit-level moderate
 
   build:
-    name: Lint, Build, and Test
+    name: Build, Test, and Lint
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -51,12 +51,12 @@ jobs:
           key: turbo-${{ runner.os }}-${{ github.sha }}
           restore-keys: |
             turbo-${{ runner.os }}-
-      - name: Lint
-        run: pnpm turbo lint
       - name: Build
         run: pnpm turbo build
       - name: Test
         run: pnpm turbo test
+      - name: Lint
+        run: pnpm lint
 
       # Pack wallet extension and upload it as an artifact for easy developer use:
       - name: Wallet Extension Has Changes?
