@@ -6,6 +6,7 @@ import { Ed25519PublicKey } from './ed25519-publickey';
 import { PublicKey } from './publickey';
 import { Secp256k1PublicKey } from './secp256k1-publickey';
 import { Secp256r1PublicKey } from './secp256r1-publickey';
+import { decodeMultiSig } from './multisig';
 
 /**
  * A keypair used for signing transactions.
@@ -42,6 +43,7 @@ export const SIGNATURE_FLAG_TO_SCHEME = {
 	0x02: 'Secp256r1',
 	0x03: 'MultiSig',
 } as const;
+
 export type SignatureFlag = keyof typeof SIGNATURE_FLAG_TO_SCHEME;
 
 export function toSerializedSignature({
@@ -56,16 +58,17 @@ export function toSerializedSignature({
 	return toB64(serializedSignature);
 }
 
-export function fromSerializedSignature(
+/// Expects to parse a serialized signature by its signature scheme to a list of signature
+/// and public key pairs. The list is of length 1 if it is not multisig.
+export function toParsedSignaturePubkeyPair(
 	serializedSignature: SerializedSignature,
-): SignaturePubkeyPair {
+): SignaturePubkeyPair[] {
 	const bytes = fromB64(serializedSignature);
 	const signatureScheme =
 		SIGNATURE_FLAG_TO_SCHEME[bytes[0] as keyof typeof SIGNATURE_FLAG_TO_SCHEME];
 
 	if (signatureScheme === 'MultiSig') {
-		// TODO(joyqvq): add multisig parsing support
-		throw new Error('MultiSig is not supported');
+		return decodeMultiSig(serializedSignature);
 	}
 
 	const SIGNATURE_SCHEME_TO_PUBLIC_KEY = {
@@ -80,9 +83,23 @@ export function fromSerializedSignature(
 	const pubkeyBytes = bytes.slice(1 + signature.length);
 	const pubKey = new PublicKey(pubkeyBytes);
 
-	return {
-		signatureScheme,
-		signature,
-		pubKey,
-	};
+	return [
+		{
+			signatureScheme,
+			signature,
+			pubKey,
+		},
+	];
+}
+
+/// Expects to parse a single signature pubkey pair from the serialized
+/// signature. Use this only if multisig is not expected.
+export function toSingleSignaturePubkeyPair(
+	serializedSignature: SerializedSignature,
+): SignaturePubkeyPair {
+	const res = toParsedSignaturePubkeyPair(serializedSignature);
+	if (res.length !== 1) {
+		throw Error('Expected a single signature');
+	}
+	return res[0];
 }

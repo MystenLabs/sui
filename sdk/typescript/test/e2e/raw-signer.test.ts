@@ -5,12 +5,12 @@ import { describe, it, expect, beforeAll } from 'vitest';
 import {
 	Ed25519Keypair,
 	fromB64,
-	fromSerializedSignature,
 	IntentScope,
 	messageWithIntent,
 	RawSigner,
 	Secp256k1Keypair,
 	toB64,
+	toSingleSignaturePubkeyPair,
 	verifyMessage,
 } from '../../src';
 
@@ -95,7 +95,7 @@ describe('RawSigner', () => {
 
 			const signer = new RawSigner(keypair, toolbox.provider);
 			const serializedSignature = await signer.signData(intentMessage);
-			const { signature } = fromSerializedSignature(serializedSignature);
+			const { signature } = toSingleSignaturePubkeyPair(serializedSignature);
 			expect(toB64(signature)).toEqual(t[3]);
 
 			const isValid = await verifyMessage(
@@ -142,7 +142,7 @@ describe('RawSigner', () => {
 
 			const signer = new RawSigner(keypair, toolbox.provider);
 			const serializedSignature = await signer.signData(intentMessage);
-			const { signature } = fromSerializedSignature(serializedSignature);
+			const { signature } = toSingleSignaturePubkeyPair(serializedSignature);
 			expect(toB64(signature)).toEqual(t[3]);
 
 			const isValid = await verifyMessage(

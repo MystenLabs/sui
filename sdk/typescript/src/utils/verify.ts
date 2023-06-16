@@ -6,7 +6,7 @@ import nacl from 'tweetnacl';
 import { IntentScope, messageWithIntent } from './intent';
 import { secp256k1 } from '@noble/curves/secp256k1';
 import { sha256 } from '@noble/hashes/sha256';
-import { fromSerializedSignature, SerializedSignature } from '../cryptography/signature';
+import { SerializedSignature, toSingleSignaturePubkeyPair } from '../cryptography/signature';
 import { blake2b } from '@noble/hashes/blake2b';
 
 // TODO: This might actually make sense to eventually move to the `Keypair` instances themselves, as
@@ -19,7 +19,7 @@ export async function verifyMessage(
 	serializedSignature: SerializedSignature,
 	scope: IntentScope,
 ) {
-	const signature = fromSerializedSignature(serializedSignature);
+	const signature = toSingleSignaturePubkeyPair(serializedSignature);
 	const messageBytes = messageWithIntent(
 		scope,
 		typeof message === 'string' ? fromB64(message) : message,

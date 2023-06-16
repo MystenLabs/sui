@@ -3,7 +3,7 @@
 
 import {
 	toB64,
-	fromSerializedSignature,
+	toParsedSignaturePubkeyPair,
 	getGasData,
 	getTransactionSender,
 	getTransactionSignature,
@@ -62,9 +62,9 @@ export function Signatures({ transaction }: Props) {
 
 	const isSponsoredTransaction = gasData?.owner !== sender;
 
-	const deserializedTransactionSignatures = transactionSignatures.map((signature) =>
-		fromSerializedSignature(signature),
-	);
+	const deserializedTransactionSignatures = transactionSignatures
+		.map((signature) => toParsedSignaturePubkeyPair(signature))
+		.flat();
 
 	const userSignature = getSignatureFromAddress(deserializedTransactionSignatures, sender!);
 
