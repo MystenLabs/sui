@@ -352,7 +352,7 @@ impl KeyToolCommand {
                         SignatureScheme::ED25519 => {
                             let kp = Ed25519KeyPair::from_bytes(&bytes).map_err(|_| anyhow!("Cannot decode ed25519 keypair from the private key. Importing private key failed."))?;
                             let skp = SuiKeyPair::Ed25519(kp);
-                            let address = Into::<SuiAddress>::into(&skp.public()).to_string();
+                            let address: SuiAddress = Into::<SuiAddress>::into(&skp.public());
                             keystore.add_key(skp)?;
                             eprintln!("Private key imported successfully.");
                             println!("{address}")
