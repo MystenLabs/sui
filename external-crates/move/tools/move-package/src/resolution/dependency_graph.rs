@@ -354,13 +354,13 @@ impl DependencyGraph {
         dependency_cache: &mut DependencyCache,
         progress_output: &mut Progress,
     ) -> Result<(
-        BTreeMap<PM::PackageName, (DependencyGraph, Option<Symbol>, bool)>,
-        BTreeMap<PM::PackageName, (DependencyGraph, Option<Symbol>, bool)>,
+        BTreeMap<PM::PackageName, (DependencyGraph, bool)>,
+        BTreeMap<PM::PackageName, (DependencyGraph, bool)>,
     )> {
         let mut dep_graphs = BTreeMap::new();
         let mut dep_graphs_external = BTreeMap::new();
         for (dep_pkg_name, dep) in dependencies {
-            let (pkg_graph, resolver, is_override) = DependencyGraph::new_for_dep(
+            let (pkg_graph, is_override) = DependencyGraph::new_for_dep(
                 parent,
                 dep,
                 mode,
@@ -377,10 +377,10 @@ impl DependencyGraph {
                     parent_pkg
                 )
             })?;
-            if resolver.is_some() {
-                dep_graphs_external.insert(*dep_pkg_name, (pkg_graph, resolver, is_override));
+            if matches!(dep, PM::Dependency::External(_)) {
+                dep_graphs_external.insert(*dep_pkg_name, (pkg_graph, is_override));
             } else {
-                dep_graphs.insert(*dep_pkg_name, (pkg_graph, resolver, is_override));
+                dep_graphs.insert(*dep_pkg_name, (pkg_graph, is_override));
             }
         }
         Ok((dep_graphs, dep_graphs_external))
@@ -388,7 +388,7 @@ impl DependencyGraph {
 
     fn combine_all(
         combined_graph: &mut DependencyGraph,
-        dep_graphs: BTreeMap<PM::PackageName, (DependencyGraph, Option<Symbol>, bool)>,
+        dep_graphs: BTreeMap<PM::PackageName, (DependencyGraph, bool)>,
         mode: DependencyMode,
         overrides: &BTreeMap<PM::PackageName, Package>,
         dev_overrides: &BTreeMap<PM::PackageName, Package>,
@@ -397,9 +397,9 @@ impl DependencyGraph {
         // partition dep into overrides and not
         let (override_graphs, graphs): (Vec<_>, Vec<_>) = dep_graphs
             .values()
-            .partition(|(_, _, is_override)| *is_override);
+            .partition(|(_, is_override)| *is_override);
 
-        for (graph, resolver, is_override) in override_graphs {
+        for (graph, _) in override_graphs {
             DependencyGraph::combine(
                 combined_graph,
                 mode,
@@ -407,11 +407,10 @@ impl DependencyGraph {
                 dev_overrides,
                 root_package,
                 graph,
-                *resolver,
             )?;
         }
 
-        for (graph, resolver, is_override) in graphs {
+        for (graph, _) in graphs {
             DependencyGraph::combine(
                 combined_graph,
                 mode,
@@ -419,12 +418,11 @@ impl DependencyGraph {
                 dev_overrides,
                 root_package,
                 graph,
-                *resolver,
             )?;
         }
 
         // add all the remaining edges
-        for (graph, _, _) in dep_graphs.values() {
+        for (graph, _) in dep_graphs.values() {
             for (from, to, dep) in graph.package_graph.all_edges() {
                 combined_graph.package_graph.add_edge(from, to, dep.clone());
             }
@@ -439,7 +437,6 @@ impl DependencyGraph {
         dev_overrides: &BTreeMap<PM::PackageName, Package>,
         root_package: PM::PackageName,
         graph: &DependencyGraph,
-        resolver: Option<Symbol>,
     ) -> Result<()> {
         for (pkg_name, new_pkg) in &graph.package_table {
             if let Some(existing_pkg) = combined_graph.package_table.get(&pkg_name) {
@@ -449,7 +446,7 @@ impl DependencyGraph {
                     // resolved in which case we need to make sure that the dependencies of the
                     // existing package and dependencies of the externally resolved package are
                     // the same
-                    if let Some(r) = resolver {
+                    if let Some(r) = new_pkg.resolver {
                         let (self_deps, ext_deps) = pkg_deps_equal(
                             *pkg_name,
                             &combined_graph.package_graph,
@@ -543,8 +540,8 @@ impl DependencyGraph {
         internal_dependencies: &mut VecDeque<(PM::PackageName, PM::InternalDependency)>,
         dependency_cache: &mut DependencyCache,
         progress_output: &mut Progress,
-    ) -> Result<(DependencyGraph, Option<Symbol>, bool)> {
-        let (pkg_graph, resolver, is_override) = match dep {
+    ) -> Result<(DependencyGraph, bool)> {
+        let (pkg_graph, is_override) = match dep {
             PM::Dependency::Internal(d) => {
                 DependencyGraph::check_for_dep_cycles(
                     d.clone(),
@@ -576,7 +573,7 @@ impl DependencyGraph {
                 for (_, p) in pkg_graph.package_table.iter_mut() {
                     p.kind.reroot(parent)?;
                 }
-                (pkg_graph, None, d.dep_override)
+                (pkg_graph, d.dep_override)
             }
             PM::Dependency::External(resolver) => {
                 let pkg_graph = DependencyGraph::get_external(
@@ -587,10 +584,10 @@ impl DependencyGraph {
                     &dep_pkg_path,
                     progress_output,
                 )?;
-                (pkg_graph, Some(*resolver), false)
+                (pkg_graph, false)
             }
         };
-        Ok((pkg_graph, resolver, is_override))
+        Ok((pkg_graph, is_override))
     }
 
     /// Cycle detection to avoid infinite recursion due to the way we construct internally resolved
