@@ -45,7 +45,8 @@ const MAX_PROTOCOL_VERSION: u64 = 14;
 // Version 14: Introduce a config variable to allow charging of computation to be either
 //             bucket base or rounding up. The presence of `gas_rounding_step` (or `None`)
 //             decides whether rounding is applied or not.
-//             Add reordering of user transactions by gas price after consensus.
+//             Add reordering of user transactions by gas price after consensus.  Add
+//             `sui::table_vec::drop` to the framework via a system package upgrade.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
