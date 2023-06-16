@@ -6,6 +6,7 @@ use config::AuthorityIdentifier;
 use std::collections::HashMap;
 use store::rocks::{open_cf, DBMap, MetricConf, ReadWriteOptions};
 use store::{reopen, Map, TypedStoreError};
+use tracing::debug;
 use types::{
     CommittedSubDag, CommittedSubDagShell, ConsensusCommit, ConsensusCommitV2, Round,
     SequenceNumber,
@@ -160,13 +161,101 @@ impl ConsensusStore {
     ) -> StoreResult<Option<ConsensusCommit>> {
         self.committed_sub_dags_by_index_v2.get(seq)
     }
+
+    /// Reads from storage the latest commit sub dag where its ReputationScores are marked as "final".
+    /// If none exists yet then this method will return None.
+    pub fn read_latest_commit_with_final_reputation_scores(&self) -> Option<ConsensusCommit> {
+        for commit in self
+            .committed_sub_dags_by_index_v2
+            .unbounded_iter()
+            .skip_to_last()
+            .reverse()
+            .map(|(_, sub_dag)| sub_dag)
+        {
+            // found a final of schedule score, so we'll return that
+            if commit.reputation_score().final_of_schedule {
+                debug!(
+                    "Found latest final reputation scores: {:?} from commit {:?}",
+                    commit.reputation_score(),
+                    commit.sub_dag_index()
+                );
+                return Some(commit);
+            }
+        }
+        debug!("No final reputation scores have been found");
+        None
+    }
 }
 
 #[cfg(test)]
 mod test {
     use crate::ConsensusStore;
+    use std::collections::HashMap;
     use store::Map;
-    use types::{CommittedSubDagShell, ConsensusCommit, ConsensusCommitV2, TimestampMs};
+    use test_utils::CommitteeFixture;
+    use types::{
+        Certificate, CommittedSubDag, CommittedSubDagShell, ConsensusCommit, ConsensusCommitV2,
+        ReputationScores, TimestampMs,
+    };
+
+    #[tokio::test]
+    async fn test_read_latest_final_reputation_scores() {
+        // GIVEN
+        let store = ConsensusStore::new_for_tests();
+        let fixture = CommitteeFixture::builder().build();
+        let committee = fixture.committee();
+
+        // AND we add some commits without any final scores
+        for sequence_number in 0..10 {
+            let sub_dag = CommittedSubDag::new(
+                vec![],
+                Certificate::default(),
+                sequence_number,
+                ReputationScores::new(&committee),
+                None,
+            );
+
+            store
+                .write_consensus_state(&HashMap::new(), &sub_dag)
+                .unwrap();
+        }
+
+        // WHEN we try to read the final schedule. The one of sub dag sequence 12 should be returned
+        let commit = store.read_latest_commit_with_final_reputation_scores();
+
+        // THEN no commit is returned
+        assert!(commit.is_none());
+
+        // AND when adding more commits with some final scores amongst them
+        for sequence_number in 10..=20 {
+            let mut scores = ReputationScores::new(&committee);
+
+            // we mark the sequence 14 & 20 committed sub dag as with final schedule
+            if sequence_number == 14 || sequence_number == 20 {
+                scores.final_of_schedule = true;
+            }
+
+            let sub_dag = CommittedSubDag::new(
+                vec![],
+                Certificate::default(),
+                sequence_number,
+                scores,
+                None,
+            );
+
+            store
+                .write_consensus_state(&HashMap::new(), &sub_dag)
+                .unwrap();
+        }
+
+        // WHEN we try to read the final schedule. The one of sub dag sequence 20 should be returned
+        let commit = store
+            .read_latest_commit_with_final_reputation_scores()
+            .unwrap();
+
+        assert!(commit.reputation_score().final_of_schedule);
+        assert_eq!(commit.sub_dag_index(), 20)
+    }
 
     #[tokio::test]
     async fn test_v1_v2_backwards_compatibility() {
