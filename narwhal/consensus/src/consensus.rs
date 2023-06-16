@@ -168,7 +168,11 @@ impl LeaderSchedule {
             store
                 .read_latest_commit_with_final_reputation_scores()
                 .map_or(LeaderSwapTable::default(), |commit| {
-                    LeaderSwapTable::new(&committee, &commit.reputation_score())
+                    LeaderSwapTable::new(
+                        &committee,
+                        commit.leader_round(),
+                        &commit.reputation_score(),
+                    )
                 })
         } else {
             LeaderSwapTable::default()
