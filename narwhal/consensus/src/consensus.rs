@@ -155,14 +155,14 @@ impl LeaderSchedule {
         }
     }
 
+    /// Restores the LeaderSchedule by using the storage. It will attempt to retrieve the last committed
+    /// "final" ReputationScores and use them to create build a LeaderSwapTable to use for the LeaderSchedule.
     pub fn from_store(
         committee: Committee,
         store: Arc<ConsensusStore>,
         protocol_config: ProtocolConfig,
     ) -> Self {
-        // restore the final ReputationScores to create a LeaderSwapTable. If not found then fallback
-        // to default swap table.
-        // Only try to restore when the new leader election schedule is enabled, other fallback to
+        // Only try to restore when the new leader election schedule is enabled, otherwise fallback to
         // default swap table, which basically means there will be no swaps.
         let table = if protocol_config.narwhal_new_leader_election_schedule() {
             store
