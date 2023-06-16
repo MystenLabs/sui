@@ -682,7 +682,7 @@ impl SimpleFaucet {
         // Assert that the number of times a sui_address occurs is the number of times the coins
         // come up in the vector.
         let mut request_count: HashMap<SuiAddress, u64> = HashMap::new();
-        // Aquire lock and update all of the request Uuids
+        // Acquire lock and update all of the request Uuids
         let mut task_map = self.task_id_cache.lock().await;
         for (uuid, addy, amounts) in requests {
             let number_of_coins = amounts.len();
@@ -725,7 +725,7 @@ impl SimpleFaucet {
             );
         }
 
-        // We use a seperate map to figure out which index should correlate to the
+        // We use a separate map to figure out which index should correlate to the
         Ok(())
     }
 
@@ -995,7 +995,7 @@ mod tests {
     #[tokio::test]
     async fn simple_faucet_basic_interface_should_work() {
         telemetry_subscribers::init_for_testing();
-        let test_cluster = TestClusterBuilder::new().build().await.unwrap();
+        let test_cluster = TestClusterBuilder::new().build().await;
 
         let tmp = tempfile::tempdir().unwrap();
         let prom_registry = Registry::new();
@@ -1023,7 +1023,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_init_gas_queue() {
-        let test_cluster = TestClusterBuilder::new().build().await.unwrap();
+        let test_cluster = TestClusterBuilder::new().build().await;
         let address = test_cluster.get_address_0();
         let mut context = test_cluster.wallet;
         let gases = get_current_gases(address, &mut context).await;
@@ -1056,7 +1056,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_transfer_state() {
-        let test_cluster = TestClusterBuilder::new().build().await.unwrap();
+        let test_cluster = TestClusterBuilder::new().build().await;
         let address = test_cluster.get_address_0();
         let mut context = test_cluster.wallet;
         let gases = get_current_gases(address, &mut context).await;
@@ -1105,7 +1105,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_batch_transfer_interface() {
-        let test_cluster = TestClusterBuilder::new().build().await.unwrap();
+        let test_cluster = TestClusterBuilder::new().build().await;
         let context = test_cluster.wallet;
         let config: FaucetConfig = Default::default();
         let coin_amount = config.amount;
@@ -1182,7 +1182,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_ttl_cache_expires_after_duration() {
-        let test_cluster = TestClusterBuilder::new().build().await.unwrap();
+        let test_cluster = TestClusterBuilder::new().build().await;
         let context = test_cluster.wallet;
         // We set it to a fast expiration for the purposes of testing and so these requests don't have time to pass
         // through the batch process.
@@ -1233,7 +1233,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_discard_invalid_gas() {
-        let test_cluster = TestClusterBuilder::new().build().await.unwrap();
+        let test_cluster = TestClusterBuilder::new().build().await;
         let address = test_cluster.get_address_0();
         let mut context = test_cluster.wallet;
         let mut gases = get_current_gases(address, &mut context).await;
@@ -1310,7 +1310,7 @@ mod tests {
     #[tokio::test]
     async fn test_clear_wal() {
         telemetry_subscribers::init_for_testing();
-        let test_cluster = TestClusterBuilder::new().build().await.unwrap();
+        let test_cluster = TestClusterBuilder::new().build().await;
         let context = test_cluster.wallet;
         let tmp = tempfile::tempdir().unwrap();
         let prom_registry = Registry::new();
@@ -1373,7 +1373,7 @@ mod tests {
     #[tokio::test]
     async fn test_discard_smaller_amount_gas() {
         telemetry_subscribers::init_for_testing();
-        let test_cluster = TestClusterBuilder::new().build().await.unwrap();
+        let test_cluster = TestClusterBuilder::new().build().await;
         let address = test_cluster.get_address_0();
         let mut context = test_cluster.wallet;
         let gases = get_current_gases(address, &mut context).await;
@@ -1459,7 +1459,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_insufficient_balance_will_retry_success() {
-        let test_cluster = TestClusterBuilder::new().build().await.unwrap();
+        let test_cluster = TestClusterBuilder::new().build().await;
         let address = test_cluster.get_address_0();
         let mut context = test_cluster.wallet;
         let gases = get_current_gases(address, &mut context).await;
@@ -1532,7 +1532,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_faucet_no_loop_forever() {
-        let test_cluster = TestClusterBuilder::new().build().await.unwrap();
+        let test_cluster = TestClusterBuilder::new().build().await;
         let address = test_cluster.get_address_0();
         let mut context = test_cluster.wallet;
         let gases = get_current_gases(address, &mut context).await;
@@ -1595,7 +1595,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_faucet_restart_clears_wal() {
-        let test_cluster = TestClusterBuilder::new().build().await.unwrap();
+        let test_cluster = TestClusterBuilder::new().build().await;
         let context = test_cluster.wallet;
         let tmp = tempfile::tempdir().unwrap();
         let prom_registry = Registry::new();
@@ -1665,7 +1665,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_amounts_transferred_on_batch() {
-        let test_cluster = TestClusterBuilder::new().build().await.unwrap();
+        let test_cluster = TestClusterBuilder::new().build().await;
         let context = test_cluster.wallet;
         let config: FaucetConfig = Default::default();
 

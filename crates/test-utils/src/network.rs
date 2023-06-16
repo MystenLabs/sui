@@ -576,19 +576,12 @@ impl TestClusterBuilder {
         self
     }
 
-    pub async fn build(self) -> anyhow::Result<TestCluster> {
-        let cluster = self.start_test_network_with_customized_ports().await?;
-        Ok(cluster)
-    }
-
-    async fn start_test_network_with_customized_ports(
-        mut self,
-    ) -> Result<TestCluster, anyhow::Error> {
-        let swarm = self.start_swarm().await?;
+    pub async fn build(mut self) -> TestCluster {
+        let swarm = self.start_swarm().await.unwrap();
         let working_dir = swarm.dir();
 
         let mut wallet_conf: SuiClientConfig =
-            PersistedConfig::read(&working_dir.join(SUI_CLIENT_CONFIG))?;
+            PersistedConfig::read(&working_dir.join(SUI_CLIENT_CONFIG)).unwrap();
 
         let fullnode = swarm.fullnodes().next().unwrap();
         let json_rpc_address = fullnode.config.json_rpc_address;
@@ -604,16 +597,17 @@ impl TestClusterBuilder {
 
         wallet_conf
             .persisted(&working_dir.join(SUI_CLIENT_CONFIG))
-            .save()?;
+            .save()
+            .unwrap();
 
         let wallet_conf = swarm.dir().join(SUI_CLIENT_CONFIG);
-        let wallet = WalletContext::new(&wallet_conf, None, None).await?;
+        let wallet = WalletContext::new(&wallet_conf, None, None).await.unwrap();
 
-        Ok(TestCluster {
+        TestCluster {
             swarm,
             wallet,
             fullnode_handle,
-        })
+        }
     }
 
     /// Start a Swarm and set up WalletConfig

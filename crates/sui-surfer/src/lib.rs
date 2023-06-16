@@ -44,8 +44,7 @@ pub async fn run<S: SurfStrategy + Default>(
                 ACCOUNT_NUM
             ])
             .build()
-            .await
-            .unwrap(),
+            .await,
     );
     info!(
         "Started cluster with {} validators and epoch duration of {:?}ms",

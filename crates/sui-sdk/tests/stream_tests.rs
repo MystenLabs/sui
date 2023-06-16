@@ -83,7 +83,7 @@ use test_utils::network::TestClusterBuilder;
 
 #[tokio::test]
 async fn test_coins_stream() -> Result<(), anyhow::Error> {
-    let test_cluster = TestClusterBuilder::new().build().await?;
+    let test_cluster = TestClusterBuilder::new().build().await;
     let address = test_cluster.get_address_0();
     let rpc_url = test_cluster.rpc_url();
 
