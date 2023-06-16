@@ -44,7 +44,7 @@ struct Workspace {
 }
 
 #[derive(Error, Debug)]
-pub(crate) enum PlanError {
+pub(crate) enum Error {
     #[error("Could not find repository root, please supply one")]
     NoRoot,
 
@@ -70,15 +70,15 @@ pub(crate) enum PlanError {
     IO(#[from] io::Error),
 }
 
-type PlanResult<T> = Result<T, PlanError>;
+type Result<T> = std::result::Result<T, Error>;
 
 impl CutPlan {
     /// Scan `args.directories` looking for `args.packages` to produce a new plan.
-    pub(crate) fn discover(args: Args) -> PlanResult<Self> {
+    pub(crate) fn discover(args: Args) -> Result<Self> {
         let cwd = env::current_dir()?;
 
         let Some(root) = args.root.or_else(|| discover_root(cwd)) else {
-            return Err(PlanError::NoRoot);
+            return Err(Error::NoRoot);
         };
 
         struct Walker {
@@ -89,7 +89,7 @@ impl CutPlan {
         }
 
         impl Walker {
-            fn walk(&mut self, src: &Path, dst: &Path, suffix: &Option<String>) -> PlanResult<()> {
+            fn walk(&mut self, src: &Path, dst: &Path, suffix: &Option<String>) -> Result<()> {
                 self.try_insert_package(src, dst, suffix)?;
 
                 for entry in fs::read_dir(src)? {
@@ -111,7 +111,7 @@ impl CutPlan {
                 src: &Path,
                 dst: &Path,
                 suffix: &Option<String>,
-            ) -> PlanResult<()> {
+            ) -> Result<()> {
                 let toml = src.join("Cargo.toml");
 
                 let Some(pkg_name) = package_name(toml)? else {
@@ -173,11 +173,11 @@ impl CutPlan {
 
         for (name, pkg) in &packages {
             if let Some(prev) = rev_name.insert(pkg.dst_name.clone(), name.clone()) {
-                return Err(PlanError::PackageConflictName(name.clone(), prev));
+                return Err(Error::PackageConflictName(name.clone(), prev));
             }
 
             if let Some(prev) = rev_path.insert(pkg.dst_path.clone(), name.clone()) {
-                return Err(PlanError::PackageConflictPath(name.clone(), prev));
+                return Err(Error::PackageConflictPath(name.clone(), prev));
             }
         }
 
@@ -189,15 +189,15 @@ impl Workspace {
     /// Read `members` and `exclude` from the `workspace` section of the `Cargo.toml` file in
     /// directory `root`.  Fails if there isn't a manifest, it doesn't contain a `workspace`
     /// section, or the relevant fields are not formatted as expected.
-    fn read<P: AsRef<Path>>(root: P) -> PlanResult<Self> {
+    fn read<P: AsRef<Path>>(root: P) -> Result<Self> {
         let path = root.as_ref().join("Cargo.toml");
         if !path.exists() {
-            return Err(PlanError::NoWorkspace(path));
+            return Err(Error::NoWorkspace(path));
         }
 
         let toml = toml::de::from_str::<Value>(&fs::read_to_string(&path)?)?;
         let Some(workspace) = toml.get("workspace") else {
-            return Err(PlanError::NoWorkspace(path));
+            return Err(Error::NoWorkspace(path));
         };
 
         let members = toml_path_array_to_set(root.as_ref(), workspace, "members")?;
@@ -208,10 +208,10 @@ impl Workspace {
 
     /// Determine the state of the path insofar as whether it is a direct member or exclude of this
     /// `Workspace`.
-    fn state<P: AsRef<Path>>(&self, path: P) -> PlanResult<WorkspaceState> {
+    fn state<P: AsRef<Path>>(&self, path: P) -> Result<WorkspaceState> {
         let path = path.as_ref();
         match (self.members.contains(path), self.exclude.contains(path)) {
-            (true, true) => Err(PlanError::WorkspaceConflict(path.to_path_buf())),
+            (true, true) => Err(Error::WorkspaceConflict(path.to_path_buf())),
 
             (true, false) => Ok(WorkspaceState::Member),
             (false, true) => Ok(WorkspaceState::Exclude),
@@ -248,17 +248,17 @@ fn toml_path_array_to_set<P: AsRef<Path>>(
     root: P,
     table: &Value,
     field: &'static str,
-) -> PlanResult<HashSet<PathBuf>> {
+) -> Result<HashSet<PathBuf>> {
     let mut set = HashSet::new();
 
     let Some(array) = table.get(field) else { return Ok(set) };
     let Some(array) = array.as_array() else {
-        return Err(PlanError::NotAStringArray(field))
+        return Err(Error::NotAStringArray(field))
     };
 
     for val in array {
         let Some(path) = val.as_str() else {
-            return Err(PlanError::NotAStringArray(field));
+            return Err(Error::NotAStringArray(field));
         };
 
         set.insert(fs::canonicalize(root.as_ref().join(path))?);
@@ -267,7 +267,7 @@ fn toml_path_array_to_set<P: AsRef<Path>>(
     Ok(set)
 }
 
-fn package_name<P: AsRef<Path>>(path: P) -> PlanResult<Option<String>> {
+fn package_name<P: AsRef<Path>>(path: P) -> Result<Option<String>> {
     if !path.as_ref().is_file() {
         return Ok(None);
     }
