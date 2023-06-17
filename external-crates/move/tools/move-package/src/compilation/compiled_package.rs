@@ -606,6 +606,7 @@ impl CompiledPackage {
                 vec![sources_package_paths],
                 deps_package_paths,
                 ModelBuilderOptions::default(),
+                None,
             )?;
 
             if resolution_graph.build_options.generate_docs {
