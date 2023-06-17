@@ -10,7 +10,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 14;
+const MAX_PROTOCOL_VERSION: u64 = 15;
 
 // Record history of protocol version allocations here:
 //
@@ -45,8 +45,8 @@ const MAX_PROTOCOL_VERSION: u64 = 14;
 // Version 14: Introduce a config variable to allow charging of computation to be either
 //             bucket base or rounding up. The presence of `gas_rounding_step` (or `None`)
 //             decides whether rounding is applied or not.
-//             Add reordering of user transactions by gas price after consensus.  Add
-//             `sui::table_vec::drop` to the framework via a system package upgrade.
+// Version 15: Add reordering of user transactions by gas price after consensus.
+//             Add `sui::table_vec::drop` to the framework via a system package upgrade.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -1224,6 +1224,10 @@ impl ProtocolConfig {
                 let mut cfg = Self::get_for_version_impl(version - 1, chain);
                 cfg.gas_rounding_step = Some(1_000);
                 cfg.gas_model_version = Some(6);
+                cfg
+            }
+            15 => {
+                let mut cfg = Self::get_for_version_impl(version - 1, chain);
                 cfg.feature_flags.consensus_transaction_ordering =
                     ConsensusTransactionOrdering::ByGasPrice;
                 cfg
