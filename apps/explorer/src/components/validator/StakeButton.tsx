@@ -45,8 +45,7 @@ export function StakeButton() {
 	if (!stakeSupportedWallets.length) {
 		return (
 			<Button
-				size="md"
-				variant="primary"
+				size="lg"
 				href="https://chrome.google.com/webstore/detail/sui-wallet/opcgpfmipidbgpenhmajoajpbobppdil"
 			>
 				Install Sui Wallet to stake SUI
