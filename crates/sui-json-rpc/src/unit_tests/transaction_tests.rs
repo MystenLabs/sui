@@ -16,7 +16,7 @@ use crate::api::{IndexerApiClient, TransactionBuilderClient, WriteApiClient};
 
 #[sim_test]
 async fn test_get_transaction_block() -> Result<(), anyhow::Error> {
-    let cluster = TestClusterBuilder::new().build().await?;
+    let cluster = TestClusterBuilder::new().build().await;
     let http_client = cluster.rpc_client();
     let address = cluster.get_address_0();
 
@@ -102,7 +102,7 @@ async fn test_get_transaction_block() -> Result<(), anyhow::Error> {
 
 #[sim_test]
 async fn test_get_raw_transaction() -> Result<(), anyhow::Error> {
-    let cluster = TestClusterBuilder::new().build().await?;
+    let cluster = TestClusterBuilder::new().build().await;
     let http_client = cluster.rpc_client();
     let address = cluster.get_address_0();
 
@@ -150,7 +150,7 @@ async fn test_get_raw_transaction() -> Result<(), anyhow::Error> {
 
 #[sim_test]
 async fn test_get_fullnode_transaction() -> Result<(), anyhow::Error> {
-    let cluster = TestClusterBuilder::new().build().await.unwrap();
+    let cluster = TestClusterBuilder::new().build().await;
 
     let context = &cluster.wallet;
 

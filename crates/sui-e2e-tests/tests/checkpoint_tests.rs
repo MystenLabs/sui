@@ -7,7 +7,7 @@ use test_utils::network::TestClusterBuilder;
 
 #[sim_test]
 async fn basic_checkpoints_integration_test() {
-    let test_cluster = TestClusterBuilder::new().build().await.unwrap();
+    let test_cluster = TestClusterBuilder::new().build().await;
     let tx = test_cluster
         .wallet
         .make_transfer_sui_transaction(None, None)
