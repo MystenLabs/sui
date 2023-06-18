@@ -45,8 +45,8 @@ export function StakeButton() {
 	if (!stakeSupportedWallets.length) {
 		return (
 			<Button
-				size="lg"
-				variant="outline"
+				size="md"
+				variant="primary"
 				href="https://chrome.google.com/webstore/detail/sui-wallet/opcgpfmipidbgpenhmajoajpbobppdil"
 			>
 				Install Sui Wallet to stake SUI
@@ -67,7 +67,6 @@ export function StakeButton() {
 		return (
 			<Button
 				size="lg"
-				variant="outline"
 				onClick={() => {
 					// Always just assume we should connect to the first stake supported wallet for now:
 					connect(stakeSupportedWallets[0].name);
