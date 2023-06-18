@@ -64,9 +64,9 @@ export type SuiEventFilter =
 	| {
 			TimeRange: {
 				// left endpoint of time interval, milliseconds since epoch, inclusive
-				start_time: number;
+				startTime: string;
 				// right endpoint of time interval, milliseconds since epoch, exclusive
-				end_time: number;
+				endTime: string;
 			};
 	  }
 	| { Sender: SuiAddress }
