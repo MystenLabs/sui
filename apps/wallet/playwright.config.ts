@@ -58,10 +58,12 @@ const config: PlaywrightTestConfig = {
 		},
 		{
 			command:
-				'RUST_LOG="consensus=off" cargo run --bin sui-test-validator -- --epoch-duration-ms 20000',
+				process.env.E2E_RUN_LOCAL_NET_CMD ??
+				'RUST_LOG="consensus=off" cargo run --bin sui-test-validator',
 			port: 9123,
 			timeout: 120 * 1000,
-			reuseExistingServer: !process.env.CI,
+			/* Set this to true to reuse the server instance on step 'Run Local net' in e2e.yml */
+			reuseExistingServer: true,
 		},
 	],
 };
