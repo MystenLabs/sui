@@ -22,6 +22,61 @@ use tokio::sync::watch;
 use tracing::info;
 use types::{CertificateAPI, HeaderAPI, PreSubscribedBroadcastSender};
 
+#[tokio::test]
+async fn order_leaders() {
+    // GIVEN
+    let fixture = CommitteeFixture::builder().build();
+    let committee = fixture.committee();
+    // Make certificates for rounds 1 to 7.
+    let ids: Vec<_> = fixture.authorities().map(|a| a.id()).collect();
+    let genesis = Certificate::genesis(&committee)
+        .iter()
+        .map(|x| x.digest())
+        .collect::<BTreeSet<_>>();
+    let (certificates, _next_parents) = test_utils::make_optimal_certificates(
+        &committee,
+        &latest_protocol_version(),
+        1..=7,
+        &genesis,
+        &ids,
+    );
+
+    let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
+    let gc_depth = 50;
+    let mut state = ConsensusState::new(metrics.clone(), gc_depth);
+
+    for certificate in certificates {
+        state.try_insert(&certificate).unwrap();
+    }
+
+    let store = make_consensus_store(&test_utils::temp_dir());
+    let schedule = LeaderSchedule::new(committee.clone(), LeaderSwapTable::default());
+    let bullshark = Bullshark::new(
+        committee,
+        store,
+        latest_protocol_version(),
+        metrics,
+        NUM_SUB_DAGS_PER_SCHEDULE,
+        schedule.clone(),
+    );
+
+    // AND the leader of round 6
+    let (_, leader) = schedule.leader_certificate(6, &state.dag);
+
+    // WHEN
+    let mut ordered_leaders = bullshark.order_leaders(leader.unwrap(), &state);
+
+    // THEN
+    // we expect all the leaders to be returned in round ascending order
+    let mut expected_leader_rounds: VecDeque<Round> = VecDeque::from(vec![2, 4, 6]);
+    while let Some(leader) = ordered_leaders.pop_front() {
+        assert_eq!(leader.round(), expected_leader_rounds.pop_front().unwrap());
+    }
+
+    // we expect to have ordered all the 3 leaders
+    assert!(expected_leader_rounds.is_empty());
+}
+
 // Run for 4 dag rounds in ideal conditions (all nodes reference all other nodes). We should commit
 // the leader of round 2.
 #[tokio::test]
