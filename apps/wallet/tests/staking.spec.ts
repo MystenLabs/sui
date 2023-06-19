@@ -15,7 +15,7 @@ test('staking', async ({ page, extensionUrl }) => {
 	await page.getByTestId('faucet-request-button').click();
 	await expect(page.getByTestId('coin-balance')).not.toHaveText('0SUI');
 
-	await page.getByTestId('stake-and-earn-button').click();
+	await page.getByText(/Stake and Earn SUI/).click();
 	await page.getByTestId('validator-list-item').first().click();
 	await page.getByTestId('select-validator-cta').click();
 	await page.getByTestId('stake-amount-input').fill(STAKE_AMOUNT.toString());
@@ -23,13 +23,13 @@ test('staking', async ({ page, extensionUrl }) => {
 	await expect(page.getByTestId('loading-indicator')).not.toBeVisible({
 		timeout: TEST_TIMEOUT,
 	});
-	await expect(page.getByText(/Stake failed/i)).not.toBeVisible();
 	await expect(page.getByTestId('overlay-title')).toHaveText('Transaction');
+	await expect(page.getByTestId('transaction-status')).toHaveText('Transaction Success');
 
 	await page.getByTestId('close-icon').click();
 	await expect(page.getByText(`Currently Staked${STAKE_AMOUNT} SUI`)).toBeVisible();
 
-	await page.getByTestId('stake-and-earn-button').click();
+	await page.getByText(`Currently Staked${STAKE_AMOUNT} SUI`).click();
 	await expect(page.getByText(/Starts Earning now/)).toBeVisible({
 		timeout: TEST_TIMEOUT,
 	});
@@ -40,6 +40,6 @@ test('staking', async ({ page, extensionUrl }) => {
 	await expect(page.getByTestId('loading-indicator')).not.toBeVisible({
 		timeout: TEST_TIMEOUT,
 	});
-	await expect(page.getByText(/Unstake failed/i)).not.toBeVisible();
 	await expect(page.getByTestId('overlay-title')).toHaveText('Transaction');
+	await expect(page.getByTestId('transaction-status')).toHaveText('Transaction Success');
 });
