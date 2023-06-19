@@ -4,6 +4,7 @@
 use anyhow::{bail, Context, Result};
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::env;
+use std::fmt;
 use std::fs;
 use std::path::{Path, PathBuf};
 use thiserror::Error;
@@ -501,6 +502,55 @@ impl Workspace {
     }
 }
 
+impl fmt::Display for CutPlan {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        writeln!(f, "Copying packages in: {}", self.root.display())?;
+
+        fn write_package(
+            root: &Path,
+            name: &str,
+            pkg: &CutPackage,
+            f: &mut fmt::Formatter<'_>,
+        ) -> fmt::Result {
+            let dst_path = pkg.dst_path.strip_prefix(root).unwrap_or(&pkg.dst_path);
+
+            let src_path = pkg.src_path.strip_prefix(root).unwrap_or(&pkg.src_path);
+
+            writeln!(f, " - to:   {}", pkg.dst_name)?;
+            writeln!(f, "         {}", dst_path.display())?;
+            writeln!(f, "   from: {name}")?;
+            writeln!(f, "         {}", src_path.display())?;
+            Ok(())
+        }
+
+        writeln!(f)?;
+        writeln!(f, "new [workspace] members:")?;
+        for (name, package) in &self.packages {
+            if package.ws_state == WorkspaceState::Member {
+                write_package(&self.root, name, package, f)?
+            }
+        }
+
+        writeln!(f)?;
+        writeln!(f, "new [workspace] excludes:")?;
+        for (name, package) in &self.packages {
+            if package.ws_state == WorkspaceState::Exclude {
+                write_package(&self.root, name, package, f)?
+            }
+        }
+
+        writeln!(f)?;
+        writeln!(f, "other packages:")?;
+        for (name, package) in &self.packages {
+            if package.ws_state == WorkspaceState::Unknown {
+                write_package(&self.root, name, package, f)?
+            }
+        }
+
+        Ok(())
+    }
+}
+
 /// Find the root of the git repository containing `cwd`, if it exists, return `None` otherwise.
 /// This function only searches prefixes of the provided path for the git repo, so if the path is
 /// given as a relative path within the repository, the root will not be found.
@@ -736,6 +786,7 @@ mod tests {
         let cut = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
 
         let plan = CutPlan::discover(Args {
+            dry_run: false,
             feature: "feature".to_string(),
             root: None,
             directories: vec![
@@ -800,6 +851,33 @@ mod tests {
                 },
             }"#]]
         .assert_eq(&debug_for_test(&plan));
+
+        expect![[r#"
+            Copying packages in: $PATH
+
+            new [workspace] members:
+             - to:   sui-adapter-feature
+                     sui-execution/exec-cut/sui-adapter
+               from: sui-adapter-latest
+                     sui-execution/latest/sui-adapter
+             - to:   sui-execution-cut-feature
+                     sui-execution/cut-cut
+               from: sui-execution-cut
+                     sui-execution/cut
+             - to:   sui-verifier-feature
+                     sui-execution/exec-cut/sui-verifier
+               from: sui-verifier-latest
+                     sui-execution/latest/sui-verifier
+
+            new [workspace] excludes:
+             - to:   move-core-types-feature
+                     sui-execution/cut-move-core/types
+               from: move-core-types
+                     external-crates/move/move-core/types
+
+            other packages:
+        "#]]
+        .assert_eq(&display_for_test(&plan));
     }
 
     #[test]
@@ -809,6 +887,7 @@ mod tests {
         // Create a plan where all the new packages are gathered into a single top-level destination
         // directory, and expect that the resulting plan's `directories` only contains one entry.
         let plan = CutPlan::discover(Args {
+            dry_run: false,
             feature: "feature".to_string(),
             root: None,
             directories: vec![
@@ -898,6 +977,7 @@ mod tests {
         .unwrap();
 
         let err = CutPlan::discover(Args {
+            dry_run: false,
             feature: "feature".to_string(),
             root: Some(tmp.path().to_owned()),
             directories: vec![Directory {
@@ -934,6 +1014,7 @@ mod tests {
         .unwrap();
 
         let err = CutPlan::discover(Args {
+            dry_run: false,
             feature: "feature".to_string(),
             root: Some(tmp.path().to_owned()),
             directories: vec![
@@ -977,6 +1058,7 @@ mod tests {
         .unwrap();
 
         let err = CutPlan::discover(Args {
+            dry_run: false,
             feature: "feature".to_string(),
             root: Some(tmp.path().to_owned()),
             directories: vec![
@@ -1020,6 +1102,7 @@ mod tests {
         .unwrap();
 
         let err = CutPlan::discover(Args {
+            dry_run: false,
             feature: "feature".to_string(),
             root: Some(tmp.path().to_owned()),
             directories: vec![Directory {
@@ -1118,6 +1201,7 @@ mod tests {
         .unwrap();
 
         let plan = CutPlan::discover(Args {
+            dry_run: false,
             feature: "cut".to_string(),
             root: Some(tmp.path().to_owned()),
             directories: vec![Directory {
@@ -1200,6 +1284,11 @@ mod tests {
     /// Print with pretty-printed debug formatting, with repo paths scrubbed out for consistency.
     fn debug_for_test<T: fmt::Debug>(x: &T) -> String {
         scrub_path(&format!("{x:#?}"), repo_root())
+    }
+
+    /// Print with display formatting, with repo paths scrubbed out for consistency.
+    fn display_for_test<T: fmt::Display>(x: &T) -> String {
+        scrub_path(&format!("{x}"), repo_root())
     }
 
     /// Read multiple files into one string.
