@@ -851,6 +851,33 @@ mod tests {
                 },
             }"#]]
         .assert_eq(&debug_for_test(&plan));
+
+        expect![[r#"
+            Copying packages in: $PATH
+
+            new [workspace] members:
+             - to:   sui-adapter-feature
+                     sui-execution/exec-cut/sui-adapter
+               from: sui-adapter-latest
+                     sui-execution/latest/sui-adapter
+             - to:   sui-execution-cut-feature
+                     sui-execution/cut-cut
+               from: sui-execution-cut
+                     sui-execution/cut
+             - to:   sui-verifier-feature
+                     sui-execution/exec-cut/sui-verifier
+               from: sui-verifier-latest
+                     sui-execution/latest/sui-verifier
+
+            new [workspace] excludes:
+             - to:   move-core-types-feature
+                     sui-execution/cut-move-core/types
+               from: move-core-types
+                     external-crates/move/move-core/types
+
+            other packages:
+        "#]]
+        .assert_eq(&display_for_test(&plan));
     }
 
     #[test]
@@ -1257,6 +1284,11 @@ mod tests {
     /// Print with pretty-printed debug formatting, with repo paths scrubbed out for consistency.
     fn debug_for_test<T: fmt::Debug>(x: &T) -> String {
         scrub_path(&format!("{x:#?}"), repo_root())
+    }
+
+    /// Print with display formatting, with repo paths scrubbed out for consistency.
+    fn display_for_test<T: fmt::Display>(x: &T) -> String {
+        scrub_path(&format!("{x}"), repo_root())
     }
 
     /// Read multiple files into one string.
