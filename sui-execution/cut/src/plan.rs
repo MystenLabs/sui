@@ -1,17 +1,17 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use anyhow::{bail, Context, Result};
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::env;
 use std::fs;
-use std::io;
 use std::path::{Path, PathBuf};
 use thiserror::Error;
 use toml::value::Value;
 use toml_edit::{Document, Item};
 
 use crate::args::Args;
-use crate::path::{self, deep_copy, normalize_path, path_relative_to, shortest_new_prefix};
+use crate::path::{deep_copy, normalize_path, path_relative_to, shortest_new_prefix};
 
 /// Description of where packages should be copied to, what their new names should be, and whether
 /// they should be added to the `workspace` `members` or `exclude` fields.
@@ -77,26 +77,12 @@ pub(crate) enum Error {
     #[error("Cutting package '{0}' will overwrite existing path: {}", .1.display())]
     ExistingPackage(String, PathBuf),
 
-    #[error("Expected '{0}' field to be an array of strings")]
+    #[error("'{0}' field is not an array of strings")]
     NotAStringArray(&'static str),
 
     #[error("Cannot represent path as a TOML string: {}", .0.display())]
     PathToTomlStr(PathBuf),
-
-    #[error("Path Error: {0}")]
-    Path(#[from] path::Error),
-
-    #[error("TOML Parsing Error: {0}")]
-    Toml(#[from] toml::de::Error),
-
-    #[error("TOML Editing Error: {0}")]
-    TomlEdit(#[from] toml_edit::TomlError),
-
-    #[error("IO Error: {0}")]
-    IO(#[from] io::Error),
 }
-
-type Result<T> = std::result::Result<T, Error>;
 
 impl CutPlan {
     /// Scan `args.directories` looking for `args.packages` to produce a new plan.  The resulting
@@ -106,7 +92,7 @@ impl CutPlan {
         let cwd = env::current_dir()?;
 
         let Some(root) = args.root.or_else(|| discover_root(cwd)) else {
-            return Err(Error::NoRoot);
+            bail!(Error::NoRoot);
         };
 
         let root = fs::canonicalize(root)?;
@@ -127,7 +113,8 @@ impl CutPlan {
                 suffix: &Option<String>,
                 mut fresh_parent: bool,
             ) -> Result<()> {
-                self.try_insert_package(src, dst, suffix)?;
+                self.try_insert_package(src, dst, suffix)
+                    .with_context(|| format!("Failed to plan copy for {}", src.display()))?;
 
                 // Figure out whether the parent directory was already created, or whether this
                 // directory needs to be created.
@@ -185,7 +172,7 @@ impl CutPlan {
 
                 let dst_path = dst.to_path_buf();
                 if dst_path.exists() {
-                    return Err(Error::ExistingPackage(pkg_name, dst_path));
+                    bail!(Error::ExistingPackage(pkg_name, dst_path));
                 }
 
                 self.planned_packages.insert(
@@ -211,13 +198,17 @@ impl CutPlan {
         };
 
         for dir in args.directories {
+            let src_path = fs::canonicalize(&dir.src)
+                .with_context(|| format!("Canonicalizing {} failed", dir.src.display()))?;
+
             // Remove redundant `..` components from the destination path to avoid creating
             // directories we may not need at the destination.  E.g. a destination path of
             //
             //   foo/../bar
             //
             // Should only create the directory `bar`, not also the directory `foo`.
-            let dst_path = normalize_path(&dir.dst)?;
+            let dst_path = normalize_path(&dir.dst)
+                .with_context(|| format!("Normalizing {} failed", dir.dst.display()))?;
 
             // Check whether any parent directories need to be made as part of this iteration of the
             // cut.
@@ -226,12 +217,14 @@ impl CutPlan {
                 true
             });
 
-            walker.walk(
-                &fs::canonicalize(dir.src)?,
-                &dst_path,
-                &dir.suffix,
-                fresh_parent,
-            )?;
+            walker
+                .walk(
+                    &fs::canonicalize(dir.src)?,
+                    &dst_path,
+                    &dir.suffix,
+                    fresh_parent,
+                )
+                .with_context(|| format!("Failed to find packages in {}", src_path.display()))?;
         }
 
         // Emit warnings for packages that were not found
@@ -251,11 +244,11 @@ impl CutPlan {
 
         for (name, pkg) in &packages {
             if let Some(prev) = rev_name.insert(pkg.dst_name.clone(), name.clone()) {
-                return Err(Error::PackageConflictName(name.clone(), prev));
+                bail!(Error::PackageConflictName(name.clone(), prev));
             }
 
             if let Some(prev) = rev_path.insert(pkg.dst_path.clone(), name.clone()) {
-                return Err(Error::PackageConflictPath(name.clone(), prev));
+                bail!(Error::PackageConflictPath(name.clone(), prev));
             }
         }
 
@@ -276,17 +269,21 @@ impl CutPlan {
         })
     }
     fn execute_(&self) -> Result<()> {
-        for package in self.packages.values() {
-            self.copy_package(package)?
+        for (name, package) in &self.packages {
+            self.copy_package(package).with_context(|| {
+                format!("Failed to copy package '{name}' to '{}'.", package.dst_name)
+            })?
         }
 
         for package in self.packages.values() {
-            self.update_package(package)?
+            self.update_package(package)
+                .with_context(|| format!("Failed to update manifest for '{}'", package.dst_name))?
         }
 
         // Update the workspace at the end, so that if there is any problem before that, rollback
         // will leave the state clean.
         self.update_workspace()
+            .context("Failed to update [workspace].")
     }
 
     /// Copy the contents of `package` from its `src_path` to its `dst_path`, unchanged.
@@ -400,7 +397,7 @@ impl CutPlan {
     fn update_workspace(&self) -> Result<()> {
         let path = self.root.join("Cargo.toml");
         if !path.exists() {
-            return Err(Error::NoWorkspace(path));
+            bail!(Error::NoWorkspace(path));
         }
 
         let mut toml = fs::read_to_string(&path)?.parse::<Document>()?;
@@ -414,7 +411,7 @@ impl CutPlan {
                     // This assumes that there is a "workspace.members" section, which is a fair
                     // assumption in our repo.
                     let Some(members) = toml["workspace"]["members"].as_array_mut() else {
-                        return Err(Error::NotAStringArray("members"));
+                        bail!(Error::NotAStringArray("members"));
                     };
 
                     let pkg_path = path_to_toml_value(&self.root, &package.dst_path)?;
@@ -425,7 +422,7 @@ impl CutPlan {
                     // This assumes that there is a "workspace.exclude" section, which is a fair
                     // assumption in our repo.
                     let Some(exclude) = toml["workspace"]["exclude"].as_array_mut() else {
-                        return Err(Error::NotAStringArray("exclude"));
+                        bail!(Error::NotAStringArray("exclude"));
                     };
 
                     let pkg_path = path_to_toml_value(&self.root, &package.dst_path)?;
@@ -474,16 +471,18 @@ impl Workspace {
     fn read<P: AsRef<Path>>(root: P) -> Result<Self> {
         let path = root.as_ref().join("Cargo.toml");
         if !path.exists() {
-            return Err(Error::NoWorkspace(path));
+            bail!(Error::NoWorkspace(path));
         }
 
         let toml = toml::de::from_str::<Value>(&fs::read_to_string(&path)?)?;
         let Some(workspace) = toml.get("workspace") else {
-            return Err(Error::NoWorkspace(path));
+            bail!(Error::NoWorkspace(path));
         };
 
-        let members = toml_path_array_to_set(root.as_ref(), workspace, "members")?;
-        let exclude = toml_path_array_to_set(root.as_ref(), workspace, "exclude")?;
+        let members = toml_path_array_to_set(root.as_ref(), workspace, "members")
+            .context("Failed to read workspace.members")?;
+        let exclude = toml_path_array_to_set(root.as_ref(), workspace, "exclude")
+            .context("Failed to read workspace.exclude")?;
 
         Ok(Self { members, exclude })
     }
@@ -493,7 +492,7 @@ impl Workspace {
     fn state<P: AsRef<Path>>(&self, path: P) -> Result<WorkspaceState> {
         let path = path.as_ref();
         match (self.members.contains(path), self.exclude.contains(path)) {
-            (true, true) => Err(Error::WorkspaceConflict(path.to_path_buf())),
+            (true, true) => bail!(Error::WorkspaceConflict(path.to_path_buf())),
 
             (true, false) => Ok(WorkspaceState::Member),
             (false, true) => Ok(WorkspaceState::Exclude),
@@ -535,15 +534,18 @@ fn toml_path_array_to_set<P: AsRef<Path>>(
 
     let Some(array) = table.get(field) else { return Ok(set) };
     let Some(array) = array.as_array() else {
-        return Err(Error::NotAStringArray(field))
+        bail!(Error::NotAStringArray(field))
     };
 
     for val in array {
         let Some(path) = val.as_str() else {
-            return Err(Error::NotAStringArray(field));
+            bail!(Error::NotAStringArray(field));
         };
 
-        set.insert(fs::canonicalize(root.as_ref().join(path))?);
+        set.insert(
+            fs::canonicalize(root.as_ref().join(path))
+                .with_context(|| format!("Canonicalizing path '{path}'"))?,
+        );
     }
 
     Ok(set)
@@ -560,7 +562,7 @@ where
 {
     let path = path_relative_to(root, path)?;
     let Some(repr) = path.to_str() else {
-        return Err(Error::PathToTomlStr(path));
+        bail!(Error::PathToTomlStr(path));
     };
 
     Ok(repr.into())
@@ -668,9 +670,9 @@ mod tests {
 
     #[test]
     fn test_no_workspace() {
-        expect!["No [workspace] found at $PATH/sui-execution/cut/Cargo.toml/Cargo.toml"].assert_eq(
-            &display_for_test(&Workspace::read(env!("CARGO_MANIFEST_DIR")).unwrap_err()),
-        );
+        let err = Workspace::read(env!("CARGO_MANIFEST_DIR")).unwrap_err();
+        expect!["No [workspace] found at $PATH/sui-execution/cut/Cargo.toml/Cargo.toml"]
+            .assert_eq(&scrub_path(&format!("{:#}", err), repo_root()));
     }
 
     #[test]
@@ -705,8 +707,9 @@ mod tests {
         )
         .unwrap();
 
-        expect!["Expected 'members' field to be an array of strings"]
-            .assert_eq(&display_for_test(&Workspace::read(&tmp).unwrap_err()));
+        let err = Workspace::read(&tmp).unwrap_err();
+        expect!["Failed to read workspace.members: 'members' field is not an array of strings"]
+            .assert_eq(&scrub_path(&format!("{:#}", err), repo_root()));
     }
 
     #[test]
@@ -723,8 +726,9 @@ mod tests {
         )
         .unwrap();
 
-        expect!["IO Error: No such file or directory (os error 2)"]
-            .assert_eq(&display_for_test(&Workspace::read(&tmp).unwrap_err()));
+        let err = Workspace::read(&tmp).unwrap_err();
+        expect!["Failed to read workspace.members: Canonicalizing path 'i_dont_exist': No such file or directory (os error 2)"]
+        .assert_eq(&scrub_path(&format!("{:#}", err), repo_root()));
     }
 
     #[test]
@@ -905,10 +909,8 @@ mod tests {
         })
         .unwrap_err();
 
-        expect!["Both member and exclude of [workspace]: $PATH/foo"].assert_eq(&scrub_path(
-            &format!("{}", err),
-            fs::canonicalize(tmp.path()).unwrap(),
-        ));
+        expect!["Failed to find packages in $PATH: Failed to plan copy for $PATH/foo: Both member and exclude of [workspace]: $PATH/foo"]
+        .assert_eq(&scrub_path(&format!("{:#}", err), tmp.path()));
     }
 
     #[test]
@@ -951,7 +953,7 @@ mod tests {
         .unwrap_err();
 
         expect!["Packages 'bar-latest' and 'bar' map to the same cut package name"]
-            .assert_eq(&format!("{}", err));
+            .assert_eq(&format!("{:#}", err));
     }
 
     #[test]
@@ -994,7 +996,7 @@ mod tests {
         .unwrap_err();
 
         expect!["Packages 'foo-bar' and 'baz-bar' map to the same cut package path"]
-            .assert_eq(&format!("{}", err));
+            .assert_eq(&format!("{:#}", err));
     }
 
     #[test]
@@ -1029,8 +1031,8 @@ mod tests {
         })
         .unwrap_err();
 
-        expect!["Cutting package 'foo-bar' will overwrite existing path: $PATH/baz/bar"]
-            .assert_eq(&scrub_path(&format!("{}", err), tmp.path()));
+        expect!["Failed to find packages in $PATH/foo: Failed to plan copy for $PATH/foo/bar: Cutting package 'foo-bar' will overwrite existing path: $PATH/baz/bar"]
+        .assert_eq(&scrub_path(&format!("{:#}", err), tmp.path()));
     }
 
     #[test]
@@ -1197,12 +1199,7 @@ mod tests {
 
     /// Print with pretty-printed debug formatting, with repo paths scrubbed out for consistency.
     fn debug_for_test<T: fmt::Debug>(x: &T) -> String {
-        scrub_path(&format!("{x:#?}"), fs::canonicalize(repo_root()).unwrap())
-    }
-
-    /// Display with repo paths scrubbed out for consistency.
-    fn display_for_test<T: fmt::Display>(x: &T) -> String {
-        scrub_path(&format!("{x}"), fs::canonicalize(repo_root()).unwrap())
+        scrub_path(&format!("{x:#?}"), repo_root())
     }
 
     /// Read multiple files into one string.
@@ -1216,8 +1213,15 @@ mod tests {
     }
 
     fn scrub_path<P: AsRef<Path>>(x: &str, p: P) -> String {
-        let path = p.as_ref().as_os_str().to_os_string().into_string().unwrap();
-        x.replace(&path, "$PATH")
+        let path0 = fs::canonicalize(&p)
+            .unwrap()
+            .into_os_string()
+            .into_string()
+            .unwrap();
+
+        let path1 = p.as_ref().as_os_str().to_os_string().into_string().unwrap();
+
+        x.replace(&path0, "$PATH").replace(&path1, "$PATH")
     }
 
     fn repo_root() -> PathBuf {

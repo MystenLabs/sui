@@ -9596,6 +9596,7 @@ dependencies = [
 name = "sui-execution-cut"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "clap 4.3.3",
  "expect-test",
  "tempfile",
