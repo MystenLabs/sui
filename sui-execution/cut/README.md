@@ -11,8 +11,7 @@ When making copies, `cut` maintains the following properties:
 - If crate A depends on crate B, then when copies A' and B' are made,
   A' will depend on B' (not B).
 - If crate A (copied) depends on crate B (not copied) and refers to it
-  by a relative path, the path in copy A' is fixed up to continue
-  pointing to B
+  by a relative path, the path in copy A' continues pointing to B.
 - If crate C is a workspace member, then the copy, C', will also be
   added to the workspace members.
 - If crate C is a workspace exclude, then the copy, C', will also be
@@ -34,7 +33,7 @@ to copy:
 ## Copying
 
 When copying crates, the tool preserves the relative path of the crate
-in its source directory. I.e. if crate A is found at path
+in its source directory. For instance, if crate A is found at path
 `./foo/bar/baz/A` in its source directory, it will be copied to
 directory `./foo/bar/baz/A` in its destination directory.
 
