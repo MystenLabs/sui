@@ -1,4 +1,3 @@
-use std::collections::VecDeque;
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
@@ -10,6 +9,7 @@ use crate::{
 };
 use config::{Committee, Stake};
 use fastcrypto::hash::Hash;
+use std::collections::VecDeque;
 use std::sync::Arc;
 use storage::ConsensusStore;
 use sui_protocol_config::ProtocolConfig;
@@ -320,11 +320,7 @@ impl Bullshark {
 
     /// Order the past leaders that we didn't already commit. It orders the leaders from the one
     /// of the older (smaller) round to the newest round.
-    pub fn order_leaders(
-        &self,
-        leader: &Certificate,
-        state: &ConsensusState,
-    ) -> VecDeque<Certificate> {
+    fn order_leaders(&self, leader: &Certificate, state: &ConsensusState) -> VecDeque<Certificate> {
         let mut to_commit = VecDeque::new();
         to_commit.push_front(leader.clone());
 
