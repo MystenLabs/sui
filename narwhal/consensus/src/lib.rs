@@ -62,4 +62,8 @@ pub enum Outcome {
 
     // Processed Certificate triggered a commit.
     Commit,
+
+    // When the schedule has changed during a commit, then this is return with everything that has
+    // been committed so far.
+    ScheduleChanged,
 }
