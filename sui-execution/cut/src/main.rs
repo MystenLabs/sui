@@ -14,6 +14,8 @@ fn main() {
     println!("Cutting directories: {:#?}\n", args.directories);
     println!("Including packages: {:#?}\n", args.packages);
 
-    let plan = CutPlan::discover(args);
+    let plan = CutPlan::discover(args).expect("plan discovery should succeed");
+
     println!("Plan: {:#?}\n", plan);
+    plan.execute().expect("plan execution should succeed");
 }
