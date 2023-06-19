@@ -77,6 +77,103 @@ async fn order_leaders() {
     assert!(expected_leader_rounds.is_empty());
 }
 
+#[tokio::test]
+async fn commit_one_with_leader_schedule_change() {
+    struct TestCase {
+        description: String,
+        protocol_config: ProtocolConfig,
+        rounds: Round,
+        expected_leaders: VecDeque<AuthorityIdentifier>,
+    }
+
+    let test_cases: Vec<TestCase> = vec![
+        TestCase {
+            description: "When no schedule change is enabled, then all leaders commit in round robin fashion".to_string(),
+            protocol_config: latest_protocol_version(),
+            rounds: 11,
+            expected_leaders: VecDeque::from(vec![
+                AuthorityIdentifier(0),
+                AuthorityIdentifier(1),
+                AuthorityIdentifier(2),
+                AuthorityIdentifier(3),
+                AuthorityIdentifier(0),
+            ]),
+        },
+        TestCase {
+            description: "When schedule change is enabled, then authority 0 is bad node and swapped with authority 3".to_string(),
+            protocol_config: {
+                let mut config: ProtocolConfig = latest_protocol_version();
+                config.set_narwhal_new_leader_election_schedule(true);
+                config
+            },
+            rounds: 11,
+            expected_leaders: VecDeque::from(vec![
+                AuthorityIdentifier(0),
+                AuthorityIdentifier(1),
+                AuthorityIdentifier(2),
+                AuthorityIdentifier(3),
+                AuthorityIdentifier(3),
+            ]),
+        },
+    ];
+
+    for mut test_case in test_cases {
+        println!("Running test case \"{}\"", test_case.description);
+
+        // GIVEN
+        let fixture = CommitteeFixture::builder().build();
+        let committee = fixture.committee();
+        // Make certificates for rounds 1 to 9.
+        let ids: Vec<_> = fixture.authorities().map(|a| a.id()).collect();
+        let genesis = Certificate::genesis(&committee)
+            .iter()
+            .map(|x| x.digest())
+            .collect::<BTreeSet<_>>();
+        let (certificates, _next_parents) = test_utils::make_optimal_certificates(
+            &committee,
+            &latest_protocol_version(),
+            1..=test_case.rounds,
+            &genesis,
+            &ids,
+        );
+
+        let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
+        let gc_depth = 50;
+        let sub_dags_per_schedule = 3;
+        let mut state = ConsensusState::new(metrics.clone(), gc_depth);
+        let store = make_consensus_store(&test_utils::temp_dir());
+        let schedule = LeaderSchedule::new(committee.clone(), LeaderSwapTable::default());
+        let mut bullshark = Bullshark::new(
+            committee,
+            store,
+            test_case.protocol_config,
+            metrics,
+            sub_dags_per_schedule,
+            schedule.clone(),
+        );
+
+        let mut committed_sub_dags = Vec::new();
+        for certificate in certificates {
+            let (outcome, committed) = bullshark
+                .process_certificate(&mut state, certificate)
+                .unwrap();
+
+            if outcome == Outcome::Commit {
+                for sub_dag in &committed {
+                    assert_eq!(
+                        sub_dag.leader.origin(),
+                        test_case.expected_leaders.pop_front().unwrap()
+                    )
+                }
+            }
+
+            committed_sub_dags.extend(committed);
+        }
+
+        assert!(test_case.expected_leaders.is_empty());
+    }
+}
+
 // Run for 4 dag rounds in ideal conditions (all nodes reference all other nodes). We should commit
 // the leader of round 2.
 #[tokio::test]
