@@ -672,7 +672,7 @@ mod tests {
     fn test_no_workspace() {
         let err = Workspace::read(env!("CARGO_MANIFEST_DIR")).unwrap_err();
         expect!["No [workspace] found at $PATH/sui-execution/cut/Cargo.toml/Cargo.toml"]
-            .assert_eq(&scrub_path(&format!("{:?}", err), repo_root()));
+            .assert_eq(&scrub_path(&format!("{:#}", err), repo_root()));
     }
 
     #[test]
@@ -708,12 +708,8 @@ mod tests {
         .unwrap();
 
         let err = Workspace::read(&tmp).unwrap_err();
-        expect![[r#"
-            Failed to read workspace.members
-
-            Caused by:
-                'members' field is not an array of strings"#]]
-        .assert_eq(&scrub_path(&format!("{:?}", err), repo_root()));
+        expect!["Failed to read workspace.members: 'members' field is not an array of strings"]
+            .assert_eq(&scrub_path(&format!("{:#}", err), repo_root()));
     }
 
     #[test]
@@ -731,13 +727,8 @@ mod tests {
         .unwrap();
 
         let err = Workspace::read(&tmp).unwrap_err();
-        expect![[r#"
-            Failed to read workspace.members
-
-            Caused by:
-                0: Canonicalizing path 'i_dont_exist'
-                1: No such file or directory (os error 2)"#]]
-        .assert_eq(&scrub_path(&format!("{:?}", err), repo_root()));
+        expect!["Failed to read workspace.members: Canonicalizing path 'i_dont_exist': No such file or directory (os error 2)"]
+        .assert_eq(&scrub_path(&format!("{:#}", err), repo_root()));
     }
 
     #[test]
@@ -918,13 +909,8 @@ mod tests {
         })
         .unwrap_err();
 
-        expect![[r#"
-            Failed to find packages in $PATH
-
-            Caused by:
-                0: Failed to plan copy for $PATH/foo
-                1: Both member and exclude of [workspace]: $PATH/foo"#]]
-        .assert_eq(&scrub_path(&format!("{:?}", err), tmp.path()));
+        expect!["Failed to find packages in $PATH: Failed to plan copy for $PATH/foo: Both member and exclude of [workspace]: $PATH/foo"]
+        .assert_eq(&scrub_path(&format!("{:#}", err), tmp.path()));
     }
 
     #[test]
@@ -967,7 +953,7 @@ mod tests {
         .unwrap_err();
 
         expect!["Packages 'bar-latest' and 'bar' map to the same cut package name"]
-            .assert_eq(&format!("{:?}", err));
+            .assert_eq(&format!("{:#}", err));
     }
 
     #[test]
@@ -1010,7 +996,7 @@ mod tests {
         .unwrap_err();
 
         expect!["Packages 'foo-bar' and 'baz-bar' map to the same cut package path"]
-            .assert_eq(&format!("{:?}", err));
+            .assert_eq(&format!("{:#}", err));
     }
 
     #[test]
@@ -1045,13 +1031,8 @@ mod tests {
         })
         .unwrap_err();
 
-        expect![[r#"
-            Failed to find packages in $PATH/foo
-
-            Caused by:
-                0: Failed to plan copy for $PATH/foo/bar
-                1: Cutting package 'foo-bar' will overwrite existing path: $PATH/baz/bar"#]]
-        .assert_eq(&scrub_path(&format!("{:?}", err), tmp.path()));
+        expect!["Failed to find packages in $PATH/foo: Failed to plan copy for $PATH/foo/bar: Cutting package 'foo-bar' will overwrite existing path: $PATH/baz/bar"]
+        .assert_eq(&scrub_path(&format!("{:#}", err), tmp.path()));
     }
 
     #[test]
