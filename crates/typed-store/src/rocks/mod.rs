@@ -797,6 +797,20 @@ impl<K, V> DBMap<K, V> {
         Ok(())
     }
 
+    pub fn compact_range_raw(
+        &self,
+        cf_name: &str,
+        start: Vec<u8>,
+        end: Vec<u8>,
+    ) -> Result<(), TypedStoreError> {
+        let cf = self
+            .rocksdb
+            .cf_handle(cf_name)
+            .expect("compact range: column family does not exist");
+        self.rocksdb.compact_range_cf(&cf, Some(start), Some(end));
+        Ok(())
+    }
+
     pub fn compact_range_to_bottom<J: Serialize>(
         &self,
         start: &J,
