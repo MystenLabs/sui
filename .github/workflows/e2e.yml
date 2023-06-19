@@ -64,6 +64,8 @@ jobs:
           path: apps/explorer/playwright-report/
           retention-days: 30
 
+      - name: Run Local net
+        run: cargo run --bin sui-test-validator -- --epoch-duration-ms 10000 &
       - name: Set Wallet env
         run: echo "API_ENV=local" > "$PWD/apps/wallet/configs/environment/.env"
       - name: Build Wallet
