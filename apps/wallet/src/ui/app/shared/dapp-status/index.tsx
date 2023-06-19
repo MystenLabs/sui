@@ -87,6 +87,7 @@ function DappStatus() {
 				).unwrap();
 				ampli.disconnectedApplication({
 					applicationUrl: activeOriginUrl,
+					disconnectedAccounts: 1,
 					sourceFlow: 'Header',
 				});
 				setVisible(false);

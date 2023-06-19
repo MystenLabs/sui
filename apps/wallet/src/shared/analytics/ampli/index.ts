@@ -148,6 +148,14 @@ export interface DisconnectedApplicationProperties {
 	 */
 	applicationUrl: string;
 	/**
+	 * The number of accounts that were disconnected.
+	 *
+	 * | Rule | Value |
+	 * |---|---|
+	 * | Type | integer |
+	 */
+	disconnectedAccounts: number;
+	/**
 	 * The flow the user disconnected the application from.
 	 */
 	sourceFlow: string;
