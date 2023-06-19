@@ -11,7 +11,7 @@ async fn main() -> Result<(), anyhow::Error> {
     let sui = SuiClientBuilder::default()
         .build("https://fullnode.devnet.sui.io:443")
         .await?;
-    let address = SuiAddress::from_str("0xec11cad080d0496a53bafcea629fcbcfff2a9866")?;
+    let address = SuiAddress::from_str("0x2567a1d98a4d703229e4fee6b61f7b8c80ca366c99e9d4408c0c5eb25699760a")?;
     let objects = sui
         .read_api()
         .get_owned_objects(
