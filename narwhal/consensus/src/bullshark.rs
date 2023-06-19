@@ -320,7 +320,11 @@ impl Bullshark {
 
     /// Order the past leaders that we didn't already commit. It orders the leaders from the one
     /// of the older (smaller) round to the newest round.
-    fn order_leaders(&self, leader: &Certificate, state: &ConsensusState) -> VecDeque<Certificate> {
+    pub fn order_leaders(
+        &self,
+        leader: &Certificate,
+        state: &ConsensusState,
+    ) -> VecDeque<Certificate> {
         let mut to_commit = VecDeque::new();
         to_commit.push_front(leader.clone());
 
