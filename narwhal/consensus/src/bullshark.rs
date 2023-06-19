@@ -1,3 +1,4 @@
+use std::collections::VecDeque;
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
@@ -155,90 +156,24 @@ impl Bullshark {
             return Ok((Outcome::LeaderBelowCommitRound, Vec::new()));
         }
 
-        let leader = match self
-            .leader_schedule
-            .leader_certificate(leader_round, &state.dag)
-        {
-            (_leader_authority, Some(certificate)) => certificate,
-            (_leader_authority, None) => {
-                // leader has not been found - we don't have any certificate
-                return Ok((Outcome::LeaderNotFound, Vec::new()));
+        let mut committed_sub_dags = Vec::new();
+        let outcome = loop {
+            let (outcome, committed) = self.commit_leader(leader_round, state)?;
+
+            // always extend the returned sub dags
+            committed_sub_dags.extend(committed);
+
+            // break the loop and return the result as long as there is no schedule change.
+            // We want to retry if there is a schedule change.
+            if outcome != Outcome::ScheduleChanged {
+                break outcome;
             }
         };
 
-        // Check if the leader has f+1 support from its children (ie. round r+1).
-        let stake: Stake = state
-            .dag
-            .get(&round)
-            .expect("We should have the whole history by now")
-            .values()
-            .filter(|(_, x)| x.header().parents().contains(&leader.digest()))
-            .map(|(_, x)| self.committee.stake_by_id(x.origin()))
-            .sum();
-
-        // If it is the case, we can commit the leader. But first, we need to recursively go back to
-        // the last committed leader, and commit all preceding leaders in the right order. Committing
-        // a leader block means committing all its dependencies.
-        if stake < self.committee.validity_threshold() {
-            debug!("Leader {:?} does not have enough support", leader);
-            return Ok((Outcome::NotEnoughSupportForLeader, Vec::new()));
-        }
-
-        // Get an ordered list of past leaders that are linked to the current leader.
-        debug!("Leader {:?} has enough support", leader);
-        let mut committed_sub_dags = Vec::new();
-        let mut total_committed_certificates = 0;
-
-        for leader in self.order_leaders(leader, state).iter().rev() {
-            let sub_dag_index = state.next_sub_dag_index();
-            let _span = error_span!("bullshark_process_sub_dag", sub_dag_index);
-
-            debug!("Leader {:?} has enough support", leader);
-
-            let mut min_round = leader.round();
-            let mut sequence = Vec::new();
-
-            // Starting from the oldest leader, flatten the sub-dag referenced by the leader.
-            for x in utils::order_dag(leader, state) {
-                // Update and clean up internal state.
-                state.update(&x);
-
-                // For logging.
-                min_round = min_round.min(x.round());
-
-                // Add the certificate to the sequence.
-                sequence.push(x);
-            }
-            debug!(min_round, "Subdag has {} certificates", sequence.len());
-
-            total_committed_certificates += sequence.len();
-
-            // We resolve the reputation score that should be stored alongside with this sub dag.
-            let reputation_score = self.resolve_reputation_score(state, &sequence, sub_dag_index);
-
-            let sub_dag = CommittedSubDag::new(
-                sequence,
-                leader.clone(),
-                sub_dag_index,
-                reputation_score.clone(),
-                state.last_committed_sub_dag.as_ref(),
-            );
-
-            // Persist the update.
-            self.store
-                .write_consensus_state(&state.last_committed, &sub_dag)?;
-
-            // Update the last sub dag
-            state.last_committed_sub_dag = Some(sub_dag.clone());
-
-            committed_sub_dags.push(sub_dag);
-
-            // If the leader schedule has been updated, then we'll need to recalculate any upcoming
-            // leaders for the rest of the recursive commits.
-            if self.update_leader_schedule(leader.round(), &reputation_score) {
-                // TODO: a new schedule has been produced, which means that we need to recalculate leaders
-                // to ensure that the new ones are considered and update the commit path.
-            }
+        // If we have no sub dag to commit then we simply return the outcome directly.
+        // Otherwise we let the rest of the method run.
+        if committed_sub_dags.is_empty() {
+            return Ok((outcome, committed_sub_dags));
         }
 
         // record the last time we got a successful leader election
@@ -268,16 +203,131 @@ impl Bullshark {
             debug!("Latest commit of {}: Round {}", name, round);
         }
 
+        let total_committed_certificates: u64 = committed_sub_dags
+            .iter()
+            .map(|sub_dag| sub_dag.certificates.len() as u64)
+            .sum();
+
         self.metrics
             .committed_certificates
-            .report(total_committed_certificates as u64);
+            .report(total_committed_certificates);
 
         Ok((Outcome::Commit, committed_sub_dags))
     }
 
-    /// Order the past leaders that we didn't already commit.
-    pub fn order_leaders(&self, leader: &Certificate, state: &ConsensusState) -> Vec<Certificate> {
-        let mut to_commit = vec![leader.clone()];
+    /// Commits the leader of round `leader_round`. It is also recursively committing any earlier
+    /// leader that hasn't been committed, assuming that's possible.
+    /// If the schedule has changed due to a commit and there are more leaders to commit, then this
+    /// method will return the enum `ScheduleChanged` so the caller will know to retry for the uncommitted
+    /// leaders with the updated schedule now.
+    fn commit_leader(
+        &mut self,
+        leader_round: Round,
+        state: &mut ConsensusState,
+    ) -> Result<(Outcome, Vec<CommittedSubDag>), ConsensusError> {
+        let leader = match self
+            .leader_schedule
+            .leader_certificate(leader_round, &state.dag)
+        {
+            (_leader_authority, Some(certificate)) => certificate,
+            (_leader_authority, None) => {
+                // leader has not been found - we don't have any certificate
+                return Ok((Outcome::LeaderNotFound, vec![]));
+            }
+        };
+
+        // Check if the leader has f+1 support from its children (ie. leader_round+1).
+        let stake: Stake = state
+            .dag
+            .get(&(leader_round + 1))
+            .expect("We should have the whole history by now")
+            .values()
+            .filter(|(_, x)| x.header().parents().contains(&leader.digest()))
+            .map(|(_, x)| self.committee.stake_by_id(x.origin()))
+            .sum();
+
+        // If it is the case, we can commit the leader. But first, we need to recursively go back to
+        // the last committed leader, and commit all preceding leaders in the right order. Committing
+        // a leader block means committing all its dependencies.
+        if stake < self.committee.validity_threshold() {
+            debug!("Leader {:?} does not have enough support", leader);
+            return Ok((Outcome::NotEnoughSupportForLeader, vec![]));
+        }
+
+        // Get an ordered list of past leaders that are linked to the current leader.
+        debug!("Leader {:?} has enough support", leader);
+
+        let mut committed_sub_dags = Vec::new();
+        let mut leaders_to_commit = self.order_leaders(leader, state);
+
+        while let Some(leader) = leaders_to_commit.pop_front() {
+            let sub_dag_index = state.next_sub_dag_index();
+            let _span = error_span!("bullshark_process_sub_dag", sub_dag_index);
+
+            debug!("Leader {:?} has enough support", leader);
+
+            let mut min_round = leader.round();
+            let mut sequence = Vec::new();
+
+            // Starting from the oldest leader, flatten the sub-dag referenced by the leader.
+            for x in utils::order_dag(&leader, state) {
+                // Update and clean up internal state.
+                state.update(&x);
+
+                // For logging.
+                min_round = min_round.min(x.round());
+
+                // Add the certificate to the sequence.
+                sequence.push(x);
+            }
+            debug!(min_round, "Subdag has {} certificates", sequence.len());
+
+            // We resolve the reputation score that should be stored alongside with this sub dag.
+            let reputation_score = self.resolve_reputation_score(state, &sequence, sub_dag_index);
+
+            let sub_dag = CommittedSubDag::new(
+                sequence,
+                leader.clone(),
+                sub_dag_index,
+                reputation_score.clone(),
+                state.last_committed_sub_dag.as_ref(),
+            );
+
+            // Persist the update.
+            self.store
+                .write_consensus_state(&state.last_committed, &sub_dag)?;
+
+            // Update the last sub dag
+            state.last_committed_sub_dag = Some(sub_dag.clone());
+
+            committed_sub_dags.push(sub_dag);
+
+            // If the leader schedule has been updated, then we'll need to recalculate any upcoming
+            // leaders for the rest of the recursive commits. We do that by repeating the leader
+            // election for the round that triggered the original commit
+            if self.update_leader_schedule(leader.round(), &reputation_score) {
+                // return that schedule has changed only when there are more leaders to commit until,
+                // the `leader_round`, otherwise we have committed everything we could and practically
+                // the leader of `leader_round` is the one that changed the schedule.
+                if !leaders_to_commit.is_empty() {
+                    return Ok((Outcome::ScheduleChanged, committed_sub_dags));
+                }
+            }
+        }
+
+        Ok((Outcome::Commit, committed_sub_dags))
+    }
+
+    /// Order the past leaders that we didn't already commit. It orders the leaders from the one
+    /// of the older (smaller) round to the newest round.
+    pub fn order_leaders(
+        &self,
+        leader: &Certificate,
+        state: &ConsensusState,
+    ) -> VecDeque<Certificate> {
+        let mut to_commit = VecDeque::new();
+        to_commit.push_front(leader.clone());
+
         let mut leader = leader;
         assert_eq!(leader.round() % 2, 0);
         for r in (state.last_round.committed_round + 2..=leader.round() - 2)
@@ -300,7 +350,9 @@ impl Bullshark {
 
             // Check whether there is a path between the last two leaders.
             if self.linked(leader, prev_leader, &state.dag) {
-                to_commit.push(prev_leader.clone());
+                // always add on the front so in the end we create a list with the leaders ordered
+                // from the lowest to the highest round.
+                to_commit.push_front(prev_leader.clone());
                 leader = prev_leader;
             } else {
                 self.metrics
