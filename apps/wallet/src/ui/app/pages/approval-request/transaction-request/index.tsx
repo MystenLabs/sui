@@ -16,6 +16,7 @@ import { respondToTransactionRequest } from '_redux/slices/transaction-requests'
 import { useQredoTransaction } from '_src/ui/app/hooks/useQredoTransaction';
 import { PageMainLayoutTitle } from '_src/ui/app/shared/page-main-layout/PageMainLayoutTitle';
 import { TransactionSummary } from '_src/ui/app/shared/transaction-summary';
+import { ampli } from '_src/shared/analytics/ampli';
 
 export type TransactionRequestProps = {
 	txRequest: TransactionApprovalRequest;
@@ -72,6 +73,10 @@ export function TransactionRequest({ txRequest }: TransactionRequestProps) {
 							clientIdentifier,
 						}),
 					);
+					ampli.approvedTransaction({
+						applicationUrl: txRequest.origin,
+						receivedFailureWarning: false,
+					});
 				}}
 				address={addressForTransaction}
 				approveLoading={isLoading || isConfirmationVisible}
@@ -109,6 +114,10 @@ export function TransactionRequest({ txRequest }: TransactionRequestProps) {
 							clientIdentifier,
 						}),
 					);
+					ampli.approvedTransaction({
+						applicationUrl: txRequest.origin,
+						receivedFailureWarning: true,
+					});
 					setConfirmationVisible(false);
 				}}
 			/>

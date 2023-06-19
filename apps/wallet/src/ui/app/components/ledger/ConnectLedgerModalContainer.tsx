@@ -7,6 +7,7 @@ import { useNavigate } from 'react-router-dom';
 import { getLedgerConnectionErrorMessage } from '../../helpers/errorMessages';
 import { useNextMenuUrl } from '../menu/hooks';
 import { ConnectLedgerModal } from './ConnectLedgerModal';
+import { ampli } from '_src/shared/analytics/ampli';
 
 export function ConnectLedgerModalContainer() {
 	const navigate = useNavigate();
@@ -24,6 +25,7 @@ export function ConnectLedgerModalContainer() {
 			}}
 			onConfirm={() => {
 				navigate(importLedgerAccountsUrl);
+				ampli.connectedHardwareWallet({ hardwareWalletType: 'Ledger' });
 			}}
 		/>
 	);

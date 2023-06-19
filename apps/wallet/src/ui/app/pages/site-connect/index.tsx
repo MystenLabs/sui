@@ -18,6 +18,7 @@ import { permissionsSelectors, respondToPermissionRequest } from '_redux/slices/
 import type { RootState } from '_redux/RootReducer';
 
 import st from './SiteConnectPage.module.scss';
+import { ampli } from '_src/shared/analytics/ampli';
 
 function SiteConnectPage() {
 	const { requestID } = useParams();
@@ -36,7 +37,7 @@ function SiteConnectPage() {
 	);
 	const handleOnSubmit = useCallback(
 		async (allowed: boolean) => {
-			if (requestID && accountsToConnect) {
+			if (requestID && accountsToConnect && permissionRequest) {
 				await dispatch(
 					respondToPermissionRequest({
 						id: requestID,
@@ -44,9 +45,13 @@ function SiteConnectPage() {
 						allowed,
 					}),
 				);
+				ampli.connectedApplication({
+					applicationName: permissionRequest.name,
+					applicationUrl: permissionRequest.origin,
+				});
 			}
 		},
-		[dispatch, requestID, accountsToConnect],
+		[requestID, accountsToConnect, permissionRequest, dispatch],
 	);
 	useEffect(() => {
 		if (!loading && (!permissionRequest || permissionRequest.responseDate)) {

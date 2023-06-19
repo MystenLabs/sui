@@ -3,6 +3,7 @@
 
 import { useMutation } from '@tanstack/react-query';
 import { toast } from 'react-hot-toast';
+import { ampli } from '_src/shared/analytics/ampli';
 
 import { useBackgroundClient } from './useBackgroundClient';
 
@@ -13,6 +14,7 @@ export function useDeriveNextAccountMutation() {
 			return backgroundClient.deriveNextAccount();
 		},
 		onSuccess: () => {
+			ampli.createdNewAccount();
 			toast.success('New account created');
 		},
 		onError: (e) => {

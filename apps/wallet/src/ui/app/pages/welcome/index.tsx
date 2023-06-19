@@ -11,6 +11,7 @@ import Loading from '_components/loading';
 import Logo from '_components/logo';
 import { useInitializedGuard } from '_hooks';
 import PageLayout from '_pages/layout';
+import { ampli } from '_src/shared/analytics/ampli';
 
 const VALUE_PROP = [
 	'Send, receive tokens and NFTs',
@@ -65,6 +66,7 @@ const WelcomePage = () => {
 							<div className="flex sticky pb-10 m-auto w-[300px] -bottom-px bg-sui-lightest">
 								<Button
 									to="/initialize/select"
+									onClick={() => ampli.clickedGetStarted()}
 									size="tall"
 									text="Get Started"
 									after={<ArrowRight16 />}
