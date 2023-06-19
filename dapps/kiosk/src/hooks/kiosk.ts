@@ -11,14 +11,14 @@ import {
 import { useRpc } from '../context/RpcClientContext';
 import { ObjectId, SuiAddress, SuiObjectResponse } from '@mysten/sui.js';
 import {
-  Kiosk,
-  KioskData,
-  KioskItem,
-  KioskListing,
-  KioskOwnerCap,
-  fetchKiosk,
-  getKioskObject,
-  getOwnedKiosks,
+	Kiosk,
+	KioskData,
+	KioskItem,
+	KioskListing,
+	KioskOwnerCap,
+	fetchKiosk,
+	getKioskObject,
+	getOwnedKiosks,
 } from '@mysten/kiosk';
 import { parseObjectDisplays, processKioskListings } from '../utils/utils';
 import { OwnedObjectType } from '../components/Inventory/OwnedObjects';
@@ -30,31 +30,28 @@ export type KioskFnType = (item: OwnedObjectType, price?: string) => Promise<voi
  * If the user doesn't have a kiosk, the return is an object with null values.
  */
 export function useOwnedKiosk(address: SuiAddress | undefined) {
-  const provider = useRpc();
+	const provider = useRpc();
 
-  return useQuery({
-    queryKey: [TANSTACK_OWNED_KIOSK_KEY, address],
-    refetchOnMount: false,
-    retry: false,
-    queryFn: async (): Promise<{
-      caps: KioskOwnerCap[];
-      kioskId: SuiAddress | undefined;
-      kioskCap: SuiAddress | undefined;
-    } | null> => {
-      if (!address) return null;
+	return useQuery({
+		queryKey: [TANSTACK_OWNED_KIOSK_KEY, address],
+		refetchOnMount: false,
+		retry: false,
+		queryFn: async (): Promise<{
+			caps: KioskOwnerCap[];
+			kioskId: SuiAddress | undefined;
+			kioskCap: SuiAddress | undefined;
+		} | null> => {
+			if (!address) return null;
 
-      const { kioskOwnerCaps, kioskIds } = await getOwnedKiosks(
-        provider,
-        address,
-      );
+			const { kioskOwnerCaps, kioskIds } = await getOwnedKiosks(provider, address);
 
-      return {
-        caps: kioskOwnerCaps,
-        kioskId: kioskIds[0],
-        kioskCap: kioskOwnerCaps[0]?.objectId,
-      };
-    },
-  });
+			return {
+				caps: kioskOwnerCaps,
+				kioskId: kioskIds[0],
+				kioskCap: kioskOwnerCaps[0]?.objectId,
+			};
+		},
+	});
 }
 
 /**

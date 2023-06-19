@@ -11,20 +11,18 @@ import { KioskSelector } from '../components/Kiosk/KioskSelector';
 import { useKioskSelector } from '../hooks/useKioskSelector';
 
 function Home() {
-  const { currentAccount } = useWalletKit();
+	const { currentAccount } = useWalletKit();
 
-  const {
-    data: ownedKiosk,
-    isLoading,
-    refetch: refetchOwnedKiosk,
-  } = useOwnedKiosk(currentAccount?.address);
+	const {
+		data: ownedKiosk,
+		isLoading,
+		refetch: refetchOwnedKiosk,
+	} = useOwnedKiosk(currentAccount?.address);
 
-  const { selected, setSelected, showKioskSelector } = useKioskSelector(
-    currentAccount?.address,
-  );
+	const { selected, setSelected, showKioskSelector } = useKioskSelector(currentAccount?.address);
 
-  // Return loading state.
-  if (isLoading) return <Loading />;
+	// Return loading state.
+	if (isLoading) return <Loading />;
 
 	// Return wallet not connected state.
 	if (!currentAccount?.address) return <WalletNotConnected />;
@@ -32,23 +30,17 @@ function Home() {
 	// if the account doesn't have a kiosk.
 	if (!ownedKiosk?.kioskId) return <KioskCreation onCreate={refetchOwnedKiosk} />;
 
-  // kiosk management screen.
-  return (
-    <div className="container">
-      {showKioskSelector && selected && (
-        <div className="px-4">
-          <KioskSelector
-            caps={ownedKiosk.caps}
-            selected={selected}
-            setSelected={setSelected}
-          />
-        </div>
-      )}
-      {selected && currentAccount?.address && (
-        <KioskData kioskId={selected.kioskId} />
-      )}
-    </div>
-  );
+	// kiosk management screen.
+	return (
+		<div className="container">
+			{showKioskSelector && selected && (
+				<div className="px-4">
+					<KioskSelector caps={ownedKiosk.caps} selected={selected} setSelected={setSelected} />
+				</div>
+			)}
+			{selected && currentAccount?.address && <KioskData kioskId={selected.kioskId} />}
+		</div>
+	);
 }
 
 export default Home;

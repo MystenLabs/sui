@@ -17,7 +17,7 @@ import { Button } from '../Base/Button';
 import { useWithdrawMutation } from '../../mutations/kiosk';
 
 export function KioskData({ kioskId }: { kioskId: ObjectId }) {
-  const { currentAccount } = useWalletKit();
+	const { currentAccount } = useWalletKit();
 
 	const { data: kiosk, isLoading } = useKioskDetails(kioskId);
 
@@ -64,25 +64,20 @@ export function KioskData({ kioskId }: { kioskId: ObjectId }) {
 				)}
 			</div>
 
-      <Tab.Group vertical defaultIndex={0}>
-        <Tab.List>
-          <Tab className="tab-title">My Kiosk</Tab>
-          <Tab className="tab-title">My Wallet</Tab>
-        </Tab.List>
-        <Tab.Panels>
-          <Tab.Panel>
-            {kioskId && <KioskItems kioskId={kioskId}></KioskItems>}
-          </Tab.Panel>
-          <Tab.Panel>
-            {currentAccount && (
-              <OwnedObjects
-                kioskId={kioskId}
-                address={currentAccount.address}
-              ></OwnedObjects>
-            )}
-          </Tab.Panel>
-        </Tab.Panels>
-      </Tab.Group>
-    </div>
-  );
+			<Tab.Group vertical defaultIndex={0}>
+				<Tab.List>
+					<Tab className="tab-title">My Kiosk</Tab>
+					<Tab className="tab-title">My Wallet</Tab>
+				</Tab.List>
+				<Tab.Panels>
+					<Tab.Panel>{kioskId && <KioskItems kioskId={kioskId}></KioskItems>}</Tab.Panel>
+					<Tab.Panel>
+						{currentAccount && (
+							<OwnedObjects kioskId={kioskId} address={currentAccount.address}></OwnedObjects>
+						)}
+					</Tab.Panel>
+				</Tab.Panels>
+			</Tab.Group>
+		</div>
+	);
 }

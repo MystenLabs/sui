@@ -10,20 +10,14 @@ import { MIST_PER_SUI, ObjectId } from '@mysten/sui.js';
 import { usePlaceAndListMutation } from '../../mutations/kiosk';
 
 export interface ListPriceProps {
-  item: OwnedObjectType;
-  onSuccess: () => void;
-  closeModal: () => void;
-  listAndPlace?: boolean;
-  kioskId: ObjectId;
+	item: OwnedObjectType;
+	onSuccess: () => void;
+	closeModal: () => void;
+	listAndPlace?: boolean;
+	kioskId: ObjectId;
 }
-export function ListPrice({
-  item,
-  onSuccess,
-  closeModal,
-  listAndPlace,
-  kioskId,
-}: ListPriceProps) {
-  const [price, setPrice] = useState<string>('');
+export function ListPrice({ item, onSuccess, closeModal, listAndPlace, kioskId }: ListPriceProps) {
+	const [price, setPrice] = useState<string>('');
 
 	const placeAndListToKioskMutation = usePlaceAndListMutation({
 		onSuccess: onSuccess,
@@ -47,23 +41,23 @@ export function ListPrice({
 					></input>
 				</div>
 
-        <div className="mt-6">
-          <Button
-            loading={placeAndListToKioskMutation.isLoading}
-            className="ease-in-out duration-300 rounded py-2 px-4 bg-primary text-white hover:opacity-70 w-full"
-            onClick={() =>
-              placeAndListToKioskMutation.mutate({
-                item,
-                price: (Number(price) * Number(MIST_PER_SUI)).toString(),
-                shouldPlace: listAndPlace,
-                kioskId,
-              })
-            }
-          >
-            List Item
-          </Button>
-        </div>
-      </>
-    </ModalBase>
-  );
+				<div className="mt-6">
+					<Button
+						loading={placeAndListToKioskMutation.isLoading}
+						className="ease-in-out duration-300 rounded py-2 px-4 bg-primary text-white hover:opacity-70 w-full"
+						onClick={() =>
+							placeAndListToKioskMutation.mutate({
+								item,
+								price: (Number(price) * Number(MIST_PER_SUI)).toString(),
+								shouldPlace: listAndPlace,
+								kioskId,
+							})
+						}
+					>
+						List Item
+					</Button>
+				</div>
+			</>
+		</ModalBase>
+	);
 }

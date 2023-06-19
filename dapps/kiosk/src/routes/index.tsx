@@ -8,18 +8,18 @@ import Home from './Home';
 import SingleKiosk from './SingleKiosk';
 
 export const router = createBrowserRouter([
-  {
-    path: '/',
-    element: <Root />,
-    children: [
-      {
-        path: '',
-        element: <Home />,
-      },
-      {
-        path: '/kiosk/:id',
-        element: <SingleKiosk />,
-      },
-    ],
-  },
+	{
+		path: '/',
+		element: <Root />,
+		children: [
+			{
+				path: '',
+				element: <Home />,
+			},
+			{
+				path: '/kiosk/:id',
+				element: <SingleKiosk />,
+			},
+		],
+	},
 ]);
