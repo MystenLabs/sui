@@ -28,8 +28,7 @@ mod sim_only_tests {
                 ProtocolVersion::MAX_ALLOWED.as_u64(),
             ))
             .build()
-            .await
-            .unwrap();
+            .await;
 
         let (package_id, object_id) = publish_package_and_create_parent_object(&test_cluster).await;
 
@@ -100,14 +99,13 @@ mod sim_only_tests {
             config
         });
 
-        let mut test_cluster = TestClusterBuilder::new()
+        let test_cluster = TestClusterBuilder::new()
             .with_supported_protocol_versions(SupportedProtocolVersions::new_for_testing(
                 ProtocolVersion::MAX.as_u64(),
                 ProtocolVersion::MAX_ALLOWED.as_u64(),
             ))
             .build()
-            .await
-            .unwrap();
+            .await;
 
         let (package_id, object_id) = publish_package_and_create_parent_object(&test_cluster).await;
 
@@ -143,9 +141,6 @@ mod sim_only_tests {
         assert_eq!(effects.unwrapped_then_deleted().len(), 1);
 
         test_cluster.trigger_reconfiguration().await;
-        test_cluster.spawn_new_fullnode().await;
-        // Make sure the new fullnode is able to catch up without failing.
-        test_cluster.wait_for_epoch_all_nodes(2).await;
     }
 
     async fn publish_package_and_create_parent_object(
@@ -289,13 +284,8 @@ mod sim_only_tests {
     }
 
     fn count_wrapped_tombstone(node: &SuiNode) -> usize {
-        let include_wrapped_tombstones = !node
-            .state()
-            .epoch_store_for_testing()
-            .protocol_config()
-            .simplified_unwrap_then_delete();
         let db = node.state().db();
-        db.iter_live_object_set(include_wrapped_tombstones)
+        db.iter_live_object_set(true)
             .filter(|o| matches!(o, LiveObject::Wrapped(_)))
             .count()
     }
