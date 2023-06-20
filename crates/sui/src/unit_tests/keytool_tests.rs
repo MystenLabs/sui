@@ -205,7 +205,7 @@ async fn test_mnemonics_ed25519() -> Result<(), anyhow::Error> {
     for t in TEST_CASES {
         let mut keystore = Keystore::from(InMemKeystore::new_insecure_for_tests(0));
         KeyToolCommand::Import {
-            mnemonic_phrase: t[0].to_string(),
+            input_string: t[0].to_string(),
             key_scheme: SignatureScheme::ED25519,
             derivation_path: None,
         }
@@ -229,7 +229,7 @@ async fn test_mnemonics_secp256k1() -> Result<(), anyhow::Error> {
     for t in TEST_CASES {
         let mut keystore = Keystore::from(InMemKeystore::new_insecure_for_tests(0));
         KeyToolCommand::Import {
-            mnemonic_phrase: t[0].to_string(),
+            input_string: t[0].to_string(),
             key_scheme: SignatureScheme::Secp256k1,
             derivation_path: None,
         }
@@ -267,7 +267,7 @@ async fn test_mnemonics_secp256r1() -> Result<(), anyhow::Error> {
     for t in TEST_CASES {
         let mut keystore = Keystore::from(InMemKeystore::new_insecure_for_tests(0));
         KeyToolCommand::Import {
-            mnemonic_phrase: t[0].to_string(),
+            input_string: t[0].to_string(),
             key_scheme: SignatureScheme::Secp256r1,
             derivation_path: None,
         }
@@ -288,7 +288,7 @@ async fn test_mnemonics_secp256r1() -> Result<(), anyhow::Error> {
 async fn test_invalid_derivation_path() -> Result<(), anyhow::Error> {
     let mut keystore = Keystore::from(InMemKeystore::new_insecure_for_tests(0));
     assert!(KeyToolCommand::Import {
-        mnemonic_phrase: TEST_MNEMONIC.to_string(),
+        input_string: TEST_MNEMONIC.to_string(),
         key_scheme: SignatureScheme::ED25519,
         derivation_path: Some("m/44'/1'/0'/0/0".parse().unwrap()),
     }
@@ -297,7 +297,7 @@ async fn test_invalid_derivation_path() -> Result<(), anyhow::Error> {
     .is_err());
 
     assert!(KeyToolCommand::Import {
-        mnemonic_phrase: TEST_MNEMONIC.to_string(),
+        input_string: TEST_MNEMONIC.to_string(),
         key_scheme: SignatureScheme::ED25519,
         derivation_path: Some("m/0'/784'/0'/0/0".parse().unwrap()),
     }
@@ -306,7 +306,7 @@ async fn test_invalid_derivation_path() -> Result<(), anyhow::Error> {
     .is_err());
 
     assert!(KeyToolCommand::Import {
-        mnemonic_phrase: TEST_MNEMONIC.to_string(),
+        input_string: TEST_MNEMONIC.to_string(),
         key_scheme: SignatureScheme::ED25519,
         derivation_path: Some("m/54'/784'/0'/0/0".parse().unwrap()),
     }
@@ -315,7 +315,7 @@ async fn test_invalid_derivation_path() -> Result<(), anyhow::Error> {
     .is_err());
 
     assert!(KeyToolCommand::Import {
-        mnemonic_phrase: TEST_MNEMONIC.to_string(),
+        input_string: TEST_MNEMONIC.to_string(),
         key_scheme: SignatureScheme::Secp256k1,
         derivation_path: Some("m/54'/784'/0'/0'/0'".parse().unwrap()),
     }
@@ -324,7 +324,7 @@ async fn test_invalid_derivation_path() -> Result<(), anyhow::Error> {
     .is_err());
 
     assert!(KeyToolCommand::Import {
-        mnemonic_phrase: TEST_MNEMONIC.to_string(),
+        input_string: TEST_MNEMONIC.to_string(),
         key_scheme: SignatureScheme::Secp256k1,
         derivation_path: Some("m/44'/784'/0'/0/0".parse().unwrap()),
     }
@@ -339,7 +339,7 @@ async fn test_invalid_derivation_path() -> Result<(), anyhow::Error> {
 async fn test_valid_derivation_path() -> Result<(), anyhow::Error> {
     let mut keystore = Keystore::from(InMemKeystore::new_insecure_for_tests(0));
     assert!(KeyToolCommand::Import {
-        mnemonic_phrase: TEST_MNEMONIC.to_string(),
+        input_string: TEST_MNEMONIC.to_string(),
         key_scheme: SignatureScheme::ED25519,
         derivation_path: Some("m/44'/784'/0'/0'/0'".parse().unwrap()),
     }
@@ -348,7 +348,7 @@ async fn test_valid_derivation_path() -> Result<(), anyhow::Error> {
     .is_ok());
 
     assert!(KeyToolCommand::Import {
-        mnemonic_phrase: TEST_MNEMONIC.to_string(),
+        input_string: TEST_MNEMONIC.to_string(),
         key_scheme: SignatureScheme::ED25519,
         derivation_path: Some("m/44'/784'/0'/0'/1'".parse().unwrap()),
     }
@@ -357,7 +357,7 @@ async fn test_valid_derivation_path() -> Result<(), anyhow::Error> {
     .is_ok());
 
     assert!(KeyToolCommand::Import {
-        mnemonic_phrase: TEST_MNEMONIC.to_string(),
+        input_string: TEST_MNEMONIC.to_string(),
         key_scheme: SignatureScheme::ED25519,
         derivation_path: Some("m/44'/784'/1'/0'/1'".parse().unwrap()),
     }
@@ -366,7 +366,7 @@ async fn test_valid_derivation_path() -> Result<(), anyhow::Error> {
     .is_ok());
 
     assert!(KeyToolCommand::Import {
-        mnemonic_phrase: TEST_MNEMONIC.to_string(),
+        input_string: TEST_MNEMONIC.to_string(),
         key_scheme: SignatureScheme::Secp256k1,
         derivation_path: Some("m/54'/784'/0'/0/1".parse().unwrap()),
     }
@@ -375,7 +375,7 @@ async fn test_valid_derivation_path() -> Result<(), anyhow::Error> {
     .is_ok());
 
     assert!(KeyToolCommand::Import {
-        mnemonic_phrase: TEST_MNEMONIC.to_string(),
+        input_string: TEST_MNEMONIC.to_string(),
         key_scheme: SignatureScheme::Secp256k1,
         derivation_path: Some("m/54'/784'/1'/0/1".parse().unwrap()),
     }
