@@ -71,15 +71,15 @@ export interface IdentifyProperties {
 	/**
 	 * The type of account currently being used by the user.
 	 */
-	active_account_type?: string;
+	activeAccountType?: string;
 	/**
 	 * The Sui Network that the user is currently interacting with.
 	 */
-	active_network: string;
+	activeNetwork: string;
 	/**
 	 * The active origin website that the extension is being used on.
 	 */
-	active_origin?: string;
+	activeOrigin?: string;
 	/**
 	 * The version of the wallet the user has installed.
 	 */
@@ -92,6 +92,17 @@ export interface ApprovedTransactionProperties {
 	 */
 	applicationUrl: string;
 	receivedFailureWarning: boolean;
+}
+
+export interface ClickedCollectibleCardProperties {
+	/**
+	 * The object type of a collectible.
+	 */
+	collectibleType: string;
+	/**
+	 * The ID of an object on Sui.
+	 */
+	objectId: string;
 }
 
 export interface ClickedStakeSuiProperties {
@@ -286,17 +297,6 @@ export interface UnstakedSuiProperties {
 	validatorAddress: string;
 }
 
-export interface ViewedCollectibleProperties {
-	/**
-	 * The object type of a collectible.
-	 */
-	collectibleType: string;
-	/**
-	 * The ID of an object on Sui.
-	 */
-	objectId: string;
-}
-
 export interface VisitedFiatOnRampProperties {
 	/**
 	 * The name of the fiat on-ramp provider.
@@ -316,6 +316,14 @@ export class ApprovedTransaction implements BaseEvent {
 	event_type = 'approved transaction';
 
 	constructor(public event_properties: ApprovedTransactionProperties) {
+		this.event_properties = event_properties;
+	}
+}
+
+export class ClickedCollectibleCard implements BaseEvent {
+	event_type = 'clicked collectible card';
+
+	constructor(public event_properties: ClickedCollectibleCardProperties) {
 		this.event_properties = event_properties;
 	}
 }
@@ -488,14 +496,6 @@ export class UnstakedSui implements BaseEvent {
 	}
 }
 
-export class ViewedCollectible implements BaseEvent {
-	event_type = 'viewed collectible';
-
-	constructor(public event_properties: ViewedCollectibleProperties) {
-		this.event_properties = event_properties;
-	}
-}
-
 export class ViewedLedgerTutorial implements BaseEvent {
 	event_type = 'viewed ledger tutorial';
 }
@@ -631,6 +631,25 @@ export class Ampli {
     options?: EventOptions,
   ) {
     return this.track(new ApprovedTransaction(properties), options);
+  }
+
+  /**
+   * clicked collectible card
+   *
+   * [View in Tracking Plan](https://data.amplitude.com/mystenlabs/Sui%20Wallet/events/main/latest/clicked%20collectible%20card)
+   *
+   * When users click to view a collectible in the wallet.
+   *
+   * Owner: William Robertson
+   *
+   * @param properties The event's properties (e.g. collectibleType)
+   * @param options Amplitude event options.
+   */
+  clickedCollectibleCard(
+    properties: ClickedCollectibleCardProperties,
+    options?: EventOptions,
+  ) {
+    return this.track(new ClickedCollectibleCard(properties), options);
   }
 
   /**
@@ -1073,25 +1092,6 @@ export class Ampli {
     options?: EventOptions,
   ) {
     return this.track(new UnstakedSui(properties), options);
-  }
-
-  /**
-   * viewed collectible
-   *
-   * [View in Tracking Plan](https://data.amplitude.com/mystenlabs/Sui%20Wallet/events/main/latest/viewed%20collectible)
-   *
-   * When users view a collectible in the wallet.
-   *
-   * Owner: William Robertson
-   *
-   * @param properties The event's properties (e.g. collectibleType)
-   * @param options Amplitude event options.
-   */
-  viewedCollectible(
-    properties: ViewedCollectibleProperties,
-    options?: EventOptions,
-  ) {
-    return this.track(new ViewedCollectible(properties), options);
   }
 
   /**

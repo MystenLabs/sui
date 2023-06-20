@@ -64,7 +64,7 @@ function NftsPage() {
 									objectId,
 								}).toString()}`}
 								onClick={() => {
-									ampli.viewedCollectible({
+									ampli.clickedCollectibleCard({
 										objectId,
 										collectibleType: type!,
 									});
