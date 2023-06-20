@@ -59,7 +59,7 @@ function DisconnectApp({
 			await backgroundClient.sendGetPermissionRequests();
 			ampli.disconnectedApplication({
 				sourceFlow: 'Application page',
-				disconnectedAccounts: accountsToDisconnect.length,
+				disconnectedAccounts: accountsToDisconnect.length || 1,
 				applicationName: permission.name,
 				applicationUrl: origin,
 			});

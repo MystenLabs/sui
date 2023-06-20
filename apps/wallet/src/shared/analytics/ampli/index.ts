@@ -71,11 +71,15 @@ export interface IdentifyProperties {
 	/**
 	 * The type of account currently being used by the user.
 	 */
-	active_account_type: string;
+	active_account_type?: string;
 	/**
 	 * The Sui Network that the user is currently interacting with.
 	 */
 	active_network: string;
+	/**
+	 * The active origin website that the extension is being used on.
+	 */
+	active_origin?: string;
 }
 
 export interface ApprovedTransactionProperties {

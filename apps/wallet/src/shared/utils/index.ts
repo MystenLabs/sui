@@ -7,7 +7,6 @@ import { useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import Browser from 'webextension-polyfill';
 
-import { ampli } from '../analytics/ampli';
 import { getUrlWithDeviceId } from '../analytics/amplitude';
 import { trackPageview, trackEvent } from '../plausible';
 import { useAppSelector } from '_hooks';
@@ -44,36 +43,7 @@ export function usePageView() {
 			},
 		});
 	}, [activeNetwork, location, growthBook, apiEnv, customRPC]);
-
-	useEffect(() => {
-		ampli.identify(undefined, {
-			active_network: activeNetwork,
-			active_account_type: '',
-		});
-	}, [activeNetwork]);
-
-	useEffect(() => {
-		ampli.openedWalletExtension();
-	}, []);
 }
-
-// export function useAmplitudeUserProperties() {
-// 	const location = useLocation();
-// 	const { apiEnv, customRPC } = useAppSelector((state) => state.app);
-// 	const activeNetwork = customRPC && apiEnv === 'customRPC' ? customRPC : apiEnv.toUpperCase();
-
-// 	useEffect(() => {
-// 		ampli.identify(undefined, {
-// 			active_network: activeNetwork,
-// 		});
-// 	}, [activeNetwork]);
-
-// 	useEffect(() => {
-// 		ampli.identify(undefined, {
-// 			active_network: activeNetwork,
-// 		});
-// 	}, []);
-// }
 
 export function isValidUrl(url: string | null) {
 	if (!url) {
