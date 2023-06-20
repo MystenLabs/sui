@@ -89,7 +89,7 @@ function TransferCoinPage() {
 			queryClient.invalidateQueries(['coin-balance']);
 
 			ampli.sentCoins({
-				coinSymbol: Coin.getCoinSymbol(coinType!),
+				coinType: coinType!,
 			});
 
 			const receiptUrl = `/receipt?txdigest=${encodeURIComponent(

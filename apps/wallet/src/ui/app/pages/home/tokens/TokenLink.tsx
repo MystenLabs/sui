@@ -19,7 +19,7 @@ export function TokenLink({ coinBalance, centerAction }: Props) {
 			to={`/send?type=${encodeURIComponent(coinBalance.coinType)}`}
 			onClick={() =>
 				ampli.selectedCoin({
-					coinSymbol: Coin.getCoinSymbol(coinBalance.coinType),
+					coinType: coinBalance.coinType,
 					totalBalance: coinBalance.totalBalance,
 				})
 			}
