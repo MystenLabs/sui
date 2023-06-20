@@ -20,13 +20,9 @@ import st from './Playground.module.scss';
 function AppsPlayGround() {
     const ecosystemApps = useFeature<DAppEntry[]>(FEATURES.WALLET_DAPPS).value;
     const location = useLocation();
-    const [tagFilter, setTagFilter] = useState<string | null>(null);
 
-    useEffect(() => {
-        const queryParams = new URLSearchParams(location.search);
-        const filterValue = queryParams.get('tagFilter');
-        setTagFilter(filterValue);
-    }, [location]);
+    const queryParams = new URLSearchParams(location.search);
+    const tagFilter = queryParams.get('tagFilter');
 
     const filteredEcosystemApps = useMemo(() => {
         if (!ecosystemApps) {
