@@ -470,6 +470,9 @@ impl Proposer {
                     }
                 }
 
+                // Reset advance flag.
+                advance = false;
+
                 // Reschedule the timer.
                 let timer_start = Instant::now();
                 max_delay_timer
@@ -478,6 +481,9 @@ impl Proposer {
                 min_delay_timer
                     .as_mut()
                     .reset(timer_start + self.min_delay());
+
+                // Recheck condition and reset time out flags.
+                continue;
             }
 
             tokio::select! {
@@ -581,6 +587,9 @@ impl Proposer {
                             let _ = self.tx_narwhal_round_updates.send(self.round);
                             self.last_parents = parents;
 
+                            // Reset advance flag.
+                            advance = false;
+
                             // Extend max_delay_timer to properly wait for leader from the
                             // previous round.
                             //
@@ -633,9 +642,9 @@ impl Proposer {
                     };
 
                     self.metrics
-                    .proposer_ready_to_advance
-                    .with_label_values(&[&advance.to_string(), round_type])
-                    .inc();
+                        .proposer_ready_to_advance
+                        .with_label_values(&[&advance.to_string(), round_type])
+                        .inc();
                 }
 
                 // Receive digests from our workers.
