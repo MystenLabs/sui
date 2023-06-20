@@ -97,12 +97,12 @@ class VaultStorageClass {
 		return !!(await getFromLocalStorage<StoredData>(VAULT_KEY));
 	}
 
-	public getMnemonic() {
-		return this.#vault?.getMnemonic() || null;
-	}
-
 	public get entropy() {
 		return this.#vault?.entropy || null;
+	}
+
+	public getMnemonicSeedHex() {
+		return this.#vault?.mnemonicSeedHex || null;
 	}
 
 	public async verifyPassword(password: string) {

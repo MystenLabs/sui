@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { fromExportedKeypair } from '@mysten/sui.js';
+import { fromExportedKeypair, mnemonicToSeedHex } from '@mysten/sui.js';
 
 import { encrypt, decrypt } from '_shared/cryptography/keystore';
 import {
@@ -22,6 +22,7 @@ export type V2DecryptedDataType = {
 	entropy: string;
 	importedKeypairs: ExportedKeypair[];
 	qredoTokens?: Record<string, string>;
+	mnemonicSeedHex?: string;
 };
 
 /**
@@ -32,6 +33,7 @@ export class Vault {
 	public readonly entropy: Uint8Array;
 	public readonly importedKeypairs: Keypair[];
 	public readonly qredoTokens: Map<string, string> = new Map();
+	public readonly mnemonicSeedHex: string;
 
 	public static async from(
 		password: string,
@@ -41,6 +43,7 @@ export class Vault {
 		let entropy: Uint8Array | null = null;
 		let keypairs: Keypair[] = [];
 		let qredoTokens = new Map<string, string>();
+		let mnemonicSeedHex: string | null = null;
 		if (typeof data === 'string') {
 			entropy = mnemonicToEntropy(
 				Buffer.from(await decrypt<string>(password, data)).toString('utf-8'),
@@ -52,20 +55,23 @@ export class Vault {
 				entropy: entropySerialized,
 				importedKeypairs,
 				qredoTokens: storedTokens,
+				mnemonicSeedHex: storedMnemonicSeedHex,
 			} = await decrypt<V2DecryptedDataType>(password, data.data);
 			entropy = toEntropy(entropySerialized);
 			keypairs = importedKeypairs.map(fromExportedKeypair);
 			if (storedTokens) {
 				qredoTokens = new Map(Object.entries(storedTokens));
 			}
+			mnemonicSeedHex = storedMnemonicSeedHex || null;
 		} else {
 			throw new Error("Unknown data, provided data can't be used to create a Vault");
 		}
 		if (!validateEntropy(entropy)) {
 			throw new Error("Can't restore Vault, entropy is invalid.");
 		}
-		const vault = new Vault(entropy, keypairs, qredoTokens);
-		const doMigrate = typeof data === 'string' || data.v !== LATEST_VAULT_VERSION;
+		const vault = new Vault(entropy, keypairs, qredoTokens, mnemonicSeedHex);
+		const doMigrate =
+			typeof data === 'string' || data.v !== LATEST_VAULT_VERSION || !mnemonicSeedHex;
 		if (doMigrate && typeof onMigrateCallback === 'function') {
 			await onMigrateCallback(vault);
 		}
@@ -76,10 +82,12 @@ export class Vault {
 		entropy: Uint8Array,
 		importedKeypairs: Keypair[] = [],
 		qredoTokens: Map<string, string> = new Map(),
+		mnemonicSeedHex: string | null = null,
 	) {
 		this.entropy = entropy;
 		this.importedKeypairs = importedKeypairs;
 		this.qredoTokens = qredoTokens;
+		this.mnemonicSeedHex = mnemonicSeedHex || mnemonicToSeedHex(entropyToMnemonic(entropy));
 	}
 
 	public async encrypt(password: string) {
@@ -87,6 +95,7 @@ export class Vault {
 			entropy: entropyToSerialized(this.entropy),
 			importedKeypairs: this.importedKeypairs.map((aKeypair) => aKeypair.export()),
 			qredoTokens: Object.fromEntries(this.qredoTokens.entries()),
+			mnemonicSeedHex: this.mnemonicSeedHex,
 		};
 		return {
 			v: LATEST_VAULT_VERSION,

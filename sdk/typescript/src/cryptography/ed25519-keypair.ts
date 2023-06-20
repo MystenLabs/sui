@@ -133,6 +133,24 @@ export class Ed25519Keypair implements Keypair {
 	}
 
 	/**
+	 * Derive Ed25519 keypair from mnemonicSeed and path.
+	 *
+	 * If path is none, it will default to m/44'/784'/0'/0'/0', otherwise the path must
+	 * be compliant to SLIP-0010 in form m/44'/784'/{account_index}'/{change_index}'/{address_index}'.
+	 */
+	static deriveKeypairFromSeed(seedHex: string, path?: string): Ed25519Keypair {
+		if (path == null) {
+			path = DEFAULT_ED25519_DERIVATION_PATH;
+		}
+		if (!isValidHardenedPath(path)) {
+			throw new Error('Invalid derivation path');
+		}
+		const { key } = derivePath(path, seedHex);
+
+		return Ed25519Keypair.fromSecretKey(key);
+	}
+
+	/**
 	 * This returns an exported keypair object, the private key field is the pure 32-byte seed.
 	 */
 	export(): ExportedKeypair {
