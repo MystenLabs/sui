@@ -54,6 +54,7 @@ use tokio::time::Duration;
 use tracing::{debug, info, warn};
 
 #[cfg(test)]
+#[cfg(feature = "test-utils")]
 #[path = "unit_tests/consensus_tests.rs"]
 pub mod consensus_tests;
 

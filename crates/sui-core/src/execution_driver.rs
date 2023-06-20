@@ -18,6 +18,7 @@ use tracing::{error, error_span, info, trace, Instrument};
 use crate::authority::AuthorityState;
 
 #[cfg(test)]
+#[cfg(feature = "test-utils")]
 #[path = "unit_tests/execution_driver_tests.rs"]
 mod execution_driver_tests;
 

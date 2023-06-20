@@ -63,6 +63,7 @@ use crate::stake_aggregator::{InsertResult, MultiStakeAggregator, StakeAggregato
 pub const DEFAULT_RETRIES: usize = 4;
 
 #[cfg(test)]
+#[cfg(feature = "test-utils")]
 #[path = "unit_tests/authority_aggregator_tests.rs"]
 pub mod authority_aggregator_tests;
 

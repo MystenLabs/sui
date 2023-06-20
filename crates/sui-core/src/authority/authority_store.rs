@@ -1364,6 +1364,7 @@ impl AuthorityStore {
     }
 
     #[cfg(test)]
+    #[cfg(feature = "test-utils")]
     pub(crate) fn reset_locks_for_test(
         &self,
         transactions: &[TransactionDigest],

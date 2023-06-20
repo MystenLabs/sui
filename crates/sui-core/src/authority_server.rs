@@ -45,6 +45,7 @@ pub(crate) const MAX_TM_QUEUE_LENGTH: usize = 100_000;
 pub(crate) const MAX_PER_OBJECT_QUEUE_LENGTH: usize = 1000;
 
 #[cfg(test)]
+#[cfg(feature = "test-utils")]
 #[path = "unit_tests/server_tests.rs"]
 mod server_tests;
 

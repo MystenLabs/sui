@@ -39,6 +39,7 @@ use sui_types::transaction::{VerifiedCertificate, VerifiedTransaction};
 use self::reconfig_observer::ReconfigObserver;
 
 #[cfg(test)]
+#[cfg(feature = "test-utils")]
 mod tests;
 
 const TASK_QUEUE_SIZE: usize = 10000;

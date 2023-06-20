@@ -29,6 +29,7 @@ use crate::authority::{AuthorityMetrics, AuthorityStore};
 use tap::TapOptional;
 
 #[cfg(test)]
+#[cfg(feature = "test-utils")]
 #[path = "unit_tests/transaction_manager_tests.rs"]
 mod transaction_manager_tests;
 
@@ -695,6 +696,7 @@ impl TransactionManager {
     }
 
     #[cfg(test)]
+    #[cfg(feature = "test-utils")]
     pub(crate) fn objects_available(
         &self,
         input_keys: Vec<InputKey>,
@@ -853,6 +855,7 @@ impl TransactionManager {
 
     // Verify TM has no pending item for tests.
     #[cfg(test)]
+    #[cfg(feature = "test-utils")]
     fn check_empty_for_testing(&self) {
         let inner = self.inner.read();
         assert!(

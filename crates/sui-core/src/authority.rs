@@ -134,18 +134,22 @@ use crate::{transaction_input_checker, transaction_manager::TransactionManager};
 pub mod authority_tests;
 
 #[cfg(test)]
+#[cfg(feature = "test-utils")]
 #[path = "unit_tests/batch_transaction_tests.rs"]
 mod batch_transaction_tests;
 
 #[cfg(test)]
+#[cfg(feature = "test-utils")]
 #[path = "unit_tests/move_integration_tests.rs"]
 pub mod move_integration_tests;
 
 #[cfg(test)]
+#[cfg(feature = "test-utils")]
 #[path = "unit_tests/gas_tests.rs"]
 mod gas_tests;
 
 #[cfg(test)]
+#[cfg(feature = "test-utils")]
 #[path = "unit_tests/batch_verification_tests.rs"]
 mod batch_verification_tests;
 
@@ -4031,6 +4035,7 @@ impl AuthorityState {
     }
 
     #[cfg(test)]
+    #[cfg(feature = "test-utils")]
     pub(crate) fn iter_live_object_set_for_testing(
         &self,
     ) -> impl Iterator<Item = authority_store_tables::LiveObject> + '_ {
@@ -4042,6 +4047,7 @@ impl AuthorityState {
     }
 
     #[cfg(test)]
+    #[cfg(feature = "test-utils")]
     pub(crate) fn shutdown_execution_for_test(&self) {
         self.tx_execution_shutdown
             .lock()

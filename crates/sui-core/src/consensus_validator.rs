@@ -152,6 +152,7 @@ impl SuiTxValidatorMetrics {
 }
 
 #[cfg(test)]
+#[cfg(feature = "test-utils")]
 mod tests {
     use crate::{
         consensus_adapter::consensus_tests::{test_certificates, test_gas_objects},

@@ -9,6 +9,7 @@ use sui_types::{
 };
 
 #[cfg(test)]
+#[cfg(feature = "test-utils")]
 #[path = "unit_tests/transaction_deny_tests.rs"]
 mod transaction_deny_tests;
 
