@@ -48,7 +48,7 @@ export function useTransactionSummary({
 
 	const summary = useMemo(() => {
 		if (!transaction) return null;
-		const objectSummary = getObjectChangeSummary(objectChangesWithDisplay, currentAddress);
+		const objectSummary = getObjectChangeSummary(objectChangesWithDisplay);
 		const balanceChangeSummary = getBalanceChangeSummary(transaction);
 		const gas = getGasSummary(transaction);
 
