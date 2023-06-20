@@ -166,7 +166,7 @@ export function ObjectChangeEntry({ changes, type }: ObjectChangeEntryProps) {
 											<ChevronDown expanded={open} />
 										</div>
 									</Disclosure.Button>
-									<Disclosure.Panel>
+									<Disclosure.Panel as="div" className="gap-4 flex flex-col">
 										<>
 											{!!changes.changesWithDisplay.length && (
 												<div className="flex gap-2 overflow-y-auto">
