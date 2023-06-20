@@ -29,6 +29,7 @@ use sui_types::multiaddr::Multiaddr;
 pub struct ValidatorConfigBuilder {
     config_directory: Option<PathBuf>,
     supported_protocol_versions: Option<SupportedProtocolVersions>,
+    force_unpruned_checkpoints: bool,
 }
 
 impl ValidatorConfigBuilder {
@@ -48,6 +49,11 @@ impl ValidatorConfigBuilder {
     ) -> Self {
         assert!(self.supported_protocol_versions.is_none());
         self.supported_protocol_versions = Some(supported_protocol_versions);
+        self
+    }
+
+    pub fn with_unpruned_checkpoints(mut self) -> Self {
+        self.force_unpruned_checkpoints = true;
         self
     }
 
@@ -103,6 +109,12 @@ impl ValidatorConfigBuilder {
             ..Default::default()
         };
 
+        let mut pruning_config = AuthorityStorePruningConfig::validator_config();
+        if self.force_unpruned_checkpoints {
+            pruning_config.num_epochs_to_retain_for_checkpoints = None;
+        }
+        let pruning_config = pruning_config;
+
         NodeConfig {
             protocol_key_pair: AuthorityKeyPairWithPath::new(validator.key_pair),
             network_key_pair: KeyPairWithPath::new(SuiKeyPair::Ed25519(validator.network_key_pair)),
@@ -122,7 +134,7 @@ impl ValidatorConfigBuilder {
             grpc_load_shed: None,
             grpc_concurrency_limit: Some(DEFAULT_GRPC_CONCURRENCY_LIMIT),
             p2p_config,
-            authority_store_pruning_config: AuthorityStorePruningConfig::validator_config(),
+            authority_store_pruning_config: pruning_config,
             end_of_epoch_broadcast_channel_capacity:
                 default_end_of_epoch_broadcast_channel_capacity(),
             checkpoint_executor_config: Default::default(),

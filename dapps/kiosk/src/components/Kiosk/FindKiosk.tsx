@@ -6,58 +6,57 @@ import { useNavigate, useParams } from 'react-router-dom';
 import classnames from 'classnames';
 
 export default function FindKiosk() {
-  const { kioskId } = useParams();
+	const { kioskId } = useParams();
 
-  const [searchKiosk, setSearchKioskId] = useState<string>(kioskId || '');
-  const navigate = useNavigate();
+	const [searchKiosk, setSearchKioskId] = useState<string>(kioskId || '');
+	const navigate = useNavigate();
 
-  const viewKiosk = (e?: FormEvent<HTMLFormElement>) => {
-    if (!searchKiosk || viewingSearchKiosk) return;
-    e?.preventDefault();
+	const viewKiosk = (e?: FormEvent<HTMLFormElement>) => {
+		if (!searchKiosk || viewingSearchKiosk) return;
+		e?.preventDefault();
 
-    const id = searchKiosk.length === 64 ? `0x${searchKiosk}` : searchKiosk;
-    navigate(`/kiosk/${id}`);
-    setSearchKioskId(id);
-  };
+		const id = searchKiosk.length === 64 ? `0x${searchKiosk}` : searchKiosk;
+		navigate(`/kiosk/${id}`);
+		setSearchKioskId(id);
+	};
 
-  const viewingSearchKiosk = searchKiosk === kioskId;
-  const isObjectIdInput = (val: string | undefined) =>
-    val?.length === 66 || val?.length === 64;
+	const viewingSearchKiosk = searchKiosk === kioskId;
+	const isObjectIdInput = (val: string | undefined) => val?.length === 66 || val?.length === 64;
 
-  const onInput = (e: any) => {
-    setSearchKioskId(e.target.value);
-  };
+	const onInput = (e: any) => {
+		setSearchKioskId(e.target.value);
+	};
 
-  const canSearch = !(kioskId === searchKiosk || !isObjectIdInput(searchKiosk));
+	const canSearch = !(kioskId === searchKiosk || !isObjectIdInput(searchKiosk));
 
-  return (
-    <form onSubmit={viewKiosk} className="text-center lg:min-w-[700px]">
-      <div className="flex items-center bg-gray-100 border rounded border-gray-300 overflow-hidden">
-        <div className="basis-10/12">
-          <input
-            type="text"
-            id="search"
-            role="search"
-            value={searchKiosk}
-            onInput={onInput}
-            className="bg-gray-100 border lg:min-w-[600px] text-gray-900 placeholder:text-gray-500 text-sm rounded rounded-r-none
+	return (
+		<form onSubmit={viewKiosk} className="text-center lg:min-w-[700px]">
+			<div className="flex items-center bg-gray-100 border rounded border-gray-300 overflow-hidden">
+				<div className="basis-10/12">
+					<input
+						type="text"
+						id="search"
+						role="search"
+						value={searchKiosk}
+						onInput={onInput}
+						className="bg-gray-100 border lg:min-w-[600px] text-gray-900 placeholder:text-gray-500 text-sm rounded rounded-r-none
              focus:ring-transparent 
             focus:border-primary block w-full p-2.5 outline-primary"
-            placeholder="Enter a Sui Kiosk ID to search for a kiosk..."
-            required
-          />
-        </div>
-        <button
-          type="submit"
-          className={classnames(
-            'basis-2/12 w-full h-[42px] text-primary text-xs mx-auto disabled:opacity-60 !rounded-l-none',
-            canSearch && 'bg-primary !text-white',
-          )}
-          disabled={!canSearch}
-        >
-          Search
-        </button>
-      </div>
-    </form>
-  );
+						placeholder="Enter a Sui Kiosk ID to search for a kiosk..."
+						required
+					/>
+				</div>
+				<button
+					type="submit"
+					className={classnames(
+						'basis-2/12 w-full h-[42px] text-primary text-xs mx-auto disabled:opacity-60 !rounded-l-none',
+						canSearch && 'bg-primary !text-white',
+					)}
+					disabled={!canSearch}
+				>
+					Search
+				</button>
+			</div>
+		</form>
+	);
 }

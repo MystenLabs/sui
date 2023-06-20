@@ -24,6 +24,7 @@ runs:
           - 'crates/**'
           - 'external-crates/**'
           - 'narwhal/**'
+          - 'sui-execution/**'
           - '.github/workflows/bench.yml'
           - '.github/workflows/codecov.yml'
           - '.github/workflows/rust.yml'

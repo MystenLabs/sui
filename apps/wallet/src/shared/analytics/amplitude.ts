@@ -12,25 +12,23 @@ const IS_PROD_ENV = process.env.NODE_ENV === 'production';
 export const persistableStorage = new PersistableStorage<UserSession>();
 
 export async function initAmplitude() {
-    ampli.load({
-        environment: IS_PROD_ENV ? 'production' : 'development',
-        // Flip this if you'd like to test Amplitude locally
-        disabled: !IS_PROD_ENV,
-        client: {
-            configuration: {
-                cookieStorage: persistableStorage,
-                logLevel: IS_PROD_ENV
-                    ? amplitude.Types.LogLevel.Warn
-                    : amplitude.Types.LogLevel.Debug,
-            },
-        },
-    });
+	ampli.load({
+		environment: IS_PROD_ENV ? 'production' : 'development',
+		// Flip this if you'd like to test Amplitude locally
+		disabled: !IS_PROD_ENV,
+		client: {
+			configuration: {
+				cookieStorage: persistableStorage,
+				logLevel: IS_PROD_ENV ? amplitude.Types.LogLevel.Warn : amplitude.Types.LogLevel.Debug,
+			},
+		},
+	});
 }
 
 export function getUrlWithDeviceId(url: URL) {
-    const amplitudeDeviceId = ampli.client.getDeviceId();
-    if (amplitudeDeviceId) {
-        url.searchParams.append('deviceId', amplitudeDeviceId);
-    }
-    return url;
+	const amplitudeDeviceId = ampli.client.getDeviceId();
+	if (amplitudeDeviceId) {
+		url.searchParams.append('deviceId', amplitudeDeviceId);
+	}
+	return url;
 }

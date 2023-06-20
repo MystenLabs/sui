@@ -476,6 +476,7 @@ impl AuthorityStorePruningConfig {
         // TODO: Remove this after aggressive pruning is enabled by default
         let num_epochs_to_retain = if cfg!(msim) { 0 } else { 2 };
         let pruning_run_delay_seconds = if cfg!(msim) { Some(2) } else { None };
+        let num_epochs_to_retain_for_checkpoints = if cfg!(msim) { Some(1) } else { None };
         Self {
             num_latest_epoch_dbs_to_retain: 3,
             epoch_db_pruning_period_secs: 60 * 60,
@@ -484,13 +485,14 @@ impl AuthorityStorePruningConfig {
             max_checkpoints_in_batch: 10,
             max_transactions_in_batch: 1000,
             periodic_compaction_threshold_days: None,
-            num_epochs_to_retain_for_checkpoints: None,
+            num_epochs_to_retain_for_checkpoints,
         }
     }
     pub fn fullnode_config() -> Self {
         // TODO: Remove this after aggressive pruning is enabled by default
         let num_epochs_to_retain = if cfg!(msim) { 0 } else { 2 };
         let pruning_run_delay_seconds = if cfg!(msim) { Some(2) } else { None };
+        let num_epochs_to_retain_for_checkpoints = if cfg!(msim) { Some(1) } else { None };
         Self {
             num_latest_epoch_dbs_to_retain: 3,
             epoch_db_pruning_period_secs: 60 * 60,
@@ -499,7 +501,7 @@ impl AuthorityStorePruningConfig {
             max_checkpoints_in_batch: 10,
             max_transactions_in_batch: 1000,
             periodic_compaction_threshold_days: None,
-            num_epochs_to_retain_for_checkpoints: None,
+            num_epochs_to_retain_for_checkpoints,
         }
     }
 }

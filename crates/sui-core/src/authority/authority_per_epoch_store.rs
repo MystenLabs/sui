@@ -303,6 +303,10 @@ pub struct AuthorityEpochTables {
     /// Contains a single key, which overrides the value of
     /// ProtocolConfig::buffer_stake_for_protocol_upgrade_bps
     override_protocol_upgrade_buffer_stake: DBMap<u64, u64>,
+
+    /// When transaction is executed via checkpoint executor, we store association here
+    pub(crate) executed_transactions_to_checkpoint:
+        DBMap<TransactionDigest, CheckpointSequenceNumber>,
 }
 
 fn signed_transactions_table_default_config() -> DBOptions {
@@ -365,6 +369,19 @@ impl AuthorityEpochTables {
             .unbounded_iter()
             .map(|(_k, v)| v)
             .collect()
+    }
+
+    pub fn reset_db_for_execution_since_genesis(&self) -> SuiResult {
+        // TODO: Add new tables that get added to the db automatically
+        self.executed_transactions_to_checkpoint.clear()?;
+        Ok(())
+    }
+
+    /// WARNING: This method is very subtle and can corrupt the database if used incorrectly.
+    /// It should only be used in one-off cases or tests after fully understanding the risk.
+    pub fn remove_executed_tx_subtle(&self, digest: &TransactionDigest) -> SuiResult {
+        self.executed_transactions_to_checkpoint.remove(digest)?;
+        Ok(())
     }
 }
 
@@ -749,6 +766,59 @@ impl AuthorityPerEpochStore {
             .assigned_shared_object_versions
             .insert(tx_digest, assigned_versions)?;
         Ok(())
+    }
+
+    pub fn insert_finalized_transactions(
+        &self,
+        digests: &[TransactionDigest],
+        sequence: CheckpointSequenceNumber,
+    ) -> SuiResult {
+        let mut batch = self.tables.executed_transactions_to_checkpoint.batch();
+        batch.insert_batch(
+            &self.tables.executed_transactions_to_checkpoint,
+            digests.iter().map(|d| (*d, sequence)),
+        )?;
+        batch.write()?;
+        trace!("Transactions {digests:?} finalized at checkpoint {sequence}");
+        Ok(())
+    }
+
+    pub fn is_transaction_executed_in_checkpoint(
+        &self,
+        digest: &TransactionDigest,
+    ) -> SuiResult<bool> {
+        Ok(self
+            .tables
+            .executed_transactions_to_checkpoint
+            .contains_key(digest)?)
+    }
+
+    pub fn get_transaction_checkpoint(
+        &self,
+        digest: &TransactionDigest,
+    ) -> SuiResult<Option<CheckpointSequenceNumber>> {
+        Ok(self
+            .tables
+            .executed_transactions_to_checkpoint
+            .get(digest)?)
+    }
+
+    pub fn multi_get_transaction_checkpoint(
+        &self,
+        digests: &[TransactionDigest],
+    ) -> SuiResult<Vec<Option<CheckpointSequenceNumber>>> {
+        Ok(self
+            .tables
+            .executed_transactions_to_checkpoint
+            .multi_get(digests)?
+            .into_iter()
+            .collect())
+    }
+
+    pub fn per_epoch_finalized_txns_enabled(&self) -> bool {
+        self.epoch_start_configuration
+            .flags()
+            .contains(&EpochFlag::PerEpochFinalizedTransactions)
     }
 
     // For each id in objects_to_init, return the next version for that id as recorded in the

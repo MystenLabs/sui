@@ -8,13 +8,13 @@ import { thunkExtras } from './thunk-extras';
 import rootReducer from '_redux/RootReducer';
 
 const store = configureStore({
-    reducer: rootReducer,
-    middleware: (getDefaultMiddleware) =>
-        getDefaultMiddleware({
-            thunk: {
-                extraArgument: thunkExtras,
-            },
-        }).prepend(amplitudePersistenceMiddleware.middleware),
+	reducer: rootReducer,
+	middleware: (getDefaultMiddleware) =>
+		getDefaultMiddleware({
+			thunk: {
+				extraArgument: thunkExtras,
+			},
+		}).prepend(amplitudePersistenceMiddleware.middleware),
 });
 
 export default store;

@@ -178,7 +178,7 @@ dependencies = [
  "anemo-build",
  "anemo-tower",
  "anyhow",
- "clap 4.3.1",
+ "clap 4.3.3",
  "mysten-network",
  "rand 0.8.5",
  "sui-types",
@@ -207,7 +207,7 @@ dependencies = [
  "anemo",
  "anemo-tower",
  "bytes",
- "clap 4.3.1",
+ "clap 4.3.3",
  "dashmap",
  "rand 0.8.5",
  "tokio",
@@ -1780,20 +1780,20 @@ dependencies = [
 
 [[package]]
 name = "clap"
-version = "4.3.1"
+version = "4.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b4ed2379f8603fa2b7509891660e802b88c70a79a6427a70abb5968054de2c28"
+checksum = "ca8f255e4b8027970e78db75e78831229c9815fdbfa67eb1a1b777a62e24b4a0"
 dependencies = [
  "clap_builder",
- "clap_derive 4.3.1",
+ "clap_derive 4.3.2",
  "once_cell",
 ]
 
 [[package]]
 name = "clap_builder"
-version = "4.3.1"
+version = "4.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "72394f3339a76daf211e57d4bcb374410f3965dcc606dd0e03738c7888766980"
+checksum = "acd4f3c17c83b0ba34ffbc4f8bbd74f079413f747f84a6f89292f138057e36ab"
 dependencies = [
  "anstream",
  "anstyle",
@@ -1817,9 +1817,9 @@ dependencies = [
 
 [[package]]
 name = "clap_derive"
-version = "4.3.1"
+version = "4.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "59e9ef9a08ee1c0e1f2e162121665ac45ac3783b0f897db7244ae75ad9a8f65b"
+checksum = "b8cd2b2a819ad6eec39e8f1d6b53001af1e5469f8c177579cdaeb313115b825f"
 dependencies = [
  "heck 0.4.0",
  "proc-macro2 1.0.58",
@@ -5467,22 +5467,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "move-table-extension"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "bcs",
- "better_any",
- "move-binary-format",
- "move-core-types",
- "move-vm-runtime",
- "move-vm-types",
- "once_cell",
- "sha3 0.9.1",
- "smallvec",
-]
-
-[[package]]
 name = "move-transactional-test-runner"
 version = "0.1.0"
 dependencies = [
@@ -5537,7 +5521,6 @@ dependencies = [
  "move-stackless-bytecode-interpreter",
  "move-stdlib",
  "move-symbol-pool",
- "move-table-extension",
  "move-vm-runtime",
  "move-vm-test-utils",
  "move-vm-types",
@@ -5841,6 +5824,7 @@ dependencies = [
  "pprof",
  "prometheus",
  "rand 0.8.5",
+ "sui-protocol-config",
  "telemetry-subscribers",
  "thiserror",
  "tokio",
@@ -9143,7 +9127,7 @@ checksum = "734676eb262c623cec13c3155096e08d1f8f29adce39ba17948b18dad1e54142"
 
 [[package]]
 name = "sui"
-version = "1.4.0"
+version = "1.5.0"
 dependencies = [
  "anemo",
  "anyhow",
@@ -9351,6 +9335,7 @@ dependencies = [
  "futures",
  "jsonrpsee",
  "move-core-types",
+ "mysten-metrics",
  "prometheus",
  "reqwest",
  "serde 1.0.152",
@@ -9485,7 +9470,6 @@ dependencies = [
  "telemetry-subscribers",
  "tempfile",
  "test-fuzz",
- "test-utils",
  "thiserror",
  "tokio",
  "tokio-retry",
@@ -9571,6 +9555,7 @@ dependencies = [
  "sui-protocol-config",
  "sui-sdk",
  "sui-simulator",
+ "sui-swarm",
  "sui-swarm-config",
  "sui-test-transaction-builder",
  "sui-tool",
@@ -9612,17 +9597,19 @@ dependencies = [
 name = "sui-execution-cut"
 version = "0.1.0"
 dependencies = [
- "clap 4.3.1",
+ "anyhow",
+ "clap 4.3.3",
  "expect-test",
  "tempfile",
  "thiserror",
  "toml 0.7.4",
+ "toml_edit 0.19.10",
  "workspace-hack",
 ]
 
 [[package]]
 name = "sui-faucet"
-version = "1.4.0"
+version = "1.5.0"
 dependencies = [
  "anyhow",
  "async-recursion",
@@ -9633,6 +9620,7 @@ dependencies = [
  "futures",
  "http",
  "mysten-metrics",
+ "parking_lot 0.12.1",
  "prometheus",
  "rocksdb",
  "scopeguard",
@@ -9654,6 +9642,7 @@ dependencies = [
  "tower",
  "tower-http 0.3.5",
  "tracing",
+ "ttl_cache",
  "typed-store",
  "typed-store-derive",
  "uuid",
@@ -9749,7 +9738,7 @@ dependencies = [
 
 [[package]]
 name = "sui-indexer"
-version = "1.4.0"
+version = "1.5.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -9938,7 +9927,7 @@ dependencies = [
  "backoff",
  "base64 0.21.2",
  "chrono",
- "clap 4.3.1",
+ "clap 4.3.3",
  "humantime",
  "once_cell",
  "prometheus-http-query",
@@ -9954,7 +9943,7 @@ dependencies = [
 
 [[package]]
 name = "sui-move"
-version = "1.4.0"
+version = "1.5.0"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -10074,7 +10063,7 @@ dependencies = [
 
 [[package]]
 name = "sui-node"
-version = "1.4.0"
+version = "1.5.0"
 dependencies = [
  "anemo",
  "anemo-tower",
@@ -10118,7 +10107,7 @@ dependencies = [
 
 [[package]]
 name = "sui-open-rpc"
-version = "1.4.0"
+version = "1.5.0"
 dependencies = [
  "anyhow",
  "bcs",
@@ -10240,7 +10229,7 @@ dependencies = [
  "async-recursion",
  "async-trait",
  "bcs",
- "clap 4.3.1",
+ "clap 4.3.3",
  "colored",
  "futures",
  "jsonrpsee",
@@ -10326,7 +10315,7 @@ dependencies = [
 
 [[package]]
 name = "sui-rpc-loadgen"
-version = "1.4.0"
+version = "1.5.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -10375,7 +10364,7 @@ dependencies = [
 
 [[package]]
 name = "sui-sdk"
-version = "1.4.0"
+version = "1.5.0"
 dependencies = [
  "anyhow",
  "async-recursion",
@@ -10499,6 +10488,7 @@ dependencies = [
  "bcs",
  "byteorder",
  "bytes",
+ "clap 4.3.3",
  "criterion",
  "eyre",
  "futures",
@@ -10535,7 +10525,7 @@ dependencies = [
 
 [[package]]
 name = "sui-surfer"
-version = "1.4.0"
+version = "1.5.0"
 dependencies = [
  "async-trait",
  "bcs",
@@ -10692,19 +10682,20 @@ dependencies = [
 
 [[package]]
 name = "sui-tool"
-version = "1.4.0"
+version = "1.5.0"
 dependencies = [
  "anemo",
  "anemo-cli",
  "anyhow",
  "bcs",
- "clap 4.3.1",
+ "clap 4.3.3",
  "colored",
  "comfy-table",
  "eyre",
  "fastcrypto",
  "futures",
  "hex",
+ "indicatif",
  "itertools",
  "move-binary-format",
  "move-bytecode-utils",
@@ -10719,6 +10710,7 @@ dependencies = [
  "similar",
  "strum",
  "strum_macros",
+ "sui-archival",
  "sui-config",
  "sui-core",
  "sui-framework",
@@ -11821,6 +11813,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3528ecfd12c466c6f163363caf2d02a71161dd5e1cc6ae7b34207ea2d42d81ed"
 
 [[package]]
+name = "ttl_cache"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4189890526f0168710b6ee65ceaedf1460c48a14318ceec933cb26baa492096a"
+dependencies = [
+ "linked-hash-map",
+]
+
+[[package]]
 name = "tui"
 version = "0.17.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -12712,10 +12713,10 @@ dependencies = [
  "clang-sys",
  "clap 2.34.0",
  "clap 3.2.23",
- "clap 4.3.1",
+ "clap 4.3.3",
  "clap_builder",
  "clap_derive 3.2.18",
- "clap_derive 4.3.1",
+ "clap_derive 4.3.2",
  "clap_lex 0.2.4",
  "clap_lex 0.5.0",
  "clear_on_drop",
@@ -13021,7 +13022,6 @@ dependencies = [
  "move-stackless-bytecode-interpreter",
  "move-stdlib",
  "move-symbol-pool",
- "move-table-extension",
  "move-transactional-test-runner",
  "move-unit-test",
  "move-vm-config",
@@ -13370,6 +13370,7 @@ dependencies = [
  "tracing-subscriber 0.2.25",
  "tracing-subscriber 0.3.16",
  "try-lock",
+ "ttl_cache",
  "tui",
  "twox-hash",
  "typed-arena",

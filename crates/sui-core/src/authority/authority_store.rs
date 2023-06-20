@@ -403,7 +403,8 @@ impl AuthorityStore {
         Ok(result)
     }
 
-    pub fn insert_finalized_transactions(
+    // DEPRECATED -- use function of same name in AuthorityPerEpochStore
+    pub fn deprecated_insert_finalized_transactions(
         &self,
         digests: &[TransactionDigest],
         epoch: EpochId,
@@ -422,7 +423,8 @@ impl AuthorityStore {
         Ok(())
     }
 
-    pub fn is_transaction_executed_in_checkpoint(
+    // DEPRECATED -- use function of same name in AuthorityPerEpochStore
+    pub fn deprecated_is_transaction_executed_in_checkpoint(
         &self,
         digest: &TransactionDigest,
     ) -> SuiResult<bool> {
@@ -432,7 +434,8 @@ impl AuthorityStore {
             .contains_key(digest)?)
     }
 
-    pub fn get_transaction_checkpoint(
+    // DEPRECATED -- use function of same name in AuthorityPerEpochStore
+    pub fn deprecated_get_transaction_checkpoint(
         &self,
         digest: &TransactionDigest,
     ) -> SuiResult<Option<(EpochId, CheckpointSequenceNumber)>> {
@@ -442,7 +445,8 @@ impl AuthorityStore {
             .get(digest)?)
     }
 
-    pub fn multi_get_transaction_checkpoint(
+    // DEPRECATED -- use function of same name in AuthorityPerEpochStore
+    pub fn deprecated_multi_get_transaction_checkpoint(
         &self,
         digests: &[TransactionDigest],
     ) -> SuiResult<Vec<Option<(EpochId, CheckpointSequenceNumber)>>> {

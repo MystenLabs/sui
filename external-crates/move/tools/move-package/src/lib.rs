@@ -9,7 +9,7 @@ pub mod package_hooks;
 pub mod resolution;
 pub mod source_package;
 
-use anyhow::{bail, Result};
+use anyhow::Result;
 use clap::*;
 use move_core_types::account_address::AccountAddress;
 use move_model::model::GlobalEnv;
@@ -21,7 +21,6 @@ use serde::{Deserialize, Serialize};
 use source_package::layout::SourcePackageLayout;
 use std::{
     collections::BTreeMap,
-    fmt,
     io::Write,
     path::{Path, PathBuf},
 };
@@ -33,65 +32,6 @@ use crate::{
     package_lock::PackageLock,
     source_package::manifest_parser,
 };
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
-pub enum Architecture {
-    Move,
-
-    AsyncMove,
-
-    Ethereum,
-}
-
-impl fmt::Display for Architecture {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Move => write!(f, "move"),
-
-            Self::AsyncMove => write!(f, "async-move"),
-
-            Self::Ethereum => write!(f, "ethereum"),
-        }
-    }
-}
-
-impl Architecture {
-    fn all() -> impl Iterator<Item = Self> {
-        IntoIterator::into_iter([
-            Self::Move,
-            Self::AsyncMove,
-            #[cfg(feature = "evm-backend")]
-            Self::Ethereum,
-        ])
-    }
-
-    fn try_parse_from_str(s: &str) -> Result<Self> {
-        Ok(match s {
-            "move" => Self::Move,
-
-            "async-move" => Self::AsyncMove,
-
-            "ethereum" => Self::Ethereum,
-
-            _ => {
-                let supported_architectures = Self::all()
-                    .map(|arch| format!("\"{}\"", arch))
-                    .collect::<Vec<_>>();
-                let be = if supported_architectures.len() == 1 {
-                    "is"
-                } else {
-                    "are"
-                };
-                bail!(
-                    "Unrecognized architecture {} -- only {} {} supported",
-                    s,
-                    supported_architectures.join(", "),
-                    be
-                )
-            }
-        })
-    }
-}
 
 #[derive(Debug, Parser, Clone, Serialize, Deserialize, Eq, PartialEq, PartialOrd, Default)]
 #[clap(author, version, about)]
@@ -131,9 +71,6 @@ pub struct BuildConfig {
     #[clap(skip)]
     pub additional_named_addresses: BTreeMap<String, AccountAddress>,
 
-    #[clap(long = "arch", global = true, parse(try_from_str = Architecture::try_parse_from_str))]
-    pub architecture: Option<Architecture>,
-
     /// Only fetch dependency repos to MOVE_HOME
     #[clap(long = "fetch-deps-only", global = true)]
     pub fetch_deps_only: bool,
@@ -171,15 +108,6 @@ impl BuildConfig {
         let resolved_graph = self.resolution_graph_for_package(path, writer)?;
         let _mutx = PackageLock::lock(); // held until function returns
         BuildPlan::create(resolved_graph)?.compile_no_exit(writer)
-    }
-
-    #[cfg(feature = "evm-backend")]
-    pub fn compile_package_evm<W: Write>(self, path: &Path, writer: &mut W) -> Result<()> {
-        // resolution graph diagnostics are only needed for CLI commands so ignore them by passing a
-        // vector as the writer
-        let resolved_graph = self.resolution_graph_for_package(path, &mut Vec::new())?;
-        let _mutx = PackageLock::lock(); // held until function returns
-        BuildPlan::create(resolved_graph)?.compile_evm(writer)
     }
 
     // NOTE: If there are no renamings, then the root package has the global resolution of all named

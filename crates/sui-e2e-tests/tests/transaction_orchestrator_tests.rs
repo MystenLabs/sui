@@ -18,7 +18,7 @@ use tracing::info;
 
 #[sim_test]
 async fn test_blocking_execution() -> Result<(), anyhow::Error> {
-    let mut test_cluster = TestClusterBuilder::new().build().await?;
+    let mut test_cluster = TestClusterBuilder::new().build().await;
     let context = &mut test_cluster.wallet;
     let handle = &test_cluster.fullnode_handle.sui_node;
 
@@ -87,7 +87,7 @@ async fn test_fullnode_wal_log() -> Result<(), anyhow::Error> {
     let mut test_cluster = TestClusterBuilder::new()
         .with_epoch_duration_ms(600000)
         .build()
-        .await?;
+        .await;
 
     let handle = &test_cluster.fullnode_handle.sui_node;
 
@@ -172,7 +172,7 @@ async fn test_fullnode_wal_log() -> Result<(), anyhow::Error> {
 #[sim_test]
 async fn test_transaction_orchestrator_reconfig() {
     telemetry_subscribers::init_for_testing();
-    let test_cluster = TestClusterBuilder::new().build().await.unwrap();
+    let test_cluster = TestClusterBuilder::new().build().await;
     let epoch = test_cluster.fullnode_handle.sui_node.with(|node| {
         node.transaction_orchestrator()
             .unwrap()
@@ -219,7 +219,7 @@ async fn test_tx_across_epoch_boundaries() {
     let total_tx_cnt = 1;
     let (result_tx, mut result_rx) = tokio::sync::mpsc::channel::<FinalizedEffects>(total_tx_cnt);
 
-    let test_cluster = TestClusterBuilder::new().build().await.unwrap();
+    let test_cluster = TestClusterBuilder::new().build().await;
     let tx = test_cluster
         .wallet
         .make_transfer_sui_transaction(None, None)

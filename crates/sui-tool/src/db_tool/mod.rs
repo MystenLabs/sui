@@ -7,12 +7,14 @@ use crate::db_tool::db_dump::{compact, print_table_metadata};
 use anyhow::bail;
 use clap::Parser;
 use std::path::{Path, PathBuf};
+use sui_core::authority::authority_per_epoch_store::AuthorityEpochTables;
 use sui_core::authority::authority_store_tables::AuthorityPerpetualTables;
 use sui_core::checkpoints::CheckpointStore;
 use sui_types::base_types::{EpochId, ObjectID, SequenceNumber};
 use sui_types::digests::TransactionDigest;
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::storage::ObjectKey;
+use sui_types::sui_system_state::{get_sui_system_state, SuiSystemStateTrait};
 use typed_store::rocks::MetricConf;
 pub mod db_dump;
 mod index_search;
@@ -96,6 +98,11 @@ pub struct RemoveTransactionOptions {
 
     #[clap(long)]
     confirm: bool,
+
+    /// The epoch to use when loading AuthorityEpochTables.
+    /// Defaults to the current epoch.
+    #[clap(long = "epoch", short = 'e')]
+    epoch: Option<EpochId>,
 }
 
 #[derive(Parser)]
@@ -216,6 +223,12 @@ pub fn print_transaction(path: &Path, opt: PrintTransactionOptions) -> anyhow::R
 /// Add --confirm to actually remove the transaction.
 pub fn remove_transaction(path: &Path, opt: RemoveTransactionOptions) -> anyhow::Result<()> {
     let perpetual_db = AuthorityPerpetualTables::open(&path.join("store"), None);
+    let epoch = if let Some(epoch) = opt.epoch {
+        epoch
+    } else {
+        get_sui_system_state(&perpetual_db)?.epoch()
+    };
+    let epoch_store = AuthorityEpochTables::open(epoch, &path.join("store"), None);
     let Some(_transaction) = perpetual_db.get_transaction(&opt.digest)? else {
         bail!("Transaction {:?} not found and cannot be re-executed!", opt.digest);
     };
@@ -256,6 +269,7 @@ pub fn remove_transaction(path: &Path, opt: RemoveTransactionOptions) -> anyhow:
         println!("Proceeding to remove transaction {:?} in 5s ..", opt.digest);
         std::thread::sleep(std::time::Duration::from_secs(5));
         perpetual_db.remove_executed_effects_and_outputs_subtle(&opt.digest, &objects_to_remove)?;
+        epoch_store.remove_executed_tx_subtle(&opt.digest)?;
         println!("Done!");
     }
     Ok(())
@@ -325,6 +339,15 @@ pub fn reset_db_to_genesis(path: &Path) -> anyhow::Result<()> {
         None,
     );
     checkpoint_db.reset_db_for_execution_since_genesis()?;
+
+    let epoch_db = AuthorityEpochTables::open_tables_read_write(
+        path.join("store"),
+        MetricConf::default(),
+        None,
+        None,
+    );
+    epoch_db.reset_db_for_execution_since_genesis()?;
+
     Ok(())
 }
 

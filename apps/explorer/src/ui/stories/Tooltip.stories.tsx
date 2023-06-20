@@ -6,31 +6,31 @@ import { type Meta, type StoryObj } from '@storybook/react';
 import { IconTooltip, type IconTooltipProps } from '../Tooltip';
 
 export default {
-    component: IconTooltip,
+	component: IconTooltip,
 } as Meta;
 
 export const Tooltip: StoryObj<IconTooltipProps> = {
-    render: (props) => <IconTooltip {...props} tip="Test text tooltip" />,
-    args: {},
+	render: (props) => <IconTooltip {...props} tip="Test text tooltip" />,
+	args: {},
 };
 
 export const TooltipBottom: StoryObj<IconTooltipProps> = {
-    ...Tooltip,
-    args: {
-        placement: 'bottom',
-    },
+	...Tooltip,
+	args: {
+		placement: 'bottom',
+	},
 };
 
 export const TooltipLeft: StoryObj<IconTooltipProps> = {
-    ...Tooltip,
-    args: {
-        placement: 'left',
-    },
+	...Tooltip,
+	args: {
+		placement: 'left',
+	},
 };
 
 export const TooltipRight: StoryObj<IconTooltipProps> = {
-    ...Tooltip,
-    args: {
-        placement: 'right',
-    },
+	...Tooltip,
+	args: {
+		placement: 'right',
+	},
 };

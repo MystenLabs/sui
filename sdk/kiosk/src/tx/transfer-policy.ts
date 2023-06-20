@@ -5,10 +5,10 @@ import { TransactionArgument, TransactionBlock } from '@mysten/sui.js';
 import { getRulePackageAddress, objArg } from '../utils';
 import { lock } from './kiosk';
 import {
-  ObjectArgument,
-  RulesEnvironmentParam,
-  TRANSFER_POLICY_MODULE,
-  TRANSFER_POLICY_TYPE,
+	ObjectArgument,
+	RulesEnvironmentParam,
+	TRANSFER_POLICY_MODULE,
+	TRANSFER_POLICY_TYPE,
 } from '../types';
 
 /**
@@ -16,47 +16,47 @@ import {
  * Returns `transferPolicyCap`
  */
 export function createTransferPolicy(
-  tx: TransactionBlock,
-  itemType: string,
-  publisher: ObjectArgument,
+	tx: TransactionBlock,
+	itemType: string,
+	publisher: ObjectArgument,
 ): TransactionArgument {
-  let [transferPolicy, transferPolicyCap] = tx.moveCall({
-    target: `${TRANSFER_POLICY_MODULE}::new`,
-    typeArguments: [itemType],
-    arguments: [objArg(tx, publisher)],
-  });
+	let [transferPolicy, transferPolicyCap] = tx.moveCall({
+		target: `${TRANSFER_POLICY_MODULE}::new`,
+		typeArguments: [itemType],
+		arguments: [objArg(tx, publisher)],
+	});
 
-  tx.moveCall({
-    target: `0x2::transfer::public_share_object`,
-    typeArguments: [`${TRANSFER_POLICY_TYPE}<${itemType}>`],
-    arguments: [transferPolicy],
-  });
+	tx.moveCall({
+		target: `0x2::transfer::public_share_object`,
+		typeArguments: [`${TRANSFER_POLICY_TYPE}<${itemType}>`],
+		arguments: [transferPolicy],
+	});
 
-  return transferPolicyCap;
+	return transferPolicyCap;
 }
 
 /**
  * Call the `transfer_policy::withdraw` function to withdraw profits from a transfer policy.
  */
 export function withdrawFromPolicy(
-  tx: TransactionBlock,
-  itemType: string,
-  policy: ObjectArgument,
-  policyCap: ObjectArgument,
-  amount: string | bigint | null,
+	tx: TransactionBlock,
+	itemType: string,
+	policy: ObjectArgument,
+	policyCap: ObjectArgument,
+	amount: string | bigint | null,
 ): TransactionArgument {
-  let amountArg =
-    amount !== null
-      ? tx.pure({ Some: amount }, 'Option<u64>')
-      : tx.pure({ None: true }, 'Option<u64>');
+	let amountArg =
+		amount !== null
+			? tx.pure({ Some: amount }, 'Option<u64>')
+			: tx.pure({ None: true }, 'Option<u64>');
 
-  let [profits] = tx.moveCall({
-    target: `${TRANSFER_POLICY_MODULE}::withdraw`,
-    typeArguments: [itemType],
-    arguments: [objArg(tx, policy), objArg(tx, policyCap), amountArg],
-  });
+	let [profits] = tx.moveCall({
+		target: `${TRANSFER_POLICY_MODULE}::withdraw`,
+		typeArguments: [itemType],
+		arguments: [objArg(tx, policy), objArg(tx, policyCap), amountArg],
+	});
 
-  return profits;
+	return profits;
 }
 
 /**
@@ -64,34 +64,34 @@ export function withdrawFromPolicy(
  * transaction.
  */
 export function confirmRequest(
-  tx: TransactionBlock,
-  itemType: string,
-  policy: ObjectArgument,
-  request: TransactionArgument,
+	tx: TransactionBlock,
+	itemType: string,
+	policy: ObjectArgument,
+	request: TransactionArgument,
 ): void {
-  tx.moveCall({
-    target: `${TRANSFER_POLICY_MODULE}::confirm_request`,
-    typeArguments: [itemType],
-    arguments: [objArg(tx, policy), request],
-  });
+	tx.moveCall({
+		target: `${TRANSFER_POLICY_MODULE}::confirm_request`,
+		typeArguments: [itemType],
+		arguments: [objArg(tx, policy), request],
+	});
 }
 
 /**
  * Calls the `transfer_policy::remove_rule` function to remove a Rule from the transfer policy's ruleset.
  */
 export function removeTransferPolicyRule(
-  tx: TransactionBlock,
-  itemType: string,
-  ruleType: string,
-  configType: string,
-  policy: ObjectArgument,
-  policyCap: TransactionArgument,
+	tx: TransactionBlock,
+	itemType: string,
+	ruleType: string,
+	configType: string,
+	policy: ObjectArgument,
+	policyCap: TransactionArgument,
 ): void {
-  tx.moveCall({
-    target: `${TRANSFER_POLICY_MODULE}::remove_rule`,
-    typeArguments: [itemType, ruleType, configType],
-    arguments: [objArg(tx, policy), policyCap],
-  });
+	tx.moveCall({
+		target: `${TRANSFER_POLICY_MODULE}::remove_rule`,
+		typeArguments: [itemType, ruleType, configType],
+		arguments: [objArg(tx, policy), policyCap],
+	});
 }
 
 /**
@@ -100,30 +100,30 @@ export function removeTransferPolicyRule(
  * then calls the `royalty_rule::pay` function to resolve the royalty rule.
  */
 export function resolveRoyaltyRule(
-  tx: TransactionBlock,
-  itemType: string,
-  price: string,
-  policyId: ObjectArgument,
-  transferRequest: TransactionArgument,
-  environment: RulesEnvironmentParam,
+	tx: TransactionBlock,
+	itemType: string,
+	price: string,
+	policyId: ObjectArgument,
+	transferRequest: TransactionArgument,
+	environment: RulesEnvironmentParam,
 ) {
-  const policyObj = objArg(tx, policyId);
-  // calculates the amount
-  const [amount] = tx.moveCall({
-    target: `${getRulePackageAddress(environment)}::royalty_rule::fee_amount`,
-    typeArguments: [itemType],
-    arguments: [policyObj, objArg(tx, price)],
-  });
+	const policyObj = objArg(tx, policyId);
+	// calculates the amount
+	const [amount] = tx.moveCall({
+		target: `${getRulePackageAddress(environment)}::royalty_rule::fee_amount`,
+		typeArguments: [itemType],
+		arguments: [policyObj, objArg(tx, price)],
+	});
 
-  // splits the coin.
-  const feeCoin = tx.splitCoins(tx.gas, [amount]);
+	// splits the coin.
+	const feeCoin = tx.splitCoins(tx.gas, [amount]);
 
-  // pays the policy
-  tx.moveCall({
-    target: `${getRulePackageAddress(environment)}::royalty_rule::pay`,
-    typeArguments: [itemType],
-    arguments: [policyObj, transferRequest, feeCoin],
-  });
+	// pays the policy
+	tx.moveCall({
+		target: `${getRulePackageAddress(environment)}::royalty_rule::pay`,
+		typeArguments: [itemType],
+		arguments: [policyObj, transferRequest, feeCoin],
+	});
 }
 
 /**
@@ -132,22 +132,22 @@ export function resolveRoyaltyRule(
  * by calling the `kiosk_lock_rule::prove` function to resolve it.
  */
 export function resolveKioskLockRule(
-  tx: TransactionBlock,
-  itemType: string,
-  item: TransactionArgument,
-  kiosk: ObjectArgument,
-  kioskCap: ObjectArgument,
-  policyId: ObjectArgument,
-  transferRequest: TransactionArgument,
-  environment: RulesEnvironmentParam,
+	tx: TransactionBlock,
+	itemType: string,
+	item: TransactionArgument,
+	kiosk: ObjectArgument,
+	kioskCap: ObjectArgument,
+	policyId: ObjectArgument,
+	transferRequest: TransactionArgument,
+	environment: RulesEnvironmentParam,
 ) {
-  // lock item in the kiosk.
-  lock(tx, itemType, kiosk, kioskCap, policyId, item);
+	// lock item in the kiosk.
+	lock(tx, itemType, kiosk, kioskCap, policyId, item);
 
-  // proves that the item is locked in the kiosk to the TP.
-  tx.moveCall({
-    target: `${getRulePackageAddress(environment)}::kiosk_lock_rule::prove`,
-    typeArguments: [itemType],
-    arguments: [transferRequest, objArg(tx, kiosk)],
-  });
+	// proves that the item is locked in the kiosk to the TP.
+	tx.moveCall({
+		target: `${getRulePackageAddress(environment)}::kiosk_lock_rule::prove`,
+		typeArguments: [itemType],
+		arguments: [transferRequest, objArg(tx, kiosk)],
+	});
 }

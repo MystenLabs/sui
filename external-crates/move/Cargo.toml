@@ -7,12 +7,6 @@ members = [
     "documentation/examples/diem-framework/crates/crypto",
     "documentation/examples/diem-framework/crates/crypto-derive",
     "documentation/examples/diem-framework/crates/natives",
-    "evm/exec-utils",
-    "evm/extract-ethereum-abi",
-    "evm/move-ethereum-abi",
-    "evm/move-to-yul",
-    "extensions/async/move-async-vm",
-    "extensions/move-table-extension",
     "move-analyzer",
     "move-binary-format",
     "move-binary-format/serializer-tests",
@@ -80,8 +74,6 @@ members = [
 #
 # For more, see the "Conditional compilation for tests" section in documentation/coding_guidelines.md.
 default-members = [
-    "evm/extract-ethereum-abi",
-    "evm/move-to-yul",
     "move-analyzer",
     "move-ir-compiler",
     "move-prover",

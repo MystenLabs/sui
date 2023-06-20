@@ -12,26 +12,22 @@ import { useQueryTransactionsByAddress } from '_hooks';
 import { useActiveAddress } from '_src/ui/app/hooks/useActiveAddress';
 
 export function CompletedTransactions() {
-    const activeAddress = useActiveAddress();
-    const {
-        data: txns,
-        isLoading,
-        error,
-    } = useQueryTransactionsByAddress(activeAddress);
-    if (error) {
-        return <Alert>{(error as Error)?.message}</Alert>;
-    }
-    return (
-        <Loading loading={isLoading}>
-            {txns?.length && activeAddress ? (
-                txns.map((txn) => (
-                    <ErrorBoundary key={getTransactionDigest(txn)}>
-                        <TransactionCard txn={txn} address={activeAddress} />
-                    </ErrorBoundary>
-                ))
-            ) : (
-                <NoActivityCard message="When available, your Sui network transactions will show up here." />
-            )}
-        </Loading>
-    );
+	const activeAddress = useActiveAddress();
+	const { data: txns, isLoading, error } = useQueryTransactionsByAddress(activeAddress);
+	if (error) {
+		return <Alert>{(error as Error)?.message}</Alert>;
+	}
+	return (
+		<Loading loading={isLoading}>
+			{txns?.length && activeAddress ? (
+				txns.map((txn) => (
+					<ErrorBoundary key={getTransactionDigest(txn)}>
+						<TransactionCard txn={txn} address={activeAddress} />
+					</ErrorBoundary>
+				))
+			) : (
+				<NoActivityCard message="When available, your Sui network transactions will show up here." />
+			)}
+		</Loading>
+	);
 }

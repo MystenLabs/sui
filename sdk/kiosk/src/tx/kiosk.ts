@@ -1,41 +1,31 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import {
-  SuiAddress,
-  TransactionArgument,
-  TransactionBlock,
-} from '@mysten/sui.js';
+import { SuiAddress, TransactionArgument, TransactionBlock } from '@mysten/sui.js';
 
 import { getTypeWithoutPackageAddress, objArg } from '../utils';
+import { confirmRequest, resolveKioskLockRule, resolveRoyaltyRule } from './transfer-policy';
 import {
-  confirmRequest,
-  resolveKioskLockRule,
-  resolveRoyaltyRule,
-} from './transfer-policy';
-import {
-  KIOSK_LOCK_RULE,
-  KIOSK_MODULE,
-  KIOSK_TYPE,
-  ObjectArgument,
-  PurchaseAndResolvePoliciesResponse,
-  PurchaseOptionalParams,
-  ROYALTY_RULE,
-  RulesEnvironmentParam,
-  TransferPolicy,
+	KIOSK_LOCK_RULE,
+	KIOSK_MODULE,
+	KIOSK_TYPE,
+	ObjectArgument,
+	PurchaseAndResolvePoliciesResponse,
+	PurchaseOptionalParams,
+	ROYALTY_RULE,
+	RulesEnvironmentParam,
+	TransferPolicy,
 } from '../types';
 
 /**
  * Create a new shared Kiosk and returns the [kiosk, kioskOwnerCap] tuple.
  */
-export function createKiosk(
-  tx: TransactionBlock,
-): [TransactionArgument, TransactionArgument] {
-  let [kiosk, kioskOwnerCap] = tx.moveCall({
-    target: `${KIOSK_MODULE}::new`,
-  });
+export function createKiosk(tx: TransactionBlock): [TransactionArgument, TransactionArgument] {
+	let [kiosk, kioskOwnerCap] = tx.moveCall({
+		target: `${KIOSK_MODULE}::new`,
+	});
 
-  return [kiosk, kioskOwnerCap];
+	return [kiosk, kioskOwnerCap];
 }
 
 /**
@@ -43,17 +33,17 @@ export function createKiosk(
  * Returns the `kioskOwnerCap` object.
  */
 export function createKioskAndShare(tx: TransactionBlock): TransactionArgument {
-  let [kiosk, kioskOwnerCap] = tx.moveCall({
-    target: `${KIOSK_MODULE}::new`,
-  });
+	let [kiosk, kioskOwnerCap] = tx.moveCall({
+		target: `${KIOSK_MODULE}::new`,
+	});
 
-  tx.moveCall({
-    target: `0x2::transfer::public_share_object`,
-    typeArguments: [KIOSK_TYPE],
-    arguments: [kiosk],
-  });
+	tx.moveCall({
+		target: `0x2::transfer::public_share_object`,
+		typeArguments: [KIOSK_TYPE],
+		arguments: [kiosk],
+	});
 
-  return kioskOwnerCap;
+	return kioskOwnerCap;
 }
 
 /**
@@ -61,17 +51,17 @@ export function createKioskAndShare(tx: TransactionBlock): TransactionArgument {
  * Place an item to the Kiosk.
  */
 export function place(
-  tx: TransactionBlock,
-  itemType: string,
-  kiosk: ObjectArgument,
-  kioskCap: ObjectArgument,
-  item: ObjectArgument,
+	tx: TransactionBlock,
+	itemType: string,
+	kiosk: ObjectArgument,
+	kioskCap: ObjectArgument,
+	item: ObjectArgument,
 ): void {
-  tx.moveCall({
-    target: `${KIOSK_MODULE}::place`,
-    typeArguments: [itemType],
-    arguments: [objArg(tx, kiosk), objArg(tx, kioskCap), objArg(tx, item)],
-  });
+	tx.moveCall({
+		target: `${KIOSK_MODULE}::place`,
+		typeArguments: [itemType],
+		arguments: [objArg(tx, kiosk), objArg(tx, kioskCap), objArg(tx, item)],
+	});
 }
 
 /**
@@ -83,23 +73,18 @@ export function place(
  * locked without an option to take it out.
  */
 export function lock(
-  tx: TransactionBlock,
-  itemType: string,
-  kiosk: ObjectArgument,
-  kioskCap: ObjectArgument,
-  policy: ObjectArgument,
-  item: ObjectArgument,
+	tx: TransactionBlock,
+	itemType: string,
+	kiosk: ObjectArgument,
+	kioskCap: ObjectArgument,
+	policy: ObjectArgument,
+	item: ObjectArgument,
 ): void {
-  tx.moveCall({
-    target: `${KIOSK_MODULE}::lock`,
-    typeArguments: [itemType],
-    arguments: [
-      objArg(tx, kiosk),
-      objArg(tx, kioskCap),
-      objArg(tx, policy),
-      objArg(tx, item),
-    ],
-  });
+	tx.moveCall({
+		target: `${KIOSK_MODULE}::lock`,
+		typeArguments: [itemType],
+		arguments: [objArg(tx, kiosk), objArg(tx, kioskCap), objArg(tx, policy), objArg(tx, item)],
+	});
 }
 
 /**
@@ -107,23 +92,19 @@ export function lock(
  * Take an item from the Kiosk.
  */
 export function take(
-  tx: TransactionBlock,
-  itemType: string,
-  kiosk: ObjectArgument,
-  kioskCap: ObjectArgument,
-  itemId: SuiAddress,
+	tx: TransactionBlock,
+	itemType: string,
+	kiosk: ObjectArgument,
+	kioskCap: ObjectArgument,
+	itemId: SuiAddress,
 ): TransactionArgument {
-  let [item] = tx.moveCall({
-    target: `${KIOSK_MODULE}::take`,
-    typeArguments: [itemType],
-    arguments: [
-      objArg(tx, kiosk),
-      objArg(tx, kioskCap),
-      tx.pure(itemId, 'address'),
-    ],
-  });
+	let [item] = tx.moveCall({
+		target: `${KIOSK_MODULE}::take`,
+		typeArguments: [itemType],
+		arguments: [objArg(tx, kiosk), objArg(tx, kioskCap), tx.pure(itemId, 'address')],
+	});
 
-  return item;
+	return item;
 }
 
 /**
@@ -131,23 +112,23 @@ export function take(
  * List an item for sale.
  */
 export function list(
-  tx: TransactionBlock,
-  itemType: string,
-  kiosk: ObjectArgument,
-  kioskCap: ObjectArgument,
-  itemId: SuiAddress,
-  price: string | bigint,
+	tx: TransactionBlock,
+	itemType: string,
+	kiosk: ObjectArgument,
+	kioskCap: ObjectArgument,
+	itemId: SuiAddress,
+	price: string | bigint,
 ): void {
-  tx.moveCall({
-    target: `${KIOSK_MODULE}::list`,
-    typeArguments: [itemType],
-    arguments: [
-      objArg(tx, kiosk),
-      objArg(tx, kioskCap),
-      tx.pure(itemId, 'address'),
-      tx.pure(price, 'u64'),
-    ],
-  });
+	tx.moveCall({
+		target: `${KIOSK_MODULE}::list`,
+		typeArguments: [itemType],
+		arguments: [
+			objArg(tx, kiosk),
+			objArg(tx, kioskCap),
+			tx.pure(itemId, 'address'),
+			tx.pure(price, 'u64'),
+		],
+	});
 }
 
 /**
@@ -155,21 +136,17 @@ export function list(
  * List an item for sale.
  */
 export function delist(
-  tx: TransactionBlock,
-  itemType: string,
-  kiosk: ObjectArgument,
-  kioskCap: ObjectArgument,
-  itemId: SuiAddress,
+	tx: TransactionBlock,
+	itemType: string,
+	kiosk: ObjectArgument,
+	kioskCap: ObjectArgument,
+	itemId: SuiAddress,
 ): void {
-  tx.moveCall({
-    target: `${KIOSK_MODULE}::delist`,
-    typeArguments: [itemType],
-    arguments: [
-      objArg(tx, kiosk),
-      objArg(tx, kioskCap),
-      tx.pure(itemId, 'address'),
-    ],
-  });
+	tx.moveCall({
+		target: `${KIOSK_MODULE}::delist`,
+		typeArguments: [itemType],
+		arguments: [objArg(tx, kiosk), objArg(tx, kioskCap), tx.pure(itemId, 'address')],
+	});
 }
 
 /**
@@ -177,23 +154,18 @@ export function delist(
  * Place an item to the Kiosk and list it for sale.
  */
 export function placeAndList(
-  tx: TransactionBlock,
-  itemType: string,
-  kiosk: ObjectArgument,
-  kioskCap: ObjectArgument,
-  item: ObjectArgument,
-  price: string | bigint,
+	tx: TransactionBlock,
+	itemType: string,
+	kiosk: ObjectArgument,
+	kioskCap: ObjectArgument,
+	item: ObjectArgument,
+	price: string | bigint,
 ): void {
-  tx.moveCall({
-    target: `${KIOSK_MODULE}::place_and_list`,
-    typeArguments: [itemType],
-    arguments: [
-      objArg(tx, kiosk),
-      objArg(tx, kioskCap),
-      objArg(tx, item),
-      tx.pure(price, 'u64'),
-    ],
-  });
+	tx.moveCall({
+		target: `${KIOSK_MODULE}::place_and_list`,
+		typeArguments: [itemType],
+		arguments: [objArg(tx, kiosk), objArg(tx, kioskCap), objArg(tx, item), tx.pure(price, 'u64')],
+	});
 }
 
 /**
@@ -201,23 +173,19 @@ export function placeAndList(
  * a TransferRequest which needs to be dealt with (via a matching TransferPolicy).
  */
 export function purchase(
-  tx: TransactionBlock,
-  itemType: string,
-  kiosk: ObjectArgument,
-  itemId: SuiAddress,
-  payment: ObjectArgument,
+	tx: TransactionBlock,
+	itemType: string,
+	kiosk: ObjectArgument,
+	itemId: SuiAddress,
+	payment: ObjectArgument,
 ): [TransactionArgument, TransactionArgument] {
-  let [item, transferRequest] = tx.moveCall({
-    target: `${KIOSK_MODULE}::purchase`,
-    typeArguments: [itemType],
-    arguments: [
-      objArg(tx, kiosk),
-      tx.pure(itemId, 'address'),
-      objArg(tx, payment),
-    ],
-  });
+	let [item, transferRequest] = tx.moveCall({
+		target: `${KIOSK_MODULE}::purchase`,
+		typeArguments: [itemType],
+		arguments: [objArg(tx, kiosk), tx.pure(itemId, 'address'), objArg(tx, payment)],
+	});
 
-  return [item, transferRequest];
+	return [item, transferRequest];
 }
 
 /**
@@ -225,27 +193,27 @@ export function purchase(
  * If the amount is null, then the entire balance will be withdrawn.
  */
 export function withdrawFromKiosk(
-  tx: TransactionBlock,
-  kiosk: ObjectArgument,
-  kioskCap: ObjectArgument,
-  amount: string | bigint | null,
+	tx: TransactionBlock,
+	kiosk: ObjectArgument,
+	kioskCap: ObjectArgument,
+	amount: string | bigint | null,
 ): TransactionArgument {
-  let amountArg =
-    amount !== null
-      ? tx.pure(
-          {
-            Some: amount,
-          },
-          'Option<u64>',
-        )
-      : tx.pure({ None: true }, 'Option<u64>');
+	let amountArg =
+		amount !== null
+			? tx.pure(
+					{
+						Some: amount,
+					},
+					'Option<u64>',
+			  )
+			: tx.pure({ None: true }, 'Option<u64>');
 
-  let [coin] = tx.moveCall({
-    target: `${KIOSK_MODULE}::withdraw`,
-    arguments: [objArg(tx, kiosk), objArg(tx, kioskCap), amountArg],
-  });
+	let [coin] = tx.moveCall({
+		target: `${KIOSK_MODULE}::withdraw`,
+		arguments: [objArg(tx, kiosk), objArg(tx, kioskCap), amountArg],
+	});
 
-  return coin;
+	return coin;
 }
 
 /**
@@ -253,23 +221,19 @@ export function withdrawFromKiosk(
  * Immutably borrow an item from the Kiosk.
  */
 export function borrow(
-  tx: TransactionBlock,
-  itemType: string,
-  kiosk: ObjectArgument,
-  kioskCap: ObjectArgument,
-  itemId: SuiAddress,
+	tx: TransactionBlock,
+	itemType: string,
+	kiosk: ObjectArgument,
+	kioskCap: ObjectArgument,
+	itemId: SuiAddress,
 ): TransactionArgument {
-  let [item] = tx.moveCall({
-    target: `${KIOSK_MODULE}::borrow`,
-    typeArguments: [itemType],
-    arguments: [
-      objArg(tx, kiosk),
-      objArg(tx, kioskCap),
-      tx.pure(itemId, 'address'),
-    ],
-  });
+	let [item] = tx.moveCall({
+		target: `${KIOSK_MODULE}::borrow`,
+		typeArguments: [itemType],
+		arguments: [objArg(tx, kiosk), objArg(tx, kioskCap), tx.pure(itemId, 'address')],
+	});
 
-  return item;
+	return item;
 }
 
 /**
@@ -277,23 +241,19 @@ export function borrow(
  * Mutably borrow an item from the Kiosk.
  */
 export function borrowMut(
-  tx: TransactionBlock,
-  itemType: string,
-  kiosk: ObjectArgument,
-  kioskCap: ObjectArgument,
-  itemId: SuiAddress,
+	tx: TransactionBlock,
+	itemType: string,
+	kiosk: ObjectArgument,
+	kioskCap: ObjectArgument,
+	itemId: SuiAddress,
 ): TransactionArgument {
-  let [item] = tx.moveCall({
-    target: `${KIOSK_MODULE}::borrow_mut`,
-    typeArguments: [itemType],
-    arguments: [
-      objArg(tx, kiosk),
-      objArg(tx, kioskCap),
-      tx.pure(itemId, 'address'),
-    ],
-  });
+	let [item] = tx.moveCall({
+		target: `${KIOSK_MODULE}::borrow_mut`,
+		typeArguments: [itemType],
+		arguments: [objArg(tx, kiosk), objArg(tx, kioskCap), tx.pure(itemId, 'address')],
+	});
 
-  return item;
+	return item;
 }
 
 /**
@@ -303,23 +263,19 @@ export function borrowMut(
  * Requires calling `returnValue` to return the item.
  */
 export function borrowValue(
-  tx: TransactionBlock,
-  itemType: string,
-  kiosk: ObjectArgument,
-  kioskCap: ObjectArgument,
-  itemId: SuiAddress,
+	tx: TransactionBlock,
+	itemType: string,
+	kiosk: ObjectArgument,
+	kioskCap: ObjectArgument,
+	itemId: SuiAddress,
 ): [TransactionArgument, TransactionArgument] {
-  let [item, promise] = tx.moveCall({
-    target: `${KIOSK_MODULE}::borrow_val`,
-    typeArguments: [itemType],
-    arguments: [
-      objArg(tx, kiosk),
-      objArg(tx, kioskCap),
-      tx.pure(itemId, 'address'),
-    ],
-  });
+	let [item, promise] = tx.moveCall({
+		target: `${KIOSK_MODULE}::borrow_val`,
+		typeArguments: [itemType],
+		arguments: [objArg(tx, kiosk), objArg(tx, kioskCap), tx.pure(itemId, 'address')],
+	});
 
-  return [item, promise];
+	return [item, promise];
 }
 
 /**
@@ -327,17 +283,17 @@ export function borrowValue(
  * Return an item to the Kiosk after it was `borrowValue`-d.
  */
 export function returnValue(
-  tx: TransactionBlock,
-  itemType: string,
-  kiosk: ObjectArgument,
-  item: TransactionArgument,
-  promise: TransactionArgument,
+	tx: TransactionBlock,
+	itemType: string,
+	kiosk: ObjectArgument,
+	item: TransactionArgument,
+	promise: TransactionArgument,
 ): void {
-  tx.moveCall({
-    target: `${KIOSK_MODULE}::return_val`,
-    typeArguments: [itemType],
-    arguments: [objArg(tx, kiosk), item, promise],
-  });
+	tx.moveCall({
+		target: `${KIOSK_MODULE}::return_val`,
+		typeArguments: [itemType],
+		arguments: [objArg(tx, kiosk), item, promise],
+	});
 }
 
 /**
@@ -350,77 +306,64 @@ export function returnValue(
  * to transfer it to an address or place it in their kiosk.
  */
 export function purchaseAndResolvePolicies(
-  tx: TransactionBlock,
-  itemType: string,
-  price: string,
-  kiosk: ObjectArgument,
-  itemId: SuiAddress,
-  policy: TransferPolicy,
-  environment: RulesEnvironmentParam,
-  extraParams?: PurchaseOptionalParams,
+	tx: TransactionBlock,
+	itemType: string,
+	price: string,
+	kiosk: ObjectArgument,
+	itemId: SuiAddress,
+	policy: TransferPolicy,
+	environment: RulesEnvironmentParam,
+	extraParams?: PurchaseOptionalParams,
 ): PurchaseAndResolvePoliciesResponse {
-  // if we don't pass the listing or the listing doens't have a price, return.
-  if (price === undefined || typeof price !== 'string')
-    throw new Error(`Price of the listing is not supplied.`);
+	// if we don't pass the listing or the listing doens't have a price, return.
+	if (price === undefined || typeof price !== 'string')
+		throw new Error(`Price of the listing is not supplied.`);
 
-  // Split the coin for the amount of the listing.
-  const coin = tx.splitCoins(tx.gas, [tx.pure(price, 'u64')]);
+	// Split the coin for the amount of the listing.
+	const coin = tx.splitCoins(tx.gas, [tx.pure(price, 'u64')]);
 
-  // initialize the purchase `kiosk::purchase`
-  const [purchasedItem, transferRequest] = purchase(
-    tx,
-    itemType,
-    kiosk,
-    itemId,
-    coin,
-  );
+	// initialize the purchase `kiosk::purchase`
+	const [purchasedItem, transferRequest] = purchase(tx, itemType, kiosk, itemId, coin);
 
-  // Start resolving rules.
-  // Right now we support `kiosk_lock_rule` and `royalty_rule`.
-  // They can also be supplied in parallel (supports combination).
-  let hasKioskLockRule = false;
+	// Start resolving rules.
+	// Right now we support `kiosk_lock_rule` and `royalty_rule`.
+	// They can also be supplied in parallel (supports combination).
+	let hasKioskLockRule = false;
 
-  for (let rule of policy.rules) {
-    const ruleWithoutAddr = getTypeWithoutPackageAddress(rule);
+	for (let rule of policy.rules) {
+		const ruleWithoutAddr = getTypeWithoutPackageAddress(rule);
 
-    switch (ruleWithoutAddr) {
-      case ROYALTY_RULE:
-        resolveRoyaltyRule(
-          tx,
-          itemType,
-          price,
-          policy.id,
-          transferRequest,
-          environment,
-        );
-        break;
-      case KIOSK_LOCK_RULE:
-        if (!extraParams?.ownedKiosk || !extraParams?.ownedKioskCap)
-          throw new Error(
-            `This item type ${itemType} has a 'kiosk_lock_rule', but function call is missing user's kiosk and kioskCap params`,
-          );
-        hasKioskLockRule = true;
-        resolveKioskLockRule(
-          tx,
-          itemType,
-          purchasedItem,
-          extraParams.ownedKiosk,
-          extraParams.ownedKioskCap,
-          policy.id,
-          transferRequest,
-          environment,
-        );
-        break;
-      default:
-        break;
-    }
-  }
+		switch (ruleWithoutAddr) {
+			case ROYALTY_RULE:
+				resolveRoyaltyRule(tx, itemType, price, policy.id, transferRequest, environment);
+				break;
+			case KIOSK_LOCK_RULE:
+				if (!extraParams?.ownedKiosk || !extraParams?.ownedKioskCap)
+					throw new Error(
+						`This item type ${itemType} has a 'kiosk_lock_rule', but function call is missing user's kiosk and kioskCap params`,
+					);
+				hasKioskLockRule = true;
+				resolveKioskLockRule(
+					tx,
+					itemType,
+					purchasedItem,
+					extraParams.ownedKiosk,
+					extraParams.ownedKioskCap,
+					policy.id,
+					transferRequest,
+					environment,
+				);
+				break;
+			default:
+				break;
+		}
+	}
 
-  // confirm the Transfer Policy request.
-  confirmRequest(tx, itemType, policy.id, transferRequest);
+	// confirm the Transfer Policy request.
+	confirmRequest(tx, itemType, policy.id, transferRequest);
 
-  return {
-    item: purchasedItem,
-    canTransfer: !hasKioskLockRule,
-  };
+	return {
+		item: purchasedItem,
+		canTransfer: !hasKioskLockRule,
+	};
 }

@@ -4,9 +4,9 @@
 import { type GRAPH_DURATIONS, type UNITS } from './utils';
 
 export type EpochGasInfo = {
-    epoch: number;
-    referenceGasPrice: bigint | null;
-    date: Date | null;
+	epoch: number;
+	referenceGasPrice: bigint | null;
+	date: Date | null;
 };
 
 export type UnitsType = (typeof UNITS)[number];

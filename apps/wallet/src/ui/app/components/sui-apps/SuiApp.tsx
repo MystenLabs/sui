@@ -12,94 +12,87 @@ import { getDAppUrl } from '_src/shared/utils';
 import st from './SuiApp.module.scss';
 
 export type DAppEntry = {
-    name: string;
-    description: string;
-    link: string;
-    icon: string;
-    tags: string[];
+	name: string;
+	description: string;
+	link: string;
+	icon: string;
+	tags: string[];
 };
 export type DisplayType = 'full' | 'card';
 export interface SuiAppProps extends DAppEntry {
-    displayType: DisplayType;
-    permissionID?: string;
+	displayType: DisplayType;
+	permissionID?: string;
 }
 
 export function SuiApp({
-    name,
-    description,
-    link,
-    icon,
-    tags,
-    displayType,
-    permissionID,
+	name,
+	description,
+	link,
+	icon,
+	tags,
+	displayType,
+	permissionID,
 }: SuiAppProps) {
-    const [showDisconnectApp, setShowDisconnectApp] = useState(false);
-    const appUrl = getDAppUrl(link);
-    const originLabel = appUrl.hostname;
+	const [showDisconnectApp, setShowDisconnectApp] = useState(false);
+	const appUrl = getDAppUrl(link);
+	const originLabel = appUrl.hostname;
 
-    const AppDetails = (
-        <div className={cl(st.suiApp, st[displayType])}>
-            <div className={st.icon}>
-                {icon ? (
-                    <img src={icon} className={st.icon} alt={name} />
-                ) : (
-                    <div className={st.defaultImg}></div>
-                )}
-            </div>
-            <div className={st.info}>
-                <div className={st.title}>{name} </div>
-                {displayType === 'full' && (
-                    <div className={st.description}>{description}</div>
-                )}
+	const AppDetails = (
+		<div className={cl(st.suiApp, st[displayType])}>
+			<div className={st.icon}>
+				{icon ? (
+					<img src={icon} className={st.icon} alt={name} />
+				) : (
+					<div className={st.defaultImg}></div>
+				)}
+			</div>
+			<div className={st.info}>
+				<div className={st.title}>{name} </div>
+				{displayType === 'full' && <div className={st.description}>{description}</div>}
 
-                {displayType === 'card' && (
-                    <div className={st.link}>{originLabel}</div>
-                )}
+				{displayType === 'card' && <div className={st.link}>{originLabel}</div>}
 
-                {displayType === 'full' && tags?.length && (
-                    <div className={st.tags}>
-                        {tags?.map((tag) => (
-                            <div className={st.tag} key={tag}>
-                                {tag}
-                            </div>
-                        ))}
-                    </div>
-                )}
-            </div>
-        </div>
-    );
-    return (
-        <>
-            {permissionID && showDisconnectApp ? (
-                <DisconnectApp
-                    name={name}
-                    link={link}
-                    icon={icon}
-                    permissionID={permissionID}
-                    setShowDisconnectApp={setShowDisconnectApp}
-                />
-            ) : null}
-            {permissionID ? (
-                <div
-                    className={st.ecosystemApp}
-                    onClick={() => setShowDisconnectApp(true)}
-                >
-                    {AppDetails}
-                </div>
-            ) : (
-                <ExternalLink
-                    href={appUrl?.toString() ?? link}
-                    title={name}
-                    className={st.ecosystemApp}
-                    onClick={() => {
-                        trackEvent('AppOpen', {
-                            props: { name, source: 'AppPage' },
-                        });
-                    }}
-                >
-                    {AppDetails}
-                </ExternalLink>
-            )}
-        </>
-    );
+				{displayType === 'full' && tags?.length && (
+					<div className={st.tags}>
+						{tags?.map((tag) => (
+							<div className={st.tag} key={tag}>
+								{tag}
+							</div>
+						))}
+					</div>
+				)}
+			</div>
+		</div>
+	);
+	return (
+		<>
+			{permissionID && showDisconnectApp ? (
+				<DisconnectApp
+					name={name}
+					link={link}
+					icon={icon}
+					permissionID={permissionID}
+					setShowDisconnectApp={setShowDisconnectApp}
+				/>
+			) : null}
+			{permissionID ? (
+				<div className={st.ecosystemApp} onClick={() => setShowDisconnectApp(true)}>
+					{AppDetails}
+				</div>
+			) : (
+				<ExternalLink
+					href={appUrl?.toString() ?? link}
+					title={name}
+					className={st.ecosystemApp}
+					onClick={() => {
+						trackEvent('AppOpen', {
+							props: { name, source: 'AppPage' },
+						});
+					}}
+				>
+					{AppDetails}
+				</ExternalLink>
+			)}
+		</>
+	);
 }

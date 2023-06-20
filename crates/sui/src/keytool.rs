@@ -7,7 +7,7 @@ use fastcrypto::ed25519::Ed25519KeyPair;
 use fastcrypto::encoding::{decode_bytes_hex, Base64, Encoding, Hex};
 use fastcrypto::hash::HashFunction;
 use fastcrypto::secp256k1::recoverable::Secp256k1Sig;
-use fastcrypto::traits::KeyPair;
+use fastcrypto::traits::{KeyPair, ToFromBytes};
 use fastcrypto_zkp::bn254::api::Bn254Fr;
 use fastcrypto_zkp::bn254::poseidon::PoseidonWrapper;
 use fastcrypto_zkp::bn254::zk_login::OAuthProvider;
@@ -110,11 +110,11 @@ pub enum KeyToolCommand {
         #[clap(long)]
         base64pk: String,
     },
-    /// Add a new key to sui.keystore based on the input mnemonic phrase, the key scheme flag {ed25519 | secp256k1 | secp256r1}
+    /// Add a new key to sui.keystore using either the input mnemonic phrase or a private key (from the Wallet), the key scheme flag {ed25519 | secp256k1 | secp256r1}
     /// and an optional derivation path, default to m/44'/784'/0'/0'/0' for ed25519 or m/54'/784'/0'/0/0 for secp256k1
     /// or m/74'/784'/0'/0/0 for secp256r1. Supports mnemonic phrase of word length 12, 15, 18`, 21, 24.
     Import {
-        mnemonic_phrase: String,
+        input_string: String,
         key_scheme: SignatureScheme,
         derivation_path: Option<DerivationPath>,
     },
@@ -339,36 +339,44 @@ impl KeyToolCommand {
             }
 
             KeyToolCommand::Import {
-                mnemonic_phrase,
+                input_string,
                 key_scheme,
                 derivation_path,
             } => {
-                let address =
-                    keystore.import_from_mnemonic(&mnemonic_phrase, key_scheme, derivation_path)?;
-                info!("Key imported for address [{address}]");
+                // check if input is a private key -- should start with 0x
+                if input_string.starts_with("0x") {
+                    let bytes = Hex::decode(&input_string).map_err(|_| {
+                        anyhow!("Private key is malformed. Importing private key failed.")
+                    })?;
+                    match key_scheme {
+                        SignatureScheme::ED25519 => {
+                            let kp = Ed25519KeyPair::from_bytes(&bytes).map_err(|_| anyhow!("Cannot decode ed25519 keypair from the private key. Importing private key failed."))?;
+                            let skp = SuiKeyPair::Ed25519(kp);
+                            let address: SuiAddress = Into::<SuiAddress>::into(&skp.public());
+                            keystore.add_key(skp)?;
+                            eprintln!("Private key imported successfully.");
+                            println!("{address}")
+                        }
+                        _ => return Err(anyhow!(
+                            "Only ed25519 signature scheme is supported for private keys at the moment."
+                        ))
+                    }
+                } else {
+                    let address = keystore.import_from_mnemonic(
+                        &input_string,
+                        key_scheme,
+                        derivation_path,
+                    )?;
+                    eprintln!("Mnemonic imported successfully.");
+                    println!("{address}")
+                }
             }
 
-            KeyToolCommand::Convert { value } => match Base64::decode(&value) {
-                Ok(decoded) => {
-                    assert_eq!(decoded.len(), 33);
-                    info!(
-                        "Wallet formatted private key: 0x{}",
-                        Hex::encode(&decoded[1..])
-                    );
-                }
-                Err(_) => match Hex::decode(&value) {
-                    Ok(decoded) => {
-                        assert_eq!(decoded.len(), 32);
-                        let mut res = Vec::new();
-                        res.extend_from_slice(&[SignatureScheme::ED25519.flag()]);
-                        res.extend_from_slice(&decoded);
-                        info!("Keystore formatted private key: {:?}", Base64::encode(&res));
-                    }
-                    Err(_) => {
-                        info!("Invalid private key format");
-                    }
-                },
-            },
+            KeyToolCommand::Convert { value } => {
+                let base64 = convert_string_to_base64(value)?;
+                eprintln!("Successfully converted private key to base64.");
+                println!("{base64}");
+            }
 
             KeyToolCommand::Base64PubKeyToAddress { base64_key } => {
                 let pk = PublicKey::decode_base64(&base64_key)
@@ -638,6 +646,31 @@ impl KeyToolCommand {
             }
         }
         Ok(())
+    }
+}
+
+fn convert_string_to_base64(value: String) -> Result<String, anyhow::Error> {
+    match Base64::decode(&value) {
+        Ok(decoded) => {
+            assert_eq!(decoded.len(), 33);
+            let hex_encoded = Hex::encode(&decoded[1..]);
+            info!("Wallet formatted private key: 0x{}", hex_encoded);
+            Ok(hex_encoded)
+        }
+        Err(_) => match Hex::decode(&value) {
+            Ok(decoded) => {
+                assert_eq!(decoded.len(), 32);
+                let mut res = Vec::new();
+                res.extend_from_slice(&[SignatureScheme::ED25519.flag()]);
+                res.extend_from_slice(&decoded);
+                info!("Keystore formatted private key: {:?}", Base64::encode(&res));
+                Ok(Base64::encode(&res))
+            }
+            Err(_) => {
+                info!("Invalid private key format");
+                Err(anyhow!("Invalid private key format"))
+            }
+        },
     }
 }
 

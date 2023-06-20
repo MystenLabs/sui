@@ -13,36 +13,27 @@ import type { ReactNode } from 'react';
 import st from './Layout.module.scss';
 
 export type PageLayoutProps = {
-    forceFullscreen?: boolean;
-    children: ReactNode | ReactNode[];
-    className?: string;
+	forceFullscreen?: boolean;
+	children: ReactNode | ReactNode[];
+	className?: string;
 };
 
-function PageLayout({
-    forceFullscreen = false,
-    children,
-    className,
-}: PageLayoutProps) {
-    const guardLoading = useFullscreenGuard(forceFullscreen);
-    const isNavVisible = useAppSelector(getNavIsVisible);
-    return (
-        <Loading loading={guardLoading}>
-            <div
-                className={cl(
-                    'w-popup-width h-popup-height',
-                    st.container,
-                    className,
-                    {
-                        [st.navHidden]: !isNavVisible,
-                    }
-                )}
-            >
-                {children}
-                <div id="overlay-portal-container"></div>
-                <div id="toaster-portal-container"></div>
-            </div>
-        </Loading>
-    );
+function PageLayout({ forceFullscreen = false, children, className }: PageLayoutProps) {
+	const guardLoading = useFullscreenGuard(forceFullscreen);
+	const isNavVisible = useAppSelector(getNavIsVisible);
+	return (
+		<Loading loading={guardLoading}>
+			<div
+				className={cl('w-popup-width h-popup-height', st.container, className, {
+					[st.navHidden]: !isNavVisible,
+				})}
+			>
+				{children}
+				<div id="overlay-portal-container"></div>
+				<div id="toaster-portal-container"></div>
+			</div>
+		</Loading>
+	);
 }
 
 export default memo(PageLayout);

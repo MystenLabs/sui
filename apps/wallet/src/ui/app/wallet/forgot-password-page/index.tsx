@@ -11,16 +11,16 @@ import PageLayout from '_pages/layout';
 import st from './ForgotPasswordPage.module.scss';
 
 export default function ForgotPasswordPage() {
-    const initGuardLoading = useInitializedGuard(true);
-    const lockedGuardLoading = useLockedGuard(true);
-    const guardsLoading = initGuardLoading || lockedGuardLoading;
-    return (
-        <Loading loading={guardsLoading}>
-            <PageLayout>
-                <PageMainLayout className={st.main}>
-                    <ImportPage mode="forgot" />
-                </PageMainLayout>
-            </PageLayout>
-        </Loading>
-    );
+	const initGuardLoading = useInitializedGuard(true);
+	const lockedGuardLoading = useLockedGuard(true);
+	const guardsLoading = initGuardLoading || lockedGuardLoading;
+	return (
+		<Loading loading={guardsLoading}>
+			<PageLayout>
+				<PageMainLayout className={st.main}>
+					<ImportPage mode="forgot" />
+				</PageMainLayout>
+			</PageLayout>
+		</Loading>
+	);
 }

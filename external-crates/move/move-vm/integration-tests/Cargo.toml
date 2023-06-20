@@ -26,14 +26,9 @@ move-vm-runtime = { path = "../runtime" }
 move-vm-types = { path = "../types" }
 move-vm-test-utils = { path = "../test-utils" }
 move-stdlib = { path = "../../move-stdlib" }
-move-table-extension = { path = "../../extensions/move-table-extension", optional = true }
 
 [features]
 default = []
-table-extension = [
-    "move-table-extension",
-    "move-vm-test-utils/table-extension"
-]
 
 [[bin]]
 name = "instantiation"

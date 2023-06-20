@@ -1,10 +1,10 @@
 {
-  "extends": "../tsconfig.base.json",
-  "include": ["src"],
-  "compilerOptions": {
-    "outDir": "dist",
-    "rootDir": "src",
-    "baseUrl": "."
-  },
-  "references": [{ "path": "../../typescript" }]
+	"extends": "../tsconfig.base.json",
+	"include": ["src"],
+	"compilerOptions": {
+		"outDir": "dist",
+		"rootDir": "src",
+		"baseUrl": "."
+	},
+	"references": [{ "path": "../../typescript" }]
 }
