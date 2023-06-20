@@ -60,7 +60,10 @@ use super::{
 /// merged into larger graphs until the main combined graph is computed.
 ///
 /// External dependencies are provided by external resolvers as fully formed dependency sub-graphs
-/// that need to be inserted into the "main" dependency graph being constructed.
+/// that need to be inserted into the "main" dependency graph being constructed. We process these
+/// after all internal dependencies are processed so that we can validated externally resolved
+/// dependencies against internally resolved dependencies in case they refer to the same package
+/// names.
 #[derive(Debug, Clone)]
 pub struct DependencyGraph {
     /// Path to the root package and its name (according to its manifest)
