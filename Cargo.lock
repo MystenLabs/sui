@@ -4925,6 +4925,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "move-abstract-stack"
+version = "0.0.1"
+
+[[package]]
 name = "move-binary-format"
 version = "0.0.3"
 dependencies = [
@@ -4973,6 +4977,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "fail",
+ "move-abstract-stack",
  "move-binary-format",
  "move-borrow-graph",
  "move-core-types",
@@ -10862,6 +10867,7 @@ dependencies = [
 name = "sui-verifier-latest"
 version = "0.1.0"
 dependencies = [
+ "move-abstract-stack",
  "move-binary-format",
  "move-bytecode-utils",
  "move-bytecode-verifier",
@@ -12993,6 +12999,7 @@ dependencies = [
  "mockall_derive",
  "more-asserts",
  "move-abigen",
+ "move-abstract-stack",
  "move-binary-format",
  "move-borrow-graph",
  "move-bytecode-source-map",

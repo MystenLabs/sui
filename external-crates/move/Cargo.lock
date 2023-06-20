@@ -2478,6 +2478,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "move-abstract-stack"
+version = "0.0.1"
+
+[[package]]
 name = "move-analyzer"
 version = "1.0.0"
 dependencies = [
@@ -2557,6 +2561,7 @@ dependencies = [
  "fail",
  "hex-literal",
  "invalid-mutations",
+ "move-abstract-stack",
  "move-binary-format",
  "move-borrow-graph",
  "move-core-types",

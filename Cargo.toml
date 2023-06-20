@@ -2,6 +2,7 @@
 resolver = "2"
 
 exclude = [
+    "external-crates/move/move-abstract-stack",
     "external-crates/move/move-binary-format",
     "external-crates/move/move-binary-format/serializer-tests",
     "external-crates/move/move-borrow-graph",
@@ -212,6 +213,7 @@ move-prover = { path = "external-crates/move/move-prover" }
 move-prover-boogie-backend = { path = "external-crates/move/move-prover/boogie-backend" }
 move-stackless-bytecode = { path = "external-crates/move/move-prover/bytecode" }
 move-symbol-pool = { path = "external-crates/move/move-symbol-pool" }
+move-abstract-stack = { path = "external-crates/move/move-abstract-stack" }
 
 fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "c961a01596a87e76f590c7e43aca9d57106dbbb1" }
 fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "c961a01596a87e76f590c7e43aca9d57106dbbb1", package = "fastcrypto-zkp" }
