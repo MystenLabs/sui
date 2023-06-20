@@ -34,20 +34,24 @@ function AppsPage() {
         useFeature<DAppEntry[]>(FEATURES.WALLET_DAPPS).value ?? [];
 
     const uniqueAppTags = useMemo(() => {
-        const tagsSet = new Set<FilterTag>();
+        const tagSet = new Set<string>();
 
-        const flattenedTags = ecosystemApps.flatMap((app) =>
-            app.tags.map((tag) => ({
-                name: tag,
-                link: `apps/?tagFilter=${tag.toLowerCase()}`,
-            }))
-        );
+        const allTags = ecosystemApps.flatMap((app) => app.tags);
 
-        flattenedTags.forEach((tag) => {
-            tagsSet.add(tag);
-        });
+        // Filter out dupes, then run a map to generate tag objects
+        return allTags.filter((tag) => {
+            const lowercaseTag = tag.toLowerCase();
 
-        return [...tagsSet];
+            if (tagSet.has(lowercaseTag)) {
+                return false;
+            }
+
+            tagSet.add(lowercaseTag);
+            return true;
+        }).map((tag) => ({
+            name: tag,
+            link: `apps/?tagFilter=${tag.toLowerCase()}`,
+        }));
     }, [ecosystemApps]);
 
     const allFilterTags = [...defaultFilterTags, ...uniqueAppTags];
