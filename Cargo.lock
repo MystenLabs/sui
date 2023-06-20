@@ -5824,6 +5824,7 @@ dependencies = [
  "pprof",
  "prometheus",
  "rand 0.8.5",
+ "sui-protocol-config",
  "telemetry-subscribers",
  "thiserror",
  "tokio",
