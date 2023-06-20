@@ -46,7 +46,9 @@ function AppsPage() {
 
 	const uniqueAppTags = [...uniqueAppTagNames].map((tag) => ({
 		name: tag,
-		link: `apps/?tagFilter=${tag}`,
+		// The tag subroute is used to get around the NavLink limitation with reading query params
+		// Enables active route highlighting without excessive overhead
+		link: `apps/${tag}?tagFilter=${tag}`,
 	}));
 
 	const allFilterTags = [...defaultFilterTags, ...uniqueAppTags];
@@ -57,7 +59,7 @@ function AppsPage() {
 				<section>
 					<FiltersPortal tags={allFilterTags} />
 					<Routes>
-						<Route path="/" element={<AppsPlayGround />} />
+						<Route path="/*" element={<AppsPlayGround />} />
 						<Route path="/connected" element={<ConnectedAppsCard />} />
 					</Routes>
 				</section>

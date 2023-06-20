@@ -37,17 +37,19 @@ function FiltersPortal({ tags }: Tags) {
 			{element
 				? ReactDOM.createPortal(
 						<div className={st.filterTags}>
-							{tags.map((tag) => (
-								<NavLink
-									key={tag.link}
-									to={`/${tag.link}`}
-									end
-									className={activeTagsFilter}
-									title={tag.name}
-								>
-									<span className={st.title}>{tag.name}</span>
-								</NavLink>
-							))}
+							{tags.map((tag) => {
+								return (
+									<NavLink
+										key={tag.link}
+										to={`/${tag.link}`}
+										end
+										className={activeTagsFilter}
+										title={tag.name}
+									>
+										<span className={st.title}>{tag.name}</span>
+									</NavLink>
+								);
+							})}
 						</div>,
 						element,
 				  )
