@@ -28,7 +28,7 @@ function AppsPlayGround() {
 		if (!ecosystemApps) {
 			return [];
 		} else if (tagFilter) {
-			return ecosystemApps.filter((app) => !app.tags.includes(tagFilter));
+			return ecosystemApps.filter((app) => app.tags.includes(tagFilter));
 		}
 		return ecosystemApps;
 	}, [ecosystemApps, tagFilter]);

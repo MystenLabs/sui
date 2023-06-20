@@ -46,7 +46,7 @@ function AppsPage() {
 
 	const uniqueAppTags = [...uniqueAppTagNames].map((tag) => ({
 		name: tag,
-		link: `apps/?tagFilter=${tag.toLowerCase()}`,
+		link: `apps/?tagFilter=${tag}`,
 	}));
 
 	const allFilterTags = [...defaultFilterTags, ...uniqueAppTags];
