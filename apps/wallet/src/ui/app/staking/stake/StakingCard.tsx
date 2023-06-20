@@ -143,10 +143,10 @@ function StakingCard() {
 				sentryTransaction.finish();
 			}
 		},
-		onSuccess: (_, variables) => {
+		onSuccess: (_, { amount, validatorAddress }) => {
 			ampli.stakedSui({
-				stakedAmount: variables.amount.toString(),
-				validatorAddress: variables.validatorAddress,
+				stakedAmount: amount.toString(),
+				validatorAddress: validatorAddress,
 			});
 		},
 	});

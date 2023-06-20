@@ -24,8 +24,8 @@ export function ConnectLedgerModalContainer() {
 				toast.error(getLedgerConnectionErrorMessage(error) || 'Something went wrong.');
 			}}
 			onConfirm={() => {
-				navigate(importLedgerAccountsUrl);
 				ampli.connectedHardwareWallet({ hardwareWalletType: 'Ledger' });
+				navigate(importLedgerAccountsUrl);
 			}}
 		/>
 	);

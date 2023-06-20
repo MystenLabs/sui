@@ -80,7 +80,6 @@ export function TransferNFTForm({
 			queryClient.invalidateQueries(['object', objectId]);
 			queryClient.invalidateQueries(['get-kiosk-contents'], { refetchType: 'all' });
 			queryClient.invalidateQueries(['get-owned-objects']);
-
 			return navigate(
 				`/receipt?${new URLSearchParams({
 					txdigest: getTransactionDigest(response),
