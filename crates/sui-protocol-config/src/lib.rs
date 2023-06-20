@@ -10,7 +10,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 15;
+const MAX_PROTOCOL_VERSION: u64 = 16;
 
 // Record history of protocol version allocations here:
 //
@@ -47,6 +47,9 @@ const MAX_PROTOCOL_VERSION: u64 = 15;
 //             decides whether rounding is applied or not.
 // Version 15: Add reordering of user transactions by gas price after consensus.
 //             Add `sui::table_vec::drop` to the framework via a system package upgrade.
+// Version 16: Enabled simplified_unwrap_then_delete feature flag, which allows the execution engine
+//             to no longer consult the object store when generating unwrapped_then_deleted in the
+//             effects; this also allows us to stop including wrapped tombstones in accumulator.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -1244,6 +1247,11 @@ impl ProtocolConfig {
                 let mut cfg = Self::get_for_version_impl(version - 1, chain);
                 cfg.feature_flags.consensus_transaction_ordering =
                     ConsensusTransactionOrdering::ByGasPrice;
+                cfg
+            }
+            16 => {
+                let mut cfg = Self::get_for_version_impl(version - 1, chain);
+                cfg.feature_flags.simplified_unwrap_then_delete = true;
                 cfg
             }
             // Use this template when making changes:

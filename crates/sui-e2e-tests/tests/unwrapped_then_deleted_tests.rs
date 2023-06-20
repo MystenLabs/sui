@@ -28,7 +28,8 @@ mod sim_only_tests {
                 ProtocolVersion::MAX_ALLOWED.as_u64(),
             ))
             .build()
-            .await;
+            .await
+            .unwrap();
 
         let (package_id, object_id) = publish_package_and_create_parent_object(&test_cluster).await;
 
@@ -105,7 +106,8 @@ mod sim_only_tests {
                 ProtocolVersion::MAX_ALLOWED.as_u64(),
             ))
             .build()
-            .await;
+            .await
+            .unwrap();
 
         let (package_id, object_id) = publish_package_and_create_parent_object(&test_cluster).await;
 

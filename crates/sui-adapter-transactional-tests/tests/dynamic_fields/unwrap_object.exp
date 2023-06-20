@@ -33,6 +33,7 @@ gas summary: computation_cost: 1000000, storage_cost: 4157200,  storage_rebate: 
 task 6 'run'. lines 52-52:
 mutated: object(0,0), object(5,0)
 deleted: object(5,1)
+unwrapped_then_deleted: object(_)
 gas summary: computation_cost: 1000000, storage_cost: 2211600,  storage_rebate: 4115628, non_refundable_storage_fee: 41572
 
 task 7 'run'. lines 55-55:
