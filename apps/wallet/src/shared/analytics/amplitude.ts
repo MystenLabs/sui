@@ -15,7 +15,7 @@ export async function initAmplitude() {
 	ampli.load({
 		environment: IS_PROD_ENV ? 'production' : 'development',
 		// Flip this if you'd like to test Amplitude locally
-		disabled: IS_PROD_ENV,
+		disabled: !IS_PROD_ENV,
 		client: {
 			configuration: {
 				cookieStorage: persistableStorage,

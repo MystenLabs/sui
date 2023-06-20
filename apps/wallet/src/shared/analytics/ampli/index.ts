@@ -80,6 +80,10 @@ export interface IdentifyProperties {
 	 * The active origin website that the extension is being used on.
 	 */
 	active_origin?: string;
+	/**
+	 * The version of the wallet the user has installed.
+	 */
+	wallet_version: string;
 }
 
 export interface ApprovedTransactionProperties {
@@ -249,6 +253,13 @@ export interface SentCoinsProperties {
 	coinSymbol: string;
 }
 
+export interface SentCollectibleProperties {
+	/**
+	 * The ID of an object on Sui.
+	 */
+	objectId: string;
+}
+
 export interface StakedSuiProperties {
 	/**
 	 * The amount of SUI staked.
@@ -276,6 +287,17 @@ export interface UnstakedSuiProperties {
 	 * The address of the selected validator.
 	 */
 	validatorAddress: string;
+}
+
+export interface ViewedCollectibleProperties {
+	/**
+	 * The object type of a collectible.
+	 */
+	collectibleType: string;
+	/**
+	 * The ID of an object on Sui.
+	 */
+	objectId: string;
 }
 
 export interface VisitedFiatOnRampProperties {
@@ -429,6 +451,14 @@ export class SentCoins implements BaseEvent {
 	}
 }
 
+export class SentCollectible implements BaseEvent {
+	event_type = 'sent collectible';
+
+	constructor(public event_properties: SentCollectibleProperties) {
+		this.event_properties = event_properties;
+	}
+}
+
 export class StakedSui implements BaseEvent {
 	event_type = 'staked SUI';
 
@@ -457,6 +487,14 @@ export class UnstakedSui implements BaseEvent {
 	event_type = 'unstaked SUI';
 
 	constructor(public event_properties: UnstakedSuiProperties) {
+		this.event_properties = event_properties;
+	}
+}
+
+export class ViewedCollectible implements BaseEvent {
+	event_type = 'viewed collectible';
+
+	constructor(public event_properties: ViewedCollectibleProperties) {
 		this.event_properties = event_properties;
 	}
 }
@@ -948,6 +986,23 @@ export class Ampli {
   }
 
   /**
+   * sent collectible
+   *
+   * [View in Tracking Plan](https://data.amplitude.com/mystenlabs/Sui%20Wallet/events/main/latest/sent%20collectible)
+   *
+   * Owner: William Robertson
+   *
+   * @param properties The event's properties (e.g. objectId)
+   * @param options Amplitude event options.
+   */
+  sentCollectible(
+    properties: SentCollectibleProperties,
+    options?: EventOptions,
+  ) {
+    return this.track(new SentCollectible(properties), options);
+  }
+
+  /**
    * staked SUI
    *
    * [View in Tracking Plan](https://data.amplitude.com/mystenlabs/Sui%20Wallet/events/main/latest/staked%20SUI)
@@ -1021,6 +1076,25 @@ export class Ampli {
     options?: EventOptions,
   ) {
     return this.track(new UnstakedSui(properties), options);
+  }
+
+  /**
+   * viewed collectible
+   *
+   * [View in Tracking Plan](https://data.amplitude.com/mystenlabs/Sui%20Wallet/events/main/latest/viewed%20collectible)
+   *
+   * When users view a collectible in the wallet.
+   *
+   * Owner: William Robertson
+   *
+   * @param properties The event's properties (e.g. collectibleType)
+   * @param options Amplitude event options.
+   */
+  viewedCollectible(
+    properties: ViewedCollectibleProperties,
+    options?: EventOptions,
+  ) {
+    return this.track(new ViewedCollectible(properties), options);
   }
 
   /**

@@ -17,6 +17,7 @@ export function useAmplitudeIdentity() {
 			active_network: activeNetwork,
 			active_account_type: activeAccount?.type,
 			active_origin: activeOrigin || undefined,
+			wallet_version: Browser.runtime.getManifest().version,
 		});
 	}, [activeAccount?.type, activeNetwork, activeOrigin]);
 }
