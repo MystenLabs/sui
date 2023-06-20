@@ -40,6 +40,7 @@ jobs:
     outputs:
       isRust: ${{ steps.diff.outputs.isRust }}
       isMove: ${{ steps.diff.outputs.isMove }}
+      isReleaseNotesEligible: ${{ steps.diff.outputs.isReleaseNotesEligible }}
     steps:
       - uses: actions/checkout@v3
       - name: Detect Changes
@@ -61,6 +62,26 @@ jobs:
       - run: |
           cargo hakari generate --diff  # workspace-hack Cargo.toml is up-to-date
           cargo hakari manage-deps --dry-run  # all workspace crates depend on workspace-hack
+
+  release-notes-description-check:
+    name: release-notes-check
+    needs: diff
+    if: needs.diff.outputs.isReleaseNotesEligible == 'true'
+    runs-on: [ubuntu-latest]
+    steps:
+      - uses: actions/checkout@v3
+      - name: Check Pull Request Description
+        shell: bash
+        run: |
+          PR_NUMBER=$(jq --raw-output .pull_request.number "$GITHUB_EVENT_PATH")
+          DESCRIPTION=$(curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            "https://api.github.com/repos/MystenLabs/sui/pulls//pulls/$PR_NUMBER" \
+            | jq --raw-output .body)
+          
+          if [[ $DESCRIPTION =~ \[x\].*Release[[:space:]]notes.*[[:space:]]+.* ]]; then
+            echo "At least one '[x]' was checked under 'Type of Change (Check all that apply)', you need to add a blob under the 'Release Notes' section."
+            exit 1
+          fi     
 
   test:
     needs: diff
