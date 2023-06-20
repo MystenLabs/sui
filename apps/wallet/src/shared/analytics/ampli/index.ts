@@ -83,7 +83,7 @@ export interface IdentifyProperties {
 	/**
 	 * The version of the wallet the user has installed.
 	 */
-	wallet_version: string;
+	walletVersion: string;
 }
 
 export interface ApprovedTransactionProperties {

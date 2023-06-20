@@ -15,10 +15,10 @@ export function useAmplitudeIdentity() {
 
 	useEffect(() => {
 		ampli.identify(undefined, {
-			active_network: activeNetwork,
-			active_account_type: activeAccount?.type,
-			active_origin: activeOrigin || undefined,
-			wallet_version: Browser.runtime.getManifest().version,
+			activeNetwork,
+			activeAccountType: activeAccount?.type,
+			activeOrigin: activeOrigin || undefined,
+			walletVersion: Browser.runtime.getManifest().version,
 		});
 	}, [activeAccount?.type, activeNetwork, activeOrigin]);
 }
