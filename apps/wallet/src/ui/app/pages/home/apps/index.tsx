@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useFeature } from '@growthbook/growthbook-react';
-import { useMemo } from 'react';
 import { Route, Routes } from 'react-router-dom';
 
 import { Content } from '_app/shared/bottom-menu-layout';
@@ -32,28 +31,23 @@ function AppsPage() {
 	];
 	const ecosystemApps = useFeature<DAppEntry[]>(FEATURES.WALLET_DAPPS).value ?? [];
 
-	const uniqueAppTags = useMemo(() => {
-		const tagSet = new Set<string>();
+	const uniqueAppTagNames = new Set<string>();
 
-		const allTags = ecosystemApps.flatMap((app) => app.tags);
+	ecosystemApps
+		.flatMap((app) => app.tags)
+		.filter((tag) => {
+			if (uniqueAppTagNames.has(tag)) {
+				return false;
+			}
 
-		// Filter out dupes, then run a map to generate tag objects
-		return allTags
-			.filter((tag) => {
-				const lowercaseTag = tag.toLowerCase();
+			uniqueAppTagNames.add(tag);
+			return true;
+		});
 
-				if (tagSet.has(lowercaseTag)) {
-					return false;
-				}
-
-				tagSet.add(lowercaseTag);
-				return true;
-			})
-			.map((tag) => ({
-				name: tag,
-				link: `apps/?tagFilter=${tag.toLowerCase()}`,
-			}));
-	}, [ecosystemApps]);
+	const uniqueAppTags = [...uniqueAppTagNames].map((tag) => ({
+		name: tag,
+		link: `apps/?tagFilter=${tag.toLowerCase()}`,
+	}));
 
 	const allFilterTags = [...defaultFilterTags, ...uniqueAppTags];
 
