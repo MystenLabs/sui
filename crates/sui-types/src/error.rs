@@ -411,8 +411,6 @@ pub enum SuiError {
         digest
     )]
     TransactionAlreadyExecuted { digest: TransactionDigest },
-    #[error("Object ID did not have the expected type")]
-    BadObjectType { error: String },
     #[error("Fail to retrieve Object layout for {st}")]
     FailObjectLayout { st: String },
 
@@ -448,12 +446,6 @@ pub enum SuiError {
     #[error("Failed to dispatch subscription: {error:?}")]
     FailedToDispatchSubscription { error: String },
 
-    #[error("Failed to serialize Owner: {error:?}")]
-    OwnerFailedToSerialize { error: String },
-
-    #[error("Failed to deserialize fields into JSON: {error:?}")]
-    ExtraFieldFailedToDeserialize { error: String },
-
     #[error("Failed to execute transaction locally by Orchestrator: {error:?}")]
     TransactionOrchestratorLocalExecutionError { error: String },
 
@@ -464,8 +456,6 @@ pub enum SuiError {
     ObjectSerializationError { error: String },
     #[error("Failure deserializing object in the requested format: {:?}", error)]
     ObjectDeserializationError { error: String },
-    #[error("Event store component is not active on this node")]
-    NoEventStore,
 
     // Client side error
     #[error("Too many authority errors were detected for {}: {:?}", action, errors)]
@@ -473,8 +463,6 @@ pub enum SuiError {
         errors: Vec<(AuthorityName, SuiError)>,
         action: String,
     },
-    #[error("Invalid transaction range query to the fullnode: {:?}", error)]
-    FullNodeInvalidTxRangeQuery { error: String },
 
     // Errors related to the authority-consensus interface.
     #[error("Failed to submit transaction to consensus: {0}")]
@@ -483,8 +471,6 @@ pub enum SuiError {
     ConsensusConnectionBroken(String),
     #[error("Failed to hear back from consensus: {0}")]
     FailedToHearBackFromConsensus(String),
-    #[error("Failed to execute handle_consensus_transaction on Sui: {0}")]
-    HandleConsensusTransactionFailure(String),
 
     // Cryptography errors.
     #[error("Signature seed invalid length, input byte size was: {0}")]

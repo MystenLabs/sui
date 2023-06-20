@@ -1796,7 +1796,7 @@ impl BackingPackageStore for AuthorityStore {
         if let Some(obj) = &package {
             fp_ensure!(
                 obj.is_package(),
-                SuiError::BadObjectType {
+                SuiError::TypeError {
                     error: format!("Package expected, Move object found: {package_id}"),
                 }
             );

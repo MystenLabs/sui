@@ -1595,7 +1595,7 @@ impl<'backing> ModuleResolver for TemporaryStore<'backing> {
                 .serialized_module_map()
                 .get(module_id.name().as_str())
                 .cloned()),
-            _ => Err(SuiError::BadObjectType {
+            _ => Err(SuiError::TypeError {
                 error: "Expected module object".to_string(),
             }),
         }
