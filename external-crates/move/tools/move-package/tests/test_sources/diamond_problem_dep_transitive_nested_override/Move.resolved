@@ -29,15 +29,19 @@ ResolvedGraph {
             ],
             "A": [
                 (
+                    "Root",
+                    Incoming,
+                ),
+                (
                     "B",
                     Outgoing,
                 ),
+            ],
+            "C": [
                 (
                     "Root",
                     Incoming,
                 ),
-            ],
-            "C": [
                 (
                     "D",
                     Outgoing,
@@ -45,10 +49,6 @@ ResolvedGraph {
                 (
                     "E",
                     Outgoing,
-                ),
-                (
-                    "Root",
-                    Incoming,
                 ),
             ],
             "D": [
@@ -63,12 +63,12 @@ ResolvedGraph {
             ],
             "E": [
                 (
-                    "D",
-                    Outgoing,
-                ),
-                (
                     "C",
                     Incoming,
+                ),
+                (
+                    "D",
+                    Outgoing,
                 ),
             ],
         },
@@ -79,7 +79,7 @@ ResolvedGraph {
                 ),
                 version: None,
                 resolver: None,
-                overridden_path: true,
+                overridden_path: false,
             },
             "B": Package {
                 kind: Local(
@@ -101,7 +101,7 @@ ResolvedGraph {
                 ),
                 version: None,
                 resolver: None,
-                overridden_path: true,
+                overridden_path: false,
             },
             "D": Package {
                 kind: Local(
@@ -115,7 +115,7 @@ ResolvedGraph {
                     ),
                 ),
                 resolver: None,
-                overridden_path: true,
+                overridden_path: false,
             },
             "E": Package {
                 kind: Local(
@@ -123,7 +123,7 @@ ResolvedGraph {
                 ),
                 version: None,
                 resolver: None,
-                overridden_path: true,
+                overridden_path: false,
             },
         },
         always_deps: {

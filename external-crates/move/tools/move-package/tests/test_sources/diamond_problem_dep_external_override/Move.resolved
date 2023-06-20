@@ -33,22 +33,22 @@ ResolvedGraph {
             ],
             "B": [
                 (
-                    "ADep",
-                    Outgoing,
-                ),
-                (
                     "Root",
                     Incoming,
+                ),
+                (
+                    "ADep",
+                    Outgoing,
                 ),
             ],
             "A": [
                 (
-                    "ADep",
-                    Outgoing,
-                ),
-                (
                     "Root",
                     Incoming,
+                ),
+                (
+                    "ADep",
+                    Outgoing,
                 ),
             ],
         },
@@ -83,7 +83,7 @@ ResolvedGraph {
                 ),
                 version: None,
                 resolver: None,
-                overridden_path: true,
+                overridden_path: false,
             },
         },
         always_deps: {

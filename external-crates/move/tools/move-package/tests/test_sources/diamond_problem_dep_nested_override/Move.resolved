@@ -35,17 +35,11 @@ ResolvedGraph {
                     Incoming,
                 ),
             ],
-            "C": [
+            "A": [
                 (
-                    "E",
-                    Outgoing,
-                ),
-                (
-                    "A",
+                    "Root",
                     Incoming,
                 ),
-            ],
-            "A": [
                 (
                     "C",
                     Outgoing,
@@ -54,29 +48,35 @@ ResolvedGraph {
                     "D",
                     Outgoing,
                 ),
-                (
-                    "Root",
-                    Incoming,
-                ),
             ],
-            "D": [
-                (
-                    "E",
-                    Outgoing,
-                ),
+            "C": [
                 (
                     "A",
                     Incoming,
                 ),
-            ],
-            "B": [
                 (
                     "E",
                     Outgoing,
                 ),
+            ],
+            "D": [
+                (
+                    "A",
+                    Incoming,
+                ),
+                (
+                    "E",
+                    Outgoing,
+                ),
+            ],
+            "B": [
                 (
                     "Root",
                     Incoming,
+                ),
+                (
+                    "E",
+                    Outgoing,
                 ),
             ],
         },
@@ -87,7 +87,7 @@ ResolvedGraph {
                 ),
                 version: None,
                 resolver: None,
-                overridden_path: true,
+                overridden_path: false,
             },
             "B": Package {
                 kind: Local(
@@ -95,7 +95,7 @@ ResolvedGraph {
                 ),
                 version: None,
                 resolver: None,
-                overridden_path: true,
+                overridden_path: false,
             },
             "C": Package {
                 kind: Local(
@@ -103,7 +103,7 @@ ResolvedGraph {
                 ),
                 version: None,
                 resolver: None,
-                overridden_path: true,
+                overridden_path: false,
             },
             "D": Package {
                 kind: Local(
@@ -111,7 +111,7 @@ ResolvedGraph {
                 ),
                 version: None,
                 resolver: None,
-                overridden_path: true,
+                overridden_path: false,
             },
             "E": Package {
                 kind: Local(

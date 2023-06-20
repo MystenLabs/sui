@@ -15,12 +15,12 @@ ResolvedGraph {
             ],
             "A": [
                 (
-                    "C",
-                    Outgoing,
-                ),
-                (
                     "Root",
                     Incoming,
+                ),
+                (
+                    "C",
+                    Outgoing,
                 ),
             ],
             "C": [
@@ -35,12 +35,12 @@ ResolvedGraph {
             ],
             "B": [
                 (
-                    "C",
-                    Outgoing,
-                ),
-                (
                     "Root",
                     Incoming,
+                ),
+                (
+                    "C",
+                    Outgoing,
                 ),
             ],
         },

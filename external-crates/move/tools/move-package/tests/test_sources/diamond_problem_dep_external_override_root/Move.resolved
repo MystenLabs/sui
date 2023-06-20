@@ -19,12 +19,12 @@ ResolvedGraph {
             ],
             "A": [
                 (
-                    "ADep",
-                    Outgoing,
-                ),
-                (
                     "Root",
                     Incoming,
+                ),
+                (
+                    "ADep",
+                    Outgoing,
                 ),
                 (
                     "B",
@@ -43,12 +43,12 @@ ResolvedGraph {
             ],
             "B": [
                 (
-                    "A",
-                    Outgoing,
-                ),
-                (
                     "Root",
                     Incoming,
+                ),
+                (
+                    "A",
+                    Outgoing,
                 ),
             ],
             "C": [
@@ -91,7 +91,7 @@ ResolvedGraph {
                 ),
                 version: None,
                 resolver: None,
-                overridden_path: true,
+                overridden_path: false,
             },
             "C": Package {
                 kind: Local(
@@ -99,7 +99,7 @@ ResolvedGraph {
                 ),
                 version: None,
                 resolver: None,
-                overridden_path: true,
+                overridden_path: false,
             },
         },
         always_deps: {

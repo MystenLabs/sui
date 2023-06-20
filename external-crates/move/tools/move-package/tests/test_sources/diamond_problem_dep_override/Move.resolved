@@ -33,22 +33,22 @@ ResolvedGraph {
             ],
             "A": [
                 (
-                    "C",
-                    Outgoing,
-                ),
-                (
                     "Root",
                     Incoming,
+                ),
+                (
+                    "C",
+                    Outgoing,
                 ),
             ],
             "B": [
                 (
-                    "C",
-                    Outgoing,
-                ),
-                (
                     "Root",
                     Incoming,
+                ),
+                (
+                    "C",
+                    Outgoing,
                 ),
             ],
         },
@@ -59,7 +59,7 @@ ResolvedGraph {
                 ),
                 version: None,
                 resolver: None,
-                overridden_path: true,
+                overridden_path: false,
             },
             "B": Package {
                 kind: Local(
@@ -67,7 +67,7 @@ ResolvedGraph {
                 ),
                 version: None,
                 resolver: None,
-                overridden_path: true,
+                overridden_path: false,
             },
             "C": Package {
                 kind: Local(

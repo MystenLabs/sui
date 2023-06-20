@@ -1,1 +1,6 @@
-Failed to resolve dependencies for package 'Root': Resolving dependencies for package 'B': Incorrect override of D in A (an override should dominate all uses of the overridden package)
+When resolving dependencies for package Root,conflicting dependencies found for 'C':
+
+Not found:
+	dependency { name = "D" } for package { local = "deps_only/D", version = "2.0.0" }
+New:
+	dependency { name = "D" } for package { local = "deps_only/D", version = "1.0.0" }
