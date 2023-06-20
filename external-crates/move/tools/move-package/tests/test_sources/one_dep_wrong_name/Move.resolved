@@ -1,1 +1,1 @@
-Name of dependency 'WrongNameForDep' does not match dependency's package name 'OtherDep'
+Can't merge dependencies for 'OtherDep' because nothing depends on it

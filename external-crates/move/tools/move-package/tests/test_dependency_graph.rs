@@ -212,22 +212,22 @@ fn merge_simple() {
     )
     .expect("Reading inner");
 
-    assert!(outer
-        .merge(
-            Symbol::from("A"),
-            Symbol::from("A"),
-            inner,
-            Symbol::from(""),
-            &BTreeMap::new(),
-        )
-        .is_ok());
+    assert!(DependencyGraph::merge(
+        &mut outer,
+        &inner,
+        Symbol::from("A"),
+        DependencyMode::Always,
+        &BTreeMap::new(),
+        &BTreeMap::new(),
+        Symbol::from("Root"),
+    )
+    .is_ok());
 
     assert_eq!(
         outer.topological_order(),
         vec![Symbol::from("Root"), Symbol::from("A")],
     );
 }
-
 #[test]
 fn merge_into_root() {
     let tmp = tempfile::tempdir().unwrap();
@@ -252,15 +252,16 @@ fn merge_into_root() {
     )
     .expect("Reading inner");
 
-    assert!(outer
-        .merge(
-            Symbol::from("Root"),
-            Symbol::from("A"),
-            inner,
-            Symbol::from(""),
-            &BTreeMap::new(),
-        )
-        .is_ok());
+    assert!(DependencyGraph::merge(
+        &mut outer,
+        &inner,
+        Symbol::from("Root"),
+        DependencyMode::Always,
+        &BTreeMap::new(),
+        &BTreeMap::new(),
+        Symbol::from("Root"),
+    )
+    .is_ok());
 
     assert_eq!(
         outer.topological_order(),
@@ -291,7 +292,17 @@ fn merge_detached() {
     )
     .expect("Reading inner");
 
-    let Err(err) = outer.merge(Symbol::from("OtherDep"), Symbol::from("A"), inner, Symbol::from(""), &BTreeMap::new()) else {
+    let dep_graphs = BTreeMap::from([(Symbol::from("OtherDep"), (inner, false))]);
+    let Err(err) = DependencyGraph::merge_all(
+        &mut outer,
+        dep_graphs,
+        DependencyMode::Always,
+        &BTreeMap::new(),
+        &BTreeMap::new(),
+        Symbol::from("Root"),
+        &DependencyKind::default(),
+        &BTreeMap::new(),
+    ) else {
         panic!("Inner's root is not part of outer's graph, so this should fail");
     };
 
@@ -317,7 +328,17 @@ fn merge_after_calculating_always_deps() {
     )
     .expect("Reading inner");
 
-    let Err(err) = outer.merge(Symbol::from("A"),Symbol::from("A"), inner, Symbol::from(""), &BTreeMap::new()) else {
+    let dep_graphs = BTreeMap::from([(Symbol::from("A"), (inner, false))]);
+    let Err(err) = DependencyGraph::merge_all(
+        &mut outer,
+        dep_graphs,
+        DependencyMode::Always,
+        &BTreeMap::new(),
+        &BTreeMap::new(),
+        Symbol::from("Root"),
+        &DependencyKind::default(),
+        &BTreeMap::new(),
+    ) else {
         panic!("Outer's always deps have already been calculated so this should fail");
     };
 
@@ -347,15 +368,16 @@ fn merge_overlapping() {
     )
     .expect("Reading inner");
 
-    assert!(outer
-        .merge(
-            Symbol::from("B"),
-            Symbol::from("A"),
-            inner,
-            Symbol::from(""),
-            &BTreeMap::new(),
-        )
-        .is_ok());
+    assert!(DependencyGraph::merge(
+        &mut outer,
+        &inner,
+        Symbol::from("B"),
+        DependencyMode::Always,
+        &BTreeMap::new(),
+        &BTreeMap::new(),
+        Symbol::from("Root"),
+    )
+    .is_ok());
 }
 
 #[test]
@@ -381,11 +403,19 @@ fn merge_overlapping_different_deps() {
     )
     .expect("Reading inner");
 
-    let Err(err) = outer.merge(Symbol::from("B"),Symbol::from("A"), inner, Symbol::from(""), &BTreeMap::new()) else {
+    let Err(err) = DependencyGraph::merge(
+        &mut outer,
+        &inner,
+        Symbol::from("B"),
+        DependencyMode::Always,
+        &BTreeMap::new(),
+        &BTreeMap::new(),
+        Symbol::from("Root")
+    ) else {
         panic!("Outer and inner mention package A which has different dependencies in both.");
     };
 
-    assert_error_contains!(err, "Conflicting dependencies found");
+    assert_error_contains!(err, "conflicting dependencies found");
 }
 
 #[test]
@@ -411,7 +441,14 @@ fn merge_cyclic() {
     )
     .expect("Reading inner");
 
-    let Err(err) = outer.merge(Symbol::from("B"), Symbol::from("Root"), inner, Symbol::from(""), &BTreeMap::new()) else {
+    let Err(err) = DependencyGraph::merge(
+        &mut outer,
+        &inner,
+        Symbol::from("B"),
+        DependencyMode::Always,
+        &BTreeMap::new(),
+        &BTreeMap::new(),
+        Symbol::from("Root")) else {
         panic!("Inner refers back to outer's root");
     };
 

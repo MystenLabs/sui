@@ -18,8 +18,7 @@ use crate::{
     source_package::{
         layout::SourcePackageLayout,
         manifest_parser::{
-            parse_dependency, parse_move_manifest_from_file, parse_move_manifest_string,
-            parse_source_manifest, parse_substitution,
+            parse_dependency, parse_move_manifest_string, parse_source_manifest, parse_substitution,
         },
         parsed_manifest as PM,
     },
@@ -128,18 +127,6 @@ pub struct Dependency {
 pub enum DependencyMode {
     Always,
     DevOnly,
-}
-
-/// Keeps information about external resolution request
-#[derive(Debug, Clone)]
-pub struct ExternalRequest {
-    mode: DependencyMode,
-    from: Symbol,
-    to: Symbol,
-    resolver: Symbol,
-    pkg_path: PathBuf,
-    /// overrides at the point of external graph insertion
-    overrides: BTreeMap<PM::PackageName, Package>,
 }
 
 /// Wrapper struct to display a package as an inline table in the lock file (matching the
@@ -275,7 +262,7 @@ impl DependencyGraph {
 
         // process internally resolved packages first so that we have a graph with all internally
         // resolved dependencies that we can than use to verify externally resolved dependencies
-        DependencyGraph::combine_all(
+        DependencyGraph::merge_all(
             &mut combined_graph,
             dep_graphs,
             DependencyMode::Always,
@@ -285,7 +272,7 @@ impl DependencyGraph {
             parent,
             &root_manifest.dependencies,
         )?;
-        DependencyGraph::combine_all(
+        DependencyGraph::merge_all(
             &mut combined_graph,
             dev_dep_graphs,
             DependencyMode::DevOnly,
@@ -297,7 +284,7 @@ impl DependencyGraph {
         )?;
 
         // process externally resolved packages
-        DependencyGraph::combine_all(
+        DependencyGraph::merge_all(
             &mut combined_graph,
             dep_graphs_external,
             DependencyMode::Always,
@@ -307,7 +294,7 @@ impl DependencyGraph {
             parent,
             &root_manifest.dependencies,
         )?;
-        DependencyGraph::combine_all(
+        DependencyGraph::merge_all(
             &mut combined_graph,
             dev_dep_graphs_external,
             DependencyMode::DevOnly,
@@ -393,7 +380,7 @@ impl DependencyGraph {
 
     /// Given all sub-graphs representing dependencies of the parent manifest file, combines all
     /// subgraphs to form the parent dependency graph.
-    fn combine_all(
+    pub fn merge_all(
         combined_graph: &mut DependencyGraph,
         dep_graphs: BTreeMap<PM::PackageName, (DependencyGraph, bool)>,
         mode: DependencyMode,
@@ -403,6 +390,9 @@ impl DependencyGraph {
         parent: &PM::DependencyKind,
         dependencies: &PM::Dependencies,
     ) -> Result<()> {
+        if !combined_graph.always_deps.is_empty() {
+            bail!("Merging dependencies into a graph after calculating its 'always' dependencies");
+        }
         // partition graphs into overrides and not
         let (override_graphs, graphs): (Vec<_>, Vec<_>) = dep_graphs
             .iter()
@@ -431,7 +421,17 @@ impl DependencyGraph {
                 }
             }
 
-            DependencyGraph::combine(
+            if !combined_graph
+                .package_graph
+                .contains_node(sub_graph.root_package)
+            {
+                bail!(
+                    "Can't merge dependencies for '{}' because nothing depends on it",
+                    sub_graph.root_package
+                );
+            }
+
+            DependencyGraph::merge(
                 combined_graph,
                 sub_graph,
                 sub_graph.root_package,
@@ -458,7 +458,18 @@ impl DependencyGraph {
                     continue;
                 }
             }
-            DependencyGraph::combine(
+
+            if !combined_graph
+                .package_graph
+                .contains_node(sub_graph.root_package)
+            {
+                bail!(
+                    "Can't merge dependencies for '{}' because nothing depends on it",
+                    sub_graph.root_package
+                );
+            }
+
+            DependencyGraph::merge(
                 combined_graph,
                 sub_graph,
                 sub_graph.root_package,
@@ -542,41 +553,52 @@ impl DependencyGraph {
         Ok(true)
     }
 
-    /// Recursively combine package from a sub-graph with the main combined graph. The sub-graph is
+    /// Recursively merge package from a sub-graph with the main combined graph. The sub-graph is
     /// traversed in a depth-first manner, successively adding packages (via the `resolve_pkg`
-    /// function) and their connecting edges. Additionally, during traversal the algorithm detects
-    /// which of the sub-graph's packages need to be overridden (in which case their dependencies in
-    /// the sub-graph should no longer be inserted into the combined package).
-    fn combine(
+    /// function) and their connecting edges (between `from_pkg_name and
+    /// `to_pkg_name`). Additionally, during traversal the algorithm detects which of the
+    /// sub-graph's packages need to be overridden (in which case their dependencies in the
+    /// sub-graph should no longer be inserted into the combined package).
+    pub fn merge(
         combined_graph: &mut DependencyGraph,
         sub_graph: &DependencyGraph,
-        parent_pkg_name: PM::PackageName,
+        from_pkg_name: PM::PackageName,
         mode: DependencyMode,
         overrides: &BTreeMap<PM::PackageName, Package>,
         dev_overrides: &BTreeMap<PM::PackageName, Package>,
         root_package: PM::PackageName,
     ) -> Result<()> {
-        for sub_pkg_name in sub_graph
+        for to_pkg_name in sub_graph
             .package_graph
-            .neighbors_directed(parent_pkg_name, Direction::Outgoing)
+            .neighbors_directed(from_pkg_name, Direction::Outgoing)
         {
             // unwrap safe as the table must have the package if the graph has it
-            let sub_pkg = sub_graph.package_table.get(&sub_pkg_name).unwrap();
+            let sub_pkg = sub_graph.package_table.get(&to_pkg_name).unwrap();
+
+            // The root package is not present in the package table (because it doesn't have a
+            // source).  If it appears in the other table, it indicates a cycle.
+            if to_pkg_name == combined_graph.root_package {
+                bail!(
+                    "Conflicting dependencies found:\n{0} = 'root'\n{0} = {1}",
+                    to_pkg_name,
+                    PackageWithResolverTOML(&sub_pkg),
+                );
+            }
 
             // unwrap is safe as all edges have a Dependency weight
             let sub_dep = sub_graph
                 .package_graph
-                .edge_weight(parent_pkg_name, sub_pkg_name)
+                .edge_weight(from_pkg_name, to_pkg_name)
                 .unwrap();
             combined_graph
                 .package_graph
-                .add_edge(parent_pkg_name, sub_pkg_name, sub_dep.clone());
+                .add_edge(from_pkg_name, to_pkg_name, sub_dep.clone());
 
             if DependencyGraph::insert_pkg(
                 combined_graph,
                 sub_graph,
                 sub_pkg,
-                sub_pkg_name,
+                to_pkg_name,
                 mode,
                 overrides,
                 dev_overrides,
@@ -587,10 +609,10 @@ impl DependencyGraph {
                 continue;
             }
 
-            DependencyGraph::combine(
+            DependencyGraph::merge(
                 combined_graph,
                 sub_graph,
-                sub_pkg_name,
+                to_pkg_name,
                 mode,
                 overrides,
                 dev_overrides,
@@ -602,7 +624,12 @@ impl DependencyGraph {
 
     /// Attempts to insert a package into the combined graph, taking into consideration if a package
     /// with the same name already exists in the graph and whether there are overrides concerning a
-    /// given package.
+    /// given package:
+    ///    - if no package exists in the graph, insert it
+    ///    - if the same package already exists in the graph verify that both packages (new and
+    ///    existing one) have the same sets of dependencies and report and an error if they do not
+    ///    - if a conflicting package already exists in the graph, override it if an override can be
+    ///    found in the set (if it does not, report an error)
     fn insert_pkg(
         combined_graph: &mut DependencyGraph,
         sub_graph: &DependencyGraph,
@@ -795,79 +822,6 @@ impl DependencyGraph {
             bail!(msg);
         }
         Ok(())
-    }
-
-    pub fn new_old<Progress: Write>(
-        root_package: &PM::SourceManifest,
-        root_path: PathBuf,
-        dependency_cache: &mut DependencyCache,
-        progress_output: &mut Progress,
-        manifest_digest: Option<String>,
-        deps_digest: Option<String>,
-    ) -> Result<DependencyGraph> {
-        let mut graph = DependencyGraph {
-            root_path: root_path.clone(),
-            root_package: root_package.package.name,
-            package_graph: DiGraphMap::new(),
-            package_table: BTreeMap::new(),
-            always_deps: BTreeSet::new(),
-            manifest_digest,
-            deps_digest,
-        };
-
-        // Ensure there's always a root node, even if it has no edges.
-        graph.package_graph.add_node(graph.root_package);
-        // Collect external resolution requests and process them later to check for "safe"
-        // overlapping packages existing in both externally and internally resolved graphs.
-        let mut external_requests = vec![];
-        graph
-            .extend_graph(
-                &PM::DependencyKind::default(),
-                root_package,
-                &root_path,
-                dependency_cache,
-                &mut external_requests,
-                &mut BTreeMap::new(),
-                progress_output,
-            )
-            .with_context(|| {
-                format!(
-                    "Failed to resolve dependencies for package '{}'",
-                    graph.root_package
-                )
-            })?;
-
-        for ExternalRequest {
-            mode,
-            from,
-            to,
-            resolver,
-            pkg_path,
-            overrides,
-        } in external_requests
-        {
-            graph
-                .resolve_externally(
-                    mode,
-                    from,
-                    to,
-                    resolver,
-                    &pkg_path,
-                    &overrides,
-                    progress_output,
-                )
-                .with_context(|| {
-                    format!(
-                        "Failed to resolve dependencies for package '{}'",
-                        graph.root_package
-                    )
-                })?
-        }
-
-        graph.check_acyclic()?;
-        graph.discover_always_deps();
-
-        Ok(graph)
     }
 
     /// Create a dependency graph by reading a lock file.
@@ -1099,138 +1053,6 @@ impl DependencyGraph {
         Ok(())
     }
 
-    /// A "root" function responsible for adding the graph in `extension` to `self` (the core of the
-    /// merging process is implemented recursively in the `merge_pkg` function). Packages can be
-    /// shared between the two as long as either:
-    /// - they are consistent (have the same name and the same set of dependencies)
-    /// - if a valid override exists for the otherwise conflicting packages
-    ///
-    /// Merging starts by creating an edge from the package containing the extension as its
-    /// dependency (`from` argument) to the package being the "root" of the extension
-    /// (`merged_pkg_name` argument). During merge, which happens on a per-package basis in the
-    /// `merge_pkg` function, packages coming from `extension` are labeled as being resolved by
-    /// `resolver`.
-    ///
-    /// It is an error to attempt to merge into `self` after its `always_deps` (the set of packages
-    /// that are always transitive dependencies of its root, regardless of mode) has been
-    /// calculated.  This usually happens when the graph is created, so this function is intended
-    /// primarily for internal use, but is exposed for testing.
-    pub fn merge(
-        &mut self,
-        from: PM::PackageName,
-        merged_pkg_name: PM::PackageName,
-        extension: DependencyGraph,
-        resolver: Symbol,
-        overrides: &BTreeMap<PM::PackageName, Package>,
-    ) -> Result<()> {
-        let DependencyGraph {
-            root_package: ext_root,
-            package_graph: ext_graph,
-            package_table: ext_table,
-
-            // Unnecessary in the context of the larger graph.
-            root_path: _,
-
-            // Will be recalculated for the larger graph.
-            always_deps: _,
-            manifest_digest: _,
-            deps_digest: _,
-        } = extension;
-
-        if !self.package_graph.contains_node(ext_root) {
-            bail!("Can't merge dependencies for '{ext_root}' because nothing depends on it");
-        }
-
-        // If this has been calculated it is guaranteed to contain at least `self.root_package`.
-        if !self.always_deps.is_empty() {
-            bail!("Merging dependencies into a graph after calculating its 'always' dependencies");
-        }
-
-        if ext_table.is_empty() {
-            // the external graph is effectively empty - nothing to merge
-            return Ok(());
-        }
-
-        // unwrap safe as the table must have the package if the graph has it
-        let merged_pkg = ext_table.get(&merged_pkg_name).unwrap();
-        self.merge_pkg(
-            merged_pkg.clone(),
-            merged_pkg_name,
-            &ext_graph,
-            &ext_table,
-            resolver,
-            overrides,
-        )?;
-        // unwrap is safe as all edges have a Dependency weight
-        let merged_dep = ext_graph.edge_weight(from, merged_pkg_name).unwrap();
-        self.package_graph
-            .add_edge(from, merged_pkg_name, merged_dep.clone());
-
-        Ok(())
-    }
-
-    /// Recursively merge package from an `extension` graph (resolved by an external resolver) to
-    /// `self`. The extension graph is traversed in a depth-first manner, successively adding
-    /// packages and their connecting edges to `self` via the `process_graph_entry`
-    /// function. Additionally, during traversal the algorithm detects which of the sub-graph's
-    /// packages need to be overridden (in which case their dependencies in `extension` should no
-    /// longer be inserted into `self`).
-    fn merge_pkg(
-        &mut self,
-        mut ext_pkg: Package,
-        ext_name: PM::PackageName,
-        ext_graph: &DiGraphMap<PM::PackageName, Dependency>,
-        ext_table: &BTreeMap<PM::PackageName, Package>,
-        resolver: Symbol,
-        overrides: &BTreeMap<PM::PackageName, Package>,
-    ) -> Result<()> {
-        ext_pkg.resolver = Some(resolver);
-
-        // The root package is not present in the package table (because it doesn't have a
-        // source).  If it appears in the other table, it indicates a cycle.
-        if ext_name == self.root_package {
-            bail!(
-                "Conflicting dependencies found:\n{0} = 'root'\n{0} = {1}",
-                ext_name,
-                PackageWithResolverTOML(&ext_pkg),
-            );
-        }
-
-        if self
-            .process_graph_entry(
-                &ext_pkg,
-                ext_name,
-                overrides,
-                Some(ext_graph),
-                Some(resolver),
-            )?
-            .is_some()
-        {
-            // existing entry was found
-            return Ok(());
-        }
-
-        // if we are here, it means that a new package has been inserted into the graph - we need to
-        // process its dependencies and add appropriate edges to them
-        for dst in ext_graph.neighbors_directed(ext_name, Direction::Outgoing) {
-            // unwrap safe as the table must have the package if the graph has it
-            let dst_pkg = ext_table.get(&dst).unwrap();
-            self.merge_pkg(
-                dst_pkg.clone(),
-                dst,
-                ext_graph,
-                ext_table,
-                resolver,
-                overrides,
-            )?;
-            // unwrap is safe as all edges have a Dependency weight
-            let ext_dep = ext_graph.edge_weight(ext_name, dst).unwrap();
-            self.package_graph.add_edge(ext_name, dst, ext_dep.clone());
-        }
-
-        Ok(())
-    }
-
     /// Return packages in the graph in topological order (a package is ordered before its
     /// dependencies).
     ///
@@ -1255,179 +1077,6 @@ impl DependencyGraph {
             .edges(pkg)
             .filter(move |(_, _, dep)| dep.mode <= mode)
             .map(|(_, dep_name, dep)| (dep_name, dep, &self.package_table[&dep_name]))
-    }
-
-    /// Add the transitive dependencies and dev-dependencies from `package` to the dependency graph.
-    fn extend_graph<Progress: Write>(
-        &mut self,
-        parent: &PM::DependencyKind,
-        package: &PM::SourceManifest,
-        package_path: &Path,
-        dependency_cache: &mut DependencyCache,
-        external_requests: &mut Vec<ExternalRequest>,
-        overrides: &mut BTreeMap<PM::PackageName, Package>,
-        progress_output: &mut Progress,
-    ) -> Result<()> {
-        let from = package.package.name;
-
-        self.extend_with_dependencies(
-            DependencyMode::Always,
-            &package.dependencies,
-            from,
-            parent,
-            package_path,
-            dependency_cache,
-            external_requests,
-            overrides,
-            progress_output,
-        )?;
-
-        self.extend_with_dependencies(
-            DependencyMode::DevOnly,
-            &package.dev_dependencies,
-            from,
-            parent,
-            package_path,
-            dependency_cache,
-            external_requests,
-            overrides,
-            progress_output,
-        )?;
-
-        Ok(())
-    }
-
-    /// Iterate over the set of a given package's dependencies (overridden dependencies first). to
-    /// add them to the dependency graph.
-    fn extend_with_dependencies<Progress: Write>(
-        &mut self,
-        mode: DependencyMode,
-        dependencies: &PM::Dependencies,
-        from: Symbol,
-        parent: &PM::DependencyKind,
-        package_path: &Path,
-        dependency_cache: &mut DependencyCache,
-        external_requests: &mut Vec<ExternalRequest>,
-        overrides: &mut BTreeMap<PM::PackageName, Package>,
-        progress_output: &mut Progress,
-    ) -> Result<()> {
-        // partition dep into overrides and not
-        let (overridden_deps, deps): (Vec<_>, Vec<_>) =
-            dependencies.iter().partition(|(_, dep)| {
-                matches!(
-                    dep,
-                    PM::Dependency::Internal(PM::InternalDependency {
-                        dep_override: true,
-                        ..
-                    })
-                )
-            });
-
-        // Process overrides first to include them in processing of non-overridden deps. It is
-        // important to do so as a dependency override may "prune" portions of a dependency graph
-        // that would otherwise prevent other dependencies from kicking in. In other words, a given
-        // override may be the dominant one only if another override eliminates some graph
-        // edges. See diamond_problem_dep_transitive_nested_override for an example (in tests) of
-        // such situation.
-        //
-        // It's also pretty important that we do not extend overrides with the override being
-        // currently processed. The reason for it is that in order to detect incorrect overrides
-        // (such that do not dominate all package "uses") we rely on the package being reachable via
-        // different paths:
-        // - if it's reached via an overridden path again for the same override, it's OK
-        // - if it's reached via an overridden path again for a different override, it's an error
-        // - if it's reached via a non-overridden path, it's an error (insufficient override)
-        //
-        // While the first type of error could still be detected if we injected the currently
-        // processed override into the overrides set, the second one would not.  Consider
-        // diamond_problem_dep_incorrect_override_occupied example (in tests) to see a situation
-        // when a non-overridden path is chosen first to insert the package and then insufficient
-        // override could be considered correct if we injected it into the overrides set (as we will
-        // not have another path to explore that would disqualify it).
-        let mut local_overrides = BTreeMap::new();
-        for (to, dep) in overridden_deps {
-            let inserted_pkg = self.extend_with_dep(
-                mode,
-                from,
-                *to,
-                dep,
-                parent,
-                package_path,
-                dependency_cache,
-                external_requests,
-                overrides,
-                progress_output,
-            )?;
-            // do not include already overridden overrides
-            if let Some(pkg) = inserted_pkg {
-                if !overrides.contains_key(to) {
-                    local_overrides.insert(*to, pkg);
-                }
-            }
-        }
-
-        // add new overrides to the set
-        overrides.extend(local_overrides.clone());
-
-        for (to, dep) in deps {
-            self.extend_with_dep(
-                mode,
-                from,
-                *to,
-                dep,
-                parent,
-                package_path,
-                dependency_cache,
-                external_requests,
-                overrides,
-                progress_output,
-            )?;
-        }
-        // remove locally added overrides from the set
-        overrides.retain(|k, _| !local_overrides.contains_key(k));
-        Ok(())
-    }
-
-    /// Extend the dependency graph with a single dependent package.
-    fn extend_with_dep<Progress: Write>(
-        &mut self,
-        mode: DependencyMode,
-        from: Symbol,
-        to: Symbol,
-        dep: &PM::Dependency,
-        parent: &PM::DependencyKind,
-        package_path: &Path,
-        dependency_cache: &mut DependencyCache,
-        external_requests: &mut Vec<ExternalRequest>,
-        overrides: &mut BTreeMap<PM::PackageName, Package>,
-        progress_output: &mut Progress,
-    ) -> Result<Option<Package>> {
-        let inserted_pkg = match dep {
-            PM::Dependency::External(resolver) => {
-                external_requests.push(ExternalRequest {
-                    mode,
-                    from,
-                    to,
-                    resolver: *resolver,
-                    pkg_path: package_path.to_path_buf(),
-                    overrides: overrides.clone(),
-                });
-                None
-            }
-
-            PM::Dependency::Internal(dep) => Some(self.resolve_internally(
-                mode,
-                from,
-                to,
-                parent,
-                dep.clone(),
-                dependency_cache,
-                external_requests,
-                overrides,
-                progress_output,
-            )?),
-        };
-        Ok(inserted_pkg)
     }
 
     /// Resolve the packages described at dependency `to` of package `from` with manifest at path
@@ -1501,266 +1150,6 @@ impl DependencyGraph {
         })?;
 
         Ok(sub_graph)
-    }
-
-    fn resolve_externally<Progress: Write>(
-        &mut self,
-        mode: DependencyMode,
-        from: PM::PackageName,
-        to: PM::PackageName,
-        resolver: Symbol,
-        package_path: &Path,
-        overrides: &BTreeMap<PM::PackageName, Package>,
-        progress_output: &mut Progress,
-    ) -> Result<()> {
-        let sub_graph =
-            DependencyGraph::get_external(mode, from, to, resolver, package_path, progress_output)?;
-
-        self.merge(from, to, sub_graph, resolver, overrides)
-            .with_context(|| {
-                format!("Adding dependencies from {resolver} for dependency '{to}' in '{from}'")
-            })?;
-
-        Ok(())
-    }
-
-    /// Use the internal resolution mechanism (which recursively explores transitive dependencies)
-    /// to resolve packages reachable from `to` (inclusive), which was found as a dependency `dep`
-    /// of package `from` whose source is `parent`, adding them to `self`.
-    ///
-    /// Avoids re-fetching git repositories if they are already available locally, when
-    /// `skip_fetch_latest_git_deps` is true, and sends progress updates to `progress_output`.
-    fn resolve_internally<Progress: Write>(
-        &mut self,
-        mode: DependencyMode,
-        from: PM::PackageName,
-        to: PM::PackageName,
-        parent: &PM::DependencyKind,
-        dep: PM::InternalDependency,
-        dependency_cache: &mut DependencyCache,
-        external_requests: &mut Vec<ExternalRequest>,
-        overrides: &mut BTreeMap<PM::PackageName, Package>,
-        progress_output: &mut Progress,
-    ) -> Result<Package> {
-        let PM::InternalDependency {
-            kind,
-            version,
-            subst,
-            digest,
-            dep_override,
-        } = dep;
-
-        // are there active overrides for this path in the graph?
-        let overridden_path = !overrides.is_empty();
-        let mut pkg = Package {
-            kind,
-            version,
-            resolver: None,
-            overridden_path,
-        };
-
-        pkg.kind.reroot(parent)?;
-        let inserted_pkg = self.process_dependency(
-            pkg,
-            to,
-            dependency_cache,
-            external_requests,
-            overrides,
-            progress_output,
-        )?;
-        self.package_graph.add_edge(
-            from,
-            to,
-            Dependency {
-                mode,
-                subst,
-                digest,
-                dep_override,
-            },
-        );
-        Ok(inserted_pkg)
-    }
-
-    /// Ensure that package `pkg_name` and all its transitive dependencies are present in the graph,
-    /// all sourced from their respective packages, `pkg`.  Fails if any of the packages in the
-    /// dependency sub-graph rooted at `pkg_name` are already present in `self` but sourced from a
-    /// different dependency.
-    fn process_dependency<Progress: Write>(
-        &mut self,
-        pkg: Package,
-        name: PM::PackageName,
-        dependency_cache: &mut DependencyCache,
-        external_requests: &mut Vec<ExternalRequest>,
-        overrides: &mut BTreeMap<PM::PackageName, Package>,
-        progress_output: &mut Progress,
-    ) -> Result<Package> {
-        if let Some(existing_entry) = self.process_graph_entry(
-            &pkg, name, overrides, /* external_subgraph */ None, /* resolver */ None,
-        )? {
-            // existing entry was found
-            return Ok(existing_entry);
-        }
-        // a package has been inserted into the graph - process its dependencies
-
-        dependency_cache
-            .download_and_update_if_remote(name, &pkg.kind, progress_output)
-            .with_context(|| format!("Fetching '{}'", name))?;
-
-        let pkg_path = self.root_path.join(local_path(&pkg.kind));
-        let manifest = parse_move_manifest_from_file(&pkg_path)
-            .with_context(|| format!("Parsing manifest for '{}'", name))?;
-
-        let inserted_pkg = pkg.clone();
-        let kind = pkg.kind.clone();
-        self.extend_graph(
-            &kind,
-            &manifest,
-            &pkg_path,
-            dependency_cache,
-            external_requests,
-            overrides,
-            progress_output,
-        )
-        .with_context(|| format!("Resolving dependencies for package '{}'", name))?;
-        Ok(inserted_pkg)
-    }
-
-    /// Attempt to insert a newly encountered package to the graph which may or may not already
-    /// contain an entry for the same package name:
-    ///    - if no package exists in the graph, insert it
-    ///    - if a conflicting package already exists in the graph, override it if an override can be
-    ///    found in the set (if it does not, report an error)
-    ///    - if the same package already exists in the graph, and this package is on the "override
-    ///    path" keep checking its dependencies to make sure that previously used overrides are
-    ///    correct (dominate all uses of the package); a package is marked to be on the "override
-    ///    path" if it is inserted into the graph while the overrides set is non-empty, making this
-    ///    mark into a coarse indicator of whether portions of the graph need to be (re)validated.
-    fn process_graph_entry(
-        &mut self,
-        pkg: &Package,
-        name: PM::PackageName,
-        overrides: &BTreeMap<PM::PackageName, Package>,
-        external_subgraph: Option<&DiGraphMap<PM::PackageName, Dependency>>,
-        resolver: Option<Symbol>,
-    ) -> Result<Option<Package>> {
-        match self.package_table.entry(name) {
-            Entry::Vacant(entry) => {
-                // Note that we simply insert a dependent package here without checking the
-                // overrides set. The reason for it is that if there was an override for this entry,
-                // it would have already been inserted as the overrides are processed before
-                // non-overridden dependencies (and only after they are processed, the overrides set
-                // is populated).
-                entry.insert(pkg.clone());
-                Ok(None)
-            }
-
-            // Seeing the same package again, pointing to the same dependency: OK, return early but
-            // only if seeing a package that was not on an "override path" (was created when no
-            // override was active); otherwise we need to keep inspecting the graph to make sure
-            // that the overrides introduced on this path correctly dominate all "uses" of a given
-            // package
-            Entry::Occupied(entry) if entry.get() == pkg => {
-                if let Some(ext_graph) = external_subgraph {
-                    // when trying to insert a package into the graph as part of merging an external
-                    // subgraph it's not enough to check for package equality as it does not capture
-                    // dependencies that may differ between the internally and externally resolved
-                    // packages.
-                    let (self_deps, ext_deps) =
-                        pkg_deps_equal(name, &self.package_graph, ext_graph);
-                    if self_deps != ext_deps {
-                        bail!(
-                            "Conflicting dependencies found for '{name}' during external resolution by '{}':\n{}{}",
-                            resolver.unwrap(), // safe because external_subgraph exists
-                            format_deps("\nExternal dependencies not found:", self_deps),
-                            format_deps("\nNew external dependencies:", ext_deps),
-                        );
-                    }
-                }
-                if entry.get().overridden_path {
-                    // check if acyclic to avoid infinite recursion - see the
-                    // diamond_problem_dep_incorrect_override_cycle (in tests) for an example of
-                    // such situation
-                    self.check_acyclic()?;
-                    // inspect the rest of the graph and report error if a problem is found
-                    self.override_verify(pkg, name, overrides)?;
-                }
-                Ok(Some(pkg.clone()))
-            }
-
-            // Seeing the same package again, but pointing to a different dependency: Not OK unless
-            // there is an override.
-            Entry::Occupied(mut entry) => {
-                if let Some(overridden_pkg) = overrides.get(&name) {
-                    // override found - use it and return - its dependencies have already been
-                    // processed the first time override pkg was processed (before it was inserted
-                    // into overrides set)
-                    if overridden_pkg != entry.get() {
-                        entry.insert(overridden_pkg.clone());
-                    }
-                    Ok(Some(overridden_pkg.clone()))
-                } else {
-                    bail!(
-                        "Conflicting dependencies found:\n{0} = {1}\n{0} = {2}",
-                        name,
-                        PackageWithResolverTOML(entry.get()),
-                        PackageWithResolverTOML(pkg),
-                    );
-                }
-            }
-        }
-    }
-
-    /// Inspect a portion of the graph by simply following existing nodes and edges. If during
-    /// inspection we encounter a package inserted as a result of an override but this override is
-    /// not in the current overrides set (or a different override for the same package is in the
-    /// overrides set), then the previously used override was incorrect (insufficient) and an error
-    /// must be reported.
-    fn override_verify(
-        &self,
-        pkg: &Package,
-        name: PM::PackageName,
-        overrides: &BTreeMap<PM::PackageName, Package>,
-    ) -> Result<()> {
-        // check if any (should be 0 or 1) edges are the overrides of pkg
-        let pkg_overrides: Vec<_> = self
-            .package_graph
-            .neighbors_directed(name, Direction::Incoming)
-            .filter(|src| {
-                // unwrap is safe as all edges have a Dependency weight
-                self.package_graph
-                    .edge_weight(*src, name)
-                    .unwrap()
-                    .dep_override
-            })
-            .collect();
-
-        if !pkg_overrides.is_empty() {
-            let Some(overridden_pkg) = overrides.get(&name) else {
-                bail!("Incorrect override of {} in {} (an override should dominate all uses of the overridden package)", name, pkg_overrides[0]);
-            };
-            if overridden_pkg != pkg {
-                // This should never happen as we process overridden dependencies first. Since the
-                // overridden dependency is omitted from the set of all overrides (see a comment in
-                // extend_with_dependencies to see why), a conflicting override will be caught as a
-                // "simple" conflicting dependency
-                bail!(
-                    "Incorrect override of {} in {} (conflicting overrides)",
-                    name,
-                    pkg_overrides[0]
-                );
-            }
-        }
-
-        // recursively check all other packages in the subgraph
-        for dst in self
-            .package_graph
-            .neighbors_directed(name, Direction::Outgoing)
-        {
-            // unwrap is safe as dst is in the graph so it must also be in package table
-            let dst_pkg = self.package_table.get(&dst).unwrap();
-            self.override_verify(dst_pkg, dst, overrides)?;
-        }
-        Ok(())
     }
 
     /// Check that every dependency in the graph, excluding the root package, is present in the
@@ -2035,36 +1424,6 @@ fn deps_equal<'a>(
         .symmetric_difference(&sub_pkg_edges)
         .partition(|dep| combined_edges.contains(dep));
     (combined_pkgs, sub_pkgs)
-}
-
-fn format_deps(msg: &str, dependencies: Vec<(&Dependency, PM::PackageName)>) -> String {
-    let mut s = "".to_string();
-    if !dependencies.is_empty() {
-        s.push_str(msg);
-        for (dep, pkg) in dependencies {
-            s.push_str("\n\t");
-            s.push_str(format!("{}", DependencyTOML(pkg, dep)).as_str());
-        }
-    }
-    s
-}
-
-fn pkg_deps_equal<'a>(
-    pkg_name: Symbol,
-    pkg_graph: &'a DiGraphMap<PM::PackageName, Dependency>,
-    sub_graph: &'a DiGraphMap<PM::PackageName, Dependency>,
-) -> (
-    Vec<(&'a Dependency, PM::PackageName)>,
-    Vec<(&'a Dependency, PM::PackageName)>,
-) {
-    let pkg_edges = BTreeSet::from_iter(pkg_graph.edges(pkg_name).map(|(_, pkg, dep)| (dep, pkg)));
-    let sub_pkg_edges =
-        BTreeSet::from_iter(sub_graph.edges(pkg_name).map(|(_, pkg, dep)| (dep, pkg)));
-
-    let (pkg_deps, sub_pkg_deps): (Vec<_>, Vec<_>) = pkg_edges
-        .symmetric_difference(&sub_pkg_edges)
-        .partition(|dep| pkg_edges.contains(dep));
-    (pkg_deps, sub_pkg_deps)
 }
 
 /// Computes dependency hashes but may return None if information about some dependencies is not
