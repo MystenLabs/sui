@@ -12,6 +12,7 @@ import { FEATURES } from '_src/shared/experimentation/features';
 import type { DAppEntry } from '_src/ui/app/components/sui-apps/SuiApp';
 
 import st from './AppsPage.module.scss';
+import { useMemo } from 'react';
 
 type FilterTag = {
     name: string;
@@ -31,16 +32,23 @@ function AppsPage() {
     ];
     const ecosystemApps =
         useFeature<DAppEntry[]>(FEATURES.WALLET_DAPPS).value ?? [];
-    const uniqueAppTags = new Set<FilterTag>();
 
-    ecosystemApps.forEach((app) => {
-        app.tags.forEach((tag) => {
-            uniqueAppTags.add({
+    const uniqueAppTags = useMemo(() => {
+        const tagsSet = new Set<FilterTag>();
+
+        const flattenedTags = ecosystemApps.flatMap((app) =>
+            app.tags.map((tag) => ({
                 name: tag,
                 link: `apps/?tagFilter=${tag.toLowerCase()}`,
-            });
+            }))
+        );
+
+        flattenedTags.forEach((tag) => {
+            tagsSet.add(tag);
         });
-    });
+
+        return [...tagsSet];
+    }, [ecosystemApps]);
 
     const allFilterTags = [...defaultFilterTags, ...uniqueAppTags];
 
