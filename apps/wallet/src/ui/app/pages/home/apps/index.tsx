@@ -15,63 +15,61 @@ import st from './AppsPage.module.scss';
 import { useMemo } from 'react';
 
 type FilterTag = {
-    name: string;
-    link: string;
+	name: string;
+	link: string;
 };
 
 function AppsPage() {
-    const defaultFilterTags: FilterTag[] = [
-        {
-            name: 'Connections',
-            link: 'apps/connected',
-        },
-        {
-            name: 'All',
-            link: 'apps',
-        },
-    ];
-    const ecosystemApps =
-        useFeature<DAppEntry[]>(FEATURES.WALLET_DAPPS).value ?? [];
+	const defaultFilterTags: FilterTag[] = [
+		{
+			name: 'Connections',
+			link: 'apps/connected',
+		},
+		{
+			name: 'All',
+			link: 'apps',
+		},
+	];
+	const ecosystemApps = useFeature<DAppEntry[]>(FEATURES.WALLET_DAPPS).value ?? [];
 
-    const uniqueAppTags = useMemo(() => {
-        const tagSet = new Set<string>();
+	const uniqueAppTags = useMemo(() => {
+		const tagSet = new Set<string>();
 
-        const allTags = ecosystemApps.flatMap((app) => app.tags);
+		const allTags = ecosystemApps.flatMap((app) => app.tags);
 
-        // Filter out dupes, then run a map to generate tag objects
-        return allTags.filter((tag) => {
-            const lowercaseTag = tag.toLowerCase();
+		// Filter out dupes, then run a map to generate tag objects
+		return allTags
+			.filter((tag) => {
+				const lowercaseTag = tag.toLowerCase();
 
-            if (tagSet.has(lowercaseTag)) {
-                return false;
-            }
+				if (tagSet.has(lowercaseTag)) {
+					return false;
+				}
 
-            tagSet.add(lowercaseTag);
-            return true;
-        }).map((tag) => ({
-            name: tag,
-            link: `apps/?tagFilter=${tag.toLowerCase()}`,
-        }));
-    }, [ecosystemApps]);
+				tagSet.add(lowercaseTag);
+				return true;
+			})
+			.map((tag) => ({
+				name: tag,
+				link: `apps/?tagFilter=${tag.toLowerCase()}`,
+			}));
+	}, [ecosystemApps]);
 
-    const allFilterTags = [...defaultFilterTags, ...uniqueAppTags];
+	const allFilterTags = [...defaultFilterTags, ...uniqueAppTags];
 
-    return (
-        <div className={st.container}>
-            <Content>
-                <section>
-                    <FiltersPortal tags={allFilterTags} />
-                    <Routes>
-                        <Route path="/" element={<AppsPlayGround />} />
-                        <Route
-                            path="/connected"
-                            element={<ConnectedAppsCard />}
-                        />
-                    </Routes>
-                </section>
-            </Content>
-        </div>
-    );
+	return (
+		<div className={st.container}>
+			<Content>
+				<section>
+					<FiltersPortal tags={allFilterTags} />
+					<Routes>
+						<Route path="/" element={<AppsPlayGround />} />
+						<Route path="/connected" element={<ConnectedAppsCard />} />
+					</Routes>
+				</section>
+			</Content>
+		</div>
+	);
 }
 
 export default AppsPage;

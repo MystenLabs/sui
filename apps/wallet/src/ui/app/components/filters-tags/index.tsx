@@ -16,8 +16,8 @@ function activeTagsFilter({ isActive }: { isActive: boolean }) {
 
 // TODO: extend this interface to include params and functions for the filter tags
 export interface Props {
-    name: string;
-    link: string;
+	name: string;
+	link: string;
 }
 
 type Tags = {

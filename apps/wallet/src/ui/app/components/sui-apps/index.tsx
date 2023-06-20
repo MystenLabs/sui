@@ -18,72 +18,66 @@ import { prepareLinkToCompare } from '_src/shared/utils';
 import st from './Playground.module.scss';
 
 function AppsPlayGround() {
-    const ecosystemApps = useFeature<DAppEntry[]>(FEATURES.WALLET_DAPPS).value;
-    const location = useLocation();
+	const ecosystemApps = useFeature<DAppEntry[]>(FEATURES.WALLET_DAPPS).value;
+	const location = useLocation();
 
-    const queryParams = new URLSearchParams(location.search);
-    const tagFilter = queryParams.get('tagFilter');
+	const queryParams = new URLSearchParams(location.search);
+	const tagFilter = queryParams.get('tagFilter');
 
-    const filteredEcosystemApps = useMemo(() => {
-        if (!ecosystemApps) {
-            return [];
-        } else if (tagFilter) {
-            return ecosystemApps.filter((app) => !app.tags.includes(tagFilter));
-        }
-        return ecosystemApps;
-    }, [ecosystemApps, tagFilter]);
+	const filteredEcosystemApps = useMemo(() => {
+		if (!ecosystemApps) {
+			return [];
+		} else if (tagFilter) {
+			return ecosystemApps.filter((app) => !app.tags.includes(tagFilter));
+		}
+		return ecosystemApps;
+	}, [ecosystemApps, tagFilter]);
 
-    const allPermissions = useAppSelector(permissionsSelectors.selectAll);
-    const linkToPermissionID = useMemo(() => {
-        const map = new Map<string, string>();
-        for (const aPermission of allPermissions) {
-            map.set(prepareLinkToCompare(aPermission.origin), aPermission.id);
-            if (aPermission.pagelink) {
-                map.set(
-                    prepareLinkToCompare(aPermission.pagelink),
-                    aPermission.id
-                );
-            }
-        }
-        return map;
-    }, [allPermissions]);
+	const allPermissions = useAppSelector(permissionsSelectors.selectAll);
+	const linkToPermissionID = useMemo(() => {
+		const map = new Map<string, string>();
+		for (const aPermission of allPermissions) {
+			map.set(prepareLinkToCompare(aPermission.origin), aPermission.id);
+			if (aPermission.pagelink) {
+				map.set(prepareLinkToCompare(aPermission.pagelink), aPermission.id);
+			}
+		}
+		return map;
+	}, [allPermissions]);
 
-    return (
-        <div className={cl(st.container)}>
-            <div className="flex justify-center mb-4">
-                <Heading variant="heading6" color="gray-90" weight="semibold">
-                    Sui Apps
-                </Heading>
-            </div>
+	return (
+		<div className={cl(st.container)}>
+			<div className="flex justify-center mb-4">
+				<Heading variant="heading6" color="gray-90" weight="semibold">
+					Sui Apps
+				</Heading>
+			</div>
 
-            {filteredEcosystemApps?.length ? (
-                <div className="p-4 bg-gray-40 rounded-xl">
-                    <Text variant="pBodySmall" color="gray-75" weight="normal">
-                        Apps below are actively curated but do not indicate any
-                        endorsement or relationship with Sui Wallet. Please
-                        DYOR.
-                    </Text>
-                </div>
-            ) : null}
+			{filteredEcosystemApps?.length ? (
+				<div className="p-4 bg-gray-40 rounded-xl">
+					<Text variant="pBodySmall" color="gray-75" weight="normal">
+						Apps below are actively curated but do not indicate any endorsement or relationship with
+						Sui Wallet. Please DYOR.
+					</Text>
+				</div>
+			) : null}
 
-            {filteredEcosystemApps?.length ? (
-                <div className={st.apps}>
-                    {filteredEcosystemApps.map((app) => (
-                        <SuiApp
-                            key={app.link}
-                            {...app}
-                            permissionID={linkToPermissionID.get(
-                                prepareLinkToCompare(app.link)
-                            )}
-                            displayType="full"
-                        />
-                    ))}
-                </div>
-            ) : (
-                <SuiAppEmpty displayType="full" />
-            )}
-        </div>
-    );
+			{filteredEcosystemApps?.length ? (
+				<div className={st.apps}>
+					{filteredEcosystemApps.map((app) => (
+						<SuiApp
+							key={app.link}
+							{...app}
+							permissionID={linkToPermissionID.get(prepareLinkToCompare(app.link))}
+							displayType="full"
+						/>
+					))}
+				</div>
+			) : (
+				<SuiAppEmpty displayType="full" />
+			)}
+		</div>
+	);
 }
 
 export default AppsPlayGround;
