@@ -94,17 +94,14 @@ pub struct Package {
     pub version: Option<PM::Version>,
     /// Optional field set if the package was externally resolved.
     resolver: Option<Symbol>,
-    /// Set if the package was inserted while some overrides were active.
-    overridden_path: bool,
 }
 
 impl PartialEq for Package {
     fn eq(&self, other: &Self) -> bool {
-        // comparison should neither contain overridden_path (as it's only used to determine if
-        // package should be re-inspected) nor the type of resolver (as it would actually lead to
-        // incorrect result when comparing packages during insertion of externally resolved ones -
-        // an internally resolved existing package in the graph would not be recognized as a
-        // potential different version of the externally resolved one)
+        // comparison omit the type of resolver (as it would actually lead to incorrect result when
+        // comparing packages during insertion of externally resolved ones - an internally resolved
+        // existing package in the graph would not be recognized as a potential different version of
+        // the externally resolved one)
         self.kind == other.kind && self.version == other.version
     }
 }
@@ -315,7 +312,6 @@ impl DependencyGraph {
                         kind: internal.kind.clone(),
                         version: internal.version,
                         resolver: None,
-                        overridden_path: false,
                     };
                     dep_pkg.kind.reroot(parent)?;
                     overrides.insert(*dep_pkg_name, dep_pkg);
@@ -452,7 +448,6 @@ impl DependencyGraph {
                     kind: kind.clone(),
                     version: version.clone(),
                     resolver: None,
-                    overridden_path: false,
                 };
                 dep_pkg.kind.reroot(parent)?;
                 self.package_graph.add_edge(
@@ -894,7 +889,6 @@ impl DependencyGraph {
                 kind: source.kind,
                 version: source.version,
                 resolver,
-                overridden_path: false,
             };
 
             match package_table.entry(pkg_name) {
@@ -1206,7 +1200,6 @@ impl<'a> fmt::Display for PackageTOML<'a> {
             kind,
             version,
             resolver: _,
-            overridden_path: _,
         } = self.0;
 
         f.write_str("{ ")?;

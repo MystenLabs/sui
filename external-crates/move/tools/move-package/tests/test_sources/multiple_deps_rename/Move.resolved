@@ -33,7 +33,6 @@ ResolvedGraph {
                 ),
                 version: None,
                 resolver: None,
-                overridden_path: false,
             },
             "D": Package {
                 kind: Local(
@@ -41,7 +40,6 @@ ResolvedGraph {
                 ),
                 version: None,
                 resolver: None,
-                overridden_path: false,
             },
         },
         always_deps: {

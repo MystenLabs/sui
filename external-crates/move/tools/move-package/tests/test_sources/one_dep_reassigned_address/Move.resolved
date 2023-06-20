@@ -23,7 +23,6 @@ ResolvedGraph {
                 ),
                 version: None,
                 resolver: None,
-                overridden_path: false,
             },
         },
         always_deps: {
