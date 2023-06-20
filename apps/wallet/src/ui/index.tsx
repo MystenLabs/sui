@@ -47,11 +47,11 @@ function renderApp() {
 	}
 	const root = createRoot(rootDom);
 	root.render(
-		// <StrictMode>
-		<Provider store={store}>
-			<AppWrapper />
-		</Provider>,
-		// </StrictMode>,
+		<StrictMode>
+			<Provider store={store}>
+				<AppWrapper />
+			</Provider>
+		</StrictMode>,
 	);
 }
 

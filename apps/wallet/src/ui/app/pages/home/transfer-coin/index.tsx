@@ -3,7 +3,7 @@
 
 import { useCoinMetadata } from '@mysten/core';
 import { ArrowRight16, ArrowLeft16 } from '@mysten/icons';
-import { getTransactionDigest } from '@mysten/sui.js';
+import { Coin, getTransactionDigest } from '@mysten/sui.js';
 import * as Sentry from '@sentry/react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
@@ -89,7 +89,7 @@ function TransferCoinPage() {
 			queryClient.invalidateQueries(['coin-balance']);
 
 			ampli.sentCoins({
-				coinType: coinType!,
+				coinSymbol: Coin.getCoinSymbol(coinType!),
 			});
 
 			const receiptUrl = `/receipt?txdigest=${encodeURIComponent(

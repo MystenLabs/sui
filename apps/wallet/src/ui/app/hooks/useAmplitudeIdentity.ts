@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useEffect } from 'react';
+import Browser from 'webextension-polyfill';
 
 import { useActiveAccount } from './useActiveAccount';
 import useAppSelector from './useAppSelector';
