@@ -118,7 +118,7 @@ function MyTokens() {
 								<PinButton
 									unpin
 									onClick={() => {
-										ampli.unpinnedCoin({ coinType: coinBalance.coinType });
+										ampli.unpinnedCoin({ coinSymbol: Coin.getCoinSymbol(coinBalance.coinType) });
 										unpinCoinType(coinBalance.coinType);
 									}}
 								/>
@@ -144,7 +144,7 @@ function MyTokens() {
 							centerAction={
 								<PinButton
 									onClick={() => {
-										ampli.pinnedCoin({ coinType: coinBalance.coinType });
+										ampli.pinnedCoin({ coinSymbol: Coin.getCoinSymbol(coinBalance.coinType) });
 										pinCoinType(coinBalance.coinType);
 									}}
 								/>

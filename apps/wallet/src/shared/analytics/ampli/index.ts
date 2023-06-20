@@ -207,16 +207,16 @@ export interface OpenedConnectLedgerFlowProperties {
 
 export interface PinnedCoinProperties {
 	/**
-	 * The type of coin (e.g., SUI)
+	 * The symbol of a coin (e.g., SUI or ETH).
 	 */
-	coinType: string;
+	coinSymbol: string;
 }
 
 export interface SelectedCoinProperties {
 	/**
-	 * The type of coin (e.g., SUI)
+	 * The symbol of a coin (e.g., SUI or ETH).
 	 */
-	coinType: string;
+	coinSymbol: string;
 	/**
 	 * The total balance of the selected coin that the user has.
 	 */
@@ -244,9 +244,9 @@ export interface SelectedValidatorProperties {
 
 export interface SentCoinsProperties {
 	/**
-	 * The type of coin that was sent.
+	 * The symbol of a coin (e.g., SUI or ETH).
 	 */
-	coinType: string;
+	coinSymbol: string;
 }
 
 export interface StakedSuiProperties {
@@ -266,9 +266,9 @@ export interface SwitchedAccountProperties {
 
 export interface UnpinnedCoinProperties {
 	/**
-	 * The type of coin (e.g., SUI)
+	 * The symbol of a coin (e.g., SUI or ETH).
 	 */
-	coinType: string;
+	coinSymbol: string;
 }
 
 export interface UnstakedSuiProperties {
@@ -880,7 +880,7 @@ export class Ampli {
    *
    * Owner: William Robertson
    *
-   * @param properties The event's properties (e.g. coinType)
+   * @param properties The event's properties (e.g. coinSymbol)
    * @param options Amplitude event options.
    */
   pinnedCoin(
@@ -899,7 +899,7 @@ export class Ampli {
    *
    * Owner: Jon Shek
    *
-   * @param properties The event's properties (e.g. coinType)
+   * @param properties The event's properties (e.g. coinSymbol)
    * @param options Amplitude event options.
    */
   selectedCoin(
@@ -937,7 +937,7 @@ export class Ampli {
    *
    * Owner: Jon Shek
    *
-   * @param properties The event's properties (e.g. coinType)
+   * @param properties The event's properties (e.g. coinSymbol)
    * @param options Amplitude event options.
    */
   sentCoins(
@@ -994,7 +994,7 @@ export class Ampli {
    *
    * Owner: William Robertson
    *
-   * @param properties The event's properties (e.g. coinType)
+   * @param properties The event's properties (e.g. coinSymbol)
    * @param options Amplitude event options.
    */
   unpinnedCoin(
