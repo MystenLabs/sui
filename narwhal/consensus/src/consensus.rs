@@ -37,35 +37,54 @@ pub type Dag = BTreeMap<Round, HashMap<AuthorityIdentifier, (CertificateDigest, 
 
 #[derive(Default)]
 pub struct LeaderSwapTable {
-    pub good_nodes: Vec<AuthorityIdentifier>,
-    pub bad_nodes: HashSet<AuthorityIdentifier>,
+    /// The round on which the leader swap table get into effect.
+    _round: Round,
+    /// The list of `f` (by stake) authorities with best scores as those defined by the provided `ReputationScores`.
+    /// Those authorities will be used in the position of the `bad_nodes` on the final leader schedule.
+    good_nodes: Vec<AuthorityIdentifier>,
+    /// The set of `f` (by stake) authorities with the worst scores as those defined by the provided `ReputationScores`.
+    /// Every time where such authority is elected as leader on the schedule, it will swapped by one
+    /// of the authorities of the `good_nodes`.
+    bad_nodes: HashSet<AuthorityIdentifier>,
 }
 
 impl LeaderSwapTable {
     // constructs a new table based on the provided reputation scores.
-    pub fn new(committee: &Committee, reputation_scores: ReputationScores) -> Self {
+    pub fn new(committee: &Committee, round: Round, reputation_scores: ReputationScores) -> Self {
         assert!(reputation_scores.final_of_schedule, "Only reputation scores that have been calculated on the end of a schedule are accepted");
 
-        let good_nodes = Self::good_nodes(&reputation_scores, committee);
-        let bad_nodes = Self::bad_nodes(&reputation_scores, committee);
+        // calculating the good nodes
+        let authorities = reputation_scores.authorities_by_score_desc();
+        let good_nodes = Self::retrieve_first_nodes(committee, authorities.into_iter());
 
-        debug!("Reputation scores: {:?}", reputation_scores);
-        debug!("Good nodes: {:?}", good_nodes);
-        debug!("Bad nodes: {:?}", bad_nodes);
+        // calculating the bad nodes
+        let authorities = reputation_scores.authorities_by_score_desc();
+
+        // we revert the sorted authorities to score ascending so we get the first f low scorers
+        let bad_authorities = Self::retrieve_first_nodes(committee, authorities.into_iter().rev());
+        let bad_nodes = bad_authorities
+            .into_iter()
+            .collect::<HashSet<AuthorityIdentifier>>();
+
+        debug!("Reputation scores on round {round}: {reputation_scores:?}");
+        debug!("Good nodes: {good_nodes:?}");
+        debug!("Bad nodes: {bad_nodes:?}");
 
         Self {
+            _round: round,
             good_nodes,
             bad_nodes,
         }
     }
 
-    /// Checks whether the provided leader is a bad performer and needs to be swapped for the schedule
+    /// Checks whether the provided leader is a bad performer and needs to be swapped in the schedule
     /// with a good performer. If not, then the method returns None. Otherwise the leader to swap with
     /// is returned instead. The `leader_round` represents the DAG round on which the provided AuthorityIdentifier
     /// is a leader on and is used as a seed to random function in order to calculate the good node that
-    /// will swap for that round the bad node. We are intentionally not doing weighted randomness as
+    /// will swap in that round with the bad node. We are intentionally not doing weighted randomness as
     /// we want to give to all the good nodes equal opportunity to get swapped with bad nodes and not
-    /// have one node with enough stake dominating on the final schedule.
+    /// have one node with enough stake end up swapping bad nodes more frequently than the others on
+    /// the final schedule.
     pub fn swap(
         &self,
         leader: &AuthorityIdentifier,
@@ -93,35 +112,10 @@ impl LeaderSwapTable {
         None
     }
 
-    /// Retrieves the f by stake nodes with the best scores.
-    fn good_nodes(
-        reputation_scores: &ReputationScores,
-        committee: &Committee,
-    ) -> Vec<AuthorityIdentifier> {
-        let authorities = reputation_scores.authorities_by_score_desc();
-
-        Self::retrieve_first_f_nodes(committee, authorities.into_iter())
-    }
-
-    /// Retrieves the f by stake nodes with the worst scores
-    fn bad_nodes(
-        reputation_scores: &ReputationScores,
-        committee: &Committee,
-    ) -> HashSet<AuthorityIdentifier> {
-        let authorities = reputation_scores.authorities_by_score_desc();
-
-        // we revert the sorted authorities to score ascending so we get the first f low scorers
-        let bad_authorities =
-            Self::retrieve_first_f_nodes(committee, authorities.into_iter().rev());
-        bad_authorities
-            .into_iter()
-            .collect::<HashSet<AuthorityIdentifier>>()
-    }
-
     // Retrieves the first f by stake nodes provided by the iterator `authorities`. It's the
     // caller's responsibility to ensure that the elements of the `authorities` input is already
     // sorted.
-    fn retrieve_first_f_nodes(
+    fn retrieve_first_nodes(
         committee: &Committee,
         authorities: impl Iterator<Item = (AuthorityIdentifier, u64)>,
     ) -> Vec<AuthorityIdentifier> {

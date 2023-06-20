@@ -331,7 +331,7 @@ async fn test_leader_swap_table() {
         scores.add_score(*id, score as u64);
     }
 
-    let table = LeaderSwapTable::new(&committee, scores);
+    let table = LeaderSwapTable::new(&committee, 2, scores);
 
     // Only one bad authority should be calculated since all have equal stake
     assert_eq!(table.bad_nodes.len(), 1);
@@ -366,7 +366,7 @@ async fn test_leader_swap_table() {
     }
 
     // We expect the first 3 authorities (f) to be amongst the bad nodes
-    let table = LeaderSwapTable::new(&committee, scores);
+    let table = LeaderSwapTable::new(&committee, 2, scores);
 
     assert_eq!(table.bad_nodes.len(), 3);
     assert!(table.bad_nodes.contains(&authority_ids[0]));
