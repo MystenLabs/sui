@@ -42,9 +42,11 @@ module package::mod {
 }
 ```
 
-If the function `mod::foo()` should not be `public`ly accessible and, for any reason, needs to be tested/used in tests outside
-of `package::mod`, declare the test module - e.g. `test_mod` - a `friend` of the function's module in `package::mod`, and
-change the function's declaration to be `public(friend)`:
+If you don't intend the function `mod::foo()` to be `public`, but you want the ability to test it outside
+of `package::mod`, then create a test module and declare it a `friend` of the function's module in `package::mod`.
+
+To make the test function available, change the `mod::foo()` function declaration to `public(friend)`, as in the
+following example:
 
 ```move
 module package::mod {
@@ -54,8 +56,9 @@ module package::mod {
 }
 ```
 
-As mentioned above, the signatures of `public(friend)` functions can be changed at will in future package versions.
-Note that, in this case, commands such as `sui move build`/`sui move coverage` will need the addition of the `--test` flag.
+As mentioned previously, you can always change the signatures of `public(friend)` functions in future package versions.
+
+When using commands such as `sui move build` and `sui move coverage` with these modules, you must include the `--test` flag. See [Build and Test the Sui Move Package](move/build-test.md#building-your-package) for more information on building packages.
 
 # Apps
 
