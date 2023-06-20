@@ -7,7 +7,7 @@
 use crate::bullshark::Bullshark;
 use crate::utils::gc_round;
 use crate::{metrics::ConsensusMetrics, ConsensusError, SequenceNumber};
-use config::{Authority, AuthorityIdentifier, Committee};
+use config::{Authority, AuthorityIdentifier, Committee, Stake};
 use fastcrypto::hash::Hash;
 use mysten_metrics::metered_channel;
 use mysten_metrics::spawn_logged_monitored_task;
@@ -15,6 +15,7 @@ use parking_lot::RwLock;
 use rand::prelude::SliceRandom;
 use rand::rngs::StdRng;
 use rand::SeedableRng;
+use std::fmt::{Debug, Formatter};
 use std::{
     cmp::{max, Ordering},
     collections::{BTreeMap, BTreeSet, HashMap},
@@ -36,10 +37,10 @@ pub mod consensus_tests;
 /// The representation of the DAG in memory.
 pub type Dag = BTreeMap<Round, HashMap<AuthorityIdentifier, (CertificateDigest, Certificate)>>;
 
-#[derive(Default, Clone, Debug)]
+#[derive(Default, Clone)]
 pub struct LeaderSwapTable {
     /// The round on which the leader swap table get into effect.
-    _round: Round,
+    round: Round,
     /// The list of `f` (by stake) authorities with best scores as those defined by the provided `ReputationScores`.
     /// Those authorities will be used in the position of the `bad_nodes` on the final leader schedule.
     good_nodes: Vec<Authority>,
@@ -47,6 +48,25 @@ pub struct LeaderSwapTable {
     /// Every time where such authority is elected as leader on the schedule, it will swapped by one
     /// of the authorities of the `good_nodes`.
     bad_nodes: HashMap<AuthorityIdentifier, Authority>,
+}
+
+impl Debug for LeaderSwapTable {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&format!(
+            "LeaderSwapTable round:{}, good_nodes:{:?} with stake:{}, bad_nodes:{:?} with stake:{}",
+            self.round,
+            self.good_nodes
+                .iter()
+                .map(|a| a.id())
+                .collect::<Vec<AuthorityIdentifier>>(),
+            self.good_nodes.iter().map(|a| a.stake()).sum::<Stake>(),
+            self.bad_nodes
+                .iter()
+                .map(|a| *a.0)
+                .collect::<Vec<AuthorityIdentifier>>(),
+            self.bad_nodes.iter().map(|a| a.1.stake()).sum::<Stake>(),
+        ))
+    }
 }
 
 impl LeaderSwapTable {
@@ -76,7 +96,7 @@ impl LeaderSwapTable {
         debug!("Reputation scores on round {round}: {reputation_scores:?}");
 
         Self {
-            _round: round,
+            round,
             good_nodes,
             bad_nodes,
         }
