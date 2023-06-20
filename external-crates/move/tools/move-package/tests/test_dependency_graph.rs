@@ -212,16 +212,16 @@ fn merge_simple() {
     )
     .expect("Reading inner");
 
-    assert!(DependencyGraph::merge(
-        &mut outer,
-        &inner,
-        Symbol::from("A"),
-        DependencyMode::Always,
-        &BTreeMap::new(),
-        &BTreeMap::new(),
-        Symbol::from("Root"),
-    )
-    .is_ok());
+    assert!(outer
+        .merge_pkg(
+            &inner,
+            Symbol::from("A"),
+            DependencyMode::Always,
+            &BTreeMap::new(),
+            &BTreeMap::new(),
+            Symbol::from("Root"),
+        )
+        .is_ok());
 
     assert_eq!(
         outer.topological_order(),
@@ -252,16 +252,16 @@ fn merge_into_root() {
     )
     .expect("Reading inner");
 
-    assert!(DependencyGraph::merge(
-        &mut outer,
-        &inner,
-        Symbol::from("Root"),
-        DependencyMode::Always,
-        &BTreeMap::new(),
-        &BTreeMap::new(),
-        Symbol::from("Root"),
-    )
-    .is_ok());
+    assert!(outer
+        .merge_pkg(
+            &inner,
+            Symbol::from("Root"),
+            DependencyMode::Always,
+            &BTreeMap::new(),
+            &BTreeMap::new(),
+            Symbol::from("Root"),
+        )
+        .is_ok());
 
     assert_eq!(
         outer.topological_order(),
@@ -293,8 +293,7 @@ fn merge_detached() {
     .expect("Reading inner");
 
     let dep_graphs = BTreeMap::from([(Symbol::from("OtherDep"), (inner, false))]);
-    let Err(err) = DependencyGraph::merge_all(
-        &mut outer,
+    let Err(err) = outer.merge_all(
         dep_graphs,
         DependencyMode::Always,
         &BTreeMap::new(),
@@ -329,8 +328,7 @@ fn merge_after_calculating_always_deps() {
     .expect("Reading inner");
 
     let dep_graphs = BTreeMap::from([(Symbol::from("A"), (inner, false))]);
-    let Err(err) = DependencyGraph::merge_all(
-        &mut outer,
+    let Err(err) = outer.merge_all(
         dep_graphs,
         DependencyMode::Always,
         &BTreeMap::new(),
@@ -368,16 +366,16 @@ fn merge_overlapping() {
     )
     .expect("Reading inner");
 
-    assert!(DependencyGraph::merge(
-        &mut outer,
-        &inner,
-        Symbol::from("B"),
-        DependencyMode::Always,
-        &BTreeMap::new(),
-        &BTreeMap::new(),
-        Symbol::from("Root"),
-    )
-    .is_ok());
+    assert!(outer
+        .merge_pkg(
+            &inner,
+            Symbol::from("B"),
+            DependencyMode::Always,
+            &BTreeMap::new(),
+            &BTreeMap::new(),
+            Symbol::from("Root"),
+        )
+        .is_ok());
 }
 
 #[test]
@@ -403,8 +401,7 @@ fn merge_overlapping_different_deps() {
     )
     .expect("Reading inner");
 
-    let Err(err) = DependencyGraph::merge(
-        &mut outer,
+    let Err(err) = outer.merge_pkg(
         &inner,
         Symbol::from("B"),
         DependencyMode::Always,
@@ -441,8 +438,7 @@ fn merge_cyclic() {
     )
     .expect("Reading inner");
 
-    let Err(err) = DependencyGraph::merge(
-        &mut outer,
+    let Err(err) = outer.merge_pkg(
         &inner,
         Symbol::from("B"),
         DependencyMode::Always,

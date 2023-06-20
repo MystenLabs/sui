@@ -53,22 +53,14 @@ use super::{
 /// package dominates all the conflicting "uses" of the dependent package. These overrides are taken
 /// into consideration during the dependency graph construction.
 ///
-/// When constructing the graph (top to bottom) for internal dependencies (external dependencies are
-/// batch-processed at the end of the graph construction), we maintain a set of the current
-/// overrides collected when processing dependencies (starting with an empty set at the root package).
-///
-/// When processing dependencies of a given package, we process overrides first to collect a list of
-/// overrides to be added to the set (if they are not yet in the set - outer overrides "win") and
-/// then process non-overridden dependencies using a freshly updated overrides set. We use this
-/// overrides set when attempting to insert a package into the graph (with an entry for this package
-/// already existing or not) via the `process_graph_entry` function. After a package is fully
-/// processed, remove its own overrides from the set.
+/// If an up-to-date lock file for the dependency graph being constructed is not available, the
+/// graph construction proceeds bottom-up, by either reading sub-graphs from their respective lock
+/// files (if they are up-to-date) or by constructing sub-graphs by exploring all their (direct and
+/// indirect) dependencies specified in manifest files. These sub-graphs are then successively
+/// merged into larger graphs until the main combined graph is computed.
 ///
 /// External dependencies are provided by external resolvers as fully formed dependency sub-graphs
-/// that need to be inserted into the "main" dependency graph being constructed. Whenever an
-/// external dependency is encountered, it's "recorded" along with the set of overrides available at
-/// the point of sub-graph insertion, and batch-merged (using the `merge` function) after
-/// construction of the entire internally resolved graph is completed.
+/// that need to be inserted into the "main" dependency graph being constructed.
 #[derive(Debug, Clone)]
 pub struct DependencyGraph {
     /// Path to the root package and its name (according to its manifest)
@@ -401,68 +393,28 @@ impl DependencyGraph {
         // edges. See diamond_problem_dep_transitive_nested_override for an example (in tests) of
         // such situation.
         for (dep_pkg_name, (sub_graph, _)) in override_graphs {
-            if let Some(dep) = dependencies.get(dep_pkg_name) {
-                if !self.insert_direct_dep(
-                    dep,
-                    *dep_pkg_name,
-                    sub_graph,
-                    mode,
-                    overrides,
-                    dev_overrides,
-                    root_package,
-                    parent,
-                )? {
-                    continue;
-                }
-            }
-
-            if !self.package_graph.contains_node(sub_graph.root_package) {
-                bail!(
-                    "Can't merge dependencies for '{}' because nothing depends on it",
-                    sub_graph.root_package
-                );
-            }
-
-            self.merge(
+            self.merge_subgraph(
                 sub_graph,
-                sub_graph.root_package,
+                *dep_pkg_name,
                 mode,
                 overrides,
                 dev_overrides,
                 root_package,
+                parent,
+                dependencies,
             )?;
         }
 
         for (dep_pkg_name, (sub_graph, _)) in graphs {
-            if let Some(dep) = dependencies.get(dep_pkg_name) {
-                if !self.insert_direct_dep(
-                    dep,
-                    *dep_pkg_name,
-                    sub_graph,
-                    mode,
-                    overrides,
-                    dev_overrides,
-                    root_package,
-                    parent,
-                )? {
-                    continue;
-                }
-            }
-
-            if !self.package_graph.contains_node(sub_graph.root_package) {
-                bail!(
-                    "Can't merge dependencies for '{}' because nothing depends on it",
-                    sub_graph.root_package
-                );
-            }
-
-            self.merge(
+            self.merge_subgraph(
                 sub_graph,
-                sub_graph.root_package,
+                *dep_pkg_name,
                 mode,
                 overrides,
                 dev_overrides,
                 root_package,
+                parent,
+                dependencies,
             )?;
         }
 
@@ -538,13 +490,60 @@ impl DependencyGraph {
         Ok(true)
     }
 
+    /// Merges a sub-graph representing parent graph's dependency (`dep_pkg_name`) with the combined
+    /// graph.
+    fn merge_subgraph(
+        &mut self,
+        sub_graph: &DependencyGraph,
+        dep_pkg_name: PM::PackageName,
+        mode: DependencyMode,
+        overrides: &BTreeMap<PM::PackageName, Package>,
+        dev_overrides: &BTreeMap<PM::PackageName, Package>,
+        root_package: PM::PackageName,
+        parent: &PM::DependencyKind,
+        dependencies: &PM::Dependencies,
+    ) -> Result<()> {
+        if let Some(dep) = dependencies.get(&dep_pkg_name) {
+            if !self.insert_direct_dep(
+                dep,
+                dep_pkg_name,
+                sub_graph,
+                mode,
+                overrides,
+                dev_overrides,
+                root_package,
+                parent,
+            )? {
+                return Ok(());
+            }
+        }
+
+        if !self.package_graph.contains_node(sub_graph.root_package) {
+            bail!(
+                "Can't merge dependencies for '{}' because nothing depends on it",
+                sub_graph.root_package
+            );
+        }
+
+        self.merge_pkg(
+            sub_graph,
+            sub_graph.root_package,
+            mode,
+            overrides,
+            dev_overrides,
+            root_package,
+        )?;
+
+        Ok(())
+    }
+
     /// Recursively merges package from a sub-graph with the main combined graph. The sub-graph is
     /// traversed in a depth-first manner, successively adding packages (via the `resolve_pkg`
     /// function) and their connecting edges (between `from_pkg_name and
     /// `to_pkg_name`). Additionally, during traversal the algorithm detects which of the
     /// sub-graph's packages need to be overridden (in which case their dependencies in the
     /// sub-graph should no longer be inserted into the combined package).
-    pub fn merge(
+    pub fn merge_pkg(
         &mut self,
         sub_graph: &DependencyGraph,
         from_pkg_name: PM::PackageName,
@@ -592,7 +591,7 @@ impl DependencyGraph {
                 continue;
             }
 
-            self.merge(
+            self.merge_pkg(
                 sub_graph,
                 to_pkg_name,
                 mode,
