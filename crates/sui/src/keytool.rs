@@ -726,7 +726,7 @@ impl KeyToolCommand {
                 let tx_bytes = Base64::decode(&tx_bytes)
                     .map_err(|e| anyhow!("Invalid base64 key: {:?}", e))?;
                 let tx_data: TransactionData = bcs::from_bytes(&tx_bytes)?;
-                println!("Transaction data: {:?}", tx_data);
+                eprintln!("Transaction data: {:?}", tx_data);
                 CommandOutput::DecodeTxBytes(tx_data)
             }
 
@@ -734,8 +734,8 @@ impl KeyToolCommand {
                 // todo: unhardcode keypair and jwt_randomness and max_epoch.
                 let kp: Ed25519KeyPair = get_key_pair_from_rng(&mut StdRng::from_seed([0; 32])).1;
                 let skp = SuiKeyPair::Ed25519(kp.copy());
-                println!("Ephemeral pubkey: {:?}", skp.public().encode_base64());
-                println!("Ephemeral keypair: {:?}", skp.encode_base64());
+                eprintln!("Ephemeral pubkey: {:?}", skp.public().encode_base64());
+                eprintln!("Ephemeral keypair: {:?}", skp.encode_base64());
 
                 // Nonce is defined as the base64Url encoded of the poseidon hash of 4 inputs:
                 // first half of eph_pubkey bytes in BigInt, second half, max_epoch, randomness.
@@ -753,7 +753,7 @@ impl KeyToolCommand {
                 )
                 .unwrap();
                 let hash = poseidon.hash(vec![first, second, max_epoch, jwt_randomness])?;
-                println!("Nonce: {:?}", hash.to_string());
+                eprintln!("Nonce: {:?}", hash.to_string());
                 CommandOutput::ZkLogInPrepare(ZkLogInPrepare {
                     ephemeral_pubkey: skp.public().encode_base64(),
                     ephemeral_keypair: skp.encode_base64(),
@@ -767,11 +767,11 @@ impl KeyToolCommand {
                     OAuthProvider::Google.get_config().0.to_owned(),
                     SupportedKeyClaim::Sub.to_string(),
                 );
-                println!("Address params: {:?}", address_params);
+                eprintln!("Address params: {:?}", address_params);
                 hasher.update(bcs::to_bytes(&address_params).unwrap());
                 hasher.update(big_int_str_to_bytes(&address_seed));
                 let user_address = SuiAddress::from_bytes(hasher.finalize().digest)?;
-                println!("Sui Address: {:?}", user_address);
+                eprintln!("Sui Address: {:?}", user_address);
                 CommandOutput::GenerateZkLoginAddress(user_address, address_params)
             }
 
@@ -788,7 +788,7 @@ impl KeyToolCommand {
                     Signature::from_str(&user_signature).map_err(|e| anyhow!(e))?,
                 );
                 let sig = GenericSignature::from(authenticator);
-                println!(
+                eprintln!(
                     "ZkLogin Authenticator Signature Serialized: {:?}",
                     sig.encode_base64()
                 );
