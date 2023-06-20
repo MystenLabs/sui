@@ -46,27 +46,34 @@ export function usePageView() {
 	}, [activeNetwork, location, growthBook, apiEnv, customRPC]);
 
 	useEffect(() => {
-		ampli.openedWalletExtension();
-	}, []);
-}
-
-export function useAmplitudeUserProperties() {
-	const location = useLocation();
-	const { apiEnv, customRPC } = useAppSelector((state) => state.app);
-	const activeNetwork = customRPC && apiEnv === 'customRPC' ? customRPC : apiEnv.toUpperCase();
-
-	useEffect(() => {
 		ampli.identify(undefined, {
 			active_network: activeNetwork,
+			active_account_type: '',
 		});
 	}, [activeNetwork]);
 
 	useEffect(() => {
-		ampli.identify(undefined, {
-			active_network: activeNetwork,
-		});
+		ampli.openedWalletExtension();
 	}, []);
 }
+
+// export function useAmplitudeUserProperties() {
+// 	const location = useLocation();
+// 	const { apiEnv, customRPC } = useAppSelector((state) => state.app);
+// 	const activeNetwork = customRPC && apiEnv === 'customRPC' ? customRPC : apiEnv.toUpperCase();
+
+// 	useEffect(() => {
+// 		ampli.identify(undefined, {
+// 			active_network: activeNetwork,
+// 		});
+// 	}, [activeNetwork]);
+
+// 	useEffect(() => {
+// 		ampli.identify(undefined, {
+// 			active_network: activeNetwork,
+// 		});
+// 	}, []);
+// }
 
 export function isValidUrl(url: string | null) {
 	if (!url) {

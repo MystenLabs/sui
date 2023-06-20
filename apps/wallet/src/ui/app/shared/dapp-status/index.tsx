@@ -19,10 +19,10 @@ import { appDisconnect } from './actions';
 import Loading from '_components/loading';
 import { useAppDispatch, useAppSelector } from '_hooks';
 import { createDappStatusSelector } from '_redux/slices/permissions';
+import { ampli } from '_src/shared/analytics/ampli';
 import { trackEvent } from '_src/shared/plausible';
 
 import st from './DappStatus.module.scss';
-import { ampli } from '_src/shared/analytics/ampli';
 
 function DappStatus() {
 	const dispatch = useAppDispatch();

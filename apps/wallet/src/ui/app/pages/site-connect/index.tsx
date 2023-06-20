@@ -14,11 +14,11 @@ import Loading from '_components/loading';
 import { UserApproveContainer } from '_components/user-approve-container';
 import { useAppDispatch, useAppSelector } from '_hooks';
 import { permissionsSelectors, respondToPermissionRequest } from '_redux/slices/permissions';
+import { ampli } from '_src/shared/analytics/ampli';
 
 import type { RootState } from '_redux/RootReducer';
 
 import st from './SiteConnectPage.module.scss';
-import { ampli } from '_src/shared/analytics/ampli';
 
 function SiteConnectPage() {
 	const { requestID } = useParams();

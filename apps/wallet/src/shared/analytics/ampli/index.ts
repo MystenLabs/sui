@@ -201,11 +201,22 @@ export interface OpenedConnectLedgerFlowProperties {
 	sourceFlow: string;
 }
 
-export interface SelectedCoinProperties {
+export interface PinnedCoinProperties {
 	/**
-	 * The type of coin that was selected.
+	 * The type of coin (e.g., SUI)
 	 */
 	coinType: string;
+}
+
+export interface SelectedCoinProperties {
+	/**
+	 * The type of coin (e.g., SUI)
+	 */
+	coinType: string;
+	/**
+	 * The total balance of the selected coin that the user has.
+	 */
+	totalBalance: string;
 }
 
 export interface SelectedValidatorProperties {
@@ -237,43 +248,30 @@ export interface SentCoinsProperties {
 export interface StakedSuiProperties {
 	/**
 	 * The amount of SUI staked.
-	 *
-	 * | Rule | Value |
-	 * |---|---|
-	 * | Type | number |
 	 */
-	stakedAmount: number;
+	stakedAmount: string;
 	/**
 	 * The address of the selected validator.
 	 */
 	validatorAddress: string;
-	/**
-	 * The name of the selected validator.
-	 */
-	validatorName: string;
 }
 
 export interface SwitchedAccountProperties {
 	toAccountType: string;
 }
 
-export interface UnstakedSuiProperties {
+export interface UnpinnedCoinProperties {
 	/**
-	 * The amount of SUI staked.
-	 *
-	 * | Rule | Value |
-	 * |---|---|
-	 * | Type | number |
+	 * The type of coin (e.g., SUI)
 	 */
-	stakedAmount: number;
+	coinType: string;
+}
+
+export interface UnstakedSuiProperties {
 	/**
 	 * The address of the selected validator.
 	 */
 	validatorAddress: string;
-	/**
-	 * The name of the selected validator.
-	 */
-	validatorName: string;
 }
 
 export interface VisitedFiatOnRampProperties {
@@ -395,6 +393,14 @@ export class OpenedWalletExtension implements BaseEvent {
 	event_type = 'opened wallet extension';
 }
 
+export class PinnedCoin implements BaseEvent {
+	event_type = 'pinned coin';
+
+	constructor(public event_properties: PinnedCoinProperties) {
+		this.event_properties = event_properties;
+	}
+}
+
 export class SelectedCoin implements BaseEvent {
 	event_type = 'selected coin';
 
@@ -431,6 +437,14 @@ export class SwitchedAccount implements BaseEvent {
 	event_type = 'switched account';
 
 	constructor(public event_properties: SwitchedAccountProperties) {
+		this.event_properties = event_properties;
+	}
+}
+
+export class UnpinnedCoin implements BaseEvent {
+	event_type = 'unpinned coin';
+
+	constructor(public event_properties: UnpinnedCoinProperties) {
 		this.event_properties = event_properties;
 	}
 }
@@ -854,6 +868,25 @@ export class Ampli {
   }
 
   /**
+   * pinned coin
+   *
+   * [View in Tracking Plan](https://data.amplitude.com/mystenlabs/Sui%20Wallet/events/main/latest/pinned%20coin)
+   *
+   * When users pin an unrecognized coin on the home page.
+   *
+   * Owner: William Robertson
+   *
+   * @param properties The event's properties (e.g. coinType)
+   * @param options Amplitude event options.
+   */
+  pinnedCoin(
+    properties: PinnedCoinProperties,
+    options?: EventOptions,
+  ) {
+    return this.track(new PinnedCoin(properties), options);
+  }
+
+  /**
    * selected coin
    *
    * [View in Tracking Plan](https://data.amplitude.com/mystenlabs/Sui%20Wallet/events/main/latest/selected%20coin)
@@ -949,6 +982,25 @@ export class Ampli {
   }
 
   /**
+   * unpinned coin
+   *
+   * [View in Tracking Plan](https://data.amplitude.com/mystenlabs/Sui%20Wallet/events/main/latest/unpinned%20coin)
+   *
+   * When users un-pin a recognized coin on the home page.
+   *
+   * Owner: William Robertson
+   *
+   * @param properties The event's properties (e.g. coinType)
+   * @param options Amplitude event options.
+   */
+  unpinnedCoin(
+    properties: UnpinnedCoinProperties,
+    options?: EventOptions,
+  ) {
+    return this.track(new UnpinnedCoin(properties), options);
+  }
+
+  /**
    * unstaked SUI
    *
    * [View in Tracking Plan](https://data.amplitude.com/mystenlabs/Sui%20Wallet/events/main/latest/unstaked%20SUI)
@@ -957,7 +1009,7 @@ export class Ampli {
    *
    * Owner: Jon Shek
    *
-   * @param properties The event's properties (e.g. stakedAmount)
+   * @param properties The event's properties (e.g. validatorAddress)
    * @param options Amplitude event options.
    */
   unstakedSui(
