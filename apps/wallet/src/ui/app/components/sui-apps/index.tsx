@@ -3,7 +3,7 @@
 
 import { useFeature } from '@growthbook/growthbook-react';
 import cl from 'classnames';
-import { useMemo, useState, useEffect } from 'react';
+import { useMemo } from 'react';
 import { useLocation } from 'react-router-dom';
 
 import { permissionsSelectors } from '../../redux/slices/permissions';

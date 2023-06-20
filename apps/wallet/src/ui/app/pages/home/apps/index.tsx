@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useFeature } from '@growthbook/growthbook-react';
+import { useMemo } from 'react';
 import { Route, Routes } from 'react-router-dom';
 
 import { Content } from '_app/shared/bottom-menu-layout';
@@ -12,7 +13,6 @@ import { FEATURES } from '_src/shared/experimentation/features';
 import type { DAppEntry } from '_src/ui/app/components/sui-apps/SuiApp';
 
 import st from './AppsPage.module.scss';
-import { useMemo } from 'react';
 
 type FilterTag = {
 	name: string;
