@@ -92,7 +92,7 @@ pub struct AuthorityPerpetualTables {
     pub(crate) events: DBMap<(TransactionEventsDigest, usize), Event>,
 
     /// DEPRECATED in favor of the table of the same name in authority_per_epoch_store.
-    /// Plese do not add new accessors/callsites.
+    /// Please do not add new accessors/callsites.
     /// When transaction is executed via checkpoint executor, we store association here
     pub(crate) executed_transactions_to_checkpoint:
         DBMap<TransactionDigest, (EpochId, CheckpointSequenceNumber)>,
@@ -275,7 +275,7 @@ impl AuthorityPerpetualTables {
     }
 
     // DEPRECATED as the backing table has been moved to authority_per_epoch_store.
-    // Plese do not add new accessors/callsites.
+    // Please do not add new accessors/callsites.
     pub fn get_checkpoint_sequence_number(
         &self,
         digest: &TransactionDigest,
@@ -373,11 +373,12 @@ impl AuthorityPerpetualTables {
             .is_none())
     }
 
-    pub fn iter_live_object_set(&self) -> LiveSetIter<'_> {
+    pub fn iter_live_object_set(&self, include_wrapped_object: bool) -> LiveSetIter<'_> {
         LiveSetIter {
             iter: self.objects.unbounded_iter(),
             tables: self,
             prev: None,
+            include_wrapped_object,
         }
     }
 
@@ -468,6 +469,8 @@ pub struct LiveSetIter<'a> {
         <DBMap<ObjectKey, StoreObjectWrapper> as Map<'a, ObjectKey, StoreObjectWrapper>>::Iterator,
     tables: &'a AuthorityPerpetualTables,
     prev: Option<(ObjectKey, StoreObjectWrapper)>,
+    /// Whether a wrapped object is considered as a live object.
+    include_wrapped_object: bool,
 }
 
 #[derive(Eq, PartialEq, Debug, Clone, Deserialize, Serialize, Hash)]
@@ -499,20 +502,29 @@ impl LiveObject {
     }
 }
 
-fn store_object_wrapper_to_live_object(
-    tables: &AuthorityPerpetualTables,
-    object_key: ObjectKey,
-    store_object: StoreObjectWrapper,
-) -> Option<LiveObject> {
-    match store_object.migrate().into_inner() {
-        StoreObject::Value(object) => {
-            let object = tables
-                .construct_object(&object_key, object)
-                .expect("Constructing object from store cannot fail");
-            Some(LiveObject::Normal(object))
+impl LiveSetIter<'_> {
+    fn store_object_wrapper_to_live_object(
+        &self,
+        object_key: ObjectKey,
+        store_object: StoreObjectWrapper,
+    ) -> Option<LiveObject> {
+        match store_object.migrate().into_inner() {
+            StoreObject::Value(object) => {
+                let object = self
+                    .tables
+                    .construct_object(&object_key, object)
+                    .expect("Constructing object from store cannot fail");
+                Some(LiveObject::Normal(object))
+            }
+            StoreObject::Wrapped => {
+                if self.include_wrapped_object {
+                    Some(LiveObject::Wrapped(object_key))
+                } else {
+                    None
+                }
+            }
+            StoreObject::Deleted => None,
         }
-        StoreObject::Wrapped => Some(LiveObject::Wrapped(object_key)),
-        StoreObject::Deleted => None,
     }
 }
 
@@ -528,7 +540,7 @@ impl Iterator for LiveSetIter<'_> {
                 if let Some((prev_key, prev_value)) = prev {
                     if prev_key.0 != next_key.0 {
                         let live_object =
-                            store_object_wrapper_to_live_object(self.tables, prev_key, prev_value);
+                            self.store_object_wrapper_to_live_object(prev_key, prev_value);
                         if live_object.is_some() {
                             return live_object;
                         }
@@ -537,7 +549,7 @@ impl Iterator for LiveSetIter<'_> {
                 continue;
             }
             if let Some((key, value)) = self.prev.take() {
-                let live_object = store_object_wrapper_to_live_object(self.tables, key, value);
+                let live_object = self.store_object_wrapper_to_live_object(key, value);
                 if live_object.is_some() {
                     return live_object;
                 }
