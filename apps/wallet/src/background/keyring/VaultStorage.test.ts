@@ -17,7 +17,6 @@ import {
 	testDataVault1,
 	testDataVault2,
 	testEntropySerialized,
-	testMnemonic,
 	testEd25519,
 	testMnemonicSeedHex,
 } from '_src/test-utils/vault';
