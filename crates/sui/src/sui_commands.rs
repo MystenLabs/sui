@@ -251,7 +251,11 @@ impl SuiCommand {
                 .await
             }
             SuiCommand::GenesisCeremony(cmd) => run(cmd),
-            SuiCommand::KeyTool { keystore_path, json, cmd } => {
+            SuiCommand::KeyTool {
+                keystore_path,
+                json,
+                cmd,
+            } => {
                 let keystore_path =
                     keystore_path.unwrap_or(sui_config_dir()?.join(SUI_KEYSTORE_FILENAME));
                 let mut keystore = Keystore::from(FileBasedKeystore::new(&keystore_path)?);
