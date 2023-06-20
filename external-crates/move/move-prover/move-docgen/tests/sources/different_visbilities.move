@@ -10,6 +10,7 @@ module TestViz {
     public entry fun this_is_a_public_script_fun() {}
 
     /// This is a private function
+    #[allow(unused_function)]
     fun this_is_a_private_fun() {}
 }
 }
