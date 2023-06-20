@@ -2386,7 +2386,7 @@ impl AuthorityState {
                 }
             })?)
         } else {
-            Err(SuiError::ObjectDeserializationError {
+            Err(SuiError::TypeError {
                 error: format!("Provided object : [{object_id}] is not a Move object."),
             })
         }

@@ -302,12 +302,12 @@ where
     V: Serialize + DeserializeOwned,
 {
     let object = get_dynamic_field_object_from_store(object_store, parent_id, key)?;
-    let move_object = object.data.try_as_move().ok_or_else(|| {
-        SuiError::DynamicFieldReadError(format!(
-            "Dynamic field {:?} is not a Move object",
-            object.id()
-        ))
-    })?;
+    let move_object = object
+        .data
+        .try_as_move()
+        .ok_or_else(|| SuiError::TypeError {
+            error: format!("Dynamic field {:?} is not a Move object", object.id()),
+        })?;
     Ok(bcs::from_bytes::<Field<K, V>>(move_object.contents())
         .map_err(|err| SuiError::DynamicFieldReadError(err.to_string()))?
         .value)

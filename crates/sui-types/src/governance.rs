@@ -97,8 +97,10 @@ impl TryFrom<&Object> for StakedSui {
         match &object.data {
             Data::Move(o) => {
                 if o.type_().is_staked_sui() {
-                    return bcs::from_bytes(o.contents()).map_err(|err| SuiError::TypeError {
-                        error: format!("Unable to deserialize StakedSui object: {:?}", err),
+                    return bcs::from_bytes(o.contents()).map_err(|err| {
+                        SuiError::ObjectDeserializationError {
+                            error: format!("Unable to deserialize StakedSui object: {:?}", err),
+                        }
                     });
                 }
             }

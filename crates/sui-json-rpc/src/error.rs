@@ -6,6 +6,7 @@ use hyper::header::InvalidHeaderValue;
 use jsonrpsee::core::Error as RpcError;
 use jsonrpsee::types::error::CallError;
 use jsonrpsee::types::ErrorObject;
+use serde::Serialize;
 use sui_types::error::{SuiError, SuiObjectResponseError, UserInputError};
 use sui_types::quorum_driver_types::QuorumDriverError;
 use thiserror::Error;
@@ -71,6 +72,12 @@ impl Error {
             Error::SuiError(sui_error) => match sui_error {
                 SuiError::TransactionNotFound { .. } | SuiError::TransactionsNotFound { .. } => {
                     RpcError::Call(CallError::InvalidParams(sui_error.into()))
+                }
+                SuiError::ObjectDeserializationError { .. }
+                | SuiError::SuiSystemStateReadError(_) => {
+                    let error_object =
+                        ErrorObject::owned(-32603, sui_error.to_string(), None::<String>);
+                    RpcError::Call(CallError::Custom(error_object))
                 }
                 _ => RpcError::Call(CallError::Failed(sui_error.into())),
             },
