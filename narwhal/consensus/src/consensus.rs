@@ -54,17 +54,22 @@ impl LeaderSwapTable {
         assert!(reputation_scores.final_of_schedule, "Only reputation scores that have been calculated on the end of a schedule are accepted");
 
         // calculating the good nodes
-        let authorities = reputation_scores.authorities_by_score_desc();
-        let good_nodes = Self::retrieve_first_nodes(committee, authorities.into_iter());
+        let good_nodes = Self::retrieve_first_nodes(
+            committee,
+            reputation_scores.authorities_by_score_desc().into_iter(),
+        );
 
         // calculating the bad nodes
-        let authorities = reputation_scores.authorities_by_score_desc();
-
         // we revert the sorted authorities to score ascending so we get the first f low scorers
-        let bad_authorities = Self::retrieve_first_nodes(committee, authorities.into_iter().rev());
-        let bad_nodes = bad_authorities
-            .into_iter()
-            .collect::<HashSet<AuthorityIdentifier>>();
+        let bad_nodes = Self::retrieve_first_nodes(
+            committee,
+            reputation_scores
+                .authorities_by_score_desc()
+                .into_iter()
+                .rev(),
+        )
+        .into_iter()
+        .collect::<HashSet<AuthorityIdentifier>>();
 
         debug!("Reputation scores on round {round}: {reputation_scores:?}");
         debug!("Good nodes: {good_nodes:?}");
