@@ -221,7 +221,7 @@ impl Logger for MetricsLogger {
             .observe(req_latency_secs);
 
         if let Some(code) = error_code {
-            if code == -32000 {
+            if code == -32603 {
                 self.metrics
                     .server_errors_by_route
                     .with_label_values(&[method_name])

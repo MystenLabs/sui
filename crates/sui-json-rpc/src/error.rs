@@ -61,25 +61,99 @@ impl From<Error> for RpcError {
 
 impl Error {
     pub fn to_rpc_error(self) -> RpcError {
+        // Unfortunately Rust doesn't understand using enum variants as types
         match self {
-            Error::UserInputError(user_input_error) => {
-                RpcError::Call(CallError::InvalidParams(user_input_error.into()))
-            }
-            Error::SuiRpcInputError(sui_json_rpc_input_error) => {
-                RpcError::Call(CallError::InvalidParams(sui_json_rpc_input_error.into()))
-            }
             Error::SuiError(sui_error) => match sui_error {
-                SuiError::TransactionNotFound { .. } | SuiError::TransactionsNotFound { .. } => {
+                SuiError::SuiObjectResponseError { error } => match error {
+                    SuiObjectResponseError::Unknown { .. } => {
+                        RpcError::Call(CallError::Failed(error.into()))
+                    }
+                    _ => RpcError::Call(CallError::InvalidParams(error.into())),
+                },
+                SuiError::UserInputError { .. }
+                | SuiError::UnexpectedOwnerType
+                | SuiError::TooManyTransactionsPendingExecution { .. }
+                | SuiError::TooManyTransactionsPendingConsensus
+                | SuiError::TooManyTransactionsPendingOnObject { .. }
+                | SuiError::InvalidSignature { .. }
+                | SuiError::SignerSignatureAbsent { .. }
+                | SuiError::SignerSignatureNumberMismatch { .. }
+                | SuiError::IncorrectSigner { .. }
+                | SuiError::UnknownSigner { .. }
+                | SuiError::StakeAggregatorRepeatedSigner { .. }
+                | SuiError::PotentiallyTemporarilyInvalidSignature { .. }
+                | SuiError::WrongEpoch { .. }
+                | SuiError::CertificateRequiresQuorum
+                | SuiError::ErrorWhileProcessingCertificate { .. }
+                | SuiError::QuorumFailedToGetEffectsQuorumWhenProcessingTransaction { .. }
+                | SuiError::InvalidSystemTransaction
+                | SuiError::InvalidAuthenticator
+                | SuiError::InvalidAddress
+                | SuiError::InvalidTransactionDigest
+                | SuiError::FunctionNotFound { .. }
+                | SuiError::ModuleNotFound { .. }
+                | SuiError::ObjectLockAlreadyInitialized { .. }
+                | SuiError::ObjectLockConflict { .. }
+                | SuiError::ObjectLockedAtFutureEpoch { .. }
+                | SuiError::TransactionNotFound { .. }
+                | SuiError::TransactionsNotFound { .. }
+                | SuiError::TransactionEventsNotFound { .. }
+                | SuiError::TransactionAlreadyExecuted { .. }
+                | SuiError::InvalidChildObjectAccess { .. }
+                | SuiError::TransactionSerializationError { .. }
+                | SuiError::ObjectSerializationError { .. }
+                | SuiError::UnexpectedVersion { .. }
+                | SuiError::WrongMessageVersion { .. }
+                | SuiError::FullNodeCantHandleCertificate
+                | SuiError::CircularObjectOwnership
+                | SuiError::TooManyIncorrectAuthorities { .. }
+                | SuiError::IndexStoreNotAvailable
+                | SuiError::UnsupportedFeatureError { .. }
+                | SuiError::InvalidCommittee(_)
+                | SuiError::ByzantineAuthoritySuspicion { .. }
+                | SuiError::TransactionExpired => {
                     RpcError::Call(CallError::InvalidParams(sui_error.into()))
                 }
-                SuiError::ObjectDeserializationError { .. }
-                | SuiError::SuiSystemStateReadError(_) => {
+                SuiError::StorageError { .. }
+                | SuiError::GenericStorageError { .. }
+                | SuiError::StorageMissingFieldError { .. }
+                | SuiError::StorageCorruptedFieldError { .. }
+                | SuiError::GenericAuthorityError { .. }
+                | SuiError::MissingCommitteeAtEpoch { .. }
+                | SuiError::FileIOError { .. }
+                | SuiError::JWKRetrievalError
+                | SuiError::ExecutionInvariantViolation
+                | SuiError::Unknown { .. } => {
                     let error_object =
                         ErrorObject::owned(-32603, sui_error.to_string(), None::<String>);
                     RpcError::Call(CallError::Custom(error_object))
                 }
                 _ => RpcError::Call(CallError::Failed(sui_error.into())),
             },
+            Error::InternalError(err) => {
+                let error_object = ErrorObject::owned(-32603, err.to_string(), None::<String>);
+                RpcError::Call(CallError::Custom(error_object))
+            }
+            Error::BcsError(err) => {
+                let error_object = ErrorObject::owned(-32603, err.to_string(), None::<String>);
+                RpcError::Call(CallError::Custom(error_object))
+            }
+            Error::UnexpectedError(err) => {
+                let error_object = ErrorObject::owned(-32603, err, None::<String>);
+                RpcError::Call(CallError::Custom(error_object))
+            }
+            Error::RPCServerError(err) => err, // return RPCServerError as is
+            Error::UserInputError(user_input_error) => {
+                RpcError::Call(CallError::InvalidParams(user_input_error.into()))
+            }
+            Error::EncodingError(err) => {
+                let error_object = ErrorObject::owned(-32603, err.to_string(), None::<String>);
+                RpcError::Call(CallError::Custom(error_object))
+            }
+            Error::TokioJoinError(err) => {
+                let error_object = ErrorObject::owned(-32603, err.to_string(), None::<String>);
+                RpcError::Call(CallError::Custom(error_object))
+            }
             Error::QuorumDriverError(err) => match err {
                 QuorumDriverError::NonRecoverableTransactionError { errors } => {
                     let error_object = ErrorObject::owned(
@@ -91,6 +165,17 @@ impl Error {
                 }
                 _ => RpcError::Call(CallError::Failed(err.into())),
             },
+            Error::SuiObjectResponseError(sui_object_response_error) => {
+                match sui_object_response_error {
+                    SuiObjectResponseError::Unknown { .. } => {
+                        RpcError::Call(CallError::Failed(sui_object_response_error.into()))
+                    }
+                    _ => RpcError::Call(CallError::InvalidParams(sui_object_response_error.into())),
+                }
+            }
+            Error::SuiRpcInputError(sui_json_rpc_input_error) => {
+                RpcError::Call(CallError::InvalidParams(sui_json_rpc_input_error.into()))
+            }
             _ => RpcError::Call(CallError::Failed(self.into())),
         }
     }
@@ -119,3 +204,24 @@ pub enum SuiRpcInputError {
     #[error("Unable to serialize: {0}")]
     CannotSerialize(#[from] bcs::Error),
 }
+
+/*
+* ClientDeserializationError
+* TypeError
+* ModuleDeserializationFailure
+* FailObjectLayout
+* DynamicFieldReadError
+* SuiSystemStateReadError
+* ObjectDeserializationError
+
+*/
+
+/*
+ * Depends on where this happens. This error enum to be used when error stems from us trying to deserialize something
+ * ServerDeserializationError
+ * ModuleDeserializationFailure
+ * FailObjectLayout
+ * DynamicFieldReadError
+ * SuiSystemStateReadError
+ * ObjectDeserializationError
+ */

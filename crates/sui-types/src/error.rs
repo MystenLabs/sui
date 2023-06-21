@@ -360,9 +360,6 @@ pub enum SuiError {
     #[error("Invalid transaction digest.")]
     InvalidTransactionDigest,
 
-    #[error("Unexpected message.")]
-    UnexpectedMessage,
-
     // Move module publishing related errors
     #[error("Failed to verify the Move module, reason: {error:?}.")]
     ModuleVerificationFailure { error: String },
