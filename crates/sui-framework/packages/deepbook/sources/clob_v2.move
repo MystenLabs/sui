@@ -1317,6 +1317,57 @@ module deepbook::clob_v2 {
         }
     }
 
+    /// Clean up expired orders
+    /// Note that this function can reduce gas cost if orders
+    /// with the same price are grouped together in the vector because we would not need the computation to find the tick_index.
+    /// For example, if we have the following order_id to price mapping, {0: 100., 1: 200., 2: 100., 3: 200.}.
+    /// Grouping order_ids like [0, 2, 1, 3] would make it the most gas efficient.
+    /// Order owners should be the owner addresses from the account capacities which placed the orders,
+    /// and they should correspond to the order IDs one by one.
+    public fun clean_up_expired_orders<BaseAsset, QuoteAsset>(
+        pool: &mut Pool<BaseAsset, QuoteAsset>,
+        clock: &Clock,
+        order_ids: vector<u64>,
+        order_owners: vector<address>
+    ) {
+        let pool_id = *object::uid_as_inner(&pool.id);
+        let now = clock::timestamp_ms(clock);
+        let n_order = vector::length(&order_ids);
+        assert!(n_order == vector::length(&order_owners), ENotEqual);
+        let i_order = 0;
+        let tick_index: u64 = 0;
+        let tick_price: u64 = 0;
+        while (i_order < n_order) {
+            let order_id = *vector::borrow(&order_ids, i_order);
+            let owner = *vector::borrow(&order_owners, i_order);
+            if (!table::contains(&pool.usr_open_orders, owner)) { continue };
+            let usr_open_orders = borrow_mut(&mut pool.usr_open_orders, owner);
+            if (!linked_table::contains(usr_open_orders, order_id)) { continue };
+            let new_tick_price = *linked_table::borrow(usr_open_orders, order_id);
+            let is_bid = order_is_bid(order_id);
+            let open_orders = if (is_bid) { &mut pool.bids } else { &mut pool.asks };
+            if (new_tick_price != tick_price) {
+                tick_price = new_tick_price;
+                let (tick_exists, new_tick_index) = find_leaf(
+                    open_orders,
+                    tick_price
+                );
+                assert!(tick_exists, EInvalidTickPrice);
+                tick_index = new_tick_index;
+            };
+            let order = remove_order<BaseAsset, QuoteAsset>(open_orders, usr_open_orders, tick_index, order_id, owner);
+            assert!(order.expire_timestamp < now, EInvalidExpireTimestamp);
+            if (is_bid) {
+                let balance_locked = clob_math::mul(order.quantity, order.price);
+                custodian::unlock_balance(&mut pool.quote_custodian, owner, balance_locked);
+            } else {
+                custodian::unlock_balance(&mut pool.base_custodian, owner, order.quantity);
+            };
+            emit_order_canceled<BaseAsset, QuoteAsset>(pool_id, &order);
+            i_order = i_order + 1;
+        }
+    }
+
     public fun list_open_orders<BaseAsset, QuoteAsset>(
         pool: &Pool<BaseAsset, QuoteAsset>,
         account_cap: &AccountCap
