@@ -7,13 +7,12 @@ publish = false
 edition = "2021"
 
 [dependencies]
-bcs = "0.1.4"
+bcs.workspace = true
 
-shared-crypto = { path = "../shared-crypto" }
-sui-genesis-builder = { path = "../sui-genesis-builder" }
-sui-move-build = { path = "../sui-move-build" }
-sui-types = { path = "../sui-types" }
+shared-crypto.workspace = true
+sui-genesis-builder.workspace = true
+sui-move-build.workspace = true
+sui-types.workspace = true
 
 move-core-types.workspace = true
-
 workspace-hack = { version = "0.1", path = "../workspace-hack" }

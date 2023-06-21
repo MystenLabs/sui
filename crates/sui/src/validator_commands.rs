@@ -286,7 +286,7 @@ impl SuiValidatorCommand {
                 };
                 // TODO set key files permission
                 let validator_info_file_name = dir.join("validator.info");
-                let validator_info_bytes = serde_yaml::to_vec(&validator_info)?;
+                let validator_info_bytes = serde_yaml::to_string(&validator_info)?;
                 fs::write(validator_info_file_name.clone(), validator_info_bytes)?;
                 println!(
                     "Generated validator info file: {:?}.",

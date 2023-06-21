@@ -14,7 +14,7 @@ path = "lib.rs"
 proc-macro = true
 
 [dependencies]
-proc-macro2 = "1.0.47"
-syn = { version = "1.0.104", features = ["full"] }
-synstructure = "0.12"
+proc-macro2.workspace = true
+syn.workspace = true
+synstructure.workspace = true
 workspace-hack = { version = "0.1", path = "../workspace-hack" }

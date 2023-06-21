@@ -67,7 +67,7 @@ auto_ops = { version = "0.3", default-features = false }
 axum = { version = "0.6", default-features = false, features = ["form", "headers", "http1", "http2", "json", "matched-path", "original-uri", "query", "tokio"] }
 axum-core = { version = "0.3", default-features = false }
 axum-extra = { version = "0.4" }
-axum-server = { version = "0.4", features = ["tls-rustls"] }
+axum-server = { version = "0.4", default-features = false, features = ["tls-rustls"] }
 backoff = { version = "0.4", features = ["tokio"] }
 backtrace = { version = "0.3" }
 base-x = { version = "0.2", default-features = false }
@@ -106,7 +106,6 @@ bytecode-interpreter-crypto = { path = "../../external-crates/move/move-prover/i
 bytemuck = { version = "1", default-features = false }
 byteorder = { version = "1", features = ["i128"] }
 bytes = { version = "1", features = ["serde"] }
-bzip2-sys = { version = "0.1", default-features = false, features = ["static"] }
 cached = { version = "0.43" }
 cached_proc_macro_types = { version = "0.1", default-features = false }
 camino = { version = "1", default-features = false, features = ["serde1"] }
@@ -319,7 +318,7 @@ leb128 = { version = "0.2", default-features = false }
 lexical-core = { version = "0.7" }
 libc = { version = "0.2" }
 libm = { version = "0.2" }
-librocksdb-sys = { version = "0.11", features = ["bzip2", "lz4", "snappy", "zlib", "zstd"] }
+librocksdb-sys = { version = "0.11", features = ["lz4", "snappy", "zlib", "zstd"] }
 libtest-mimic = { version = "0.5", default-features = false }
 libz-sys = { version = "1", default-features = false, features = ["static"] }
 linked-hash-map = { version = "0.5", default-features = false }
@@ -500,7 +499,7 @@ rfc6979-9fbad63c4bcf4a8f = { package = "rfc6979", version = "0.4", default-featu
 ring = { version = "0.16" }
 ripemd = { version = "0.1", default-features = false }
 roaring = { version = "0.10", default-features = false }
-rocksdb = { version = "0.21", features = ["multi-threaded-cf"] }
+rocksdb = { version = "0.21", default-features = false, features = ["lz4", "multi-threaded-cf", "snappy", "zlib", "zstd"] }
 ron = { version = "0.8" }
 rsa = { version = "0.8", features = ["sha2"] }
 rstest = { version = "0.16" }
@@ -629,8 +628,7 @@ toml_edit-cdcf2f9584511fe6 = { package = "toml_edit", version = "0.19", features
 tonic = { version = "0.8", features = ["tls"] }
 tonic-health = { version = "0.8" }
 tower = { version = "0.4", features = ["full"] }
-tower-http-468e82937335b1c9 = { package = "tower-http", version = "0.3", features = ["full"] }
-tower-http-9fbad63c4bcf4a8f = { package = "tower-http", version = "0.4", features = ["trace"] }
+tower-http = { version = "0.3", features = ["full"] }
 tower-layer = { version = "0.3", default-features = false }
 tower-service = { version = "0.3", default-features = false }
 tracing = { version = "0.1", features = ["log"] }
@@ -759,7 +757,7 @@ autocfg = { version = "1", default-features = false }
 axum = { version = "0.6", default-features = false, features = ["form", "headers", "http1", "http2", "json", "matched-path", "original-uri", "query", "tokio"] }
 axum-core = { version = "0.3", default-features = false }
 axum-extra = { version = "0.4" }
-axum-server = { version = "0.4", features = ["tls-rustls"] }
+axum-server = { version = "0.4", default-features = false, features = ["tls-rustls"] }
 backoff = { version = "0.4", features = ["tokio"] }
 backtrace = { version = "0.3" }
 base-x = { version = "0.2", default-features = false }
@@ -801,7 +799,6 @@ bytecode-interpreter-crypto = { path = "../../external-crates/move/move-prover/i
 bytemuck = { version = "1", default-features = false }
 byteorder = { version = "1", features = ["i128"] }
 bytes = { version = "1", features = ["serde"] }
-bzip2-sys = { version = "0.1", default-features = false, features = ["static"] }
 cached = { version = "0.43" }
 cached_proc_macro = { version = "0.16", default-features = false }
 cached_proc_macro_types = { version = "0.1", default-features = false }
@@ -1051,7 +1048,7 @@ lexical-core = { version = "0.7" }
 libc = { version = "0.2" }
 libloading = { version = "0.7", default-features = false }
 libm = { version = "0.2" }
-librocksdb-sys = { version = "0.11", features = ["bzip2", "lz4", "snappy", "zlib", "zstd"] }
+librocksdb-sys = { version = "0.11", features = ["lz4", "snappy", "zlib", "zstd"] }
 libtest-mimic = { version = "0.5", default-features = false }
 libz-sys = { version = "1", default-features = false, features = ["static"] }
 linked-hash-map = { version = "0.5", default-features = false }
@@ -1266,7 +1263,7 @@ rfc6979-9fbad63c4bcf4a8f = { package = "rfc6979", version = "0.4", default-featu
 ring = { version = "0.16" }
 ripemd = { version = "0.1", default-features = false }
 roaring = { version = "0.10", default-features = false }
-rocksdb = { version = "0.21", features = ["multi-threaded-cf"] }
+rocksdb = { version = "0.21", default-features = false, features = ["lz4", "multi-threaded-cf", "snappy", "zlib", "zstd"] }
 ron = { version = "0.8" }
 rsa = { version = "0.8", features = ["sha2"] }
 rstest = { version = "0.16" }
@@ -1418,8 +1415,7 @@ tonic-build = { version = "0.8" }
 tonic-health = { version = "0.8" }
 toolchain_find = { version = "0.2", default-features = false }
 tower = { version = "0.4", features = ["full"] }
-tower-http-468e82937335b1c9 = { package = "tower-http", version = "0.3", features = ["full"] }
-tower-http-9fbad63c4bcf4a8f = { package = "tower-http", version = "0.4", features = ["trace"] }
+tower-http = { version = "0.3", features = ["full"] }
 tower-layer = { version = "0.3", default-features = false }
 tower-service = { version = "0.3", default-features = false }
 tracing = { version = "0.1", features = ["log"] }

@@ -8,17 +8,17 @@ license = "Apache-2.0"
 publish = false
 
 [dependencies]
-anyhow = { version = "1.0.64", features = ["backtrace"] }
-fastcrypto = { workspace = true }
-tempfile = "3.3.0"
+anyhow.workspace = true
+fastcrypto.workspace = true
+tempfile.workspace = true
 
 move-bytecode-verifier = { path = "../../external-crates/move/move-bytecode-verifier" }
 sui-adapter = { path = "../../sui-execution/latest/sui-adapter", package = "sui-adapter-latest" }
 sui-verifier = { path = "../../sui-execution/latest/sui-verifier", package = "sui-verifier-latest" }
 
-serde-reflection = "0.3.6"
-sui-types = { path = "../sui-types" }
-sui-protocol-config = { path = "../sui-protocol-config" }
+serde-reflection.workspace = true
+sui-types.workspace = true
+sui-protocol-config.workspace = true
 
 move-binary-format.workspace = true
 move-bytecode-utils.workspace = true
