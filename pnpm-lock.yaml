@@ -798,6 +798,9 @@ importers:
       '@fontsource/inter':
         specifier: ^4.5.15
         version: 4.5.15
+      '@fontsource/red-hat-mono':
+        specifier: ^4.5.12
+        version: 4.5.12
       '@hookform/resolvers':
         specifier: ^3.0.1
         version: 3.0.1(react-hook-form@7.43.9)

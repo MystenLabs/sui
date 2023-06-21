@@ -16,6 +16,7 @@
 	},
 	"dependencies": {
 		"@fontsource/inter": "^4.5.15",
+		"@fontsource/red-hat-mono": "^4.5.12",
 		"@hookform/resolvers": "^3.0.1",
 		"@radix-ui/react-dialog": "^1.0.4",
 		"@radix-ui/react-label": "^2.0.2",

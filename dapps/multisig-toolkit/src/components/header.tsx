@@ -2,14 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { KeyRound } from 'lucide-react';
-import {
-	NavigationMenu,
-	NavigationMenuItem,
-	NavigationMenuLink,
-	NavigationMenuList,
-	navigationMenuTriggerStyle,
-} from './ui/navigation-menu';
-import { Link } from 'react-router-dom';
+import { NavLink } from 'react-router-dom';
+
+const links = [
+	{ to: '/offline-signer', label: 'Offline Signer' },
+	{ to: '/signature-analyzer', label: 'Signature Analyzer' },
+];
 
 export function Header() {
 	return (
@@ -21,16 +19,20 @@ export function Header() {
 				</h1>
 			</div>
 
-			<div>
-				<NavigationMenu>
-					<NavigationMenuList>
-						<NavigationMenuItem>
-							<NavigationMenuLink asChild className={navigationMenuTriggerStyle()}>
-								<Link to="/offline-signer">Offline Signer</Link>
-							</NavigationMenuLink>
-						</NavigationMenuItem>
-					</NavigationMenuList>
-				</NavigationMenu>
+			<div className="flex gap-4">
+				{links.map(({ to, label }) => (
+					<NavLink
+						key={to}
+						to={to}
+						className={({ isActive }) =>
+							isActive
+								? 'text-sm font-semibold transition-colors hover:text-primary'
+								: 'text-sm font-semibold text-muted-foreground transition-colors hover:text-primary'
+						}
+					>
+						{label}
+					</NavLink>
+				))}
 			</div>
 		</div>
 	);
