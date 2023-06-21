@@ -74,14 +74,18 @@ jobs:
         shell: bash
         run: |
           export PR_NUMBER=$(jq --raw-output .pull_request.number "$GITHUB_EVENT_PATH")
-          DESCRIPTION=$(curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+          export DESCRIPTION=$(curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
             "https://api.github.com/repos/MystenLabs/sui/pulls/${PR_NUMBER}" \
             | jq --raw-output .body)
-          
-          if [[ $DESCRIPTION =~ \[x\].*Release[[:space:]]notes.*[[:space:]]+.* ]]; then
-            echo "At least one '[x]' was checked under 'Type of Change (Check all that apply)', you need to add a blob under the 'Release Notes' section."
-            exit 1
-          fi     
+
+          if [[ "${DESCRIPTION}" == *"[x]"*  ]]; then
+            if [[ "${DESCRIPTION}" =~ Release[[:space:]]notes[[:space:]]+.* ]]; then
+              exit 0
+            else
+              echo "At least one '[x]' was checked under 'Type of Change (Check all that apply)', you need to add a blob under the 'Release Notes' section."
+              exit 1
+            fi
+          fi
 
   test:
     needs: diff
