@@ -58,6 +58,9 @@ const textStyles = cva([], {
 			true: 'font-mono',
 			false: 'font-sans',
 		},
+		nowrap: {
+			true: 'whitespace-nowrap',
+		},
 	},
 	defaultVariants: {
 		weight: 'medium',
