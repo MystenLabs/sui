@@ -18,6 +18,7 @@ clap = { version = "3.2.17", features = ["derive"] }
 diesel = { version = "2.0.3", features = ["chrono", "postgres", "r2d2", "serde_json", "64-column-tables"] }
 diesel-derive-enum = { version = "2.0.1", features = ["postgres"] }
 futures = "0.3.23"
+itertools = "0.10.4"
 jsonrpsee = { git="https://github.com/wlmyng/jsonrpsee.git", rev= "b1b300784795f6a64d0fcdf8f03081a9bc38bde8", features = ["full"] }
 prometheus = "0.13.3"
 serde = { version = "1.0.144", features = ["derive"] }

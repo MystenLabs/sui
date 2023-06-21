@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use itertools::Itertools;
+
 use sui_json_rpc_types::{
     BalanceChange, ObjectChange, SuiCommand, SuiTransactionBlock, SuiTransactionBlockDataAPI,
     SuiTransactionBlockEffects, SuiTransactionBlockEffectsAPI, SuiTransactionBlockEvents,
@@ -258,15 +260,17 @@ impl CheckpointTransactionBlockResponse {
             .chain(mutated)
             .chain(unwrapped)
             .filter_map(|obj_ref| match obj_ref.owner {
-                Owner::AddressOwner(address) => Some(Recipient {
-                    id: None,
-                    transaction_digest: self.digest.to_string(),
-                    checkpoint_sequence_number: checkpoint as i64,
-                    epoch: epoch as i64,
-                    sender: self.transaction.data.sender().to_string(),
-                    recipient: address.to_string(),
-                }),
+                Owner::AddressOwner(address) => Some(address.to_string()),
                 _ => None,
+            })
+            .unique()
+            .map(|recipient| Recipient {
+                id: None,
+                transaction_digest: self.digest.to_string(),
+                checkpoint_sequence_number: checkpoint as i64,
+                epoch: epoch as i64,
+                sender: self.transaction.data.sender().to_string(),
+                recipient,
             })
             .collect()
     }
