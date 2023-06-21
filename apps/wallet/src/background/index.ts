@@ -4,9 +4,10 @@
 import { lte, coerce } from 'semver';
 import Browser from 'webextension-polyfill';
 
-import { LOCK_ALARM_NAME } from './Alarms';
+import Alarms, { CLEAN_UP_ALARM_NAME, LOCK_ALARM_NAME } from './Alarms';
 import NetworkEnv from './NetworkEnv';
 import Permissions from './Permissions';
+import Transactions from './Transactions';
 import { Connections } from './connections';
 import Keyring from './keyring';
 import * as Qredo from './qredo';
@@ -20,7 +21,7 @@ Browser.runtime.onInstalled.addListener(async ({ reason, previousVersion }) => {
 	if (navigator.userAgent === 'Playwright') {
 		return;
 	}
-
+	Alarms.setCleanUpAlarm();
 	// TODO: Our versions don't use semver, and instead are date-based. Instead of using the semver
 	// library, we can use some combination of parsing into a date + inspecting patch.
 	const previousVersionSemver = coerce(previousVersion)?.version;
@@ -87,6 +88,8 @@ Keyring.on('accountsChanged', async (accounts) => {
 Browser.alarms.onAlarm.addListener((alarm) => {
 	if (alarm.name === LOCK_ALARM_NAME) {
 		Keyring.reviveDone.finally(() => Keyring.lock());
+	} else if (alarm.name === CLEAN_UP_ALARM_NAME) {
+		Transactions.clearStaleTransactions();
 	}
 });
 
