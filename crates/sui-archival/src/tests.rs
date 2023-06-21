@@ -9,7 +9,6 @@ use prometheus::Registry;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
-use sui_macros::sim_test;
 use sui_storage::object_store::util::path_to_filesystem;
 use sui_storage::object_store::{ObjectStoreConfig, ObjectStoreType};
 use sui_swarm_config::test_utils::{empty_contents, CommitteeFixture};
@@ -37,7 +36,7 @@ async fn write_new_checkpoints_to_store(
     store: SharedInMemoryStore,
     num_checkpoints: usize,
     prev_checkpoint: Option<VerifiedCheckpoint>,
-) -> anyhow::Result<Option<VerifiedCheckpoint>> {
+) -> Result<Option<VerifiedCheckpoint>> {
     let (ordered_checkpoints, _contents, _sequence_number_to_digest, _checkpoints) = test_state
         .committee
         .make_empty_checkpoints(num_checkpoints, prev_checkpoint.clone());
@@ -93,7 +92,7 @@ async fn insert_checkpoints_and_verify_manifest(
     test_state: &TestState,
     test_store: SharedInMemoryStore,
     prev_checkpoint: Option<VerifiedCheckpoint>,
-) -> anyhow::Result<Option<VerifiedCheckpoint>> {
+) -> Result<Option<VerifiedCheckpoint>> {
     let mut prev_tail = None;
     let mut prev_checkpoint = prev_checkpoint;
     let mut num_verified_iterations = 0;
@@ -138,28 +137,100 @@ async fn insert_checkpoints_and_verify_manifest(
     Ok(prev_checkpoint)
 }
 
-#[sim_test]
+#[tokio::test]
 async fn test_archive_basic() -> Result<(), anyhow::Error> {
     let test_store = SharedInMemoryStore::default();
-    let test_state = setup_checkpoint_writer(temp_dir()).await?;
-    let _kill = test_state.archive_writer.start(test_store.clone())?;
+    let test_state = setup_test_state(temp_dir()).await?;
+    let kill = test_state.archive_writer.start(test_store.clone()).await?;
     insert_checkpoints_and_verify_manifest(&test_state, test_store, None).await?;
+    kill.send(())?;
     Ok(())
 }
 
-#[sim_test]
+#[tokio::test]
 async fn test_archive_resumes() -> Result<(), anyhow::Error> {
     let test_store = SharedInMemoryStore::default();
-    let test_state = setup_checkpoint_writer(temp_dir()).await?;
-    let kill = test_state.archive_writer.start(test_store.clone())?;
+    let test_state = setup_test_state(temp_dir()).await?;
+    let kill = test_state.archive_writer.start(test_store.clone()).await?;
     let prev_checkpoint =
         insert_checkpoints_and_verify_manifest(&test_state, test_store.clone(), None).await?;
 
     // Kill the archive writer so we can restart it again
     drop(kill);
-    let test_state = setup_checkpoint_writer(temp_dir()).await?;
-    let _kill = test_state.archive_writer.start(test_store.clone())?;
+    let test_state = setup_test_state(temp_dir()).await?;
+    let kill = test_state.archive_writer.start(test_store.clone()).await?;
     insert_checkpoints_and_verify_manifest(&test_state, test_store, prev_checkpoint).await?;
+    kill.send(())?;
+    Ok(())
+}
 
+#[tokio::test]
+async fn test_manifest_serde() -> Result<()> {
+    let original_manifest = Manifest::new(0, 100);
+    let remote_store = ObjectStoreConfig {
+        object_store: Some(ObjectStoreType::File),
+        directory: Some(temp_dir()),
+        ..Default::default()
+    }
+    .make()?;
+    write_manifest(original_manifest.clone(), remote_store.clone()).await?;
+    let downloaded_manifest = read_manifest(remote_store).await?;
+    assert_eq!(downloaded_manifest, original_manifest);
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_archive_reader_e2e() -> Result<(), anyhow::Error> {
+    let test_store = SharedInMemoryStore::default();
+    let mut test_state = setup_test_state(temp_dir()).await?;
+    let kill = test_state.archive_writer.start(test_store.clone()).await?;
+    let mut latest_archived_checkpoint_seq_num = 0;
+    while latest_archived_checkpoint_seq_num < 10 {
+        insert_checkpoints_and_verify_manifest(&test_state, test_store.clone(), None).await?;
+        let new_latest_archived_checkpoint_seq_num = test_state
+            .archive_reader
+            .latest_available_checkpoint()
+            .await?;
+        ma::assert_ge!(
+            new_latest_archived_checkpoint_seq_num,
+            latest_archived_checkpoint_seq_num
+        );
+        latest_archived_checkpoint_seq_num = new_latest_archived_checkpoint_seq_num;
+        tokio::time::sleep(Duration::from_secs(1)).await;
+    }
+    ma::assert_ge!(latest_archived_checkpoint_seq_num, 10);
+    let genesis_checkpoint = test_store
+        .get_checkpoint_by_sequence_number(0)?
+        .context("Missing genesis checkpoint")?;
+    let genesis_checkpoint_content = test_store
+        .get_full_checkpoint_contents_by_sequence_number(0)?
+        .context("Missing genesis checkpoint")?;
+    let read_store = SharedInMemoryStore::default();
+    read_store.inner_mut().insert_genesis_state(
+        genesis_checkpoint,
+        VerifiedCheckpointContents::new_unchecked(genesis_checkpoint_content),
+        test_state.committee.committee().to_owned(),
+    );
+    let counter = Arc::new(AtomicU64::new(0));
+    test_state.archive_reader.sync_manifest_once().await?;
+    test_state
+        .archive_reader
+        .read(
+            read_store.clone(),
+            0..(latest_archived_checkpoint_seq_num + 1),
+            counter,
+        )
+        .await?;
+    ma::assert_ge!(
+        read_store
+            .get_highest_verified_checkpoint()?
+            .sequence_number,
+        latest_archived_checkpoint_seq_num
+    );
+    ma::assert_ge!(
+        read_store.get_highest_synced_checkpoint()?.sequence_number,
+        latest_archived_checkpoint_seq_num
+    );
+    kill.send(())?;
     Ok(())
 }
