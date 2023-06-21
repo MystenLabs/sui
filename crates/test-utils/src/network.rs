@@ -29,7 +29,8 @@ use sui_swarm_config::network_config_builder::{
     ProtocolVersionsConfig, SupportedProtocolVersionsCallback,
 };
 use sui_swarm_config::node_config_builder::{FullnodeConfigBuilder, ValidatorConfigBuilder};
-use sui_types::base_types::{AuthorityName, ObjectID, SuiAddress};
+use sui_test_transaction_builder::TestTransactionBuilder;
+use sui_types::base_types::{AuthorityName, ObjectID, ObjectRef, SuiAddress};
 use sui_types::committee::EpochId;
 use sui_types::crypto::KeypairTraits;
 use sui_types::crypto::SuiKeyPair;
@@ -38,7 +39,7 @@ use sui_types::object::Object;
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
 use sui_types::sui_system_state::SuiSystemState;
 use sui_types::sui_system_state::SuiSystemStateTrait;
-use sui_types::transaction::VerifiedTransaction;
+use sui_types::transaction::{TransactionData, VerifiedTransaction};
 use tokio::time::{timeout, Instant};
 use tokio::{task::JoinHandle, time::sleep};
 use tracing::info;
@@ -207,6 +208,19 @@ impl TestCluster {
             .await
     }
 
+    pub async fn get_object_or_tombstone_from_fullnode_store(
+        &self,
+        object_id: ObjectID,
+    ) -> ObjectRef {
+        self.fullnode_handle
+            .sui_node
+            .state()
+            .db()
+            .get_object_or_tombstone(object_id)
+            .unwrap()
+            .unwrap()
+    }
+
     /// To detect whether the network has reached such state, we use the fullnode as the
     /// source of truth, since a fullnode only does epoch transition when the network has
     /// done so.
@@ -347,6 +361,20 @@ impl TestCluster {
             })
             .await;
         }
+    }
+
+    pub async fn test_transaction_builder(&self) -> TestTransactionBuilder {
+        let (sender, gas) = self.wallet.get_one_gas_object().await.unwrap().unwrap();
+        let rgp = self.get_reference_gas_price().await;
+        TestTransactionBuilder::new(sender, gas, rgp)
+    }
+
+    pub async fn sign_and_execute_transaction(
+        &self,
+        tx: &TransactionData,
+    ) -> SuiTransactionBlockResponse {
+        let signed_tx = self.wallet.sign_transaction(tx);
+        self.execute_transaction(signed_tx).await
     }
 
     /// Execute a transaction on the network and wait for it to be executed on the rpc fullnode.

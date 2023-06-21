@@ -8,6 +8,7 @@ use futures::future::AbortHandle;
 use std::collections::HashSet;
 use std::num::NonZeroUsize;
 use sui_core::authority::authority_store_tables::AuthorityPerpetualTables;
+use sui_protocol_config::ProtocolConfig;
 use sui_storage::object_store::{ObjectStoreConfig, ObjectStoreType};
 use sui_types::base_types::ObjectID;
 use sui_types::object::Object;
@@ -34,13 +35,14 @@ fn insert_keys(
 fn compare_live_objects(
     db1: &AuthorityPerpetualTables,
     db2: &AuthorityPerpetualTables,
+    include_wrapped_tombstone: bool,
 ) -> Result<(), anyhow::Error> {
     let mut object_set_1 = HashSet::new();
     let mut object_set_2 = HashSet::new();
-    for live_object in db1.iter_live_object_set() {
+    for live_object in db1.iter_live_object_set(include_wrapped_tombstone) {
         object_set_1.insert(live_object.object_reference());
     }
-    for live_object in db2.iter_live_object_set() {
+    for live_object in db2.iter_live_object_set(include_wrapped_tombstone) {
         object_set_2.insert(live_object.object_reference());
     }
     assert_eq!(object_set_1, object_set_2);
@@ -64,12 +66,15 @@ async fn test_snapshot_basic() -> Result<(), anyhow::Error> {
         directory: Some(remote),
         ..Default::default()
     };
+    let include_wrapped_tombstone =
+        !ProtocolConfig::get_for_max_version().simplified_unwrap_then_delete();
     let snapshot_writer = StateSnapshotWriterV1::new(
         0,
         &local_store_config,
         &remote_store_config,
         FileCompression::Zstd,
         NonZeroUsize::new(1).unwrap(),
+        include_wrapped_tombstone,
     )
     .await?;
     let perpetual_db = AuthorityPerpetualTables::open(&db_path, None);
@@ -93,7 +98,11 @@ async fn test_snapshot_basic() -> Result<(), anyhow::Error> {
     snapshot_reader
         .read(&restored_perpetual_db, abort_registration)
         .await?;
-    compare_live_objects(&perpetual_db, &restored_perpetual_db)?;
+    compare_live_objects(
+        &perpetual_db,
+        &restored_perpetual_db,
+        include_wrapped_tombstone,
+    )?;
     Ok(())
 }
 
@@ -114,12 +123,15 @@ async fn test_snapshot_empty_db() -> Result<(), anyhow::Error> {
         directory: Some(remote),
         ..Default::default()
     };
+    let include_wrapped_tombstone =
+        !ProtocolConfig::get_for_max_version().simplified_unwrap_then_delete();
     let snapshot_writer = StateSnapshotWriterV1::new(
         0,
         &local_store_config,
         &remote_store_config,
         FileCompression::Zstd,
         NonZeroUsize::new(1).unwrap(),
+        include_wrapped_tombstone,
     )
     .await?;
     let perpetual_db = AuthorityPerpetualTables::open(&db_path, None);
@@ -142,6 +154,10 @@ async fn test_snapshot_empty_db() -> Result<(), anyhow::Error> {
     snapshot_reader
         .read(&restored_perpetual_db, abort_registration)
         .await?;
-    compare_live_objects(&perpetual_db, &restored_perpetual_db)?;
+    compare_live_objects(
+        &perpetual_db,
+        &restored_perpetual_db,
+        include_wrapped_tombstone,
+    )?;
     Ok(())
 }

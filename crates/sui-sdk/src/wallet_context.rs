@@ -426,6 +426,18 @@ impl WalletContext {
         )
     }
 
+    pub async fn publish_package(&self, path: PathBuf) -> ObjectRef {
+        let (sender, gas_object) = self.get_one_gas_object().await.unwrap().unwrap();
+        let gas_price = self.get_reference_gas_price().await.unwrap();
+        let txn = self.sign_transaction(
+            &TestTransactionBuilder::new(sender, gas_object, gas_price)
+                .publish(path)
+                .build(),
+        );
+        let resp = self.execute_transaction_must_succeed(txn).await;
+        get_new_package_obj_from_response(&resp).unwrap()
+    }
+
     /// Executes a transaction to publish the `basics` package and returns the package object ref.
     pub async fn publish_basics_package(&self) -> ObjectRef {
         let (sender, gas_object) = self.get_one_gas_object().await.unwrap().unwrap();

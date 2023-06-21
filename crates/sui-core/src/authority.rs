@@ -2,16 +2,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeMap;
-use std::path::{Path, PathBuf};
-use std::time::Duration;
-use std::{collections::HashMap, fs, pin::Pin, sync::Arc};
-
+use crate::authority::authority_store_types::{StoreObject, StoreObjectWrapper};
 use anyhow::anyhow;
 use arc_swap::{ArcSwap, Guard};
 use chrono::prelude::*;
 use fastcrypto::encoding::Base58;
 use fastcrypto::encoding::Encoding;
+use fastcrypto::hash::MultisetHash;
+use futures::stream::FuturesUnordered;
 use itertools::Itertools;
 use move_binary_format::CompiledModule;
 use move_core_types::language_storage::ModuleId;
@@ -26,6 +24,12 @@ use prometheus::{
 };
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
+use std::fs::File;
+use std::io::Write;
+use std::path::{Path, PathBuf};
+use std::time::{Duration, Instant};
+use std::{collections::HashMap, fs, pin::Pin, sync::Arc, thread};
 use sui_config::node::StateDebugDumpConfig;
 use tap::{TapFallible, TapOptional};
 use tokio::sync::mpsc::unbounded_channel;
@@ -121,7 +125,7 @@ use crate::event_handler::SubscriptionHandler;
 use crate::execution_driver::execution_process;
 use crate::module_cache_metrics::ResolverMetrics;
 use crate::stake_aggregator::StakeAggregator;
-use crate::state_accumulator::StateAccumulator;
+use crate::state_accumulator::{StateAccumulator, WrappedObject};
 use crate::{transaction_input_checker, transaction_manager::TransactionManager};
 
 #[cfg(test)]
@@ -2111,6 +2115,12 @@ impl AuthorityState {
             accumulator,
             expensive_safety_check_config.enable_state_consistency_check(),
         );
+        self.maybe_reaccumulate_state_hash(
+            cur_epoch_store,
+            epoch_start_configuration
+                .epoch_start_state()
+                .protocol_version(),
+        );
         self.db()
             .set_epoch_start_configuration(&epoch_start_configuration)
             .await?;
@@ -2151,6 +2161,138 @@ impl AuthorityState {
         Ok(new_epoch_store)
     }
 
+    /// This is a temporary method to be used when we enable simplified_unwrap_then_delete.
+    /// It re-accumulates state hash for the new epoch if simplified_unwrap_then_delete is enabled.
+    fn maybe_reaccumulate_state_hash(
+        &self,
+        cur_epoch_store: &AuthorityPerEpochStore,
+        new_protocol_version: ProtocolVersion,
+    ) {
+        let old_simplified_unwrap_then_delete = cur_epoch_store
+            .protocol_config()
+            .simplified_unwrap_then_delete();
+        let new_simplified_unwrap_then_delete = ProtocolConfig::get_for_version(
+            new_protocol_version,
+            cur_epoch_store.get_chain_identifier().chain(),
+        )
+        .simplified_unwrap_then_delete();
+        // If in the new epoch the simplified_unwrap_then_delete is enabled for the first time,
+        // we re-accumulate state root.
+        let should_reaccumulate =
+            !old_simplified_unwrap_then_delete && new_simplified_unwrap_then_delete;
+        if !should_reaccumulate {
+            return;
+        }
+        info!("[Re-accumulate] simplified_unwrap_then_delete is enabled in the new protocol version, re-accumulating state hash");
+        let cur_time = Instant::now();
+        thread::scope(|s| {
+            let pending_tasks = FuturesUnordered::new();
+            // Shard the object IDs into different ranges so that we can process them in parallel.
+            // We divide the range into 2^BITS number of ranges. To do so we use the highest BITS bits
+            // to mark the starting/ending point of the range. For example, when BITS = 5, we
+            // divide the range into 32 ranges, and the first few ranges are:
+            // 00000000_.... to 00000111_....
+            // 00001000_.... to 00001111_....
+            // 00010000_.... to 00010111_....
+            // and etc.
+            const BITS: u8 = 5;
+            for index in 0u8..(1 << BITS) {
+                pending_tasks.push(s.spawn(move || {
+                    let mut id_bytes = [0; ObjectID::LENGTH];
+                    id_bytes[0] = index << (8 - BITS);
+                    let start_id = ObjectID::new(id_bytes);
+
+                    id_bytes[0] |= (1 << (8 - BITS)) - 1;
+                    for element in id_bytes.iter_mut().skip(1) {
+                        *element = u8::MAX;
+                    }
+                    let end_id = ObjectID::new(id_bytes);
+
+                    info!(
+                        "[Re-accumulate] Scanning object ID range {:?}..{:?}",
+                        start_id, end_id
+                    );
+                    let mut prev = (
+                        ObjectKey::min_for_id(&ObjectID::ZERO),
+                        StoreObjectWrapper::V1(StoreObject::Deleted),
+                    );
+                    let mut object_scanned: u64 = 0;
+                    let mut wrapped_objects_to_remove = vec![];
+                    for (object_key, object) in self.database.perpetual_tables.objects.range_iter(
+                        ObjectKey::min_for_id(&start_id)..=ObjectKey::max_for_id(&end_id),
+                    ) {
+                        object_scanned += 1;
+                        if object_scanned % 100000 == 0 {
+                            info!(
+                                "[Re-accumulate] Task {}: object scanned: {}",
+                                index, object_scanned,
+                            );
+                        }
+                        if matches!(prev.1.inner(), StoreObject::Wrapped)
+                            && object_key.0 != prev.0 .0
+                        {
+                            wrapped_objects_to_remove
+                                .push(WrappedObject::new(prev.0 .0, prev.0 .1));
+                        }
+
+                        prev = (object_key, object);
+                    }
+                    if matches!(prev.1.inner(), StoreObject::Wrapped) {
+                        wrapped_objects_to_remove.push(WrappedObject::new(prev.0 .0, prev.0 .1));
+                    }
+                    info!(
+                        "[Re-accumulate] Task {}: object scanned: {}, wrapped objects: {}",
+                        index,
+                        object_scanned,
+                        wrapped_objects_to_remove.len(),
+                    );
+                    (wrapped_objects_to_remove, object_scanned)
+                }));
+            }
+            let (last_checkpoint_of_epoch, cur_accumulator) = self
+                .database
+                .get_root_state_accumulator(cur_epoch_store.epoch());
+            let (accumulator, total_objects_scanned, total_wrapped_objects) =
+                pending_tasks.into_iter().fold(
+                    (cur_accumulator, 0u64, 0usize),
+                    |(mut accumulator, total_objects_scanned, total_wrapped_objects), task| {
+                        let (wrapped_objects_to_remove, object_scanned) = task.join().unwrap();
+                        accumulator.remove_all(
+                            wrapped_objects_to_remove
+                                .iter()
+                                .map(|wrapped| bcs::to_bytes(wrapped).unwrap().to_vec())
+                                .collect::<Vec<Vec<u8>>>(),
+                        );
+                        (
+                            accumulator,
+                            total_objects_scanned + object_scanned,
+                            total_wrapped_objects + wrapped_objects_to_remove.len(),
+                        )
+                    },
+                );
+            info!(
+                "[Re-accumulate] Total objects scanned: {}, total wrapped objects: {}",
+                total_objects_scanned, total_wrapped_objects,
+            );
+            info!(
+                "[Re-accumulate] New accumulator value: {:?}",
+                accumulator.digest()
+            );
+            self.database
+                .perpetual_tables
+                .root_state_hash_by_epoch
+                .insert(
+                    &cur_epoch_store.epoch(),
+                    &(last_checkpoint_of_epoch, accumulator),
+                )
+                .unwrap();
+        });
+        info!(
+            "[Re-accumulate] Re-accumulating took {}seconds",
+            cur_time.elapsed().as_secs()
+        );
+    }
+
     fn check_system_consistency(
         &self,
         cur_epoch_store: &AuthorityPerEpochStore,
@@ -2187,7 +2329,7 @@ impl AuthorityState {
             self.database.expensive_check_is_consistent_state(
                 checkpoint_executor,
                 accumulator,
-                cur_epoch_store.epoch(),
+                cur_epoch_store,
                 cfg!(debug_assertions), // panic in debug mode only
             );
         }
@@ -3889,6 +4031,17 @@ impl AuthorityState {
     }
 
     #[cfg(test)]
+    pub(crate) fn iter_live_object_set_for_testing(
+        &self,
+    ) -> impl Iterator<Item = authority_store_tables::LiveObject> + '_ {
+        let include_wrapped_object = !self
+            .epoch_store_for_testing()
+            .protocol_config()
+            .simplified_unwrap_then_delete();
+        self.database.iter_live_object_set(include_wrapped_object)
+    }
+
+    #[cfg(test)]
     pub(crate) fn shutdown_execution_for_test(&self) {
         self.tx_execution_shutdown
             .lock()
@@ -4136,9 +4289,6 @@ pub mod framework_injection {
             .collect()
     }
 }
-
-use std::fs::File;
-use std::io::Write;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct NodeStateDump {
