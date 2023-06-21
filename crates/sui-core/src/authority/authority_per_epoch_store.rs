@@ -1512,6 +1512,7 @@ impl AuthorityPerEpochStore {
         Ok(executable_txns)
     }
 
+    #[cfg(any(test, feature = "test-utils"))]
     pub(crate) async fn process_consensus_transactions_for_tests<C: CheckpointServiceNotify>(
         &self,
         transactions: Vec<VerifiedSequencedConsensusTransaction>,
