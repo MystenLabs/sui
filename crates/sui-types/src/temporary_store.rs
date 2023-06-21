@@ -17,7 +17,7 @@ use tracing::trace;
 use crate::committee::EpochId;
 use crate::effects::{TransactionEffects, TransactionEvents};
 use crate::execution_status::ExecutionStatus;
-use crate::storage::ObjectStore;
+use crate::storage::{DeleteKindWithOldVersion, ObjectStore};
 use crate::sui_system_state::{
     get_sui_system_state, get_sui_system_state_wrapper, AdvanceEpochParams, SuiSystemState,
 };
@@ -49,8 +49,10 @@ pub type TxCoins = (ObjectMap, WrittenObjects);
 pub struct InnerTemporaryStore {
     pub objects: ObjectMap,
     pub mutable_inputs: Vec<ObjectRef>,
+    // All the written objects' sequence number should have been updated to the lamport version.
     pub written: WrittenObjects,
-    // deleted or wrapped or unwrap-then-delete
+    // deleted or wrapped or unwrap-then-delete. The sequence number should have been updated to
+    // the lamport version.
     pub deleted: BTreeMap<ObjectID, (SequenceNumber, DeleteKind)>,
     pub loaded_child_objects: BTreeMap<ObjectID, SequenceNumber>,
     pub events: TransactionEvents,
@@ -176,7 +178,7 @@ pub struct TemporaryStore<'backing> {
     // into written directly.
     written: BTreeMap<ObjectID, (Object, WriteKind)>, // Objects written
     /// Objects actively deleted.
-    deleted: BTreeMap<ObjectID, (SequenceNumber, DeleteKind)>,
+    deleted: BTreeMap<ObjectID, DeleteKindWithOldVersion>,
     /// Child objects loaded during dynamic field opers
     /// Currently onply populated for full nodes, not for validators
     loaded_child_objects: BTreeMap<ObjectID, SequenceNumber>,
@@ -303,10 +305,12 @@ impl<'backing> TemporaryStore<'backing> {
             written.insert(id, (obj.compute_object_reference(), obj, kind));
         }
 
-        for (id, (mut version, kind)) in self.deleted {
-            // Update the version, post-delete.
-            version.increment_to(self.lamport_timestamp);
-            deleted.insert(id, (version, kind));
+        for (id, kind) in self.deleted {
+            // Check invariant that version must increase.
+            if let Some(version) = kind.old_version() {
+                debug_assert!(version < self.lamport_timestamp);
+            }
+            deleted.insert(id, (self.lamport_timestamp, kind.to_delete_kind()));
         }
 
         // Combine object events with move events.
@@ -362,8 +366,10 @@ impl<'backing> TemporaryStore<'backing> {
             }
         });
 
-        self.deleted.iter_mut().for_each(|(id, (version, _))| {
-            modified_at_versions.push((*id, *version));
+        self.deleted.iter_mut().for_each(|(id, kind)| {
+            if let Some(version) = kind.old_version() {
+                modified_at_versions.push((*id, version));
+            }
         });
 
         let protocol_version = self.protocol_config.version;
@@ -471,6 +477,20 @@ impl<'backing> TemporaryStore<'backing> {
             },
             "Object previous transaction not properly set",
         );
+
+        if self.protocol_config.simplified_unwrap_then_delete() {
+            debug_assert!(self.deleted.iter().all(|(_, kind)| {
+                !matches!(
+                    kind,
+                    DeleteKindWithOldVersion::UnwrapThenDeleteDEPRECATED(_)
+                )
+            }));
+        } else {
+            debug_assert!(self
+                .deleted
+                .iter()
+                .all(|(_, kind)| { !matches!(kind, DeleteKindWithOldVersion::UnwrapThenDelete) }));
+        }
     }
 
     // Invariant: A key assumption of the write-delete logic
@@ -534,7 +554,7 @@ impl<'backing> TemporaryStore<'backing> {
             // delete all gas objects except the primary_gas_object
             for (id, version, _digest) in &gas[1..] {
                 debug_assert_ne!(*id, primary_gas_object.id());
-                self.delete_object(id, *version, DeleteKind::Normal)
+                self.delete_object(id, DeleteKindWithOldVersion::Normal(*version));
             }
             // unwrap is safe because we checked that the primary gas object was a coin object above.
             primary_gas_object
@@ -547,7 +567,7 @@ impl<'backing> TemporaryStore<'backing> {
         Ok(gas[0])
     }
 
-    pub fn delete_object(&mut self, id: &ObjectID, version: SequenceNumber, kind: DeleteKind) {
+    pub fn delete_object(&mut self, id: &ObjectID, kind: DeleteKindWithOldVersion) {
         // there should be no deletion after write
         debug_assert!(self.written.get(id).is_none());
 
@@ -561,13 +581,13 @@ impl<'backing> TemporaryStore<'backing> {
                 // In addition, gas objects should never be immutable, so gas smashing
                 // should not allow us to delete immutable objects
                 let digest = self.tx_digest;
-                panic!("Internal invariant violation in tx {digest}: Deleting immutable object {id}, version {version}, delete kind {kind}")
+                panic!("Internal invariant violation in tx {digest}: Deleting immutable object {id}, delete kind {kind:?}")
             }
         }
 
         // For object deletion, we will increment the version when converting the store to effects
         // so the object will eventually show up in the parent_sync table with a new version.
-        self.deleted.insert(*id, (version, kind));
+        self.deleted.insert(*id, kind);
     }
 
     pub fn drop_writes(&mut self) {
@@ -603,7 +623,7 @@ impl<'backing> TemporaryStore<'backing> {
         for (id, change) in changes {
             match change {
                 ObjectChange::Write(new_value, kind) => self.write_object(new_value, kind),
-                ObjectChange::Delete(version, kind) => self.delete_object(&id, version, kind),
+                ObjectChange::Delete(kind) => self.delete_object(&id, kind),
             }
         }
     }
@@ -736,12 +756,12 @@ impl<'backing> TemporaryStore<'backing> {
             }
         }
 
-        for (id, (_version, kind)) in &self.deleted {
+        for (id, kind) in &self.deleted {
             if authenticated_objs.contains(id) || gas_objs.contains(id) {
                 continue;
             }
             match kind {
-                DeleteKind::Normal | DeleteKind::Wrap => {
+                DeleteKindWithOldVersion::Normal(_) | DeleteKindWithOldVersion::Wrap(_) => {
                     // get owner at beginning of tx
                     let old_obj = self.store.get_object(id)?.unwrap();
                     match &old_obj.owner {
@@ -754,7 +774,8 @@ impl<'backing> TemporaryStore<'backing> {
                         Owner::Immutable => unreachable!("Immutable objects cannot be deleted"),
                     }
                 }
-                DeleteKind::UnwrapThenDelete => {
+                DeleteKindWithOldVersion::UnwrapThenDelete
+                | DeleteKindWithOldVersion::UnwrapThenDeleteDEPRECATED(_) => {
                     // unwrapped-then-deleted object was not an input to the tx,
                     // no ownership checks needed
                 }
@@ -965,15 +986,17 @@ impl<'backing> TemporaryStore<'backing> {
             total_bytes_written_deleted += old_object_size + new_object_size;
         }
 
-        for (object_id, (version, kind)) in &self.deleted {
+        for (object_id, kind) in &self.deleted {
             match kind {
-                DeleteKind::Wrap | DeleteKind::Normal => {
+                DeleteKindWithOldVersion::Wrap(version)
+                | DeleteKindWithOldVersion::Normal(version) => {
                     let (storage_rebate, object_size) =
                         self.get_input_storage_rebate_and_size(object_id, *version)?;
                     gas_status.charge_storage_mutation(0, storage_rebate)?;
                     total_bytes_written_deleted += object_size;
                 }
-                DeleteKind::UnwrapThenDelete => {
+                DeleteKindWithOldVersion::UnwrapThenDelete
+                | DeleteKindWithOldVersion::UnwrapThenDeleteDEPRECATED(_) => {
                     // an unwrapped object does not have a storage rebate, we will charge for storage changes via its wrapper object
                 }
             }
@@ -1224,14 +1247,16 @@ impl<'backing> TemporaryStore<'backing> {
     }
 
     fn collect_rebate(&self, gas_status: &mut SuiGasStatus) {
-        for (object_id, (version, kind)) in &self.deleted {
+        for (object_id, kind) in &self.deleted {
             match kind {
-                DeleteKind::Wrap | DeleteKind::Normal => {
+                DeleteKindWithOldVersion::Wrap(version)
+                | DeleteKindWithOldVersion::Normal(version) => {
                     // get and track the deleted object `storage_rebate`
                     let storage_rebate = self.get_input_storage_rebate(object_id, *version);
                     gas_status.track_storage_mutation(0, storage_rebate);
                 }
-                DeleteKind::UnwrapThenDelete => {
+                DeleteKindWithOldVersion::UnwrapThenDelete
+                | DeleteKindWithOldVersion::UnwrapThenDeleteDEPRECATED(_) => {
                     // an unwrapped object does not have a storage rebate, we will charge for storage changes via its wrapper object
                 }
             }
@@ -1431,9 +1456,9 @@ impl<'backing> TemporaryStore<'backing> {
                 }
             }
         }
-        for (id, (input_version, kind)) in &self.deleted {
+        for (id, kind) in &self.deleted {
             match kind {
-                DeleteKind::Normal => {
+                DeleteKindWithOldVersion::Normal(input_version) => {
                     let (input_sui, input_storage_rebate) = self.get_input_sui(
                         id,
                         *input_version,
@@ -1443,7 +1468,7 @@ impl<'backing> TemporaryStore<'backing> {
                     total_input_sui += input_sui;
                     total_input_rebate += input_storage_rebate;
                 }
-                DeleteKind::Wrap => {
+                DeleteKindWithOldVersion::Wrap(input_version) => {
                     // wrapped object was a tx input or dynamic field--need to account for it in input SUI
                     // note: if an object is created by the tx, then wrapped, it will not appear here
                     let (input_sui, input_storage_rebate) = self.get_input_sui(
@@ -1458,7 +1483,8 @@ impl<'backing> TemporaryStore<'backing> {
                     // 1. freshly created, which means it has 0 contribution to input SUI
                     // 2. unwrapped from another object A, which means its contribution to input SUI will be captured by looking at A
                 }
-                DeleteKind::UnwrapThenDelete => {
+                DeleteKindWithOldVersion::UnwrapThenDelete
+                | DeleteKindWithOldVersion::UnwrapThenDeleteDEPRECATED(_) => {
                     // an unwrapped option was wrapped in input object or dynamic field A, which means its contribution to input SUI will
                     // be captured by looking at A
                 }

@@ -1,7 +1,7 @@
-#[evm_contract] // for passing evm test flavor
 module A::A {
     use A::Foo;
 
+    #[allow(unused_function)]
     fun f(): u64 {
         Foo::foo()
     }

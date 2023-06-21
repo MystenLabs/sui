@@ -8,11 +8,14 @@ use proptest::prelude::*;
 #[test]
 fn serde_pubkey() {
     let skp = SuiKeyPair::Ed25519(get_key_pair().1);
-    let mut bytes = Vec::new();
-    bytes.extend_from_slice(&[skp.public().flag()]);
-    bytes.extend_from_slice(skp.public().as_ref());
     let ser = serde_json::to_string(&skp.public()).unwrap();
-    assert_eq!(ser, format!("\"{}\"", Base64::encode(&bytes)));
+    assert_eq!(
+        ser,
+        format!(
+            "{{\"Ed25519\":\"{}\"}}",
+            Base64::encode(skp.public().as_ref())
+        )
+    );
 }
 
 #[test]

@@ -98,6 +98,7 @@ module capy::capy_winter {
     struct SentKey has store, copy, drop { sender: address }
     struct OpenedKey has store, copy, drop { sender: address }
 
+    #[allow(unused_function)]
     /// Build a CapyPost office and offer gifts to send and buy.
     fun init(ctx: &mut TxContext) {
         transfer::share_object(CapyPost { id: object::new(ctx), balance: balance::zero() });

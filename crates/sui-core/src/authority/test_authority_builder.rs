@@ -171,10 +171,11 @@ impl<'a> TestAuthorityBuilder<'a> {
         let registry = Registry::new();
         let cache_metrics = Arc::new(ResolverMetrics::new(&registry));
         let signature_verifier_metrics = SignatureVerifierMetrics::new(&registry);
-        if self.protocol_config.is_some() {
-            let config = self.protocol_config.unwrap();
-            let _guard = ProtocolConfig::apply_overrides_for_testing(move |_, _| config.clone());
-        }
+        // `_guard` must be declared here so it is not dropped before
+        // `AuthorityPerEpochStore::new` is called
+        let _guard = self
+            .protocol_config
+            .map(|config| ProtocolConfig::apply_overrides_for_testing(move |_, _| config.clone()));
         let epoch_start_configuration = EpochStartConfiguration::new(
             genesis.sui_system_object().into_epoch_start_state(),
             *genesis.checkpoint().digest(),
@@ -196,7 +197,6 @@ impl<'a> TestAuthorityBuilder<'a> {
             &expensive_safety_checks,
             ChainIdentifier::from(*genesis.checkpoint().digest()),
         );
-
         let committee_store = Arc::new(CommitteeStore::new(
             path.join("epochs"),
             &genesis_committee,

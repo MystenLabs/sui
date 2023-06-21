@@ -27,6 +27,7 @@ tempfile = "3.3.0"
 thiserror = "1.0.34"
 tracing = "0.1.36"
 prometheus = "0.13.3"
+indicatif = "0.17.2"
 
 anemo-cli.workspace = true
 anemo.workspace = true
@@ -51,5 +52,6 @@ sui-replay = { path = "../sui-replay" }
 sui-sdk = { path = "../sui-sdk" }
 sui-storage = { path = "../sui-storage" }
 sui-types = { path = "../sui-types" }
+sui-archival = { path = "../sui-archival" }
 
 workspace-hack = { version = "0.1", path = "../workspace-hack" }

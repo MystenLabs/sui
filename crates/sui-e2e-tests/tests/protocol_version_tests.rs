@@ -103,8 +103,7 @@ mod sim_only_tests {
                 START, FINISH,
             ))
             .build()
-            .await
-            .unwrap();
+            .await;
 
         expect_upgrade_succeeded(&test_cluster).await;
     }
@@ -124,8 +123,7 @@ mod sim_only_tests {
                 START, FINISH,
             ))
             .build()
-            .await
-            .unwrap();
+            .await;
 
         let validator = test_cluster.get_validator_pubkeys()[0].clone();
         test_cluster.stop_node(&validator);
@@ -179,8 +177,7 @@ mod sim_only_tests {
                 }
             }))
             .build()
-            .await
-            .unwrap();
+            .await;
 
         expect_upgrade_succeeded(&test_cluster).await;
 
@@ -214,8 +211,7 @@ mod sim_only_tests {
                 }
             }))
             .build()
-            .await
-            .unwrap();
+            .await;
 
         test_cluster.swarm.validator_nodes().for_each(|v| {
             let node_handle = v.get_node_handle().expect("node should be running");
@@ -248,8 +244,7 @@ mod sim_only_tests {
                 }
             }))
             .build()
-            .await
-            .unwrap();
+            .await;
 
         test_cluster.swarm.validator_nodes().for_each(|v| {
             let node_handle = v.get_node_handle().expect("node should be running");
@@ -292,8 +287,7 @@ mod sim_only_tests {
                 }
             }))
             .build()
-            .await
-            .unwrap();
+            .await;
 
         expect_upgrade_failed(&test_cluster).await;
     }
@@ -385,8 +379,7 @@ mod sim_only_tests {
                 START, FINISH,
             ))
             .build()
-            .await
-            .unwrap();
+            .await;
 
         expect_upgrade_succeeded(&cluster).await;
 
@@ -440,7 +433,6 @@ mod sim_only_tests {
             ))
             .build()
             .await
-            .unwrap()
     }
 
     async fn call_canary(cluster: &TestCluster) -> u64 {
@@ -548,8 +540,7 @@ mod sim_only_tests {
                 START, START,
             ))
             .build()
-            .await
-            .unwrap();
+            .await;
 
         expect_upgrade_failed(&test_cluster).await;
     }
@@ -568,8 +559,7 @@ mod sim_only_tests {
             ))
             .with_epoch_duration_ms(40000)
             .build()
-            .await
-            .unwrap();
+            .await;
 
         // We must stop the validators before overriding the system modules, otherwise the validators
         // may start running before the override and hence send capabilities indicating that they
@@ -621,8 +611,7 @@ mod sim_only_tests {
                 START, FINISH,
             ))
             .build()
-            .await
-            .unwrap();
+            .await;
 
         test_cluster.stop_all_validators().await;
         let mut validators = test_cluster.swarm.validator_nodes();
@@ -651,8 +640,7 @@ mod sim_only_tests {
                 START, FINISH,
             ))
             .build()
-            .await
-            .unwrap();
+            .await;
         let genesis_epoch_start_time = test_cluster
             .swarm
             .validator_nodes()
@@ -698,8 +686,7 @@ mod sim_only_tests {
             ))
             .with_objects([sui_system_package_object("mock_sui_systems/base")])
             .build()
-            .await
-            .unwrap();
+            .await;
         // Make sure we can survive at least one epoch.
         test_cluster.wait_for_epoch(None).await;
     }
@@ -715,8 +702,7 @@ mod sim_only_tests {
             ))
             .with_objects([sui_system_package_object("mock_sui_systems/base")])
             .build()
-            .await
-            .unwrap();
+            .await;
         // Wait for the upgrade to finish. After the upgrade, the new framework will be installed,
         // but the system state object hasn't been upgraded yet.
         let system_state = test_cluster.wait_for_epoch(Some(1)).await;
@@ -748,8 +734,7 @@ mod sim_only_tests {
             ))
             .with_objects([sui_system_package_object("mock_sui_systems/base")])
             .build()
-            .await
-            .unwrap();
+            .await;
         // Wait for the upgrade to finish. After the upgrade, the new framework will be installed,
         // but the system state object hasn't been upgraded yet.
         let system_state = test_cluster.wait_for_epoch(Some(1)).await;
@@ -804,8 +789,7 @@ mod sim_only_tests {
                 START, FINISH,
             ))
             .build()
-            .await
-            .unwrap();
+            .await;
         // TODO: Replace the path with the new framework path when we test it for real.
         override_sui_system_modules("../../../sui-framework/packages/sui-system");
         // Wait for the upgrade to finish. After the upgrade, the new framework will be installed,

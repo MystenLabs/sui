@@ -11,6 +11,7 @@ module examples::one_timer {
         id: UID
     }
 
+    #[allow(unused_function)]
     /// This function is only called once on module publish.
     /// Use it to make sure something has happened only once, like
     /// here - only module author will own a version of a

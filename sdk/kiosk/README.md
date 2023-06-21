@@ -27,20 +27,20 @@ import { fetchKiosk } from '@mysten/kiosk';
 import { Connection, JsonRpcProvider } from '@mysten/sui.js';
 
 const provider = new JsonRpcProvider(
-  new Connection({ fullnode: 'https://fullnode.testnet.sui.io:443' }),
+	new Connection({ fullnode: 'https://fullnode.testnet.sui.io:443' }),
 );
 
 const getKiosk = async () => {
-  const kioskAddress = `0xSomeKioskAddress`;
+	const kioskAddress = `0xSomeKioskAddress`;
 
-  const { data } = await fetchKiosk(
-    provider,
-    kioskAddress,
-    {}, // empty pagination, currently disabled.
-    { withListingPrices: true, withKioskFields: true },
-  );
+	const { data } = await fetchKiosk(
+		provider,
+		kioskAddress,
+		{}, // empty pagination, currently disabled.
+		{ withListingPrices: true, withKioskFields: true },
+	);
 
-  console.log(data); // { items: [],  itemIds: [],  listingIds: [], kiosk: {...} }
+	console.log(data); // { items: [],  itemIds: [],  listingIds: [], kiosk: {...} }
 };
 ```
 
@@ -117,15 +117,15 @@ import { createKioskAndShare } from '@mysten/kiosk';
 import { TransactionBlock } from '@mysten/sui.js';
 
 const createKiosk = async () => {
-  const accountAddress = '0xSomeSuiAddress';
+	const accountAddress = '0xSomeSuiAddress';
 
-  const tx = new TransactionBlock();
-  const kiosk_cap = createKioskAndShare(tx);
+	const tx = new TransactionBlock();
+	const kiosk_cap = createKioskAndShare(tx);
 
-  tx.transferObjects([kiosk_cap], tx.pure(accountAddress, 'address'));
+	tx.transferObjects([kiosk_cap], tx.pure(accountAddress, 'address'));
 
-  // ... continue to sign and execute the transaction
-  // ...
+	// ... continue to sign and execute the transaction
+	// ...
 };
 ```
 
@@ -139,18 +139,18 @@ import { placeAndList } from '@mysten/kiosk';
 import { TransactionBlock } from '@mysten/sui.js';
 
 const placeAndListToKiosk = async () => {
-  const kiosk = 'SomeKioskId';
-  const kioskCap = 'KioskCapObjectId';
-  const itemType = '0xItemAddr::some:ItemType';
-  const item = 'SomeItemId';
-  const price = '100000';
+	const kiosk = 'SomeKioskId';
+	const kioskCap = 'KioskCapObjectId';
+	const itemType = '0xItemAddr::some:ItemType';
+	const item = 'SomeItemId';
+	const price = '100000';
 
-  const tx = new TransactionBlock();
+	const tx = new TransactionBlock();
 
-  placeAndList(tx, itemType, kiosk, kioskCap, item, price);
+	placeAndList(tx, itemType, kiosk, kioskCap, item, price);
 
-  // ... continue to sign and execute the transaction
-  // ...
+	// ... continue to sign and execute the transaction
+	// ...
 };
 ```
 
@@ -164,20 +164,20 @@ import { withdrawFromKiosk } from '@mysten/kiosk';
 import { TransactionBlock } from '@mysten/sui.js';
 
 const withdraw = async () => {
-  const kiosk = 'SomeKioskId';
-  const kioskCap = 'KioskCapObjectId';
-  const address = '0xSomeAddressThatReceivesTheFunds';
-  const amount = '100000';
+	const kiosk = 'SomeKioskId';
+	const kioskCap = 'KioskCapObjectId';
+	const address = '0xSomeAddressThatReceivesTheFunds';
+	const amount = '100000';
 
-  const tx = new TransactionBlock();
+	const tx = new TransactionBlock();
 
-  withdrawFromKiosk(tx, kiosk, kioskCap, amount);
+	withdrawFromKiosk(tx, kiosk, kioskCap, amount);
 
-  // transfer the Coin to self or any other address.
-  tx.transferObjects([coin], tx.pure(address, 'address'));
+	// transfer the Coin to self or any other address.
+	tx.transferObjects([coin], tx.pure(address, 'address'));
 
-  // ... continue to sign and execute the transaction
-  // ...
+	// ... continue to sign and execute the transaction
+	// ...
 };
 ```
 

@@ -99,7 +99,6 @@ test-fuzz = "3.0.4"
 
 sui-macros = { path = "../sui-macros" }
 sui-protocol-config = { path = "../sui-protocol-config" }
-test-utils = { path = "../test-utils" }
 
 [[example]]
 name = "generate-format"

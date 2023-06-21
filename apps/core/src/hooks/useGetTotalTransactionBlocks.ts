@@ -5,15 +5,15 @@ import { useRpcClient } from '../api/RpcClientContext';
 import { useQuery } from '@tanstack/react-query';
 
 const defaultOptions = {
-    cacheTime: 24 * 60 * 60 * 1000,
-    staleTime: Infinity,
-    retry: 5,
+	cacheTime: 24 * 60 * 60 * 1000,
+	staleTime: Infinity,
+	retry: 5,
 };
 export function useGetTotalTransactionBlocks(options = defaultOptions) {
-    const rpc = useRpcClient();
-    return useQuery({
-        queryKey: ['home', 'transaction-count'],
-        queryFn: () => rpc.getTotalTransactionBlocks(),
-        ...options,
-    });
+	const rpc = useRpcClient();
+	return useQuery({
+		queryKey: ['home', 'transaction-count'],
+		queryFn: () => rpc.getTotalTransactionBlocks(),
+		...options,
+	});
 }

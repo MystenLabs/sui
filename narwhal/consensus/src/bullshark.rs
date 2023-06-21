@@ -10,6 +10,7 @@ use config::{Authority, Committee, Stake};
 use fastcrypto::hash::Hash;
 use std::sync::Arc;
 use storage::ConsensusStore;
+use sui_protocol_config::ProtocolConfig;
 use tokio::time::Instant;
 use tracing::{debug, error_span};
 use types::{Certificate, CertificateAPI, CommittedSubDag, HeaderAPI, ReputationScores, Round};
@@ -25,6 +26,9 @@ pub mod randomized_tests;
 pub struct Bullshark {
     /// The committee information.
     pub committee: Committee,
+    /// The protocol config settings allowing us to enable/disable features and support properties
+    /// according to the supported protocol version.
+    pub protocol_config: ProtocolConfig,
     /// Persistent storage to safe ensure crash-recovery.
     pub store: Arc<ConsensusStore>,
     /// The most recent round of inserted certificate
@@ -42,11 +46,13 @@ impl Bullshark {
     pub fn new(
         committee: Committee,
         store: Arc<ConsensusStore>,
+        protocol_config: ProtocolConfig,
         metrics: Arc<ConsensusMetrics>,
         num_sub_dags_per_schedule: u64,
     ) -> Self {
         Self {
             committee,
+            protocol_config,
             store,
             last_successful_leader_election_timestamp: Instant::now(),
             max_inserted_certificate_round: 0,

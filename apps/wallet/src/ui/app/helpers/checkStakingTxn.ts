@@ -5,5 +5,5 @@ import type { SuiTransactionBlockResponse } from '@mysten/sui.js';
 
 // TODO: Support programmable transactions:
 export function checkStakingTxn(_txn: SuiTransactionBlockResponse) {
-    return false;
+	return false;
 }

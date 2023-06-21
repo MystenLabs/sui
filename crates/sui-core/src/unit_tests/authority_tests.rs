@@ -3811,8 +3811,7 @@ async fn test_iter_live_object_set() {
     let obj_id = ObjectID::random();
     let authority = init_state_with_ids(vec![(sender, gas), (sender, obj_id)]).await;
     let starting_live_set: HashSet<_> = authority
-        .database
-        .iter_live_object_set()
+        .iter_live_object_set_for_testing()
         .filter_map(|object| {
             let id = object.object_id();
             if id != gas && id != obj_id {
@@ -3995,8 +3994,7 @@ fn check_live_set(
     expected.sort();
 
     let actual: Vec<_> = authority
-        .database
-        .iter_live_object_set()
+        .iter_live_object_set_for_testing()
         .filter_map(|object| {
             let id = object.object_id();
             if ignore.contains(&id) {

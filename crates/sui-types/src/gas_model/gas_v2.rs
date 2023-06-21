@@ -11,8 +11,8 @@ use crate::{
 use move_core_types::vm_status::StatusCode;
 use std::iter;
 use sui_cost_tables::bytecode_tables::{
-    initial_cost_schedule_v1, initial_cost_schedule_v2, initial_cost_schedule_v3, GasStatus,
-    ZERO_COST_SCHEDULE,
+    initial_cost_schedule_v1, initial_cost_schedule_v2, initial_cost_schedule_v3,
+    initial_cost_schedule_v4, GasStatus, ZERO_COST_SCHEDULE,
 };
 use sui_cost_tables::units_types::CostTable;
 use sui_protocol_config::*;
@@ -156,8 +156,10 @@ fn cost_table_for_version(config: &ProtocolConfig) -> CostTable {
         initial_cost_schedule_v1()
     } else if gas_model == 4 {
         initial_cost_schedule_v2()
-    } else {
+    } else if gas_model == 5 {
         initial_cost_schedule_v3()
+    } else {
+        initial_cost_schedule_v4()
     }
 }
 
@@ -207,7 +209,7 @@ pub struct SuiGasStatus {
     /// This allows us to track how much storage rebate we need to retain in system transactions.
     unmetered_storage_rebate: u64,
     /// Rounding value to round up gas charges.
-    gas_rounding_step: u64,
+    gas_rounding_step: Option<u64>,
 }
 
 impl SuiGasStatus {
@@ -218,10 +220,10 @@ impl SuiGasStatus {
         gas_price: u64,
         storage_gas_price: u64,
         rebate_rate: u64,
-        gas_rounding_step: u64,
+        gas_rounding_step: Option<u64>,
         cost_table: SuiCostTable,
     ) -> SuiGasStatus {
-        let gas_rounding_step = gas_rounding_step.max(1);
+        let gas_rounding_step = gas_rounding_step.map(|val| val.max(1));
         SuiGasStatus {
             gas_status: move_gas_status,
             gas_budget,
@@ -251,7 +253,7 @@ impl SuiGasStatus {
             gas_budget
         };
         let sui_cost_table = SuiCostTable::new(config);
-        let gas_rounding_step = config.gas_rounding_step_as_option().unwrap_or(1u64);
+        let gas_rounding_step = config.gas_rounding_step_as_option();
         Self::new(
             GasStatus::new_v2(
                 sui_cost_table.execution_cost_table.clone(),
@@ -273,7 +275,7 @@ impl SuiGasStatus {
         gas_budget: u64,
         gas_price: u64,
         storage_gas_price: u64,
-        gas_rounding_step: u64,
+        gas_rounding_step: Option<u64>,
         cost_table: SuiCostTable,
     ) -> SuiGasStatus {
         let protocol_config = ProtocolConfig::get_for_max_version();
@@ -309,7 +311,7 @@ impl SuiGasStatus {
             0,
             0,
             0,
-            1, // `gas_rounding_step` used in a division if we ever enter that code
+            None,
             SuiCostTable::unmetered(),
         )
     }
@@ -326,11 +328,11 @@ impl SuiGasStatusAPI for SuiGasStatus {
 
     fn bucketize_computation(&mut self) -> Result<(), ExecutionError> {
         let gas_used = self.gas_status.gas_used_pre_gas_price();
-        let gas_used = if self.gas_status.gas_model_version > 5 {
-            if gas_used > 0 && gas_used % self.gas_rounding_step == 0 {
+        let gas_used = if let Some(gas_rounding) = self.gas_rounding_step {
+            if gas_used > 0 && gas_used % gas_rounding == 0 {
                 gas_used * self.gas_price
             } else {
-                ((gas_used / self.gas_rounding_step) + 1) * self.gas_rounding_step * self.gas_price
+                ((gas_used / gas_rounding) + 1) * gas_rounding * self.gas_price
             }
         } else {
             let bucket_cost = get_bucket_cost(&self.cost_table.computation_bucket, gas_used);

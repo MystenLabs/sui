@@ -23,10 +23,11 @@ uuid = {version = "1.1.2", features = [ "v4", "fast-rng"]}
 prometheus = "0.13.3"
 scopeguard = "1.1"
 tap = "1.0"
-
+ttl_cache = "0.5.1"
 eyre = "0.6.8"
 rocksdb = "0.21.0"
 tempfile = "3.3.0"
+parking_lot = "0.12.1"
 
 sui = { path = "../sui" }
 sui-node = { path = "../sui-node" }

@@ -2,10 +2,10 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use super::{ast::*, cfg::BlockCFG};
+use super::{ast::*, cfg::MutForwardCFG};
 
 /// Returns true if anything changed
-pub fn optimize(cfg: &mut BlockCFG) -> bool {
+pub fn optimize(cfg: &mut MutForwardCFG) -> bool {
     let mut changed = false;
     for block in cfg.blocks_mut().values_mut() {
         let old_block = std::mem::take(block);

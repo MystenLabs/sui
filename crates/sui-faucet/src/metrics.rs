@@ -27,6 +27,7 @@ pub struct FaucetMetrics {
     pub(crate) current_executions_in_flight: IntGauge,
     pub(crate) total_available_coins: IntGauge,
     pub(crate) total_discarded_coins: IntGauge,
+    pub(crate) total_coin_requests_succeeded: IntGauge,
 }
 
 const LATENCY_SEC_BUCKETS: &[f64] = &[
@@ -102,6 +103,12 @@ impl FaucetMetrics {
             total_discarded_coins: register_int_gauge_with_registry!(
                 "total_discarded_coins",
                 "Total number of discarded coins",
+                registry,
+            )
+            .unwrap(),
+            total_coin_requests_succeeded: register_int_gauge_with_registry!(
+                "total_coin_requests_succeeded",
+                "Total number of requests processed successfully in Faucet (both batch and non_batched)",
                 registry,
             )
             .unwrap(),

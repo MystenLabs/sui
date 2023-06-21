@@ -9,28 +9,22 @@ import { useNextMenuUrl } from '../menu/hooks';
 import { ConnectLedgerModal } from './ConnectLedgerModal';
 
 export function ConnectLedgerModalContainer() {
-    const navigate = useNavigate();
-    const accountsUrl = useNextMenuUrl(true, '/accounts');
-    const importLedgerAccountsUrl = useNextMenuUrl(
-        true,
-        '/import-ledger-accounts'
-    );
+	const navigate = useNavigate();
+	const accountsUrl = useNextMenuUrl(true, '/accounts');
+	const importLedgerAccountsUrl = useNextMenuUrl(true, '/import-ledger-accounts');
 
-    return (
-        <ConnectLedgerModal
-            onClose={() => {
-                navigate(accountsUrl);
-            }}
-            onError={(error) => {
-                navigate(accountsUrl);
-                toast.error(
-                    getLedgerConnectionErrorMessage(error) ||
-                        'Something went wrong.'
-                );
-            }}
-            onConfirm={() => {
-                navigate(importLedgerAccountsUrl);
-            }}
-        />
-    );
+	return (
+		<ConnectLedgerModal
+			onClose={() => {
+				navigate(accountsUrl);
+			}}
+			onError={(error) => {
+				navigate(accountsUrl);
+				toast.error(getLedgerConnectionErrorMessage(error) || 'Something went wrong.');
+			}}
+			onConfirm={() => {
+				navigate(importLedgerAccountsUrl);
+			}}
+		/>
+	);
 }

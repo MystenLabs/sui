@@ -175,7 +175,7 @@ Emitted when a maker order is injected into the order book.
 <code>owner: <b>address</b></code>
 </dt>
 <dd>
- object ID of the <code>AccountCap</code> that placed the order
+ owner ID of the <code>AccountCap</code> that placed the order
 </dd>
 <dt>
 <code>original_quantity: u64</code>
@@ -251,7 +251,7 @@ Emitted when a maker order is canceled.
 <code>owner: <b>address</b></code>
 </dt>
 <dd>
- owner address of the <code>AccountCap</code> that placed the order
+ owner ID of the <code>AccountCap</code> that canceled the order
 </dd>
 <dt>
 <code>original_quantity: u64</code>
@@ -327,13 +327,13 @@ Emitted only when a maker order is filled.
 <code>taker_address: <b>address</b></code>
 </dt>
 <dd>
- address of <code>AccountCap</code> that filled the order
+ owner ID of the <code>AccountCap</code> that filled the order
 </dd>
 <dt>
 <code>maker_address: <b>address</b></code>
 </dt>
 <dd>
- address of <code>AccountCap</code> that placed the order, also as "maker_address"
+ owner ID of the <code>AccountCap</code> that placed the order
 </dd>
 <dt>
 <code>original_quantity: u64</code>
@@ -449,7 +449,7 @@ Emitted when user withdraw asset from custodian
 <code>owner: <b>address</b></code>
 </dt>
 <dd>
- owner address of the <code>AccountCap</code> that withdraw the asset
+ owner ID of the <code>AccountCap</code> that withdrew the asset
 </dd>
 </dl>
 
@@ -512,7 +512,7 @@ Emitted when user withdraw asset from custodian
 <code>owner: <b>address</b></code>
 </dt>
 <dd>
-
+ Order can only be canceled by the <code>AccountCap</code> with this owner ID
 </dd>
 <dt>
 <code>expire_timestamp: u64</code>
@@ -2126,7 +2126,7 @@ So please check that boolean value first before using the order id.
     <b>assert</b>!(price % pool.tick_size == 0, <a href="clob_v2.md#0xdee9_clob_v2_EInvalidPrice">EInvalidPrice</a>);
     <b>assert</b>!(quantity % pool.lot_size == 0, <a href="clob_v2.md#0xdee9_clob_v2_EInvalidQuantity">EInvalidQuantity</a>);
     <b>assert</b>!(expire_timestamp &gt; <a href="../../../.././build/Sui/docs/clock.md#0x2_clock_timestamp_ms">clock::timestamp_ms</a>(<a href="../../../.././build/Sui/docs/clock.md#0x2_clock">clock</a>), <a href="clob_v2.md#0xdee9_clob_v2_EInvalidExpireTimestamp">EInvalidExpireTimestamp</a>);
-    <b>let</b> owner = sender(ctx);
+    <b>let</b> owner = account_owner(account_cap);
     <b>let</b> original_quantity = quantity;
     <b>let</b> base_quantity_filled;
     <b>let</b> quote_quantity_filled;
@@ -2134,7 +2134,7 @@ So please check that boolean value first before using the order id.
     <b>if</b> (is_bid) {
         <b>let</b> quote_quantity_original = <a href="custodian.md#0xdee9_custodian_account_available_balance">custodian::account_available_balance</a>&lt;QuoteAsset&gt;(
             &pool.quote_custodian,
-            owner,
+            owner
         );
         <b>let</b> quote_balance = <a href="custodian.md#0xdee9_custodian_decrease_user_available_balance">custodian::decrease_user_available_balance</a>&lt;QuoteAsset&gt;(
             &<b>mut</b> pool.quote_custodian,

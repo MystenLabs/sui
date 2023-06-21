@@ -11,38 +11,36 @@ import { Text } from '~/ui/Text';
 
 // Generate table data from the checkpoints data
 export const genTableDataFromCheckpointsData = (data: CheckpointPage) => ({
-    data: data?.data.map((checkpoint) => ({
-        digest: (
-            <HighlightedTableCol first>
-                <CheckpointLink digest={checkpoint.digest} />
-            </HighlightedTableCol>
-        ),
-        time: <TxTimeType timestamp={Number(checkpoint.timestampMs)} />,
-        sequenceNumber: (
-            <CheckpointSequenceLink sequence={checkpoint.sequenceNumber} />
-        ),
-        transactionBlockCount: (
-            <Text variant="bodySmall/medium" color="steel-darker">
-                {checkpoint.transactions.length}
-            </Text>
-        ),
-    })),
-    columns: [
-        {
-            header: () => 'Digest',
-            accessorKey: 'digest',
-        },
-        {
-            header: () => 'Sequence Number',
-            accessorKey: 'sequenceNumber',
-        },
-        {
-            header: () => 'Time',
-            accessorKey: 'time',
-        },
-        {
-            header: () => 'Transaction Block Count',
-            accessorKey: 'transactionBlockCount',
-        },
-    ],
+	data: data?.data.map((checkpoint) => ({
+		digest: (
+			<HighlightedTableCol first>
+				<CheckpointLink digest={checkpoint.digest} />
+			</HighlightedTableCol>
+		),
+		time: <TxTimeType timestamp={Number(checkpoint.timestampMs)} />,
+		sequenceNumber: <CheckpointSequenceLink sequence={checkpoint.sequenceNumber} />,
+		transactionBlockCount: (
+			<Text variant="bodySmall/medium" color="steel-darker">
+				{checkpoint.transactions.length}
+			</Text>
+		),
+	})),
+	columns: [
+		{
+			header: () => 'Digest',
+			accessorKey: 'digest',
+		},
+		{
+			header: () => 'Sequence Number',
+			accessorKey: 'sequenceNumber',
+		},
+		{
+			header: () => 'Time',
+			accessorKey: 'time',
+		},
+		{
+			header: () => 'Transaction Block Count',
+			accessorKey: 'transactionBlockCount',
+		},
+	],
 });

@@ -15,27 +15,24 @@ const Transport = require('@ledgerhq/hw-transport').default;
 const Sui = require('@mysten/ledgerjs-hw-app-sui').default;
 
 const getPublicKey = async () => {
-    const sui = new Sui(await Transport.create());
-    return await sui.getPublicKey("44'/784'/0'/0'/0'");
+	const sui = new Sui(await Transport.create());
+	return await sui.getPublicKey("44'/784'/0'/0'/0'");
 };
 
 const signTransaction = async () => {
-    const sui = new Sui(await Transport.create());
-    return await sui.signTransaction(
-        "44'/784'/0'/0'/0'",
-        '<transaction contents>'
-    );
+	const sui = new Sui(await Transport.create());
+	return await sui.signTransaction("44'/784'/0'/0'/0'", '<transaction contents>');
 };
 
 const getVersion = async () => {
-    const sui = new Sui(await Transport.create());
-    return await sui.getVersion();
+	const sui = new Sui(await Transport.create());
+	return await sui.getVersion();
 };
 
 const doAll = async () => {
-    console.log(await getPublicKey());
-    console.log(await signTransaction());
-    console.log(await getVersion());
+	console.log(await getPublicKey());
+	console.log(await signTransaction());
+	console.log(await getVersion());
 };
 
 doAll().catch((err) => console.log(err));
@@ -45,23 +42,23 @@ doAll().catch((err) => console.log(err));
 
 ### Table of Contents
 
--   [Sui](#sui)
-    -   [Parameters](#parameters)
-    -   [Examples](#examples)
-    -   [getPublicKey](#getpublickey)
-        -   [Parameters](#parameters-1)
-        -   [Examples](#examples-1)
-    -   [signTransaction](#signtransaction)
-        -   [Parameters](#parameters-2)
-        -   [Examples](#examples-2)
-    -   [getVersion](#signtransaction)
-        -   [Parameters](#parameters-3)
-        -   [Examples](#examples-3)
+- [Sui](#sui)
+  - [Parameters](#parameters)
+  - [Examples](#examples)
+  - [getPublicKey](#getpublickey)
+    - [Parameters](#parameters-1)
+    - [Examples](#examples-1)
+  - [signTransaction](#signtransaction)
+    - [Parameters](#parameters-2)
+    - [Examples](#examples-2)
+  - [getVersion](#signtransaction)
+    - [Parameters](#parameters-3)
+    - [Examples](#examples-3)
 
 ### Parameters
 
--   `transport` **`Transport<any>`**
--   `scrambleKey` **[string](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/String)** (optional, default `"Sui"`)
+- `transport` **`Transport<any>`**
+- `scrambleKey` **[string](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/String)** (optional, default `"Sui"`)
 
 ### Examples
 
@@ -78,8 +75,8 @@ Gets the Sui address for a given BIP-32 path.
 
 #### Parameters
 
--   `path` **[string](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/String)** a path in BIP-32 format
--   `displayOnDevice` **[boolean](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Boolean)** whether or not to display the address on the Ledger device.
+- `path` **[string](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/String)** a path in BIP-32 format
+- `displayOnDevice` **[boolean](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Boolean)** whether or not to display the address on the Ledger device.
 
 #### Examples
 
@@ -95,15 +92,12 @@ Sign a transaction with a given BIP-32 path.
 
 #### Parameters
 
--   `path` **[string](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/String)** a path in BIP-32 format
+- `path` **[string](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/String)** a path in BIP-32 format
 
 #### Examples
 
 ```javascript
-const publicKey = await sui.signTransaction(
-    "44'/784'/0'/0'/0'",
-    '<transaction contents>'
-);
+const publicKey = await sui.signTransaction("44'/784'/0'/0'/0'", '<transaction contents>');
 ```
 
 Returns **[Promise](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Promise)&lt;[object](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Object)>** an object with text field containing a signature.

@@ -29,6 +29,7 @@ pub struct WriteAheadLog {
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
 pub struct Entry {
     pub uuid: uuid::Bytes,
+    // TODO (jian): remove recipient
     pub recipient: SuiAddress,
     pub tx: TransactionData,
     pub retry_count: u64,

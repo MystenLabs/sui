@@ -24,6 +24,7 @@ module capy::eden {
         capy_two: Option<Capy>,
     }
 
+    #[allow(unused_function)]
     fun init(ctx: &mut TxContext) {
         sui::transfer::share_object(Eden {
             id: object::new(ctx),
@@ -38,6 +39,7 @@ module capy::eden {
         option::fill(&mut eden.capy_two, capy_two)
     }
 
+    #[allow(unused_function)]
     /// Breed a "free" Capy using capys set in the `Eden` object. Can only be performed
     /// twice. Aborts when trying to breed more than 2 times.
     fun get_capy(eden: &mut Eden, reg: &mut CapyRegistry, ctx: &mut TxContext) {

@@ -15,6 +15,7 @@ tonic = "0.8"
 dashmap = "5.4.0"
 tower = "0.4.13"
 
+sui-storage = { path = "../sui-storage" }
 sui-types = { path = "../sui-types" }
 sui-config = { path = "../sui-config" }
 shared-crypto = { path = "../shared-crypto" }

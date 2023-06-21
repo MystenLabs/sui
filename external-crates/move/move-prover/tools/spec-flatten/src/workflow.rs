@@ -109,6 +109,7 @@ pub(crate) fn prepare_with_override(
             named_address_map: named_addresses.clone(),
         }],
         get_model_options(options),
+        None,
     )?;
     if env.has_errors() {
         return Err(anyhow!("Error in model building"));

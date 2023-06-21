@@ -13,6 +13,7 @@ module examples::item {
     /// Custom NFT-like type.
     struct Item has key, store { id: UID, name: String }
 
+    #[allow(unused_function)]
     /// Module initializer is called once on module publish.
     /// Here we create only one instance of `AdminCap` and send it to the publisher.
     fun init(ctx: &mut TxContext) {

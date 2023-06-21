@@ -4,20 +4,20 @@
 import { number, object, string } from 'superstruct';
 
 export const NetworkMetrics = object({
-  currentTps: number(),
-  tps30Days: number(),
-  currentCheckpoint: string(),
-  currentEpoch: string(),
-  totalAddresses: string(),
-  totalObjects: string(),
-  totalPackages: string(),
+	currentTps: number(),
+	tps30Days: number(),
+	currentCheckpoint: string(),
+	currentEpoch: string(),
+	totalAddresses: string(),
+	totalObjects: string(),
+	totalPackages: string(),
 });
 
 export const AddressMetrics = object({
-  checkpoint: number(),
-  epoch: number(),
-  timestampMs: number(),
-  cumulativeAddresses: number(),
-  cumulativeActiveAddresses: number(),
-  dailyActiveAddresses: number(),
+	checkpoint: number(),
+	epoch: number(),
+	timestampMs: number(),
+	cumulativeAddresses: number(),
+	cumulativeActiveAddresses: number(),
+	dailyActiveAddresses: number(),
 });

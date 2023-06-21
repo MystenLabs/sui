@@ -43,8 +43,7 @@ use mysten_metrics::{spawn_monitored_task, RegistryService};
 use mysten_network::server::ServerBuilder;
 use narwhal_network::metrics::MetricsMakeCallbackHandler;
 use narwhal_network::metrics::{NetworkConnectionMetrics, NetworkMetrics};
-use sui_archival::writer::ArchiveWriterV1;
-use sui_archival::StorageFormat;
+use sui_archival::writer::ArchiveWriter;
 use sui_config::node::DBCheckpointConfig;
 use sui_config::node_config_metrics::NodeConfigMetrics;
 use sui_config::{ConsensusConfig, NodeConfig};
@@ -94,8 +93,8 @@ use sui_network::discovery::TrustedPeerChangeEvent;
 use sui_network::state_sync;
 use sui_protocol_config::{ProtocolConfig, SupportedProtocolVersions};
 use sui_storage::object_store::{ObjectStoreConfig, ObjectStoreType};
-use sui_storage::{FileCompression, IndexStore};
-use sui_types::base_types::{AuthorityName, EpochId, TransactionDigest};
+use sui_storage::{FileCompression, IndexStore, StorageFormat};
+use sui_types::base_types::{AuthorityName, EpochId};
 use sui_types::committee::Committee;
 use sui_types::crypto::KeypairTraits;
 use sui_types::error::{SuiError, SuiResult};
@@ -389,7 +388,7 @@ impl SuiNode {
                     directory: Some(config.archive_path()),
                     ..Default::default()
                 };
-                let archive_writer = ArchiveWriterV1::new(
+                let archive_writer = ArchiveWriter::new(
                     local_store_config,
                     remote_store_config.clone(),
                     FileCompression::Zstd,
@@ -399,7 +398,7 @@ impl SuiNode {
                     &prometheus_registry,
                 )
                 .await?;
-                Some(archive_writer.start(state_sync_store)?)
+                Some(archive_writer.start(state_sync_store).await?)
             } else {
                 None
             };
@@ -641,15 +640,6 @@ impl SuiNode {
     pub async fn close_epoch_for_testing(&self) -> SuiResult {
         let epoch_store = self.state.epoch_store_for_testing();
         self.close_epoch(&epoch_store).await
-    }
-
-    pub fn is_transaction_executed_in_checkpoint(
-        &self,
-        digest: &TransactionDigest,
-    ) -> SuiResult<bool> {
-        self.state
-            .database
-            .is_transaction_executed_in_checkpoint(digest)
     }
 
     fn create_p2p_network(
@@ -1250,6 +1240,22 @@ impl SuiNode {
                 }
             };
             *self.validator_components.lock().await = new_validator_components;
+
+            #[cfg(msim)]
+            if !matches!(
+                self.config
+                    .authority_store_pruning_config
+                    .num_epochs_to_retain_for_checkpoints,
+                None | Some(u64::MAX) | Some(0)
+            ) {
+                self.state
+                .prune_checkpoints_for_eligible_epochs(
+                    self.config.clone(),
+                    sui_core::authority::authority_store_pruner::AuthorityStorePruningMetrics::new_for_test(),
+                )
+                .await?;
+            }
+
             info!("Reconfiguration finished");
         }
     }

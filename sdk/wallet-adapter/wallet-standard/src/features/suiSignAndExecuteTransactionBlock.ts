@@ -2,14 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import type {
-  ExecuteTransactionRequestType,
-  SuiTransactionBlockResponse,
-  SuiTransactionBlockResponseOptions,
-} from "@mysten/sui.js";
-import type { SuiSignTransactionBlockInput } from "./suiSignTransactionBlock";
+	ExecuteTransactionRequestType,
+	SuiTransactionBlockResponse,
+	SuiTransactionBlockResponseOptions,
+} from '@mysten/sui.js';
+import type { SuiSignTransactionBlockInput } from './suiSignTransactionBlock';
 
 /** The latest API version of the signAndExecuteTransactionBlock API. */
-export type SuiSignAndExecuteTransactionBlockVersion = "1.0.0";
+export type SuiSignAndExecuteTransactionBlockVersion = '1.0.0';
 
 /**
  * A Wallet Standard feature for signing a transaction, and submitting it to the
@@ -17,30 +17,28 @@ export type SuiSignAndExecuteTransactionBlockVersion = "1.0.0";
  * and return the transaction response.
  */
 export type SuiSignAndExecuteTransactionBlockFeature = {
-  /** Namespace for the feature. */
-  "sui:signAndExecuteTransactionBlock": {
-    /** Version of the feature API. */
-    version: SuiSignAndExecuteTransactionBlockVersion;
-    signAndExecuteTransactionBlock: SuiSignAndExecuteTransactionBlockMethod;
-  };
+	/** Namespace for the feature. */
+	'sui:signAndExecuteTransactionBlock': {
+		/** Version of the feature API. */
+		version: SuiSignAndExecuteTransactionBlockVersion;
+		signAndExecuteTransactionBlock: SuiSignAndExecuteTransactionBlockMethod;
+	};
 };
 
 export type SuiSignAndExecuteTransactionBlockMethod = (
-  input: SuiSignAndExecuteTransactionBlockInput
+	input: SuiSignAndExecuteTransactionBlockInput,
 ) => Promise<SuiSignAndExecuteTransactionBlockOutput>;
 
 /** Input for signing and sending transactions. */
-export interface SuiSignAndExecuteTransactionBlockInput
-  extends SuiSignTransactionBlockInput {
-  /**
-   * `WaitForEffectsCert` or `WaitForLocalExecution`, see details in `ExecuteTransactionRequestType`.
-   * Defaults to `WaitForLocalExecution` if options.showEffects or options.showEvents is true
-   */
-  requestType?: ExecuteTransactionRequestType;
-  /** specify which fields to return (e.g., transaction, effects, events, etc). By default, only the transaction digest will be returned. */
-  options?: SuiTransactionBlockResponseOptions;
+export interface SuiSignAndExecuteTransactionBlockInput extends SuiSignTransactionBlockInput {
+	/**
+	 * `WaitForEffectsCert` or `WaitForLocalExecution`, see details in `ExecuteTransactionRequestType`.
+	 * Defaults to `WaitForLocalExecution` if options.showEffects or options.showEvents is true
+	 */
+	requestType?: ExecuteTransactionRequestType;
+	/** specify which fields to return (e.g., transaction, effects, events, etc). By default, only the transaction digest will be returned. */
+	options?: SuiTransactionBlockResponseOptions;
 }
 
 /** Output of signing and sending transactions. */
-export interface SuiSignAndExecuteTransactionBlockOutput
-  extends SuiTransactionBlockResponse {}
+export interface SuiSignAndExecuteTransactionBlockOutput extends SuiTransactionBlockResponse {}

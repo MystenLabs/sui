@@ -10,6 +10,8 @@
 -  [Resource `Custodian`](#0xdee9_custodian_v2_Custodian)
 -  [Constants](#@Constants_0)
 -  [Function `mint_account_cap`](#0xdee9_custodian_v2_mint_account_cap)
+-  [Function `create_child_account_cap`](#0xdee9_custodian_v2_create_child_account_cap)
+-  [Function `delete_account_cap`](#0xdee9_custodian_v2_delete_account_cap)
 -  [Function `account_owner`](#0xdee9_custodian_v2_account_owner)
 -  [Function `account_balance`](#0xdee9_custodian_v2_account_balance)
 -  [Function `new`](#0xdee9_custodian_v2_new)
@@ -72,6 +74,11 @@
 
 ## Resource `AccountCap`
 
+Capability granting permission to access an entry in <code><a href="custodian_v2.md#0xdee9_custodian_v2_Custodian">Custodian</a>.account_balances</code>.
+Calling <code>mint_account_cap</code> creates an "admin account cap" such that id == owner with
+the permission to both access funds and create new <code><a href="custodian_v2.md#0xdee9_custodian_v2_AccountCap">AccountCap</a></code>s.
+Calling <code>create_child_account_cap</code> creates a "child account cap" such that id != owner
+that can access funds, but cannot create new <code><a href="custodian_v2.md#0xdee9_custodian_v2_AccountCap">AccountCap</a></code>s.
 
 
 <pre><code><b>struct</b> <a href="custodian_v2.md#0xdee9_custodian_v2_AccountCap">AccountCap</a> <b>has</b> store, key
@@ -94,7 +101,8 @@
 <code>owner: <b>address</b></code>
 </dt>
 <dd>
-
+ The owner of this AccountCap. Note: this is
+ derived from an object ID, not a user address
 </dd>
 </dl>
 
@@ -148,11 +156,21 @@
 
 
 
+<a name="0xdee9_custodian_v2_EAdminAccountCapRequired"></a>
+
+
+
+<pre><code><b>const</b> <a href="custodian_v2.md#0xdee9_custodian_v2_EAdminAccountCapRequired">EAdminAccountCapRequired</a>: u64 = 2;
+</code></pre>
+
+
+
 <a name="0xdee9_custodian_v2_mint_account_cap"></a>
 
 ## Function `mint_account_cap`
 
-Create an <code><a href="custodian_v2.md#0xdee9_custodian_v2_AccountCap">AccountCap</a></code> that can be used across all DeepBook pool
+Create an admin <code><a href="custodian_v2.md#0xdee9_custodian_v2_AccountCap">AccountCap</a></code> that can be used across all DeepBook pools, and has
+the permission to create new <code><a href="custodian_v2.md#0xdee9_custodian_v2_AccountCap">AccountCap</a></code>s that can access the same source of funds
 
 
 <pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="custodian_v2.md#0xdee9_custodian_v2_mint_account_cap">mint_account_cap</a>(ctx: &<b>mut</b> <a href="../../../.././build/Sui/docs/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="custodian_v2.md#0xdee9_custodian_v2_AccountCap">custodian_v2::AccountCap</a>
@@ -165,10 +183,67 @@ Create an <code><a href="custodian_v2.md#0xdee9_custodian_v2_AccountCap">Account
 
 
 <pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="custodian_v2.md#0xdee9_custodian_v2_mint_account_cap">mint_account_cap</a>(ctx: &<b>mut</b> TxContext): <a href="custodian_v2.md#0xdee9_custodian_v2_AccountCap">AccountCap</a> {
+    <b>let</b> id = <a href="../../../.././build/Sui/docs/object.md#0x2_object_new">object::new</a>(ctx);
+    <b>let</b> owner = <a href="../../../.././build/Sui/docs/object.md#0x2_object_uid_to_address">object::uid_to_address</a>(&id);
+    <a href="custodian_v2.md#0xdee9_custodian_v2_AccountCap">AccountCap</a> { id, owner }
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0xdee9_custodian_v2_create_child_account_cap"></a>
+
+## Function `create_child_account_cap`
+
+Create a "child account cap" such that id != owner
+that can access funds, but cannot create new <code><a href="custodian_v2.md#0xdee9_custodian_v2_AccountCap">AccountCap</a></code>s.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="custodian_v2.md#0xdee9_custodian_v2_create_child_account_cap">create_child_account_cap</a>(admin_account_cap: &<a href="custodian_v2.md#0xdee9_custodian_v2_AccountCap">custodian_v2::AccountCap</a>, ctx: &<b>mut</b> <a href="../../../.././build/Sui/docs/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="custodian_v2.md#0xdee9_custodian_v2_AccountCap">custodian_v2::AccountCap</a>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="custodian_v2.md#0xdee9_custodian_v2_create_child_account_cap">create_child_account_cap</a>(admin_account_cap: &<a href="custodian_v2.md#0xdee9_custodian_v2_AccountCap">AccountCap</a>, ctx: &<b>mut</b> TxContext): <a href="custodian_v2.md#0xdee9_custodian_v2_AccountCap">AccountCap</a> {
+    // Only the admin account cap can create new account caps
+    <b>assert</b>!(<a href="../../../.././build/Sui/docs/object.md#0x2_object_uid_to_address">object::uid_to_address</a>(&admin_account_cap.id) == admin_account_cap.owner, <a href="custodian_v2.md#0xdee9_custodian_v2_EAdminAccountCapRequired">EAdminAccountCapRequired</a>);
+
     <a href="custodian_v2.md#0xdee9_custodian_v2_AccountCap">AccountCap</a> {
         id: <a href="../../../.././build/Sui/docs/object.md#0x2_object_new">object::new</a>(ctx),
-        owner: sender(ctx)
+        owner: admin_account_cap.owner
     }
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0xdee9_custodian_v2_delete_account_cap"></a>
+
+## Function `delete_account_cap`
+
+Destroy the given <code>account_cap</code> object
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="custodian_v2.md#0xdee9_custodian_v2_delete_account_cap">delete_account_cap</a>(account_cap: <a href="custodian_v2.md#0xdee9_custodian_v2_AccountCap">custodian_v2::AccountCap</a>)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="custodian_v2.md#0xdee9_custodian_v2_delete_account_cap">delete_account_cap</a>(account_cap: <a href="custodian_v2.md#0xdee9_custodian_v2_AccountCap">AccountCap</a>) {
+    <b>let</b> <a href="custodian_v2.md#0xdee9_custodian_v2_AccountCap">AccountCap</a> { id, owner: _ } = account_cap;
+    <a href="../../../.././build/Sui/docs/object.md#0x2_object_delete">object::delete</a>(id)
 }
 </code></pre>
 
@@ -180,7 +255,7 @@ Create an <code><a href="custodian_v2.md#0xdee9_custodian_v2_AccountCap">Account
 
 ## Function `account_owner`
 
-Return the owner address of an AccountCap
+Return the owner of an AccountCap
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="custodian_v2.md#0xdee9_custodian_v2_account_owner">account_owner</a>(account_cap: &<a href="custodian_v2.md#0xdee9_custodian_v2_AccountCap">custodian_v2::AccountCap</a>): <b>address</b>

@@ -61,4 +61,4 @@ task 13 'view-object'. lines 65-67:
 No object at id 1,1
 
 task 14 'upgrade'. lines 68-71:
-Error: INVALID TEST. Could not load object argument 0xc1a85383fc881013473c67dd4a5881e823f0b533bcd9dc6cac45bf87095c4a47
+Error: INVALID TEST. Could not load object argument 0xf12c31c3d61d79fc968525b7de593500d3f5b386308affb08c292abecafda6ef
