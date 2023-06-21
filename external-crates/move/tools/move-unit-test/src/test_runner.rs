@@ -18,6 +18,7 @@ use colored::*;
 use move_binary_format::{errors::VMResult, file_format::CompiledModule};
 use move_bytecode_utils::Modules;
 use move_compiler::{
+    diagnostics::WarningFilters,
     shared::{Flags, NumericalAddress, PackagePaths},
     unit_test::{ExpectedFailure, ModuleTestPlan, TestCase, TestPlan},
 };
@@ -374,6 +375,7 @@ impl SharedTestingConfig {
                 vec![],
                 ModelBuilderOptions::default(),
                 Flags::testing(),
+                Some(WarningFilters::unused_function_warnings_filter()),
             )
             .unwrap_or_else(|e| panic!("Unable to build stackless bytecode: {}", e));
 

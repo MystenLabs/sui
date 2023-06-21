@@ -9,10 +9,12 @@ module 0x2::A {
         f2: T,
     }
 
+    #[allow(unused_function)]
     fun move_plain(s: &S1): u64 {
         s.f2
     }
 
+    #[allow(unused_function)]
     fun move_generic<T: copy>(s: &S2<T>): T {
         *&s.f2
     }

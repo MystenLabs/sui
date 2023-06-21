@@ -54,6 +54,7 @@ module games::sea_hero {
 
 
 
+    #[allow(unused_function)]
     /// Get a treasury cap for the coin and give it to the admin
     // TODO: this leverages Move module initializers
     fun init(ctx: &mut TxContext) {

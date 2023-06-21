@@ -48,11 +48,6 @@ module std::aclTests {
     }
 
     #[test_only]
-    fun create_signer(): signer {
-        vector::pop_back(&mut unit_test::create_signers_for_testing(1))
-    }
-
-    #[test_only]
     fun create_two_signers(): (signer, signer) {
         let signers = &mut unit_test::create_signers_for_testing(2);
         (vector::pop_back(signers), vector::pop_back(signers))

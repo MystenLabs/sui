@@ -28,6 +28,7 @@ module nfts::num {
     /// Created more than the maximum supply of Num NFT's
     const ETooManyNums: u64 = 0;
 
+    #[allow(unused_function)]
     /// Create a unique issuer cap and give it to the transaction sender
     fun init(ctx: &mut TxContext) {
         let issuer_cap = NumIssuerCap {
