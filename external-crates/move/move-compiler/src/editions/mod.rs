@@ -61,12 +61,16 @@ pub fn check_feature(env: &mut CompilationEnv, edition: Edition, loc: Loc, featu
 impl Edition {
     pub const LEGACY: &str = "legacy";
     pub const E2024_PREFIX: &str = "2024";
+
+    pub const SUPPORTED: &[Self] = &[Self::Legacy, Self::E2024(EditionRelease::Alpha)];
 }
 
 impl EditionRelease {
     pub const ALPHA: &str = "alpha";
     pub const BETA: &str = "beta";
     pub const EXT_SEP: &str = ".";
+
+    pub const SUFFIXES: &[Self] = &[Self::Alpha, Self::Beta];
 }
 
 impl FeatureGate {
@@ -83,6 +87,7 @@ impl FeatureGate {
 impl Flavor {
     pub const GLOBAL_STORAGE: &str = "global-storage";
     pub const SUI: &str = "sui";
+    pub const ALL: &[Self] = &[Self::GlobalStorage, Self::Sui];
 }
 
 //**************************************************************************************************
@@ -94,19 +99,33 @@ impl FromStr for Edition {
 
     // Required method
     fn from_str(s: &str) -> anyhow::Result<Self> {
-        Ok(if s == Edition::LEGACY {
+        let edition = if s == Edition::LEGACY {
             Edition::Legacy
         } else if let Some(s) = s.strip_prefix(Edition::E2024_PREFIX) {
             let release = EditionRelease::from_str(s)?;
             let edition = Edition::E2024(release);
-            if release != EditionRelease::Alpha {
-                let alpha = Edition::E2024(EditionRelease::Alpha);
-                anyhow::bail!("{edition} is not yet supported. Only {alpha} is supported")
-            }
             edition
         } else {
-            anyhow::bail!("Unknown edition {s}")
-        })
+            anyhow::bail!(
+                "Unknown edition \"{s}\". Expected one of: {}",
+                Self::SUPPORTED
+                    .iter()
+                    .map(|e| format!("\"{}\"", e))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            )
+        };
+        if !Self::SUPPORTED.iter().any(|e| *e == edition) {
+            anyhow::bail!(
+                "Unsupported edition \"{s}\". Current supported editions include: {}",
+                Self::SUPPORTED
+                    .iter()
+                    .map(|e| format!("\"{}\"", e))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            )
+        }
+        Ok(edition)
     }
 }
 
@@ -118,11 +137,26 @@ impl FromStr for EditionRelease {
             match s {
                 Self::ALPHA => Self::Alpha,
                 Self::BETA => Self::Beta,
-                _ => anyhow::bail!("Unknown release suffix: {}{s}", Self::EXT_SEP),
+                _ => anyhow::bail!(
+                    "Unknown release suffix \"{}{s}\". Expected no suffix, or one of: {}",
+                    Self::EXT_SEP,
+                    Self::SUFFIXES
+                        .iter()
+                        .map(|e| format!("\"{}\"", e))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                ),
             }
         } else {
             if !s.is_empty() {
-                anyhow::bail!("Unknown release suffix: {s}")
+                anyhow::bail!(
+                    "Unknown release suffix \"{s}\". Expected no suffix, or one of: {}",
+                    Self::SUFFIXES
+                        .iter()
+                        .map(|e| format!("\"{}\"", e))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )
             }
             Self::Final
         })
@@ -136,7 +170,14 @@ impl FromStr for Flavor {
         Ok(match s {
             Self::GLOBAL_STORAGE => Self::GlobalStorage,
             Self::SUI => Self::Sui,
-            _ => anyhow::bail!("Unknown flavor: {s}"),
+            _ => anyhow::bail!(
+                "Unknown flavor \"{s}\". Expected one of: {}",
+                Self::ALL
+                    .iter()
+                    .map(|e| format!("\"{}\"", e))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
         })
     }
 }

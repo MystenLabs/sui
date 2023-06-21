@@ -1,0 +1,1 @@
+Error parsing '[package]' section of manifest: Invalid 'edition'. Unknown release suffix ".final". Expected no suffix, or one of: ".alpha", ".beta"
