@@ -206,10 +206,11 @@ async fn access_clock_object_test() {
     let start = SystemTime::now()
         .duration_since(SystemTime::UNIX_EPOCH)
         .unwrap();
-    let validators = test_cluster.get_validator_pubkeys();
     let (effects, events, objects) = test_cluster
-        .submit_transaction_to_validators(transaction, &validators)
-        .await;
+        .execute_transaction_return_raw_effects(transaction)
+        .await
+        .unwrap();
+    assert!(effects.status().is_ok());
 
     assert_eq!(
         objects.first().unwrap().compute_object_reference(),
@@ -293,7 +294,9 @@ async fn shared_object_sync() {
 
     let (effects, _, _) = test_cluster
         .submit_transaction_to_validators(create_counter_transaction.clone(), &slow_validators)
-        .await;
+        .await
+        .unwrap();
+    assert!(effects.status().is_ok());
     let ((counter_id, counter_initial_shared_version, _), _) = effects.created()[0];
 
     // Check that the counter object exists in at least one of the validators the transaction was
@@ -331,15 +334,19 @@ async fn shared_object_sync() {
     );
 
     // Let's submit the transaction to the original set of validators, except the first.
-    test_cluster
+    let (effects, _, _) = test_cluster
         .submit_transaction_to_validators(increment_counter_transaction.clone(), &validators[1..])
-        .await;
+        .await
+        .unwrap();
+    assert!(effects.status().is_ok());
 
     // Submit transactions to the out-of-date authority.
     // It will succeed because we share owned object certificates through narwhal
-    test_cluster
+    let (effects, _, _) = test_cluster
         .submit_transaction_to_validators(increment_counter_transaction, &validators[0..1])
-        .await;
+        .await
+        .unwrap();
+    assert!(effects.status().is_ok());
 }
 
 /// Send a simple shared object transaction to Sui and ensures the client gets back a response.
