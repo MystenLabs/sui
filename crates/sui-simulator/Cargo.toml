@@ -12,18 +12,18 @@ move-package.workspace = true
 
 sui-adapter = { path = "../../sui-execution/latest/sui-adapter", package = "sui-adapter-latest" }
 
-sui-framework = { path = "../sui-framework" }
-sui-move-build = { path = "../sui-move-build" }
-sui-types = { path = "../sui-types" }
-tempfile = "3.3.0"
-tracing = "0.1"
+sui-framework.workspace = true
+sui-move-build.workspace = true
+sui-types.workspace = true
+tempfile.workspace = true
+tracing.workspace = true
 anemo.workspace = true
 anemo-tower.workspace = true
-narwhal-network = { path = "../../narwhal/network" }
+narwhal-network.workspace = true
 fastcrypto = { workspace = true, features = ["copy_key"] }
 telemetry-subscribers.workspace = true
-tower = "0.4.13"
-lru = "0.10"
+tower.workspace = true
+lru.workspace = true
 
 [target.'cfg(msim)'.dependencies]
-msim = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "bd870b9a11870a2618c55ba703d58fafd41d686c", package = "msim" }
+msim.workspace = true
