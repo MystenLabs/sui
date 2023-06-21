@@ -9,6 +9,7 @@ use rand::rngs::OsRng;
 use std::path::PathBuf;
 use std::{num::NonZeroUsize, path::Path, sync::Arc};
 use sui_config::genesis::{TokenAllocation, TokenDistributionScheduleBuilder};
+use sui_macros::nondeterministic;
 use sui_protocol_config::SupportedProtocolVersions;
 use sui_types::base_types::{AuthorityName, SuiAddress};
 use sui_types::committee::{Committee, ProtocolVersion};
@@ -68,7 +69,7 @@ impl ConfigBuilder {
     }
 
     pub fn new_with_temp_dir() -> Self {
-        Self::new(tempfile::tempdir().unwrap().into_path())
+        Self::new(nondeterministic!(tempfile::tempdir().unwrap().into_path()))
     }
 }
 

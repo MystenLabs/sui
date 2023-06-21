@@ -22,7 +22,7 @@ async fn test_blocking_execution() -> Result<(), anyhow::Error> {
     let context = &mut test_cluster.wallet;
     let handle = &test_cluster.fullnode_handle.sui_node;
 
-    let temp_dir = tempfile::tempdir().unwrap();
+    let temp_dir = nondeterministic!(tempfile::tempdir().unwrap());
     let registry = Registry::new();
     // Start orchestrator inside container so that it will be properly shutdown.
     let orchestrator = handle
@@ -91,7 +91,7 @@ async fn test_fullnode_wal_log() -> Result<(), anyhow::Error> {
 
     let handle = &test_cluster.fullnode_handle.sui_node;
 
-    let temp_dir = tempfile::tempdir().unwrap();
+    let temp_dir = nondeterministic!(tempfile::tempdir().unwrap());
     tokio::task::yield_now().await;
     let registry = Registry::new();
     // Start orchestrator inside container so that it will be properly shutdown.
