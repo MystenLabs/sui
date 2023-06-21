@@ -7,6 +7,7 @@ import { toast } from 'react-hot-toast';
 import { useParams, useLocation, Navigate, useNavigate } from 'react-router-dom';
 
 import { useBackgroundClient } from '../../hooks/useBackgroundClient';
+import { useQredoInfo } from '../../hooks/useQredoInfo';
 import { Button } from '../../shared/ButtonUI';
 import { SelectQredoAccountsSummaryCard } from './components/SelectQredoAccountsSummaryCard';
 import { useQredoUIPendingRequest } from './hooks';
@@ -25,8 +26,25 @@ export function SelectQredoAccountsPage() {
 	// do not call the api if user has not clicked continue in Qredo Connect Info page
 	const fetchAccountsEnabled =
 		!isQredoRequestLoading && (!qredoPendingRequest || qredoRequestReviewed);
-
+	const { data: qredoInfoData } = useQredoInfo(
+		qredoPendingRequest
+			? {
+					identity: {
+						apiUrl: qredoPendingRequest.apiUrl,
+						organization: qredoPendingRequest.organization,
+						origin: qredoPendingRequest.origin,
+						service: qredoPendingRequest.service,
+					},
+			  }
+			: null,
+	);
 	const [selectedAccounts, setSelectedAccounts] = useState<Wallet[]>([]);
+	useEffect(() => {
+		const accounts = qredoInfoData?.qredoInfo?.accounts;
+		if (accounts?.length) {
+			setSelectedAccounts((value) => Array.from(new Set([...value, ...accounts])));
+		}
+	}, [qredoInfoData?.qredoInfo?.accounts]);
 	const [showPassword, setShowPassword] = useState(false);
 	const shouldCloseWindow = (!isQredoRequestLoading && !qredoPendingRequest) || !id;
 	useEffect(() => {
