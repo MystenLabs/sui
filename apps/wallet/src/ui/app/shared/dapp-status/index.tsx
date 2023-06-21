@@ -56,7 +56,7 @@ function DappStatus() {
 		y,
 		context,
 		reference,
-		floating,
+		refs,
 		middlewareData: { arrow: arrowData },
 	} = useFloating({
 		open: visible,
@@ -96,8 +96,9 @@ function DappStatus() {
 		return null;
 	}
 	return (
-		<>
+		<div className="w-40">
 			<ButtonConnectedTo
+				truncate
 				iconBefore={<Dot12 className="text-success" />}
 				text={activeOrigin || ''}
 				iconAfter={<ChevronDown12 />}
@@ -121,7 +122,7 @@ function DappStatus() {
 						className={st.popup}
 						style={{ top: y || 0, left: x || 0 }}
 						{...getFloatingProps()}
-						ref={floating}
+						ref={refs.setFloating}
 					>
 						<div className={st.popupContent}>
 							<div className={st.originContainer}>
@@ -149,7 +150,7 @@ function DappStatus() {
 					</motion.div>
 				) : null}
 			</AnimatePresence>
-		</>
+		</div>
 	);
 }
 
