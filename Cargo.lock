@@ -9759,6 +9759,7 @@ dependencies = [
  "diesel_migrations",
  "fastcrypto",
  "futures",
+ "itertools",
  "jsonrpsee",
  "move-bytecode-utils",
  "move-core-types",
