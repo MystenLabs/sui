@@ -44,7 +44,7 @@ use tokio::time::{timeout, Instant};
 use tokio::{task::JoinHandle, time::sleep};
 use tracing::info;
 
-const NUM_VALIDAOTR: usize = 4;
+const NUM_VALIDATOR: usize = 4;
 
 pub struct FullNodeHandle {
     pub sui_node: SuiNodeHandle,
@@ -642,7 +642,7 @@ impl TestClusterBuilder {
     async fn start_swarm(&mut self) -> Result<Swarm, anyhow::Error> {
         let mut builder: SwarmBuilder = Swarm::builder()
             .committee_size(
-                NonZeroUsize::new(self.num_validators.unwrap_or(NUM_VALIDAOTR)).unwrap(),
+                NonZeroUsize::new(self.num_validators.unwrap_or(NUM_VALIDATOR)).unwrap(),
             )
             .with_objects(self.additional_objects.clone())
             .with_db_checkpoint_config(self.db_checkpoint_config_validators.clone())
