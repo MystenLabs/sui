@@ -1,0 +1,36 @@
+[package]
+name = "sui-source-validation-service"
+version = "0.1.0"
+authors = ["Mysten Labs <build@mystenlabs.com>"]
+license = "Apache-2.0"
+publish = false
+edition = "2021"
+
+[lib]
+path = "src/lib.rs"
+
+[[bin]]
+path = "src/main.rs"
+name = "sui-source-validation-service"
+
+[dependencies]
+actix-web = { version = "4", features = ["rustls"] }
+anyhow = { version = "1.0.64", features = ["backtrace"] }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+serde = { version = "1.0.144", features = ["derive"] }
+serde_json = "1.0.88"
+
+sui-config = { path = "../../crates/sui-config" }
+sui-move = { path = "../../crates/sui-move", features = ["all"] }
+sui-move-build = { path = "../../crates/sui-move-build" }
+sui-sdk = { path = "../../crates/sui-sdk" }
+sui-source-validation = { path = "../sui-source-validation" }
+
+move-package.workspace = true
+workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
+
+[dev-dependencies]
+expect-test = "1.4.0"
+reqwest = { version = "0.11", default-features = false, features = ["rustls-tls"] }
+
+test-utils = { path = "../test-utils" }
