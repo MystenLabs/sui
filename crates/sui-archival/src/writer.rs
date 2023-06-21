@@ -18,19 +18,21 @@ use std::io::{BufWriter, Seek, SeekFrom, Write};
 use std::ops::Range;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::thread::sleep;
 use std::time::Duration;
 use sui_storage::blob::{Blob, BlobEncoding};
 use sui_storage::object_store::util::{copy_file, path_to_filesystem};
 use sui_storage::object_store::ObjectStoreConfig;
 use sui_storage::{compress, FileCompression, StorageFormat};
 use sui_types::messages_checkpoint::{
-    CertifiedCheckpointSummary as Checkpoint, FullCheckpointContents as CheckpointContents,
+    CertifiedCheckpointSummary as Checkpoint, CheckpointSequenceNumber,
+    FullCheckpointContents as CheckpointContents,
 };
 use sui_types::storage::{ReadStore, WriteStore};
 use tokio::sync::mpsc;
 use tokio::sync::mpsc::{Receiver, Sender};
 use tokio::time::Instant;
-use tracing::debug;
+use tracing::{debug, info};
 
 pub struct ArchiveMetrics {
     pub latest_checkpoint_archived: IntGauge,
@@ -117,20 +119,17 @@ impl CheckpointWriter {
         })
     }
 
-    pub async fn write(
+    pub fn write(
         &mut self,
         checkpoint_contents: CheckpointContents,
         checkpoint_summary: Checkpoint,
     ) -> Result<()> {
         match self.storage_format {
-            StorageFormat::Blob => {
-                self.write_as_blob(checkpoint_contents, checkpoint_summary)
-                    .await
-            }
+            StorageFormat::Blob => self.write_as_blob(checkpoint_contents, checkpoint_summary),
         }
     }
 
-    pub async fn write_as_blob(
+    pub fn write_as_blob(
         &mut self,
         checkpoint_contents: CheckpointContents,
         checkpoint_summary: Checkpoint,
@@ -146,7 +145,7 @@ impl CheckpointWriter {
                 .checked_add(1)
                 .context("Epoch num overflow")?
         {
-            self.cut().await?;
+            self.cut()?;
             self.update_to_next_epoch();
             if self.epoch_dir().exists() {
                 fs::remove_dir_all(self.epoch_dir())?;
@@ -168,7 +167,7 @@ impl CheckpointWriter {
             > self.commit_file_size
             || (self.last_commit_instant.elapsed() > self.commit_duration);
         if cut_new_checkpoint_file {
-            self.cut().await?;
+            self.cut()?;
             self.reset()?;
         }
 
@@ -184,7 +183,7 @@ impl CheckpointWriter {
             .context("Checkpoint sequence num overflow")?;
         Ok(())
     }
-    async fn finalize(&mut self) -> Result<FileMetadata> {
+    fn finalize(&mut self) -> Result<FileMetadata> {
         self.wbuf.flush()?;
         self.wbuf.get_ref().sync_data()?;
         let off = self.wbuf.get_ref().stream_position()?;
@@ -202,7 +201,7 @@ impl CheckpointWriter {
         )?;
         Ok(file_metadata)
     }
-    async fn finalize_summary(&mut self) -> Result<FileMetadata> {
+    fn finalize_summary(&mut self) -> Result<FileMetadata> {
         self.summary_wbuf.flush()?;
         self.summary_wbuf.get_ref().sync_data()?;
         let off = self.summary_wbuf.get_ref().stream_position()?;
@@ -220,10 +219,10 @@ impl CheckpointWriter {
         )?;
         Ok(file_metadata)
     }
-    async fn cut(&mut self) -> Result<()> {
+    fn cut(&mut self) -> Result<()> {
         if !self.checkpoint_range.is_empty() {
-            let checkpoint_file_metadata = self.finalize().await?;
-            let summary_file_metadata = self.finalize_summary().await?;
+            let checkpoint_file_metadata = self.finalize()?;
+            let summary_file_metadata = self.finalize_summary()?;
             let checkpoint_updates = CheckpointUpdates::new(
                 self.epoch_num,
                 self.checkpoint_range.end,
@@ -231,7 +230,8 @@ impl CheckpointWriter {
                 summary_file_metadata,
                 &mut self.manifest,
             );
-            self.sender.send(checkpoint_updates).await?;
+            info!("Checkpoint file cut for: {:?}", checkpoint_updates);
+            self.sender.blocking_send(checkpoint_updates)?;
         }
         Ok(())
     }
@@ -344,51 +344,13 @@ impl ArchiveWriter {
         })
     }
 
-    pub fn start<S>(&self, store: S) -> Result<tokio::sync::broadcast::Sender<()>>
+    pub async fn start<S>(&self, store: S) -> Result<tokio::sync::broadcast::Sender<()>>
     where
         S: WriteStore + Send + Sync + 'static,
         <S as ReadStore>::Error: Send,
     {
-        let (sender, receiver) = mpsc::channel::<CheckpointUpdates>(100);
-        let (kill_sender, _) = tokio::sync::broadcast::channel::<()>(1);
-        tokio::spawn(Self::start_tailing_checkpoints(
-            self.remote_object_store.clone(),
-            self.local_staging_dir_root.clone(),
-            store,
-            self.file_compression,
-            self.storage_format,
-            self.commit_duration,
-            self.commit_file_size,
-            sender,
-            kill_sender.subscribe(),
-        ));
-        tokio::spawn(Self::start_syncing_with_remote(
-            self.remote_object_store.clone(),
-            self.local_object_store.clone(),
-            self.local_staging_dir_root.clone(),
-            receiver,
-            kill_sender.subscribe(),
-            self.archive_metrics.clone(),
-        ));
-        Ok(kill_sender)
-    }
-
-    async fn start_tailing_checkpoints<S>(
-        remote_object_store: Arc<DynObjectStore>,
-        local_staging_root_dir: PathBuf,
-        store: S,
-        file_compression: FileCompression,
-        storage_format: StorageFormat,
-        commit_duration: Duration,
-        commit_file_size: usize,
-        sender: Sender<CheckpointUpdates>,
-        mut kill: tokio::sync::broadcast::Receiver<()>,
-    ) -> Result<()>
-    where
-        S: WriteStore + Send + Sync + 'static,
-        <S as ReadStore>::Error: Send,
-    {
-        let remote_archive_is_empty = remote_object_store
+        let remote_archive_is_empty = self
+            .remote_object_store
             .list_with_delimiter(None)
             .await
             .expect("Failed to read remote archive dir")
@@ -398,34 +360,76 @@ impl ArchiveWriter {
             // Start from genesis
             Manifest::new(0, 0)
         } else {
-            read_manifest(remote_object_store.clone())
+            read_manifest(self.remote_object_store.clone())
                 .await
                 .expect("Failed to read manifest")
         };
-        let mut checkpoint_sequence_number = manifest.next_checkpoint_seq_num();
-        let mut writer = CheckpointWriter::new(
-            local_staging_root_dir,
-            file_compression,
-            storage_format,
+        let start_checkpoint_sequence_number = manifest.next_checkpoint_seq_num();
+        let (sender, receiver) = mpsc::channel::<CheckpointUpdates>(100);
+        let checkpoint_writer = CheckpointWriter::new(
+            self.local_staging_dir_root.clone(),
+            self.file_compression,
+            self.storage_format,
             sender,
             manifest,
-            commit_duration,
-            commit_file_size,
+            self.commit_duration,
+            self.commit_file_size,
         )
         .expect("Failed to create checkpoint writer");
-        loop {
-            tokio::select! {
-                _ = kill.recv() => {
-                    break
-                },
-                res = Self::write_next_checkpoint(checkpoint_sequence_number, &store, &mut writer) => {
-                    if let Err(e) = res {
-                        panic!("Failed while writing checkpoint with err: {e}");
-                    }
-                    checkpoint_sequence_number = checkpoint_sequence_number.checked_add(1)
+        let (kill_sender, kill_receiver) = tokio::sync::broadcast::channel::<()>(1);
+        tokio::spawn(Self::start_syncing_with_remote(
+            self.remote_object_store.clone(),
+            self.local_object_store.clone(),
+            self.local_staging_dir_root.clone(),
+            receiver,
+            kill_sender.subscribe(),
+            self.archive_metrics.clone(),
+        ));
+        tokio::task::spawn_blocking(move || {
+            Self::start_tailing_checkpoints(
+                start_checkpoint_sequence_number,
+                checkpoint_writer,
+                store,
+                kill_receiver,
+            )
+        });
+        Ok(kill_sender)
+    }
+
+    fn start_tailing_checkpoints<S>(
+        start_checkpoint_sequence_number: CheckpointSequenceNumber,
+        mut checkpoint_writer: CheckpointWriter,
+        store: S,
+        mut kill: tokio::sync::broadcast::Receiver<()>,
+    ) -> Result<()>
+    where
+        S: WriteStore + Send + Sync + 'static,
+        <S as ReadStore>::Error: Send,
+    {
+        let mut checkpoint_sequence_number = start_checkpoint_sequence_number;
+        info!("Starting checkpoint tailing from sequence number: {checkpoint_sequence_number}");
+
+        while kill.try_recv().is_err() {
+            if let Some(checkpoint_summary) = store
+                .get_checkpoint_by_sequence_number(checkpoint_sequence_number)
+                .map_err(|_| anyhow!("Failed to read checkpoint summary from store"))?
+            {
+                if let Some(checkpoint_contents) = store
+                    .get_full_checkpoint_contents(&checkpoint_summary.content_digest)
+                    .map_err(|_| anyhow!("Failed to read checkpoint content from store"))?
+                {
+                    checkpoint_writer
+                        .write(checkpoint_contents, checkpoint_summary.into_inner())?;
+                    checkpoint_sequence_number = checkpoint_sequence_number
+                        .checked_add(1)
                         .context("checkpoint seq number overflow")?;
-                },
+                    // There is more checkpoints to tail, so continue without sleeping
+                    continue;
+                }
             }
+            // Checkpoint with `checkpoint_sequence_number` is not available to read from store yet,
+            // sleep for sometime and then retry
+            sleep(Duration::from_secs(3));
         }
         Ok(())
     }
@@ -443,6 +447,7 @@ impl ArchiveWriter {
                 _ = kill.recv() => break,
                 updates = update_receiver.recv() => {
                     if let Some(checkpoint_updates) = updates {
+                        info!("Received checkpoint update: {:?}", checkpoint_updates);
                         let latest_checkpoint_seq_num = checkpoint_updates.manifest.next_checkpoint_seq_num();
                         let summary_file_path = checkpoint_updates.summary_file_path();
                         Self::sync_file_to_remote(
@@ -472,41 +477,13 @@ impl ArchiveWriter {
                         .expect("Updating manifest should not fail");
                         metrics.latest_checkpoint_archived.set(latest_checkpoint_seq_num as i64)
                     } else {
+                        info!("Terminating archive sync loop");
                         break;
                     }
                 },
             }
         }
         Ok(())
-    }
-
-    async fn write_next_checkpoint<S>(
-        checkpoint_sequence_number: u64,
-        store: S,
-        checkpoint_writer: &mut CheckpointWriter,
-    ) -> Result<()>
-    where
-        S: WriteStore + Send + Sync,
-    {
-        loop {
-            if let Some(checkpoint_summary) = store
-                .get_checkpoint_by_sequence_number(checkpoint_sequence_number)
-                .map_err(|_| anyhow!("Failed to read checkpoint summary from store"))?
-            {
-                if let Some(checkpoint_contents) = store
-                    .get_full_checkpoint_contents(&checkpoint_summary.content_digest)
-                    .map_err(|_| anyhow!("Failed to read checkpoint content from store"))?
-                {
-                    checkpoint_writer
-                        .write(checkpoint_contents, checkpoint_summary.into_inner())
-                        .await?;
-                    return Ok(());
-                }
-            }
-            // Checkpoint with `checkpoint_sequence_number` is not available to read from store yet,
-            // sleep for sometime and then retry
-            tokio::time::sleep(Duration::from_secs(3)).await;
-        }
     }
 
     async fn sync_file_to_remote(

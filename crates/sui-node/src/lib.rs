@@ -398,7 +398,7 @@ impl SuiNode {
                     &prometheus_registry,
                 )
                 .await?;
-                Some(archive_writer.start(state_sync_store)?)
+                Some(archive_writer.start(state_sync_store).await?)
             } else {
                 None
             };
