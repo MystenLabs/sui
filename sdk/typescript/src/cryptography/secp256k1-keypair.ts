@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import type { ExportedKeypair, Keypair } from './keypair';
+import type { ExportedKeypair, Keypair } from './keypair.js';
 import { PublicKey } from './publickey.js';
 import { sha256 } from '@noble/hashes/sha256';
 import { Secp256k1PublicKey } from './secp256k1-publickey.js';
