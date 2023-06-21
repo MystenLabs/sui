@@ -23,7 +23,7 @@ impl Multiaddr {
         Self(inner)
     }
 
-    pub fn iter(&self) -> ::multiaddr::Iter<'_> {
+    pub(crate) fn iter(&self) -> ::multiaddr::Iter<'_> {
         self.0.iter()
     }
 

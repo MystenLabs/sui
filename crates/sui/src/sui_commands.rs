@@ -36,7 +36,7 @@ use sui_swarm_config::network_config::NetworkConfig;
 use sui_swarm_config::network_config_builder::ConfigBuilder;
 use sui_swarm_config::node_config_builder::FullnodeConfigBuilder;
 use sui_types::crypto::{SignatureScheme, SuiKeyPair};
-use sui_types::multiaddr::{Multiaddr, Protocol};
+use sui_types::multiaddr::Multiaddr;
 use tracing::info;
 
 #[allow(clippy::large_enum_variant)]
@@ -638,43 +638,10 @@ fn read_line() -> Result<String, anyhow::Error> {
 }
 
 fn multiaddr_to_filename(address: Multiaddr, default: String) -> String {
-    let mut h = None;
-    let mut p = None;
-
-    for component in address.iter() {
-        match component {
-            Protocol::Ip4(ip) => h = Some(ip.to_string()),
-            Protocol::Ip6(ip) => h = Some(ip.to_string()),
-            Protocol::Dns(dns) => h = Some(dns.to_string()),
-            Protocol::Udp(port) | Protocol::Tcp(port) => p = Some(port.to_string()),
-            _ => (),
+    if let Some(hostname) = address.hostname() {
+        if let Some(port) = address.port() {
+            return format!("{}:{}.yaml", hostname, port);
         }
     }
-
-    match (h, p) {
-        (Some(hostname), Some(port)) => {
-            let file_name = format!("{}:{}.yaml", hostname, port);
-            file_name
-        }
-        _ => default,
-    }
+    default
 }
-
-// fn multiaddr_to_filename1(mut address: Multiaddr, default: String) -> String {
-//     let port = address.pop();
-//     let hostname = address.pop();
-//     let h = match hostname {
-//         Some(Protocol::Ip4(ip)) => ip.to_string(),
-//         Some(Protocol::Ip6(ip)) => ip.to_string(),
-//         Some(Protocol::Dns(dns)) => dns.to_string(),
-//         _ => return default,
-//     };
-
-//     let p = match port {
-//         Some(Protocol::Udp(port)) => port.to_string(),
-//         Some(Protocol::Tcp(port)) => port.to_string(),
-//         _ => return default,
-//     };
-
-//     format!("{h}:{p}.yaml")
-// }
