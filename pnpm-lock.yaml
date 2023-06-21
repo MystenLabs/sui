@@ -1,9 +1,5 @@
 lockfileVersion: '6.0'
 
-settings:
-  autoInstallPeers: false
-  excludeLinksFromLockfile: false
-
 overrides:
   node-notifier: 10.0.0
   async: 3.2.2
@@ -284,8 +280,8 @@ importers:
         specifier: 7.0.4
         version: 7.0.4(react-dom@18.2.0)(react@18.2.0)
       '@storybook/addons':
-        specifier: 7.0.4
-        version: 7.0.4(react-dom@18.2.0)(react@18.2.0)
+        specifier: 7.0.22
+        version: 7.0.22(react-dom@18.2.0)(react@18.2.0)
       '@storybook/react':
         specifier: 7.0.4
         version: 7.0.4(react-dom@18.2.0)(react@18.2.0)(typescript@5.0.4)
@@ -576,8 +572,8 @@ importers:
         specifier: 7.0.4
         version: 7.0.4(react-dom@18.2.0)(react@18.2.0)
       '@storybook/addons':
-        specifier: 7.0.4
-        version: 7.0.4(react-dom@18.2.0)(react@18.2.0)
+        specifier: 7.0.22
+        version: 7.0.22(react-dom@18.2.0)(react@18.2.0)
       '@storybook/blocks':
         specifier: 7.0.4
         version: 7.0.4(react-dom@18.2.0)(react@18.2.0)
@@ -6232,6 +6228,19 @@ packages:
       react-dom: 18.2.0(react@18.2.0)
     dev: true
 
+  /@storybook/addons@7.0.22(react-dom@18.2.0)(react@18.2.0):
+    resolution: {integrity: sha512-ZSHyysGC1pohtickJtkWht/KCF5zTR0nTdcQtQu5MlPsNHmueq0QvXUsk2H2ePxVEaSG2uXxUnX7mfRCTvo02w==}
+    peerDependencies:
+      react: ^16.8.0 || ^17.0.0 || ^18.0.0
+      react-dom: ^16.8.0 || ^17.0.0 || ^18.0.0
+    dependencies:
+      '@storybook/manager-api': 7.0.22(react-dom@18.2.0)(react@18.2.0)
+      '@storybook/preview-api': 7.0.22
+      '@storybook/types': 7.0.22
+      react: 18.2.0
+      react-dom: 18.2.0(react@18.2.0)
+    dev: true
+
   /@storybook/addons@7.0.4(react-dom@18.2.0)(react@18.2.0):
     resolution: {integrity: sha512-dkpyKNwAY+Ev9ZbgiLB0ki7H6AbAMqYcBx1qYvyFR2hv3k1Ta2OQIMTkODWdkYsgffH00SSpgaBwb2lBUrMZkw==}
     peerDependencies:
@@ -6436,6 +6445,17 @@ packages:
       telejson: 7.1.0
     dev: true
 
+  /@storybook/channel-postmessage@7.0.22:
+    resolution: {integrity: sha512-iGoeeLJ2mgi78SuR/UZ41wAbD+37inUrWyDl0eqMMUqfTy4t9le0040+vyv2+p/zckhcrZaXZ+wE4l5lKdhVhA==}
+    dependencies:
+      '@storybook/channels': 7.0.22
+      '@storybook/client-logger': 7.0.22
+      '@storybook/core-events': 7.0.22
+      '@storybook/global': 5.0.0
+      qs: 6.11.1
+      telejson: 7.1.0
+    dev: true
+
   /@storybook/channel-postmessage@7.0.4:
     resolution: {integrity: sha512-KInHB3iSBgMxGkDmOMBu+B+ohxi2NzDpcl9yA5+xVuqG8Q6gJBurDYBsinq2zEZ1ceZYSoCseqJaH2jQFh/Oeg==}
     dependencies:
@@ -6467,6 +6487,10 @@ packages:
 
   /@storybook/channels@7.0.20:
     resolution: {integrity: sha512-AL5GGSQ8WTDUoh3gitKEzo3fu7Vq5okXq2pAknAZlQA2Oio+HHO5nMeXvOfGdvo/tzbpNE3n5utmCJz006xrCA==}
+    dev: true
+
+  /@storybook/channels@7.0.22:
+    resolution: {integrity: sha512-8mR30xBotnhc24GQpBp14bflvagkOnBXUhCTyiljULvkyo/bK0NE8IeSSto1FAIzPl6+s5/A0sePvLNRuj3gqw==}
     dev: true
 
   /@storybook/channels@7.0.4:
@@ -6530,6 +6554,12 @@ packages:
 
   /@storybook/client-logger@7.0.20:
     resolution: {integrity: sha512-h0maWgvrhoDVALrbQ6ZFF0/7koVAazMbqWLmV/SF4JB2cBSgfgO0gmrCmKzUAe+KOABK/TMQTEQc1S1js0Dorw==}
+    dependencies:
+      '@storybook/global': 5.0.0
+    dev: true
+
+  /@storybook/client-logger@7.0.22:
+    resolution: {integrity: sha512-wSevZBg/yfkmoXrsC35D5JeKzATP2jOmT3SIdSfWPASKImB8gRXiJUX33mXVzzInpxu8Hsv+TuFcfxWsQGIOpw==}
     dependencies:
       '@storybook/global': 5.0.0
     dev: true
@@ -6646,6 +6676,10 @@ packages:
 
   /@storybook/core-events@7.0.20:
     resolution: {integrity: sha512-gUBQsbcDmRufmg8LdH7D57c/9BQ+cPi2vBcXdudmxeJFafGwDmLRu1mlv9rxlW4kicn/LZWJjKXtq4XXzF4OGg==}
+    dev: true
+
+  /@storybook/core-events@7.0.22:
+    resolution: {integrity: sha512-T7xiJTlNKrNxRCvJj/5RRukhFFJZqfmfF3DNi+P6YsLBE569GZ6y1eO58IalVzts4lB+LGYLAxkaWssNcZJ6Kg==}
     dev: true
 
   /@storybook/core-events@7.0.4:
@@ -6818,6 +6852,31 @@ packages:
       '@storybook/preview-api': 7.0.4
     dev: true
 
+  /@storybook/manager-api@7.0.22(react-dom@18.2.0)(react@18.2.0):
+    resolution: {integrity: sha512-7tvHZrrxp70zB4PyU+sIcBvBVq/dkhHkCsmuthRPW+OkZoolcXVU2xIbR62shOeaAobLbcJrlx5V2IFrLboZnA==}
+    peerDependencies:
+      react: ^16.8.0 || ^17.0.0 || ^18.0.0
+      react-dom: ^16.8.0 || ^17.0.0 || ^18.0.0
+    dependencies:
+      '@storybook/channels': 7.0.22
+      '@storybook/client-logger': 7.0.22
+      '@storybook/core-events': 7.0.22
+      '@storybook/csf': 0.1.0
+      '@storybook/global': 5.0.0
+      '@storybook/router': 7.0.22(react-dom@18.2.0)(react@18.2.0)
+      '@storybook/theming': 7.0.22(react-dom@18.2.0)(react@18.2.0)
+      '@storybook/types': 7.0.22
+      dequal: 2.0.3
+      lodash: 4.17.21
+      memoizerific: 1.11.3
+      react: 18.2.0
+      react-dom: 18.2.0(react@18.2.0)
+      semver: 7.5.1
+      store2: 2.14.2
+      telejson: 7.1.0
+      ts-dedent: 2.2.0
+    dev: true
+
   /@storybook/manager-api@7.0.4(react-dom@18.2.0)(react@18.2.0):
     resolution: {integrity: sha512-kydmycU7EdlngXRL+9rmNQ6WE4VsbW9TvSeuzfmZ1RVbbl1yF3jpwU/9xK23I4ci4jWk6xilAJgs7FkPBVCeJQ==}
     peerDependencies:
@@ -6931,6 +6990,26 @@ packages:
       '@storybook/csf': 0.1.0
       '@storybook/global': 5.0.0
       '@storybook/types': 7.0.20
+      '@types/qs': 6.9.7
+      dequal: 2.0.3
+      lodash: 4.17.21
+      memoizerific: 1.11.3
+      qs: 6.11.1
+      synchronous-promise: 2.0.17
+      ts-dedent: 2.2.0
+      util-deprecate: 1.0.2
+    dev: true
+
+  /@storybook/preview-api@7.0.22:
+    resolution: {integrity: sha512-ugkJVojMSceP9hPZB6e00ox+1gIMaYw3lqdHFeRT3EFQeifCpSK2AnwS3MLLmqeSJeAOY2FC/ESWQ/v0dHvkKQ==}
+    dependencies:
+      '@storybook/channel-postmessage': 7.0.22
+      '@storybook/channels': 7.0.22
+      '@storybook/client-logger': 7.0.22
+      '@storybook/core-events': 7.0.22
+      '@storybook/csf': 0.1.0
+      '@storybook/global': 5.0.0
+      '@storybook/types': 7.0.22
       '@types/qs': 6.9.7
       dequal: 2.0.3
       lodash: 4.17.21
@@ -7149,6 +7228,19 @@ packages:
       - supports-color
     dev: true
 
+  /@storybook/router@7.0.22(react-dom@18.2.0)(react@18.2.0):
+    resolution: {integrity: sha512-yLKqpOm0zCF0EZcQn7aoV3EeDtg0DnhqBXLKXaiQpaPBV8AH6YJOQ3IiGY2CjeWhl2SIIH1glcQEDsF/6klD1g==}
+    peerDependencies:
+      react: ^16.8.0 || ^17.0.0 || ^18.0.0
+      react-dom: ^16.8.0 || ^17.0.0 || ^18.0.0
+    dependencies:
+      '@storybook/client-logger': 7.0.22
+      memoizerific: 1.11.3
+      qs: 6.11.1
+      react: 18.2.0
+      react-dom: 18.2.0(react@18.2.0)
+    dev: true
+
   /@storybook/router@7.0.4(react-dom@18.2.0)(react@18.2.0):
     resolution: {integrity: sha512-pVUSYBYbf+eIiWpO0i3kOZwvETM26txd7Q4IZqFcORX+BhWgPgcDZk9uebxii2SmwZ1VqdMKbhgeXsNcQxtnrw==}
     peerDependencies:
@@ -7186,6 +7278,20 @@ packages:
       - supports-color
     dev: true
 
+  /@storybook/theming@7.0.22(react-dom@18.2.0)(react@18.2.0):
+    resolution: {integrity: sha512-yNpjPW4NnJhrzTyYzqhzGK2bOB5AcW7V9NTdFmE5ZMgcoJLInHubWeCM2ODKE9/YzsKxo1gU8Io4qJ2IKZIoog==}
+    peerDependencies:
+      react: ^16.8.0 || ^17.0.0 || ^18.0.0
+      react-dom: ^16.8.0 || ^17.0.0 || ^18.0.0
+    dependencies:
+      '@emotion/use-insertion-effect-with-fallbacks': 1.0.0(react@18.2.0)
+      '@storybook/client-logger': 7.0.22
+      '@storybook/global': 5.0.0
+      memoizerific: 1.11.3
+      react: 18.2.0
+      react-dom: 18.2.0(react@18.2.0)
+    dev: true
+
   /@storybook/theming@7.0.4(react-dom@18.2.0)(react@18.2.0):
     resolution: {integrity: sha512-BahlmB86Q9wlvUT9Otx7vmJ7IAiytCBYyx5uLY3Ypt4JHyh5dT8UI8u4uowor9QW20YdfwPSIdaJwF1qzVuWNg==}
     peerDependencies:
@@ -7204,6 +7310,15 @@ packages:
     resolution: {integrity: sha512-Z7RhHRnhrPd2jXPZtjbOILj1QgylqlsD3cFIYMcSz3yvUvxLRx3BKCftXyFbIuxr0QoCJE38adRp7YGO9uJnQQ==}
     dependencies:
       '@storybook/channels': 7.0.20
+      '@types/babel__core': 7.20.0
+      '@types/express': 4.17.17
+      file-system-cache: 2.0.2
+    dev: true
+
+  /@storybook/types@7.0.22:
+    resolution: {integrity: sha512-fzYD3fcgpQw3p0DLMQqlEvTw47qNwrPX8Wdv8pkS12RrM5ycmy6d6fVFVJOB9uWNXD1l34vWclEo6pbtEaBM9A==}
+    dependencies:
+      '@storybook/channels': 7.0.22
       '@types/babel__core': 7.20.0
       '@types/express': 4.17.17
       file-system-cache: 2.0.2
@@ -22420,3 +22535,7 @@ packages:
   /zxcvbn@4.4.2:
     resolution: {integrity: sha512-Bq0B+ixT/DMyG8kgX2xWcI5jUvCwqrMxSFam7m0lAf78nf04hv6lNCsyLYdyYTrCVMqNDY/206K7eExYCeSyUQ==}
     dev: false
+
+settings:
+  autoInstallPeers: false
+  excludeLinksFromLockfile: false
