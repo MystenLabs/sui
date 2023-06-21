@@ -1,0 +1,40 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+// tests modules cannot use transfer internal functions outside of the defining module
+
+//# publish
+module 0x0.m {
+    import 0x2.coin;
+    import 0x2.transfer;
+
+    t(s: coin.Coin<u64>) {
+        label l0:
+        transfer.transfer<coin.Coin<u64>>(move(s), 0x100);
+        return;
+    }
+}
+
+//# publish
+module 0x0.m {
+    import 0x2.coin;
+    import 0x2.transfer;
+
+    t(s: coin.Coin<u64>) {
+        label l0:
+        transfer.freeze_object<coin.Coin<u64>>(move(s));
+        return;
+    }
+}
+
+//# publish
+module 0x0.m {
+    import 0x2.coin;
+    import 0x2.transfer;
+
+    t(s: coin.Coin<u64>) {
+        label l0:
+        transfer.share_object<coin.Coin<u64>>(move(s));
+        return;
+    }
+}

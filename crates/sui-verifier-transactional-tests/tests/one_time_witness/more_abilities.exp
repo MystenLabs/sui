@@ -1,5 +1,13 @@
-processed 2 tasks
+processed 4 tasks
 
-task 1 'publish'. lines 8-20:
+task 1 'publish'. lines 8-19:
+Error: Transaction Effects Status: Sui Move Bytecode Verification Error. Please run the Sui Move Verifier for more information.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: SuiMoveVerificationError, source: Some("one-time witness type candidate _::m::M must have a single ability: drop"), command: Some(0) } }
+
+task 2 'publish'. lines 21-32:
+Error: Transaction Effects Status: Sui Move Bytecode Verification Error. Please run the Sui Move Verifier for more information.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: SuiMoveVerificationError, source: Some("one-time witness type candidate _::m::M must have a single ability: drop"), command: Some(0) } }
+
+task 3 'publish'. lines 34-45:
 Error: Transaction Effects Status: Sui Move Bytecode Verification Error. Please run the Sui Move Verifier for more information.
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: SuiMoveVerificationError, source: Some("one-time witness type candidate _::m::M must have a single ability: drop"), command: Some(0) } }

@@ -1,6 +1,5 @@
-processed 2 tasks
+processed 1 task
 
-task 1 'publish'. lines 8-15:
-created: object(1,0)
-mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 4370000,  storage_rebate: 0, non_refundable_storage_fee: 0
+task 0 'publish'. lines 6-17:
+Error: Transaction Effects Status: Move Bytecode Verification Error. Please run the Bytecode Verifier for more information.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: VMVerificationOrDeserializationError, source: Some(VMError { major_status: ZERO_SIZED_STRUCT, sub_status: None, message: None, exec_state: None, location: Module(ModuleId { address: _, name: Identifier("m") }), indices: [(StructDefinition, 0)], offsets: [] }), command: Some(0) } }

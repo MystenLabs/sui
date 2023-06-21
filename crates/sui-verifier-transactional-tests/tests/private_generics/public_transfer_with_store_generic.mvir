@@ -1,0 +1,56 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+// tests modules can use transfer functions outside of the defining module, if the type
+// has store. This object conditionally has key+store
+
+//# publish
+module 0x0.m {
+    import 0x2.transfer;
+    import 0x2.coin;
+
+    t(s: coin.Coin<u64>) {
+        label l0:
+        transfer.public_transfer<coin.Coin<u64>>(move(s), 0x100);
+        return;
+    }
+    t_gen<T: key + store>(s: T) {
+        label l0:
+        transfer.public_transfer<T>(move(s), 0x100);
+        return;
+    }
+}
+
+//# publish
+module 0x0.m {
+    import 0x2.transfer;
+    import 0x2.coin;
+
+    t(s: coin.Coin<u64>) {
+        label l0:
+        transfer.public_freeze_object<coin.Coin<u64>>(move(s));
+        return;
+    }
+    t_gen<T: key + store>(s: T) {
+        label l0:
+        transfer.public_freeze_object<T>(move(s));
+        return;
+    }
+}
+
+//# publish
+module 0x0.m {
+    import 0x2.transfer;
+    import 0x2.coin;
+
+    t(s: coin.Coin<u64>) {
+        label l0:
+        transfer.public_share_object<coin.Coin<u64>>(move(s));
+        return;
+    }
+    t_gen<T: key + store>(s: T) {
+        label l0:
+        transfer.public_share_object<T>(move(s));
+        return;
+    }
+}
