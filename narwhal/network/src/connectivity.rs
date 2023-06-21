@@ -106,6 +106,12 @@ impl ConnectionMonitor {
             tokio::select! {
                 _ = connection_stat_collection_interval.tick() => {
                     if let Some(network) = self.network.upgrade() {
+                        self.connection_metrics.socket_receive_buffer_size.set(
+                            network.socket_receive_buf_size() as i64
+                        );
+                        self.connection_metrics.socket_send_buffer_size.set(
+                            network.socket_send_buf_size() as i64
+                        );
                         for peer_id in known_peers.iter() {
                             if let Some(connection) = network.peer(*peer_id) {
                                 let stats = connection.connection_stats();
