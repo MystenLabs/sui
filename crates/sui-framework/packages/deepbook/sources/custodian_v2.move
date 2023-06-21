@@ -6,12 +6,13 @@ module deepbook::custodian_v2 {
     use sui::coin::{Self, Coin};
     use sui::object::{Self, UID};
     use sui::table::{Self, Table};
-    use sui::tx_context::{TxContext, sender};
+    use sui::tx_context::TxContext;
 
     friend deepbook::clob_v2;
 
     // <<<<<<<<<<<<<<<<<<<<<<<< Error codes <<<<<<<<<<<<<<<<<<<<<<<<
     const EUserBalanceDoesNotExist: u64 = 1;
+    const EAdminAccountCapRequired: u64 = 2;
     // <<<<<<<<<<<<<<<<<<<<<<<< Error codes <<<<<<<<<<<<<<<<<<<<<<<<
 
     struct Account<phantom T> has store {
@@ -19,8 +20,15 @@ module deepbook::custodian_v2 {
         locked_balance: Balance<T>,
     }
 
+    /// Capability granting permission to access an entry in `Custodian.account_balances`.
+    /// Calling `mint_account_cap` creates an "admin account cap" such that id == owner with
+    /// the permission to both access funds and create new `AccountCap`s.
+    /// Calling `create_child_account_cap` creates a "child account cap" such that id != owner
+    /// that can access funds, but cannot create new `AccountCap`s.
     struct AccountCap has key, store {
         id: UID,
+        /// The owner of this AccountCap. Note: this is
+        /// derived from an object ID, not a user address
         owner: address
     }
 
@@ -31,15 +39,33 @@ module deepbook::custodian_v2 {
         account_balances: Table<address, Account<T>>,
     }
 
-    /// Create an `AccountCap` that can be used across all DeepBook pool
+    /// Create an admin `AccountCap` that can be used across all DeepBook pools, and has
+    /// the permission to create new `AccountCap`s that can access the same source of funds
     public(friend) fun mint_account_cap(ctx: &mut TxContext): AccountCap {
+        let id = object::new(ctx);
+        let owner = object::uid_to_address(&id);
+        AccountCap { id, owner }
+    }
+
+    /// Create a "child account cap" such that id != owner
+    /// that can access funds, but cannot create new `AccountCap`s.
+    public fun create_child_account_cap(admin_account_cap: &AccountCap, ctx: &mut TxContext): AccountCap {
+        // Only the admin account cap can create new account caps
+        assert!(object::uid_to_address(&admin_account_cap.id) == admin_account_cap.owner, EAdminAccountCapRequired);
+
         AccountCap {
             id: object::new(ctx),
-            owner: sender(ctx)
+            owner: admin_account_cap.owner
         }
     }
 
-    /// Return the owner address of an AccountCap
+    /// Destroy the given `account_cap` object
+    public fun delete_account_cap(account_cap: AccountCap) {
+        let AccountCap { id, owner: _ } = account_cap;
+        object::delete(id)
+    }
+
+    /// Return the owner of an AccountCap
     public fun account_owner(account_cap: &AccountCap): address {
         account_cap.owner
     }
@@ -178,7 +204,9 @@ module deepbook::custodian_v2 {
     #[test_only]
     use sui::coin::{mint_for_testing};
     #[test_only]
-    use sui::test_utils::assert_eq;
+    use sui::test_utils::{assert_eq, destroy};
+    #[test_only]
+    use sui::tx_context;
 
     #[test_only]
     const ENull: u64 = 0;
@@ -281,5 +309,40 @@ module deepbook::custodian_v2 {
             test_scenario::return_shared(custodian);
         };
         test_scenario::end(test);
+    }
+
+    #[test]
+    fun test_create_child_account_cap() {
+        let ctx = tx_context::dummy();
+        let admin_cap = mint_account_cap(&mut ctx);
+        // check that we can duplicate child cap, and don't get another admin cap
+        let child_cap = create_child_account_cap(&admin_cap, &mut ctx);
+        assert_eq(child_cap.owner, admin_cap.owner);
+        assert!(&child_cap.id != &admin_cap.id, 0);
+
+        // check that both child and admin cap can access the funds
+        let custodian = new<USD>(&mut ctx);
+        increase_user_available_balance(&mut custodian, account_owner(&admin_cap), balance::create_for_testing(10000));
+        let coin = decrease_user_available_balance(&mut custodian, &child_cap, 10000);
+
+        destroy(admin_cap);
+        destroy(child_cap);
+        destroy(custodian);
+        destroy(coin);
+    }
+
+    #[expected_failure(abort_code = EAdminAccountCapRequired)]
+    #[test]
+    fun test_cant_create_with_child() {
+        // a child cap cannot create an account cap
+        let ctx = tx_context::dummy();
+        let admin_cap = mint_account_cap(&mut ctx);
+        // check that we can duplicate child cap, and don't get another admin cap
+        let child_cap1 = create_child_account_cap(&admin_cap, &mut ctx);
+        let child_cap2 = create_child_account_cap(&child_cap1, &mut ctx); // should abort
+
+        destroy(admin_cap);
+        destroy(child_cap1);
+        destroy(child_cap2);
     }
 }

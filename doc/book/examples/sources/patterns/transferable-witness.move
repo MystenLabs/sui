@@ -19,6 +19,7 @@ module examples::transferable_witness {
     /// Carries the witness type. Can be used only once to get a Witness.
     struct WitnessCarrier has key { id: UID, witness: WITNESS }
 
+    #[allow(unused_function)]
     /// Send a `WitnessCarrier` to the module publisher.
     fun init(ctx: &mut TxContext) {
         transfer::transfer(

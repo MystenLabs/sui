@@ -443,9 +443,6 @@ pub struct AuthorityStorePruningConfig {
     pub max_checkpoints_in_batch: usize,
     /// maximum number of transaction in the pruning batch
     pub max_transactions_in_batch: usize,
-    /// pruner deletion method. If set to `true`, range deletion is utilized (recommended).
-    /// Use `false` for point deletes.
-    pub use_range_deletion: bool,
     /// enables periodic background compaction for old SST files whose last modified time is
     /// older than `periodic_compaction_threshold_days` days.
     /// That ensures that all sst files eventually go through the compaction process
@@ -468,7 +465,6 @@ impl Default for AuthorityStorePruningConfig {
             pruning_run_delay_seconds,
             max_checkpoints_in_batch: 10,
             max_transactions_in_batch: 1000,
-            use_range_deletion: true,
             periodic_compaction_threshold_days: None,
             num_epochs_to_retain_for_checkpoints: None,
         }
@@ -480,6 +476,7 @@ impl AuthorityStorePruningConfig {
         // TODO: Remove this after aggressive pruning is enabled by default
         let num_epochs_to_retain = if cfg!(msim) { 0 } else { 2 };
         let pruning_run_delay_seconds = if cfg!(msim) { Some(2) } else { None };
+        let num_epochs_to_retain_for_checkpoints = if cfg!(msim) { Some(1) } else { None };
         Self {
             num_latest_epoch_dbs_to_retain: 3,
             epoch_db_pruning_period_secs: 60 * 60,
@@ -487,15 +484,15 @@ impl AuthorityStorePruningConfig {
             pruning_run_delay_seconds,
             max_checkpoints_in_batch: 10,
             max_transactions_in_batch: 1000,
-            use_range_deletion: true,
             periodic_compaction_threshold_days: None,
-            num_epochs_to_retain_for_checkpoints: None,
+            num_epochs_to_retain_for_checkpoints,
         }
     }
     pub fn fullnode_config() -> Self {
         // TODO: Remove this after aggressive pruning is enabled by default
         let num_epochs_to_retain = if cfg!(msim) { 0 } else { 2 };
         let pruning_run_delay_seconds = if cfg!(msim) { Some(2) } else { None };
+        let num_epochs_to_retain_for_checkpoints = if cfg!(msim) { Some(1) } else { None };
         Self {
             num_latest_epoch_dbs_to_retain: 3,
             epoch_db_pruning_period_secs: 60 * 60,
@@ -503,9 +500,8 @@ impl AuthorityStorePruningConfig {
             pruning_run_delay_seconds,
             max_checkpoints_in_batch: 10,
             max_transactions_in_batch: 1000,
-            use_range_deletion: true,
             periodic_compaction_threshold_days: None,
-            num_epochs_to_retain_for_checkpoints: None,
+            num_epochs_to_retain_for_checkpoints,
         }
     }
 }

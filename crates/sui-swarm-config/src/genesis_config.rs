@@ -23,6 +23,7 @@ use tracing::info;
 #[derive(Serialize, Deserialize, Debug)]
 pub struct SsfnGenesisConfig {
     pub p2p_address: Multiaddr,
+    pub network_key_pair: Option<NetworkKeyPair>,
 }
 
 // All information needed to build a NodeConfig for a validator.

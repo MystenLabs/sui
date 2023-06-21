@@ -17,6 +17,6 @@ export const mainnetEnvironment: RulesEnvironmentParam = { env: 'mainnet' };
 
 /** A helper to easily export a custom environment */
 export const customEnvironment = (address: string): RulesEnvironmentParam => ({
-  env: 'custom',
-  address,
+	env: 'custom',
+	address,
 });

@@ -4,7 +4,6 @@
 use crate::{
     crypto::{CompressedSignature, DefaultHash, SignatureScheme},
     signature::{AuthenticatorTrait, AuxVerifyData},
-    sui_serde::SuiBitmap,
 };
 pub use enum_dispatch::enum_dispatch;
 use fastcrypto::{
@@ -17,7 +16,6 @@ use fastcrypto::{
     traits::{ToFromBytes, VerifyingKey},
 };
 use once_cell::sync::OnceCell;
-use roaring::RoaringBitmap;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
@@ -39,25 +37,9 @@ mod multisig_tests;
 
 pub type WeightUnit = u8;
 pub type ThresholdUnit = u16;
+pub type BitmapUnit = u16;
 pub const MAX_SIGNER_IN_MULTISIG: usize = 10;
-
-/// This initialize the underlying bytes representation of MultiSig. It encodes
-/// [struct MultiSig] as the MultiSig flag (0x03) concat with the bcs bytes
-/// of [struct MultiSig] i.e. `flag || bcs_bytes(MultiSig)`.
-impl AsRef<[u8]> for MultiSig {
-    fn as_ref(&self) -> &[u8] {
-        self.bytes
-            .get_or_try_init::<_, eyre::Report>(|| {
-                let as_bytes = bcs::to_bytes(self).expect("BCS serialization should not fail");
-                let mut bytes = Vec::with_capacity(1 + as_bytes.len());
-                bytes.push(SignatureScheme::MultiSig.flag());
-                bytes.extend_from_slice(as_bytes.as_slice());
-                Ok(bytes)
-            })
-            .expect("OnceCell invariant violated")
-    }
-}
-
+pub const MAX_BITMAP_VALUE: BitmapUnit = 0b1111111111;
 /// The struct that contains signatures and public keys necessary for authenticating a MultiSig.
 #[serde_as]
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
@@ -65,9 +47,7 @@ pub struct MultiSig {
     /// The plain signature encoded with signature scheme.
     sigs: Vec<CompressedSignature>,
     /// A bitmap that indicates the position of which public key the signature should be authenticated with.
-    #[schemars(with = "Base64")]
-    #[serde_as(as = "SuiBitmap")]
-    bitmap: RoaringBitmap,
+    bitmap: BitmapUnit,
     /// The public key encoded with each public key with its signature scheme used along with the corresponding weight.
     multisig_pk: MultiSigPublicKey,
     /// A bytes representation of [struct MultiSig]. This helps with implementing [trait AsRef<[u8]>].
@@ -123,7 +103,7 @@ impl AuthenticatorTrait for MultiSig {
 
         // Verify each signature against its corresponding signature scheme and public key.
         // TODO: further optimization can be done because multiple Ed25519 signatures can be batch verified.
-        for (sig, i) in self.sigs.iter().zip(&self.bitmap) {
+        for (sig, i) in self.sigs.iter().zip(as_indices(self.bitmap)?) {
             let (pk, weight) =
                 self.multisig_pk
                     .pk_map
@@ -190,8 +170,41 @@ impl AuthenticatorTrait for MultiSig {
     }
 }
 
+/// Interpret a bitmap of 01s as a list of indices that is set to 1s.
+/// e.g. 22 = 0b10110, then the result is [1, 2, 4].
+pub fn as_indices(bitmap: u16) -> Result<Vec<u8>, SuiError> {
+    if bitmap > MAX_BITMAP_VALUE {
+        return Err(SuiError::InvalidSignature {
+            error: "Invalid bitmap".to_string(),
+        });
+    }
+    let mut res = Vec::new();
+    for i in 0..10 {
+        if bitmap & (1 << i) != 0 {
+            res.push(i as u8);
+        }
+    }
+    Ok(res)
+}
+
 impl MultiSig {
+    /// Create MultiSig from its fields.
+    pub fn new(
+        sigs: Vec<CompressedSignature>,
+        bitmap: u16,
+        multisig_pk: MultiSigPublicKey,
+    ) -> Self {
+        Self {
+            sigs,
+            bitmap,
+            multisig_pk,
+            bytes: OnceCell::new(),
+        }
+    }
     /// This combines a list of [enum Signature] `flag || signature || pk` to a MultiSig.
+    /// The order of full_sigs must be the same as the order of public keys in
+    /// [enum MultiSigPublicKey]. e.g. for [pk1, pk2, pk3, pk4, pk5],
+    /// [sig1, sig2, sig5] is valid, but [sig2, sig1, sig5] is invalid.
     pub fn combine(
         full_sigs: Vec<Signature>,
         multisig_pk: MultiSigPublicKey,
@@ -207,22 +220,24 @@ impl MultiSig {
                 error: "Invalid number of signatures".to_string(),
             });
         }
-        let mut bitmap = RoaringBitmap::new();
+        let mut bitmap = 0;
         let mut sigs = Vec::with_capacity(full_sigs.len());
         for s in full_sigs {
             let pk = s.to_public_key()?;
-            let inserted = bitmap.insert(multisig_pk.get_index(&pk).ok_or(
-                SuiError::IncorrectSigner {
+            let index = multisig_pk
+                .get_index(&pk)
+                .ok_or(SuiError::IncorrectSigner {
                     error: format!("pk does not exist: {:?}", pk),
-                },
-            )?);
-            if !inserted {
+                })?;
+            if bitmap & (1 << index) != 0 {
                 return Err(SuiError::InvalidSignature {
-                    error: "Duplicate sigature".to_string(),
+                    error: "Duplicate public key".to_string(),
                 });
             }
+            bitmap |= 1 << index;
             sigs.push(s.to_compressed()?);
         }
+
         Ok(MultiSig {
             sigs,
             bitmap,
@@ -232,7 +247,10 @@ impl MultiSig {
     }
 
     pub fn validate(&self) -> Result<(), FastCryptoError> {
-        if self.sigs.len() > self.multisig_pk.pk_map.len() || self.sigs.is_empty() {
+        if self.sigs.len() > self.multisig_pk.pk_map.len()
+            || self.sigs.is_empty()
+            || self.bitmap > MAX_BITMAP_VALUE
+        {
             return Err(FastCryptoError::InvalidInput);
         }
         self.multisig_pk.validate()?;
@@ -247,77 +265,8 @@ impl MultiSig {
         &self.sigs
     }
 
-    pub fn get_bitmap(&self) -> &RoaringBitmap {
-        &self.bitmap
-    }
-}
-/// The struct that contains the public key used for authenticating a MultiSig.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-pub struct MultiSigPublicKey {
-    /// A list of public key and its corresponding weight.
-    pk_map: Vec<(PublicKey, WeightUnit)>,
-    /// If the total weight of the public keys corresponding to verified signatures is larger than threshold, the MultiSig is verified.
-    threshold: ThresholdUnit,
-}
-
-impl MultiSigPublicKey {
-    pub fn new(
-        pks: Vec<PublicKey>,
-        weights: Vec<WeightUnit>,
-        threshold: ThresholdUnit,
-    ) -> Result<Self, SuiError> {
-        if pks.is_empty()
-            || weights.is_empty()
-            || threshold == 0
-            || pks.len() != weights.len()
-            || pks.len() > MAX_SIGNER_IN_MULTISIG
-            || weights.iter().any(|w| *w == 0)
-            || weights
-                .iter()
-                .map(|w| *w as ThresholdUnit)
-                .sum::<ThresholdUnit>()
-                < threshold
-        {
-            return Err(SuiError::InvalidSignature {
-                error: "Invalid multisig public key construction".to_string(),
-            });
-        }
-        Ok(MultiSigPublicKey {
-            pk_map: pks.into_iter().zip(weights.into_iter()).collect(),
-            threshold,
-        })
-    }
-
-    pub fn get_index(&self, pk: &PublicKey) -> Option<u32> {
-        self.pk_map
-            .iter()
-            .position(|x| &x.0 == pk)
-            .map(|x| x as u32)
-    }
-
-    pub fn threshold(&self) -> &ThresholdUnit {
-        &self.threshold
-    }
-
-    pub fn pubkeys(&self) -> &Vec<(PublicKey, WeightUnit)> {
-        &self.pk_map
-    }
-
-    pub fn validate(&self) -> Result<(), FastCryptoError> {
-        let pk_map = self.pubkeys();
-        if self.threshold == 0
-            || pk_map.is_empty()
-            || pk_map.len() > MAX_SIGNER_IN_MULTISIG
-            || pk_map.iter().any(|(_pk, weight)| *weight == 0)
-            || pk_map
-                .iter()
-                .map(|(_pk, weight)| *weight as ThresholdUnit)
-                .sum::<ThresholdUnit>()
-                < self.threshold
-        {
-            return Err(FastCryptoError::InvalidInput);
-        }
-        Ok(())
+    pub fn get_indices(&self) -> Result<Vec<u8>, SuiError> {
+        as_indices(self.bitmap)
     }
 }
 
@@ -346,5 +295,94 @@ impl FromStr for MultiSig {
             error: "Invalid multisig bytes".to_string(),
         })?;
         Ok(sig)
+    }
+}
+
+/// This initialize the underlying bytes representation of MultiSig. It encodes
+/// [struct MultiSig] as the MultiSig flag (0x03) concat with the bcs bytes
+/// of [struct MultiSig] i.e. `flag || bcs_bytes(MultiSig)`.
+impl AsRef<[u8]> for MultiSig {
+    fn as_ref(&self) -> &[u8] {
+        self.bytes
+            .get_or_try_init::<_, eyre::Report>(|| {
+                let as_bytes = bcs::to_bytes(self).expect("BCS serialization should not fail");
+                let mut bytes = Vec::with_capacity(1 + as_bytes.len());
+                bytes.push(SignatureScheme::MultiSig.flag());
+                bytes.extend_from_slice(as_bytes.as_slice());
+                Ok(bytes)
+            })
+            .expect("OnceCell invariant violated")
+    }
+}
+
+/// The struct that contains the public key used for authenticating a MultiSig.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+pub struct MultiSigPublicKey {
+    /// A list of public key and its corresponding weight.
+    pk_map: Vec<(PublicKey, WeightUnit)>,
+    /// If the total weight of the public keys corresponding to verified signatures is larger than threshold, the MultiSig is verified.
+    threshold: ThresholdUnit,
+}
+
+impl MultiSigPublicKey {
+    /// Construct MultiSigPublicKey from its fields.
+    pub fn construct(pk_map: Vec<(PublicKey, WeightUnit)>, threshold: ThresholdUnit) -> Self {
+        Self { pk_map, threshold }
+    }
+
+    pub fn new(
+        pks: Vec<PublicKey>,
+        weights: Vec<WeightUnit>,
+        threshold: ThresholdUnit,
+    ) -> Result<Self, SuiError> {
+        if pks.is_empty()
+            || weights.is_empty()
+            || threshold == 0
+            || pks.len() != weights.len()
+            || pks.len() > MAX_SIGNER_IN_MULTISIG
+            || weights.iter().any(|w| *w == 0)
+            || weights
+                .iter()
+                .map(|w| *w as ThresholdUnit)
+                .sum::<ThresholdUnit>()
+                < threshold
+        {
+            return Err(SuiError::InvalidSignature {
+                error: "Invalid multisig public key construction".to_string(),
+            });
+        }
+        Ok(MultiSigPublicKey {
+            pk_map: pks.into_iter().zip(weights.into_iter()).collect(),
+            threshold,
+        })
+    }
+
+    pub fn get_index(&self, pk: &PublicKey) -> Option<u8> {
+        self.pk_map.iter().position(|x| &x.0 == pk).map(|x| x as u8)
+    }
+
+    pub fn threshold(&self) -> &ThresholdUnit {
+        &self.threshold
+    }
+
+    pub fn pubkeys(&self) -> &Vec<(PublicKey, WeightUnit)> {
+        &self.pk_map
+    }
+
+    pub fn validate(&self) -> Result<(), FastCryptoError> {
+        let pk_map = self.pubkeys();
+        if self.threshold == 0
+            || pk_map.is_empty()
+            || pk_map.len() > MAX_SIGNER_IN_MULTISIG
+            || pk_map.iter().any(|(_pk, weight)| *weight == 0)
+            || pk_map
+                .iter()
+                .map(|(_pk, weight)| *weight as ThresholdUnit)
+                .sum::<ThresholdUnit>()
+                < self.threshold
+        {
+            return Err(FastCryptoError::InvalidInput);
+        }
+        Ok(())
     }
 }

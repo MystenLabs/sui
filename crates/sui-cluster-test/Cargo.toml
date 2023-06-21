@@ -23,6 +23,7 @@ uuid = {version = "1.1.2", features = [ "v4", "fast-rng"]}
 prometheus = "0.13.3"
 fastcrypto = { workspace = true }
 shared-crypto = { path = "../shared-crypto" }
+mysten-metrics = { path = "../../crates/mysten-metrics" }
 
 sui-indexer = { path = "../sui-indexer" }
 sui-faucet = { path = "../sui-faucet" }

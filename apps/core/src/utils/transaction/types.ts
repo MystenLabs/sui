@@ -7,18 +7,18 @@ import { GasSummaryType } from './getGasSummary';
 import { ObjectChangeSummary } from './getObjectChangeSummary';
 
 export type TransactionSummary = {
-    digest?: string;
-    sender?: SuiAddress;
-    timestamp?: string;
-    balanceChanges: BalanceChangeSummary;
-    gas?: GasSummaryType;
-    objectSummary: ObjectChangeSummary | null;
+	digest?: string;
+	sender?: SuiAddress;
+	timestamp?: string;
+	balanceChanges: BalanceChangeSummary;
+	gas?: GasSummaryType;
+	objectSummary: ObjectChangeSummary | null;
 } | null;
 
 export type SuiObjectChangeTypes =
-    | 'published'
-    | 'transferred'
-    | 'mutated'
-    | 'deleted'
-    | 'wrapped'
-    | 'created';
+	| 'published'
+	| 'transferred'
+	| 'mutated'
+	| 'deleted'
+	| 'wrapped'
+	| 'created';

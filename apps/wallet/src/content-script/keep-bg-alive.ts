@@ -13,34 +13,34 @@ let bgPort: Runtime.Port | null = null;
 let autoReConnect = true;
 
 function doConnect() {
-    if (autoReConnect) {
-        try {
-            bgPort = Browser.runtime.connect({ name: KEEP_ALIVE_BG_PORT_NAME });
-        } catch (e) {
-            // usually fails when extension gets updated and context is invalidated
-        }
-    }
-    if (bgPort) {
-        bgPort.onMessage.addListener((msg) => {
-            if (msg === MSG_DISABLE_AUTO_RECONNECT) {
-                autoReConnect = false;
-            }
-        });
-        bgPort.onDisconnect.addListener(() => {
-            bgPort = null;
-            doConnect();
-        });
-    }
+	if (autoReConnect) {
+		try {
+			bgPort = Browser.runtime.connect({ name: KEEP_ALIVE_BG_PORT_NAME });
+		} catch (e) {
+			// usually fails when extension gets updated and context is invalidated
+		}
+	}
+	if (bgPort) {
+		bgPort.onMessage.addListener((msg) => {
+			if (msg === MSG_DISABLE_AUTO_RECONNECT) {
+				autoReConnect = false;
+			}
+		});
+		bgPort.onDisconnect.addListener(() => {
+			bgPort = null;
+			doConnect();
+		});
+	}
 }
 
 export function init() {
-    Browser.runtime.onMessage.addListener((msg) => {
-        if (msg === MSG_CONNECT) {
-            autoReConnect = true;
-            if (!bgPort) {
-                doConnect();
-            }
-        }
-    });
-    doConnect();
+	Browser.runtime.onMessage.addListener((msg) => {
+		if (msg === MSG_CONNECT) {
+			autoReConnect = true;
+			if (!bgPort) {
+				doConnect();
+			}
+		}
+	});
+	doConnect();
 }

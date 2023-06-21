@@ -16,7 +16,7 @@ module deepbook::clob_v2 {
     use sui::sui::SUI;
     use sui::table::{Self, Table, contains, add, borrow_mut};
     use sui::transfer;
-    use sui::tx_context::{TxContext, sender};
+    use sui::tx_context::TxContext;
 
     use deepbook::critbit::{Self, CritbitTree, is_empty, borrow_mut_leaf_by_index, min_leaf, remove_leaf_by_index, max_leaf, next_leaf, previous_leaf, borrow_leaf_by_index, borrow_leaf_by_key, find_leaf, insert_leaf};
     use deepbook::custodian_v2::{Self as custodian, Custodian, AccountCap, mint_account_cap, account_owner};
@@ -104,7 +104,7 @@ module deepbook::clob_v2 {
         /// ID of the order defined by client
         client_order_id: u64,
         is_bid: bool,
-        /// object ID of the `AccountCap` that placed the order
+        /// owner ID of the `AccountCap` that placed the order
         owner: address,
         original_quantity: u64,
         base_asset_quantity_placed: u64,
@@ -121,7 +121,7 @@ module deepbook::clob_v2 {
         /// ID of the order defined by client
         client_order_id: u64,
         is_bid: bool,
-        /// owner address of the `AccountCap` that placed the order
+        /// owner ID of the `AccountCap` that canceled the order
         owner: address,
         original_quantity: u64,
         base_asset_quantity_canceled: u64,
@@ -139,9 +139,9 @@ module deepbook::clob_v2 {
         /// ID of the order defined by maker client
         maker_client_order_id: u64,
         is_bid: bool,
-        /// address of `AccountCap` that filled the order
+        /// owner ID of the `AccountCap` that filled the order
         taker_address: address,
-        /// address of `AccountCap` that placed the order, also as "maker_address"
+        /// owner ID of the `AccountCap` that placed the order
         maker_address: address,
         original_quantity: u64,
         base_asset_quantity_filled: u64,
@@ -167,7 +167,7 @@ module deepbook::clob_v2 {
         pool_id: ID,
         /// quantity of the asset user withdrew
         quantity: u64,
-        /// owner address of the `AccountCap` that withdraw the asset
+        /// owner ID of the `AccountCap` that withdrew the asset
         owner: address
     }
     // <<<<<<<<<<<<<<<<<<<<<<<< Events <<<<<<<<<<<<<<<<<<<<<<<<
@@ -187,7 +187,7 @@ module deepbook::clob_v2 {
         // quantity of the order currently held
         quantity: u64,
         is_bid: bool,
-        // Order can only be cancelled by the owner.
+        /// Order can only be canceled by the `AccountCap` with this owner ID
         owner: address,
         // Expiration timestamp in ms.
         expire_timestamp: u64,
@@ -212,7 +212,7 @@ module deepbook::clob_v2 {
         next_bid_order_id: u64,
         // Order id of the next ask order, starting from 1<<63.
         next_ask_order_id: u64,
-        // Map from owner of account_cap -> (map from order id -> order price)
+        // Map from AccountCap owner ID -> (map from order id -> order price)
         usr_open_orders: Table<address, LinkedTable<u64, u64>>,
         // taker_fee_rate should be strictly greater than maker_rebate_rate.
         // The difference between taker_fee_rate and maker_rabate_rate goes to the protocol.
@@ -1015,7 +1015,7 @@ module deepbook::clob_v2 {
         assert!(price % pool.tick_size == 0, EInvalidPrice);
         assert!(quantity % pool.lot_size == 0, EInvalidQuantity);
         assert!(expire_timestamp > clock::timestamp_ms(clock), EInvalidExpireTimestamp);
-        let owner = sender(ctx);
+        let owner = account_owner(account_cap);
         let original_quantity = quantity;
         let base_quantity_filled;
         let quote_quantity_filled;
@@ -1023,7 +1023,7 @@ module deepbook::clob_v2 {
         if (is_bid) {
             let quote_quantity_original = custodian::account_available_balance<QuoteAsset>(
                 &pool.quote_custodian,
-                owner,
+                owner
             );
             let quote_balance = custodian::decrease_user_available_balance<QuoteAsset>(
                 &mut pool.quote_custodian,

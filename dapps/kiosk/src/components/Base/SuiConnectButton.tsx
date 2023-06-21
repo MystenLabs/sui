@@ -4,11 +4,11 @@
 import { ConnectButton } from '@mysten/wallet-kit';
 
 export function SuiConnectButton() {
-  return (
-    <ConnectButton
-      style={{
-        backgroundColor: '#101827',
-      }}
-    />
-  );
+	return (
+		<ConnectButton
+			style={{
+				backgroundColor: '#101827',
+			}}
+		/>
+	);
 }

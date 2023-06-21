@@ -8,19 +8,14 @@ import { getNormalizedFunctionParameterTypeDetails } from '../utils';
 import type { SuiMoveNormalizedType } from '@mysten/sui.js';
 
 export function useFunctionParamsDetails(
-    params: SuiMoveNormalizedType[],
-    functionTypeArgNames?: string[]
+	params: SuiMoveNormalizedType[],
+	functionTypeArgNames?: string[],
 ) {
-    return useMemo(
-        () =>
-            params
-                .map((aParam) =>
-                    getNormalizedFunctionParameterTypeDetails(
-                        aParam,
-                        functionTypeArgNames
-                    )
-                )
-                .filter(({ isTxContext }) => !isTxContext),
-        [params, functionTypeArgNames]
-    );
+	return useMemo(
+		() =>
+			params
+				.map((aParam) => getNormalizedFunctionParameterTypeDetails(aParam, functionTypeArgNames))
+				.filter(({ isTxContext }) => !isTxContext),
+		[params, functionTypeArgNames],
+	);
 }

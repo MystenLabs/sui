@@ -18,7 +18,6 @@ feature_flags:
   disallow_change_struct_type_params_on_upgrade: true
   no_extraneous_module_bytes: true
   narwhal_versioned_metadata: true
-  consensus_transaction_ordering: ByGasPrice
 max_tx_size_bytes: 131072
 max_input_objects: 2048
 max_size_written_objects: 5000000
@@ -38,7 +37,6 @@ max_move_package_size: 102400
 max_tx_gas: 50000000000
 max_gas_price: 100000
 max_gas_computation_bucket: 5000000
-gas_rounding_step: 1000
 max_loop_depth: 5
 max_generic_instantiation_length: 32
 max_function_parameters: 128

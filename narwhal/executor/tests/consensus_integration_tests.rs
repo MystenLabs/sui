@@ -79,6 +79,7 @@ async fn test_recovery() {
     let bullshark = Bullshark::new(
         committee.clone(),
         consensus_store.clone(),
+        latest_protocol_version(),
         metrics.clone(),
         NUM_SUB_DAGS_PER_SCHEDULE,
     );

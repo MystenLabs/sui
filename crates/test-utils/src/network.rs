@@ -29,7 +29,8 @@ use sui_swarm_config::network_config_builder::{
     ProtocolVersionsConfig, SupportedProtocolVersionsCallback,
 };
 use sui_swarm_config::node_config_builder::{FullnodeConfigBuilder, ValidatorConfigBuilder};
-use sui_types::base_types::{AuthorityName, ObjectID, SuiAddress};
+use sui_test_transaction_builder::TestTransactionBuilder;
+use sui_types::base_types::{AuthorityName, ObjectID, ObjectRef, SuiAddress};
 use sui_types::committee::EpochId;
 use sui_types::crypto::KeypairTraits;
 use sui_types::crypto::SuiKeyPair;
@@ -38,12 +39,12 @@ use sui_types::object::Object;
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
 use sui_types::sui_system_state::SuiSystemState;
 use sui_types::sui_system_state::SuiSystemStateTrait;
-use sui_types::transaction::VerifiedTransaction;
+use sui_types::transaction::{TransactionData, VerifiedTransaction};
 use tokio::time::{timeout, Instant};
 use tokio::{task::JoinHandle, time::sleep};
 use tracing::info;
 
-const NUM_VALIDAOTR: usize = 4;
+const NUM_VALIDATOR: usize = 4;
 
 pub struct FullNodeHandle {
     pub sui_node: SuiNodeHandle,
@@ -207,6 +208,19 @@ impl TestCluster {
             .await
     }
 
+    pub async fn get_object_or_tombstone_from_fullnode_store(
+        &self,
+        object_id: ObjectID,
+    ) -> ObjectRef {
+        self.fullnode_handle
+            .sui_node
+            .state()
+            .db()
+            .get_object_or_tombstone(object_id)
+            .unwrap()
+            .unwrap()
+    }
+
     /// To detect whether the network has reached such state, we use the fullnode as the
     /// source of truth, since a fullnode only does epoch transition when the network has
     /// done so.
@@ -290,13 +304,14 @@ impl TestCluster {
                 handle.with_async(|node| async {
                     let mut retries = 0;
                     loop {
-                        if node.state().epoch_store_for_testing().epoch() == target_epoch {
+                        let epoch = node.state().epoch_store_for_testing().epoch();
+                        if epoch == target_epoch {
                             break;
                         }
                         tokio::time::sleep(Duration::from_secs(1)).await;
                         retries += 1;
                         if retries % 5 == 0 {
-                            tracing::warn!(validator=?node.state().name.concise(), "Waiting for {:?} seconds for epoch change", retries);
+                            tracing::warn!(validator=?node.state().name.concise(), "Waiting for {:?} seconds to reach epoch {:?}. Currently at epoch {:?}", retries, target_epoch, epoch);
                         }
                     }
                 })
@@ -346,6 +361,20 @@ impl TestCluster {
             })
             .await;
         }
+    }
+
+    pub async fn test_transaction_builder(&self) -> TestTransactionBuilder {
+        let (sender, gas) = self.wallet.get_one_gas_object().await.unwrap().unwrap();
+        let rgp = self.get_reference_gas_price().await;
+        TestTransactionBuilder::new(sender, gas, rgp)
+    }
+
+    pub async fn sign_and_execute_transaction(
+        &self,
+        tx: &TransactionData,
+    ) -> SuiTransactionBlockResponse {
+        let signed_tx = self.wallet.sign_transaction(tx);
+        self.execute_transaction(signed_tx).await
     }
 
     /// Execute a transaction on the network and wait for it to be executed on the rpc fullnode.
@@ -442,6 +471,7 @@ pub struct TestClusterBuilder {
     fullnode_supported_protocol_versions_config: Option<ProtocolVersionsConfig>,
     db_checkpoint_config_validators: DBCheckpointConfig,
     db_checkpoint_config_fullnodes: DBCheckpointConfig,
+    num_unpruned_validators: Option<usize>,
 }
 
 impl TestClusterBuilder {
@@ -456,6 +486,7 @@ impl TestClusterBuilder {
             fullnode_supported_protocol_versions_config: None,
             db_checkpoint_config_validators: DBCheckpointConfig::default(),
             db_checkpoint_config_fullnodes: DBCheckpointConfig::default(),
+            num_unpruned_validators: None,
         }
     }
 
@@ -563,24 +594,22 @@ impl TestClusterBuilder {
         self
     }
 
+    pub fn with_num_unpruned_validators(mut self, n: usize) -> Self {
+        self.num_unpruned_validators = Some(n);
+        self
+    }
+
     pub fn with_accounts(mut self, accounts: Vec<AccountConfig>) -> Self {
         self.get_or_init_genesis_config().accounts = accounts;
         self
     }
 
-    pub async fn build(self) -> anyhow::Result<TestCluster> {
-        let cluster = self.start_test_network_with_customized_ports().await?;
-        Ok(cluster)
-    }
-
-    async fn start_test_network_with_customized_ports(
-        mut self,
-    ) -> Result<TestCluster, anyhow::Error> {
-        let swarm = self.start_swarm().await?;
+    pub async fn build(mut self) -> TestCluster {
+        let swarm = self.start_swarm().await.unwrap();
         let working_dir = swarm.dir();
 
         let mut wallet_conf: SuiClientConfig =
-            PersistedConfig::read(&working_dir.join(SUI_CLIENT_CONFIG))?;
+            PersistedConfig::read(&working_dir.join(SUI_CLIENT_CONFIG)).unwrap();
 
         let fullnode = swarm.fullnodes().next().unwrap();
         let json_rpc_address = fullnode.config.json_rpc_address;
@@ -596,23 +625,24 @@ impl TestClusterBuilder {
 
         wallet_conf
             .persisted(&working_dir.join(SUI_CLIENT_CONFIG))
-            .save()?;
+            .save()
+            .unwrap();
 
         let wallet_conf = swarm.dir().join(SUI_CLIENT_CONFIG);
-        let wallet = WalletContext::new(&wallet_conf, None, None).await?;
+        let wallet = WalletContext::new(&wallet_conf, None, None).await.unwrap();
 
-        Ok(TestCluster {
+        TestCluster {
             swarm,
             wallet,
             fullnode_handle,
-        })
+        }
     }
 
     /// Start a Swarm and set up WalletConfig
     async fn start_swarm(&mut self) -> Result<Swarm, anyhow::Error> {
         let mut builder: SwarmBuilder = Swarm::builder()
             .committee_size(
-                NonZeroUsize::new(self.num_validators.unwrap_or(NUM_VALIDAOTR)).unwrap(),
+                NonZeroUsize::new(self.num_validators.unwrap_or(NUM_VALIDATOR)).unwrap(),
             )
             .with_objects(self.additional_objects.clone())
             .with_db_checkpoint_config(self.db_checkpoint_config_validators.clone())
@@ -632,6 +662,9 @@ impl TestClusterBuilder {
         }
         if let Some(fullnode_rpc_port) = self.fullnode_rpc_port {
             builder = builder.with_fullnode_rpc_port(fullnode_rpc_port);
+        }
+        if let Some(num_unpruned_validators) = self.num_unpruned_validators {
+            builder = builder.with_num_unpruned_validators(num_unpruned_validators);
         }
 
         let mut swarm = builder.build();

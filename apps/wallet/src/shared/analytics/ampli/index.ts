@@ -24,47 +24,47 @@ import * as amplitude from '@amplitude/analytics-browser';
 export type Environment = 'production' | 'development';
 
 export const ApiKey: Record<Environment, string> = {
-    production: '05c63856469c4e1d4aa9a6c1b2298d3b',
-    development: '938968357fcb3bf031d27b5049f62449',
+	production: '05c63856469c4e1d4aa9a6c1b2298d3b',
+	development: '938968357fcb3bf031d27b5049f62449',
 };
 
 /**
  * Default Amplitude configuration options. Contains tracking plan information.
  */
 export const DefaultConfiguration: BrowserOptions = {
-    plan: {
-        version: '1',
-        branch: 'main',
-        source: 'web',
-        versionId: '7d6d5758-f2dc-4fed-a9ed-b8f700f3bba7',
-    },
-    ...{
-        ingestionMetadata: {
-            sourceName: 'browser-typescript-ampli',
-            sourceVersion: '2.0.0',
-        },
-    },
+	plan: {
+		version: '1',
+		branch: 'main',
+		source: 'web',
+		versionId: '7d6d5758-f2dc-4fed-a9ed-b8f700f3bba7',
+	},
+	...{
+		ingestionMetadata: {
+			sourceName: 'browser-typescript-ampli',
+			sourceVersion: '2.0.0',
+		},
+	},
 };
 
 export interface LoadOptionsBase {
-    disabled?: boolean;
+	disabled?: boolean;
 }
 
 export type LoadOptionsWithEnvironment = LoadOptionsBase & {
-    environment: Environment;
-    client?: { configuration?: BrowserOptions };
+	environment: Environment;
+	client?: { configuration?: BrowserOptions };
 };
 export type LoadOptionsWithApiKey = LoadOptionsBase & {
-    client: { apiKey: string; configuration?: BrowserOptions };
+	client: { apiKey: string; configuration?: BrowserOptions };
 };
 export type LoadOptionsWithClientInstance = LoadOptionsBase & {
-    client: { instance: BrowserClient };
+	client: { instance: BrowserClient };
 };
 
 export type LoadOptions =
-    | LoadOptionsWithEnvironment
-    | LoadOptionsWithApiKey
-    | LoadOptionsWithClientInstance;
+	| LoadOptionsWithEnvironment
+	| LoadOptionsWithApiKey
+	| LoadOptionsWithClientInstance;
 
 export type PromiseResult<T> = { promise: Promise<T | void> };
 

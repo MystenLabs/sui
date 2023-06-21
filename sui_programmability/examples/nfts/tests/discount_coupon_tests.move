@@ -17,6 +17,7 @@ module nfts::discount_coupon_tests {
     // const MINT_FAILED: u64 = 0;
     // const TRANSFER_FAILED: u64 = 1;
 
+    #[allow(unused_function)]
     // Initializes the "state of the world" that mimics what should
     // be available in Sui genesis state (e.g., mints and distributes
     // coins to users).

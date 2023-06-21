@@ -20,7 +20,7 @@ use sui_config::{
     FULL_NODE_DB_PATH,
 };
 use sui_protocol_config::SupportedProtocolVersions;
-use sui_types::crypto::{AuthorityKeyPair, AuthorityPublicKeyBytes, SuiKeyPair};
+use sui_types::crypto::{AuthorityKeyPair, AuthorityPublicKeyBytes, NetworkKeyPair, SuiKeyPair};
 use sui_types::multiaddr::Multiaddr;
 
 /// This builder contains information that's not included in ValidatorGenesisConfig for building
@@ -29,6 +29,7 @@ use sui_types::multiaddr::Multiaddr;
 pub struct ValidatorConfigBuilder {
     config_directory: Option<PathBuf>,
     supported_protocol_versions: Option<SupportedProtocolVersions>,
+    force_unpruned_checkpoints: bool,
 }
 
 impl ValidatorConfigBuilder {
@@ -48,6 +49,11 @@ impl ValidatorConfigBuilder {
     ) -> Self {
         assert!(self.supported_protocol_versions.is_none());
         self.supported_protocol_versions = Some(supported_protocol_versions);
+        self
+    }
+
+    pub fn with_unpruned_checkpoints(mut self) -> Self {
+        self.force_unpruned_checkpoints = true;
         self
     }
 
@@ -103,6 +109,12 @@ impl ValidatorConfigBuilder {
             ..Default::default()
         };
 
+        let mut pruning_config = AuthorityStorePruningConfig::validator_config();
+        if self.force_unpruned_checkpoints {
+            pruning_config.num_epochs_to_retain_for_checkpoints = None;
+        }
+        let pruning_config = pruning_config;
+
         NodeConfig {
             protocol_key_pair: AuthorityKeyPairWithPath::new(validator.key_pair),
             network_key_pair: KeyPairWithPath::new(SuiKeyPair::Ed25519(validator.network_key_pair)),
@@ -122,7 +134,7 @@ impl ValidatorConfigBuilder {
             grpc_load_shed: None,
             grpc_concurrency_limit: Some(DEFAULT_GRPC_CONCURRENCY_LIMIT),
             p2p_config,
-            authority_store_pruning_config: AuthorityStorePruningConfig::validator_config(),
+            authority_store_pruning_config: pruning_config,
             end_of_epoch_broadcast_channel_capacity:
                 default_end_of_epoch_broadcast_channel_capacity(),
             checkpoint_executor_config: Default::default(),
@@ -168,6 +180,7 @@ pub struct FullnodeConfigBuilder {
     genesis: Option<Genesis>,
     p2p_external_address: Option<Multiaddr>,
     p2p_listen_address: Option<SocketAddr>,
+    network_key_pair: Option<KeyPairWithPath>,
 }
 
 impl FullnodeConfigBuilder {
@@ -250,6 +263,14 @@ impl FullnodeConfigBuilder {
         self
     }
 
+    pub fn with_network_key_pair(mut self, network_key_pair: Option<NetworkKeyPair>) -> Self {
+        if let Some(network_key_pair) = network_key_pair {
+            self.network_key_pair =
+                Some(KeyPairWithPath::new(SuiKeyPair::Ed25519(network_key_pair)));
+        }
+        self
+    }
+
     pub fn build<R: rand::RngCore + rand::CryptoRng>(
         self,
         rng: &mut R,
@@ -313,8 +334,8 @@ impl FullnodeConfigBuilder {
             worker_key_pair: KeyPairWithPath::new(SuiKeyPair::Ed25519(
                 validator_config.worker_key_pair,
             )),
-            network_key_pair: KeyPairWithPath::new(SuiKeyPair::Ed25519(
-                validator_config.network_key_pair,
+            network_key_pair: self.network_key_pair.unwrap_or(KeyPairWithPath::new(
+                SuiKeyPair::Ed25519(validator_config.network_key_pair),
             )),
             db_path: self
                 .db_path

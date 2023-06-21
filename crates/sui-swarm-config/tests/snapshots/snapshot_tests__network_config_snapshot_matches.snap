@@ -69,7 +69,6 @@ validator_configs:
       num-epochs-to-retain: 2
       max-checkpoints-in-batch: 10
       max-transactions-in-batch: 1000
-      use-range-deletion: true
     end-of-epoch-broadcast-channel-capacity: 128
     checkpoint-executor-config:
       checkpoint-execution-max-concurrency: 200
@@ -158,7 +157,6 @@ validator_configs:
       num-epochs-to-retain: 2
       max-checkpoints-in-batch: 10
       max-transactions-in-batch: 1000
-      use-range-deletion: true
     end-of-epoch-broadcast-channel-capacity: 128
     checkpoint-executor-config:
       checkpoint-execution-max-concurrency: 200
@@ -247,7 +245,6 @@ validator_configs:
       num-epochs-to-retain: 2
       max-checkpoints-in-batch: 10
       max-transactions-in-batch: 1000
-      use-range-deletion: true
     end-of-epoch-broadcast-channel-capacity: 128
     checkpoint-executor-config:
       checkpoint-execution-max-concurrency: 200
@@ -336,7 +333,6 @@ validator_configs:
       num-epochs-to-retain: 2
       max-checkpoints-in-batch: 10
       max-transactions-in-batch: 1000
-      use-range-deletion: true
     end-of-epoch-broadcast-channel-capacity: 128
     checkpoint-executor-config:
       checkpoint-execution-max-concurrency: 200
@@ -425,7 +421,6 @@ validator_configs:
       num-epochs-to-retain: 2
       max-checkpoints-in-batch: 10
       max-transactions-in-batch: 1000
-      use-range-deletion: true
     end-of-epoch-broadcast-channel-capacity: 128
     checkpoint-executor-config:
       checkpoint-execution-max-concurrency: 200
@@ -514,7 +509,6 @@ validator_configs:
       num-epochs-to-retain: 2
       max-checkpoints-in-batch: 10
       max-transactions-in-batch: 1000
-      use-range-deletion: true
     end-of-epoch-broadcast-channel-capacity: 128
     checkpoint-executor-config:
       checkpoint-execution-max-concurrency: 200
@@ -603,7 +597,6 @@ validator_configs:
       num-epochs-to-retain: 2
       max-checkpoints-in-batch: 10
       max-transactions-in-batch: 1000
-      use-range-deletion: true
     end-of-epoch-broadcast-channel-capacity: 128
     checkpoint-executor-config:
       checkpoint-execution-max-concurrency: 200

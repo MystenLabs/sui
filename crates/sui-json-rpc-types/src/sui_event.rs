@@ -72,6 +72,18 @@ impl From<EventEnvelope> for SuiEvent {
     }
 }
 
+impl From<SuiEvent> for Event {
+    fn from(val: SuiEvent) -> Self {
+        Event {
+            package_id: val.package_id,
+            transaction_module: val.transaction_module,
+            sender: val.sender,
+            type_: val.type_,
+            contents: val.bcs,
+        }
+    }
+}
+
 impl SuiEvent {
     pub fn try_from(
         event: Event,

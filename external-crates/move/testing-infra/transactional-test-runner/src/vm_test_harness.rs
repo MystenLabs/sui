@@ -9,6 +9,7 @@ use crate::{
     tasks::{EmptyCommand, InitCommand, SyntaxChoice, TaskInput},
 };
 use anyhow::{anyhow, Result};
+use async_trait::async_trait;
 use clap::Parser;
 use move_binary_format::{
     errors::{Location, VMError, VMResult},
@@ -75,6 +76,7 @@ pub struct AdapterExecuteArgs {
     pub check_runtime_types: bool,
 }
 
+#[async_trait]
 impl<'a> MoveTestAdapter<'a> for SimpleVMTestAdapter<'a> {
     type ExtraInitArgs = EmptyCommand;
     type ExtraPublishArgs = EmptyCommand;
@@ -90,7 +92,7 @@ impl<'a> MoveTestAdapter<'a> for SimpleVMTestAdapter<'a> {
         self.default_syntax
     }
 
-    fn init(
+    async fn init(
         default_syntax: SyntaxChoice,
         pre_compiled_deps: Option<&'a FullyCompiledProgram>,
         task_opt: Option<TaskInput<(InitCommand, EmptyCommand)>>,
@@ -154,7 +156,7 @@ impl<'a> MoveTestAdapter<'a> for SimpleVMTestAdapter<'a> {
         (adapter, None)
     }
 
-    fn publish_modules(
+    async fn publish_modules(
         &mut self,
         modules: Vec<(Option<Symbol>, CompiledModule)>,
         gas_budget: Option<u64>,
@@ -185,7 +187,7 @@ impl<'a> MoveTestAdapter<'a> for SimpleVMTestAdapter<'a> {
         }
     }
 
-    fn execute_script(
+    async fn execute_script(
         &mut self,
         script: CompiledScript,
         type_arg_tags: Vec<TypeTag>,
@@ -234,7 +236,7 @@ impl<'a> MoveTestAdapter<'a> for SimpleVMTestAdapter<'a> {
         Ok((None, serialized_return_values))
     }
 
-    fn call_function(
+    async fn call_function(
         &mut self,
         module: &ModuleId,
         function: &IdentStr,
@@ -283,7 +285,7 @@ impl<'a> MoveTestAdapter<'a> for SimpleVMTestAdapter<'a> {
         Ok((None, serialized_return_values))
     }
 
-    fn view_data(
+    async fn view_data(
         &mut self,
         address: AccountAddress,
         module: &ModuleId,
@@ -293,7 +295,10 @@ impl<'a> MoveTestAdapter<'a> for SimpleVMTestAdapter<'a> {
         view_resource_in_move_storage(&self.storage, address, module, resource, type_args)
     }
 
-    fn handle_subcommand(&mut self, _: TaskInput<Self::Subcommand>) -> Result<Option<String>> {
+    async fn handle_subcommand(
+        &mut self,
+        _: TaskInput<Self::Subcommand>,
+    ) -> Result<Option<String>> {
         unreachable!()
     }
 }
@@ -408,8 +413,9 @@ static MOVE_STDLIB_COMPILED: Lazy<Vec<CompiledModule>> = Lazy::new(|| {
     }
 });
 
-pub fn run_test(path: &Path) -> Result<(), Box<dyn std::error::Error>> {
-    run_test_impl::<SimpleVMTestAdapter>(path, Some(&*PRECOMPILED_MOVE_STDLIB))
+#[tokio::main]
+pub async fn run_test(path: &Path) -> Result<(), Box<dyn std::error::Error>> {
+    run_test_impl::<SimpleVMTestAdapter>(path, Some(&*PRECOMPILED_MOVE_STDLIB)).await
 }
 
 impl From<AdapterExecuteArgs> for VMConfig {

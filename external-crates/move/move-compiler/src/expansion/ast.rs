@@ -580,11 +580,28 @@ impl Address {
             Self::NamedUnassigned(_) => NumericalAddress::DEFAULT_ERROR_ADDRESS,
         }
     }
+
+    pub fn is(&self, address: impl AsRef<str>) -> bool {
+        match self {
+            Self::Numerical(Some(n), _) | Self::NamedUnassigned(n) => {
+                n.value.as_str() == address.as_ref()
+            }
+            Self::Numerical(None, _) => false,
+        }
+    }
 }
 
 impl ModuleIdent_ {
     pub fn new(address: Address, module: ModuleName) -> Self {
         Self { address, module }
+    }
+
+    pub fn is(&self, address: impl AsRef<str>, module: impl AsRef<str>) -> bool {
+        let Self {
+            address: a,
+            module: m,
+        } = self;
+        a.is(address) && m == module.as_ref()
     }
 }
 

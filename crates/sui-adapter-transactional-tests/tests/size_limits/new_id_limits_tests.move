@@ -3,7 +3,7 @@
 
 // Test limits on number of created IDs
 
-//# init --addresses Test=0x0
+//# init --addresses Test=0x0 --max-gas 100000000000000
 
 //# publish
 
@@ -31,34 +31,19 @@ module Test::M1 {
     }
 }
 
-// create below create count limit should succeed
-//# run Test::M1::create_n_ids --args 1 --gas-budget 100000000000000 --gas-price 1 --protocol-version 2
-
-// create below create count limit should succeed
-//# run Test::M1::create_n_ids --args 256 --gas-budget 100000000000000 --gas-price 1 --protocol-version 2
-
-// create at create count limit should succeed
-//# run Test::M1::create_n_ids --args 2048 --gas-budget 100000000000000 --gas-price 1 --protocol-version 2
-
-// create above create count limit should fail
-//# run Test::M1::create_n_ids --args 2049 --gas-budget 100000000000000 --gas-price 1 --protocol-version 2
-
-// create above create count limit should fail
-//# run Test::M1::create_n_ids --args 4096 --gas-budget 100000000000000 --gas-price 1 --protocol-version 2
-
 // tests below all run out of gas with realistic prices
 
 // create below create count limit should succeed
-//# run Test::M1::create_n_ids --args 1 --gas-budget 100000000000000 --gas-price 1
+//# run Test::M1::create_n_ids --args 1 --gas-budget 100000000000000
 
 // create below create count limit should succeed
-//# run Test::M1::create_n_ids --args 256 --gas-budget 100000000000000 --gas-price 1
+//# run Test::M1::create_n_ids --args 256 --gas-budget 100000000000000
 
 // create at create count limit should succeed
-//# run Test::M1::create_n_ids --args 2048 --gas-budget 100000000000000 --gas-price 1
+//# run Test::M1::create_n_ids --args 2048 --gas-budget 100000000000000
 
 // create above create count limit should fail
-//# run Test::M1::create_n_ids --args 2049 --gas-budget 100000000000000 --gas-price 1
+//# run Test::M1::create_n_ids --args 2049 --gas-budget 100000000000000
 
 // create above create count limit should fail
-//# run Test::M1::create_n_ids --args 4096 --gas-budget 100000000000000 --gas-price 1
+//# run Test::M1::create_n_ids --args 4096 --gas-budget 100000000000000

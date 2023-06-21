@@ -1,5 +1,20 @@
 # @mysten/sui.js
 
+## 0.36.0
+
+### Minor Changes
+
+- 3ea9adb71a: Add multisig support
+- 1cfb1c9da3: The `TransactionBlock` builder now uses the protocol config from the chain when constructing and validating transactions, instead of using hard-coded limits. If you wish to perform signing offline (without a provider), you can either define a `protocolConfig` option when building a transaction, or explicitly set `limits`, which will be used instead of the protocol config.
+- fb3bb9118a: Remove logging of RPCValidation errors when typescript types do not match RPC response types
+
+### Patch Changes
+
+- 1cfb1c9da3: Added `getProtocolConfig()` method to the provider.
+- Updated dependencies [ca5c72815d]
+- Updated dependencies [fdb569464e]
+  - @mysten/bcs@0.7.2
+
 ## 0.35.1
 
 ### Patch Changes
@@ -197,7 +212,7 @@
 
 ### Minor Changes
 
-- a67cc044b: Transaction signatures are now serialized into a single string, and all APIs that previously took the public key, signature, and scheme now just take the single serialized signature string. To help make parsing this easier, there are new `toSerializedSignature` and `fromSerializedSignature` methods exposed as well.
+- a67cc044b: Transaction signatures are now serialized into a single string, and all APIs that previously took the public key, signature, and scheme now just take the single serialized signature string. To help make parsing this easier, there are new `toSerializedSignature` and `toParsedSignaturePubkeyPair` methods exposed as well.
 - a67cc044b: The RawSigner now provides a `signTransaction` function, which can be used to sign a transaction without submitting it to the network.
 - a67cc044b: The RawSigner now provides a `signMessage` function that can be used to sign personal messages. The SDK also now exports a `verifyMessage` function that can be used to easily verify a message signed with `signMessage`.
 

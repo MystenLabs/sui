@@ -6,30 +6,30 @@ import { Spinner } from './Spinner';
 import classNames from 'classnames';
 
 export function Button({
-  children,
-  loading,
-  className,
-  disabled,
-  onClick,
-  ...props
+	children,
+	loading,
+	className,
+	disabled,
+	onClick,
+	...props
 }: {
-  children: ReactNode;
-  loading?: boolean;
-  className?: string;
-  onClick: () => Promise<void> | void;
-  disabled?: boolean;
+	children: ReactNode;
+	loading?: boolean;
+	className?: string;
+	onClick: () => Promise<void> | void;
+	disabled?: boolean;
 }) {
-  return (
-    <button
-      className={classNames(
-        'ease-in-out duration-300 disabled:opacity-30 rounded border py-2 px-4 bg-gray-200',
-        className,
-      )}
-      onClick={onClick}
-      disabled={!!disabled}
-      {...props}
-    >
-      {loading ? <Spinner /> : children}
-    </button>
-  );
+	return (
+		<button
+			className={classNames(
+				'ease-in-out duration-300 disabled:opacity-30 rounded border py-2 px-4 bg-gray-200',
+				className,
+			)}
+			onClick={onClick}
+			disabled={!!disabled}
+			{...props}
+		>
+			{loading ? <Spinner /> : children}
+		</button>
+	);
 }

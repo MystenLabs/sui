@@ -898,12 +898,42 @@ pub fn initial_cost_schedule_v3() -> CostTable {
     }
 }
 
+pub fn initial_cost_schedule_v4() -> CostTable {
+    let instruction_tiers: BTreeMap<u64, u64> = vec![
+        (0, 1),
+        (20_000, 2),
+        (50_000, 10),
+        (100_000, 50),
+        (200_000, 100),
+    ]
+    .into_iter()
+    .collect();
+
+    let stack_height_tiers: BTreeMap<u64, u64> =
+        vec![(0, 1), (1_000, 2), (10_000, 10)].into_iter().collect();
+
+    let stack_size_tiers: BTreeMap<u64, u64> = vec![
+        (0, 1),
+        (100_000, 2),     // ~100K
+        (500_000, 5),     // ~500K
+        (1_000_000, 100), // ~1M
+    ]
+    .into_iter()
+    .collect();
+
+    CostTable {
+        instruction_tiers,
+        stack_size_tiers,
+        stack_height_tiers,
+    }
+}
+
 // Convert from our representation of gas costs to the type that the MoveVM expects for unit tests.
 // We don't want our gas depending on the MoveVM test utils and we don't want to fix our
 // representation to whatever is there, so instead we perform this translation from our gas units
 // and cost schedule to the one expected by the Move unit tests.
 pub fn initial_cost_schedule_for_unit_tests() -> move_vm_test_utils::gas_schedule::CostTable {
-    let table = initial_cost_schedule_v3();
+    let table = initial_cost_schedule_v4();
     move_vm_test_utils::gas_schedule::CostTable {
         instruction_tiers: table
             .instruction_tiers

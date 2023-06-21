@@ -211,7 +211,7 @@ pub struct Label(pub usize);
 // Commands
 //**************************************************************************************************
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 #[allow(clippy::large_enum_variant)]
 pub enum Command_ {
     Assign(Vec<LValue>, Box<Exp>),
@@ -239,7 +239,7 @@ pub enum Command_ {
 }
 pub type Command = Spanned<Command_>;
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum LValue_ {
     Ignore,
     Var(Var, Box<SingleType>),
@@ -258,7 +258,7 @@ pub enum UnitCase {
     FromUser,
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct ModuleCall {
     pub module: ModuleIdent,
     pub name: FunctionName,
@@ -310,7 +310,7 @@ pub enum MoveOpAnnotation {
     InferredNoCopy,
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum UnannotatedExp_ {
     Unit {
         case: UnitCase,
@@ -350,7 +350,7 @@ pub enum UnannotatedExp_ {
     UnresolvedError,
 }
 pub type UnannotatedExp = Spanned<UnannotatedExp_>;
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Exp {
     pub ty: Type,
     pub exp: UnannotatedExp,
@@ -359,7 +359,7 @@ pub fn exp(ty: Type, exp: UnannotatedExp) -> Exp {
     Exp { ty, exp }
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum ExpListItem {
     Single(Exp, Box<SingleType>),
     Splat(Loc, Exp, Vec<SingleType>),
@@ -463,6 +463,22 @@ impl UnannotatedExp_ {
     }
 }
 
+impl TypeName_ {
+    pub fn is(
+        &self,
+        address: impl AsRef<str>,
+        module: impl AsRef<str>,
+        name: impl AsRef<str>,
+    ) -> bool {
+        match self {
+            TypeName_::Builtin(_) => false,
+            TypeName_::ModuleType(mident, n) => {
+                mident.value.is(address, module) && n == name.as_ref()
+            }
+        }
+    }
+}
+
 impl BaseType_ {
     pub fn builtin(loc: Loc, b_: BuiltinTypeName_, ty_args: Vec<BaseType>) -> BaseType {
         use BuiltinTypeName_::*;
@@ -528,6 +544,18 @@ impl BaseType_ {
     pub fn u256(loc: Loc) -> BaseType {
         Self::builtin(loc, BuiltinTypeName_::U256, vec![])
     }
+
+    pub fn is_apply(
+        &self,
+        address: impl AsRef<str>,
+        module: impl AsRef<str>,
+        name: impl AsRef<str>,
+    ) -> Option<(&AbilitySet, &TypeName, &[BaseType])> {
+        match self {
+            Self::Apply(abs, n, tys) if n.value.is(address, module, name) => Some((abs, n, tys)),
+            _ => None,
+        }
+    }
 }
 
 impl SingleType_ {
@@ -571,6 +599,17 @@ impl SingleType_ {
         match self {
             SingleType_::Ref(_, _) => AbilitySet::references(loc),
             SingleType_::Base(b) => b.value.abilities(loc),
+        }
+    }
+
+    pub fn is_apply(
+        &self,
+        address: impl AsRef<str>,
+        module: impl AsRef<str>,
+        name: impl AsRef<str>,
+    ) -> Option<(&AbilitySet, &TypeName, &[BaseType])> {
+        match self {
+            Self::Ref(_, b) | Self::Base(b) => b.value.is_apply(address, module, name),
         }
     }
 }
@@ -638,6 +677,19 @@ impl Type_ {
         };
         sp(loc, t_)
     }
+
+    pub fn is_apply(
+        &self,
+        address: impl AsRef<str>,
+        module: impl AsRef<str>,
+        name: impl AsRef<str>,
+    ) -> Option<(&AbilitySet, &TypeName, &[BaseType])> {
+        match self {
+            Type_::Unit => None,
+            Type_::Single(t) => t.value.is_apply(address, module, name),
+            Type_::Multiple(_) => None,
+        }
+    }
 }
 
 impl TName for Var {
@@ -654,6 +706,22 @@ impl TName for Var {
 
     fn borrow(&self) -> (&Loc, &Symbol) {
         (&self.0.loc, &self.0.value)
+    }
+}
+
+impl ModuleCall {
+    pub fn is(
+        &self,
+        address: impl AsRef<str>,
+        module: impl AsRef<str>,
+        function: impl AsRef<str>,
+    ) -> bool {
+        let Self {
+            module: sp!(_, mident),
+            name: f,
+            ..
+        } = self;
+        mident.is(address, module) && f == function.as_ref()
     }
 }
 

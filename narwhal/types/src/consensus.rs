@@ -7,6 +7,7 @@ use config::{AuthorityIdentifier, Committee};
 use enum_dispatch::enum_dispatch;
 use fastcrypto::hash::Hash;
 use serde::{Deserialize, Serialize};
+use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::mpsc;
@@ -157,6 +158,28 @@ impl ReputationScores {
 
     pub fn all_zero(&self) -> bool {
         !self.scores_per_authority.values().any(|e| *e > 0)
+    }
+
+    // Returns the authorities in score descending order.
+    pub fn authorities_by_score_desc(&self) -> Vec<(AuthorityIdentifier, u64)> {
+        let mut authorities: Vec<_> = self
+            .scores_per_authority
+            .iter()
+            .map(|(authority, score)| (*authority, *score))
+            .collect();
+
+        authorities.sort_by(|a1, a2| {
+            match a2.1.cmp(&a1.1) {
+                Ordering::Equal => {
+                    // we resolve the score equality deterministically by ordering in authority
+                    // identifier order descending.
+                    a2.0.cmp(&a1.0)
+                }
+                result => result,
+            }
+        });
+
+        authorities
     }
 }
 
@@ -343,6 +366,7 @@ mod tests {
     use config::AuthorityIdentifier;
     use indexmap::IndexMap;
     use std::collections::BTreeSet;
+    use std::num::NonZeroUsize;
     use test_utils::CommitteeFixture;
 
     #[test]
@@ -442,5 +466,42 @@ mod tests {
             sub_dag_round_4.commit_timestamp,
             sub_dag_round_2.commit_timestamp
         );
+    }
+
+    #[test]
+    fn test_authority_sorting_in_reputation_scores() {
+        let fixture = CommitteeFixture::builder()
+            .committee_size(NonZeroUsize::new(10).unwrap())
+            .build();
+        let committee = fixture.committee();
+
+        let mut scores = ReputationScores::new(&committee);
+
+        let ids: Vec<AuthorityIdentifier> = fixture.authorities().map(|a| a.id()).collect();
+
+        // adding some scores
+        scores.add_score(ids[0], 0);
+        scores.add_score(ids[1], 10);
+        scores.add_score(ids[2], 10);
+        scores.add_score(ids[3], 10);
+        scores.add_score(ids[4], 10);
+        scores.add_score(ids[5], 20);
+        scores.add_score(ids[6], 30);
+        scores.add_score(ids[7], 30);
+        scores.add_score(ids[8], 40);
+        scores.add_score(ids[9], 40);
+
+        // sorting the authorities
+        let sorted_authorities = scores.authorities_by_score_desc();
+        assert_eq!(sorted_authorities[0], (ids[9], 40));
+        assert_eq!(sorted_authorities[1], (ids[8], 40));
+        assert_eq!(sorted_authorities[2], (ids[7], 30));
+        assert_eq!(sorted_authorities[3], (ids[6], 30));
+        assert_eq!(sorted_authorities[4], (ids[5], 20));
+        assert_eq!(sorted_authorities[5], (ids[4], 10));
+        assert_eq!(sorted_authorities[6], (ids[3], 10));
+        assert_eq!(sorted_authorities[7], (ids[2], 10));
+        assert_eq!(sorted_authorities[8], (ids[1], 10));
+        assert_eq!(sorted_authorities[9], (ids[0], 0));
     }
 }

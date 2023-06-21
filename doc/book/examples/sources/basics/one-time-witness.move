@@ -58,6 +58,7 @@ module examples::my_otw {
     /// Type is named after the module but uppercased
     struct MY_OTW has drop {}
 
+    #[allow(unused_function)]
     /// To get it, use the first argument of the module initializer.
     /// It is a full instance and not a reference type.
     fun init(witness: MY_OTW, ctx: &mut TxContext) {

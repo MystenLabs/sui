@@ -66,6 +66,7 @@ pub fn run_move_prover<W: WriteColor>(
             named_address_map: addrs,
         }],
         options.model_builder.clone(),
+        None,
     )?;
     run_move_prover_with_model(&env, error_writer, options, Some(now))
 }

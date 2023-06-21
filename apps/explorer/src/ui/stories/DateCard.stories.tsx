@@ -6,11 +6,11 @@ import { type Meta, type StoryObj } from '@storybook/react';
 import { DateCard, type DateCardProps } from '../DateCard';
 
 export default {
-    component: DateCard,
+	component: DateCard,
 } as Meta;
 
 export const defaultAmount: StoryObj<DateCardProps> = {
-    args: {
-        date: 1667942429177,
-    },
+	args: {
+		date: 1667942429177,
+	},
 };

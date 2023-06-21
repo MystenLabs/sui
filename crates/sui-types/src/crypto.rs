@@ -234,7 +234,7 @@ impl<'de> Deserialize<'de> for SuiKeyPair {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, JsonSchema, Serialize, Deserialize)]
 pub enum PublicKey {
     Ed25519(Ed25519PublicKeyAsBytes),
     Secp256k1(Secp256k1PublicKeyAsBytes),
@@ -284,28 +284,6 @@ impl EncodeDecodeBase64 for PublicKey {
             }
             _ => Err(eyre!("Invalid bytes")),
         }
-    }
-}
-
-impl Serialize for PublicKey {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        let s = self.encode_base64();
-        serializer.serialize_str(&s)
-    }
-}
-
-impl<'de> Deserialize<'de> for PublicKey {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        use serde::de::Error;
-        let s = String::deserialize(deserializer)?;
-        <PublicKey as EncodeDecodeBase64>::decode_base64(&s)
-            .map_err(|e| Error::custom(e.to_string()))
     }
 }
 

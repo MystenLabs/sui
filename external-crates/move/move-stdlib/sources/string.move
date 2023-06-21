@@ -91,4 +91,11 @@ module std::string {
     native fun internal_is_char_boundary(v: &vector<u8>, i: u64): bool;
     native fun internal_sub_string(v: &vector<u8>, i: u64, j: u64): vector<u8>;
     native fun internal_index_of(v: &vector<u8>, r: &vector<u8>): u64;
+
+    // Test only API for the native function. Don't return a value so other
+    // tests aren't tempted to use this function.
+    #[test_only]
+    public fun internal_sub_string_for_testing(v: &vector<u8>, i: u64, j: u64) {
+        internal_sub_string(v, i, j);
+    }
 }

@@ -1,5 +1,18 @@
 # @mysten/kiosk
 
+## 0.3.1
+
+### Patch Changes
+
+- 6a2a42d779: Add `getOwnedKiosks` query to easily get owned kiosks and their ownerCaps for an address
+- abf6ad381e: Refactor the fetchKiosk function to return all content instead of paginating, to prevent missing data
+- d72fdb5a5c: Fix on createTransferPolicy method. Updated type arguments for public_share_object command.
+- Updated dependencies [3ea9adb71a]
+- Updated dependencies [1cfb1c9da3]
+- Updated dependencies [1cfb1c9da3]
+- Updated dependencies [fb3bb9118a]
+  - @mysten/sui.js@0.36.0
+
 ## 0.3.0
 
 ### Minor Changes

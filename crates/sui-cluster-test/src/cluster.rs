@@ -189,7 +189,7 @@ impl Cluster for LocalNewCluster {
             cluster_builder = cluster_builder.with_fullnode_rpc_port(rpc_port);
         }
 
-        let mut test_cluster = cluster_builder.build().await?;
+        let mut test_cluster = cluster_builder.build().await;
 
         // Use the wealthy account for faucet
         let faucet_key = test_cluster.swarm.config_mut().account_keys.swap_remove(0);

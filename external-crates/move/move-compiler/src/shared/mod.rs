@@ -3,9 +3,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
+    cfgir::visitor::AbsIntVisitorObj,
     command_line as cli,
     diagnostics::{
-        codes::{Severity, WarningFilter, WARNING_FILTER_ATTR},
+        codes::{Category, Severity, WarningFilter, WARNING_FILTER_ATTR},
         Diagnostic, Diagnostics, WarningFilters,
     },
     naming::ast::ModuleDefinition,
@@ -15,6 +16,7 @@ use move_ir_types::location::*;
 use move_symbol_pool::Symbol;
 use petgraph::{algo::astar as petgraph_astar, graphmap::DiGraphMap};
 use std::{
+    cell::RefCell,
     collections::BTreeMap,
     fmt,
     hash::Hash,
@@ -173,22 +175,23 @@ pub struct IndexedPackagePath {
 
 pub type AttributeDeriver = dyn Fn(&mut CompilationEnv, &mut ModuleDefinition);
 
-#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CompilationEnv {
     flags: Flags,
     // filters warnings when added.
     warning_filter: Vec<WarningFilters>,
     diags: Diagnostics,
+    visitors: Visitors,
     // TODO(tzakian): Remove the global counter and use this counter instead
     // pub counter: u64,
 }
 
 impl CompilationEnv {
-    pub fn new(flags: Flags) -> Self {
+    pub fn new(flags: Flags, visitors: Vec<cli::compiler::Visitor>) -> Self {
         Self {
             flags,
             warning_filter: vec![],
             diags: Diagnostics::new(),
+            visitors: Visitors::new(visitors),
         }
     }
 
@@ -201,9 +204,11 @@ impl CompilationEnv {
         if !is_filtered {
             // add help to suppress warning, if applicable
             // TODO do we want a centralized place for tips like this?
-            if diag.info().severity() == Severity::Warning {
-                let possible_filter =
-                    WarningFilter::Code(diag.info().category(), diag.info().code());
+            if diag.info().severity() == Severity::Warning && !diag.info().is_external() {
+                let possible_filter = WarningFilter::Code(
+                    Category::try_from(diag.info().category()).unwrap(),
+                    diag.info().code(),
+                );
                 if let Some(filter_name) = possible_filter.to_str() {
                     let help = format!(
                         "This warning can be suppressed with '#[{}({})]' \
@@ -285,6 +290,10 @@ impl CompilationEnv {
 
     pub fn flags(&self) -> &Flags {
         &self.flags
+    }
+
+    pub fn visitors(&self) -> &Visitors {
+        &self.visitors
     }
 }
 
@@ -447,6 +456,27 @@ impl Flags {
 
     pub fn bytecode_version(&self) -> Option<u32> {
         self.bytecode_version
+    }
+}
+
+//**************************************************************************************************
+// Visitors
+//**************************************************************************************************
+
+pub struct Visitors {
+    pub abs_int: Vec<RefCell<AbsIntVisitorObj>>,
+}
+
+impl Visitors {
+    pub fn new(passes: Vec<cli::compiler::Visitor>) -> Self {
+        use cli::compiler::Visitor;
+        let mut vs = Visitors { abs_int: vec![] };
+        for pass in passes {
+            match pass {
+                Visitor::AbsIntVisitor(f) => vs.abs_int.push(RefCell::new(f)),
+            }
+        }
+        vs
     }
 }
 

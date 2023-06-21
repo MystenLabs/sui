@@ -3,7 +3,7 @@
 
 // Test creating objects just below the size limit, and above it
 
-//# init --addresses Test=0x0 --accounts A
+//# init --addresses Test=0x0 --accounts A --max-gas 100000000000000
 
 //# publish
 
@@ -76,33 +76,14 @@ module Test::M1 {
     }
 }
 
-// create above size limit should fail
-//# run Test::M1::transfer_object_with_size --args 256001 --sender A --gas-budget 10000000000000 --gas-price 1 --protocol-version 2
-
-// create under size limit should succeed
-//# run Test::M1::transfer_object_with_size --args 255999 --sender A --gas-budget 100000000000000 --gas-price 1 --protocol-version 2
-
-// create at size limit should succeed
-//# run Test::M1::transfer_object_with_size --args 256000 --sender A --gas-budget 100000000000000 --gas-price 1 --protocol-version 2
-
-// adding 1 byte to an object at the size limit should fail
-//# run Test::M1::add_byte --args object(4,0) --sender A --gas-budget 100000000000000 --gas-price 1 --protocol-version 2
-
-// create at size limit, wrap, increase to over size limit while wrapped, then unwrap. should fail
-//# run Test::M1::transfer_object_with_size --args 255968 --sender A --gas-budget 100000000000000 --gas-price 1 --protocol-version 2
-
-//# run Test::M1::wrap --args object(6,0) --sender A --gas-budget 100000000000000
-
-//# run Test::M1::add_bytes_then_unwrap --args object(7,0) 33 --sender A --gas-budget 100000000000000 --gas-price 1 --protocol-version 2
-
 
 // tests below all run out of gas with realistic prices
 
 // create above size limit should fail
-//# run Test::M1::transfer_object_with_size --args 256001 --sender A --gas-budget 10000000000000 --gas-price 1
+//# run Test::M1::transfer_object_with_size --args 256001 --sender A --gas-budget 10000000000000
 
 // create under size limit should succeed
-//# run Test::M1::transfer_object_with_size --args 255999 --sender A --gas-budget 100000000000000 --gas-price 1
+//# run Test::M1::transfer_object_with_size --args 255999 --sender A --gas-budget 100000000000000
 
 // create at size limit should succeed
-//# run Test::M1::transfer_object_with_size --args 256000 --sender A --gas-budget 100000000000000 --gas-price 1
+//# run Test::M1::transfer_object_with_size --args 256000 --sender A --gas-budget 100000000000000

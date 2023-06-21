@@ -9,10 +9,14 @@ use super::{
 use crate::{
     diag,
     diagnostics::{codes::*, Diagnostic},
-    expansion::ast::{Fields, ModuleIdent, Value_},
+    expansion::ast::{AttributeName_, Fields, ModuleIdent, Value_, Visibility},
     naming::ast::{self as N, TParam, TParamID, Type, TypeName_, Type_},
     parser::ast::{Ability_, BinOp_, ConstantName, Field, FunctionName, StructName, UnaryOp_},
-    shared::{unique_map::UniqueMap, *},
+    shared::{
+        known_attributes::{KnownAttribute, TestingAttribute},
+        unique_map::UniqueMap,
+        *,
+    },
     typing::ast as T,
     FullyCompiledProgram,
 };
@@ -56,6 +60,8 @@ fn module(
     mdef: N::ModuleDefinition,
 ) -> T::ModuleDefinition {
     assert!(context.current_script_constants.is_none());
+    assert!(context.called_fns.is_empty());
+
     context.current_module = Some(ident);
     let N::ModuleDefinition {
         warning_filter,
@@ -76,7 +82,7 @@ fn module(
     let functions = nfunctions.map(|name, f| function(context, name, f, false));
     assert!(context.constraints.is_empty());
     context.env.pop_warning_filter_scope();
-    T::ModuleDefinition {
+    let typed_module = T::ModuleDefinition {
         warning_filter,
         package_name,
         attributes,
@@ -86,7 +92,12 @@ fn module(
         structs,
         constants,
         functions,
-    }
+    };
+    gen_unused_warnings(context, &typed_module);
+    // reset called functions set so that it's ready to be be populated with values from
+    // a single module only
+    context.called_fns.clear();
+    typed_module
 }
 
 fn scripts(
@@ -2053,6 +2064,9 @@ fn module_call(
         parameter_types: params_ty_list,
         acquires,
     };
+    if context.is_current_module(&m) {
+        context.called_fns.insert(f.value());
+    }
     (ret_ty, T::UnannotatedExp_::ModuleCall(Box::new(call)))
 }
 
@@ -2264,4 +2278,50 @@ fn make_arg_types<S: std::fmt::Display, F: Fn() -> S>(
         given.pop();
     }
     given
+}
+
+//**************************************************************************************************
+// Module-wide warnings
+//**************************************************************************************************
+
+/// Generates warnings for unused struct types and unused (private) functions.
+fn gen_unused_warnings(context: &mut Context, mdef: &T::ModuleDefinition) {
+    if mdef.is_source_module {
+        // generate warnings only for modules compiled in this pass rather than for all modules
+        // including pre-compiled libraries for which we do not have source code available and
+        // cannot be analyzed in this pass
+        context
+            .env
+            .add_warning_filter_scope(mdef.warning_filter.clone());
+
+        for (loc, name, fun) in &mdef.functions {
+            if fun.attributes.iter().any(|(_, n, _)| {
+                n == &AttributeName_::Known(KnownAttribute::Testing(TestingAttribute::Test))
+            }) {
+                // functions with #[test] attribute are implicitly used
+                continue;
+            }
+
+            context
+                .env
+                .add_warning_filter_scope(fun.warning_filter.clone());
+            if !context.called_fns.contains(name)
+                && fun.entry.is_none()
+                && matches!(fun.visibility, Visibility::Internal)
+            {
+                // TODO: postponing handling of friend functions until we decide what to do with them
+                // vis-a-vis ideas around package-private
+                let msg = format!(
+                    "The non-'public', non-'entry' function '{name}' is never called. \
+                           Consider removing it."
+                );
+                context
+                    .env
+                    .add_diag(diag!(UnusedItem::Function, (loc, msg)))
+            }
+            context.env.pop_warning_filter_scope();
+        }
+
+        context.env.pop_warning_filter_scope();
+    }
 }

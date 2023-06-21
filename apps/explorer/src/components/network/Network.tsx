@@ -10,24 +10,24 @@ import { Network } from '../../utils/api/DefaultRpcClient';
 import { NetworkSelect, type NetworkOption } from '~/ui/header/NetworkSelect';
 
 export default function WrappedNetworkSelect() {
-    const [network, setNetwork] = useContext(NetworkContext);
-    const { data } = useGetSystemState();
-    const { data: binaryVersion } = useGetBinaryVersion();
+	const [network, setNetwork] = useContext(NetworkContext);
+	const { data } = useGetSystemState();
+	const { data: binaryVersion } = useGetBinaryVersion();
 
-    const networks = [
-        { id: Network.MAINNET, label: 'Mainnet' },
-        { id: Network.TESTNET, label: 'Testnet' },
-        { id: Network.DEVNET, label: 'Devnet' },
-        { id: Network.LOCAL, label: 'Local' },
-    ].filter(Boolean) as NetworkOption[];
+	const networks = [
+		{ id: Network.MAINNET, label: 'Mainnet' },
+		{ id: Network.TESTNET, label: 'Testnet' },
+		{ id: Network.DEVNET, label: 'Devnet' },
+		{ id: Network.LOCAL, label: 'Local' },
+	].filter(Boolean) as NetworkOption[];
 
-    return (
-        <NetworkSelect
-            value={network}
-            onChange={setNetwork}
-            networks={networks}
-            version={data?.protocolVersion}
-            binaryVersion={binaryVersion}
-        />
-    );
+	return (
+		<NetworkSelect
+			value={network}
+			onChange={setNetwork}
+			networks={networks}
+			version={data?.protocolVersion}
+			binaryVersion={binaryVersion}
+		/>
+	);
 }
