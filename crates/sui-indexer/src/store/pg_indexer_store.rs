@@ -54,15 +54,14 @@ use crate::models::objects::{
 };
 use crate::models::packages::Package;
 use crate::models::system_state::DBValidatorSummary;
-use crate::models::transaction_index::{InputObject, MoveCall, Recipient};
+use crate::models::transaction_index::{ChangedObject, InputObject, MoveCall, Recipient};
 use crate::models::transactions::Transaction;
 use crate::schema::{
-    active_addresses, address_stats, addresses, checkpoints, epochs, events, input_objects,
-    move_calls, objects, objects_history, packages, recipients, system_states, transactions,
-    validators,
+    active_addresses, address_stats, addresses, changed_objects, checkpoints, epochs, events,
+    input_objects, move_calls, objects, objects_history, packages, recipients, system_states,
+    transactions, validators,
 };
 use crate::store::diesel_marco::{read_only_blocking, transactional_blocking};
-use crate::store::indexer_store::TemporaryCheckpointStore;
 use crate::store::module_resolver::IndexerModuleResolver;
 use crate::store::query::DBFilter;
 use crate::store::TransactionObjectChanges;
@@ -755,6 +754,33 @@ impl IndexerStore for PgIndexerStore {
         ))
     }
 
+    async fn get_changed_object_sequence_by_digest(
+        &self,
+        tx_digest: Option<String>,
+        is_descending: bool,
+    ) -> Result<Option<i64>, IndexerError> {
+        read_only_blocking!(&self.blocking_cp, |conn| {
+            if let Some(digest) = &tx_digest {
+                let mut boxed_query = changed_objects::dsl::changed_objects
+                    .filter(changed_objects::dsl::transaction_digest.eq(digest))
+                    .select(changed_objects::dsl::id)
+                    .into_boxed();
+                if is_descending {
+                    boxed_query = boxed_query.order(changed_objects::dsl::id.desc());
+                } else {
+                    boxed_query = boxed_query.order(changed_objects::dsl::id.asc());
+                }
+                Some(boxed_query.first::<i64>(conn))
+            } else {
+                None
+            }
+            .transpose()
+        })
+        .context(&format!(
+            "Failed reading changed object sequence with digest {tx_digest:?}"
+        ))
+    }
+
     async fn get_recipient_sequence_by_digest(
         &self,
         tx_digest: Option<String>,
@@ -953,13 +979,10 @@ impl IndexerStore for PgIndexerStore {
         is_descending: bool,
     ) -> Result<Vec<Transaction>, IndexerError> {
         let sql_query = format!(
-            "SELECT transaction_digest as digest_name FROM (
-                SELECT transaction_digest, max(id) AS max_id
-                FROM input_objects
-                WHERE object_id = '{}' {} {}
-                GROUP BY transaction_digest
-                ORDER BY max_id {} LIMIT {}
-            ) AS t",
+            "SELECT transaction_digest as digest_name
+             FROM input_objects
+             WHERE object_id = '{}' {} {}
+             ORDER BY max_id {} LIMIT {}",
             object_id,
             if let Some(start_sequence) = start_sequence {
                 if is_descending {
@@ -986,6 +1009,45 @@ impl IndexerStore for PgIndexerStore {
         self.multi_get_transactions_by_digests(&tx_digests).await
     }
 
+    async fn get_transaction_page_by_changed_object(
+        &self,
+        object_id: ObjectID,
+        version: Option<i64>,
+        start_sequence: Option<i64>,
+        limit: usize,
+        is_descending: bool,
+    ) -> Result<Vec<Transaction>, IndexerError> {
+        let sql_query = format!(
+            "SELECT transaction_digest as digest_name
+             FROM changed_objects
+             WHERE object_id = '{}' {} {}
+             ORDER BY id {} LIMIT {}",
+            object_id,
+            if let Some(start_sequence) = start_sequence {
+                if is_descending {
+                    format!("AND id < {}", start_sequence)
+                } else {
+                    format!("AND id > {}", start_sequence)
+                }
+            } else {
+                "".to_string()
+            },
+            if let Some(version) = version {
+                format!("AND version = {}", version)
+            } else {
+                "".to_string()
+            },
+            if is_descending { "DESC" } else { "ASC" },
+            limit
+        );
+        let tx_digests: Vec<String> = read_only_blocking!(&self.blocking_cp, |conn| diesel::sql_query(sql_query).load(conn))
+                .context(&format!("Failed reading transaction digests by changed object ID {object_id} and version {version:?} with start_sequence {start_sequence:?} and limit {limit}"))?
+                .into_iter()
+                .map(|table: TempDigestTable| table.digest_name)
+                .collect();
+        self.multi_get_transactions_by_digests(&tx_digests).await
+    }
+
     async fn get_transaction_page_by_move_call(
         &self,
         package_name: ObjectID,
@@ -999,13 +1061,10 @@ impl IndexerStore for PgIndexerStore {
         // however, but valid Move identifiers can only contain 0-9, a-z, A-Z, and _,
         // so it is safe to use them as-is in the query below
         let sql_query = format!(
-            "SELECT transaction_digest as digest_name FROM (
-                SELECT transaction_digest, max(id) AS max_id
-                FROM move_calls
-                WHERE move_package = '{}' {} {} {}
-                GROUP BY transaction_digest
-                ORDER BY max_id {} LIMIT {}
-            ) AS t",
+            "SELECT transaction_digest as digest_name
+             FROM move_calls
+             WHERE move_package = '{}' {} {} {}
+             ORDER BY id {} LIMIT {}",
             package_name,
             if let Some(start_sequence) = start_sequence {
                 if is_descending {
@@ -1181,117 +1240,6 @@ impl IndexerStore for PgIndexerStore {
         })
     }
 
-    fn persist_all_checkpoint_data(
-        &self,
-        data: &TemporaryCheckpointStore,
-    ) -> Result<usize, IndexerError> {
-        let TemporaryCheckpointStore {
-            checkpoint,
-            transactions,
-            events,
-            object_changes: tx_object_changes,
-            packages,
-            input_objects,
-            move_calls,
-            recipients,
-        } = data;
-
-        transactional_blocking!(&self.blocking_cp, |conn| {
-            // Commit indexed transactions
-            for transaction_chunk in transactions.chunks(PG_COMMIT_CHUNK_SIZE) {
-                diesel::insert_into(transactions::table)
-                    .values(transaction_chunk)
-                    .on_conflict(transactions::transaction_digest)
-                    .do_update()
-                    .set((
-                        transactions::timestamp_ms.eq(excluded(transactions::timestamp_ms)),
-                        transactions::checkpoint_sequence_number
-                            .eq(excluded(transactions::checkpoint_sequence_number)),
-                    ))
-                    .execute(conn)
-                    .map_err(IndexerError::from)
-                    .context("Failed writing transactions to PostgresDB")?;
-            }
-
-            // Commit indexed events
-            for event_chunk in events.chunks(PG_COMMIT_CHUNK_SIZE) {
-                diesel::insert_into(events::table)
-                    .values(event_chunk)
-                    .on_conflict_do_nothing()
-                    .execute(conn)
-                    .map_err(IndexerError::from)
-                    .context("Failed writing events to PostgresDB")?;
-            }
-
-            // Commit indexed objects
-            let mutated_objects: Vec<Object> = tx_object_changes
-                .iter()
-                .flat_map(|changes| changes.changed_objects.iter().cloned())
-                .collect();
-            // TODO(gegaowp): monitor the deletion batch size to see
-            // if bulk update via unnest is necessary.
-            let deleted_changes = tx_object_changes
-                .iter()
-                .flat_map(|changes| changes.deleted_objects.iter().cloned())
-                .collect::<Vec<_>>();
-            let deleted_objects: Vec<Object> = deleted_changes
-                .iter()
-                .map(|deleted_object| deleted_object.clone().into())
-                .collect();
-            persist_transaction_object_changes(conn, mutated_objects, deleted_objects, None, None)?;
-
-            // TODO(gegaowp): refactor to consolidate commit blocks
-            // Commit indexed packages
-            for packages_chunk in packages.chunks(PG_COMMIT_CHUNK_SIZE) {
-                diesel::insert_into(packages::table)
-                    .values(packages_chunk)
-                    .on_conflict_do_nothing()
-                    .execute(conn)
-                    .map_err(IndexerError::from)
-                    .context("Failed writing packages to PostgresDB")?;
-            }
-
-            // Commit indexed move calls
-            for move_calls_chunk in move_calls.chunks(PG_COMMIT_CHUNK_SIZE) {
-                diesel::insert_into(move_calls::table)
-                    .values(move_calls_chunk)
-                    .on_conflict_do_nothing()
-                    .execute(conn)
-                    .map_err(IndexerError::from)
-                    .context("Failed writing move_calls to PostgresDB")?;
-            }
-
-            // Commit indexed input objects
-            for input_objects_chunk in input_objects.chunks(PG_COMMIT_CHUNK_SIZE) {
-                diesel::insert_into(input_objects::table)
-                    .values(input_objects_chunk)
-                    .on_conflict_do_nothing()
-                    .execute(conn)
-                    .map_err(IndexerError::from)
-                    .context("Failed writing input_objects to PostgresDB")?;
-            }
-
-            // Commit indexed recipients
-            for recipients_chunk in recipients.chunks(PG_COMMIT_CHUNK_SIZE) {
-                diesel::insert_into(recipients::table)
-                    .values(recipients_chunk)
-                    .on_conflict_do_nothing()
-                    .execute(conn)
-                    .map_err(IndexerError::from)
-                    .context("Failed writing recipients to PostgresDB")?;
-            }
-
-            // Commit indexed checkpoint last, so that if the checkpoint is committed,
-            // all related data have been committed as well.
-            diesel::insert_into(checkpoints::table)
-                .values(checkpoint)
-                .on_conflict_do_nothing()
-                .execute(conn)
-                .map_err(IndexerError::from)
-                .context("Failed writing checkpoint to PostgresDB")
-        })
-    }
-
     async fn persist_checkpoint_transactions(
         &self,
         checkpoint: &Checkpoint,
@@ -1440,6 +1388,7 @@ impl IndexerStore for PgIndexerStore {
     async fn persist_transaction_index_tables(
         &self,
         input_objects: &[InputObject],
+        changed_objects: &[ChangedObject],
         move_calls: &[MoveCall],
         recipients: &[Recipient],
     ) -> Result<(), IndexerError> {
@@ -1462,6 +1411,16 @@ impl IndexerStore for PgIndexerStore {
                     .execute(conn)
                     .map_err(IndexerError::from)
                     .context("Failed writing input_objects to PostgresDB")?;
+            }
+
+            // Commit indexed changed objects
+            for changed_objects_chunk in changed_objects.chunks(PG_COMMIT_CHUNK_SIZE) {
+                diesel::insert_into(changed_objects::table)
+                    .values(changed_objects_chunk)
+                    .on_conflict_do_nothing()
+                    .execute(conn)
+                    .map_err(IndexerError::from)
+                    .context("Failed writing changed_objects to PostgresDB")?;
             }
 
             // Commit indexed recipients

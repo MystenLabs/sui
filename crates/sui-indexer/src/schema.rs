@@ -57,6 +57,18 @@ diesel::table! {
 }
 
 diesel::table! {
+    changed_objects (id) {
+        id -> Int8,
+        transaction_digest -> Varchar,
+        checkpoint_sequence_number -> Int8,
+        epoch -> Int8,
+        object_id -> Varchar,
+        object_change_type -> Text,
+        object_version -> Int8,
+    }
+}
+
+diesel::table! {
     checkpoints (sequence_number) {
         sequence_number -> Int8,
         checkpoint_digest -> Varchar,
@@ -326,6 +338,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     address_stats,
     addresses,
     at_risk_validators,
+    changed_objects,
     checkpoints,
     epochs,
     events,

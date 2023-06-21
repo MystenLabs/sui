@@ -38,7 +38,7 @@ fn indexer_benchmark(c: &mut Criterion) {
     let db_url = format!("postgres://postgres:{pw}@{pg_host}:{pg_port}");
 
     let rt: Runtime = Runtime::new().unwrap();
-    let (mut checkpoints, store) = rt.block_on(async {
+    let (mut _checkpoints, store) = rt.block_on(async {
         let blocking_cp = new_pg_connection_pool(&db_url).await.unwrap();
         reset_database(&mut blocking_cp.get().unwrap(), true).unwrap();
         let registry = Registry::default();
@@ -50,10 +50,7 @@ fn indexer_benchmark(c: &mut Criterion) {
         (checkpoints, store)
     });
 
-    c.bench_function("persist_checkpoint", |b| {
-        b.iter(|| store.persist_all_checkpoint_data(&checkpoints.pop().unwrap()))
-    });
-
+    // TODO(gegaowp): add updated data ingestion benchmarking steps here.
     let mut checkpoints = (20..100).cycle().map(CheckpointId::SequenceNumber);
     c.bench_function("get_checkpoint", |b| {
         b.to_async(Runtime::new().unwrap())
@@ -92,6 +89,7 @@ fn create_checkpoint(sequence_number: i64) -> TemporaryCheckpointStore {
         }],
         packages: vec![],
         input_objects: vec![],
+        changed_objects: vec![],
         move_calls: vec![],
         recipients: vec![],
     }
