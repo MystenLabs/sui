@@ -8,13 +8,19 @@ import {
 	SignaturePubkeyPair,
 	SignatureScheme,
 	toSingleSignaturePubkeyPair,
-} from './signature';
-import { PublicKey } from './publickey';
+} from './signature.js';
+import { PublicKey } from './publickey.js';
 import { blake2b } from '@noble/hashes/blake2b';
 import { bytesToHex } from '@noble/hashes/utils';
 
-import { normalizeSuiAddress } from '../types';
-import { Ed25519PublicKey, Secp256k1PublicKey, Secp256r1PublicKey, builder, fromB64 } from '..';
+import { normalizeSuiAddress } from '../types/index.js';
+import {
+	Ed25519PublicKey,
+	Secp256k1PublicKey,
+	Secp256r1PublicKey,
+	builder,
+	fromB64,
+} from '../index.js';
 
 export type PubkeyWeightPair = {
 	pubKey: PublicKey;

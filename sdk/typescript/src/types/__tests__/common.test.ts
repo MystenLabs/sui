@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { describe, it, expect } from 'vitest';
-import { parseStructTag, normalizeStructTag } from '../common';
+import { parseStructTag, normalizeStructTag } from '../common.js';
 
 describe('parseStructTag', () => {
 	it('parses struct tags correctly', () => {

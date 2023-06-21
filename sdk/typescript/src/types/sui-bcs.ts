@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { BCS, EnumTypeDefinition, getSuiMoveConfig, StructTypeDefinition } from '@mysten/bcs';
-import { SuiObjectRef } from './objects';
+import { SuiObjectRef } from './objects.js';
 
 /**
  * A reference to a shared object.

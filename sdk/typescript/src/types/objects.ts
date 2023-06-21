@@ -18,8 +18,8 @@ import {
 	nullable,
 	tuple,
 } from 'superstruct';
-import { ObjectId, ObjectOwner, SequenceNumber, TransactionDigest } from './common';
-import { OwnedObjectRef } from './transactions';
+import { ObjectId, ObjectOwner, SequenceNumber, TransactionDigest } from './common.js';
+import { OwnedObjectRef } from './transactions.js';
 
 export const ObjectType = union([string(), literal('package')]);
 export type ObjectType = Infer<typeof ObjectType>;

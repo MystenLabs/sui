@@ -2,11 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { fromB64, toB64 } from '@mysten/bcs';
-import { TransactionBlock } from '../builder';
-import { TransactionBlockDataBuilder } from '../builder/TransactionBlockData';
-import { SerializedSignature } from '../cryptography/signature';
-import { JsonRpcProvider } from '../providers/json-rpc-provider';
-import { HttpHeaders } from '../rpc/client';
+import { TransactionBlock } from '../builder/index.js';
+import { TransactionBlockDataBuilder } from '../builder/TransactionBlockData.js';
+import { SerializedSignature } from '../cryptography/signature.js';
+import { JsonRpcProvider } from '../providers/json-rpc-provider.js';
+import { HttpHeaders } from '../rpc/client.js';
 import {
 	ExecuteTransactionRequestType,
 	FaucetResponse,
@@ -16,10 +16,10 @@ import {
 	DryRunTransactionBlockResponse,
 	SuiTransactionBlockResponse,
 	SuiTransactionBlockResponseOptions,
-} from '../types';
-import { IntentScope, messageWithIntent } from '../utils/intent';
-import { Signer } from './signer';
-import { SignedTransaction, SignedMessage } from './types';
+} from '../types/index.js';
+import { IntentScope, messageWithIntent } from '../utils/intent.js';
+import { Signer } from './signer.js';
+import { SignedTransaction, SignedMessage } from './types.js';
 
 ///////////////////////////////
 // Exported Abstracts

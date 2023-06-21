@@ -13,7 +13,7 @@ import {
 	string,
 	union,
 } from 'superstruct';
-import { ObjectId } from './common';
+import { ObjectId } from './common.js';
 
 export const DynamicFieldType = union([literal('DynamicField'), literal('DynamicObject')]);
 export type DynamicFieldType = Infer<typeof DynamicFieldType>;

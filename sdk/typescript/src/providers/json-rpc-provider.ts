@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { HttpHeaders, JsonRpcClient } from '../rpc/client';
+import { HttpHeaders, JsonRpcClient } from '../rpc/client.js';
 import {
 	ExecuteTransactionRequestType,
 	ObjectId,
@@ -50,22 +50,22 @@ import {
 	Unsubscribe,
 	ResolvedNameServiceNames,
 	ProtocolConfig,
-} from '../types';
-import { DynamicFieldName, DynamicFieldPage } from '../types/dynamic_fields';
+} from '../types/index.js';
+import { DynamicFieldName, DynamicFieldPage } from '../types/dynamic_fields.js';
 import {
 	DEFAULT_CLIENT_OPTIONS,
 	WebsocketClient,
 	WebsocketClientOptions,
-} from '../rpc/websocket-client';
-import { requestSuiFromFaucet } from '../rpc/faucet-client';
+} from '../rpc/websocket-client.js';
+import { requestSuiFromFaucet } from '../rpc/faucet-client.js';
 import { any, array, string, nullable } from 'superstruct';
 import { fromB58, toB64, toHEX } from '@mysten/bcs';
-import { SerializedSignature } from '../cryptography/signature';
-import { Connection, devnetConnection } from '../rpc/connection';
-import { TransactionBlock } from '../builder';
-import { CheckpointPage } from '../types/checkpoints';
-import { NetworkMetrics, AddressMetrics } from '../types/metrics';
-import { EpochInfo, EpochPage } from '../types/epochs';
+import { SerializedSignature } from '../cryptography/signature.js';
+import { Connection, devnetConnection } from '../rpc/connection.js';
+import { TransactionBlock } from '../builder/index.js';
+import { CheckpointPage } from '../types/checkpoints.js';
+import { NetworkMetrics, AddressMetrics } from '../types/metrics.js';
+import { EpochInfo, EpochPage } from '../types/epochs.js';
 
 export interface PaginationArguments<Cursor> {
 	/** Optional paging cursor */

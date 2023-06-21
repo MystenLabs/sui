@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { array, nullable, number, object, Infer, string } from 'superstruct';
-import { TransactionDigest, ObjectId } from './common';
+import { TransactionDigest, ObjectId } from './common.js';
 
 export const FaucetCoinInfo = object({
 	amount: number(),
