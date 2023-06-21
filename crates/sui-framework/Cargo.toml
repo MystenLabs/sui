@@ -8,23 +8,22 @@ license = "Apache-2.0"
 publish = false
 
 [dependencies]
-bcs = "0.1.4"
-serde = { version = "1.0.144", features = ["derive"] }
-once_cell = "1.16"
-tracing = "0.1.36"
+bcs.workspace = true
+serde.workspace = true
+once_cell.workspace = true
+tracing.workspace = true
 
-sui-types = { path = "../sui-types" }
+sui-types.workspace = true
 
 move-binary-format.workspace = true
 move-core-types.workspace = true
-
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [build-dependencies]
-anyhow = { version = "1.0.64", features = ["backtrace"] }
-bcs = "0.1.4"
+anyhow.workspace = true
+bcs.workspace = true
 
-sui-move-build = { path = "../sui-move-build" }
+sui-move-build.workspace = true
 
 move-binary-format.workspace = true
 move-package.workspace = true

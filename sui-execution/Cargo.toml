@@ -8,8 +8,8 @@ publish = false
 edition = "2021"
 
 [dependencies]
-sui-protocol-config = { path = "../crates/sui-protocol-config" }
-sui-types = { path = "../crates/sui-types" }
+sui-protocol-config.workspace = true
+sui-types.workspace = true
 
 move-binary-format.workspace = true
 move-bytecode-utils.workspace = true

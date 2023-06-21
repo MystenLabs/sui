@@ -7,19 +7,19 @@ publish = false
 edition = "2021"
 
 [dependencies]
-arc-swap = "1.5.1"
+arc-swap.workspace = true
 fastcrypto.workspace = true
-dashmap = "5.4.0"
-either = "1.8.0"
-itertools = "0.10.5"
-once_cell = "1.16"
-rayon = "1.5.3"
-thiserror = "1.0.35"
+dashmap.workspace = true
+either.workspace = true
+itertools.workspace = true
+once_cell.workspace = true
+rayon.workspace = true
+thiserror.workspace = true
 workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
 
 crypto = { path = "../crypto", package = "narwhal-crypto" }
 
 [dev-dependencies]
-proptest = "1.0.0"
-proptest-derive = "0.3.0"
-rayon = "1.5.3"
+proptest.workspace = true
+proptest-derive.workspace = true
+rayon.workspace = true
