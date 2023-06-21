@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { ArrowRight16 } from '@mysten/icons';
+import { ArrowUpRight12, ArrowRight16 } from '@mysten/icons';
 import { hasPublicTransfer, formatAddress } from '@mysten/sui.js';
 import cl from 'classnames';
 import { Navigate, useSearchParams } from 'react-router-dom';
@@ -75,7 +75,7 @@ function NFTDetailsPage() {
 										size="captionSmall"
 										href={objectExplorerLink || ''}
 										text="VIEW ON EXPLORER"
-										after={<ArrowRight16 className="-rotate-45" />}
+										after={<ArrowUpRight12 />}
 									/>
 								) : null}
 							</div>
@@ -121,7 +121,7 @@ function NFTDetailsPage() {
 									}
 								/>
 							</LabelValuesContainer>
-							<Collapse title="Details" initialIsOpen>
+							<Collapse initialIsOpen title="Details">
 								<LabelValuesContainer>
 									<LabelValueItem label="Name" value={nftDisplayData?.name} />
 									<LabelValueItem
