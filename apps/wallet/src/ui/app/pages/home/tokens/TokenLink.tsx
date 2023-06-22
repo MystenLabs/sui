@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { type CoinBalance } from '@mysten/sui.js';
+import { MIST_PER_SUI, type CoinBalance } from '@mysten/sui.js';
 import { type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 
@@ -20,7 +20,7 @@ export function TokenLink({ coinBalance, centerAction }: Props) {
 			onClick={() =>
 				ampli.selectedCoin({
 					coinType: coinBalance.coinType,
-					totalBalance: coinBalance.totalBalance,
+					totalBalance: BigInt(coinBalance.totalBalance) / MIST_PER_SUI,
 				})
 			}
 			key={coinBalance.coinType}
