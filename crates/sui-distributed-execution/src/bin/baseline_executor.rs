@@ -1,6 +1,7 @@
 use clap::*;
 use std::path::PathBuf;
 use std::time::Instant;
+use std::cmp;
 use sui_config::{Config, NodeConfig};
 use sui_core::authority::epoch_start_configuration::EpochStartConfiguration;
 use sui_distributed_execution::seqn_worker;
@@ -39,9 +40,9 @@ struct Args {
     #[clap(long)]
     download: Option<u64>,
 
-    /// Specifies whether I will execute or not
+    /// Specifies the watermark up to which I will execute checkpoints
     #[clap(long)]
-    execute: bool,
+    execute: Option<u64>,
 
     #[clap(long, help = "Specify address to listen on")]
     listen_address: Option<Multiaddr>,
@@ -58,7 +59,7 @@ async fn main() {
         sw_state.handle_download(watermark, &config).await;
     }
 
-    if args.execute {
+    if let Some(watermark) = args.execute {
         let mut ew_state = exec_worker::ExecutionWorkerState::new();
         ew_state.init_store(genesis);
 
@@ -75,7 +76,7 @@ async fn main() {
 
         let now = Instant::now();
         let mut num_tx: usize = 0;
-        for checkpoint_seq in genesis_seq..highest_synced_seq {
+        for checkpoint_seq in genesis_seq..cmp::min(watermark, highest_synced_seq) {
             let checkpoint_summary = sw_state
                 .checkpoint_store
                 .get_checkpoint_by_sequence_number(checkpoint_seq)
