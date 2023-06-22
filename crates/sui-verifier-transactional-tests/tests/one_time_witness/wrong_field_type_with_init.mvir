@@ -3,13 +3,14 @@
 
 // invalid, wrong struct field type
 
-//# init --addresses test=0x0
-
 //# publish
-module test::m {
+module 0x0.m {
+    import 0x2.tx_context;
 
     struct M has drop { value: u64 }
 
-    fun init(_: M, _ctx: &mut sui::tx_context::TxContext) {
+    init(_otw: Self.M, _ctx: &mut tx_context.TxContext) {
+        label l0:
+        return;
     }
 }

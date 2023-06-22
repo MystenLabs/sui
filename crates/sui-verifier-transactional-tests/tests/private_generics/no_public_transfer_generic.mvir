@@ -1,0 +1,39 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+// tests modules cannot use transfer internal functions outside of the defining module
+// Note: it is not possible to make a generic type `T<...> has key, store`
+// where a given instantiation`T<...>` has key but does _not_ have store
+
+//# publish
+module 0x0.m {
+    import 0x2.transfer;
+
+    t<T: key>(s: T) {
+        label l0:
+        transfer.transfer<T>(move(s), 0x100);
+        return;
+    }
+}
+
+//# publish
+module 0x0.m {
+    import 0x2.transfer;
+
+    t<T: key>(s: T) {
+        label l0:
+        transfer.freeze_object<T>(move(s));
+        return;
+    }
+}
+
+//# publish
+module 0x0.m {
+    import 0x2.transfer;
+
+    t<T: key>(s: T) {
+        label l0:
+        transfer.share_object<T>(move(s));
+        return;
+    }
+}
