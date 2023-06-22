@@ -449,6 +449,7 @@ pub struct AuthorityStorePruningConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub periodic_compaction_threshold_days: Option<usize>,
     /// number of epochs to keep the latest version of transactions and effects for
+    /// minimum eligible value is 2
     #[serde(skip_serializing_if = "Option::is_none")]
     pub num_epochs_to_retain_for_checkpoints: Option<u64>,
 }
@@ -476,7 +477,7 @@ impl AuthorityStorePruningConfig {
         // TODO: Remove this after aggressive pruning is enabled by default
         let num_epochs_to_retain = if cfg!(msim) { 0 } else { 2 };
         let pruning_run_delay_seconds = if cfg!(msim) { Some(2) } else { None };
-        let num_epochs_to_retain_for_checkpoints = if cfg!(msim) { Some(1) } else { None };
+        let num_epochs_to_retain_for_checkpoints = if cfg!(msim) { Some(2) } else { None };
         Self {
             num_latest_epoch_dbs_to_retain: 3,
             epoch_db_pruning_period_secs: 60 * 60,
@@ -492,7 +493,7 @@ impl AuthorityStorePruningConfig {
         // TODO: Remove this after aggressive pruning is enabled by default
         let num_epochs_to_retain = if cfg!(msim) { 0 } else { 2 };
         let pruning_run_delay_seconds = if cfg!(msim) { Some(2) } else { None };
-        let num_epochs_to_retain_for_checkpoints = if cfg!(msim) { Some(1) } else { None };
+        let num_epochs_to_retain_for_checkpoints = if cfg!(msim) { Some(2) } else { None };
         Self {
             num_latest_epoch_dbs_to_retain: 3,
             epoch_db_pruning_period_secs: 60 * 60,

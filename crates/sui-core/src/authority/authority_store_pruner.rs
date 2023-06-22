@@ -503,7 +503,7 @@ impl AuthorityStorePruner {
                             error!("Failed to prune objects: {:?}", err);
                         }
                     },
-                    _ = checkpoints_prune_interval.tick(), if !matches!(config.num_epochs_to_retain_for_checkpoints, None | Some(u64::MAX) | Some(0)) => {
+                    _ = checkpoints_prune_interval.tick(), if !matches!(config.num_epochs_to_retain_for_checkpoints, None | Some(u64::MAX) | Some(0) | Some(1)) => {
                         if let Err(err) = Self::prune_checkpoints_for_eligible_epochs(&perpetual_db, &checkpoint_store, &objects_lock_table, config, metrics.clone(), indirect_objects_threshold).await {
                             error!("Failed to prune checkpoints: {:?}", err);
                         }
