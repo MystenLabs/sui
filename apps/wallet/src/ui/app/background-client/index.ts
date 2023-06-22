@@ -25,6 +25,7 @@ import { setActiveOrigin, changeActiveNetwork } from '_redux/slices/app';
 import { setPermissions } from '_redux/slices/permissions';
 import { setTransactionRequests } from '_redux/slices/transaction-requests';
 import { type SerializedLedgerAccount } from '_src/background/keyring/LedgerAccount';
+import { type QredoConnectIdentity } from '_src/background/qredo/types';
 import {
 	isQredoConnectPayload,
 	type QredoConnectPayload,
@@ -361,13 +362,16 @@ export class BackgroundClient {
 		);
 	}
 
-	public getQredoConnectionInfo(qredoID: string, refreshAccessToken = false) {
+	public getQredoConnectionInfo(
+		filter: { qredoID: string } | { identity: QredoConnectIdentity },
+		refreshAccessToken = false,
+	) {
 		return lastValueFrom(
 			this.sendMessage(
 				createMessage<QredoConnectPayload<'getQredoInfo'>>({
 					type: 'qredo-connect',
 					method: 'getQredoInfo',
-					args: { qredoID, refreshAccessToken },
+					args: { filter, refreshAccessToken },
 				}),
 			).pipe(
 				take(1),
