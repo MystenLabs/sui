@@ -105,11 +105,13 @@ export function GasPriceCard({ useLargeSpacing }: { useLargeSpacing: boolean }) 
 						<Heading variant="heading4/semibold" color="steel-darker">
 							Reference Gas Price
 						</Heading>
-						<ListboxSelect
-							value={selectedGraphDuration}
-							options={GRAPH_DURATIONS}
-							onSelect={setSelectedGraphsDuration}
-						/>
+						{GRAPH_DURATIONS.length > 1 ? (
+							<ListboxSelect
+								value={selectedGraphDuration}
+								options={GRAPH_DURATIONS}
+								onSelect={setSelectedGraphsDuration}
+							/>
+						) : null}
 					</div>
 					<FilterList<UnitsType>
 						lessSpacing
