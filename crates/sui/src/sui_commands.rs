@@ -640,7 +640,7 @@ fn read_line() -> Result<String, anyhow::Error> {
 fn multiaddr_to_filename(address: Multiaddr, default: String) -> String {
     if let Some(hostname) = address.hostname() {
         if let Some(port) = address.port() {
-            return format!("{}:{}.yaml", hostname, port);
+            return format!("{}-{}.yaml", hostname, port);
         }
     }
     default
