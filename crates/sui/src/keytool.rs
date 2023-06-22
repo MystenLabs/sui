@@ -45,6 +45,10 @@ use sui_types::zk_login_authenticator::ZkLoginAuthenticator;
 use sui_types::zk_login_util::AddressParams;
 use tracing::info;
 
+use tabled::builder::Builder;
+use tabled::settings::Rotate;
+use tabled::settings::{object::Rows, Modify, Width};
+
 #[cfg(test)]
 #[path = "unit_tests/keytool_tests.rs"]
 mod keytool_tests;
@@ -919,13 +923,46 @@ pub enum CommandOutput {
 
 impl Display for CommandOutput {
     fn fmt(&self, formatter: &mut Formatter<'_>) -> std::fmt::Result {
-        let json_obj = json![self];
-        let mut table = json_to_table(&json_obj);
-        let style = tabled::settings::Style::rounded().horizontals([]);
-        table.with(style);
-        table.array_orientation(Orientation::Column);
+        match self {
+            // Sign needs to be manually built because we need to wrap the very long rawTxData string and rawIntentMsg strings into multiple rows due to their lengths, which we cannot do with a JsonTable
+            CommandOutput::Sign(data) => {
+                let intent_table = json_to_table(&json!(&data.intent))
+                    .with(tabled::settings::Style::rounded().horizontals([]))
+                    .to_string();
 
-        write!(formatter, "{}", table)
+                let mut builder = Builder::default();
+                builder
+                    .set_header([
+                        "suiSignature",
+                        "digest",
+                        "rawIntentMsg",
+                        "intent",
+                        "rawTxData",
+                        "suiAddress",
+                    ])
+                    .push_record([
+                        &data.sui_signature,
+                        &data.digest,
+                        &data.raw_intent_msg,
+                        &intent_table,
+                        &data.raw_tx_data,
+                        &data.sui_address.to_string(),
+                    ]);
+                let mut table = builder.build();
+                table.with(Rotate::Left);
+                table.with(tabled::settings::Style::rounded().horizontals([]));
+                table.with(Modify::new(Rows::new(0..)).with(Width::wrap(160).keep_words()));
+                write!(formatter, "{}", table)
+            }
+            _ => {
+                let json_obj = json![self];
+                let mut table = json_to_table(&json_obj);
+                let style = tabled::settings::Style::rounded().horizontals([]);
+                table.with(style);
+                table.array_orientation(Orientation::Column);
+                write!(formatter, "{}", table)
+            }
+        }
     }
 }
 
