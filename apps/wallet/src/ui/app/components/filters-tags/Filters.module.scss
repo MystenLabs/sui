@@ -6,6 +6,7 @@
 .filter-tags {
 	display: flex;
 	gap: 8px;
+	overflow-x: auto;
 
 	.filter {
 		@include utils.typography('Primary/BodySmall-SB');

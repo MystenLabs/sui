@@ -27,7 +27,10 @@ function Navigation({ className }: NavigationProps) {
 				[st.hidden]: !isVisible,
 			})}
 		>
-			<div id="sui-apps-filters"></div>
+			<div
+				id="sui-apps-filters"
+				className="flex overflow-x-scroll whitespace-nowrap w-full justify-center"
+			></div>
 
 			<div className={st.navMenu}>
 				<NavLink data-testid="nav-tokens" to="./tokens" className={makeLinkCls} title="Tokens">

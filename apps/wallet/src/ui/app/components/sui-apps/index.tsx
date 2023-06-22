@@ -2,27 +2,37 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useFeature } from '@growthbook/growthbook-react';
-import { ArrowUpRight16 } from '@mysten/icons';
 import cl from 'classnames';
 import { useMemo } from 'react';
+import { useLocation } from 'react-router-dom';
 
-import { useExplorerLink } from '../../hooks/useExplorerLink';
 import { permissionsSelectors } from '../../redux/slices/permissions';
 import { SuiApp, type DAppEntry } from './SuiApp';
 import { SuiAppEmpty } from './SuiAppEmpty';
-import { Button } from '_app/shared/ButtonUI';
 import { Heading } from '_app/shared/heading';
 import { Text } from '_app/shared/text';
-import { ExplorerLinkType } from '_components/explorer-link/ExplorerLinkType';
 import { useAppSelector } from '_hooks';
 import { FEATURES } from '_src/shared/experimentation/features';
-import { trackEvent } from '_src/shared/plausible';
 import { prepareLinkToCompare } from '_src/shared/utils';
 
 import st from './Playground.module.scss';
 
 function AppsPlayGround() {
-	const ecosystemApps = useFeature<DAppEntry[]>(FEATURES.WALLET_DAPPS).value ?? [];
+	const ecosystemApps = useFeature<DAppEntry[]>(FEATURES.WALLET_DAPPS).value;
+	const location = useLocation();
+
+	const queryParams = new URLSearchParams(location.search);
+	const tagFilter = queryParams.get('tagFilter');
+
+	const filteredEcosystemApps = useMemo(() => {
+		if (!ecosystemApps) {
+			return [];
+		} else if (tagFilter) {
+			return ecosystemApps.filter((app) => app.tags.includes(tagFilter));
+		}
+		return ecosystemApps;
+	}, [ecosystemApps, tagFilter]);
+
 	const allPermissions = useAppSelector(permissionsSelectors.selectAll);
 	const linkToPermissionID = useMemo(() => {
 		const map = new Map<string, string>();
@@ -34,33 +44,16 @@ function AppsPlayGround() {
 		}
 		return map;
 	}, [allPermissions]);
-	const accountOnExplorerHref = useExplorerLink({
-		type: ExplorerLinkType.address,
-		useActiveAddress: true,
-	});
+
 	return (
 		<div className={cl(st.container)}>
-			<div className="flex justify-center">
+			<div className="flex justify-center mb-4">
 				<Heading variant="heading6" color="gray-90" weight="semibold">
-					Playground
+					Sui Apps
 				</Heading>
 			</div>
-			<div className="my-4">
-				<Button
-					variant="outline"
-					href={accountOnExplorerHref!}
-					text={
-						<div className="flex gap-1">
-							View your account on Sui Explorer <ArrowUpRight16 />
-						</div>
-					}
-					onClick={() => {
-						trackEvent('ViewExplorerAccount');
-					}}
-				/>
-			</div>
 
-			{ecosystemApps?.length ? (
+			{filteredEcosystemApps?.length ? (
 				<div className="p-4 bg-gray-40 rounded-xl">
 					<Text variant="pBodySmall" color="gray-75" weight="normal">
 						Apps below are actively curated but do not indicate any endorsement or relationship with
@@ -69,9 +62,9 @@ function AppsPlayGround() {
 				</div>
 			) : null}
 
-			{ecosystemApps?.length ? (
+			{filteredEcosystemApps?.length ? (
 				<div className={st.apps}>
-					{ecosystemApps.map((app) => (
+					{filteredEcosystemApps.map((app) => (
 						<SuiApp
 							key={app.link}
 							{...app}
