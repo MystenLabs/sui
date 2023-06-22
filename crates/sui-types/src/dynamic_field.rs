@@ -120,14 +120,12 @@ impl DynamicFieldInfo {
             (DynamicFieldType::DynamicObject, Some(TypeTag::Struct(s))) => Ok(s
                 .type_params
                 .first()
-                .ok_or_else(|| SuiError::DeserializationError {
-                    input_type: "object".to_string(),
-                    error: format!("Error extracting dynamic object name from object: {tag}"),
+                .ok_or_else(|| SuiError::TypeError {
+                    error: format!("Expected at least one TypeParam, none found for {tag}"),
                 })?
                 .clone()),
-            _ => Err(SuiError::DeserializationError {
-                input_type: "object".to_string(),
-                error: format!("Error extracting dynamic object name from object: {tag}"),
+            _ => Err(SuiError::TypeError {
+                error: format!("Error extracting dynamic object name from object: expected DynamicField or DynamicObject, received: {tag}"),
             }),
         }
     }
@@ -136,15 +134,13 @@ impl DynamicFieldInfo {
         move_struct: &MoveStruct,
     ) -> SuiResult<(MoveValue, DynamicFieldType, ObjectID)> {
         let name = extract_field_from_move_struct(move_struct, "name").ok_or_else(|| {
-            SuiError::DeserializationError {
-                input_type: "object".to_string(),
+            SuiError::TypeError {
                 error: "Cannot extract [name] field from sui::dynamic_field::Field".to_string(),
             }
         })?;
 
         let value = extract_field_from_move_struct(move_struct, "value").ok_or_else(|| {
-            SuiError::DeserializationError {
-                input_type: "object".to_string(),
+            SuiError::TypeError {
                 error: "Cannot extract [value] field from sui::dynamic_field::Field".to_string(),
             }
         })?;

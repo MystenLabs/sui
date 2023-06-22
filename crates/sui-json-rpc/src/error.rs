@@ -52,6 +52,9 @@ pub enum Error {
 
     #[error(transparent)]
     SuiRpcInputError(#[from] SuiRpcInputError),
+
+    #[error("{0}")]
+    SuiRpcInternalError(String),
 }
 
 impl From<Error> for RpcError {
@@ -103,6 +106,7 @@ impl Error {
             Error::SuiRpcInputError(sui_json_rpc_input_error) => {
                 RpcError::Call(CallError::InvalidParams(sui_json_rpc_input_error.into()))
             }
+            Error::SuiRpcInternalError(err) => to_internal_error(err),
             _ => RpcError::Call(CallError::Failed(self.into())),
         }
     }
@@ -134,10 +138,8 @@ pub enum SuiRpcInputError {
 
 /*
 * ClientDeserializationError
-* TypeError
 * ModuleDeserializationFailure
 * FailObjectLayout
-* SuiSystemStateReadError
 
 */
 
@@ -145,12 +147,8 @@ pub enum SuiRpcInputError {
 * Depends on where this happens. This error enum to be used when error stems from us trying to deserialize something
 * ServerDeserializationError
 * ModuleDeserializationFailure
-SuiSystemStateReadError
 * FailObjectLayout
 */
-
-#[derive(Debug, Error)]
-pub enum ServerDeserializationError {}
 
 pub fn match_sui_error(sui_error: SuiError) -> RpcError {
     match sui_error {
@@ -160,7 +158,7 @@ pub fn match_sui_error(sui_error: SuiError) -> RpcError {
             }
             _ => RpcError::Call(CallError::InvalidParams(error.into())),
         },
-        SuiError::ExecutionError(err, status) => match status {
+        SuiError::ExecutionError(_err, status) => match status {
             ExecutionFailureStatus::VMInvariantViolation => to_internal_error(status),
             _ => RpcError::Call(CallError::InvalidParams(status.into())),
         },
@@ -203,6 +201,7 @@ pub fn match_sui_error(sui_error: SuiError) -> RpcError {
         | SuiError::UnsupportedFeatureError { .. }
         | SuiError::InvalidCommittee(_)
         | SuiError::ByzantineAuthoritySuspicion { .. }
+        | SuiError::TypeError { .. }
         | SuiError::TransactionExpired => {
             RpcError::Call(CallError::InvalidParams(sui_error.into()))
         }
@@ -216,6 +215,7 @@ pub fn match_sui_error(sui_error: SuiError) -> RpcError {
         | SuiError::JWKRetrievalError
         | SuiError::ExecutionInvariantViolation
         | SuiError::SuiSystemStateReadError(_)
+        | SuiError::FailObjectLayout { .. }
         | SuiError::Unknown { .. } => to_internal_error(sui_error),
         _ => RpcError::Call(CallError::Failed(sui_error.into())),
     }

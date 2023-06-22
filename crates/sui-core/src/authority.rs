@@ -2349,11 +2349,12 @@ impl AuthorityState {
                     "Object with in parent_entry is missing from object store, datastore is \
                      inconsistent",
                 );
-                Err(UserInputError::ObjectNotFound {
-                    object_id: *object_id,
-                    version: Some(obj_ref.1),
-                }
-                .into())
+                Err(SuiError::GenericStorageError(format!(
+                    "Object with in parent_entry is missing from object store, datastore is \
+                     inconsistent. Object id: {}, version: {:?}",
+                    object_id,
+                    Some(obj_ref.1)
+                )))
             }
         }
     }
@@ -2382,6 +2383,7 @@ impl AuthorityState {
         if let Some(move_object) = o.data.try_as_move() {
             Ok(bcs::from_bytes(move_object.contents()).map_err(|e| {
                 SuiError::DeserializationError {
+                    // error from state
                     input_type: "object".to_string(),
                     error: format!("{e}"),
                 }
@@ -2579,6 +2581,7 @@ impl AuthorityState {
             })?;
             move_objects.push(bcs::from_bytes(move_object.contents()).map_err(|e| {
                 SuiError::DeserializationError {
+                    // error from state
                     input_type: "object".to_string(),
                     error: format!("{e}"),
                 }

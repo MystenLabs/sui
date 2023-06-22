@@ -659,7 +659,7 @@ impl ReadApiServer for ReadApi {
             if let Some((_, seq)) = spawn_monitored_task!(async move {
                 // TODO: this is reading from a deprecated DB. The replacement DB however
                 // is in the epoch store, and thus we risk breaking the read API for txes
-                // from old epochs. Should be migrated once we have indexer support, or 
+                // from old epochs. Should be migrated once we have indexer support, or
                 // when we can tolerate returning None for old txes.
                 state.database.deprecated_get_transaction_checkpoint(&digest)
                     .map_err(|e| {
@@ -1101,7 +1101,7 @@ pub async fn get_move_modules_by_package(
                 )
                 .map_err(|e| {
                     error!("Failed to call get_move_modules_by_package for package: {package:?}");
-                    Error::from(e)
+                    Error::SuiRpcInternalError(e.to_string()) // TODO(wlmyng): circle back to determine how we can better do this
                 })
             }
             _ => Err(Error::SuiRpcInputError(SuiRpcInputError::GenericInvalid(

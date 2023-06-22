@@ -289,8 +289,7 @@ impl MoveObjectType {
     pub fn try_extract_field_name(&self, type_: &DynamicFieldType) -> SuiResult<TypeTag> {
         match &self.0 {
             MoveObjectType_::GasCoin | MoveObjectType_::StakedSui | MoveObjectType_::Coin(_) => {
-                Err(SuiError::DeserializationError {
-                    input_type: "object".to_string(),
+                Err(SuiError::TypeError {
                     error: "Error extracting dynamic object name from Coin object".to_string(),
                 })
             }

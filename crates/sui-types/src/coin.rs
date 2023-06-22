@@ -152,6 +152,7 @@ impl TreasuryCap {
     /// Create a TreasuryCap from BCS bytes
     pub fn from_bcs_bytes(content: &[u8]) -> Result<Self, SuiError> {
         bcs::from_bytes(content).map_err(|err| SuiError::DeserializationError {
+            // not enough context here
             input_type: "object".to_string(),
             error: format!("Unable to deserialize TreasuryCap object: {:?}", err),
         })
@@ -209,6 +210,7 @@ impl CoinMetadata {
     /// Create a coin from BCS bytes
     pub fn from_bcs_bytes(content: &[u8]) -> Result<Self, SuiError> {
         bcs::from_bytes(content).map_err(|err| SuiError::DeserializationError {
+            // not enough context here?
             input_type: "object".to_string(),
             error: format!("Unable to deserialize CoinMetadata object: {:?}", err),
         })
