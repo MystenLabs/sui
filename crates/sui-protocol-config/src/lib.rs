@@ -50,6 +50,7 @@ const MAX_PROTOCOL_VERSION: u64 = 16;
 // Version 16: Enabled simplified_unwrap_then_delete feature flag, which allows the execution engine
 //             to no longer consult the object store when generating unwrapped_then_deleted in the
 //             effects; this also allows us to stop including wrapped tombstones in accumulator.
+//             Add self-matching prevention for deepbook.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
