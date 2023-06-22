@@ -1,15 +1,30 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::path::{Path, PathBuf};
+use std::{
+    fs,
+    path::{Path, PathBuf},
+};
 
 use actix_web::{dev::Server, web, App, HttpRequest, HttpServer, Responder};
+use serde::Deserialize;
 
 use move_package::BuildConfig as MoveBuildConfig;
 use sui_move::build::resolve_lock_file_path;
 use sui_move_build::{BuildConfig, SuiPackageHooks};
 use sui_sdk::wallet_context::WalletContext;
 use sui_source_validation::{BytecodeSourceVerifier, SourceMode};
+
+#[derive(Deserialize, Debug)]
+pub struct Config {
+    pub packages: Vec<Packages>,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct Packages {
+    repository: String,
+    paths: Vec<String>,
+}
 
 pub async fn verify_package(
     context: &WalletContext,
@@ -41,7 +56,26 @@ pub async fn verify_package(
         .map_err(anyhow::Error::from)
 }
 
-pub async fn initialize(
+pub fn parse_config(config_path: impl AsRef<Path>) -> anyhow::Result<Config> {
+    let contents = fs::read_to_string(config_path)?;
+    Ok(toml::from_str(&contents)?)
+}
+
+pub async fn clone_repositories(config: &Config) -> anyhow::Result<()> {
+    for p in &config.packages {
+        let _ = p.repository;
+        let _ = p.paths;
+    }
+    Ok(())
+}
+
+pub async fn initialize(context: &WalletContext, config: &Config) -> anyhow::Result<()> {
+    clone_repositories(config).await?;
+    verify_packages(context, vec![]).await?;
+    Ok(())
+}
+
+pub async fn verify_packages(
     context: &WalletContext,
     package_paths: Vec<PathBuf>,
 ) -> anyhow::Result<()> {
