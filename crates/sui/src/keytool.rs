@@ -434,7 +434,7 @@ impl KeyToolCommand {
 
                                 CommandOutput::Import(Key {
                                     sui_address: address.to_string(),
-                                    public_base64_key: skp.public().encode_base64(),
+                                    public_base64_key: skp.encode_base64(),
                                     key_scheme: scheme,
                                     mnemonic: None,
                                     flag: skp.public().flag(),
@@ -460,7 +460,7 @@ impl KeyToolCommand {
 
                     CommandOutput::Import(Key {
                         sui_address: sui_address.to_string(),
-                        public_base64_key: pk.public().encode_base64(),
+                        public_base64_key: pk.encode_base64(),
                         key_scheme: scheme,
                         mnemonic: None,
                         flag: pk.public().flag(),
