@@ -6,9 +6,16 @@ import { DisplayObject } from '../DisplayObject';
 import { Button } from '../Base/Button';
 import { KioskListing } from '@mysten/kiosk';
 import { KioskFnType } from '../../hooks/kiosk';
-import { useDelistMutation, usePurchaseItemMutation, useTakeMutation } from '../../mutations/kiosk';
+import {
+	useCreateKioskMutation,
+	useDelistMutation,
+	usePurchaseItemMutation,
+	useTakeMutation,
+} from '../../mutations/kiosk';
 import { toast } from 'react-hot-toast';
 import { ObjectId } from '@mysten/sui.js';
+import { useQueryClient } from '@tanstack/react-query';
+import { TANSTACK_OWNED_KIOSK_KEY } from '../../utils/constants';
 
 export type KioskItemProps = {
 	isGuest?: boolean;
@@ -29,6 +36,14 @@ export function KioskItem({
 	onSuccess,
 	listFn,
 }: KioskItemProps) {
+	const queryClient = useQueryClient();
+	const createKiosk = useCreateKioskMutation({
+		onSuccess: () => {
+			queryClient.invalidateQueries([TANSTACK_OWNED_KIOSK_KEY]);
+			toast.success('Kiosk created successfully');
+		},
+	});
+
 	const takeMutation = useTakeMutation({
 		onSuccess: () => {
 			toast.success('Item was transferred back to the address.');
@@ -70,6 +85,19 @@ export function KioskItem({
 						>
 							Purchase
 						</Button>
+					)}
+					{listing && !hasKiosk && (
+						<div className="md:col-span-2 text-xs">
+							<p>Create a kiosk to interact with other kiosks.</p>
+
+							<Button
+								className="mt-2"
+								loading={createKiosk.isLoading}
+								onClick={() => createKiosk.mutate()}
+							>
+								Click here to create.
+							</Button>
+						</div>
 					)}
 				</>
 			</DisplayObject>
