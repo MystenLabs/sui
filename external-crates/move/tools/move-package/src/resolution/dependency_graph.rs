@@ -129,18 +129,34 @@ struct PackageWithResolverTOML<'a>(&'a Package);
 struct DependencyTOML<'a>(PM::PackageName, &'a Dependency);
 struct SubstTOML<'a>(&'a PM::Substitution);
 
-impl DependencyGraph {
+/// A builder for `DependencyGraph`
+pub struct DependencyGraphBuilder<Progress: Write> {
+    /// Used to avoid re-fetching dependencies that are already present locally
+    pub dependency_cache: DependencyCache,
+    /// Logger
+    pub progress_output: Progress,
+    /// A chain of visited dependencies used for cycle detection
+    visited_dependencies: VecDeque<(PM::PackageName, PM::InternalDependency)>,
+}
+
+impl<Progress: Write> DependencyGraphBuilder<Progress> {
+    pub fn new(skip_fetch_latest_git_deps: bool, progress_output: Progress) -> Self {
+        DependencyGraphBuilder {
+            dependency_cache: DependencyCache::new(skip_fetch_latest_git_deps),
+            progress_output,
+            visited_dependencies: VecDeque::new(),
+        }
+    }
+
     /// Get a graph from the Move.lock file, if Move.lock file is present and up-to-date
     /// (additionally returning false), otherwise compute a new graph based on the content of the
     /// Move.toml (manifest) file (additionally returning true).
-    pub fn get<Progress: Write>(
+    pub fn get_graph(
+        &mut self,
         parent: &PM::DependencyKind,
         root_path: PathBuf,
         manifest_string: String,
         lock_string: Option<String>,
-        internal_dependencies: &mut VecDeque<(PM::PackageName, PM::InternalDependency)>,
-        dependency_cache: &mut DependencyCache,
-        progress_output: &mut Progress,
     ) -> Result<(DependencyGraph, bool)> {
         let toml_manifest = parse_move_manifest_string(manifest_string.clone())?;
         let manifest = parse_source_manifest(toml_manifest)?;
@@ -148,12 +164,7 @@ impl DependencyGraph {
         // compute digests eagerly as even if we can't reuse existing lock file, they need to become
         // part of the newly computed dependency graph
         let new_manifest_digest = digest_str(manifest_string.into_bytes().as_slice());
-        let new_deps_digest_opt = dependency_digest(
-            root_path.clone(),
-            &manifest,
-            dependency_cache,
-            progress_output,
-        )?;
+        let new_deps_digest_opt = self.dependency_digest(root_path.clone(), &manifest)?;
         if let Some(lock_contents) = lock_string {
             let schema::Header {
                 version: _,
@@ -170,7 +181,7 @@ impl DependencyGraph {
                     if Some(deps_digest) == new_deps_digest_opt {
                         // dependencies have not changed
                         return Ok((
-                            Self::read_from_lock(
+                            DependencyGraph::read_from_lock(
                                 root_path,
                                 manifest.package.name,
                                 &mut lock_contents.as_bytes(),
@@ -184,13 +195,10 @@ impl DependencyGraph {
         }
 
         Ok((
-            DependencyGraph::new(
+            self.new_graph(
                 parent,
                 &manifest,
                 root_path.to_path_buf(),
-                internal_dependencies,
-                dependency_cache,
-                progress_output,
                 Some(new_manifest_digest),
                 new_deps_digest_opt,
             )?,
@@ -202,36 +210,28 @@ impl DependencyGraph {
     ///
     /// `progress_output` is an output stream that is written to while generating the graph, to
     /// provide human-readable progress updates.
-    pub fn new<Progress: Write>(
+    pub fn new_graph(
+        &mut self,
         parent: &PM::DependencyKind,
         root_manifest: &PM::SourceManifest,
         root_path: PathBuf,
-        internal_dependencies: &mut VecDeque<(PM::PackageName, PM::InternalDependency)>,
-        dependency_cache: &mut DependencyCache,
-        progress_output: &mut Progress,
         manifest_digest: Option<String>,
         deps_digest: Option<String>,
     ) -> Result<DependencyGraph> {
         // collect sub-graphs for "regular" and "dev" dependencies
-        let (dep_graphs, dep_graphs_external) = DependencyGraph::collect_graphs(
+        let (dep_graphs, dep_graphs_external) = self.collect_graphs(
             parent,
             root_manifest.package.name,
             root_path.clone(),
             DependencyMode::Always,
             &root_manifest.dependencies,
-            internal_dependencies,
-            dependency_cache,
-            progress_output,
         )?;
-        let (dev_dep_graphs, dev_dep_graphs_external) = DependencyGraph::collect_graphs(
+        let (dev_dep_graphs, dev_dep_graphs_external) = self.collect_graphs(
             parent,
             root_manifest.package.name,
             root_path.clone(),
             DependencyMode::DevOnly,
             &root_manifest.dev_dependencies,
-            internal_dependencies,
-            dependency_cache,
-            progress_output,
         )?;
 
         let mut combined_graph = DependencyGraph {
@@ -249,9 +249,14 @@ impl DependencyGraph {
             .add_node(combined_graph.root_package);
 
         // get overrides
-        let overrides = DependencyGraph::collect_overrides(parent, &root_manifest.dependencies)?;
-        let dev_overrides =
-            DependencyGraph::collect_overrides(parent, &root_manifest.dev_dependencies)?;
+        let overrides = DependencyGraphBuilder::<Progress>::collect_overrides(
+            parent,
+            &root_manifest.dependencies,
+        )?;
+        let dev_overrides = DependencyGraphBuilder::<Progress>::collect_overrides(
+            parent,
+            &root_manifest.dev_dependencies,
+        )?;
 
         // process internally resolved packages first so that we have a graph with all internally
         // resolved dependencies that we can than use to verify externally resolved dependencies
@@ -324,15 +329,13 @@ impl DependencyGraph {
 
     /// Given all dependencies from the parent manifest file, collects all the sub-graphs
     /// representing these dependencies.
-    pub fn collect_graphs<Progress: Write>(
+    pub fn collect_graphs(
+        &mut self,
         parent: &PM::DependencyKind,
         parent_pkg: PM::PackageName,
         root_path: PathBuf,
         mode: DependencyMode,
         dependencies: &PM::Dependencies,
-        internal_dependencies: &mut VecDeque<(PM::PackageName, PM::InternalDependency)>,
-        dependency_cache: &mut DependencyCache,
-        progress_output: &mut Progress,
     ) -> Result<(
         BTreeMap<PM::PackageName, (DependencyGraph, bool)>,
         BTreeMap<PM::PackageName, (DependencyGraph, bool)>,
@@ -340,23 +343,21 @@ impl DependencyGraph {
         let mut dep_graphs = BTreeMap::new();
         let mut dep_graphs_external = BTreeMap::new();
         for (dep_pkg_name, dep) in dependencies {
-            let (pkg_graph, is_override) = DependencyGraph::new_for_dep(
-                parent,
-                dep,
-                mode,
-                parent_pkg,
-                *dep_pkg_name,
-                root_path.clone(),
-                internal_dependencies,
-                dependency_cache,
-                progress_output,
-            )
-            .with_context(|| {
-                format!(
-                    "Failed to resolve dependencies for package '{}'",
-                    parent_pkg
+            let (pkg_graph, is_override) = self
+                .new_for_dep(
+                    parent,
+                    dep,
+                    mode,
+                    parent_pkg,
+                    *dep_pkg_name,
+                    root_path.clone(),
                 )
-            })?;
+                .with_context(|| {
+                    format!(
+                        "Failed to resolve dependencies for package '{}'",
+                        parent_pkg
+                    )
+                })?;
             if let PM::Dependency::External(_) = dep {
                 dep_graphs_external.insert(*dep_pkg_name, (pkg_graph, is_override));
             } else {
@@ -366,6 +367,122 @@ impl DependencyGraph {
         Ok((dep_graphs, dep_graphs_external))
     }
 
+    /// Given a dependency in the parent's manifest file, creates a sub-graph for this dependency.
+    fn new_for_dep(
+        &mut self,
+        parent: &PM::DependencyKind,
+        dep: &PM::Dependency,
+        mode: DependencyMode,
+        parent_pkg: PM::PackageName,
+        dep_pkg_name: PM::PackageName,
+        dep_pkg_path: PathBuf,
+    ) -> Result<(DependencyGraph, bool)> {
+        let (pkg_graph, is_override) = match dep {
+            PM::Dependency::Internal(d) => {
+                DependencyGraph::check_for_dep_cycles(
+                    d.clone(),
+                    dep_pkg_name,
+                    &mut self.visited_dependencies,
+                )?;
+                self.dependency_cache
+                    .download_and_update_if_remote(dep_pkg_name, &d.kind, &mut self.progress_output)
+                    .with_context(|| format!("Fetching '{}'", dep_pkg_name))?;
+                let pkg_path = dep_pkg_path.join(local_path(&d.kind));
+                let manifest_string =
+                    std::fs::read_to_string(pkg_path.join(SourcePackageLayout::Manifest.path()))
+                        .with_context(|| format!("Parsing manifest for '{}'", dep_pkg_name))?;
+                let lock_string =
+                    std::fs::read_to_string(pkg_path.join(SourcePackageLayout::Lock.path())).ok();
+                // save dependency for cycle detection
+                self.visited_dependencies
+                    .push_front((dep_pkg_name, d.clone()));
+                let (mut pkg_graph, _) =
+                    self.get_graph(&d.kind, pkg_path.clone(), manifest_string, lock_string)?;
+                self.visited_dependencies.pop_front();
+                // reroot all packages to normalize local paths across all graphs
+                for (_, p) in pkg_graph.package_table.iter_mut() {
+                    p.kind.reroot(parent)?;
+                }
+                (pkg_graph, d.dep_override)
+            }
+            PM::Dependency::External(resolver) => {
+                let pkg_graph = DependencyGraph::get_external(
+                    mode,
+                    parent_pkg,
+                    dep_pkg_name,
+                    *resolver,
+                    &dep_pkg_path,
+                    &mut self.progress_output,
+                )?;
+                (pkg_graph, false)
+            }
+        };
+        Ok((pkg_graph, is_override))
+    }
+
+    /// Computes dependency hashes but may return None if information about some dependencies is not
+    /// available.
+    fn dependency_hashes(
+        &mut self,
+        root_path: PathBuf,
+        dependencies: &PM::Dependencies,
+    ) -> Result<Option<Vec<String>>> {
+        let mut hashed_lock_files = Vec::new();
+
+        for (pkg_name, dep) in dependencies {
+            let internal_dep = match dep {
+                // bail if encountering external dependency that would require running the external
+                // resolver
+                // TODO: should we consider handling this here?
+                PM::Dependency::External(_) => return Ok(None),
+                PM::Dependency::Internal(d) => d,
+            };
+
+            self.dependency_cache
+                .download_and_update_if_remote(
+                    *pkg_name,
+                    &internal_dep.kind,
+                    &mut self.progress_output,
+                )
+                .with_context(|| format!("Fetching '{}'", *pkg_name))?;
+            let pkg_path = root_path.join(local_path(&internal_dep.kind));
+
+            let Ok(lock_contents) = std::fs::read_to_string(pkg_path.join(SourcePackageLayout::Lock.path())) else {
+            return Ok(None);
+        };
+            hashed_lock_files.push(digest_str(lock_contents.as_bytes()));
+        }
+
+        Ok(Some(hashed_lock_files))
+    }
+
+    /// Computes a digest of all dependencies in a manifest file but may return None if information
+    /// about some dependencies is not available.
+    fn dependency_digest(
+        &mut self,
+        root_path: PathBuf,
+        manifest: &PM::SourceManifest,
+    ) -> Result<Option<String>> {
+        let Some(mut dep_hashes) = self.dependency_hashes(
+            root_path.clone(),
+            &manifest.dependencies,
+        )? else {
+            return Ok(None);
+        };
+
+        let Some(dev_dep_hashes) = self.dependency_hashes(
+            root_path,
+            &manifest.dev_dependencies,
+        )? else {
+            return Ok(None);
+        };
+
+        dep_hashes.extend(dev_dep_hashes);
+        Ok(Some(hashed_files_digest(dep_hashes)))
+    }
+}
+
+impl DependencyGraph {
     /// Given all sub-graphs representing dependencies of the parent manifest file, combines all
     /// subgraphs to form the parent dependency graph.
     pub fn merge_all(
@@ -710,67 +827,6 @@ impl DependencyGraph {
             return Ok(dev_only.then_some(dev_pkg));
         }
         Ok(None)
-    }
-
-    /// Given a dependency in the parent's manifest file, creates a sub-graph for this dependency.
-    fn new_for_dep<Progress: Write>(
-        parent: &PM::DependencyKind,
-        dep: &PM::Dependency,
-        mode: DependencyMode,
-        parent_pkg: PM::PackageName,
-        dep_pkg_name: PM::PackageName,
-        dep_pkg_path: PathBuf,
-        internal_dependencies: &mut VecDeque<(PM::PackageName, PM::InternalDependency)>,
-        dependency_cache: &mut DependencyCache,
-        progress_output: &mut Progress,
-    ) -> Result<(DependencyGraph, bool)> {
-        let (pkg_graph, is_override) = match dep {
-            PM::Dependency::Internal(d) => {
-                DependencyGraph::check_for_dep_cycles(
-                    d.clone(),
-                    dep_pkg_name,
-                    internal_dependencies,
-                )?;
-                dependency_cache
-                    .download_and_update_if_remote(dep_pkg_name, &d.kind, progress_output)
-                    .with_context(|| format!("Fetching '{}'", dep_pkg_name))?;
-                let pkg_path = dep_pkg_path.join(local_path(&d.kind));
-                let manifest_string =
-                    std::fs::read_to_string(pkg_path.join(SourcePackageLayout::Manifest.path()))
-                        .with_context(|| format!("Parsing manifest for '{}'", dep_pkg_name))?;
-                let lock_string =
-                    std::fs::read_to_string(pkg_path.join(SourcePackageLayout::Lock.path())).ok();
-                // save dependency for cycle detection
-                internal_dependencies.push_front((dep_pkg_name, d.clone()));
-                let (mut pkg_graph, _) = DependencyGraph::get(
-                    &d.kind,
-                    pkg_path.clone(),
-                    manifest_string,
-                    lock_string,
-                    internal_dependencies,
-                    dependency_cache,
-                    progress_output,
-                )?;
-                internal_dependencies.pop_front();
-                // reroot all packages to normalize local paths across all graphs
-                for (_, p) in pkg_graph.package_table.iter_mut() {
-                    p.kind.reroot(parent)?;
-                }
-                (pkg_graph, d.dep_override)
-            }
-            PM::Dependency::External(resolver) => {
-                let pkg_graph = DependencyGraph::get_external(
-                    mode,
-                    parent_pkg,
-                    dep_pkg_name,
-                    *resolver,
-                    &dep_pkg_path,
-                    progress_output,
-                )?;
-                (pkg_graph, false)
-            }
-        };
-        Ok((pkg_graph, is_override))
     }
 
     /// Cycle detection to avoid infinite recursion due to the way we construct internally resolved
@@ -1403,67 +1459,4 @@ fn deps_equal<'a>(
         .symmetric_difference(&sub_pkg_edges)
         .partition(|dep| combined_edges.contains(dep));
     (combined_pkgs, sub_pkgs)
-}
-
-/// Computes dependency hashes but may return None if information about some dependencies is not
-/// available.
-fn dependency_hashes<Progress: Write>(
-    root_path: PathBuf,
-    dependency_cache: &mut DependencyCache,
-    dependencies: &PM::Dependencies,
-    progress_output: &mut Progress,
-) -> Result<Option<Vec<String>>> {
-    let mut hashed_lock_files = Vec::new();
-
-    for (pkg_name, dep) in dependencies {
-        let internal_dep = match dep {
-            // bail if encountering external dependency that would require running the external
-            // resolver
-            // TODO: should we consider handling this here?
-            PM::Dependency::External(_) => return Ok(None),
-            PM::Dependency::Internal(d) => d,
-        };
-
-        dependency_cache
-            .download_and_update_if_remote(*pkg_name, &internal_dep.kind, progress_output)
-            .with_context(|| format!("Fetching '{}'", *pkg_name))?;
-        let pkg_path = root_path.join(local_path(&internal_dep.kind));
-
-        let Ok(lock_contents) = std::fs::read_to_string(pkg_path.join(SourcePackageLayout::Lock.path())) else {
-            return Ok(None);
-        };
-        hashed_lock_files.push(digest_str(lock_contents.as_bytes()));
-    }
-
-    Ok(Some(hashed_lock_files))
-}
-
-/// Computes a digest of all dependencies in a manifest file but may return None if information
-/// about some dependencies is not available.
-fn dependency_digest<Progress: Write>(
-    root_path: PathBuf,
-    manifest: &PM::SourceManifest,
-    dependency_cache: &mut DependencyCache,
-    progress_output: &mut Progress,
-) -> Result<Option<String>> {
-    let Some(mut dep_hashes) = dependency_hashes(
-        root_path.clone(),
-        dependency_cache,
-        &manifest.dependencies,
-        progress_output,
-    )? else {
-        return Ok(None);
-    };
-
-    let Some(dev_dep_hashes) = dependency_hashes(
-        root_path,
-        dependency_cache,
-        &manifest.dev_dependencies,
-        progress_output,
-    )? else {
-        return Ok(None);
-    };
-
-    dep_hashes.extend(dev_dep_hashes);
-    Ok(Some(hashed_files_digest(dep_hashes)))
 }

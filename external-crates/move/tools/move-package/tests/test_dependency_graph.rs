@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
-    collections::{BTreeMap, BTreeSet, VecDeque},
+    collections::{BTreeMap, BTreeSet},
     fs::{self, File},
     io::Write,
     path::PathBuf,
@@ -10,8 +10,7 @@ use std::{
 
 use move_package::{
     resolution::{
-        dependency_cache::DependencyCache,
-        dependency_graph::{DependencyGraph, DependencyMode},
+        dependency_graph::{DependencyGraph, DependencyGraphBuilder, DependencyMode},
         lock_file::LockFile,
     },
     source_package::{
@@ -33,19 +32,11 @@ fn no_dep_graph() {
     let pkg = no_dep_test_package();
 
     let manifest = parse_move_manifest_from_file(&pkg).expect("Loading manifest");
-    let mut dependency_cache = DependencyCache::new(/* skip_fetch_latest_git_deps */ true);
-    let mut internal_dependencies = VecDeque::new();
-    let graph = DependencyGraph::new(
-        &DependencyKind::default(),
-        &manifest,
-        pkg,
-        &mut internal_dependencies,
-        &mut dependency_cache,
-        &mut std::io::sink(),
-        None,
-        None,
-    )
-    .expect("Creating DependencyGraph");
+    let mut dep_graph_builder =
+        DependencyGraphBuilder::new(/* skip_fetch_latest_git_deps */ true, std::io::sink());
+    let graph = dep_graph_builder
+        .new_graph(&DependencyKind::default(), &manifest, pkg, None, None)
+        .expect("Creating DependencyGraph");
 
     assert!(
         graph.package_graph.contains_node(graph.root_package),
@@ -140,19 +131,11 @@ fn always_deps() {
     let pkg = dev_dep_test_package();
 
     let manifest = parse_move_manifest_from_file(&pkg).expect("Loading manifest");
-    let mut dependency_cache = DependencyCache::new(/* skip_fetch_latest_git_deps */ true);
-    let mut internal_dependencies = VecDeque::new();
-    let graph = DependencyGraph::new(
-        &DependencyKind::default(),
-        &manifest,
-        pkg,
-        &mut internal_dependencies,
-        &mut dependency_cache,
-        &mut std::io::sink(),
-        None,
-        None,
-    )
-    .expect("Creating DependencyGraph");
+    let mut dep_graph_builder =
+        DependencyGraphBuilder::new(/* skip_fetch_latest_git_deps */ true, std::io::sink());
+    let graph = dep_graph_builder
+        .new_graph(&DependencyKind::default(), &manifest, pkg, None, None)
+        .expect("Creating DependencyGraph");
 
     assert_eq!(
         graph.always_deps,
@@ -456,19 +439,11 @@ fn immediate_dependencies() {
     let pkg = dev_dep_test_package();
 
     let manifest = parse_move_manifest_from_file(&pkg).expect("Loading manifest");
-    let mut dependency_cache = DependencyCache::new(/* skip_fetch_latest_git_deps */ true);
-    let mut internal_dependencies = VecDeque::new();
-    let graph = DependencyGraph::new(
-        &DependencyKind::default(),
-        &manifest,
-        pkg,
-        &mut internal_dependencies,
-        &mut dependency_cache,
-        &mut std::io::sink(),
-        None,
-        None,
-    )
-    .expect("Creating DependencyGraph");
+    let mut dep_graph_builder =
+        DependencyGraphBuilder::new(/* skip_fetch_latest_git_deps */ true, std::io::sink());
+    let graph = dep_graph_builder
+        .new_graph(&DependencyKind::default(), &manifest, pkg, None, None)
+        .expect("Creating DependencyGraph");
 
     let r = Symbol::from("Root");
     let a = Symbol::from("A");

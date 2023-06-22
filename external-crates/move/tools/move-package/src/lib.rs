@@ -14,14 +14,11 @@ use clap::*;
 use move_compiler::editions::{Edition, Flavor};
 use move_core_types::account_address::AccountAddress;
 use move_model::model::GlobalEnv;
-use resolution::{
-    dependency_cache::DependencyCache, dependency_graph::DependencyGraph,
-    resolution_graph::ResolvedGraph,
-};
+use resolution::{dependency_graph::DependencyGraphBuilder, resolution_graph::ResolvedGraph};
 use serde::{Deserialize, Serialize};
 use source_package::{layout::SourcePackageLayout, parsed_manifest::DependencyKind};
 use std::{
-    collections::{BTreeMap, VecDeque},
+    collections::BTreeMap,
     io::Write,
     path::{Path, PathBuf},
 };
@@ -160,16 +157,13 @@ impl BuildConfig {
         let lock_string = std::fs::read_to_string(path.join(SourcePackageLayout::Lock.path())).ok();
         let _mutx = PackageLock::lock(); // held until function returns
 
-        let mut dependency_cache = DependencyCache::new(self.skip_fetch_latest_git_deps);
-        let mut internal_dependencies = VecDeque::new();
-        let (dependency_graph, modified) = DependencyGraph::get(
+        let mut dep_graph_builder =
+            DependencyGraphBuilder::new(self.skip_fetch_latest_git_deps, writer);
+        let (dependency_graph, modified) = dep_graph_builder.get_graph(
             &DependencyKind::default(),
             path.clone(),
             manifest_string,
             lock_string,
-            &mut internal_dependencies,
-            &mut dependency_cache,
-            writer,
         )?;
 
         if modified {
@@ -180,6 +174,17 @@ impl BuildConfig {
             }
         }
 
-        ResolvedGraph::resolve(dependency_graph, self, &mut dependency_cache, writer)
+        let DependencyGraphBuilder {
+            mut dependency_cache,
+            progress_output,
+            ..
+        } = dep_graph_builder;
+
+        ResolvedGraph::resolve(
+            dependency_graph,
+            self,
+            &mut dependency_cache,
+            progress_output,
+        )
     }
 }
