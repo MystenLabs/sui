@@ -48,8 +48,8 @@ function AppsPage() {
 				<section>
 					<FiltersPortal tags={allFilterTags} />
 					<Routes>
-						<Route path="/:tagName?" element={<AppsPlayGround />} />
 						<Route path="/connected" element={<ConnectedAppsCard />} />
+						<Route path="/:tagName?" element={<AppsPlayGround />} />
 					</Routes>
 				</section>
 			</Content>
