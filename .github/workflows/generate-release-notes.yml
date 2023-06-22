@@ -30,8 +30,10 @@ jobs:
         max_attempts: 2
         timeout_seconds: 30
         command: |
-          echo "commit_hash=$(git rev-parse HEAD)" >> $GITHUB_ENV
+          echo "new_commit_hash=$(git rev-parse HEAD)" >> $GITHUB_ENV
           echo "existing_tag=$(git tag --points-at ${{ env.commit_hash }} | grep -E 'release_notes_v(.*)' | head -n 1)" >> $GITHUB_ENV
+          echo "sui_version=$(cat Cargo.toml | grep "^version =" | tr -d '"' | awk '{ print $3 }')" >> $GITHUB_ENV
+          echo "old_commit_hash=$(git show-ref -s ${{ env.existing_tag }})" >> $GITHUB_ENV
 
     - name: Read Sui Version
       if: ${{ env.existing_tag == '' }}
@@ -39,5 +41,7 @@ jobs:
       run: |
         sui_version=$(cat Cargo.toml | grep "^version =" | tr -d '"' | awk '{ print $3 }')
         echo "sui_version=$sui_version" >> $GITHUB_ENV
+
+    - name: 
       
       
