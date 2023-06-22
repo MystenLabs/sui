@@ -14,7 +14,10 @@ export function useDeriveNextAccountMutation() {
 			return backgroundClient.deriveNextAccount();
 		},
 		onSuccess: () => {
-			ampli.createdNewAccount();
+			ampli.addedAccounts({
+				accountType: 'Derived',
+				numberOfAccounts: 1,
+			});
 			toast.success('New account created');
 		},
 		onError: (e) => {

@@ -53,8 +53,8 @@ export function ImportLedgerAccounts() {
 
 	const importLedgerAccountsMutation = useImportLedgerAccountsMutation({
 		onSuccess: (_, importedAccounts) => {
-			ampli.importedHardwareAccounts({
-				hardwareWalletType: 'Ledger',
+			ampli.addedAccounts({
+				accountType: 'Ledger',
 				numberOfAccounts: importedAccounts.length,
 			});
 			navigate(accountsUrl);

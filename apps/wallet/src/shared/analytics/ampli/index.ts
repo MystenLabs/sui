@@ -1,9 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// @ts-nocheck
 /* tslint:disable */
 /* eslint-disable */
+// @ts-nocheck
 /**
  * Ampli - A strong typed wrapper for your Analytics
  *
@@ -84,6 +84,25 @@ export interface IdentifyProperties {
 	 * The version of the wallet the user has installed.
 	 */
 	walletVersion: string;
+}
+
+export interface AddedAccountsProperties {
+	/**
+	 * The type of wallet account (e.g., Ledger, Qredo, etc.)
+	 *
+	 * | Rule | Value |
+	 * |---|---|
+	 * | Enum Values | Ledger, Qredo, Derived, Imported |
+	 */
+	accountType: 'Ledger' | 'Qredo' | 'Derived' | 'Imported';
+	/**
+	 * The number of accounts imported.
+	 *
+	 * | Rule | Value |
+	 * |---|---|
+	 * | Type | number |
+	 */
+	numberOfAccounts: number;
 }
 
 export interface ApprovedTransactionProperties {
@@ -185,25 +204,6 @@ export interface ImportedExistingAccountProperties {
 	 * The flow the user came from.
 	 */
 	sourceFlow: string;
-}
-
-export interface ImportedHardwareAccountsProperties {
-	/**
-	 * The type of hardware wallet that was connected to.
-	 *
-	 * | Rule | Value |
-	 * |---|---|
-	 * | Enum Values | Ledger |
-	 */
-	hardwareWalletType: 'Ledger';
-	/**
-	 * The number of accounts imported.
-	 *
-	 * | Rule | Value |
-	 * |---|---|
-	 * | Type | number |
-	 */
-	numberOfAccounts: number;
 }
 
 export interface OpenedApplicationProperties {
@@ -312,6 +312,14 @@ export class Identify implements BaseEvent {
 	}
 }
 
+export class AddedAccounts implements BaseEvent {
+	event_type = 'added accounts';
+
+	constructor(public event_properties: AddedAccountsProperties) {
+		this.event_properties = event_properties;
+	}
+}
+
 export class ApprovedTransaction implements BaseEvent {
 	event_type = 'approved transaction';
 
@@ -372,10 +380,6 @@ export class ConnectedHardwareWallet implements BaseEvent {
 	}
 }
 
-export class CreatedNewAccount implements BaseEvent {
-	event_type = 'created new account';
-}
-
 export class CreatedNewWallet implements BaseEvent {
 	event_type = 'created new wallet';
 }
@@ -392,14 +396,6 @@ export class ImportedExistingAccount implements BaseEvent {
 	event_type = 'imported existing account';
 
 	constructor(public event_properties: ImportedExistingAccountProperties) {
-		this.event_properties = event_properties;
-	}
-}
-
-export class ImportedHardwareAccounts implements BaseEvent {
-	event_type = 'imported hardware accounts';
-
-	constructor(public event_properties: ImportedHardwareAccountsProperties) {
 		this.event_properties = event_properties;
 	}
 }
@@ -615,6 +611,25 @@ export class Ampli {
   }
 
   /**
+   * added accounts
+   *
+   * [View in Tracking Plan](https://data.amplitude.com/mystenlabs/Sui%20Wallet/events/main/latest/added%20accounts)
+   *
+   * When users successfully add new accounts to the wallet.
+   *
+   * Owner: Jon Shek
+   *
+   * @param properties The event's properties (e.g. accountType)
+   * @param options Amplitude event options.
+   */
+  addedAccounts(
+    properties: AddedAccountsProperties,
+    options?: EventOptions,
+  ) {
+    return this.track(new AddedAccounts(properties), options);
+  }
+
+  /**
    * approved transaction
    *
    * [View in Tracking Plan](https://data.amplitude.com/mystenlabs/Sui%20Wallet/events/main/latest/approved%20transaction)
@@ -780,23 +795,6 @@ export class Ampli {
   }
 
   /**
-   * created new account
-   *
-   * [View in Tracking Plan](https://data.amplitude.com/mystenlabs/Sui%20Wallet/events/main/latest/created%20new%20account)
-   *
-   * When users create a new account through the account menu.
-   *
-   * Owner: Jon Shek
-   *
-   * @param options Amplitude event options.
-   */
-  createdNewAccount(
-    options?: EventOptions,
-  ) {
-    return this.track(new CreatedNewAccount(), options);
-  }
-
-  /**
    * created new wallet
    *
    * [View in Tracking Plan](https://data.amplitude.com/mystenlabs/Sui%20Wallet/events/main/latest/created%20new%20wallet)
@@ -849,25 +847,6 @@ export class Ampli {
     options?: EventOptions,
   ) {
     return this.track(new ImportedExistingAccount(properties), options);
-  }
-
-  /**
-   * imported hardware accounts
-   *
-   * [View in Tracking Plan](https://data.amplitude.com/mystenlabs/Sui%20Wallet/events/main/latest/imported%20hardware%20accounts)
-   *
-   * When users successfully import some number of hardware accounts.
-   *
-   * Owner: Jon Shek
-   *
-   * @param properties The event's properties (e.g. hardwareWalletType)
-   * @param options Amplitude event options.
-   */
-  importedHardwareAccounts(
-    properties: ImportedHardwareAccountsProperties,
-    options?: EventOptions,
-  ) {
-    return this.track(new ImportedHardwareAccounts(properties), options);
   }
 
   /**
