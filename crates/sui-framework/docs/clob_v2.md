@@ -986,38 +986,20 @@ Emitted when user withdraw asset from custodian
 
 
 
-<a name="0xdee9_clob_v2_CANCEL_BOTH"></a>
-
-
-
-<pre><code><b>const</b> <a href="clob_v2.md#0xdee9_clob_v2_CANCEL_BOTH">CANCEL_BOTH</a>: u8 = 3;
-</code></pre>
-
-
-
-<a name="0xdee9_clob_v2_CANCEL_NEWEST"></a>
-
-
-
-<pre><code><b>const</b> <a href="clob_v2.md#0xdee9_clob_v2_CANCEL_NEWEST">CANCEL_NEWEST</a>: u8 = 2;
-</code></pre>
-
-
-
 <a name="0xdee9_clob_v2_CANCEL_OLDEST"></a>
 
 
 
-<pre><code><b>const</b> <a href="clob_v2.md#0xdee9_clob_v2_CANCEL_OLDEST">CANCEL_OLDEST</a>: u8 = 1;
+<pre><code><b>const</b> <a href="clob_v2.md#0xdee9_clob_v2_CANCEL_OLDEST">CANCEL_OLDEST</a>: u8 = 0;
 </code></pre>
 
 
 
-<a name="0xdee9_clob_v2_DECREMENT_AND_CANCEL"></a>
+<a name="0xdee9_clob_v2_EInvalidSelfMatchingPreventionArg"></a>
 
 
 
-<pre><code><b>const</b> <a href="clob_v2.md#0xdee9_clob_v2_DECREMENT_AND_CANCEL">DECREMENT_AND_CANCEL</a>: u8 = 0;
+<pre><code><b>const</b> <a href="clob_v2.md#0xdee9_clob_v2_EInvalidSelfMatchingPreventionArg">EInvalidSelfMatchingPreventionArg</a>: u64 = 21;
 </code></pre>
 
 
@@ -1474,7 +1456,7 @@ Emitted when user withdraw asset from custodian
             <b>let</b> maker_base_quantity = maker_order.quantity;
             <b>let</b> skip_order = <b>false</b>;
 
-            <b>if</b> (maker_order.expire_timestamp &lt;= current_timestamp) {
+            <b>if</b> (maker_order.expire_timestamp &lt;= current_timestamp || account_owner(account_cap) == maker_order.owner) {
                 skip_order = <b>true</b>;
                 <a href="custodian.md#0xdee9_custodian_unlock_balance">custodian::unlock_balance</a>(&<b>mut</b> pool.base_custodian, maker_order.owner, maker_order.quantity);
                 <a href="clob_v2.md#0xdee9_clob_v2_emit_order_canceled">emit_order_canceled</a>&lt;BaseAsset, QuoteAsset&gt;(pool_id, maker_order);
@@ -1661,7 +1643,7 @@ Emitted when user withdraw asset from custodian
             <b>let</b> maker_base_quantity = maker_order.quantity;
             <b>let</b> skip_order = <b>false</b>;
 
-            <b>if</b> (maker_order.expire_timestamp &lt;= current_timestamp) {
+            <b>if</b> (maker_order.expire_timestamp &lt;= current_timestamp || account_owner(account_cap) == maker_order.owner) {
                 skip_order = <b>true</b>;
                 <a href="custodian.md#0xdee9_custodian_unlock_balance">custodian::unlock_balance</a>(&<b>mut</b> pool.base_custodian, maker_order.owner, maker_order.quantity);
                 <a href="clob_v2.md#0xdee9_clob_v2_emit_order_canceled">emit_order_canceled</a>&lt;BaseAsset, QuoteAsset&gt;(pool_id, maker_order);
@@ -1803,7 +1785,7 @@ Emitted when user withdraw asset from custodian
             <b>let</b> maker_base_quantity = maker_order.quantity;
             <b>let</b> skip_order = <b>false</b>;
 
-            <b>if</b> (maker_order.expire_timestamp &lt;= current_timestamp) {
+            <b>if</b> (maker_order.expire_timestamp &lt;= current_timestamp || account_owner(account_cap) == maker_order.owner) {
                 skip_order = <b>true</b>;
                 <b>let</b> maker_quote_quantity = clob_math::mul(maker_order.quantity, maker_order.price);
                 <a href="custodian.md#0xdee9_custodian_unlock_balance">custodian::unlock_balance</a>(&<b>mut</b> pool.quote_custodian, maker_order.owner, maker_quote_quantity);
@@ -2121,6 +2103,7 @@ So please check that boolean value first before using the order id.
     // Match the bid order against the asks Critbit Tree in the same way <b>as</b> a market order but up until the price level found in the previous step.
     // If the bid order is not completely filled, inject the remaining quantity <b>to</b> the bids Critbit Tree according <b>to</b> the input price and order id.
     // If limit ask order, vice versa.
+    <b>assert</b>!(self_matching_prevention == <a href="clob_v2.md#0xdee9_clob_v2_CANCEL_OLDEST">CANCEL_OLDEST</a>, <a href="clob_v2.md#0xdee9_clob_v2_EInvalidSelfMatchingPreventionArg">EInvalidSelfMatchingPreventionArg</a>);
     <b>assert</b>!(quantity &gt; 0, <a href="clob_v2.md#0xdee9_clob_v2_EInvalidQuantity">EInvalidQuantity</a>);
     <b>assert</b>!(price &gt; 0, <a href="clob_v2.md#0xdee9_clob_v2_EInvalidPrice">EInvalidPrice</a>);
     <b>assert</b>!(price % pool.tick_size == 0, <a href="clob_v2.md#0xdee9_clob_v2_EInvalidPrice">EInvalidPrice</a>);
@@ -2614,7 +2597,7 @@ Grouping order_ids like [0, 2, 1, 3] would make it the most gas efficient.
             is_bid: order.is_bid,
             owner: order.owner,
             expire_timestamp: order.expire_timestamp,
-            self_matching_prevention: <a href="clob_v2.md#0xdee9_clob_v2_PREVENT_SELF_MATCHING_DEFAULT">PREVENT_SELF_MATCHING_DEFAULT</a>
+            self_matching_prevention: order.self_matching_prevention
         });
         order_id = <a href="../../../.././build/Sui/docs/linked_table.md#0x2_linked_table_next">linked_table::next</a>(usr_open_order_ids, *<a href="_borrow">option::borrow</a>(order_id));
     };
