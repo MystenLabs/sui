@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
+    ffi::OsString,
     fs,
     path::{Path, PathBuf},
     process::Command,
@@ -68,7 +69,7 @@ pub fn parse_config(config_path: impl AsRef<Path>) -> anyhow::Result<Config> {
 /// Represents a sequence of git commands to clone a repository and sparsely checkout Move packages within.
 pub struct CloneCommand {
     /// git args
-    args: Vec<Vec<String>>,
+    args: Vec<Vec<OsString>>,
     /// report repository url in error messages
     repo_url: String,
 }
@@ -82,48 +83,42 @@ impl CloneCommand {
         let Some(repo_name) = components.last() else {
 	    bail!("Could not discover repository name in url {}", &p.repository)
 	};
-        let dest = dest
-            .join(repo_name)
-            .into_os_string()
-            .into_string()
-            .map_err(|_| {
-                anyhow!(
-                    "Could not create path to clone repsository {}",
-                    &p.repository
-                )
-            })?;
+        let dest = dest.join(repo_name).into_os_string();
+
+        macro_rules! append {
+            ($args:ident, $arg:expr) => {
+                $args.push(OsString::from($arg));
+            };
+        }
 
         let mut args = vec![];
         // Args to clone empty repository
-        args.push(
-            [
-                "clone",
-                "-n",
-                "--depth=1",
-                "--filter=tree:0",
-                &p.repository,
-                &dest,
-            ]
-            .iter()
-            .map(|&s| s.into())
-            .collect(),
-        );
+        let mut cmd_args: Vec<OsString> = vec![];
+        append!(cmd_args, "clone");
+        append!(cmd_args, "-n");
+        append!(cmd_args, "--depth=1");
+        append!(cmd_args, "--filter=tree:0");
+        append!(cmd_args, &p.repository);
+        append!(cmd_args, dest.clone());
+        args.push(cmd_args);
 
         // Args to sparse checkout the package set
-        let mut prefix: Vec<String> = ["-C", &dest, "sparse-checkout", "set", "--no-cone"]
-            .iter()
-            .map(|&s| s.into())
-            .collect();
-        prefix.extend_from_slice(&p.paths);
-        args.push(prefix);
+        let mut cmd_args: Vec<OsString> = vec![];
+        append!(cmd_args, "-C");
+        append!(cmd_args, dest.clone());
+        append!(cmd_args, "sparse-checkout");
+        append!(cmd_args, "set");
+        append!(cmd_args, "--no-cone");
+        let path_args: Vec<OsString> = p.paths.iter().map(|s| OsString::from(s)).collect();
+        cmd_args.extend_from_slice(&path_args);
+        args.push(cmd_args);
 
         // Args to checkout the default branch.
-        args.push(
-            ["-C", &dest, "checkout"]
-                .iter()
-                .map(|&s| s.into())
-                .collect(),
-        );
+        let mut cmd_args: Vec<OsString> = vec![];
+        append!(cmd_args, "-C");
+        append!(cmd_args, dest);
+        append!(cmd_args, "checkout");
+        args.push(cmd_args);
 
         Ok(Self {
             args,
