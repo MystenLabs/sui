@@ -15,10 +15,10 @@ import Alert from '../../alert';
 import { useNextMenuUrl } from '../hooks';
 import { MenuLayout } from './MenuLayout';
 import { PasswordInputDialog } from './PasswordInputDialog';
+import { ampli } from '_src/shared/analytics/ampli';
 import { useBackgroundClient } from '_src/ui/app/hooks/useBackgroundClient';
 import { Button } from '_src/ui/app/shared/ButtonUI';
 import FieldLabel from '_src/ui/app/shared/field-label';
-import { ampli } from '_src/shared/analytics/ampli';
 
 const validation = object({
 	privateKey: yupString()
