@@ -133,13 +133,22 @@ impl CloneCommand {
 
     pub async fn run(&self) -> anyhow::Result<()> {
         for args in &self.args {
-            Command::new("git").args(args).output().map_err(|_| {
+            let result = Command::new("git").args(args).output().map_err(|_| {
                 anyhow!(
-                    "Error cloning package(s) for {} with command git {:#?}",
+                    "Error cloning {} with command `git {:#?}`",
                     self.repo_url,
                     args
                 )
             })?;
+            if !result.status.success() {
+                bail!(
+                    "Nonzero exit status when cloning {} with command `git {:#?}`.\
+		     Stderr: {:?}",
+                    self.repo_url,
+                    args,
+                    result.stderr
+                )
+            }
         }
         Ok(())
     }
