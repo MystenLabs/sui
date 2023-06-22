@@ -18,6 +18,7 @@ import { PasswordInputDialog } from './PasswordInputDialog';
 import { useBackgroundClient } from '_src/ui/app/hooks/useBackgroundClient';
 import { Button } from '_src/ui/app/shared/ButtonUI';
 import FieldLabel from '_src/ui/app/shared/field-label';
+import { ampli } from '_src/shared/analytics/ampli';
 
 const validation = object({
 	privateKey: yupString()
@@ -68,6 +69,10 @@ export function ImportPrivateKey() {
 			await backgroundClient.importPrivateKey(password, keyPair);
 		},
 		onSuccess: () => {
+			ampli.addedAccounts({
+				accountType: 'Imported',
+				numberOfAccounts: 1,
+			});
 			toast.success('Account imported');
 			navigate(accountsUrl);
 		},
