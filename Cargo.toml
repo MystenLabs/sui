@@ -2,6 +2,9 @@
 resolver = "2"
 
 exclude = [
+    "external-crates/move-execution/v0/move-bytecode-verifier",
+    "external-crates/move-execution/v0/move-stdlib",
+    "external-crates/move-execution/v0/move-vm/runtime",
     "external-crates/move/move-abstract-stack",
     "external-crates/move/move-binary-format",
     "external-crates/move/move-binary-format/serializer-tests",
@@ -15,19 +18,19 @@ exclude = [
     "external-crates/move/move-compiler",
     "external-crates/move/move-compiler/transactional-tests",
     "external-crates/move/move-core/types",
-    "external-crates/move/move-ir/types",
     "external-crates/move/move-ir-compiler",
     "external-crates/move/move-ir-compiler/move-bytecode-source-map",
     "external-crates/move/move-ir-compiler/move-ir-to-bytecode",
     "external-crates/move/move-ir-compiler/move-ir-to-bytecode/syntax",
     "external-crates/move/move-ir-compiler/transactional-tests",
+    "external-crates/move/move-ir/types",
     "external-crates/move/move-model",
     "external-crates/move/move-prover",
     "external-crates/move/move-prover/boogie-backend",
     "external-crates/move/move-prover/bytecode",
     "external-crates/move/move-prover/interpreter",
-    "external-crates/move/move-prover/interpreter/crypto",
     "external-crates/move/move-prover/interpreter-testsuite",
+    "external-crates/move/move-prover/interpreter/crypto",
     "external-crates/move/move-prover/move-abigen",
     "external-crates/move/move-prover/move-docgen",
     "external-crates/move/move-prover/move-errmapgen",
@@ -57,7 +60,7 @@ exclude = [
     "external-crates/move/tools/move-unit-test",
     "external-crates/move/tools/read-write-set",
     "external-crates/move/tools/read-write-set/dynamic",
-    "external-crates/move/tools/read-write-set/types"
+    "external-crates/move/tools/read-write-set/types",
 ]
 
 members = [
@@ -149,6 +152,9 @@ members = [
     "sui-execution/latest/sui-adapter",
     "sui-execution/latest/sui-move-natives",
     "sui-execution/latest/sui-verifier",
+    "sui-execution/v0/sui-adapter",
+    "sui-execution/v0/sui-move-natives",
+    "sui-execution/v0/sui-verifier",
 ]
 
 [workspace.package]
