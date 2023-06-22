@@ -31,7 +31,7 @@ function ConnectedDapps() {
 	const connectedApps = useMemo(
 		() =>
 			allPermissions
-				.filter(({ allowed, accounts }) => allowed)
+				.filter(({ allowed }) => allowed)
 				.map((aPermission) => {
 					const matchedEcosystemApp = ecosystemApps.find((anEcosystemApp) => {
 						const originAdj = prepareLinkToCompare(aPermission.origin);
