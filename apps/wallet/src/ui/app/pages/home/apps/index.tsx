@@ -36,7 +36,7 @@ function AppsPage() {
 			name: tag,
 			// The tag subroute is used to get around the NavLink limitation with reading query params
 			// Enables active route highlighting without excessive overhead
-			link: `apps/${tag}?tagFilter=${tag}`,
+			link: `apps/${tag}`,
 		}),
 	);
 

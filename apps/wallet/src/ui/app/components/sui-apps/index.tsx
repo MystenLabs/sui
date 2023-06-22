@@ -21,17 +21,17 @@ function AppsPlayGround() {
 	const ecosystemApps = useFeature<DAppEntry[]>(FEATURES.WALLET_DAPPS).value;
 	const location = useLocation();
 
-	const queryParams = new URLSearchParams(location.search);
-	const tagFilter = queryParams.get('tagFilter');
+	const pathSegments = location.pathname.split('/');
+	const lastPath = pathSegments[pathSegments.length - 1];
 
 	const filteredEcosystemApps = useMemo(() => {
 		if (!ecosystemApps) {
 			return [];
-		} else if (tagFilter) {
-			return ecosystemApps.filter((app) => app.tags.includes(tagFilter));
+		} else if (lastPath !== 'apps') {
+			return ecosystemApps.filter((app) => app.tags.includes(lastPath));
 		}
 		return ecosystemApps;
-	}, [ecosystemApps, tagFilter]);
+	}, [ecosystemApps, lastPath]);
 
 	const allPermissions = useAppSelector(permissionsSelectors.selectAll);
 	const linkToPermissionID = useMemo(() => {
