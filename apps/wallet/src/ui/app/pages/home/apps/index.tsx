@@ -44,12 +44,14 @@ function AppsPage() {
 			return true;
 		});
 
-	const uniqueAppTags = [...uniqueAppTagNames].map((tag) => ({
-		name: tag,
-		// The tag subroute is used to get around the NavLink limitation with reading query params
-		// Enables active route highlighting without excessive overhead
-		link: `apps/${tag}?tagFilter=${tag}`,
-	}));
+	const uniqueAppTags = Array.from(new Set(ecosystemApps.flatMap((app) => app.tags))).map(
+		(tag) => ({
+			name: tag,
+			// The tag subroute is used to get around the NavLink limitation with reading query params
+			// Enables active route highlighting without excessive overhead
+			link: `apps/${tag}?tagFilter=${tag}`,
+		}),
+	);
 
 	const allFilterTags = [...defaultFilterTags, ...uniqueAppTags];
 
