@@ -28,7 +28,13 @@ fn test_additonal_addresses() {
         std::io::sink(),
     );
     let dg = dep_graph_builder
-        .new_graph(&PM::DependencyKind::default(), &pm, path, None, None)
+        .new_graph(
+            &PM::DependencyKind::default(),
+            &pm,
+            path,
+            /* manifest_digest */ None,
+            /* deps_digest */ None,
+        )
         .unwrap();
 
     let DG::DependencyGraphBuilder {
@@ -77,7 +83,13 @@ fn test_additonal_addresses_already_assigned_same_value() {
         std::io::sink(),
     );
     let dg = dep_graph_builder
-        .new_graph(&PM::DependencyKind::default(), &pm, path, None, None)
+        .new_graph(
+            &PM::DependencyKind::default(),
+            &pm,
+            path,
+            /* manifest_digest */ None,
+            /* deps_digest */ None,
+        )
         .unwrap();
 
     let DG::DependencyGraphBuilder {
@@ -115,7 +127,13 @@ fn test_additonal_addresses_already_assigned_different_value() {
         std::io::sink(),
     );
     let dg = dep_graph_builder
-        .new_graph(&PM::DependencyKind::default(), &pm, path, None, None)
+        .new_graph(
+            &PM::DependencyKind::default(),
+            &pm,
+            path,
+            /* manifest_digest */ None,
+            /* deps_digest */ None,
+        )
         .unwrap();
 
     let DG::DependencyGraphBuilder {

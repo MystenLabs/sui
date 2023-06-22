@@ -328,7 +328,8 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
     }
 
     /// Given all dependencies from the parent manifest file, collects all the sub-graphs
-    /// representing these dependencies.
+    /// representing these dependencies - returns internally resolved sub-graphs (first return
+    /// value) and externally resolved sub-graphs (second retrun value) separately.
     pub fn collect_graphs(
         &mut self,
         parent: &PM::DependencyKind,

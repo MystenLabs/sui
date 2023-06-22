@@ -35,7 +35,13 @@ fn no_dep_graph() {
     let mut dep_graph_builder =
         DependencyGraphBuilder::new(/* skip_fetch_latest_git_deps */ true, std::io::sink());
     let graph = dep_graph_builder
-        .new_graph(&DependencyKind::default(), &manifest, pkg, None, None)
+        .new_graph(
+            &DependencyKind::default(),
+            &manifest,
+            pkg,
+            /* manifest_digest */ None,
+            /* deps_digest */ None,
+        )
         .expect("Creating DependencyGraph");
 
     assert!(
@@ -134,7 +140,13 @@ fn always_deps() {
     let mut dep_graph_builder =
         DependencyGraphBuilder::new(/* skip_fetch_latest_git_deps */ true, std::io::sink());
     let graph = dep_graph_builder
-        .new_graph(&DependencyKind::default(), &manifest, pkg, None, None)
+        .new_graph(
+            &DependencyKind::default(),
+            &manifest,
+            pkg,
+            /* manifest_digest */ None,
+            /* deps_digest */ None,
+        )
         .expect("Creating DependencyGraph");
 
     assert_eq!(
@@ -442,7 +454,13 @@ fn immediate_dependencies() {
     let mut dep_graph_builder =
         DependencyGraphBuilder::new(/* skip_fetch_latest_git_deps */ true, std::io::sink());
     let graph = dep_graph_builder
-        .new_graph(&DependencyKind::default(), &manifest, pkg, None, None)
+        .new_graph(
+            &DependencyKind::default(),
+            &manifest,
+            pkg,
+            /* manifest_digest */ None,
+            /* deps_digest */ None,
+        )
         .expect("Creating DependencyGraph");
 
     let r = Symbol::from("Root");
