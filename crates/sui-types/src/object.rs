@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeMap;
 use std::convert::TryFrom;
 use std::fmt::{Debug, Display, Formatter};
 use std::mem::size_of;
@@ -16,6 +17,7 @@ use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use serde_with::Bytes;
 
+use crate::balance::Balance;
 use crate::base_types::{MoveObjectType, ObjectIDParseError};
 use crate::coin::Coin;
 use crate::crypto::{default_hash, deterministic_random_account_key};
@@ -395,6 +397,95 @@ impl MoveObject {
                 .fold(acc, |acc, v| Self::get_total_sui_in_value(v, acc)),
             _ => acc,
         }
+    }
+}
+
+// Helpers for extracting Coin<T> balances for all T
+impl MoveObject {
+    fn is_balance(s: &StructTag) -> Option<&TypeTag> {
+        (Balance::is_balance(s) && s.type_params.len() == 1).then(|| &s.type_params[0])
+    }
+
+    /// Get the total balances for all `Coin<T>` embedded in `self`.
+    pub fn get_coin_balances(
+        &self,
+        layout_resolver: &mut dyn LayoutResolver,
+    ) -> Result<BTreeMap<TypeTag, u64>, SuiError> {
+        let mut balances = BTreeMap::default();
+
+        // Fast path without deserialization.
+        if let Some(type_tag) = self.type_.coin_type_maybe() {
+            let balance = self.get_coin_value_unsafe();
+            if balance > 0 {
+                *balances.entry(type_tag).or_insert(0) += balance;
+            }
+        } else {
+            let layout = layout_resolver.get_layout(self, ObjectFormatOptions::with_types())?;
+            let move_struct = self.to_move_struct(&layout)?;
+            Self::get_coin_balances_in_struct(&move_struct, &mut balances, 0)?;
+        }
+
+        Ok(balances)
+    }
+
+    /// Get the total balances for all `Coin<T>` embedded in `s`, eitehr directly or in its
+    /// (transitive fields).
+    fn get_coin_balances_in_struct(
+        s: &MoveStruct,
+        balances: &mut BTreeMap<TypeTag, u64>,
+        value_depth: u64,
+    ) -> Result<(), SuiError> {
+        let (struct_type, fields) = match s {
+            MoveStruct::WithTypes { type_, fields } => (type_, fields),
+            _ => unreachable!(),
+        };
+
+        if let Some(type_tag) = Self::is_balance(struct_type) {
+            let balance = match fields[0].1 {
+                MoveValue::U64(n) => n,
+                _ => unreachable!(), // a Balance<T> object should have exactly one field, of type int
+            };
+
+            // Accumulate the found balance
+            if balance > 0 {
+                *balances.entry(type_tag.clone()).or_insert(0) += balance;
+            }
+        } else {
+            for field in fields {
+                Self::get_coin_balances_in_value(&field.1, balances, value_depth)?;
+            }
+        }
+
+        Ok(())
+    }
+
+    fn get_coin_balances_in_value(
+        v: &MoveValue,
+        balances: &mut BTreeMap<TypeTag, u64>,
+        value_depth: u64,
+    ) -> Result<(), SuiError> {
+        const MAX_MOVE_VALUE_DEPTH: u64 = 256; // This is 2x was the current value of
+                                               // `max_move_value_depth` is from protocol config
+
+        let value_depth = value_depth + 1;
+
+        if value_depth > MAX_MOVE_VALUE_DEPTH {
+            return Err(SuiError::GenericAuthorityError {
+                error: "exceeded max move value depth".to_owned(),
+            });
+        }
+
+        match v {
+            MoveValue::Struct(s) => Self::get_coin_balances_in_struct(s, balances, value_depth)?,
+            MoveValue::Vector(vec) => {
+                for entry in vec {
+                    Self::get_coin_balances_in_value(entry, balances, value_depth)?;
+                }
+            }
+            _ => {}
+        }
+
+        Ok(())
     }
 }
 
