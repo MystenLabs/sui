@@ -3488,7 +3488,10 @@ impl AuthorityState {
             )
             .await
             .tap_ok(|_| {
-                debug!("commit_certificate finished");
+                debug!(
+                    effects_digest = ?effects.digest(),
+                    "commit_certificate finished"
+                );
             })?;
 
         // todo - ideally move this metric in NotifyRead once we have metrics in AuthorityStore
