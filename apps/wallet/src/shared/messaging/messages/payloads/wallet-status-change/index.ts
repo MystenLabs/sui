@@ -9,7 +9,7 @@ import type { NetworkEnvType } from '_src/background/NetworkEnv';
 
 export type WalletStatusChange = {
 	network?: NetworkEnvType;
-	accounts?: SuiAddress[];
+	accounts?: { address: SuiAddress; publicKey: string | null }[];
 };
 
 export interface WalletStatusChangePayload extends BasePayload, WalletStatusChange {

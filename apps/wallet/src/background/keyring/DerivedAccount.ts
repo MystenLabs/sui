@@ -32,4 +32,8 @@ export class DerivedAccount implements Account {
 			derivationPath: this.derivationPath,
 		};
 	}
+
+	getPublicKey() {
+		return this.accountKeypair.publicKey.toBase64();
+	}
 }

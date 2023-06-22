@@ -3,14 +3,20 @@
 
 import TransportWebHID from '@ledgerhq/hw-transport-webhid';
 import TransportWebUSB from '@ledgerhq/hw-transport-webusb';
+import { toB64 } from '@mysten/bcs';
 import SuiLedgerClient from '@mysten/ledgerjs-hw-app-sui';
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 
+import { useAccounts } from '../../hooks/useAccounts';
+import { useBackgroundClient } from '../../hooks/useBackgroundClient';
 import {
 	convertErrorToLedgerConnectionFailedError,
 	LedgerDeviceNotFoundError,
 	LedgerNoTransportMechanismError,
 } from './ledgerErrors';
+import { AccountType, type SerializedAccount } from '_src/background/keyring/Account';
+import { type SerializedLedgerAccount } from '_src/background/keyring/LedgerAccount';
+import { type AccountsPublicInfoUpdates } from '_src/background/keyring/accounts';
 
 type SuiLedgerClientProviderProps = {
 	children: React.ReactNode;
@@ -22,9 +28,16 @@ type SuiLedgerClientContextValue = {
 };
 
 const SuiLedgerClientContext = createContext<SuiLedgerClientContextValue | undefined>(undefined);
-
+function filterLedger(account: SerializedAccount): account is SerializedLedgerAccount {
+	return account.type === AccountType.LEDGER;
+}
 export function SuiLedgerClientProvider({ children }: SuiLedgerClientProviderProps) {
 	const [suiLedgerClient, setSuiLedgerClient] = useState<SuiLedgerClient>();
+	const accounts = useAccounts();
+	const allLedgerWithoutPublicKey = useMemo(
+		() => accounts.filter(filterLedger).filter(({ publicKey }) => !publicKey),
+		[accounts],
+	);
 
 	const resetSuiLedgerClient = useCallback(async () => {
 		await suiLedgerClient?.transport.close();
@@ -55,6 +68,42 @@ export function SuiLedgerClientProvider({ children }: SuiLedgerClientProviderPro
 		},
 		[resetSuiLedgerClient],
 	);
+	const backgroundClient = useBackgroundClient();
+
+	useEffect(() => {
+		// update ledger accounts without the public key
+		(async () => {
+			if (allLedgerWithoutPublicKey.length) {
+				try {
+					if (!suiLedgerClient) {
+						await connectToLedger();
+						return;
+					}
+					const updates: AccountsPublicInfoUpdates = [];
+					for (const { derivationPath, address } of allLedgerWithoutPublicKey) {
+						if (derivationPath) {
+							try {
+								const { publicKey } = await suiLedgerClient.getPublicKey(derivationPath);
+								updates.push({
+									accountAddress: address,
+									changes: {
+										publicKey: toB64(publicKey),
+									},
+								});
+							} catch (e) {
+								// do nothing
+							}
+						}
+					}
+					if (updates.length) {
+						await backgroundClient.updateAccountsPublicInfo(updates);
+					}
+				} catch (e) {
+					// do nothing
+				}
+			}
+		})();
+	}, [allLedgerWithoutPublicKey, suiLedgerClient, backgroundClient, connectToLedger]);
 
 	const contextValue: SuiLedgerClientContextValue = useMemo(() => {
 		return {

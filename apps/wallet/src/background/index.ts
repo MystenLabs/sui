@@ -9,6 +9,7 @@ import NetworkEnv from './NetworkEnv';
 import Permissions from './Permissions';
 import { Connections } from './connections';
 import Keyring from './keyring';
+import { deleteAccountsPublicInfo, getStoredAccountsPublicInfo } from './keyring/accounts';
 import * as Qredo from './qredo';
 import { isSessionStorageSupported } from './storage-utils';
 import { openInNewTab } from '_shared/utils';
@@ -62,11 +63,17 @@ Permissions.permissionReply.subscribe((permission) => {
 	}
 });
 
-Permissions.on('connectedAccountsChanged', ({ origin, accounts }) => {
+Permissions.on('connectedAccountsChanged', async ({ origin, accounts }) => {
+	const allAccountPublicInfo = await getStoredAccountsPublicInfo();
 	connections.notifyContentScript({
 		event: 'walletStatusChange',
 		origin,
-		change: { accounts },
+		change: {
+			accounts: accounts.map((address) => ({
+				address,
+				publicKey: allAccountPublicInfo[address]?.publicKey || null,
+			})),
+		},
 	});
 });
 
@@ -81,6 +88,9 @@ Keyring.on('accountsChanged', keyringStatusCallback);
 Keyring.on('activeAccountChanged', keyringStatusCallback);
 
 Keyring.on('accountsChanged', async (accounts) => {
+	await deleteAccountsPublicInfo({
+		toKeep: accounts.map(({ address }) => address),
+	});
 	await Permissions.ensurePermissionAccountsUpdated(accounts);
 });
 
