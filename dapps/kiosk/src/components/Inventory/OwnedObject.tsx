@@ -6,15 +6,18 @@ import { DisplayObject } from '../DisplayObject';
 import { Button } from '../Base/Button';
 import { KioskFnType } from '../../hooks/kiosk';
 import { usePlaceMutation } from '../../mutations/kiosk';
+import { ObjectId } from '@mysten/sui.js';
 
 export function OwnedObject({
 	object,
 	onListSuccess,
 	listFn,
+	kioskId,
 }: {
 	onListSuccess: () => void;
 	listFn: KioskFnType;
 	object: OwnedObjectType;
+	kioskId: ObjectId;
 }) {
 	const placeToKioskMutation = usePlaceMutation({
 		onSuccess: onListSuccess,
@@ -26,7 +29,7 @@ export function OwnedObject({
 				<Button
 					className="bg-gray-200 hover:bg-primary hover:text-white"
 					loading={placeToKioskMutation.isLoading}
-					onClick={() => placeToKioskMutation.mutate(object)}
+					onClick={() => placeToKioskMutation.mutate({ item: object, kioskId })}
 				>
 					Place in kiosk
 				</Button>
