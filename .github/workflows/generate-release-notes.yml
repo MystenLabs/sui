@@ -14,16 +14,30 @@ on:
 
 jobs:
   generate-release-notes:
-    name: Generate Release Notes
-    runs-on: ubuntu-latest
-
+    name: Has commit been processed already?
+    runs-on: [self-hosted, self-hosted-arc]
+    
     steps:
-    - name: Checkout
-      uses: actions/checkout@7dd9e2a3dc350cf687eb1b2a4fadfee8c8e49675 # pin@v3
+    - name: Checkout sui repo main branch
+      uses: actions/checkout@755da8c3cf115ac066823e79a1e1788f8940201b # pin@v3
       with:
         fetch-depth: 0
+        ref: main
 
-    - name: Run script
-      shell: bash
+    - name: Check for a Release Notes tag for this commit
+      uses: nick-fields/retry@3e91a01664abd3c5cd539100d10d33b9c5b68482 # pin@v2
+      with:
+        max_attempts: 2
+        timeout_seconds: 30
+        command: |
+          echo "commit_hash=$(git rev-parse HEAD)" >> $GITHUB_ENV
+          echo "existing_tag=$(git tag --points-at ${{ env.commit_hash }} | grep -E 'release_notes_v(.*)' | head -n 1)" >> $GITHUB_ENV
+
+    - name: Read Sui Version
+      if: ${{ env.existing_tag == '' }}
+      working-directory: ./
       run: |
-        ./scripts/generate-release-notes.sh ${{ inputs.new_branch }} ${{ inputs.previous_branch }}
+        sui_version=$(cat Cargo.toml | grep "^version =" | tr -d '"' | awk '{ print $3 }')
+        echo "sui_version=$sui_version" >> $GITHUB_ENV
+      
+      
