@@ -1098,17 +1098,7 @@ impl AuthorityState {
             .map(|(_, ((id, seq, _), obj, _))| InputKey(*id, (!obj.is_package()).then_some(*seq)))
             .collect();
 
-        let events = inner_temporary_store.events.clone();
-
-        let loaded_child_objects = if self.is_fullnode(epoch_store) {
-            // We only care about this for full nodes
-            inner_temporary_store.loaded_child_objects.clone()
-        } else {
-            BTreeMap::new()
-        };
-
-        let tx_coins = self
-            .commit_certificate(inner_temporary_store, certificate, effects, epoch_store)
+        self.commit_certificate(inner_temporary_store, certificate, effects, epoch_store)
             .await?;
 
         // commit_certificate finished, the tx is fully committed to the store.
@@ -1123,19 +1113,6 @@ impl AuthorityState {
         // before the output objects are actually available.
         self.transaction_manager
             .notify_commit(&digest, output_keys, epoch_store);
-
-        // index certificate
-        let _ = self
-            .post_process_one_tx(
-                certificate,
-                effects,
-                &events,
-                epoch_store,
-                tx_coins,
-                loaded_child_objects,
-            )
-            .await
-            .tap_err(|e| error!("tx post processing failed: {e}"));
 
         // Update metrics.
         self.metrics.total_effects.inc();
@@ -3448,7 +3425,7 @@ impl AuthorityState {
         certificate: &VerifiedExecutableTransaction,
         effects: &TransactionEffects,
         epoch_store: &Arc<AuthorityPerEpochStore>,
-    ) -> SuiResult<Option<TxCoins>> {
+    ) -> SuiResult {
         let _metrics_guard = self.metrics.commit_certificate_latency.start_timer();
 
         let tx_digest = certificate.digest();
@@ -3465,9 +3442,29 @@ impl AuthorityState {
             None
         };
 
+        let loaded_child_objects = if self.is_fullnode(epoch_store) {
+            // We only care about this for full nodes
+            inner_temporary_store.loaded_child_objects.clone()
+        } else {
+            BTreeMap::new()
+        };
+
         // Returns coin objects for indexing for fullnode if indexing is enabled.
         let tx_coins =
             self.fullnode_only_get_tx_coins_for_indexing(&inner_temporary_store, epoch_store);
+
+        // index certificate
+        let _ = self
+            .post_process_one_tx(
+                certificate,
+                effects,
+                &inner_temporary_store.events,
+                epoch_store,
+                tx_coins,
+                loaded_child_objects,
+            )
+            .await
+            .tap_err(|e| error!("tx post processing failed: {e}"));
 
         // The insertion to epoch_store is not atomic with the insertion to the perpetual store. This is OK because
         // we insert to the epoch store first. And during lookups we always look up in the perpetual store first.
@@ -3496,7 +3493,7 @@ impl AuthorityState {
             .pending_notify_read
             .set(self.database.executed_effects_notify_read.num_pending() as i64);
 
-        Ok(tx_coins)
+        Ok(())
     }
 
     /// Get the TransactionEnvelope that currently locks the given object, if any.
