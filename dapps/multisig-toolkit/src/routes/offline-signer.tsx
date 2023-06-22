@@ -27,8 +27,6 @@ export default function OfflineSigner() {
 		},
 	});
 
-	console.log(data);
-
 	return (
 		<div className="flex flex-col gap-4">
 			<h2 className="scroll-m-20 text-4xl font-extrabold tracking-tight lg:text-5xl">
