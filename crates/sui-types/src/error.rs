@@ -530,7 +530,7 @@ pub enum SuiError {
     TimeoutError,
 
     #[error("Error executing {0}")]
-    ExecutionError(String),
+    ExecutionError(String, ExecutionErrorKind),
 
     #[error("Invalid committee composition")]
     InvalidCommittee(String),
@@ -595,7 +595,7 @@ impl From<sui_protocol_config::Error> for SuiError {
 
 impl From<ExecutionError> for SuiError {
     fn from(error: ExecutionError) -> Self {
-        SuiError::ExecutionError(error.to_string())
+        SuiError::ExecutionError(error.to_string(), error.kind().clone())
     }
 }
 
@@ -617,12 +617,6 @@ impl From<SuiError> for Status {
     fn from(error: SuiError) -> Self {
         let bytes = bcs::to_bytes(&error).unwrap();
         Status::with_details(tonic::Code::Internal, error.to_string(), bytes.into())
-    }
-}
-
-impl From<ExecutionErrorKind> for SuiError {
-    fn from(kind: ExecutionErrorKind) -> Self {
-        ExecutionError::from_kind(kind).into()
     }
 }
 

@@ -1328,10 +1328,7 @@ impl IndexStore {
                 )
             })
             .await
-            .unwrap()
-            .map_err(|e| {
-                SuiError::ExecutionError(format!("Failed to read balance frm DB: {:?}", e))
-            });
+            .unwrap();
         }
 
         self.metrics.balance_lookup_from_total.inc();
@@ -1367,9 +1364,6 @@ impl IndexStore {
                 })
                 .await
                 .unwrap()
-                .map_err(|e| {
-                    SuiError::ExecutionError(format!("Failed to read balance frm DB: {:?}", e))
-                })
             })
             .await
     }
@@ -1391,10 +1385,7 @@ impl IndexStore {
                 Self::get_all_balances_from_db(metrics_cloned, coin_index_cloned, owner)
             })
             .await
-            .unwrap()
-            .map_err(|e| {
-                SuiError::ExecutionError(format!("Failed to read all balance from DB: {:?}", e))
-            });
+            .unwrap();
         }
 
         self.metrics.all_balance_lookup_from_total.inc();
@@ -1408,9 +1399,6 @@ impl IndexStore {
                 })
                 .await
                 .unwrap()
-                .map_err(|e| {
-                    SuiError::ExecutionError(format!("Failed to read all balance from DB: {:?}", e))
-                })
             })
             .await
     }
@@ -1457,7 +1445,7 @@ impl IndexStore {
             }
             let coin_type =
                 TypeTag::Struct(Box::new(parse_sui_struct_tag(&coin_type).map_err(|e| {
-                    SuiError::ExecutionError(format!(
+                    SuiError::GenericStorageError(format!(
                         "Failed to parse event sender address: {:?}",
                         e
                     ))

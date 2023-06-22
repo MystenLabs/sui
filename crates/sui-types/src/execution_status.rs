@@ -25,7 +25,7 @@ pub enum ExecutionStatus {
     },
 }
 
-#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, Error, EnumVariantOrder)]
+#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, Error, EnumVariantOrder, Hash)]
 pub enum ExecutionFailureStatus {
     //
     // General transaction errors

@@ -7,6 +7,7 @@ use jsonrpsee::core::Error as RpcError;
 use jsonrpsee::types::error::CallError;
 use jsonrpsee::types::ErrorObject;
 use sui_types::error::{SuiError, SuiObjectResponseError, UserInputError};
+use sui_types::execution_status::ExecutionFailureStatus;
 use sui_types::quorum_driver_types::QuorumDriverError;
 use thiserror::Error;
 use tokio::task::JoinError;
@@ -137,7 +138,6 @@ pub enum SuiRpcInputError {
 * ModuleDeserializationFailure
 * FailObjectLayout
 * SuiSystemStateReadError
-* ObjectDeserializationError
 
 */
 
@@ -145,9 +145,8 @@ pub enum SuiRpcInputError {
 * Depends on where this happens. This error enum to be used when error stems from us trying to deserialize something
 * ServerDeserializationError
 * ModuleDeserializationFailure
+SuiSystemStateReadError
 * FailObjectLayout
-
-* ObjectDeserializationError
 */
 
 #[derive(Debug, Error)]
@@ -160,6 +159,10 @@ pub fn match_sui_error(sui_error: SuiError) -> RpcError {
                 RpcError::Call(CallError::Failed(error.into()))
             }
             _ => RpcError::Call(CallError::InvalidParams(error.into())),
+        },
+        SuiError::ExecutionError(err, status) => match status {
+            ExecutionFailureStatus::VMInvariantViolation => to_internal_error(status),
+            _ => RpcError::Call(CallError::InvalidParams(status.into())),
         },
         SuiError::UserInputError { .. }
         | SuiError::UnexpectedOwnerType
