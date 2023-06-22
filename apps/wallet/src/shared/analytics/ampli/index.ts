@@ -110,6 +110,9 @@ export interface ApprovedTransactionProperties {
 	 * The URL of the application that initiated the transaction.
 	 */
 	applicationUrl: string;
+	/**
+	 * Whether or not users received a failure warning when signing a transaction.
+	 */
 	receivedFailureWarning: boolean;
 }
 
@@ -233,7 +236,7 @@ export interface SelectedCoinProperties {
 	 */
 	coinType: string;
 	/**
-	 * The total balance of the selected coin that the user has.
+	 * The total balance in SUI of the selected coin that the user has.
 	 */
 	totalBalance: string;
 }
@@ -280,6 +283,9 @@ export interface StakedSuiProperties {
 }
 
 export interface SwitchedAccountProperties {
+	/**
+	 * The type of account that is being switched to.
+	 */
 	toAccountType: string;
 }
 
