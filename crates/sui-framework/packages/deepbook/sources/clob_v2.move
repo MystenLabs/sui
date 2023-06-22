@@ -45,20 +45,15 @@ module deepbook::clob_v2 {
     const EInvalidFee: u64 = 18;
     const EInvalidExpireTimestamp: u64 = 19;
     const EInvalidTickSizeLotSize: u64 = 20;
+    const EInvalidSelfMatchingPreventionArg: u64 = 21;
 
     // <<<<<<<<<<<<<<<<<<<<<<<< Error codes <<<<<<<<<<<<<<<<<<<<<<<<
 
     // <<<<<<<<<<<<<<<<<<<<<<<< Constants <<<<<<<<<<<<<<<<<<<<<<<<
     const FLOAT_SCALING: u64 = 1_000_000_000;
     // Self-Trade Prevention option
-    // Cancel smaller order and decrement larger order by the smaller size. If the same size, cancel both.
-    const DECREMENT_AND_CANCEL: u8 = 0;
     // Cancel older (resting) order in full. Continue to execute the newer taking order.
-    const CANCEL_OLDEST: u8 = 1;
-    // Cancel newer (taking) order in full. Let the old resting order remain on the order book.
-    const CANCEL_NEWEST: u8 = 2;
-    // Cancel both orders immediately.
-    const CANCEL_BOTH: u8 = 3;
+    const CANCEL_OLDEST: u8 = 0;
     // Restrictions on limit orders.
     const N_RESTRICTIONS: u8 = 4;
     const NO_RESTRICTION: u8 = 0;
@@ -463,7 +458,7 @@ module deepbook::clob_v2 {
                 let maker_base_quantity = maker_order.quantity;
                 let skip_order = false;
 
-                if (maker_order.expire_timestamp <= current_timestamp) {
+                if (maker_order.expire_timestamp <= current_timestamp || account_owner(account_cap) == maker_order.owner) {
                     skip_order = true;
                     custodian::unlock_balance(&mut pool.base_custodian, maker_order.owner, maker_order.quantity);
                     emit_order_canceled<BaseAsset, QuoteAsset>(pool_id, maker_order);
@@ -630,7 +625,7 @@ module deepbook::clob_v2 {
                 let maker_base_quantity = maker_order.quantity;
                 let skip_order = false;
 
-                if (maker_order.expire_timestamp <= current_timestamp) {
+                if (maker_order.expire_timestamp <= current_timestamp || account_owner(account_cap) == maker_order.owner) {
                     skip_order = true;
                     custodian::unlock_balance(&mut pool.base_custodian, maker_order.owner, maker_order.quantity);
                     emit_order_canceled<BaseAsset, QuoteAsset>(pool_id, maker_order);
@@ -752,7 +747,7 @@ module deepbook::clob_v2 {
                 let maker_base_quantity = maker_order.quantity;
                 let skip_order = false;
 
-                if (maker_order.expire_timestamp <= current_timestamp) {
+                if (maker_order.expire_timestamp <= current_timestamp || account_owner(account_cap) == maker_order.owner) {
                     skip_order = true;
                     let maker_quote_quantity = clob_math::mul(maker_order.quantity, maker_order.price);
                     custodian::unlock_balance(&mut pool.quote_custodian, maker_order.owner, maker_quote_quantity);
@@ -1010,6 +1005,7 @@ module deepbook::clob_v2 {
         // Match the bid order against the asks Critbit Tree in the same way as a market order but up until the price level found in the previous step.
         // If the bid order is not completely filled, inject the remaining quantity to the bids Critbit Tree according to the input price and order id.
         // If limit ask order, vice versa.
+        assert!(self_matching_prevention == CANCEL_OLDEST, EInvalidSelfMatchingPreventionArg);
         assert!(quantity > 0, EInvalidQuantity);
         assert!(price > 0, EInvalidPrice);
         assert!(price % pool.tick_size == 0, EInvalidPrice);
@@ -1344,7 +1340,7 @@ module deepbook::clob_v2 {
                 is_bid: order.is_bid,
                 owner: order.owner,
                 expire_timestamp: order.expire_timestamp,
-                self_matching_prevention: PREVENT_SELF_MATCHING_DEFAULT
+                self_matching_prevention: order.self_matching_prevention
             });
             order_id = linked_table::next(usr_open_order_ids, *option::borrow(order_id));
         };
