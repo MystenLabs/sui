@@ -31,19 +31,6 @@ function AppsPage() {
 	];
 	const ecosystemApps = useFeature<DAppEntry[]>(FEATURES.WALLET_DAPPS).value ?? [];
 
-	const uniqueAppTagNames = new Set<string>();
-
-	ecosystemApps
-		.flatMap((app) => app.tags)
-		.filter((tag) => {
-			if (uniqueAppTagNames.has(tag)) {
-				return false;
-			}
-
-			uniqueAppTagNames.add(tag);
-			return true;
-		});
-
 	const uniqueAppTags = Array.from(new Set(ecosystemApps.flatMap((app) => app.tags))).map(
 		(tag) => ({
 			name: tag,
