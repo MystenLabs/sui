@@ -368,9 +368,7 @@ where
                     "Executing tx locally by orchestrator failed with error: {:?}", err
                 );
                 metrics.local_execution_failure.inc();
-                Err(SuiError::TransactionOrchestratorLocalExecutionError {
-                    error: err.to_string(),
-                })
+                Err(err)
             }
             Ok(Ok(_)) => {
                 metrics.local_execution_success.inc();

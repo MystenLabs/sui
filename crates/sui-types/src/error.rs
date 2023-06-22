@@ -454,9 +454,6 @@ pub enum SuiError {
     #[error("Failed to dispatch subscription: {error:?}")]
     FailedToDispatchSubscription { error: String },
 
-    #[error("Failed to execute transaction locally by Orchestrator: {error:?}")]
-    TransactionOrchestratorLocalExecutionError { error: String },
-
     // Errors returned by authority and client read API's
     #[error(
         "Failed to serialize {input_type} in the requested format: {:?}",
