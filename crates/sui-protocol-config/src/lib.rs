@@ -688,6 +688,9 @@ pub struct ProtocolConfig {
     scoring_decision_mad_divisor: Option<f64>,
     // The cutoff value for the MED outlier detection
     scoring_decision_cutoff_value: Option<f64>,
+
+    /// === Execution Version ===
+    execution_version: Option<u64>,
 }
 
 // feature flags
@@ -1139,6 +1142,8 @@ impl ProtocolConfig {
                 max_move_value_depth: None,
 
                 gas_rounding_step: None,
+
+                execution_version: None,
 
                 // When adding a new constant, set it to None in the earliest version, like this:
                 // new_constant: None,

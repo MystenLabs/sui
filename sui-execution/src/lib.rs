@@ -19,11 +19,16 @@ pub fn executor(
     paranoid_type_checks: bool,
     silent: bool,
 ) -> SuiResult<Arc<dyn Executor + Send + Sync>> {
-    Ok(Arc::new(latest::Executor::new(
-        protocol_config,
-        paranoid_type_checks,
-        silent,
-    )?))
+    let version = protocol_config.execution_version_as_option().unwrap_or(0);
+    Ok(match version {
+        0 => Arc::new(latest::Executor::new(
+            protocol_config,
+            paranoid_type_checks,
+            silent,
+        )?),
+
+        v => panic!("Unsupported execution version {v}"),
+    })
 }
 
 pub fn verifier<'m>(
@@ -31,5 +36,9 @@ pub fn verifier<'m>(
     is_metered: bool,
     metrics: &'m Arc<BytecodeVerifierMetrics>,
 ) -> Box<dyn Verifier + 'm> {
-    Box::new(latest::Verifier::new(protocol_config, is_metered, metrics))
+    let version = protocol_config.execution_version_as_option().unwrap_or(0);
+    match version {
+        0 => Box::new(latest::Verifier::new(protocol_config, is_metered, metrics)),
+        v => panic!("Unsupported execution version {v}"),
+    }
 }
