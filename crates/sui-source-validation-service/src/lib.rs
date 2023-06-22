@@ -58,7 +58,7 @@ pub async fn verify_package(
 
 pub fn parse_config(config_path: impl AsRef<Path>) -> anyhow::Result<Config> {
     let contents = fs::read_to_string(config_path)?;
-    toml::from_str(&contents).map_err(anyhow::Error::from)
+    Ok(toml::from_str(&contents)?)
 }
 
 pub async fn clone_repositories(config: &Config) -> anyhow::Result<()> {
