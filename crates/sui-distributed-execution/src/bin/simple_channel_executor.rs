@@ -1,6 +1,7 @@
 use clap::*;
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::cmp;
 use sui_adapter::adapter;
 use sui_config::{Config, NodeConfig};
 use sui_core::authority::epoch_start_configuration::EpochStartConfiguration;
@@ -16,7 +17,6 @@ use sui_types::multiaddr::Multiaddr;
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
 use sui_types::sui_system_state::get_sui_system_state;
 use sui_types::sui_system_state::SuiSystemStateTrait;
-use tokio::signal;
 use tokio::sync::mpsc;
 use tokio::time::Instant;
 
@@ -49,9 +49,9 @@ struct Args {
     #[clap(long)]
     download: Option<u64>,
 
-    /// Specifies whether I will execute or not
+    /// Specifies the watermark up to which I will execute checkpoints
     #[clap(long)]
-    execute: bool,
+    execute: Option<u64>,
 
     #[clap(long, help = "Specify address to listen on")]
     listen_address: Option<Multiaddr>,
@@ -72,7 +72,7 @@ async fn main() {
     let (epoch_end_sender, mut epoch_end_receiver) = mpsc::channel(32);
 
     // Sequence Worker
-    tokio::spawn(async move {
+    let sw_handler = tokio::spawn(async move {
         let config = NodeConfig::load(&args.config_path).unwrap();
         let genesis = Arc::new(config.genesis().expect("Could not load genesis"));
         let genesis_seq = genesis.checkpoint().into_summary_and_sequence().0;
@@ -85,6 +85,10 @@ async fn main() {
         let epoch_start_config = sw_state.epoch_store.epoch_start_config();
         let reference_gas_price = sw_state.epoch_store.reference_gas_price();
 
+        if let Some(watermark) = args.download {
+            sw_state.handle_download(watermark, &config).await;
+        }
+
         // Epoch Start
         epoch_start_sender
             .send(EpochStartMessage(
@@ -95,195 +99,201 @@ async fn main() {
             .await
             .expect("Sending doesn't work");
 
-        for checkpoint_seq in genesis_seq..highest_synced_seq {
-            let checkpoint_summary = sw_state
-                .checkpoint_store
-                .get_checkpoint_by_sequence_number(checkpoint_seq)
-                .expect("Cannot get checkpoint")
-                .expect("Checkpoint is None");
+        if let Some(watermark) = args.execute {
+            for checkpoint_seq in genesis_seq..cmp::min(watermark, highest_synced_seq) {
+                let checkpoint_summary = sw_state
+                    .checkpoint_store
+                    .get_checkpoint_by_sequence_number(checkpoint_seq)
+                    .expect("Cannot get checkpoint")
+                    .expect("Checkpoint is None");
 
-            if checkpoint_seq % 10000 == 0 {
-                println!("Sending checkpoint {}", checkpoint_seq);
-            }
+                if checkpoint_seq % 10000 == 0 {
+                    println!("Sending checkpoint {}", checkpoint_seq);
+                }
 
-            let (_seq, summary) = checkpoint_summary.into_summary_and_sequence();
-            let contents = sw_state
-                .checkpoint_store
-                .get_checkpoint_contents(&summary.content_digest)
-                .expect("Contents must exist")
-                .expect("Contents must exist");
+                let (_seq, summary) = checkpoint_summary.into_summary_and_sequence();
+                let contents = sw_state
+                    .checkpoint_store
+                    .get_checkpoint_contents(&summary.content_digest)
+                    .expect("Contents must exist")
+                    .expect("Contents must exist");
 
-            if contents.size() > 1 {
-                println!(
-                    "Checkpoint {} has {} transactions",
-                    checkpoint_seq,
-                    contents.size()
-                );
-            }
-
-            for tx_digest in contents.iter() {
-                let tx = sw_state
-                    .store
-                    .get_transaction_block(&tx_digest.transaction)
-                    .expect("Transaction exists")
-                    .expect("Transaction exists");
-
-                tx_sender
-                    .send(TransactionMessage(
-                        tx.clone(),
-                        tx_digest.clone(),
+                if contents.size() > 1 {
+                    println!(
+                        "Checkpoint {} has {} transactions",
                         checkpoint_seq,
-                    ))
-                    .await
-                    .expect("Sending doesn't work");
+                        contents.size()
+                    );
+                }
 
-                if let TransactionKind::ChangeEpoch(_) = tx.data().transaction_data().kind() {
-                    // wait for epoch end message from execution worker
-                    println!(
-                        "Waiting for epoch end message. Checkpoint_seq: {}",
-                        checkpoint_seq
-                    );
+                for tx_digest in contents.iter() {
+                    let tx = sw_state
+                        .store
+                        .get_transaction_block(&tx_digest.transaction)
+                        .expect("Transaction exists")
+                        .expect("Transaction exists");
 
-                    let EpochEndMessage(new_epoch_start_state) = epoch_end_receiver
-                        .recv()
-                        .await
-                        .expect("Receiving doesn't work");
-                    let next_epoch_committee = new_epoch_start_state.get_sui_committee();
-                    let next_epoch = next_epoch_committee.epoch();
-                    let last_checkpoint = sw_state
-                        .checkpoint_store
-                        .get_epoch_last_checkpoint(sw_state.epoch_store.epoch())
-                        .expect("Error loading last checkpoint for current epoch")
-                        .expect("Could not load last checkpoint for current epoch");
-                    println!(
-                        "Last checkpoint sequence number: {}",
-                        last_checkpoint.sequence_number(),
-                    );
-                    let epoch_start_configuration = EpochStartConfiguration::new(
-                        new_epoch_start_state,
-                        *last_checkpoint.digest(),
-                    );
-                    assert_eq!(sw_state.epoch_store.epoch() + 1, next_epoch);
-                    sw_state.epoch_store = sw_state.epoch_store.new_at_next_epoch(
-                        config.protocol_public_key(),
-                        next_epoch_committee,
-                        epoch_start_configuration,
-                        sw_state.store.clone(),
-                        &config.expensive_safety_check_config,
-                    );
-                    println!("New epoch store has epoch {}", sw_state.epoch_store.epoch());
-                    let protocol_config = sw_state.epoch_store.protocol_config();
-                    let epoch_start_config = sw_state.epoch_store.epoch_start_config();
-                    let reference_gas_price = sw_state.epoch_store.reference_gas_price();
-                    epoch_start_sender
-                        .send(EpochStartMessage(
-                            protocol_config.clone(),
-                            epoch_start_config.epoch_data(),
-                            reference_gas_price,
+                    tx_sender
+                        .send(TransactionMessage(
+                            tx.clone(),
+                            tx_digest.clone(),
+                            checkpoint_seq,
                         ))
                         .await
                         .expect("Sending doesn't work");
+
+                    if let TransactionKind::ChangeEpoch(_) = tx.data().transaction_data().kind() {
+                        // wait for epoch end message from execution worker
+                        println!(
+                            "Waiting for epoch end message. Checkpoint_seq: {}",
+                            checkpoint_seq
+                        );
+
+                        let EpochEndMessage(new_epoch_start_state) = epoch_end_receiver
+                            .recv()
+                            .await
+                            .expect("Receiving doesn't work");
+                        let next_epoch_committee = new_epoch_start_state.get_sui_committee();
+                        let next_epoch = next_epoch_committee.epoch();
+                        let last_checkpoint = sw_state
+                            .checkpoint_store
+                            .get_epoch_last_checkpoint(sw_state.epoch_store.epoch())
+                            .expect("Error loading last checkpoint for current epoch")
+                            .expect("Could not load last checkpoint for current epoch");
+                        println!(
+                            "Last checkpoint sequence number: {}",
+                            last_checkpoint.sequence_number(),
+                        );
+                        let epoch_start_configuration = EpochStartConfiguration::new(
+                            new_epoch_start_state,
+                            *last_checkpoint.digest(),
+                        );
+                        assert_eq!(sw_state.epoch_store.epoch() + 1, next_epoch);
+                        sw_state.epoch_store = sw_state.epoch_store.new_at_next_epoch(
+                            config.protocol_public_key(),
+                            next_epoch_committee,
+                            epoch_start_configuration,
+                            sw_state.store.clone(),
+                            &config.expensive_safety_check_config,
+                        );
+                        println!("New epoch store has epoch {}", sw_state.epoch_store.epoch());
+                        let protocol_config = sw_state.epoch_store.protocol_config();
+                        let epoch_start_config = sw_state.epoch_store.epoch_start_config();
+                        let reference_gas_price = sw_state.epoch_store.reference_gas_price();
+                        epoch_start_sender
+                            .send(EpochStartMessage(
+                                protocol_config.clone(),
+                                epoch_start_config.epoch_data(),
+                                reference_gas_price,
+                            ))
+                            .await
+                            .expect("Sending doesn't work");
+                    }
                 }
             }
         }
         println!("Sequence worker finished");
     });
 
-    // Execution Worker
-    tokio::spawn(async move {
-        let mut epoch_data: EpochData;
-        let mut protocol_config: ProtocolConfig;
-        let mut reference_gas_price: u64;
-        // Wait for epoch start message
-        let EpochStartMessage(
-            protocol_config_,
-            epoch_data_,
-            reference_gas_price_,
-        ) = epoch_start_receiver.recv().await.unwrap();
-        println!("Got epoch start message");
+    let mut ew_handler_opt = None;
+    if let Some(watermark) = args.execute {
+        // Execution Worker
+        ew_handler_opt = Some(tokio::spawn(async move {
+            let mut epoch_data: EpochData;
+            let mut protocol_config: ProtocolConfig;
+            let mut reference_gas_price: u64;
+            // Wait for epoch start message
+            let EpochStartMessage(
+                protocol_config_,
+                epoch_data_,
+                reference_gas_price_,
+            ) = epoch_start_receiver.recv().await.unwrap();
+            println!("Got epoch start message");
 
-        protocol_config = protocol_config_;
-        epoch_data = epoch_data_;
-        reference_gas_price = reference_gas_price_;
+            protocol_config = protocol_config_;
+            epoch_data = epoch_data_;
+            reference_gas_price = reference_gas_price_;
 
-        let native_functions = sui_move_natives::all_natives(/* silent */ true);
-        let mut move_vm = Arc::new(
-            adapter::new_move_vm(native_functions.clone(), &protocol_config, false)
-                .expect("We defined natives to not fail here"),
-        );
+            let native_functions = sui_move_natives::all_natives(/* silent */ true);
+            let mut move_vm = Arc::new(
+                adapter::new_move_vm(native_functions.clone(), &protocol_config, false)
+                    .expect("We defined natives to not fail here"),
+            );
 
-        // start timer for TPS computation
-        let now = Instant::now();
-        let mut num_tx: usize = 0;
-        // receive txs
-        while let Some(TransactionMessage(
-            tx,
-            tx_digest,
-            checkpoint_seq,
-        )) = tx_receiver.recv().await
-        {
-            ew_state
-                .execute_tx(
-                    &tx,
-                    &tx_digest,
-                    checkpoint_seq,
-                    &protocol_config,
-                    &move_vm,
-                    &epoch_data,
-                    reference_gas_price,
-                    metrics_clone.clone(),
-                )
-                .await;
+            // start timer for TPS computation
+            let now = Instant::now();
+            let mut num_tx: usize = 0;
+            // receive txs
+            while let Some(TransactionMessage(
+                tx,
+                tx_digest,
+                checkpoint_seq,
+            )) = tx_receiver.recv().await
+            {
+                ew_state
+                    .execute_tx(
+                        &tx,
+                        &tx_digest,
+                        checkpoint_seq,
+                        &protocol_config,
+                        &move_vm,
+                        &epoch_data,
+                        reference_gas_price,
+                        metrics_clone.clone(),
+                    )
+                    .await;
 
-            num_tx += 1;
-            if checkpoint_seq % 10000 == 0 {
-                println!("Executed {}", checkpoint_seq);
+                num_tx += 1;
+                if checkpoint_seq % 10000 == 0 {
+                    println!("Executed {}", checkpoint_seq);
+                }
+
+                if let TransactionKind::ChangeEpoch(_) = tx.data().transaction_data().kind() {
+                    // First send end of epoch message to sequence worker
+                    println!("END OF EPOCH at checkpoint {}", checkpoint_seq);
+                    let latest_state = get_sui_system_state(&&ew_state.memory_store)
+                        .expect("Read Sui System State object cannot fail");
+                    let new_epoch_start_state = latest_state.into_epoch_start_state();
+                    epoch_end_sender
+                        .send(EpochEndMessage(
+                            new_epoch_start_state,
+                        ))
+                        .await
+                        .expect("Sending doesn't work");
+
+                    // Then wait for start epoch message from sequence worker and update local state
+                    let EpochStartMessage(
+                        protocol_config_,
+                        epoch_data_,
+                        reference_gas_price_,
+                    ) = epoch_start_receiver.recv().await.unwrap();
+                    move_vm = Arc::new(
+                        adapter::new_move_vm(native_functions.clone(), &protocol_config, false)
+                            .expect("We defined natives to not fail here"),
+                    );
+                    protocol_config = protocol_config_;
+                    epoch_data = epoch_data_;
+                    reference_gas_price = reference_gas_price_;
+                }
+
+                // Stop executing when I hit the watermark
+                if checkpoint_seq == watermark-1 {
+                    break;
+                }
             }
 
-            if let TransactionKind::ChangeEpoch(_) = tx.data().transaction_data().kind() {
-                // First send end of epoch message to sequence worker
-                println!("END OF EPOCH at checkpoint {}", checkpoint_seq);
-                let latest_state = get_sui_system_state(&&ew_state.memory_store)
-                    .expect("Read Sui System State object cannot fail");
-                let new_epoch_start_state = latest_state.into_epoch_start_state();
-                epoch_end_sender
-                    .send(EpochEndMessage(
-                        new_epoch_start_state,
-                    ))
-                    .await
-                    .expect("Sending doesn't work");
+            // print TPS
+            let elapsed = now.elapsed();
+            println!(
+                "Execution worker TPS: {}",
+                1000.0 * num_tx as f64 / elapsed.as_millis() as f64
+            );
+            println!("Execution worker finished");
+        }));
+    }
 
-                // Then wait for start epoch message from sequence worker and update local state
-                let EpochStartMessage(
-                    protocol_config_,
-                    epoch_data_,
-                    reference_gas_price_,
-                ) = epoch_start_receiver.recv().await.unwrap();
-                move_vm = Arc::new(
-                    adapter::new_move_vm(native_functions.clone(), &protocol_config, false)
-                        .expect("We defined natives to not fail here"),
-                );
-                protocol_config = protocol_config_;
-                epoch_data = epoch_data_;
-                reference_gas_price = reference_gas_price_;
-            }
-        }
-
-        // print TPS
-        let elapsed = now.elapsed();
-        println!(
-            "Execution worker TPS: {}",
-            1000.0 * num_tx as f64 / elapsed.as_millis() as f64
-        );
-        println!("Execution worker finished");
-    });
-
-    // wait for SIGINT on the main thread
-    match signal::ctrl_c().await {
-        Ok(()) => {}
-        Err(err) => {
-            eprintln!("Unable to listen for shutdown signal: {}", err);
-            // we also shut down in case of error
-        }
+    sw_handler.await.expect("sw failed");
+    if let Some(ew_handler) = ew_handler_opt {
+        ew_handler.await.expect("ew failed");
     }
 }
