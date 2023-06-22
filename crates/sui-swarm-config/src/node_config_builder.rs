@@ -19,6 +19,7 @@ use sui_config::{
     local_ip_utils, ConsensusConfig, NodeConfig, AUTHORITIES_DB_NAME, CONSENSUS_DB_NAME,
     FULL_NODE_DB_PATH,
 };
+use sui_macros::nondeterministic;
 use sui_protocol_config::SupportedProtocolVersions;
 use sui_types::crypto::{AuthorityKeyPair, AuthorityPublicKeyBytes, NetworkKeyPair, SuiKeyPair};
 use sui_types::multiaddr::Multiaddr;
@@ -65,7 +66,7 @@ impl ValidatorConfigBuilder {
         let key_path = get_key_path(&validator.key_pair);
         let config_directory = self
             .config_directory
-            .unwrap_or_else(|| tempfile::tempdir().unwrap().into_path());
+            .unwrap_or_else(|| nondeterministic!(tempfile::tempdir().unwrap().into_path()));
         let db_path = config_directory
             .join(AUTHORITIES_DB_NAME)
             .join(key_path.clone());
@@ -289,7 +290,7 @@ impl FullnodeConfigBuilder {
         let key_path = get_key_path(&validator_config.key_pair);
         let config_directory = self
             .config_directory
-            .unwrap_or_else(|| tempfile::tempdir().unwrap().into_path());
+            .unwrap_or_else(|| nondeterministic!(tempfile::tempdir().unwrap().into_path()));
 
         let p2p_config = {
             let seed_peers = network_config

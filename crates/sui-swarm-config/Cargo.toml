@@ -35,6 +35,7 @@ sui-storage = { path = "../sui-storage" }
 sui-types = { path = "../sui-types" }
 sui-genesis-builder = { path = "../sui-genesis-builder" }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
+sui-macros = { path = "../sui-macros" }
 
 [target.'cfg(msim)'.dependencies]
 sui-simulator = { path = "../sui-simulator" }

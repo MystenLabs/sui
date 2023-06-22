@@ -9,6 +9,7 @@ use std::time::Duration;
 use sui_config::NodeConfig;
 use sui_core::authority_client::AuthorityAPI;
 use sui_core::authority_client::NetworkAuthorityClient;
+use sui_macros::nondeterministic;
 pub use sui_node::{SuiNode, SuiNodeHandle};
 use sui_swarm_config::network_config::NetworkConfig;
 use sui_swarm_config::network_config_builder::ConfigBuilder;
@@ -29,7 +30,7 @@ pub fn test_authority_configs() -> NetworkConfig {
 }
 
 pub fn test_and_configure_authority_configs(committee_size: usize) -> NetworkConfig {
-    let config_dir = tempfile::tempdir().unwrap().into_path();
+    let config_dir = nondeterministic!(tempfile::tempdir().unwrap().into_path());
     let rng = StdRng::from_seed([0; 32]);
     let mut configs = ConfigBuilder::new(config_dir)
         .committee_size(NonZeroUsize::new(committee_size).unwrap())
@@ -58,7 +59,7 @@ pub fn test_and_configure_authority_configs_with_objects<I: IntoIterator<Item = 
     committee_size: usize,
     objects: I,
 ) -> (NetworkConfig, Vec<Object>) {
-    let config_dir = tempfile::tempdir().unwrap().into_path();
+    let config_dir = nondeterministic!(tempfile::tempdir().unwrap().into_path());
     let rng = StdRng::from_seed([0; 32]);
     let mut configs = ConfigBuilder::new(&config_dir)
         .rng(rng)

@@ -28,6 +28,7 @@ sui-move-build = { path = "../sui-move-build" }
 sui-node = { path = "../sui-node" }
 sui-protocol-config = { path = "../sui-protocol-config" }
 sui-swarm = { path = "../sui-swarm" }
+sui-macros = { path = "../sui-macros" }
 sui-types = { path = "../sui-types", features = ["test-utils"] }
 sui-keys = { path = "../sui-keys" }
 sui-sdk = { path = "../sui-sdk" }
@@ -42,6 +43,3 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [target.'cfg(msim)'.dependencies]
 sui-simulator = { path = "../sui-simulator" }
-
-[dev-dependencies]
-sui-macros = { path = "../sui-macros" }
