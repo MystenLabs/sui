@@ -1357,11 +1357,10 @@ impl AuthorityState {
         Ok((
             DryRunTransactionBlockResponse {
                 input: SuiTransactionBlockData::try_from(transaction.clone(), &module_cache)
-                    .map_err(|e| SuiError::TransactionSerializationError {
-                        error: format!(
-                            "Failed to convert transaction to SuiTransactionBlockData: {}",
-                            e
-                        ),
+                    .map_err(|e| SuiError::ConversionError {
+                        input_type: "transaction".to_string(),
+                        output_type: "SuiTransactionBlockData".to_string(),
+                        error: e.to_string(),
                     })?, // TODO: replace the underlying try_from to SuiError. This one goes deep
                 effects: effects.clone().try_into()?,
                 events: SuiTransactionBlockEvents::try_from(
@@ -1679,7 +1678,8 @@ impl AuthorityState {
         let name_type = move_object.type_().try_extract_field_name(&type_)?;
 
         let bcs_name = bcs::to_bytes(&name_value.clone().undecorate()).map_err(|e| {
-            SuiError::ObjectSerializationError {
+            SuiError::SerializationError {
+                input_type: "object".to_string(),
                 error: format!("{e}"),
             }
         })?;
@@ -2381,7 +2381,8 @@ impl AuthorityState {
         let o = self.get_object_read(object_id)?.into_object()?;
         if let Some(move_object) = o.data.try_as_move() {
             Ok(bcs::from_bytes(move_object.contents()).map_err(|e| {
-                SuiError::ObjectDeserializationError {
+                SuiError::DeserializationError {
+                    input_type: "object".to_string(),
                     error: format!("{e}"),
                 }
             })?)
@@ -2577,7 +2578,8 @@ impl AuthorityState {
                 SuiError::from(UserInputError::MovePackageAsObject { object_id: id.0 })
             })?;
             move_objects.push(bcs::from_bytes(move_object.contents()).map_err(|e| {
-                SuiError::ObjectDeserializationError {
+                SuiError::DeserializationError {
+                    input_type: "object".to_string(),
                     error: format!("{e}"),
                 }
             })?);

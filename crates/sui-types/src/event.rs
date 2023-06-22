@@ -134,7 +134,8 @@ impl Event {
             resolver,
         )?;
         MoveStruct::simple_deserialize(contents, &layout).map_err(|e| {
-            SuiError::ObjectSerializationError {
+            SuiError::SerializationError {
+                input_type: "object".to_string(),
                 error: e.to_string(),
             }
         })

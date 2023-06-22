@@ -5,7 +5,7 @@ use fastcrypto::error::FastCryptoError;
 use hyper::header::InvalidHeaderValue;
 use jsonrpsee::core::Error as RpcError;
 use jsonrpsee::types::error::CallError;
-use jsonrpsee::types::{ErrorObject, ErrorObjectOwned};
+use jsonrpsee::types::ErrorObject;
 use sui_types::error::{SuiError, SuiObjectResponseError, UserInputError};
 use sui_types::quorum_driver_types::QuorumDriverError;
 use thiserror::Error;
@@ -136,21 +136,22 @@ pub enum SuiRpcInputError {
 * TypeError
 * ModuleDeserializationFailure
 * FailObjectLayout
-* DynamicFieldReadError
 * SuiSystemStateReadError
 * ObjectDeserializationError
 
 */
 
 /*
- * Depends on where this happens. This error enum to be used when error stems from us trying to deserialize something
- * ServerDeserializationError
- * ModuleDeserializationFailure
- * FailObjectLayout
- * DynamicFieldReadError
- * SuiSystemStateReadError
- * ObjectDeserializationError
- */
+* Depends on where this happens. This error enum to be used when error stems from us trying to deserialize something
+* ServerDeserializationError
+* ModuleDeserializationFailure
+* FailObjectLayout
+
+* ObjectDeserializationError
+*/
+
+#[derive(Debug, Error)]
+pub enum ServerDeserializationError {}
 
 pub fn match_sui_error(sui_error: SuiError) -> RpcError {
     match sui_error {
@@ -190,8 +191,6 @@ pub fn match_sui_error(sui_error: SuiError) -> RpcError {
         | SuiError::TransactionEventsNotFound { .. }
         | SuiError::TransactionAlreadyExecuted { .. }
         | SuiError::InvalidChildObjectAccess { .. }
-        | SuiError::TransactionSerializationError { .. }
-        | SuiError::ObjectSerializationError { .. }
         | SuiError::UnexpectedVersion { .. }
         | SuiError::WrongMessageVersion { .. }
         | SuiError::FullNodeCantHandleCertificate
@@ -213,6 +212,7 @@ pub fn match_sui_error(sui_error: SuiError) -> RpcError {
         | SuiError::FileIOError { .. }
         | SuiError::JWKRetrievalError
         | SuiError::ExecutionInvariantViolation
+        | SuiError::SuiSystemStateReadError(_)
         | SuiError::Unknown { .. } => to_internal_error(sui_error),
         _ => RpcError::Call(CallError::Failed(sui_error.into())),
     }

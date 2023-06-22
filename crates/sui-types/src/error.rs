@@ -98,6 +98,17 @@ pub enum UserInputError {
         object_id: ObjectID,
         version: Option<SequenceNumber>,
     },
+    #[error(
+        "Could not find the dynamic field object {:?} with key {:?} on parent {:?}",
+        id,
+        key,
+        parent_id
+    )]
+    DynamicFieldObjectNotFound {
+        id: ObjectID,
+        key: String,
+        parent_id: ObjectID,
+    },
     #[error("Object {provided_obj_ref:?} is not available for consumption, its current version: {current_version:?}.")]
     ObjectVersionUnavailableForConsumption {
         provided_obj_ref: ObjectRef,
@@ -447,12 +458,22 @@ pub enum SuiError {
     TransactionOrchestratorLocalExecutionError { error: String },
 
     // Errors returned by authority and client read API's
-    #[error("Failure serializing transaction in the requested format: {:?}", error)]
-    TransactionSerializationError { error: String },
-    #[error("Failure serializing object in the requested format: {:?}", error)]
-    ObjectSerializationError { error: String },
-    #[error("Failure deserializing object in the requested format: {:?}", error)]
-    ObjectDeserializationError { error: String },
+    #[error(
+        "Failed to serialize {input_type} in the requested format: {:?}",
+        error
+    )]
+    SerializationError { input_type: String, error: String },
+    #[error(
+        "Failed to deserialize {input_type} in the requested format: {:?}",
+        error
+    )]
+    DeserializationError { input_type: String, error: String },
+    #[error("Failed to convert {input_type} to {output_type}: {:?}", error)]
+    ConversionError {
+        input_type: String,
+        output_type: String,
+        error: String,
+    },
 
     // Client side error
     #[error("Too many authority errors were detected for {}: {:?}", action, errors)]
@@ -519,9 +540,6 @@ pub enum SuiError {
 
     #[error("Index store not available on this Fullnode.")]
     IndexStoreNotAvailable,
-
-    #[error("Failed to read dynamic field from table in the object store: {0}")]
-    DynamicFieldReadError(String),
 
     #[error("Failed to read or deserialize system state related data structures on-chain: {0}")]
     SuiSystemStateReadError(String),

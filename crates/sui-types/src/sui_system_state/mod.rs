@@ -244,7 +244,7 @@ pub fn get_sui_system_state(object_store: &dyn ObjectStore) -> Result<SuiSystemS
             let result: SuiSystemStateInnerV1 =
                 get_dynamic_field_from_store(object_store, id, &wrapper.version).map_err(
                     |err| {
-                        SuiError::DynamicFieldReadError(format!(
+                        SuiError::SuiSystemStateReadError(format!(
                             "Failed to load sui system state inner object with ID {:?} and version {:?}: {:?}",
                             id, wrapper.version, err
                         ))
@@ -256,7 +256,7 @@ pub fn get_sui_system_state(object_store: &dyn ObjectStore) -> Result<SuiSystemS
             let result: SuiSystemStateInnerV2 =
                 get_dynamic_field_from_store(object_store, id, &wrapper.version).map_err(
                     |err| {
-                        SuiError::DynamicFieldReadError(format!(
+                        SuiError::SuiSystemStateReadError(format!(
                             "Failed to load sui system state inner object with ID {:?} and version {:?}: {:?}",
                             id, wrapper.version, err
                         ))
@@ -269,7 +269,7 @@ pub fn get_sui_system_state(object_store: &dyn ObjectStore) -> Result<SuiSystemS
             let result: SimTestSuiSystemStateInnerV1 =
                 get_dynamic_field_from_store(object_store, id, &wrapper.version).map_err(
                     |err| {
-                        SuiError::DynamicFieldReadError(format!(
+                        SuiError::SuiSystemStateReadError(format!(
                             "Failed to load sui system state inner object with ID {:?} and version {:?}: {:?}",
                             id, wrapper.version, err
                         ))
@@ -282,7 +282,7 @@ pub fn get_sui_system_state(object_store: &dyn ObjectStore) -> Result<SuiSystemS
             let result: SimTestSuiSystemStateInnerShallowV2 =
                 get_dynamic_field_from_store(object_store, id, &wrapper.version).map_err(
                     |err| {
-                        SuiError::DynamicFieldReadError(format!(
+                        SuiError::SuiSystemStateReadError(format!(
                             "Failed to load sui system state inner object with ID {:?} and version {:?}: {:?}",
                             id, wrapper.version, err
                         ))
@@ -295,7 +295,7 @@ pub fn get_sui_system_state(object_store: &dyn ObjectStore) -> Result<SuiSystemS
             let result: SimTestSuiSystemStateInnerDeepV2 =
                 get_dynamic_field_from_store(object_store, id, &wrapper.version).map_err(
                     |err| {
-                        SuiError::DynamicFieldReadError(format!(
+                        SuiError::SuiSystemStateReadError(format!(
                             "Failed to load sui system state inner object with ID {:?} and version {:?}: {:?}",
                             id, wrapper.version, err
                         ))

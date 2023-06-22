@@ -292,7 +292,7 @@ impl MoveObject {
 
     /// Get a `MoveStructLayout` for `self`.
     /// The `resolver` value must contain the module that declares `self.type_` and the (transitive)
-    /// dependencies of `self.type_` in order for this to succeed. Failure will result in an `ObjectSerializationError`
+    /// dependencies of `self.type_` in order for this to succeed. Failure will result in a `SerializationError`
     pub fn get_layout(
         &self,
         format: ObjectFormatOptions,
@@ -312,7 +312,8 @@ impl MoveObject {
         } else {
             TypeLayoutBuilder::build_with_fields(&type_, resolver)
         }
-        .map_err(|e| SuiError::ObjectSerializationError {
+        .map_err(|e| SuiError::SerializationError {
+            input_type: "object".to_string(),
             error: e.to_string(),
         })?;
         match layout {
@@ -326,7 +327,8 @@ impl MoveObject {
     /// Convert `self` to the JSON representation dictated by `layout`.
     pub fn to_move_struct(&self, layout: &MoveStructLayout) -> Result<MoveStruct, SuiError> {
         MoveStruct::simple_deserialize(&self.contents, layout).map_err(|e| {
-            SuiError::ObjectSerializationError {
+            SuiError::SerializationError {
+                input_type: "object".to_string(),
                 error: e.to_string(),
             }
         })
@@ -795,7 +797,7 @@ impl Object {
 
     /// Get a `MoveStructLayout` for `self`.
     /// The `resolver` value must contain the module that declares `self.type_` and the (transitive)
-    /// dependencies of `self.type_` in order for this to succeed. Failure will result in an `ObjectSerializationError`
+    /// dependencies of `self.type_` in order for this to succeed. Failure will result in a `SerializationError`
     pub fn get_layout(
         &self,
         format: ObjectFormatOptions,
