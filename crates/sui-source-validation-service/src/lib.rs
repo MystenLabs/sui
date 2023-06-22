@@ -85,39 +85,38 @@ impl CloneCommand {
 	};
         let dest = dest.join(repo_name).into_os_string();
 
-        macro_rules! append {
-            ($args:ident, $arg:expr) => {
-                $args.push(OsString::from($arg));
+        macro_rules! ostr {
+            ($arg:expr) => {
+                OsString::from($arg)
             };
         }
 
         let mut args = vec![];
         // Args to clone empty repository
-        let mut cmd_args: Vec<OsString> = vec![];
-        append!(cmd_args, "clone");
-        append!(cmd_args, "-n");
-        append!(cmd_args, "--depth=1");
-        append!(cmd_args, "--filter=tree:0");
-        append!(cmd_args, &p.repository);
-        append!(cmd_args, dest.clone());
+        let cmd_args: Vec<OsString> = vec![
+            ostr!("clone"),
+            ostr!("-n"),
+            ostr!("--depth=1"),
+            ostr!("--filter=tree:0"),
+            ostr!(&p.repository),
+            dest.clone(),
+        ];
         args.push(cmd_args);
 
         // Args to sparse checkout the package set
-        let mut cmd_args: Vec<OsString> = vec![];
-        append!(cmd_args, "-C");
-        append!(cmd_args, dest.clone());
-        append!(cmd_args, "sparse-checkout");
-        append!(cmd_args, "set");
-        append!(cmd_args, "--no-cone");
-        let path_args: Vec<OsString> = p.paths.iter().map(|s| OsString::from(s)).collect();
+        let mut cmd_args: Vec<OsString> = vec![
+            ostr!("-C"),
+            dest.clone(),
+            ostr!("sparse-checkout"),
+            ostr!("set"),
+            ostr!("--no-cone"),
+        ];
+        let path_args: Vec<OsString> = p.paths.iter().map(OsString::from).collect();
         cmd_args.extend_from_slice(&path_args);
         args.push(cmd_args);
 
         // Args to checkout the default branch.
-        let mut cmd_args: Vec<OsString> = vec![];
-        append!(cmd_args, "-C");
-        append!(cmd_args, dest);
-        append!(cmd_args, "checkout");
+        let cmd_args: Vec<OsString> = vec![ostr!("-C"), dest, ostr!("checkout")];
         args.push(cmd_args);
 
         Ok(Self {
