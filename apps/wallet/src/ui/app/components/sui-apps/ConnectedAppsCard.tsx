@@ -5,6 +5,7 @@ import { useFeature } from '@growthbook/growthbook-react';
 import cl from 'classnames';
 import { useEffect, useMemo } from 'react';
 
+import { useActiveAddress } from '../../hooks/useActiveAddress';
 import { useBackgroundClient } from '../../hooks/useBackgroundClient';
 import { permissionsSelectors } from '../../redux/slices/permissions';
 import Loading from '../loading';
@@ -28,10 +29,11 @@ function ConnectedDapps() {
 	const ecosystemApps = useFeature<DAppEntry[]>(FEATURES.WALLET_DAPPS).value ?? emptyArray;
 	const loading = useAppSelector(({ permissions }) => !permissions.initialized);
 	const allPermissions = useAppSelector(permissionsSelectors.selectAll);
+	const activeAddress = useActiveAddress();
 	const connectedApps = useMemo(
 		() =>
 			allPermissions
-				.filter(({ allowed }) => allowed)
+				.filter(({ allowed, accounts }) => allowed && accounts.includes(activeAddress!))
 				.map((aPermission) => {
 					const matchedEcosystemApp = ecosystemApps.find((anEcosystemApp) => {
 						const originAdj = prepareLinkToCompare(aPermission.origin);
@@ -60,7 +62,7 @@ function ConnectedDapps() {
 						permissionID: aPermission.id,
 					};
 				}),
-		[allPermissions, ecosystemApps],
+		[activeAddress, allPermissions, ecosystemApps],
 	);
 	return (
 		<Loading loading={loading}>
