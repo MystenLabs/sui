@@ -14,7 +14,11 @@ use sui_types::object::Owner;
 use sui_types::transaction::{SenderSignedData, TransactionDataAPI};
 
 use crate::errors::IndexerError;
-use crate::models::transaction_index::{InputObject, MoveCall, Recipient};
+use crate::models::transaction_index::{ChangedObject, InputObject, MoveCall, Recipient};
+
+const CREATED_OBJECT_CHANGE_TYPE: &str = "created";
+const MUTATED_OBJECT_CHANGE_TYPE: &str = "mutated";
+const UNWRAPPED_OBJECT_CHANGE_TYPE: &str = "unwrapped";
 
 pub struct FastPathTransactionBlockResponse {
     pub digest: TransactionDigest,
@@ -222,7 +226,38 @@ impl CheckpointTransactionBlockResponse {
         Ok(input_objects)
     }
 
-    pub fn get_move_calls(&self, epoch: u64, checkpoint: u64) -> Vec<MoveCall> {
+    pub fn get_changed_objects(&self, epoch: u64) -> Vec<ChangedObject> {
+        let created = self
+            .effects
+            .created()
+            .iter()
+            .map(|o| (o, CREATED_OBJECT_CHANGE_TYPE));
+        let mutated = self
+            .effects
+            .mutated()
+            .iter()
+            .map(|o| (o, MUTATED_OBJECT_CHANGE_TYPE));
+        let unwrapped = self
+            .effects
+            .unwrapped()
+            .iter()
+            .map(|o| (o, UNWRAPPED_OBJECT_CHANGE_TYPE));
+        created
+            .chain(mutated)
+            .chain(unwrapped)
+            .map(|(obj_ref, change_type)| ChangedObject {
+                id: None,
+                transaction_digest: self.digest.to_string(),
+                checkpoint_sequence_number: self.checkpoint as i64,
+                epoch: epoch as i64,
+                object_id: obj_ref.reference.object_id.to_string(),
+                object_change_type: change_type.to_string(),
+                object_version: obj_ref.reference.version.value() as i64,
+            })
+            .collect()
+    }
+
+    pub fn get_move_calls(&self, epoch: u64) -> Vec<MoveCall> {
         let tx_kind = self.transaction.data.transaction();
         let sender = self.transaction.data.sender();
         match tx_kind {
@@ -235,7 +270,7 @@ impl CheckpointTransactionBlockResponse {
                         SuiCommand::MoveCall(m) => Some(MoveCall {
                             id: None,
                             transaction_digest: self.digest.to_string(),
-                            checkpoint_sequence_number: checkpoint as i64,
+                            checkpoint_sequence_number: self.checkpoint as i64,
                             epoch: epoch as i64,
                             sender: sender.to_string(),
                             move_package: m.package.to_string(),
@@ -252,7 +287,7 @@ impl CheckpointTransactionBlockResponse {
         .unwrap_or_default()
     }
 
-    pub fn get_recipients(&self, epoch: u64, checkpoint: u64) -> Vec<Recipient> {
+    pub fn get_recipients(&self, epoch: u64) -> Vec<Recipient> {
         let created = self.effects.created().iter();
         let mutated = self.effects.mutated().iter();
         let unwrapped = self.effects.unwrapped().iter();
@@ -267,7 +302,7 @@ impl CheckpointTransactionBlockResponse {
             .map(|recipient| Recipient {
                 id: None,
                 transaction_digest: self.digest.to_string(),
-                checkpoint_sequence_number: checkpoint as i64,
+                checkpoint_sequence_number: self.checkpoint as i64,
                 epoch: epoch as i64,
                 sender: self.transaction.data.sender().to_string(),
                 recipient,
