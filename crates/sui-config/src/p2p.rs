@@ -225,6 +225,14 @@ impl StateSyncConfig {
     }
 }
 
+/// Access Type of a node.
+/// AccessType info is shared in the discovery process.
+/// * If the node marks itself as Public, other nodes may try to connect to it.
+/// * If the node marks itself as Private, only nodes that have it in
+///     their `allowlisted_peers` or `seed_peers` will try to connect to it.
+/// * If not set, defaults to Public.
+/// AccessType is useful when a network of nodes want to stay private. To achieve this,
+/// mark every node in this network as `Private` and allowlist/seed them to each other.
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum AccessType {
     Public,
@@ -261,10 +269,7 @@ pub struct DiscoveryConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub get_known_peers_rate_limit: Option<NonZeroU32>,
 
-    /// Access Type of this node.
-    /// If the node is Public, anyone could access it.
-    /// If the node is Private, only preferred/allowlisted peers could access it.
-    /// If not set, defaults to Public.
+    /// See docstring for `AccessType`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub access_type: Option<AccessType>,
 
@@ -301,9 +306,6 @@ impl DiscoveryConfig {
 
     pub fn access_type(&self) -> AccessType {
         // defaults None to Public
-        match self.access_type {
-            Some(AccessType::Private) => AccessType::Private,
-            _ => AccessType::Public,
-        }
+        self.access_type.unwrap_or(AccessType::Public)
     }
 }

@@ -60,9 +60,7 @@ pub struct NodeInfo {
     /// This is used to determine which of two NodeInfo's from the same PeerId should be retained.
     pub timestamp_ms: u64,
 
-    /// Access Type of this node.
-    /// If the node is Public, anyone could access it.
-    /// If the node is Private, only preferred/allowlisted peers could access it.
+    /// See docstring for `AccessType`.
     pub access_type: AccessType,
 }
 
