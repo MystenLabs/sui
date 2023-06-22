@@ -4,9 +4,9 @@ use std::sync::Arc;
 use sui_adapter::adapter;
 use sui_config::{Config, NodeConfig};
 use sui_core::authority::epoch_start_configuration::EpochStartConfiguration;
-use sui_distributed_execution::EpochEndMessage;
-use sui_distributed_execution::ExecutionWorkerState;
-use sui_distributed_execution::SequenceWorkerState;
+use sui_distributed_execution::seqn_worker;
+use sui_distributed_execution::exec_worker;
+use sui_distributed_execution::types::*;
 use sui_move_natives;
 use sui_protocol_config::ProtocolConfig;
 use sui_types::epoch_data::EpochData;
@@ -62,9 +62,9 @@ async fn main() {
     let args = Args::parse();
     let config = NodeConfig::load(&args.config_path).unwrap();
     let genesis = Arc::new(config.genesis().expect("Could not load genesis"));
-    let mut sw_state = SequenceWorkerState::new(&config).await;
+    let mut sw_state = seqn_worker::SequenceWorkerState::new(&config).await;
     let metrics_clone = sw_state.metrics.clone();
-    let mut ew_state = ExecutionWorkerState::new();
+    let mut ew_state = exec_worker::ExecutionWorkerState::new();
     ew_state.init_store(&genesis);
 
     let (epoch_start_sender, mut epoch_start_receiver) = mpsc::channel(32);
@@ -87,7 +87,7 @@ async fn main() {
 
         // Epoch Start
         epoch_start_sender
-            .send(sui_distributed_execution::EpochStartMessage(
+            .send(EpochStartMessage(
                 protocol_config.clone(),
                 epoch_start_config.epoch_data(),
                 reference_gas_price,
@@ -129,7 +129,7 @@ async fn main() {
                     .expect("Transaction exists");
 
                 tx_sender
-                    .send(sui_distributed_execution::TransactionMessage(
+                    .send(TransactionMessage(
                         tx.clone(),
                         tx_digest.clone(),
                         checkpoint_seq,
@@ -176,7 +176,7 @@ async fn main() {
                     let epoch_start_config = sw_state.epoch_store.epoch_start_config();
                     let reference_gas_price = sw_state.epoch_store.reference_gas_price();
                     epoch_start_sender
-                        .send(sui_distributed_execution::EpochStartMessage(
+                        .send(EpochStartMessage(
                             protocol_config.clone(),
                             epoch_start_config.epoch_data(),
                             reference_gas_price,
@@ -195,7 +195,7 @@ async fn main() {
         let mut protocol_config: ProtocolConfig;
         let mut reference_gas_price: u64;
         // Wait for epoch start message
-        let sui_distributed_execution::EpochStartMessage(
+        let EpochStartMessage(
             protocol_config_,
             epoch_data_,
             reference_gas_price_,
@@ -216,7 +216,7 @@ async fn main() {
         let now = Instant::now();
         let mut num_tx: usize = 0;
         // receive txs
-        while let Some(sui_distributed_execution::TransactionMessage(
+        while let Some(TransactionMessage(
             tx,
             tx_digest,
             checkpoint_seq,
@@ -247,14 +247,14 @@ async fn main() {
                     .expect("Read Sui System State object cannot fail");
                 let new_epoch_start_state = latest_state.into_epoch_start_state();
                 epoch_end_sender
-                    .send(sui_distributed_execution::EpochEndMessage(
+                    .send(EpochEndMessage(
                         new_epoch_start_state,
                     ))
                     .await
                     .expect("Sending doesn't work");
 
                 // Then wait for start epoch message from sequence worker and update local state
-                let sui_distributed_execution::EpochStartMessage(
+                let EpochStartMessage(
                     protocol_config_,
                     epoch_data_,
                     reference_gas_price_,

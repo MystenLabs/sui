@@ -3,7 +3,8 @@ use std::path::PathBuf;
 use std::time::Instant;
 use sui_config::{Config, NodeConfig};
 use sui_core::authority::epoch_start_configuration::EpochStartConfiguration;
-use sui_distributed_execution::{ExecutionWorkerState, SequenceWorkerState};
+use sui_distributed_execution::seqn_worker;
+use sui_distributed_execution::exec_worker;
 use sui_types::multiaddr::Multiaddr;
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
 use sui_types::sui_system_state::get_sui_system_state;
@@ -51,16 +52,15 @@ async fn main() {
     let args = Args::parse();
     let config = NodeConfig::load(&args.config_path).unwrap();
     let genesis = config.genesis().expect("Could not load genesis");
-    let mut sw_state = SequenceWorkerState::new(&config).await;
+    let mut sw_state = seqn_worker::SequenceWorkerState::new(&config).await;
 
     if let Some(watermark) = args.download {
         sw_state.handle_download(watermark, &config).await;
     }
 
     if args.execute {
-        let mut ew_state = ExecutionWorkerState::new();
+        let mut ew_state = exec_worker::ExecutionWorkerState::new();
         ew_state.init_store(genesis);
-        // let mut memory_store = MemoryBackedStore::new();
 
         let mut protocol_config = sw_state.epoch_store.protocol_config();
         let mut move_vm = sw_state.epoch_store.move_vm();

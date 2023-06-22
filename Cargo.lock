@@ -9914,6 +9914,31 @@ dependencies = [
 ]
 
 [[package]]
+name = "sui-distributed-execution"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap 3.2.25",
+ "const-str",
+ "futures",
+ "git-version",
+ "move-binary-format",
+ "move-bytecode-utils",
+ "move-core-types",
+ "prometheus",
+ "sui-adapter",
+ "sui-config",
+ "sui-core",
+ "sui-move-natives",
+ "sui-node",
+ "sui-protocol-config",
+ "sui-types",
+ "tokio",
+ "tracing",
+ "typed-store",
+]
+
+[[package]]
 name = "sui-faucet"
 version = "1.1.1"
 dependencies = [
@@ -10626,26 +10651,6 @@ dependencies = [
  "tokio",
  "tracing",
  "workspace-hack",
-]
-
-[[package]]
-name = "sui-simple-fullnode"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "clap 3.2.25",
- "const-str",
- "git-version",
- "move-binary-format",
- "move-bytecode-utils",
- "move-core-types",
- "sui-adapter",
- "sui-config",
- "sui-core",
- "sui-node",
- "sui-types",
- "tokio",
- "typed-store",
 ]
 
 [[package]]
