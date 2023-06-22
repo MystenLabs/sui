@@ -11,6 +11,7 @@ use std::{
 use actix_web::{dev::Server, web, App, HttpRequest, HttpServer, Responder};
 use anyhow::{anyhow, bail};
 use serde::Deserialize;
+use tracing::info;
 use url::Url;
 
 use move_package::BuildConfig as MoveBuildConfig;
@@ -153,6 +154,7 @@ pub async fn clone_repositories(config: &Config, dir: &Path) -> anyhow::Result<(
     let mut tasks = vec![];
     for p in &config.packages {
         let command = CloneCommand::new(p, dir)?;
+        info!("cloning {} to {}", &p.repository, dir.display());
         let t = tokio::spawn(async move { command.run().await });
         tasks.push(t);
     }
