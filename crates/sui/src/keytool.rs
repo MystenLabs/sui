@@ -43,9 +43,6 @@ use sui_types::signature::GenericSignature;
 use sui_types::transaction::TransactionData;
 use sui_types::zk_login_authenticator::ZkLoginAuthenticator;
 use sui_types::zk_login_util::AddressParams;
-use tabled::builder::Builder;
-use tabled::settings::Rotate;
-use tabled::settings::{object::Rows, Modify, Width};
 use tracing::info;
 
 #[cfg(test)]
@@ -463,7 +460,7 @@ impl KeyToolCommand {
 
                     CommandOutput::Import(Key {
                         sui_address: sui_address.to_string(),
-                        public_base64_key: pk.encode_base64(),
+                        public_base64_key: pk.public().encode_base64(),
                         key_scheme: scheme,
                         mnemonic: None,
                         flag: pk.public().flag(),
@@ -922,50 +919,13 @@ pub enum CommandOutput {
 
 impl Display for CommandOutput {
     fn fmt(&self, formatter: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            // Sign needs to be manually built because we need to wrap the very long rawTxData string and rawIntentMsg strings into some table length, which we cannot do with a JsonTable
-            CommandOutput::Sign(data) => {
-                // let mut table = Table::new(vec![data]);
-                // table.with(Rotate::Left);
-                // table.with(tabled::settings::Style::rounded().horizontals([]));
-                // table.with(Modify::new(Rows::new(0..)).with(Width::wrap(160).keep_words()));
-                let intent_table = json_to_table(&json!(&data.intent))
-                    .with(tabled::settings::Style::rounded().horizontals([]))
-                    .to_string();
+        let json_obj = json![self];
+        let mut table = json_to_table(&json_obj);
+        let style = tabled::settings::Style::rounded().horizontals([]);
+        table.with(style);
+        table.array_orientation(Orientation::Column);
 
-                let mut builder = Builder::default();
-                builder
-                    .set_header([
-                        "suiSignature",
-                        "digest",
-                        "rawIntentMsg",
-                        "intent",
-                        "rawTxData",
-                        "suiAddress",
-                    ])
-                    .push_record([
-                        &data.sui_signature,
-                        &data.digest,
-                        &data.raw_intent_msg,
-                        &intent_table,
-                        &data.raw_tx_data,
-                        &data.sui_address.to_string(),
-                    ]);
-                let mut table = builder.build();
-                table.with(Rotate::Left);
-                table.with(tabled::settings::Style::rounded().horizontals([]));
-                table.with(Modify::new(Rows::new(0..)).with(Width::wrap(160).keep_words()));
-                write!(formatter, "{}", table)
-            }
-            _ => {
-                let json_obj = json![self];
-                let mut table = json_to_table(&json_obj);
-                let style = tabled::settings::Style::rounded().horizontals([]);
-                table.with(style);
-                table.array_orientation(Orientation::Column);
-                write!(formatter, "{}", table)
-            }
-        }
+        write!(formatter, "{}", table)
     }
 }
 
