@@ -148,35 +148,36 @@ impl DependencyGraph {
         // compute digests eagerly as even if we can't reuse existing lock file, they need to become
         // part of the newly computed dependency graph
         let new_manifest_digest = digest_str(manifest_string.into_bytes().as_slice());
-        let new_deps_digest = dependency_digest(
+        let new_deps_digest_opt = dependency_digest(
             root_path.clone(),
             &manifest,
             dependency_cache,
             progress_output,
         )?;
         if let Some(lock_contents) = lock_string {
-            let (manifest_digest_opt, deps_digest_opt) = schema::read_header(&lock_contents)?;
+            let schema::Header {
+                version: _,
+                manifest_digest: manifest_digest_opt,
+                deps_digest: deps_digest_opt,
+            } = schema::read_header(&lock_contents)?;
 
             // check if manifest file and dependencies haven't changed and we can use existing lock
             // file to create the dependency graph
-            if let Some(manifest_digest) = manifest_digest_opt {
-                // manifest digest exists in the lock file
-                if manifest_digest == new_manifest_digest {
-                    // manifest file hasn't changed
-                    if let Some(deps_digest) = deps_digest_opt {
-                        // dependencies digest exists in the lock file
-                        if Some(deps_digest) == new_deps_digest {
-                            // dependencies have not changed
-                            return Ok((
-                                Self::read_from_lock(
-                                    root_path,
-                                    manifest.package.name,
-                                    &mut lock_contents.as_bytes(),
-                                    None,
-                                )?,
-                                false,
-                            ));
-                        }
+            if Some(new_manifest_digest.clone()) == manifest_digest_opt {
+                // manifest file hasn't changed
+                if let Some(deps_digest) = deps_digest_opt {
+                    // dependencies digest exists in the lock file
+                    if Some(deps_digest) == new_deps_digest_opt {
+                        // dependencies have not changed
+                        return Ok((
+                            Self::read_from_lock(
+                                root_path,
+                                manifest.package.name,
+                                &mut lock_contents.as_bytes(),
+                                None,
+                            )?,
+                            false,
+                        ));
                     }
                 }
             }
@@ -191,7 +192,7 @@ impl DependencyGraph {
                 dependency_cache,
                 progress_output,
                 Some(new_manifest_digest),
-                new_deps_digest,
+                new_deps_digest_opt,
             )?,
             true,
         ))
@@ -356,7 +357,7 @@ impl DependencyGraph {
                     parent_pkg
                 )
             })?;
-            if matches!(dep, PM::Dependency::External(_)) {
+            if let PM::Dependency::External(_) = dep {
                 dep_graphs_external.insert(*dep_pkg_name, (pkg_graph, is_override));
             } else {
                 dep_graphs.insert(*dep_pkg_name, (pkg_graph, is_override));
@@ -630,18 +631,18 @@ impl DependencyGraph {
                 let (combined_pkgs, sub_pkgs) = deps_equal(sub_pkg_name, &self, &sub_graph);
                 if combined_pkgs != sub_pkgs {
                     let msg = if let Some(r) = sub_pkg.resolver {
-                        format!("When resolving external dependencies for package {},\
-                                     conflicting dependencies found for '{}' during resolution by '{}':\n{}{}",
-                                    root_package,
-                                    sub_pkg_name,
-                                    r,
-                                    format_pkgs("\nNot found:", combined_pkgs),
-                                    format_pkgs("\nNew:", sub_pkgs)
-                            )
+                        format!("When resolving external dependencies for package {}, \
+                                 conflicting dependencies found for '{}' during resolution by '{}':\n{}{}",
+                                root_package,
+                                sub_pkg_name,
+                                r,
+                                format_pkgs("\nNot found:", combined_pkgs),
+                                format_pkgs("\nNew:", sub_pkgs)
+                        )
                     } else {
                         format!(
-                            "When resolving dependencies for package {},\
-                                 conflicting dependencies found for '{}':\n{}{}",
+                            "When resolving dependencies for package {}, \
+                             conflicting dependencies found for '{}':\n{}{}",
                             root_package,
                             sub_pkg_name,
                             format_pkgs("\nNot found:", combined_pkgs),
@@ -704,11 +705,9 @@ impl DependencyGraph {
                 );
             }
             return Ok(Some(pkg));
-        } else if dev_only {
+        } else if let Some(dev_pkg) = dev_overrides.get(pkg_name) {
             // "dev" dependencies section case
-            if let Some(dev_pkg) = dev_overrides.get(pkg_name) {
-                return Ok(Some(dev_pkg));
-            }
+            return Ok(dev_only.then_some(dev_pkg));
         }
         Ok(None)
     }
@@ -816,7 +815,14 @@ impl DependencyGraph {
         let mut package_graph = DiGraphMap::new();
         let mut package_table = BTreeMap::new();
 
-        let (packages, (manifest_digest, deps_digest)) = schema::Packages::read(lock)?;
+        let (
+            packages,
+            schema::Header {
+                version: _,
+                manifest_digest,
+                deps_digest,
+            },
+        ) = schema::Packages::read(lock)?;
 
         // Ensure there's always a root node, even if it has no edges.
         package_graph.add_node(root_package);
@@ -1441,19 +1447,19 @@ fn dependency_digest<Progress: Write>(
     progress_output: &mut Progress,
 ) -> Result<Option<String>> {
     let Some(mut dep_hashes) = dependency_hashes(
-                            root_path.clone(),
-                            dependency_cache,
-                            &manifest.dependencies,
-                            progress_output,
+        root_path.clone(),
+        dependency_cache,
+        &manifest.dependencies,
+        progress_output,
     )? else {
         return Ok(None);
     };
 
     let Some(dev_dep_hashes) = dependency_hashes(
-                                root_path,
-                                dependency_cache,
-                                &manifest.dev_dependencies,
-                                progress_output,
+        root_path,
+        dependency_cache,
+        &manifest.dev_dependencies,
+        progress_output,
     )? else {
         return Ok(None);
     };

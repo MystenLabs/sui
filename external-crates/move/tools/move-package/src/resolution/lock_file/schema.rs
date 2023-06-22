@@ -61,24 +61,24 @@ pub struct Dependency {
 }
 
 #[derive(Serialize, Deserialize)]
+pub struct Header {
+    pub version: u64,
+    /// A hash of the manifest file content this lock file was generated from, if any.
+    pub manifest_digest: Option<String>,
+    /// A hash of all the dependencies (their lock file content) this lock file depends on, if any.
+    pub deps_digest: Option<String>,
+}
+
+#[derive(Serialize, Deserialize)]
 struct Schema<T> {
     #[serde(rename = "move")]
     move_: T,
 }
 
-#[derive(Serialize, Deserialize)]
-struct Header {
-    version: u64,
-    /// A hash of the manifest file content this lock file was generated from, if any.
-    manifest_digest: Option<String>,
-    /// A hash of all the dependencies (their lock file content) this lock file depends on, if any.
-    deps_digest: Option<String>,
-}
-
 impl Packages {
     /// Read packages from the lock file, assuming the file's format matches the schema expected
     /// by this lock file, and its version is not newer than the version supported by this library.
-    pub fn read(lock: &mut impl Read) -> Result<(Packages, (Option<String>, Option<String>))> {
+    pub fn read(lock: &mut impl Read) -> Result<(Packages, Header)> {
         let contents = {
             let mut buf = String::new();
             lock.read_to_string(&mut buf).context("Reading lock file")?;
@@ -91,27 +91,21 @@ impl Packages {
     }
 }
 
-/// Read hashes from the lock file header after verifying that the version of the lock is not newer
-/// than the version supported by this library.
-pub fn read_header(contents: &String) -> Result<(Option<String>, Option<String>)> {
-    let Schema {
-        move_:
-            Header {
-                version,
-                manifest_digest,
-                deps_digest,
-            },
-    } = toml::de::from_str::<Schema<Header>>(&contents).context("Deserializing lock header")?;
+/// Read lock file header after verifying that the version of the lock is not newer than the version
+/// supported by this library.
+pub fn read_header(contents: &String) -> Result<Header> {
+    let Schema { move_: header } =
+        toml::de::from_str::<Schema<Header>>(&contents).context("Deserializing lock header")?;
 
-    if version > VERSION {
+    if header.version > VERSION {
         bail!(
             "Lock file format is too new, expected version {} or below, found {}",
             VERSION,
-            version
+            header.version
         );
     }
 
-    Ok((manifest_digest, deps_digest))
+    Ok(header)
 }
 
 /// Write the initial part of the lock file.

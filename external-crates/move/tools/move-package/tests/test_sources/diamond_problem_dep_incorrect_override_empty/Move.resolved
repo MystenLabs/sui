@@ -1,4 +1,4 @@
-When resolving dependencies for package Root,conflicting dependencies found for 'C':
+When resolving dependencies for package Root, conflicting dependencies found for 'C':
 
 Not found:
 	dependency { name = "D" } for package { local = "deps_only/D", version = "2.0.0" }

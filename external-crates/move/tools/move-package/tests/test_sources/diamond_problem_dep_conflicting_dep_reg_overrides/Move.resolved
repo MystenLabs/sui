@@ -1,1 +1,1 @@
-Unable to parse Move package manifest: redefinition of table `dependencies` for key `dependencies` at line 13 column 1
+Conflicting "regular" and "dev" overrides of C in Root
