@@ -26,7 +26,7 @@ function AppsPage() {
 		},
 		{
 			name: 'All',
-			link: 'apps/all',
+			link: 'apps',
 		},
 	];
 	const ecosystemApps = useFeature<DAppEntry[]>(FEATURES.WALLET_DAPPS).value ?? [];
@@ -48,7 +48,7 @@ function AppsPage() {
 				<section>
 					<FiltersPortal tags={allFilterTags} />
 					<Routes>
-						<Route path="/:tagName" element={<AppsPlayGround />} />
+						<Route path="/:tagName?" element={<AppsPlayGround />} />
 						<Route path="/connected" element={<ConnectedAppsCard />} />
 					</Routes>
 				</section>

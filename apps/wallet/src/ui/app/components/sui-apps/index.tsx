@@ -24,7 +24,7 @@ function AppsPlayGround() {
 	const filteredEcosystemApps = useMemo(() => {
 		if (!ecosystemApps) {
 			return [];
-		} else if (tagName && tagName !== 'all') {
+		} else if (tagName) {
 			return ecosystemApps.filter((app) => app.tags.includes(tagName));
 		}
 		return ecosystemApps;
