@@ -54,4 +54,5 @@ sui-sdk.workspace = true
 sui-storage.workspace = true
 sui-types.workspace = true
 sui-archival.workspace = true
+sui-snapshot.workspace = true
 workspace-hack = { version = "0.1", path = "../workspace-hack" }

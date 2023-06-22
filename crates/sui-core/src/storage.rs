@@ -154,6 +154,13 @@ impl ReadStore for RocksDbStore {
     ) -> Result<Option<TransactionEvents>, Self::Error> {
         self.authority_store.get_events(digest)
     }
+
+    fn get_epoch_last_checkpoint(
+        &self,
+        epoch_id: EpochId,
+    ) -> Result<Option<VerifiedCheckpoint>, Self::Error> {
+        self.checkpoint_store.get_epoch_last_checkpoint(epoch_id)
+    }
 }
 
 impl WriteStore for RocksDbStore {
@@ -197,6 +204,22 @@ impl WriteStore for RocksDbStore {
             .update_highest_verified_checkpoint(checkpoint)?;
         *locked = Some(checkpoint.sequence_number);
         Ok(())
+    }
+
+    fn update_highest_pruned_checkpoint(
+        &self,
+        checkpoint: &VerifiedCheckpoint,
+    ) -> Result<(), Self::Error> {
+        self.checkpoint_store
+            .update_highest_pruned_checkpoint(checkpoint)
+    }
+
+    fn update_highest_executed_checkpoint(
+        &self,
+        checkpoint: &VerifiedCheckpoint,
+    ) -> Result<(), Self::Error> {
+        self.checkpoint_store
+            .update_highest_executed_checkpoint(checkpoint)
     }
 
     fn insert_checkpoint_contents(

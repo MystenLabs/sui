@@ -21,14 +21,16 @@ use sui_keys::keystore::AccountKeystore;
 use sui_macros::*;
 use sui_node::SuiNodeHandle;
 use sui_sdk::wallet_context::WalletContext;
+use sui_snapshot::restorer::SnapshotRestoreConfig;
 use sui_storage::key_value_store::TransactionKeyValueStore;
 use sui_storage::key_value_store_metrics::KeyValueStoreMetrics;
+use sui_storage::object_store::ObjectStoreConfig;
 use sui_test_transaction_builder::{
     batch_make_transfer_transactions, create_devnet_nft, delete_devnet_nft, increment_counter,
     publish_basics_package, publish_basics_package_and_make_counter, publish_nfts_package,
     TestTransactionBuilder,
 };
-use sui_tool::restore_from_db_checkpoint;
+use sui_tool::{restore_from_db_checkpoint, restore_from_formal_snapshot};
 use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
 use sui_types::base_types::{ObjectRef, SequenceNumber};
 use sui_types::crypto::{get_key_pair, SuiKeyPair};
@@ -1148,7 +1150,7 @@ async fn test_get_objects_read() -> Result<(), anyhow::Error> {
 
 // Test for restoring a full node from a db snapshot
 #[sim_test]
-async fn test_full_node_bootstrap_from_snapshot() -> Result<(), anyhow::Error> {
+async fn test_full_node_bootstrap_from_db_snapshot() -> Result<(), anyhow::Error> {
     telemetry_subscribers::init_for_testing();
     let mut test_cluster = TestClusterBuilder::new()
         .with_epoch_duration_ms(10_000)
@@ -1180,6 +1182,92 @@ async fn test_full_node_bootstrap_from_snapshot() -> Result<(), anyhow::Error> {
 
     // Spin up a new full node restored from the snapshot taken at the end of epoch 1
     restore_from_db_checkpoint(&config, &checkpoint_path.join("epoch_1")).await?;
+    let node = test_cluster
+        .start_fullnode_from_config(config)
+        .await
+        .sui_node;
+
+    node.state()
+        .db()
+        .notify_read_executed_effects(vec![digest])
+        .await
+        .unwrap();
+
+    loop {
+        // Ensure this full node is able to transition to the next epoch
+        if node.with(|node| node.current_epoch_for_testing()) >= 2 {
+            break;
+        }
+        sleep(Duration::from_millis(500)).await;
+    }
+
+    // Ensure this fullnode never processed older epoch (before snapshot) i.e. epoch_0 store was
+    // doesn't exist
+    assert!(!epoch_0_db_path.exists());
+
+    let (_transferred_object, _, _, digest_after_restore, ..) =
+        transfer_coin(&test_cluster.wallet).await?;
+    node.state()
+        .db()
+        .notify_read_executed_effects(vec![digest_after_restore])
+        .await
+        .unwrap();
+    Ok(())
+}
+
+#[sim_test]
+async fn test_full_node_bootstrap_from_formal_snapshot() -> Result<(), anyhow::Error> {
+    telemetry_subscribers::init_for_testing();
+    let mut test_cluster = TestClusterBuilder::new()
+        .with_epoch_duration_ms(10_000)
+        .with_enable_snapshot_writer()
+        .with_enable_archive_writer()
+        .build()
+        .await;
+    let archive_path = test_cluster
+        .fullnode_handle
+        .sui_node
+        .with(|node| node.archive_path());
+    let snapshot_path = test_cluster
+        .fullnode_handle
+        .sui_node
+        .with(|node| node.snapshot_path());
+    let config = test_cluster
+        .fullnode_config_builder()
+        .build(&mut OsRng, test_cluster.swarm.config());
+    let epoch_0_db_path = config.db_path().join("store").join("epoch_0");
+    let _ = transfer_coin(&test_cluster.wallet).await?;
+    let _ = transfer_coin(&test_cluster.wallet).await?;
+    let (_transferred_object, _, _, digest, ..) = transfer_coin(&test_cluster.wallet).await?;
+
+    // Skip the first epoch change from epoch 0 to epoch 1, but wait for the second
+    // epoch change from epoch 1 to epoch 2 at which point during reconfiguration we will write
+    // the formal snapshot for epoch 1
+    loop {
+        if snapshot_path.join("epoch_1").exists() {
+            break;
+        }
+        sleep(Duration::from_millis(500)).await;
+
+        // TODO figure out better way to wait for the proper checkpoint
+        // to be written to archival storage. Since we don't know the
+        // number of checkpoints in an epoch, the simplest thing for
+        // now it to just sleep for a reasonable amount of time.
+    }
+
+    // Spin up a new full node restored from the snapshot taken at the end of epoch 1
+    restore_from_formal_snapshot(
+        snapshot_path.join("epoch_1"),
+        SnapshotRestoreConfig {
+            // TODO
+            db_path: config.db_path().to_path_buf(),
+            ..Default::default()
+        },
+        ObjectStoreConfig {},
+        config.genesis().unwrap().clone(),
+        3,
+    )
+    .await?;
     let node = test_cluster
         .start_fullnode_from_config(config)
         .await

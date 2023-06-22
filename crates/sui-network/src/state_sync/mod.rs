@@ -937,7 +937,7 @@ async fn sync_to_checkpoint<S>(
     checkpoint: Checkpoint,
 ) -> Result<()>
 where
-    S: WriteStore,
+    S: WriteStore + Clone,
     <S as ReadStore>::Error: std::error::Error,
 {
     metrics.set_highest_known_checkpoint(*checkpoint.sequence_number());
@@ -1017,7 +1017,7 @@ where
             let checkpoint = maybe_checkpoint.ok_or_else(|| {
                 anyhow::anyhow!("no peers were able to help sync checkpoint {next}")
             })?;
-            match verify_checkpoint(&current, &store, checkpoint) {
+            match verify_checkpoint(&current, store.clone(), checkpoint) {
                 Ok(verified_checkpoint) => verified_checkpoint,
                 Err(checkpoint) => {
                     let mut peer_heights = peer_heights.write().unwrap();

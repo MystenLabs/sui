@@ -476,6 +476,16 @@ impl CheckpointStore {
         )
     }
 
+    pub fn update_highest_pruned_checkpoint(
+        &self,
+        checkpoint: &VerifiedCheckpoint,
+    ) -> Result<(), TypedStoreError> {
+        self.watermarks.insert(
+            &CheckpointWatermark::HighestPruned,
+            &(*checkpoint.sequence_number(), *checkpoint.digest()),
+        )
+    }
+
     /// Sets highest executed checkpoint to any value.
     ///
     /// WARNING: This method is very subtle and can corrupt the database if used incorrectly.
@@ -530,7 +540,7 @@ impl CheckpointStore {
     pub fn get_epoch_last_checkpoint(
         &self,
         epoch_id: EpochId,
-    ) -> SuiResult<Option<VerifiedCheckpoint>> {
+    ) -> Result<Option<VerifiedCheckpoint>, TypedStoreError> {
         let seq = self.epoch_last_checkpoint_map.get(&epoch_id)?;
         let checkpoint = match seq {
             Some(seq) => self.get_checkpoint_by_sequence_number(seq)?,

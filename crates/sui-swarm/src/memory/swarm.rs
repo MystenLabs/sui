@@ -12,7 +12,7 @@ use std::{
     mem, ops,
     path::{Path, PathBuf},
 };
-use sui_config::node::DBCheckpointConfig;
+use sui_config::node::{DBCheckpointConfig, StateArchiveConfig, StateSnapshotConfig};
 use sui_config::NodeConfig;
 use sui_node::SuiNodeHandle;
 use sui_protocol_config::{ProtocolVersion, SupportedProtocolVersions};
@@ -41,6 +41,8 @@ pub struct SwarmBuilder<R = OsRng> {
     // Default to supported_protocol_versions_config, but can be overridden.
     fullnode_supported_protocol_versions_config: Option<ProtocolVersionsConfig>,
     db_checkpoint_config: DBCheckpointConfig,
+    state_snapshot_write_config: StateSnapshotConfig,
+    state_archive_write_config: StateArchiveConfig,
     num_unpruned_validators: Option<usize>,
 }
 
@@ -60,6 +62,8 @@ impl SwarmBuilder {
             supported_protocol_versions_config: ProtocolVersionsConfig::Default,
             fullnode_supported_protocol_versions_config: None,
             db_checkpoint_config: DBCheckpointConfig::default(),
+            state_snapshot_write_config: StateSnapshotConfig::default(),
+            state_archive_write_config: StateArchiveConfig::default(),
             num_unpruned_validators: None,
         }
     }
@@ -81,6 +85,8 @@ impl<R> SwarmBuilder<R> {
             fullnode_supported_protocol_versions_config: self
                 .fullnode_supported_protocol_versions_config,
             db_checkpoint_config: self.db_checkpoint_config,
+            state_snapshot_write_config: self.state_snapshot_write_config,
+            state_archive_write_config: self.state_archive_write_config,
             num_unpruned_validators: self.num_unpruned_validators,
         }
     }
@@ -198,6 +204,16 @@ impl<R> SwarmBuilder<R> {
         self
     }
 
+    pub fn with_state_snapshot_write_config(mut self, config: StateSnapshotConfig) -> Self {
+        self.state_snapshot_write_config = config;
+        self
+    }
+
+    pub fn with_state_archive_write_config(mut self, config: StateArchiveConfig) -> Self {
+        self.state_archive_write_config = config;
+        self
+    }
+
     fn get_or_init_genesis_config(&mut self) -> &mut GenesisConfig {
         if self.genesis_config.is_none() {
             assert!(self.network_config.is_none());
@@ -246,7 +262,9 @@ impl<R: rand::RngCore + rand::CryptoRng> SwarmBuilder<R> {
 
         let mut fullnode_config_builder = FullnodeConfigBuilder::new()
             .with_config_directory(dir.as_ref().into())
-            .with_db_checkpoint_config(self.db_checkpoint_config.clone());
+            .with_db_checkpoint_config(self.db_checkpoint_config.clone())
+            .with_state_snapshot_write_config(self.state_snapshot_write_config.clone())
+            .with_state_archive_write_config(self.state_archive_write_config.clone());
         if let Some(spvc) = &self.fullnode_supported_protocol_versions_config {
             let supported_versions = match spvc {
                 ProtocolVersionsConfig::Default => SupportedProtocolVersions::SYSTEM_DEFAULT,

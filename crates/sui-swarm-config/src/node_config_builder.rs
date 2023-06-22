@@ -177,6 +177,8 @@ pub struct FullnodeConfigBuilder {
     rpc_addr: Option<SocketAddr>,
     supported_protocol_versions: Option<SupportedProtocolVersions>,
     db_checkpoint_config: Option<DBCheckpointConfig>,
+    state_snapshot_write_config: Option<StateSnapshotConfig>,
+    state_archive_write_config: Option<StateArchiveConfig>,
     expensive_safety_check_config: Option<ExpensiveSafetyCheckConfig>,
     db_path: Option<PathBuf>,
     network_address: Option<Multiaddr>,
@@ -218,6 +220,16 @@ impl FullnodeConfigBuilder {
 
     pub fn with_db_checkpoint_config(mut self, db_checkpoint_config: DBCheckpointConfig) -> Self {
         self.db_checkpoint_config = Some(db_checkpoint_config);
+        self
+    }
+
+    pub fn with_state_snapshot_write_config(mut self, config: StateSnapshotConfig) -> Self {
+        self.state_snapshot_write_config = Some(config);
+        self
+    }
+
+    pub fn with_state_archive_write_config(mut self, config: StateArchiveConfig) -> Self {
+        self.state_archive_write_config = Some(config);
         self
     }
 
@@ -382,9 +394,9 @@ impl FullnodeConfigBuilder {
             transaction_deny_config: Default::default(),
             certificate_deny_config: Default::default(),
             state_debug_dump_config: Default::default(),
-            state_archive_write_config: StateArchiveConfig::default(),
+            state_archive_write_config: self.state_archive_write_config.unwrap_or_default(),
             state_archive_read_config: vec![],
-            state_snapshot_write_config: StateSnapshotConfig::default(),
+            state_snapshot_write_config: self.state_snapshot_write_config.unwrap_or_default(),
             indexer_max_subscriptions: Default::default(),
             transaction_kv_store_read_config: Default::default(),
             transaction_kv_store_write_config: Default::default(),

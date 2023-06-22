@@ -347,7 +347,7 @@ pub async fn verify_archive_with_local_store<S>(
     interactive: bool,
 ) -> Result<()>
 where
-    S: WriteStore + Clone + Send + 'static,
+    S: WriteStore + Clone + Send + Sync + 'static,
     <S as ReadStore>::Error: std::error::Error,
 {
     let metrics = ArchiveReaderMetrics::new(&Registry::default());

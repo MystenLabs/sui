@@ -226,7 +226,7 @@ where
     Ok(VerifiedCheckpoint::new_unchecked(checkpoint))
 }
 
-fn hard_link(src: impl AsRef<Path>, dst: impl AsRef<Path>) -> io::Result<()> {
+pub fn hard_link(src: impl AsRef<Path>, dst: impl AsRef<Path>) -> io::Result<()> {
     fs::create_dir_all(&dst)?;
     for entry in fs::read_dir(src)? {
         let entry = entry?;

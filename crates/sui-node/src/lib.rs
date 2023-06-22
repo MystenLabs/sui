@@ -626,6 +626,14 @@ impl SuiNode {
         self.config.db_checkpoint_path()
     }
 
+    pub fn archive_path(&self) -> PathBuf {
+        self.config.archive_path()
+    }
+
+    pub fn snapshot_path(&self) -> PathBuf {
+        self.config.snapshot_path()
+    }
+
     // Init reconfig process by starting to reject user certs
     pub async fn close_epoch(&self, epoch_store: &Arc<AuthorityPerEpochStore>) -> SuiResult {
         info!("close_epoch (current epoch = {})", epoch_store.epoch());

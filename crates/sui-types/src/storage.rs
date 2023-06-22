@@ -338,6 +338,11 @@ pub trait ReadStore {
         &self,
         digest: &TransactionEventsDigest,
     ) -> Result<Option<TransactionEvents>, Self::Error>;
+
+    fn get_epoch_last_checkpoint(
+        &self,
+        epoch_id: EpochId,
+    ) -> Result<Option<VerifiedCheckpoint>, Self::Error>;
 }
 
 impl<T: ReadStore> ReadStore for &T {
@@ -407,6 +412,13 @@ impl<T: ReadStore> ReadStore for &T {
     ) -> Result<Option<TransactionEvents>, Self::Error> {
         ReadStore::get_transaction_events(*self, digest)
     }
+
+    fn get_epoch_last_checkpoint(
+        &self,
+        epoch_id: EpochId,
+    ) -> Result<Option<VerifiedCheckpoint>, Self::Error> {
+        ReadStore::get_epoch_last_checkpoint(*self, epoch_id)
+    }
 }
 
 pub trait WriteStore: ReadStore {
@@ -416,6 +428,14 @@ pub trait WriteStore: ReadStore {
         checkpoint: &VerifiedCheckpoint,
     ) -> Result<(), Self::Error>;
     fn update_highest_verified_checkpoint(
+        &self,
+        checkpoint: &VerifiedCheckpoint,
+    ) -> Result<(), Self::Error>;
+    fn update_highest_pruned_checkpoint(
+        &self,
+        checkpoint: &VerifiedCheckpoint,
+    ) -> Result<(), Self::Error>;
+    fn update_highest_executed_checkpoint(
         &self,
         checkpoint: &VerifiedCheckpoint,
     ) -> Result<(), Self::Error>;
@@ -447,6 +467,20 @@ impl<T: WriteStore> WriteStore for &T {
         WriteStore::update_highest_verified_checkpoint(*self, checkpoint)
     }
 
+    fn update_highest_pruned_checkpoint(
+        &self,
+        checkpoint: &VerifiedCheckpoint,
+    ) -> Result<(), Self::Error> {
+        WriteStore::update_highest_pruned_checkpoint(*self, checkpoint)
+    }
+
+    fn update_highest_executed_checkpoint(
+        &self,
+        checkpoint: &VerifiedCheckpoint,
+    ) -> Result<(), Self::Error> {
+        WriteStore::update_highest_executed_checkpoint(*self, checkpoint)
+    }
+
     fn insert_checkpoint_contents(
         &self,
         checkpoint: &VerifiedCheckpoint,
@@ -464,6 +498,8 @@ impl<T: WriteStore> WriteStore for &T {
 pub struct InMemoryStore {
     highest_verified_checkpoint: Option<(CheckpointSequenceNumber, CheckpointDigest)>,
     highest_synced_checkpoint: Option<(CheckpointSequenceNumber, CheckpointDigest)>,
+    highest_pruned_checkpoint: Option<(CheckpointSequenceNumber, CheckpointDigest)>,
+    highest_executed_checkpoint: Option<(CheckpointSequenceNumber, CheckpointDigest)>,
     checkpoints: HashMap<CheckpointDigest, VerifiedCheckpoint>,
     full_checkpoint_contents: HashMap<CheckpointSequenceNumber, FullCheckpointContents>,
     contents_digest_to_sequence_number: HashMap<CheckpointContentsDigest, CheckpointSequenceNumber>,
@@ -476,6 +512,8 @@ pub struct InMemoryStore {
     epoch_to_committee: Vec<Committee>,
 
     lowest_checkpoint_number: CheckpointSequenceNumber,
+
+    epoch_last_checkpoint_map: HashMap<EpochId, Option<CheckpointSequenceNumber>>,
 }
 
 impl InMemoryStore {
@@ -589,6 +627,9 @@ impl InMemoryStore {
                 .collect();
             let committee = Committee::new(checkpoint.epoch().saturating_add(1), next_committee);
             self.insert_committee(committee);
+
+            self.epoch_last_checkpoint_map
+                .insert(checkpoint.epoch(), Some(*checkpoint.sequence_number()));
         }
 
         self.checkpoints.insert(digest, checkpoint.clone());
@@ -646,6 +687,32 @@ impl InMemoryStore {
             Some((*checkpoint.sequence_number(), *checkpoint.digest()));
     }
 
+    pub fn update_highest_pruned_checkpoint(&mut self, checkpoint: &VerifiedCheckpoint) {
+        if !self.checkpoints.contains_key(checkpoint.digest()) {
+            panic!("store should already contain checkpoint");
+        }
+        if let Some(highest_pruned_checkpoint) = self.highest_pruned_checkpoint {
+            if highest_pruned_checkpoint.0 >= checkpoint.sequence_number {
+                return;
+            }
+        }
+        self.highest_pruned_checkpoint =
+            Some((*checkpoint.sequence_number(), *checkpoint.digest()));
+    }
+
+    pub fn update_highest_executed_checkpoint(&mut self, checkpoint: &VerifiedCheckpoint) {
+        if !self.checkpoints.contains_key(checkpoint.digest()) {
+            panic!("store should already contain checkpoint");
+        }
+        if let Some(highest_executed_checkpoint) = self.highest_executed_checkpoint {
+            if highest_executed_checkpoint.0 >= checkpoint.sequence_number {
+                return;
+            }
+        }
+        self.highest_executed_checkpoint =
+            Some((*checkpoint.sequence_number(), *checkpoint.digest()));
+    }
+
     pub fn checkpoints(&self) -> &HashMap<CheckpointDigest, VerifiedCheckpoint> {
         &self.checkpoints
     }
@@ -693,6 +760,14 @@ impl InMemoryStore {
         digest: &TransactionEventsDigest,
     ) -> Option<&TransactionEvents> {
         self.events.get(digest)
+    }
+
+    pub fn get_epoch_last_checkpoint(&self, epoch_id: EpochId) -> Option<&VerifiedCheckpoint> {
+        let seq = self.epoch_last_checkpoint_map.get(&epoch_id)?;
+        match seq {
+            Some(seq) => self.get_checkpoint_by_sequence_number(*seq),
+            None => None,
+        }
     }
 }
 
@@ -820,6 +895,16 @@ impl ReadStore for SharedInMemoryStore {
             .cloned()
             .pipe(Ok)
     }
+
+    fn get_epoch_last_checkpoint(
+        &self,
+        epoch_id: EpochId,
+    ) -> Result<Option<VerifiedCheckpoint>, Self::Error> {
+        self.inner()
+            .get_epoch_last_checkpoint(epoch_id)
+            .cloned()
+            .pipe(Ok)
+    }
 }
 
 impl WriteStore for SharedInMemoryStore {
@@ -843,6 +928,24 @@ impl WriteStore for SharedInMemoryStore {
     ) -> Result<(), Self::Error> {
         self.inner_mut()
             .update_highest_verified_checkpoint(checkpoint);
+        Ok(())
+    }
+
+    fn update_highest_pruned_checkpoint(
+        &self,
+        checkpoint: &VerifiedCheckpoint,
+    ) -> Result<(), Self::Error> {
+        self.inner_mut()
+            .update_highest_pruned_checkpoint(checkpoint);
+        Ok(())
+    }
+
+    fn update_highest_executed_checkpoint(
+        &self,
+        checkpoint: &VerifiedCheckpoint,
+    ) -> Result<(), Self::Error> {
+        self.inner_mut()
+            .update_highest_executed_checkpoint(checkpoint);
         Ok(())
     }
 
@@ -1037,7 +1140,7 @@ impl ReadStore for SingleCheckpointSharedInMemoryStore {
         &self,
         sequence_number: CheckpointSequenceNumber,
     ) -> Result<Option<VerifiedCheckpoint>, Self::Error> {
-        self.0.get_checkpoint_by_sequence_number(sequence_number)
+        ReadStore::get_checkpoint_by_sequence_number(&self.0, sequence_number)
     }
 
     fn get_highest_verified_checkpoint(&self) -> Result<VerifiedCheckpoint, Self::Error> {
@@ -1091,6 +1194,13 @@ impl ReadStore for SingleCheckpointSharedInMemoryStore {
     ) -> Result<Option<TransactionEvents>, Self::Error> {
         self.0.get_transaction_events(digest)
     }
+
+    fn get_epoch_last_checkpoint(
+        &self,
+        epoch_id: EpochId,
+    ) -> Result<Option<VerifiedCheckpoint>, Self::Error> {
+        self.0.get_epoch_last_checkpoint(epoch_id)
+    }
 }
 
 impl WriteStore for SingleCheckpointSharedInMemoryStore {
@@ -1100,7 +1210,7 @@ impl WriteStore for SingleCheckpointSharedInMemoryStore {
             locked.checkpoints.clear();
             locked.sequence_number_to_digest.clear();
         }
-        self.0.insert_checkpoint(checkpoint)?;
+        WriteStore::insert_checkpoint(&self.0, checkpoint)?;
         Ok(())
     }
 
@@ -1117,6 +1227,22 @@ impl WriteStore for SingleCheckpointSharedInMemoryStore {
         checkpoint: &VerifiedCheckpoint,
     ) -> Result<(), Self::Error> {
         self.0.update_highest_verified_checkpoint(checkpoint)?;
+        Ok(())
+    }
+
+    fn update_highest_pruned_checkpoint(
+        &self,
+        checkpoint: &VerifiedCheckpoint,
+    ) -> Result<(), Self::Error> {
+        self.0.update_highest_pruned_checkpoint(checkpoint)?;
+        Ok(())
+    }
+
+    fn update_highest_executed_checkpoint(
+        &self,
+        checkpoint: &VerifiedCheckpoint,
+    ) -> Result<(), Self::Error> {
+        self.0.update_highest_executed_checkpoint(checkpoint)?;
         Ok(())
     }
 

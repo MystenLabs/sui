@@ -6,6 +6,7 @@
 mod tests;
 
 mod reader;
+pub mod restorer;
 pub mod uploader;
 mod writer;
 
@@ -15,18 +16,9 @@ use num_enum::TryFromPrimitive;
 use object_store::path::Path;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
-use std::sync::Arc;
-use sui_core::authority::authority_store_tables::AuthorityPerpetualTables;
-use sui_core::authority::epoch_start_configuration::EpochStartConfiguration;
-use sui_core::checkpoints::CheckpointStore;
-use sui_core::epoch::committee_store::CommitteeStore;
 use sui_storage::object_store::util::path_to_filesystem;
 use sui_storage::{compute_sha3_checksum, FileCompression, SHA3_BYTES};
-use sui_types::accumulator::Accumulator;
 use sui_types::base_types::ObjectID;
-use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
-use sui_types::sui_system_state::get_sui_system_state;
-use sui_types::sui_system_state::SuiSystemStateTrait;
 
 /// The following describes the format of an object file (*.obj) used for persisting live sui objects.
 /// The maximum size per .obj file is 128MB. State snapshot will be taken at the end of every epoch.
@@ -121,6 +113,7 @@ const BUCKET_PARTITION_BYTES: usize = 4;
 const COMPRESSION_TYPE_BYTES: usize = 1;
 const FILE_METADATA_BYTES: usize =
     FILE_TYPE_BYTES + BUCKET_BYTES + BUCKET_PARTITION_BYTES + COMPRESSION_TYPE_BYTES + SHA3_BYTES;
+const DEFAULT_CONCURRENCY: usize = 10;
 
 #[derive(
     Copy, Clone, Debug, Eq, PartialEq, Serialize, Deserialize, TryFromPrimitive, IntoPrimitive,
@@ -207,33 +200,4 @@ pub fn create_file_metadata(
         sha3_digest,
     };
     Ok(file_metadata)
-}
-
-pub async fn setup_db_state(
-    epoch: u64,
-    accumulator: Accumulator,
-    perpetual_db: Arc<AuthorityPerpetualTables>,
-    checkpoint_store: Arc<CheckpointStore>,
-    committee_store: Arc<CommitteeStore>,
-) -> Result<()> {
-    // This function should be called once state accumulator based hash verification
-    // is complete and live object set state is downloaded to local store
-    let system_state_object = get_sui_system_state(&perpetual_db)?;
-    let new_epoch_start_state = system_state_object.into_epoch_start_state();
-    let next_epoch_committee = new_epoch_start_state.get_sui_committee();
-    let last_checkpoint = checkpoint_store
-        .get_epoch_last_checkpoint(epoch)
-        .expect("Error loading last checkpoint for current epoch")
-        .expect("Could not load last checkpoint for current epoch");
-    let epoch_start_configuration =
-        EpochStartConfiguration::new(new_epoch_start_state, *last_checkpoint.digest());
-    perpetual_db
-        .set_epoch_start_configuration(&epoch_start_configuration)
-        .await?;
-    perpetual_db.insert_root_state_hash(epoch, last_checkpoint.sequence_number, accumulator)?;
-    perpetual_db.set_highest_pruned_checkpoint_without_wb(last_checkpoint.sequence_number)?;
-    committee_store.insert_new_committee(&next_epoch_committee)?;
-    checkpoint_store.update_highest_executed_checkpoint(&last_checkpoint)?;
-
-    Ok(())
 }

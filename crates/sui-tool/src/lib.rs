@@ -36,6 +36,8 @@ use sui_core::authority::AuthorityStore;
 use sui_core::checkpoints::CheckpointStore;
 use sui_core::epoch::committee_store::CommitteeStore;
 use sui_core::storage::RocksDbStore;
+use sui_snapshot::restorer::{SnapshotRestoreConfig, SnapshotRestorer};
+use sui_storage::hard_link;
 use sui_storage::object_store::ObjectStoreConfig;
 use sui_types::messages_grpc::{
     ObjectInfoRequest, ObjectInfoRequestKind, ObjectInfoResponse, TransactionInfoRequest,
@@ -616,6 +618,85 @@ pub async fn restore_from_db_checkpoint(
 ) -> Result<(), anyhow::Error> {
     copy_dir_all(db_checkpoint_path, config.db_path(), vec![])?;
     Ok(())
+}
+
+pub async fn restore_from_formal_snapshot(
+    path: PathBuf,
+    snapshot_restore_config: SnapshotRestoreConfig,
+    archive_object_store_config: ObjectStoreConfig,
+    genesis: Genesis,
+    concurrency: usize,
+) -> anyhow::Result<()> {
+    // first ensure that target db is empty
+    if !AuthorityPerpetualTables::open(&path.join("store").join("perpetual"), None)
+        .database_is_empty()
+        .expect("Database read should not fail at init.")
+    {
+        panic!("Database is not empty. Will not perform snapshot restoration");
+    }
+
+    let genesis_committee = genesis.committee()?;
+
+    let perpetual_staging = Arc::new(AuthorityPerpetualTables::open(
+        &path.join("store_staging").join("perpetual"),
+        None,
+    ));
+
+    let committee_store = Arc::new(CommitteeStore::new(
+        path.join("epochs"),
+        &genesis_committee,
+        None,
+    ));
+
+    let store = AuthorityStore::open(
+        perpetual_staging.clone(),
+        &genesis,
+        &committee_store,
+        usize::MAX,
+        false,
+        &Registry::default(),
+    )
+    .await?;
+
+    let checkpoint_store = Arc::new(CheckpointStore::open_tables_read_write(
+        path.join("checkpoints"),
+        MetricConf::default(),
+        None,
+        None,
+    ));
+    // Only insert the genesis checkpoint if the DB is empty and doesn't have it already
+    if checkpoint_store
+        .get_checkpoint_by_digest(genesis.checkpoint().digest())
+        .unwrap()
+        .is_none()
+    {
+        checkpoint_store.insert_checkpoint_contents(genesis.checkpoint_contents().clone())?;
+        checkpoint_store.insert_verified_checkpoint(&genesis.checkpoint())?;
+        checkpoint_store.update_highest_synced_checkpoint(&genesis.checkpoint())?;
+    }
+
+    let state_sync_store = RocksDbStore::new(store, committee_store, checkpoint_store);
+
+    let archive_reader_config = ArchiveReaderConfig {
+        remote_store_config: archive_object_store_config,
+        download_concurrency: NonZeroUsize::new(concurrency).unwrap(),
+        use_for_pruning_watermark: false,
+    };
+    let metrics = ArchiveReaderMetrics::new(&Registry::default());
+    let archive_reader = Arc::new(ArchiveReader::new(archive_reader_config, &metrics)?);
+    archive_reader.sync_manifest_once().await?;
+
+    let restorer =
+        SnapshotRestorer::new(snapshot_restore_config, archive_reader, path.clone()).await?;
+    info!("Restoring from snapshot");
+    restorer
+        .run(state_sync_store.clone(), perpetual_staging)
+        .await
+        .expect("Snapshot restoration failed");
+
+    // Hardlink staging tables to perpetual store path so that on restart, the
+    // data will be available in the expected authority store directory.
+    Ok(hard_link(path.join("store_staging"), path.join("store"))?)
 }
 
 pub async fn verify_archive(

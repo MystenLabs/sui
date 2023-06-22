@@ -621,7 +621,6 @@ pub struct StateArchiveConfig {
     pub concurrency: usize,
     pub use_for_pruning_watermark: bool,
 }
-
 #[derive(Default, Debug, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct StateSnapshotConfig {

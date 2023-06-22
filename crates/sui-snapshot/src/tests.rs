@@ -72,7 +72,7 @@ async fn test_snapshot_basic() -> Result<(), anyhow::Error> {
         &local_store_config,
         &remote_store_config,
         FileCompression::Zstd,
-        NonZeroUsize::new(1).unwrap(),
+        NonZeroUsize::new(1),
     )
     .await?;
     let perpetual_db = Arc::new(AuthorityPerpetualTables::open(&db_path, None));
@@ -85,18 +85,24 @@ async fn test_snapshot_basic() -> Result<(), anyhow::Error> {
         directory: Some(restored_local),
         ..Default::default()
     };
-    let mut snapshot_reader = StateSnapshotReaderV1::new(
+    let snapshot_reader = StateSnapshotReaderV1::new(
         0,
         &remote_store_config,
         &local_store_restore_config,
         usize::MAX,
-        NonZeroUsize::new(1).unwrap(),
+        NonZeroUsize::new(1),
     )
     .await?;
     let restored_perpetual_db = AuthorityPerpetualTables::open(&restored_db_path, None);
     let (_abort_handle, abort_registration) = AbortHandle::new_pair();
+    let (sha3_digests, _acc, all_files) = snapshot_reader.get_checksums()?;
     snapshot_reader
-        .read(&restored_perpetual_db, abort_registration)
+        .read(
+            &restored_perpetual_db,
+            sha3_digests,
+            all_files,
+            abort_registration,
+        )
         .await?;
     compare_live_objects(&perpetual_db, &restored_perpetual_db, true)?;
     Ok(())
@@ -125,7 +131,7 @@ async fn test_snapshot_empty_db() -> Result<(), anyhow::Error> {
         &local_store_config,
         &remote_store_config,
         FileCompression::Zstd,
-        NonZeroUsize::new(1).unwrap(),
+        NonZeroUsize::new(1),
     )
     .await?;
     let perpetual_db = Arc::new(AuthorityPerpetualTables::open(&db_path, None));
@@ -137,18 +143,24 @@ async fn test_snapshot_empty_db() -> Result<(), anyhow::Error> {
         directory: Some(restored_local),
         ..Default::default()
     };
-    let mut snapshot_reader = StateSnapshotReaderV1::new(
+    let snapshot_reader = StateSnapshotReaderV1::new(
         0,
         &remote_store_config,
         &local_store_restore_config,
         usize::MAX,
-        NonZeroUsize::new(1).unwrap(),
+        NonZeroUsize::new(1),
     )
     .await?;
     let restored_perpetual_db = AuthorityPerpetualTables::open(&restored_db_path, None);
     let (_abort_handle, abort_registration) = AbortHandle::new_pair();
+    let (sha3_digests, _acc, all_files) = snapshot_reader.get_checksums()?;
     snapshot_reader
-        .read(&restored_perpetual_db, abort_registration)
+        .read(
+            &restored_perpetual_db,
+            sha3_digests,
+            all_files,
+            abort_registration,
+        )
         .await?;
     compare_live_objects(
         &perpetual_db,

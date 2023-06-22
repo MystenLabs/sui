@@ -12,7 +12,7 @@ use std::num::NonZeroUsize;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
-use sui_config::node::DBCheckpointConfig;
+use sui_config::node::{DBCheckpointConfig, StateArchiveConfig, StateSnapshotConfig};
 use sui_config::{Config, SUI_CLIENT_CONFIG, SUI_NETWORK_CONFIG};
 use sui_config::{NodeConfig, PersistedConfig, SUI_KEYSTORE_FILENAME};
 use sui_core::authority_aggregator::AuthorityAggregator;
@@ -24,6 +24,7 @@ use sui_protocol_config::{ProtocolVersion, SupportedProtocolVersions};
 use sui_sdk::sui_client_config::{SuiClientConfig, SuiEnv};
 use sui_sdk::wallet_context::WalletContext;
 use sui_sdk::{SuiClient, SuiClientBuilder};
+use sui_storage::object_store::{ObjectStoreConfig, ObjectStoreType};
 use sui_swarm::memory::{Swarm, SwarmBuilder};
 use sui_swarm_config::genesis_config::{
     AccountConfig, GenesisConfig, ValidatorGenesisConfig, DEFAULT_GAS_AMOUNT,
@@ -575,6 +576,8 @@ pub struct TestClusterBuilder {
     fullnode_supported_protocol_versions_config: Option<ProtocolVersionsConfig>,
     db_checkpoint_config_validators: DBCheckpointConfig,
     db_checkpoint_config_fullnodes: DBCheckpointConfig,
+    state_snapshot_write_config: StateSnapshotConfig,
+    state_archive_write_config: StateArchiveConfig,
     num_unpruned_validators: Option<usize>,
     config_dir: Option<PathBuf>,
 }
@@ -592,6 +595,8 @@ impl TestClusterBuilder {
             fullnode_supported_protocol_versions_config: None,
             db_checkpoint_config_validators: DBCheckpointConfig::default(),
             db_checkpoint_config_fullnodes: DBCheckpointConfig::default(),
+            state_snapshot_write_config: StateSnapshotConfig::default(),
+            state_archive_write_config: StateArchiveConfig::default(),
             num_unpruned_validators: None,
             config_dir: None,
         }
@@ -647,6 +652,39 @@ impl TestClusterBuilder {
             object_store_config: None,
             perform_index_db_checkpoints_at_epoch_end: None,
             prune_and_compact_before_upload: Some(true),
+        };
+        self
+    }
+
+    pub fn with_enable_snapshot_writer(mut self) -> Self {
+        // TODO: this is the path to the snapshot within the "remote"
+        // store. Do we need to define this for testing purposes?
+        let temp_dir = tempfile::tempdir().unwrap().into_path().join("test");
+        let object_store_config = ObjectStoreConfig {
+            object_store: Some(ObjectStoreType::File),
+            directory: Some(temp_dir),
+            ..Default::default()
+        };
+        self.state_snapshot_write_config = StateSnapshotConfig {
+            object_store_config: Some(object_store_config),
+            concurrency: 3,
+        };
+        self
+    }
+
+    pub fn with_enable_archive_writer(mut self) -> Self {
+        // TODO: this is the path to the snapshot within the "remote"
+        // store. Do we need to define this for testing purposes?
+        let temp_dir = tempfile::tempdir().unwrap().into_path().join("test");
+        let object_store_config = ObjectStoreConfig {
+            object_store: Some(ObjectStoreType::File),
+            directory: Some(temp_dir),
+            ..Default::default()
+        };
+        self.state_archive_write_config = StateArchiveConfig {
+            object_store_config: Some(object_store_config),
+            concurrency: 3,
+            use_for_pruning_watermark: false,
         };
         self
     }
@@ -773,7 +811,9 @@ impl TestClusterBuilder {
                     .clone()
                     .unwrap_or(self.validator_supported_protocol_versions_config.clone()),
             )
-            .with_db_checkpoint_config(self.db_checkpoint_config_fullnodes.clone());
+            .with_db_checkpoint_config(self.db_checkpoint_config_fullnodes.clone())
+            .with_state_snapshot_write_config(self.state_snapshot_write_config.clone())
+            .with_state_archive_write_config(self.state_archive_write_config.clone());
 
         if let Some(genesis_config) = self.genesis_config.take() {
             builder = builder.with_genesis_config(genesis_config);
