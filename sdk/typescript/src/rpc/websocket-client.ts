@@ -117,8 +117,11 @@ export class WebsocketClient {
 			this.options.callTimeout,
 		);
 
-		// If an input ID is provided, this is a reconnect and we need to use that ID instead:
-		this.#subscriptions.set(input.id || id, {
+		// If an input ID is provided, this is a reconnect and we need to delete the existing subscription
+		if (input.id !== undefined) {
+			this.#subscriptions.delete(input.id);
+		}
+		this.#subscriptions.set(id, {
 			...input,
 			// Always set the latest actual subscription ID:
 			id,
