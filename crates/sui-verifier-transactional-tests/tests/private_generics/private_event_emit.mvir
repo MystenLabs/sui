@@ -1,0 +1,53 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+// tests modules cannot emit events for types not defined in the current module
+
+//# publish
+module 0x0.m {
+    import 0x2.event;
+    import 0x2.coin;
+
+    t(s: coin.CurrencyCreated<u64>) {
+        label l0:
+        event.emit<coin.CurrencyCreated<u64>>(move(s));
+        return;
+    }
+}
+
+//# publish
+module 0x0.m {
+    import 0x2.event;
+
+    t<T: copy + drop>(x: T) {
+        label l0:
+        event.emit<T>(move(x));
+        return;
+    }
+}
+
+//# publish
+module 0x0.m {
+    import 0x2.event;
+
+    t(x: u64) {
+        label l0:
+        event.emit<u64>(move(x));
+        return;
+    }
+}
+
+//# publish
+module 0x0.m {
+    import 0x2.event;
+
+    struct X has copy, drop {
+        dummy: bool,
+    }
+
+    t(x: vector<Self.X>) {
+        label l0:
+        event.emit<vector<Self.X>>(move(x));
+        return;
+    }
+}
