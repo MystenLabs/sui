@@ -131,6 +131,10 @@ impl AuthorityStorePruner {
             }
         }
         for (object_id, (min_version, max_version)) in updates {
+            debug!(
+                "Pruning object {:?} versions {:?} - {:?}",
+                object_id, min_version, max_version
+            );
             let start_range = ObjectKey(object_id, min_version);
             let end_range = ObjectKey(object_id, (max_version.value() + 1).into());
             wb.delete_range(&perpetual_db.objects, &start_range, &end_range)?;
@@ -169,6 +173,7 @@ impl AuthorityStorePruner {
             .flat_map(|content| content.iter().map(|tx| tx.transaction));
         for transaction_digest in transactions {
             if let Some(next_digest) = transaction_digest.next_lexicographical() {
+                debug!("Pruning transaction {:?}", transaction_digest);
                 perpetual_batch.delete_range(
                     &perpetual_db.transactions,
                     &transaction_digest,
@@ -189,6 +194,7 @@ impl AuthorityStorePruner {
 
         for effects in effects_to_prune {
             let effects_digest = effects.digest();
+            debug!("Pruning effects {:?}", effects_digest);
             if let Some(next_digest) = effects.digest().next_lexicographical() {
                 perpetual_batch.delete_range(
                     &perpetual_db.effects,
@@ -212,6 +218,7 @@ impl AuthorityStorePruner {
         for checkpoint_content in checkpoint_content_to_prune {
             let content_digest = *checkpoint_content.digest();
             if let Some(next_digest) = content_digest.next_lexicographical() {
+                debug!("Pruning checkpoint_content {:?}", content_digest);
                 checkpoints_batch.delete_range(
                     &checkpoint_db.checkpoint_content,
                     &content_digest,
