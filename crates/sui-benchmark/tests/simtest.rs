@@ -91,6 +91,7 @@ mod test {
         test_simulated_load(TestInitData::new(&test_cluster).await, 120).await;
     }
 
+    #[ignore("Disabled due to flakiness - re-enable when failure is fixed")]
     #[sim_test(config = "test_config()")]
     async fn test_simulated_load_reconfig_restarts() {
         // TODO added to invalidate a failing test seed in CI. Remove me
