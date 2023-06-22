@@ -10746,10 +10746,12 @@ dependencies = [
  "sui-move-build",
  "sui-sdk",
  "sui-source-validation",
+ "telemetry-subscribers",
  "tempfile",
  "test-utils",
  "tokio",
  "toml 0.7.4",
+ "tracing",
  "url",
  "workspace-hack",
 ]
