@@ -1,21 +1,16 @@
-processed 5 tasks
+processed 3 tasks
 
-task 1 'publish'. lines 9-12:
+task 0 'publish'. lines 7-22:
 created: object(1,0)
 mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 4020400,  storage_rebate: 0, non_refundable_storage_fee: 0
+gas summary: computation_cost: 1000000, storage_cost: 4689200,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2 'publish'. lines 14-22:
+task 1 'publish'. lines 24-39:
 created: object(2,0)
 mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 5418800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+gas summary: computation_cost: 1000000, storage_cost: 4377600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 3 'publish'. lines 24-32:
+task 2 'publish'. lines 41-56:
 created: object(3,0)
 mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 5107200,  storage_rebate: 978120, non_refundable_storage_fee: 9880
-
-task 4 'publish'. lines 34-42:
-created: object(4,0)
-mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 5099600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+gas summary: computation_cost: 1000000, storage_cost: 4370000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
