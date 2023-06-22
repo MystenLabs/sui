@@ -2,19 +2,12 @@ name: Generate Release Notes
 
 on:
   workflow_dispatch:
-    inputs:
-      previous_branch:
-        description: 'Previous Release Branch (releases/sui-vX.X.X-release)'
-        type: string
-        required: true
-      new_branch:
-        description: 'New Release Branch (releases/sui-vX.X.X-release)'
-        type: string
-        required: true
 
 jobs:
-  generate-release-notes:
-    name: Has commit been processed already?
+  get-list-of-prs:
+    name: Find new PRs to process
+    outputs:
+      matrix: ${{ steps.get-pr-list.outputs.matrix }}
     runs-on: [self-hosted, self-hosted-arc]
     
     steps:
@@ -33,15 +26,26 @@ jobs:
           echo "new_commit_hash=$(git rev-parse HEAD)" >> $GITHUB_ENV
           echo "existing_tag=$(git tag --points-at ${{ env.commit_hash }} | grep -E 'release_notes_v(.*)' | head -n 1)" >> $GITHUB_ENV
           echo "sui_version=$(cat Cargo.toml | grep "^version =" | tr -d '"' | awk '{ print $3 }')" >> $GITHUB_ENV
-          echo "old_commit_hash=$(git show-ref -s ${{ env.existing_tag }})" >> $GITHUB_ENV
+          [[ -n ${{ env.existing_tag }} ]] && echo "old_commit_hash=$(git show-ref -s ${{ env.existing_tag }})" >> $GITHUB_ENV
 
-    - name: Read Sui Version
-      if: ${{ env.existing_tag == '' }}
+    - name: Get list of PRs
+      id: get-pr-list
+      if: ${{ env.old_commit_hash != '' }}
       working-directory: ./
       run: |
-        sui_version=$(cat Cargo.toml | grep "^version =" | tr -d '"' | awk '{ print $3 }')
-        echo "sui_version=$sui_version" >> $GITHUB_ENV
+        export list_of_prs=($(git log --grep "\[x\]" --pretty=oneline --abbrev-commit d8de3b747ba275542825d3d7dfe78067e3c88df...8c0c8780447e519db3eb3644492343d0bbf179ef -- crates dashboards doc docker external-crates kiosk narwhal nre sui-execution | grep -o '#[0-9]\+' | grep -o '[0-9]\+'))
+        echo "::set-output name=matrix::${list_of_prs}"
+  
+  process-prs:
+    name: Processing PRs
+    needs: [ get-list-of-prs ]
+    runs-on: [self-hosted, self-hosted-arc]
+    strategy:
+      matrix:
+         pr: ${{fromJson(needs.get-list-of-prs.outputs.matrix)}}
 
-    - name: 
-      
-      
+    steps:
+    - name: Process PRs
+      run: |
+        echo ${{ matrix.pr }}
+
