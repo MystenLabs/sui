@@ -3,10 +3,15 @@
 
 //! This module controls feature gating and breaking changes in new editions of the source language
 
-use std::{fmt::Display, str::FromStr};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    fmt::Display,
+    str::FromStr,
+};
 
 use crate::{diag, shared::CompilationEnv};
 use move_ir_types::location::*;
+use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 
 //**************************************************************************************************
@@ -26,13 +31,8 @@ pub enum EditionRelease {
     Alpha,
 }
 
-#[derive(PartialEq, Eq, Clone, Copy, Debug)]
-pub enum FeatureGate {
-    LetMut,
-    ReceiverSyntax,
-    MacroFun,
-    UnderscoreType,
-}
+#[derive(PartialEq, Eq, Clone, Copy, Debug, PartialOrd, Ord)]
+pub enum FeatureGate {}
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug, PartialOrd, Ord)]
 pub enum Flavor {
@@ -45,11 +45,14 @@ pub enum Flavor {
 //**************************************************************************************************
 
 pub fn check_feature(env: &mut CompilationEnv, edition: Edition, loc: Loc, feature: FeatureGate) {
-    let min_edition = feature.min_edition();
-    if edition < min_edition {
+    let is_supported = SUPPORTED_FEATURES.get(&edition).unwrap().contains(&feature);
+    if !is_supported {
         env.add_diag(diag!(
             Editions::FeatureTooNew,
-            (loc, "{} requires edition {} or newer")
+            (
+                loc,
+                format!("{feature} requires edition {edition} or newer")
+            )
         ))
     }
 }
@@ -58,11 +61,41 @@ pub fn check_feature(env: &mut CompilationEnv, edition: Edition, loc: Loc, featu
 // impls
 //**************************************************************************************************
 
+static SUPPORTED_FEATURES: Lazy<BTreeMap<Edition, BTreeSet<FeatureGate>>> =
+    Lazy::new(|| BTreeMap::from_iter(Edition::ALL.iter().map(|e| (*e, e.features()))));
+
 impl Edition {
     pub const LEGACY: &str = "legacy";
     pub const E2024_PREFIX: &str = "2024";
 
+    pub const ALL: &[Self] = &[
+        Self::Legacy,
+        Self::E2024(EditionRelease::Alpha),
+        Self::E2024(EditionRelease::Beta),
+        Self::E2024(EditionRelease::Final),
+    ];
     pub const SUPPORTED: &[Self] = &[Self::Legacy, Self::E2024(EditionRelease::Alpha)];
+
+    // Intended only for implementing the lazy static (supported feature map) above
+    fn prev(&self) -> Option<Self> {
+        match self {
+            Self::Legacy => None,
+            Self::E2024(EditionRelease::Alpha) => Some(Self::Legacy),
+            Self::E2024(EditionRelease::Beta) => Some(Self::E2024(EditionRelease::Alpha)),
+            Self::E2024(EditionRelease::Final) => Some(Self::E2024(EditionRelease::Beta)),
+        }
+    }
+
+    // Inefficient and should be called only to implement the lazy static
+    // (supported feature map) above
+    fn features(&self) -> BTreeSet<FeatureGate> {
+        match self {
+            Edition::Legacy => BTreeSet::new(),
+            Edition::E2024(EditionRelease::Alpha) => self.prev().unwrap().features(),
+            Edition::E2024(EditionRelease::Beta) => self.prev().unwrap().features(),
+            Edition::E2024(EditionRelease::Final) => self.prev().unwrap().features(),
+        }
+    }
 }
 
 impl EditionRelease {
@@ -71,17 +104,6 @@ impl EditionRelease {
     pub const EXT_SEP: &str = ".";
 
     pub const SUFFIXES: &[Self] = &[Self::Alpha, Self::Beta];
-}
-
-impl FeatureGate {
-    pub fn min_edition(&self) -> Edition {
-        match self {
-            FeatureGate::LetMut => Edition::E2024(EditionRelease::Alpha),
-            FeatureGate::ReceiverSyntax => Edition::E2024(EditionRelease::Alpha),
-            FeatureGate::MacroFun => Edition::E2024(EditionRelease::Alpha),
-            FeatureGate::UnderscoreType => Edition::E2024(EditionRelease::Alpha),
-        }
-    }
 }
 
 impl Flavor {
@@ -249,6 +271,12 @@ impl Serialize for Flavor {
         S: serde::Serializer,
     {
         serializer.serialize_str(&format!("{}", self))
+    }
+}
+
+impl Display for FeatureGate {
+    fn fmt(&self, _: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        Ok(())
     }
 }
 

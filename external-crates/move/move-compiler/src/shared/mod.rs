@@ -304,11 +304,7 @@ impl CompilationEnv {
     }
 
     pub fn package_config(&self, package: Option<Symbol>) -> Option<&PackageConfig> {
-        if let Some(name) = package {
-            self.package_configs.get(&name)
-        } else {
-            None
-        }
+        self.package_configs.get(package.as_ref()?)
     }
 }
 
