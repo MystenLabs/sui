@@ -1101,7 +1101,7 @@ pub async fn get_move_modules_by_package(
                 )
                 .map_err(|e| {
                     error!("Failed to call get_move_modules_by_package for package: {package:?}");
-                    Error::SuiRpcInternalError(e.to_string()) // TODO(wlmyng): circle back to determine how we can better do this
+                    Error::SuiRpcInternalError(e)
                 })
             }
             _ => Err(Error::SuiRpcInputError(SuiRpcInputError::GenericInvalid(

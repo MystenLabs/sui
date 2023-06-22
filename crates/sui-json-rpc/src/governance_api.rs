@@ -148,7 +148,8 @@ impl GovernanceReadApi {
             system_state.clone().into_sui_system_state_summary();
 
         let rates = exchange_rates(&self.state, system_state_summary.epoch)
-            .await?
+            .await
+            .map_err(Error::SuiRpcInternalError)?
             .into_iter()
             .map(|rates| (rates.pool_id, rates))
             .collect::<BTreeMap<_, _>>();
@@ -268,7 +269,7 @@ impl GovernanceReadApiServer for GovernanceReadApi {
 
         let exchange_rate_table = exchange_rates(&self.state, system_state_summary.epoch)
             .await
-            .map_err(Error::from)?;
+            .map_err(Error::SuiRpcInternalError)?;
 
         let mut apys = vec![];
 

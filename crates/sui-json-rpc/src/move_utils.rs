@@ -200,7 +200,7 @@ impl MoveUtilsServer for MoveUtils {
                             /* max_binary_format_version */ VERSION_MAX,
                             /* no_extraneous_module_bytes */ false,
                         )
-                        .map_err(|e| Error::SuiRpcInternalError(e.to_string()))
+                        .map_err(Error::SuiRpcInternalError)
                     }
                     _ => Err(Error::SuiRpcInputError(SuiRpcInputError::GenericInvalid(
                         format!("Object is not a package with ID {}", package),

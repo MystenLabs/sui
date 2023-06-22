@@ -53,8 +53,9 @@ pub enum Error {
     #[error(transparent)]
     SuiRpcInputError(#[from] SuiRpcInputError),
 
+    // TODO(wlmyng): circle back to determine how we can better do this
     #[error("{0}")]
-    SuiRpcInternalError(String),
+    SuiRpcInternalError(SuiError),
 }
 
 impl From<Error> for RpcError {
@@ -106,7 +107,11 @@ impl Error {
             Error::SuiRpcInputError(sui_json_rpc_input_error) => {
                 RpcError::Call(CallError::InvalidParams(sui_json_rpc_input_error.into()))
             }
-            Error::SuiRpcInternalError(err) => to_internal_error(err),
+            Error::SuiRpcInternalError(err) => match err {
+                SuiError::ModuleDeserializationFailure { .. }
+                | SuiError::DeserializationError { .. } => to_internal_error(err),
+                _ => match_sui_error(err),
+            },
             _ => RpcError::Call(CallError::Failed(self.into())),
         }
     }
@@ -135,20 +140,6 @@ pub enum SuiRpcInputError {
     #[error("Unable to serialize: {0}")]
     CannotSerialize(#[from] bcs::Error),
 }
-
-/*
-* ClientDeserializationError
-* ModuleDeserializationFailure
-* FailObjectLayout
-
-*/
-
-/*
-* Depends on where this happens. This error enum to be used when error stems from us trying to deserialize something
-* ServerDeserializationError
-* ModuleDeserializationFailure
-* FailObjectLayout
-*/
 
 pub fn match_sui_error(sui_error: SuiError) -> RpcError {
     match sui_error {

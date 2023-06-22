@@ -2777,7 +2777,7 @@ async fn test_object_no_id_error() {
     path.extend(["src", "unit_tests", "data", "object_no_id"]);
     let res = build_config.build(path);
 
-    matches!(res.err(), Some(SuiError::ExecutionError(err_str, status)) if
+    matches!(res.err(), Some(SuiError::ExecutionError(err_str, _status)) if
                  err_str.contains("SuiMoveVerificationError")
                  && err_str.contains("First field of struct NotObject must be 'id'"));
 }

@@ -2375,41 +2375,6 @@ impl AuthorityState {
         Some(ChainIdentifier::from(*checkpoint.digest()))
     }
 
-    pub fn get_move_object<T>(&self, object_id: &ObjectID) -> SuiResult<T>
-    where
-        T: DeserializeOwned,
-    {
-        let o = self.get_object_read(object_id)?.into_object()?;
-        if let Some(move_object) = o.data.try_as_move() {
-            Ok(bcs::from_bytes(move_object.contents()).map_err(|e| {
-                SuiError::DeserializationError {
-                    // error from state
-                    input_type: "object".to_string(),
-                    error: format!("{e}"),
-                }
-            })?)
-        } else {
-            Err(SuiError::TypeError {
-                error: format!("Provided object : [{object_id}] is not a Move object."),
-            })
-        }
-    }
-
-    /// This function read the dynamic fields of a Table and return the deserialized value for the key.
-    pub async fn read_table_value<K, V>(&self, table: ObjectID, key: &K) -> Option<V>
-    where
-        K: DeserializeOwned + Serialize,
-        V: DeserializeOwned,
-    {
-        let key_bcs = bcs::to_bytes(key).ok()?;
-        let df = self
-            .get_dynamic_fields_iterator(table, None)
-            .ok()?
-            .find(|(_, df)| key_bcs == df.bcs_name)?;
-        let field: Field<K, V> = self.get_move_object(&df.1.object_id).ok()?;
-        Some(field.value)
-    }
-
     /// This function aims to serve rpc reads on past objects and
     /// we don't expect it to be called for other purposes.
     /// Depending on the object pruning policies that will be enforced in the
