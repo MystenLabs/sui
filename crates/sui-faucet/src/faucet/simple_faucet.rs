@@ -805,7 +805,20 @@ impl Faucet for SimpleFaucet {
                 id: coin_id,
             });
         }
-        Ok(FaucetReceipt { sent })
+
+        // Store into status map that the txn was successful for backwards compatibility
+        let faucet_receipt = FaucetReceipt { sent };
+        let mut task_map = self.task_id_cache.lock().await;
+        task_map.insert(
+            id,
+            BatchSendStatus {
+                status: BatchSendStatusType::SUCCEEDED,
+                transferred_gas_objects: Some(faucet_receipt.clone()),
+            },
+            Duration::from_secs(self.ttl_expiration),
+        );
+
+        Ok(faucet_receipt)
     }
 
     async fn batch_send(
