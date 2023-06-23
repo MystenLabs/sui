@@ -1,11 +1,8 @@
-use sui_config::NodeConfig;
-use sui_protocol_config::ProtocolConfig;
-use sui_types::base_types::ExecutionDigests;
-use sui_types::epoch_data::EpochData;
-use sui_types::messages::VerifiedTransaction;
-
-use prometheus::Registry;
 use std::sync::Arc;
+use std::cmp;
+
+use sui_config::NodeConfig;
+use prometheus::Registry;
 use sui_core::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use sui_core::authority::epoch_start_configuration::EpochStartConfiguration;
 use sui_core::authority::AuthorityStore;
@@ -17,26 +14,17 @@ use sui_core::signature_verifier::SignatureVerifierMetrics;
 use sui_core::storage::RocksDbStore;
 use sui_node::metrics;
 use sui_types::metrics::LimitsMetrics;
-use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemState;
+use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
 use sui_types::sui_system_state::SuiSystemStateTrait;
-use tokio::sync::watch;
+use sui_types::messages::TransactionDataAPI;
+use sui_types::messages::TransactionKind;
+use tokio::sync::{watch, mpsc};
 use tokio::time::Duration;
 use typed_store::rocks::default_db_options;
 
-#[derive(Debug)]
-pub struct EpochStartMessage(pub ProtocolConfig, pub EpochData, pub u64);
-#[derive(Debug)]
-pub struct EpochEndMessage(pub EpochStartSystemState);
-#[derive(Debug)]
-pub struct TransactionMessage(pub VerifiedTransaction, pub ExecutionDigests, pub u64);
+use super::types::*;
 
 pub struct SequenceWorkerState {
-    // config: NodeConfig,
-    // genesis: &Genesis,
-    // registry_service: RegistryService,
-    // prometheus_registry: Registry,
-    // metrics: Arc<LimitsMetrics>,
-    // checkpoint_store: Arc<CheckpointStore>,
     pub store: Arc<AuthorityStore>,
     pub epoch_store: Arc<AuthorityPerEpochStore>,
     pub checkpoint_store: Arc<CheckpointStore>,
@@ -180,5 +168,135 @@ impl SequenceWorkerState {
             None => 0,
         };
         (highest_synced_seq, highest_executed_seq)
+    }
+
+    pub async fn run(&mut self, 
+        config: NodeConfig, 
+        download: Option<u64>, 
+        exeucte: Option<u64>,
+        epoch_start_sender: mpsc::Sender<EpochStartMessage>,
+        tx_sender: mpsc::Sender<TransactionMessage>,
+        mut epoch_end_receiver: mpsc::Receiver<EpochEndMessage>,)
+    {
+        let genesis = Arc::new(config.genesis().expect("Could not load genesis"));
+        let genesis_seq = genesis.checkpoint().into_summary_and_sequence().0;
+
+        let (highest_synced_seq, highest_executed_seq) = self.get_watermarks();
+        println!("Highest synced {}", highest_synced_seq);
+        println!("Highest executed {}", highest_executed_seq);
+
+        let protocol_config = self.epoch_store.protocol_config();
+        let epoch_start_config = self.epoch_store.epoch_start_config();
+        let reference_gas_price = self.epoch_store.reference_gas_price();
+
+        // Epoch Start
+        epoch_start_sender
+            .send(EpochStartMessage(
+                protocol_config.clone(),
+                epoch_start_config.epoch_data(),
+                reference_gas_price,
+            ))
+            .await
+            .expect("Sending doesn't work");
+
+        if let Some(watermark) = download {
+            self.handle_download(watermark, &config).await;
+        }
+        
+
+        if let Some(watermark) = exeucte {
+            for checkpoint_seq in genesis_seq..cmp::min(watermark, highest_synced_seq) {
+                let checkpoint_summary = self
+                    .checkpoint_store
+                    .get_checkpoint_by_sequence_number(checkpoint_seq)
+                    .expect("Cannot get checkpoint")
+                    .expect("Checkpoint is None");
+
+                if checkpoint_seq % 10000 == 0 {
+                    println!("Sending checkpoint {}", checkpoint_seq);
+                }
+
+                let (_seq, summary) = checkpoint_summary.into_summary_and_sequence();
+                let contents = self
+                    .checkpoint_store
+                    .get_checkpoint_contents(&summary.content_digest)
+                    .expect("Contents must exist")
+                    .expect("Contents must exist");
+
+                if contents.size() > 1 {
+                    println!(
+                        "Checkpoint {} has {} transactions",
+                        checkpoint_seq,
+                        contents.size()
+                    );
+                }
+
+                for tx_digest in contents.iter() {
+                    let tx = self
+                        .store
+                        .get_transaction_block(&tx_digest.transaction)
+                        .expect("Transaction exists")
+                        .expect("Transaction exists");
+
+                    tx_sender
+                        .send(TransactionMessage(
+                            tx.clone(),
+                            tx_digest.clone(),
+                            checkpoint_seq,
+                        ))
+                        .await
+                        .expect("Sending doesn't work");
+
+                    if let TransactionKind::ChangeEpoch(_) = tx.data().transaction_data().kind() {
+                        // wait for epoch end message from execution worker
+                        println!(
+                            "Waiting for epoch end message. Checkpoint_seq: {}",
+                            checkpoint_seq
+                        );
+
+                        let EpochEndMessage(new_epoch_start_state) = epoch_end_receiver
+                            .recv()
+                            .await
+                            .expect("Receiving doesn't work");
+                        let next_epoch_committee = new_epoch_start_state.get_sui_committee();
+                        let next_epoch = next_epoch_committee.epoch();
+                        let last_checkpoint = self
+                            .checkpoint_store
+                            .get_epoch_last_checkpoint(self.epoch_store.epoch())
+                            .expect("Error loading last checkpoint for current epoch")
+                            .expect("Could not load last checkpoint for current epoch");
+                        println!(
+                            "Last checkpoint sequence number: {}",
+                            last_checkpoint.sequence_number(),
+                        );
+                        let epoch_start_configuration = EpochStartConfiguration::new(
+                            new_epoch_start_state,
+                            *last_checkpoint.digest(),
+                        );
+                        assert_eq!(self.epoch_store.epoch() + 1, next_epoch);
+                        self.epoch_store = self.epoch_store.new_at_next_epoch(
+                            config.protocol_public_key(),
+                            next_epoch_committee,
+                            epoch_start_configuration,
+                            self.store.clone(),
+                            &config.expensive_safety_check_config,
+                        );
+                        println!("New epoch store has epoch {}", self.epoch_store.epoch());
+                        let protocol_config = self.epoch_store.protocol_config();
+                        let epoch_start_config = self.epoch_store.epoch_start_config();
+                        let reference_gas_price = self.epoch_store.reference_gas_price();
+                        epoch_start_sender
+                            .send(EpochStartMessage(
+                                protocol_config.clone(),
+                                epoch_start_config.epoch_data(),
+                                reference_gas_price,
+                            ))
+                            .await
+                            .expect("Sending doesn't work");
+                    }
+                }
+            }
+        }
+        println!("Sequence worker finished");
     }
 }

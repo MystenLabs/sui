@@ -1,10 +1,8 @@
 use clap::*;
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::cmp;
 use sui_adapter::adapter;
 use sui_config::{Config, NodeConfig};
-use sui_core::authority::epoch_start_configuration::EpochStartConfiguration;
 use sui_distributed_execution::seqn_worker;
 use sui_distributed_execution::exec_worker;
 use sui_distributed_execution::types::*;
@@ -14,7 +12,6 @@ use sui_types::epoch_data::EpochData;
 use sui_types::messages::TransactionDataAPI;
 use sui_types::messages::TransactionKind;
 use sui_types::multiaddr::Multiaddr;
-use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
 use sui_types::sui_system_state::get_sui_system_state;
 use sui_types::sui_system_state::SuiSystemStateTrait;
 use tokio::sync::mpsc;
@@ -69,130 +66,18 @@ async fn main() {
 
     let (epoch_start_sender, mut epoch_start_receiver) = mpsc::channel(32);
     let (tx_sender, mut tx_receiver) = mpsc::channel(1000);
-    let (epoch_end_sender, mut epoch_end_receiver) = mpsc::channel(32);
+    let (epoch_end_sender, epoch_end_receiver) = mpsc::channel(32);
 
-    // Sequence Worker
+    // Run Sequence Worker
     let sw_handler = tokio::spawn(async move {
-        let config = NodeConfig::load(&args.config_path).unwrap();
-        let genesis = Arc::new(config.genesis().expect("Could not load genesis"));
-        let genesis_seq = genesis.checkpoint().into_summary_and_sequence().0;
-
-        let (highest_synced_seq, highest_executed_seq) = sw_state.get_watermarks();
-        println!("Highest synced {}", highest_synced_seq);
-        println!("Highest executed {}", highest_executed_seq);
-
-        let protocol_config = sw_state.epoch_store.protocol_config();
-        let epoch_start_config = sw_state.epoch_store.epoch_start_config();
-        let reference_gas_price = sw_state.epoch_store.reference_gas_price();
-
-        if let Some(watermark) = args.download {
-            sw_state.handle_download(watermark, &config).await;
-        }
-
-        // Epoch Start
-        epoch_start_sender
-            .send(EpochStartMessage(
-                protocol_config.clone(),
-                epoch_start_config.epoch_data(),
-                reference_gas_price,
-            ))
-            .await
-            .expect("Sending doesn't work");
-
-        if let Some(watermark) = args.execute {
-            for checkpoint_seq in genesis_seq..cmp::min(watermark, highest_synced_seq) {
-                let checkpoint_summary = sw_state
-                    .checkpoint_store
-                    .get_checkpoint_by_sequence_number(checkpoint_seq)
-                    .expect("Cannot get checkpoint")
-                    .expect("Checkpoint is None");
-
-                if checkpoint_seq % 10000 == 0 {
-                    println!("Sending checkpoint {}", checkpoint_seq);
-                }
-
-                let (_seq, summary) = checkpoint_summary.into_summary_and_sequence();
-                let contents = sw_state
-                    .checkpoint_store
-                    .get_checkpoint_contents(&summary.content_digest)
-                    .expect("Contents must exist")
-                    .expect("Contents must exist");
-
-                if contents.size() > 1 {
-                    println!(
-                        "Checkpoint {} has {} transactions",
-                        checkpoint_seq,
-                        contents.size()
-                    );
-                }
-
-                for tx_digest in contents.iter() {
-                    let tx = sw_state
-                        .store
-                        .get_transaction_block(&tx_digest.transaction)
-                        .expect("Transaction exists")
-                        .expect("Transaction exists");
-
-                    tx_sender
-                        .send(TransactionMessage(
-                            tx.clone(),
-                            tx_digest.clone(),
-                            checkpoint_seq,
-                        ))
-                        .await
-                        .expect("Sending doesn't work");
-
-                    if let TransactionKind::ChangeEpoch(_) = tx.data().transaction_data().kind() {
-                        // wait for epoch end message from execution worker
-                        println!(
-                            "Waiting for epoch end message. Checkpoint_seq: {}",
-                            checkpoint_seq
-                        );
-
-                        let EpochEndMessage(new_epoch_start_state) = epoch_end_receiver
-                            .recv()
-                            .await
-                            .expect("Receiving doesn't work");
-                        let next_epoch_committee = new_epoch_start_state.get_sui_committee();
-                        let next_epoch = next_epoch_committee.epoch();
-                        let last_checkpoint = sw_state
-                            .checkpoint_store
-                            .get_epoch_last_checkpoint(sw_state.epoch_store.epoch())
-                            .expect("Error loading last checkpoint for current epoch")
-                            .expect("Could not load last checkpoint for current epoch");
-                        println!(
-                            "Last checkpoint sequence number: {}",
-                            last_checkpoint.sequence_number(),
-                        );
-                        let epoch_start_configuration = EpochStartConfiguration::new(
-                            new_epoch_start_state,
-                            *last_checkpoint.digest(),
-                        );
-                        assert_eq!(sw_state.epoch_store.epoch() + 1, next_epoch);
-                        sw_state.epoch_store = sw_state.epoch_store.new_at_next_epoch(
-                            config.protocol_public_key(),
-                            next_epoch_committee,
-                            epoch_start_configuration,
-                            sw_state.store.clone(),
-                            &config.expensive_safety_check_config,
-                        );
-                        println!("New epoch store has epoch {}", sw_state.epoch_store.epoch());
-                        let protocol_config = sw_state.epoch_store.protocol_config();
-                        let epoch_start_config = sw_state.epoch_store.epoch_start_config();
-                        let reference_gas_price = sw_state.epoch_store.reference_gas_price();
-                        epoch_start_sender
-                            .send(EpochStartMessage(
-                                protocol_config.clone(),
-                                epoch_start_config.epoch_data(),
-                                reference_gas_price,
-                            ))
-                            .await
-                            .expect("Sending doesn't work");
-                    }
-                }
-            }
-        }
-        println!("Sequence worker finished");
+        sw_state.run(
+            config.clone(), 
+            args.download, 
+            args.execute,
+            epoch_start_sender, 
+            tx_sender, 
+            epoch_end_receiver
+        ).await;
     });
 
     let mut ew_handler_opt = None;
