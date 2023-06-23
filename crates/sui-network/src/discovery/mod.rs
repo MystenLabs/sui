@@ -176,6 +176,8 @@ impl DiscoveryEventLoop {
                 None
             };
 
+            // TODO: once we have `PeerAffinity::Allowlisted` we should update allowlisted peers'
+            // affinity.
             let peer_info = anemo::types::PeerInfo {
                 peer_id,
                 affinity: anemo::types::PeerAffinity::High,
