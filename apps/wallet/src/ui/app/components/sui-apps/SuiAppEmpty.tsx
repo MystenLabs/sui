@@ -3,7 +3,7 @@
 
 import { cva, type VariantProps } from 'class-variance-authority';
 
-const appEmptyStyle = cva(['flex gap-3 gap-3 p-3.75 h-28'], {
+const appEmptyStyle = cva(['flex gap-3 p-3.75 h-28'], {
 	variants: {
 		displayType: {
 			full: 'w-full',
