@@ -114,11 +114,23 @@ impl UnstartedDiscovery {
         } = self;
 
         let discovery_config = config.discovery.clone().unwrap_or_default();
-
+        let allowlisted_peers = Arc::new(
+            discovery_config
+                .allowlisted_peers
+                .clone()
+                .into_iter()
+                .map(|ap| (ap.peer_id, ap.address))
+                .chain(config.seed_peers.iter().filter_map(|peer| {
+                    peer.peer_id
+                        .map(|peer_id| (peer_id, Some(peer.address.clone())))
+                }))
+                .collect::<HashMap<_, _>>(),
+        );
         (
             DiscoveryEventLoop {
                 config,
-                discovery_config,
+                discovery_config: Arc::new(discovery_config),
+                allowlisted_peers,
                 network,
                 tasks: JoinSet::new(),
                 pending_dials: Default::default(),
