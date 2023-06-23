@@ -4,7 +4,7 @@
 import { useFeature } from '@growthbook/growthbook-react';
 import cl from 'classnames';
 import { useMemo } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 
 import { permissionsSelectors } from '../../redux/slices/permissions';
 import { SuiApp, type DAppEntry } from './SuiApp';
@@ -19,19 +19,16 @@ import st from './Playground.module.scss';
 
 function AppsPlayGround() {
 	const ecosystemApps = useFeature<DAppEntry[]>(FEATURES.WALLET_DAPPS).value;
-	const location = useLocation();
-
-	const queryParams = new URLSearchParams(location.search);
-	const tagFilter = queryParams.get('tagFilter');
+	const { tagName } = useParams();
 
 	const filteredEcosystemApps = useMemo(() => {
 		if (!ecosystemApps) {
 			return [];
-		} else if (tagFilter) {
-			return ecosystemApps.filter((app) => app.tags.includes(tagFilter));
+		} else if (tagName) {
+			return ecosystemApps.filter((app) => app.tags.includes(tagName));
 		}
 		return ecosystemApps;
-	}, [ecosystemApps, tagFilter]);
+	}, [ecosystemApps, tagName]);
 
 	const allPermissions = useAppSelector(permissionsSelectors.selectAll);
 	const linkToPermissionID = useMemo(() => {
