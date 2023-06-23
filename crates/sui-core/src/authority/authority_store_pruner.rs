@@ -300,7 +300,7 @@ impl AuthorityStorePruner {
             checkpoint_store,
             PruningMode::Checkpoints,
             config
-                .num_epochs_to_retain_for_checkpoints
+                .num_epochs_to_retain_for_checkpoints()
                 .ok_or_else(|| anyhow!("config value not set"))?,
             pruned_checkpoint_number,
             perpetual_db.get_highest_pruned_checkpoint()?,
@@ -510,7 +510,7 @@ impl AuthorityStorePruner {
                             error!("Failed to prune objects: {:?}", err);
                         }
                     },
-                    _ = checkpoints_prune_interval.tick(), if !matches!(config.num_epochs_to_retain_for_checkpoints, None | Some(u64::MAX) | Some(0)) => {
+                    _ = checkpoints_prune_interval.tick(), if !matches!(config.num_epochs_to_retain_for_checkpoints(), None | Some(u64::MAX) | Some(0)) => {
                         if let Err(err) = Self::prune_checkpoints_for_eligible_epochs(&perpetual_db, &checkpoint_store, &objects_lock_table, config, metrics.clone(), indirect_objects_threshold).await {
                             error!("Failed to prune checkpoints: {:?}", err);
                         }
