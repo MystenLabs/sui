@@ -124,13 +124,13 @@ export class Keyring {
 		if (this.isLocked) {
 			return null;
 		}
-		const mnemonic = VaultStorage.getMnemonic();
-		if (!mnemonic) {
+		const mnemonicSeedHex = VaultStorage.getMnemonicSeedHex();
+		if (!mnemonicSeedHex) {
 			return null;
 		}
 		const nextIndex = (await this.getLastDerivedIndex()) + 1;
 		await this.storeLastDerivedIndex(nextIndex);
-		const account = this.deriveAccount(nextIndex, mnemonic);
+		const account = this.deriveAccount(nextIndex, mnemonicSeedHex);
 		this.#accountsMap.set(account.address, account);
 		this.notifyAccountsChanged();
 		return account;
@@ -487,14 +487,14 @@ export class Keyring {
 	}
 
 	private async unlocked() {
-		let mnemonic = VaultStorage.getMnemonic();
-		if (!mnemonic) {
+		let mnemonicSeedHex = VaultStorage.getMnemonicSeedHex();
+		if (!mnemonicSeedHex) {
 			return;
 		}
 		Alarms.setLockAlarm();
 		const lastAccountIndex = await this.getLastDerivedIndex();
 		for (let i = 0; i <= lastAccountIndex; i++) {
-			const account = this.deriveAccount(i, mnemonic);
+			const account = this.deriveAccount(i, mnemonicSeedHex);
 			this.#accountsMap.set(account.address, account);
 			if (i === 0) {
 				this.#mainDerivedAccount = account.address;
@@ -533,15 +533,15 @@ export class Keyring {
 				this.#accountsMap.set(account.address, account);
 			}
 		});
-		mnemonic = null;
+		mnemonicSeedHex = null;
 		this.#locked = false;
 		this.storeAccountsPublicInfo();
 		this.notifyLockedStatusUpdate(this.#locked);
 	}
 
-	private deriveAccount(accountIndex: number, mnemonic: string) {
+	private deriveAccount(accountIndex: number, mnemonicSeedHex: string) {
 		const derivationPath = this.makeDerivationPath(accountIndex);
-		const keypair = Ed25519Keypair.deriveKeypair(mnemonic, derivationPath);
+		const keypair = Ed25519Keypair.deriveKeypairFromSeed(mnemonicSeedHex, derivationPath);
 		return new DerivedAccount({ keypair, derivationPath });
 	}
 
