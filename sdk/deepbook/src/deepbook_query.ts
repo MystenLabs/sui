@@ -28,7 +28,7 @@ export class DeepBook_query {
                 txb.moveCall({
                         typeArguments: [token1, token2],
                         target: `dee9::clob_v2::get_order_status`,
-                        arguments: [txb.object(poolId), txb.object(String(orderId)), txb.object(`${accountCap}`)],
+                        arguments: [txb.object(`${poolId}`), txb.object(String(orderId)), txb.object(`${accountCap}`)],
                 });
                 txb.setSender(this.currentAddress);
                 return await this.provider.devInspectTransactionBlock({
