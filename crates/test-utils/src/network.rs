@@ -36,8 +36,8 @@ use sui_types::base_types::{AuthorityName, ObjectID, ObjectRef, SuiAddress};
 use sui_types::committee::{Committee, EpochId};
 use sui_types::crypto::KeypairTraits;
 use sui_types::crypto::SuiKeyPair;
-use sui_types::effects::TransactionEffectsAPI;
 use sui_types::effects::{TransactionEffects, TransactionEvents};
+use sui_types::error::SuiResult;
 use sui_types::governance::MIN_VALIDATOR_JOINING_STAKE_MIST;
 use sui_types::message_envelope::Message;
 use sui_types::object::Object;
@@ -390,11 +390,32 @@ impl TestCluster {
 
     /// Execute a transaction on the network and wait for it to be executed on the rpc fullnode.
     /// Also expects the effects status to be ExecutionStatus::Success.
+    /// This function is recommended for transaction execution since it most resembles the
+    /// production path.
     pub async fn execute_transaction(
         &self,
         tx: VerifiedTransaction,
     ) -> SuiTransactionBlockResponse {
         self.wallet.execute_transaction_must_succeed(tx).await
+    }
+
+    /// Different from `execute_transaction` which returns RPC effects types, this function
+    /// returns raw effects, events and extra objects returned by the validators,
+    /// aggregated manually (without authority aggregator).
+    /// It also does not check whether the transaction is executed successfully.
+    /// In order to keep the fullnode up-to-date so that latter queries can read consistent
+    /// results, it calls execute_transaction_may_fail again which goes through fullnode.
+    /// This is less efficient and verbose, but can be used if more details are needed
+    /// from the execution results, and if the transaction is expected to fail.
+    pub async fn execute_transaction_return_raw_effects(
+        &self,
+        tx: VerifiedTransaction,
+    ) -> anyhow::Result<(TransactionEffects, TransactionEvents, Vec<Object>)> {
+        let results = self
+            .submit_transaction_to_validators(tx.clone(), &self.get_validator_pubkeys())
+            .await?;
+        self.wallet.execute_transaction_may_fail(tx).await.unwrap();
+        Ok(results)
     }
 
     pub fn authority_aggregator(&self) -> Arc<AuthorityAggregator<NetworkAuthorityClient>> {
@@ -412,13 +433,9 @@ impl TestCluster {
         &self,
         tx: VerifiedTransaction,
         pubkeys: &[AuthorityName],
-    ) -> (TransactionEffects, TransactionEvents, Vec<Object>) {
+    ) -> anyhow::Result<(TransactionEffects, TransactionEvents, Vec<Object>)> {
         let agg = self.authority_aggregator();
-        let certificate = agg
-            .process_transaction(tx)
-            .await
-            .unwrap()
-            .into_cert_for_testing();
+        let certificate = agg.process_transaction(tx).await?.into_cert_for_testing();
         let replies = loop {
             let futures: Vec<_> = agg
                 .authority_clients
@@ -453,13 +470,13 @@ impl TestCluster {
                 break replies;
             }
         };
-        let replies = replies.into_iter().map(|r| r.unwrap());
+        let replies: SuiResult<Vec<_>> = replies.into_iter().collect();
+        let replies = replies?;
         let mut all_effects = HashMap::new();
         let mut all_events = HashMap::new();
         let mut all_objects = HashSet::new();
         for reply in replies {
             let effects = reply.signed_effects.into_data();
-            assert!(effects.status().is_ok());
             all_effects.insert(effects.digest(), effects);
             all_events.insert(reply.events.digest(), reply.events);
             all_objects.insert(reply.fastpath_input_objects);
@@ -467,11 +484,11 @@ impl TestCluster {
         assert_eq!(all_effects.len(), 1);
         assert_eq!(all_events.len(), 1);
         assert_eq!(all_objects.len(), 1);
-        (
+        Ok((
             all_effects.into_values().next().unwrap(),
             all_events.into_values().next().unwrap(),
             all_objects.into_iter().next().unwrap(),
-        )
+        ))
     }
 
     #[cfg(msim)]
