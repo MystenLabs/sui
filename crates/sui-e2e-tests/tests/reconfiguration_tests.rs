@@ -615,7 +615,7 @@ async fn test_reconfig_with_committee_change_stress() {
             .filter(|node| {
                 node.config
                     .authority_store_pruning_config
-                    .num_epochs_to_retain_for_checkpoints
+                    .num_epochs_to_retain_for_checkpoints()
                     .is_some()
             })
             .take(2)

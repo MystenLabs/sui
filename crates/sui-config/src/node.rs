@@ -27,6 +27,7 @@ use sui_types::crypto::NetworkKeyPair;
 use sui_types::crypto::SuiKeyPair;
 use sui_types::crypto::{get_key_pair_from_rng, AccountKeyPair, AuthorityKeyPair};
 use sui_types::multiaddr::Multiaddr;
+use tracing::info;
 
 // Default max number of concurrent requests served
 pub const DEFAULT_GRPC_CONCURRENCY_LIMIT: usize = 20000000000;
@@ -450,7 +451,7 @@ pub struct AuthorityStorePruningConfig {
     pub periodic_compaction_threshold_days: Option<usize>,
     /// number of epochs to keep the latest version of transactions and effects for
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub num_epochs_to_retain_for_checkpoints: Option<u64>,
+    num_epochs_to_retain_for_checkpoints: Option<u64>,
 }
 
 impl Default for AuthorityStorePruningConfig {
@@ -476,7 +477,7 @@ impl AuthorityStorePruningConfig {
         // TODO: Remove this after aggressive pruning is enabled by default
         let num_epochs_to_retain = if cfg!(msim) { 0 } else { 2 };
         let pruning_run_delay_seconds = if cfg!(msim) { Some(2) } else { None };
-        let num_epochs_to_retain_for_checkpoints = if cfg!(msim) { Some(1) } else { None };
+        let num_epochs_to_retain_for_checkpoints = if cfg!(msim) { Some(2) } else { None };
         Self {
             num_latest_epoch_dbs_to_retain: 3,
             epoch_db_pruning_period_secs: 60 * 60,
@@ -492,7 +493,7 @@ impl AuthorityStorePruningConfig {
         // TODO: Remove this after aggressive pruning is enabled by default
         let num_epochs_to_retain = if cfg!(msim) { 0 } else { 2 };
         let pruning_run_delay_seconds = if cfg!(msim) { Some(2) } else { None };
-        let num_epochs_to_retain_for_checkpoints = if cfg!(msim) { Some(1) } else { None };
+        let num_epochs_to_retain_for_checkpoints = if cfg!(msim) { Some(2) } else { None };
         Self {
             num_latest_epoch_dbs_to_retain: 3,
             epoch_db_pruning_period_secs: 60 * 60,
@@ -503,6 +504,23 @@ impl AuthorityStorePruningConfig {
             periodic_compaction_threshold_days: None,
             num_epochs_to_retain_for_checkpoints,
         }
+    }
+
+    pub fn set_num_epochs_to_retain_for_checkpoints(&mut self, num_epochs_to_retain: Option<u64>) {
+        self.num_epochs_to_retain_for_checkpoints = num_epochs_to_retain;
+    }
+
+    pub fn num_epochs_to_retain_for_checkpoints(&self) -> Option<u64> {
+        self.num_epochs_to_retain_for_checkpoints
+            // if n less than 2, coerce to 2 and log
+            .map(|n| {
+                if n < 2 {
+                    info!("num_epochs_to_retain_for_checkpoints must be at least 2, rounding up from {}", n);
+                    2
+                } else {
+                    n
+                }
+            })
     }
 }
 
