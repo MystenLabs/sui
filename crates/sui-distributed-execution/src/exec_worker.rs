@@ -137,108 +137,111 @@ impl ExecutionWorkerState {
         }
     }
 
+
     pub async fn run(&mut self,
         metrics: Arc<LimitsMetrics>,
         exec_watermark: u64,
         mut sw_receiver: mpsc::Receiver<SailfishMessage>,
         ew_sender: mpsc::Sender<SailfishMessage>,
     ){
-        let mut epoch_data: EpochData;
-        let mut protocol_config: ProtocolConfig;
-        let mut reference_gas_price: u64;
         // Wait for epoch start message
         let SailfishMessage::EpochStart{
-            conf: protocol_config_,
-            data: epoch_data_,
-            ref_gas_price: reference_gas_price_,
+            conf: mut protocol_config,
+            data: mut epoch_data,
+            ref_gas_price: mut reference_gas_price,
         } = sw_receiver.recv().await.unwrap() 
         else {
             panic!("unexpected message");
         };
         println!("Got epoch start message");
 
-        protocol_config = protocol_config_;
-        epoch_data = epoch_data_;
-        reference_gas_price = reference_gas_price_;
-
         let native_functions = sui_move_natives::all_natives(/* silent */ true);
         let mut move_vm = Arc::new(
-            adapter::new_move_vm(native_functions.clone(), &protocol_config, false)
+            adapter::new_move_vm(native_functions, &protocol_config, false)
                 .expect("We defined natives to not fail here"),
         );
 
-        // start timer for TPS computation
+        // Start timer for TPS computation
         let now = Instant::now();
         let mut num_tx: usize = 0;
-        // receive txs
-        while let Some(SailfishMessage::Transaction{
-            tx,
-            digest: tx_digest,
-            checkpoint_seq,
-        }) = sw_receiver.recv().await
-        {
-            self
-                .execute_tx(
+
+        // Receive txs
+        while let Some(msg) = sw_receiver.recv().await {
+            if let SailfishMessage::Transaction{tx, digest, checkpoint_seq} = msg {
+                self.execute_tx(
                     &tx,
-                    &tx_digest,
+                    &digest,
                     checkpoint_seq,
                     &protocol_config,
                     &move_vm,
                     &epoch_data,
                     reference_gas_price,
                     metrics.clone(),
-                )
-                .await;
+                ).await;
 
-            num_tx += 1;
-            if checkpoint_seq % 10000 == 0 {
-                println!("Executed {}", checkpoint_seq);
-            }
+                num_tx += 1;
+                if checkpoint_seq % 10000 == 0 {
+                    println!("Executed {}", checkpoint_seq);
+                }
 
-            if let TransactionKind::ChangeEpoch(_) = tx.data().transaction_data().kind() {
-                // First send end of epoch message to sequence worker
-                println!("END OF EPOCH at checkpoint {}", checkpoint_seq);
-                let latest_state = get_sui_system_state(&&self.memory_store)
-                    .expect("Read Sui System State object cannot fail");
-                let new_epoch_start_state = latest_state.into_epoch_start_state();
-                ew_sender
-                    .send(SailfishMessage::EpochEnd{
-                        new_epoch_start_state,
-                    })
-                    .await
-                    .expect("Sending doesn't work");
+                if let TransactionKind::ChangeEpoch(_) = tx.data().transaction_data().kind() {
+                    // Change epoch
+                    println!("END OF EPOCH at checkpoint {}", checkpoint_seq);
+                     (protocol_config, epoch_data, reference_gas_price, move_vm) = 
+                        self.process_epoch_change(&ew_sender, &mut sw_receiver).await;
+                }
 
-                // Then wait for start epoch message from sequence worker and update local state
-                let SailfishMessage::EpochStart{
-                    conf: protocol_config_,
-                    data: epoch_data_,
-                    ref_gas_price: reference_gas_price_,
-                } = sw_receiver.recv().await.unwrap()
-                else {
-                    panic!("unexpected message");
-                };
-                move_vm = Arc::new(
-                    adapter::new_move_vm(native_functions.clone(), &protocol_config, false)
-                        .expect("We defined natives to not fail here"),
-                );
-                protocol_config = protocol_config_;
-                epoch_data = epoch_data_;
-                reference_gas_price = reference_gas_price_;
-            }
-
-            // Stop executing when I hit the watermark
-            if checkpoint_seq == exec_watermark-1 {
-                break;
+                // Stop executing when I hit the watermark
+                if checkpoint_seq == exec_watermark-1 {
+                    break;
+                }
+            } else {
+                panic!("unexpected message");
             }
         }
 
-        // print TPS
+        // Print TPS
         let elapsed = now.elapsed();
         println!(
             "Execution worker TPS: {}",
             1000.0 * num_tx as f64 / elapsed.as_millis() as f64
         );
         println!("Execution worker finished");
+    }
+
+
+    // Helper function to process an epoch change
+    async fn process_epoch_change(&self,
+        ew_sender: &mpsc::Sender<SailfishMessage>,
+        sw_receiver: &mut mpsc::Receiver<SailfishMessage>,
+    ) -> (ProtocolConfig, EpochData, u64, Arc<MoveVM>)
+    {
+        // First send end of epoch message to sequence worker
+        let latest_state = get_sui_system_state(&&self.memory_store)
+            .expect("Read Sui System State object cannot fail");
+        let new_epoch_start_state = latest_state.into_epoch_start_state();
+        ew_sender
+            .send(SailfishMessage::EpochEnd{
+                new_epoch_start_state,
+            }).await
+            .expect("Sending doesn't work");
+
+        // Then wait for start epoch message from sequence worker and update local state
+        let SailfishMessage::EpochStart{
+            conf: protocol_config,
+            data: epoch_data,
+            ref_gas_price: reference_gas_price,
+        } = sw_receiver.recv().await.unwrap()
+        else {
+            panic!("unexpected message");
+        };
+
+        let native_functions = sui_move_natives::all_natives(/* silent */ true);
+        let new_move_vm = Arc::new(
+            adapter::new_move_vm(native_functions.clone(), &protocol_config, false)
+                .expect("We defined natives to not fail here"),
+        );
+        return (protocol_config, epoch_data, reference_gas_price, new_move_vm);
     }
 }
 
