@@ -54,9 +54,11 @@ async fn main() {
     let mut ew_state = exec_worker::ExecutionWorkerState::new();
     ew_state.init_store(&genesis);
 
-    let (epoch_start_sender, epoch_start_receiver) = mpsc::channel(32);
-    let (tx_sender, tx_receiver) = mpsc::channel(1000);
-    let (epoch_end_sender, epoch_end_receiver) = mpsc::channel(32);
+    // Channel from sw to ew
+    let (sw_sender, sw_receiver) = mpsc::channel(32);
+    // Channel from ew to sw
+    let (ew_sender, ew_receiver) = mpsc::channel(32);
+
 
     // Run Sequence Worker
     let sw_handler = tokio::spawn(async move {
@@ -64,9 +66,8 @@ async fn main() {
             config.clone(), 
             args.download, 
             args.execute,
-            epoch_start_sender, 
-            tx_sender, 
-            epoch_end_receiver
+            sw_sender, 
+            ew_receiver, 
         ).await;
     });
 
@@ -77,9 +78,8 @@ async fn main() {
             ew_state.run(
                 metrics,
                 watermark,
-                epoch_start_receiver,
-                tx_receiver,
-                epoch_end_sender,
+                sw_receiver,
+                ew_sender
             ).await;
         }));
     }

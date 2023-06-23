@@ -140,9 +140,8 @@ impl ExecutionWorkerState {
     pub async fn run(&mut self,
         metrics: Arc<LimitsMetrics>,
         exec_watermark: u64,
-        mut epoch_start_receiver: mpsc::Receiver<SailfishMessage>,
-        mut tx_receiver: mpsc::Receiver<SailfishMessage>,
-        epoch_end_sender: mpsc::Sender<SailfishMessage>,
+        mut sw_receiver: mpsc::Receiver<SailfishMessage>,
+        ew_sender: mpsc::Sender<SailfishMessage>,
     ){
         let mut epoch_data: EpochData;
         let mut protocol_config: ProtocolConfig;
@@ -152,7 +151,7 @@ impl ExecutionWorkerState {
             conf: protocol_config_,
             data: epoch_data_,
             ref_gas_price: reference_gas_price_,
-        } = epoch_start_receiver.recv().await.unwrap() 
+        } = sw_receiver.recv().await.unwrap() 
         else {
             panic!("unexpected message");
         };
@@ -176,7 +175,7 @@ impl ExecutionWorkerState {
             tx,
             digest: tx_digest,
             checkpoint_seq,
-        }) = tx_receiver.recv().await
+        }) = sw_receiver.recv().await
         {
             self
                 .execute_tx(
@@ -202,7 +201,7 @@ impl ExecutionWorkerState {
                 let latest_state = get_sui_system_state(&&self.memory_store)
                     .expect("Read Sui System State object cannot fail");
                 let new_epoch_start_state = latest_state.into_epoch_start_state();
-                epoch_end_sender
+                ew_sender
                     .send(SailfishMessage::EpochEnd{
                         new_epoch_start_state,
                     })
@@ -214,7 +213,7 @@ impl ExecutionWorkerState {
                     conf: protocol_config_,
                     data: epoch_data_,
                     ref_gas_price: reference_gas_price_,
-                } = epoch_start_receiver.recv().await.unwrap()
+                } = sw_receiver.recv().await.unwrap()
                 else {
                     panic!("unexpected message");
                 };

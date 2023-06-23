@@ -173,9 +173,8 @@ impl SequenceWorkerState {
         config: NodeConfig, 
         download: Option<u64>, 
         exeucte: Option<u64>,
-        epoch_start_sender: mpsc::Sender<SailfishMessage>,
-        tx_sender: mpsc::Sender<SailfishMessage>,
-        mut epoch_end_receiver: mpsc::Receiver<SailfishMessage>,
+        sw_sender: mpsc::Sender<SailfishMessage>,
+        mut ew_receiver: mpsc::Receiver<SailfishMessage>,
     ){
         let genesis = Arc::new(config.genesis().expect("Could not load genesis"));
         let genesis_seq = genesis.checkpoint().into_summary_and_sequence().0;
@@ -189,7 +188,7 @@ impl SequenceWorkerState {
         let reference_gas_price = self.epoch_store.reference_gas_price();
 
         // Epoch Start
-        epoch_start_sender
+        sw_sender
             .send(SailfishMessage::EpochStart{
                 conf: protocol_config.clone(),
                 data: epoch_start_config.epoch_data(),
@@ -237,7 +236,7 @@ impl SequenceWorkerState {
                         .expect("Transaction exists")
                         .expect("Transaction exists");
 
-                    tx_sender
+                    sw_sender
                         .send(SailfishMessage::Transaction{
                             tx: tx.clone(),
                             digest: tx_digest.clone(),
@@ -253,7 +252,7 @@ impl SequenceWorkerState {
                             checkpoint_seq
                         );
 
-                        let SailfishMessage::EpochEnd{new_epoch_start_state} = epoch_end_receiver
+                        let SailfishMessage::EpochEnd{new_epoch_start_state} = ew_receiver
                             .recv()
                             .await
                             .expect("Receiving doesn't work")
@@ -287,7 +286,7 @@ impl SequenceWorkerState {
                         let protocol_config = self.epoch_store.protocol_config();
                         let epoch_start_config = self.epoch_store.epoch_start_config();
                         let reference_gas_price = self.epoch_store.reference_gas_price();
-                        epoch_start_sender
+                        sw_sender
                             .send(SailfishMessage::EpochStart{
                                 conf: protocol_config.clone(),
                                 data: epoch_start_config.epoch_data(),
