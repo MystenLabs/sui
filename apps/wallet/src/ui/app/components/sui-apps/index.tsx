@@ -62,9 +62,11 @@ function AppsPlayGround() {
 			{filteredEcosystemApps?.length ? (
 				<div className={st.apps}>
 					{filteredEcosystemApps.map((app) => (
-						<div className="flex flex-col divide-y divide-gray-45 divide-solid divide-x-0 mt-2">
+						<div
+							className="flex flex-col divide-y divide-gray-45 divide-solid divide-x-0 mt-2"
+							key={app.link}
+						>
 							<SuiApp
-								key={app.link}
 								{...app}
 								permissionID={linkToPermissionID.get(prepareLinkToCompare(app.link))}
 								displayType="full"
