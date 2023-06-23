@@ -558,7 +558,7 @@ mod tests {
     use std::path::Path;
     use std::time::Duration;
     use std::{collections::HashSet, sync::Arc};
-    use tracing::log::{error, info};
+    use tracing::log::info;
 
     use crate::authority::authority_store_pruner::AuthorityStorePruningMetrics;
     use crate::authority::authority_store_tables::AuthorityPerpetualTables;
@@ -566,11 +566,9 @@ mod tests {
         get_store_object_pair, ObjectContentDigest, StoreData, StoreObject, StoreObjectPair,
         StoreObjectWrapper,
     };
-    #[cfg(not(target_env = "msvc"))]
-    use pprof::Symbol;
     use prometheus::Registry;
     use sui_storage::mutex_table::RwLockTable;
-    use sui_types::base_types::{ObjectDigest, VersionNumber};
+    use sui_types::base_types::ObjectDigest;
     use sui_types::effects::TransactionEffects;
     use sui_types::effects::TransactionEffectsAPI;
     use sui_types::{
@@ -614,54 +612,6 @@ mod tests {
             after_pruning.insert(k);
         }
         Ok(after_pruning)
-    }
-
-    fn is_rocksdb_range_tombstone_frame(vs: &[Symbol]) -> bool {
-        for symbol in vs.iter() {
-            if symbol
-                .name()
-                .contains("rocksdb::FragmentedRangeTombstoneList")
-            {
-                return true;
-            }
-        }
-        false
-    }
-
-    fn insert_keys(
-        objects: &DBMap<ObjectKey, StoreObjectWrapper>,
-    ) -> Result<TransactionEffects, anyhow::Error> {
-        let mut to_delete = vec![];
-        let num_versions_to_keep = 2;
-        let total_unique_object_ids = 100_000;
-        let num_versions_per_object = 10;
-        let ids = ObjectID::in_range(ObjectID::ZERO, total_unique_object_ids)?;
-        for id in ids {
-            for i in (0..num_versions_per_object).rev() {
-                let obj = get_store_object_pair(Object::immutable_with_id_for_testing(id), 0).0;
-                objects.insert(&ObjectKey(id, SequenceNumber::from(i)), &obj)?;
-                if i < num_versions_per_object - num_versions_to_keep {
-                    to_delete.push((id, SequenceNumber::from(i)));
-                }
-                objects.insert(&ObjectKey(id, SequenceNumber::from(i)), &obj)?;
-            }
-        }
-
-        let mut effects = TransactionEffects::default();
-        *effects.modified_at_versions_mut_for_testing() = to_delete;
-        Ok(effects)
-    }
-
-    fn read_keys(
-        objects: &DBMap<ObjectKey, StoreObjectWrapper>,
-        num_reads: u32,
-    ) -> Result<(), anyhow::Error> {
-        let mut i = 0;
-        while i < num_reads {
-            let _res = objects.get(&ObjectKey(ObjectID::random(), VersionNumber::MAX))?;
-            i += 1;
-        }
-        Ok(())
     }
 
     fn generate_test_data(
@@ -708,7 +658,7 @@ mod tests {
         Ok((to_keep, to_delete))
     }
 
-    fn lock_table() -> Arc<RwLockTable<ObjectContentDigest>> {
+    pub(crate) fn lock_table() -> Arc<RwLockTable<ObjectContentDigest>> {
         Arc::new(RwLockTable::new(1))
     }
 
@@ -851,8 +801,84 @@ mod tests {
         ma::assert_le!(after_compaction_size, before_compaction_size);
         Ok(())
     }
+}
 
-    #[cfg(not(target_env = "msvc"))]
+#[cfg(test)]
+#[cfg(not(target_os = "macos"))]
+#[cfg(not(target_env = "msvc"))]
+mod pprof_tests {
+    use crate::authority::authority_store_pruner::tests;
+
+    use std::sync::Arc;
+    use tracing::log::{error, info};
+
+    use crate::authority::authority_store_pruner::tests::lock_table;
+    use crate::authority::authority_store_pruner::AuthorityStorePruningMetrics;
+    use crate::authority::authority_store_tables::AuthorityPerpetualTables;
+    use crate::authority::authority_store_types::{get_store_object_pair, StoreObjectWrapper};
+    use pprof::Symbol;
+    use prometheus::Registry;
+    use sui_types::base_types::VersionNumber;
+    use sui_types::effects::TransactionEffects;
+    use sui_types::effects::TransactionEffectsAPI;
+    use sui_types::{
+        base_types::{ObjectID, SequenceNumber},
+        object::Object,
+        storage::ObjectKey,
+    };
+    use typed_store::rocks::DBMap;
+    use typed_store::Map;
+
+    use super::AuthorityStorePruner;
+
+    fn insert_keys(
+        objects: &DBMap<ObjectKey, StoreObjectWrapper>,
+    ) -> Result<TransactionEffects, anyhow::Error> {
+        let mut to_delete = vec![];
+        let num_versions_to_keep = 2;
+        let total_unique_object_ids = 100_000;
+        let num_versions_per_object = 10;
+        let ids = ObjectID::in_range(ObjectID::ZERO, total_unique_object_ids)?;
+        for id in ids {
+            for i in (0..num_versions_per_object).rev() {
+                let obj = get_store_object_pair(Object::immutable_with_id_for_testing(id), 0).0;
+                objects.insert(&ObjectKey(id, SequenceNumber::from(i)), &obj)?;
+                if i < num_versions_per_object - num_versions_to_keep {
+                    to_delete.push((id, SequenceNumber::from(i)));
+                }
+                objects.insert(&ObjectKey(id, SequenceNumber::from(i)), &obj)?;
+            }
+        }
+
+        let mut effects = TransactionEffects::default();
+        *effects.modified_at_versions_mut_for_testing() = to_delete;
+        Ok(effects)
+    }
+
+    fn read_keys(
+        objects: &DBMap<ObjectKey, StoreObjectWrapper>,
+        num_reads: u32,
+    ) -> Result<(), anyhow::Error> {
+        let mut i = 0;
+        while i < num_reads {
+            let _res = objects.get(&ObjectKey(ObjectID::random(), VersionNumber::MAX))?;
+            i += 1;
+        }
+        Ok(())
+    }
+
+    fn is_rocksdb_range_tombstone_frame(vs: &[Symbol]) -> bool {
+        for symbol in vs.iter() {
+            if symbol
+                .name()
+                .contains("rocksdb::FragmentedRangeTombstoneList")
+            {
+                return true;
+            }
+        }
+        false
+    }
+
     #[tokio::test]
     async fn ensure_no_tombstone_fragmentation_in_stack_frame_with_ignore_tombstones(
     ) -> Result<(), anyhow::Error> {
@@ -868,7 +894,7 @@ mod tests {
         AuthorityStorePruner::prune_objects(
             vec![effects],
             &perpetual_db,
-            &lock_table(),
+            &tests::lock_table(),
             0,
             metrics,
             1,
