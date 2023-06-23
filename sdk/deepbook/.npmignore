@@ -1,8 +1,0 @@
-scripts/
-.env.test.ts
-.env.test.js
-src/*.js
-src/utils/*.js
-.idea/
-node_modules
-
