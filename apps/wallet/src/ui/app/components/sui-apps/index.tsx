@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useFeature } from '@growthbook/growthbook-react';
-import cl from 'classnames';
 import { useMemo } from 'react';
 import { useParams } from 'react-router-dom';
 
@@ -14,8 +13,6 @@ import { Text } from '_app/shared/text';
 import { useAppSelector } from '_hooks';
 import { FEATURES } from '_src/shared/experimentation/features';
 import { prepareLinkToCompare } from '_src/shared/utils';
-
-import st from './Playground.module.scss';
 
 function AppsPlayGround() {
 	const ecosystemApps = useFeature<DAppEntry[]>(FEATURES.WALLET_DAPPS).value;
@@ -43,7 +40,7 @@ function AppsPlayGround() {
 	}, [allPermissions]);
 
 	return (
-		<div className={cl(st.container)}>
+		<>
 			<div className="flex justify-center mb-4">
 				<Heading variant="heading6" color="gray-90" weight="semibold">
 					Sui Apps
@@ -60,20 +57,21 @@ function AppsPlayGround() {
 			) : null}
 
 			{filteredEcosystemApps?.length ? (
-				<div className={st.apps}>
+				<div className="flex flex-col divide-y divide-gray-45 divide-solid divide-x-0 mt-2 mb-28">
 					{filteredEcosystemApps.map((app) => (
 						<SuiApp
 							key={app.link}
 							{...app}
 							permissionID={linkToPermissionID.get(prepareLinkToCompare(app.link))}
 							displayType="full"
+							openAppSite
 						/>
 					))}
 				</div>
 			) : (
 				<SuiAppEmpty displayType="full" />
 			)}
-		</div>
+		</>
 	);
 }
 
