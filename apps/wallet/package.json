@@ -159,11 +159,5 @@
 		"webextension-polyfill": "^0.10.0",
 		"yup": "^0.32.11",
 		"zxcvbn": "^4.4.2"
-	},
-	"pnpm": {
-		"overrides": {
-			"got@<11.8.5": ">=11.8.5",
-			"semver@<7.5.2": ">=7.5.2"
-		}
 	}
 }
