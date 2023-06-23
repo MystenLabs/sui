@@ -11,7 +11,7 @@ use sui_json_rpc_types::{
     SuiTransactionBlockResponseOptions,
 };
 use sui_types::base_types::{EpochId, ObjectID, SequenceNumber, SuiAddress, VersionNumber};
-use sui_types::digests::CheckpointDigest;
+use sui_types::digests::{CheckpointDigest, TransactionDigest};
 use sui_types::error::SuiError;
 use sui_types::event::EventID;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
@@ -124,14 +124,6 @@ pub trait IndexerStore {
         is_descending: bool,
     ) -> Result<Vec<Transaction>, IndexerError>;
 
-    async fn get_transaction_page_by_mutated_object(
-        &self,
-        object_id: String,
-        start_sequence: Option<i64>,
-        limit: usize,
-        is_descending: bool,
-    ) -> Result<Vec<Transaction>, IndexerError>;
-
     async fn get_transaction_page_by_recipient_address(
         &self,
         sender_address: Option<SuiAddress>,
@@ -139,7 +131,7 @@ pub trait IndexerStore {
         start_sequence: Option<i64>,
         limit: usize,
         is_descending: bool,
-    ) -> Result<Vec<Transaction>, IndexerError>;
+    ) -> Result<Vec<TransactionDigest>, IndexerError>;
 
     // `address` can be either sender or recipient address of the transaction
     async fn get_transaction_page_by_address(
@@ -148,7 +140,7 @@ pub trait IndexerStore {
         start_sequence: Option<i64>,
         limit: usize,
         is_descending: bool,
-    ) -> Result<Vec<Transaction>, IndexerError>;
+    ) -> Result<Vec<TransactionDigest>, IndexerError>;
 
     async fn get_transaction_page_by_input_object(
         &self,
@@ -157,7 +149,7 @@ pub trait IndexerStore {
         start_sequence: Option<i64>,
         limit: usize,
         is_descending: bool,
-    ) -> Result<Vec<Transaction>, IndexerError>;
+    ) -> Result<Vec<TransactionDigest>, IndexerError>;
 
     async fn get_transaction_page_by_changed_object(
         &self,
@@ -166,7 +158,7 @@ pub trait IndexerStore {
         start_sequence: Option<i64>,
         limit: usize,
         is_descending: bool,
-    ) -> Result<Vec<Transaction>, IndexerError>;
+    ) -> Result<Vec<TransactionDigest>, IndexerError>;
 
     async fn get_transaction_page_by_move_call(
         &self,
@@ -176,7 +168,7 @@ pub trait IndexerStore {
         start_sequence: Option<i64>,
         limit: usize,
         is_descending: bool,
-    ) -> Result<Vec<Transaction>, IndexerError>;
+    ) -> Result<Vec<TransactionDigest>, IndexerError>;
 
     async fn get_transaction_sequence_by_digest(
         &self,
