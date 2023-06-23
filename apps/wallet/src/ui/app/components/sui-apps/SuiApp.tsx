@@ -133,9 +133,7 @@ export function SuiApp({
 			{displayType === 'full' ? (
 				<ListView name={name} description={description} icon={icon} tags={tags} />
 			) : (
-				<div className="grid grid-cols-1 w-full gap-3.75">
-					<CardView name={name} link={link} icon={icon} />
-				</div>
+				<CardView name={name} link={link} icon={icon} />
 			)}
 		</ExternalLink>
 	);
