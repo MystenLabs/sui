@@ -65,7 +65,7 @@ use sui_types::crypto::{
 };
 use sui_types::digests::ChainIdentifier;
 use sui_types::digests::TransactionEventsDigest;
-use sui_types::dynamic_field::{DynamicFieldInfo, DynamicFieldName, DynamicFieldType, Field};
+use sui_types::dynamic_field::{DynamicFieldInfo, DynamicFieldName, DynamicFieldType};
 use sui_types::effects::{
     SignedTransactionEffects, TransactionEffects, TransactionEffectsAPI, TransactionEvents,
     VerifiedCertifiedTransactionEffects, VerifiedSignedTransactionEffects,
