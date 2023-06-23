@@ -7,6 +7,7 @@
 use std::cmp::{max, min};
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
+// use std::str::FromStr;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 
@@ -33,7 +34,7 @@ use sui_types::object::Owner;
 use sui_types::parse_sui_struct_tag;
 use sui_types::temporary_store::TxCoins;
 use tokio::task::spawn_blocking;
-use tracing::{debug, trace};
+use tracing::debug;
 use typed_store::rocks::{
     default_db_options, read_size_from_env, DBBatch, DBMap, DBOptions, MetricConf,
 };
@@ -156,7 +157,8 @@ pub struct IndexStoreTables {
     /// on a node according to the local machine time, so it varies across nodes.
     /// The timestamping happens when the node sees a txn certificate for the first time.
     #[default_options_override_fn = "timestamps_table_default_config"]
-    timestamps: DBMap<TransactionDigest, u64>,
+    /// DEPRECATED. DO NOT USE
+    _timestamps: DBMap<TransactionDigest, u64>,
 
     /// Ordering of all indexed transactions.
     #[default_options_override_fn = "transactions_order_table_default_config"]
@@ -284,12 +286,16 @@ impl IndexStore {
         batch: &mut DBBatch,
         object_index_changes: &ObjectIndexChanges,
         tx_coins: Option<TxCoins>,
-    ) -> SuiResult<IndexStoreCacheUpdates> {
+    ) -> SuiResult<(
+        IndexStoreCacheUpdates,
+        Vec<((SuiAddress, String, ObjectID), CoinInfo)>,
+    )> {
         // In production if this code path is hit, we should expect `tx_coins` to not be None.
         // However, in many tests today we do not distinguish validator and/or fullnode, so
         // we gracefully exist here.
         if tx_coins.is_none() {
-            return Ok(IndexStoreCacheUpdates::default());
+            tracing::warn!(tx_digest=?digest, "tx_coins is None, skipping indexing coin");
+            return Ok((IndexStoreCacheUpdates::default(), vec![]));
         }
         // Acquire locks on changed coin owners
         let mut addresses: HashSet<SuiAddress> = HashSet::new();
@@ -338,7 +344,7 @@ impl IndexStore {
                 }
                 Some((*owner, coin_type_tag.to_string(), *obj_id))
             }).collect::<Vec<_>>();
-        trace!(
+        tracing::warn!(
             tx_digset=?digest,
             "coin_delete_keys: {:?}",
             coin_delete_keys,
@@ -384,13 +390,13 @@ impl IndexStore {
             }
             Some(((*owner, coin_type_tag.to_string(), *obj_id), (CoinInfo {version: obj_info.version, digest: obj_info.digest, balance: coin.balance.value(), previous_transaction: *digest})))
         }).collect::<Vec<_>>();
-        trace!(
+        tracing::warn!(
             tx_digset=?digest,
             "coin_add_keys: {:?}",
             coin_add_keys,
         );
 
-        batch.insert_batch(&self.tables.coin_index, coin_add_keys.into_iter())?;
+        batch.insert_batch(&self.tables.coin_index, coin_add_keys.clone().into_iter())?;
 
         let per_coin_type_balance_changes: Vec<_> = balance_changes
             .iter()
@@ -417,7 +423,7 @@ impl IndexStore {
             per_coin_type_balance_changes,
             all_balance_changes,
         };
-        Ok(cache_updates)
+        Ok((cache_updates, coin_add_keys))
     }
 
     pub async fn index_tx(
@@ -483,13 +489,8 @@ impl IndexStore {
             }),
         )?;
 
-        batch.insert_batch(
-            &self.tables.timestamps,
-            std::iter::once((*digest, timestamp_ms)),
-        )?;
-
         // Coin Index
-        let cache_updates = self
+        let (cache_updates, coin_add_keys) = self
             .index_coin(digest, &mut batch, &object_index_changes, tx_coins)
             .await?;
 
@@ -605,6 +606,30 @@ impl IndexStore {
         }
 
         batch.write()?;
+        tracing::warn!(tx_digest=?digest, "batch written");
+        for (key, value) in coin_add_keys {
+            let read_value = self.tables.coin_index.get(&key).unwrap();
+            match read_value {
+                None => panic!(
+                    "tx_digest={:?}, key: {:?} not found in coin_index",
+                    digest, key
+                ),
+                Some(read_value) => {
+                    assert_eq!(
+                        read_value, value,
+                        "tx_digest={:?}, key: {:?} actual: {:?} != expected: {:?}",
+                        digest, key, read_value, value
+                    );
+                    tracing::warn!(
+                        "tx_digest={:?}, key: {:?} actual: {:?}, expected: {:?}",
+                        digest,
+                        key,
+                        read_value,
+                        value
+                    );
+                }
+            }
+        }
 
         if !invalidate_caches {
             // We cannot update the cache before updating the db or else on failing to write to db
@@ -702,15 +727,6 @@ impl IndexStore {
             .loaded_child_object_versions
             .get(transaction_digest)
             .map_err(|err| err.into())
-    }
-
-    /// Returns unix timestamp for a transaction if it exists
-    pub fn get_timestamp_ms(
-        &self,
-        transaction_digest: &TransactionDigest,
-    ) -> SuiResult<Option<u64>> {
-        let ts = self.tables.timestamps.get(transaction_digest)?;
-        Ok(ts)
     }
 
     fn get_transactions_from_index<KeyT: Clone + Serialize + DeserializeOwned + PartialEq>(
@@ -1231,6 +1247,22 @@ impl IndexStore {
         one_coin_type_only: bool,
     ) -> SuiResult<impl Iterator<Item = (String, ObjectID, CoinInfo)> + '_> {
         let (starting_coin_type, starting_object_id) = cursor;
+        // let key = (
+        //     SuiAddress::from_str(
+        //         "0x43b8f743162704af85214b0d0159fbef11aae0e996a8e9eac7fafda7fc5bd5f2",
+        //     )
+        //     .unwrap(),
+        //     "0x2::sui::SUI".into(),
+        //     ObjectID::from_hex_literal(
+        //         "0xeb898e86727ad691a8aebbe3c1f2844583a3fd59b9ffa583e84817eea43100ea",
+        //     )
+        //     .unwrap(),
+        // );
+        // let v = self.tables.coin_index.get(&key).unwrap();
+        // if v.is_none() {
+        //     return Err(SuiError::Unknown("debug".into()));
+        // }
+        // Ok(std::iter::once((key.1, key.2, v.unwrap())))
         Ok(self
             .tables
             .coin_index
