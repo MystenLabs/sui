@@ -9,8 +9,6 @@ import { getPoolInfoByRecords } from './utils';
 import { PoolInfo, Records } from './utils';
 import { defaultGasBudget, F } from './utils';
 
-const treasury = require('../treasuryCap-example.json');
-
 export type smartRouteResult = {
         maxSwapTokens: number;
         smartRoute: string[];
