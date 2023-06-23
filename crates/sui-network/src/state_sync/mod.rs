@@ -50,6 +50,7 @@
 use anemo::{types::PeerEvent, PeerId, Request, Response, Result};
 use futures::{stream::FuturesOrdered, FutureExt, StreamExt};
 use rand::Rng;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::{
     collections::{HashMap, VecDeque},
     sync::{Arc, RwLock},
@@ -67,11 +68,12 @@ use sui_types::{
     storage::WriteStore,
 };
 use tap::{Pipe, TapFallible, TapOptional};
+use tokio::sync::oneshot;
 use tokio::{
     sync::{broadcast, mpsc, watch},
     task::{AbortHandle, JoinSet},
 };
-use tracing::{debug, info, trace};
+use tracing::{debug, error, info, trace};
 
 mod generated {
     include!(concat!(env!("OUT_DIR"), "/sui.StateSync.rs"));
@@ -89,6 +91,7 @@ pub use generated::{
 };
 pub use server::GetCheckpointAvailabilityResponse;
 pub use server::GetCheckpointSummaryRequest;
+use sui_archival::reader::ArchiveReaderBalancer;
 use sui_storage::verify_checkpoint;
 
 use self::{metrics::Metrics, server::CheckpointContentsDownloadLimitLayer};
@@ -364,6 +367,9 @@ struct StateSyncEventLoop<S> {
     checkpoint_event_sender: broadcast::Sender<VerifiedCheckpoint>,
     network: anemo::Network,
     metrics: Metrics,
+
+    archive_readers: ArchiveReaderBalancer,
+    sync_checkpoint_from_archive_task: Option<AbortHandle>,
 }
 
 impl<S> StateSyncEventLoop<S>
@@ -391,21 +397,13 @@ where
             target_checkpoint_contents_sequence_receiver,
         ) = watch::channel(0);
 
-        // Initialize checkpoint watermark metrics
-        self.metrics.set_highest_verified_checkpoint(
-            *self
-                .store
-                .get_highest_verified_checkpoint()
-                .expect("store operation should not fail")
-                .sequence_number(),
-        );
-        self.metrics.set_highest_synced_checkpoint(
-            *self
-                .store
-                .get_highest_synced_checkpoint()
-                .expect("store operation should not fail")
-                .sequence_number(),
-        );
+        // Spawn tokio task to update metrics periodically in the background
+        let (_sender, receiver) = oneshot::channel();
+        tokio::spawn(update_checkpoint_watermark_metrics(
+            receiver,
+            self.store.clone(),
+            self.metrics.clone(),
+        ));
 
         // Start checkpoint contents sync loop.
         let task = sync_checkpoint_contents(
@@ -414,7 +412,6 @@ where
             self.peer_heights.clone(),
             self.weak_sender.clone(),
             self.checkpoint_event_sender.clone(),
-            self.metrics.clone(),
             self.config.checkpoint_content_download_concurrency(),
             self.config.checkpoint_content_download_tx_concurrency(),
             self.config.checkpoint_content_timeout(),
@@ -422,6 +419,22 @@ where
         );
         let task_handle = self.tasks.spawn(task);
         self.sync_checkpoint_contents_task = Some(task_handle);
+
+        // Start archive based checkpoint content sync loop.
+        // TODO: Consider switching to sync from archive only on startup.
+        // Right now because the peer set is fixed at startup, a node may eventually
+        // end up with peers who have all purged their local state. In such a scenario it will be
+        // stuck until restart when it ends up with a different set of peers. Once the discovery
+        // mechanism can dynamically identify and connect to other peers on the network, we will rely
+        // on sync from archive as a fall back.
+        let task = sync_checkpoint_contents_from_archive(
+            self.network.clone(),
+            self.archive_readers.clone(),
+            self.store.clone(),
+            self.peer_heights.clone(),
+        );
+        let task_handle = self.tasks.spawn(task);
+        self.sync_checkpoint_from_archive_task = Some(task_handle);
 
         // Start main loop.
         loop {
@@ -462,6 +475,10 @@ where
 
                     if matches!(&self.sync_checkpoint_summaries_task, Some(t) if t.is_finished()) {
                         self.sync_checkpoint_summaries_task = None;
+                    }
+
+                    if matches!(&self.sync_checkpoint_from_archive_task, Some(t) if t.is_finished()) {
+                        panic!("sync_checkpoint_from_archive task unexpectedly terminated")
                     }
                 },
             }
@@ -563,10 +580,6 @@ where
                 .expect("store operation should not fail");
         }
 
-        self.metrics
-            .set_highest_verified_checkpoint(*checkpoint.sequence_number());
-        self.metrics
-            .set_highest_synced_checkpoint(*checkpoint.sequence_number());
         self.store
             .update_highest_verified_checkpoint(&checkpoint)
             .expect("store operation should not fail");
@@ -1035,7 +1048,6 @@ where
         store
             .insert_checkpoint(&checkpoint)
             .expect("store operation should not fail");
-        metrics.set_highest_verified_checkpoint(*checkpoint.sequence_number());
     }
 
     peer_heights
@@ -1046,13 +1058,75 @@ where
     Ok(())
 }
 
+async fn sync_checkpoint_contents_from_archive<S>(
+    network: anemo::Network,
+    archive_readers: ArchiveReaderBalancer,
+    store: S,
+    peer_heights: Arc<RwLock<PeerHeights>>,
+) where
+    S: WriteStore + Clone + Send + Sync + 'static,
+    <S as ReadStore>::Error: std::error::Error,
+{
+    loop {
+        let peers: Vec<_> = peer_heights
+            .read()
+            .unwrap()
+            .peers_on_same_chain()
+            // Filter out any peers who we aren't connected with.
+            .filter_map(|(peer_id, info)| network.peer(*peer_id).map(|peer| (peer, *info)))
+            .collect();
+        let lowest_checkpoint_on_peers = peers
+            .iter()
+            .map(|(_p, state_sync_info)| state_sync_info.lowest)
+            .min();
+        let highest_synced = store
+            .get_highest_synced_checkpoint()
+            .expect("store operation should not fail")
+            .sequence_number;
+        let sync_from_archive = if let Some(lowest_checkpoint_on_peers) = lowest_checkpoint_on_peers
+        {
+            highest_synced < lowest_checkpoint_on_peers
+        } else {
+            false
+        };
+        if sync_from_archive {
+            let start = highest_synced
+                .checked_add(1)
+                .expect("Checkpoint seq num overflow");
+            let checkpoint_range = start..lowest_checkpoint_on_peers.unwrap();
+            if let Some(archive_reader) = archive_readers
+                .pick_one_random(checkpoint_range.clone())
+                .await
+            {
+                let txn_counter = Arc::new(AtomicU64::new(0));
+                let checkpoint_counter = Arc::new(AtomicU64::new(0));
+                if let Err(err) = archive_reader
+                    .read(
+                        store.clone(),
+                        checkpoint_range,
+                        txn_counter.clone(),
+                        checkpoint_counter.clone(),
+                    )
+                    .await
+                {
+                    error!("State sync from archive failed with error: {:?}", err);
+                } else {
+                    info!("State sync from archive is complete. Checkpoints downloaded = {:?}, Txns downloaded = {:?}", checkpoint_counter.load(Ordering::Relaxed), txn_counter.load(Ordering::Relaxed));
+                }
+            } else {
+                error!("Failed to find an archive reader to complete the state sync request");
+            }
+        }
+        tokio::time::sleep(Duration::from_secs(5)).await;
+    }
+}
+
 async fn sync_checkpoint_contents<S>(
     network: anemo::Network,
     store: S,
     peer_heights: Arc<RwLock<PeerHeights>>,
     sender: mpsc::WeakSender<StateSyncMessage>,
     checkpoint_event_sender: broadcast::Sender<VerifiedCheckpoint>,
-    metrics: Metrics,
     checkpoint_content_download_concurrency: usize,
     checkpoint_content_download_tx_concurrency: u64,
     timeout: Duration,
@@ -1100,7 +1174,6 @@ async fn sync_checkpoint_contents<S>(
                         store
                             .update_highest_synced_checkpoint(&checkpoint)
                             .expect("store operation should not fail");
-                        metrics.set_highest_synced_checkpoint(*checkpoint.sequence_number());
                         // We don't care if no one is listening as this is a broadcast channel
                         let _ = checkpoint_event_sender.send(checkpoint.clone());
                         highest_synced = checkpoint;
@@ -1237,6 +1310,31 @@ where
             }
         }
     }
-
     None
+}
+
+async fn update_checkpoint_watermark_metrics<S>(
+    mut recv: oneshot::Receiver<()>,
+    store: S,
+    metrics: Metrics,
+) -> Result<()>
+where
+    S: WriteStore + Clone + Send + Sync,
+    <S as ReadStore>::Error: std::error::Error,
+{
+    let mut interval = tokio::time::interval(Duration::from_secs(5));
+    loop {
+        tokio::select! {
+             _now = interval.tick() => {
+                let highest_verified_checkpoint = store.get_highest_verified_checkpoint()
+                    .expect("store operation should not fail");
+                metrics.set_highest_verified_checkpoint(highest_verified_checkpoint.sequence_number);
+                let highest_synced_checkpoint = store.get_highest_synced_checkpoint()
+                    .expect("store operation should not fail");
+                metrics.set_highest_synced_checkpoint(highest_synced_checkpoint.sequence_number);
+             },
+            _ = &mut recv => break,
+        }
+    }
+    Ok(())
 }

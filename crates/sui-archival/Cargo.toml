@@ -25,7 +25,6 @@ zstd = "0.12.3"
 typed-store.workspace = true
 typed-store-derive.workspace = true
 sui-types = { path = "../sui-types" }
-sui-core = { path = "../sui-core" }
 sui-storage = { path = "../sui-storage" }
 sui-protocol-config = { path = "../sui-protocol-config" }
 fastcrypto = { workspace = true, features = ["copy_key"] }

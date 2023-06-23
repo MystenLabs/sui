@@ -28,7 +28,7 @@ use anyhow::anyhow;
 use eyre::ContextCompat;
 use indicatif::{ProgressBar, ProgressStyle};
 use prometheus::Registry;
-use sui_archival::reader::ArchiveReader;
+use sui_archival::reader::{ArchiveReader, ArchiveReaderConfig};
 use sui_core::authority::authority_store_tables::AuthorityPerpetualTables;
 use sui_core::authority::AuthorityStore;
 use sui_core::checkpoints::CheckpointStore;
@@ -681,8 +681,11 @@ pub async fn state_sync_from_archive(
         .map(|c| c.sequence_number)
         .unwrap_or(0);
     let state_sync_store = RocksDbStore::new(store, committee_store, checkpoint_store.clone());
-    let mut archive_reader =
-        ArchiveReader::new(remote_store_config, NonZeroUsize::new(concurrency).unwrap())?;
+    let archive_reader_config = ArchiveReaderConfig {
+        remote_store_config,
+        download_concurrency: NonZeroUsize::new(concurrency).unwrap(),
+    };
+    let archive_reader = ArchiveReader::new(archive_reader_config)?;
     archive_reader.sync_manifest_once().await?;
     let latest_checkpoint_in_archive = archive_reader.latest_available_checkpoint().await?;
     info!(
@@ -696,10 +699,11 @@ pub async fn state_sync_from_archive(
     let progress_bar = ProgressBar::new(latest_checkpoint_in_archive).with_style(
         ProgressStyle::with_template("[{elapsed_precise}] {wide_bar} {pos}/{len}({msg})").unwrap(),
     );
-    let counter = Arc::new(AtomicU64::new(0));
+    let txn_counter = Arc::new(AtomicU64::new(0));
+    let checkpoint_counter = Arc::new(AtomicU64::new(0));
     let cloned_progress_bar = progress_bar.clone();
     let cloned_checkpoint_store = checkpoint_store.clone();
-    let cloned_counter = counter.clone();
+    let cloned_counter = txn_counter.clone();
     let instant = Instant::now();
     tokio::spawn(async move {
         loop {
@@ -726,7 +730,12 @@ pub async fn state_sync_from_archive(
         .map_err(|_| anyhow!("Failed to increment checkpoint"))?;
     info!("Starting syncing checkpoints from checkpoint seq num: {start}");
     archive_reader
-        .read(state_sync_store, start..u64::MAX, counter)
+        .read(
+            state_sync_store,
+            start..u64::MAX,
+            txn_counter,
+            checkpoint_counter,
+        )
         .await?;
     let end = checkpoint_store
         .get_highest_synced_checkpoint()?

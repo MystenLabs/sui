@@ -43,6 +43,7 @@ use mysten_metrics::{spawn_monitored_task, RegistryService};
 use mysten_network::server::ServerBuilder;
 use narwhal_network::metrics::MetricsMakeCallbackHandler;
 use narwhal_network::metrics::{NetworkConnectionMetrics, NetworkMetrics};
+use sui_archival::reader::ArchiveReaderBalancer;
 use sui_archival::writer::ArchiveWriter;
 use sui_config::node::DBCheckpointConfig;
 use sui_config::node_config_metrics::NodeConfigMetrics;
@@ -365,12 +366,14 @@ impl SuiNode {
         // Create network
         // TODO only configure validators as seed/preferred peers for validators and not for
         // fullnodes once we've had a chance to re-work fullnode configuration generation.
+        let archive_readers = ArchiveReaderBalancer::new(config.archive_reader_config())?;
         let (trusted_peer_change_tx, trusted_peer_change_rx) = watch::channel(Default::default());
         let (p2p_network, discovery_handle, state_sync_handle) = Self::create_p2p_network(
             &config,
             state_sync_store.clone(),
             chain_identifier,
             trusted_peer_change_rx,
+            archive_readers,
             &prometheus_registry,
         )?;
         // We must explicitly send this instead of relying on the initial value to trigger
@@ -381,27 +384,29 @@ impl SuiNode {
             epoch_store.epoch_start_state(),
         )
         .expect("Initial trusted peers must be set");
-        let state_archive_handle =
-            if let Some(remote_store_config) = &config.state_archive_config.object_store_config {
-                let local_store_config = ObjectStoreConfig {
-                    object_store: Some(ObjectStoreType::File),
-                    directory: Some(config.archive_path()),
-                    ..Default::default()
-                };
-                let archive_writer = ArchiveWriter::new(
-                    local_store_config,
-                    remote_store_config.clone(),
-                    FileCompression::Zstd,
-                    StorageFormat::Blob,
-                    Duration::from_secs(600),
-                    1024 * 1024 * 1024,
-                    &prometheus_registry,
-                )
-                .await?;
-                Some(archive_writer.start(state_sync_store).await?)
-            } else {
-                None
+
+        let state_archive_handle = if let Some(remote_store_config) =
+            &config.state_archive_write_config.object_store_config
+        {
+            let local_store_config = ObjectStoreConfig {
+                object_store: Some(ObjectStoreType::File),
+                directory: Some(config.archive_path()),
+                ..Default::default()
             };
+            let archive_writer = ArchiveWriter::new(
+                local_store_config,
+                remote_store_config.clone(),
+                FileCompression::Zstd,
+                StorageFormat::Blob,
+                Duration::from_secs(600),
+                1024 * 1024 * 1024,
+                &prometheus_registry,
+            )
+            .await?;
+            Some(archive_writer.start(state_sync_store).await?)
+        } else {
+            None
+        };
         let db_checkpoint_config = if config.db_checkpoint_config.checkpoint_path.is_none() {
             DBCheckpointConfig {
                 checkpoint_path: Some(config.db_checkpoint_path()),
@@ -647,11 +652,13 @@ impl SuiNode {
         state_sync_store: RocksDbStore,
         chain_identifier: ChainIdentifier,
         trusted_peer_change_rx: watch::Receiver<TrustedPeerChangeEvent>,
+        archive_readers: ArchiveReaderBalancer,
         prometheus_registry: &Registry,
     ) -> Result<(Network, discovery::Handle, state_sync::Handle)> {
         let (state_sync, state_sync_server) = state_sync::Builder::new()
             .config(config.p2p_config.state_sync.clone().unwrap_or_default())
             .store(state_sync_store)
+            .archive_readers(archive_readers)
             .with_metrics(prometheus_registry)
             .build();
 
