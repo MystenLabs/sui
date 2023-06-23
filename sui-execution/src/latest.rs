@@ -97,7 +97,9 @@ impl executor::Executor for Executor {
         TransactionEffects,
         Result<(), ExecutionError>,
     ) {
-        execute_transaction_to_effects::<execution_mode::Normal>(
+        use std::time::Instant;
+        let start = Instant::now();
+        let res = execute_transaction_to_effects::<execution_mode::Normal>(
             shared_object_refs,
             temporary_store,
             transaction_kind,
@@ -113,7 +115,10 @@ impl executor::Executor for Executor {
             metrics,
             enable_expensive_checks,
             certificate_deny_set,
-        )
+        );
+        let duration = start.elapsed();
+        println!("Execution time (exec only): {:?}", duration);
+        res
     }
 
     fn dev_inspect_transaction(

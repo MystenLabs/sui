@@ -1049,6 +1049,7 @@ impl<'backing> TemporaryStore<'backing> {
                     *execution_result = Err(err);
                 }
             }
+            println!("GAS BUCKETIZE: {:#?}", gas_status);
 
             // On error we need to dump writes, deletes, etc before charging storage gas
             if execution_result.is_err() {
@@ -1068,6 +1069,7 @@ impl<'backing> TemporaryStore<'backing> {
                 self.handle_storage_and_rebate_v2(gas, gas_object_id, gas_status, execution_result)
             }
 
+            println!("GAS SUMMARY: {:#?}", gas_status);
             let cost_summary = gas_status.summary();
             let gas_used = cost_summary.net_gas_usage();
 

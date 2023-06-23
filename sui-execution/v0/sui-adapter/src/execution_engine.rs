@@ -258,7 +258,9 @@ fn execute_transaction<Mode: ExecutionMode>(
                 None,
             ))
         } else {
-            execution_loop::<Mode>(
+            use std::time::Instant;
+            let start = Instant::now();
+            let res = execution_loop::<Mode>(
                 temporary_store,
                 transaction_kind,
                 gas_object_ref.0,
@@ -267,7 +269,10 @@ fn execute_transaction<Mode: ExecutionMode>(
                 &mut gas_status,
                 protocol_config,
                 metrics.clone(),
-            )
+            );
+            let duration = start.elapsed();
+            println!("Execution time (inner exec only): {:?}", duration);
+            res
         };
 
         let effects_estimated_size = temporary_store.estimate_effects_size_upperbound();
