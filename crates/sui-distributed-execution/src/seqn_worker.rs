@@ -16,8 +16,7 @@ use sui_node::metrics;
 use sui_types::metrics::LimitsMetrics;
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
 use sui_types::sui_system_state::SuiSystemStateTrait;
-use sui_types::messages::TransactionDataAPI;
-use sui_types::messages::TransactionKind;
+use sui_types::messages::{TransactionDataAPI, TransactionKind};
 use tokio::sync::{watch, mpsc};
 use tokio::time::Duration;
 use typed_store::rocks::default_db_options;
@@ -176,8 +175,8 @@ impl SequenceWorkerState {
         exeucte: Option<u64>,
         epoch_start_sender: mpsc::Sender<EpochStartMessage>,
         tx_sender: mpsc::Sender<TransactionMessage>,
-        mut epoch_end_receiver: mpsc::Receiver<EpochEndMessage>,)
-    {
+        mut epoch_end_receiver: mpsc::Receiver<EpochEndMessage>,
+    ){
         let genesis = Arc::new(config.genesis().expect("Could not load genesis"));
         let genesis_seq = genesis.checkpoint().into_summary_and_sequence().0;
 

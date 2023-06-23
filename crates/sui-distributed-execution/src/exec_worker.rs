@@ -1,3 +1,6 @@
+use std::collections::HashSet;
+use std::sync::Arc;
+
 use sui_adapter::adapter::MoveVM;
 use sui_adapter::{execution_engine, execution_mode};
 use sui_config::genesis::Genesis;
@@ -6,11 +9,15 @@ use sui_protocol_config::ProtocolConfig;
 use sui_types::base_types::ExecutionDigests;
 use sui_types::epoch_data::EpochData;
 use sui_types::message_envelope::Message;
-use sui_types::messages::{InputObjectKind, InputObjects, TransactionDataAPI, VerifiedTransaction};
-use std::collections::HashSet;
-use std::sync::Arc;
+use sui_types::messages::{InputObjectKind, InputObjects, TransactionDataAPI, VerifiedTransaction, TransactionKind};
 use sui_types::metrics::LimitsMetrics;
 use sui_types::temporary_store::TemporaryStore;
+use sui_types::sui_system_state::get_sui_system_state;
+use sui_types::sui_system_state::SuiSystemStateTrait;
+use sui_adapter::adapter;
+use sui_move_natives;
+use tokio::sync::mpsc;
+use tokio::time::Instant;
 
 use super::types::*;
 
@@ -127,6 +134,105 @@ impl ExecutionWorkerState {
         for (obj_add_id, (oref, obj, _)) in inner_temp_store.written {
             self.memory_store.objects.insert(obj_add_id, (oref, obj));
         }
+    }
+
+    pub async fn run(&mut self,
+        metrics: Arc<LimitsMetrics>,
+        exec_watermark: u64,
+        mut epoch_start_receiver: mpsc::Receiver<EpochStartMessage>,
+        mut tx_receiver: mpsc::Receiver<TransactionMessage>,
+        epoch_end_sender: mpsc::Sender<EpochEndMessage>,
+    ){
+        let mut epoch_data: EpochData;
+        let mut protocol_config: ProtocolConfig;
+        let mut reference_gas_price: u64;
+        // Wait for epoch start message
+        let EpochStartMessage(
+            protocol_config_,
+            epoch_data_,
+            reference_gas_price_,
+        ) = epoch_start_receiver.recv().await.unwrap();
+        println!("Got epoch start message");
+
+        protocol_config = protocol_config_;
+        epoch_data = epoch_data_;
+        reference_gas_price = reference_gas_price_;
+
+        let native_functions = sui_move_natives::all_natives(/* silent */ true);
+        let mut move_vm = Arc::new(
+            adapter::new_move_vm(native_functions.clone(), &protocol_config, false)
+                .expect("We defined natives to not fail here"),
+        );
+
+        // start timer for TPS computation
+        let now = Instant::now();
+        let mut num_tx: usize = 0;
+        // receive txs
+        while let Some(TransactionMessage(
+            tx,
+            tx_digest,
+            checkpoint_seq,
+        )) = tx_receiver.recv().await
+        {
+            self
+                .execute_tx(
+                    &tx,
+                    &tx_digest,
+                    checkpoint_seq,
+                    &protocol_config,
+                    &move_vm,
+                    &epoch_data,
+                    reference_gas_price,
+                    metrics.clone(),
+                )
+                .await;
+
+            num_tx += 1;
+            if checkpoint_seq % 10000 == 0 {
+                println!("Executed {}", checkpoint_seq);
+            }
+
+            if let TransactionKind::ChangeEpoch(_) = tx.data().transaction_data().kind() {
+                // First send end of epoch message to sequence worker
+                println!("END OF EPOCH at checkpoint {}", checkpoint_seq);
+                let latest_state = get_sui_system_state(&&self.memory_store)
+                    .expect("Read Sui System State object cannot fail");
+                let new_epoch_start_state = latest_state.into_epoch_start_state();
+                epoch_end_sender
+                    .send(EpochEndMessage(
+                        new_epoch_start_state,
+                    ))
+                    .await
+                    .expect("Sending doesn't work");
+
+                // Then wait for start epoch message from sequence worker and update local state
+                let EpochStartMessage(
+                    protocol_config_,
+                    epoch_data_,
+                    reference_gas_price_,
+                ) = epoch_start_receiver.recv().await.unwrap();
+                move_vm = Arc::new(
+                    adapter::new_move_vm(native_functions.clone(), &protocol_config, false)
+                        .expect("We defined natives to not fail here"),
+                );
+                protocol_config = protocol_config_;
+                epoch_data = epoch_data_;
+                reference_gas_price = reference_gas_price_;
+            }
+
+            // Stop executing when I hit the watermark
+            if checkpoint_seq == exec_watermark-1 {
+                break;
+            }
+        }
+
+        // print TPS
+        let elapsed = now.elapsed();
+        println!(
+            "Execution worker TPS: {}",
+            1000.0 * num_tx as f64 / elapsed.as_millis() as f64
+        );
+        println!("Execution worker finished");
     }
 }
 
