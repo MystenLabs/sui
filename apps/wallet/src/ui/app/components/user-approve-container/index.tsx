@@ -23,7 +23,7 @@ type UserApproveContainerProps = {
 	onSubmit: (approved: boolean) => Promise<void>;
 	isWarning?: boolean;
 	addressHidden?: boolean;
-	address?: SuiAddress;
+	address?: SuiAddress | null;
 	scrollable?: boolean;
 };
 

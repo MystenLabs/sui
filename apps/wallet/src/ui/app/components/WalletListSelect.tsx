@@ -113,6 +113,7 @@ export function WalletListSelect({
 				) : null
 			}
 			minimalPadding
+			boxShadow
 		/>
 	);
 }

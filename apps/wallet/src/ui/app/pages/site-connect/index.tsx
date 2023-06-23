@@ -76,7 +76,6 @@ function SiteConnectPage() {
 	useEffect(() => {
 		setDisplayWarning(!isSecure);
 	}, [isSecure]);
-
 	return (
 		<Loading loading={loading}>
 			{permissionRequest &&
@@ -88,7 +87,7 @@ function SiteConnectPage() {
 						rejectTitle="Reject"
 						onSubmit={handleHideWarning}
 						isWarning
-						addressHidden
+						address={activeAddress}
 					>
 						<PageMainLayoutTitle title="Insecure Website" />
 						<div className={st.warningWrapper}>
@@ -110,13 +109,13 @@ function SiteConnectPage() {
 						approveTitle="Connect"
 						rejectTitle="Reject"
 						onSubmit={handleOnSubmit}
-						addressHidden
 						approveDisabled={!accountsToConnect.length}
 					>
 						<PageMainLayoutTitle title="Approve Connection" />
 						<SummaryCard
 							header="Permissions requested"
 							body={<DAppPermissionsList permissions={permissionRequest.permissions} />}
+							boxShadow
 						/>
 						<WalletListSelect
 							title="Connect Accounts"
