@@ -199,6 +199,10 @@ pub enum SuiClientCommands {
         /// (SenderSignedData) using base64 encoding, and print out the string.
         #[clap(long, required = false)]
         serialize_signed_transaction: bool,
+
+        /// If `true`, enable linters
+        #[clap(long, global = true)]
+        lint: bool,
     },
 
     /// Run the bytecode verifier on the package
@@ -269,6 +273,10 @@ pub enum SuiClientCommands {
         /// (SenderSignedData) using base64 encoding, and print out the string.
         #[clap(long, required = false)]
         serialize_signed_transaction: bool,
+
+        /// If `true`, enable linters
+        #[clap(long, global = true)]
+        lint: bool,
     },
 
     /// Verify local Move packages against on-chain packages, and optionally their dependencies.
@@ -636,6 +644,7 @@ impl SuiClientCommands {
                 legacy_digest,
                 serialize_unsigned_transaction,
                 serialize_signed_transaction,
+                lint,
             } => {
                 let sender = context.try_get_object_owner(&gas).await?;
                 let sender = sender.unwrap_or(context.active_address()?);
@@ -648,6 +657,7 @@ impl SuiClientCommands {
                         package_path,
                         with_unpublished_dependencies,
                         skip_dependency_verification,
+                        lint,
                     )
                     .await?;
 
@@ -721,6 +731,7 @@ impl SuiClientCommands {
                 with_unpublished_dependencies,
                 serialize_unsigned_transaction,
                 serialize_signed_transaction,
+                lint,
             } => {
                 let sender = context.try_get_object_owner(&gas).await?;
                 let sender = sender.unwrap_or(context.active_address()?);
@@ -732,6 +743,7 @@ impl SuiClientCommands {
                     package_path,
                     with_unpublished_dependencies,
                     skip_dependency_verification,
+                    lint,
                 )
                 .await?;
 
@@ -1280,6 +1292,7 @@ fn compile_package_simple(
         resolution_graph,
         false,
         false,
+        false,
     )?)
 }
 
@@ -1289,6 +1302,7 @@ async fn compile_package(
     package_path: PathBuf,
     with_unpublished_dependencies: bool,
     skip_dependency_verification: bool,
+    lint: bool,
 ) -> Result<
     (
         PackageDependencies,
@@ -1317,6 +1331,7 @@ async fn compile_package(
         resolution_graph,
         run_bytecode_verifier,
         print_diags_to_stderr,
+        lint,
     )?;
     if !compiled_package.is_system_package() {
         if let Some(already_published) = compiled_package.published_root_module() {
