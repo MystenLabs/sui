@@ -53,7 +53,7 @@ Multiple source verification errors found:
 
 - Local dependency did not match its on-chain version at 0000000000000000000000000000000000000000000000000000000000000001::MoveStdlib::address"#
     ];
-    expected.assert_eq(&truncated_error_message);
+    expected.assert_eq(truncated_error_message);
     Ok(())
 }
 
