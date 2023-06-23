@@ -1245,7 +1245,7 @@ impl SuiNode {
             if !matches!(
                 self.config
                     .authority_store_pruning_config
-                    .num_epochs_to_retain_for_checkpoints,
+                    .num_epochs_to_retain_for_checkpoints(),
                 None | Some(u64::MAX) | Some(0)
             ) {
                 self.state
