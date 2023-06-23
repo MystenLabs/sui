@@ -1,5 +1,1 @@
-# Deepbook TypeScript SDK
-
-## Working with Devnet
-
-##
+# Deebook-sdk
