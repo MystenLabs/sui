@@ -6,7 +6,7 @@
   "jsxBracketSameLine": true,
   "arrowParens": "always",
   "printWidth": 128,
-  "tabWidth": 4,
+  "tabWidth": 8,
   "useTabs": false,
   "quoteProps": "consistent",
   "bracketSpacing": true,
