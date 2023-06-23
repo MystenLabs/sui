@@ -1754,10 +1754,7 @@ mod tests {
         let amounts = vec![1, 2, 3];
         let uuid_test = Uuid::new_v4();
 
-        faucet
-            .send(uuid_test.clone(), recipient, &amounts)
-            .await
-            .unwrap();
+        faucet.send(uuid_test, recipient, &amounts).await.unwrap();
 
         let status = faucet.get_batch_send_status(uuid_test).await.unwrap();
         let mut actual_amounts: Vec<u64> = status
