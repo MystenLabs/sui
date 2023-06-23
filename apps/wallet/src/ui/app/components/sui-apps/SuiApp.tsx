@@ -29,7 +29,7 @@ function CardView({ name, link, icon }: CardViewProp) {
 	const appUrl = getDAppUrl(link);
 	const originLabel = appUrl.hostname;
 	return (
-		<div className="bg-white group flex flex-col p-3.75 box-border w-full rounded-2xl border border-gray-45 border-solid h-32 hover:bg-sui/10 hover:border-sui/30">
+		<div className="bg-white flex flex-col p-3.75 box-border w-full rounded-2xl border border-gray-45 border-solid h-32 hover:bg-sui/10 hover:border-sui/30">
 			<div className="flex mb-1">
 				<ImageIcon src={icon || null} label={name} fallback={name} size="lg" circle />
 			</div>
@@ -57,7 +57,7 @@ type ListViewProp = {
 
 function ListView({ name, icon, description, tags }: ListViewProp) {
 	return (
-		<div className="bg-white group flex py-3.5 px-1.25 gap-3 item-center box-border rounded hover:bg-sui/10">
+		<div className="bg-white flex py-3.5 px-1.25 gap-3 item-center box-border rounded hover:bg-sui/10">
 			<ImageIcon src={icon || null} label={name} fallback={name} size="xl" circle />
 			<div className="flex flex-col gap-1 justify-center">
 				<Text variant="body" weight="semibold" color="sui-dark">
@@ -121,24 +121,21 @@ export function SuiApp({
 		);
 	}
 
-	const AppDetails = (
-		<>
-			{displayType === 'full' ? (
-				<ListView name={name} description={description} icon={icon} tags={tags} />
-			) : (
-				<CardView name={name} link={link} icon={icon} />
-			)}
-		</>
-	);
+	const AppDetails =
+		displayType === 'full' ? (
+			<ListView name={name} description={description} icon={icon} tags={tags} />
+		) : (
+			<CardView name={name} link={link} icon={icon} />
+		);
 
 	if (permissionID && !openAppSite) {
 		return (
-			<button
-				className="bg-transparent border-none cursor-pointer focus:outline-none p-0 m-0 text-left w-full"
+			<div
+				className="bg-transparent cursor-pointer text-left w-full"
 				onClick={() => setShowDisconnectApp(true)}
 			>
 				{AppDetails}
-			</button>
+			</div>
 		);
 	}
 
