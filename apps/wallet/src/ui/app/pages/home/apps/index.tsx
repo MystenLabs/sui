@@ -31,25 +31,12 @@ function AppsPage() {
 	];
 	const ecosystemApps = useFeature<DAppEntry[]>(FEATURES.WALLET_DAPPS).value ?? [];
 
-	const uniqueAppTagNames = new Set<string>();
-
-	ecosystemApps
-		.flatMap((app) => app.tags)
-		.filter((tag) => {
-			if (uniqueAppTagNames.has(tag)) {
-				return false;
-			}
-
-			uniqueAppTagNames.add(tag);
-			return true;
-		});
-
 	const uniqueAppTags = Array.from(new Set(ecosystemApps.flatMap((app) => app.tags))).map(
 		(tag) => ({
 			name: tag,
 			// The tag subroute is used to get around the NavLink limitation with reading query params
 			// Enables active route highlighting without excessive overhead
-			link: `apps/${tag}?tagFilter=${tag}`,
+			link: `apps/${tag}`,
 		}),
 	);
 
@@ -61,8 +48,8 @@ function AppsPage() {
 				<section>
 					<FiltersPortal tags={allFilterTags} />
 					<Routes>
-						<Route path="/*" element={<AppsPlayGround />} />
 						<Route path="/connected" element={<ConnectedAppsCard />} />
+						<Route path="/:tagName?" element={<AppsPlayGround />} />
 					</Routes>
 				</section>
 			</Content>
