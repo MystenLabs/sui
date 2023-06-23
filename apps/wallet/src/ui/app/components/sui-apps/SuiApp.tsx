@@ -133,6 +133,7 @@ export function SuiApp({
 			<div
 				className="bg-transparent cursor-pointer text-left w-full"
 				onClick={() => setShowDisconnectApp(true)}
+				role="button"
 			>
 				{AppDetails}
 			</div>
