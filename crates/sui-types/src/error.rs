@@ -455,22 +455,18 @@ pub enum SuiError {
     FailedToDispatchSubscription { error: String },
 
     // Errors returned by authority and client read API's
-    #[error(
-        "Failed to serialize {input_type} in the requested format: {:?}",
-        error
-    )]
-    SerializationError { input_type: String, error: String },
-    #[error(
-        "Failed to deserialize {input_type} in the requested format: {:?}",
-        error
-    )]
-    DeserializationError { input_type: String, error: String },
+    #[error("Failed to serialize into requested format {format}: {:?}", error)]
+    SerializationError { format: String, error: String },
+    #[error("Failed to deserialize into requested format {format}: {:?}", error)]
+    DeserializationError { format: String, error: String },
     #[error("Failed to convert {input_type} to {output_type}: {:?}", error)]
     ConversionError {
         input_type: String,
         output_type: String,
         error: String,
     },
+    #[error("{0}")]
+    MoveStructParseError(String),
 
     // Client side error
     #[error("Too many authority errors were detected for {}: {:?}", action, errors)]

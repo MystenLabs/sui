@@ -99,7 +99,7 @@ impl TryFrom<&Object> for StakedSui {
                 if o.type_().is_staked_sui() {
                     return bcs::from_bytes(o.contents()).map_err(|err| {
                         SuiError::DeserializationError {
-                            input_type: "object".to_string(),
+                            format: "StakedSui".to_string(),
                             error: format!("Unable to deserialize StakedSui object: {:?}", err),
                         }
                     });

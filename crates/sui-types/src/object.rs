@@ -313,7 +313,7 @@ impl MoveObject {
             TypeLayoutBuilder::build_with_fields(&type_, resolver)
         }
         .map_err(|e| SuiError::SerializationError {
-            input_type: "object".to_string(),
+            format: "MoveStructLayout".to_string(),
             error: e.to_string(),
         })?;
         match layout {
@@ -328,7 +328,7 @@ impl MoveObject {
     pub fn to_move_struct(&self, layout: &MoveStructLayout) -> Result<MoveStruct, SuiError> {
         MoveStruct::simple_deserialize(&self.contents, layout).map_err(|e| {
             SuiError::SerializationError {
-                input_type: "object".to_string(),
+                format: "MoveStruct".to_string(),
                 error: e.to_string(),
             }
         })

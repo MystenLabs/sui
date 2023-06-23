@@ -356,7 +356,7 @@ async fn exchange_rates(
     )? {
         let pool_id: ID =
             bcs::from_bytes(&df.1.bcs_name).map_err(|e| SuiError::DeserializationError {
-                input_type: "object".to_string(),
+                format: "ID".to_string(),
                 error: e.to_string(),
             })?;
         let validator = get_validator_from_table(
@@ -382,7 +382,7 @@ async fn exchange_rates(
             .map(|df| {
                 let epoch: EpochId = bcs::from_bytes(&df.1.bcs_name).map_err(|e| {
                     SuiError::DeserializationError {
-                        input_type: "object".to_string(),
+                        format: "EpochId".to_string(),
                         error: e.to_string(),
                     }
                 })?;

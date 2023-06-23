@@ -1361,7 +1361,7 @@ impl AuthorityState {
                         input_type: "transaction".to_string(),
                         output_type: "SuiTransactionBlockData".to_string(),
                         error: e.to_string(),
-                    })?, // TODO: replace the underlying try_from to SuiError. This one goes deep
+                    })?, // TODO(wlmyng): replace the underlying try_from to SuiError. This one goes deep
                 effects: effects.clone().try_into()?,
                 events: SuiTransactionBlockEvents::try_from(
                     inner_temp_store.events.clone(),
@@ -1679,7 +1679,7 @@ impl AuthorityState {
 
         let bcs_name = bcs::to_bytes(&name_value.clone().undecorate()).map_err(|e| {
             SuiError::SerializationError {
-                input_type: "object".to_string(),
+                format: "bcs_name".to_string(),
                 error: format!("{e}"),
             }
         })?;
@@ -2546,7 +2546,7 @@ impl AuthorityState {
             })?;
             move_objects.push(bcs::from_bytes(move_object.contents()).map_err(|e| {
                 SuiError::DeserializationError {
-                    input_type: "object".to_string(),
+                    format: type_.to_string(),
                     error: format!("{e}"),
                 }
             })?);

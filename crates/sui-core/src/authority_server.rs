@@ -313,7 +313,7 @@ impl ValidatorService {
         // Enforce overall transaction size limit.
         let tx_size =
             bcs::serialized_size(&transaction).map_err(|e| SuiError::SerializationError {
-                input_type: "transaction".to_string(),
+                format: "tx_size".to_string(),
                 error: e.to_string(),
             })?;
         let max_tx_size_bytes = epoch_store.protocol_config().max_tx_size_bytes();

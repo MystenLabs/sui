@@ -152,31 +152,28 @@ impl DynamicFieldInfo {
                 }
                 _ => None,
             }
-            .ok_or_else(|| SuiError::DeserializationError {
-                input_type: "object".to_string(),
-                error: "Cannot extract [name] field from sui::dynamic_object_field::Wrapper."
-                    .to_string(),
+            .ok_or_else(|| {
+                SuiError::MoveStructParseError(
+                    "Cannot extract [name] field from sui::dynamic_object_field::Wrapper."
+                        .to_string(),
+                )
             })?;
             // ID extracted from the wrapper object
-            let object_id =
-                extract_id_value(value).ok_or_else(|| SuiError::DeserializationError {
-                    input_type: "object".to_string(),
-                    error: format!(
-                        "Cannot extract dynamic object's object id from \
+            let object_id = extract_id_value(value).ok_or_else(|| {
+                SuiError::MoveStructParseError(format!(
+                    "Cannot extract dynamic object's object id from \
                         sui::dynamic_field::Field, {value:?}"
-                    ),
-                })?;
+                ))
+            })?;
             (name.clone(), DynamicFieldType::DynamicObject, object_id)
         } else {
             // ID of the Field object
-            let object_id =
-                extract_object_id(move_struct).ok_or_else(|| SuiError::DeserializationError {
-                    input_type: "object".to_string(),
-                    error: format!(
-                        "Cannot extract dynamic object's object id from \
+            let object_id = extract_object_id(move_struct).ok_or_else(|| {
+                SuiError::MoveStructParseError(format!(
+                    "Cannot extract dynamic object's object id from \
                         sui::dynamic_field::Field, {move_struct:?}",
-                    ),
-                })?;
+                ))
+            })?;
             (name.clone(), DynamicFieldType::DynamicField, object_id)
         })
     }
@@ -283,7 +280,7 @@ where
 {
     let id = derive_dynamic_field_id(parent_id, &K::get_type_tag(), &bcs::to_bytes(key).unwrap())
         .map_err(|err| SuiError::SerializationError {
-        input_type: "object_id".to_string(),
+        format: "ObjectID".to_string(),
         error: err.to_string(),
     })?;
     let object = object_store.get_object(&id)?.ok_or_else(|| {
@@ -316,7 +313,7 @@ where
         })?;
     Ok(bcs::from_bytes::<Field<K, V>>(move_object.contents())
         .map_err(|err| SuiError::DeserializationError {
-            input_type: "dynamic_field".to_string(),
+            format: "DynamicField".to_string(),
             error: err.to_string(),
         })?
         .value)
