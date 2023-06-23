@@ -92,7 +92,7 @@ async fn main() -> Result<(), anyhow::Error> {
         .route("/gas", post(request_gas))
         .route("/v1/gas", post(batch_request_gas))
         .route("/v1/status", post(request_status))
-        .route("/v1/gas_old", post(request_gas_V1_interface))
+        .route("/v1/gas_old", post(request_gas_v1_interface))
         .layer(
             ServiceBuilder::new()
                 .layer(HandleErrorLayer::new(handle_error))
@@ -267,7 +267,7 @@ async fn request_gas(
 }
 
 /// This function takes the old gas API and has a response that matches the new batch API interface.
-async fn request_gas_V1_interface(
+async fn request_gas_v1_interface(
     Extension(state): Extension<Arc<AppState>>,
     Json(payload): Json<FaucetRequest>,
 ) -> impl IntoResponse {
