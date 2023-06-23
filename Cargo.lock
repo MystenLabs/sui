@@ -9671,11 +9671,15 @@ dependencies = [
  "move-core-types",
  "move-vm-config",
  "move-vm-runtime",
+ "move-vm-runtime-v0",
  "sui-adapter-latest",
+ "sui-adapter-v0",
  "sui-move-natives-latest",
+ "sui-move-natives-v0",
  "sui-protocol-config",
  "sui-types",
  "sui-verifier-latest",
+ "sui-verifier-v0",
  "workspace-hack",
 ]
 
