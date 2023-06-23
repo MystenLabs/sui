@@ -1,6 +1,3 @@
-// use sui_adapter::adapter::MoveVM;
-// use sui_adapter::{execution_engine, execution_mode};
-// use sui_types::messages::{InputObjectKind, InputObjects, TransactionDataAPI, VerifiedTransaction};
 use sui_types::storage::get_module_by_id;
 
 use anyhow::Result;

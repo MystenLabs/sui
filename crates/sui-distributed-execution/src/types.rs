@@ -20,12 +20,11 @@ use move_core_types::{language_storage::ModuleId, resolver::ModuleResolver};
 
 
 #[derive(Debug)]
-pub struct EpochStartMessage(pub ProtocolConfig, pub EpochData, pub u64);
-#[derive(Debug)]
-pub struct EpochEndMessage(pub EpochStartSystemState);
-#[derive(Debug)]
-pub struct TransactionMessage(pub VerifiedTransaction, pub ExecutionDigests, pub u64);
-
+pub enum SailfishMessage {
+    EpochStart{conf: ProtocolConfig, data: EpochData, ref_gas_price: u64},
+    EpochEnd{new_epoch_start_state: EpochStartSystemState},
+    Transaction{tx: VerifiedTransaction, digest: ExecutionDigests, checkpoint_seq: u64}
+}
 
 
 pub struct MemoryBackedStore {

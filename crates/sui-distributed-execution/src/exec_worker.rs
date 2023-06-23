@@ -1,3 +1,4 @@
+use core::panic;
 use std::collections::HashSet;
 use std::sync::Arc;
 
@@ -139,19 +140,22 @@ impl ExecutionWorkerState {
     pub async fn run(&mut self,
         metrics: Arc<LimitsMetrics>,
         exec_watermark: u64,
-        mut epoch_start_receiver: mpsc::Receiver<EpochStartMessage>,
-        mut tx_receiver: mpsc::Receiver<TransactionMessage>,
-        epoch_end_sender: mpsc::Sender<EpochEndMessage>,
+        mut epoch_start_receiver: mpsc::Receiver<SailfishMessage>,
+        mut tx_receiver: mpsc::Receiver<SailfishMessage>,
+        epoch_end_sender: mpsc::Sender<SailfishMessage>,
     ){
         let mut epoch_data: EpochData;
         let mut protocol_config: ProtocolConfig;
         let mut reference_gas_price: u64;
         // Wait for epoch start message
-        let EpochStartMessage(
-            protocol_config_,
-            epoch_data_,
-            reference_gas_price_,
-        ) = epoch_start_receiver.recv().await.unwrap();
+        let SailfishMessage::EpochStart{
+            conf: protocol_config_,
+            data: epoch_data_,
+            ref_gas_price: reference_gas_price_,
+        } = epoch_start_receiver.recv().await.unwrap() 
+        else {
+            panic!("unexpected message");
+        };
         println!("Got epoch start message");
 
         protocol_config = protocol_config_;
@@ -168,11 +172,11 @@ impl ExecutionWorkerState {
         let now = Instant::now();
         let mut num_tx: usize = 0;
         // receive txs
-        while let Some(TransactionMessage(
+        while let Some(SailfishMessage::Transaction{
             tx,
-            tx_digest,
+            digest: tx_digest,
             checkpoint_seq,
-        )) = tx_receiver.recv().await
+        }) = tx_receiver.recv().await
         {
             self
                 .execute_tx(
@@ -199,18 +203,21 @@ impl ExecutionWorkerState {
                     .expect("Read Sui System State object cannot fail");
                 let new_epoch_start_state = latest_state.into_epoch_start_state();
                 epoch_end_sender
-                    .send(EpochEndMessage(
+                    .send(SailfishMessage::EpochEnd{
                         new_epoch_start_state,
-                    ))
+                    })
                     .await
                     .expect("Sending doesn't work");
 
                 // Then wait for start epoch message from sequence worker and update local state
-                let EpochStartMessage(
-                    protocol_config_,
-                    epoch_data_,
-                    reference_gas_price_,
-                ) = epoch_start_receiver.recv().await.unwrap();
+                let SailfishMessage::EpochStart{
+                    conf: protocol_config_,
+                    data: epoch_data_,
+                    ref_gas_price: reference_gas_price_,
+                } = epoch_start_receiver.recv().await.unwrap()
+                else {
+                    panic!("unexpected message");
+                };
                 move_vm = Arc::new(
                     adapter::new_move_vm(native_functions.clone(), &protocol_config, false)
                         .expect("We defined natives to not fail here"),
