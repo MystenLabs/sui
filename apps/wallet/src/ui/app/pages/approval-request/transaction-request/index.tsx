@@ -60,7 +60,7 @@ export function TransactionRequest({ txRequest }: TransactionRequestProps) {
 					if (isLoading) {
 						return;
 					}
-					if (isError) {
+					if (approved && isError) {
 						setConfirmationVisible(true);
 						return;
 					}
