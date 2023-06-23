@@ -83,7 +83,7 @@ export async function setup() {
 	const keypair = Ed25519Keypair.generate();
 	const address = keypair.getPublicKey().toSuiAddress();
 	const provider = getProvider();
-	const resp = await retry(() => provider.requestSuiFromFaucet(address), {
+	const resp = await retry(() => provider.requestSuiFromFaucetV0(address), {
 		backoff: 'EXPONENTIAL',
 		// overall timeout in 60 seconds
 		timeout: 1000 * 60,

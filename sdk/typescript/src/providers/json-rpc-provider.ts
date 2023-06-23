@@ -50,14 +50,20 @@ import {
 	Unsubscribe,
 	ResolvedNameServiceNames,
 	ProtocolConfig,
-} from '../types/index.js';
-import { DynamicFieldName, DynamicFieldPage } from '../types/dynamic_fields.js';
+	BatchFaucetResponse,
+	BatchStatusFaucetResponse,
+} from '../types';
+import { DynamicFieldName, DynamicFieldPage } from '../types/dynamic_fields';
 import {
 	DEFAULT_CLIENT_OPTIONS,
 	WebsocketClient,
 	WebsocketClientOptions,
-} from '../rpc/websocket-client.js';
-import { requestSuiFromFaucet } from '../rpc/faucet-client.js';
+} from '../rpc/websocket-client';
+import {
+	requestSuiFromFaucetV0,
+	requestSuiFromFaucetV1,
+	getFaucetRequestStatus,
+} from '../rpc/faucet-client';
 import { any, array, string, nullable } from 'superstruct';
 import { fromB58, toB64, toHEX } from '@mysten/bcs';
 import { SerializedSignature } from '../cryptography/signature.js';
@@ -151,14 +157,34 @@ export class JsonRpcProvider {
 		return undefined;
 	}
 
-	async requestSuiFromFaucet(
+	async requestSuiFromFaucetV0(
 		recipient: SuiAddress,
 		httpHeaders?: HttpHeaders,
 	): Promise<FaucetResponse> {
 		if (!this.connection.faucet) {
 			throw new Error('Faucet URL is not specified');
 		}
-		return requestSuiFromFaucet(this.connection.faucet, recipient, httpHeaders);
+		return requestSuiFromFaucetV0(this.connection.faucet, recipient, httpHeaders);
+	}
+
+	async requestSuiFromFaucetV1(
+		recipient: SuiAddress,
+		httpHeaders?: HttpHeaders,
+	): Promise<BatchFaucetResponse> {
+		if (!this.connection.faucet) {
+			throw new Error('Faucet URL is not specified');
+		}
+		return requestSuiFromFaucetV1(this.connection.faucet + 'gas', recipient, httpHeaders);
+	}
+
+	async getFaucetRequestStatus(
+		task_id: string,
+		httpHeaders?: HttpHeaders,
+	): Promise<BatchStatusFaucetResponse> {
+		if (!this.connection.faucet) {
+			throw new Error('Faucet URL is not specified');
+		}
+		return getFaucetRequestStatus(this.connection.faucet + 'status', task_id, httpHeaders);
 	}
 
 	/**

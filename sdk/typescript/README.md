@@ -87,7 +87,7 @@ import { JsonRpcProvider, devnetConnection } from '@mysten/sui.js';
 // connect to Devnet
 const provider = new JsonRpcProvider(devnetConnection);
 // get tokens from the DevNet faucet server
-await provider.requestSuiFromFaucet(
+await provider.requestSuiFromFaucetV0(
 	'0xcc2bd176a478baea9a0de7a24cd927661cc6e860d5bacecb9a138ef20dbab231',
 );
 ```
@@ -99,7 +99,7 @@ import { JsonRpcProvider, localnetConnection } from '@mysten/sui.js';
 // connect to local RPC server
 const provider = new JsonRpcProvider(localnetConnection);
 // get tokens from the local faucet server
-await provider.requestSuiFromFaucet(
+await provider.requestSuiFromFaucetV0(
 	'0xcc2bd176a478baea9a0de7a24cd927661cc6e860d5bacecb9a138ef20dbab231',
 );
 ```
@@ -116,7 +116,7 @@ const connection = new Connection({
 // connect to a custom RPC server
 const provider = new JsonRpcProvider(connection);
 // get tokens from a custom faucet server
-await provider.requestSuiFromFaucet(
+await provider.requestSuiFromFaucetV0(
 	'0xcc2bd176a478baea9a0de7a24cd927661cc6e860d5bacecb9a138ef20dbab231',
 );
 ```

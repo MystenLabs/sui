@@ -19,5 +19,5 @@ export async function generateKeypair() {
 
 export async function requestingSuiFromFaucet(address: string) {
 	const provider = new JsonRpcProvider(localnetConnection);
-	await provider.requestSuiFromFaucet(address);
+	await provider.requestSuiFromFaucetV0(address);
 }

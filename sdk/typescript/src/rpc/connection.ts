@@ -25,23 +25,24 @@ export class Connection {
 	get faucet() {
 		return this.#options.faucet;
 	}
+
 }
 
 // TODO: Maybe don't have pre-built connections, and instead just have pre-built objects that folks
 // can use with the connection?
 export const localnetConnection = new Connection({
 	fullnode: 'http://127.0.0.1:9000',
-	faucet: 'http://127.0.0.1:9123/gas',
+	faucet: 'http://127.0.0.1:9123',
 });
 
 export const devnetConnection = new Connection({
 	fullnode: 'https://fullnode.devnet.sui.io:443/',
-	faucet: 'https://faucet.devnet.sui.io/gas',
+	faucet: 'https://faucet.devnet.sui.io/',
 });
 
 export const testnetConnection = new Connection({
 	fullnode: 'https://fullnode.testnet.sui.io:443/',
-	faucet: 'https://faucet.testnet.sui.io/gas',
+	faucet: 'https://faucet.testnet.sui.io/',
 });
 
 export const mainnetConnection = new Connection({

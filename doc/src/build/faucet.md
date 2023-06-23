@@ -44,7 +44,7 @@ import { JsonRpcProvider, devnetConnection } from '@mysten/sui.js';
 // connect to Devnet
 const provider = new JsonRpcProvider(devnetConnection);
 // get tokens from the Devnet faucet server
-await provider.requestSuiFromFaucet(
+await provider.requestSuiFromFaucetV0(
   '<YOUR SUI ADDRESS>'
 );
 ```
