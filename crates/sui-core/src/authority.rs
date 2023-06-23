@@ -2546,7 +2546,6 @@ impl AuthorityState {
             })?;
             move_objects.push(bcs::from_bytes(move_object.contents()).map_err(|e| {
                 SuiError::DeserializationError {
-                    // error from state
                     input_type: "object".to_string(),
                     error: format!("{e}"),
                 }

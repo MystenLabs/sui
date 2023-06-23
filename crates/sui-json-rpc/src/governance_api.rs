@@ -49,7 +49,7 @@ impl GovernanceReadApi {
         let state = self.state.clone();
         let result = spawn_monitored_task!(async move {
             state
-                .get_move_objects(owner, MoveObjectType::staked_sui()) // error: server-side if DeserializationError
+                .get_move_objects(owner, MoveObjectType::staked_sui())
                 .await
         })
         .await??;
@@ -356,7 +356,6 @@ async fn exchange_rates(
     )? {
         let pool_id: ID =
             bcs::from_bytes(&df.1.bcs_name).map_err(|e| SuiError::DeserializationError {
-                // error from state
                 input_type: "object".to_string(),
                 error: e.to_string(),
             })?;
@@ -383,7 +382,6 @@ async fn exchange_rates(
             .map(|df| {
                 let epoch: EpochId = bcs::from_bytes(&df.1.bcs_name).map_err(|e| {
                     SuiError::DeserializationError {
-                        // error from state
                         input_type: "object".to_string(),
                         error: e.to_string(),
                     }
