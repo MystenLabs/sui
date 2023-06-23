@@ -15,6 +15,7 @@ tonic = "0.8"
 dashmap = "5.4.0"
 tower = "0.4.13"
 
+sui-archival = { path = "../sui-archival" }
 sui-storage = { path = "../sui-storage" }
 sui-types = { path = "../sui-types" }
 sui-config = { path = "../sui-config" }
@@ -42,3 +43,4 @@ telemetry-subscribers.workspace = true
 tokio = { workspace = true, features = ["test-util"] }
 ed25519-consensus = { version = "2.0.1" }
 fastcrypto = { workspace = true }
+tempfile = "3.3.0"

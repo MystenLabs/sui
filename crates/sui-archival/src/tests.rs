@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::reader::ArchiveReader;
+use crate::reader::{ArchiveReader, ArchiveReaderConfig};
 use crate::writer::ArchiveWriter;
 use crate::{read_manifest, write_manifest, Manifest};
 use anyhow::{Context, Result};
@@ -83,9 +83,11 @@ async fn setup_test_state(temp_dir: PathBuf) -> anyhow::Result<TestState> {
         &Registry::default(),
     )
     .await?;
-
-    let archive_reader =
-        ArchiveReader::new(remote_store_config.clone(), NonZeroUsize::new(2).unwrap())?;
+    let archive_reader_config = ArchiveReaderConfig {
+        remote_store_config: remote_store_config.clone(),
+        download_concurrency: NonZeroUsize::new(2).unwrap(),
+    };
+    let archive_reader = ArchiveReader::new(archive_reader_config)?;
     let local_store = local_store_config.make()?;
     let remote_store = remote_store_config.make()?;
     Ok(TestState {
@@ -184,7 +186,7 @@ async fn test_manifest_serde() -> Result<()> {
 #[tokio::test]
 async fn test_archive_reader_e2e() -> Result<(), anyhow::Error> {
     let test_store = SharedInMemoryStore::default();
-    let mut test_state = setup_test_state(temp_dir()).await?;
+    let test_state = setup_test_state(temp_dir()).await?;
     let kill = test_state.archive_writer.start(test_store.clone()).await?;
     let mut latest_archived_checkpoint_seq_num = 0;
     while latest_archived_checkpoint_seq_num < 10 {
@@ -213,14 +215,16 @@ async fn test_archive_reader_e2e() -> Result<(), anyhow::Error> {
         VerifiedCheckpointContents::new_unchecked(genesis_checkpoint_content),
         test_state.committee.committee().to_owned(),
     );
-    let counter = Arc::new(AtomicU64::new(0));
+    let tx_counter = Arc::new(AtomicU64::new(0));
+    let checkpoint_counter = Arc::new(AtomicU64::new(0));
     test_state.archive_reader.sync_manifest_once().await?;
     test_state
         .archive_reader
         .read(
             read_store.clone(),
             0..(latest_archived_checkpoint_seq_num + 1),
-            counter,
+            tx_counter,
+            checkpoint_counter,
         )
         .await?;
     ma::assert_ge!(

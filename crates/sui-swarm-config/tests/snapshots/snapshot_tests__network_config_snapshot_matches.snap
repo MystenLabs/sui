@@ -90,7 +90,9 @@ validator_configs:
       user_transaction_disabled: false
     certificate-deny-config: {}
     state-debug-dump-config: {}
-    state-archive-config: {}
+    state-archive-write-config:
+      concurrency: 0
+    state-archive-read-config: []
   - protocol-key-pair:
       value: avYcyVgYMXTyaUYh9IRwLK0gSzl7YF6ZQDAbrS1Bhvo=
     worker-key-pair:
@@ -178,7 +180,9 @@ validator_configs:
       user_transaction_disabled: false
     certificate-deny-config: {}
     state-debug-dump-config: {}
-    state-archive-config: {}
+    state-archive-write-config:
+      concurrency: 0
+    state-archive-read-config: []
   - protocol-key-pair:
       value: OXnx3yM1C/ppgnDMx/o1d49fJs7E05kq11mXNae/O+I=
     worker-key-pair:
@@ -266,7 +270,9 @@ validator_configs:
       user_transaction_disabled: false
     certificate-deny-config: {}
     state-debug-dump-config: {}
-    state-archive-config: {}
+    state-archive-write-config:
+      concurrency: 0
+    state-archive-read-config: []
   - protocol-key-pair:
       value: CyNkjqNVr3HrHTH7f/NLs7u5lUHJzuPAw0PqMTD2y2s=
     worker-key-pair:
@@ -354,7 +360,9 @@ validator_configs:
       user_transaction_disabled: false
     certificate-deny-config: {}
     state-debug-dump-config: {}
-    state-archive-config: {}
+    state-archive-write-config:
+      concurrency: 0
+    state-archive-read-config: []
   - protocol-key-pair:
       value: X/I/kM+KvHcxAKEf2UU6Sr7SpN3bhiE9nP5CuM/iIY0=
     worker-key-pair:
@@ -442,7 +450,9 @@ validator_configs:
       user_transaction_disabled: false
     certificate-deny-config: {}
     state-debug-dump-config: {}
-    state-archive-config: {}
+    state-archive-write-config:
+      concurrency: 0
+    state-archive-read-config: []
   - protocol-key-pair:
       value: N272EiFDyKtxRbDKbyN6ujenJ+skPcRoc/XolpOLGnU=
     worker-key-pair:
@@ -530,7 +540,9 @@ validator_configs:
       user_transaction_disabled: false
     certificate-deny-config: {}
     state-debug-dump-config: {}
-    state-archive-config: {}
+    state-archive-write-config:
+      concurrency: 0
+    state-archive-read-config: []
   - protocol-key-pair:
       value: a74f03IOjL8ZFSWFChFVEi+wiMwHNwNCPDGIYkGfgjs=
     worker-key-pair:
@@ -618,7 +630,9 @@ validator_configs:
       user_transaction_disabled: false
     certificate-deny-config: {}
     state-debug-dump-config: {}
-    state-archive-config: {}
+    state-archive-write-config:
+      concurrency: 0
+    state-archive-read-config: []
 account_keys:
   - Hloy4pnf8pWEHGP+4OFsXz56bLdIJhkD2O+OdKMqCA4=
   - pvMScjoMR/DaN0M5IOxS2VpGC59N6kv6gDm63ufLQ5w=

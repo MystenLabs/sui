@@ -560,11 +560,39 @@ impl InMemoryStore {
             .insert(sequence_number, digest);
     }
 
+    pub fn delete_checkpoint_content_test_only(
+        &mut self,
+        sequence_number: u64,
+    ) -> anyhow::Result<()> {
+        let contents = self
+            .full_checkpoint_contents
+            .get(&sequence_number)
+            .unwrap()
+            .clone();
+        let contents_digest = *contents.checkpoint_contents().digest();
+        for content in contents.iter() {
+            let effects_digest = content.effects.digest();
+            let tx_digest = content.transaction.digest();
+            self.effects.remove(&effects_digest);
+            self.transactions.remove(tx_digest);
+        }
+        self.checkpoint_contents.remove(&contents_digest);
+        self.full_checkpoint_contents.remove(&sequence_number);
+        self.contents_digest_to_sequence_number
+            .remove(&contents_digest);
+        self.lowest_checkpoint_number = sequence_number + 1;
+        Ok(())
+    }
+
     pub fn update_highest_synced_checkpoint(&mut self, checkpoint: &VerifiedCheckpoint) {
         if !self.checkpoints.contains_key(checkpoint.digest()) {
             panic!("store should already contain checkpoint");
         }
-
+        if let Some(highest_synced_checkpoint) = self.highest_synced_checkpoint {
+            if highest_synced_checkpoint.0 >= checkpoint.sequence_number {
+                return;
+            }
+        }
         self.highest_synced_checkpoint =
             Some((*checkpoint.sequence_number(), *checkpoint.digest()));
     }
@@ -572,6 +600,11 @@ impl InMemoryStore {
     pub fn update_highest_verified_checkpoint(&mut self, checkpoint: &VerifiedCheckpoint) {
         if !self.checkpoints.contains_key(checkpoint.digest()) {
             panic!("store should already contain checkpoint");
+        }
+        if let Some(highest_verified_checkpoint) = self.highest_verified_checkpoint {
+            if highest_verified_checkpoint.0 >= checkpoint.sequence_number {
+                return;
+            }
         }
         self.highest_verified_checkpoint =
             Some((*checkpoint.sequence_number(), *checkpoint.digest()));
