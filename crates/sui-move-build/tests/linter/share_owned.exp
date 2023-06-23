@@ -1,21 +1,21 @@
 warning[Lint W01001]: possible owned object share
-   ┌─ tests/linter/share_owned.move:11:9
+   ┌─ tests/linter/share_owned.move:14:9
    │
- 9 │     public entry fun arg_object(o: Obj) {
+12 │     public entry fun arg_object(o: Obj) {
    │                                 - A potentially shared object coming from here
-10 │         let arg = o;
-11 │         transfer::public_share_object(arg);
+13 │         let arg = o;
+14 │         transfer::public_share_object(arg);
    │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
    │         │                             │
    │         │                             This argument should in most cases come from an object created within the same function.
    │         You may be trying to share an owned object.
 
 warning[Lint W01001]: possible owned object share
-   ┌─ tests/linter/share_owned.move:32:9
+   ┌─ tests/linter/share_owned.move:35:9
    │
-31 │         let Wrapper { id, i: _, o } = w;
+34 │         let Wrapper { id, i: _, o } = w;
    │                                 - A potentially shared object coming from here
-32 │         transfer::public_share_object(o);
+35 │         transfer::public_share_object(o);
    │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
    │         │                             │
    │         │                             This argument should in most cases come from an object created within the same function.

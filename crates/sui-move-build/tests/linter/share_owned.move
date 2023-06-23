@@ -1,3 +1,6 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 module 0x42::test1 {
     use sui::transfer;
     use sui::object::UID;
