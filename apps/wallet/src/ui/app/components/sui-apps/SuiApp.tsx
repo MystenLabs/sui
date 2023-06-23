@@ -1,15 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import cl from 'classnames';
 import { useState } from 'react';
 
 import DisconnectApp from './DisconnectApp';
+import { ImageIcon } from '_app/shared/image-icon';
 import ExternalLink from '_components/external-link';
 import { trackEvent } from '_src/shared/plausible';
 import { getDAppUrl } from '_src/shared/utils';
-
-import st from './SuiApp.module.scss';
+import { Text } from '_src/ui/app/shared/text';
 
 export type DAppEntry = {
 	name: string;
@@ -19,9 +18,82 @@ export type DAppEntry = {
 	tags: string[];
 };
 export type DisplayType = 'full' | 'card';
-export interface SuiAppProps extends DAppEntry {
-	displayType: DisplayType;
+
+type CardViewProp = {
+	name: string;
+	link: string;
+	icon?: string;
+};
+
+function CardView({ name, link, icon }: CardViewProp) {
+	const appUrl = getDAppUrl(link);
+	const originLabel = appUrl.hostname;
+	return (
+		<div className="bg-white flex flex-col p-3.75 box-border w-full rounded-2xl border border-gray-45 border-solid h-32 hover:bg-sui/10 hover:border-sui/30">
+			<div className="flex mb-1">
+				<ImageIcon src={icon || null} label={name} fallback={name} size="lg" circle />
+			</div>
+
+			<div className="flex flex-col gap-1 justify-start item-start">
+				<div className="line-clamp-2 break-all">
+					<Text variant="body" weight="semibold" color="gray-90">
+						{name}
+					</Text>
+				</div>
+				<Text variant="bodySmall" weight="medium" color="steel" truncate>
+					{originLabel}
+				</Text>
+			</div>
+		</div>
+	);
+}
+
+type ListViewProp = {
+	name: string;
+	icon?: string;
+	description: string;
+	tags?: string[];
+};
+
+function ListView({ name, icon, description, tags }: ListViewProp) {
+	return (
+		<div className="bg-white flex py-3.5 px-1.25 gap-3 item-center box-border rounded hover:bg-sui/10">
+			<ImageIcon src={icon || null} label={name} fallback={name} size="xl" circle />
+			<div className="flex flex-col gap-1 justify-center">
+				<Text variant="body" weight="semibold" color="sui-dark">
+					{name}
+				</Text>
+				<Text variant="subtitle" weight="normal" color="steel-darker">
+					{description}
+				</Text>
+				{tags?.length && (
+					<div className="flex flex-wrap gap-1">
+						{tags?.map((tag) => (
+							<div
+								className="flex item-center justify-center px-1.5 py-0.5 border border-solid border-steel rounded"
+								key={tag}
+							>
+								<Text variant="captionSmall" weight="medium" color="steel-dark">
+									{tag}
+								</Text>
+							</div>
+						))}
+					</div>
+				)}
+			</div>
+		</div>
+	);
+}
+
+export interface SuiAppProps {
+	name: string;
+	description: string;
+	link: string;
+	icon: string;
+	tags: string[];
 	permissionID?: string;
+	displayType: DisplayType;
+	openAppSite?: boolean;
 }
 
 export function SuiApp({
@@ -30,69 +102,56 @@ export function SuiApp({
 	link,
 	icon,
 	tags,
-	displayType,
 	permissionID,
+	displayType,
+	openAppSite,
 }: SuiAppProps) {
 	const [showDisconnectApp, setShowDisconnectApp] = useState(false);
 	const appUrl = getDAppUrl(link);
-	const originLabel = appUrl.hostname;
 
-	const AppDetails = (
-		<div className={cl(st.suiApp, st[displayType])}>
-			<div className={st.icon}>
-				{icon ? (
-					<img src={icon} className={st.icon} alt={name} />
-				) : (
-					<div className={st.defaultImg}></div>
-				)}
+	if (permissionID && showDisconnectApp) {
+		return (
+			<DisconnectApp
+				name={name}
+				link={link}
+				icon={icon}
+				permissionID={permissionID}
+				setShowDisconnectApp={setShowDisconnectApp}
+			/>
+		);
+	}
+
+	const AppDetails =
+		displayType === 'full' ? (
+			<ListView name={name} description={description} icon={icon} tags={tags} />
+		) : (
+			<CardView name={name} link={link} icon={icon} />
+		);
+
+	if (permissionID && !openAppSite) {
+		return (
+			<div
+				className="bg-transparent cursor-pointer text-left w-full"
+				onClick={() => setShowDisconnectApp(true)}
+				role="button"
+			>
+				{AppDetails}
 			</div>
-			<div className={st.info}>
-				<div className={st.title}>{name} </div>
-				{displayType === 'full' && <div className={st.description}>{description}</div>}
+		);
+	}
 
-				{displayType === 'card' && <div className={st.link}>{originLabel}</div>}
-
-				{displayType === 'full' && tags?.length && (
-					<div className={st.tags}>
-						{tags?.map((tag) => (
-							<div className={st.tag} key={tag}>
-								{tag}
-							</div>
-						))}
-					</div>
-				)}
-			</div>
-		</div>
-	);
 	return (
-		<>
-			{permissionID && showDisconnectApp ? (
-				<DisconnectApp
-					name={name}
-					link={link}
-					icon={icon}
-					permissionID={permissionID}
-					setShowDisconnectApp={setShowDisconnectApp}
-				/>
-			) : null}
-			{permissionID ? (
-				<div className={st.ecosystemApp} onClick={() => setShowDisconnectApp(true)}>
-					{AppDetails}
-				</div>
-			) : (
-				<ExternalLink
-					href={appUrl?.toString() ?? link}
-					title={name}
-					className={st.ecosystemApp}
-					onClick={() => {
-						trackEvent('AppOpen', {
-							props: { name, source: 'AppPage' },
-						});
-					}}
-				>
-					{AppDetails}
-				</ExternalLink>
-			)}
-		</>
+		<ExternalLink
+			href={appUrl?.toString() ?? link}
+			title={name}
+			className="no-underline"
+			onClick={() => {
+				trackEvent('AppOpen', {
+					props: { name, source: 'AppPage' },
+				});
+			}}
+		>
+			{AppDetails}
+		</ExternalLink>
 	);
 }
