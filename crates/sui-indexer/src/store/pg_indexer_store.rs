@@ -12,7 +12,7 @@ use diesel::dsl::{count, max};
 use diesel::pg::PgConnection;
 use diesel::sql_types::{BigInt, VarChar};
 use diesel::upsert::excluded;
-use diesel::{ExpressionMethods, PgArrayExpressionMethods};
+use diesel::ExpressionMethods;
 use diesel::{OptionalExtension, QueryableByName};
 use diesel::{QueryDsl, RunQueryDsl};
 use fastcrypto::hash::Digest;
@@ -903,40 +903,6 @@ impl IndexerStore for PgIndexerStore {
         }).context(&format!("Failed reading transaction digests with kind {kind} and start_sequence {start_sequence:?} and limit {limit}"))
     }
 
-    async fn get_transaction_page_by_mutated_object(
-        &self,
-        object_id: String,
-        start_sequence: Option<i64>,
-        limit: usize,
-        is_descending: bool,
-    ) -> Result<Vec<Transaction>, IndexerError> {
-        read_only_blocking!(&self.blocking_cp, |conn| {
-            let mut boxed_query = transactions::dsl::transactions
-                .filter(transactions::dsl::mutated.contains(vec![Some(object_id.clone())]))
-                .or_filter(transactions::dsl::created.contains(vec![Some(object_id.clone())]))
-                .or_filter(transactions::dsl::unwrapped.contains(vec![Some(object_id.clone())]))
-                .into_boxed();
-            if let Some(start_sequence) = start_sequence {
-                if is_descending {
-                    boxed_query = boxed_query.filter(transactions::dsl::id.lt(start_sequence));
-                } else {
-                    boxed_query = boxed_query.filter(transactions::dsl::id.gt(start_sequence));
-                }
-            }
-            if is_descending {
-               boxed_query
-                    .order(transactions::dsl::id.desc())
-                    .limit(limit as i64)
-                    .load::<Transaction>(conn)
-            } else {
-                boxed_query
-                    .order(transactions::dsl::id.asc())
-                    .limit(limit as i64)
-                    .load::<Transaction>(conn)
-            }
-        }).context(&format!("Failed reading transaction digests by mutated object id {object_id} with start_sequence {start_sequence:?} and limit {limit}"))
-    }
-
     async fn get_transaction_page_by_sender_address(
         &self,
         sender_address: String,
@@ -977,12 +943,12 @@ impl IndexerStore for PgIndexerStore {
         start_sequence: Option<i64>,
         limit: usize,
         is_descending: bool,
-    ) -> Result<Vec<Transaction>, IndexerError> {
+    ) -> Result<Vec<TransactionDigest>, IndexerError> {
         let sql_query = format!(
             "SELECT transaction_digest as digest_name
              FROM input_objects
              WHERE object_id = '{}' {} {}
-             ORDER BY max_id {} LIMIT {}",
+             ORDER BY id {} LIMIT {}",
             object_id,
             if let Some(start_sequence) = start_sequence {
                 if is_descending {
@@ -1001,12 +967,18 @@ impl IndexerStore for PgIndexerStore {
             if is_descending { "DESC" } else { "ASC" },
             limit
         );
-        let tx_digests: Vec<String> = read_only_blocking!(&self.blocking_cp, |conn| diesel::sql_query(sql_query).load(conn))
+        read_only_blocking!(&self.blocking_cp, |conn| diesel::sql_query(sql_query).load(conn))
                 .context(&format!("Failed reading transaction digests by input object ID {object_id} and version {version:?} with start_sequence {start_sequence:?} and limit {limit}"))?
                 .into_iter()
-                .map(|table: TempDigestTable| table.digest_name)
-                .collect();
-        self.multi_get_transactions_by_digests(&tx_digests).await
+                .map(|table: TempDigestTable|
+                    table.digest_name.parse().map_err(|e| {
+                        IndexerError::InsertableParsingError(format!(
+                            "Failed to parse transaction digest {} : {:?}",
+                            table.digest_name, e
+                        ))
+                    })
+                )
+                .collect::<Result<Vec<TransactionDigest>, _>>()
     }
 
     async fn get_transaction_page_by_changed_object(
@@ -1016,7 +988,7 @@ impl IndexerStore for PgIndexerStore {
         start_sequence: Option<i64>,
         limit: usize,
         is_descending: bool,
-    ) -> Result<Vec<Transaction>, IndexerError> {
+    ) -> Result<Vec<TransactionDigest>, IndexerError> {
         let sql_query = format!(
             "SELECT transaction_digest as digest_name
              FROM changed_objects
@@ -1040,12 +1012,18 @@ impl IndexerStore for PgIndexerStore {
             if is_descending { "DESC" } else { "ASC" },
             limit
         );
-        let tx_digests: Vec<String> = read_only_blocking!(&self.blocking_cp, |conn| diesel::sql_query(sql_query).load(conn))
+        read_only_blocking!(&self.blocking_cp, |conn| diesel::sql_query(sql_query).load(conn))
                 .context(&format!("Failed reading transaction digests by changed object ID {object_id} and version {version:?} with start_sequence {start_sequence:?} and limit {limit}"))?
                 .into_iter()
-                .map(|table: TempDigestTable| table.digest_name)
-                .collect();
-        self.multi_get_transactions_by_digests(&tx_digests).await
+                .map(|table: TempDigestTable|
+                    table.digest_name.parse().map_err(|e| {
+                        IndexerError::InsertableParsingError(format!(
+                            "Failed to parse transaction digest {} : {:?}",
+                            table.digest_name, e
+                        ))
+                    })
+                )
+                .collect::<Result<Vec<TransactionDigest>, _>>()
     }
 
     async fn get_transaction_page_by_move_call(
@@ -1056,7 +1034,7 @@ impl IndexerStore for PgIndexerStore {
         start_sequence: Option<i64>,
         limit: usize,
         is_descending: bool,
-    ) -> Result<Vec<Transaction>, IndexerError> {
+    ) -> Result<Vec<TransactionDigest>, IndexerError> {
         // note: module_name and function_name are user-controlled, which is scary.
         // however, but valid Move identifiers can only contain 0-9, a-z, A-Z, and _,
         // so it is safe to use them as-is in the query below
@@ -1088,14 +1066,20 @@ impl IndexerStore for PgIndexerStore {
             if is_descending { "DESC" } else { "ASC" },
             limit
         );
-        let tx_digests: Vec<String> = read_only_blocking!(&self.blocking_cp, |conn| diesel::sql_query(sql_query).load(conn))
+        read_only_blocking!(&self.blocking_cp, |conn| diesel::sql_query(sql_query).load(conn))
                 .context(&format!(
                         "Failed reading transaction digests with package_name {} module_name {:?} and function_name {:?} and start_sequence {:?} and limit {}",
                         package_name, module_name, function_name, start_sequence, limit))?
                 .into_iter()
-                .map(|table: TempDigestTable| table.digest_name)
-                .collect();
-        self.multi_get_transactions_by_digests(&tx_digests).await
+                .map(|table: TempDigestTable|
+                    table.digest_name.parse().map_err(|e| {
+                        IndexerError::InsertableParsingError(format!(
+                            "Failed to parse transaction digest {} : {:?}",
+                            table.digest_name, e
+                        ))
+                    })
+                )
+                .collect::<Result<Vec<TransactionDigest>, _>>()
     }
 
     async fn get_transaction_page_by_recipient_address(
@@ -1105,7 +1089,7 @@ impl IndexerStore for PgIndexerStore {
         start_sequence: Option<i64>,
         limit: usize,
         is_descending: bool,
-    ) -> Result<Vec<Transaction>, IndexerError> {
+    ) -> Result<Vec<TransactionDigest>, IndexerError> {
         let sql_query = format!(
             "SELECT transaction_digest as digest_name FROM recipients
              WHERE recipient = '{}' {} {} 
@@ -1128,12 +1112,18 @@ impl IndexerStore for PgIndexerStore {
             if is_descending { "DESC" } else { "ASC" },
             limit
         );
-        let tx_digests: Vec<String> = read_only_blocking!(&self.blocking_cp, |conn| diesel::sql_query(sql_query).load(conn))
+        read_only_blocking!(&self.blocking_cp, |conn| diesel::sql_query(sql_query).load(conn))
                 .context(&format!("Failed reading transaction digests by recipient address {to} with start_sequence {start_sequence:?} and limit {limit}"))?
                 .into_iter()
-                .map(|table: TempDigestTable| table.digest_name)
-                .collect();
-        self.multi_get_transactions_by_digests(&tx_digests).await
+                .map(|table: TempDigestTable|
+                    table.digest_name.parse().map_err(|e| {
+                        IndexerError::InsertableParsingError(format!(
+                            "Failed to parse transaction digest {} : {:?}",
+                            table.digest_name, e
+                        ))
+                    })
+                )
+                .collect::<Result<Vec<TransactionDigest>, _>>()
     }
 
     async fn get_transaction_page_by_address(
@@ -1142,7 +1132,7 @@ impl IndexerStore for PgIndexerStore {
         start_sequence: Option<i64>,
         limit: usize,
         is_descending: bool,
-    ) -> Result<Vec<Transaction>, IndexerError> {
+    ) -> Result<Vec<TransactionDigest>, IndexerError> {
         let sql_query = format!(
             "SELECT transaction_digest as digest_name FROM (
                 SELECT transaction_digest, max(id) AS max_id
@@ -1165,12 +1155,18 @@ impl IndexerStore for PgIndexerStore {
             if is_descending { "DESC" } else { "ASC" },
             limit
         );
-        let tx_digests: Vec<String> = read_only_blocking!(&self.blocking_cp, |conn| diesel::sql_query(sql_query).load(conn))
+        read_only_blocking!(&self.blocking_cp, |conn| diesel::sql_query(sql_query).load(conn))
                 .context(&format!("Failed reading transaction digests by address {address} with start_sequence {start_sequence:?} and limit {limit}"))?
                 .into_iter()
-                .map(|table: TempDigestTable| table.digest_name)
-                .collect();
-        self.multi_get_transactions_by_digests(&tx_digests).await
+                .map(|table: TempDigestTable|
+                    table.digest_name.parse().map_err(|e| {
+                        IndexerError::InsertableParsingError(format!(
+                            "Failed to parse transaction digest {} : {:?}",
+                            table.digest_name, e
+                        ))
+                    })
+                )
+                .collect::<Result<Vec<TransactionDigest>, _>>()
     }
 
     async fn get_network_metrics(&self) -> Result<NetworkMetrics, IndexerError> {
