@@ -96,8 +96,8 @@ function SiteConnectPage() {
 						</div>
 
 						<div className={st.warningMessage}>
-							This site requesting this wallet connection is not secure, and attackers might be
-							trying to steal your information.
+							If you connect your wallet to this site your data could be exposed to attackers. Click
+							**Reject** if you don't trust this site.
 							<br />
 							<br />
 							Continue at your own risk.

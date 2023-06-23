@@ -10,7 +10,6 @@
 
 .scroll-body {
 	flex: 1;
-	padding: 24px;
 	padding-bottom: 0;
 	display: flex;
 	flex-flow: column;
@@ -26,6 +25,8 @@
 	display: flex;
 	flex-flow: column;
 	gap: 15px;
+	background-color: colors.$sui-alice-blue;
+	padding: 24px;
 
 	&.scrollable {
 		overflow-y: hidden;
