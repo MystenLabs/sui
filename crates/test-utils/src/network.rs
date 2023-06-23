@@ -14,6 +14,8 @@ use std::time::Duration;
 use sui_config::node::DBCheckpointConfig;
 use sui_config::{Config, SUI_CLIENT_CONFIG, SUI_NETWORK_CONFIG};
 use sui_config::{NodeConfig, PersistedConfig, SUI_KEYSTORE_FILENAME};
+use sui_core::authority_aggregator::AuthorityAggregator;
+use sui_core::authority_client::NetworkAuthorityClient;
 use sui_json_rpc_types::SuiTransactionBlockResponse;
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_node::SuiNodeHandle;
@@ -395,6 +397,12 @@ impl TestCluster {
         self.wallet.execute_transaction_must_succeed(tx).await
     }
 
+    pub fn authority_aggregator(&self) -> Arc<AuthorityAggregator<NetworkAuthorityClient>> {
+        self.fullnode_handle
+            .sui_node
+            .with(|node| node.clone_authority_aggregator().unwrap())
+    }
+
     /// Execute a transaction on specified list of validators, and bypassing authority aggregator.
     /// This allows us to obtain the return value directly from validators, so that we can access more
     /// information directly such as the original effects, events and extra objects returned.
@@ -405,10 +413,7 @@ impl TestCluster {
         tx: VerifiedTransaction,
         pubkeys: &[AuthorityName],
     ) -> (TransactionEffects, TransactionEvents, Vec<Object>) {
-        let agg = self
-            .fullnode_handle
-            .sui_node
-            .with(|node| node.clone_authority_aggregator().unwrap());
+        let agg = self.authority_aggregator();
         let certificate = agg
             .process_transaction(tx)
             .await
