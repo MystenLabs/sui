@@ -7,7 +7,7 @@ import {
 } from '@mysten/sui.js';
 import { getPoolInfoByRecords } from './utils';
 import { PoolInfo, Records } from './utils';
-import { defaultGasBudget, F } from './utils';
+import { defaultGasBudget } from './utils';
 
 export type smartRouteResult = {
 	maxSwapTokens: number;
