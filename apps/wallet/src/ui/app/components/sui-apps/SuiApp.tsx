@@ -119,23 +119,6 @@ export function SuiApp({
 		);
 	}
 
-	const AppDetails = (
-		<button
-			className="bg-transparent border-none cursor-pointer focus:outline-none p-0 m-0 text-left w-full"
-			onClick={() => setShowDisconnectApp(true)}
-		>
-			{displayType === 'full' ? (
-				<ListView name={name} description={description} icon={icon} tags={tags} />
-			) : (
-				<div className="grid grid-cols-1 w-full gap-3.75">
-					<CardView name={name} link={link} icon={icon} />
-				</div>
-			)}
-		</button>
-	);
-
-	if (permissionID) return <>{AppDetails}</>;
-
 	return (
 		<ExternalLink
 			href={appUrl?.toString() ?? link}
@@ -147,7 +130,13 @@ export function SuiApp({
 				});
 			}}
 		>
-			{AppDetails}
+			{displayType === 'full' ? (
+				<ListView name={name} description={description} icon={icon} tags={tags} />
+			) : (
+				<div className="grid grid-cols-1 w-full gap-3.75">
+					<CardView name={name} link={link} icon={icon} />
+				</div>
+			)}
 		</ExternalLink>
 	);
 }
