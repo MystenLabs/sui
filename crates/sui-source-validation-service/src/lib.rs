@@ -8,9 +8,12 @@ use std::{
     process::Command,
 };
 
-use actix_web::{dev::Server, web, App, HttpRequest, HttpServer, Responder};
 use anyhow::{anyhow, bail};
+use axum::routing::{get, IntoMakeService};
+use axum::{Router, Server};
+use hyper::server::conn::AddrIncoming;
 use serde::Deserialize;
+use std::net::TcpListener;
 use tracing::info;
 use url::Url;
 
@@ -185,14 +188,12 @@ pub async fn verify_packages(
     Ok(())
 }
 
-pub fn serve() -> anyhow::Result<Server> {
-    Ok(
-        HttpServer::new(|| App::new().route("/api", web::get().to(api_route)))
-            .bind("0.0.0.0:8000")?
-            .run(),
-    )
+pub fn serve() -> anyhow::Result<Server<AddrIncoming, IntoMakeService<Router>>> {
+    let app = Router::new().route("/api", get(api_route));
+    let listener = TcpListener::bind("0.0.0.0:8000")?;
+    Ok(Server::from_tcp(listener)?.serve(app.into_make_service()))
 }
 
-async fn api_route(_request: HttpRequest) -> impl Responder {
+async fn api_route() -> &'static str {
     "{\"source\": \"code\"}"
 }
