@@ -93,6 +93,7 @@ export interface SuiAppProps {
 	tags: string[];
 	permissionID?: string;
 	displayType: DisplayType;
+	openAppSite?: boolean;
 }
 
 export function SuiApp({
@@ -103,6 +104,7 @@ export function SuiApp({
 	tags,
 	permissionID,
 	displayType,
+	openAppSite,
 }: SuiAppProps) {
 	const [showDisconnectApp, setShowDisconnectApp] = useState(false);
 	const appUrl = getDAppUrl(link);
@@ -119,6 +121,27 @@ export function SuiApp({
 		);
 	}
 
+	const AppDetails = (
+		<>
+			{displayType === 'full' ? (
+				<ListView name={name} description={description} icon={icon} tags={tags} />
+			) : (
+				<CardView name={name} link={link} icon={icon} />
+			)}
+		</>
+	);
+
+	if (permissionID && !openAppSite) {
+		return (
+			<button
+				className="bg-transparent border-none cursor-pointer focus:outline-none p-0 m-0 text-left w-full"
+				onClick={() => setShowDisconnectApp(true)}
+			>
+				{AppDetails}
+			</button>
+		);
+	}
+
 	return (
 		<ExternalLink
 			href={appUrl?.toString() ?? link}
@@ -130,11 +153,7 @@ export function SuiApp({
 				});
 			}}
 		>
-			{displayType === 'full' ? (
-				<ListView name={name} description={description} icon={icon} tags={tags} />
-			) : (
-				<CardView name={name} link={link} icon={icon} />
-			)}
+			{AppDetails}
 		</ExternalLink>
 	);
 }

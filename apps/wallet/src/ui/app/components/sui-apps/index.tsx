@@ -64,6 +64,7 @@ function AppsPlayGround() {
 							{...app}
 							permissionID={linkToPermissionID.get(prepareLinkToCompare(app.link))}
 							displayType="full"
+							openAppSite
 						/>
 					))}
 				</div>
