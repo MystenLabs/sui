@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useFeature } from '@growthbook/growthbook-react';
-import cl from 'classnames';
 import { useEffect, useMemo } from 'react';
 
 import { useBackgroundClient } from '../../hooks/useBackgroundClient';
@@ -15,8 +14,6 @@ import { Text } from '_app/shared/text';
 import { useAppSelector } from '_hooks';
 import { FEATURES } from '_src/shared/experimentation/features';
 import { prepareLinkToCompare } from '_src/shared/utils';
-
-import st from './Playground.module.scss';
 
 const emptyArray: DAppEntry[] = [];
 
@@ -75,7 +72,7 @@ function ConnectedDapps() {
 				</Text>
 			</div>
 
-			<div className={cl(st.apps, st.appCards)}>
+			<div className="mb-28 grid gap-3.75 grid-cols-2">
 				{connectedApps.length ? (
 					connectedApps.map((app) => <SuiApp key={app.permissionID} {...app} displayType="card" />)
 				) : (
