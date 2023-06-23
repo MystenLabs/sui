@@ -14,9 +14,9 @@ path = "src/main.rs"
 name = "sui-source-validation-service"
 
 [dependencies]
-actix-web = { version = "4", features = ["rustls"] }
 anyhow = { version = "1.0.64", features = ["backtrace"] }
 clap = { version = "3.2.17", features = ["derive"] }
+hyper = "0.14"
 tempfile = "3.3.0"
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 toml = { version = "0.7.4", features = ["preserve_order"] }
@@ -31,6 +31,7 @@ sui-move-build = { path = "../../crates/sui-move-build" }
 sui-sdk = { path = "../../crates/sui-sdk" }
 sui-source-validation = { path = "../sui-source-validation" }
 
+axum.workspace = true
 move-package.workspace = true
 telemetry-subscribers.workspace = true
 workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
