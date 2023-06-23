@@ -63,6 +63,18 @@ pub fn parse_config(config_path: impl AsRef<Path>) -> anyhow::Result<Config> {
     Ok(toml::from_str(&contents)?)
 }
 
+pub fn repo_name_from_url(url: &str) -> anyhow::Result<String> {
+    let repo_url = Url::parse(url)?;
+    let Some(components) = repo_url.path_segments().map(|c| c.collect::<Vec<_>>()) else {
+	    bail!("Could not discover repository path in url {url}")
+	};
+    let Some(repo_name) = components.last() else {
+	    bail!("Could not discover repository name in url {url}")
+    };
+
+    Ok(repo_name.to_string())
+}
+
 #[derive(Debug)]
 /// Represents a sequence of git commands to clone a repository and sparsely checkout Move packages within.
 pub struct CloneCommand {
@@ -74,13 +86,7 @@ pub struct CloneCommand {
 
 impl CloneCommand {
     pub fn new(p: &Packages, dest: &Path) -> anyhow::Result<CloneCommand> {
-        let repo_url = Url::parse(&p.repository)?;
-        let Some(components) = repo_url.path_segments().map(|c| c.collect::<Vec<_>>()) else {
-	    bail!("Could not discover repository path in url {}", &p.repository)
-	};
-        let Some(repo_name) = components.last() else {
-	    bail!("Could not discover repository name in url {}", &p.repository)
-	};
+        let repo_name = repo_name_from_url(&p.repository)?;
         let dest = dest.join(repo_name).into_os_string();
 
         macro_rules! ostr {
@@ -179,13 +185,7 @@ pub async fn verify_packages(
 ) -> anyhow::Result<()> {
     let mut tasks = vec![];
     for p in &config.packages {
-        let repo_url = Url::parse(&p.repository)?;
-        let Some(components) = repo_url.path_segments().map(|c| c.collect::<Vec<_>>()) else {
-	    bail!("Could not discover repository path in url {}", &p.repository)
-	};
-        let Some(repo_name) = components.last() else {
-	    bail!("Could not discover repository name in url {}", &p.repository)
-	};
+        let repo_name = repo_name_from_url(&p.repository)?;
         let packages_dir = dir.join(repo_name);
         for p in &p.paths {
             let package_path = packages_dir.join(p).clone();
