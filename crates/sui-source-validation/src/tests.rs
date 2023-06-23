@@ -579,7 +579,7 @@ fn sanitize_id(mut message: String, m: &HashMap<SuiAddress, &str>) -> String {
 }
 
 /// Compile and publish package at absolute path `package` to chain.
-async fn publish_package(context: &WalletContext, package: PathBuf) -> (ObjectRef, ObjectRef) {
+pub async fn publish_package(context: &WalletContext, package: PathBuf) -> (ObjectRef, ObjectRef) {
     let txn = context.make_publish_transaction(package).await;
     let response = context.execute_transaction_must_succeed(txn).await;
     let package = get_new_package_obj_from_response(&response).unwrap();
@@ -624,7 +624,7 @@ async fn publish_package_and_deps(context: &WalletContext, package: PathBuf) -> 
 
 /// Copy `package` from fixtures into `directory`, setting its named address in the copied package's
 /// `Move.toml` to `address`. (A fixture's self-address is assumed to match its package name).
-async fn copy_published_package<'s>(
+pub async fn copy_published_package<'s>(
     directory: impl AsRef<Path>,
     package: &str,
     address: SuiAddress,

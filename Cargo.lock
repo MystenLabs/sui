@@ -10492,6 +10492,7 @@ dependencies = [
  "axum",
  "clap 3.2.23",
  "expect-test",
+ "fs_extra",
  "hyper",
  "move-package",
  "reqwest",

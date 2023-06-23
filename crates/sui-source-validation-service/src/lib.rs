@@ -1,12 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    ffi::OsString,
-    fs,
-    path::{Path, PathBuf},
-    process::Command,
-};
+use std::{ffi::OsString, fs, path::Path, process::Command};
 
 use anyhow::{anyhow, bail};
 use axum::routing::{get, IntoMakeService};
@@ -14,6 +9,7 @@ use axum::{Router, Server};
 use hyper::server::conn::AddrIncoming;
 use serde::Deserialize;
 use std::net::TcpListener;
+use sui_sdk::SuiClient;
 use tracing::info;
 use url::Url;
 
@@ -35,15 +31,14 @@ pub struct Packages {
 }
 
 pub async fn verify_package(
-    context: &WalletContext,
+    client: &SuiClient,
     package_path: impl AsRef<Path>,
 ) -> anyhow::Result<()> {
     move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks));
     let config = resolve_lock_file_path(
         MoveBuildConfig::default(),
         Some(package_path.as_ref().to_path_buf()),
-    )
-    .unwrap();
+    )?;
     let build_config = BuildConfig {
         config,
         run_bytecode_verifier: false, /* no need to run verifier if code is on-chain */
@@ -53,7 +48,6 @@ pub async fn verify_package(
         .build(package_path.as_ref().to_path_buf())
         .unwrap();
 
-    let client = context.get_client().await?;
     BytecodeSourceVerifier::new(client.read_api())
         .verify_package(
             &compiled_package,
@@ -174,16 +168,36 @@ pub async fn initialize(
     dir: &Path,
 ) -> anyhow::Result<()> {
     clone_repositories(config, dir).await?;
-    verify_packages(context, vec![]).await?;
+    verify_packages(context, config, dir).await?;
     Ok(())
 }
 
 pub async fn verify_packages(
     context: &WalletContext,
-    package_paths: Vec<PathBuf>,
+    config: &Config,
+    dir: &Path,
 ) -> anyhow::Result<()> {
-    for p in package_paths {
-        verify_package(context, p).await?
+    let mut tasks = vec![];
+    for p in &config.packages {
+        let repo_url = Url::parse(&p.repository)?;
+        let Some(components) = repo_url.path_segments().map(|c| c.collect::<Vec<_>>()) else {
+	    bail!("Could not discover repository path in url {}", &p.repository)
+	};
+        let Some(repo_name) = components.last() else {
+	    bail!("Could not discover repository name in url {}", &p.repository)
+	};
+        let packages_dir = dir.join(repo_name);
+        for p in &p.paths {
+            let package_path = packages_dir.join(p).clone();
+            let client = context.get_client().await?;
+            info!("verifying {p}");
+            let t = tokio::spawn(async move { verify_package(&client, package_path).await });
+            tasks.push(t)
+        }
+    }
+
+    for t in tasks {
+        t.await.unwrap()?;
     }
     Ok(())
 }
