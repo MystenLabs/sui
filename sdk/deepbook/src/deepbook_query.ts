@@ -5,6 +5,7 @@ import { DevInspectResults } from '@mysten/sui.js/client';
 import { normalizeSuiObjectId } from '@mysten/sui.js/utils';
 import { SuiClient, getFullnodeUrl } from '@mysten/sui.js/client';
 import { TransactionBlock } from '@mysten/sui.js/transactions';
+import { CLOCK, MODULE_CLOB, PACKAGE_ID } from './utils';
 
 export class DeepBook_query {
 	public provider: SuiClient;
@@ -23,21 +24,21 @@ export class DeepBook_query {
 	 * @param token1 token1 of a certain pair, eg: 0x5378a0e7495723f7d942366a125a6556cf56f573fa2bb7171b554a2986c4229a::weth::WETH
 	 * @param token2 token2 of a certain pair, eg: 0x5378a0e7495723f7d942366a125a6556cf56f573fa2bb7171b554a2986c4229a::usdt::USDT
 	 * @param poolId: the pool id, eg: 0xcaee8e1c046b58e55196105f1436a2337dcaa0c340a7a8c8baf65e4afb8823a4
-	 * @param orderId the order id, eg: 1
+	 * @param orderId the order id, eg: "1"
 	 * @param accountCap: your accountCap, eg: 0x6f699fef193723277559c8f499ca3706121a65ac96d273151b8e52deb29135d3
 	 */
 	public async get_order_status(
 		token1: string,
 		token2: string,
 		poolId: string,
-		orderId: number,
+		orderId: string,
 		accountCap: string,
 	): Promise<DevInspectResults> {
 		const txb = new TransactionBlock();
 		txb.moveCall({
 			typeArguments: [token1, token2],
-			target: `dee9::clob::get_order_status`,
-			arguments: [txb.object(poolId), txb.object(String(orderId)), txb.object(accountCap)],
+			target: `${PACKAGE_ID}::${MODULE_CLOB}::get_order_status`,
+			arguments: [txb.object(poolId), txb.object(orderId), txb.object(accountCap)],
 		});
 		txb.setSender(this.currentAddress);
 		return await this.provider.devInspectTransactionBlock({
@@ -62,7 +63,7 @@ export class DeepBook_query {
 		const txb = new TransactionBlock();
 		txb.moveCall({
 			typeArguments: [token1, token2],
-			target: `dee9::clob::account_balance`,
+			target: `${PACKAGE_ID}::${MODULE_CLOB}::account_balance`,
 			arguments: [txb.object(poolId), txb.object(accountCap)],
 		});
 		txb.setSender(this.currentAddress);
@@ -88,7 +89,7 @@ export class DeepBook_query {
 		const txb = new TransactionBlock();
 		txb.moveCall({
 			typeArguments: [token1, token2],
-			target: `dee9::clob::list_open_orders`,
+			target: `${PACKAGE_ID}::${MODULE_CLOB}::list_open_orders`,
 			arguments: [txb.object(poolId), txb.object(accountCap)],
 		});
 		txb.setSender(this.currentAddress);
@@ -109,7 +110,7 @@ export class DeepBook_query {
 		const txb = new TransactionBlock();
 		txb.moveCall({
 			typeArguments: [token1, token2],
-			target: `dee9::clob::get_market_price`,
+			target: `${PACKAGE_ID}::${MODULE_CLOB}::get_market_price`,
 			arguments: [txb.object(poolId)],
 		});
 		return await this.provider.devInspectTransactionBlock({
@@ -134,18 +135,18 @@ export class DeepBook_query {
 		lowerPrice: number,
 		higherPrice: number,
 		is_bid_side: boolean,
-	) {
+	): Promise<DevInspectResults> {
 		const txb = new TransactionBlock();
 		txb.moveCall({
 			typeArguments: [token1, token2],
 			target: is_bid_side
-				? `dee9::clob::get_level2_book_status_bid_side`
-				: `dee9::clob::get_level2_book_status_ask_side`,
+				? `${PACKAGE_ID}::${MODULE_CLOB}::get_level2_book_status_bid_side`
+				: `${PACKAGE_ID}::${MODULE_CLOB}::get_level2_book_status_ask_side`,
 			arguments: [
 				txb.object(poolId),
 				txb.pure(String(lowerPrice)),
 				txb.pure(String(higherPrice)),
-				txb.object(normalizeSuiObjectId('0x6')),
+				txb.object(normalizeSuiObjectId(CLOCK)),
 			],
 		});
 		return await this.provider.devInspectTransactionBlock({
