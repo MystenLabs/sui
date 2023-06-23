@@ -4,7 +4,8 @@
 use crate::{
     db_tool::{execute_db_tool_command, print_db_all_tables, DbToolCommand},
     get_object, get_transaction_block, make_clients, restore_from_db_checkpoint,
-    state_sync_from_archive, ConciseObjectOutput, GroupedObjectOutput, VerboseObjectOutput,
+    state_sync_from_archive, verify_archive, ConciseObjectOutput, GroupedObjectOutput,
+    VerboseObjectOutput,
 };
 use anyhow::Result;
 use std::path::PathBuf;
@@ -124,6 +125,17 @@ pub enum ToolCommand {
         genesis: PathBuf,
         #[clap(long = "db-path")]
         db_path: PathBuf,
+        #[clap(flatten)]
+        object_store_config: ObjectStoreConfig,
+        #[clap(default_value_t = 5)]
+        download_concurrency: usize,
+    },
+
+    /// Tool to verify the archive store
+    #[clap(name = "verify-archive")]
+    VerifyArchive {
+        #[clap(long = "genesis")]
+        genesis: PathBuf,
         #[clap(flatten)]
         object_store_config: ObjectStoreConfig,
         #[clap(default_value_t = 5)]
@@ -388,6 +400,13 @@ impl ToolCommand {
                     download_concurrency,
                 )
                 .await?;
+            }
+            ToolCommand::VerifyArchive {
+                genesis,
+                object_store_config,
+                download_concurrency,
+            } => {
+                verify_archive(&genesis, object_store_config, download_concurrency, true).await?;
             }
             ToolCommand::SignTransaction {
                 genesis,
