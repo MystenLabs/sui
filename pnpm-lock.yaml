@@ -1,4 +1,4 @@
-lockfileVersion: '6.0'
+lockfileVersion: '6.1'
 
 settings:
   autoInstallPeers: false
@@ -69,6 +69,9 @@ importers:
       '@growthbook/growthbook-react':
         specifier: ^0.15.0
         version: 0.15.0(react@18.2.0)
+      '@mysten/kiosk':
+        specifier: workspace:*
+        version: link:../../sdk/kiosk
       '@mysten/sui.js':
         specifier: workspace:*
         version: link:../../sdk/typescript
@@ -431,6 +434,9 @@ importers:
       '@mysten/icons':
         specifier: workspace:*
         version: link:../icons
+      '@mysten/kiosk':
+        specifier: workspace:*
+        version: link:../../sdk/kiosk
       '@mysten/ledgerjs-hw-app-sui':
         specifier: workspace:*
         version: link:../../sdk/ledgerjs-hw-app-sui
@@ -1252,10 +1258,10 @@ importers:
         version: 13.3.0(react-dom@18.2.0)(react@18.2.0)
       nextra:
         specifier: latest
-        version: 2.7.1(next@13.3.0)(react-dom@18.2.0)(react@18.2.0)
+        version: 2.7.0(next@13.3.0)(react-dom@18.2.0)(react@18.2.0)
       nextra-theme-docs:
         specifier: latest
-        version: 2.7.1(next@13.3.0)(nextra@2.7.1)(react-dom@18.2.0)(react@18.2.0)
+        version: 2.7.0(next@13.3.0)(nextra@2.7.0)(react-dom@18.2.0)(react@18.2.0)
       react:
         specifier: ^18.2.0
         version: 18.2.0
@@ -2921,7 +2927,6 @@ packages:
     engines: {node: '>=6.9.0'}
     dependencies:
       regenerator-runtime: 0.13.11
-    dev: false
 
   /@babel/template@7.22.5:
     resolution: {integrity: sha512-X7yV7eiwAxdj9k94NEylvbVHLiVG1nvzCV2EAowhxLTwODV1jl9UzZ48leOC0sH7OnuHrIkllaBgneUykIcZaw==}
@@ -5481,7 +5486,7 @@ packages:
     peerDependencies:
       react: ^16.8 || ^17.0 || ^18.0
     dependencies:
-      '@babel/runtime': 7.22.3
+      '@babel/runtime': 7.22.5
       react: 18.2.0
     dev: false
 
@@ -5529,7 +5534,7 @@ packages:
     peerDependencies:
       react: ^16.8 || ^17.0 || ^18.0
     dependencies:
-      '@babel/runtime': 7.22.3
+      '@babel/runtime': 7.22.5
       '@radix-ui/react-use-callback-ref': 1.0.0(react@18.2.0)
       react: 18.2.0
     dev: false
@@ -5554,7 +5559,7 @@ packages:
     peerDependencies:
       react: ^16.8 || ^17.0 || ^18.0
     dependencies:
-      '@babel/runtime': 7.22.3
+      '@babel/runtime': 7.22.5
       react: 18.2.0
     dev: false
 
@@ -16628,11 +16633,11 @@ packages:
       - babel-plugin-macros
     dev: false
 
-  /nextra-theme-docs@2.7.1(next@13.3.0)(nextra@2.7.1)(react-dom@18.2.0)(react@18.2.0):
-    resolution: {integrity: sha512-C2DtoGH15q22t4r2JC89lvvajmnyiqsv3PaqHJpoHRlF2eR5giuLhZC5Oahb9AENRDcnUIUvqVi/8NlfiIM0yQ==}
+  /nextra-theme-docs@2.7.0(next@13.3.0)(nextra@2.7.0)(react-dom@18.2.0)(react@18.2.0):
+    resolution: {integrity: sha512-984jZR13QO/YTIsLEYpFK2Pf4hQjD2Z2fHrBYJl/ZZQjylwxnnGcx1QAciy65mnPWr7/Kv9/dAKpjm9tYtyLrw==}
     peerDependencies:
       next: '>=9.5.3'
-      nextra: 2.7.1
+      nextra: 2.7.0
       react: '>=16.13.1'
       react-dom: '>=16.13.1'
     dependencies:
@@ -16647,15 +16652,15 @@ packages:
       next: 13.3.0(react-dom@18.2.0)(react@18.2.0)
       next-seo: 6.1.0(next@13.3.0)(react-dom@18.2.0)(react@18.2.0)
       next-themes: 0.2.1(next@13.3.0)(react-dom@18.2.0)(react@18.2.0)
-      nextra: 2.7.1(next@13.3.0)(react-dom@18.2.0)(react@18.2.0)
+      nextra: 2.7.0(next@13.3.0)(react-dom@18.2.0)(react@18.2.0)
       react: 18.2.0
       react-dom: 18.2.0(react@18.2.0)
       scroll-into-view-if-needed: 3.0.10
       zod: 3.21.4
     dev: false
 
-  /nextra@2.7.1(next@13.3.0)(react-dom@18.2.0)(react@18.2.0):
-    resolution: {integrity: sha512-qchTb7XSm357XAHf9MV9UlUSGolPEPE8iFnC/9KMwvhIoE4seyPYWMrnH84XraZCcGERvy9TrkFD30VE7Qv1MA==}
+  /nextra@2.7.0(next@13.3.0)(react-dom@18.2.0)(react@18.2.0):
+    resolution: {integrity: sha512-SXUsczIzb6+apg3ipRQQllBJk6W2FJfUrmJrQySu9DJpUfS36ylQYLX5ofkCI+Sq3ZHfefZbnut49KGozt/rGQ==}
     engines: {node: '>=16'}
     peerDependencies:
       next: '>=9.5.3'
@@ -18487,7 +18492,7 @@ packages:
     dependencies:
       '@babel/core': 7.21.4
       '@babel/generator': 7.22.5
-      '@babel/runtime': 7.22.3
+      '@babel/runtime': 7.22.5
       ast-types: 0.14.2
       commander: 2.20.3
       doctrine: 3.0.0

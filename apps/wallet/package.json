@@ -123,6 +123,7 @@
 		"@metamask/browser-passworder": "^4.1.0",
 		"@mysten/core": "workspace:*",
 		"@mysten/icons": "workspace:*",
+		"@mysten/kiosk": "workspace:*",
 		"@mysten/ledgerjs-hw-app-sui": "workspace:*",
 		"@mysten/sui.js": "workspace:*",
 		"@mysten/wallet-standard": "workspace:*",
