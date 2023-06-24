@@ -11,7 +11,7 @@ use sui_types::quorum_driver_types::QuorumDriverError;
 use thiserror::Error;
 use tokio::task::JoinError;
 
-pub type SuiApiResult<T = ()> = Result<T, Error>;
+pub type RpcInterimResult<T = ()> = Result<T, Error>;
 
 #[derive(Debug, Error)]
 pub enum Error {

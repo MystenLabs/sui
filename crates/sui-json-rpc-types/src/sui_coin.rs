@@ -35,7 +35,7 @@ pub struct Balance {
 }
 
 #[serde_as]
-#[derive(Serialize, Deserialize, Debug, JsonSchema, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Debug, JsonSchema, PartialEq, Eq, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct Coin {
     pub coin_type: String,

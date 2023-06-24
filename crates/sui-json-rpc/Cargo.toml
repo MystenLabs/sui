@@ -51,7 +51,6 @@ shared-crypto.workspace = true
 typed-store.workspace = true
 cached.workspace = true
 
-
 [dev-dependencies]
 sui-config.workspace = true
 sui-keys.workspace = true

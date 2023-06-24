@@ -13,6 +13,7 @@ use move_core_types::language_storage::{StructTag, TypeTag};
 use sui_storage::indexes::TotalBalance;
 use sui_types::digests::TransactionDigest;
 use sui_types::transaction::VerifiedTransaction;
+use tap::TapFallible;
 use tracing::{debug, info, instrument};
 
 use mysten_metrics::spawn_monitored_task;
@@ -30,7 +31,7 @@ use sui_types::object::{Object, ObjectRead};
 use sui_types::parse_sui_struct_tag;
 
 use crate::api::{cap_page_limit, CoinReadApiServer, JsonRpcMetrics};
-use crate::error::{Error, SuiApiResult, SuiRpcInputError};
+use crate::error::{Error, RpcInterimResult, SuiRpcInputError};
 use crate::{with_tracing, SuiRpcModule};
 
 #[cfg(test)]
@@ -109,12 +110,7 @@ impl CoinReadApiServer for CoinReadApi {
         with_tracing!(async move {
             let cursor = match cursor {
                 Some(object_id) => {
-                    let obj = self
-                        .internal
-                        .get_state()
-                        .get_object(&object_id)
-                        .await
-                        .map_err(Error::from)?;
+                    let obj = self.internal.get_object(&object_id).await?;
                     match obj {
                         Some(obj) => {
                             let coin_type = obj.coin_type_maybe();
@@ -163,12 +159,10 @@ impl CoinReadApiServer for CoinReadApi {
             }));
             let balance = self
                 .internal
-                .get_state()
                 .get_balance(owner, coin_type.clone())
                 .await
-                .map_err(|e: SuiError| {
+                .tap_err(|e| {
                     debug!(?owner, "Failed to get balance with error: {:?}", e);
-                    Error::from(e)
                 })?;
             Ok(Balance {
                 coin_type: coin_type.to_string(),
@@ -183,15 +177,9 @@ impl CoinReadApiServer for CoinReadApi {
     #[instrument(skip(self))]
     async fn get_all_balances(&self, owner: SuiAddress) -> RpcResult<Vec<Balance>> {
         with_tracing!(async move {
-            let all_balance = self
-                .internal
-                .get_state()
-                .get_all_balance(owner)
-                .await
-                .map_err(|e: SuiError| {
-                    debug!(?owner, "Failed to get all balance with error: {:?}", e);
-                    Error::from(e)
-                })?;
+            let all_balance = self.internal.get_all_balance(owner).await.tap_err(|e| {
+                debug!(?owner, "Failed to get all balance with error: {:?}", e);
+            })?;
             Ok(all_balance
                 .iter()
                 .map(|(coin_type, balance)| {
@@ -213,7 +201,15 @@ impl CoinReadApiServer for CoinReadApi {
             let coin_struct = parse_sui_struct_tag(&coin_type).map_err(|_| {
                 Error::SuiRpcInputError(SuiRpcInputError::CannotParseSuiStructTag(coin_type))
             })?;
-            Ok(self.internal.get_coin_metadata(coin_struct).await?)
+            let metadata_object = self
+                .internal
+                .find_package_object(
+                    &coin_struct.address.into(),
+                    CoinMetadata::type_(coin_struct),
+                )
+                .await
+                .ok();
+            Ok(metadata_object.and_then(|v: Object| v.try_into().ok()))
         })
     }
 
@@ -227,7 +223,17 @@ impl CoinReadApiServer for CoinReadApi {
             Ok(if GAS::is_gas(&coin_struct) {
                 Supply { value: 0 }
             } else {
-                let treasury_cap = self.internal.get_treasury_cap(coin_struct).await?;
+                let treasury_cap_object = self
+                    .internal
+                    .find_package_object(
+                        &coin_struct.address.into(),
+                        TreasuryCap::type_(coin_struct),
+                    )
+                    .await?;
+                let treasury_cap = TreasuryCap::from_bcs_bytes(
+                    treasury_cap_object.data.try_as_move().unwrap().contents(),
+                )
+                .map_err(Error::from)?;
                 treasury_cap.total_supply
             })
         })
@@ -242,11 +248,6 @@ pub trait State {
     fn get_object_read(&self, object_id: &ObjectID) -> SuiResult<ObjectRead>;
     async fn get_object(&self, object_id: &ObjectID) -> SuiResult<Option<Object>>;
     fn find_publish_txn_digest(&self, package_id: ObjectID) -> SuiResult<TransactionDigest>;
-    async fn find_package_object(
-        &self,
-        package_id: &ObjectID,
-        object_struct_tag: StructTag,
-    ) -> SuiApiResult<Object>;
     fn get_owned_coins(
         &self,
         owner: SuiAddress,
@@ -265,39 +266,18 @@ pub trait State {
     ) -> SuiResult<Arc<HashMap<TypeTag, TotalBalance>>>;
 }
 
-/// We set StateImpl as a wrapper over Arc<AuthorityState> primarily due to the need to pass Arc<AuthorityState> to find_package_object_id
-pub struct StateImpl {
-    state: Arc<AuthorityState>,
-}
-
-impl StateImpl {
-    pub fn new(state: Arc<AuthorityState>) -> Self {
-        Self { state }
-    }
-}
-
 #[async_trait]
-impl State for StateImpl {
+impl State for AuthorityState {
     fn get_object_read(&self, object_id: &ObjectID) -> SuiResult<ObjectRead> {
-        self.state.get_object_read(object_id)
+        self.get_object_read(object_id)
     }
 
     async fn get_object(&self, object_id: &ObjectID) -> SuiResult<Option<Object>> {
-        self.state.get_object(object_id).await
+        self.get_object(object_id).await
     }
 
     fn find_publish_txn_digest(&self, package_id: ObjectID) -> SuiResult<TransactionDigest> {
-        self.state.find_publish_txn_digest(package_id)
-    }
-
-    async fn find_package_object(
-        &self,
-        package_id: &ObjectID,
-        object_struct_tag: StructTag,
-    ) -> SuiApiResult<Object> {
-        let object_id =
-            find_package_object_id(self.state.clone(), *package_id, object_struct_tag).await?;
-        Ok(self.get_object_read(&object_id)?.into_object()?)
+        self.find_publish_txn_digest(package_id)
     }
 
     fn get_owned_coins(
@@ -308,7 +288,6 @@ impl State for StateImpl {
         one_coin_type_only: bool,
     ) -> SuiResult<Vec<SuiCoin>> {
         Ok(self
-            .state
             .get_owned_coins_iterator_with_cursor(owner, cursor, limit, one_coin_type_only)?
             .map(|(coin_type, coin_object_id, coin)| SuiCoin {
                 coin_type,
@@ -325,14 +304,11 @@ impl State for StateImpl {
         &self,
         digest: TransactionDigest,
     ) -> SuiResult<(VerifiedTransaction, TransactionEffects)> {
-        self.state
-            .get_executed_transaction_and_effects(digest)
-            .await
+        self.get_executed_transaction_and_effects(digest).await
     }
 
     async fn get_balance(&self, owner: SuiAddress, coin_type: TypeTag) -> SuiResult<TotalBalance> {
-        self.state
-            .indexes
+        self.indexes
             .as_ref()
             .ok_or(SuiError::IndexStoreNotAvailable)?
             .get_balance(owner, coin_type)
@@ -343,8 +319,7 @@ impl State for StateImpl {
         &self,
         owner: SuiAddress,
     ) -> SuiResult<Arc<HashMap<TypeTag, TotalBalance>>> {
-        self.state
-            .indexes
+        self.indexes
             .as_ref()
             .ok_or(SuiError::IndexStoreNotAvailable)?
             .get_all_balance(owner)
@@ -359,10 +334,10 @@ impl State for StateImpl {
     result = true
 )]
 async fn find_package_object_id(
-    state: Arc<AuthorityState>,
+    state: Arc<dyn State + Send + Sync>,
     package_id: ObjectID,
     object_struct_tag: StructTag,
-) -> SuiApiResult<ObjectID> {
+) -> RpcInterimResult<ObjectID> {
     spawn_monitored_task!(async move {
         let publish_txn_digest = state.find_publish_txn_digest(package_id)?;
 
@@ -394,18 +369,28 @@ async fn find_package_object_id(
 #[async_trait]
 pub trait CoinReadInternal {
     fn get_state(&self) -> Arc<dyn State + Send + Sync>;
+    async fn get_object(&self, object_id: &ObjectID) -> RpcInterimResult<Option<Object>>;
+    async fn get_balance(
+        &self,
+        owner: SuiAddress,
+        coin_type: TypeTag,
+    ) -> RpcInterimResult<TotalBalance>;
+    async fn get_all_balance(
+        &self,
+        owner: SuiAddress,
+    ) -> RpcInterimResult<Arc<HashMap<TypeTag, TotalBalance>>>;
+    async fn find_package_object(
+        &self,
+        package_id: &ObjectID,
+        object_struct_tag: StructTag,
+    ) -> RpcInterimResult<Object>;
     async fn get_coins_iterator(
         &self,
         owner: SuiAddress,
         cursor: (String, ObjectID),
         limit: Option<usize>,
         one_coin_type_only: bool,
-    ) -> SuiApiResult<CoinPage>;
-    async fn get_coin_metadata(
-        &self,
-        coin_struct: StructTag,
-    ) -> SuiApiResult<Option<SuiCoinMetadata>>;
-    async fn get_treasury_cap(&self, coin_struct: StructTag) -> SuiApiResult<TreasuryCap>;
+    ) -> RpcInterimResult<CoinPage>;
 }
 
 pub struct CoinReadInternalImpl {
@@ -416,10 +401,7 @@ pub struct CoinReadInternalImpl {
 
 impl CoinReadInternalImpl {
     pub fn new(state: Arc<AuthorityState>, metrics: Arc<JsonRpcMetrics>) -> Self {
-        Self {
-            state: Arc::new(StateImpl::new(state)),
-            metrics,
-        }
+        Self { state, metrics }
     }
 }
 
@@ -429,17 +411,44 @@ impl CoinReadInternal for CoinReadInternalImpl {
         self.state.clone()
     }
 
+    async fn get_object(&self, object_id: &ObjectID) -> RpcInterimResult<Option<Object>> {
+        Ok(self.state.get_object(object_id).await?)
+    }
+
+    async fn get_balance(
+        &self,
+        owner: SuiAddress,
+        coin_type: TypeTag,
+    ) -> RpcInterimResult<TotalBalance> {
+        Ok(self.state.get_balance(owner, coin_type).await?)
+    }
+
+    async fn get_all_balance(
+        &self,
+        owner: SuiAddress,
+    ) -> RpcInterimResult<Arc<HashMap<TypeTag, TotalBalance>>> {
+        Ok(self.state.get_all_balance(owner).await?)
+    }
+
+    async fn find_package_object(
+        &self,
+        package_id: &ObjectID,
+        object_struct_tag: StructTag,
+    ) -> RpcInterimResult<Object> {
+        let state = self.get_state();
+        let object_id = find_package_object_id(state, *package_id, object_struct_tag).await?;
+        Ok(self.state.get_object_read(&object_id)?.into_object()?)
+    }
+
     async fn get_coins_iterator(
         &self,
         owner: SuiAddress,
         cursor: (String, ObjectID),
         limit: Option<usize>,
         one_coin_type_only: bool,
-    ) -> SuiApiResult<CoinPage> {
+    ) -> RpcInterimResult<CoinPage> {
         let limit = cap_page_limit(limit);
         self.metrics.get_coins_limit.report(limit as u64);
-
-        // This is needed for spawn_monitored_task
         let state = self.get_state();
         let mut data = spawn_monitored_task!(async move {
             state.get_owned_coins(owner, cursor, limit + 1, one_coin_type_only)
@@ -460,42 +469,20 @@ impl CoinReadInternal for CoinReadInternalImpl {
             has_next_page,
         })
     }
-
-    async fn get_coin_metadata(
-        &self,
-        coin_struct: StructTag,
-    ) -> SuiApiResult<Option<SuiCoinMetadata>> {
-        let metadata_object = self
-            .state
-            .find_package_object(
-                &coin_struct.address.into(),
-                CoinMetadata::type_(coin_struct),
-            )
-            .await
-            .ok();
-        Ok(metadata_object.and_then(|v: Object| v.try_into().ok()))
-    }
-
-    async fn get_treasury_cap(&self, coin_struct: StructTag) -> SuiApiResult<TreasuryCap> {
-        let treasury_cap_object = self
-            .state
-            .find_package_object(&coin_struct.address.into(), TreasuryCap::type_(coin_struct))
-            .await?;
-
-        Ok(TreasuryCap::from_bcs_bytes(
-            treasury_cap_object.data.try_as_move().unwrap().contents(),
-        )?)
-    }
 }
 
 #[cfg(test)]
 mod tests {
     use expect_test::expect;
     use jsonrpsee::types::ErrorObjectOwned;
+    use mockall::predicate;
     use move_core_types::language_storage::StructTag;
+    use sui_json_rpc_types::Coin;
     use sui_types::balance::Supply;
-    use sui_types::base_types::{ObjectID, SuiAddress};
+    use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress};
     use sui_types::coin::TreasuryCap;
+    use sui_types::digests::{ObjectDigest, TransactionDigest};
+    use sui_types::gas_coin::GAS;
     use sui_types::id::UID;
     use sui_types::object::Object;
     use sui_types::parse_sui_struct_tag;
@@ -510,6 +497,38 @@ mod tests {
 
     fn get_test_coin_type(package_id: ObjectID) -> String {
         format!("{}::test_coin::TEST_COIN", package_id)
+    }
+
+    enum CoinType {
+        Gas,
+        Usdc,
+    }
+
+    fn get_test_coin(id_hex_literal: Option<&str>, coin_type: CoinType) -> Coin {
+        let (arr, coin_type_string, balance, default_hex) = match coin_type {
+            CoinType::Gas => ([0; 32], GAS::type_().to_string(), 42, "0xA"),
+            CoinType::Usdc => (
+                [1; 32],
+                "0x168da5bf1f48dafc111b0a488fa454aca95e0b5e::usdc::USDC".to_string(),
+                24,
+                "0xB",
+            ),
+        };
+
+        let object_id = if let Some(literal) = id_hex_literal {
+            ObjectID::from_hex_literal(literal).unwrap()
+        } else {
+            ObjectID::from_hex_literal(default_hex).unwrap()
+        };
+
+        Coin {
+            coin_type: coin_type_string,
+            coin_object_id: object_id,
+            version: SequenceNumber::from_u64(1),
+            digest: ObjectDigest::from(arr),
+            balance,
+            previous_transaction: TransactionDigest::from(arr),
+        }
     }
 
     fn get_test_treasury_cap_peripherals(
@@ -539,6 +558,181 @@ mod tests {
         use jsonrpsee::types::ErrorObjectOwned;
         use typed_store::TypedStoreError;
 
+        // Success scenarios
+        #[tokio::test]
+        async fn test_gas_coin_no_cursor() {
+            let owner = get_test_owner();
+            let gas_coin = get_test_coin(None, CoinType::Gas);
+            let gas_coin_clone = gas_coin.clone();
+            let mut mock_state = MockState::new();
+            mock_state
+                .expect_get_owned_coins()
+                .with(
+                    predicate::eq(owner),
+                    predicate::eq((GAS::type_().to_string(), ObjectID::ZERO)),
+                    predicate::eq(51),
+                    predicate::eq(true),
+                )
+                .return_once(move |_, _, _, _| Ok(vec![gas_coin_clone]));
+            let internal = CoinReadInternalImpl {
+                state: Arc::new(mock_state),
+                metrics: Arc::new(JsonRpcMetrics::new_for_tests()),
+            };
+            let coin_read_api = CoinReadApi {
+                internal: Box::new(internal),
+            };
+
+            let response = coin_read_api.get_coins(owner, None, None, None).await;
+            assert!(response.is_ok());
+            let result = response.unwrap();
+            assert_eq!(
+                result,
+                CoinPage {
+                    data: vec![gas_coin.clone()],
+                    next_cursor: Some(gas_coin.coin_object_id),
+                    has_next_page: false,
+                }
+            );
+        }
+
+        #[tokio::test]
+        async fn test_gas_coin_with_cursor() {
+            let owner = get_test_owner();
+            let limit = 2;
+            let coins = vec![
+                get_test_coin(Some("0xA"), CoinType::Gas),
+                get_test_coin(Some("0xAA"), CoinType::Gas),
+                get_test_coin(Some("0xAAA"), CoinType::Gas),
+            ];
+            let coins_clone = coins.clone();
+            let mut mock_state = MockState::new();
+            mock_state
+                .expect_get_owned_coins()
+                .with(
+                    predicate::eq(owner),
+                    predicate::eq((GAS::type_().to_string(), coins[0].coin_object_id)),
+                    predicate::eq(limit + 1),
+                    predicate::eq(true),
+                )
+                .return_once(move |_, _, _, _| Ok(coins_clone));
+            let internal = CoinReadInternalImpl {
+                state: Arc::new(mock_state),
+                metrics: Arc::new(JsonRpcMetrics::new_for_tests()),
+            };
+            let coin_read_api = CoinReadApi {
+                internal: Box::new(internal),
+            };
+
+            let response = coin_read_api
+                .get_coins(owner, None, Some(coins[0].coin_object_id), Some(limit))
+                .await;
+            assert!(response.is_ok());
+            let result = response.unwrap();
+            assert_eq!(
+                result,
+                CoinPage {
+                    data: coins[..limit].to_vec(),
+                    next_cursor: Some(coins[limit - 1].coin_object_id),
+                    has_next_page: true,
+                }
+            );
+        }
+
+        #[tokio::test]
+        async fn test_coin_no_cursor() {
+            let coin = get_test_coin(None, CoinType::Usdc);
+            let coin_clone = coin.clone();
+            // Build request params
+            let owner = get_test_owner();
+            let coin_type = coin.coin_type.clone();
+
+            let coin_type_tag =
+                TypeTag::Struct(Box::new(parse_sui_struct_tag(&coin.coin_type).unwrap()));
+            let mut mock_state = MockState::new();
+            mock_state
+                .expect_get_owned_coins()
+                .with(
+                    predicate::eq(owner),
+                    predicate::eq((coin_type_tag.to_string(), ObjectID::ZERO)),
+                    predicate::eq(51),
+                    predicate::eq(true),
+                )
+                .return_once(move |_, _, _, _| Ok(vec![coin_clone]));
+            let internal = CoinReadInternalImpl {
+                state: Arc::new(mock_state),
+                metrics: Arc::new(JsonRpcMetrics::new_for_tests()),
+            };
+            let coin_read_api = CoinReadApi {
+                internal: Box::new(internal),
+            };
+
+            let response = coin_read_api
+                .get_coins(owner, Some(coin_type), None, None)
+                .await;
+
+            assert!(response.is_ok());
+            let result = response.unwrap();
+            assert_eq!(
+                result,
+                CoinPage {
+                    data: vec![coin.clone()],
+                    next_cursor: Some(coin.coin_object_id),
+                    has_next_page: false,
+                }
+            );
+        }
+
+        #[tokio::test]
+        async fn test_coin_with_cursor() {
+            let coins = vec![
+                get_test_coin(Some("0xB"), CoinType::Usdc),
+                get_test_coin(Some("0xBB"), CoinType::Usdc),
+                get_test_coin(Some("0xBBB"), CoinType::Usdc),
+            ];
+            let coins_clone = coins.clone();
+            // Build request params
+            let owner = get_test_owner();
+            let coin_type = coins[0].coin_type.clone();
+            let cursor = coins[0].coin_object_id;
+            let limit = 2;
+
+            let coin_type_tag =
+                TypeTag::Struct(Box::new(parse_sui_struct_tag(&coins[0].coin_type).unwrap()));
+            let mut mock_state = MockState::new();
+            mock_state
+                .expect_get_owned_coins()
+                .with(
+                    predicate::eq(owner),
+                    predicate::eq((coin_type_tag.to_string(), coins[0].coin_object_id)),
+                    predicate::eq(limit + 1),
+                    predicate::eq(true),
+                )
+                .return_once(move |_, _, _, _| Ok(coins_clone));
+            let internal = CoinReadInternalImpl {
+                state: Arc::new(mock_state),
+                metrics: Arc::new(JsonRpcMetrics::new_for_tests()),
+            };
+            let coin_read_api = CoinReadApi {
+                internal: Box::new(internal),
+            };
+
+            let response = coin_read_api
+                .get_coins(owner, Some(coin_type), Some(cursor), Some(limit))
+                .await;
+
+            assert!(response.is_ok());
+            let result = response.unwrap();
+            assert_eq!(
+                result,
+                CoinPage {
+                    data: coins[..limit].to_vec(),
+                    next_cursor: Some(coins[limit - 1].coin_object_id),
+                    has_next_page: true,
+                }
+            );
+        }
+
+        // Expected error scenarios
         #[tokio::test]
         async fn test_invalid_coin_type() {
             let owner = get_test_owner();
@@ -584,6 +778,7 @@ mod tests {
             expected.assert_eq(error_object.message());
         }
 
+        // Unexpected error scenarios
         #[tokio::test]
         async fn test_get_coins_iterator_index_store_not_available() {
             let owner = get_test_owner();
@@ -615,7 +810,6 @@ mod tests {
 
         #[tokio::test]
         async fn test_get_coins_iterator_typed_store_error() {
-            // Validate that we handle and return an error message when we encounter an unexpected error
             let owner = get_test_owner();
             let coin_type = get_test_coin_type(get_test_package_id());
             let mut mock_state = MockState::new();
@@ -799,9 +993,9 @@ mod tests {
             };
             let treasury_cap_object =
                 Object::treasury_cap_for_testing(input_coin_struct.clone(), treasury_cap);
-            let mut mock_state = MockState::new();
+            let mut mock_internal = MockCoinReadInternal::new();
             // return TreasuryCap instead of CoinMetadata to set up test
-            mock_state
+            mock_internal
                 .expect_find_package_object()
                 .with(predicate::always(), predicate::eq(coin_metadata_struct))
                 .returning(move |object_id, _| {
@@ -811,12 +1005,8 @@ mod tests {
                         panic!("should not be called with any other object id")
                     }
                 });
-            let internal = CoinReadInternalImpl {
-                state: Arc::new(mock_state),
-                metrics: Arc::new(JsonRpcMetrics::new_for_tests()),
-            };
             let coin_read_api = CoinReadApi {
-                internal: Box::new(internal),
+                internal: Box::new(mock_internal),
             };
 
             let response = coin_read_api.get_coin_metadata(coin_name.clone()).await;
@@ -852,8 +1042,8 @@ mod tests {
             let package_id = get_test_package_id();
             let (coin_name, _, treasury_cap_struct, _, treasury_cap_object) =
                 get_test_treasury_cap_peripherals(package_id);
-            let mut mock_state = MockState::new();
-            mock_state
+            let mut mock_internal = MockCoinReadInternal::new();
+            mock_internal
                 .expect_find_package_object()
                 .with(predicate::always(), predicate::eq(treasury_cap_struct))
                 .returning(move |object_id, _| {
@@ -863,12 +1053,8 @@ mod tests {
                         panic!("should not be called with any other object id")
                     }
                 });
-            let internal = CoinReadInternalImpl {
-                state: Arc::new(mock_state),
-                metrics: Arc::new(JsonRpcMetrics::new_for_tests()),
-            };
             let coin_read_api = CoinReadApi {
-                internal: Box::new(internal),
+                internal: Box::new(mock_internal),
             };
 
             let response = coin_read_api.get_total_supply(coin_name.clone()).await;
@@ -894,8 +1080,8 @@ mod tests {
             };
             let coin_metadata_object =
                 Object::coin_metadata_for_testing(input_coin_struct.clone(), coin_metadata);
-            let mut mock_state = MockState::new();
-            mock_state
+            let mut mock_internal = MockCoinReadInternal::new();
+            mock_internal
                 .expect_find_package_object()
                 .with(predicate::always(), predicate::eq(treasury_cap_struct))
                 .returning(move |object_id, _| {
@@ -905,12 +1091,8 @@ mod tests {
                         panic!("should not be called with any other object id")
                     }
                 });
-            let internal = CoinReadInternalImpl {
-                state: Arc::new(mock_state),
-                metrics: Arc::new(JsonRpcMetrics::new_for_tests()),
-            };
             let coin_read_api = CoinReadApi {
-                internal: Box::new(internal),
+                internal: Box::new(mock_internal),
             };
 
             let response = coin_read_api.get_total_supply(coin_name.clone()).await;
