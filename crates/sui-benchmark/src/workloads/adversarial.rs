@@ -51,6 +51,8 @@ pub enum AdversarialPayloadType {
     MaxReads,
     // Creates a the largest package publish possible
     MaxPackagePublish,
+    // Transaction calling a function that loops infinitely, taking a shared object as input.
+    InfiniteLoop,
     // TODO:
     // - MaxReads (by creating a bunch of shared objects in the module init for adversarial, then taking them all as input)
     // - MaxEffects (by creating a bunch of small objects) and mutating lots of objects
@@ -167,11 +169,13 @@ impl Payload for AdversarialTestPayload {
             ExecutionEffects::SuiTransactionBlockEffects(_) => unimplemented!("Not impl"),
         };
 
-        debug_assert!(
-            effects.is_ok(),
-            "Adversarial transactions should never abort: {:?}",
-            stat
-        );
+        if (!matches!(self.adversarial_payload_cfg.payload_type, AdversarialPayloadType::InfiniteLoop)) {
+            debug_assert!(
+                effects.is_ok(),
+                "Adversarial transactions should never abort: {:?}",
+                stat
+            );
+        }
 
         self.state.update(effects);
     }
@@ -336,6 +340,18 @@ impl AdversarialTestPayload {
                 fn_name: "".to_owned(),
                 args: vec![],
             },
+            AdversarialPayloadType::InfiniteLoop => AdversarialPayloadArgs {
+                fn_name: "infinite_loop".to_owned(),
+                args: [
+                    CallArg::Object(ObjectArg::SharedObject {
+                        id: self.df_parent_obj_ref.0,
+                        initial_shared_version: self.df_parent_obj_ref.1,
+                        mutable: true,
+                    })
+                    .into(),
+                ]
+                .to_vec(),
+            },
         }
     }
 }
@@ -484,6 +500,8 @@ impl Workload<dyn Payload> for AdversarialWorkload {
             if let Some(tag) = obj.data.struct_tag() {
                 if tag.to_string().contains("::adversarial::Obj") {
                     self.df_parent_obj_ref = o.0;
+                    let owner = o.1;
+                    assert!(matches!(owner, Owner::Shared { .. }), "Obj must be shared");
                 }
             }
         }

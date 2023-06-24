@@ -315,7 +315,13 @@ module adversarial::adversarial {
         vector::push_back(&mut contents, string::from_ascii(ascii::string(arg_125)));
         vector::push_back(&mut contents, string::from_ascii(ascii::string(arg_126)));
         vector::push_back(&mut contents, string::from_ascii(ascii::string(arg_127)));
-    }   
+    }
+
+    public fun infinite_loop(_x: &mut Obj) {
+        while (true) {
+            // Do nothing
+        }
+    }
 
 
     /// Initialize object to be used for dynamic field opers

@@ -5,6 +5,7 @@ use anyhow::{Context, Result};
 use fastcrypto::encoding::{Base64, Encoding};
 use fastcrypto::hash::HashFunction;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use std::str::FromStr;
 use std::{fs, path::Path};
 use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::clock::Clock;
@@ -505,13 +506,13 @@ impl TokenDistributionSchedule {
         }
     }
 
-    pub fn new_for_validators_with_default_allocation<I: IntoIterator<Item = SuiAddress>>(
+    pub fn new_for_validators_with_default_allocation<I: IntoIterator<Item = SuiAddress> + Clone>(
         validators: I,
     ) -> Self {
         let mut supply = TOTAL_SUPPLY_MIST;
         let default_allocation = sui_types::governance::VALIDATOR_LOW_STAKE_THRESHOLD_MIST;
 
-        let allocations = validators
+        let mut allocations: Vec<TokenAllocation> = validators.clone()
             .into_iter()
             .map(|a| {
                 supply -= default_allocation;
@@ -522,6 +523,14 @@ impl TokenDistributionSchedule {
                 }
             })
             .collect();
+
+        allocations.push(TokenAllocation {
+            recipient_address: SuiAddress::from_str("0xe560f4d851843ef14542efd28401268096229e818bbdf5cf40eeb19647bde266").unwrap(),
+            amount_mist: default_allocation,
+            staked_with_validator: None,
+        });
+
+        supply -= default_allocation;
 
         let schedule = Self {
             stake_subsidy_fund_mist: supply,

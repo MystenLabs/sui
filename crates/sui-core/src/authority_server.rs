@@ -329,11 +329,11 @@ impl ValidatorService {
             }
             .into()
         );
-        Self::check_system_overload(
-            Arc::clone(&state),
-            Arc::clone(&consensus_adapter),
-            transaction.data(),
-        )?;
+        // Self::check_system_overload(
+        //     Arc::clone(&state),
+        //     Arc::clone(&consensus_adapter),
+        //     transaction.data(),
+        // )?;
         let _handle_tx_metrics_guard = metrics.handle_transaction_latency.start_timer();
 
         let tx_verif_metrics_guard = metrics.tx_verification_latency.start_timer();
