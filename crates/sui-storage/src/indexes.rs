@@ -151,10 +151,13 @@ pub struct IndexStoreTables {
     transactions_by_move_function:
         DBMap<(ObjectID, String, String, TxSequenceNumber), TransactionDigest>,
 
+    #[allow(dead_code)]
     /// This is a map between the transaction digest and its timestamp (UTC timestamp in
     /// **milliseconds** since epoch 1/1/1970). A transaction digest is subjectively time stamped
     /// on a node according to the local machine time, so it varies across nodes.
     /// The timestamping happens when the node sees a txn certificate for the first time.
+    ///
+    /// DEPRECATED. DO NOT USE
     #[default_options_override_fn = "timestamps_table_default_config"]
     timestamps: DBMap<TransactionDigest, u64>,
 
@@ -483,11 +486,6 @@ impl IndexStore {
             }),
         )?;
 
-        batch.insert_batch(
-            &self.tables.timestamps,
-            std::iter::once((*digest, timestamp_ms)),
-        )?;
-
         // Coin Index
         let cache_updates = self
             .index_coin(digest, &mut batch, &object_index_changes, tx_coins)
@@ -702,15 +700,6 @@ impl IndexStore {
             .loaded_child_object_versions
             .get(transaction_digest)
             .map_err(|err| err.into())
-    }
-
-    /// Returns unix timestamp for a transaction if it exists
-    pub fn get_timestamp_ms(
-        &self,
-        transaction_digest: &TransactionDigest,
-    ) -> SuiResult<Option<u64>> {
-        let ts = self.tables.timestamps.get(transaction_digest)?;
-        Ok(ts)
     }
 
     fn get_transactions_from_index<KeyT: Clone + Serialize + DeserializeOwned + PartialEq>(
