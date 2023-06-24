@@ -62,6 +62,7 @@ narwhal-node = { path = "../../narwhal/node" }
 narwhal-types = { path = "../../narwhal/types" }
 narwhal-worker = { path = "../../narwhal/worker" }
 shared-crypto = { path = "../shared-crypto" }
+sui-archival = { path = "../sui-archival" }
 sui-config = { path = "../sui-config" }
 sui-execution = { path = "../../sui-execution" }
 sui-framework = { path = "../sui-framework" }

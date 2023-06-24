@@ -684,6 +684,7 @@ pub async fn state_sync_from_archive(
     let archive_reader_config = ArchiveReaderConfig {
         remote_store_config,
         download_concurrency: NonZeroUsize::new(concurrency).unwrap(),
+        use_for_pruning_watermark: false,
     };
     let archive_reader = ArchiveReader::new(archive_reader_config)?;
     archive_reader.sync_manifest_once().await?;

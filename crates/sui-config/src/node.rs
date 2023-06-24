@@ -264,6 +264,7 @@ impl NodeConfig {
                         remote_store_config: remote_store_config.clone(),
                         download_concurrency: NonZeroUsize::new(config.concurrency)
                             .unwrap_or(NonZeroUsize::new(5).unwrap()),
+                        use_for_pruning_watermark: config.use_for_pruning_watermark,
                     })
             })
             .collect()
@@ -575,6 +576,7 @@ pub struct StateArchiveConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub object_store_config: Option<ObjectStoreConfig>,
     pub concurrency: usize,
+    pub use_for_pruning_watermark: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize, Eq)]

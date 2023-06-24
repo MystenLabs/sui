@@ -9457,6 +9457,7 @@ dependencies = [
  "serde_yaml 0.8.26",
  "shared-crypto",
  "signature 1.6.4",
+ "sui-archival",
  "sui-config",
  "sui-execution",
  "sui-framework",

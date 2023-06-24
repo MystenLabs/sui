@@ -310,6 +310,7 @@ async fn test_state_sync_using_archive() -> anyhow::Result<()> {
     let archive_reader_config = ArchiveReaderConfig {
         remote_store_config,
         download_concurrency: NonZeroUsize::new(1).unwrap(),
+        use_for_pruning_watermark: false,
     };
     // We will delete all checkpoints older than this checkpoint on Node 2
     let oldest_checkpoint_to_keep: u64 = 10;
