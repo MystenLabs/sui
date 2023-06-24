@@ -7,8 +7,6 @@
 module sui::balance {
     use sui::tx_context::{Self, TxContext};
 
-    friend sui::sui;
-
     /// For when trying to destroy a non-zero balance.
     const ENonZero: u64 = 0;
 
@@ -135,7 +133,7 @@ module sui::balance {
     }
 
     /// Destroy a `Supply` preventing any further minting and burning.
-    public(friend) fun destroy_supply<T>(self: Supply<T>): u64 {
+    public fun destroy_supply<T>(self: Supply<T>): u64 {
         let Supply { value } = self;
         value
     }
