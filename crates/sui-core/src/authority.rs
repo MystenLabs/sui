@@ -48,6 +48,7 @@ use narwhal_config::{
 };
 use once_cell::sync::OnceCell;
 use shared_crypto::intent::{Intent, IntentScope};
+use sui_archival::reader::ArchiveReaderBalancer;
 use sui_config::certificate_deny_config::CertificateDenyConfig;
 use sui_config::genesis::Genesis;
 use sui_config::node::{
@@ -1972,6 +1973,7 @@ impl AuthorityState {
         certificate_deny_config: CertificateDenyConfig,
         indirect_objects_threshold: usize,
         debug_dump_config: StateDebugDumpConfig,
+        archive_readers: ArchiveReaderBalancer,
     ) -> Arc<Self> {
         Self::check_protocol_version(supported_protocol_versions, epoch_store.protocol_version());
 
@@ -1995,6 +1997,7 @@ impl AuthorityState {
             epoch_store.epoch_start_state().epoch_duration_ms(),
             prometheus_registry,
             indirect_objects_threshold,
+            archive_readers,
         );
         let state = Arc::new(AuthorityState {
             name,
@@ -2038,6 +2041,7 @@ impl AuthorityState {
         config: NodeConfig,
         metrics: Arc<AuthorityStorePruningMetrics>,
     ) -> anyhow::Result<()> {
+        let archive_readers = ArchiveReaderBalancer::new(config.archive_reader_config())?;
         AuthorityStorePruner::prune_checkpoints_for_eligible_epochs(
             &self.database.perpetual_tables,
             &self.checkpoint_store,
@@ -2045,6 +2049,7 @@ impl AuthorityState {
             config.authority_store_pruning_config,
             metrics,
             config.indirect_objects_threshold,
+            archive_readers,
         )
         .await
     }

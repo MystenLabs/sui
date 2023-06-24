@@ -14,6 +14,7 @@ use std::cmp::{max, min};
 use std::collections::HashMap;
 use std::time::SystemTime;
 use std::{sync::Arc, time::Duration};
+use sui_archival::reader::ArchiveReaderBalancer;
 use sui_config::node::AuthorityStorePruningConfig;
 use sui_storage::mutex_table::RwLockTable;
 use sui_types::base_types::SequenceNumber;
@@ -292,9 +293,16 @@ impl AuthorityStorePruner {
         config: AuthorityStorePruningConfig,
         metrics: Arc<AuthorityStorePruningMetrics>,
         indirect_objects_threshold: usize,
+        archive_readers: ArchiveReaderBalancer,
     ) -> anyhow::Result<()> {
         let pruned_checkpoint_number =
             checkpoint_store.get_highest_pruned_checkpoint_seq_number()?;
+        let latest_archived_checkpoint = archive_readers
+            .get_archive_watermark()
+            .await?
+            .unwrap_or(u64::MAX);
+        let highest_pruned_checkpoint = perpetual_db.get_highest_pruned_checkpoint()?;
+        info!("Latest archived checkpoint: {latest_archived_checkpoint}, highest pruned checkpoint: {highest_pruned_checkpoint}");
         Self::prune_for_eligible_epochs(
             perpetual_db,
             checkpoint_store,
@@ -303,7 +311,7 @@ impl AuthorityStorePruner {
                 .num_epochs_to_retain_for_checkpoints()
                 .ok_or_else(|| anyhow!("config value not set"))?,
             pruned_checkpoint_number,
-            perpetual_db.get_highest_pruned_checkpoint()?,
+            min(highest_pruned_checkpoint, latest_archived_checkpoint),
             objects_lock_table,
             config,
             metrics.clone(),
@@ -462,6 +470,7 @@ impl AuthorityStorePruner {
         objects_lock_table: Arc<RwLockTable<ObjectContentDigest>>,
         metrics: Arc<AuthorityStorePruningMetrics>,
         indirect_objects_threshold: usize,
+        archive_readers: ArchiveReaderBalancer,
     ) -> Sender<()> {
         let (sender, mut recv) = tokio::sync::oneshot::channel();
         debug!(
@@ -511,7 +520,7 @@ impl AuthorityStorePruner {
                         }
                     },
                     _ = checkpoints_prune_interval.tick(), if !matches!(config.num_epochs_to_retain_for_checkpoints(), None | Some(u64::MAX) | Some(0)) => {
-                        if let Err(err) = Self::prune_checkpoints_for_eligible_epochs(&perpetual_db, &checkpoint_store, &objects_lock_table, config, metrics.clone(), indirect_objects_threshold).await {
+                        if let Err(err) = Self::prune_checkpoints_for_eligible_epochs(&perpetual_db, &checkpoint_store, &objects_lock_table, config, metrics.clone(), indirect_objects_threshold, archive_readers.clone()).await {
                             error!("Failed to prune checkpoints: {:?}", err);
                         }
                     },
@@ -530,6 +539,7 @@ impl AuthorityStorePruner {
         epoch_duration_ms: u64,
         registry: &Registry,
         indirect_objects_threshold: usize,
+        archive_readers: ArchiveReaderBalancer,
     ) -> Self {
         AuthorityStorePruner {
             _objects_pruner_cancel_handle: Self::setup_pruning(
@@ -540,6 +550,7 @@ impl AuthorityStorePruner {
                 objects_lock_table,
                 AuthorityStorePruningMetrics::new(registry),
                 indirect_objects_threshold,
+                archive_readers,
             ),
         }
     }

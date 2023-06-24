@@ -373,7 +373,7 @@ impl SuiNode {
             state_sync_store.clone(),
             chain_identifier,
             trusted_peer_change_rx,
-            archive_readers,
+            archive_readers.clone(),
             &prometheus_registry,
         )?;
         // We must explicitly send this instead of relying on the initial value to trigger
@@ -384,7 +384,6 @@ impl SuiNode {
             epoch_store.epoch_start_state(),
         )
         .expect("Initial trusted peers must be set");
-
         let state_archive_handle = if let Some(remote_store_config) =
             &config.state_archive_write_config.object_store_config
         {
@@ -456,6 +455,7 @@ impl SuiNode {
             config.certificate_deny_config.clone(),
             config.indirect_objects_threshold,
             config.state_debug_dump_config.clone(),
+            archive_readers,
         )
         .await;
         // ensure genesis txn was executed

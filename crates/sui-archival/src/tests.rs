@@ -86,6 +86,7 @@ async fn setup_test_state(temp_dir: PathBuf) -> anyhow::Result<TestState> {
     let archive_reader_config = ArchiveReaderConfig {
         remote_store_config: remote_store_config.clone(),
         download_concurrency: NonZeroUsize::new(2).unwrap(),
+        use_for_pruning_watermark: false,
     };
     let archive_reader = ArchiveReader::new(archive_reader_config)?;
     let local_store = local_store_config.make()?;

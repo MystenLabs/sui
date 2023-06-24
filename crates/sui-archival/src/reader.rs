@@ -32,6 +32,7 @@ use tracing::info;
 pub struct ArchiveReaderConfig {
     pub remote_store_config: ObjectStoreConfig,
     pub download_concurrency: NonZeroUsize,
+    pub use_for_pruning_watermark: bool,
 }
 
 // ArchiveReaderBalancer selects archives for reading based on whether they can fulfill a checkpoint request
@@ -47,6 +48,24 @@ impl ArchiveReaderBalancer {
             readers.push(Arc::new(ArchiveReader::new(config.clone())?));
         }
         Ok(ArchiveReaderBalancer { readers })
+    }
+    pub async fn get_archive_watermark(&self) -> Result<Option<u64>> {
+        let mut checkpoints: Vec<Result<CheckpointSequenceNumber>> = vec![];
+        for reader in self
+            .readers
+            .iter()
+            .filter(|r| r.use_for_pruning_watermark())
+        {
+            let latest_checkpoint = reader.latest_available_checkpoint().await;
+            info!(
+                "Latest archived checkpoint in remote store: {:?} is: {:?}",
+                reader.remote_store_identifier(),
+                latest_checkpoint
+            );
+            checkpoints.push(latest_checkpoint)
+        }
+        let checkpoints: Result<Vec<CheckpointSequenceNumber>> = checkpoints.into_iter().collect();
+        checkpoints.map(|vec| vec.into_iter().min())
     }
     pub async fn pick_one_random(
         &self,
@@ -91,6 +110,7 @@ pub struct ArchiveReader {
     concurrency: usize,
     sender: Arc<Sender<()>>,
     manifest: Arc<Mutex<Manifest>>,
+    use_for_pruning_watermark: bool,
     remote_object_store: Arc<DynObjectStore>,
 }
 
@@ -105,6 +125,7 @@ impl ArchiveReader {
             manifest,
             sender: Arc::new(sender),
             remote_object_store,
+            use_for_pruning_watermark: config.use_for_pruning_watermark,
             concurrency: config.download_concurrency.get(),
         })
     }
@@ -259,6 +280,14 @@ impl ArchiveReader {
             .next_checkpoint_seq_num()
             .checked_sub(1)
             .context("No checkpoint data in archive")
+    }
+
+    pub fn use_for_pruning_watermark(&self) -> bool {
+        self.use_for_pruning_watermark
+    }
+
+    pub fn remote_store_identifier(&self) -> String {
+        self.remote_object_store.to_string()
     }
 
     pub async fn sync_manifest_once(&self) -> Result<()> {
