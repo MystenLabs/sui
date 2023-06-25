@@ -3,7 +3,12 @@
 
 use config::{DownloadFeedConfigs, UploadFeedConfig};
 use metrics::OracleMetrics;
+use move_core_types::language_storage::TypeTag;
+use move_core_types::ident_str;
 use mysten_metrics::monitored_scope;
+use sui_json_rpc_types::SuiTypeTag;
+use sui_json::SuiJsonValue;
+use serde_json::json;
 use prometheus::Registry;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -14,7 +19,7 @@ use sui_json_rpc_types::{
 };
 use sui_sdk::rpc_types::SuiObjectResponse;
 use sui_sdk::SuiClient;
-use sui_types::base_types::SuiAddress;
+use sui_types::{base_types::SuiAddress, transaction::{TransactionData, CallArg}};
 
 use sui_sdk::wallet_context::WalletContext;
 use sui_types::base_types::ObjectID;
@@ -181,7 +186,7 @@ impl DataProvider {
             .with_label_values(&[&self.feed_name, &self.source_name])
             .inc();
 
-        let value = value.unwrap();
+        let value = (value.unwrap() * METRICS_MULTIPLIER) as u64;
         match self.submit(value).await {
             Ok(effects) => {
                 info!(
@@ -192,7 +197,7 @@ impl DataProvider {
                 self.metrics
                     .uploaded_values
                     .with_label_values(&[&self.feed_name])
-                    .observe((value * METRICS_MULTIPLIER) as u64);
+                    .observe((value) as u64);
                 self.metrics
                     .upload_successes
                     .with_label_values(&[&self.feed_name, &self.source_name])
@@ -200,11 +205,11 @@ impl DataProvider {
                 let gas_usage = effects.gas_cost_summary().gas_used();
                 self.metrics
                     .gas_used
-                    .with_label_values(&[&self.feed_name])
+                    .with_label_values(&[&self.feed_name, &self.source_name])
                     .observe(gas_usage);
                 self.metrics
                     .total_gas_used
-                    .with_label_values(&[&self.feed_name])
+                    .with_label_values(&[&self.feed_name, &self.source_name])
                     .inc_by(gas_usage);
             }
             Err(_) => {
@@ -252,9 +257,28 @@ impl DataProvider {
         }
     }
 
-    async fn submit(&self, _value: f64) -> anyhow::Result<SuiTransactionBlockEffects> {
+    async fn submit(&self, value: u64) -> anyhow::Result<SuiTransactionBlockEffects> {
         let _scope = monitored_scope("Oracle::DataProvider::submit");
         // TODO add error handling & polling perhaps
+
+        // let data = TransactionData::new_move_call(
+        //     self.signer_address,
+        //     self.upload_feed.write_package_id,
+        //     ident_str!(&self.upload_feed.write_module_name).to_owned(),
+        //     ident_str!(&self.upload_feed.write_function_name).to_owned(),
+        //     // FIXME
+        //     vec![TypeTag::U64],
+        //     gas1,
+        //     vec![
+        //         CallArg::Object(ObjectArg::SharedObject {})
+        // //             SuiJsonValue::new(json!(self.upload_feed.write_data_provider_object_id)).unwrap(),
+        //         CallArg::CLOCK_IMM
+        //     ],
+        //     TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS * rgp,
+        //     rgp,
+        // )
+        // .unwrap();
+
         let tx = self
             .client
             .transaction_builder()
@@ -263,9 +287,15 @@ impl DataProvider {
                 self.upload_feed.write_package_id,
                 &self.upload_feed.write_module_name,
                 &self.upload_feed.write_function_name,
-                vec![],
-                // FIXME use the value
-                vec![],
+                vec![SuiTypeTag::try_from(TypeTag::U64).unwrap()],
+                vec![
+                    SuiJsonValue::new(json!(self.upload_feed.write_data_provider_object_id)).unwrap(),
+                    SuiJsonValue::new(json!(ObjectID::from_hex_literal("0x06").unwrap())).unwrap(),
+                    SuiJsonValue::new(json!("SUIUSD")).unwrap(),
+                    SuiJsonValue::new(json!(value.to_string())).unwrap(),
+                    // SuiJsonValue::new(convert_number_to_string(value.to_json_value())))
+                    SuiJsonValue::new(json!("tests")).unwrap(),
+                ],
                 None,
                 100_000_000,
             )

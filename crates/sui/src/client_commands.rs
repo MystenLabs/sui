@@ -1605,6 +1605,10 @@ async fn construct_move_call_transaction(
         .map(|value| SuiJsonValue::new(convert_number_to_string(value.to_json_value())))
         .collect::<Result<_, _>>()?;
 
+    let type_args = type_args
+        .into_iter()
+        .map(|arg| arg.try_into())
+        .collect::<Result<Vec<_>, _>>()?;
     let gas_owner = context.try_get_object_owner(&gas).await?;
     let sender = gas_owner.unwrap_or(context.active_address()?);
 
@@ -1616,10 +1620,7 @@ async fn construct_move_call_transaction(
             package,
             module,
             function,
-            type_args
-                .into_iter()
-                .map(|arg| arg.try_into())
-                .collect::<Result<Vec<_>, _>>()?,
+            type_args,
             args,
             gas,
             gas_budget,
