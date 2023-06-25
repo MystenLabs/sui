@@ -262,7 +262,6 @@ export class DeepBook_sdk {
 	 * @param token2 Full coin type of quote asset, eg: "0x3d0d0ce17dcd3b40c2d839d96ce66871ffb40e1154a8dd99af72292b3d10d7fc::usdt::USDT"
 	 * @param client_order_id an id which identify who make the order, you can define it by yourself, eg: "1" , "2", ...
 	 * @param poolId Object id of pool, created after invoking createPool, eg: "0xcaee8e1c046b58e55196105f1436a2337dcaa0c340a7a8c8baf65e4afb8823a4"
-	 * @param treasury treasury of the quote coin, in the selling case, we will mint a zero quote coin to receive the quote coin from the pool. eg: "0x0a11d301013759e79cb5f89a8bb29c3f9a9bb5be6dec2ddba48ea4b39abc5b5a"
 	 * @param tokenObjectIn Object id of the token to swap: eg: "0x6e566fec4c388eeb78a7dab832c9f0212eb2ac7e8699500e203def5b41b9c70d"
 	 * @param amountIn amount of token to buy or sell, eg: 10000000
 	 * @param currentAddress current user address, eg: "0xbddc9d4961b46a130c2e1f38585bbc6fa8077ce54bcb206b26874ac08d607966"
@@ -273,7 +272,6 @@ export class DeepBook_sdk {
 		token2: string,
 		client_order_id: string,
 		poolId: string,
-		treasury: string,
 		tokenObjectIn: string,
 		amountIn: number,
 		currentAddress: string,
@@ -313,6 +311,7 @@ export class DeepBook_sdk {
 	 * @param poolId Object id of pool, created after invoking createPool, eg: "0xcaee8e1c046b58e55196105f1436a2337dcaa0c340a7a8c8baf65e4afb8823a4"
 	 * @param price: price of the limit order, eg: 180000000
 	 * @param quantity: quantity of the limit order in BASE ASSET, eg: 100000000
+	 * @param self_matching_prevention: true for self matching prevention, false for not, eg: true
 	 * @param isBid: true for buying base with quote, false for selling base for quote
 	 * @param expireTimestamp: expire timestamp of the limit order in ms, eg: 1620000000000
 	 * @param restriction restrictions on limit orders, explain in doc for more details, eg: 0
@@ -325,6 +324,7 @@ export class DeepBook_sdk {
 		poolId: string,
 		price: number,
 		quantity: number,
+		self_matching_prevention: boolean,
 		isBid: boolean,
 		expireTimestamp: number,
 		restriction: number,
@@ -336,6 +336,7 @@ export class DeepBook_sdk {
 			txb.pure(client_order_id),
 			txb.pure(Math.floor(price * 1000000000)), // to avoid float number
 			txb.pure(quantity),
+			txb.pure(self_matching_prevention),
 			txb.pure(isBid),
 			txb.pure(expireTimestamp),
 			txb.pure(restriction),
@@ -357,7 +358,6 @@ export class DeepBook_sdk {
 	 * @param token2 Full coin type of quote asset, eg: "0x3d0d0ce17dcd3b40c2d839d96ce66871ffb40e1154a8dd99af72292b3d10d7fc::usdt::USDT"
 	 * @param poolId Object id of pool, created after invoking createPool, eg: "0xcaee8e1c046b58e55196105f1436a2337dcaa0c340a7a8c8baf65e4afb8823a4"
 	 * @param orderId orderId of a limit order, you can find them through function query.list_open_orders eg: "0"
-	 * @param currentAddress: current user address, eg: "0xbddc9d4961b46a130c2e1f38585bbc6fa8077ce54bcb206b26874ac08d607966"
 	 * @param accountCap Object id of Account Capacity under user address, created after invoking createAccount, eg: "0x6f699fef193723277559c8f499ca3706121a65ac96d273151b8e52deb29135d3"
 	 */
 	public cancelOrder(
@@ -365,7 +365,6 @@ export class DeepBook_sdk {
 		token2: string,
 		poolId: string,
 		orderId: string,
-		currentAddress: string,
 		accountCap: string,
 	): TransactionBlock {
 		const txb = new TransactionBlock();
