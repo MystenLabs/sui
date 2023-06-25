@@ -1,5 +1,5 @@
 // Copyright (c) Mysten Labs, Inc.
-// SPDX-License-Identifier: Apache-2.
+// SPDX-License-Identifier: Apache-2.0
 
 import { PoolInfo, Records } from './dto';
 

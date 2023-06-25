@@ -1,3 +1,6 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 import { DevInspectResults, JsonRpcProvider, normalizeSuiObjectId, testnetConnection, TransactionBlock } from '@mysten/sui.js';
 
 export class DeepBook_query {
