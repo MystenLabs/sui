@@ -4,7 +4,7 @@
 import { GrowthBookProvider } from '@growthbook/growthbook-react';
 import { RpcClientContext } from '@mysten/core';
 import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
-import { Fragment, StrictMode, useEffect } from 'react';
+import { Fragment, StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Provider } from 'react-redux';
 import { HashRouter } from 'react-router-dom';
@@ -14,11 +14,9 @@ import { SuiLedgerClientProvider } from './app/components/ledger/SuiLedgerClient
 import { growthbook } from './app/experimentation/feature-gating';
 import { persister, queryClient } from './app/helpers/queryClient';
 import { useAppSelector } from './app/hooks';
-import { useAmplitudeIdentity } from './app/hooks/useAmplitudeIdentity';
 import { ErrorBoundary } from '_components/error-boundary';
 import { initAppType } from '_redux/slices/app';
 import { getFromLocationSearch } from '_redux/slices/app/AppType';
-import { ampli } from '_src/shared/analytics/ampli';
 import { initAmplitude } from '_src/shared/analytics/amplitude';
 import { setAttributes } from '_src/shared/experimentation/features';
 import initSentry from '_src/shared/sentry';
@@ -57,12 +55,6 @@ function renderApp() {
 
 function AppWrapper() {
 	const network = useAppSelector(({ app: { apiEnv, customRPC } }) => `${apiEnv}_${customRPC}`);
-
-	useAmplitudeIdentity();
-	useEffect(() => {
-		ampli.openedWalletExtension();
-	}, []);
-
 	return (
 		<GrowthBookProvider growthbook={growthbook}>
 			<HashRouter>

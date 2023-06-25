@@ -81,6 +81,22 @@ export interface IdentifyProperties {
 	 */
 	activeOrigin?: string;
 	/**
+	 * The path (e.g., /apps) of a given screen in the wallet.
+	 */
+	pagePath: string;
+	/**
+	 * The fully qualified path fragment (e.g., /apps?is_connected=true) of a given screen.
+	 */
+	pagePathFragment: string;
+	/**
+	 * The mode that the wallet is currently in.
+	 *
+	 * | Rule | Value |
+	 * |---|---|
+	 * | Enum Values | Fullscreen, Pop-up |
+	 */
+	walletAppMode?: 'Fullscreen' | 'Pop-up';
+	/**
 	 * The version of the wallet the user has installed.
 	 */
 	walletVersion: string;
