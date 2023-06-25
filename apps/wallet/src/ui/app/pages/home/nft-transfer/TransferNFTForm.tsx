@@ -37,11 +37,9 @@ export function TransferNFTForm({
 	const navigate = useNavigate();
 	const { clientIdentifier, notificationModal } = useQredoTransaction();
 
-	const kioskContents = useGetKioskContents(activeAddress);
+	const { data: kiosk } = useGetKioskContents(activeAddress);
 	const transferKioskItem = useTransferKioskItem({ objectId, objectType });
-	const isContainedInKiosk = kioskContents?.data?.some(
-		(kioskItem) => kioskItem.data?.objectId === objectId,
-	);
+	const isContainedInKiosk = kiosk?.list.some((kioskItem) => kioskItem.data?.objectId === objectId);
 
 	const transferNFT = useMutation({
 		mutationFn: async (to: string) => {
@@ -80,7 +78,7 @@ export function TransferNFTForm({
 		},
 		onSuccess: (response) => {
 			queryClient.invalidateQueries(['object', objectId]);
-			queryClient.invalidateQueries(['get-kiosk-contents']);
+			queryClient.invalidateQueries(['get-kiosk-contents'], { refetchType: 'all' });
 			queryClient.invalidateQueries(['get-owned-objects']);
 			return navigate(
 				`/receipt?${new URLSearchParams({

@@ -20,13 +20,13 @@ export function OwnedObjects({ id }: { id: string }) {
 	const ownedObjects = useGetOwnedObjects(id, {
 		MatchNone: [{ StructType: '0x2::coin::Coin' }],
 	});
-	const { data: kioskContents } = useGetKioskContents(id);
+	const { data: kioskData } = useGetKioskContents(id);
 
 	const { data, isError, isFetching, pagination } = useCursorPagination(ownedObjects);
 
 	const filteredData = useMemo(
-		() => (filter === 'all' ? data?.data : kioskContents),
-		[filter, data, kioskContents],
+		() => (filter === 'all' ? data?.data : kioskData?.list),
+		[filter, data, kioskData],
 	);
 
 	if (isError) {
@@ -46,7 +46,7 @@ export function OwnedObjects({ id }: { id: string }) {
 						key={filter.value}
 						value={filter.value}
 						label={filter.label}
-						disabled={filter.value === 'kiosks' && !kioskContents?.length}
+						disabled={filter.value === 'kiosks' && !kioskData?.list?.length}
 					/>
 				))}
 			</RadioGroup>

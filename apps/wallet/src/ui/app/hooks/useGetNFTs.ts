@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useGetOwnedObjects, useGetKioskContents, hasDisplayData } from '@mysten/core';
+import { useGetOwnedObjects, hasDisplayData, useGetKioskContents } from '@mysten/core';
 import { type SuiObjectData, type SuiAddress } from '@mysten/sui.js';
 
 import useAppSelector from './useAppSelector';
@@ -24,16 +24,16 @@ export function useGetNFTs(address?: SuiAddress | null) {
 		50,
 	);
 	const { apiEnv } = useAppSelector((state) => state.app);
-
 	const disableOriginByteKiosk = apiEnv !== 'mainnet';
-	const { data: kioskContents, isLoading: areKioskContentsLoading } = useGetKioskContents(
+
+	const { data: kioskData, isLoading: areKioskContentsLoading } = useGetKioskContents(
 		address,
 		disableOriginByteKiosk,
 	);
 
-	const filteredKioskContents = kioskContents
-		?.filter(hasDisplayData)
-		.map((data) => data.data as SuiObjectData);
+	const filteredKioskContents = (kioskData?.list ?? [])
+		.filter(hasDisplayData)
+		.map(({ data }) => (data as SuiObjectData) || []);
 
 	const nfts = [
 		...(filteredKioskContents ?? []),
@@ -42,6 +42,7 @@ export function useGetNFTs(address?: SuiAddress | null) {
 			.filter(hasDisplayData)
 			.map(({ data }) => data as SuiObjectData) || []),
 	];
+
 	return {
 		data: nfts,
 		isInitialLoading,
