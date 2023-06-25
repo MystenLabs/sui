@@ -38,6 +38,7 @@
 -  [Function `remove_order`](#0xdee9_clob_v2_remove_order)
 -  [Function `cancel_all_orders`](#0xdee9_clob_v2_cancel_all_orders)
 -  [Function `batch_cancel_order`](#0xdee9_clob_v2_batch_cancel_order)
+-  [Function `clean_up_expired_orders`](#0xdee9_clob_v2_clean_up_expired_orders)
 -  [Function `list_open_orders`](#0xdee9_clob_v2_list_open_orders)
 -  [Function `account_balance`](#0xdee9_clob_v2_account_balance)
 -  [Function `get_market_price`](#0xdee9_clob_v2_get_market_price)
@@ -2543,6 +2544,77 @@ Grouping order_ids like [0, 2, 1, 3] would make it the most gas efficient.
             order_id,
             owner
         );
+        <b>if</b> (is_bid) {
+            <b>let</b> balance_locked = clob_math::mul(order.quantity, order.price);
+            <a href="custodian.md#0xdee9_custodian_unlock_balance">custodian::unlock_balance</a>(&<b>mut</b> pool.quote_custodian, owner, balance_locked);
+        } <b>else</b> {
+            <a href="custodian.md#0xdee9_custodian_unlock_balance">custodian::unlock_balance</a>(&<b>mut</b> pool.base_custodian, owner, order.quantity);
+        };
+        <a href="clob_v2.md#0xdee9_clob_v2_emit_order_canceled">emit_order_canceled</a>&lt;BaseAsset, QuoteAsset&gt;(pool_id, &order);
+        i_order = i_order + 1;
+    }
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0xdee9_clob_v2_clean_up_expired_orders"></a>
+
+## Function `clean_up_expired_orders`
+
+Clean up expired orders
+Note that this function can reduce gas cost if orders
+with the same price are grouped together in the vector because we would not need the computation to find the tick_index.
+For example, if we have the following order_id to price mapping, {0: 100., 1: 200., 2: 100., 3: 200.}.
+Grouping order_ids like [0, 2, 1, 3] would make it the most gas efficient.
+Order owners should be the owner addresses from the account capacities which placed the orders,
+and they should correspond to the order IDs one by one.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_clean_up_expired_orders">clean_up_expired_orders</a>&lt;BaseAsset, QuoteAsset&gt;(pool: &<b>mut</b> <a href="clob_v2.md#0xdee9_clob_v2_Pool">clob_v2::Pool</a>&lt;BaseAsset, QuoteAsset&gt;, <a href="../../../.././build/Sui/docs/clock.md#0x2_clock">clock</a>: &<a href="../../../.././build/Sui/docs/clock.md#0x2_clock_Clock">clock::Clock</a>, order_ids: <a href="">vector</a>&lt;u64&gt;, order_owners: <a href="">vector</a>&lt;<b>address</b>&gt;)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_clean_up_expired_orders">clean_up_expired_orders</a>&lt;BaseAsset, QuoteAsset&gt;(
+    pool: &<b>mut</b> <a href="clob_v2.md#0xdee9_clob_v2_Pool">Pool</a>&lt;BaseAsset, QuoteAsset&gt;,
+    <a href="../../../.././build/Sui/docs/clock.md#0x2_clock">clock</a>: &Clock,
+    order_ids: <a href="">vector</a>&lt;u64&gt;,
+    order_owners: <a href="">vector</a>&lt;<b>address</b>&gt;
+) {
+    <b>let</b> pool_id = *<a href="../../../.././build/Sui/docs/object.md#0x2_object_uid_as_inner">object::uid_as_inner</a>(&pool.id);
+    <b>let</b> now = <a href="../../../.././build/Sui/docs/clock.md#0x2_clock_timestamp_ms">clock::timestamp_ms</a>(<a href="../../../.././build/Sui/docs/clock.md#0x2_clock">clock</a>);
+    <b>let</b> n_order = <a href="_length">vector::length</a>(&order_ids);
+    <b>assert</b>!(n_order == <a href="_length">vector::length</a>(&order_owners), <a href="clob_v2.md#0xdee9_clob_v2_ENotEqual">ENotEqual</a>);
+    <b>let</b> i_order = 0;
+    <b>let</b> tick_index: u64 = 0;
+    <b>let</b> tick_price: u64 = 0;
+    <b>while</b> (i_order &lt; n_order) {
+        <b>let</b> order_id = *<a href="_borrow">vector::borrow</a>(&order_ids, i_order);
+        <b>let</b> owner = *<a href="_borrow">vector::borrow</a>(&order_owners, i_order);
+        <b>if</b> (!<a href="../../../.././build/Sui/docs/table.md#0x2_table_contains">table::contains</a>(&pool.usr_open_orders, owner)) { <b>continue</b> };
+        <b>let</b> usr_open_orders = borrow_mut(&<b>mut</b> pool.usr_open_orders, owner);
+        <b>if</b> (!<a href="../../../.././build/Sui/docs/linked_table.md#0x2_linked_table_contains">linked_table::contains</a>(usr_open_orders, order_id)) { <b>continue</b> };
+        <b>let</b> new_tick_price = *<a href="../../../.././build/Sui/docs/linked_table.md#0x2_linked_table_borrow">linked_table::borrow</a>(usr_open_orders, order_id);
+        <b>let</b> is_bid = <a href="clob_v2.md#0xdee9_clob_v2_order_is_bid">order_is_bid</a>(order_id);
+        <b>let</b> open_orders = <b>if</b> (is_bid) { &<b>mut</b> pool.bids } <b>else</b> { &<b>mut</b> pool.asks };
+        <b>if</b> (new_tick_price != tick_price) {
+            tick_price = new_tick_price;
+            <b>let</b> (tick_exists, new_tick_index) = find_leaf(
+                open_orders,
+                tick_price
+            );
+            <b>assert</b>!(tick_exists, <a href="clob_v2.md#0xdee9_clob_v2_EInvalidTickPrice">EInvalidTickPrice</a>);
+            tick_index = new_tick_index;
+        };
+        <b>let</b> order = <a href="clob_v2.md#0xdee9_clob_v2_remove_order">remove_order</a>&lt;BaseAsset, QuoteAsset&gt;(open_orders, usr_open_orders, tick_index, order_id, owner);
+        <b>assert</b>!(order.expire_timestamp &lt; now, <a href="clob_v2.md#0xdee9_clob_v2_EInvalidExpireTimestamp">EInvalidExpireTimestamp</a>);
         <b>if</b> (is_bid) {
             <b>let</b> balance_locked = clob_math::mul(order.quantity, order.price);
             <a href="custodian.md#0xdee9_custodian_unlock_balance">custodian::unlock_balance</a>(&<b>mut</b> pool.quote_custodian, owner, balance_locked);
