@@ -148,7 +148,6 @@ export function SuiApp({
 			className="no-underline"
 			onClick={() => {
 				ampli.openedApplication({ applicationName: name });
-
 				trackEvent('AppOpen', {
 					props: { name, source: 'AppPage' },
 				});
