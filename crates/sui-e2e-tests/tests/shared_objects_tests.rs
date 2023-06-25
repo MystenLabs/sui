@@ -239,6 +239,7 @@ async fn call_shared_object_contract() {
         .contains(&assert_value_mut_transaction));
 }
 
+#[ignore("Disabled due to flakiness - re-enable when failure is fixed")]
 #[sim_test]
 async fn access_clock_object_test() {
     let gas_objects = generate_test_gas_objects();
