@@ -43,7 +43,7 @@ export function ImageIcon({ src, label, alt = label, fallback, ...styleProps }: 
 	const [error, setError] = useState(false);
 	return (
 		<div role="img" className={imageStyle(styleProps)} aria-label={label}>
-			{error ? (
+			{error || !src || src === '' ? (
 				<FallBackAvatar str={fallback} />
 			) : (
 				<img
