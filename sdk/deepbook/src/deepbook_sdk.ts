@@ -577,7 +577,7 @@ export class DeepBook_sdk {
 					target: `dee9::clob_v2::swap_exact_base_for_quote`,
 					arguments: [
 						txb.object(poolInfo.clob_v2),
-						txb.pure(String(client_order_id)),
+						txb.pure(client_order_id),
 						txb.object(accountCap),
 						_amount,
 						// @ts-ignore
