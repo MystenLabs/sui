@@ -45,16 +45,18 @@ function SiteConnectPage() {
 						allowed,
 					}),
 				);
-				ampli.connectedApplication({
+				ampli.respondedToConnectionRequest({
 					applicationName: permissionRequest.name,
 					applicationUrl: permissionRequest.origin,
+					approvedConnection: allowed,
 				});
+				window.close();
 			}
 		},
 		[requestID, accountsToConnect, permissionRequest, dispatch],
 	);
 	useEffect(() => {
-		if (!loading && (!permissionRequest || permissionRequest.responseDate)) {
+		if (!loading && !permissionRequest) {
 			window.close();
 		}
 	}, [loading, permissionRequest]);

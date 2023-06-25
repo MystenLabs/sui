@@ -173,17 +173,6 @@ export interface ClickedUnstakeSuiProperties {
 	validatorName: string;
 }
 
-export interface ConnectedApplicationProperties {
-	/**
-	 * The name of the application being visited.
-	 */
-	applicationName?: string;
-	/**
-	 * The URL of the application that was connected.
-	 */
-	applicationUrl: string;
-}
-
 export interface ConnectedHardwareWalletProperties {
 	/**
 	 * The type of hardware wallet that was connected to.
@@ -244,6 +233,21 @@ export interface PinnedCoinProperties {
 	 * The type of a coin.
 	 */
 	coinType: string;
+}
+
+export interface RespondedToConnectionRequestProperties {
+	/**
+	 * The name of the application that initiated the connection request.
+	 */
+	applicationName?: string;
+	/**
+	 * The URL of the application that initiated the transaction.
+	 */
+	applicationUrl: string;
+	/**
+	 * Whether or not the user approved an application connection request.
+	 */
+	approvedConnection: boolean;
 }
 
 export interface SelectedCoinProperties {
@@ -390,14 +394,6 @@ export class ClickedUnstakeSui implements BaseEvent {
 	}
 }
 
-export class ConnectedApplication implements BaseEvent {
-	event_type = 'connected application';
-
-	constructor(public event_properties: ConnectedApplicationProperties) {
-		this.event_properties = event_properties;
-	}
-}
-
 export class ConnectedHardwareWallet implements BaseEvent {
 	event_type = 'connected hardware wallet';
 
@@ -450,6 +446,14 @@ export class PinnedCoin implements BaseEvent {
 	event_type = 'pinned coin';
 
 	constructor(public event_properties: PinnedCoinProperties) {
+		this.event_properties = event_properties;
+	}
+}
+
+export class RespondedToConnectionRequest implements BaseEvent {
+	event_type = 'responded to connection request';
+
+	constructor(public event_properties: RespondedToConnectionRequestProperties) {
 		this.event_properties = event_properties;
 	}
 }
@@ -791,25 +795,6 @@ export class Ampli {
   }
 
   /**
-   * connected application
-   *
-   * [View in Tracking Plan](https://data.amplitude.com/mystenlabs/Sui%20Wallet/events/main/latest/connected%20application)
-   *
-   * When users connect to an application in the wallet.
-   *
-   * Owner: Jon Shek
-   *
-   * @param properties The event's properties (e.g. applicationName)
-   * @param options Amplitude event options.
-   */
-  connectedApplication(
-    properties: ConnectedApplicationProperties,
-    options?: EventOptions,
-  ) {
-    return this.track(new ConnectedApplication(properties), options);
-  }
-
-  /**
    * connected hardware wallet
    *
    * [View in Tracking Plan](https://data.amplitude.com/mystenlabs/Sui%20Wallet/events/main/latest/connected%20hardware%20wallet)
@@ -955,6 +940,25 @@ export class Ampli {
     options?: EventOptions,
   ) {
     return this.track(new PinnedCoin(properties), options);
+  }
+
+  /**
+   * responded to connection request
+   *
+   * [View in Tracking Plan](https://data.amplitude.com/mystenlabs/Sui%20Wallet/events/main/latest/responded%20to%20connection%20request)
+   *
+   * When users respond to a connection request in the wallet.
+   *
+   * Owner: William Robertson
+   *
+   * @param properties The event's properties (e.g. applicationName)
+   * @param options Amplitude event options.
+   */
+  respondedToConnectionRequest(
+    properties: RespondedToConnectionRequestProperties,
+    options?: EventOptions,
+  ) {
+    return this.track(new RespondedToConnectionRequest(properties), options);
   }
 
   /**
