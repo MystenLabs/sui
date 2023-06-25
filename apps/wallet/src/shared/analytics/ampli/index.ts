@@ -305,6 +305,10 @@ export interface SwitchedAccountProperties {
 	toAccountType: string;
 }
 
+export interface SwitchedNetworkProperties {
+	toNetwork: string;
+}
+
 export interface UnpinnedCoinProperties {
 	/**
 	 * The type of a coin.
@@ -494,6 +498,14 @@ export class SwitchedAccount implements BaseEvent {
 	event_type = 'switched account';
 
 	constructor(public event_properties: SwitchedAccountProperties) {
+		this.event_properties = event_properties;
+	}
+}
+
+export class SwitchedNetwork implements BaseEvent {
+	event_type = 'switched network';
+
+	constructor(public event_properties: SwitchedNetworkProperties) {
 		this.event_properties = event_properties;
 	}
 }
@@ -1055,6 +1067,25 @@ export class Ampli {
     options?: EventOptions,
   ) {
     return this.track(new SwitchedAccount(properties), options);
+  }
+
+  /**
+   * switched network
+   *
+   * [View in Tracking Plan](https://data.amplitude.com/mystenlabs/Sui%20Wallet/events/main/latest/switched%20network)
+   *
+   * When users switch between different network connections.
+   *
+   * Owner: William Robertson
+   *
+   * @param properties The event's properties (e.g. toNetwork)
+   * @param options Amplitude event options.
+   */
+  switchedNetwork(
+    properties: SwitchedNetworkProperties,
+    options?: EventOptions,
+  ) {
+    return this.track(new SwitchedNetwork(properties), options);
   }
 
   /**

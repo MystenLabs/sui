@@ -11,6 +11,7 @@ import { CustomRPCInput } from './custom-rpc-input';
 import { API_ENV_TO_INFO, generateActiveNetworkList } from '_app/ApiProvider';
 import { useAppSelector, useAppDispatch } from '_hooks';
 import { changeActiveNetwork } from '_redux/slices/app';
+import { ampli } from '_src/shared/analytics/ampli';
 import { API_ENV } from '_src/shared/api-env';
 
 import st from './NetworkSelector.module.scss';
@@ -55,6 +56,9 @@ const NetworkSelector = () => {
 												store: true,
 											}),
 										).unwrap();
+										ampli.switchedNetwork({
+											toNetwork: apiEnv.env.toUpperCase(),
+										});
 									} catch (e) {
 										toast.error((e as Error).message);
 									}
