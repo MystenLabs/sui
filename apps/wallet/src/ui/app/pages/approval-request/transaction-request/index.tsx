@@ -73,8 +73,9 @@ export function TransactionRequest({ txRequest }: TransactionRequestProps) {
 							clientIdentifier,
 						}),
 					);
-					ampli.approvedTransaction({
+					ampli.respondedToTransactionRequest({
 						applicationUrl: txRequest.origin,
+						approvedTransaction: approved,
 						receivedFailureWarning: false,
 					});
 				}}
@@ -114,8 +115,9 @@ export function TransactionRequest({ txRequest }: TransactionRequestProps) {
 							clientIdentifier,
 						}),
 					);
-					ampli.approvedTransaction({
+					ampli.respondedToTransactionRequest({
 						applicationUrl: txRequest.origin,
+						approvedTransaction: isConfirmed,
 						receivedFailureWarning: true,
 					});
 					setConfirmationVisible(false);

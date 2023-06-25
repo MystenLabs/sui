@@ -121,17 +121,6 @@ export interface AddedAccountsProperties {
 	numberOfAccounts: number;
 }
 
-export interface ApprovedTransactionProperties {
-	/**
-	 * The URL of the application that initiated the transaction.
-	 */
-	applicationUrl: string;
-	/**
-	 * Whether or not users received a failure warning when signing a transaction.
-	 */
-	receivedFailureWarning: boolean;
-}
-
 export interface ClickedCollectibleCardProperties {
 	/**
 	 * The object type of a collectible.
@@ -250,6 +239,21 @@ export interface RespondedToConnectionRequestProperties {
 	approvedConnection: boolean;
 }
 
+export interface RespondedToTransactionRequestProperties {
+	/**
+	 * The URL of the application that initiated the transaction.
+	 */
+	applicationUrl: string;
+	/**
+	 * Whether or not a transaction request was approved.
+	 */
+	approvedTransaction: boolean;
+	/**
+	 * Whether or not users received a failure warning when signing a transaction.
+	 */
+	receivedFailureWarning: boolean;
+}
+
 export interface SelectedCoinProperties {
 	/**
 	 * The type of a coin.
@@ -350,14 +354,6 @@ export class AddedAccounts implements BaseEvent {
 	}
 }
 
-export class ApprovedTransaction implements BaseEvent {
-	event_type = 'approved transaction';
-
-	constructor(public event_properties: ApprovedTransactionProperties) {
-		this.event_properties = event_properties;
-	}
-}
-
 export class ClickedCollectibleCard implements BaseEvent {
 	event_type = 'clicked collectible card';
 
@@ -454,6 +450,14 @@ export class RespondedToConnectionRequest implements BaseEvent {
 	event_type = 'responded to connection request';
 
 	constructor(public event_properties: RespondedToConnectionRequestProperties) {
+		this.event_properties = event_properties;
+	}
+}
+
+export class RespondedToTransactionRequest implements BaseEvent {
+	event_type = 'responded to transaction request';
+
+	constructor(public event_properties: RespondedToTransactionRequestProperties) {
 		this.event_properties = event_properties;
 	}
 }
@@ -665,25 +669,6 @@ export class Ampli {
     options?: EventOptions,
   ) {
     return this.track(new AddedAccounts(properties), options);
-  }
-
-  /**
-   * approved transaction
-   *
-   * [View in Tracking Plan](https://data.amplitude.com/mystenlabs/Sui%20Wallet/events/main/latest/approved%20transaction)
-   *
-   * When users approve a transaction from an application.
-   *
-   * Owner: Jon Shek
-   *
-   * @param properties The event's properties (e.g. applicationUrl)
-   * @param options Amplitude event options.
-   */
-  approvedTransaction(
-    properties: ApprovedTransactionProperties,
-    options?: EventOptions,
-  ) {
-    return this.track(new ApprovedTransaction(properties), options);
   }
 
   /**
@@ -959,6 +944,25 @@ export class Ampli {
     options?: EventOptions,
   ) {
     return this.track(new RespondedToConnectionRequest(properties), options);
+  }
+
+  /**
+   * responded to transaction request
+   *
+   * [View in Tracking Plan](https://data.amplitude.com/mystenlabs/Sui%20Wallet/events/main/latest/responded%20to%20transaction%20request)
+   *
+   * When users respond to a transaction request from an application.
+   *
+   * Owner: Jon Shek
+   *
+   * @param properties The event's properties (e.g. applicationUrl)
+   * @param options Amplitude event options.
+   */
+  respondedToTransactionRequest(
+    properties: RespondedToTransactionRequestProperties,
+    options?: EventOptions,
+  ) {
+    return this.track(new RespondedToTransactionRequest(properties), options);
   }
 
   /**
