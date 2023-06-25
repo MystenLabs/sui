@@ -80,7 +80,7 @@ export class DeepBook_sdk {
 		txb.moveCall({
 			typeArguments: [token1, token2],
 			target: `dee9::clob_v2::deposit_base`,
-			arguments: [txb.object(`${poolId}`), txb.object(coin), txb.object(`${accountCap}`)],
+			arguments: [txb.object(poolId), txb.object(coin), txb.object(accountCap)],
 		});
 		txb.setGasBudget(this.gasBudget);
 		return txb;
@@ -105,7 +105,7 @@ export class DeepBook_sdk {
 		txb.moveCall({
 			typeArguments: [token1, token2],
 			target: `dee9::clob_v2::deposit_quote`,
-			arguments: [txb.object(`${poolId}`), txb.object(coin), txb.object(`${accountCap}`)],
+			arguments: [txb.object(poolId), txb.object(coin), txb.object(accountCap)],
 		});
 		txb.setGasBudget(this.gasBudget);
 		return txb;
@@ -132,7 +132,7 @@ export class DeepBook_sdk {
 		const withdraw = txb.moveCall({
 			typeArguments: [token1, token2],
 			target: `dee9::clob_v2::withdraw_base`,
-			arguments: [txb.object(`${poolId}`), txb.pure(quantity), txb.object(`${accountCap}`)],
+			arguments: [txb.object(poolId), txb.pure(quantity), txb.object(accountCap)],
 		});
 		txb.transferObjects([withdraw], txb.pure(currentAddress));
 		txb.setGasBudget(this.gasBudget);
@@ -160,7 +160,7 @@ export class DeepBook_sdk {
 		const withdraw = txb.moveCall({
 			typeArguments: [token1, token2],
 			target: `dee9::clob_v2::withdraw_quote`,
-			arguments: [txb.object(`${poolId}`), txb.pure(quantity), txb.object(`${accountCap}`)],
+			arguments: [txb.object(poolId), txb.pure(quantity), txb.object(accountCap)],
 		});
 		txb.transferObjects([withdraw], txb.pure(currentAddress));
 		txb.setGasBudget(this.gasBudget);
@@ -197,8 +197,8 @@ export class DeepBook_sdk {
 			typeArguments: [token1, token2],
 			target: `dee9::clob_v2::place_market_order`,
 			arguments: [
-				txb.object(`${poolId}`),
-				txb.object(`${accountCap}`),
+				txb.object(poolId),
+				txb.object(accountCap),
 				txb.pure(client_order_id),
 				txb.pure(quantity),
 				txb.pure(is_bid),
@@ -241,9 +241,9 @@ export class DeepBook_sdk {
 			typeArguments: [token1, token2],
 			target: `dee9::clob_v2::swap_exact_quote_for_base`,
 			arguments: [
-				txb.object(`${poolId}`),
+				txb.object(poolId),
 				txb.pure(client_order_id),
-				txb.object(`${accountCap}`),
+				txb.object(accountCap),
 				txb.object(String(amountIn)),
 				txb.object(normalizeSuiObjectId('0x6')),
 				txb.object(tokenObjectIn),
@@ -283,9 +283,9 @@ export class DeepBook_sdk {
 			typeArguments: [token1, token2],
 			target: `dee9::clob_v2::swap_exact_base_for_quote`,
 			arguments: [
-				txb.object(`${poolId}`),
+				txb.object(poolId),
 				txb.pure(client_order_id),
-				txb.object(`${accountCap}`),
+				txb.object(accountCap),
 				txb.object(String(amountIn)),
 				txb.object(tokenObjectIn),
 				txb.moveCall({
@@ -332,7 +332,7 @@ export class DeepBook_sdk {
 	): TransactionBlock {
 		const txb = new TransactionBlock();
 		const args = [
-			txb.object(`${poolId}`),
+			txb.object(poolId),
 			txb.pure(client_order_id),
 			txb.pure(Math.floor(price * 1000000000)), // to avoid float number
 			txb.pure(quantity),
@@ -341,7 +341,7 @@ export class DeepBook_sdk {
 			txb.pure(expireTimestamp),
 			txb.pure(restriction),
 			txb.object(normalizeSuiObjectId('0x6')),
-			txb.object(`${accountCap}`),
+			txb.object(accountCap),
 		];
 		txb.moveCall({
 			typeArguments: [token1, token2],
@@ -371,7 +371,7 @@ export class DeepBook_sdk {
 		txb.moveCall({
 			typeArguments: [token1, token2],
 			target: `dee9::clob_v2::cancel_order`,
-			arguments: [txb.object(`${poolId}`), txb.pure(orderId), txb.object(`${accountCap}`)],
+			arguments: [txb.object(poolId), txb.pure(orderId), txb.object(accountCap)],
 		});
 		txb.setGasBudget(this.gasBudget);
 		return txb;
@@ -389,7 +389,7 @@ export class DeepBook_sdk {
 		txb.moveCall({
 			typeArguments: [token1, token2],
 			target: `dee9::clob_v2::cancel_all_orders`,
-			arguments: [txb.object(`${poolId}`), txb.object(`${accountCap}`)],
+			arguments: [txb.object(poolId), txb.object(accountCap)],
 		});
 		txb.setGasBudget(this.gasBudget);
 		return txb;
@@ -414,7 +414,7 @@ export class DeepBook_sdk {
 		txb.moveCall({
 			typeArguments: [token1, token2],
 			target: `dee9::clob_v2::batch_cancel_order`,
-			arguments: [txb.object(`${poolId}`), txb.pure(orderIds), txb.object(`${accountCap}`)],
+			arguments: [txb.object(poolId), txb.pure(orderIds), txb.object(accountCap)],
 		});
 		txb.setGasBudget(defaultGasBudget);
 		return txb;
@@ -562,9 +562,9 @@ export class DeepBook_sdk {
 					typeArguments: [isBid ? nextPath : path[i], isBid ? path[i] : nextPath],
 					target: `dee9::clob_v2::swap_exact_quote_for_base`,
 					arguments: [
-						txb.object(String(poolInfo.clob_v2)),
-						txb.pure(String(client_order_id)),
-						txb.object(String(accountCap)),
+						txb.object(poolInfo.clob_v2),
+						txb.pure(client_order_id),
+						txb.object(accountCap),
 						_amount,
 						txb.object(normalizeSuiObjectId('0x6')),
 						_tokenOut,
@@ -576,9 +576,9 @@ export class DeepBook_sdk {
 					typeArguments: [isBid ? nextPath : path[i], isBid ? path[i] : nextPath],
 					target: `dee9::clob_v2::swap_exact_base_for_quote`,
 					arguments: [
-						txb.object(String(poolInfo.clob_v2)),
+						txb.object(poolInfo.clob_v2),
 						txb.pure(String(client_order_id)),
-						txb.object(String(accountCap)),
+						txb.object(accountCap),
 						_amount,
 						// @ts-ignore
 						_tokenIn,

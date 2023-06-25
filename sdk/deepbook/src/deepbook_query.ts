@@ -28,7 +28,7 @@ export class DeepBook_query {
 		txb.moveCall({
 			typeArguments: [token1, token2],
 			target: `dee9::clob_v2::get_order_status`,
-			arguments: [txb.object(`${poolId}`), txb.object(String(orderId)), txb.object(`${accountCap}`)],
+			arguments: [txb.object(poolId), txb.object(orderId), txb.object(accountCap)],
 		});
 		txb.setSender(this.currentAddress);
 		return await this.provider.devInspectTransactionBlock({
@@ -54,7 +54,7 @@ export class DeepBook_query {
 		txb.moveCall({
 			typeArguments: [token1, token2],
 			target: `dee9::clob_v2::account_balance`,
-			arguments: [txb.object(`${poolId}`), txb.object(`${accountCap}`)],
+			arguments: [txb.object(poolId), txb.object(accountCap)],
 		});
 		txb.setSender(this.currentAddress);
 		return await this.provider.devInspectTransactionBlock({
@@ -80,7 +80,7 @@ export class DeepBook_query {
 		txb.moveCall({
 			typeArguments: [token1, token2],
 			target: `dee9::clob_v2::list_open_orders`,
-			arguments: [txb.object(`${poolId}`), txb.object(`${accountCap}`)],
+			arguments: [txb.object(poolId), txb.object(accountCap)],
 		});
 		txb.setSender(this.currentAddress);
 
@@ -101,7 +101,7 @@ export class DeepBook_query {
 		txb.moveCall({
 			typeArguments: [token1, token2],
 			target: `dee9::clob_v2::get_market_price`,
-			arguments: [txb.object(`${poolId}`)],
+			arguments: [txb.object(poolId)],
 		});
 		return await this.provider.devInspectTransactionBlock({
 			transactionBlock: txb,
@@ -133,7 +133,7 @@ export class DeepBook_query {
 				? `dee9::clob_v2::get_level2_book_status_bid_side`
 				: `dee9::clob_v2::get_level2_book_status_ask_side`,
 			arguments: [
-				txb.object(`${poolId}`),
+				txb.object(poolId),
 				txb.pure(String(lowerPrice)),
 				txb.pure(String(higherPrice)),
 				txb.object(normalizeSuiObjectId('0x6')),

@@ -1,3 +1,6 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.
+
 import { PoolInfo, Records } from './dto';
 
 export function getPoolInfoByRecords(tokenType1: string, tokenType2: string, records: Records): PoolInfo {

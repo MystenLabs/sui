@@ -8,8 +8,6 @@ lerna-debug.log*
 .pnpm-debug.log*
 .DS_Store
 .idea/
-src/*.js
-src/utils/*.js
 
 # Diagnostic reports (https://nodejs.org/api/report.html)
 report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
