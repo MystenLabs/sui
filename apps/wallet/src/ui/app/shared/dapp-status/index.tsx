@@ -102,7 +102,7 @@ function DappStatus() {
 		return null;
 	}
 	return (
-		<div className="w-40">
+		<>
 			<ButtonConnectedTo
 				truncate
 				iconBefore={<Dot12 className="text-success" />}
@@ -156,7 +156,7 @@ function DappStatus() {
 					</motion.div>
 				) : null}
 			</AnimatePresence>
-		</div>
+		</>
 	);
 }
 
