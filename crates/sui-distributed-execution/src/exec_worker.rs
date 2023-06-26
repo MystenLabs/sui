@@ -1,6 +1,9 @@
 use core::panic;
 use std::collections::{HashSet, HashMap, VecDeque};
 use std::sync::Arc;
+use std::pin::Pin;
+use std::future::Future;
+use futures::stream::FuturesUnordered;
 
 use sui_adapter::adapter::MoveVM;
 use sui_adapter::{execution_engine, execution_mode};
@@ -50,6 +53,7 @@ impl QueuesManager {
             ready: manager_sender}
     }
 
+    /// Enqueues a transaction on the manager
     async fn queue_tx(&mut self, tx: VerifiedTransaction) {
        
 		// Store tx
@@ -72,8 +76,8 @@ impl QueuesManager {
         // Update the wait table
         self.wait_table.insert(txid, HashSet::from_iter(rw_set.clone()));
         for obj in rw_set.iter() {
-            let obj_queue = self.obj_queues.get(obj).unwrap();
-            if let Some(&head) = obj_queue.front() {
+            let queue = self.obj_queues.get(obj).unwrap();
+            if let Some(&head) = queue.front() {
                 if head == txid {
                     self.wait_table.get_mut(&txid).unwrap().remove(obj);
                 }
@@ -86,6 +90,35 @@ impl QueuesManager {
 			self.ready.send(tx).await.expect("manager_sender failed");
 		}
 	}
+
+    /// Cleans up after a completed transaction
+	async fn clean_up(&mut self, completed_tx: VerifiedTransaction) {
+
+        // Get digest and RW set
+        let txid = *completed_tx.digest();
+        let mut rw_set = get_read_set(&completed_tx);
+        rw_set.append(&mut get_write_set(&completed_tx));
+		
+		// Remove tx from obj_queues
+		for obj in rw_set.iter() {
+            let queue = self.obj_queues.get_mut(obj).unwrap();
+            assert!(*queue.front().unwrap() == txid);  // sanity check
+            queue.pop_front();
+			
+			// Update wait_table; advance wait status of txs waiting on obj
+            if let Some(next_txid) = queue.front() {
+                self.wait_table.get_mut(next_txid).unwrap().remove(obj);
+
+                // Check if next_txid ready
+                if self.wait_table.get_mut(next_txid).unwrap().is_empty() {
+                    self.wait_table.remove(next_txid);
+                    let next_tx = self.tx_store.get(next_txid).unwrap();
+                    self.ready.send(next_tx.clone()).await.expect("manager_sender failed");
+                }
+            }
+		}
+        self.tx_store.remove(&txid);
+    }
 }
 
 pub struct ExecutionWorkerState {
@@ -204,8 +237,8 @@ impl ExecutionWorkerState {
     }
 
 
-    // Receive and process an EpochStart message.
-    // returns new (move_vm, protocol_config, epoch_data, reference_gas_price)
+    /// Helper function to receive and process an EpochStart message.
+    /// Returns new (move_vm, protocol_config, epoch_data, reference_gas_price)
     async fn process_epoch_start(&mut self,
         sw_receiver: &mut mpsc::Receiver<SailfishMessage>,
     ) -> (Arc<MoveVM>, ProtocolConfig, EpochData, u64)
@@ -228,7 +261,31 @@ impl ExecutionWorkerState {
         return (move_vm, protocol_config, epoch_data, reference_gas_price)
     }
 
+    /// Helper function to process an epoch change
+    async fn process_epoch_change(&mut self,
+        ew_sender: &mpsc::Sender<SailfishMessage>,
+        sw_receiver: &mut mpsc::Receiver<SailfishMessage>,
+    ) -> (Arc<MoveVM>, ProtocolConfig, EpochData, u64)
+    {
+        // First send end of epoch message to sequence worker
+        let latest_state = get_sui_system_state(&&self.memory_store)
+            .expect("Read Sui System State object cannot fail");
+        let new_epoch_start_state = latest_state.into_epoch_start_state();
+        ew_sender
+            .send(SailfishMessage::EpochEnd{
+                new_epoch_start_state,
+            }).await
+            .expect("Sending doesn't work");
 
+        // Then wait for start epoch message from sequence worker and update local state
+        let (new_move_vm, protocol_config, epoch_data, reference_gas_price)
+            = self.process_epoch_start(sw_receiver).await;
+
+        return (new_move_vm, protocol_config, epoch_data, reference_gas_price);
+    }
+
+
+    /// ExecutionWorker main
     pub async fn run(&mut self,
         metrics: Arc<LimitsMetrics>,
         exec_watermark: u64,
@@ -242,6 +299,16 @@ impl ExecutionWorkerState {
         // Start timer for TPS computation
         let now = Instant::now();
         let mut num_tx: usize = 0;
+
+        // Channel from Manager to ew
+        let (manager_sender, manager_receiver) = mpsc::channel(32);
+        let manager = QueuesManager::new(manager_sender);
+
+        // Magical futures, return list of freed objects upon completion
+        let mut tasks = FuturesUnordered::<Pin<Box<dyn Future<Output = VerifiedTransaction>>>>::new();
+
+
+        // Main loop
 
         // Receive txs
         while let Some(msg) = sw_receiver.recv().await {
@@ -285,30 +352,6 @@ impl ExecutionWorkerState {
             1000.0 * num_tx as f64 / elapsed.as_millis() as f64
         );
         println!("Execution worker finished");
-    }
-
-
-    // Helper function to process an epoch change
-    async fn process_epoch_change(&mut self,
-        ew_sender: &mpsc::Sender<SailfishMessage>,
-        sw_receiver: &mut mpsc::Receiver<SailfishMessage>,
-    ) -> (Arc<MoveVM>, ProtocolConfig, EpochData, u64)
-    {
-        // First send end of epoch message to sequence worker
-        let latest_state = get_sui_system_state(&&self.memory_store)
-            .expect("Read Sui System State object cannot fail");
-        let new_epoch_start_state = latest_state.into_epoch_start_state();
-        ew_sender
-            .send(SailfishMessage::EpochEnd{
-                new_epoch_start_state,
-            }).await
-            .expect("Sending doesn't work");
-
-        // Then wait for start epoch message from sequence worker and update local state
-        let (new_move_vm, protocol_config, epoch_data, reference_gas_price)
-            = self.process_epoch_start(sw_receiver).await;
-
-        return (new_move_vm, protocol_config, epoch_data, reference_gas_price);
     }
 }
 

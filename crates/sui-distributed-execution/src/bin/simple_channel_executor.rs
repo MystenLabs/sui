@@ -59,8 +59,7 @@ async fn main() {
     // Channel from ew to sw
     let (ew_sender, ew_receiver) = mpsc::channel(32);
 
-
-    // Run Sequence Worker
+    // Run Sequence Worker asynchronously
     let sw_handler = tokio::spawn(async move {
         sw_state.run(
             config.clone(), 
@@ -72,21 +71,15 @@ async fn main() {
     });
 
     // Run Execution Worker
-    let mut ew_handler_opt = None;
     if let Some(watermark) = args.execute {
-        ew_handler_opt = Some(tokio::spawn(async move {
-            ew_state.run(
-                metrics,
-                watermark,
-                sw_receiver,
-                ew_sender
-            ).await;
-        }));
+        ew_state.run(
+            metrics,
+            watermark,
+            sw_receiver,
+            ew_sender
+        ).await;
     }
 
     // Wait for workers to terminate
     sw_handler.await.expect("sw failed");
-    if let Some(ew_handler) = ew_handler_opt {
-        ew_handler.await.expect("ew failed");
-    }
 }
