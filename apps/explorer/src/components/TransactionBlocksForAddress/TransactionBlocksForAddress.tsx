@@ -50,7 +50,6 @@ const OBJECT_FILTER_OPTIONS = [
     { label: 'Updated Objects', value: 'ChangedObject' },
 ];
 
-
 const reducer = (
     state: PageStateByFilterMap,
     action: TransactionBlocksForAddressActionType
@@ -76,6 +75,15 @@ const reducer = (
     }
 };
 
+const generateTransactionFilter = (filterName: FILTER_VALUES, addr: string): TransactionFilter => {
+    switch(filterName) {
+        case FILTER_VALUES.FROMORTO:
+            return { [FILTER_VALUES.FROMORTO]: { addr}};
+        default:
+            return { [filterName]: addr} as TransactionFilter;
+    }
+}
+
 function TransactionBlocksForAddress({
 	address,
 	filter = FILTER_VALUES.CHANGED,
@@ -95,9 +103,7 @@ function TransactionBlocksForAddress({
         isFetchingNextPage,
         fetchNextPage,
         hasNextPage,
-    } = useGetTransactionBlocks({
-        [filterValue]: address,
-    } as TransactionFilter);
+    } = useGetTransactionBlocks(generateTransactionFilter(filterValue, address));
 
     const currentPage = currentPageState[filterValue];
     const cardData =
