@@ -27,6 +27,21 @@
 			"source": "./src/builder/index.ts",
 			"import": "./dist/esm/builder/index.js",
 			"require": "./dist/cjs/builder/index.js"
+		},
+		"./keypairs/ed25519": {
+			"source": "./src/keypairs/ed25519/index.ts",
+			"import": "./dist/esm/keypairs/ed25519/index.js",
+			"require": "./dist/cjs/keypairs/ed25519/index.js"
+		},
+		"./keypairs/secp256k1": {
+			"source": "./src/keypairs/secp256k1/index.ts",
+			"import": "./dist/esm/keypairs/secp256k1/index.js",
+			"require": "./dist/cjs/keypairs/secp256k1/index.js"
+		},
+		"./keypairs/secp256r1": {
+			"source": "./src/keypairs/secp256r1/index.ts",
+			"import": "./dist/esm/keypairs/secp256r1/index.js",
+			"require": "./dist/cjs/keypairs/secp256r1/index.js"
 		}
 	},
 	"scripts": {
