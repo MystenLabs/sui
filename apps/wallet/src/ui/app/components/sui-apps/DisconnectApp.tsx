@@ -17,6 +17,7 @@ import { type DAppEntry } from './SuiApp';
 import Overlay from '_components/overlay';
 import { useAppSelector } from '_hooks';
 import { permissionsSelectors } from '_redux/slices/permissions';
+import { ampli } from '_src/shared/analytics/ampli';
 import { trackEvent } from '_src/shared/plausible';
 
 export interface DisconnectAppProps extends Omit<DAppEntry, 'description' | 'tags'> {
@@ -56,6 +57,12 @@ function DisconnectApp({
 			});
 			await backgroundClient.disconnectApp(origin, accountsToDisconnect);
 			await backgroundClient.sendGetPermissionRequests();
+			ampli.disconnectedApplication({
+				sourceFlow: 'Application page',
+				disconnectedAccounts: accountsToDisconnect.length || 1,
+				applicationName: permission.name,
+				applicationUrl: origin,
+			});
 		},
 		onSuccess: () => {
 			toast.success('Disconnected successfully');

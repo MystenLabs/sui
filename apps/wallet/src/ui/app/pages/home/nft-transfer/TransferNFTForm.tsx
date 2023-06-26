@@ -17,6 +17,7 @@ import BottomMenuLayout, { Content, Menu } from '_app/shared/bottom-menu-layout'
 import { Text } from '_app/shared/text';
 import { AddressInput } from '_components/address-input';
 import { useSigner } from '_hooks';
+import { ampli } from '_src/shared/analytics/ampli';
 import { QredoActionIgnoredByUser } from '_src/ui/app/QredoSigner';
 import { getSignerOperationErrorMessage } from '_src/ui/app/helpers/errorMessages';
 import { useQredoTransaction } from '_src/ui/app/hooks/useQredoTransaction';
@@ -80,6 +81,9 @@ export function TransferNFTForm({
 			queryClient.invalidateQueries(['object', objectId]);
 			queryClient.invalidateQueries(['get-kiosk-contents'], { refetchType: 'all' });
 			queryClient.invalidateQueries(['get-owned-objects']);
+
+			ampli.sentCollectible({ objectId });
+
 			return navigate(
 				`/receipt?${new URLSearchParams({
 					txdigest: getTransactionDigest(response),

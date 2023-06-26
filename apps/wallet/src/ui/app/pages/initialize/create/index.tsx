@@ -14,6 +14,7 @@ import { useAppDispatch } from '_hooks';
 import PasswordFields from '_pages/initialize/shared/password-fields';
 import { createVault } from '_redux/slices/account';
 import { ToS_LINK } from '_shared/constants';
+import { ampli } from '_src/shared/analytics/ampli';
 
 const CreatePage = () => {
 	const dispatch = useAppDispatch();
@@ -31,6 +32,8 @@ const CreatePage = () => {
 				onSubmit={async (values) => {
 					try {
 						await dispatch(createVault({ password: values.password })).unwrap();
+
+						ampli.createdNewWallet();
 						navigate('../backup', { state: { onboarding: true } });
 					} catch (e) {
 						// Do nothing

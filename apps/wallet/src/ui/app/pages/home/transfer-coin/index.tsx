@@ -18,6 +18,7 @@ import BottomMenuLayout, { Content, Menu } from '_app/shared/bottom-menu-layout'
 import { Text } from '_app/shared/text';
 import { ActiveCoinsCard } from '_components/active-coins-card';
 import Overlay from '_components/overlay';
+import { ampli } from '_src/shared/analytics/ampli';
 import { trackEvent } from '_src/shared/plausible';
 import { QredoActionIgnoredByUser } from '_src/ui/app/QredoSigner';
 import { getSignerOperationErrorMessage } from '_src/ui/app/helpers/errorMessages';
@@ -86,6 +87,11 @@ function TransferCoinPage() {
 		onSuccess: (response) => {
 			queryClient.invalidateQueries(['get-coins']);
 			queryClient.invalidateQueries(['coin-balance']);
+
+			ampli.sentCoins({
+				coinType: coinType!,
+			});
+
 			const receiptUrl = `/receipt?txdigest=${encodeURIComponent(
 				getTransactionDigest(response),
 			)}&from=transactions`;
