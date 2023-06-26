@@ -25,14 +25,13 @@ export class Connection {
 	get faucet() {
 		return this.#options.faucet;
 	}
-
 }
 
 // TODO: Maybe don't have pre-built connections, and instead just have pre-built objects that folks
 // can use with the connection?
 export const localnetConnection = new Connection({
 	fullnode: 'http://127.0.0.1:9000',
-	faucet: 'http://127.0.0.1:9123',
+	faucet: 'http://127.0.0.1:9123/',
 });
 
 export const devnetConnection = new Connection({
