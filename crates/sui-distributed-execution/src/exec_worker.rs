@@ -204,17 +204,16 @@ impl ExecutionWorkerState {
     }
 
 
-    pub async fn run(&mut self,
-        metrics: Arc<LimitsMetrics>,
-        exec_watermark: u64,
-        mut sw_receiver: mpsc::Receiver<SailfishMessage>,
-        ew_sender: mpsc::Sender<SailfishMessage>,
-    ){
-        // Wait for epoch start message
+    // Receive and process an EpochStart message.
+    // returns new (move_vm, protocol_config, epoch_data, reference_gas_price)
+    async fn process_epoch_start(&mut self,
+        sw_receiver: &mut mpsc::Receiver<SailfishMessage>,
+    ) -> (Arc<MoveVM>, ProtocolConfig, EpochData, u64)
+    {
         let SailfishMessage::EpochStart{
-            conf: mut protocol_config,
-            data: mut epoch_data,
-            ref_gas_price: mut reference_gas_price,
+            conf: protocol_config,
+            data: epoch_data,
+            ref_gas_price: reference_gas_price,
         } = sw_receiver.recv().await.unwrap() 
         else {
             panic!("unexpected message");
@@ -222,10 +221,23 @@ impl ExecutionWorkerState {
         println!("Got epoch start message");
 
         let native_functions = sui_move_natives::all_natives(/* silent */ true);
-        let mut move_vm = Arc::new(
+        let move_vm = Arc::new(
             adapter::new_move_vm(native_functions, &protocol_config, false)
                 .expect("We defined natives to not fail here"),
         );
+        return (move_vm, protocol_config, epoch_data, reference_gas_price)
+    }
+
+
+    pub async fn run(&mut self,
+        metrics: Arc<LimitsMetrics>,
+        exec_watermark: u64,
+        mut sw_receiver: mpsc::Receiver<SailfishMessage>,
+        ew_sender: mpsc::Sender<SailfishMessage>,
+    ){
+        // Start the initial epoch
+        let (mut move_vm, mut protocol_config, mut epoch_data, mut reference_gas_price)
+            = self.process_epoch_start(&mut sw_receiver).await;
 
         // Start timer for TPS computation
         let now = Instant::now();
@@ -253,7 +265,7 @@ impl ExecutionWorkerState {
                 if let TransactionKind::ChangeEpoch(_) = tx.data().transaction_data().kind() {
                     // Change epoch
                     println!("END OF EPOCH at checkpoint {}", checkpoint_seq);
-                     (protocol_config, epoch_data, reference_gas_price, move_vm) = 
+                     (move_vm, protocol_config, epoch_data, reference_gas_price) = 
                         self.process_epoch_change(&ew_sender, &mut sw_receiver).await;
                 }
 
@@ -277,10 +289,10 @@ impl ExecutionWorkerState {
 
 
     // Helper function to process an epoch change
-    async fn process_epoch_change(&self,
+    async fn process_epoch_change(&mut self,
         ew_sender: &mpsc::Sender<SailfishMessage>,
         sw_receiver: &mut mpsc::Receiver<SailfishMessage>,
-    ) -> (ProtocolConfig, EpochData, u64, Arc<MoveVM>)
+    ) -> (Arc<MoveVM>, ProtocolConfig, EpochData, u64)
     {
         // First send end of epoch message to sequence worker
         let latest_state = get_sui_system_state(&&self.memory_store)
@@ -293,21 +305,10 @@ impl ExecutionWorkerState {
             .expect("Sending doesn't work");
 
         // Then wait for start epoch message from sequence worker and update local state
-        let SailfishMessage::EpochStart{
-            conf: protocol_config,
-            data: epoch_data,
-            ref_gas_price: reference_gas_price,
-        } = sw_receiver.recv().await.unwrap()
-        else {
-            panic!("unexpected message");
-        };
+        let (new_move_vm, protocol_config, epoch_data, reference_gas_price)
+            = self.process_epoch_start(sw_receiver).await;
 
-        let native_functions = sui_move_natives::all_natives(/* silent */ true);
-        let new_move_vm = Arc::new(
-            adapter::new_move_vm(native_functions.clone(), &protocol_config, false)
-                .expect("We defined natives to not fail here"),
-        );
-        return (protocol_config, epoch_data, reference_gas_price, new_move_vm);
+        return (new_move_vm, protocol_config, epoch_data, reference_gas_price);
     }
 }
 
