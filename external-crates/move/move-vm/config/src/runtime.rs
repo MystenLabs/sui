@@ -19,6 +19,9 @@ pub struct VMConfig {
     // When this flag is set to true, MoveVM will check that there are no trailing bytes after
     // deserializing and check for no metadata bytes
     pub check_no_extraneous_bytes_during_deserialization: bool,
+    // When this flag is set to true, errors from the VM will be augmented with execution state
+    // (stacktrace etc.)
+    pub error_execution_state: bool,
 }
 
 impl Default for VMConfig {
@@ -30,6 +33,7 @@ impl Default for VMConfig {
             runtime_limits_config: VMRuntimeLimitsConfig::default(),
             enable_invariant_violation_check_in_swap_loc: true,
             check_no_extraneous_bytes_during_deserialization: false,
+            error_execution_state: true,
         }
     }
 }
