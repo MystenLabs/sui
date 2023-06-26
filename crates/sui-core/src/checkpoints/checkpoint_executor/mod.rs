@@ -321,6 +321,21 @@ impl CheckpointExecutor {
     ) {
         debug!("Scheduling checkpoint for execution");
 
+        // get PAUSE_AT_CHECKPOINT seq number from env var
+        let pause_at_checkpoint = std::env::var("PAUSE_AT_CHECKPOINT")
+            .map(|s| {
+                s.parse::<u64>()
+                    .expect("Failed to parse PAUSE_AT_CHECKPOINT")
+            })
+            .ok()
+            .unwrap_or(0);
+
+        if *checkpoint.sequence_number() >= pause_at_checkpoint {
+            error!("Not scheduling checkpoint {:?} for execution because PAUSE_AT_CHECKPOINT is set to {:?}.", checkpoint.sequence_number(), pause_at_checkpoint);
+            // sleep forever
+            tokio::time::sleep(Duration::from_secs(3600 * 10000)).await;
+        }
+
         // Mismatch between node epoch and checkpoint epoch after startup
         // crash recovery is invalid
         let checkpoint_epoch = checkpoint.epoch();
