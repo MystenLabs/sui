@@ -10,7 +10,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 16;
+const MAX_PROTOCOL_VERSION: u64 = 17;
 
 // Record history of protocol version allocations here:
 //
@@ -51,6 +51,7 @@ const MAX_PROTOCOL_VERSION: u64 = 16;
 //             to no longer consult the object store when generating unwrapped_then_deleted in the
 //             effects; this also allows us to stop including wrapped tombstones in accumulator.
 //             Add self-matching prevention for deepbook.
+// Version 17: Introduce execution layer versioning, preserve all existing behaviour in v0.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -1260,6 +1261,11 @@ impl ProtocolConfig {
                 cfg.feature_flags.simplified_unwrap_then_delete = true;
                 cfg
             }
+            17 => {
+                let mut cfg = Self::get_for_version_impl(version - 1, chain);
+                cfg.execution_version = Some(1);
+                cfg
+            },
             // Use this template when making changes:
             //
             //     // modify an existing constant.
