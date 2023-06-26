@@ -24,6 +24,8 @@ pub struct IndexerMetrics {
     pub latest_fullnode_checkpoint_sequence_number: IntGauge,
     pub latest_indexer_checkpoint_sequence_number: IntGauge,
     pub latest_indexer_object_checkpoint_sequence_number: IntGauge,
+    pub tx_query_match_count: IntCounter,
+    pub tx_query_mismatch_count: IntCounter,
     // checkpoint E2E latency is:
     // fullnode_download_latency + checkpoint_index_latency + db_commit_latency
     pub fullnode_checkpoint_wait_and_download_latency: Histogram,
@@ -55,7 +57,8 @@ pub struct IndexerMetrics {
     pub get_latest_checkpoint_sequence_number_latency: Histogram,
     // indexer.rs
     pub get_owned_objects_latency: Histogram,
-    pub query_transaction_blocks_latency: Histogram,
+    pub fn_query_transaction_blocks_latency: Histogram,
+    pub idx_query_transaction_blocks_latency: Histogram,
     pub query_events_latency: Histogram,
     pub get_dynamic_fields_latency: Histogram,
     pub get_dynamic_field_object_latency: Histogram,
@@ -116,6 +119,18 @@ impl IndexerMetrics {
             latest_indexer_object_checkpoint_sequence_number: register_int_gauge_with_registry!(
                 "latest_indexer_object_checkpoint_sequence_number",
                 "Latest object checkpoint sequence number from the Indexer",
+                registry,
+            )
+            .unwrap(),
+            tx_query_match_count: register_int_counter_with_registry!(
+                "tx_query_match_count",
+                "Total number of transactions that match the query",
+                registry,
+            )
+            .unwrap(),
+            tx_query_mismatch_count: register_int_counter_with_registry!(
+                "tx_query_mismatch_count",
+                "Total number of transactions that do not match the query",
                 registry,
             )
             .unwrap(),
@@ -287,8 +302,15 @@ impl IndexerMetrics {
                 registry
             )
             .unwrap(),
-            query_transaction_blocks_latency: register_histogram_with_registry!(
-                "query_transaction_blocks_latency",
+            fn_query_transaction_blocks_latency: register_histogram_with_registry!(
+                "fn_query_transaction_blocks_latency",
+                "Time spent in query_transaction_blocks on the fullnode behind.",
+                LATENCY_SEC_BUCKETS.to_vec(),
+                registry
+            )
+            .unwrap(),
+            idx_query_transaction_blocks_latency: register_histogram_with_registry!(
+                "idx_query_transaction_blocks_latency",
                 "Time spent in query_transaction_blocks on the fullnode behind.",
                 LATENCY_SEC_BUCKETS.to_vec(),
                 registry
