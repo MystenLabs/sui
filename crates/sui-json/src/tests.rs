@@ -5,7 +5,7 @@ use std::path::Path;
 use std::str::FromStr;
 
 use fastcrypto::encoding::{Encoding, Hex};
-use move_core_types::language_storage::StructTag;
+use move_core_types::language_storage::{StructTag, TypeTag};
 use move_core_types::u256::U256;
 use move_core_types::value::{MoveFieldLayout, MoveStructLayout};
 use move_core_types::{
@@ -25,7 +25,7 @@ use sui_types::gas_coin::GasCoin;
 use sui_types::object::Object;
 use sui_types::{parse_sui_type_tag, MOVE_STDLIB_ADDRESS};
 
-use crate::ResolvedCallArg;
+use crate::{to_primitive_layout, ResolvedCallArg};
 
 use super::{check_valid_homogeneous, HEX_PREFIX};
 use super::{resolve_move_function_args, SuiJsonValue};
@@ -927,4 +927,81 @@ fn test_string_vec_df_name_child_id_eq() {
         "0x2c2e361ee262b9f1f9a930e27e092cce5906b1e63a699ee60aec2de452ab9c70",
         child_id.to_string()
     );
+}
+
+#[test]
+fn test_type_tag_to_primitive_layout() {
+    assert!(matches!(
+        to_primitive_layout(&TypeTag::Bool).unwrap(),
+        MoveTypeLayout::Bool
+    ));
+    assert!(matches!(
+        to_primitive_layout(&TypeTag::U8).unwrap(),
+        MoveTypeLayout::U8
+    ));
+    assert!(matches!(
+        to_primitive_layout(&TypeTag::U64).unwrap(),
+        MoveTypeLayout::U64
+    ));
+    assert!(matches!(
+        to_primitive_layout(&TypeTag::U128).unwrap(),
+        MoveTypeLayout::U128
+    ));
+    assert!(matches!(
+        to_primitive_layout(&TypeTag::Address).unwrap(),
+        MoveTypeLayout::Address
+    ));
+
+    // Signer is not primitive type
+    assert!(to_primitive_layout(&TypeTag::Signer).is_none());
+
+    assert!(matches!(
+        to_primitive_layout(&TypeTag::Vector(Box::new(TypeTag::U8))).unwrap(),
+        MoveTypeLayout::Vector(b) if matches!(b.as_ref(), MoveTypeLayout::U8)
+    ));
+    assert!(matches!(
+        to_primitive_layout(&TypeTag::Vector(Box::new(TypeTag::Bool))).unwrap(),
+        MoveTypeLayout::Vector(b) if matches!(b.as_ref(), MoveTypeLayout::Bool)
+    ));
+    assert!(matches!(
+        to_primitive_layout(&TypeTag::Vector(Box::new(TypeTag::U64))).unwrap(),
+        MoveTypeLayout::Vector(b) if matches!(b.as_ref(), MoveTypeLayout::U64)
+    ));
+    assert!(matches!(
+        to_primitive_layout(&TypeTag::Vector(Box::new(TypeTag::U128))).unwrap(),
+        MoveTypeLayout::Vector(b) if matches!(b.as_ref(), MoveTypeLayout::U128)
+    ));
+    assert!(matches!(
+        to_primitive_layout(&TypeTag::Vector(Box::new(TypeTag::Address))).unwrap(),
+        MoveTypeLayout::Vector(b) if matches!(b.as_ref(), MoveTypeLayout::Address)
+    ));
+    assert!(to_primitive_layout(&TypeTag::Vector(Box::new(TypeTag::Signer))).is_none());
+
+    let ascii_st = StructTag {
+        address: MOVE_STDLIB_ADDRESS,
+        module: STD_ASCII_MODULE_NAME.into(),
+        name: STD_ASCII_STRUCT_NAME.into(),
+        type_params: vec![],
+    };
+    assert!(matches!(
+        to_primitive_layout(&ascii_st.into()).unwrap(),
+        MoveTypeLayout::Struct(s) if matches!(s, MoveStructLayout::WithTypes { .. })));
+
+    let primitive_option_st = StructTag {
+        address: MOVE_STDLIB_ADDRESS,
+        module: STD_OPTION_MODULE_NAME.into(),
+        name: STD_OPTION_STRUCT_NAME.into(),
+        type_params: vec![TypeTag::U64],
+    };
+    assert!(matches!(
+        to_primitive_layout(&primitive_option_st.into()).unwrap(),
+        MoveTypeLayout::Vector(s) if matches!(*s, MoveTypeLayout::U64)));
+
+    let non_primitive_option_st = StructTag {
+        address: MOVE_STDLIB_ADDRESS,
+        module: STD_OPTION_MODULE_NAME.into(),
+        name: STD_OPTION_STRUCT_NAME.into(),
+        type_params: vec![TypeTag::Signer],
+    };
+    assert!(to_primitive_layout(&non_primitive_option_st.into()).is_none());
 }

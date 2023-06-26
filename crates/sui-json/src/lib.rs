@@ -555,17 +555,21 @@ fn check_valid_homogeneous_rec(curr_q: &mut VecDeque<&JsonValue>) -> Result<(), 
     check_valid_homogeneous_rec(&mut next_q)
 }
 
-fn is_primitive_type_tag(t: &TypeTag) -> bool {
-    match t {
-        TypeTag::Bool
-        | TypeTag::U8
-        | TypeTag::U16
-        | TypeTag::U32
-        | TypeTag::U64
-        | TypeTag::U128
-        | TypeTag::U256
-        | TypeTag::Address => true,
-        TypeTag::Vector(inner) => is_primitive_type_tag(inner),
+fn to_primitive_layout(type_tag: &TypeTag) -> Option<MoveTypeLayout> {
+    Some(match type_tag {
+        TypeTag::Address => MoveTypeLayout::Address,
+        TypeTag::Bool => MoveTypeLayout::Bool,
+        TypeTag::U8 => MoveTypeLayout::U8,
+        TypeTag::U16 => MoveTypeLayout::U16,
+        TypeTag::U32 => MoveTypeLayout::U32,
+        TypeTag::U64 => MoveTypeLayout::U64,
+        TypeTag::U128 => MoveTypeLayout::U128,
+        TypeTag::U256 => MoveTypeLayout::U256,
+        TypeTag::Signer => return None,
+        TypeTag::Vector(v) => {
+            let inner_type = &**v;
+            MoveTypeLayout::Vector(Box::new(to_primitive_layout(inner_type)?))
+        }
         TypeTag::Struct(st) => {
             let StructTag {
                 address,
@@ -574,17 +578,32 @@ fn is_primitive_type_tag(t: &TypeTag) -> bool {
                 type_params: type_args,
             } = &**st;
             let resolved_struct = (address, module.as_ident_str(), name.as_ident_str());
-            // is id or..
-            if resolved_struct == RESOLVED_SUI_ID {
-                return true;
-            }
-            // is option of a primitive
-            resolved_struct == RESOLVED_STD_OPTION
-                && type_args.len() == 1
-                && is_primitive_type_tag(&type_args[0])
+            return if resolved_struct == RESOLVED_ASCII_STR {
+                Some(MoveTypeLayout::Struct(MoveStructLayout::WithTypes {
+                    type_: resolved_to_struct(RESOLVED_ASCII_STR),
+                    fields: vec![MoveFieldLayout::new(
+                        ident_str!("bytes").into(),
+                        MoveTypeLayout::Vector(Box::new(MoveTypeLayout::U8)),
+                    )],
+                }))
+            } else if resolved_struct == RESOLVED_UTF8_STR {
+                Some(MoveTypeLayout::Struct(MoveStructLayout::WithTypes {
+                    type_: resolved_to_struct(RESOLVED_UTF8_STR),
+                    fields: vec![MoveFieldLayout::new(
+                        ident_str!("bytes").into(),
+                        MoveTypeLayout::Vector(Box::new(MoveTypeLayout::U8)),
+                    )],
+                }))
+            } else if resolved_struct == RESOLVED_SUI_ID {
+                Some(MoveTypeLayout::Struct(ID::layout()))
+            } else if resolved_struct == RESOLVED_STD_OPTION && type_args.len() == 1 {
+                let inner_layout = to_primitive_layout(&type_args[0]);
+                inner_layout.map(|inner_layout| MoveTypeLayout::Vector(Box::new(inner_layout)))
+            } else {
+                None
+            };
         }
-        TypeTag::Signer => false,
-    }
+    })
 }
 
 /// Checks if a give SignatureToken represents a primitive type and, if so, returns MoveTypeLayout
@@ -617,51 +636,14 @@ pub fn primitive_type(
             }
         }
         SignatureToken::Struct(struct_handle_idx) => {
-            let resolved_struct = resolve_struct(view, *struct_handle_idx);
-            if resolved_struct == RESOLVED_ASCII_STR {
-                (
-                    true,
-                    Some(MoveTypeLayout::Struct(MoveStructLayout::WithTypes {
-                        type_: resolved_to_struct(RESOLVED_ASCII_STR),
-                        fields: vec![MoveFieldLayout::new(
-                            ident_str!("bytes").into(),
-                            MoveTypeLayout::Vector(Box::new(MoveTypeLayout::U8)),
-                        )],
-                    })),
-                )
-            } else if resolved_struct == RESOLVED_UTF8_STR {
-                // both structs structs representing strings have one field - a vector of type u8
-                (
-                    true,
-                    Some(MoveTypeLayout::Struct(MoveStructLayout::WithTypes {
-                        type_: resolved_to_struct(RESOLVED_UTF8_STR),
-                        fields: vec![MoveFieldLayout::new(
-                            ident_str!("bytes").into(),
-                            MoveTypeLayout::Vector(Box::new(MoveTypeLayout::U8)),
-                        )],
-                    })),
-                )
-            } else if resolved_struct == RESOLVED_SUI_ID {
-                (
-                    true,
-                    Some(MoveTypeLayout::Struct(MoveStructLayout::WithTypes {
-                        type_: resolved_to_struct(RESOLVED_SUI_ID),
-                        fields: vec![MoveFieldLayout::new(
-                            ident_str!("bytes").into(),
-                            MoveTypeLayout::Address,
-                        )],
-                    })),
-                )
-            } else {
-                (false, None)
-            }
+            let type_tag = resolved_to_struct(resolve_struct(view, *struct_handle_idx)).into();
+            let layout = to_primitive_layout(&type_tag);
+            (layout.is_some(), layout)
         }
         SignatureToken::StructInstantiation(idx, targs) => {
             let resolved_struct = resolve_struct(view, *idx);
             // is option of a primitive
             if resolved_struct == RESOLVED_STD_OPTION && targs.len() == 1 {
-                // there is no MoveLayout for this so while we can still report whether a type
-                // is primitive or not, we can't return the layout
                 let (is_primitive, inner_layout) = primitive_type(view, type_args, &targs[0]);
                 let layout =
                     inner_layout.map(|inner_layout| MoveTypeLayout::Vector(Box::new(inner_layout)));
@@ -671,13 +653,13 @@ pub fn primitive_type(
             }
         }
 
-        SignatureToken::TypeParameter(idx) => (
-            type_args
-                .get(*idx as usize)
-                .map(is_primitive_type_tag)
-                .unwrap_or(false),
-            None,
-        ),
+        SignatureToken::TypeParameter(idx) => {
+            let Some(type_tag) = type_args.get(*idx as usize) else {
+                return (false, None);
+            };
+            let layout = to_primitive_layout(type_tag);
+            (layout.is_some(), layout)
+        }
 
         SignatureToken::Signer
         | SignatureToken::Reference(_)
