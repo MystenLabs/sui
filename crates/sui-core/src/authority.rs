@@ -1120,6 +1120,7 @@ impl AuthorityState {
             .notify_commit(&digest, output_keys, epoch_store);
 
         // index certificate
+        /*
         let _ = self
             .post_process_one_tx(
                 certificate,
@@ -1131,6 +1132,7 @@ impl AuthorityState {
             )
             .await
             .tap_err(|e| error!("tx post processing failed: {e}"));
+        */
 
         // Update metrics.
         self.metrics.total_effects.inc();
