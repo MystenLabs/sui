@@ -78,7 +78,7 @@
 		"@playwright/test": "^1.32.3",
 		"@storybook/addon-a11y": "7.0.4",
 		"@storybook/addon-essentials": "7.0.4",
-		"@storybook/addons": "7.0.4",
+		"@storybook/addons": "7.0.23",
 		"@storybook/react": "7.0.4",
 		"@storybook/react-vite": "7.0.20",
 		"@storybook/theming": "7.0.4",
