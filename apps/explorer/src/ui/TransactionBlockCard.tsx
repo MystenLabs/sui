@@ -1,10 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { Disclosure } from '@headlessui/react';
 import { ChevronRight12, ChevronRight16 } from '@mysten/icons';
+import * as Collapsible from '@radix-ui/react-collapsible';
 import clsx from 'clsx';
-import { type ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 
 import { Card, type CardProps } from '~/ui/Card';
 import { Divider } from '~/ui/Divider';
@@ -57,9 +57,9 @@ function TransactionBlockCardHeader({
 
 	if (collapsible) {
 		return (
-			<Disclosure.Button as="div" className="cursor-pointer">
-				{headerContent}
-			</Disclosure.Button>
+			<Collapsible.Trigger asChild>
+				<div className="cursor-pointer">{headerContent}</div>
+			</Collapsible.Trigger>
 		);
 	}
 
@@ -77,34 +77,29 @@ export function TransactionBlockCardSection({
 	defaultOpen = true,
 	children,
 }: TransactionBlockCardSectionProps) {
+	const [open, setOpen] = useState(defaultOpen);
 	return (
-		<div className="flex w-full flex-col gap-3">
-			<Disclosure defaultOpen={defaultOpen}>
-				{({ open }) => (
-					<>
-						{title && (
-							<Disclosure.Button>
-								<div className="flex items-center gap-2">
-									{typeof title === 'string' ? (
-										<Text color="steel-darker" variant="body/semibold">
-											{title}
-										</Text>
-									) : (
-										title
-									)}
-									<Divider />
-									<ChevronRight12
-										className={clsx('h-4 w-4 cursor-pointer text-gray-45', open && 'rotate-90')}
-									/>
-								</div>
-							</Disclosure.Button>
+		<Collapsible.Root open={open} onOpenChange={setOpen} className="flex w-full flex-col gap-3">
+			{title && (
+				<Collapsible.Trigger>
+					<div className="flex items-center gap-2">
+						{typeof title === 'string' ? (
+							<Text color="steel-darker" variant="body/semibold">
+								{title}
+							</Text>
+						) : (
+							title
 						)}
+						<Divider />
+						<ChevronRight12
+							className={clsx('h-4 w-4 cursor-pointer text-gray-45', open && 'rotate-90')}
+						/>
+					</div>
+				</Collapsible.Trigger>
+			)}
 
-						<Disclosure.Panel>{children}</Disclosure.Panel>
-					</>
-				)}
-			</Disclosure>
-		</div>
+			<Collapsible.Content>{children}</Collapsible.Content>
+		</Collapsible.Root>
 	);
 }
 
@@ -124,25 +119,24 @@ export function TransactionBlockCard({
 	children,
 	...cardProps
 }: TransactionBlockCardProps) {
+	const [open, setOpen] = useState(true);
 	return (
 		<div className="relative w-full">
 			<Card rounded="2xl" border="gray45" bg="white" spacing="none" {...cardProps}>
-				<div className={clsx(size === 'md' ? 'px-6 py-7' : 'px-4 py-4.5')}>
-					<Disclosure defaultOpen>
-						{({ open }) => (
-							<>
-								<TransactionBlockCardHeader
-									open={open}
-									size={size}
-									title={title}
-									collapsible={collapsible}
-								/>
+				<Collapsible.Root
+					open={open}
+					onOpenChange={setOpen}
+					className={clsx(size === 'md' ? 'px-6 py-7' : 'px-4 py-4.5')}
+				>
+					<TransactionBlockCardHeader
+						open={open}
+						size={size}
+						title={title}
+						collapsible={collapsible}
+					/>
 
-								<Disclosure.Panel>{children}</Disclosure.Panel>
-							</>
-						)}
-					</Disclosure>
-				</div>
+					<Collapsible.Content>{children}</Collapsible.Content>
+				</Collapsible.Root>
 
 				{footer && (
 					<div className={clsx('rounded-b-2xl bg-sui/10 py-2.5', size === 'md' ? 'px-6' : 'px-4')}>
