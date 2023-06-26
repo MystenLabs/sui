@@ -1,15 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import type { ExportedKeypair, Keypair } from './keypair';
-import { PublicKey } from './publickey';
+import type { ExportedKeypair, Keypair } from './keypair.js';
+import { PublicKey } from './publickey.js';
 import { sha256 } from '@noble/hashes/sha256';
-import { Secp256k1PublicKey } from './secp256k1-publickey';
+import { Secp256k1PublicKey } from './secp256k1-publickey.js';
 import { secp256k1 } from '@noble/curves/secp256k1';
-import { isValidBIP32Path, mnemonicToSeed } from './mnemonics';
+import { isValidBIP32Path, mnemonicToSeed } from './mnemonics.js';
 import { HDKey } from '@scure/bip32';
 import { toB64 } from '@mysten/bcs';
-import { SignatureScheme } from './signature';
+import { SignatureScheme } from './signature.js';
 import { bytesToHex } from '@noble/hashes/utils';
 import { blake2b } from '@noble/hashes/blake2b';
 

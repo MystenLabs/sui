@@ -1,40 +1,40 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-export * from './cryptography/ed25519-keypair';
-export * from './cryptography/secp256k1-keypair';
-export * from './cryptography/secp256r1-keypair';
-export * from './cryptography/keypair';
-export * from './cryptography/ed25519-publickey';
-export * from './cryptography/secp256k1-publickey';
-export * from './cryptography/secp256r1-publickey';
-export * from './cryptography/multisig';
-export * from './cryptography/publickey';
-export * from './cryptography/mnemonics';
-export * from './cryptography/signature';
+export * from './cryptography/ed25519-keypair.js';
+export * from './cryptography/secp256k1-keypair.js';
+export * from './cryptography/secp256r1-keypair.js';
+export * from './cryptography/keypair.js';
+export * from './cryptography/ed25519-publickey.js';
+export * from './cryptography/secp256k1-publickey.js';
+export * from './cryptography/secp256r1-publickey.js';
+export * from './cryptography/multisig.js';
+export * from './cryptography/publickey.js';
+export * from './cryptography/mnemonics.js';
+export * from './cryptography/signature.js';
 
-export * from './providers/json-rpc-provider';
+export * from './providers/json-rpc-provider.js';
 
-export * from './rpc/client';
-export * from './rpc/faucet-client';
-export * from './rpc/websocket-client';
-export * from './rpc/connection';
+export * from './rpc/client.js';
+export * from './rpc/faucet-client.js';
+export * from './rpc/websocket-client.js';
+export * from './rpc/connection.js';
 
-export * from './signers/txn-data-serializers/type-tag-serializer';
+export * from './signers/txn-data-serializers/type-tag-serializer.js';
 
-export * from './signers/signer';
-export * from './signers/raw-signer';
-export * from './signers/signer-with-provider';
-export * from './signers/types';
+export * from './signers/signer.js';
+export * from './signers/raw-signer.js';
+export * from './signers/signer-with-provider.js';
+export * from './signers/types.js';
 
-export * from './types';
-export * from './utils/format';
-export * from './utils/intent';
-export * from './utils/verify';
-export * from './utils/errors';
+export * from './types/index.js';
+export * from './utils/format.js';
+export * from './utils/intent.js';
+export * from './utils/verify.js';
+export * from './utils/errors.js';
 
-export * from './framework';
+export * from './framework/index.js';
 
-export * from './builder';
+export * from './builder/index.js';
 
 export { fromB64, toB64 } from '@mysten/bcs';
 

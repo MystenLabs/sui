@@ -64,6 +64,12 @@ module.exports = {
 	},
 	overrides: [
 		{
+			files: ['sdk/typescript/src/**/*'],
+			rules: {
+				'import/extensions': ['error', 'ignorePackages'],
+			},
+		},
+		{
 			files: ['apps/explorer/**/*'],
 			rules: {
 				'import/order': [

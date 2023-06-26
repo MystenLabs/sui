@@ -1,9 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { Ed25519PublicKey } from './ed25519-publickey';
-import { Secp256k1PublicKey } from './secp256k1-publickey';
-import { SignatureScheme } from './signature';
+import { Ed25519PublicKey } from './ed25519-publickey.js';
+import { Secp256k1PublicKey } from './secp256k1-publickey.js';
+import { SignatureScheme } from './signature.js';
 
 /**
  * Value to be converted into public key.

@@ -3,7 +3,7 @@
 
 import { fromB64 } from '@mysten/bcs';
 import { is, mask } from 'superstruct';
-import { JsonRpcProvider } from '../providers/json-rpc-provider';
+import { JsonRpcProvider } from '../providers/json-rpc-provider.js';
 import {
 	extractMutableReference,
 	extractStructTag,
@@ -15,7 +15,7 @@ import {
 	SuiObjectRef,
 	SUI_TYPE_ARG,
 	ProtocolConfig,
-} from '../types';
+} from '../types/index.js';
 import {
 	Transactions,
 	TransactionArgument,
@@ -23,7 +23,7 @@ import {
 	TransactionBlockInput,
 	getTransactionType,
 	MoveCallTransaction,
-} from './Transactions';
+} from './Transactions.js';
 import {
 	BuilderCallArg,
 	getIdFromCallArg,
@@ -31,10 +31,10 @@ import {
 	isMutableSharedObjectInput,
 	ObjectCallArg,
 	PureCallArg,
-} from './Inputs';
-import { getPureSerializationType, isTxContext } from './serializer';
-import { TransactionBlockDataBuilder, TransactionExpiration } from './TransactionBlockData';
-import { TRANSACTION_TYPE, create, WellKnownEncoding } from './utils';
+} from './Inputs.js';
+import { getPureSerializationType, isTxContext } from './serializer.js';
+import { TransactionBlockDataBuilder, TransactionExpiration } from './TransactionBlockData.js';
+import { TRANSACTION_TYPE, create, WellKnownEncoding } from './utils.js';
 
 type TransactionResult = TransactionArgument & TransactionArgument[];
 

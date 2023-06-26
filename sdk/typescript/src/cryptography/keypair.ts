@@ -2,10 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { fromB64 } from '@mysten/bcs';
-import { Ed25519Keypair } from './ed25519-keypair';
-import { PublicKey } from './publickey';
-import { Secp256k1Keypair } from './secp256k1-keypair';
-import { SignatureScheme } from './signature';
+import { Ed25519Keypair } from './ed25519-keypair.js';
+import { PublicKey } from './publickey.js';
+import { Secp256k1Keypair } from './secp256k1-keypair.js';
+import { SignatureScheme } from './signature.js';
 
 export const PRIVATE_KEY_SIZE = 32;
 export const LEGACY_PRIVATE_KEY_SIZE = 64;

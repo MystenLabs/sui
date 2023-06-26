@@ -2,11 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { fromB64, toB64 } from '@mysten/bcs';
-import { Ed25519PublicKey } from './ed25519-publickey';
-import { PublicKey } from './publickey';
-import { Secp256k1PublicKey } from './secp256k1-publickey';
-import { Secp256r1PublicKey } from './secp256r1-publickey';
-import { decodeMultiSig } from './multisig';
+import { Ed25519PublicKey } from './ed25519-publickey.js';
+import { PublicKey } from './publickey.js';
+import { Secp256k1PublicKey } from './secp256k1-publickey.js';
+import { Secp256r1PublicKey } from './secp256r1-publickey.js';
+import { decodeMultiSig } from './multisig.js';
 
 /**
  * A keypair used for signing transactions.

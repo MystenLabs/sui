@@ -3,10 +3,10 @@
 
 import { fromB64 } from '@mysten/bcs';
 import nacl from 'tweetnacl';
-import { IntentScope, messageWithIntent } from './intent';
+import { IntentScope, messageWithIntent } from './intent.js';
 import { secp256k1 } from '@noble/curves/secp256k1';
 import { sha256 } from '@noble/hashes/sha256';
-import { SerializedSignature, toSingleSignaturePubkeyPair } from '../cryptography/signature';
+import { SerializedSignature, toSingleSignaturePubkeyPair } from '../cryptography/signature.js';
 import { blake2b } from '@noble/hashes/blake2b';
 
 // TODO: This might actually make sense to eventually move to the `Keypair` instances themselves, as
