@@ -1,5 +1,5 @@
 use core::panic;
-use std::collections::HashSet;
+use std::collections::{HashSet, HashMap, VecDeque};
 use std::sync::Arc;
 
 use sui_adapter::adapter::MoveVM;
@@ -7,7 +7,7 @@ use sui_adapter::{execution_engine, execution_mode};
 use sui_config::genesis::Genesis;
 use sui_core::transaction_input_checker::get_gas_status_no_epoch_store_experimental;
 use sui_protocol_config::ProtocolConfig;
-use sui_types::base_types::ExecutionDigests;
+use sui_types::base_types::{ObjectID, ExecutionDigests};
 use sui_types::epoch_data::EpochData;
 use sui_types::message_envelope::Message;
 use sui_types::messages::{InputObjectKind, InputObjects, TransactionDataAPI, VerifiedTransaction, TransactionKind};
@@ -15,12 +15,78 @@ use sui_types::metrics::LimitsMetrics;
 use sui_types::temporary_store::TemporaryStore;
 use sui_types::sui_system_state::get_sui_system_state;
 use sui_types::sui_system_state::SuiSystemStateTrait;
+use sui_types::digests::TransactionDigest;
 use sui_adapter::adapter;
 use sui_move_natives;
 use tokio::sync::mpsc;
 use tokio::time::Instant;
 
 use super::types::*;
+
+
+// TODO
+fn get_read_set(tx: &VerifiedTransaction) -> Vec<ObjectID> {
+    Vec::new()
+}
+
+// TODO
+fn get_write_set(tx: &VerifiedTransaction) -> Vec<ObjectID> {
+    Vec::new()
+}
+
+pub struct QueuesManager {
+    tx_store: HashMap<TransactionDigest, VerifiedTransaction>,
+    obj_queues: HashMap<ObjectID, VecDeque<TransactionDigest>>,
+    wait_table: HashMap<TransactionDigest, HashSet<ObjectID>>,
+    ready: mpsc::Sender<VerifiedTransaction>,
+}
+
+impl QueuesManager {
+    fn new(manager_sender: mpsc::Sender<VerifiedTransaction>) -> QueuesManager {
+        QueuesManager { 
+            tx_store: HashMap::new(), 
+            obj_queues: HashMap::new(),
+            wait_table: HashMap::new(),
+            ready: manager_sender}
+    }
+
+    async fn queue_tx(&mut self, tx: VerifiedTransaction) {
+       
+		// Store tx
+        let txid = *tx.digest();
+		self.tx_store.insert(txid, tx.clone());
+
+        // Get RW set
+        let mut rw_set = get_read_set(&tx);
+        rw_set.append(&mut get_write_set(&tx));
+        
+        // Add tx to object queues
+        for obj in rw_set.iter() {
+            if let Some(q) = self.obj_queues.get_mut(obj) {
+                q.push_back(txid);
+            } else {
+                self.obj_queues.insert(*obj, [txid].into());
+            }
+        }
+
+        // Update the wait table
+        self.wait_table.insert(txid, HashSet::from_iter(rw_set.clone()));
+        for obj in rw_set.iter() {
+            let obj_queue = self.obj_queues.get(obj).unwrap();
+            if let Some(&head) = obj_queue.front() {
+                if head == txid {
+                    self.wait_table.get_mut(&txid).unwrap().remove(obj);
+                }
+            }
+		}
+
+        // Check if ready
+        if self.wait_table.get_mut(&txid).unwrap().is_empty() {
+			self.wait_table.remove(&txid);
+			self.ready.send(tx).await.expect("manager_sender failed");
+		}
+	}
+}
 
 pub struct ExecutionWorkerState {
     pub memory_store: MemoryBackedStore,
