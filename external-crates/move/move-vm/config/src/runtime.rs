@@ -19,6 +19,8 @@ pub struct VMConfig {
     // When this flag is set to true, MoveVM will check that there are no trailing bytes after
     // deserializing and check for no metadata bytes
     pub check_no_extraneous_bytes_during_deserialization: bool,
+    // Configs for profiling VM
+    pub profile_config: VMProfilerConfig,
 }
 
 impl Default for VMConfig {
@@ -30,6 +32,7 @@ impl Default for VMConfig {
             runtime_limits_config: VMRuntimeLimitsConfig::default(),
             enable_invariant_violation_check_in_swap_loc: true,
             check_no_extraneous_bytes_during_deserialization: false,
+            profile_config: VMProfilerConfig::default(),
         }
     }
 }
@@ -47,6 +50,20 @@ impl Default for VMRuntimeLimitsConfig {
         Self {
             vector_len_max: DEFAULT_MAX_CONSTANT_VECTOR_LEN,
             max_value_nest_depth: Some(DEFAULT_MAX_VALUE_NEST_DEPTH),
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct VMProfilerConfig {
+    /// Base path for files
+    pub base_path: std::path::PathBuf,
+}
+
+impl std::default::Default for VMProfilerConfig {
+    fn default() -> Self {
+        Self {
+            base_path: std::path::PathBuf::from("."),
         }
     }
 }

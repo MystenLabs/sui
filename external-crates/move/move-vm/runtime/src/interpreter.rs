@@ -19,6 +19,7 @@ use move_core_types::{
     vm_status::{StatusCode, StatusType},
 };
 use move_vm_config::runtime::VMRuntimeLimitsConfig;
+use move_vm_profiler::{profile_close_frame, profile_dump_file, profile_open_frame, GasProfile};
 use move_vm_types::{
     data_store::DataStore,
     gas::{GasMeter, SimpleInstruction},
@@ -114,7 +115,19 @@ impl Interpreter {
             paranoid_type_checks: loader.vm_config().paranoid_type_checks,
             runtime_limits_config: loader.vm_config().runtime_limits_config.clone(),
         };
-        if function.is_native() {
+
+        let mut profile = GasProfile::init(
+            &loader.vm_config().profile_config,
+            function.pretty_string(),
+            gas_meter.remaining_gas().into(),
+        );
+        profile_open_frame!(
+            &mut profile,
+            function.pretty_string(),
+            gas_meter.remaining_gas().into()
+        );
+
+        let ret = if function.is_native() {
             for arg in args {
                 interpreter
                     .operand_stack
@@ -159,12 +172,29 @@ impl Interpreter {
                         )
                         .finish(Location::Undefined),
                 })?;
+
+            profile_close_frame!(
+                &mut profile,
+                function.pretty_string(),
+                gas_meter.remaining_gas().into()
+            );
+
             Ok(return_values.into_iter().collect())
         } else {
             interpreter.execute_main(
-                loader, data_store, gas_meter, extensions, function, ty_args, args,
+                loader,
+                data_store,
+                gas_meter,
+                extensions,
+                function,
+                ty_args,
+                args,
+                &mut profile,
             )
-        }
+        };
+
+        profile_dump_file!(profile);
+        ret
     }
 
     /// Main loop for the execution of a function.
@@ -182,6 +212,7 @@ impl Interpreter {
         function: Arc<Function>,
         ty_args: Vec<Type>,
         args: Vec<Value>,
+        prof: &mut GasProfile,
     ) -> VMResult<Vec<Value>> {
         let mut locals = Locals::new(function.local_count());
         for (i, value) in args.into_iter().enumerate() {
@@ -202,10 +233,15 @@ impl Interpreter {
             .map_err(|err| self.set_location(err))?;
         loop {
             let resolver = current_frame.resolver(link_context, loader);
-            let exit_code =
-                current_frame //self
-                    .execute_code(&resolver, &mut self, data_store, gas_meter)
-                    .map_err(|err| self.maybe_core_dump(err, &current_frame))?;
+            let exit_code = current_frame //self
+                .execute_code(
+                    &resolver,
+                    &mut self,
+                    data_store,
+                    gas_meter,
+                    prof,
+                )
+                .map_err(|err| self.maybe_core_dump(err, &current_frame))?;
             match exit_code {
                 ExitCode::Return => {
                     let non_ref_vals = current_frame
@@ -218,6 +254,11 @@ impl Interpreter {
                         .charge_drop_frame(non_ref_vals.into_iter())
                         .map_err(|e| self.set_location(e))?;
 
+                    profile_close_frame!(
+                        prof,
+                        current_frame.function.pretty_string(),
+                        gas_meter.remaining_gas().into()
+                    );
                     if let Some(frame) = self.call_stack.pop() {
                         // Note: the caller will find the callee's return values at the top of the shared operand stack
                         current_frame = frame;
@@ -229,6 +270,8 @@ impl Interpreter {
                 }
                 ExitCode::Call(fh_idx) => {
                     let func = resolver.function_from_handle(fh_idx);
+                    let func_name = func.pretty_string();
+                    profile_open_frame!(prof, func_name.clone(), gas_meter.remaining_gas().into());
 
                     if self.paranoid_type_checks {
                         self.check_friend_or_private_call(&current_frame.function, &func)?;
@@ -263,8 +306,11 @@ impl Interpreter {
                             vec![],
                         )?;
                         current_frame.pc += 1; // advance past the Call instruction in the caller
+
+                        profile_close_frame!(prof, func_name, gas_meter.remaining_gas().into());
                         continue;
                     }
+
                     let frame = self
                         .make_call_frame(link_context, loader, func, vec![])
                         .map_err(|e| self.set_location(e))
@@ -283,6 +329,9 @@ impl Interpreter {
                         .instantiate_generic_function(idx, current_frame.ty_args())
                         .map_err(|e| set_err_info!(current_frame, e))?;
                     let func = resolver.function_from_instantiation(idx);
+                    let func_name = func.pretty_string();
+
+                    profile_open_frame!(prof, func_name.clone(), gas_meter.remaining_gas().into());
 
                     if self.paranoid_type_checks {
                         self.check_friend_or_private_call(&current_frame.function, &func)?;
@@ -313,6 +362,9 @@ impl Interpreter {
                             &resolver, data_store, gas_meter, extensions, func, ty_args,
                         )?;
                         current_frame.pc += 1; // advance past the Call instruction in the caller
+
+                        profile_close_frame!(prof, func_name, gas_meter.remaining_gas().into());
+
                         continue;
                     }
                     let frame = self
@@ -1128,8 +1180,9 @@ impl Frame {
         interpreter: &mut Interpreter,
         data_store: &mut impl DataStore,
         gas_meter: &mut impl GasMeter,
+        prof: &mut GasProfile,
     ) -> VMResult<ExitCode> {
-        self.execute_code_impl(resolver, interpreter, data_store, gas_meter)
+        self.execute_code_impl(resolver, interpreter, data_store, gas_meter, prof)
             .map_err(|e| {
                 let e = if cfg!(feature = "testing") || cfg!(feature = "stacktrace") {
                     e.with_exec_state(interpreter.get_internal_state())
@@ -2296,6 +2349,7 @@ impl Frame {
         interpreter: &mut Interpreter,
         data_store: &mut impl DataStore,
         gas_meter: &mut impl GasMeter,
+        prof: &mut GasProfile,
     ) -> PartialVMResult<ExitCode> {
         let code = self.function.code();
         loop {
@@ -2337,7 +2391,13 @@ impl Frame {
                     )?;
                 }
 
-                match Self::execute_instruction(
+                profile_open_frame!(
+                    prof,
+                    format!("{:?}", instruction),
+                    gas_meter.remaining_gas().into()
+                );
+
+                let r = Self::execute_instruction(
                     &mut self.pc,
                     &mut self.locals,
                     &self.ty_args,
@@ -2347,7 +2407,15 @@ impl Frame {
                     data_store,
                     gas_meter,
                     instruction,
-                )? {
+                )?;
+
+                profile_close_frame!(
+                    prof,
+                    format!("{:?}", instruction),
+                    gas_meter.remaining_gas().into()
+                );
+
+                match r {
                     InstrRet::Ok => (),
                     InstrRet::ExitCode(exit_code) => {
                         return Ok(exit_code);
