@@ -29,7 +29,7 @@ use sui_types::digests::TransactionEventsDigest;
 use sui_types::dynamic_field::{self, DynamicFieldInfo};
 use sui_types::effects::TransactionEvents;
 use sui_types::error::{SuiError, SuiResult, UserInputError};
-use sui_types::object::Owner;
+use sui_types::object::{Object, Owner};
 use sui_types::parse_sui_struct_tag;
 use sui_types::temporary_store::TxCoins;
 use tokio::task::spawn_blocking;
@@ -75,6 +75,17 @@ pub struct CoinInfo {
     pub digest: ObjectDigest,
     pub balance: u64,
     pub previous_transaction: TransactionDigest,
+}
+
+impl CoinInfo {
+    pub fn from_object(object: &Object) -> Option<CoinInfo> {
+        object.as_coin_maybe().map(|coin| CoinInfo {
+            version: object.version(),
+            digest: object.digest(),
+            previous_transaction: object.previous_transaction,
+            balance: coin.value(),
+        })
+    }
 }
 
 pub struct IndexStoreMetrics {
@@ -203,6 +214,16 @@ pub struct IndexStoreTables {
     event_by_time: DBMap<(u64, EventId), EventIndex>,
 }
 
+impl IndexStoreTables {
+    pub fn owner_index(&self) -> &DBMap<OwnerIndexKey, ObjectInfo> {
+        &self.owner_index
+    }
+
+    pub fn coin_index(&self) -> &DBMap<CoinIndexKey, CoinInfo> {
+        &self.coin_index
+    }
+}
+
 pub struct IndexStore {
     next_sequence_number: AtomicU64,
     tables: IndexStoreTables,
@@ -279,6 +300,10 @@ impl IndexStore {
             metrics: Arc::new(metrics),
             max_type_length: max_type_length.unwrap_or(128),
         }
+    }
+
+    pub fn tables(&self) -> &IndexStoreTables {
+        &self.tables
     }
 
     pub async fn index_coin(
