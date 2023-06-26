@@ -3,7 +3,7 @@
 
 use self::db_dump::{dump_table, duplicate_objects_summary, list_tables, table_summary, StoreName};
 use self::index_search::{search_index, SearchRange};
-use crate::db_tool::db_dump::{compact, print_table_metadata};
+use crate::db_tool::db_dump::{compact, print_table_metadata, prune_checkpoints, prune_objects};
 use anyhow::bail;
 use clap::Parser;
 use std::path::{Path, PathBuf};
@@ -35,6 +35,8 @@ pub enum DbToolCommand {
     ResetDB,
     RewindCheckpointExecution(RewindCheckpointExecutionOptions),
     Compact,
+    PruneObjects,
+    PruneCheckpoints,
 }
 
 #[derive(Parser)]
@@ -128,7 +130,7 @@ pub struct RewindCheckpointExecutionOptions {
     checkpoint_sequence_number: u64,
 }
 
-pub fn execute_db_tool_command(db_path: PathBuf, cmd: DbToolCommand) -> anyhow::Result<()> {
+pub async fn execute_db_tool_command(db_path: PathBuf, cmd: DbToolCommand) -> anyhow::Result<()> {
     match cmd {
         DbToolCommand::ListTables => print_db_all_tables(db_path),
         DbToolCommand::Dump(d) => print_all_entries(
@@ -154,6 +156,8 @@ pub fn execute_db_tool_command(db_path: PathBuf, cmd: DbToolCommand) -> anyhow::
             rewind_checkpoint_execution(&db_path, d.epoch, d.checkpoint_sequence_number)
         }
         DbToolCommand::Compact => compact(db_path),
+        DbToolCommand::PruneObjects => prune_objects(db_path).await,
+        DbToolCommand::PruneCheckpoints => prune_checkpoints(db_path).await,
         DbToolCommand::IndexSearchKeyRange(rg) => {
             let res = search_index(
                 db_path,

@@ -304,7 +304,7 @@ impl ToolCommand {
             ToolCommand::DbTool { db_path, cmd } => {
                 let path = PathBuf::from(db_path);
                 match cmd {
-                    Some(c) => execute_db_tool_command(path, c)?,
+                    Some(c) => execute_db_tool_command(path, c).await?,
                     None => print_db_all_tables(path)?,
                 }
             }

@@ -473,7 +473,7 @@ pub struct AuthorityStorePruningConfig {
     pub periodic_compaction_threshold_days: Option<usize>,
     /// number of epochs to keep the latest version of transactions and effects for
     #[serde(skip_serializing_if = "Option::is_none")]
-    num_epochs_to_retain_for_checkpoints: Option<u64>,
+    pub num_epochs_to_retain_for_checkpoints: Option<u64>,
 }
 
 impl Default for AuthorityStorePruningConfig {
