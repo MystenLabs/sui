@@ -19,6 +19,7 @@ import { appDisconnect } from './actions';
 import Loading from '_components/loading';
 import { useAppDispatch, useAppSelector } from '_hooks';
 import { createDappStatusSelector } from '_redux/slices/permissions';
+import { ampli } from '_src/shared/analytics/ampli';
 import { trackEvent } from '_src/shared/plausible';
 
 import st from './DappStatus.module.scss';
@@ -84,6 +85,11 @@ function DappStatus() {
 						accounts: [activeAddress],
 					}),
 				).unwrap();
+				ampli.disconnectedApplication({
+					applicationUrl: activeOriginUrl,
+					disconnectedAccounts: 1,
+					sourceFlow: 'Header',
+				});
 				setVisible(false);
 			} catch (e) {
 				// Do nothing

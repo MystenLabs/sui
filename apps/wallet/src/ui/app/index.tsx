@@ -4,6 +4,7 @@
 import { useEffect } from 'react';
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 
+import { useInitialPageView } from './hooks/useInitialPageView';
 import { QredoConnectInfoPage } from './pages/qredo-connect/QredoConnectInfoPage';
 import { SelectQredoAccountsPage } from './pages/qredo-connect/SelectQredoAccountsPage';
 import { RestrictedPage } from './pages/restricted';
@@ -54,6 +55,8 @@ const App = () => {
 		const menuVisible = !HIDDEN_MENU_PATHS.some((aPath) => location.pathname.startsWith(aPath));
 		dispatch(setNavVisibility(menuVisible));
 	}, [location, dispatch]);
+
+	useInitialPageView();
 
 	return (
 		<Routes>

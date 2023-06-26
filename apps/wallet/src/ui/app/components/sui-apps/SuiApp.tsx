@@ -6,6 +6,7 @@ import { useState } from 'react';
 import DisconnectApp from './DisconnectApp';
 import { ImageIcon } from '_app/shared/image-icon';
 import ExternalLink from '_components/external-link';
+import { ampli } from '_src/shared/analytics/ampli';
 import { trackEvent } from '_src/shared/plausible';
 import { getDAppUrl } from '_src/shared/utils';
 import { Text } from '_src/ui/app/shared/text';
@@ -146,6 +147,7 @@ export function SuiApp({
 			title={name}
 			className="no-underline"
 			onClick={() => {
+				ampli.openedApplication({ applicationName: name });
 				trackEvent('AppOpen', {
 					props: { name, source: 'AppPage' },
 				});
