@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { Infer, array, boolean, nullable, object, string } from 'superstruct';
-import { ObjectId } from './common';
+import { ObjectId } from './common.js';
 
 export const ResolvedNameServiceNames = object({
 	data: array(string()),

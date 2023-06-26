@@ -25,9 +25,9 @@ import {
 	SuiJsonValue,
 	TransactionDigest,
 	TransactionEventDigest,
-} from './common';
-import { SuiEvent } from './events';
-import { ObjectDigest, SuiGasData, SuiMovePackage, SuiObjectRef } from './objects';
+} from './common.js';
+import { SuiEvent } from './events.js';
+import { ObjectDigest, SuiGasData, SuiMovePackage, SuiObjectRef } from './objects.js';
 
 export const EpochId = string();
 

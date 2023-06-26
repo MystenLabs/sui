@@ -4,9 +4,9 @@
 import { fromB64, toB64 } from '@mysten/bcs';
 import { blake2b } from '@noble/hashes/blake2b';
 import { bytesToHex } from '@noble/hashes/utils';
-import { normalizeSuiAddress, SUI_ADDRESS_LENGTH } from '../types';
-import { bytesEqual, PublicKey, PublicKeyInitData } from './publickey';
-import { SIGNATURE_SCHEME_TO_FLAG } from './signature';
+import { normalizeSuiAddress, SUI_ADDRESS_LENGTH } from '../types/index.js';
+import { bytesEqual, PublicKey, PublicKeyInitData } from './publickey.js';
+import { SIGNATURE_SCHEME_TO_FLAG } from './signature.js';
 
 const SECP256R1_PUBLIC_KEY_SIZE = 33;
 
