@@ -14,7 +14,6 @@ use std::sync::Arc;
 use std::thread::JoinHandle;
 use std::time::Duration;
 use sui_config::local_ip_utils;
-use sui_config::node::ExpensiveSafetyCheckConfig;
 use sui_swarm_config::node_config_builder::FullnodeConfigBuilder;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::SuiAddress;
@@ -137,9 +136,6 @@ impl Env {
 
                 let node_config = FullnodeConfigBuilder::new()
                     .with_rpc_port(fullnode_rpc_port)
-                    .with_expensive_safety_check_config(
-                        ExpensiveSafetyCheckConfig::new_disable_all(),
-                    )
                     .build(&mut OsRng, &cloned_config);
                 let node = sui_swarm::memory::Node::new(node_config);
                 node.start().await.unwrap();
