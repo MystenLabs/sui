@@ -23,6 +23,7 @@ use move_core_types::{
     language_storage::{ModuleId, StructTag, TypeTag},
     vm_status::StatusCode,
 };
+use move_vm_profiler::GasProfiler;
 use move_vm_runtime::{
     move_vm::MoveVM,
     session::{SerializedReturnValues, Session},
@@ -616,6 +617,7 @@ fn run_with_module(
         .into_iter()
         .map(|tag| session.load_type(&tag))
         .collect::<VMResult<Vec<_>>>();
+    let gas_rem = gas.remaining_gas().into();
 
     let res = type_args.and_then(|type_args| {
         session.execute_entry_function(
@@ -624,6 +626,11 @@ fn run_with_module(
             type_args,
             Vec::<Vec<u8>>::new(),
             gas,
+            &mut GasProfiler::init(
+                &session.vm_config().profiler_config,
+                entry_name.to_string(),
+                gas_rem,
+            ),
         )
     });
 
