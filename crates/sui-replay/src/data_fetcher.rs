@@ -648,7 +648,7 @@ impl NodeStateDumpFetcher {
     ) -> Self {
         let mut s = Self::from(node_state_dump);
         s.backup_remote_fetcher = backup_remote_fetcher;
-        return s;
+        s
     }
 }
 
