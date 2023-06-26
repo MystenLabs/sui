@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { Disclosure } from '@headlessui/react';
 import {
 	ObjectChangeLabels,
 	type SuiObjectChangeWithDisplay,
@@ -16,8 +15,9 @@ import {
 	type DisplayFieldsResponse,
 	parseStructTag,
 } from '@mysten/sui.js';
+import * as Collapsible from '@radix-ui/react-collapsible';
 import clsx from 'clsx';
-import { type ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 
 import { ObjectDisplay } from './ObjectDisplay';
 
@@ -78,33 +78,26 @@ function ObjectDetailPanel({
 	panelContent: ReactNode;
 	headerContent?: ReactNode;
 }) {
+	const [open, setOpen] = useState(false);
 	return (
-		<div>
-			<Disclosure>
-				{({ open }) => (
-					<>
-						<div className="flex flex-wrap items-center justify-between">
-							<Disclosure.Button>
-								<div className="flex items-center gap-0.5">
-									<Text variant="pBody/medium" color="steel-dark">
-										Object
-									</Text>
+		<Collapsible.Root open={open} onOpenChange={setOpen}>
+			<div className="flex flex-wrap items-center justify-between">
+				<Collapsible.Trigger>
+					<div className="flex items-center gap-0.5">
+						<Text variant="pBody/medium" color="steel-dark">
+							Object
+						</Text>
 
-									<ChevronRight12
-										className={clsx('h-3 w-3 text-steel-dark', open && 'rotate-90')}
-									/>
-								</div>
-							</Disclosure.Button>
-							{headerContent}
-						</div>
+						<ChevronRight12 className={clsx('h-3 w-3 text-steel-dark', open && 'rotate-90')} />
+					</div>
+				</Collapsible.Trigger>
+				{headerContent}
+			</div>
 
-						<Disclosure.Panel>
-							<div className="flex flex-col gap-2">{panelContent}</div>
-						</Disclosure.Panel>
-					</>
-				)}
-			</Disclosure>
-		</div>
+			<Collapsible.Content>
+				<div className="flex flex-col gap-2">{panelContent}</div>
+			</Collapsible.Content>
+		</Collapsible.Root>
 	);
 }
 
