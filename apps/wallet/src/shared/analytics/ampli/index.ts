@@ -156,10 +156,6 @@ export interface ClickedUnstakeSuiProperties {
 	 * The address of the selected validator.
 	 */
 	validatorAddress: string;
-	/**
-	 * The name of the selected validator.
-	 */
-	validatorName: string;
 }
 
 export interface ConnectedHardwareWalletProperties {
@@ -261,8 +257,12 @@ export interface SelectedCoinProperties {
 	coinType: string;
 	/**
 	 * The total balance in SUI of the selected coin that the user has.
+	 *
+	 * | Rule | Value |
+	 * |---|---|
+	 * | Type | number |
 	 */
-	totalBalance: string;
+	totalBalance: number;
 }
 
 export interface SelectedValidatorProperties {
@@ -298,8 +298,12 @@ export interface SentCollectibleProperties {
 export interface StakedSuiProperties {
 	/**
 	 * The amount of SUI staked.
+	 *
+	 * | Rule | Value |
+	 * |---|---|
+	 * | Type | number |
 	 */
-	stakedAmount: string;
+	stakedAmount: number;
 	/**
 	 * The address of the selected validator.
 	 */

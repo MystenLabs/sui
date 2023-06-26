@@ -20,7 +20,7 @@ export function TokenLink({ coinBalance, centerAction }: Props) {
 			onClick={() =>
 				ampli.selectedCoin({
 					coinType: coinBalance.coinType,
-					totalBalance: (BigInt(coinBalance.totalBalance) / MIST_PER_SUI).toString(),
+					totalBalance: Number(BigInt(coinBalance.totalBalance) / MIST_PER_SUI),
 				})
 			}
 			key={coinBalance.coinType}
