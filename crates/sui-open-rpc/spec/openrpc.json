@@ -502,7 +502,7 @@
           "name": "Read API"
         }
       ],
-      "description": "Return the chain's identifier",
+      "description": "Return the first four bytes of the chain's genesis checkpoint digest.",
       "params": [],
       "result": {
         "name": "String",
