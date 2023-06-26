@@ -841,9 +841,91 @@ mod tests {
     }
 
     mod get_all_coins_tests {
+        use sui_types::object::{MoveObject, Owner};
+
         use super::super::*;
         use super::*;
 
+        // Success scenarios
+        #[tokio::test]
+        async fn test_no_cursor() {
+            let owner = get_test_owner();
+            let gas_coin = get_test_coin(None, CoinType::Gas);
+            let gas_coin_clone = gas_coin.clone();
+            let mut mock_state = MockState::new();
+            mock_state
+                .expect_get_owned_coins()
+                .with(
+                    predicate::eq(owner),
+                    predicate::eq((String::from_utf8([0u8].to_vec()).unwrap(), ObjectID::ZERO)),
+                    predicate::eq(51),
+                    predicate::eq(false),
+                )
+                .return_once(move |_, _, _, _| Ok(vec![gas_coin_clone]));
+            let internal = CoinReadInternalImpl {
+                state: Arc::new(mock_state),
+                metrics: Arc::new(JsonRpcMetrics::new_for_tests()),
+            };
+            let coin_read_api = CoinReadApi {
+                internal: Box::new(internal),
+            };
+            let response = coin_read_api
+                .get_all_coins(owner, None, Some(51))
+                .await
+                .unwrap();
+            assert_eq!(response.data.len(), 1);
+            assert_eq!(response.data[0], gas_coin);
+        }
+
+        #[tokio::test]
+        async fn test_with_cursor() {
+            let owner = get_test_owner();
+            let limit = 2;
+            let coins = vec![
+                get_test_coin(Some("0xA"), CoinType::Gas),
+                get_test_coin(Some("0xAA"), CoinType::Gas),
+                get_test_coin(Some("0xAAA"), CoinType::Gas),
+            ];
+            let coins_clone = coins.clone();
+            let coin_move_object = MoveObject::new_gas_coin(
+                coins[0].version,
+                coins[0].coin_object_id,
+                coins[0].balance,
+            );
+            let coin_object = Object::new_move(
+                coin_move_object,
+                Owner::Immutable,
+                coins[0].previous_transaction,
+            );
+            let mut mock_state = MockState::new();
+            mock_state
+                .expect_get_object()
+                .return_once(move |_| Ok(Some(coin_object)));
+            mock_state
+                .expect_get_owned_coins()
+                .with(
+                    predicate::eq(owner),
+                    predicate::eq((coins[0].coin_type.clone(), coins[0].coin_object_id)),
+                    predicate::eq(limit + 1),
+                    predicate::eq(false),
+                )
+                .return_once(move |_, _, _, _| Ok(coins_clone));
+            let internal = CoinReadInternalImpl {
+                state: Arc::new(mock_state),
+                metrics: Arc::new(JsonRpcMetrics::new_for_tests()),
+            };
+            let coin_read_api = CoinReadApi {
+                internal: Box::new(internal),
+            };
+            let response = coin_read_api
+                .get_all_coins(owner, Some(coins[0].coin_object_id), Some(limit))
+                .await
+                .unwrap();
+            assert_eq!(response.data.len(), limit);
+            assert_eq!(response.data, coins[..limit].to_vec());
+        }
+
+        // Expected error scenarios
         #[tokio::test]
         async fn test_object_is_not_coin() {
             let owner = get_test_owner();
@@ -907,6 +989,8 @@ mod tests {
             let expected = expect!["cursor not found"];
             expected.assert_eq(error_object.message());
         }
+
+        // Unexpected error scenarios
     }
 
     mod get_balance_tests {
