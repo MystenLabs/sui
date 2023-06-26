@@ -8,6 +8,9 @@
 	"engines": {
 		"node": ">=16"
 	},
+	"bin": {
+		"build-package": "./src/build-package.ts"
+	},
 	"scripts": {
 		"prettier:check": "prettier -c --ignore-unknown .",
 		"prettier:fix": "prettier -w --ignore-unknown .",
@@ -19,7 +22,6 @@
 	},
 	"devDependencies": {
 		"esbuild": "^0.18.5",
-		"ts-node": "^10.9.1",
 		"typescript": "^5.0.4"
 	},
 	"dependencies": {
