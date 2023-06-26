@@ -18,10 +18,10 @@ import {
 	SuiTransactionBlockResponseOptions,
 	BatchFaucetResponse,
 	BatchStatusFaucetResponse,
-} from '../types';
-import { IntentScope, messageWithIntent } from '../utils/intent';
-import { Signer } from './signer';
-import { SignedTransaction, SignedMessage } from './types';
+} from '../types/index.js';
+import { IntentScope, messageWithIntent } from '../utils/intent.js';
+import { Signer } from './signer.js';
+import { SignedTransaction, SignedMessage } from './types.js';
 
 ///////////////////////////////
 // Exported Abstracts

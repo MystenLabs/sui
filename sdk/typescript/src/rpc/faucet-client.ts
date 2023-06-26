@@ -6,9 +6,9 @@ import {
 	SuiAddress,
 	BatchFaucetResponse,
 	BatchStatusFaucetResponse,
-} from '../types';
-import { FaucetRateLimitError } from '../utils/errors';
-import { HttpHeaders } from './client';
+} from '../types/index.js';
+import { FaucetRateLimitError } from '../utils/errors.js';
+import { HttpHeaders } from './client.js';
 
 export async function requestSuiFromFaucetV0(
 	endpoint: string,

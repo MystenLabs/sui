@@ -52,18 +52,18 @@ import {
 	ProtocolConfig,
 	BatchFaucetResponse,
 	BatchStatusFaucetResponse,
-} from '../types';
-import { DynamicFieldName, DynamicFieldPage } from '../types/dynamic_fields';
+} from '../types/index.js';
+import { DynamicFieldName, DynamicFieldPage } from '../types/dynamic_fields.js';
 import {
 	DEFAULT_CLIENT_OPTIONS,
 	WebsocketClient,
 	WebsocketClientOptions,
-} from '../rpc/websocket-client';
+} from '../rpc/websocket-client.js';
 import {
 	requestSuiFromFaucetV0,
 	requestSuiFromFaucetV1,
 	getFaucetRequestStatus,
-} from '../rpc/faucet-client';
+} from '../rpc/faucet-client.js';
 import { any, array, string, nullable } from 'superstruct';
 import { fromB58, toB64, toHEX } from '@mysten/bcs';
 import { SerializedSignature } from '../cryptography/signature.js';
