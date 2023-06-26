@@ -149,7 +149,7 @@ pub trait ReadApi {
         version: Option<BigInt<u64>>,
     ) -> RpcResult<ProtocolConfigResponse>;
 
-    /// Return the chain's identifier
+    /// Return the first four bytes of the chain's genesis checkpoint digest.
     #[method(name = "getChainIdentifier")]
     async fn get_chain_identifier(&self) -> RpcResult<String>;
 }
