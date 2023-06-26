@@ -14,4 +14,4 @@
 '@mysten/bcs': minor
 ---
 
-Addition of the new faucet batch API implementation
+Addition of the new faucet batch API implementation, and renaming of `requestSuiFromFaucet` to `requestSuiFromFaucetV0`
