@@ -10170,6 +10170,7 @@ version = "1.5.0"
 dependencies = [
  "anyhow",
  "axum",
+ "bcs",
  "clap 3.2.23",
  "futures",
  "jsonpath_lib",
@@ -10186,6 +10187,7 @@ dependencies = [
  "sui-json-rpc-types",
  "sui-sdk",
  "sui-types",
+ "tap",
  "telemetry-subscribers",
  "tokio",
  "tracing",

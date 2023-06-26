@@ -23,7 +23,13 @@ pub struct DataSourceConfig {
 pub struct UploadFeedConfig {
     pub submission_interval: Duration,
     pub data_source_config: DataSourceConfig,
+    pub upload_parameters: UploadParameters,
+}
 
+#[serde_as]
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct UploadParameters {
     pub write_package_id: ObjectID,
     pub write_module_name: String,
     pub write_function_name: String,
@@ -42,6 +48,7 @@ pub struct DownloadFeedConfigs {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct OracleNodeConfig {
+    pub gas_object_id: ObjectID,
     pub upload_feeds: HashMap<String, HashMap<String, UploadFeedConfig>>,
     pub download_feeds: DownloadFeedConfigs,
 

@@ -1,14 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use prometheus::{register_int_counter_vec_with_registry, IntCounterVec, Registry};
+use prometheus::{register_int_counter_vec_with_registry, register_int_counter_with_registry, IntCounterVec, IntCounter, Registry};
 
-use mysten_metrics::histogram::HistogramVec;
+use mysten_metrics::histogram::{Histogram, HistogramVec};
 
 #[derive(Clone)]
 pub struct OracleMetrics {
     pub(crate) data_source_successes: IntCounterVec,
     pub(crate) data_source_errors: IntCounterVec,
+    pub(crate) data_staleness: IntCounterVec,
     pub(crate) upload_successes: IntCounterVec,
     pub(crate) upload_data_errors: IntCounterVec,
     pub(crate) download_successes: IntCounterVec,
@@ -16,8 +17,9 @@ pub struct OracleMetrics {
     pub(crate) uploaded_values: HistogramVec,
     pub(crate) downloaded_values: HistogramVec,
 
-    pub(crate) total_gas_used: IntCounterVec,
-    pub(crate) gas_used: HistogramVec,
+    pub(crate) total_gas_used: IntCounter,
+    pub(crate) gas_used: Histogram,
+    pub(crate) total_data_points_uploaded: IntCounter,
 }
 
 impl OracleMetrics {
@@ -37,17 +39,24 @@ impl OracleMetrics {
                 registry,
             )
             .unwrap(),
+            data_staleness: register_int_counter_vec_with_registry!(
+                "oracle_data_staleness",
+                "Total number of stale data that are skipped",
+                &["feed"],
+                registry,
+            )
+            .unwrap(),
             upload_successes: register_int_counter_vec_with_registry!(
                 "oracle_upload_successes",
                 "Total number of successful data upload",
-                &["feed", "source"],
+                &["feed"],
                 registry,
             )
             .unwrap(),
             upload_data_errors: register_int_counter_vec_with_registry!(
                 "oracle_upload_data_errors",
                 "Total number of erroneous data upload",
-                &["feed", "source"],
+                &["feed"],
                 registry,
             )
             .unwrap(),
@@ -77,19 +86,23 @@ impl OracleMetrics {
                 &["feed"],
                 registry,
             ),
-            total_gas_used: register_int_counter_vec_with_registry!(
+            total_gas_used: register_int_counter_with_registry!(
                 "oracle_total_gas_used",
                 "Total number of gas used for uploading data",
-                &["feed", "source"],
                 registry,
             )
             .unwrap(),
-            gas_used: HistogramVec::new_in_registry(
+            gas_used: Histogram::new_in_registry(
                 "oracle_gas_used",
                 "Gas used for uploading data",
-                &["feed", "source"],
                 registry,
             ),
+            total_data_points_uploaded: register_int_counter_with_registry!(
+                "oracle_total_data_points_uploaded",
+                "Total number of data points uploaded",
+                registry,
+            )
+            .unwrap(),
         }
     }
 }

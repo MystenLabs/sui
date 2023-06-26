@@ -79,6 +79,7 @@ async fn main() -> anyhow::Result<()> {
 
     OracleNode::new(
         config.upload_feeds,
+        config.gas_object_id,
         config.download_feeds,
         wallet_ctx,
         prometheus_registry,

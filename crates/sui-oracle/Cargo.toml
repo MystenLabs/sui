@@ -19,6 +19,8 @@ serde = { version = "1.0.144", features = ["derive", "rc"] }
 serde_json = { version = "1.0.1"}
 jsonpath_lib = "0.3.0"
 serde_with = "2.1.0"
+tap.workspace = true
+bcs.workspace = true
 
 sui-config = { path = "../sui-config" }
 sui-json = { path = "../sui-json" }
