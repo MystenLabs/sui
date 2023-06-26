@@ -782,6 +782,8 @@ impl AuthorityState {
         );
 
         // Lock this down to 0x6 before we pin child versions in effects
+        // Also, this logic is incompatible with TransactionManager AvailableObjectCache,
+        // so SUI_CLOCK_OBJECT_ID is currently excluded from the cache.
         let objects = objects
             .into_iter()
             .filter(|o| o.id() == SUI_CLOCK_OBJECT_ID)
