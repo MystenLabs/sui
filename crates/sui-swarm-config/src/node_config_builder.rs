@@ -142,7 +142,8 @@ impl ValidatorConfigBuilder {
             supported_protocol_versions: self.supported_protocol_versions,
             db_checkpoint_config: Default::default(),
             indirect_objects_threshold: usize::MAX,
-            expensive_safety_check_config: ExpensiveSafetyCheckConfig::new_enable_all(),
+            // By default, expensive checks will be enabled in debug build, but not in release build.
+            expensive_safety_check_config: ExpensiveSafetyCheckConfig::default(),
             name_service_package_address: None,
             name_service_registry_id: None,
             name_service_reverse_registry_id: None,
