@@ -20,7 +20,7 @@ import TransactionBlocksForAddress, {
 import { AddressLink, ObjectLink } from '~/ui/InternalLink';
 import { LoadingSpinner } from '~/ui/LoadingSpinner';
 import { RadioGroup, RadioOption } from '~/ui/Radio';
-import { Tab, TabGroup, TabList, TabPanel, TabPanels } from '~/ui/Tabs';
+import { TabHeader, Tabs, TabsContent, TabsList, TabsTrigger } from '~/ui/Tabs';
 
 const GENESIS_TX_DIGEST = 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=';
 
@@ -57,44 +57,37 @@ function PkgView({ data }: { data: DataType }) {
 	return (
 		<div>
 			<div>
-				<TabGroup size="lg">
-					<TabList>
-						<Tab>Details</Tab>
-					</TabList>
-					<TabPanels>
-						<TabPanel>
-							<table className={styles.description} id="descriptionResults">
-								<tbody>
-									<tr>
-										<td>Object ID</td>
-										<td id="objectID" className={styles.objectid}>
-											<ObjectLink objectId={viewedData.id} noTruncate />
-										</td>
-									</tr>
+				<TabHeader title="Details">
+					<table className={styles.description} id="descriptionResults">
+						<tbody>
+							<tr>
+								<td>Object ID</td>
+								<td id="objectID" className={styles.objectid}>
+									<ObjectLink objectId={viewedData.id} noTruncate />
+								</td>
+							</tr>
 
-									<tr>
-										<td>Version</td>
-										<td>{viewedData.version}</td>
-									</tr>
+							<tr>
+								<td>Version</td>
+								<td>{viewedData.version}</td>
+							</tr>
 
-									{viewedData?.publisherAddress && (
-										<tr>
-											<td>Publisher</td>
-											<td id="lasttxID">
-												<AddressLink address={viewedData.publisherAddress} noTruncate />
-											</td>
-										</tr>
-									)}
-								</tbody>
-							</table>
-						</TabPanel>
-					</TabPanels>
-				</TabGroup>
+							{viewedData?.publisherAddress && (
+								<tr>
+									<td>Publisher</td>
+									<td id="lasttxID">
+										<AddressLink address={viewedData.publisherAddress} noTruncate />
+									</td>
+								</tr>
+							)}
+						</tbody>
+					</table>
+				</TabHeader>
 
-				<TabGroup size="lg">
-					<TabList>
+				<Tabs defaultValue="modules">
+					<TabsList>
 						<div className="mt-16 flex w-full justify-between">
-							<Tab>Modules</Tab>
+							<TabsTrigger value="modules">Modules</TabsTrigger>
 							<div>
 								<RadioGroup
 									className="hidden gap-0.5 md:flex"
@@ -108,19 +101,17 @@ function PkgView({ data }: { data: DataType }) {
 								</RadioGroup>
 							</div>
 						</div>
-					</TabList>
-					<TabPanels>
-						<TabPanel noGap>
-							<ErrorBoundary>
-								<PkgModulesWrapper
-									id={data.id}
-									modules={properties}
-									splitPanelOrientation={selectedSplitPanelOrientation}
-								/>
-							</ErrorBoundary>
-						</TabPanel>
-					</TabPanels>
-				</TabGroup>
+					</TabsList>
+					<TabsContent value="modules" noGap>
+						<ErrorBoundary>
+							<PkgModulesWrapper
+								id={data.id}
+								modules={properties}
+								splitPanelOrientation={selectedSplitPanelOrientation}
+							/>
+						</ErrorBoundary>
+					</TabsContent>
+				</Tabs>
 
 				<div className={styles.txsection}>
 					<ErrorBoundary>

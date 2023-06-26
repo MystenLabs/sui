@@ -1,49 +1,33 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { Tab as HeadlessTab } from '@headlessui/react';
+import * as TabsPrimitive from '@radix-ui/react-tabs';
 import { cva } from 'class-variance-authority';
 import clsx from 'clsx';
-import { createContext, useContext } from 'react';
-
-import { type ExtractProps } from './types';
+import {
+	type ComponentPropsWithoutRef,
+	type ElementRef,
+	forwardRef,
+	createContext,
+	useContext,
+	type ReactNode,
+} from 'react';
 
 type TabSize = 'md' | 'lg' | 'sm';
 
 const TabSizeContext = createContext<TabSize | null | undefined>(null);
 
-export const TabPanels = HeadlessTab.Panels;
-
-export type TabPanelProps = ExtractProps<typeof HeadlessTab.Panel> & {
-	noGap?: boolean;
-};
-
-export function TabPanel({ noGap = false, ...props }: TabPanelProps) {
-	return <HeadlessTab.Panel className={noGap ? '' : 'my-4'} {...props} />;
-}
-
-export type TabGroupProps = ExtractProps<typeof HeadlessTab.Group> & {
-	size?: TabSize;
-};
-
-export function TabGroup({ size, ...props }: TabGroupProps) {
-	return (
-		<TabSizeContext.Provider value={size}>
-			<HeadlessTab.Group as="div" {...props} />
-		</TabSizeContext.Provider>
-	);
-}
-
 const tabStyles = cva(
 	[
-		'border-b border-transparent ui-selected:border-gray-65 font-semibold text-steel-dark disabled:text-steel-dark hover:text-steel-darker active:text-steel -mb-px',
+		'border-b border-transparent -mb-px',
+		'font-semibold text-steel-dark disabled:text-steel-dark disabled:pointer-events-none hover:text-steel-darker data-[state=active]:border-gray-65',
 	],
 	{
 		variants: {
 			size: {
-				lg: 'text-heading4 ui-selected:text-steel-darker pb-2',
-				md: 'text-body ui-selected:text-steel-darker pb-2',
-				sm: 'text-captionSmall font-medium pb-0.5 disabled:opacity-40 ui-selected:text-steel-darker',
+				lg: 'text-heading4 data-[state=active]:text-steel-darker pb-2',
+				md: 'text-body data-[state=active]:text-steel-darker pb-2',
+				sm: 'text-captionSmall font-medium pb-0.5 disabled:opacity-40 data-[state=active]:text-steel-darker',
 			},
 		},
 		defaultVariants: {
@@ -52,30 +36,84 @@ const tabStyles = cva(
 	},
 );
 
-export type TabProps = ExtractProps<typeof HeadlessTab>;
+const Tabs = forwardRef<
+	ElementRef<typeof TabsPrimitive.Root>,
+	ComponentPropsWithoutRef<typeof TabsPrimitive.Root> & { size?: TabSize }
+>(({ size, ...props }, ref) => (
+	<TabSizeContext.Provider value={size}>
+		<TabsPrimitive.Root ref={ref} {...props} />
+	</TabSizeContext.Provider>
+));
 
-export function Tab({ ...props }: TabProps) {
+const TabsList = forwardRef<
+	ElementRef<typeof TabsPrimitive.List>,
+	ComponentPropsWithoutRef<typeof TabsPrimitive.List> & {
+		fullWidth?: boolean;
+		disableBottomBorder?: boolean;
+		lessSpacing?: boolean;
+	}
+>(({ fullWidth, disableBottomBorder, lessSpacing, ...props }, ref) => (
+	<TabsPrimitive.List
+		ref={ref}
+		className={clsx(
+			'flex items-center border-gray-45',
+			lessSpacing ? 'gap-2' : 'gap-6',
+			fullWidth && 'flex-1',
+			!disableBottomBorder && 'border-b',
+		)}
+		{...props}
+	/>
+));
+
+const TabsTrigger = forwardRef<
+	ElementRef<typeof TabsPrimitive.Trigger>,
+	ComponentPropsWithoutRef<typeof TabsPrimitive.Trigger>
+>((props, ref) => {
 	const size = useContext(TabSizeContext);
 
-	return <HeadlessTab className={tabStyles({ size })} {...props} />;
-}
+	return <TabsPrimitive.Trigger ref={ref} className={tabStyles({ size })} {...props} />;
+});
 
-export type TabListProps = ExtractProps<typeof HeadlessTab.List> & {
-	fullWidth?: boolean;
-	disableBottomBorder?: boolean;
-	lessSpacing?: boolean;
-};
+const TabsContent = forwardRef<
+	ElementRef<typeof TabsPrimitive.Content>,
+	ComponentPropsWithoutRef<typeof TabsPrimitive.Content> & { noGap?: boolean }
+>(({ noGap, ...props }, ref) => (
+	<TabsPrimitive.Content
+		ref={ref}
+		className={clsx(
+			'ring-offset-background focus-visible:ring-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2',
+			!noGap && 'my-4',
+		)}
+		{...props}
+	/>
+));
 
-export function TabList({ fullWidth, disableBottomBorder, lessSpacing, ...props }: TabListProps) {
+export { Tabs, TabsList, TabsTrigger, TabsContent };
+
+/**
+ * A special single-tab header that automatically creates the correct components and state.
+ * TODO: This probably shouldn't even be tabs, because that's bad for a11y when there's just single tabs acting as headers.
+ * We should instead just re-define this as a header components.
+ */
+export function TabHeader({
+	size = 'lg',
+	title,
+	children,
+	noGap,
+}: {
+	size?: TabSize;
+	title: string;
+	children: ReactNode;
+	noGap?: boolean;
+}) {
 	return (
-		<HeadlessTab.List
-			className={clsx(
-				'flex border-gray-45',
-				lessSpacing ? 'gap-2' : 'gap-6',
-				fullWidth && 'flex-1',
-				!disableBottomBorder && 'border-b',
-			)}
-			{...props}
-		/>
+		<Tabs size={size} defaultValue="tab">
+			<TabsList>
+				<TabsTrigger value="tab">{title}</TabsTrigger>
+			</TabsList>
+			<TabsContent value="tab" noGap={noGap}>
+				{children}
+			</TabsContent>
+		</Tabs>
 	);
 }

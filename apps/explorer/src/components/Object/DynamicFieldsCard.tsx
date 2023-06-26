@@ -9,7 +9,7 @@ import { UnderlyingObjectCard } from './UnderlyingObjectCard';
 import { DisclosureBox } from '~/ui/DisclosureBox';
 import { ObjectLink } from '~/ui/InternalLink';
 import { LoadingSpinner } from '~/ui/LoadingSpinner';
-import { Tab, TabGroup, TabList, TabPanel, TabPanels } from '~/ui/Tabs';
+import { TabHeader } from '~/ui/Tabs';
 
 export function DynamicFieldsCard({ id }: { id: string }) {
 	const { data, isInitialLoading, isFetchingNextPage, hasNextPage, fetchNextPage } =
@@ -38,54 +38,47 @@ export function DynamicFieldsCard({ id }: { id: string }) {
 
 	return hasPages ? (
 		<div className="mt-10">
-			<TabGroup size="lg">
-				<TabList>
-					<Tab>Dynamic Fields</Tab>
-				</TabList>
-				<TabPanels>
-					<TabPanel>
-						<div className="mt-4 flex max-h-600 flex-col gap-5 overflow-auto">
-							{data.pages.map(({ data }) =>
-								// Show the field name and type is it is not an object
-								data.map((result) => (
-									<DisclosureBox
-										title={
-											<div className="flex items-center gap-1 truncate break-words text-body font-medium leading-relaxed text-steel-dark">
-												<div className="block w-full truncate break-words">
-													{typeof result.name?.value === 'object' ? (
-														<>Struct {result.name.type}</>
-													) : result.name?.value ? (
-														String(result.name.value)
-													) : null}
-												</div>
-												<ObjectLink objectId={result.objectId} />
-											</div>
-										}
-										variant="outline"
-										key={result.objectId}
-									>
-										<div className="flex flex-col divide-y divide-gray-45">
-											<UnderlyingObjectCard
-												parentId={id}
-												name={result.name}
-												dynamicFieldType={result.type}
-											/>
+			<TabHeader title="Dynamic Fields">
+				<div className="mt-4 flex max-h-600 flex-col gap-5 overflow-auto">
+					{data.pages.map(({ data }) =>
+						// Show the field name and type is it is not an object
+						data.map((result) => (
+							<DisclosureBox
+								title={
+									<div className="flex items-center gap-1 truncate break-words text-body font-medium leading-relaxed text-steel-dark">
+										<div className="block w-full truncate break-words">
+											{typeof result.name?.value === 'object' ? (
+												<>Struct {result.name.type}</>
+											) : result.name?.value ? (
+												String(result.name.value)
+											) : null}
 										</div>
-									</DisclosureBox>
-								)),
-							)}
-
-							<div ref={observerElem}>
-								{isSpinnerVisible ? (
-									<div className="mt-1 flex w-full justify-center">
-										<LoadingSpinner text="Loading data" />
+										<ObjectLink objectId={result.objectId} />
 									</div>
-								) : null}
+								}
+								variant="outline"
+								key={result.objectId}
+							>
+								<div className="flex flex-col divide-y divide-gray-45">
+									<UnderlyingObjectCard
+										parentId={id}
+										name={result.name}
+										dynamicFieldType={result.type}
+									/>
+								</div>
+							</DisclosureBox>
+						)),
+					)}
+
+					<div ref={observerElem}>
+						{isSpinnerVisible ? (
+							<div className="mt-1 flex w-full justify-center">
+								<LoadingSpinner text="Loading data" />
 							</div>
-						</div>
-					</TabPanel>
-				</TabPanels>
-			</TabGroup>
+						) : null}
+					</div>
+				</div>
+			</TabHeader>
 		</div>
 	) : null;
 }

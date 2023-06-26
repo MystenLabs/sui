@@ -15,15 +15,12 @@ import {
 
 import { DescriptionItem, DescriptionList } from '~/ui/DescriptionList';
 import { AddressLink } from '~/ui/InternalLink';
-import { Tab, TabGroup, TabList } from '~/ui/Tabs';
+import { TabHeader } from '~/ui/Tabs';
 import { Text } from '~/ui/Text';
 
 function SignaturePanel({ title, signature }: { title: string; signature: SignaturePubkeyPair }) {
 	return (
-		<TabGroup>
-			<TabList>
-				<Tab>{title}</Tab>
-			</TabList>
+		<TabHeader title={title}>
 			<DescriptionList>
 				<DescriptionItem title="Scheme" align="start" labelWidth="sm">
 					<Text variant="pBody/medium" color="steel-darker">
@@ -39,7 +36,7 @@ function SignaturePanel({ title, signature }: { title: string; signature: Signat
 					</Text>
 				</DescriptionItem>
 			</DescriptionList>
-		</TabGroup>
+		</TabHeader>
 	);
 }
 
