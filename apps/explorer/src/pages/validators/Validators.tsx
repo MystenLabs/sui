@@ -102,7 +102,7 @@ export function validatorsTableData(
 							to={`/validator/${encodeURIComponent(props.row.original.address)}`}
 							onClick={() =>
 								ampli.clickedValidatorRow({
-									sourceFlow: 'Epoch details - validators table',
+									sourceFlow: 'Epoch details',
 									validatorAddress: props.row.original.address,
 									validatorName: name,
 								})
