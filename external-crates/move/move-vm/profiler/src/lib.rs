@@ -4,7 +4,7 @@
 use move_vm_config::runtime::VMProfilerConfig;
 use once_cell::sync::Lazy;
 use serde::Serialize;
-use std::{collections::BTreeMap, path::PathBuf};
+use std::collections::BTreeMap;
 
 #[cfg(any(debug_assertions, feature = "debugging"))]
 const MOVE_VM_PROFILER_ENV_VAR_NAME: &str = "MOVE_VM_PROFILE";
@@ -59,7 +59,7 @@ pub struct GasProfile {
     #[serde(skip)]
     pub start_gas: u64,
     #[serde(skip)]
-    pub output_base_path: PathBuf,
+    pub config: VMProfilerConfig,
 }
 
 impl GasProfile {
@@ -82,12 +82,16 @@ impl GasProfile {
                 events: vec![],
             }],
             start_gas,
-            output_base_path: config.base_path.clone(),
+            config: config.clone(),
         }
     }
 
     fn get_profile_name(&self) -> String {
         self.name.clone()
+    }
+
+    pub fn short_name(s: &String) -> String {
+        s.split("::").last().unwrap_or(s).to_string()
     }
 
     fn is_metered(&self) -> bool {
@@ -149,7 +153,7 @@ impl GasProfile {
             .expect("Clock may have gone backwards")
             .as_nanos();
 
-        let mut p = self.output_base_path.clone();
+        let mut p = self.config.base_path.clone();
         p.push(format!(
             "gas_profile_{}_{}.json",
             self.get_profile_name(),
@@ -168,7 +172,14 @@ impl GasProfile {
 macro_rules! profile_open_frame {
     ($profiler:expr, $frame_name:expr, $gas_rem:expr) => {
         #[cfg(any(debug_assertions, feature = "debugging"))]
-        $profiler.open_frame($frame_name, $gas_rem)
+        {
+            let name = if !$profiler.config.use_long_function_name {
+                GasProfile::short_name(&$frame_name)
+            } else {
+                $frame_name
+            };
+            $profiler.open_frame(name, $gas_rem)
+        }
     };
 }
 
@@ -176,7 +187,38 @@ macro_rules! profile_open_frame {
 macro_rules! profile_close_frame {
     ($profiler:expr, $frame_name:expr, $gas_rem:expr) => {
         #[cfg(any(debug_assertions, feature = "debugging"))]
-        $profiler.close_frame($frame_name, $gas_rem)
+        {
+            let name = if !$profiler.config.use_long_function_name {
+                GasProfile::short_name(&$frame_name)
+            } else {
+                $frame_name
+            };
+            $profiler.close_frame(name, $gas_rem)
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! profile_open_instr {
+    ($profiler:expr, $frame_name:expr, $gas_rem:expr) => {
+        #[cfg(any(debug_assertions, feature = "debugging"))]
+        {
+            if $profiler.config.track_bytecode_instructions {
+                $profiler.open_frame($frame_name, $gas_rem)
+            }
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! profile_close_instr {
+    ($profiler:expr, $frame_name:expr, $gas_rem:expr) => {
+        #[cfg(any(debug_assertions, feature = "debugging"))]
+        {
+            if $profiler.config.track_bytecode_instructions {
+                $profiler.close_frame($frame_name, $gas_rem)
+            }
+        }
     };
 }
 

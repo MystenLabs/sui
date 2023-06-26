@@ -13,6 +13,7 @@ import { UserApproveContainer } from '_components/user-approve-container';
 import { useAppDispatch, useSigner, useTransactionData, useTransactionDryRun } from '_hooks';
 import { type TransactionApprovalRequest } from '_payloads/transactions/ApprovalRequest';
 import { respondToTransactionRequest } from '_redux/slices/transaction-requests';
+import { ampli } from '_src/shared/analytics/ampli';
 import { useQredoTransaction } from '_src/ui/app/hooks/useQredoTransaction';
 import { PageMainLayoutTitle } from '_src/ui/app/shared/page-main-layout/PageMainLayoutTitle';
 import { TransactionSummary } from '_src/ui/app/shared/transaction-summary';
@@ -72,6 +73,11 @@ export function TransactionRequest({ txRequest }: TransactionRequestProps) {
 							clientIdentifier,
 						}),
 					);
+					ampli.respondedToTransactionRequest({
+						applicationUrl: txRequest.origin,
+						approvedTransaction: approved,
+						receivedFailureWarning: false,
+					});
 				}}
 				address={addressForTransaction}
 				approveLoading={isLoading || isConfirmationVisible}
@@ -109,6 +115,11 @@ export function TransactionRequest({ txRequest }: TransactionRequestProps) {
 							clientIdentifier,
 						}),
 					);
+					ampli.respondedToTransactionRequest({
+						applicationUrl: txRequest.origin,
+						approvedTransaction: isConfirmed,
+						receivedFailureWarning: true,
+					});
 					setConfirmationVisible(false);
 				}}
 			/>

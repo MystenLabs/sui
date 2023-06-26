@@ -8,6 +8,7 @@ import * as Yup from 'yup';
 
 import { useAppSelector, useAppDispatch } from '_hooks';
 import { changeActiveNetwork } from '_redux/slices/app';
+import { ampli } from '_src/shared/analytics/ampli';
 import { API_ENV } from '_src/shared/api-env';
 import { isValidUrl } from '_src/shared/utils';
 import { InputWithAction } from '_src/ui/app/shared/InputWithAction';
@@ -41,6 +42,9 @@ export function CustomRPCInput() {
 						store: true,
 					}),
 				).unwrap();
+				ampli.switchedNetwork({
+					toNetwork: rpcInput,
+				});
 			} catch (e) {
 				toast.error((e as Error).message);
 			}

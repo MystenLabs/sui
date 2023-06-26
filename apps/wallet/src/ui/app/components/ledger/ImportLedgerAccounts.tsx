@@ -18,6 +18,7 @@ import { LedgerAccountList, type SelectableLedgerAccount } from './LedgerAccount
 import { useDeriveLedgerAccounts } from './useDeriveLedgerAccounts';
 import { useImportLedgerAccountsMutation } from './useImportLedgerAccountsMutation';
 import { type SerializedLedgerAccount } from '_src/background/keyring/LedgerAccount';
+import { ampli } from '_src/shared/analytics/ampli';
 import { Button } from '_src/ui/app/shared/ButtonUI';
 import { Link } from '_src/ui/app/shared/Link';
 import { Text } from '_src/ui/app/shared/text';
@@ -51,7 +52,13 @@ export function ImportLedgerAccounts() {
 	});
 
 	const importLedgerAccountsMutation = useImportLedgerAccountsMutation({
-		onSuccess: () => navigate(accountsUrl),
+		onSuccess: (_, importedAccounts) => {
+			ampli.addedAccounts({
+				accountType: 'Ledger',
+				numberOfAccounts: importedAccounts.length,
+			});
+			navigate(accountsUrl);
+		},
 		onError: () => {
 			toast.error('There was an issue importing your Ledger accounts.');
 		},

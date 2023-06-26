@@ -25,7 +25,7 @@ gas summary: computation_cost: 1000000, storage_cost: 7052800,  storage_rebate: 
 
 task 6 'programmable'. lines 43-45:
 Error: Transaction Effects Status: Move Runtime Abort. Location: p::n::bar (function index 0) at offset 6, Abort Code: 0
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: p, name: Identifier("n") }, function: 0, instruction: 6, function_name: Some("bar") }, 0), source: Some(VMError { major_status: ABORTED, sub_status: Some(0), message: Some("p::n::bar at offset 6"), exec_state: Some(ExecutionState { stack_trace: [(Some(ModuleId { address: p, name: Identifier("m") }), FunctionDefinitionIndex(0), 1)] }), location: Module(ModuleId { address: p, name: Identifier("n") }), indices: [], offsets: [(FunctionDefinitionIndex(0), 6)] }), command: Some(1) } }
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: p, name: Identifier("n") }, function: 0, instruction: 6, function_name: Some("bar") }, 0), source: Some(VMError { major_status: ABORTED, sub_status: Some(0), message: Some("p::n::bar at offset 6"), exec_state: None, location: Module(ModuleId { address: p, name: Identifier("n") }), indices: [], offsets: [(FunctionDefinitionIndex(0), 6)] }), command: Some(1) } }
 
 task 8 'programmable'. lines 49-51:
 mutated: object(0,0)

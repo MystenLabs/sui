@@ -13,6 +13,7 @@ import { SelectQredoAccountsSummaryCard } from './components/SelectQredoAccounts
 import { useQredoUIPendingRequest } from './hooks';
 import { PasswordInputDialog } from '_components/menu/content/PasswordInputDialog';
 import Overlay from '_components/overlay';
+import { ampli } from '_src/shared/analytics/ampli';
 import { type Wallet } from '_src/shared/qredo-api';
 
 export function SelectQredoAccountsPage() {
@@ -71,6 +72,11 @@ export function SelectQredoAccountsPage() {
 								qredoID: id,
 								accounts: selectedAccounts,
 								password,
+							});
+
+							ampli.addedAccounts({
+								accountType: 'Qredo',
+								numberOfAccounts: selectedAccounts.length,
 							});
 							toast.success(`Qredo account${selectedAccounts.length > 1 ? 's' : ''} added`);
 							navigate('/tokens?menu=/accounts');

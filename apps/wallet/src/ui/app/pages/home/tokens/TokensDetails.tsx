@@ -27,6 +27,7 @@ import Alert from '_components/alert';
 import Loading from '_components/loading';
 import { filterAndSortTokenBalances } from '_helpers';
 import { useAppSelector, useCoinsReFetchingConfig } from '_hooks';
+import { ampli } from '_src/shared/analytics/ampli';
 import { API_ENV } from '_src/shared/api-env';
 import { AccountSelector } from '_src/ui/app/components/AccountSelector';
 import { useLedgerNotification } from '_src/ui/app/hooks/useLedgerNotification';
@@ -113,7 +114,15 @@ function MyTokens() {
 						<TokenLink
 							key={coinBalance.coinType}
 							coinBalance={coinBalance}
-							centerAction={<PinButton unpin onClick={() => unpinCoinType(coinBalance.coinType)} />}
+							centerAction={
+								<PinButton
+									unpin
+									onClick={() => {
+										ampli.unpinnedCoin({ coinType: coinBalance.coinType });
+										unpinCoinType(coinBalance.coinType);
+									}}
+								/>
+							}
 						/>
 					))}
 				</TokenList>
@@ -132,7 +141,14 @@ function MyTokens() {
 						<TokenLink
 							key={coinBalance.coinType}
 							coinBalance={coinBalance}
-							centerAction={<PinButton onClick={() => pinCoinType(coinBalance.coinType)} />}
+							centerAction={
+								<PinButton
+									onClick={() => {
+										ampli.pinnedCoin({ coinType: coinBalance.coinType });
+										pinCoinType(coinBalance.coinType);
+									}}
+								/>
+							}
 						/>
 					))}
 				</TokenList>

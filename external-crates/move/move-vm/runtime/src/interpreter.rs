@@ -19,7 +19,7 @@ use move_core_types::{
     vm_status::{StatusCode, StatusType},
 };
 use move_vm_config::runtime::VMRuntimeLimitsConfig;
-use move_vm_profiler::{profile_close_frame, profile_dump_file, profile_open_frame, GasProfile};
+use move_vm_profiler::{profile_close_frame, profile_dump_file, profile_open_frame, GasProfile, profile_open_instr, profile_close_instr};
 use move_vm_types::{
     data_store::DataStore,
     gas::{GasMeter, SimpleInstruction},
@@ -477,7 +477,7 @@ impl Interpreter {
         )
         .map_err(|e| match function.module_id() {
             Some(id) => {
-                let e = if cfg!(feature = "testing") || cfg!(feature = "stacktrace") {
+                let e = if resolver.loader().vm_config().error_execution_state {
                     e.with_exec_state(self.get_internal_state())
                 } else {
                     e
@@ -1184,7 +1184,7 @@ impl Frame {
     ) -> VMResult<ExitCode> {
         self.execute_code_impl(resolver, interpreter, data_store, gas_meter, prof)
             .map_err(|e| {
-                let e = if cfg!(feature = "testing") || cfg!(feature = "stacktrace") {
+                let e = if resolver.loader().vm_config().error_execution_state {
                     e.with_exec_state(interpreter.get_internal_state())
                 } else {
                     e
@@ -2391,7 +2391,7 @@ impl Frame {
                     )?;
                 }
 
-                profile_open_frame!(
+                profile_open_instr!(
                     prof,
                     format!("{:?}", instruction),
                     gas_meter.remaining_gas().into()
@@ -2409,7 +2409,7 @@ impl Frame {
                     instruction,
                 )?;
 
-                profile_close_frame!(
+                profile_close_instr!(
                     prof,
                     format!("{:?}", instruction),
                     gas_meter.remaining_gas().into()
