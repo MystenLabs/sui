@@ -77,12 +77,12 @@ validator_configs:
       perform-db-checkpoints-at-epoch-end: false
     indirect-objects-threshold: 18446744073709551615
     expensive-safety-check-config:
-      enable-epoch-sui-conservation-check: true
-      enable-deep-per-tx-sui-conservation-check: true
+      enable-epoch-sui-conservation-check: false
+      enable-deep-per-tx-sui-conservation-check: false
       force-disable-epoch-sui-conservation-check: false
-      enable-state-consistency-check: true
+      enable-state-consistency-check: false
       force-disable-state-consistency-check: false
-      enable-move-vm-paranoid-checks: true
+      enable-move-vm-paranoid-checks: false
     transaction-deny-config:
       package_publish_disabled: false
       package_upgrade_disabled: false
@@ -168,12 +168,12 @@ validator_configs:
       perform-db-checkpoints-at-epoch-end: false
     indirect-objects-threshold: 18446744073709551615
     expensive-safety-check-config:
-      enable-epoch-sui-conservation-check: true
-      enable-deep-per-tx-sui-conservation-check: true
+      enable-epoch-sui-conservation-check: false
+      enable-deep-per-tx-sui-conservation-check: false
       force-disable-epoch-sui-conservation-check: false
-      enable-state-consistency-check: true
+      enable-state-consistency-check: false
       force-disable-state-consistency-check: false
-      enable-move-vm-paranoid-checks: true
+      enable-move-vm-paranoid-checks: false
     transaction-deny-config:
       package_publish_disabled: false
       package_upgrade_disabled: false
@@ -259,12 +259,12 @@ validator_configs:
       perform-db-checkpoints-at-epoch-end: false
     indirect-objects-threshold: 18446744073709551615
     expensive-safety-check-config:
-      enable-epoch-sui-conservation-check: true
-      enable-deep-per-tx-sui-conservation-check: true
+      enable-epoch-sui-conservation-check: false
+      enable-deep-per-tx-sui-conservation-check: false
       force-disable-epoch-sui-conservation-check: false
-      enable-state-consistency-check: true
+      enable-state-consistency-check: false
       force-disable-state-consistency-check: false
-      enable-move-vm-paranoid-checks: true
+      enable-move-vm-paranoid-checks: false
     transaction-deny-config:
       package_publish_disabled: false
       package_upgrade_disabled: false
@@ -350,12 +350,12 @@ validator_configs:
       perform-db-checkpoints-at-epoch-end: false
     indirect-objects-threshold: 18446744073709551615
     expensive-safety-check-config:
-      enable-epoch-sui-conservation-check: true
-      enable-deep-per-tx-sui-conservation-check: true
+      enable-epoch-sui-conservation-check: false
+      enable-deep-per-tx-sui-conservation-check: false
       force-disable-epoch-sui-conservation-check: false
-      enable-state-consistency-check: true
+      enable-state-consistency-check: false
       force-disable-state-consistency-check: false
-      enable-move-vm-paranoid-checks: true
+      enable-move-vm-paranoid-checks: false
     transaction-deny-config:
       package_publish_disabled: false
       package_upgrade_disabled: false
@@ -441,12 +441,12 @@ validator_configs:
       perform-db-checkpoints-at-epoch-end: false
     indirect-objects-threshold: 18446744073709551615
     expensive-safety-check-config:
-      enable-epoch-sui-conservation-check: true
-      enable-deep-per-tx-sui-conservation-check: true
+      enable-epoch-sui-conservation-check: false
+      enable-deep-per-tx-sui-conservation-check: false
       force-disable-epoch-sui-conservation-check: false
-      enable-state-consistency-check: true
+      enable-state-consistency-check: false
       force-disable-state-consistency-check: false
-      enable-move-vm-paranoid-checks: true
+      enable-move-vm-paranoid-checks: false
     transaction-deny-config:
       package_publish_disabled: false
       package_upgrade_disabled: false
@@ -532,12 +532,12 @@ validator_configs:
       perform-db-checkpoints-at-epoch-end: false
     indirect-objects-threshold: 18446744073709551615
     expensive-safety-check-config:
-      enable-epoch-sui-conservation-check: true
-      enable-deep-per-tx-sui-conservation-check: true
+      enable-epoch-sui-conservation-check: false
+      enable-deep-per-tx-sui-conservation-check: false
       force-disable-epoch-sui-conservation-check: false
-      enable-state-consistency-check: true
+      enable-state-consistency-check: false
       force-disable-state-consistency-check: false
-      enable-move-vm-paranoid-checks: true
+      enable-move-vm-paranoid-checks: false
     transaction-deny-config:
       package_publish_disabled: false
       package_upgrade_disabled: false
@@ -623,12 +623,12 @@ validator_configs:
       perform-db-checkpoints-at-epoch-end: false
     indirect-objects-threshold: 18446744073709551615
     expensive-safety-check-config:
-      enable-epoch-sui-conservation-check: true
-      enable-deep-per-tx-sui-conservation-check: true
+      enable-epoch-sui-conservation-check: false
+      enable-deep-per-tx-sui-conservation-check: false
       force-disable-epoch-sui-conservation-check: false
-      enable-state-consistency-check: true
+      enable-state-consistency-check: false
       force-disable-state-consistency-check: false
-      enable-move-vm-paranoid-checks: true
+      enable-move-vm-paranoid-checks: false
     transaction-deny-config:
       package_publish_disabled: false
       package_upgrade_disabled: false
