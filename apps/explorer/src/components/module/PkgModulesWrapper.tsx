@@ -12,7 +12,7 @@ import { ModuleFunctionsInteraction } from './module-functions-interaction';
 
 import { useBreakpoint } from '~/hooks/useBreakpoint';
 import { SplitPanes } from '~/ui/SplitPanes';
-import { Tab, TabGroup, TabList, TabPanel, TabPanels } from '~/ui/Tabs';
+import { TabHeader } from '~/ui/Tabs';
 import { ListItem, VerticalList } from '~/ui/VerticalList';
 import { useSearchParamsMerged } from '~/ui/utils/LinkWithQuery';
 
@@ -87,28 +87,17 @@ function PkgModuleViewWrapper({ id, modules, splitPanelOrientation }: Props) {
 		{
 			panel: (
 				<div key="bytecode" className="h-full grow overflow-auto border-gray-45 pt-5 md:pl-7">
-					<TabGroup size="md">
-						<TabList>
-							<Tab>Bytecode</Tab>
-						</TabList>
-						<TabPanels>
-							<TabPanel>
-								<div
-									className={clsx(
-										'overflow-auto',
-										(splitPanelOrientation === 'horizontal' || !isMediumOrAbove) &&
-											'h-verticalListLong',
-									)}
-								>
-									<ModuleViewWrapper
-										id={id}
-										modules={modules}
-										selectedModuleName={selectedModule}
-									/>
-								</div>
-							</TabPanel>
-						</TabPanels>
-					</TabGroup>
+					<TabHeader size="md" title="Bytecode">
+						<div
+							className={clsx(
+								'overflow-auto',
+								(splitPanelOrientation === 'horizontal' || !isMediumOrAbove) &&
+									'h-verticalListLong',
+							)}
+						>
+							<ModuleViewWrapper id={id} modules={modules} selectedModuleName={selectedModule} />
+						</div>
+					</TabHeader>
 				</div>
 			),
 			defaultSize: 40,
@@ -116,31 +105,24 @@ function PkgModuleViewWrapper({ id, modules, splitPanelOrientation }: Props) {
 		{
 			panel: (
 				<div key="execute" className="h-full grow overflow-auto border-gray-45 pt-5 md:pl-7">
-					<TabGroup size="md">
-						<TabList>
-							<Tab>Execute</Tab>
-						</TabList>
-						<TabPanels>
-							<TabPanel>
-								<div
-									className={clsx(
-										'overflow-auto',
-										(splitPanelOrientation === 'horizontal' || !isMediumOrAbove) &&
-											'h-verticalListLong',
-									)}
-								>
-									{id && selectedModule ? (
-										<ModuleFunctionsInteraction
-											// force recreating everything when we change modules
-											key={`${id}-${selectedModule}`}
-											packageId={id}
-											moduleName={selectedModule}
-										/>
-									) : null}
-								</div>
-							</TabPanel>
-						</TabPanels>
-					</TabGroup>
+					<TabHeader size="md" title="Execute">
+						<div
+							className={clsx(
+								'overflow-auto',
+								(splitPanelOrientation === 'horizontal' || !isMediumOrAbove) &&
+									'h-verticalListLong',
+							)}
+						>
+							{id && selectedModule ? (
+								<ModuleFunctionsInteraction
+									// force recreating everything when we change modules
+									key={`${id}-${selectedModule}`}
+									packageId={id}
+									moduleName={selectedModule}
+								/>
+							) : null}
+						</div>
+					</TabHeader>
 				</div>
 			),
 			defaultSize: 60,

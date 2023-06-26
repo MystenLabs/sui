@@ -27,7 +27,7 @@ import { TransactionSummary } from '~/pages/transaction-result/transaction-summa
 import { Banner } from '~/ui/Banner';
 import { PageHeader } from '~/ui/PageHeader';
 import { SplitPanes } from '~/ui/SplitPanes';
-import { Tab, TabGroup, TabList, TabPanel, TabPanels } from '~/ui/Tabs';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '~/ui/Tabs';
 
 export function TransactionView({ transaction }: { transaction: SuiTransactionBlockResponse }) {
 	const isMediumOrAbove = useBreakpoint('md');
@@ -43,32 +43,30 @@ export function TransactionView({ transaction }: { transaction: SuiTransactionBl
 	const leftPane = {
 		panel: (
 			<div className="h-full overflow-y-auto rounded-2xl border border-transparent bg-gray-40 p-6 md:h-full md:max-h-screen md:p-10">
-				<TabGroup size="lg">
-					<TabList>
-						<Tab>Summary</Tab>
-						{hasEvents && <Tab>Events</Tab>}
-						{isProgrammableTransaction && <Tab>Signatures</Tab>}
-					</TabList>
-					<TabPanels>
-						<TabPanel>
+				<Tabs size="lg" defaultValue="summary">
+					<TabsList>
+						<TabsTrigger value="summary">Summary</TabsTrigger>
+						{hasEvents && <TabsTrigger value="events">Events</TabsTrigger>}
+						{isProgrammableTransaction && <TabsTrigger value="signatures">Signatures</TabsTrigger>}
+					</TabsList>
+					<TabsContent value="summary">
+						<div className="mt-10">
+							<TransactionSummary transaction={transaction} />
+						</div>
+					</TabsContent>
+					{hasEvents && (
+						<TabsContent value="events">
 							<div className="mt-10">
-								<TransactionSummary transaction={transaction} />
+								<Events events={transaction.events!} />
 							</div>
-						</TabPanel>
-						{hasEvents && (
-							<TabPanel>
-								<div className="mt-10">
-									<Events events={transaction.events!} />
-								</div>
-							</TabPanel>
-						)}
-						<TabPanel>
-							<div className="mt-10">
-								<Signatures transaction={transaction} />
-							</div>
-						</TabPanel>
-					</TabPanels>
-				</TabGroup>
+						</TabsContent>
+					)}
+					<TabsContent value="signatures">
+						<div className="mt-10">
+							<Signatures transaction={transaction} />
+						</div>
+					</TabsContent>
+				</Tabs>
 			</div>
 		),
 		minSize: 35,
