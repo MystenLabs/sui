@@ -9500,6 +9500,7 @@ dependencies = [
  "strum_macros",
  "sui-config",
  "sui-core",
+ "sui-json-rpc-types",
  "sui-move-build",
  "sui-swarm-config",
  "sui-test-transaction-builder",
