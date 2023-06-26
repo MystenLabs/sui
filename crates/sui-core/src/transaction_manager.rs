@@ -10,7 +10,6 @@ use std::{
 use lru::LruCache;
 use mysten_metrics::monitored_scope;
 use parking_lot::RwLock;
-use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::{base_types::TransactionDigest, error::SuiResult};
 use sui_types::{
     base_types::{ObjectID, SequenceNumber},
@@ -18,6 +17,7 @@ use sui_types::{
     digests::TransactionEffectsDigest,
     transaction::{TransactionDataAPI, VerifiedCertificate},
 };
+use sui_types::{executable_transaction::VerifiedExecutableTransaction, SUI_CLOCK_OBJECT_ID};
 use tokio::sync::mpsc::UnboundedSender;
 use tracing::{error, trace, warn};
 
@@ -221,6 +221,12 @@ impl AvailableObjectsCache {
     }
 
     fn insert(&mut self, object: &InputKey) {
+        // Clock object has "fastpath" enabled where a higher version object can be inserted,
+        // skipping over missing versions. This violates the assumption of AvailableObjectsCache.
+        // So no clock object can be cached.
+        if object.0 == SUI_CLOCK_OBJECT_ID {
+            return;
+        }
         self.cache.insert(object);
         if self.unbounded_cache_enabled == 0 {
             self.cache.shrink();
