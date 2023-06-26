@@ -801,12 +801,13 @@ fn vm_move_call(
     // script visibility checked manually for entry points
     let mut result = context
         .session
-        .execute_function_bypass_visibility(
+        .execute_function_bypass_visibility_gas_profiling(
             module_id,
             function,
             type_arguments,
             serialized_arguments,
-            context.gas_status.move_gas_status(),
+            context.gas_status.move_gas_status_mut(),
+            &mut context.gas_profiler
         )
         .map_err(|e| context.convert_vm_error(e))?;
 
@@ -880,7 +881,7 @@ fn publish_and_verify_modules(
             AccountAddress::from(package_id),
             // TODO: publish_module_bundle() currently doesn't charge gas.
             // Do we want to charge there?
-            context.gas_status.move_gas_status(),
+            context.gas_status.move_gas_status_mut(),
         )
         .map_err(|e| context.convert_vm_error(e))?;
 

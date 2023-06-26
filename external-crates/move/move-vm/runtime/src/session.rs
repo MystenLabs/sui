@@ -18,6 +18,7 @@ use move_core_types::{
     resolver::MoveResolver,
     value::MoveTypeLayout,
 };
+use move_vm_profiler::GasProfiler;
 use move_vm_types::{
     data_store::DataStore,
     gas::GasMeter,
@@ -75,6 +76,7 @@ impl<'r, 'l, S: MoveResolver> Session<'r, 'l, S> {
         ty_args: Vec<Type>,
         args: Vec<impl Borrow<[u8]>>,
         gas_meter: &mut impl GasMeter,
+        profiler: &mut GasProfiler,
     ) -> VMResult<SerializedReturnValues> {
         let bypass_declared_entry_check = false;
         self.runtime.execute_function(
@@ -86,6 +88,7 @@ impl<'r, 'l, S: MoveResolver> Session<'r, 'l, S> {
             gas_meter,
             &mut self.native_extensions,
             bypass_declared_entry_check,
+            profiler,
         )
     }
 
@@ -99,6 +102,7 @@ impl<'r, 'l, S: MoveResolver> Session<'r, 'l, S> {
         gas_meter: &mut impl GasMeter,
     ) -> VMResult<SerializedReturnValues> {
         let bypass_declared_entry_check = true;
+        let gas_rem = gas_meter.remaining_gas().into();
         self.runtime.execute_function(
             module,
             function_name,
@@ -108,6 +112,32 @@ impl<'r, 'l, S: MoveResolver> Session<'r, 'l, S> {
             gas_meter,
             &mut self.native_extensions,
             bypass_declared_entry_check,
+            &mut GasProfiler::init_default_cfg(function_name.to_string(), gas_rem),
+        )
+    }
+
+    /// Similar to execute_function_bypass_visibility, but it supports
+    /// gas profiling
+    pub fn execute_function_bypass_visibility_gas_profiling(
+        &mut self,
+        module: &ModuleId,
+        function_name: &IdentStr,
+        ty_args: Vec<Type>,
+        args: Vec<impl Borrow<[u8]>>,
+        gas_meter: &mut impl GasMeter,
+        profiler: &mut GasProfiler,
+    ) -> VMResult<SerializedReturnValues> {
+        let bypass_declared_entry_check = true;
+        self.runtime.execute_function(
+            module,
+            function_name,
+            ty_args,
+            args,
+            &mut self.data_cache,
+            gas_meter,
+            &mut self.native_extensions,
+            bypass_declared_entry_check,
+            profiler,
         )
     }
 
@@ -198,6 +228,10 @@ impl<'r, 'l, S: MoveResolver> Session<'r, 'l, S> {
     pub fn finish(self) -> (VMResult<(ChangeSet, Vec<Event>)>, S) {
         let (res, remote) = self.data_cache.into_effects();
         (res.map_err(|e| e.finish(Location::Undefined)), remote)
+    }
+
+    pub fn vm_config(&self) -> &move_vm_config::runtime::VMConfig {
+        &self.runtime.loader().vm_config()
     }
 
     /// Same like `finish`, but also extracts the native context extensions from the session.

@@ -6,10 +6,10 @@ use once_cell::sync::Lazy;
 use serde::Serialize;
 use std::collections::BTreeMap;
 
-#[cfg(any(debug_assertions, feature = "debugging"))]
+#[cfg(debug_assertions)]
 const MOVE_VM_PROFILER_ENV_VAR_NAME: &str = "MOVE_VM_PROFILE";
 
-#[cfg(any(debug_assertions, feature = "debugging"))]
+#[cfg(debug_assertions)]
 static PROFILER_ENABLED: Lazy<bool> =
     Lazy::new(|| std::env::var(MOVE_VM_PROFILER_ENV_VAR_NAME).is_ok());
 
@@ -47,7 +47,7 @@ pub struct Profile {
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct GasProfile {
+pub struct GasProfiler {
     exporter: String,
     name: String,
     active_profile_index: u64,
@@ -62,9 +62,9 @@ pub struct GasProfile {
     pub config: VMProfilerConfig,
 }
 
-impl GasProfile {
+impl GasProfiler {
     pub fn init(config: &VMProfilerConfig, name: String, start_gas: u64) -> Self {
-        GasProfile {
+        let mut prof = GasProfiler {
             exporter: "speedscope@1.15.2".to_string(),
             name: name.clone(),
             active_profile_index: 0,
@@ -83,10 +83,17 @@ impl GasProfile {
             }],
             start_gas,
             config: config.clone(),
-        }
+        };
+
+        profile_open_frame!(prof, "root".to_string(), start_gas);
+        prof
     }
 
-    fn get_profile_name(&self) -> String {
+    pub fn init_default_cfg(name: String, start_gas: u64) -> Self {
+        Self::init(&VMProfilerConfig::default(), name, start_gas)
+    }
+
+    fn profile_name(&self) -> String {
         self.name.clone()
     }
 
@@ -95,10 +102,10 @@ impl GasProfile {
     }
 
     fn is_metered(&self) -> bool {
-        self.profiles[0].end_value != 0
+        (self.profiles[0].end_value != 0) && (self.start_gas != 0)
     }
 
-    fn get_start_gas(&self) -> u64 {
+    fn start_gas(&self) -> u64 {
         self.start_gas
     }
 
@@ -115,12 +122,13 @@ impl GasProfile {
     }
 
     pub fn open_frame(&mut self, frame_name: String, gas_start: u64) {
-        if !*PROFILER_ENABLED {
+        if !*PROFILER_ENABLED || self.start_gas == 0 {
             return;
         }
 
-        let frame_idx = self.add_frame(frame_name);
-        let start = self.get_start_gas();
+        let frame_idx = self.add_frame(frame_name.clone());
+        let start = self.start_gas();
+
         self.profiles[0].events.push(Event {
             ty: "O".to_string(),
             frame: frame_idx,
@@ -129,11 +137,11 @@ impl GasProfile {
     }
 
     pub fn close_frame(&mut self, frame_name: String, gas_end: u64) {
-        if !*PROFILER_ENABLED {
+        if !*PROFILER_ENABLED || self.start_gas == 0 {
             return;
         }
         let frame_idx = self.add_frame(frame_name);
-        let start = self.get_start_gas();
+        let start = self.start_gas();
 
         self.profiles[0].events.push(Event {
             ty: "C".to_string(),
@@ -154,11 +162,7 @@ impl GasProfile {
             .as_nanos();
 
         let mut p = self.config.base_path.clone();
-        p.push(format!(
-            "gas_profile_{}_{}.json",
-            self.get_profile_name(),
-            now
-        ));
+        p.push(format!("gas_profile_{}_{}.json", self.profile_name(), now));
         let path_str = p.as_os_str().to_string_lossy().to_string();
         let mut file = std::fs::File::create(p).expect("Unable to create file");
 
@@ -168,13 +172,24 @@ impl GasProfile {
     }
 }
 
+impl Drop for GasProfiler {
+    fn drop(&mut self) {
+        profile_close_frame!(
+            self,
+            "root".to_string(),
+            self.start_gas() - self.profiles[0].end_value
+        );
+        profile_dump_file!(self);
+    }
+}
+
 #[macro_export]
 macro_rules! profile_open_frame {
     ($profiler:expr, $frame_name:expr, $gas_rem:expr) => {
-        #[cfg(any(debug_assertions, feature = "debugging"))]
+        #[cfg(debug_assertions)]
         {
             let name = if !$profiler.config.use_long_function_name {
-                GasProfile::short_name(&$frame_name)
+                GasProfiler::short_name(&$frame_name)
             } else {
                 $frame_name
             };
@@ -186,10 +201,10 @@ macro_rules! profile_open_frame {
 #[macro_export]
 macro_rules! profile_close_frame {
     ($profiler:expr, $frame_name:expr, $gas_rem:expr) => {
-        #[cfg(any(debug_assertions, feature = "debugging"))]
+        #[cfg(debug_assertions)]
         {
             let name = if !$profiler.config.use_long_function_name {
-                GasProfile::short_name(&$frame_name)
+                GasProfiler::short_name(&$frame_name)
             } else {
                 $frame_name
             };
@@ -201,7 +216,7 @@ macro_rules! profile_close_frame {
 #[macro_export]
 macro_rules! profile_open_instr {
     ($profiler:expr, $frame_name:expr, $gas_rem:expr) => {
-        #[cfg(any(debug_assertions, feature = "debugging"))]
+        #[cfg(debug_assertions)]
         {
             if $profiler.config.track_bytecode_instructions {
                 $profiler.open_frame($frame_name, $gas_rem)
@@ -213,7 +228,7 @@ macro_rules! profile_open_instr {
 #[macro_export]
 macro_rules! profile_close_instr {
     ($profiler:expr, $frame_name:expr, $gas_rem:expr) => {
-        #[cfg(any(debug_assertions, feature = "debugging"))]
+        #[cfg(debug_assertions)]
         {
             if $profiler.config.track_bytecode_instructions {
                 $profiler.close_frame($frame_name, $gas_rem)
@@ -225,7 +240,7 @@ macro_rules! profile_close_instr {
 #[macro_export]
 macro_rules! profile_dump_file {
     ($profiler:expr) => {
-        #[cfg(any(debug_assertions, feature = "debugging"))]
+        #[cfg(debug_assertions)]
         $profiler.to_file()
     };
 }

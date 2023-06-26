@@ -24,7 +24,8 @@ sui_macros::checked_arithmetic! {
 #[enum_dispatch]
 pub trait SuiGasStatusAPI {
     fn is_unmetered(&self) -> bool;
-    fn move_gas_status(&mut self) -> &mut GasStatus;
+    fn move_gas_status_mut(&mut self) -> &mut GasStatus;
+    fn move_gas_status(&self) -> &GasStatus;
     fn bucketize_computation(&mut self) -> Result<(), ExecutionError>;
     fn summary(&self) -> GasCostSummary;
     fn gas_budget(&self) -> u64;

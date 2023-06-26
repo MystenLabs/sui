@@ -214,7 +214,7 @@ pub struct SuiGasStatus {
 
 impl SuiGasStatus {
     fn new(
-        move_gas_status: GasStatus,
+        move_gas_status_mut: GasStatus,
         gas_budget: u64,
         charge: bool,
         gas_price: u64,
@@ -225,7 +225,7 @@ impl SuiGasStatus {
     ) -> SuiGasStatus {
         let gas_rounding_step = gas_rounding_step.map(|val| val.max(1));
         SuiGasStatus {
-            gas_status: move_gas_status,
+            gas_status: move_gas_status_mut,
             gas_budget,
             charge,
             computation_cost: 0,
@@ -322,8 +322,12 @@ impl SuiGasStatusAPI for SuiGasStatus {
         !self.charge
     }
 
-    fn move_gas_status(&mut self) -> &mut GasStatus {
+    fn move_gas_status_mut(&mut self) -> &mut GasStatus {
         &mut self.gas_status
+    }
+
+    fn move_gas_status(&self) -> &GasStatus {
+        &self.gas_status
     }
 
     fn bucketize_computation(&mut self) -> Result<(), ExecutionError> {

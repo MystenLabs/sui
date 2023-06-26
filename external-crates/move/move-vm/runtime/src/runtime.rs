@@ -26,6 +26,7 @@ use move_core_types::{
     vm_status::StatusCode,
 };
 use move_vm_config::runtime::VMConfig;
+use move_vm_profiler::GasProfiler;
 use move_vm_types::{
     data_store::DataStore,
     gas::GasMeter,
@@ -314,6 +315,7 @@ impl VMRuntime {
         data_store: &mut impl DataStore,
         gas_meter: &mut impl GasMeter,
         extensions: &mut NativeContextExtensions,
+        profiler: &mut GasProfiler,
     ) -> VMResult<SerializedReturnValues> {
         let arg_types = param_types
             .into_iter()
@@ -345,6 +347,7 @@ impl VMRuntime {
             gas_meter,
             extensions,
             &self.loader,
+            profiler,
         )?;
 
         let serialized_return_values = self
@@ -385,6 +388,7 @@ impl VMRuntime {
         gas_meter: &mut impl GasMeter,
         extensions: &mut NativeContextExtensions,
         bypass_declared_entry_check: bool,
+        profiler: &mut GasProfiler,
     ) -> VMResult<SerializedReturnValues> {
         use move_binary_format::{binary_views::BinaryIndexedView, file_format::SignatureIndex};
         fn check_is_entry(
@@ -436,6 +440,7 @@ impl VMRuntime {
             data_store,
             gas_meter,
             extensions,
+            profiler,
         )
     }
 
@@ -459,6 +464,8 @@ impl VMRuntime {
         ) = self
             .loader
             .load_script(script.borrow(), &type_arguments, data_store)?;
+        let func_name = func.pretty_string().to_owned();
+        let gas_rem = gas_meter.remaining_gas().into();
         // execute the function
         self.execute_function_impl(
             func,
@@ -469,6 +476,7 @@ impl VMRuntime {
             data_store,
             gas_meter,
             extensions,
+            &mut GasProfiler::init_default_cfg(func_name, gas_rem),
         )
     }
 

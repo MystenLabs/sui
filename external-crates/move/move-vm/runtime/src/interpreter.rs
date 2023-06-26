@@ -19,7 +19,9 @@ use move_core_types::{
     vm_status::{StatusCode, StatusType},
 };
 use move_vm_config::runtime::VMRuntimeLimitsConfig;
-use move_vm_profiler::{profile_close_frame, profile_dump_file, profile_open_frame, GasProfile, profile_open_instr, profile_close_instr};
+use move_vm_profiler::{
+    profile_close_frame, profile_close_instr, profile_open_frame, profile_open_instr, GasProfiler,
+};
 use move_vm_types::{
     data_store::DataStore,
     gas::{GasMeter, SimpleInstruction},
@@ -108,6 +110,7 @@ impl Interpreter {
         gas_meter: &mut impl GasMeter,
         extensions: &mut NativeContextExtensions,
         loader: &Loader,
+        profiler: &mut GasProfiler,
     ) -> VMResult<Vec<Value>> {
         let mut interpreter = Interpreter {
             operand_stack: Stack::new(),
@@ -116,13 +119,8 @@ impl Interpreter {
             runtime_limits_config: loader.vm_config().runtime_limits_config.clone(),
         };
 
-        let mut profile = GasProfile::init(
-            &loader.vm_config().profile_config,
-            function.pretty_string(),
-            gas_meter.remaining_gas().into(),
-        );
         profile_open_frame!(
-            &mut profile,
+            profiler,
             function.pretty_string(),
             gas_meter.remaining_gas().into()
         );
@@ -174,7 +172,7 @@ impl Interpreter {
                 })?;
 
             profile_close_frame!(
-                &mut profile,
+                profiler,
                 function.pretty_string(),
                 gas_meter.remaining_gas().into()
             );
@@ -182,18 +180,10 @@ impl Interpreter {
             Ok(return_values.into_iter().collect())
         } else {
             interpreter.execute_main(
-                loader,
-                data_store,
-                gas_meter,
-                extensions,
-                function,
-                ty_args,
-                args,
-                &mut profile,
+                loader, data_store, gas_meter, extensions, function, ty_args, args, profiler,
             )
         };
 
-        profile_dump_file!(profile);
         ret
     }
 
@@ -212,7 +202,7 @@ impl Interpreter {
         function: Arc<Function>,
         ty_args: Vec<Type>,
         args: Vec<Value>,
-        prof: &mut GasProfile,
+        prof: &mut GasProfiler,
     ) -> VMResult<Vec<Value>> {
         let mut locals = Locals::new(function.local_count());
         for (i, value) in args.into_iter().enumerate() {
@@ -1180,7 +1170,7 @@ impl Frame {
         interpreter: &mut Interpreter,
         data_store: &mut impl DataStore,
         gas_meter: &mut impl GasMeter,
-        prof: &mut GasProfile,
+        prof: &mut GasProfiler,
     ) -> VMResult<ExitCode> {
         self.execute_code_impl(resolver, interpreter, data_store, gas_meter, prof)
             .map_err(|e| {
@@ -2349,7 +2339,7 @@ impl Frame {
         interpreter: &mut Interpreter,
         data_store: &mut impl DataStore,
         gas_meter: &mut impl GasMeter,
-        prof: &mut GasProfile,
+        prof: &mut GasProfiler,
     ) -> PartialVMResult<ExitCode> {
         let code = self.function.code();
         loop {

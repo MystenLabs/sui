@@ -21,6 +21,7 @@ use move_core_types::{
     value::MoveValue,
 };
 use move_package::compilation::compiled_package::CompiledPackage;
+use move_vm_profiler::GasProfiler;
 use move_vm_runtime::move_vm::MoveVM;
 use move_vm_test_utils::gas_schedule::CostTable;
 use std::{fs, path::Path};
@@ -101,12 +102,18 @@ move run` must be applied to a module inside `storage/`",
             // script fun. parse module, extract script ID to pass to VM
             let module = CompiledModule::deserialize_with_defaults(&bytecode)
                 .map_err(|e| anyhow!("Error deserializing module: {:?}", e))?;
+            let gas_rem = gas_status.remaining_gas().into();
             session.execute_entry_function(
                 &module.self_id(),
                 IdentStr::new(script_name)?,
                 script_type_arguments,
                 vm_args,
                 &mut gas_status,
+                &mut GasProfiler::init(
+                    &session.vm_config().profiler_config,
+                    script_name.clone(),
+                    gas_rem,
+                ),
             )
         }
         None => session.execute_script(
