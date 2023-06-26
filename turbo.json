@@ -20,5 +20,5 @@
       ]
     }
   },
-  "globalEnv": ["VITE_NETWORK", "VITE_VERCEL_ANALYTICS_ID"]
+  "globalEnv": ["VERCEL_ENV", "VITE_NETWORK", "VITE_VERCEL_ANALYTICS_ID", "VITE_SENTRY_SAMPLE_RATE"]
 }
