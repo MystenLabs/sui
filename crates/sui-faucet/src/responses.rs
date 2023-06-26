@@ -3,6 +3,7 @@
 
 use crate::*;
 use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -50,6 +51,15 @@ impl From<BatchFaucetReceipt> for BatchFaucetResponse {
     fn from(v: BatchFaucetReceipt) -> Self {
         Self {
             task: Some(v.task),
+            error: None,
+        }
+    }
+}
+
+impl From<Uuid> for BatchFaucetResponse {
+    fn from(v: Uuid) -> Self {
+        Self {
+            task: Some(v.to_string()),
             error: None,
         }
     }
