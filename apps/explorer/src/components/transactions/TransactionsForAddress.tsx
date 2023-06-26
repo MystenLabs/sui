@@ -36,7 +36,6 @@ export function TransactionsForAddress({ address, type }: Props) {
 						limit: 100,
 						options: {
 							showEffects: true,
-							showBalanceChanges: true,
 							showInput: true,
 						},
 					}),
