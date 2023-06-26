@@ -138,32 +138,30 @@ async fn batch_request_gas(
     let id = Uuid::new_v4();
     // ID for traceability
     info!(uuid = ?id, "Got new gas request.");
+
+    let FaucetRequest::FixedAmountRequest(request) = payload else {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(BatchFaucetResponse::from(FaucetError::Internal(
+                "Input Error.".to_string(),
+            ))),
+        )
+    };
+
     if state.config.batch_enabled {
-        let result = match payload {
-            FaucetRequest::FixedAmountRequest(requests) => {
-                // TODO: get ride of this task spawning since recycled coins are now handled by the batching task.
-                spawn_monitored_task!(async move {
-                    state
-                        .faucet
-                        .batch_send(
-                            id,
-                            requests.recipient,
-                            &vec![state.config.amount; state.config.num_coins],
-                        )
-                        .await
-                })
-                .await
-                .unwrap()
-            }
-            _ => {
-                return (
-                    StatusCode::BAD_REQUEST,
-                    Json(BatchFaucetResponse::from(FaucetError::Internal(
-                        "Input Error.".to_string(),
-                    ))),
+        let result = spawn_monitored_task!(async move {
+            state
+                .faucet
+                .batch_send(
+                    id,
+                    request.recipient,
+                    &vec![state.config.amount; state.config.num_coins],
                 )
-            }
-        };
+                .await
+        })
+        .await
+        .unwrap();
+
         match result {
             Ok(v) => {
                 info!(uuid =?id, "Request is successfully served");
@@ -179,36 +177,24 @@ async fn batch_request_gas(
         }
     } else {
         // TODO (jian): remove this feature gate when batch has proven to be baked long enough
-        let result = match payload {
-            FaucetRequest::FixedAmountRequest(requests) => {
-                // We spawn a tokio task for this such that connection drop will not interrupt
-                // it and impact the recycling of coins
-                spawn_monitored_task!(async move {
-                    state
-                        .faucet
-                        .send(
-                            id,
-                            requests.recipient,
-                            &vec![state.config.amount; state.config.num_coins],
-                        )
-                        .await
-                })
-                .await
-                .unwrap()
-            }
-            _ => {
-                return (
-                    StatusCode::BAD_REQUEST,
-                    Json(BatchFaucetResponse::from(FaucetError::Internal(
-                        "Input Error.".to_string(),
-                    ))),
+        info!(uuid = ?id, "Falling back to v1 implementation");
+        let result = spawn_monitored_task!(async move {
+            state
+                .faucet
+                .send(
+                    id,
+                    request.recipient,
+                    &vec![state.config.amount; state.config.num_coins],
                 )
-            }
-        };
+                .await
+        })
+        .await
+        .unwrap();
+
         match result {
             Ok(_) => {
                 info!(uuid =?id, "Request is successfully served");
-                (StatusCode::CREATED, Json(BatchFaucetResponse::from(id)))
+                (StatusCode::ACCEPTED, Json(BatchFaucetResponse::from(id)))
             }
             Err(v) => {
                 warn!(uuid =?id, "Failed to request gas: {:?}", v);
