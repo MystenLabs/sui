@@ -10,22 +10,19 @@ import configCommon from './webpack.config.common';
 import type { Configuration } from 'webpack';
 
 const configDev: Configuration = {
-    mode: 'development',
-    devtool: 'cheap-source-map',
-    plugins: [
-        new ESLintPlugin({ extensions: ['ts', 'tsx', 'js', 'jsx'] }),
-        new StyleLintPlugin(),
-    ],
-    watchOptions: {
-        aggregateTimeout: 600,
-    },
-    stats: {
-        loggingDebug: ['sass-loader'],
-    },
+	mode: 'development',
+	devtool: 'cheap-source-map',
+	plugins: [new ESLintPlugin({ extensions: ['ts', 'tsx', 'js', 'jsx'] }), new StyleLintPlugin()],
+	watchOptions: {
+		aggregateTimeout: 600,
+	},
+	stats: {
+		loggingDebug: ['sass-loader'],
+	},
 };
 
 async function getConfig() {
-    return merge(await configCommon(), configDev);
+	return merge(await configCommon(), configDev);
 }
 
 export default getConfig;

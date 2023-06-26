@@ -2,11 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import {
-  ObjectDigest,
-  ObjectId,
-  ObjectType,
-  PaginatedObjectsResponse,
-  TransactionArgument,
+	ObjectDigest,
+	ObjectId,
+	ObjectType,
+	PaginatedObjectsResponse,
+	TransactionArgument,
 } from '@mysten/sui.js';
 import { ObjectArgument } from '.';
 
@@ -35,21 +35,21 @@ export const KIOSK_PURCHASE_CAP = `${KIOSK_MODULE}::PurchaseCap`;
  * The Kiosk object fields (for BCS queries).
  */
 export type Kiosk = {
-  id: string;
-  profits: string;
-  owner: string;
-  itemCount: number;
-  allowExtensions: boolean;
+	id: string;
+	profits: string;
+	owner: string;
+	itemCount: number;
+	allowExtensions: boolean;
 };
 
 /**
  * PurchaseCap object fields (for BCS queries).
  */
 export type PurchaseCap = {
-  id: string;
-  kioskId: string;
-  itemId: string;
-  minPrice: string;
+	id: string;
+	kioskId: string;
+	itemId: string;
+	minPrice: string;
 };
 
 /**
@@ -57,8 +57,8 @@ export type PurchaseCap = {
  * Returns the item, and a `canTransfer` param.
  */
 export type PurchaseAndResolvePoliciesResponse = {
-  item: TransactionArgument;
-  canTransfer: boolean;
+	item: TransactionArgument;
+	canTransfer: boolean;
 };
 
 /**
@@ -67,8 +67,8 @@ export type PurchaseAndResolvePoliciesResponse = {
  * without introducing more breaking changes.
  */
 export type PurchaseOptionalParams = {
-  ownedKiosk?: ObjectArgument;
-  ownedKioskCap?: ObjectArgument;
+	ownedKiosk?: ObjectArgument;
+	ownedKioskCap?: ObjectArgument;
 };
 
 /**
@@ -76,18 +76,18 @@ export type PurchaseOptionalParams = {
  * Holds a `u64` value - the price of the item.
  */
 export type KioskListing = {
-  /** The ID of the Item */
-  objectId: ObjectId;
-  /**
-   * Whether or not there's a `PurchaseCap` issued. `true` means that
-   * the listing is controlled by some logic and can't be purchased directly.
-   *
-   * TODO: consider renaming the field for better indication.
-   */
-  isExclusive: boolean;
-  /** The ID of the listing */
-  listingId: ObjectId;
-  price?: string;
+	/** The ID of the Item */
+	objectId: ObjectId;
+	/**
+	 * Whether or not there's a `PurchaseCap` issued. `true` means that
+	 * the listing is controlled by some logic and can't be purchased directly.
+	 *
+	 * TODO: consider renaming the field for better indication.
+	 */
+	isExclusive: boolean;
+	/** The ID of the listing */
+	listingId: ObjectId;
+	price?: string;
 };
 
 /**
@@ -95,45 +95,45 @@ export type KioskListing = {
  * Holds an Item `T`. The type of the item is known upfront.
  */
 export type KioskItem = {
-  /** The ID of the Item */
-  objectId: ObjectId;
-  /** The type of the Item */
-  type: ObjectType;
-  /** Whether the item is Locked (there must be a `Lock` Dynamic Field) */
-  isLocked: boolean;
-  /** Optional listing */
-  listing?: KioskListing;
+	/** The ID of the Item */
+	objectId: ObjectId;
+	/** The type of the Item */
+	type: ObjectType;
+	/** Whether the item is Locked (there must be a `Lock` Dynamic Field) */
+	isLocked: boolean;
+	/** Optional listing */
+	listing?: KioskListing;
 };
 /**
  * Aggregated data from the Kiosk.
  */
 export type KioskData = {
-  items: KioskItem[];
-  itemIds: ObjectId[];
-  listingIds: ObjectId[];
-  kiosk?: Kiosk;
-  extensions: any[]; // type will be defined on later versions of the SDK.
+	items: KioskItem[];
+	itemIds: ObjectId[];
+	listingIds: ObjectId[];
+	kiosk?: Kiosk;
+	extensions: any[]; // type will be defined on later versions of the SDK.
 };
 
 export type PagedKioskData = {
-  data: KioskData;
-  nextCursor: string | null;
-  hasNextPage: boolean;
+	data: KioskData;
+	nextCursor: string | null;
+	hasNextPage: boolean;
 };
 
 export type FetchKioskOptions = {
-  withKioskFields?: boolean;
-  withListingPrices?: boolean;
+	withKioskFields?: boolean;
+	withListingPrices?: boolean;
 };
 
 export type OwnedKiosks = {
-  kioskOwnerCaps: KioskOwnerCap[];
-  kioskIds: ObjectId[];
+	kioskOwnerCaps: KioskOwnerCap[];
+	kioskIds: ObjectId[];
 } & Omit<PaginatedObjectsResponse, 'data'>;
 
 export type KioskOwnerCap = {
-  objectId: ObjectId;
-  kioskId: ObjectId;
-  digest: ObjectDigest;
-  version: string;
+	objectId: ObjectId;
+	kioskId: ObjectId;
+	digest: ObjectDigest;
+	version: string;
 };

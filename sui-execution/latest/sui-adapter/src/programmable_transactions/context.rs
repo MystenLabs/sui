@@ -32,7 +32,10 @@ use sui_types::{
     metrics::LimitsMetrics,
     move_package::MovePackage,
     object::{Data, MoveObject, Object, Owner},
-    storage::{BackingPackageStore, ChildObjectResolver, ObjectChange, WriteKind},
+    storage::{
+        BackingPackageStore, ChildObjectResolver, DeleteKind, DeleteKindWithOldVersion,
+        ObjectChange, WriteKind,
+    },
     transaction::{Argument, CallArg, ObjectArg},
     type_resolver::TypeTagResolver,
 };
@@ -742,23 +745,50 @@ impl<'vm, 'state, 'a> ExecutionContext<'vm, 'state, 'a> {
             object_changes.insert(id, change);
         }
         for (id, delete_kind) in deletions {
-            let version = match input_object_metadata.get(&id) {
-                Some(metadata) => {
-                    assert_invariant!(
-                        !matches!(metadata.owner, Owner::Immutable),
-                        "Attempting to delete immutable object {id} via delete kind {delete_kind}"
-                    );
-                    metadata.version
-                }
-                None => match state_view.get_latest_parent_entry_ref(id) {
-                    Ok(Some((_, previous_version, _))) => previous_version,
-                    // This object was not created this transaction but has never existed in
-                    // storage, skip it.
-                    Ok(None) => continue,
-                    Err(_) => invariant_violation!("{}", missing_unwrapped_msg(&id)),
+            // For deleted and wrapped objects, the object must exist either in the input or was
+            // loaded as child object. We can read them to get the previous version.
+            // For unwrap_then_delete, in older protocol versions, we must consult the object store
+            // to see if there exists a tombstone, and if so we include it otherwise we skip it.
+            // In newer protocol versions, we can just skip it.
+            let delete_kind_with_seq = match delete_kind {
+                DeleteKind::Normal | DeleteKind::Wrap => {
+                    let old_version = match input_object_metadata.get(&id) {
+                        Some(metadata) => {
+                            assert_invariant!(
+                                !matches!(metadata.owner, Owner::Immutable),
+                                "Attempting to delete immutable object {id} via delete kind {delete_kind}"
+                            );
+                            metadata.version
+                        }
+                        None => {
+                            match loaded_child_objects.get(&id) {
+                                Some(version) => *version,
+                                None => invariant_violation!("Deleted/wrapped object {id} must be either in input or loaded child objects")
+                            }
+                        }
+                    };
+                    if delete_kind == DeleteKind::Normal {
+                        DeleteKindWithOldVersion::Normal(old_version)
+                    } else {
+                        DeleteKindWithOldVersion::Wrap(old_version)
+                    }
                 },
+                DeleteKind::UnwrapThenDelete => {
+                    if protocol_config.simplified_unwrap_then_delete() {
+                        DeleteKindWithOldVersion::UnwrapThenDelete
+                    } else {
+                        let old_version = match state_view.get_latest_parent_entry_ref(id) {
+                            Ok(Some((_, previous_version, _))) => previous_version,
+                            // This object was not created this transaction but has never existed in
+                            // storage, skip it.
+                            Ok(None) => continue,
+                            Err(_) => invariant_violation!("{}", missing_unwrapped_msg(&id)),
+                        };
+                        DeleteKindWithOldVersion::UnwrapThenDeleteDEPRECATED(old_version)
+                    }
+                }
             };
-            object_changes.insert(id, ObjectChange::Delete(version, delete_kind));
+            object_changes.insert(id, ObjectChange::Delete(delete_kind_with_seq));
         }
 
         let (res, linkage) = tmp_session.finish();

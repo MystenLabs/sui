@@ -6,18 +6,18 @@ import { type SuiAddress, CoinBalance } from '@mysten/sui.js';
 import { useQuery } from '@tanstack/react-query';
 
 export function useGetAllBalances<TResult = CoinBalance[]>(
-    address?: SuiAddress | null,
-    refetchInterval?: number,
-    staleTime?: number,
-    select?: (data: CoinBalance[]) => TResult
+	address?: SuiAddress | null,
+	refetchInterval?: number,
+	staleTime?: number,
+	select?: (data: CoinBalance[]) => TResult,
 ) {
-    const rpc = useRpcClient();
-    return useQuery({
-        queryKey: ['get-all-balance', address],
-        queryFn: () => rpc.getAllBalances({ owner: address! }),
-        enabled: !!address,
-        refetchInterval,
-        staleTime,
-        select,
-    });
+	const rpc = useRpcClient();
+	return useQuery({
+		queryKey: ['get-all-balance', address],
+		queryFn: () => rpc.getAllBalances({ owner: address! }),
+		enabled: !!address,
+		refetchInterval,
+		staleTime,
+		select,
+	});
 }

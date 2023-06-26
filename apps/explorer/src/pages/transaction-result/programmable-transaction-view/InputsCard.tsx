@@ -12,77 +12,64 @@ const REGEX_NUMBER = /^\d+$/;
 const DEFAULT_ITEMS_TO_SHOW = 10;
 
 interface InputsCardProps {
-    inputs: SuiCallArg[];
+	inputs: SuiCallArg[];
 }
 
 export function InputsCard({ inputs }: InputsCardProps) {
-    const defaultOpen = inputs.length < DEFAULT_ITEMS_TO_SHOW;
+	const defaultOpen = inputs.length < DEFAULT_ITEMS_TO_SHOW;
 
-    if (!inputs?.length) {
-        return null;
-    }
+	if (!inputs?.length) {
+		return null;
+	}
 
-    const expandableItems = inputs.map((input, index) => (
-        <TransactionBlockCardSection
-            key={index}
-            title={`Input ${index}`}
-            defaultOpen={defaultOpen}
-        >
-            <div
-                data-testid="inputs-card-content"
-                className="flex flex-col gap-2"
-            >
-                {Object.entries(input).map(([key, value]) => {
-                    let renderValue;
-                    const stringValue = String(value);
+	const expandableItems = inputs.map((input, index) => (
+		<TransactionBlockCardSection key={index} title={`Input ${index}`} defaultOpen={defaultOpen}>
+			<div data-testid="inputs-card-content" className="flex flex-col gap-2">
+				{Object.entries(input).map(([key, value]) => {
+					let renderValue;
+					const stringValue = String(value);
 
-                    if (key === 'mutable') {
-                        renderValue = String(value);
-                    } else if (key === 'objectId') {
-                        renderValue = <ObjectLink objectId={stringValue} />;
-                    } else if (
-                        'valueType' in input &&
-                        'value' in input &&
-                        input.valueType === 'address' &&
-                        key === 'value'
-                    ) {
-                        renderValue = <AddressLink address={stringValue} />;
-                    } else if (REGEX_NUMBER.test(stringValue)) {
-                        renderValue = Number(value).toLocaleString();
-                    } else {
-                        renderValue = stringValue;
-                    }
+					if (key === 'mutable') {
+						renderValue = String(value);
+					} else if (key === 'objectId') {
+						renderValue = <ObjectLink objectId={stringValue} />;
+					} else if (
+						'valueType' in input &&
+						'value' in input &&
+						input.valueType === 'address' &&
+						key === 'value'
+					) {
+						renderValue = <AddressLink address={stringValue} />;
+					} else if (REGEX_NUMBER.test(stringValue)) {
+						renderValue = Number(value).toLocaleString();
+					} else {
+						renderValue = stringValue;
+					}
 
-                    return (
-                        <div
-                            key={key}
-                            className="flex items-start justify-between"
-                        >
-                            <Text variant="pBody/medium" color="steel-dark">
-                                {key}
-                            </Text>
+					return (
+						<div key={key} className="flex items-start justify-between">
+							<Text variant="pBody/medium" color="steel-dark">
+								{key}
+							</Text>
 
-                            <div className="max-w-[66%] break-all text-right">
-                                <Text
-                                    variant="pBody/medium"
-                                    color="steel-darker"
-                                >
-                                    {renderValue}
-                                </Text>
-                            </div>
-                        </div>
-                    );
-                })}
-            </div>
-        </TransactionBlockCardSection>
-    ));
+							<div className="max-w-[66%] break-all text-right">
+								<Text variant="pBody/medium" color="steel-darker">
+									{renderValue}
+								</Text>
+							</div>
+						</div>
+					);
+				})}
+			</div>
+		</TransactionBlockCardSection>
+	));
 
-    return (
-        <ProgrammableTxnBlockCard
-            items={expandableItems}
-            itemsLabel="Inputs"
-            defaultItemsToShow={DEFAULT_ITEMS_TO_SHOW}
-            noExpandableList={defaultOpen}
-        />
-    );
+	return (
+		<ProgrammableTxnBlockCard
+			items={expandableItems}
+			itemsLabel="Inputs"
+			defaultItemsToShow={DEFAULT_ITEMS_TO_SHOW}
+			noExpandableList={defaultOpen}
+		/>
+	);
 }

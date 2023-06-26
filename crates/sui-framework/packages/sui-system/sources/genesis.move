@@ -77,6 +77,7 @@ module sui_system::genesis {
     /// The `create` function was called with duplicate validators.
     const EDuplicateValidator: u64 = 1;
 
+    #[allow(unused_function)]
     /// This function will be explicitly called once at genesis.
     /// It will create a singleton SuiSystemState object, which contains
     /// all the information we need in the system.

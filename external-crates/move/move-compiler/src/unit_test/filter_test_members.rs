@@ -198,7 +198,7 @@ fn create_test_poison(mloc: Loc) -> P::ModuleMember {
         attributes: vec![],
         loc: mloc,
         visibility: P::Visibility::Internal,
-        entry: None,
+        entry: Some(mloc), // it's a bit of a hack to avoid treating this function as unused
         acquires: vec![],
         signature,
         name: P::FunctionName(sp(mloc, "unit_test_poison".into())),

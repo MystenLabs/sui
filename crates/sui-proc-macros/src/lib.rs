@@ -232,6 +232,7 @@ pub fn sim_test(args: TokenStream, item: TokenStream) -> TokenStream {
         let sig = &input.sig;
         let body = &input.block;
         quote! {
+            #[allow(clippy::needless_return)]
             #[tokio::test]
             #ignore
             #sig {

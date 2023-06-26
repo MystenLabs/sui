@@ -802,8 +802,6 @@ implementing a custom logic that relies on the <code><a href="kiosk.md#0x2_kiosk
 
 Place any object into a Kiosk.
 Performs an authorization check to make sure only owner can do that.
-Makes sure a <code>TransferPolicy</code> exists for <code>T</code>, otherwise assets can be
-locked in the <code><a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a></code> forever.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_place">place</a>&lt;T: store, key&gt;(self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">kiosk::Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">kiosk::KioskOwnerCap</a>, item: T)
@@ -837,7 +835,7 @@ way, an item can only be listed either with a <code>list</code> function or with
 <code>list_with_purchase_cap</code>.
 
 Requires policy for <code>T</code> to make sure that there's an issued <code>TransferPolicy</code>
-and the item can be sold.
+and the item can be sold, otherwise the asset might be locked forever.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_lock">lock</a>&lt;T: store, key&gt;(self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">kiosk::Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">kiosk::KioskOwnerCap</a>, _policy: &<a href="transfer_policy.md#0x2_transfer_policy_TransferPolicy">transfer_policy::TransferPolicy</a>&lt;T&gt;, item: T)

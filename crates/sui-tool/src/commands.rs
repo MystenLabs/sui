@@ -4,7 +4,7 @@
 use crate::{
     db_tool::{execute_db_tool_command, print_db_all_tables, DbToolCommand},
     get_object, get_transaction_block, make_clients, restore_from_db_checkpoint,
-    ConciseObjectOutput, GroupedObjectOutput, VerboseObjectOutput,
+    state_sync_from_archive, ConciseObjectOutput, GroupedObjectOutput, VerboseObjectOutput,
 };
 use anyhow::Result;
 use std::path::PathBuf;
@@ -18,6 +18,7 @@ use clap::*;
 use fastcrypto::encoding::Encoding;
 use sui_config::Config;
 use sui_core::authority_aggregator::AuthorityAggregatorBuilder;
+use sui_storage::object_store::ObjectStoreConfig;
 use sui_types::messages_checkpoint::{
     CheckpointRequest, CheckpointResponse, CheckpointSequenceNumber,
 };
@@ -114,6 +115,19 @@ pub enum ToolCommand {
         db_path: String,
         #[clap(subcommand)]
         cmd: Option<DbToolCommand>,
+    },
+
+    /// Tool to sync the node from archive store
+    #[clap(name = "sync-from-archive")]
+    SyncFromArchive {
+        #[clap(long = "genesis")]
+        genesis: PathBuf,
+        #[clap(long = "db-path")]
+        db_path: PathBuf,
+        #[clap(flatten)]
+        object_store_config: ObjectStoreConfig,
+        #[clap(default_value_t = 5)]
+        download_concurrency: usize,
     },
 
     #[clap(name = "dump-validators")]
@@ -360,6 +374,20 @@ impl ToolCommand {
             } => {
                 execute_replay_command(rpc_url, safety_checks, use_authority, cfg_path, cmd)
                     .await?;
+            }
+            ToolCommand::SyncFromArchive {
+                genesis,
+                db_path,
+                object_store_config,
+                download_concurrency,
+            } => {
+                state_sync_from_archive(
+                    &db_path,
+                    &genesis,
+                    object_store_config,
+                    download_concurrency,
+                )
+                .await?;
             }
             ToolCommand::SignTransaction {
                 genesis,

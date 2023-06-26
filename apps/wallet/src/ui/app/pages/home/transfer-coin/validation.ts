@@ -8,12 +8,12 @@ import { createSuiAddressValidation } from '_components/address-input/validation
 import { createTokenValidation } from '_src/shared/validation';
 
 export function createValidationSchemaStepOne(
-    rpc: JsonRpcProvider,
-    suiNSEnabled: boolean,
-    ...args: Parameters<typeof createTokenValidation>
+	rpc: JsonRpcProvider,
+	suiNSEnabled: boolean,
+	...args: Parameters<typeof createTokenValidation>
 ) {
-    return Yup.object({
-        to: createSuiAddressValidation(rpc, suiNSEnabled),
-        amount: createTokenValidation(...args),
-    });
+	return Yup.object({
+		to: createSuiAddressValidation(rpc, suiNSEnabled),
+		amount: createTokenValidation(...args),
+	});
 }

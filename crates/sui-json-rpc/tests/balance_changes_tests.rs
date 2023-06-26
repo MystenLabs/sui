@@ -10,7 +10,7 @@ use test_utils::network::TestClusterBuilder;
 
 #[tokio::test]
 async fn test_dry_run_publish_with_mocked_coin() -> Result<(), anyhow::Error> {
-    let cluster = TestClusterBuilder::new().build().await.unwrap();
+    let cluster = TestClusterBuilder::new().build().await;
     let context = &cluster.wallet;
 
     let address = cluster.get_address_0();

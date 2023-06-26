@@ -4,14 +4,14 @@
 import { SuiObjectChangeTypes } from './types';
 
 export const ObjectChangeLabels = {
-    created: 'Created',
-    mutated: 'Updated',
-    transferred: 'Transfer',
-    published: 'Publish',
-    deleted: 'Deleted',
-    wrapped: 'Wrap',
+	created: 'Created',
+	mutated: 'Updated',
+	transferred: 'Transfer',
+	published: 'Publish',
+	deleted: 'Deleted',
+	wrapped: 'Wrap',
 };
 
 export function getObjectChangeLabel(type: SuiObjectChangeTypes) {
-    return ObjectChangeLabels[type];
+	return ObjectChangeLabels[type];
 }

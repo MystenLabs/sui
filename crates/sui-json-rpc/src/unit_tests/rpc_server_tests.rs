@@ -34,7 +34,7 @@ use tokio::time::sleep;
 
 #[sim_test]
 async fn test_get_objects() -> Result<(), anyhow::Error> {
-    let cluster = TestClusterBuilder::new().build().await?;
+    let cluster = TestClusterBuilder::new().build().await;
 
     let http_client = cluster.rpc_client();
     let address = cluster.get_address_0();
@@ -65,7 +65,7 @@ async fn test_get_objects() -> Result<(), anyhow::Error> {
 
 #[tokio::test]
 async fn test_get_package_with_display_should_not_fail() -> Result<(), anyhow::Error> {
-    let cluster = TestClusterBuilder::new().build().await?;
+    let cluster = TestClusterBuilder::new().build().await;
     let http_client = cluster.rpc_client();
     let response = http_client
         .get_object(
@@ -87,7 +87,7 @@ async fn test_get_package_with_display_should_not_fail() -> Result<(), anyhow::E
 
 #[sim_test]
 async fn test_public_transfer_object() -> Result<(), anyhow::Error> {
-    let cluster = TestClusterBuilder::new().build().await?;
+    let cluster = TestClusterBuilder::new().build().await;
     let http_client = cluster.rpc_client();
     let address = cluster.get_address_0();
 
@@ -169,7 +169,7 @@ fn assert_same_object_changes_ignoring_version_and_digest(
 
 #[sim_test]
 async fn test_publish() -> Result<(), anyhow::Error> {
-    let cluster = TestClusterBuilder::new().build().await?;
+    let cluster = TestClusterBuilder::new().build().await;
     let http_client = cluster.rpc_client();
     let address = cluster.get_address_0();
 
@@ -223,7 +223,7 @@ async fn test_publish() -> Result<(), anyhow::Error> {
 
 #[sim_test]
 async fn test_move_call() -> Result<(), anyhow::Error> {
-    let cluster = TestClusterBuilder::new().build().await?;
+    let cluster = TestClusterBuilder::new().build().await;
     let http_client = cluster.rpc_client();
     let address = cluster.get_address_0();
 
@@ -284,7 +284,7 @@ async fn test_move_call() -> Result<(), anyhow::Error> {
 
 #[sim_test]
 async fn test_get_object_info() -> Result<(), anyhow::Error> {
-    let cluster = TestClusterBuilder::new().build().await?;
+    let cluster = TestClusterBuilder::new().build().await;
     let http_client = cluster.rpc_client();
     let address = cluster.get_address_0();
     let objects = http_client
@@ -319,7 +319,7 @@ async fn test_get_object_info() -> Result<(), anyhow::Error> {
 
 #[sim_test]
 async fn test_get_object_data_with_content() -> Result<(), anyhow::Error> {
-    let cluster = TestClusterBuilder::new().build().await?;
+    let cluster = TestClusterBuilder::new().build().await;
     let http_client = cluster.rpc_client();
     let address = cluster.get_address_0();
     let objects = http_client
@@ -351,7 +351,7 @@ async fn test_get_object_data_with_content() -> Result<(), anyhow::Error> {
 
 #[sim_test]
 async fn test_get_coins() -> Result<(), anyhow::Error> {
-    let cluster = TestClusterBuilder::new().build().await?;
+    let cluster = TestClusterBuilder::new().build().await;
     let http_client = cluster.rpc_client();
     let address = cluster.get_address_0();
 
@@ -404,7 +404,7 @@ async fn test_get_coins() -> Result<(), anyhow::Error> {
 
 #[sim_test]
 async fn test_get_balance() -> Result<(), anyhow::Error> {
-    let cluster = TestClusterBuilder::new().build().await?;
+    let cluster = TestClusterBuilder::new().build().await;
     let http_client = cluster.rpc_client();
     let address = cluster.get_address_0();
 
@@ -423,7 +423,7 @@ async fn test_get_balance() -> Result<(), anyhow::Error> {
 
 #[sim_test]
 async fn test_get_metadata() -> Result<(), anyhow::Error> {
-    let cluster = TestClusterBuilder::new().build().await?;
+    let cluster = TestClusterBuilder::new().build().await;
 
     let http_client = cluster.rpc_client();
     let address = cluster.get_address_0();
@@ -507,7 +507,7 @@ async fn test_get_metadata() -> Result<(), anyhow::Error> {
 
 #[sim_test]
 async fn test_get_total_supply() -> Result<(), anyhow::Error> {
-    let cluster = TestClusterBuilder::new().build().await?;
+    let cluster = TestClusterBuilder::new().build().await;
 
     let http_client = cluster.rpc_client();
     let address = cluster.get_address_0();
@@ -643,7 +643,7 @@ async fn test_get_total_supply() -> Result<(), anyhow::Error> {
 
 #[sim_test]
 async fn test_staking() -> Result<(), anyhow::Error> {
-    let cluster = TestClusterBuilder::new().build().await?;
+    let cluster = TestClusterBuilder::new().build().await;
 
     let http_client = cluster.rpc_client();
     let address = cluster.get_address_0();
@@ -724,7 +724,7 @@ async fn test_unstaking() -> Result<(), anyhow::Error> {
     let cluster = TestClusterBuilder::new()
         .with_epoch_duration_ms(10000)
         .build()
-        .await?;
+        .await;
 
     let http_client = cluster.rpc_client();
     let address = cluster.get_address_0();
@@ -857,7 +857,7 @@ async fn test_unstaking() -> Result<(), anyhow::Error> {
 
 #[sim_test]
 async fn test_staking_multiple_coins() -> Result<(), anyhow::Error> {
-    let cluster = TestClusterBuilder::new().build().await?;
+    let cluster = TestClusterBuilder::new().build().await;
 
     let http_client = cluster.rpc_client();
     let address = cluster.get_address_0();

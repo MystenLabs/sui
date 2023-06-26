@@ -5,313 +5,257 @@ import { useMutation } from '@tanstack/react-query';
 
 import { useOwnedKiosk } from '../hooks/kiosk';
 import { OwnedObjectType } from '../components/Inventory/OwnedObjects';
-import { TransactionBlock } from '@mysten/sui.js';
+import { ObjectId, TransactionBlock } from '@mysten/sui.js';
 import {
-  Kiosk,
-  createKioskAndShare,
-  delist,
-  list,
-  place,
-  placeAndList,
-  purchaseAndResolvePolicies,
-  queryTransferPolicy,
-  take,
-  testnetEnvironment,
-  withdrawFromKiosk,
+	Kiosk,
+	createKioskAndShare,
+	delist,
+	list,
+	place,
+	placeAndList,
+	purchaseAndResolvePolicies,
+	queryTransferPolicy,
+	take,
+	testnetEnvironment,
+	withdrawFromKiosk,
 } from '@mysten/kiosk';
 import { useTransactionExecution } from '../hooks/useTransactionExecution';
 import { useWalletKit } from '@mysten/wallet-kit';
 import { useRpc } from '../context/RpcClientContext';
 import { toast } from 'react-hot-toast';
+import { findActiveCap } from '../utils/utils';
 
 type MutationParams = {
-  onSuccess?: () => void;
-  onError?: (e: Error) => void;
+	onSuccess?: () => void;
+	onError?: (e: Error) => void;
 };
 
 const defaultOnError = (e: Error) => {
-  if (typeof e === 'string') toast.error(e);
-  else toast.error(e?.message);
+	if (typeof e === 'string') toast.error(e);
+	else toast.error(e?.message);
 };
 
 /**
  * Create a new kiosk.
  */
 export function useCreateKioskMutation({ onSuccess, onError }: MutationParams) {
-  const { currentAccount } = useWalletKit();
-  const { signAndExecute } = useTransactionExecution();
+	const { currentAccount } = useWalletKit();
+	const { signAndExecute } = useTransactionExecution();
 
-  return useMutation({
-    mutationFn: () => {
-      if (!currentAccount?.address)
-        throw new Error('You need to connect your wallet!');
-      const tx = new TransactionBlock();
-      const kiosk_cap = createKioskAndShare(tx);
-      tx.transferObjects(
-        [kiosk_cap],
-        tx.pure(currentAccount.address, 'address'),
-      );
-      return signAndExecute({ tx });
-    },
-    onSuccess,
-    onError: onError || defaultOnError,
-  });
+	return useMutation({
+		mutationFn: () => {
+			if (!currentAccount?.address) throw new Error('You need to connect your wallet!');
+			const tx = new TransactionBlock();
+			const kiosk_cap = createKioskAndShare(tx);
+			tx.transferObjects([kiosk_cap], tx.pure(currentAccount.address, 'address'));
+			return signAndExecute({ tx });
+		},
+		onSuccess,
+		onError: onError || defaultOnError,
+	});
 }
 
 /**
  * Place & List or List for sale in kiosk.
  */
-export function usePlaceAndListMutation({
-  onSuccess,
-  onError,
-}: MutationParams) {
-  const { data: ownedKiosk } = useOwnedKiosk();
-  const { signAndExecute } = useTransactionExecution();
+export function usePlaceAndListMutation({ onSuccess, onError }: MutationParams) {
+	const { currentAccount } = useWalletKit();
+	const { data: ownedKiosk } = useOwnedKiosk(currentAccount?.address);
+	const { signAndExecute } = useTransactionExecution();
 
-  return useMutation({
-    mutationFn: ({
-      item,
-      price,
-      shouldPlace,
-    }: {
-      item: OwnedObjectType;
-      price: string;
-      shouldPlace?: boolean;
-    }) => {
-      if (!ownedKiosk?.kioskId || !ownedKiosk.kioskCap)
-        throw new Error('Missing kiosk or kiosk cap');
+	return useMutation({
+		mutationFn: ({
+			item,
+			price,
+			shouldPlace,
+			kioskId,
+		}: {
+			item: OwnedObjectType;
+			price: string;
+			shouldPlace?: boolean;
+			kioskId: ObjectId;
+		}) => {
+			// find active kiosk cap.
+			const cap = findActiveCap(ownedKiosk?.caps, kioskId);
 
-      const tx = new TransactionBlock();
+			if (!cap || !currentAccount?.address) throw new Error('Missing account, kiosk or kiosk cap');
 
-      if (shouldPlace)
-        placeAndList(
-          tx,
-          item.type,
-          ownedKiosk.kioskId,
-          ownedKiosk.kioskCap,
-          item.objectId,
-          price,
-        );
-      else
-        list(
-          tx,
-          item.type,
-          ownedKiosk.kioskId,
-          ownedKiosk.kioskCap,
-          item.objectId,
-          price,
-        );
+			const tx = new TransactionBlock();
 
-      return signAndExecute({ tx });
-    },
-    onSuccess,
-    onError: onError || defaultOnError,
-  });
+			if (shouldPlace) placeAndList(tx, item.type, cap.kioskId, cap.objectId, item.objectId, price);
+			else list(tx, item.type, cap.kioskId, cap.objectId, item.objectId, price);
+
+			return signAndExecute({ tx });
+		},
+		onSuccess,
+		onError: onError || defaultOnError,
+	});
 }
 
 /**
  * Mutation to place an item in the kiosk.
  */
 export function usePlaceMutation({ onSuccess, onError }: MutationParams) {
-  const { data: ownedKiosk } = useOwnedKiosk();
-  const { signAndExecute } = useTransactionExecution();
+	const { currentAccount } = useWalletKit();
+	const { data: ownedKiosk } = useOwnedKiosk(currentAccount?.address);
+	const { signAndExecute } = useTransactionExecution();
 
-  return useMutation({
-    mutationFn: (item: OwnedObjectType) => {
-      if (!ownedKiosk?.kioskId || !ownedKiosk.kioskCap)
-        throw new Error('Missing kiosk or kiosk cap');
+	return useMutation({
+		mutationFn: ({ item, kioskId }: { item: OwnedObjectType; kioskId: string }) => {
+			// find active kiosk cap.
+			const cap = findActiveCap(ownedKiosk?.caps, kioskId);
 
-      const tx = new TransactionBlock();
-      place(
-        tx,
-        item.type,
-        ownedKiosk.kioskId,
-        ownedKiosk.kioskCap,
-        item.objectId,
-      );
+			if (!cap || !currentAccount?.address) throw new Error('Missing account, kiosk or kiosk cap');
 
-      return signAndExecute({ tx });
-    },
-    onSuccess,
-    onError: onError || defaultOnError,
-  });
+			const tx = new TransactionBlock();
+			place(tx, item.type, cap.kioskId, cap.objectId, item.objectId);
+
+			return signAndExecute({ tx });
+		},
+		onSuccess,
+		onError: onError || defaultOnError,
+	});
 }
 
 /**
  * Withdraw profits from kiosk
  */
 export function useWithdrawMutation({ onError, onSuccess }: MutationParams) {
-  const { currentAccount } = useWalletKit();
-  const { data: ownedKiosk } = useOwnedKiosk();
-  const { signAndExecute } = useTransactionExecution();
+	const { currentAccount } = useWalletKit();
+	const { data: ownedKiosk } = useOwnedKiosk(currentAccount?.address);
+	const { signAndExecute } = useTransactionExecution();
 
-  return useMutation({
-    mutationFn: (kiosk: Kiosk) => {
-      if (
-        !ownedKiosk?.kioskId ||
-        !ownedKiosk.kioskCap ||
-        !currentAccount?.address
-      )
-        throw new Error('Missing account, kiosk or kiosk cap');
+	return useMutation({
+		mutationFn: (kiosk: Kiosk) => {
+			// find active kiosk cap.
+			const cap = findActiveCap(ownedKiosk?.caps, kiosk.id);
 
-      const tx = new TransactionBlock();
-      const coin = withdrawFromKiosk(
-        tx,
-        ownedKiosk.kioskId,
-        ownedKiosk.kioskCap,
-        kiosk.profits,
-      );
+			if (!cap || !currentAccount?.address) throw new Error('Missing account, kiosk or kiosk cap');
 
-      tx.transferObjects([coin], tx.pure(currentAccount.address, 'address'));
+			const tx = new TransactionBlock();
+			const coin = withdrawFromKiosk(tx, cap.kioskId, cap.objectId, kiosk.profits);
 
-      return signAndExecute({ tx });
-    },
-    onSuccess,
-    onError: onError || defaultOnError,
-  });
+			tx.transferObjects([coin], tx.pure(currentAccount.address, 'address'));
+
+			return signAndExecute({ tx });
+		},
+		onSuccess,
+		onError: onError || defaultOnError,
+	});
 }
 
 /**
  * Mutation to take an item from the kiosk.
  */
 export function useTakeMutation({ onSuccess, onError }: MutationParams) {
-  const { data: ownedKiosk } = useOwnedKiosk();
-  const { currentAccount } = useWalletKit();
-  const { signAndExecute } = useTransactionExecution();
+	const { currentAccount } = useWalletKit();
+	const { data: ownedKiosk } = useOwnedKiosk(currentAccount?.address);
+	const { signAndExecute } = useTransactionExecution();
 
-  return useMutation({
-    mutationFn: (item: OwnedObjectType) => {
-      if (
-        !ownedKiosk?.kioskId ||
-        !ownedKiosk.kioskCap ||
-        !currentAccount?.address
-      )
-        throw new Error('Missing account, kiosk or kiosk cap');
-      if (!item?.objectId) throw new Error('Missing parameters.');
+	return useMutation({
+		mutationFn: ({ item, kioskId }: { item: OwnedObjectType; kioskId: string }) => {
+			// find active kiosk cap.
+			const cap = findActiveCap(ownedKiosk?.caps, kioskId);
 
-      const tx = new TransactionBlock();
+			if (!cap || !currentAccount?.address) throw new Error('Missing account, kiosk or kiosk cap');
 
-      const obj = take(
-        tx,
-        item.type,
-        ownedKiosk.kioskId,
-        ownedKiosk.kioskCap,
-        item.objectId,
-      );
+			if (!item?.objectId) throw new Error('Missing item.');
 
-      tx.transferObjects([obj], tx.pure(currentAccount?.address));
+			const tx = new TransactionBlock();
 
-      return signAndExecute({ tx });
-    },
-    onSuccess,
-    onError: onError || defaultOnError,
-  });
+			const obj = take(tx, item.type, cap.kioskId, cap.objectId, item.objectId);
+
+			tx.transferObjects([obj], tx.pure(currentAccount?.address));
+
+			return signAndExecute({ tx });
+		},
+		onSuccess,
+		onError: onError || defaultOnError,
+	});
 }
 
 /**
  * Mutation to delist an item.
  */
 export function useDelistMutation({ onSuccess, onError }: MutationParams) {
-  const { data: ownedKiosk } = useOwnedKiosk();
-  const { currentAccount } = useWalletKit();
-  const { signAndExecute } = useTransactionExecution();
+	const { currentAccount } = useWalletKit();
+	const { data: ownedKiosk } = useOwnedKiosk(currentAccount?.address);
+	const { signAndExecute } = useTransactionExecution();
 
-  return useMutation({
-    mutationFn: (item: OwnedObjectType) => {
-      if (
-        !ownedKiosk?.kioskId ||
-        !ownedKiosk.kioskCap ||
-        !currentAccount?.address
-      )
-        throw new Error('Missing account, kiosk or kiosk cap');
-      if (!item?.objectId) throw new Error('Missing parameters.');
+	return useMutation({
+		mutationFn: ({ item, kioskId }: { item: OwnedObjectType; kioskId: string }) => {
+			// find active kiosk cap.
+			const cap = findActiveCap(ownedKiosk?.caps, kioskId);
 
-      const tx = new TransactionBlock();
+			if (!cap || !currentAccount?.address) throw new Error('Missing account, kiosk or kiosk cap');
 
-      delist(
-        tx,
-        item.type,
-        ownedKiosk.kioskId,
-        ownedKiosk.kioskCap,
-        item.objectId,
-      );
+			if (!item?.objectId) throw new Error('Missing item.');
 
-      return signAndExecute({ tx });
-    },
-    onSuccess,
-    onError: onError || defaultOnError,
-  });
+			const tx = new TransactionBlock();
+
+			delist(tx, item.type, cap.kioskId, cap.objectId, item.objectId);
+
+			return signAndExecute({ tx });
+		},
+		onSuccess,
+		onError: onError || defaultOnError,
+	});
 }
 
 /**
  * Mutation to delist an item.
  */
-export function usePurchaseItemMutation({
-  onSuccess,
-  onError,
-}: MutationParams) {
-  const { data: ownedKiosk } = useOwnedKiosk();
-  const { currentAccount } = useWalletKit();
-  const { signAndExecute } = useTransactionExecution();
-  const provider = useRpc();
+export function usePurchaseItemMutation({ onSuccess, onError }: MutationParams) {
+	const { currentAccount } = useWalletKit();
+	const { data: ownedKiosk } = useOwnedKiosk(currentAccount?.address);
+	const { signAndExecute } = useTransactionExecution();
+	const provider = useRpc();
 
-  return useMutation({
-    mutationFn: async ({
-      item,
-      kioskId,
-    }: {
-      item: OwnedObjectType;
-      kioskId: string;
-    }) => {
-      if (
-        !item ||
-        !item.listing?.price ||
-        !kioskId ||
-        !currentAccount?.address ||
-        !ownedKiosk?.kioskId ||
-        !ownedKiosk.kioskCap
-      )
-        throw new Error('Missing parameters');
+	return useMutation({
+		mutationFn: async ({ item, kioskId }: { item: OwnedObjectType; kioskId: string }) => {
+			if (
+				!item ||
+				!item.listing?.price ||
+				!kioskId ||
+				!currentAccount?.address ||
+				!ownedKiosk?.kioskId ||
+				!ownedKiosk.kioskCap
+			)
+				throw new Error('Missing parameters');
 
-      const policy = await queryTransferPolicy(provider, item.type);
+			const policy = await queryTransferPolicy(provider, item.type);
 
-      const policyId = policy[0]?.id;
-      if (!policyId) {
-        throw new Error(
-          `This item doesn't have a Transfer Policy attached so it can't be traded through kiosk.`,
-        );
-      }
+			const policyId = policy[0]?.id;
+			if (!policyId) {
+				throw new Error(
+					`This item doesn't have a Transfer Policy attached so it can't be traded through kiosk.`,
+				);
+			}
 
-      const tx = new TransactionBlock();
+			const tx = new TransactionBlock();
 
-      const environment = testnetEnvironment;
+			const environment = testnetEnvironment;
 
-      const result = purchaseAndResolvePolicies(
-        tx,
-        item.type,
-        item.listing.price,
-        kioskId,
-        item.objectId,
-        policy[0],
-        environment,
-        {
-          ownedKiosk: ownedKiosk.kioskId,
-          ownedKioskCap: ownedKiosk.kioskCap,
-        },
-      );
+			const result = purchaseAndResolvePolicies(
+				tx,
+				item.type,
+				item.listing.price,
+				kioskId,
+				item.objectId,
+				policy[0],
+				environment,
+				{
+					ownedKiosk: ownedKiosk.kioskId,
+					ownedKioskCap: ownedKiosk.kioskCap,
+				},
+			);
 
-      if (result.canTransfer)
-        place(
-          tx,
-          item.type,
-          ownedKiosk.kioskId,
-          ownedKiosk.kioskCap,
-          result.item,
-        );
+			if (result.canTransfer)
+				place(tx, item.type, ownedKiosk.kioskId, ownedKiosk.kioskCap, result.item);
 
-      return await signAndExecute({ tx });
-    },
-    onSuccess,
-    onError: onError || defaultOnError,
-  });
+			return await signAndExecute({ tx });
+		},
+		onSuccess,
+		onError: onError || defaultOnError,
+	});
 }

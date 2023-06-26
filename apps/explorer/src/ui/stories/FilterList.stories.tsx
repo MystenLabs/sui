@@ -7,18 +7,18 @@ import { useState } from 'react';
 import { FilterList, type FilterListProps } from '../FilterList';
 
 export default {
-    component: FilterList,
+	component: FilterList,
 } as Meta;
 
 export const Default: StoryObj<FilterListProps> = {
-    render: (props) => {
-        const [value, onChange] = useState('');
-        return <FilterList {...props} value={value} onChange={onChange} />;
-    },
-    args: {
-        options: ['MINT', 'SUI'],
-        disabled: false,
-        size: 'sm',
-        lessSpacing: true,
-    },
+	render: (props) => {
+		const [value, onChange] = useState('');
+		return <FilterList {...props} value={value} onChange={onChange} />;
+	},
+	args: {
+		options: ['MINT', 'SUI'],
+		disabled: false,
+		size: 'sm',
+		lessSpacing: true,
+	},
 };

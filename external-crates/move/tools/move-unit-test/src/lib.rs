@@ -114,12 +114,6 @@ pub struct UnitTestingConfig {
     /// Whether the test output need to be printed out.
     #[clap(short = 'v', long = "verbose")]
     pub report_writeset: bool,
-
-    /// Use the EVM-based execution backend.
-    /// Does not work with --stackless.
-    #[cfg(feature = "evm-backend")]
-    #[clap(long = "evm")]
-    pub evm: bool,
 }
 
 fn format_module_id(module_id: &ModuleId) -> String {
@@ -148,9 +142,6 @@ impl UnitTestingConfig {
             list: false,
             named_address_values: vec![],
             report_writeset: false,
-
-            #[cfg(feature = "evm-backend")]
-            evm: false,
         }
     }
 
@@ -252,8 +243,6 @@ impl UnitTestingConfig {
             cost_table,
             verify_and_create_named_address_mapping(self.named_address_values.clone()).unwrap(),
             self.report_writeset,
-            #[cfg(feature = "evm-backend")]
-            self.evm,
         )
         .unwrap();
 

@@ -13,20 +13,20 @@ const queryClient = new QueryClient();
 const rpcProvider = new JsonRpcProvider(testnetConnection);
 
 export default function Root() {
-  return (
-    <WalletKitProvider>
-      <QueryClientProvider client={queryClient}>
-        <RpcClientContext.Provider value={rpcProvider}>
-          <Header></Header>
-          <div className="min-h-[80vh]">
-            <Outlet />
-          </div>
-          <div className="mt-6 border-t border-primary text-center py-6">
-            Copyright © Mysten Labs, Inc.
-          </div>
-          <Toaster position="bottom-center" />
-        </RpcClientContext.Provider>
-      </QueryClientProvider>
-    </WalletKitProvider>
-  );
+	return (
+		<WalletKitProvider>
+			<QueryClientProvider client={queryClient}>
+				<RpcClientContext.Provider value={rpcProvider}>
+					<Header></Header>
+					<div className="min-h-[80vh]">
+						<Outlet />
+					</div>
+					<div className="mt-6 border-t border-primary text-center py-6">
+						Copyright © Mysten Labs, Inc.
+					</div>
+					<Toaster position="bottom-center" />
+				</RpcClientContext.Provider>
+			</QueryClientProvider>
+		</WalletKitProvider>
+	);
 }

@@ -10,30 +10,25 @@ import { useCopyToClipboard } from '../hooks/useCopyToClipboard';
 import { Text } from '../shared/text';
 
 type AccountAddressProps = {
-    copyable?: boolean;
-    address?: SuiAddress;
+	copyable?: boolean;
+	address?: SuiAddress;
 };
 
 export function AccountAddress({ copyable, address }: AccountAddressProps) {
-    const activeAddress = useActiveAddress();
-    const addressToShow = address || activeAddress;
-    const copyCallback = useCopyToClipboard(addressToShow || '', {
-        copySuccessMessage: 'Address copied',
-    });
+	const activeAddress = useActiveAddress();
+	const addressToShow = address || activeAddress;
+	const copyCallback = useCopyToClipboard(addressToShow || '', {
+		copySuccessMessage: 'Address copied',
+	});
 
-    const { data: domainName } = useResolveSuiNSName(addressToShow);
+	const { data: domainName } = useResolveSuiNSName(addressToShow);
 
-    return addressToShow ? (
-        <div className="flex flex-nowrap flex-row items-center gap-1">
-            <Text variant="bodySmall" weight="medium" color="sui-dark" mono>
-                {domainName ?? formatAddress(addressToShow)}
-            </Text>
-            {copyable ? (
-                <Copy12
-                    className="text-steel cursor-pointer"
-                    onClick={copyCallback}
-                />
-            ) : null}
-        </div>
-    ) : null;
+	return addressToShow ? (
+		<div className="flex flex-nowrap flex-row items-center gap-1">
+			<Text variant="bodySmall" weight="medium" color="sui-dark" mono>
+				{domainName ?? formatAddress(addressToShow)}
+			</Text>
+			{copyable ? <Copy12 className="text-steel cursor-pointer" onClick={copyCallback} /> : null}
+		</div>
+	) : null;
 }

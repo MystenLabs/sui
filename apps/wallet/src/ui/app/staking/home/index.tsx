@@ -8,11 +8,11 @@ import StakePage from '../stake';
 import { Validators } from '../validators';
 
 export function Staking() {
-    return (
-        <Routes>
-            <Route path="/*" element={<Validators />} />
-            <Route path="/delegation-detail" element={<DelegationDetail />} />
-            <Route path="/new" element={<StakePage />} />
-        </Routes>
-    );
+	return (
+		<Routes>
+			<Route path="/*" element={<Validators />} />
+			<Route path="/delegation-detail" element={<DelegationDetail />} />
+			<Route path="/new" element={<StakePage />} />
+		</Routes>
+	);
 }

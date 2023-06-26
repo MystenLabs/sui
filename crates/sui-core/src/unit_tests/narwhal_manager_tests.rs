@@ -15,9 +15,9 @@ use narwhal_worker::TrivialTransactionValidator;
 use prometheus::Registry;
 use std::sync::Arc;
 use std::time::Duration;
+use sui_swarm_config::network_config_builder::ConfigBuilder;
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
 use sui_types::sui_system_state::SuiSystemStateTrait;
-use test_utils::authority::test_and_configure_authority_configs;
 use tokio::sync::broadcast;
 use tokio::time::{interval, sleep};
 
@@ -88,7 +88,9 @@ async fn send_transactions(
 
 #[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn test_narwhal_manager() {
-    let configs = test_and_configure_authority_configs(1);
+    let configs = ConfigBuilder::new_with_temp_dir()
+        .committee_size(1.try_into().unwrap())
+        .build();
     let mut narwhal_managers = Vec::new();
     let mut shutdown_senders = Vec::new();
 

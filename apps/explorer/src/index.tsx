@@ -24,11 +24,11 @@ initAmplitude();
 growthbook.loadFeatures();
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
-    <React.StrictMode>
-        <GrowthBookProvider growthbook={growthbook}>
-            <QueryClientProvider client={queryClient}>
-                <RouterProvider router={router} />
-            </QueryClientProvider>
-        </GrowthBookProvider>
-    </React.StrictMode>
+	<React.StrictMode>
+		<GrowthBookProvider growthbook={growthbook}>
+			<QueryClientProvider client={queryClient}>
+				<RouterProvider router={router} />
+			</QueryClientProvider>
+		</GrowthBookProvider>
+	</React.StrictMode>,
 );

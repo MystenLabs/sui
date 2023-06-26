@@ -10,86 +10,88 @@ import { toast } from 'react-hot-toast';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useKiosk, useOwnedKiosk } from '../../hooks/kiosk';
 import { KioskNotFound } from './KioskNotFound';
+import { useWalletKit } from '@mysten/wallet-kit';
+import { normalizeSuiAddress } from '@mysten/sui.js';
 
 export function KioskItems({ kioskId }: { kioskId?: string }) {
-  const location = useLocation();
-  const isKioskPage = location.pathname.startsWith('/kiosk/');
+	const location = useLocation();
+	const isKioskPage = location.pathname.startsWith('/kiosk/');
+	const { currentAccount } = useWalletKit();
 
-  const { data: walletKiosk } = useOwnedKiosk();
-  const ownedKiosk = walletKiosk?.kioskId;
+	const { data: walletKiosk } = useOwnedKiosk(currentAccount?.address);
 
-  // checks if this is an owned kiosk.
-  // We are depending on currentAccount too, as this is what triggers the `getOwnedKioskCap()` function to change
-  // using endsWith because we support it with both 0x prefix and without.
-  const isOwnedKiosk = () => {
-    return ownedKiosk?.endsWith(kioskId || '~');
-  };
+	// checks if this is an owned kiosk.
+	// We are depending on currentAccount too, as this is what triggers the `getOwnedKioskCap()` function to change
+	// using endsWith because we support it with both 0x prefix and without.
+	const isOwnedKiosk = () => {
+		return walletKiosk?.caps?.find(
+			(x) => kioskId && normalizeSuiAddress(x.kioskId).endsWith(kioskId),
+		);
+	};
 
-  const [modalItem, setModalItem] = useState<OwnedObjectType | null>(null);
+	const [modalItem, setModalItem] = useState<OwnedObjectType | null>(null);
 
-  const {
-    data: kioskData,
-    isLoading,
-    isError,
-    refetch: getKioskData,
-  } = useKiosk(kioskId);
+	const { data: kioskData, isLoading, isError, refetch: getKioskData } = useKiosk(kioskId);
 
-  const navigate = useNavigate();
+	const navigate = useNavigate();
 
-  useEffect(() => {
-    if (!isError) return;
-    toast.error(
-      'The requested kiosk was not found. You either supplied a wrong kiosk Id or the RPC call failed.',
-    );
-  }, [navigate, isError]);
+	useEffect(() => {
+		if (!isError) return;
+		toast.error(
+			'The requested kiosk was not found. You either supplied a wrong kiosk Id or the RPC call failed.',
+		);
+	}, [navigate, isError]);
 
-  const kioskItems = kioskData?.items || [];
-  const kioskListings = kioskData?.listings || {};
+	const kioskItems = kioskData?.items || [];
+	const kioskListings = kioskData?.listings || {};
 
-  if (isError && isKioskPage) return <KioskNotFound />;
+	if (!kioskId) return <div className="py-12">Supply a kiosk ID to continue.</div>;
 
-  if (isLoading) return <Loading />;
+	if (isError && isKioskPage) return <KioskNotFound />;
 
-  if (kioskItems.length === 0)
-    return <div className="py-12">The kiosk you are viewing is empty!</div>;
+	if (isLoading) return <Loading />;
 
-  return (
-    <div className="mt-12">
-      {
-        // We're hiding this when we've clicked "view kiosk" for our own kiosk.
-        isOwnedKiosk() && isKioskPage && (
-          <div className="bg-yellow-300 text-black rounded px-3 py-2 mb-6">
-            You're viewing your own kiosk
-          </div>
-        )
-      }
-      <div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-5">
-        {kioskId &&
-          kioskItems.map((item: OwnedObjectType) => (
-            <KioskItemCmp
-              key={item.objectId}
-              kioskId={kioskId}
-              item={item}
-              isGuest={!isOwnedKiosk()}
-              onSuccess={() => {
-                getKioskData();
-              }}
-              listing={kioskListings && kioskListings[item.objectId]}
-              listFn={(item: OwnedObjectType) => setModalItem(item)}
-            />
-          ))}
-        {modalItem && (
-          <ListPrice
-            item={modalItem}
-            onSuccess={() => {
-              toast.success('Item listed successfully.');
-              getKioskData(); // replace with single kiosk Item search here and replace
-              setModalItem(null); // replace modal.
-            }}
-            closeModal={() => setModalItem(null)}
-          />
-        )}
-      </div>
-    </div>
-  );
+	if (!kioskId || kioskItems.length === 0)
+		return <div className="py-12">The kiosk you are viewing is empty!</div>;
+
+	return (
+		<div className="mt-12">
+			{
+				// We're hiding this when we've clicked "view kiosk" for our own kiosk.
+				isOwnedKiosk() && isKioskPage && (
+					<div className="bg-yellow-300 text-black rounded px-3 py-2 mb-6">
+						You're viewing your own kiosk
+					</div>
+				)
+			}
+			<div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-5">
+				{kioskItems.map((item: OwnedObjectType) => (
+					<KioskItemCmp
+						key={item.objectId}
+						kioskId={kioskId}
+						item={item}
+						isGuest={!isOwnedKiosk()}
+						hasKiosk={!!walletKiosk?.kioskId}
+						onSuccess={() => {
+							getKioskData();
+						}}
+						listing={kioskListings && kioskListings[item.objectId]}
+						listFn={(item: OwnedObjectType) => setModalItem(item)}
+					/>
+				))}
+				{modalItem && (
+					<ListPrice
+						kioskId={kioskId}
+						item={modalItem}
+						onSuccess={() => {
+							toast.success('Item listed successfully.');
+							getKioskData(); // replace with single kiosk Item search here and replace
+							setModalItem(null); // replace modal.
+						}}
+						closeModal={() => setModalItem(null)}
+					/>
+				)}
+			</div>
+		</div>
+	);
 }

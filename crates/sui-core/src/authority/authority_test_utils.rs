@@ -88,9 +88,13 @@ pub async fn send_and_confirm_transaction_with_execution_error(
     // We also check the incremental effects of the transaction on the live object set against StateAccumulator
     // for testing and regression detection
     let state_acc = StateAccumulator::new(authority.database.clone());
-    let mut state = state_acc.accumulate_live_object_set();
+    let include_wrapped_tombstone = !authority
+        .epoch_store_for_testing()
+        .protocol_config()
+        .simplified_unwrap_then_delete();
+    let mut state = state_acc.accumulate_live_object_set(include_wrapped_tombstone);
     let (result, execution_error_opt) = authority.try_execute_for_test(&certificate).await?;
-    let state_after = state_acc.accumulate_live_object_set();
+    let state_after = state_acc.accumulate_live_object_set(include_wrapped_tombstone);
     let effects_acc = state_acc.accumulate_effects(
         vec![result.inner().data().clone()],
         epoch_store.protocol_config(),

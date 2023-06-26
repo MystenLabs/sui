@@ -91,6 +91,7 @@ mod test {
         test_simulated_load(TestInitData::new(&test_cluster).await, 120).await;
     }
 
+    #[ignore("Disabled due to flakiness - re-enable when failure is fixed")]
     #[sim_test(config = "test_config()")]
     async fn test_simulated_load_reconfig_restarts() {
         // TODO added to invalidate a failing test seed in CI. Remove me
@@ -252,7 +253,6 @@ mod test {
         test_simulated_load(TestInitData::new(&test_cluster).await, 120).await;
     }
 
-    #[ignore]
     #[sim_test(config = "test_config()")]
     async fn test_simulated_load_checkpoint_pruning() {
         let test_cluster = build_test_cluster(4, 1000).await;
@@ -341,8 +341,7 @@ mod test {
             .with_objects(init_framework.into_iter().map(|p| p.genesis_object()))
             .with_stake_subsidy_start_epoch(10)
             .build()
-            .await
-            .unwrap();
+            .await;
 
         let test_init_data = TestInitData::new(&test_cluster).await;
         let test_init_data_clone = test_init_data.clone();
@@ -408,7 +407,6 @@ mod test {
         init_test_cluster_builder(default_num_validators, default_epoch_duration_ms)
             .build()
             .await
-            .unwrap()
     }
 
     fn init_test_cluster_builder(

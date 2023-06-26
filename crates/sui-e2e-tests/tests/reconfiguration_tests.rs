@@ -30,7 +30,7 @@ use tokio::time::sleep;
 
 #[sim_test]
 async fn advance_epoch_tx_test() {
-    let test_cluster = TestClusterBuilder::new().build().await.unwrap();
+    let test_cluster = TestClusterBuilder::new().build().await;
     let states = test_cluster
         .swarm
         .validator_node_handles()
@@ -73,13 +73,13 @@ async fn advance_epoch_tx_test() {
 async fn basic_reconfig_end_to_end_test() {
     // TODO remove this sleep when this test passes consistently
     sleep(Duration::from_secs(1)).await;
-    let test_cluster = TestClusterBuilder::new().build().await.unwrap();
+    let test_cluster = TestClusterBuilder::new().build().await;
     test_cluster.trigger_reconfiguration().await;
 }
 
 #[sim_test]
 async fn test_transaction_expiration() {
-    let test_cluster = TestClusterBuilder::new().build().await.unwrap();
+    let test_cluster = TestClusterBuilder::new().build().await;
     test_cluster.trigger_reconfiguration().await;
 
     let (sender, gas) = test_cluster
@@ -125,7 +125,7 @@ async fn test_transaction_expiration() {
 // may not always be tested.
 #[sim_test]
 async fn reconfig_with_revert_end_to_end_test() {
-    let test_cluster = TestClusterBuilder::new().build().await.unwrap();
+    let test_cluster = TestClusterBuilder::new().build().await;
     let authorities = test_cluster.swarm.validator_node_handles();
     let rgp = test_cluster.get_reference_gas_price().await;
     let (sender, mut gas_objects) = test_cluster.wallet.get_one_account().await.unwrap();
@@ -269,8 +269,7 @@ async fn test_passive_reconfig() {
     let test_cluster = TestClusterBuilder::new()
         .with_epoch_duration_ms(1000)
         .build()
-        .await
-        .unwrap();
+        .await;
 
     let target_epoch: u64 = std::env::var("RECONFIG_TARGET_EPOCH")
         .ok()
@@ -354,8 +353,7 @@ async fn test_create_advance_epoch_tx_race() {
     let test_cluster = TestClusterBuilder::new()
         .with_epoch_duration_ms(1000)
         .build()
-        .await
-        .unwrap();
+        .await;
 
     test_cluster.wait_for_epoch(None).await;
 
@@ -379,8 +377,7 @@ async fn test_reconfig_with_failing_validator() {
         TestClusterBuilder::new()
             .with_epoch_duration_ms(5000)
             .build()
-            .await
-            .unwrap(),
+            .await,
     );
 
     test_cluster
@@ -405,7 +402,7 @@ async fn test_validator_resign_effects() {
     // This test checks that validators are able to re-sign transaction effects that were finalized
     // in previous epochs. This allows authority aggregator to form a new effects certificate
     // in the new epoch.
-    let test_cluster = TestClusterBuilder::new().build().await.unwrap();
+    let test_cluster = TestClusterBuilder::new().build().await;
     let tx = test_cluster
         .wallet
         .make_transfer_sui_transaction(None, None)
@@ -439,8 +436,7 @@ async fn test_validator_candidate_pool_read() {
     let test_cluster = TestClusterBuilder::new()
         .with_validator_candidates([address])
         .build()
-        .await
-        .unwrap();
+        .await;
     add_validator_candidate(&test_cluster, &new_validator).await;
     test_cluster.fullnode_handle.sui_node.with(|node| {
         let system_state = node
@@ -471,8 +467,7 @@ async fn test_inactive_validator_pool_read() {
     let test_cluster = TestClusterBuilder::new()
         .with_num_validators(5)
         .build()
-        .await
-        .unwrap();
+        .await;
     // Pick the first validator.
     let validator = test_cluster.swarm.validator_node_handles().pop().unwrap();
     let address = validator.with(|node| node.get_config().sui_address());
@@ -550,8 +545,7 @@ async fn test_reconfig_with_committee_change_basic() {
     let mut test_cluster = TestClusterBuilder::new()
         .with_validator_candidates([address])
         .build()
-        .await
-        .unwrap();
+        .await;
 
     execute_add_validator_transactions(&test_cluster, &new_validator).await;
 
@@ -599,18 +593,33 @@ async fn test_reconfig_with_committee_change_stress() {
         .map(|c| (&c.account_key_pair.public()).into())
         .collect::<Vec<SuiAddress>>();
     let mut test_cluster = TestClusterBuilder::new()
-        .with_num_validators(5)
+        .with_num_validators(7)
         .with_validator_candidates(addresses)
+        .with_num_unpruned_validators(2)
         .build()
-        .await
-        .unwrap();
+        .await;
+
     while !candidates.is_empty() {
         let v1 = candidates.pop().unwrap();
         let v2 = candidates.pop().unwrap();
         execute_add_validator_transactions(&test_cluster, &v1).await;
         execute_add_validator_transactions(&test_cluster, &v2).await;
         let mut removed_validators = vec![];
-        for v in test_cluster.swarm.active_validators().take(2) {
+        for v in test_cluster
+            .swarm
+            .active_validators()
+            // Skip removal of any non-pruning validators from the committee.
+            // Until we have archival solution, we need to have some validators that do not prune,
+            // otherwise new validators to the committee will not be able to catch up to the network
+            // TODO: remove and replace with usage of archival solution
+            .filter(|node| {
+                node.config
+                    .authority_store_pruning_config
+                    .num_epochs_to_retain_for_checkpoints()
+                    .is_some()
+            })
+            .take(2)
+        {
             let h = v.get_node_handle().unwrap();
             removed_validators.push(h.state().name);
             execute_remove_validator_tx(&test_cluster, &h).await;
@@ -622,7 +631,7 @@ async fn test_reconfig_with_committee_change_stress() {
             .fullnode_handle
             .sui_node
             .with(|node| node.state().epoch_store_for_testing().committee().clone());
-        assert_eq!(committee.num_members(), 5);
+        assert_eq!(committee.num_members(), 7);
         assert!(committee.authority_exists(&handle1.state().name));
         assert!(committee.authority_exists(&handle2.state().name));
         removed_validators
@@ -644,8 +653,7 @@ async fn safe_mode_reconfig_test() {
     let test_cluster = TestClusterBuilder::new()
         .with_epoch_duration_ms(EPOCH_DURATION)
         .build()
-        .await
-        .unwrap();
+        .await;
 
     let system_state = test_cluster
         .sui_client()

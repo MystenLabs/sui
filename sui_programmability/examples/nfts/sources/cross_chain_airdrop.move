@@ -52,6 +52,7 @@ module nfts::cross_chain_airdrop {
     /// Trying to claim a token that has already been claimed
     const ETokenIDClaimed: u64 = 0;
 
+    #[allow(unused_function)]
     /// Create the `Orcacle` capability and hand it off to the oracle
     /// TODO: To make this usable, the oracle should be sent to a
     /// hardcoded address that the contract creator has private key.

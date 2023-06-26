@@ -6,16 +6,16 @@ import { LoadingSpinner, type LoadingSpinnerProps } from '../LoadingSpinner';
 import type { Meta, StoryObj } from '@storybook/react';
 
 export default {
-    component: LoadingSpinner,
+	component: LoadingSpinner,
 } as Meta;
 
 export const LoadingSpinnerDefault: StoryObj<LoadingSpinnerProps> = {
-    render: (props) => <LoadingSpinner {...props} />,
+	render: (props) => <LoadingSpinner {...props} />,
 };
 
 export const LoadingSpinnerWithText: StoryObj<LoadingSpinnerProps> = {
-    ...LoadingSpinnerDefault,
-    args: {
-        text: 'Loading...',
-    },
+	...LoadingSpinnerDefault,
+	args: {
+		text: 'Loading...',
+	},
 };

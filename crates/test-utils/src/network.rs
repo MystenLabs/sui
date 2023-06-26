@@ -2,18 +2,20 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use futures::future::join_all;
-use std::net::SocketAddr;
-use std::num::NonZeroUsize;
-use std::sync::{Arc, Mutex};
-use std::time::Duration;
-
 use jsonrpsee::http_client::{HttpClient, HttpClientBuilder};
 use jsonrpsee::ws_client::WsClient;
 use jsonrpsee::ws_client::WsClientBuilder;
 use rand::{distributions::*, rngs::OsRng, seq::SliceRandom};
+use std::collections::{HashMap, HashSet};
+use std::net::SocketAddr;
+use std::num::NonZeroUsize;
+use std::sync::{Arc, Mutex};
+use std::time::Duration;
 use sui_config::node::DBCheckpointConfig;
 use sui_config::{Config, SUI_CLIENT_CONFIG, SUI_NETWORK_CONFIG};
 use sui_config::{NodeConfig, PersistedConfig, SUI_KEYSTORE_FILENAME};
+use sui_core::authority_aggregator::AuthorityAggregator;
+use sui_core::authority_client::NetworkAuthorityClient;
 use sui_json_rpc_types::SuiTransactionBlockResponse;
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_node::SuiNodeHandle;
@@ -29,21 +31,25 @@ use sui_swarm_config::network_config_builder::{
     ProtocolVersionsConfig, SupportedProtocolVersionsCallback,
 };
 use sui_swarm_config::node_config_builder::{FullnodeConfigBuilder, ValidatorConfigBuilder};
-use sui_types::base_types::{AuthorityName, ObjectID, SuiAddress};
-use sui_types::committee::EpochId;
+use sui_test_transaction_builder::TestTransactionBuilder;
+use sui_types::base_types::{AuthorityName, ObjectID, ObjectRef, SuiAddress};
+use sui_types::committee::{Committee, EpochId};
 use sui_types::crypto::KeypairTraits;
 use sui_types::crypto::SuiKeyPair;
+use sui_types::effects::{TransactionEffects, TransactionEvents};
+use sui_types::error::SuiResult;
 use sui_types::governance::MIN_VALIDATOR_JOINING_STAKE_MIST;
+use sui_types::message_envelope::Message;
 use sui_types::object::Object;
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
 use sui_types::sui_system_state::SuiSystemState;
 use sui_types::sui_system_state::SuiSystemStateTrait;
-use sui_types::transaction::VerifiedTransaction;
+use sui_types::transaction::{TransactionData, VerifiedTransaction};
 use tokio::time::{timeout, Instant};
 use tokio::{task::JoinHandle, time::sleep};
 use tracing::info;
 
-const NUM_VALIDAOTR: usize = 4;
+const NUM_VALIDATOR: usize = 4;
 
 pub struct FullNodeHandle {
     pub sui_node: SuiNodeHandle,
@@ -122,6 +128,12 @@ impl TestCluster {
 
     pub fn fullnode_config_builder(&self) -> FullnodeConfigBuilder {
         self.swarm.get_fullnode_config_builder()
+    }
+
+    pub fn committee(&self) -> Arc<Committee> {
+        self.fullnode_handle
+            .sui_node
+            .with(|node| node.state().epoch_store_for_testing().committee().clone())
     }
 
     /// Convenience method to start a new fullnode in the test cluster.
@@ -207,6 +219,19 @@ impl TestCluster {
             .await
     }
 
+    pub async fn get_object_or_tombstone_from_fullnode_store(
+        &self,
+        object_id: ObjectID,
+    ) -> ObjectRef {
+        self.fullnode_handle
+            .sui_node
+            .state()
+            .db()
+            .get_object_or_tombstone(object_id)
+            .unwrap()
+            .unwrap()
+    }
+
     /// To detect whether the network has reached such state, we use the fullnode as the
     /// source of truth, since a fullnode only does epoch transition when the network has
     /// done so.
@@ -290,13 +315,14 @@ impl TestCluster {
                 handle.with_async(|node| async {
                     let mut retries = 0;
                     loop {
-                        if node.state().epoch_store_for_testing().epoch() == target_epoch {
+                        let epoch = node.state().epoch_store_for_testing().epoch();
+                        if epoch == target_epoch {
                             break;
                         }
                         tokio::time::sleep(Duration::from_secs(1)).await;
                         retries += 1;
                         if retries % 5 == 0 {
-                            tracing::warn!(validator=?node.state().name.concise(), "Waiting for {:?} seconds for epoch change", retries);
+                            tracing::warn!(validator=?node.state().name.concise(), "Waiting for {:?} seconds to reach epoch {:?}. Currently at epoch {:?}", retries, target_epoch, epoch);
                         }
                     }
                 })
@@ -348,13 +374,121 @@ impl TestCluster {
         }
     }
 
+    pub async fn test_transaction_builder(&self) -> TestTransactionBuilder {
+        let (sender, gas) = self.wallet.get_one_gas_object().await.unwrap().unwrap();
+        let rgp = self.get_reference_gas_price().await;
+        TestTransactionBuilder::new(sender, gas, rgp)
+    }
+
+    pub async fn sign_and_execute_transaction(
+        &self,
+        tx_data: &TransactionData,
+    ) -> SuiTransactionBlockResponse {
+        let tx = self.wallet.sign_transaction(tx_data);
+        self.execute_transaction(tx).await
+    }
+
     /// Execute a transaction on the network and wait for it to be executed on the rpc fullnode.
     /// Also expects the effects status to be ExecutionStatus::Success.
+    /// This function is recommended for transaction execution since it most resembles the
+    /// production path.
     pub async fn execute_transaction(
         &self,
         tx: VerifiedTransaction,
     ) -> SuiTransactionBlockResponse {
         self.wallet.execute_transaction_must_succeed(tx).await
+    }
+
+    /// Different from `execute_transaction` which returns RPC effects types, this function
+    /// returns raw effects, events and extra objects returned by the validators,
+    /// aggregated manually (without authority aggregator).
+    /// It also does not check whether the transaction is executed successfully.
+    /// In order to keep the fullnode up-to-date so that latter queries can read consistent
+    /// results, it calls execute_transaction_may_fail again which goes through fullnode.
+    /// This is less efficient and verbose, but can be used if more details are needed
+    /// from the execution results, and if the transaction is expected to fail.
+    pub async fn execute_transaction_return_raw_effects(
+        &self,
+        tx: VerifiedTransaction,
+    ) -> anyhow::Result<(TransactionEffects, TransactionEvents, Vec<Object>)> {
+        let results = self
+            .submit_transaction_to_validators(tx.clone(), &self.get_validator_pubkeys())
+            .await?;
+        self.wallet.execute_transaction_may_fail(tx).await.unwrap();
+        Ok(results)
+    }
+
+    pub fn authority_aggregator(&self) -> Arc<AuthorityAggregator<NetworkAuthorityClient>> {
+        self.fullnode_handle
+            .sui_node
+            .with(|node| node.clone_authority_aggregator().unwrap())
+    }
+
+    /// Execute a transaction on specified list of validators, and bypassing authority aggregator.
+    /// This allows us to obtain the return value directly from validators, so that we can access more
+    /// information directly such as the original effects, events and extra objects returned.
+    /// This also allows us to control which validator to send certificates to, which is useful in
+    /// some tests.
+    pub async fn submit_transaction_to_validators(
+        &self,
+        tx: VerifiedTransaction,
+        pubkeys: &[AuthorityName],
+    ) -> anyhow::Result<(TransactionEffects, TransactionEvents, Vec<Object>)> {
+        let agg = self.authority_aggregator();
+        let certificate = agg.process_transaction(tx).await?.into_cert_for_testing();
+        let replies = loop {
+            let futures: Vec<_> = agg
+                .authority_clients
+                .iter()
+                .filter_map(|(name, client)| {
+                    if pubkeys.contains(name) {
+                        Some(client)
+                    } else {
+                        None
+                    }
+                })
+                .map(|client| {
+                    let cert = certificate.clone();
+                    async move { client.handle_certificate_v2(cert.into()).await }
+                })
+                .collect();
+
+            let replies: Vec<_> = futures::future::join_all(futures)
+                .await
+                .into_iter()
+                // Remove all `FailedToHearBackFromConsensus` replies. Note that the original Sui error type
+                // `SuiError::FailedToHearBackFromConsensus(..)` is lost when the message is sent through the
+                // network (it is replaced by `RpcError`). As a result, the following filter doesn't work:
+                // `.filter(|result| !matches!(result, Err(SuiError::FailedToHearBackFromConsensus(..))))`.
+                .filter(|result| match result {
+                    Err(e) => !e.to_string().contains("deadline has elapsed"),
+                    _ => true,
+                })
+                .collect();
+
+            if !replies.is_empty() {
+                break replies;
+            }
+        };
+        let replies: SuiResult<Vec<_>> = replies.into_iter().collect();
+        let replies = replies?;
+        let mut all_effects = HashMap::new();
+        let mut all_events = HashMap::new();
+        let mut all_objects = HashSet::new();
+        for reply in replies {
+            let effects = reply.signed_effects.into_data();
+            all_effects.insert(effects.digest(), effects);
+            all_events.insert(reply.events.digest(), reply.events);
+            all_objects.insert(reply.fastpath_input_objects);
+        }
+        assert_eq!(all_effects.len(), 1);
+        assert_eq!(all_events.len(), 1);
+        assert_eq!(all_objects.len(), 1);
+        Ok((
+            all_effects.into_values().next().unwrap(),
+            all_events.into_values().next().unwrap(),
+            all_objects.into_iter().next().unwrap(),
+        ))
     }
 
     #[cfg(msim)]
@@ -442,6 +576,7 @@ pub struct TestClusterBuilder {
     fullnode_supported_protocol_versions_config: Option<ProtocolVersionsConfig>,
     db_checkpoint_config_validators: DBCheckpointConfig,
     db_checkpoint_config_fullnodes: DBCheckpointConfig,
+    num_unpruned_validators: Option<usize>,
 }
 
 impl TestClusterBuilder {
@@ -456,6 +591,7 @@ impl TestClusterBuilder {
             fullnode_supported_protocol_versions_config: None,
             db_checkpoint_config_validators: DBCheckpointConfig::default(),
             db_checkpoint_config_fullnodes: DBCheckpointConfig::default(),
+            num_unpruned_validators: None,
         }
     }
 
@@ -563,24 +699,22 @@ impl TestClusterBuilder {
         self
     }
 
+    pub fn with_num_unpruned_validators(mut self, n: usize) -> Self {
+        self.num_unpruned_validators = Some(n);
+        self
+    }
+
     pub fn with_accounts(mut self, accounts: Vec<AccountConfig>) -> Self {
         self.get_or_init_genesis_config().accounts = accounts;
         self
     }
 
-    pub async fn build(self) -> anyhow::Result<TestCluster> {
-        let cluster = self.start_test_network_with_customized_ports().await?;
-        Ok(cluster)
-    }
-
-    async fn start_test_network_with_customized_ports(
-        mut self,
-    ) -> Result<TestCluster, anyhow::Error> {
-        let swarm = self.start_swarm().await?;
+    pub async fn build(mut self) -> TestCluster {
+        let swarm = self.start_swarm().await.unwrap();
         let working_dir = swarm.dir();
 
         let mut wallet_conf: SuiClientConfig =
-            PersistedConfig::read(&working_dir.join(SUI_CLIENT_CONFIG))?;
+            PersistedConfig::read(&working_dir.join(SUI_CLIENT_CONFIG)).unwrap();
 
         let fullnode = swarm.fullnodes().next().unwrap();
         let json_rpc_address = fullnode.config.json_rpc_address;
@@ -596,23 +730,24 @@ impl TestClusterBuilder {
 
         wallet_conf
             .persisted(&working_dir.join(SUI_CLIENT_CONFIG))
-            .save()?;
+            .save()
+            .unwrap();
 
         let wallet_conf = swarm.dir().join(SUI_CLIENT_CONFIG);
-        let wallet = WalletContext::new(&wallet_conf, None, None).await?;
+        let wallet = WalletContext::new(&wallet_conf, None, None).await.unwrap();
 
-        Ok(TestCluster {
+        TestCluster {
             swarm,
             wallet,
             fullnode_handle,
-        })
+        }
     }
 
     /// Start a Swarm and set up WalletConfig
     async fn start_swarm(&mut self) -> Result<Swarm, anyhow::Error> {
         let mut builder: SwarmBuilder = Swarm::builder()
             .committee_size(
-                NonZeroUsize::new(self.num_validators.unwrap_or(NUM_VALIDAOTR)).unwrap(),
+                NonZeroUsize::new(self.num_validators.unwrap_or(NUM_VALIDATOR)).unwrap(),
             )
             .with_objects(self.additional_objects.clone())
             .with_db_checkpoint_config(self.db_checkpoint_config_validators.clone())
@@ -632,6 +767,9 @@ impl TestClusterBuilder {
         }
         if let Some(fullnode_rpc_port) = self.fullnode_rpc_port {
             builder = builder.with_fullnode_rpc_port(fullnode_rpc_port);
+        }
+        if let Some(num_unpruned_validators) = self.num_unpruned_validators {
+            builder = builder.with_num_unpruned_validators(num_unpruned_validators);
         }
 
         let mut swarm = builder.build();

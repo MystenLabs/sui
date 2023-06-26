@@ -50,6 +50,7 @@ pub struct ConfigBuilder<R = OsRng> {
     genesis_config: Option<GenesisConfig>,
     reference_gas_price: Option<u64>,
     additional_objects: Vec<Object>,
+    num_unpruned_validators: Option<usize>,
 }
 
 impl ConfigBuilder {
@@ -62,6 +63,7 @@ impl ConfigBuilder {
             genesis_config: None,
             reference_gas_price: None,
             additional_objects: vec![],
+            num_unpruned_validators: None,
         }
     }
 
@@ -94,6 +96,11 @@ impl<R> ConfigBuilder<R> {
     pub fn with_genesis_config(mut self, genesis_config: GenesisConfig) -> Self {
         assert!(self.genesis_config.is_none(), "Genesis config already set");
         self.genesis_config = Some(genesis_config);
+        self
+    }
+
+    pub fn with_num_unpruned_validators(mut self, n: usize) -> Self {
+        self.num_unpruned_validators = Some(n);
         self
     }
 
@@ -153,6 +160,7 @@ impl<R> ConfigBuilder<R> {
             genesis_config: self.genesis_config,
             reference_gas_price: self.reference_gas_price,
             additional_objects: self.additional_objects,
+            num_unpruned_validators: self.num_unpruned_validators,
         }
     }
 
@@ -280,6 +288,11 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
                         }
                     };
                     builder = builder.with_supported_protocol_versions(supported_versions);
+                }
+                if let Some(num_unpruned_validators) = self.num_unpruned_validators {
+                    if idx < num_unpruned_validators {
+                        builder = builder.with_unpruned_checkpoints();
+                    }
                 }
                 builder.build(validator, genesis.clone())
             })

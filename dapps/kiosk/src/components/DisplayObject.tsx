@@ -9,59 +9,51 @@ import { formatSui, mistToSui } from '../utils/utils';
 import { ItemLockedBadge } from './Kiosk/ItemLockedBadge';
 import { DEFAULT_IMAGE } from '../utils/constants';
 export interface DisplayObject {
-  listing?: KioskListing | null;
-  item: OwnedObjectType;
-  children: ReactNode;
+	listing?: KioskListing | null;
+	item: OwnedObjectType;
+	children: ReactNode;
 }
 
-export function DisplayObject({
-  item,
-  listing = null,
-  children,
-}: DisplayObject) {
-  const { currentAccount } = useWalletKit();
+export function DisplayObject({ item, listing = null, children }: DisplayObject) {
+	const { currentAccount } = useWalletKit();
 
-  const price = formatSui(mistToSui(listing?.price));
+	const price = formatSui(mistToSui(listing?.price));
 
-  return (
-    <div className="border relative border-gray-400 overflow-hidden text-center flex justify-between flex-col rounded-lg">
-      <div className="h-[275px] xl:h-[200px] overflow-hidden bg-gray-50">
-        <img
-          src={item.display.image_url}
-          className="object-cover aspect-auto h-full w-full mx-auto"
-          alt="The display of the object"
-          // @ts-ignore-next-line simple way to just default on error. Not recommended for production.
-          onError={(e) => (e.target.src = DEFAULT_IMAGE)}
-        ></img>
-      </div>
+	return (
+		<div className="border relative border-gray-400 overflow-hidden text-center flex justify-between flex-col rounded-lg">
+			<div className="h-[275px] xl:h-[200px] overflow-hidden bg-gray-50">
+				<img
+					src={item.display.image_url}
+					className="object-cover aspect-auto h-full w-full mx-auto"
+					alt="The display of the object"
+					// @ts-ignore-next-line simple way to just default on error. Not recommended for production.
+					onError={(e) => (e.target.src = DEFAULT_IMAGE)}
+				></img>
+			</div>
 
-      <div className="p-4">
-        {item.display.name && (
-          <h3 className="text-clip overflow-hidden">{item.display.name}</h3>
-        )}
+			<div className="p-4">
+				{item.display.name && <h3 className="text-clip overflow-hidden">{item.display.name}</h3>}
 
-        {item.display.description && (
-          <p className="text-sm opacity-80 text-clip overflow-hidden">
-            {item.display.description}
-          </p>
-        )}
+				{item.display.description && (
+					<p className="text-sm opacity-80 text-clip overflow-hidden">{item.display.description}</p>
+				)}
 
-        {listing && listing.price && (
-          <div className="absolute left-2 top-2 bg-primary text-white px-2 py-1 rounded-lg">
-            {price} SUI
-          </div>
-        )}
+				{listing && listing.price && (
+					<div className="absolute left-2 top-2 bg-primary text-white px-2 py-1 rounded-lg">
+						{price} SUI
+					</div>
+				)}
 
-        <p className="text-xs break-words text-gray-400 py-3">{item.type}</p>
-        {item.isLocked && <ItemLockedBadge />}
+				<p className="text-xs break-words text-gray-400 py-3">{item.type}</p>
+				{item.isLocked && <ItemLockedBadge />}
 
-        {/* button actions */}
-        {currentAccount?.address ? (
-          <div className="grid lg:grid-cols-2 gap-5 mt-6">{children}</div>
-        ) : (
-          <div className="mt-6 text-xs">Connect your wallet to interact</div>
-        )}
-      </div>
-    </div>
-  );
+				{/* button actions */}
+				{currentAccount?.address ? (
+					<div className="grid lg:grid-cols-2 gap-5 mt-6">{children}</div>
+				) : (
+					<div className="mt-6 text-xs">Connect your wallet to interact</div>
+				)}
+			</div>
+		</div>
+	);
 }

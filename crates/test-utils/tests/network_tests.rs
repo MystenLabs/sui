@@ -20,8 +20,7 @@ async fn test_additional_objects() {
     let cluster = TestClusterBuilder::new()
         .with_objects([Object::immutable_with_id_for_testing(id)])
         .build()
-        .await
-        .unwrap();
+        .await;
 
     let client = cluster.rpc_client();
     let resp = client.get_object(id, None).await.unwrap();
@@ -32,7 +31,7 @@ async fn test_additional_objects() {
 async fn test_package_override() {
     // `with_objects` can be used to override existing packages.
     let framework_ref = {
-        let default_cluster = TestClusterBuilder::new().build().await.unwrap();
+        let default_cluster = TestClusterBuilder::new().build().await;
         let client = default_cluster.rpc_client();
         let obj = client
             .get_object(SUI_SYSTEM_PACKAGE_ID, None)
@@ -74,8 +73,7 @@ async fn test_package_override() {
         let modified_cluster = TestClusterBuilder::new()
             .with_objects([package_override])
             .build()
-            .await
-            .unwrap();
+            .await;
 
         let client = modified_cluster.rpc_client();
         let obj = client

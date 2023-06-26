@@ -11,45 +11,45 @@ export const PRIVATE_KEY_SIZE = 32;
 export const LEGACY_PRIVATE_KEY_SIZE = 64;
 
 export type ExportedKeypair = {
-  schema: SignatureScheme;
-  privateKey: string;
+	schema: SignatureScheme;
+	privateKey: string;
 };
 
 /**
  * A keypair used for signing transactions.
  */
 export interface Keypair {
-  /**
-   * The public key for this keypair
-   */
-  getPublicKey(): PublicKey;
+	/**
+	 * The public key for this keypair
+	 */
+	getPublicKey(): PublicKey;
 
-  /**
-   * Return the signature for the data
-   */
-  signData(data: Uint8Array): Uint8Array;
+	/**
+	 * Return the signature for the data
+	 */
+	signData(data: Uint8Array): Uint8Array;
 
-  /**
-   * Get the key scheme of the keypair: Secp256k1 or ED25519
-   */
-  getKeyScheme(): SignatureScheme;
+	/**
+	 * Get the key scheme of the keypair: Secp256k1 or ED25519
+	 */
+	getKeyScheme(): SignatureScheme;
 
-  export(): ExportedKeypair;
+	export(): ExportedKeypair;
 }
 
 export function fromExportedKeypair(keypair: ExportedKeypair): Keypair {
-  const secretKey = fromB64(keypair.privateKey);
-  switch (keypair.schema) {
-    case 'ED25519':
-      let pureSecretKey = secretKey;
-      if (secretKey.length === LEGACY_PRIVATE_KEY_SIZE) {
-        // This is a legacy secret key, we need to strip the public key bytes and only read the first 32 bytes
-        pureSecretKey = secretKey.slice(0, PRIVATE_KEY_SIZE);
-      }
-      return Ed25519Keypair.fromSecretKey(pureSecretKey);
-    case 'Secp256k1':
-      return Secp256k1Keypair.fromSecretKey(secretKey);
-    default:
-      throw new Error(`Invalid keypair schema ${keypair.schema}`);
-  }
+	const secretKey = fromB64(keypair.privateKey);
+	switch (keypair.schema) {
+		case 'ED25519':
+			let pureSecretKey = secretKey;
+			if (secretKey.length === LEGACY_PRIVATE_KEY_SIZE) {
+				// This is a legacy secret key, we need to strip the public key bytes and only read the first 32 bytes
+				pureSecretKey = secretKey.slice(0, PRIVATE_KEY_SIZE);
+			}
+			return Ed25519Keypair.fromSecretKey(pureSecretKey);
+		case 'Secp256k1':
+			return Secp256k1Keypair.fromSecretKey(secretKey);
+		default:
+			throw new Error(`Invalid keypair schema ${keypair.schema}`);
+	}
 }

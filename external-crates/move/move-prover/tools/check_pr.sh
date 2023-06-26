@@ -82,7 +82,6 @@ CRATES="\
   $BASE/language/move-prover/boogie-backend \
   $BASE/language/move-prover\
   $BASE/language/move-model\
-  $BASE/language/evm/move-to-yul\
 "
 
 if [ ! -z "$CHECKMORE" ]; then

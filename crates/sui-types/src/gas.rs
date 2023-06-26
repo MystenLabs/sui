@@ -149,7 +149,7 @@ impl SuiCostTable {
         gas_budget: u64,
         gas_price: u64,
         storage_price: u64,
-        gas_rounding_step: u64,
+        gas_rounding_step: Option<u64>,
     ) -> SuiGasStatus {
         match self {
             Self::V1(cost_table) => SuiGasStatus::V1(SuiGasStatusV1::new_for_testing(

@@ -1,7 +1,7 @@
 {
-  "entryPoints": ["src/index.ts"],
-  "excludeInternal": true,
-  "excludePrivate": true,
-  "intentionallyNotExported": [],
-  "out": "doc"
+	"entryPoints": ["src/index.ts"],
+	"excludeInternal": true,
+	"excludePrivate": true,
+	"intentionallyNotExported": [],
+	"out": "doc"
 }

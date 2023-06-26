@@ -10,22 +10,22 @@ import type { FallbackProps } from 'react-error-boundary';
 import { Banner } from '~/ui/Banner';
 
 function Fallback({ error }: FallbackProps) {
-    return (
-        <Banner variant="error" fullWidth>
-            {error.message}
-        </Banner>
-    );
+	return (
+		<Banner variant="error" fullWidth>
+			{error.message}
+		</Banner>
+	);
 }
 
 export type ErrorBoundaryProps = {
-    children: ReactNode | ReactNode[];
+	children: ReactNode | ReactNode[];
 };
 
 export function ErrorBoundary({ children }: ErrorBoundaryProps) {
-    const location = useLocation();
-    return (
-        <ReactErrorBoundary FallbackComponent={Fallback} resetKeys={[location]}>
-            {children}
-        </ReactErrorBoundary>
-    );
+	const location = useLocation();
+	return (
+		<ReactErrorBoundary FallbackComponent={Fallback} resetKeys={[location]}>
+			{children}
+		</ReactErrorBoundary>
+	);
 }

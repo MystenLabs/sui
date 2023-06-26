@@ -265,6 +265,7 @@ codes!(
         DeadCode: { msg: "dead or unreachable code", severity: Warning },
         StructTypeParam: { msg: "unused struct type parameter", severity: Warning },
         Attribute: { msg: "unused attribute", severity: Warning },
+        Function: { msg: "unused function", severity: Warning },
     ],
     Attributes: [
         Duplicate: { msg: "invalid duplicate attribute", severity: NonblockingError },
@@ -283,9 +284,6 @@ codes!(
         BytecodeGeneration: { msg: "BYTECODE GENERATION FAILED", severity: Bug },
         BytecodeVerification: { msg: "BYTECODE VERIFICATION FAILED", severity: Bug },
     ],
-    Derivation: [
-        DeriveFailed: { msg: "attribute derivation failed", severity: BlockingError }
-    ]
 );
 
 //**************************************************************************************************
@@ -333,6 +331,7 @@ warning_filter!(
     "unused_trailing_semi": UnusedItem::TrailingSemi,
     "unused_attribute": UnusedItem::Attribute,
     "unused_type_parameter": UnusedItem::StructTypeParam,
+    "unused_function": UnusedItem::Function,
     "dead_code": UnusedItem::DeadCode,
 );
 

@@ -24,7 +24,7 @@ use crate::{BytecodeSourceVerifier, SourceMode};
 
 #[tokio::test]
 async fn successful_verification() -> anyhow::Result<()> {
-    let mut cluster = TestClusterBuilder::new().build().await?;
+    let mut cluster = TestClusterBuilder::new().build().await;
     let context = &mut cluster.wallet;
 
     let b_ref = {
@@ -84,7 +84,7 @@ async fn successful_verification() -> anyhow::Result<()> {
 
 #[tokio::test]
 async fn successful_verification_unpublished_deps() -> anyhow::Result<()> {
-    let mut cluster = TestClusterBuilder::new().build().await?;
+    let mut cluster = TestClusterBuilder::new().build().await;
     let context = &mut cluster.wallet;
     let fixtures = tempfile::tempdir()?;
 
@@ -110,7 +110,7 @@ async fn successful_verification_unpublished_deps() -> anyhow::Result<()> {
 
 #[tokio::test]
 async fn successful_verification_module_ordering() -> anyhow::Result<()> {
-    let mut cluster = TestClusterBuilder::new().build().await?;
+    let mut cluster = TestClusterBuilder::new().build().await;
     let context = &mut cluster.wallet;
 
     // This package contains a module that refers to itself, and also to the sui framework.  Its
@@ -147,7 +147,7 @@ async fn successful_verification_module_ordering() -> anyhow::Result<()> {
 
 #[tokio::test]
 async fn successful_verification_upgrades() -> anyhow::Result<()> {
-    let mut cluster = TestClusterBuilder::new().build().await?;
+    let mut cluster = TestClusterBuilder::new().build().await;
     let context = &mut cluster.wallet;
 
     let (b_v1, b_cap) = {
@@ -187,7 +187,7 @@ async fn successful_verification_upgrades() -> anyhow::Result<()> {
 
 #[tokio::test]
 async fn fail_verification_bad_address() -> anyhow::Result<()> {
-    let mut cluster = TestClusterBuilder::new().build().await?;
+    let mut cluster = TestClusterBuilder::new().build().await;
     let context = &mut cluster.wallet;
 
     let b_ref = {
@@ -221,7 +221,7 @@ async fn fail_verification_bad_address() -> anyhow::Result<()> {
 
 #[tokio::test]
 async fn fail_to_verify_unpublished_root() -> anyhow::Result<()> {
-    let mut cluster = TestClusterBuilder::new().build().await?;
+    let mut cluster = TestClusterBuilder::new().build().await;
     let context = &mut cluster.wallet;
 
     let b_pkg = {
@@ -249,7 +249,7 @@ async fn fail_to_verify_unpublished_root() -> anyhow::Result<()> {
 
 #[tokio::test]
 async fn rpc_call_failed_during_verify() -> anyhow::Result<()> {
-    let mut cluster = TestClusterBuilder::new().build().await?;
+    let mut cluster = TestClusterBuilder::new().build().await;
     let context = &mut cluster.wallet;
 
     let b_ref = {
@@ -301,7 +301,7 @@ async fn rpc_call_failed_during_verify() -> anyhow::Result<()> {
 
 #[tokio::test]
 async fn package_not_found() -> anyhow::Result<()> {
-    let mut cluster = TestClusterBuilder::new().build().await?;
+    let mut cluster = TestClusterBuilder::new().build().await;
     let context = &mut cluster.wallet;
     let mut stable_addrs = HashMap::new();
 
@@ -358,7 +358,7 @@ async fn package_not_found() -> anyhow::Result<()> {
 
 #[tokio::test]
 async fn dependency_is_an_object() -> anyhow::Result<()> {
-    let mut cluster = TestClusterBuilder::new().build().await?;
+    let mut cluster = TestClusterBuilder::new().build().await;
     let context = &mut cluster.wallet;
 
     let a_pkg = {
@@ -385,7 +385,7 @@ async fn dependency_is_an_object() -> anyhow::Result<()> {
 
 #[tokio::test]
 async fn module_not_found_on_chain() -> anyhow::Result<()> {
-    let mut cluster = TestClusterBuilder::new().build().await?;
+    let mut cluster = TestClusterBuilder::new().build().await;
     let context = &mut cluster.wallet;
 
     let b_ref = {
@@ -416,7 +416,7 @@ async fn module_not_found_on_chain() -> anyhow::Result<()> {
 
 #[tokio::test]
 async fn module_not_found_locally() -> anyhow::Result<()> {
-    let mut cluster = TestClusterBuilder::new().build().await?;
+    let mut cluster = TestClusterBuilder::new().build().await;
     let context = &mut cluster.wallet;
     let mut stable_addrs = HashMap::new();
 
@@ -451,7 +451,7 @@ async fn module_not_found_locally() -> anyhow::Result<()> {
 
 #[tokio::test]
 async fn module_bytecode_mismatch() -> anyhow::Result<()> {
-    let mut cluster = TestClusterBuilder::new().build().await?;
+    let mut cluster = TestClusterBuilder::new().build().await;
     let context = &mut cluster.wallet;
     let mut stable_addrs = HashMap::new();
 
@@ -511,7 +511,7 @@ async fn module_bytecode_mismatch() -> anyhow::Result<()> {
 
 #[tokio::test]
 async fn multiple_failures() -> anyhow::Result<()> {
-    let mut cluster = TestClusterBuilder::new().build().await?;
+    let mut cluster = TestClusterBuilder::new().build().await;
     let context = &mut cluster.wallet;
     let mut stable_addrs = HashMap::new();
 

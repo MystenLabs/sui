@@ -1264,9 +1264,8 @@ pub mod pg_integration_test {
                 .with_epoch_duration_ms(epoch)
                 .build()
                 .await
-                .unwrap()
         } else {
-            TestClusterBuilder::new().build().await.unwrap()
+            TestClusterBuilder::new().build().await
         };
 
         let config = IndexerConfig {

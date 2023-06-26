@@ -13,47 +13,42 @@ import { useActiveAddress } from '_src/ui/app/hooks/useActiveAddress';
 import { useGetQredoTransactions } from '_src/ui/app/hooks/useGetQredoTransactions';
 
 const PENDING_QREDO_TRANSACTION_STATUSES: TransactionStatus[] = [
-    'approved',
-    'authorized',
-    'created',
-    'pending',
-    'pushed',
-    'scheduled',
-    'signed',
+	'approved',
+	'authorized',
+	'created',
+	'pending',
+	'pushed',
+	'scheduled',
+	'signed',
 ];
 
 export function QredoPendingTransactions() {
-    const activeAddress = useActiveAddress();
-    const activeAccount = useActiveAccount();
-    const isQredoAccount = activeAccount?.type === AccountType.QREDO;
-    const qredoID = isQredoAccount
-        ? activeAccount.qredoConnectionID
-        : undefined;
-    const {
-        data: qredoTransactions,
-        isLoading,
-        error,
-    } = useGetQredoTransactions({
-        qredoID,
-        filterStatus: PENDING_QREDO_TRANSACTION_STATUSES,
-    });
-    if (error) {
-        return <Alert>{(error as Error)?.message}</Alert>;
-    }
-    return (
-        <Loading loading={isLoading}>
-            {qredoTransactions?.length && activeAddress ? (
-                qredoTransactions.map((txn) => (
-                    <ErrorBoundary key={txn.txID}>
-                        <QredoTransaction
-                            qredoID={qredoID}
-                            qredoTransactionID={txn.txID}
-                        />
-                    </ErrorBoundary>
-                ))
-            ) : (
-                <NoActivityCard message="When available, pending Qredo transactions will show up here." />
-            )}
-        </Loading>
-    );
+	const activeAddress = useActiveAddress();
+	const activeAccount = useActiveAccount();
+	const isQredoAccount = activeAccount?.type === AccountType.QREDO;
+	const qredoID = isQredoAccount ? activeAccount.qredoConnectionID : undefined;
+	const {
+		data: qredoTransactions,
+		isLoading,
+		error,
+	} = useGetQredoTransactions({
+		qredoID,
+		filterStatus: PENDING_QREDO_TRANSACTION_STATUSES,
+	});
+	if (error) {
+		return <Alert>{(error as Error)?.message}</Alert>;
+	}
+	return (
+		<Loading loading={isLoading}>
+			{qredoTransactions?.length && activeAddress ? (
+				qredoTransactions.map((txn) => (
+					<ErrorBoundary key={txn.txID}>
+						<QredoTransaction qredoID={qredoID} qredoTransactionID={txn.txID} />
+					</ErrorBoundary>
+				))
+			) : (
+				<NoActivityCard message="When available, pending Qredo transactions will show up here." />
+			)}
+		</Loading>
+	);
 }

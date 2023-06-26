@@ -8,33 +8,33 @@ edition = "2021"
 
 [dependencies]
 anemo.workspace = true
-anyhow = { version = "1.0.64", features = ["backtrace"] }
-bincode = "1.3.3"
-bcs = "0.1.4"
-byteorder = "1.4.3"
-itertools = "0.10.5"
-once_cell = "1.16"
-prometheus = "0.13.3"
-rand = "0.8.5"
-serde = { version = "1.0.144", features = ["derive"] }
-serde-name = "0.2.1"
-thiserror = "1.0.34"
-tracing = "0.1"
-serde_json = "1.0.88"
-serde_with = "2.1.0"
-signature = "1.6.0"
-static_assertions = "1.1.0"
-schemars ="0.8.10"
-tap = "1.0.1"
-tonic = "0.8"
-strum = "^0.24"
-strum_macros = "^0.24"
-roaring = "0.10.1"
-enum_dispatch = "^0.3"
-eyre = "0.6.8"
-indexmap = "1.9.2"
-derivative = "2.2.0"
-parking_lot = "0.12.1"
+anyhow.workspace = true
+bincode.workspace = true
+bcs.workspace = true
+byteorder.workspace = true
+itertools.workspace = true
+once_cell.workspace = true
+prometheus.workspace = true
+rand.workspace = true
+serde.workspace = true
+serde-name.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+serde_json.workspace = true
+serde_with.workspace = true
+signature.workspace = true
+static_assertions.workspace = true
+schemars.workspace = true
+tap.workspace = true
+tonic.workspace = true
+strum.workspace = true
+strum_macros.workspace = true
+roaring.workspace = true
+enum_dispatch.workspace = true
+eyre.workspace = true
+indexmap.workspace = true
+derivative.workspace = true
+parking_lot.workspace = true
 
 move-binary-format.workspace = true
 move-bytecode-utils.workspace = true
@@ -44,31 +44,31 @@ move-disassembler.workspace = true
 move-ir-types.workspace = true
 move-vm-types.workspace = true
 
-narwhal-config = { path = "../../narwhal/config" }
-narwhal-crypto = { path = "../../narwhal/crypto" }
-sui-cost-tables = { path = "../sui-cost-tables"}
-sui-protocol-config = { path = "../sui-protocol-config" }
-shared-crypto = { path = "../shared-crypto" }
-mysten-network = { path = "../mysten-network" }
-mysten-metrics = { path = "../mysten-metrics" }
-sui-macros = { path = "../sui-macros" }
-sui-enum-compat-util = { path = "../sui-enum-compat-util" }
+narwhal-config.workspace = true
+narwhal-crypto.workspace = true
+sui-cost-tables.workspace = true
+sui-protocol-config.workspace = true
+shared-crypto.workspace = true
+mysten-network.workspace = true
+mysten-metrics.workspace = true
+sui-macros.workspace = true
+sui-enum-compat-util.workspace = true
 
 fastcrypto = { workspace = true, features = ["copy_key"] }
 fastcrypto-zkp.workspace = true
 
 typed-store.workspace = true
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
-derive_more = "0.99.17"
-proptest = "1.0.0"
-proptest-derive = { version = "0.3.0" }
+derive_more.workspace = true
+proptest.workspace = true
+proptest-derive.workspace = true
 
 [dev-dependencies]
-bincode = "1.3.3"
-criterion = { version = "0.4.0", features = ["async", "async_tokio"] }
-proptest = "1.0.0"
-proptest-derive = "0.3.0"
-serde_yaml = "0.8.26"
+bincode.workspace = true
+criterion.workspace = true
+proptest.workspace = true
+proptest-derive.workspace = true
+serde_yaml.workspace = true
 
 [[bench]]
 name = "accumulator_bench"

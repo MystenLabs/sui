@@ -5,19 +5,15 @@ import { expect } from '../fixtures';
 
 import type { Page, BrowserContext } from '@playwright/test';
 
-export async function demoDappConnect(
-    page: Page,
-    demoPageUrl: string,
-    context: BrowserContext
-) {
-    await page.goto(demoPageUrl);
-    const newWalletPage = context.waitForEvent('page');
-    await page.getByRole('button', { name: 'Connect' }).click();
-    const walletPage = await newWalletPage;
-    await walletPage.waitForLoadState();
-    await walletPage.getByRole('button', { name: 'Continue' }).click();
-    await walletPage.getByRole('button', { name: 'Connect' }).click();
-    const accountsList = page.getByTestId('accounts-list');
-    const accountListItems = accountsList.getByRole('listitem');
-    await expect(accountListItems).toHaveCount(1);
+export async function demoDappConnect(page: Page, demoPageUrl: string, context: BrowserContext) {
+	await page.goto(demoPageUrl);
+	const newWalletPage = context.waitForEvent('page');
+	await page.getByRole('button', { name: 'Connect' }).click();
+	const walletPage = await newWalletPage;
+	await walletPage.waitForLoadState();
+	await walletPage.getByRole('button', { name: 'Continue' }).click();
+	await walletPage.getByRole('button', { name: 'Connect' }).click();
+	const accountsList = page.getByTestId('accounts-list');
+	const accountListItems = accountsList.getByRole('listitem');
+	await expect(accountListItems).toHaveCount(1);
 }

@@ -218,6 +218,7 @@ pub struct StateSnapshotWriterV1 {
     remote_object_store: Arc<DynObjectStore>,
     local_object_store: Arc<DynObjectStore>,
     concurrency: usize,
+    include_wrapped_tombstone: bool,
 }
 
 impl StateSnapshotWriterV1 {
@@ -227,6 +228,7 @@ impl StateSnapshotWriterV1 {
         remote_store_config: &ObjectStoreConfig,
         file_compression: FileCompression,
         concurrency: NonZeroUsize,
+        include_wrapped_tombstone: bool,
     ) -> Result<Self> {
         let epoch_dir = format!("epoch_{epoch}");
         let remote_object_store = remote_store_config.make()?;
@@ -263,6 +265,7 @@ impl StateSnapshotWriterV1 {
             remote_object_store,
             local_object_store,
             concurrency: concurrency.get(),
+            include_wrapped_tombstone,
         })
     }
     pub async fn write(mut self, perpetual_db: &AuthorityPerpetualTables) -> Result<()> {
@@ -352,7 +355,7 @@ impl StateSnapshotWriterV1 {
         let mut object_writers: HashMap<u32, LiveObjectSetWriterV1> = HashMap::new();
         let local_staging_dir_path =
             path_to_filesystem(self.local_staging_dir_root.clone(), &self.epoch_dir())?;
-        for object in perpetual_db.iter_live_object_set() {
+        for object in perpetual_db.iter_live_object_set(self.include_wrapped_tombstone) {
             let bucket_num = bucket_func(&object);
             if let Vacant(entry) = object_writers.entry(bucket_num) {
                 entry.insert(

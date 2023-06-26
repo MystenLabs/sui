@@ -133,9 +133,8 @@ pub async fn execute_replay_command(
         ReplayToolCommand::ReplayDump { path, show_effects } => {
             let mut lx = LocalExec::new_for_state_dump(&path).await?;
             let (sandbox_state, node_dump_state) = lx.execute_state_dump(safety).await?;
-            let effects = sandbox_state.local_exec_effects.clone();
             if show_effects {
-                println!("{:#?}", effects)
+                println!("{:#?}", sandbox_state.local_exec_effects);
             }
 
             sandbox_state.check_effects()?;
@@ -167,9 +166,8 @@ pub async fn execute_replay_command(
             )
             .await?;
 
-            let effects = sandbox_state.local_exec_effects.clone();
             if show_effects {
-                println!("{:#?}", effects)
+                println!("{:#?}", sandbox_state.local_exec_effects);
             }
 
             sandbox_state.check_effects()?;

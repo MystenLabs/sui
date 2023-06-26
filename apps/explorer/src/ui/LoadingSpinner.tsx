@@ -4,18 +4,14 @@
 import { ReactComponent as SpinnerSvg } from './icons/spinner.svg';
 
 export interface LoadingSpinnerProps {
-    text?: string;
+	text?: string;
 }
 
 export function LoadingSpinner({ text }: LoadingSpinnerProps) {
-    return (
-        <div className="inline-flex flex-row flex-nowrap items-center gap-3">
-            <SpinnerSvg className="animate-spin text-steel" />
-            {text ? (
-                <div className="text-body font-medium text-steel-dark">
-                    {text}
-                </div>
-            ) : null}
-        </div>
-    );
+	return (
+		<div className="inline-flex flex-row flex-nowrap items-center gap-3">
+			<SpinnerSvg className="animate-spin text-steel" />
+			{text ? <div className="text-body font-medium text-steel-dark">{text}</div> : null}
+		</div>
+	);
 }

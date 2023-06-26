@@ -9,7 +9,7 @@ const WALLET_URL = Browser.runtime.getURL('').slice(0, -1);
 const PLAUSIBLE_ENABLED = process.env.NODE_ENV === 'production';
 
 const plausible = Plausible({
-    domain: WALLET_URL,
+	domain: WALLET_URL,
 });
 
 // NOTE: Disabled this because it breaks opening new tabs when clicking on anchor elements
@@ -19,27 +19,22 @@ const plausible = Plausible({
 // }
 
 export const trackEvent: typeof plausible.trackEvent = (...args) => {
-    if (PLAUSIBLE_ENABLED) {
-        plausible.trackEvent(...args);
-    } else {
-        // eslint-disable-next-line no-console
-        console.log(`[plausible] Skipping event "${args[0]}" in development.`);
-    }
+	if (PLAUSIBLE_ENABLED) {
+		plausible.trackEvent(...args);
+	} else {
+		// eslint-disable-next-line no-console
+		console.log(`[plausible] Skipping event "${args[0]}" in development.`);
+	}
 };
 
-export const trackPageview: typeof plausible.trackPageview = ({
-    url,
-    ...options
-} = {}) => {
-    if (PLAUSIBLE_ENABLED) {
-        plausible.trackPageview({
-            url: WALLET_URL + url,
-            ...options,
-        });
-    } else {
-        // eslint-disable-next-line no-console
-        console.log(
-            `[plausible] Skipping pageview log "${url}" in development.`
-        );
-    }
+export const trackPageview: typeof plausible.trackPageview = ({ url, ...options } = {}) => {
+	if (PLAUSIBLE_ENABLED) {
+		plausible.trackPageview({
+			url: WALLET_URL + url,
+			...options,
+		});
+	} else {
+		// eslint-disable-next-line no-console
+		console.log(`[plausible] Skipping pageview log "${url}" in development.`);
+	}
 };

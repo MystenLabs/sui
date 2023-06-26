@@ -831,6 +831,7 @@ fn vm_move_call(
     Ok(result)
 }
 
+#[allow(clippy::extra_unused_type_parameters)]
 fn deserialize_modules<Mode: ExecutionMode>(
     context: &mut ExecutionContext<'_, '_, '_>,
     module_bytes: &[Vec<u8>],

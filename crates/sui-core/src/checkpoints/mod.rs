@@ -997,18 +997,22 @@ impl CheckpointBuilder {
                 {
                     continue;
                 }
-                let executed_epoch = self.state.database.get_transaction_checkpoint(digest)?;
-                if let Some((executed_epoch, _checkpoint)) = executed_epoch {
-                    // Skip here if transaction was executed in previous epoch
-                    //
-                    // Do not skip if transaction was executed in this epoch -
-                    // we rely on builder_included_transaction_in_checkpoint instead for current epoch
-                    // because execution can run ahead checkpoint builder
-                    if executed_epoch < self.epoch_store.epoch() {
-                        continue;
-                    }
+                // Skip roots from previous epochs
+                if effect.executed_epoch() < self.epoch_store.epoch() {
+                    continue;
                 }
                 for dependency in effect.dependencies().iter() {
+                    // Skip here if dependency not executed in the current epoch.
+                    // Note that the existence of an effects signature in the
+                    // epoch store for the given digest indicates that the transaction
+                    // was locally executed in the current epoch
+                    if self
+                        .epoch_store
+                        .get_effects_signature(dependency)?
+                        .is_none()
+                    {
+                        continue;
+                    }
                     if seen.insert(*dependency) {
                         pending.insert(*dependency);
                     }
@@ -1122,6 +1126,7 @@ impl CheckpointAggregator {
                 });
                 self.current.as_mut().unwrap()
             };
+
             let iter = self.epoch_store.get_pending_checkpoint_signatures_iter(
                 current.summary.sequence_number,
                 current.next_index,
@@ -1429,8 +1434,10 @@ mod tests {
     use crate::authority::test_authority_builder::TestAuthorityBuilder;
     use crate::state_accumulator::StateAccumulator;
     use async_trait::async_trait;
+    use shared_crypto::intent::{Intent, IntentScope};
     use std::collections::{BTreeMap, HashMap};
     use std::ops::Deref;
+    use sui_macros::sim_test;
     use sui_types::base_types::{ObjectID, SequenceNumber, TransactionEffectsDigest};
     use sui_types::crypto::Signature;
     use sui_types::effects::TransactionEffects;
@@ -1440,8 +1447,9 @@ mod tests {
     use sui_types::transaction::{GenesisObject, VerifiedTransaction};
     use tokio::sync::mpsc;
 
-    #[tokio::test]
+    #[sim_test]
     pub async fn checkpoint_builder_test() {
+        telemetry_subscribers::init_for_testing();
         let state = TestAuthorityBuilder::new().build().await;
 
         let dummy_tx = VerifiedTransaction::new_genesis_transaction(vec![]);
@@ -1480,21 +1488,51 @@ mod tests {
         }
 
         let mut store = HashMap::<TransactionDigest, TransactionEffects>::new();
-        store.insert(
+        commit_cert_for_test(
+            &mut store,
+            state.clone(),
             d(1),
-            e(d(1), vec![d(2), d(3)], GasCostSummary::new(11, 12, 11, 1)),
+            vec![d(2), d(3)],
+            GasCostSummary::new(11, 12, 11, 1),
         );
-        store.insert(
+        commit_cert_for_test(
+            &mut store,
+            state.clone(),
             d(2),
-            e(d(2), vec![d(3), d(4)], GasCostSummary::new(21, 22, 21, 1)),
+            vec![d(3), d(4)],
+            GasCostSummary::new(21, 22, 21, 1),
         );
-        store.insert(d(3), e(d(3), vec![], GasCostSummary::new(31, 32, 31, 1)));
-        store.insert(d(4), e(d(4), vec![], GasCostSummary::new(41, 42, 41, 1)));
+        commit_cert_for_test(
+            &mut store,
+            state.clone(),
+            d(3),
+            vec![],
+            GasCostSummary::new(31, 32, 31, 1),
+        );
+        commit_cert_for_test(
+            &mut store,
+            state.clone(),
+            d(4),
+            vec![],
+            GasCostSummary::new(41, 42, 41, 1),
+        );
         for i in [10, 11, 12, 13] {
-            store.insert(d(i), e(d(i), vec![], GasCostSummary::new(41, 42, 41, 1)));
+            commit_cert_for_test(
+                &mut store,
+                state.clone(),
+                d(i),
+                vec![],
+                GasCostSummary::new(41, 42, 41, 1),
+            );
         }
         for i in [15, 16, 17] {
-            store.insert(d(i), e(d(i), vec![], GasCostSummary::new(51, 52, 51, 1)));
+            commit_cert_for_test(
+                &mut store,
+                state.clone(),
+                d(i),
+                vec![],
+                GasCostSummary::new(51, 52, 51, 1),
+            );
         }
         let all_digests: Vec<_> = store.keys().copied().collect();
         for digest in all_digests {
@@ -1509,7 +1547,8 @@ mod tests {
             mpsc::channel::<CertifiedCheckpointSummary>(10);
         let store = Box::new(store);
 
-        let checkpoint_store = CheckpointStore::new(&std::env::temp_dir());
+        let ckpt_dir = tempfile::tempdir().unwrap();
+        let checkpoint_store = CheckpointStore::new(ckpt_dir.path());
 
         let accumulator = StateAccumulator::new(state.database.clone());
 
@@ -1698,5 +1737,30 @@ mod tests {
         *effects.dependencies_mut_for_testing() = dependencies;
         *effects.gas_cost_summary_mut_for_testing() = gas_used;
         effects
+    }
+
+    fn commit_cert_for_test(
+        store: &mut HashMap<TransactionDigest, TransactionEffects>,
+        state: Arc<AuthorityState>,
+        digest: TransactionDigest,
+        dependencies: Vec<TransactionDigest>,
+        gas_used: GasCostSummary,
+    ) {
+        let epoch_store = state.epoch_store_for_testing();
+        let effects = e(digest, dependencies, gas_used);
+        store.insert(digest, effects.clone());
+        epoch_store
+            .insert_tx_cert_and_effects_signature(
+                &digest,
+                None,
+                Some(&AuthoritySignInfo::new(
+                    epoch_store.epoch(),
+                    &effects,
+                    Intent::sui_app(IntentScope::TransactionEffects),
+                    state.name,
+                    &*state.secret,
+                )),
+            )
+            .expect("Inserting cert fx and sigs should not fail");
     }
 }

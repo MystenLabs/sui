@@ -12,6 +12,7 @@
 //! 2. Written into a mutable reference
 //! 3. Added to a vector
 //! 4. Passed to a function cal::;
+use move_abstract_stack::AbstractStack;
 use move_binary_format::{
     binary_views::{BinaryIndexedView, FunctionView},
     errors::PartialVMError,
@@ -27,7 +28,7 @@ use move_bytecode_verifier::{
 use move_core_types::{
     account_address::AccountAddress, ident_str, identifier::IdentStr, vm_status::StatusCode,
 };
-use std::{collections::BTreeMap, error::Error};
+use std::{collections::BTreeMap, error::Error, num::NonZeroU64};
 use sui_types::{
     clock::CLOCK_MODULE_NAME,
     error::{ExecutionError, VMMVerifierErrorSubStatusCode},
@@ -187,7 +188,7 @@ impl AbstractDomain for AbstractState {
 struct IDLeakAnalysis<'a> {
     binary_view: &'a BinaryIndexedView<'a>,
     function_view: &'a FunctionView<'a>,
-    stack: Vec<AbstractValue>,
+    stack: AbstractStack<AbstractValue>,
 }
 
 impl<'a> IDLeakAnalysis<'a> {
@@ -195,18 +196,32 @@ impl<'a> IDLeakAnalysis<'a> {
         Self {
             binary_view,
             function_view,
-            stack: vec![],
+            stack: AbstractStack::new(),
         }
     }
 
-    fn stack_popn(&mut self, n: usize) {
-        let new_len = self.stack.len() - n;
-        self.stack.drain(new_len..);
+    fn stack_popn(&mut self, n: u64) -> Result<(), PartialVMError> {
+        let Some(n) = NonZeroU64::new(n) else {
+            return Ok(())
+        };
+        self.stack.pop_any_n(n).map_err(|e| {
+            PartialVMError::new(StatusCode::VERIFIER_INVARIANT_VIOLATION)
+                .with_message(format!("Unexpected stack error on pop_n: {e}"))
+        })
     }
 
-    fn stack_pushn(&mut self, n: usize, val: AbstractValue) {
-        let new_len = self.stack.len() + n;
-        self.stack.resize(new_len, val);
+    fn stack_push(&mut self, val: AbstractValue) -> Result<(), PartialVMError> {
+        self.stack.push(val).map_err(|e| {
+            PartialVMError::new(StatusCode::VERIFIER_INVARIANT_VIOLATION)
+                .with_message(format!("Unexpected stack error on push: {e}"))
+        })
+    }
+
+    fn stack_pushn(&mut self, n: u64, val: AbstractValue) -> Result<(), PartialVMError> {
+        self.stack.push_n(val, n).map_err(|e| {
+            PartialVMError::new(StatusCode::VERIFIER_INVARIANT_VIOLATION)
+                .with_message(format!("Unexpected stack error on push_n: {e}"))
+        })
     }
 
     fn resolve_function(&self, function_handle: &FunctionHandle) -> FunctionIdent<'a> {
@@ -264,7 +279,7 @@ fn call(
     let parameters = verifier
         .binary_view
         .signature_at(function_handle.parameters);
-    verifier.stack_popn(parameters.len());
+    verifier.stack_popn(parameters.len() as u64)?;
 
     let return_ = verifier.binary_view.signature_at(function_handle.return_);
     let function = verifier.resolve_function(function_handle);
@@ -280,17 +295,17 @@ fn call(
                     VMMVerifierErrorSubStatusCode::MULTIPLE_RETURN_VALUES_NOT_ALLOWED as u64,
                 ));
         }
-        verifier.stack.push(AbstractValue::Fresh);
+        verifier.stack_push(AbstractValue::Fresh)?;
     } else {
-        verifier.stack_pushn(return_.0.len(), AbstractValue::Other);
+        verifier.stack_pushn(return_.0.len() as u64, AbstractValue::Other)?;
     }
     Ok(())
 }
 
-fn num_fields(struct_def: &StructDefinition) -> usize {
+fn num_fields(struct_def: &StructDefinition) -> u64 {
     match &struct_def.field_information {
         StructFieldInformation::Native => 0,
-        StructFieldInformation::Declared(fields) => fields.len(),
+        StructFieldInformation::Declared(fields) => fields.len() as u64,
     }
 }
 
@@ -304,7 +319,7 @@ fn pack(
         .binary_view
         .struct_handle_at(struct_def.struct_handle);
     let num_fields = num_fields(struct_def);
-    verifier.stack_popn(num_fields - 1);
+    verifier.stack_popn(num_fields - 1)?;
     let last_value = verifier.stack.pop().unwrap();
     if handle.abilities.has_key() && last_value != AbstractValue::Fresh {
         let (cur_package, cur_module, cur_function) = verifier.cur_function();
@@ -320,13 +335,16 @@ fn pack(
             .with_message(msg)
             .with_sub_status(VMMVerifierErrorSubStatusCode::INVALID_OBJECT_CREATION as u64));
     }
-    verifier.stack.push(AbstractValue::Other);
+    verifier.stack_push(AbstractValue::Other)?;
     Ok(())
 }
 
-fn unpack(verifier: &mut IDLeakAnalysis, struct_def: &StructDefinition) {
+fn unpack(
+    verifier: &mut IDLeakAnalysis,
+    struct_def: &StructDefinition,
+) -> Result<(), PartialVMError> {
     verifier.stack.pop().unwrap();
-    verifier.stack_pushn(num_fields(struct_def), AbstractValue::Other);
+    verifier.stack_pushn(num_fields(struct_def), AbstractValue::Other)
 }
 
 fn execute_inner(
@@ -344,11 +362,11 @@ fn execute_inner(
         }
         Bytecode::CopyLoc(_local) => {
             // cannot copy a UID
-            verifier.stack.push(AbstractValue::Other);
+            verifier.stack_push(AbstractValue::Other)?;
         }
         Bytecode::MoveLoc(local) => {
             let value = state.locals.remove(local).unwrap();
-            verifier.stack.push(value);
+            verifier.stack_push(value)?;
         }
         Bytecode::StLoc(local) => {
             let value = verifier.stack.pop().unwrap();
@@ -370,7 +388,7 @@ fn execute_inner(
         | Bytecode::VecLen(_)
         | Bytecode::VecPopBack(_) => {
             verifier.stack.pop().unwrap();
-            verifier.stack.push(AbstractValue::Other);
+            verifier.stack_push(AbstractValue::Other)?;
         }
 
         // These bytecodes don't operate on any value.
@@ -400,7 +418,7 @@ fn execute_inner(
         | Bytecode::VecMutBorrow(_) => {
             verifier.stack.pop().unwrap();
             verifier.stack.pop().unwrap();
-            verifier.stack.push(AbstractValue::Other);
+            verifier.stack_push(AbstractValue::Other)?;
         }
         Bytecode::WriteRef => {
             verifier.stack.pop().unwrap();
@@ -409,14 +427,14 @@ fn execute_inner(
 
         // These bytecodes produce references, and hence cannot be ID.
         Bytecode::MutBorrowLoc(_)
-        | Bytecode::ImmBorrowLoc(_) => verifier.stack.push(AbstractValue::Other),
+        | Bytecode::ImmBorrowLoc(_) => verifier.stack_push(AbstractValue::Other)?,
 
         | Bytecode::MutBorrowField(_)
         | Bytecode::MutBorrowFieldGeneric(_)
         | Bytecode::ImmBorrowField(_)
         | Bytecode::ImmBorrowFieldGeneric(_) => {
             verifier.stack.pop().unwrap();
-            verifier.stack.push(AbstractValue::Other);
+            verifier.stack_push(AbstractValue::Other)?;
         }
 
         // These bytecodes are not allowed, and will be
@@ -445,7 +463,7 @@ fn execute_inner(
         }
 
         Bytecode::Ret => {
-            verifier.stack_popn(verifier.function_view.return_().len())
+            verifier.stack_popn(verifier.function_view.return_().len() as u64)?
         }
 
         Bytecode::BrTrue(_) | Bytecode::BrFalse(_) | Bytecode::Abort => {
@@ -454,7 +472,7 @@ fn execute_inner(
 
         // These bytecodes produce constants, and hence cannot be ID.
         Bytecode::LdTrue | Bytecode::LdFalse | Bytecode::LdU8(_) | Bytecode::LdU16(_)| Bytecode::LdU32(_)  | Bytecode::LdU64(_) | Bytecode::LdU128(_)| Bytecode::LdU256(_)  | Bytecode::LdConst(_) => {
-            verifier.stack.push(AbstractValue::Other);
+            verifier.stack_push(AbstractValue::Other)?;
         }
 
         Bytecode::Pack(idx) => {
@@ -468,17 +486,17 @@ fn execute_inner(
         }
         Bytecode::Unpack(idx) => {
             let struct_def = expect_ok(verifier.binary_view.struct_def_at(*idx))?;
-            unpack(verifier, struct_def);
+            unpack(verifier, struct_def)?;
         }
         Bytecode::UnpackGeneric(idx) => {
             let struct_inst = expect_ok(verifier.binary_view.struct_instantiation_at(*idx))?;
             let struct_def = expect_ok(verifier.binary_view.struct_def_at(struct_inst.def))?;
-            unpack(verifier, struct_def);
+            unpack(verifier, struct_def)?;
         }
 
         Bytecode::VecPack(_, num) => {
-            verifier.stack_popn(*num as usize);
-            verifier.stack.push(AbstractValue::Other);
+            verifier.stack_popn(*num )?;
+            verifier.stack_push(AbstractValue::Other)?;
         }
 
         Bytecode::VecPushBack(_) => {
@@ -488,7 +506,7 @@ fn execute_inner(
 
         Bytecode::VecUnpack(_, num) => {
             verifier.stack.pop().unwrap();
-            verifier.stack_pushn(*num as usize, AbstractValue::Other);
+            verifier.stack_pushn(*num, AbstractValue::Other)?;
         }
 
         Bytecode::VecSwap(_) => {

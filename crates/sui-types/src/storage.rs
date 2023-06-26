@@ -53,10 +53,46 @@ pub enum DeleteKind {
     Wrap,
 }
 
+/// DeleteKind together with the old sequence number prior to the deletion, if available.
+/// For normal deletion and wrap, we always will consult the object store to obtain the old sequence number.
+/// For UnwrapThenDelete however, in the old protocol where simplified_unwrap_then_delete is false,
+/// we will consult the object store to obtain the old sequence number, which latter will be put in
+/// modified_at_versions; in the new protocol where simplified_unwrap_then_delete is true,
+/// we will not consult the object store, and hence won't have the old sequence number.
+#[derive(Debug)]
+pub enum DeleteKindWithOldVersion {
+    Normal(SequenceNumber),
+    // This variant will be deprecated when we turn on simplified_unwrap_then_delete.
+    UnwrapThenDeleteDEPRECATED(SequenceNumber),
+    UnwrapThenDelete,
+    Wrap(SequenceNumber),
+}
+
+impl DeleteKindWithOldVersion {
+    pub fn old_version(&self) -> Option<SequenceNumber> {
+        match self {
+            DeleteKindWithOldVersion::Normal(version)
+            | DeleteKindWithOldVersion::UnwrapThenDeleteDEPRECATED(version)
+            | DeleteKindWithOldVersion::Wrap(version) => Some(*version),
+            DeleteKindWithOldVersion::UnwrapThenDelete => None,
+        }
+    }
+
+    pub fn to_delete_kind(&self) -> DeleteKind {
+        match self {
+            DeleteKindWithOldVersion::Normal(_) => DeleteKind::Normal,
+            DeleteKindWithOldVersion::UnwrapThenDeleteDEPRECATED(_)
+            | DeleteKindWithOldVersion::UnwrapThenDelete => DeleteKind::UnwrapThenDelete,
+            DeleteKindWithOldVersion::Wrap(_) => DeleteKind::Wrap,
+        }
+    }
+}
+
 #[derive(Debug)]
 pub enum ObjectChange {
     Write(Object, WriteKind),
-    Delete(SequenceNumber, DeleteKind),
+    // DeleteKind together with the old sequence number prior to the deletion, if available.
+    Delete(DeleteKindWithOldVersion),
 }
 
 pub trait StorageView: Storage + ParentSync + ChildObjectResolver {}
@@ -524,11 +560,39 @@ impl InMemoryStore {
             .insert(sequence_number, digest);
     }
 
+    pub fn delete_checkpoint_content_test_only(
+        &mut self,
+        sequence_number: u64,
+    ) -> anyhow::Result<()> {
+        let contents = self
+            .full_checkpoint_contents
+            .get(&sequence_number)
+            .unwrap()
+            .clone();
+        let contents_digest = *contents.checkpoint_contents().digest();
+        for content in contents.iter() {
+            let effects_digest = content.effects.digest();
+            let tx_digest = content.transaction.digest();
+            self.effects.remove(&effects_digest);
+            self.transactions.remove(tx_digest);
+        }
+        self.checkpoint_contents.remove(&contents_digest);
+        self.full_checkpoint_contents.remove(&sequence_number);
+        self.contents_digest_to_sequence_number
+            .remove(&contents_digest);
+        self.lowest_checkpoint_number = sequence_number + 1;
+        Ok(())
+    }
+
     pub fn update_highest_synced_checkpoint(&mut self, checkpoint: &VerifiedCheckpoint) {
         if !self.checkpoints.contains_key(checkpoint.digest()) {
             panic!("store should already contain checkpoint");
         }
-
+        if let Some(highest_synced_checkpoint) = self.highest_synced_checkpoint {
+            if highest_synced_checkpoint.0 >= checkpoint.sequence_number {
+                return;
+            }
+        }
         self.highest_synced_checkpoint =
             Some((*checkpoint.sequence_number(), *checkpoint.digest()));
     }
@@ -536,6 +600,11 @@ impl InMemoryStore {
     pub fn update_highest_verified_checkpoint(&mut self, checkpoint: &VerifiedCheckpoint) {
         if !self.checkpoints.contains_key(checkpoint.digest()) {
             panic!("store should already contain checkpoint");
+        }
+        if let Some(highest_verified_checkpoint) = self.highest_verified_checkpoint {
+            if highest_verified_checkpoint.0 >= checkpoint.sequence_number {
+                return;
+            }
         }
         self.highest_verified_checkpoint =
             Some((*checkpoint.sequence_number(), *checkpoint.digest()));

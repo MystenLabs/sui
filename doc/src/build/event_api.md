@@ -59,7 +59,6 @@ You can use the `EventFilter` object to query a Sui node and retrieve events tha
 | MoveEvent   | Move struct name of the event                             | {"MoveEvent":"<PACKAGE-ID>::nft::MintNFTEvent"}                                                     |
 | EventType   | Type of event described in [Events](#event-types) section | {"EventType": "NewObject"}                                                                          |
 | Sender      | Query by sender address                                   | {"Sender":"0x008e9c621f4fdb210b873aab59a1e5bf32ddb1d33ee85eb069b348c234465106"}                     |
-| Recipient   | Query by recipient                                        | {"Recipient":{"AddressOwner":"0xa3c00467938b392a12355397bdd3d319cea5c9b8f4fc9c51b46b8e15a807f030"}} |
 | Object      | Return events associated with the given object            | {"Object":"0x727b37454ab13d5c1dbb22e8741bff72b145d1e660f71b275c01f24e7860e5e5"}                     |
 | TimeRange   | Return events emitted in [start_time, end_time] interval  | {"TimeRange":{"startTime":1669039504014, "endTime":1669039604014}}                                  |
 

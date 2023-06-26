@@ -526,18 +526,30 @@ impl DataFetcher for RemoteFetcher {
         let struct_tag_str = EPOCH_CHANGE_STRUCT_TAG.to_string();
         let struct_tag = parse_struct_tag(&struct_tag_str)?;
 
-        // TODO: Should probably limit/page this but okay for now?
-        Ok(self
-            .rpc_client
-            .event_api()
-            .query_events(EventFilter::MoveEventType(struct_tag), None, None, reverse)
-            .await
-            .map_err(|e| ReplayEngineError::UnableToQuerySystemEvents {
-                rpc_err: e.to_string(),
-            })?
-            .data
-            .into_iter()
-            .collect())
+        let mut epoch_change_events: Vec<SuiEvent> = vec![];
+        let mut has_next_page = true;
+        let mut cursor = None;
+
+        while has_next_page {
+            let page_data = self
+                .rpc_client
+                .event_api()
+                .query_events(
+                    EventFilter::MoveEventType(struct_tag.clone()),
+                    cursor,
+                    None,
+                    reverse,
+                )
+                .await
+                .map_err(|e| ReplayEngineError::UnableToQuerySystemEvents {
+                    rpc_err: e.to_string(),
+                })?;
+            epoch_change_events.extend(page_data.data);
+            has_next_page = page_data.has_next_page;
+            cursor = page_data.next_cursor;
+        }
+
+        Ok(epoch_change_events)
     }
 }
 

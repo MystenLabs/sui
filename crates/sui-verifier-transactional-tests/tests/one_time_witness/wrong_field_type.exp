@@ -1,6 +1,6 @@
-processed 2 tasks
+processed 1 task
 
-task 1 'publish'. lines 8-20:
+task 0 'publish'. lines 6-23:
 created: object(1,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 4613200,  storage_rebate: 0, non_refundable_storage_fee: 0

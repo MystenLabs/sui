@@ -8,33 +8,30 @@ import { Button } from './ButtonUI';
 import { ConfirmationModal } from './ConfirmationModal';
 
 export default {
-    component: ConfirmationModal,
-    decorators: [
-        (Story, ctx) => {
-            const [isOpen, setIsOpen] = useState(false);
-            return (
-                <>
-                    <Button
-                        onClick={() => setIsOpen(true)}
-                        text="Show dialog"
-                    />
-                    <Story
-                        args={{
-                            ...ctx.args,
-                            isOpen,
-                            onResponse: () => setIsOpen(false),
-                        }}
-                    />
-                </>
-            );
-        },
-    ],
+	component: ConfirmationModal,
+	decorators: [
+		(Story, ctx) => {
+			const [isOpen, setIsOpen] = useState(false);
+			return (
+				<>
+					<Button onClick={() => setIsOpen(true)} text="Show dialog" />
+					<Story
+						args={{
+							...ctx.args,
+							isOpen,
+							onResponse: () => setIsOpen(false),
+						}}
+					/>
+				</>
+			);
+		},
+	],
 } as Meta<typeof ConfirmationModal>;
 
 export const Default: StoryObj<typeof ConfirmationModal> = {
-    render: (props) => (
-        <>
-            <ConfirmationModal {...props} />
-        </>
-    ),
+	render: (props) => (
+		<>
+			<ConfirmationModal {...props} />
+		</>
+	),
 };

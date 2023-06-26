@@ -41,6 +41,7 @@ pub struct SwarmBuilder<R = OsRng> {
     // Default to supported_protocol_versions_config, but can be overridden.
     fullnode_supported_protocol_versions_config: Option<ProtocolVersionsConfig>,
     db_checkpoint_config: DBCheckpointConfig,
+    num_unpruned_validators: Option<usize>,
 }
 
 impl SwarmBuilder {
@@ -59,6 +60,7 @@ impl SwarmBuilder {
             supported_protocol_versions_config: ProtocolVersionsConfig::Default,
             fullnode_supported_protocol_versions_config: None,
             db_checkpoint_config: DBCheckpointConfig::default(),
+            num_unpruned_validators: None,
         }
     }
 }
@@ -79,6 +81,7 @@ impl<R> SwarmBuilder<R> {
             fullnode_supported_protocol_versions_config: self
                 .fullnode_supported_protocol_versions_config,
             db_checkpoint_config: self.db_checkpoint_config,
+            num_unpruned_validators: self.num_unpruned_validators,
         }
     }
 
@@ -108,6 +111,12 @@ impl<R> SwarmBuilder<R> {
     pub fn with_genesis_config(mut self, genesis_config: GenesisConfig) -> Self {
         assert!(self.network_config.is_none() && self.genesis_config.is_none());
         self.genesis_config = Some(genesis_config);
+        self
+    }
+
+    pub fn with_num_unpruned_validators(mut self, n: usize) -> Self {
+        assert!(self.network_config.is_none());
+        self.num_unpruned_validators = Some(n);
         self
     }
 
@@ -212,6 +221,11 @@ impl<R: rand::RngCore + rand::CryptoRng> SwarmBuilder<R> {
 
             if let Some(genesis_config) = self.genesis_config {
                 config_builder = config_builder.with_genesis_config(genesis_config);
+            }
+
+            if let Some(num_unpruned_validators) = self.num_unpruned_validators {
+                config_builder =
+                    config_builder.with_num_unpruned_validators(num_unpruned_validators);
             }
 
             config_builder

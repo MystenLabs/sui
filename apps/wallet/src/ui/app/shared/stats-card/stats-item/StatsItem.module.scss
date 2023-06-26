@@ -2,27 +2,27 @@
 @use '_values/colors';
 
 .container {
-    display: flex;
-    flex-flow: column nowrap;
-    max-width: 100%;
-    padding: 15px;
-    overflow: hidden;
-    align-items: center;
-    flex: 1;
+	display: flex;
+	flex-flow: column nowrap;
+	max-width: 100%;
+	padding: 15px;
+	overflow: hidden;
+	align-items: center;
+	flex: 1;
 
-    & + & {
-        border-left: 1px solid colors.$white;
-    }
+	& + & {
+		border-left: 1px solid colors.$white;
+	}
 }
 
 .title {
-    margin-bottom: 8px;
+	margin-bottom: 8px;
 
-    @include utils.typography('tooltip/label');
-    @include utils.overflow-ellipsis;
+	@include utils.typography('tooltip/label');
+	@include utils.overflow-ellipsis;
 }
 
 .value {
-    @include utils.typography('stats/text-lg');
-    @include utils.overflow-ellipsis;
+	@include utils.typography('stats/text-lg');
+	@include utils.overflow-ellipsis;
 }

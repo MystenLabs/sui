@@ -154,6 +154,8 @@ async fn faucet_request(
         FaucetRequest::FixedAmountRequest(FixedAmountRequest { recipient }) => {
             state.faucet.request_sui_coins(recipient).await
         }
+        // (jian) TODO: add this onto the validator and cluster test faucets
+        FaucetRequest::GetBatchSendStatusRequest(_) => todo!(),
     };
 
     if !result.transferred_gas_objects.is_empty() {

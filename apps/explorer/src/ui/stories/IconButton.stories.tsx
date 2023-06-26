@@ -8,25 +8,25 @@ import { MemoryRouter } from 'react-router-dom';
 import { IconButton, type IconButtonProps } from '../IconButton';
 
 export default {
-    component: IconButton,
-    decorators: [
-        (Story) => (
-            <MemoryRouter>
-                <Story />
-            </MemoryRouter>
-        ),
-    ],
+	component: IconButton,
+	decorators: [
+		(Story) => (
+			<MemoryRouter>
+				<Story />
+			</MemoryRouter>
+		),
+	],
 } as Meta;
 
 export const CloseIcon: StoryObj<IconButtonProps> = {
-    render: (props) => (
-        <div className="flex flex-col items-start gap-2">
-            <IconButton href="/relative" {...props} />
-            <IconButton {...props} />
-            <IconButton href="https://google.com" {...props} />
-            <IconButton onClick={() => alert('on click')} {...props} />
-            <IconButton disabled {...props} />
-        </div>
-    ),
-    args: { icon: X12 },
+	render: (props) => (
+		<div className="flex flex-col items-start gap-2">
+			<IconButton href="/relative" {...props} />
+			<IconButton {...props} />
+			<IconButton href="https://google.com" {...props} />
+			<IconButton onClick={() => alert('on click')} {...props} />
+			<IconButton disabled {...props} />
+		</div>
+	),
+	args: { icon: X12 },
 };

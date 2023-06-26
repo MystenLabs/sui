@@ -12,6 +12,7 @@ module examples::mycoin {
     /// Make sure that the name of the type matches the module's name.
     struct MYCOIN has drop {}
 
+    #[allow(unused_function)]
     /// Module initializer is called once on module publish. A treasury
     /// cap is sent to the publisher, who then controls minting and burning
     fun init(witness: MYCOIN, ctx: &mut TxContext) {

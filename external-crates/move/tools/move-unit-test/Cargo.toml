@@ -22,7 +22,6 @@ itertools = "0.10.1"
 
 move-command-line-common = { path = "../../move-command-line-common" }
 move-stdlib = { path = "../../move-stdlib", features = ["testing"] }
-move-table-extension = { path = "../../extensions/move-table-extension" }
 move-core-types = { path = "../../move-core/types" }
 move-compiler = { path = "../../move-compiler" }
 move-ir-types = { path = "../../move-ir/types" }
@@ -35,12 +34,6 @@ move-binary-format = { path = "../../move-binary-format" }
 move-model = { path = "../../move-model" }
 move-stackless-bytecode-interpreter = { path = "../../move-prover/interpreter" }
 move-bytecode-utils = { path = "../move-bytecode-utils" }
-
-# EVM-specific dependencies
-move-to-yul = { path = "../../evm/move-to-yul", optional = true }
-evm-exec-utils = { path = "../../evm/exec-utils", optional = true }
-
-evm = { version = "0.33.1", optional = true }
 primitive-types = { version = "0.10.1", optional = true }
 
 [dev-dependencies]
@@ -54,9 +47,3 @@ path = "src/main.rs"
 [[test]]
 name = "move_unit_test_testsuite"
 harness = false
-
-[features]
-evm-backend = ["move-to-yul", "evm-exec-utils", "evm", "primitive-types"]
-table-extension = [
- "move-vm-test-utils/table-extension"
-]

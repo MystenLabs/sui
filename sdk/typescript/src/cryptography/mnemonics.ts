@@ -9,12 +9,10 @@ import { mnemonicToSeedSync as bip39MnemonicToSeedSync } from '@scure/bip39';
  * @param path path string (e.g. `m/44'/784'/0'/0'/0'`).
  */
 export function isValidHardenedPath(path: string): boolean {
-  if (
-    !new RegExp("^m\\/44'\\/784'\\/[0-9]+'\\/[0-9]+'\\/[0-9]+'+$").test(path)
-  ) {
-    return false;
-  }
-  return true;
+	if (!new RegExp("^m\\/44'\\/784'\\/[0-9]+'\\/[0-9]+'\\/[0-9]+'+$").test(path)) {
+		return false;
+	}
+	return true;
 }
 
 /**
@@ -26,12 +24,10 @@ export function isValidHardenedPath(path: string): boolean {
  * @param path path string (e.g. `m/54'/784'/0'/0/0`).
  */
 export function isValidBIP32Path(path: string): boolean {
-  if (
-    !new RegExp("^m\\/(54|74)'\\/784'\\/[0-9]+'\\/[0-9]+\\/[0-9]+$").test(path)
-  ) {
-    return false;
-  }
-  return true;
+	if (!new RegExp("^m\\/(54|74)'\\/784'\\/[0-9]+'\\/[0-9]+\\/[0-9]+$").test(path)) {
+		return false;
+	}
+	return true;
 }
 
 /**
@@ -40,7 +36,7 @@ export function isValidBIP32Path(path: string): boolean {
  * @param mnemonics 12 words string split by spaces.
  */
 export function mnemonicToSeed(mnemonics: string): Uint8Array {
-  return bip39MnemonicToSeedSync(mnemonics, '');
+	return bip39MnemonicToSeedSync(mnemonics, '');
 }
 
 /**
@@ -49,5 +45,5 @@ export function mnemonicToSeed(mnemonics: string): Uint8Array {
  * @param mnemonics 12 words string split by spaces.
  */
 export function mnemonicToSeedHex(mnemonics: string): string {
-  return toHEX(mnemonicToSeed(mnemonics));
+	return toHEX(mnemonicToSeed(mnemonics));
 }

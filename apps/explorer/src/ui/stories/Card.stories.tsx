@@ -6,19 +6,19 @@ import { type Meta, type StoryObj } from '@storybook/react';
 import { Card, type CardProps } from '../Card';
 
 export default {
-    component: Card,
+	component: Card,
 } as Meta;
 
 export const Default: StoryObj<CardProps> = {
-    render: (props) => <Card {...props}>This is card content.</Card>,
+	render: (props) => <Card {...props}>This is card content.</Card>,
 };
 
 export const Small: StoryObj<CardProps> = {
-    ...Default,
-    args: { spacing: 'sm' },
+	...Default,
+	args: { spacing: 'sm' },
 };
 
 export const Large: StoryObj<CardProps> = {
-    ...Default,
-    args: { spacing: 'lg' },
+	...Default,
+	args: { spacing: 'lg' },
 };

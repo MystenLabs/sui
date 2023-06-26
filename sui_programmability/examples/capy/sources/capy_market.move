@@ -85,6 +85,7 @@ module capy::capy_market {
 
     // ======= Publishing =======
 
+    #[allow(unused_function)]
     /// By default create two Markets
     fun init(ctx: &mut TxContext) {
         publish<Capy>(ctx);

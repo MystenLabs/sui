@@ -2,22 +2,17 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useFeatureValue } from '@growthbook/growthbook-react';
-import { SUI_FRAMEWORK_ADDRESS } from '@mysten/sui.js';
+import { SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_ADDRESS } from '@mysten/sui.js';
 
 import useAppSelector from './useAppSelector';
 import { API_ENV } from '_src/shared/api-env';
 
-const DEFAULT_RECOGNIZED_PACKAGES = [SUI_FRAMEWORK_ADDRESS];
+const DEFAULT_RECOGNIZED_PACKAGES = [SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_ADDRESS];
 
 export function useRecognizedPackages() {
-    const apiEnv = useAppSelector((app) => app.app.apiEnv);
-    const recognizedPackages = useFeatureValue(
-        'recognized-packages',
-        DEFAULT_RECOGNIZED_PACKAGES
-    );
+	const apiEnv = useAppSelector((app) => app.app.apiEnv);
+	const recognizedPackages = useFeatureValue('recognized-packages', DEFAULT_RECOGNIZED_PACKAGES);
 
-    // Our recognized package list is currently only available on mainnet
-    return apiEnv === API_ENV.mainnet
-        ? recognizedPackages
-        : DEFAULT_RECOGNIZED_PACKAGES;
+	// Our recognized package list is currently only available on mainnet
+	return apiEnv === API_ENV.mainnet ? recognizedPackages : DEFAULT_RECOGNIZED_PACKAGES;
 }

@@ -3,24 +3,20 @@
 
 import { type Meta, type StoryObj } from '@storybook/react';
 
-import {
-    DateFilter,
-    useDateFilterState,
-    type DateFilterProps,
-} from '../DateFilter';
+import { DateFilter, useDateFilterState, type DateFilterProps } from '../DateFilter';
 
 export default {
-    component: DateFilter,
+	component: DateFilter,
 } as Meta;
 
 export const Default: StoryObj<DateFilterProps> = {
-    render: (props) => {
-        const [value, onChange] = useDateFilterState('D');
-        return <DateFilter {...props} value={value} onChange={onChange} />;
-    },
+	render: (props) => {
+		const [value, onChange] = useDateFilterState('D');
+		return <DateFilter {...props} value={value} onChange={onChange} />;
+	},
 };
 
 export const CustomOptions: StoryObj<DateFilterProps> = {
-    ...Default,
-    args: { options: ['D', 'ALL'] },
+	...Default,
+	args: { options: ['D', 'ALL'] },
 };

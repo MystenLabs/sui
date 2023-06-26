@@ -7,8 +7,8 @@ import { useReducer, useState } from 'react';
 import { genTableDataFromTxData } from '../transactions/TxCardUtils';
 
 import {
-    DEFAULT_TRANSACTIONS_LIMIT,
-    useGetTransactionBlocks,
+	DEFAULT_TRANSACTIONS_LIMIT,
+	useGetTransactionBlocks,
 } from '~/hooks/useGetTransactionBlocks';
 import { Heading } from '~/ui/Heading';
 import { Pagination } from '~/ui/Pagination';
@@ -23,20 +23,20 @@ export enum FILTER_VALUES {
 }
 
 type TransactionBlocksForAddressProps = {
-    address: string;
-    filter?: FILTER_VALUES;
-    isObject?: boolean;
+	address: string;
+	filter?: FILTER_VALUES;
+	isObject?: boolean;
 };
 
 enum PAGE_ACTIONS {
-    NEXT,
-    PREV,
-    FIRST,
+	NEXT,
+	PREV,
+	FIRST,
 }
 
 type TransactionBlocksForAddressActionType = {
-    type: PAGE_ACTIONS;
-    filterValue: FILTER_VALUES;
+	type: PAGE_ACTIONS;
+	filterValue: FILTER_VALUES;
 };
 
 type PageStateByFilterMap = {
@@ -77,9 +77,9 @@ const reducer = (
 };
 
 function TransactionBlocksForAddress({
-    address,
-    filter = FILTER_VALUES.CHANGED,
-    isObject = false,
+	address,
+	filter = FILTER_VALUES.CHANGED,
+	isObject = false,
 }: TransactionBlocksForAddressProps) {
     const [filterValue, setFilterValue] = useState(filter);
     const [currentPageState, dispatch] = useReducer(reducer, {

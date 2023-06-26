@@ -46,6 +46,20 @@ pub fn run(args: Args) -> crate::Result<()> {
                     type_: BannedDepType::Always,
                 },
             ),
+            (
+                "actix-web".to_owned(),
+                BannedDepConfig {
+                    message: "use axum for a webframework instead".to_owned(),
+                    type_: BannedDepType::Always,
+                },
+            ),
+            (
+                "warp".to_owned(),
+                BannedDepConfig {
+                    message: "use axum for a webframework instead".to_owned(),
+                    type_: BannedDepType::Always,
+                },
+            ),
         ]
         .into_iter()
         .collect(),

@@ -1,8 +1,0 @@
-
-
-!! Move-To-Yul Diagnostics:
- error: #[callable] or #[create] functions cannot be generic
-  ┌─ tests/NoGenericCallable.move:5:5
-  │
-5 │     fun f<T>(x: u64): u64 { x }
-  │     ^^^^^^^^^^^^^^^^^^^^^^^^^^^

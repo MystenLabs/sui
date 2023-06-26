@@ -15,7 +15,7 @@ use test_utils::network::TestClusterBuilder;
 
 #[tokio::test]
 async fn test_subscribe_transaction() -> Result<(), anyhow::Error> {
-    let cluster = TestClusterBuilder::new().build().await.unwrap();
+    let cluster = TestClusterBuilder::new().build().await;
 
     let address = &cluster.get_address_0();
     let wallet = cluster.wallet;

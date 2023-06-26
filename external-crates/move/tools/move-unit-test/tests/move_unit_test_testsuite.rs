@@ -14,18 +14,12 @@ use std::{
 
 // We don't support statistics tests as that includes times which are variable and will make these
 // tests flaky.
-const TEST_MODIFIER_STRS: &[&str] = &[
-    "storage",
-    #[cfg(feature = "evm-backend")]
-    "evm",
-];
+const TEST_MODIFIER_STRS: &[&str] = &["storage"];
 
 pub fn modify(mut base_config: UnitTestingConfig, modifier_str: &str) -> Option<UnitTestingConfig> {
     // Add future test modifiers here
     match modifier_str {
         "storage" => base_config.report_storage_on_error = true,
-        #[cfg(feature = "evm-backend")]
-        "evm" => base_config.evm = true,
         _ => return None,
     };
     Some(base_config)

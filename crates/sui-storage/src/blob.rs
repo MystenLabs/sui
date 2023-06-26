@@ -88,17 +88,7 @@ impl<T: DeserializeOwned> BlobIter<T> {
         }
     }
     fn next_blob(&mut self) -> Result<T> {
-        let len = self.reader.read_varint::<u64>()? as usize;
-        if len == 0 {
-            return Err(anyhow!("Invalid blob length of 0 in file"));
-        }
-        let encoding = self.reader.read_u8()?;
-        let mut data = vec![0u8; len];
-        self.reader.read_exact(&mut data)?;
-        let blob = Blob {
-            data,
-            encoding: BlobEncoding::try_from(encoding)?,
-        };
+        let blob = Blob::read(&mut self.reader)?;
         blob.decode()
     }
 }

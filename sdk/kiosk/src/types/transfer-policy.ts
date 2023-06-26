@@ -20,14 +20,14 @@ export const ROYALTY_RULE = 'royalty_rule::Rule';
 
 /** The `TransferPolicy` object */
 export type TransferPolicy = {
-  id: string;
-  type: string;
-  balance: string;
-  rules: string[];
-  owner: ObjectOwner;
+	id: string;
+	type: string;
+	balance: string;
+	rules: string[];
+	owner: ObjectOwner;
 };
 
 /** Event emitted when a TransferPolicy is created. */
 export type TransferPolicyCreated = {
-  id: string;
+	id: string;
 };

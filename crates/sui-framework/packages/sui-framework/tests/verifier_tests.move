@@ -5,6 +5,7 @@
 module sui::verifier_tests {
     struct VERIFIER_TESTS has drop {}
 
+    #[allow(unused_function)]
     fun init(otw: VERIFIER_TESTS, _: &mut sui::tx_context::TxContext) {
         assert!(sui::types::is_one_time_witness(&otw), 0);
     }

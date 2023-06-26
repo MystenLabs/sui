@@ -6,18 +6,15 @@ import { useQuery } from '@tanstack/react-query';
 
 import type { ObjectId } from '@mysten/sui.js';
 
-export function useNormalizedMoveModule(
-    packageId?: ObjectId | null,
-    moduleName?: string | null
-) {
-    const rpc = useRpcClient();
-    return useQuery({
-        queryKey: ['normalized-module', packageId, moduleName],
-        queryFn: async () =>
-            await rpc.getNormalizedMoveModule({
-                package: packageId!,
-                module: moduleName!,
-            }),
-        enabled: !!(packageId && moduleName),
-    });
+export function useNormalizedMoveModule(packageId?: ObjectId | null, moduleName?: string | null) {
+	const rpc = useRpcClient();
+	return useQuery({
+		queryKey: ['normalized-module', packageId, moduleName],
+		queryFn: async () =>
+			await rpc.getNormalizedMoveModule({
+				package: packageId!,
+				module: moduleName!,
+			}),
+		enabled: !!(packageId && moduleName),
+	});
 }

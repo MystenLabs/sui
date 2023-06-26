@@ -10,7 +10,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 14;
+const MAX_PROTOCOL_VERSION: u64 = 16;
 
 // Record history of protocol version allocations here:
 //
@@ -45,7 +45,12 @@ const MAX_PROTOCOL_VERSION: u64 = 14;
 // Version 14: Introduce a config variable to allow charging of computation to be either
 //             bucket base or rounding up. The presence of `gas_rounding_step` (or `None`)
 //             decides whether rounding is applied or not.
-//             Add reordering of user transactions by gas price after consensus.
+// Version 15: Add reordering of user transactions by gas price after consensus.
+//             Add `sui::table_vec::drop` to the framework via a system package upgrade.
+// Version 16: Enabled simplified_unwrap_then_delete feature flag, which allows the execution engine
+//             to no longer consult the object store when generating unwrapped_then_deleted in the
+//             effects; this also allows us to stop including wrapped tombstones in accumulator.
+//             Add self-matching prevention for deepbook.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -215,6 +220,16 @@ struct FeatureFlags {
     // How we order transactions coming out of consensus before sending to execution.
     #[serde(skip_serializing_if = "ConsensusTransactionOrdering::is_none")]
     consensus_transaction_ordering: ConsensusTransactionOrdering,
+
+    // Previously, the unwrapped_then_deleted field in TransactionEffects makes a distinction between
+    // whether an object has existed in the store previously (i.e. whether there is a tombstone).
+    // Such dependency makes effects generation inefficient, and requires us to include wrapped
+    // tombstone in state root hash.
+    // To prepare for effects V2, with this flag set to true, we simplify the definition of
+    // unwrapped_then_deleted to always include unwrapped then deleted objects,
+    // regardless of their previous state in the store.
+    #[serde(skip_serializing_if = "is_false")]
+    simplified_unwrap_then_delete: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -770,6 +785,10 @@ impl ProtocolConfig {
     pub fn consensus_transaction_ordering(&self) -> ConsensusTransactionOrdering {
         self.feature_flags.consensus_transaction_ordering
     }
+
+    pub fn simplified_unwrap_then_delete(&self) -> bool {
+        self.feature_flags.simplified_unwrap_then_delete
+    }
 }
 
 #[cfg(not(msim))]
@@ -1222,8 +1241,18 @@ impl ProtocolConfig {
             14 => {
                 let mut cfg = Self::get_for_version_impl(version - 1, chain);
                 cfg.gas_rounding_step = Some(1_000);
+                cfg.gas_model_version = Some(6);
+                cfg
+            }
+            15 => {
+                let mut cfg = Self::get_for_version_impl(version - 1, chain);
                 cfg.feature_flags.consensus_transaction_ordering =
                     ConsensusTransactionOrdering::ByGasPrice;
+                cfg
+            }
+            16 => {
+                let mut cfg = Self::get_for_version_impl(version - 1, chain);
+                cfg.feature_flags.simplified_unwrap_then_delete = true;
                 cfg
             }
             // Use this template when making changes:
@@ -1283,6 +1312,10 @@ impl ProtocolConfig {
     }
     pub fn set_max_tx_gas_for_testing(&mut self, max_tx_gas: u64) {
         self.max_tx_gas = Some(max_tx_gas)
+    }
+    #[cfg(msim)]
+    pub fn set_simplified_unwrap_then_delete(&mut self, val: bool) {
+        self.feature_flags.simplified_unwrap_then_delete = val
     }
 }
 

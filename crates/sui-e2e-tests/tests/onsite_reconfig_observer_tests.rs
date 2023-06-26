@@ -17,8 +17,7 @@ async fn test_onsite_reconfig_observer_basic() {
     let test_cluster = TestClusterBuilder::new()
         .with_epoch_duration_ms(10000)
         .build()
-        .await
-        .unwrap();
+        .await;
 
     let fullnode = &test_cluster.fullnode_handle.sui_node;
 

@@ -46,7 +46,7 @@ impl SurferTask {
             .get_node_handle()
             .unwrap();
         let all_live_objects: Vec<_> =
-            validator.with(|node| node.state().db().iter_live_object_set().collect());
+            validator.with(|node| node.state().db().iter_live_object_set(false).collect());
         for obj in all_live_objects {
             match obj {
                 LiveObject::Normal(obj) => {
@@ -89,7 +89,7 @@ impl SurferTask {
                         }
                     }
                 }
-                LiveObject::Wrapped(_) => (),
+                LiveObject::Wrapped(_) => unreachable!("Explicitly skipped wrapped objects"),
             }
         }
         let entry_functions = Arc::new(RwLock::new(vec![]));
