@@ -26,7 +26,7 @@ use sui_types::object::Object;
 use sui_types::parse_sui_struct_tag;
 
 use crate::api::{cap_page_limit, CoinReadApiServer, JsonRpcMetrics};
-use crate::error::{Error, SuiRpcInputError};
+use crate::error::{Error, ServerError, SuiRpcInputError};
 use crate::{with_tracing, SuiRpcModule};
 
 pub struct CoinReadApi {
@@ -125,10 +125,11 @@ async fn find_package_object_id(
                 }
             }
         }
-        Err(Error::UnexpectedError(format!(
+        Err(SuiRpcInputError::GenericNotFound(format!(
             "Cannot find object [{}] from [{}] package event.",
             object_struct_tag, package_id,
-        )))
+        ))
+        .into())
     })
     .await?
 }
@@ -196,16 +197,18 @@ impl CoinReadApiServer for CoinReadApi {
                         Some(obj) => {
                             let coin_type = obj.coin_type_maybe();
                             if coin_type.is_none() {
-                                Err(Error::SuiRpcInputError(SuiRpcInputError::GenericInvalid(
-                                    format!("Invalid Cursor {:?}, Object is not a coin", object_id),
-                                )))
+                                Err(Error::Client(SuiRpcInputError::GenericInvalid(format!(
+                                    "Invalid Cursor {:?}, Object is not a coin",
+                                    object_id
+                                ))))
                             } else {
                                 Ok((coin_type.unwrap().to_string(), object_id))
                             }
                         }
-                        None => Err(Error::SuiRpcInputError(SuiRpcInputError::GenericInvalid(
-                            format!("Invalid Cursor {:?}, Object not found", object_id),
-                        ))),
+                        None => Err(Error::Client(SuiRpcInputError::GenericInvalid(format!(
+                            "Invalid Cursor {:?}, Object not found",
+                            object_id
+                        )))),
                     }
                 }
                 None => {
@@ -320,7 +323,7 @@ impl CoinReadApiServer for CoinReadApi {
                 let treasury_cap = TreasuryCap::from_bcs_bytes(
                     treasury_cap_object.data.try_as_move().unwrap().contents(),
                 )
-                .map_err(Error::SuiRpcInternalError)?;
+                .map_err(|e| Error::from(ServerError::Serde(e.to_string())))?;
                 treasury_cap.total_supply
             })
         })

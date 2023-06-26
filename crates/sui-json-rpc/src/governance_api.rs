@@ -20,7 +20,7 @@ use sui_open_rpc::Module;
 use sui_types::base_types::{MoveObjectType, ObjectID, SuiAddress};
 use sui_types::committee::EpochId;
 use sui_types::dynamic_field::get_dynamic_field_from_store;
-use sui_types::error::{SuiError, SuiResult, UserInputError};
+use sui_types::error::UserInputError;
 use sui_types::governance::StakedSui;
 use sui_types::id::ID;
 use sui_types::object::ObjectRead;
@@ -31,7 +31,7 @@ use sui_types::sui_system_state::SuiSystemStateTrait;
 use sui_types::sui_system_state::{get_validator_from_table, SuiSystemState};
 
 use crate::api::{GovernanceReadApiServer, JsonRpcMetrics};
-use crate::error::{Error, SuiRpcInputError};
+use crate::error::{Error, ServerError, SuiRpcInputError};
 use crate::{with_tracing, ObjectProvider, SuiRpcModule};
 
 #[derive(Clone)]
@@ -51,6 +51,7 @@ impl GovernanceReadApi {
             state
                 .get_move_objects(owner, MoveObjectType::staked_sui())
                 .await
+                .map_err(Error::SuiRpcInternalError)
         })
         .await??;
 
@@ -148,8 +149,7 @@ impl GovernanceReadApi {
             system_state.clone().into_sui_system_state_summary();
 
         let rates = exchange_rates(&self.state, system_state_summary.epoch)
-            .await
-            .map_err(Error::SuiRpcInternalError)?
+            .await?
             .into_iter()
             .map(|rates| (rates.pool_id, rates))
             .collect::<BTreeMap<_, _>>();
@@ -267,9 +267,7 @@ impl GovernanceReadApiServer for GovernanceReadApi {
         let system_state_summary: SuiSystemStateSummary =
             self.get_latest_sui_system_state().await?;
 
-        let exchange_rate_table = exchange_rates(&self.state, system_state_summary.epoch)
-            .await
-            .map_err(Error::SuiRpcInternalError)?;
+        let exchange_rate_table = exchange_rates(&self.state, system_state_summary.epoch).await?;
 
         let mut apys = vec![];
 
@@ -331,7 +329,7 @@ fn calculate_apy((rate_e, rate_e_1): (&PoolTokenExchangeRate, &PoolTokenExchange
 async fn exchange_rates(
     state: &Arc<AuthorityState>,
     _current_epoch: EpochId,
-) -> SuiResult<Vec<ValidatorExchangeRates>> {
+) -> Result<Vec<ValidatorExchangeRates>, Error> {
     let system_state = state.database.get_sui_system_state_object()?;
     let system_state_summary: SuiSystemStateSummary = system_state.into_sui_system_state_summary();
 
@@ -355,10 +353,7 @@ async fn exchange_rates(
         system_state_summary.inactive_pools_size as usize,
     )? {
         let pool_id: ID =
-            bcs::from_bytes(&df.1.bcs_name).map_err(|e| SuiError::DeserializationError {
-                format: "ID".to_string(),
-                error: e.to_string(),
-            })?;
+            bcs::from_bytes(&df.1.bcs_name).map_err(|e| ServerError::Serde(e.to_string()))?;
         let validator = get_validator_from_table(
             state.database.as_ref(),
             system_state_summary.inactive_pools_id,
@@ -380,17 +375,13 @@ async fn exchange_rates(
             .get_dynamic_fields(exchange_rates_id, None, exchange_rates_size as usize)?
             .into_iter()
             .map(|df| {
-                let epoch: EpochId = bcs::from_bytes(&df.1.bcs_name).map_err(|e| {
-                    SuiError::DeserializationError {
-                        format: "EpochId".to_string(),
-                        error: e.to_string(),
-                    }
-                })?;
-
+                let epoch: EpochId = bcs::from_bytes(&df.1.bcs_name)
+                    .map_err(|e| ServerError::Serde(e.to_string()))?;
                 let exchange_rate: PoolTokenExchangeRate =
-                    get_dynamic_field_from_store(state.db().as_ref(), exchange_rates_id, &epoch)?;
+                    get_dynamic_field_from_store(state.db().as_ref(), exchange_rates_id, &epoch)
+                        .map_err(Error::SuiRpcInternalError)?;
 
-                Ok::<_, SuiError>((epoch, exchange_rate))
+                Ok::<_, Error>((epoch, exchange_rate))
             })
             .collect::<Result<Vec<_>, _>>()?;
 

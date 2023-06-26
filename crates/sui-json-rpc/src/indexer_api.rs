@@ -38,7 +38,7 @@ use crate::api::{
     cap_page_limit, validate_limit, IndexerApiServer, JsonRpcMetrics, ReadApiServer,
     QUERY_MAX_RESULT_LIMIT,
 };
-use crate::error::{Error, SuiRpcInputError};
+use crate::error::{Error, ServerError, SuiRpcInputError};
 use crate::name_service::Domain;
 use crate::with_tracing;
 use crate::SuiRpcModule;
@@ -351,22 +351,18 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
                 type_params: vec![],
             }));
             let domain = Domain::from_str(&name).map_err(|e| {
-                Error::UnexpectedError(format!(
+                Error::Client(SuiRpcInputError::GenericInvalid(format!(
                     "Failed to parse NameService Domain with error: {:?}",
                     e
-                ))
-            })?;
-            let domain_bcs_value = bcs::to_bytes(&domain).map_err(|e| {
-                Error::SuiRpcInputError(SuiRpcInputError::GenericInvalid(format!(
-                    "Unable to serialize name: {:?} with error: {:?}",
-                    domain, e
                 )))
             })?;
+            let domain_bcs_value = bcs::to_bytes(&domain)
+                .map_err(|e| Error::Server(ServerError::Serde(e.to_string())))?;
             let record_object_id_option = self
                 .state
                 .get_dynamic_field_object_id(registry_id, name_type_tag, &domain_bcs_value)
                 .map_err(|e| {
-                    Error::SuiRpcInputError(SuiRpcInputError::GenericInvalid(format!(
+                    Error::Client(SuiRpcInputError::GenericInvalid(format!(
                         "Unable to lookup name in name service registry with error: {:?}",
                         e
                     )))
@@ -386,6 +382,7 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
                     .read_dynamic_field_value(NAME_SERVICE_VALUE)
                     .ok_or_else(|| {
                         Error::UnexpectedError(
+                            // TODO(wlmyng): maybe we can have an error enum for parsing Move stuff
                             "Cannot find value field in record Move struct".to_string(),
                         )
                     })?;
@@ -440,10 +437,10 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
 
             let name_type_tag = TypeTag::Address;
             let addr_bcs_value = bcs::to_bytes(&address).map_err(|e| {
-                Error::SuiRpcInputError(SuiRpcInputError::GenericInvalid(format!(
-                    "Unable to serialize address: {:?} with error: {:?}",
-                    address, e
-                )))
+                Error::Client(SuiRpcInputError::Serialization {
+                    input: String::from("address"),
+                    error: e.to_string(),
+                })
             })?;
 
             let addr_object_id_opt = self

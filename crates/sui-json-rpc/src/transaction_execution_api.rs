@@ -68,13 +68,18 @@ impl TransactionExecutionApi {
 
         let request_type = match (request_type, opts.require_local_execution()) {
             (Some(ExecuteTransactionRequestType::WaitForEffectsCert), true) => {
-                return Err(Error::SuiRpcInputError(
+                return Err(Error::Client(
                     SuiRpcInputError::InvalidExecuteTransactionRequestType,
                 ));
             }
             (t, _) => t.unwrap_or_else(|| opts.default_execution_request_type()),
         };
-        let tx_data: TransactionData = bcs::from_bytes(&tx_bytes.to_vec()?)?;
+        let tx_data: TransactionData = bcs::from_bytes(&tx_bytes.to_vec()?).map_err(|e| {
+            SuiRpcInputError::Deserialization {
+                input: String::from("tx_bytes"),
+                error: e.to_string(),
+            }
+        })?;
         let sender = tx_data.sender();
         let input_objs = tx_data.input_objects().unwrap_or_default();
 
@@ -85,7 +90,10 @@ impl TransactionExecutionApi {
         let txn = Transaction::from_generic_sig_data(tx_data, Intent::sui_transaction(), sigs);
         let digest = *txn.digest();
         let raw_transaction = if opts.show_raw_input {
-            bcs::to_bytes(txn.data())?
+            bcs::to_bytes(txn.data()).map_err(|e| SuiRpcInputError::Serialization {
+                input: String::from("txn"),
+                error: e.to_string(),
+            })?
         } else {
             vec![]
         };
@@ -233,7 +241,12 @@ impl WriteApiServer for TransactionExecutionApi {
     ) -> RpcResult<DevInspectResults> {
         with_tracing!(async move {
             let tx_kind: TransactionKind =
-                bcs::from_bytes(&tx_bytes.to_vec().map_err(Error::from)?).map_err(Error::from)?;
+                bcs::from_bytes(&tx_bytes.to_vec().map_err(Error::from)?).map_err(|e| {
+                    Error::from(SuiRpcInputError::Serialization {
+                        input: String::from("tx_bytes"),
+                        error: e.to_string(),
+                    })
+                })?;
             Ok(self
                 .state
                 .dev_inspect_transaction_block(sender_address, tx_kind, gas_price.map(|i| *i))

@@ -18,11 +18,9 @@ pub enum Error {
     SuiError(#[from] SuiError),
 
     #[error(transparent)]
-    InternalError(#[from] anyhow::Error),
+    AnyhowError(#[from] anyhow::Error),
 
-    #[error("Deserialization error: {0}")]
-    BcsError(#[from] bcs::Error),
-
+    // General catchall variant for errors that we don't expect to happen. Maps to -32603 internal error
     #[error("Unexpected error: {0}")]
     UnexpectedError(String),
 
@@ -51,11 +49,21 @@ pub enum Error {
     SuiObjectResponseError(#[from] SuiObjectResponseError),
 
     #[error(transparent)]
-    SuiRpcInputError(#[from] SuiRpcInputError),
+    Client(#[from] SuiRpcInputError),
 
-    // TODO(wlmyng): circle back to determine how we can better do this
+    // TODO(wlmyng): circle back to determine how we can better do this. Errors that rely on this indirection are due to client- or server-faults that can only be discerned on RPC
     #[error("{0}")]
     SuiRpcInternalError(SuiError),
+
+    // Errors that map to -32603 internal error
+    #[error(transparent)]
+    Server(#[from] ServerError),
+}
+
+#[derive(Debug, Error)]
+pub enum ServerError {
+    #[error("Serde error encountered: {0}")]
+    Serde(String),
 }
 
 impl From<Error> for RpcError {
@@ -68,8 +76,7 @@ impl Error {
     pub fn to_rpc_error(self) -> RpcError {
         match self {
             Error::SuiError(sui_error) => match_sui_error(sui_error),
-            Error::InternalError(err) => to_internal_error(err),
-            Error::BcsError(err) => to_internal_error(err),
+            Error::AnyhowError(err) => to_internal_error(err),
             Error::UnexpectedError(err) => to_internal_error(err),
             Error::RPCServerError(err) => err, // return RPCServerError as is
             Error::UserInputError(user_input_error) => {
@@ -104,14 +111,16 @@ impl Error {
                     _ => RpcError::Call(CallError::InvalidParams(sui_object_response_error.into())),
                 }
             }
-            Error::SuiRpcInputError(sui_json_rpc_input_error) => {
+            Error::Client(sui_json_rpc_input_error) => {
                 RpcError::Call(CallError::InvalidParams(sui_json_rpc_input_error.into()))
             }
+            Error::FastCryptoError(err) => to_internal_error(err),
             Error::SuiRpcInternalError(err) => match err {
                 SuiError::ModuleDeserializationFailure { .. }
                 | SuiError::DeserializationError { .. } => to_internal_error(err),
                 _ => match_sui_error(err),
             },
+            Error::Server(err) => to_internal_error(err),
             _ => RpcError::Call(CallError::Failed(self.into())),
         }
     }
@@ -137,8 +146,11 @@ pub enum SuiRpcInputError {
     #[error("Unsupported protocol version requested. Min supported: {0}, max supported: {1}")]
     ProtocolVersionUnsupported(u64, u64),
 
-    #[error("Unable to serialize: {0}")]
-    CannotSerialize(#[from] bcs::Error),
+    // Generic error variant for any kind of serde
+    #[error("Failed to serialize {input}: {}", error)]
+    Serialization { input: String, error: String },
+    #[error("Failed to deserialize {input}: {}", error)]
+    Deserialization { input: String, error: String },
 }
 
 pub fn match_sui_error(sui_error: SuiError) -> RpcError {
