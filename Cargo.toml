@@ -37,6 +37,7 @@ exclude = [
     "external-crates/move/move-vm/config",
     "external-crates/move/move-vm/integration-tests",
     "external-crates/move/move-vm/paranoid-tests",
+    "external-crates/move/move-vm/profiler",
     "external-crates/move/move-vm/runtime",
     "external-crates/move/move-vm/test-utils",
     "external-crates/move/move-vm/transactional-tests",

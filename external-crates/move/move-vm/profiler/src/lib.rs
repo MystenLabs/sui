@@ -90,6 +90,10 @@ impl GasProfile {
         self.name.clone()
     }
 
+    fn is_metered(&self) -> bool {
+        self.profiles[0].end_value != 0
+    }
+
     fn get_start_gas(&self) -> u64 {
         self.start_gas
     }
@@ -101,9 +105,7 @@ impl GasProfile {
             .entry(frame_name.clone())
             .or_insert({
                 let val = self.shared.frames.len() as u64;
-                self.shared.frames.push(FrameName {
-                    name: frame_name.clone(),
-                });
+                self.shared.frames.push(FrameName { name: frame_name });
                 val as usize
             }) as u64
     }
@@ -138,7 +140,7 @@ impl GasProfile {
     }
 
     pub fn to_file(&self) {
-        if !*PROFILER_ENABLED {
+        if !*PROFILER_ENABLED || !self.is_metered() {
             return;
         }
         // Get the unix timestamp
