@@ -13,7 +13,7 @@ import { SuiTokenCard } from '~/components/SuiTokenCard';
 import { TopPackagesCard } from '~/components/top-packages/TopPackagesCard';
 import { useNetwork } from '~/context';
 import { Card } from '~/ui/Card';
-import { Tab, TabGroup, TabList, TabPanel, TabPanels } from '~/ui/Tabs';
+import { TabHeader } from '~/ui/Tabs';
 import { Network } from '~/utils/api/DefaultRpcClient';
 
 const ValidatorMap = lazy(() => import('../../components/validator-map'));
@@ -64,18 +64,11 @@ function Home() {
 				</ErrorBoundary>
 			</div>
 			<div data-testid="validators-table" style={{ gridArea: 'validators' }} className="mt-5">
-				<TabGroup size="lg">
-					<TabList>
-						<Tab>Validators</Tab>
-					</TabList>
-					<TabPanels>
-						<TabPanel>
-							<ErrorBoundary>
-								<TopValidatorsCard limit={10} showIcon />
-							</ErrorBoundary>
-						</TabPanel>
-					</TabPanels>
-				</TabGroup>
+				<TabHeader title="Validators">
+					<ErrorBoundary>
+						<TopValidatorsCard limit={10} showIcon />
+					</ErrorBoundary>
+				</TabHeader>
 			</div>
 
 			<div style={{ gridArea: 'packages' }}>

@@ -26,7 +26,7 @@ import { DescriptionList, DescriptionItem } from '~/ui/DescriptionList';
 import { AddressLink, ObjectLink, TransactionLink } from '~/ui/InternalLink';
 import { Link } from '~/ui/Link';
 import { ObjectDetails } from '~/ui/ObjectDetails';
-import { Tab, TabGroup, TabList, TabPanel, TabPanels } from '~/ui/Tabs';
+import { TabHeader } from '~/ui/Tabs';
 import { Text } from '~/ui/Text';
 import { extractName, parseImageURL, parseObjectType } from '~/utils/objectUtils';
 
@@ -66,100 +66,86 @@ export function TokenView({ data }: { data: SuiObjectResponse }) {
 
 	return (
 		<div className="flex flex-col flex-nowrap gap-14">
-			<TabGroup size="lg">
-				<TabList>
-					<Tab>Details</Tab>
-				</TabList>
-				<TabPanels>
-					<TabPanel noGap>
-						<div className="flex flex-col md:flex-row md:divide-x md:divide-gray-45">
-							<div className="flex-1 divide-y divide-gray-45 pb-6 md:basis-2/3 md:pb-0 md:pr-10">
-								<div className="py-4 pb-7">
-									<DescriptionList>
-										{objOwner ? (
-											<DescriptionItem title="Owner" data-testid="owner">
-												{objOwner === 'Immutable' ? (
-													'Immutable'
-												) : 'Shared' in objOwner ? (
-													'Shared'
-												) : 'ObjectOwner' in objOwner ? (
-													<ObjectLink objectId={objOwner.ObjectOwner} />
-												) : (
-													<AddressLink address={objOwner.AddressOwner} />
-												)}
-											</DescriptionItem>
-										) : null}
-										<DescriptionItem title="Object ID">
-											<ObjectLink objectId={getObjectId(data)} noTruncate />
-										</DescriptionItem>
-										<DescriptionItem title="Type">
-											{/* TODO: Support module links on `ObjectLink` */}
-											<Link to={genhref(objectType)} variant="mono">
-												{trimStdLibPrefix(objectType)}
-											</Link>
-										</DescriptionItem>
-										<DescriptionItem title="Version">
-											<Text variant="body/medium" color="steel-darker">
-												{getObjectVersion(data)}
-											</Text>
-										</DescriptionItem>
-										<DescriptionItem title="Last Transaction Block Digest">
-											<TransactionLink
-												digest={getObjectPreviousTransactionDigest(data)!}
-												noTruncate
-											/>
-										</DescriptionItem>
-									</DescriptionList>
-								</div>
-								{display ? (
-									<div className="py-4 pb-7">
-										<DescriptionList>
-											<LinkOrTextDescriptionItem title="Name" value={name} />
-											<LinkOrTextDescriptionItem title="Description" value={display.description} />
-											<LinkOrTextDescriptionItem title="Creator" value={display.creator} parseUrl />
-											<LinkOrTextDescriptionItem title="Link" value={display.link} parseUrl />
-											<LinkOrTextDescriptionItem
-												title="Website"
-												value={display.project_url}
-												parseUrl
-											/>
-										</DescriptionList>
-									</div>
+			<TabHeader title="Details" noGap>
+				<div className="flex flex-col md:flex-row md:divide-x md:divide-gray-45">
+					<div className="flex-1 divide-y divide-gray-45 pb-6 md:basis-2/3 md:pb-0 md:pr-10">
+						<div className="py-4 pb-7">
+							<DescriptionList>
+								{objOwner ? (
+									<DescriptionItem title="Owner" data-testid="owner">
+										{objOwner === 'Immutable' ? (
+											'Immutable'
+										) : 'Shared' in objOwner ? (
+											'Shared'
+										) : 'ObjectOwner' in objOwner ? (
+											<ObjectLink objectId={objOwner.ObjectOwner} />
+										) : (
+											<AddressLink address={objOwner.AddressOwner} />
+										)}
+									</DescriptionItem>
 								) : null}
-								{storageRebate && (
-									<div className="py-4 pb-7">
-										<DescriptionList>
-											<DescriptionItem title="Storage Rebate">
-												<div className="leading-1 flex items-end gap-0.5">
-													<Text variant="body/medium" color="steel-darker">
-														{storageRebateFormatted}
-													</Text>
-													<Text variant="captionSmall/normal" color="steel">
-														{symbol}
-													</Text>
-												</div>
-											</DescriptionItem>
-										</DescriptionList>
-									</div>
-								)}
-							</div>
-							{imgUrl !== '' && (
-								<div className="min-w-0 border-0 border-t border-solid border-gray-45 pt-6 md:basis-1/3 md:border-t-0 md:pl-10">
-									<div className="flex flex-row flex-nowrap gap-5">
-										<ObjectDetails
-											image={imgUrl}
-											video={video}
-											name={name || display?.description || trimStdLibPrefix(objectType)}
-											type={video ? 'Video' : fileType ?? ''}
-											variant="large"
-										/>
-									</div>
-								</div>
-							)}
+								<DescriptionItem title="Object ID">
+									<ObjectLink objectId={getObjectId(data)} noTruncate />
+								</DescriptionItem>
+								<DescriptionItem title="Type">
+									{/* TODO: Support module links on `ObjectLink` */}
+									<Link to={genhref(objectType)} variant="mono">
+										{trimStdLibPrefix(objectType)}
+									</Link>
+								</DescriptionItem>
+								<DescriptionItem title="Version">
+									<Text variant="body/medium" color="steel-darker">
+										{getObjectVersion(data)}
+									</Text>
+								</DescriptionItem>
+								<DescriptionItem title="Last Transaction Block Digest">
+									<TransactionLink digest={getObjectPreviousTransactionDigest(data)!} noTruncate />
+								</DescriptionItem>
+							</DescriptionList>
 						</div>
-					</TabPanel>
-				</TabPanels>
-			</TabGroup>
+						{display ? (
+							<div className="py-4 pb-7">
+								<DescriptionList>
+									<LinkOrTextDescriptionItem title="Name" value={name} />
+									<LinkOrTextDescriptionItem title="Description" value={display.description} />
+									<LinkOrTextDescriptionItem title="Creator" value={display.creator} parseUrl />
+									<LinkOrTextDescriptionItem title="Link" value={display.link} parseUrl />
+									<LinkOrTextDescriptionItem title="Website" value={display.project_url} parseUrl />
+								</DescriptionList>
+							</div>
+						) : null}
+						{storageRebate && (
+							<div className="py-4 pb-7">
+								<DescriptionList>
+									<DescriptionItem title="Storage Rebate">
+										<div className="leading-1 flex items-end gap-0.5">
+											<Text variant="body/medium" color="steel-darker">
+												{storageRebateFormatted}
+											</Text>
+											<Text variant="captionSmall/normal" color="steel">
+												{symbol}
+											</Text>
+										</div>
+									</DescriptionItem>
+								</DescriptionList>
+							</div>
+						)}
+					</div>
+					{imgUrl !== '' && (
+						<div className="min-w-0 border-0 border-t border-solid border-gray-45 pt-6 md:basis-1/3 md:border-t-0 md:pl-10">
+							<div className="flex flex-row flex-nowrap gap-5">
+								<ObjectDetails
+									image={imgUrl}
+									video={video}
+									name={name || display?.description || trimStdLibPrefix(objectType)}
+									type={video ? 'Video' : fileType ?? ''}
+									variant="large"
+								/>
+							</div>
+						</div>
+					)}
+				</div>
+			</TabHeader>
 			<ObjectFieldsCard id={objectId} />
 			<DynamicFieldsCard id={objectId} />
 			<TransactionBlocksForAddress address={objectId} isObject />
