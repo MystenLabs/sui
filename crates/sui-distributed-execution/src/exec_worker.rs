@@ -3,6 +3,7 @@ use std::collections::{HashSet, HashMap, VecDeque};
 use std::sync::Arc;
 use std::pin::Pin;
 use std::future::Future;
+use futures::StreamExt;
 use futures::stream::FuturesUnordered;
 
 use sui_adapter::adapter::MoveVM;
@@ -37,15 +38,22 @@ fn get_write_set(tx: &VerifiedTransaction) -> Vec<ObjectID> {
     Vec::new()
 }
 
+#[derive(Debug, Clone)]
+pub struct Transaction {
+    tx: VerifiedTransaction,
+    exec_digest: ExecutionDigests,
+    checkpoint_seq: u64,
+}
+
 pub struct QueuesManager {
-    tx_store: HashMap<TransactionDigest, VerifiedTransaction>,
+    tx_store: HashMap<TransactionDigest, Transaction>,
     obj_queues: HashMap<ObjectID, VecDeque<TransactionDigest>>,
     wait_table: HashMap<TransactionDigest, HashSet<ObjectID>>,
-    ready: mpsc::Sender<VerifiedTransaction>,
+    ready: mpsc::Sender<Transaction>,
 }
 
 impl QueuesManager {
-    fn new(manager_sender: mpsc::Sender<VerifiedTransaction>) -> QueuesManager {
+    fn new(manager_sender: mpsc::Sender<Transaction>) -> QueuesManager {
         QueuesManager { 
             tx_store: HashMap::new(), 
             obj_queues: HashMap::new(),
@@ -54,15 +62,15 @@ impl QueuesManager {
     }
 
     /// Enqueues a transaction on the manager
-    async fn queue_tx(&mut self, tx: VerifiedTransaction) {
+    async fn queue_tx(&mut self, full_tx: Transaction) {
        
 		// Store tx
-        let txid = *tx.digest();
-		self.tx_store.insert(txid, tx.clone());
+        let txid = *full_tx.tx.digest();
+		self.tx_store.insert(txid, full_tx.clone());
 
         // Get RW set
-        let mut rw_set = get_read_set(&tx);
-        rw_set.append(&mut get_write_set(&tx));
+        let mut rw_set = get_read_set(&full_tx.tx);
+        rw_set.append(&mut get_write_set(&full_tx.tx));
         
         // Add tx to object queues
         for obj in rw_set.iter() {
@@ -87,7 +95,7 @@ impl QueuesManager {
         // Check if ready
         if self.wait_table.get_mut(&txid).unwrap().is_empty() {
 			self.wait_table.remove(&txid);
-			self.ready.send(tx).await.expect("manager_sender failed");
+			self.ready.send(full_tx).await.expect("manager_sender failed");
 		}
 	}
 
@@ -151,7 +159,8 @@ impl ExecutionWorkerState {
         epoch_data: &EpochData,
         reference_gas_price: u64,
         metrics: Arc<LimitsMetrics>,
-    ) {
+    ) -> VerifiedTransaction 
+    {
         let tx_data = tx.data().transaction_data();
         let (kind, signer, gas) = tx_data.execution_parts();
         let input_object_kinds = tx_data
@@ -234,6 +243,8 @@ impl ExecutionWorkerState {
         for (obj_add_id, (oref, obj, _)) in inner_temp_store.written {
             self.memory_store.objects.insert(obj_add_id, (oref, obj));
         }
+
+        return tx.clone();
     }
 
 
@@ -284,7 +295,6 @@ impl ExecutionWorkerState {
         return (new_move_vm, protocol_config, epoch_data, reference_gas_price);
     }
 
-
     /// ExecutionWorker main
     pub async fn run(&mut self,
         metrics: Arc<LimitsMetrics>,
@@ -300,48 +310,61 @@ impl ExecutionWorkerState {
         let now = Instant::now();
         let mut num_tx: usize = 0;
 
-        // Channel from Manager to ew
-        let (manager_sender, manager_receiver) = mpsc::channel(32);
-        let manager = QueuesManager::new(manager_sender);
-
-        // Magical futures, return list of freed objects upon completion
+        // Initialize channels
+        let (manager_sender, mut manager_receiver) = mpsc::channel(32);
+        let mut manager = QueuesManager::new(manager_sender);
         let mut tasks = FuturesUnordered::<Pin<Box<dyn Future<Output = VerifiedTransaction>>>>::new();
 
-
         // Main loop
+        loop {
+            tokio::select! {
+                Some(msg) = sw_receiver.recv() => {
+                    // New tx from sequencer; enqueue to manager
+                    if let SailfishMessage::Transaction{tx, digest: exec_digest, checkpoint_seq} = msg {
+                        let full_tx = Transaction{tx, exec_digest, checkpoint_seq};
+                        manager.queue_tx(full_tx).await;
 
-        // Receive txs
-        while let Some(msg) = sw_receiver.recv().await {
-            if let SailfishMessage::Transaction{tx, digest, checkpoint_seq} = msg {
-                self.execute_tx(
-                    &tx,
-                    &digest,
-                    checkpoint_seq,
-                    &protocol_config,
-                    &move_vm,
-                    &epoch_data,
-                    reference_gas_price,
-                    metrics.clone(),
-                ).await;
+                        
+                    } else {
+                        panic!("unexpected message");
+                    }
+                },
+                Some(full_tx) = manager_receiver.recv() => {
+                    // Transaction is ready to execute; enqueue to tasks FuturesUnordered
 
-                num_tx += 1;
-                if checkpoint_seq % 10000 == 0 {
-                    println!("Executed {}", checkpoint_seq);
-                }
+                    // TODO: What if this is TransactionKind::ChangeEpoch?
+                    // How to manage epoch change?
+                    // Need to wait for everything before this to finish executing?
 
-                if let TransactionKind::ChangeEpoch(_) = tx.data().transaction_data().kind() {
-                    // Change epoch
-                    println!("END OF EPOCH at checkpoint {}", checkpoint_seq);
-                     (move_vm, protocol_config, epoch_data, reference_gas_price) = 
-                        self.process_epoch_change(&ew_sender, &mut sw_receiver).await;
-                }
+                    // TODO: Need to do tricky mutex stuff here
+                    // * the local stores need thread-safe access.
+                    // * What about the move_vm? Is it stateful?
 
-                // Stop executing when I hit the watermark
-                if checkpoint_seq == exec_watermark-1 {
-                    break;
-                }
-            } else {
-                panic!("unexpected message");
+                    // TODO: Better way to count/stop TPS measurements than highwater mark, 
+                    // as that is no longer valid in out-of-order exec.
+
+                    let Transaction{tx, exec_digest, checkpoint_seq} = full_tx;
+                    let exec = self.execute_tx(
+                        &tx,
+                        &exec_digest,
+                        checkpoint_seq,
+                        &protocol_config,
+                        &move_vm,
+                        &epoch_data,
+                        reference_gas_price,
+                        metrics.clone(),
+                    );
+
+                    tasks.push(Box::pin(exec));
+                    
+                    
+                },
+                Some(tx) = tasks.next() => {
+                    // Transation finished executing; run manager clean up
+                    manager.clean_up(tx).await;
+                    num_tx += 1;
+                },
+                else => break,
             }
         }
 
