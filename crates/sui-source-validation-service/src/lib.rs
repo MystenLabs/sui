@@ -43,6 +43,7 @@ pub async fn verify_package(
         config,
         run_bytecode_verifier: false, /* no need to run verifier if code is on-chain */
         print_diags_to_stderr: false,
+        lint: false,
     };
     let compiled_package = build_config
         .build(package_path.as_ref().to_path_buf())

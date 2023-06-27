@@ -9,10 +9,10 @@ use move_command_line_common::{
     testing::{add_update_baseline_fix, format_diff, read_env_update_baseline, EXP_EXT, OUT_EXT},
 };
 use move_compiler::{
-    compiled_unit::AnnotatedCompiledUnit,
+    command_line::compiler::move_check_for_errors,
     diagnostics::*,
     shared::{Flags, NumericalAddress},
-    unit_test, CommentMap, Compiler, SteppedCompiler, PASS_CFGIR, PASS_PARSER,
+    Compiler, PASS_PARSER,
 };
 
 /// Shared flag to keep any temporary results of the test
@@ -208,36 +208,6 @@ fn run_test(
             }
         }
     }
-}
-
-fn move_check_for_errors(
-    comments_and_compiler_res: Result<(CommentMap, SteppedCompiler<'_, PASS_PARSER>), Diagnostics>,
-) -> Diagnostics {
-    fn try_impl(
-        comments_and_compiler_res: Result<
-            (CommentMap, SteppedCompiler<'_, PASS_PARSER>),
-            Diagnostics,
-        >,
-    ) -> Result<(Vec<AnnotatedCompiledUnit>, Diagnostics), Diagnostics> {
-        let (_, compiler) = comments_and_compiler_res?;
-
-        let (mut compiler, cfgir) = compiler.run::<PASS_CFGIR>()?.into_ast();
-        let compilation_env = compiler.compilation_env();
-        if compilation_env.flags().is_testing() {
-            unit_test::plan_builder::construct_test_plan(compilation_env, None, &cfgir);
-        }
-
-        let (units, diags) = compiler.at_cfgir(cfgir).build()?;
-        Ok((units, diags))
-    }
-
-    let (units, inner_diags) = match try_impl(comments_and_compiler_res) {
-        Ok((units, inner_diags)) => (units, inner_diags),
-        Err(inner_diags) => return inner_diags,
-    };
-    let mut diags = move_compiler::compiled_unit::verify_units(&units);
-    diags.extend(inner_diags);
-    diags
 }
 
 datatest_stable::harness!(move_check_testsuite, "tests/move_check", r".*\.move$");
