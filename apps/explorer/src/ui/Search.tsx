@@ -30,19 +30,23 @@ export interface SearchProps {
 export interface SearchResultProps {
 	key: string;
 	value: SearchResult;
-	children: React.ReactNode;
 }
 
-function SearchItem({ value, children }: SearchResultProps) {
+function SearchItem({ value }: SearchResultProps) {
 	return (
 		<Combobox.Option
-			className="cursor-pointer rounded-md py-1.5 pl-2 ui-active:bg-sui/10 ui-active:shadow-sm"
+			className="cursor-pointer rounded-md px-2 py-1.5 ui-active:bg-sui/10 ui-active:shadow-sm"
 			value={value}
 			key={value.id}
 		>
-			<Text variant="body/medium" mono color="steel-darker">
-				{children}
-			</Text>
+			<div className="flex w-full items-center justify-between">
+				<div className="text-body font-medium text-steel-dark ui-active:text-hero">
+					{value.label}
+				</div>
+				<Text variant="caption/medium" color="steel">
+					{value.type}
+				</Text>
+			</div>
 		</Combobox.Option>
 	);
 }
@@ -59,10 +63,14 @@ export function Search({
 	return (
 		<Combobox nullable onChange={onSelectResult} as="div" className="relative w-full">
 			<div className="relative flex items-center">
+				<div className="absolute left-0 ml-3 block items-center text-2xl text-white/20">
+					<Search16 />
+				</div>
+
 				<Combobox.Input
 					spellCheck={false}
 					displayValue={(value: SearchResult) => value?.label}
-					className="w-full rounded-md border border-transparent bg-search-fill/60 pl-2 text-body leading-9 text-white/20 outline-none placeholder:text-xs placeholder:text-white/40 hover:bg-search-fill hover:placeholder:text-white/60 focus:border-sui focus:bg-search-fill focus:text-white focus:placeholder:text-white/60"
+					className="w-full rounded-md border border-transparent bg-search-fill/60 pl-10 text-body leading-9 text-white/20 outline-none placeholder:text-xs placeholder:text-white/40 hover:bg-search-fill hover:placeholder:text-white/60 focus:border-sui focus:bg-search-fill focus:text-white focus:placeholder:text-white/60"
 					onChange={onChange}
 					placeholder={placeholder}
 					autoComplete="off"
@@ -74,10 +82,6 @@ export function Search({
 					}}
 					value={queryValue}
 				/>
-
-				<div className="absolute right-0 mr-2 block items-center text-2xl text-white/20">
-					<Search16 />
-				</div>
 			</div>
 
 			{queryValue && (
@@ -89,17 +93,8 @@ export function Search({
 					) : hasOptions ? (
 						options.map(({ label, results }) => (
 							<div key={label}>
-								{!!results?.length && (
-									<div className="mb-2">
-										<Text color="steel-dark" variant="captionSmall/medium">
-											{label}
-										</Text>
-									</div>
-								)}
 								{results?.map((item) => (
-									<SearchItem key={item.id} value={item}>
-										{item.label}
-									</SearchItem>
+									<SearchItem key={item.id} value={item} />
 								))}
 							</div>
 						))
