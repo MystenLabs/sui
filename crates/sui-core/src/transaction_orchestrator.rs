@@ -48,7 +48,7 @@ use sui_types::transaction::VerifiedTransaction;
 
 // How long to wait for local execution (including parents) before a timeout
 // is returned to client.
-const LOCAL_EXECUTION_TIMEOUT: Duration = Duration::from_secs(10);
+const LOCAL_EXECUTION_TIMEOUT: Duration = Duration::from_secs(30);
 
 const WAIT_FOR_FINALITY_TIMEOUT: Duration = Duration::from_secs(30);
 
@@ -245,7 +245,7 @@ where
                 if transaction.contains_shared_object() {
                     self.validator_state
                         .database
-                        .notify_read_executed_effects_digests(vec![tx_digest])
+                        .notify_read_executed_effects(vec![tx_digest])
                         .await
                         .map_err(|e| {
                             warn!(?tx_digest, "notify_read_effects failed: {e:?}");
