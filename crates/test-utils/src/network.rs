@@ -159,7 +159,7 @@ impl TestCluster {
     }
 
     pub fn get_validator_pubkeys(&self) -> Vec<AuthorityName> {
-        self.swarm.validator_nodes().map(|v| v.name()).collect()
+        self.swarm.active_validators().map(|v| v.name()).collect()
     }
 
     pub fn stop_node(&self, name: &AuthorityName) {
