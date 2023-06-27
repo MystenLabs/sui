@@ -1776,7 +1776,7 @@ impl AuthorityState {
                             events.clone(),
                             *tx_digest,
                             Some(timestamp_ms),
-                            epoch_store.module_cache(),
+                            &module_resolver,
                         )?,
                     )
                     .await
