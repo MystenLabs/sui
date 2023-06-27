@@ -34,7 +34,7 @@ use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::quorum_driver_types::ExecuteTransactionRequestType;
 use sui_types::sui_serde::BigInt;
 use sui_types::sui_system_state::sui_system_state_summary::SuiSystemStateSummary;
-use sui_types::transaction::{TransactionData, TransactionKind, VerifiedTransaction};
+use sui_types::transaction::{Transaction, TransactionData, TransactionKind};
 
 const WAIT_FOR_LOCAL_EXECUTION_RETRY_COUNT: u8 = 3;
 
@@ -502,7 +502,7 @@ impl QuorumDriverApi {
     /// still fails, it will return an error.
     pub async fn execute_transaction_block(
         &self,
-        tx: VerifiedTransaction,
+        tx: Transaction,
         options: SuiTransactionBlockResponseOptions,
         request_type: Option<ExecuteTransactionRequestType>,
     ) -> SuiRpcResult<SuiTransactionBlockResponse> {

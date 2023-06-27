@@ -4052,6 +4052,13 @@ impl AuthorityState {
         Ok(new_epoch_store)
     }
 
+    pub fn verify_transaction(&self, tx: Transaction) -> SuiResult<VerifiedTransaction> {
+        self.load_epoch_store_one_call_per_task()
+            .signature_verifier
+            .verify_tx(tx.data())
+            .map(|_| VerifiedTransaction::new_from_verified(tx))
+    }
+
     #[cfg(test)]
     pub(crate) fn iter_live_object_set_for_testing(
         &self,

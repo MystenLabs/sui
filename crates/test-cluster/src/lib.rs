@@ -46,7 +46,7 @@ use sui_types::object::Object;
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
 use sui_types::sui_system_state::SuiSystemState;
 use sui_types::sui_system_state::SuiSystemStateTrait;
-use sui_types::transaction::{TransactionData, VerifiedTransaction};
+use sui_types::transaction::{Transaction, TransactionData};
 use tokio::time::{timeout, Instant};
 use tokio::{task::JoinHandle, time::sleep};
 use tracing::info;
@@ -393,10 +393,7 @@ impl TestCluster {
     /// Also expects the effects status to be ExecutionStatus::Success.
     /// This function is recommended for transaction execution since it most resembles the
     /// production path.
-    pub async fn execute_transaction(
-        &self,
-        tx: VerifiedTransaction,
-    ) -> SuiTransactionBlockResponse {
+    pub async fn execute_transaction(&self, tx: Transaction) -> SuiTransactionBlockResponse {
         self.wallet.execute_transaction_must_succeed(tx).await
     }
 
@@ -410,7 +407,7 @@ impl TestCluster {
     /// from the execution results, and if the transaction is expected to fail.
     pub async fn execute_transaction_return_raw_effects(
         &self,
-        tx: VerifiedTransaction,
+        tx: Transaction,
     ) -> anyhow::Result<(TransactionEffects, TransactionEvents, Vec<Object>)> {
         let results = self
             .submit_transaction_to_validators(tx.clone(), &self.get_validator_pubkeys())
@@ -432,7 +429,7 @@ impl TestCluster {
     /// some tests.
     pub async fn submit_transaction_to_validators(
         &self,
-        tx: VerifiedTransaction,
+        tx: Transaction,
         pubkeys: &[AuthorityName],
     ) -> anyhow::Result<(TransactionEffects, TransactionEvents, Vec<Object>)> {
         let agg = self.authority_aggregator();

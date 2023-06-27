@@ -21,7 +21,7 @@ use sui_types::{
     error::{SuiError, UserInputError},
     object::Object,
     programmable_transaction_builder::ProgrammableTransactionBuilder,
-    transaction::{GasData, TransactionData, TransactionKind, VerifiedTransaction},
+    transaction::{GasData, Transaction, TransactionData, TransactionKind},
     utils::{to_sender_signed_transaction, to_sender_signed_transaction_with_multi_signers},
 };
 
@@ -176,11 +176,7 @@ impl TransactionSponsorship {
         }
     }
 
-    pub fn sign_transaction(
-        &self,
-        accounts: &AccountTriple,
-        txn: TransactionData,
-    ) -> VerifiedTransaction {
+    pub fn sign_transaction(&self, accounts: &AccountTriple, txn: TransactionData) -> Transaction {
         match self {
             TransactionSponsorship::None => {
                 to_sender_signed_transaction(txn, &accounts.account_1.initial_data.account.key)
@@ -256,7 +252,7 @@ impl AUTransactionGen for P2PTransferGenGoodGas {
         &self,
         universe: &mut AccountUniverse,
         exec: &mut Executor,
-    ) -> (VerifiedTransaction, ExecutionResult) {
+    ) -> (Transaction, ExecutionResult) {
         P2PTransferGenRandomGas {
             sender_receiver: self.sender_receiver.clone(),
             amount: self.amount,
@@ -271,7 +267,7 @@ impl AUTransactionGen for P2PTransferGenRandomGas {
         &self,
         universe: &mut AccountUniverse,
         exec: &mut Executor,
-    ) -> (VerifiedTransaction, ExecutionResult) {
+    ) -> (Transaction, ExecutionResult) {
         P2PTransferGenRandomGasRandomPriceRandomSponsorship {
             sender_receiver: self.sender_receiver.clone(),
             amount: self.amount,
@@ -289,7 +285,7 @@ impl AUTransactionGen for P2PTransferGenGasPriceInRange {
         &self,
         universe: &mut AccountUniverse,
         exec: &mut Executor,
-    ) -> (VerifiedTransaction, ExecutionResult) {
+    ) -> (Transaction, ExecutionResult) {
         P2PTransferGenRandomGasRandomPriceRandomSponsorship {
             sender_receiver: self.sender_receiver.clone(),
             amount: DEFAULT_TRANSFER_AMOUNT,
@@ -307,7 +303,7 @@ impl AUTransactionGen for P2PTransferGenRandomGasRandomPrice {
         &self,
         universe: &mut AccountUniverse,
         exec: &mut Executor,
-    ) -> (VerifiedTransaction, ExecutionResult) {
+    ) -> (Transaction, ExecutionResult) {
         P2PTransferGenRandomGasRandomPriceRandomSponsorship {
             sender_receiver: self.sender_receiver.clone(),
             amount: self.amount,
@@ -325,7 +321,7 @@ impl AUTransactionGen for P2PTransferGenRandGasRandPriceRandCoins {
         &self,
         universe: &mut AccountUniverse,
         exec: &mut Executor,
-    ) -> (VerifiedTransaction, ExecutionResult) {
+    ) -> (Transaction, ExecutionResult) {
         P2PTransferGenRandomGasRandomPriceRandomSponsorship {
             sender_receiver: self.sender_receiver.clone(),
             amount: self.amount,
@@ -395,7 +391,7 @@ impl AUTransactionGen for P2PTransferGenRandomGasRandomPriceRandomSponsorship {
         &self,
         universe: &mut AccountUniverse,
         exec: &mut Executor,
-    ) -> (VerifiedTransaction, ExecutionResult) {
+    ) -> (Transaction, ExecutionResult) {
         let mut account_triple = self.sender_receiver.pick(universe);
         let (gas_coin_refs, (gas_balance, gas_object), gas_payer) =
             self.sponsorship

@@ -60,7 +60,9 @@ async fn test_print_raw_rgp_txn() -> Result<(), anyhow::Error> {
         Intent::sui_transaction(),
         vec![signature],
     ));
-    context.execute_transaction_must_succeed(signed_txn).await;
+    context
+        .execute_transaction_must_succeed(signed_txn.into())
+        .await;
     let (_, summary) = get_validator_summary(&sui_client, validator_address)
         .await?
         .unwrap();

@@ -34,7 +34,7 @@ use mysten_metrics::{spawn_monitored_task, GaugeGuard};
 use std::fmt::Write;
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::messages_grpc::PlainTransactionInfoResponse;
-use sui_types::transaction::{VerifiedCertificate, VerifiedTransaction};
+use sui_types::transaction::{Transaction, VerifiedCertificate};
 
 use self::reconfig_observer::ReconfigObserver;
 
@@ -47,7 +47,7 @@ const TX_MAX_RETRY_TIMES: u8 = 10;
 
 #[derive(Clone)]
 pub struct QuorumDriverTask {
-    pub transaction: VerifiedTransaction,
+    pub transaction: Transaction,
     pub tx_cert: Option<VerifiedCertificate>,
     pub retry_times: u8,
     pub next_retry_after: Instant,
@@ -124,7 +124,7 @@ impl<A: Clone> QuorumDriver<A> {
     /// Enqueuing happens only after the `next_retry_after`, if not, wait until that instant
     async fn enqueue_again_maybe(
         &self,
-        transaction: VerifiedTransaction,
+        transaction: Transaction,
         tx_cert: Option<VerifiedCertificate>,
         old_retry_times: u8,
     ) -> SuiResult<()> {
@@ -165,7 +165,7 @@ impl<A: Clone> QuorumDriver<A> {
 
     pub fn notify(
         &self,
-        transaction: &VerifiedTransaction,
+        transaction: &Transaction,
         response: &QuorumDriverResult,
         total_attempts: u8,
     ) {
@@ -202,7 +202,7 @@ where
 {
     pub async fn submit_transaction(
         &self,
-        transaction: VerifiedTransaction,
+        transaction: Transaction,
     ) -> SuiResult<Registration<TransactionDigest, QuorumDriverResult>> {
         let tx_digest = transaction.digest();
         debug!(?tx_digest, "Received transaction execution request.");
@@ -221,10 +221,7 @@ where
 
     // Used when the it is called in a component holding the notifier, and a ticket is
     // already obtained prior to calling this function, for instance, TransactionOrchestrator
-    pub async fn submit_transaction_no_ticket(
-        &self,
-        transaction: VerifiedTransaction,
-    ) -> SuiResult<()> {
+    pub async fn submit_transaction_no_ticket(&self, transaction: Transaction) -> SuiResult<()> {
         let tx_digest = transaction.digest();
         debug!(
             ?tx_digest,
@@ -243,7 +240,7 @@ where
 
     pub(crate) async fn process_transaction(
         &self,
-        transaction: VerifiedTransaction,
+        transaction: Transaction,
     ) -> Result<ProcessTransactionResult, Option<QuorumDriverError>> {
         let auth_agg = self.validators.load();
         let _tx_guard = GaugeGuard::acquire(&auth_agg.metrics.inflight_transactions);
@@ -463,7 +460,7 @@ where
 
         // If we are able to get a certificate right away, we use it and execute the cert;
         // otherwise, we have to re-form a cert and execute it.
-        let verified_transaction = match response {
+        let transaction = match response {
             PlainTransactionInfoResponse::ExecutedWithCert(cert, _, _) => {
                 self.metrics
                     .total_times_conflicting_transaction_already_finalized_when_retrying
@@ -493,16 +490,17 @@ where
                 // We only try it once.
                 return Ok(result.is_ok());
             }
-            PlainTransactionInfoResponse::Signed(signed) => {
-                signed.verify(&self.clone_committee())?.into_unsigned()
-            }
+            PlainTransactionInfoResponse::Signed(signed) => signed
+                .verify(&self.clone_committee())?
+                .into_unsigned()
+                .into_inner(),
             PlainTransactionInfoResponse::ExecutedWithoutCert(transaction, _, _) => transaction,
         };
         // Now ask validators to execute this transaction.
         let result = self
             .validators
             .load()
-            .execute_transaction_block(&verified_transaction)
+            .execute_transaction_block(&transaction)
             .await
             .tap_ok(|_resp| {
                 debug!(
@@ -584,10 +582,7 @@ where
 
     // Used when the it is called in a component holding the notifier, and a ticket is
     // already obtained prior to calling this function, for instance, TransactionOrchestrator
-    pub async fn submit_transaction_no_ticket(
-        &self,
-        transaction: VerifiedTransaction,
-    ) -> SuiResult<()> {
+    pub async fn submit_transaction_no_ticket(&self, transaction: Transaction) -> SuiResult<()> {
         self.quorum_driver
             .submit_transaction_no_ticket(transaction)
             .await
@@ -595,7 +590,7 @@ where
 
     pub async fn submit_transaction(
         &self,
-        transaction: VerifiedTransaction,
+        transaction: Transaction,
     ) -> SuiResult<Registration<TransactionDigest, QuorumDriverResult>> {
         self.quorum_driver.submit_transaction(transaction).await
     }
@@ -736,7 +731,7 @@ where
 
     fn handle_error(
         quorum_driver: Arc<QuorumDriver<A>>,
-        transaction: VerifiedTransaction,
+        transaction: Transaction,
         err: Option<QuorumDriverError>,
         tx_cert: Option<VerifiedCertificate>,
         old_retry_times: u8,

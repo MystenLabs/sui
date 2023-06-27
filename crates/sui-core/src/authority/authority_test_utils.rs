@@ -10,21 +10,18 @@ use move_core_types::account_address::AccountAddress;
 use move_symbol_pool::Symbol;
 use sui_move_build::{BuildConfig, CompiledPackage};
 use sui_types::crypto::Signature;
+use sui_types::crypto::{AccountKeyPair, AuthorityKeyPair};
 use sui_types::messages_consensus::ConsensusTransaction;
 use sui_types::move_package::UpgradePolicy;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::utils::to_sender_signed_transaction;
-use sui_types::{
-    crypto::{AccountKeyPair, AuthorityKeyPair},
-    transaction::VerifiedTransaction,
-};
 
 use super::test_authority_builder::TestAuthorityBuilder;
 use super::*;
 
 pub async fn send_and_confirm_transaction(
     authority: &AuthorityState,
-    transaction: VerifiedTransaction,
+    transaction: Transaction,
 ) -> Result<(CertifiedTransaction, SignedTransactionEffects), SuiError> {
     send_and_confirm_transaction_(
         authority,
@@ -37,7 +34,7 @@ pub async fn send_and_confirm_transaction(
 pub async fn send_and_confirm_transaction_(
     authority: &AuthorityState,
     fullnode: Option<&AuthorityState>,
-    transaction: VerifiedTransaction,
+    transaction: Transaction,
     with_shared: bool, // transaction includes shared objects
 ) -> Result<(CertifiedTransaction, SignedTransactionEffects), SuiError> {
     let (txn, effects, _execution_error_opt) = send_and_confirm_transaction_with_execution_error(
@@ -53,7 +50,7 @@ pub async fn send_and_confirm_transaction_(
 pub async fn send_and_confirm_transaction_with_execution_error(
     authority: &AuthorityState,
     fullnode: Option<&AuthorityState>,
-    transaction: VerifiedTransaction,
+    transaction: Transaction,
     with_shared: bool, // transaction includes shared objects
 ) -> Result<
     (
@@ -65,6 +62,7 @@ pub async fn send_and_confirm_transaction_with_execution_error(
 > {
     // Make the initial request
     let epoch_store = authority.load_epoch_store_one_call_per_task();
+    let transaction = authority.verify_transaction(transaction).unwrap();
     let response = authority
         .handle_transaction(&epoch_store, transaction.clone())
         .await?;
@@ -220,7 +218,7 @@ pub fn init_transfer_transaction(
     gas_object_ref: ObjectRef,
     gas_budget: u64,
     gas_price: u64,
-) -> VerifiedTransaction {
+) -> Transaction {
     let data = TransactionData::new_transfer(
         recipient,
         object_ref,
@@ -254,16 +252,18 @@ pub fn init_certified_transfer_transaction(
 }
 
 pub fn init_certified_transaction(
-    transaction: VerifiedTransaction,
+    transaction: Transaction,
     authority_state: &AuthorityState,
 ) -> VerifiedCertificate {
+    let epoch_store = authority_state.epoch_store_for_testing();
+    let transaction = authority_state.verify_transaction(transaction).unwrap();
+
     let vote = VerifiedSignedTransaction::new(
         0,
         transaction.clone(),
         authority_state.name,
         &*authority_state.secret,
     );
-    let epoch_store = authority_state.epoch_store_for_testing();
     CertifiedTransaction::new(
         transaction.into_message(),
         vec![vote.auth_sig().clone()],

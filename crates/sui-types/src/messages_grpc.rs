@@ -7,9 +7,7 @@ use crate::effects::{
     SignedTransactionEffects, TransactionEvents, VerifiedSignedTransactionEffects,
 };
 use crate::object::{Object, ObjectFormatOptions};
-use crate::transaction::{
-    SenderSignedData, SignedTransaction, VerifiedCertificate, VerifiedTransaction,
-};
+use crate::transaction::{SenderSignedData, SignedTransaction, Transaction, VerifiedCertificate};
 use move_core_types::value::MoveStructLayout;
 use serde::{Deserialize, Serialize};
 
@@ -165,11 +163,7 @@ pub enum PlainTransactionInfoResponse {
         SignedTransactionEffects,
         TransactionEvents,
     ),
-    ExecutedWithoutCert(
-        VerifiedTransaction,
-        SignedTransactionEffects,
-        TransactionEvents,
-    ),
+    ExecutedWithoutCert(Transaction, SignedTransactionEffects, TransactionEvents),
 }
 
 impl PlainTransactionInfoResponse {

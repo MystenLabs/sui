@@ -23,7 +23,7 @@ use sui_storage::object_store::ObjectStoreConfig;
 use sui_types::messages_checkpoint::{
     CheckpointRequest, CheckpointResponse, CheckpointSequenceNumber,
 };
-use sui_types::transaction::{SenderSignedData, Transaction};
+use sui_types::transaction::{SenderSignedData, Transaction, VerifiedTransaction};
 
 #[derive(Parser, Clone, ValueEnum)]
 pub enum Verbosity {
@@ -417,11 +417,12 @@ impl ToolCommand {
                     &fastcrypto::encoding::Base64::decode(sender_signed_data.as_str()).unwrap(),
                 )
                 .unwrap();
-                let transaction = Transaction::new(sender_signed_data).verify().unwrap();
+                let transaction =
+                    VerifiedTransaction::new_unchecked(Transaction::new(sender_signed_data));
                 let (agg, _) = AuthorityAggregatorBuilder::from_genesis(&genesis)
                     .build()
                     .unwrap();
-                let result = agg.process_transaction(transaction).await;
+                let result = agg.process_transaction(transaction.into()).await;
                 println!("{:?}", result);
             }
         };

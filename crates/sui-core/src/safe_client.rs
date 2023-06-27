@@ -240,7 +240,7 @@ impl<C: Clone> SafeClient<C> {
     fn check_transaction_info(
         &self,
         digest: &TransactionDigest,
-        transaction: VerifiedTransaction,
+        transaction: Transaction,
         status: TransactionStatus,
     ) -> SuiResult<PlainTransactionInfoResponse> {
         fp_ensure!(
@@ -254,7 +254,7 @@ impl<C: Clone> SafeClient<C> {
             TransactionStatus::Signed(signed) => {
                 self.get_committee(&signed.epoch)?;
                 Ok(PlainTransactionInfoResponse::Signed(
-                    SignedTransaction::new_from_data_and_sig(transaction.into_message(), signed),
+                    SignedTransaction::new_from_data_and_sig(transaction.into_data(), signed),
                 ))
             }
             TransactionStatus::Executed(cert_opt, effects, events) => {
@@ -263,7 +263,7 @@ impl<C: Clone> SafeClient<C> {
                     Some(cert) => {
                         let committee = self.get_committee(&cert.epoch)?;
                         let ct = CertifiedTransaction::new_from_data_and_sig(
-                            transaction.into_message(),
+                            transaction.into_data(),
                             cert,
                         );
                         ct.verify_signature(&committee)
@@ -341,13 +341,13 @@ where
     /// Initiate a new transfer to a Sui or Primary account.
     pub async fn handle_transaction(
         &self,
-        transaction: VerifiedTransaction,
+        transaction: Transaction,
     ) -> Result<PlainTransactionInfoResponse, SuiError> {
         let _timer = self.metrics.handle_transaction_latency.start_timer();
         let digest = *transaction.digest();
         let response = self
             .authority_client
-            .handle_transaction(transaction.clone().into_inner())
+            .handle_transaction(transaction.clone())
             .await?;
         let response = check_error!(
             self.address,
@@ -490,17 +490,14 @@ where
             .handle_transaction_info_request(request.clone())
             .await?;
 
-        let transaction_info = Transaction::new(transaction_info.transaction)
-            .verify()
-            .and_then(|verified_tx| {
-                self.check_transaction_info(
-                    &request.transaction_digest,
-                    verified_tx,
-                    transaction_info.status,
-                )
-            }).tap_err(|err| {
-                error!(?err, authority=?self.address, "Client error in handle_transaction_info_request");
-            })?;
+        let transaction = Transaction::new(transaction_info.transaction);
+        let transaction_info = self.check_transaction_info(
+            &request.transaction_digest,
+            transaction,
+            transaction_info.status,
+        ).tap_err(|err| {
+            error!(?err, authority=?self.address, "Client error in handle_transaction_info_request");
+        })?;
         self.metrics
             .total_ok_responses_handle_transaction_info_request
             .inc();
