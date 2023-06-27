@@ -7,8 +7,8 @@ import {
 	SerializedSignature,
 	SignaturePubkeyPair,
 	SignatureScheme,
-	toSingleSignaturePubkeyPair,
 } from './signature.js';
+import { toSingleSignaturePubkeyPair } from './utils.js';
 import { PublicKey } from './publickey.js';
 import { blake2b } from '@noble/hashes/blake2b';
 import { bytesToHex } from '@noble/hashes/utils';

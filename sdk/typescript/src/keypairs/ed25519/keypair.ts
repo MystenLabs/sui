@@ -2,12 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import nacl from 'tweetnacl';
-import { ExportedKeypair, Keypair, PRIVATE_KEY_SIZE } from './keypair.js';
-import { Ed25519PublicKey } from './ed25519-publickey.js';
-import { isValidHardenedPath, mnemonicToSeedHex } from './mnemonics.js';
-import { derivePath } from '../utils/ed25519-hd-key.js';
+import { ExportedKeypair, Keypair } from '../../cryptography/keypair.js';
+import { Ed25519PublicKey } from './publickey.js';
+import { isValidHardenedPath, mnemonicToSeedHex } from '../../cryptography/mnemonics.js';
+import { derivePath } from '../../utils/ed25519-hd-key.js';
 import { toB64 } from '@mysten/bcs';
-import { SignatureScheme } from './signature.js';
+import type { SignatureScheme } from '../../cryptography/signature.js';
+import { PRIVATE_KEY_SIZE } from '../../cryptography/keypair.js';
 
 export const DEFAULT_ED25519_DERIVATION_PATH = "m/44'/784'/0'/0'/0'";
 
