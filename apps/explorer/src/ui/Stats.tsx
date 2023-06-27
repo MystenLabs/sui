@@ -48,7 +48,6 @@ export function Stats({
 					<Tooltip
 						tip={unavailable ? 'Coming soon' : tooltip}
 						onOpen={() => {
-							console.log('OPENED TOOLTIP', label);
 							ampli.activatedTooltip({ tooltipLabel: label });
 						}}
 					>
