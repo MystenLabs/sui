@@ -1763,7 +1763,7 @@ impl AuthorityState {
 
         // Index tx
         if let Some(indexes) = &self.indexes {
-            let res = self
+            let _ = self
                 .index_tx(
                     indexes.as_ref(),
                     tx_digest,
