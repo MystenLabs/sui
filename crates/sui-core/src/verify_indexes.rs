@@ -6,6 +6,7 @@ use std::{collections::BTreeMap, sync::Arc};
 use anyhow::{anyhow, bail, Result};
 use sui_storage::{indexes::CoinInfo, IndexStore};
 use sui_types::{base_types::ObjectInfo, object::Owner};
+use tracing::info;
 use typed_store::traits::Map;
 
 use crate::authority::AuthorityStore;
@@ -13,6 +14,8 @@ use crate::authority::AuthorityStore;
 /// This is a very expensive function that verifies some of the secondary indexes. This is done by
 /// iterating through the live object set and recalculating these secodary indexes.
 pub fn verify_indexes(database: Arc<AuthorityStore>, indexes: Arc<IndexStore>) -> Result<()> {
+    info!("Begin running index verification checks");
+
     let mut owner_index = BTreeMap::new();
     let mut coin_index = BTreeMap::new();
 
@@ -78,6 +81,8 @@ pub fn verify_indexes(database: Arc<AuthorityStore>, indexes: Arc<IndexStore>) -
     if !coin_index.is_empty() {
         bail!("coin_index: is missing entries: {coin_index:?}");
     }
+
+    info!("Finisedh running index verification checks");
 
     Ok(())
 }

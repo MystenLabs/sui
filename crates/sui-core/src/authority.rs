@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::authority::authority_store_types::{StoreObject, StoreObjectWrapper};
+use crate::verify_indexes::verify_indexes;
 use anyhow::anyhow;
 use arc_swap::{ArcSwap, Guard};
 use chrono::prelude::*;
@@ -2128,7 +2129,7 @@ impl AuthorityState {
             cur_epoch_store,
             checkpoint_executor,
             accumulator,
-            expensive_safety_check_config.enable_state_consistency_check(),
+            expensive_safety_check_config,
         );
         self.maybe_reaccumulate_state_hash(
             cur_epoch_store,
@@ -2313,7 +2314,7 @@ impl AuthorityState {
         cur_epoch_store: &AuthorityPerEpochStore,
         checkpoint_executor: &CheckpointExecutor,
         accumulator: Arc<StateAccumulator>,
-        enable_state_consistency_check: bool,
+        expensive_safety_check_config: &ExpensiveSafetyCheckConfig,
     ) {
         info!(
             "Performing sui conservation consistency check for epoch {}",
@@ -2336,7 +2337,7 @@ impl AuthorityState {
         }
 
         // check for root state hash consistency with live object set
-        if enable_state_consistency_check {
+        if expensive_safety_check_config.enable_state_consistency_check() {
             info!(
                 "Performing state consistency check for epoch {}",
                 cur_epoch_store.epoch()
@@ -2347,6 +2348,13 @@ impl AuthorityState {
                 cur_epoch_store,
                 cfg!(debug_assertions), // panic in debug mode only
             );
+        }
+
+        if expensive_safety_check_config.enable_secondary_index_checks() {
+            if let Some(indexes) = self.indexes.clone() {
+                verify_indexes(self.database.clone(), indexes)
+                    .expect("secondary indexes are inconsistent");
+            }
         }
     }
 
