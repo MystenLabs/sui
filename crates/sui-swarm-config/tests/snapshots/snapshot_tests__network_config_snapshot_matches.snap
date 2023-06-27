@@ -84,6 +84,7 @@ validator_configs:
       enable-state-consistency-check: true
       force-disable-state-consistency-check: false
       enable-move-vm-paranoid-checks: true
+      enable-secondary-index-checks: false
     transaction-deny-config:
       package_publish_disabled: false
       package_upgrade_disabled: false
@@ -173,6 +174,7 @@ validator_configs:
       enable-state-consistency-check: true
       force-disable-state-consistency-check: false
       enable-move-vm-paranoid-checks: true
+      enable-secondary-index-checks: false
     transaction-deny-config:
       package_publish_disabled: false
       package_upgrade_disabled: false
@@ -262,6 +264,7 @@ validator_configs:
       enable-state-consistency-check: true
       force-disable-state-consistency-check: false
       enable-move-vm-paranoid-checks: true
+      enable-secondary-index-checks: false
     transaction-deny-config:
       package_publish_disabled: false
       package_upgrade_disabled: false
@@ -351,6 +354,7 @@ validator_configs:
       enable-state-consistency-check: true
       force-disable-state-consistency-check: false
       enable-move-vm-paranoid-checks: true
+      enable-secondary-index-checks: false
     transaction-deny-config:
       package_publish_disabled: false
       package_upgrade_disabled: false
@@ -440,6 +444,7 @@ validator_configs:
       enable-state-consistency-check: true
       force-disable-state-consistency-check: false
       enable-move-vm-paranoid-checks: true
+      enable-secondary-index-checks: false
     transaction-deny-config:
       package_publish_disabled: false
       package_upgrade_disabled: false
@@ -529,6 +534,7 @@ validator_configs:
       enable-state-consistency-check: true
       force-disable-state-consistency-check: false
       enable-move-vm-paranoid-checks: true
+      enable-secondary-index-checks: false
     transaction-deny-config:
       package_publish_disabled: false
       package_upgrade_disabled: false
@@ -618,6 +624,7 @@ validator_configs:
       enable-state-consistency-check: true
       force-disable-state-consistency-check: false
       enable-move-vm-paranoid-checks: true
+      enable-secondary-index-checks: false
     transaction-deny-config:
       package_publish_disabled: false
       package_upgrade_disabled: false
