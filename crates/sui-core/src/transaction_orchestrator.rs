@@ -236,30 +236,52 @@ where
                         false,
                     ))));
                 }
-                let executable_tx = VerifiedExecutableTransaction::new_from_quorum_execution(
-                    transaction,
-                    effects_cert.executed_epoch(),
-                );
 
-                match Self::execute_finalized_tx_locally_with_timeout(
-                    &self.validator_state,
-                    &executable_tx,
-                    &effects_cert,
-                    objects,
-                    &self.metrics,
-                )
-                .await
-                {
-                    Ok(_) => Ok(ExecuteTransactionResponse::EffectsCert(Box::new((
+                // TODO: local execution for shared-object txns is disabled due to the fact that
+                // it can cause forks on transactions that read child objects from read-only
+                // parent shared objects.
+                //
+                // This can be re-enabled after MVCC for child objects is merged.
+                if transaction.contains_shared_object() {
+                    self.validator_state
+                        .database
+                        .notify_read_executed_effects_digests(vec![tx_digest])
+                        .await
+                        .map_err(|e| {
+                            warn!(?tx_digest, "notify_read_effects failed: {e:?}");
+                            QuorumDriverError::QuorumDriverInternalError(e)
+                        })?;
+                    Ok(ExecuteTransactionResponse::EffectsCert(Box::new((
                         FinalizedEffects::new_from_effects_cert(effects_cert.into()),
                         response.events,
                         true,
-                    )))),
-                    Err(_) => Ok(ExecuteTransactionResponse::EffectsCert(Box::new((
-                        FinalizedEffects::new_from_effects_cert(effects_cert.into()),
-                        response.events,
-                        false,
-                    )))),
+                    ))))
+                } else {
+                    let executable_tx = VerifiedExecutableTransaction::new_from_quorum_execution(
+                        transaction,
+                        effects_cert.executed_epoch(),
+                    );
+
+                    match Self::execute_finalized_tx_locally_with_timeout(
+                        &self.validator_state,
+                        &executable_tx,
+                        &effects_cert,
+                        objects,
+                        &self.metrics,
+                    )
+                    .await
+                    {
+                        Ok(_) => Ok(ExecuteTransactionResponse::EffectsCert(Box::new((
+                            FinalizedEffects::new_from_effects_cert(effects_cert.into()),
+                            response.events,
+                            true,
+                        )))),
+                        Err(_) => Ok(ExecuteTransactionResponse::EffectsCert(Box::new((
+                            FinalizedEffects::new_from_effects_cert(effects_cert.into()),
+                            response.events,
+                            false,
+                        )))),
+                    }
                 }
             }
         }
@@ -395,6 +417,11 @@ where
                         ..
                     },
                 ))) => {
+                    if transaction.contains_shared_object() {
+                        // Do not locally execute transactions with shared objects, as this can
+                        // cause forks until MVCC is merged.
+                        continue;
+                    }
                     let executable_tx = VerifiedExecutableTransaction::new_from_quorum_execution(
                         transaction,
                         effects_cert.executed_epoch(),
