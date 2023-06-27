@@ -56,7 +56,7 @@ impl Coin {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, JsonSchema, Clone)]
+#[derive(Serialize, Deserialize, Debug, JsonSchema, Clone, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct SuiCoinMetadata {
     /// Number of decimal places the coin uses.

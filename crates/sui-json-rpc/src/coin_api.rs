@@ -152,8 +152,10 @@ impl CoinReadApiServer for CoinReadApi {
     ) -> RpcResult<Balance> {
         with_tracing!(async move {
             let coin_type = TypeTag::Struct(Box::new(match coin_type {
-                Some(c) => parse_sui_struct_tag(&c).map_err(|_| {
-                    Error::SuiRpcInputError(SuiRpcInputError::CannotParseSuiStructTag(c))
+                Some(c) => parse_sui_struct_tag(&c).map_err(|e| {
+                    Error::SuiRpcInputError(SuiRpcInputError::CannotParseSuiStructTag(format!(
+                        "{e}"
+                    )))
                 })?,
                 None => GAS::type_(),
             }));
@@ -1174,11 +1176,151 @@ mod tests {
         }
     }
 
+    mod get_all_balances_tests {
+        use super::super::*;
+        use super::*;
+        use jsonrpsee::types::ErrorObjectOwned;
+
+        // Success scenarios
+        #[tokio::test]
+        async fn test_success_scenario() {
+            let owner = get_test_owner();
+            let gas_coin = get_test_coin(None, CoinType::Gas);
+            let gas_coin_type_tag = get_test_coin_type_tag(gas_coin.coin_type.clone());
+            let usdc_coin = get_test_coin(None, CoinType::Usdc);
+            let usdc_coin_type_tag = get_test_coin_type_tag(usdc_coin.coin_type.clone());
+            let mut mock_state = MockState::new();
+            mock_state
+                .expect_get_all_balance()
+                .with(predicate::eq(owner))
+                .return_once(move |_| {
+                    let mut hash_map = HashMap::new();
+                    hash_map.insert(
+                        gas_coin_type_tag,
+                        TotalBalance {
+                            balance: 7,
+                            num_coins: 9,
+                        },
+                    );
+                    hash_map.insert(
+                        usdc_coin_type_tag,
+                        TotalBalance {
+                            balance: 10,
+                            num_coins: 11,
+                        },
+                    );
+                    Ok(Arc::new(hash_map))
+                });
+            let internal = CoinReadInternalImpl {
+                state: Arc::new(mock_state),
+                metrics: Arc::new(JsonRpcMetrics::new_for_tests()),
+            };
+            let coin_read_api = CoinReadApi {
+                internal: Box::new(internal),
+            };
+            let response = coin_read_api.get_all_balances(owner).await;
+
+            assert!(response.is_ok());
+            let expected_result = vec![
+                Balance {
+                    coin_type: gas_coin.coin_type,
+                    coin_object_count: 9,
+                    total_balance: 7,
+                    locked_balance: Default::default(),
+                },
+                Balance {
+                    coin_type: usdc_coin.coin_type,
+                    coin_object_count: 11,
+                    total_balance: 10,
+                    locked_balance: Default::default(),
+                },
+            ];
+            // This is because the underlying result is a hashmap, so order is not guaranteed
+            let mut result = response.unwrap();
+            for item in expected_result {
+                if let Some(pos) = result.iter().position(|i| *i == item) {
+                    result.remove(pos);
+                } else {
+                    panic!("{:?} not found in result", item);
+                }
+            }
+            assert!(result.is_empty());
+        }
+
+        // Unexpected error scenarios
+        #[tokio::test]
+        async fn test_index_store_not_available() {
+            let owner = get_test_owner();
+            let coin_type = get_test_coin_type(get_test_package_id());
+            let mut mock_state = MockState::new();
+            mock_state
+                .expect_get_all_balance()
+                .returning(move |_| Err(SuiError::IndexStoreNotAvailable));
+            let internal = CoinReadInternalImpl {
+                state: Arc::new(mock_state),
+                metrics: Arc::new(JsonRpcMetrics::new_for_tests()),
+            };
+            let coin_read_api = CoinReadApi {
+                internal: Box::new(internal),
+            };
+
+            let response = coin_read_api.get_all_balances(owner).await;
+
+            assert!(response.is_err());
+            let error_result = response.unwrap_err();
+            let error_object: ErrorObjectOwned = error_result.into();
+            let expected = expect!["-32000"];
+            expected.assert_eq(&error_object.code().to_string());
+            let expected = expect!["Index store not available on this Fullnode."];
+            expected.assert_eq(error_object.message());
+        }
+    }
+
     mod get_coin_metadata_tests {
         use super::super::*;
         use super::*;
         use mockall::predicate;
         use sui_types::id::UID;
+
+        // Success scenarios
+        #[tokio::test]
+        async fn test_valid_coin_metadata_object() {
+            let package_id = get_test_package_id();
+            let coin_name = get_test_coin_type(package_id);
+            let input_coin_struct = parse_sui_struct_tag(&coin_name).expect("should not fail");
+            let coin_metadata_struct = CoinMetadata::type_(input_coin_struct.clone());
+            let coin_metadata = CoinMetadata {
+                id: UID::new(ObjectID::random()),
+                decimals: 2,
+                name: "test_coin".to_string(),
+                symbol: "TEST".to_string(),
+                description: "test coin".to_string(),
+                icon_url: Some("unit.test.io".to_string()),
+            };
+            let coin_metadata_object =
+                Object::coin_metadata_for_testing(input_coin_struct.clone(), coin_metadata);
+            let metadata = SuiCoinMetadata::try_from(coin_metadata_object.clone()).unwrap();
+            let mut mock_internal = MockCoinReadInternal::new();
+            // return TreasuryCap instead of CoinMetadata to set up test
+            mock_internal
+                .expect_find_package_object()
+                .with(predicate::always(), predicate::eq(coin_metadata_struct))
+                .return_once(move |object_id, _| {
+                    if object_id == &package_id {
+                        Ok(coin_metadata_object)
+                    } else {
+                        panic!("should not be called with any other object id")
+                    }
+                });
+            let coin_read_api = CoinReadApi {
+                internal: Box::new(mock_internal),
+            };
+
+            let response = coin_read_api.get_coin_metadata(coin_name.clone()).await;
+            assert!(response.is_ok());
+            let result = response.unwrap().unwrap();
+            assert_eq!(result, metadata);
+        }
 
         #[tokio::test]
         async fn test_find_package_object_not_sui_coin_metadata() {
