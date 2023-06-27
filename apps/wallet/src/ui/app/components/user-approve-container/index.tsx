@@ -72,7 +72,7 @@ export function UserApproveContainer({
 				<div
 					className={cl(st.actions, isWarning && st.flipActions, {
 						[st.blended]: blended,
-						[st.blur]: blended,
+						[st.blurBorder]: blended,
 					})}
 				>
 					<Button
