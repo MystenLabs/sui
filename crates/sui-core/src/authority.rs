@@ -112,7 +112,7 @@ use sui_types::{
     transaction::*,
     SUI_SYSTEM_ADDRESS,
 };
-use sui_types::{is_system_package, TypeTag, SUI_CLOCK_OBJECT_ID};
+use sui_types::{is_system_package, TypeTag};
 use typed_store::Map;
 
 use crate::authority::authority_per_epoch_store::{AuthorityPerEpochStore, CertTxGuard};
@@ -764,7 +764,7 @@ impl AuthorityState {
         // this function, in order to prevent a byzantine validator from
         // giving us incorrect effects.
         effects: &VerifiedCertifiedTransactionEffects,
-        objects: Vec<Object>,
+        _objects: Vec<Object>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult {
         assert!(self.is_fullnode(epoch_store));
@@ -780,29 +780,6 @@ impl AuthorityState {
                 err: "effects/tx digest mismatch".to_string()
             }
         );
-
-        // Lock this down to 0x6 before we pin child versions in effects
-        // Also, this logic is incompatible with TransactionManager AvailableObjectCache,
-        // so SUI_CLOCK_OBJECT_ID is currently excluded from the cache.
-        let objects = objects
-            .into_iter()
-            .filter(|o| o.id() == SUI_CLOCK_OBJECT_ID)
-            .collect::<Vec<_>>();
-        if !objects.is_empty() {
-            debug!(
-                "inserting objects to object store before executing a tx: {:?}",
-                objects
-                    .iter()
-                    .map(|o| (o.id(), o.version()))
-                    .collect::<Vec<_>>()
-            );
-            self.database
-                .fullnode_fast_path_insert_objects_to_object_store_maybe(&objects)?;
-            self.transaction_manager().fastpath_objects_available(
-                objects.iter().map(InputKey::from).collect(),
-                epoch_store,
-            );
-        }
 
         if transaction.contains_shared_object() {
             epoch_store
