@@ -14,7 +14,7 @@ import {
 	nullable,
 } from 'superstruct';
 
-import { TransactionDigest, TransactionEffectsDigest } from './common';
+import { TransactionDigest, TransactionEffectsDigest } from './common.js';
 
 export const GasCostSummary = object({
 	computationCost: string(),

@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { Disclosure } from '@headlessui/react';
 import { ChevronRight12 } from '@mysten/icons';
 import {
 	formatAddress,
@@ -9,7 +8,9 @@ import {
 	type SuiEvent,
 	type TransactionEvents,
 } from '@mysten/sui.js';
+import * as Collapsible from '@radix-ui/react-collapsible';
 import clsx from 'clsx';
+import { useState } from 'react';
 
 import { SyntaxHighlighter } from '~/components/SyntaxHighlighter';
 import { CopyToClipboard } from '~/ui/CopyToClipboard';
@@ -19,6 +20,7 @@ import { ObjectLink } from '~/ui/InternalLink';
 import { Text } from '~/ui/Text';
 
 function Event({ event, divider }: { event: SuiEvent; divider: boolean }) {
+	const [open, setOpen] = useState(false);
 	const { address, module, name } = parseStructTag(event.type);
 	const objectLinkLabel = [formatAddress(address), module, name].join('::');
 
@@ -42,23 +44,21 @@ function Event({ event, divider }: { event: SuiEvent; divider: boolean }) {
 					</div>
 				</DescriptionItem>
 
-				<Disclosure>
-					{({ open }) => (
-						<>
-							<Disclosure.Button as="div" className="flex cursor-pointer items-center gap-1.5">
-								<Text variant="body/semibold" color="steel-dark">
-									{open ? 'Hide' : 'View'} Event Data
-								</Text>
+				<Collapsible.Root open={open} onOpenChange={setOpen} asChild>
+					<>
+						<Collapsible.Trigger className="flex cursor-pointer items-center gap-1.5">
+							<Text variant="body/semibold" color="steel-dark">
+								{open ? 'Hide' : 'View'} Event Data
+							</Text>
 
-								<ChevronRight12 className={clsx('h-3 w-3 text-steel-dark', open && 'rotate-90')} />
-							</Disclosure.Button>
+							<ChevronRight12 className={clsx('h-3 w-3 text-steel-dark', open && 'rotate-90')} />
+						</Collapsible.Trigger>
 
-							<Disclosure.Panel className="rounded-lg border border-transparent bg-white p-5">
-								<SyntaxHighlighter code={JSON.stringify(event, null, 2)} language="json" />
-							</Disclosure.Panel>
-						</>
-					)}
-				</Disclosure>
+						<Collapsible.Content className="rounded-lg border border-transparent bg-white p-5">
+							<SyntaxHighlighter code={JSON.stringify(event, null, 2)} language="json" />
+						</Collapsible.Content>
+					</>
+				</Collapsible.Root>
 			</div>
 
 			{divider && (

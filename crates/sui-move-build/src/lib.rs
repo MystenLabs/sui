@@ -1,6 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+#[macro_use(sp)]
+extern crate move_ir_types;
+
 use std::{
     collections::{BTreeMap, BTreeSet, HashSet},
     io::Write,
@@ -50,9 +53,13 @@ use sui_types::{
 };
 use sui_verifier::verifier as sui_bytecode_verifier;
 
+use crate::linters::share_owned::ShareOwnedVerifier;
+
 #[cfg(test)]
 #[path = "unit_tests/build_tests.rs"]
 mod build_tests;
+
+pub mod linters;
 
 /// Wrapper around the core Move `CompiledPackage` with some Sui-specific traits and info
 #[derive(Debug)]
@@ -74,6 +81,8 @@ pub struct BuildConfig {
     pub run_bytecode_verifier: bool,
     /// If true, print build diagnostics to stderr--no printing if false
     pub print_diags_to_stderr: bool,
+    /// If true, run linters
+    pub lint: bool,
 }
 
 impl BuildConfig {
@@ -116,12 +125,18 @@ impl BuildConfig {
 
     fn compile_package<W: Write>(
         resolution_graph: ResolvedGraph,
+        lint: bool,
         writer: &mut W,
     ) -> anyhow::Result<(MoveCompiledPackage, FnInfoMap)> {
         let build_plan = BuildPlan::create(resolution_graph)?;
         let mut fn_info = None;
         let compiled_pkg = build_plan.compile_with_driver(writer, |compiler| {
-            let (files, units_res) = compiler.build()?;
+            let (files, units_res) = if lint {
+                let lint_visitors = vec![ShareOwnedVerifier.into()];
+                compiler.add_visitors(lint_visitors).build()?
+            } else {
+                compiler.build()?
+            };
             match units_res {
                 Ok((units, warning_diags)) => {
                     report_warnings(&files, warning_diags);
@@ -144,6 +159,7 @@ impl BuildConfig {
     /// Given a `path` and a `build_config`, build the package in that path, including its dependencies.
     /// If we are building the Sui framework, we skip the check that the addresses should be 0
     pub fn build(self, path: PathBuf) -> SuiResult<CompiledPackage> {
+        let lint = self.lint;
         let print_diags_to_stderr = self.print_diags_to_stderr;
         let run_bytecode_verifier = self.run_bytecode_verifier;
         let resolution_graph = self.resolution_graph(&path)?;
@@ -152,6 +168,7 @@ impl BuildConfig {
             resolution_graph,
             run_bytecode_verifier,
             print_diags_to_stderr,
+            lint,
         )
     }
 
@@ -174,13 +191,14 @@ pub fn build_from_resolution_graph(
     resolution_graph: ResolvedGraph,
     run_bytecode_verifier: bool,
     print_diags_to_stderr: bool,
+    lint: bool,
 ) -> SuiResult<CompiledPackage> {
     let (published_at, dependency_ids) = gather_published_ids(&resolution_graph);
 
     let result = if print_diags_to_stderr {
-        BuildConfig::compile_package(resolution_graph, &mut std::io::stderr())
+        BuildConfig::compile_package(resolution_graph, lint, &mut std::io::stderr())
     } else {
-        BuildConfig::compile_package(resolution_graph, &mut std::io::sink())
+        BuildConfig::compile_package(resolution_graph, lint, &mut std::io::sink())
     };
     // write build failure diagnostics to stderr, convert `error` to `String` using `Debug`
     // format to include anyhow's error context chain.
@@ -541,6 +559,7 @@ impl Default for BuildConfig {
             config: MoveBuildConfig::default(),
             run_bytecode_verifier: true,
             print_diags_to_stderr: false,
+            lint: false,
         }
     }
 }

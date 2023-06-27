@@ -36,7 +36,7 @@ export function ValidatorStats({
 	return (
 		<div className="flex flex-col items-stretch gap-5 md:flex-row">
 			<div className="flex-grow">
-				<Card spacing="lg">
+				<Card spacing="lg" height="full">
 					<div className="flex basis-full flex-col gap-8 md:basis-1/3">
 						<Heading as="div" variant="heading4/semibold" color="steel-darker">
 							SUI Staked on Validator
@@ -70,7 +70,7 @@ export function ValidatorStats({
 			</div>
 
 			<div className="flex-grow">
-				<Card spacing="lg">
+				<Card spacing="lg" height="full">
 					<div className="flex basis-full flex-col items-stretch gap-8 md:basis-80">
 						<Heading as="div" variant="heading4/semibold" color="steel-darker">
 							Validator Staking Rewards
@@ -100,7 +100,7 @@ export function ValidatorStats({
 			</div>
 
 			<div className="flex-grow">
-				<Card spacing="lg">
+				<Card spacing="lg" height="full">
 					<div className="flex max-w-full flex-col gap-8">
 						<Heading as="div" variant="heading4/semibold" color="steel-darker">
 							Network Participation

@@ -32,6 +32,9 @@ pub struct Build {
     /// and events.
     #[clap(long, global = true)]
     pub generate_struct_layouts: bool,
+    /// If `true`, enable linters
+    #[clap(long, global = true)]
+    pub lint: bool,
 }
 
 impl Build {
@@ -49,6 +52,7 @@ impl Build {
             self.legacy_digest,
             self.dump_bytecode_as_base64,
             self.generate_struct_layouts,
+            self.lint,
         )
     }
 
@@ -59,11 +63,13 @@ impl Build {
         legacy_digest: bool,
         dump_bytecode_as_base64: bool,
         generate_struct_layouts: bool,
+        lint: bool,
     ) -> anyhow::Result<()> {
         let pkg = BuildConfig {
             config,
             run_bytecode_verifier: true,
             print_diags_to_stderr: true,
+            lint,
         }
         .build(rerooted_path)?;
         if dump_bytecode_as_base64 {

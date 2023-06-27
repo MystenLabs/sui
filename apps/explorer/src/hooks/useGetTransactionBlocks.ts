@@ -25,7 +25,6 @@ export function useGetTransactionBlocks(
 				limit,
 				options: {
 					showEffects: true,
-					showBalanceChanges: true,
 					showInput: true,
 				},
 			}),

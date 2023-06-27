@@ -1,10 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { Disclosure } from '@headlessui/react';
 import { useFormatCoin } from '@mysten/core';
 import { ArrowShowAndHideRight12 } from '@mysten/icons';
 import { type CoinBalance } from '@mysten/sui.js';
+import * as Collapsible from '@radix-ui/react-collapsible';
+import clsx from 'clsx';
+import { useState } from 'react';
 
 import CoinsPanel from './OwnedCoinsPanel';
 
@@ -16,16 +18,19 @@ type OwnedCoinViewProps = {
 };
 
 function OwnedCoinView({ coin, id }: OwnedCoinViewProps): JSX.Element {
+	const [open, setOpen] = useState(false);
 	const [formattedTotalBalance, symbol] = useFormatCoin(coin.totalBalance, coin.coinType);
 
 	return (
-		<Disclosure>
-			<Disclosure.Button
+		<Collapsible.Root open={open} onOpenChange={setOpen}>
+			<Collapsible.Trigger
 				data-testid="ownedcoinlabel"
 				className="grid w-full grid-cols-3 items-center justify-between rounded-none py-2 text-left hover:bg-sui-light"
 			>
 				<div className="flex">
-					<ArrowShowAndHideRight12 className="mr-1.5 text-gray-60 ui-open:rotate-90 ui-open:transform" />
+					<ArrowShowAndHideRight12
+						className={clsx('mr-1.5 text-gray-60', open && 'rotate-90 transform')}
+					/>
 					<Text color="steel-darker" variant="body/medium">
 						{symbol}
 					</Text>
@@ -43,14 +48,14 @@ function OwnedCoinView({ coin, id }: OwnedCoinViewProps): JSX.Element {
 						{symbol}
 					</Text>
 				</div>
-			</Disclosure.Button>
+			</Collapsible.Trigger>
 
-			<Disclosure.Panel>
+			<Collapsible.Content>
 				<div className="flex flex-col gap-1 bg-gray-40 p-3">
 					<CoinsPanel id={id} coinType={coin.coinType} />
 				</div>
-			</Disclosure.Panel>
-		</Disclosure>
+			</Collapsible.Content>
+		</Collapsible.Root>
 	);
 }
 

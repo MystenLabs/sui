@@ -41,7 +41,6 @@ use sui_types::transaction::{
 use sui_types::utils::{
     to_sender_signed_transaction, to_sender_signed_transaction_with_multi_signers,
 };
-use sui_types::SUI_CLOCK_OBJECT_ID;
 use test_utils::network::TestClusterBuilder;
 use test_utils::transaction::{wait_for_all_txes, wait_for_tx};
 use tokio::sync::Mutex;
@@ -72,10 +71,6 @@ async fn test_full_node_follows_txes() -> Result<(), anyhow::Error> {
     let object = object_read.into_object()?;
 
     assert_eq!(object.owner.get_owner_address().unwrap(), receiver);
-
-    // timestamp is recorded
-    let ts = fullnode.state().get_timestamp_ms(&digest).await?;
-    assert!(ts.is_some());
 
     Ok(())
 }
@@ -301,10 +296,6 @@ async fn test_full_node_indexes() -> Result<(), anyhow::Error> {
         false,
     )?;
     assert_eq!(txes.len(), 0);
-
-    // timestamp is recorded
-    let ts = node.state().get_timestamp_ms(&digest).await?;
-    assert!(ts.is_some());
 
     // This is a poor substitute for the post processing taking some time
     // Unfortunately event store writes seem to add some latency so this wait is needed
@@ -693,10 +684,6 @@ async fn test_full_node_event_read_api_ok() {
         assert_eq!(txes.len(), 1);
         assert_eq!(txes[0], digest);
     }
-
-    // timestamp is recorded
-    let ts = node.state().get_timestamp_ms(&digest).await.unwrap();
-    assert!(ts.is_some());
 
     // This is a poor substitute for the post processing taking some time
     sleep(Duration::from_millis(1000)).await;
@@ -1146,8 +1133,9 @@ async fn test_full_node_bootstrap_from_snapshot() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
+// Object fast path should be disabled and unused.
 #[sim_test]
-async fn test_pass_back_clock_object() -> Result<(), anyhow::Error> {
+async fn test_pass_back_no_object() -> Result<(), anyhow::Error> {
     let mut test_cluster = TestClusterBuilder::new().build().await;
     let rgp = test_cluster.get_reference_gas_price().await;
     let fullnode = test_cluster.spawn_new_fullnode().await.sui_node;
@@ -1207,7 +1195,7 @@ async fn test_pass_back_clock_object() -> Result<(), anyhow::Error> {
             objects,
         },
     ) = rx.recv().await.unwrap().unwrap();
-    assert!(objects.iter().any(|o| o.id() == SUI_CLOCK_OBJECT_ID));
+    assert!(objects.is_empty(), "{objects:?}");
     Ok(())
 }
 

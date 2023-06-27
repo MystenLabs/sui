@@ -9,12 +9,12 @@ import {
 	SuiObjectData,
 	getObjectId,
 	getObjectType,
-} from '../types/objects';
-import { normalizeSuiObjectId, ObjectId, SuiAddress } from '../types/common';
+} from '../types/objects.js';
+import { normalizeSuiObjectId, ObjectId, SuiAddress } from '../types/common.js';
 
-import { getOption, Option } from '../types/option';
-import { CoinStruct } from '../types/coin';
-import { StructTag } from '../types/sui-bcs';
+import { getOption, Option } from '../types/option.js';
+import { CoinStruct } from '../types/coin.js';
+import { StructTag } from '../types/sui-bcs.js';
 import { Infer, nullable, number, object, string } from 'superstruct';
 
 export const SUI_SYSTEM_ADDRESS = '0x3';

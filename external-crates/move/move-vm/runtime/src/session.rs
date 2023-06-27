@@ -101,7 +101,6 @@ impl<'r, 'l, S: MoveResolver> Session<'r, 'l, S> {
         args: Vec<impl Borrow<[u8]>>,
         gas_meter: &mut impl GasMeter,
     ) -> VMResult<SerializedReturnValues> {
-        let bypass_declared_entry_check = true;
         let gas_rem = gas_meter.remaining_gas().into();
         self.execute_function_bypass_visibility_gas_profiling(
             module,

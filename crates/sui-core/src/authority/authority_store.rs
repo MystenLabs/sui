@@ -793,7 +793,7 @@ impl AuthorityStore {
     /// to the object store, this would cause the reference counting to be incorrect.
     ///
     /// TODO: handle this in a more resilient way.
-    pub(crate) fn fullnode_fast_path_insert_objects_to_object_store_maybe(
+    pub(crate) fn _fullnode_fast_path_insert_objects_to_object_store_maybe(
         &self,
         objects: &Vec<Object>,
     ) -> SuiResult {
@@ -977,6 +977,8 @@ impl AuthorityStore {
         // test crashing before notifying
         fail_point_async!("crash");
 
+        self.executed_effects_digests_notify_read
+            .notify(transaction_digest, &effects_digest);
         self.executed_effects_notify_read
             .notify(transaction_digest, effects);
 
