@@ -793,7 +793,7 @@ impl AuthorityStore {
     /// to the object store, this would cause the reference counting to be incorrect.
     ///
     /// TODO: handle this in a more resilient way.
-    pub(crate) fn fullnode_fast_path_insert_objects_to_object_store_maybe(
+    pub(crate) fn _fullnode_fast_path_insert_objects_to_object_store_maybe(
         &self,
         objects: &Vec<Object>,
     ) -> SuiResult {

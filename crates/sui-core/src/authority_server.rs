@@ -401,12 +401,10 @@ impl ValidatorService {
                 TransactionEvents::default()
             };
 
-            let fastpath_input_objects = state.load_fastpath_input_objects(&signed_effects)?;
-
             return Ok(Some(HandleCertificateResponseV2 {
                 signed_effects: signed_effects.into_inner(),
                 events,
-                fastpath_input_objects,
+                fastpath_input_objects: vec![], // fastpath is unused for now
             }));
         }
 
@@ -483,7 +481,6 @@ impl ValidatorService {
         let effects = state
             .execute_certificate(&certificate, &epoch_store)
             .await?;
-        let fastpath_input_objects = state.load_fastpath_input_objects(&effects)?;
         let events = if let Some(event_digest) = effects.events_digest() {
             state.get_transaction_events(event_digest)?
         } else {
@@ -492,7 +489,7 @@ impl ValidatorService {
         Ok(Some(HandleCertificateResponseV2 {
             signed_effects: effects.into_inner(),
             events,
-            fastpath_input_objects,
+            fastpath_input_objects: vec![], // fastpath is unused for now
         }))
     }
 }
