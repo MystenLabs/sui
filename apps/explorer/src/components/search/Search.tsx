@@ -27,12 +27,12 @@ function Search() {
 	);
 
 	return (
-		<div className="flex max-w-lg">
+		<div className="max-w flex">
 			<SearchBox
 				queryValue={query}
 				onChange={handleTextChange}
 				onSelectResult={handleSelectResult}
-				placeholder="Search Addresses / Objects / Transactions"
+				placeholder="Search"
 				isLoading={isLoading}
 				options={results}
 			/>
