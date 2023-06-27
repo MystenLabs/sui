@@ -6,6 +6,9 @@
 	"license": "Apache-2.0",
 	"files": [
 		"builder",
+		"connection",
+		"faucet",
+		"keypairs",
 		"dist",
 		"src",
 		"CHANGELOG.md"
@@ -27,6 +30,16 @@
 			"source": "./src/builder/index.ts",
 			"import": "./dist/esm/builder/index.js",
 			"require": "./dist/cjs/builder/index.js"
+		},
+		"./connections": {
+			"source": "./src/rpc/connection.ts",
+			"import": "./dist/esm/rpc/connection.js",
+			"require": "./dist/cjs/rpc/connection.js"
+		},
+		"./faucet": {
+			"source": "./src/rpc/faucet-client.ts",
+			"import": "./dist/esm/rpc/faucet-client.js",
+			"require": "./dist/cjs/rpc/faucet-client.js"
 		},
 		"./keypairs/ed25519": {
 			"source": "./src/keypairs/ed25519/index.ts",

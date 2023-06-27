@@ -1,0 +1,5 @@
+{
+	"private": true,
+	"import": "../dist/esm/rpc/faucet-client.js",
+	"main": "../dist/cjs/rpc/faucet-client.js"
+}

@@ -110,15 +110,17 @@ async function buildImportDirectories({ exports }: PackageJSON) {
 		}
 
 		const exportDir = path.join(process.cwd(), exportName);
+		const relativePath = path.relative(exportDir, process.cwd());
+		console.log(exportMap.import?.replace(/^\.\//, `${relativePath}/`));
 		await createEmptyDir(exportDir);
 		await fs.writeFile(
 			path.join(exportDir, 'package.json'),
 			`${JSON.stringify(
 				{
 					private: true,
-					types: exportMap.types?.replace(/^\.\//, '../'),
-					import: exportMap.import?.replace(/^\.\//, '../'),
-					main: (exportMap.require ?? exportMap.default)?.replace(/^\.\//, '../'),
+					types: exportMap.types?.replace(/^\.\//, `${relativePath}/`),
+					import: exportMap.import?.replace(/^\.\//, `${relativePath}/`),
+					main: (exportMap.require ?? exportMap.default)?.replace(/^\.\//, `${relativePath}/`),
 				},
 				null,
 				2,

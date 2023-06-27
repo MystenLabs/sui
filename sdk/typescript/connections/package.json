@@ -1,0 +1,5 @@
+{
+	"private": true,
+	"import": "../dist/esm/rpc/connection.js",
+	"main": "../dist/cjs/rpc/connection.js"
+}
