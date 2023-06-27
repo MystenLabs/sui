@@ -87,7 +87,7 @@ function SiteConnectPage() {
 						rejectTitle="Reject"
 						onSubmit={handleHideWarning}
 						isWarning
-						address={activeAddress}
+						addressHidden
 						blended
 					>
 						<PageMainLayoutTitle title="Insecure Website" />
