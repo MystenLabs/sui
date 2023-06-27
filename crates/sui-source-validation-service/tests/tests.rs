@@ -7,13 +7,54 @@ use expect_test::expect;
 use reqwest::Client;
 use serde::Deserialize;
 
-use sui_source_validation_service::{initialize, serve, CloneCommand, Config, Packages};
+use sui_source_validation_service::{
+    initialize, serve, verify_packages, CloneCommand, Config, Packages,
+};
 
 use test_utils::network::TestClusterBuilder;
+
+const TEST_FIXTURES_DIR: &str = "tests/fixture";
 
 #[derive(Deserialize)]
 struct Response {
     source: String,
+}
+
+#[tokio::test]
+async fn test_verify_packages() -> anyhow::Result<()> {
+    let mut cluster = TestClusterBuilder::new().build().await;
+    let context = &mut cluster.wallet;
+
+    let config = Config {
+        packages: vec![Packages {
+            repository: "https://github.com/mystenlabs/sui".into(),
+            paths: vec!["move-stdlib".into()],
+        }],
+    };
+
+    let fixtures = tempfile::tempdir()?;
+    fs_extra::dir::copy(
+        PathBuf::from(TEST_FIXTURES_DIR).join("sui"),
+        fixtures.path(),
+        &fs_extra::dir::CopyOptions::default(),
+    )?;
+    let result = verify_packages(context, &config, fixtures.path()).await;
+    let truncated_error_message = &result
+        .unwrap_err()
+        .to_string()
+        .lines()
+        .take(3)
+        .map(|s| s.into())
+        .collect::<Vec<String>>()
+        .join("\n");
+    let expected = expect![
+        r#"
+Multiple source verification errors found:
+
+- Local dependency did not match its on-chain version at 0000000000000000000000000000000000000000000000000000000000000001::MoveStdlib::address"#
+    ];
+    expected.assert_eq(truncated_error_message);
+    Ok(())
 }
 
 #[tokio::test]
