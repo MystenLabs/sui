@@ -44,7 +44,6 @@ use sui_types::transaction::{
 use sui_types::utils::{
     to_sender_signed_transaction, to_sender_signed_transaction_with_multi_signers,
 };
-use sui_types::SUI_CLOCK_OBJECT_ID;
 use test_utils::authority::test_and_configure_authority_configs;
 use test_utils::network::TestClusterBuilder;
 use test_utils::transaction::{wait_for_all_txes, wait_for_tx};
@@ -1151,8 +1150,9 @@ async fn test_full_node_bootstrap_from_snapshot() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
+// Object fast path should be disabled and unused.
 #[sim_test]
-async fn test_pass_back_clock_object() -> Result<(), anyhow::Error> {
+async fn test_pass_back_no_object() -> Result<(), anyhow::Error> {
     let mut test_cluster = TestClusterBuilder::new().build().await?;
     let rgp = test_cluster.get_reference_gas_price().await;
     let fullnode = test_cluster.start_fullnode().await.sui_node;
@@ -1212,7 +1212,7 @@ async fn test_pass_back_clock_object() -> Result<(), anyhow::Error> {
             objects,
         },
     ) = rx.recv().await.unwrap().unwrap();
-    assert!(objects.iter().any(|o| o.id() == SUI_CLOCK_OBJECT_ID));
+    assert!(objects.is_empty(), "{objects:?}");
     Ok(())
 }
 
