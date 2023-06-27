@@ -1512,10 +1512,10 @@ impl AuthorityState {
         epoch_store: &Arc<AuthorityPerEpochStore>,
         tx_coins: Option<TxCoins>,
         written: &WrittenObjects,
-        loaded_child_objects: BTreeMap<ObjectID, SequenceNumber>,
+        loaded_child_objects: &BTreeMap<ObjectID, SequenceNumber>,
     ) -> SuiResult<u64> {
         let changes = self
-            .process_object_index(digest, effects, epoch_store, written)
+            .process_object_index(effects, epoch_store, written)
             .tap_err(|e| warn!(tx_digest=?digest, "Failed to process object index, index_tx is skipped: {e}"))?;
 
         indexes
@@ -1551,7 +1551,6 @@ impl AuthorityState {
 
     fn process_object_index(
         &self,
-        tx_digest: &TransactionDigest,
         effects: &TransactionEffects,
         epoch_store: &Arc<AuthorityPerEpochStore>,
         written: &WrittenObjects,
@@ -1562,6 +1561,7 @@ impl AuthorityState {
             .cloned()
             .collect::<HashMap<_, _>>();
 
+        let tx_digest = effects.transaction_digest();
         let mut deleted_owners = vec![];
         let mut deleted_dynamic_fields = vec![];
         for (id, _, _) in effects.deleted().iter().chain(effects.wrapped()) {
@@ -1731,11 +1731,8 @@ impl AuthorityState {
         &self,
         certificate: &VerifiedExecutableTransaction,
         effects: &TransactionEffects,
-        events: &TransactionEvents,
+        inner_temporary_store: &InnerTemporaryStore,
         epoch_store: &Arc<AuthorityPerEpochStore>,
-        tx_coins: Option<TxCoins>,
-        written: &WrittenObjects,
-        loaded_child_objects: BTreeMap<ObjectID, SequenceNumber>,
     ) -> SuiResult {
         if self.indexes.is_none() {
             return Ok(());
@@ -1743,6 +1740,12 @@ impl AuthorityState {
 
         let tx_digest = certificate.digest();
         let timestamp_ms = Self::unixtime_now_ms();
+        let events = &inner_temporary_store.events;
+        let written = &inner_temporary_store.written;
+
+        let tx_coins =
+            self.fullnode_only_get_tx_coins_for_indexing(inner_temporary_store, epoch_store);
+
         // Index tx
         if let Some(indexes) = &self.indexes {
             let res = self
@@ -1756,7 +1759,7 @@ impl AuthorityState {
                     epoch_store,
                     tx_coins,
                     written,
-                    loaded_child_objects,
+                    &inner_temporary_store.loaded_child_objects,
                 )
                 .await
                 .tap_ok(|_| self.metrics.post_processing_total_tx_indexed.inc())
@@ -3464,28 +3467,9 @@ impl AuthorityState {
             None
         };
 
-        let loaded_child_objects = if self.is_fullnode(epoch_store) {
-            // We only care about this for full nodes
-            inner_temporary_store.loaded_child_objects.clone()
-        } else {
-            BTreeMap::new()
-        };
-
-        // Returns coin objects for indexing for fullnode if indexing is enabled.
-        let tx_coins =
-            self.fullnode_only_get_tx_coins_for_indexing(&inner_temporary_store, epoch_store);
-
         // index certificate
         let _ = self
-            .post_process_one_tx(
-                certificate,
-                effects,
-                &inner_temporary_store.events,
-                epoch_store,
-                tx_coins,
-                &inner_temporary_store.written,
-                loaded_child_objects,
-            )
+            .post_process_one_tx(certificate, effects, &inner_temporary_store, epoch_store)
             .await
             .tap_err(|e| {
                 self.metrics.post_processing_total_failures.inc();

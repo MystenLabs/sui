@@ -157,8 +157,9 @@ pub struct IndexStoreTables {
     /// The timestamping happens when the node sees a txn certificate for the first time.
     ///
     /// DEPRECATED. DO NOT USE
+    #[allow(dead_code)]
     #[default_options_override_fn = "timestamps_table_default_config"]
-    _timestamps: DBMap<TransactionDigest, u64>,
+    timestamps: DBMap<TransactionDigest, u64>,
 
     /// Ordering of all indexed transactions.
     #[default_options_override_fn = "transactions_order_table_default_config"]
@@ -433,7 +434,7 @@ impl IndexStore {
         digest: &TransactionDigest,
         timestamp_ms: u64,
         tx_coins: Option<TxCoins>,
-        loaded_child_objects: BTreeMap<ObjectID, SequenceNumber>,
+        loaded_child_objects: &BTreeMap<ObjectID, SequenceNumber>,
     ) -> SuiResult<u64> {
         let sequence = self.next_sequence_number.fetch_add(1, Ordering::SeqCst);
         let mut batch = self.tables.transactions_from_addr.batch();
@@ -577,7 +578,7 @@ impl IndexStore {
         )?;
 
         // Loaded child objects table
-        let loaded_child_objects: Vec<_> = loaded_child_objects.into_iter().collect();
+        let loaded_child_objects: Vec<_> = loaded_child_objects.clone().into_iter().collect();
         batch.insert_batch(
             &self.tables.loaded_child_object_versions,
             std::iter::once((*digest, loaded_child_objects)),
@@ -1620,7 +1621,7 @@ mod tests {
                 &TransactionDigest::random(),
                 1234,
                 Some(tx_coins),
-                BTreeMap::new(),
+                &BTreeMap::new(),
             )
             .await?;
 
@@ -1672,7 +1673,7 @@ mod tests {
                 &TransactionDigest::random(),
                 1234,
                 Some(tx_coins),
-                BTreeMap::new(),
+                &BTreeMap::new(),
             )
             .await?;
         let balance_from_db = IndexStore::get_balance_from_db(
