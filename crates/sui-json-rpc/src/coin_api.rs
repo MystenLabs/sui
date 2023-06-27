@@ -37,6 +37,19 @@ use crate::{with_tracing, SuiRpcModule};
 #[cfg(test)]
 use mockall::automock;
 
+fn parse_to_struct_tag(coin_type: &str) -> Result<StructTag, Error> {
+    parse_sui_struct_tag(coin_type).map_err(|e| {
+        Error::SuiRpcInputError(SuiRpcInputError::CannotParseSuiStructTag(format!("{e}")))
+    })
+}
+
+fn parse_to_type_tag(coin_type: Option<String>) -> Result<TypeTag, Error> {
+    Ok(TypeTag::Struct(Box::new(match coin_type {
+        Some(c) => parse_to_struct_tag(&c)?,
+        None => GAS::type_(),
+    })))
+}
+
 pub struct CoinReadApi {
     // Trait object w/ Box as we do not need to share this across multiple threads
     internal: Box<dyn CoinReadInternal + Send + Sync>,
@@ -72,15 +85,7 @@ impl CoinReadApiServer for CoinReadApi {
         limit: Option<usize>,
     ) -> RpcResult<CoinPage> {
         with_tracing!(async move {
-            let coin_type_tag = TypeTag::Struct(Box::new(match coin_type {
-                Some(c) => parse_sui_struct_tag(&c).map_err(|e| {
-                    Error::SuiRpcInputError(
-                        // todo: clean up parse_sui_struct_tag to return actionable errors
-                        SuiRpcInputError::CannotParseSuiStructTag(format!("{e}")),
-                    )
-                })?,
-                None => GAS::type_(),
-            }));
+            let coin_type_tag = parse_to_type_tag(coin_type)?;
 
             let cursor = match cursor {
                 Some(c) => (coin_type_tag.to_string(), c),
@@ -151,23 +156,16 @@ impl CoinReadApiServer for CoinReadApi {
         coin_type: Option<String>,
     ) -> RpcResult<Balance> {
         with_tracing!(async move {
-            let coin_type = TypeTag::Struct(Box::new(match coin_type {
-                Some(c) => parse_sui_struct_tag(&c).map_err(|e| {
-                    Error::SuiRpcInputError(SuiRpcInputError::CannotParseSuiStructTag(format!(
-                        "{e}"
-                    )))
-                })?,
-                None => GAS::type_(),
-            }));
+            let coin_type_tag = parse_to_type_tag(coin_type)?;
             let balance = self
                 .internal
-                .get_balance(owner, coin_type.clone())
+                .get_balance(owner, coin_type_tag.clone())
                 .await
                 .tap_err(|e| {
                     debug!(?owner, "Failed to get balance with error: {:?}", e);
                 })?;
             Ok(Balance {
-                coin_type: coin_type.to_string(),
+                coin_type: coin_type_tag.to_string(),
                 coin_object_count: balance.num_coins as usize,
                 total_balance: balance.balance as u128,
                 // note: LockedCoin is deprecated
@@ -200,9 +198,7 @@ impl CoinReadApiServer for CoinReadApi {
     #[instrument(skip(self))]
     async fn get_coin_metadata(&self, coin_type: String) -> RpcResult<Option<SuiCoinMetadata>> {
         with_tracing!(async move {
-            let coin_struct = parse_sui_struct_tag(&coin_type).map_err(|_| {
-                Error::SuiRpcInputError(SuiRpcInputError::CannotParseSuiStructTag(coin_type))
-            })?;
+            let coin_struct = parse_to_struct_tag(&coin_type)?;
             let metadata_object = self
                 .internal
                 .find_package_object(
@@ -218,10 +214,7 @@ impl CoinReadApiServer for CoinReadApi {
     #[instrument(skip(self))]
     async fn get_total_supply(&self, coin_type: String) -> RpcResult<Supply> {
         with_tracing!(async move {
-            let coin_struct = parse_sui_struct_tag(&coin_type).map_err(|_| {
-                Error::SuiRpcInputError(SuiRpcInputError::CannotParseSuiStructTag(coin_type))
-            })?;
-
+            let coin_struct = parse_to_struct_tag(&coin_type)?;
             Ok(if GAS::is_gas(&coin_struct) {
                 Supply { value: 0 }
             } else {
@@ -1249,7 +1242,6 @@ mod tests {
         #[tokio::test]
         async fn test_index_store_not_available() {
             let owner = get_test_owner();
-            let coin_type = get_test_coin_type(get_test_package_id());
             let mut mock_state = MockState::new();
             mock_state
                 .expect_get_all_balance()
