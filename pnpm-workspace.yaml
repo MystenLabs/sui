@@ -3,4 +3,5 @@ packages:
     - 'apps/**'
     - 'dapps/**'
     - '!**/dist/**'
+    - '!sdk/typescript/builder'
     - '!sdk/typescript/*/**'
