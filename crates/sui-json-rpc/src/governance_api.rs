@@ -51,7 +51,7 @@ impl GovernanceReadApi {
             state
                 .get_move_objects(owner, MoveObjectType::staked_sui())
                 .await
-                .map_err(Error::SuiRpcInternalError)
+                .map_err(|e| Error::Server(ServerError::SuiError(e)))
         })
         .await??;
 
@@ -379,7 +379,7 @@ async fn exchange_rates(
                     .map_err(|e| ServerError::Serde(e.to_string()))?;
                 let exchange_rate: PoolTokenExchangeRate =
                     get_dynamic_field_from_store(state.db().as_ref(), exchange_rates_id, &epoch)
-                        .map_err(Error::SuiRpcInternalError)?;
+                        .map_err(ServerError::SuiError)?;
 
                 Ok::<_, Error>((epoch, exchange_rate))
             })

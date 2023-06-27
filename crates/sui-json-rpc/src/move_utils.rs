@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::api::MoveUtilsServer;
-use crate::error::{Error, SuiRpcInputError};
+use crate::error::{Error, ServerError, SuiRpcInputError};
 use crate::read_api::{get_move_module, get_move_modules_by_package};
 use crate::{with_tracing, SuiRpcModule};
 use async_trait::async_trait;
@@ -200,7 +200,7 @@ impl MoveUtilsServer for MoveUtils {
                             /* max_binary_format_version */ VERSION_MAX,
                             /* no_extraneous_module_bytes */ false,
                         )
-                        .map_err(Error::SuiRpcInternalError)
+                        .map_err(|e| Error::Server(ServerError::SuiError(e)))
                     }
                     _ => Err(Error::Client(SuiRpcInputError::GenericInvalid(format!(
                         "Object is not a package with ID {}",

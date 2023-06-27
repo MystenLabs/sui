@@ -1098,7 +1098,7 @@ pub async fn get_move_modules_by_package(
                 )
                 .map_err(|e| {
                     error!("Failed to call get_move_modules_by_package for package: {package:?}");
-                    Error::SuiRpcInternalError(e)
+                    Error::Server(ServerError::SuiError(e))
                 })
             }
             _ => Err(Error::Client(SuiRpcInputError::GenericInvalid(format!(

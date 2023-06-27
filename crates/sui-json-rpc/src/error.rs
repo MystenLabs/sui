@@ -51,10 +51,6 @@ pub enum Error {
     #[error(transparent)]
     Client(#[from] SuiRpcInputError),
 
-    // TODO(wlmyng): circle back to determine how we can better do this. Errors that rely on this indirection are due to client- or server-faults that can only be discerned on RPC
-    #[error("{0}")]
-    SuiRpcInternalError(SuiError),
-
     // Errors that map to -32603 internal error
     #[error(transparent)]
     Server(#[from] ServerError),
@@ -64,6 +60,10 @@ pub enum Error {
 pub enum ServerError {
     #[error("Serde error encountered: {0}")]
     Serde(String),
+
+    // TODO(wlmyng): circle back to determine how we can better do this. Errors that rely on this indirection are due to client- or server-faults that can only be discerned on RPC
+    #[error("{0}")]
+    SuiError(SuiError),
 }
 
 impl From<Error> for RpcError {
@@ -115,12 +115,14 @@ impl Error {
                 RpcError::Call(CallError::InvalidParams(sui_json_rpc_input_error.into()))
             }
             Error::FastCryptoError(err) => to_internal_error(err),
-            Error::SuiRpcInternalError(err) => match err {
-                SuiError::ModuleDeserializationFailure { .. }
-                | SuiError::DeserializationError { .. } => to_internal_error(err),
-                _ => match_sui_error(err),
+            Error::Server(err) => match err {
+                ServerError::SuiError(err) => match err {
+                    SuiError::ModuleDeserializationFailure { .. }
+                    | SuiError::DeserializationError { .. } => to_internal_error(err),
+                    _ => match_sui_error(err),
+                },
+                _ => to_internal_error(err),
             },
-            Error::Server(err) => to_internal_error(err),
             _ => RpcError::Call(CallError::Failed(self.into())),
         }
     }
