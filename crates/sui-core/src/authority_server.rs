@@ -421,12 +421,12 @@ impl ValidatorService {
             SuiError::InvalidSystemTransaction.into()
         );
 
-        // Check system overload
-        Self::check_system_overload(
-            Arc::clone(&state),
-            Arc::clone(&consensus_adapter),
-            certificate.data(),
-        )?;
+        // // Check system overload
+        // Self::check_system_overload(
+        //     Arc::clone(&state),
+        //     Arc::clone(&consensus_adapter),
+        //     certificate.data(),
+        // )?;
 
         // code block within reconfiguration lock
         let certificate = {
