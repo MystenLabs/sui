@@ -105,7 +105,7 @@ async function buildImportDirectories({ exports }: PackageJSON) {
 	}
 
 	for (const [exportName, exportMap] of Object.entries(exports)) {
-		if (typeof exportMap !== 'object' || !exportName.match(/^\.\/[\w\-_]+$/)) {
+		if (typeof exportMap !== 'object' || !exportName.match(/^\.\/[\w\-_/]+$/)) {
 			continue;
 		}
 

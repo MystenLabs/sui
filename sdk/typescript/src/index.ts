@@ -1,16 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-export * from './cryptography/ed25519-keypair.js';
-export * from './cryptography/secp256k1-keypair.js';
-export * from './cryptography/secp256r1-keypair.js';
+export * from './keypairs/ed25519/index.js';
+export * from './keypairs/secp256k1/index.js';
+export * from './keypairs/secp256r1/index.js';
 export * from './cryptography/keypair.js';
-export * from './cryptography/ed25519-publickey.js';
-export * from './cryptography/secp256k1-publickey.js';
-export * from './cryptography/secp256r1-publickey.js';
 export * from './cryptography/multisig.js';
 export * from './cryptography/publickey.js';
 export * from './cryptography/mnemonics.js';
 export * from './cryptography/signature.js';
+export * from './cryptography/utils.js';
 
 export * from './providers/json-rpc-provider.js';
 

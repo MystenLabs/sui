@@ -3,10 +3,11 @@
 
 import { blake2b } from '@noble/hashes/blake2b';
 import { Keypair } from '../cryptography/keypair.js';
-import { SerializedSignature, toSerializedSignature } from '../cryptography/signature.js';
+import { SerializedSignature } from '../cryptography/signature.js';
 import { JsonRpcProvider } from '../providers/json-rpc-provider.js';
 import { SuiAddress } from '../types/index.js';
 import { SignerWithProvider } from './signer-with-provider.js';
+import { toSerializedSignature } from '../cryptography/utils.js';
 
 export class RawSigner extends SignerWithProvider {
 	private readonly keypair: Keypair;
