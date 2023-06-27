@@ -9,6 +9,7 @@ import { ampli } from '~/utils/analytics/ampli';
 export function useInitialPageView(activeNetwork: string) {
 	const location = useLocation();
 
+	// Set user properties for the user's page information
 	useEffect(() => {
 		ampli.identify(undefined, {
 			pageDomain: window.location.hostname,
@@ -18,6 +19,7 @@ export function useInitialPageView(activeNetwork: string) {
 		});
 	}, [location.pathname, activeNetwork]);
 
+	// Log an initial page view event
 	useEffect(() => {
 		ampli.openedSuiExplorer();
 	}, []);

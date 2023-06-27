@@ -121,6 +121,10 @@ export interface CompletedSearchProperties {
 	searchQuery: string;
 }
 
+export interface HoveredOnTooltipProperties {
+	tooltipLabel: string;
+}
+
 export interface SwitchedNetworkProperties {
 	toNetwork: string;
 }
@@ -161,6 +165,14 @@ export class CompletedSearch implements BaseEvent {
 	event_type = 'completed search';
 
 	constructor(public event_properties: CompletedSearchProperties) {
+		this.event_properties = event_properties;
+	}
+}
+
+export class HoveredOnTooltip implements BaseEvent {
+	event_type = 'hovered on tooltip';
+
+	constructor(public event_properties: HoveredOnTooltipProperties) {
 		this.event_properties = event_properties;
 	}
 }
@@ -357,6 +369,25 @@ export class Ampli {
     options?: EventOptions,
   ) {
     return this.track(new CompletedSearch(properties), options);
+  }
+
+  /**
+   * hovered on tooltip
+   *
+   * [View in Tracking Plan](https://data.amplitude.com/mystenlabs/Sui%20Explorer/events/main/latest/hovered%20on%20tooltip)
+   *
+   * When users hover over a tooltip in the application.
+   *
+   * Owner: William Robertson
+   *
+   * @param properties The event's properties (e.g. tooltipLabel)
+   * @param options Amplitude event options.
+   */
+  hoveredOnTooltip(
+    properties: HoveredOnTooltipProperties,
+    options?: EventOptions,
+  ) {
+    return this.track(new HoveredOnTooltip(properties), options);
   }
 
   /**
