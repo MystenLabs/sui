@@ -1640,7 +1640,7 @@ impl AuthorityState {
                     );
                     assert_eq!(new_object.0.1, oref.1, "tx_digest={:?} error processing object owner index, object {:?} from written has mismatched verison. Actual: {}, expected: {}", tx_digest, id, new_object.0.1, oref.1);
 
-                    let Some(df_info) = self.try_create_dynamic_field_info(&new_object.1, module_resolver)? else{
+                    let Some(df_info) = self.try_create_dynamic_field_info(&new_object.1, written, module_resolver)? else{
                         // Skip indexing for non dynamic field objects.
                         continue;
                     };
@@ -1661,6 +1661,7 @@ impl AuthorityState {
     fn try_create_dynamic_field_info(
         &self,
         o: &Object,
+        written: &WrittenObjects,
         resolver: &impl GetModule,
     ) -> SuiResult<Option<DynamicFieldInfo>> {
         // Skip if not a move object
@@ -1693,16 +1694,28 @@ impl AuthorityState {
         Ok(Some(match type_ {
             DynamicFieldType::DynamicObject => {
                 // Find the actual object from storage using the object id obtained from the wrapper.
-                let Some(object) = self.database.find_object_lt_or_eq_version(object_id, o.version()) else{
-                    return Err(UserInputError::ObjectNotFound {
-                        object_id,
-                        version: Some(o.version()),
-                    }.into())
-                };
-                let version = object.version();
-                let digest = object.digest();
-                let object_type = object.data.type_().unwrap();
 
+                // Try to find the object in the written objects first.
+                let (version, digest, object_type) =
+                    if let Some((_, object, _)) = written.get(&object_id) {
+                        let version = object.version();
+                        let digest = object.digest();
+                        let object_type = object.data.type_().unwrap().clone();
+                        (version, digest, object_type)
+                    } else {
+                        // If not found, try to find it in the database.
+                        let object = self
+                            .database
+                            .get_object_by_key(&object_id, o.version())?
+                            .ok_or_else(|| UserInputError::ObjectNotFound {
+                                object_id,
+                                version: Some(o.version()),
+                            })?;
+                        let version = object.version();
+                        let digest = object.digest();
+                        let object_type = object.data.type_().unwrap().clone();
+                        (version, digest, object_type)
+                    };
                 DynamicFieldInfo {
                     name,
                     bcs_name,
@@ -2094,7 +2107,7 @@ impl AuthorityState {
                 )),
                 Owner::ObjectOwner(object_id) => {
                     let id = o.id();
-                    let Some(info) = self.try_create_dynamic_field_info(o, epoch_store.module_cache())? else{
+                    let Some(info) = self.try_create_dynamic_field_info(o, &BTreeMap::new(), epoch_store.module_cache())? else{
                         continue;
                     };
                     new_dynamic_fields.push(((ObjectID::from(object_id), id), info));
