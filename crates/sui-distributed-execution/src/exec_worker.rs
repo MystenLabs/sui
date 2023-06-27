@@ -28,13 +28,15 @@ use tokio::time::Instant;
 use super::types::*;
 
 
-// TODO
-fn get_read_set(tx: &VerifiedTransaction) -> Vec<ObjectID> {
+const MANAGER_CHANNEL_SIZE:usize = 32;
+
+// TODO: Returns the read set of a transction
+fn get_read_set(_tx: &VerifiedTransaction) -> Vec<ObjectID> {
     Vec::new()
 }
 
-// TODO
-fn get_write_set(tx: &VerifiedTransaction) -> Vec<ObjectID> {
+// TODO: Returns the write set of a transction
+fn get_write_set(_tx: &VerifiedTransaction) -> Vec<ObjectID> {
     Vec::new()
 }
 
@@ -44,6 +46,7 @@ pub struct Transaction {
     exec_digest: ExecutionDigests,
     checkpoint_seq: u64,
 }
+
 
 pub struct QueuesManager {
     tx_store: HashMap<TransactionDigest, Transaction>,
@@ -59,6 +62,18 @@ impl QueuesManager {
             obj_queues: HashMap::new(),
             wait_table: HashMap::new(),
             ready: manager_sender}
+    }
+    
+    /// Helper method that repeatedly tries sending over the self.ready channel
+    async fn try_send(&mut self, tx: Transaction) {
+        while let Err(_) =
+            self.ready.try_send(tx.clone())
+        {
+            // Channel full, sleep
+            println!("manager channel full!");
+            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+            tokio::task::yield_now().await;
+        }
     }
 
     /// Enqueues a transaction on the manager
@@ -95,12 +110,13 @@ impl QueuesManager {
         // Check if ready
         if self.wait_table.get_mut(&txid).unwrap().is_empty() {
 			self.wait_table.remove(&txid);
-			self.ready.send(full_tx).await.expect("manager_sender failed");
+            println!("manager sending {}", full_tx.checkpoint_seq);
+            self.try_send(full_tx).await;
 		}
 	}
 
     /// Cleans up after a completed transaction
-	async fn clean_up(&mut self, completed_tx: VerifiedTransaction) {
+	async fn clean_up(&mut self, completed_tx: &VerifiedTransaction) {
 
         // Get digest and RW set
         let txid = *completed_tx.digest();
@@ -121,7 +137,7 @@ impl QueuesManager {
                 if self.wait_table.get_mut(next_txid).unwrap().is_empty() {
                     self.wait_table.remove(next_txid);
                     let next_tx = self.tx_store.get(next_txid).unwrap();
-                    self.ready.send(next_tx.clone()).await.expect("manager_sender failed");
+                    self.try_send(next_tx.clone()).await;
                 }
             }
 		}
@@ -149,6 +165,7 @@ impl ExecutionWorkerState {
         }
     }
 
+    /// Executes a transaction
     pub async fn execute_tx(
         &mut self,
         tx: &VerifiedTransaction,
@@ -248,6 +265,25 @@ impl ExecutionWorkerState {
     }
 
 
+    /// TODO: Dispatch a transaction to the execution queue
+    pub fn execute_tx_async(
+        &mut self,
+        tx: &VerifiedTransaction,
+        // tx_digest: &ExecutionDigests,
+        // checkpoint_seq: u64,
+        // protocol_config: &ProtocolConfig,
+        // move_vm: &Arc<MoveVM>,
+        // epoch_data: &EpochData,
+        // reference_gas_price: u64,
+        // metrics: Arc<LimitsMetrics>,
+        _tasks_queue: &mut FuturesUnordered::<Pin<Box<dyn Future<Output = VerifiedTransaction>>>>,
+    ) -> VerifiedTransaction 
+    {
+        // TODO: dispatch execution to tasks_queue
+        return tx.clone();
+    }
+
+
     /// Helper function to receive and process an EpochStart message.
     /// Returns new (move_vm, protocol_config, epoch_data, reference_gas_price)
     async fn process_epoch_start(&mut self,
@@ -311,7 +347,7 @@ impl ExecutionWorkerState {
         let mut num_tx: usize = 0;
 
         // Initialize channels
-        let (manager_sender, mut manager_receiver) = mpsc::channel(32);
+        let (manager_sender, mut manager_receiver) = mpsc::channel(MANAGER_CHANNEL_SIZE);
         let mut manager = QueuesManager::new(manager_sender);
         let mut tasks = FuturesUnordered::<Pin<Box<dyn Future<Output = VerifiedTransaction>>>>::new();
 
@@ -323,28 +359,14 @@ impl ExecutionWorkerState {
                     if let SailfishMessage::Transaction{tx, digest: exec_digest, checkpoint_seq} = msg {
                         let full_tx = Transaction{tx, exec_digest, checkpoint_seq};
                         manager.queue_tx(full_tx).await;
-
-                        
                     } else {
                         panic!("unexpected message");
                     }
                 },
                 Some(full_tx) = manager_receiver.recv() => {
-                    // Transaction is ready to execute; enqueue to tasks FuturesUnordered
-
-                    // TODO: What if this is TransactionKind::ChangeEpoch?
-                    // How to manage epoch change?
-                    // Need to wait for everything before this to finish executing?
-
-                    // TODO: Need to do tricky mutex stuff here
-                    // * the local stores need thread-safe access.
-                    // * What about the move_vm? Is it stateful?
-
-                    // TODO: Better way to count/stop TPS measurements than highwater mark, 
-                    // as that is no longer valid in out-of-order exec.
-
+                    // Transaction is ready to execute
                     let Transaction{tx, exec_digest, checkpoint_seq} = full_tx;
-                    let exec = self.execute_tx(
+                    self.execute_tx(
                         &tx,
                         &exec_digest,
                         checkpoint_seq,
@@ -353,18 +375,37 @@ impl ExecutionWorkerState {
                         &epoch_data,
                         reference_gas_price,
                         metrics.clone(),
-                    );
-
-                    tasks.push(Box::pin(exec));
+                    ).await;
                     
-                    
-                },
-                Some(tx) = tasks.next() => {
-                    // Transation finished executing; run manager clean up
-                    manager.clean_up(tx).await;
                     num_tx += 1;
+                    if checkpoint_seq % 10000 == 0 {
+                        println!("Executed {}", checkpoint_seq);
+                    }
+                    println!("Executed {}", checkpoint_seq);
+                    // manager.clean_up(&tx).await;
+
+                    if let TransactionKind::ChangeEpoch(_) = tx.data().transaction_data().kind() {
+                        // Change epoch
+                        println!("END OF EPOCH at checkpoint {}", checkpoint_seq);
+                        (move_vm, protocol_config, epoch_data, reference_gas_price) = 
+                            self.process_epoch_change(&ew_sender, &mut sw_receiver).await;
+                    }
+
+                    // Stop executing when I hit the watermark
+                    if checkpoint_seq == exec_watermark-1 {
+                        break;
+                    }
                 },
-                else => break,
+                Some(_tx) = tasks.next() => {
+                    // TODO: to be used when using execute_tx_async            
+                    // // Transation finished executing; run manager clean up
+                    // manager.clean_up(tx).await;
+                    // num_tx += 1;
+                },
+                else => {
+                    println!("Error, abort");
+                    break
+                }
             }
         }
 

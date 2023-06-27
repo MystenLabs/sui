@@ -236,14 +236,20 @@ impl SequenceWorkerState {
                         .expect("Transaction exists")
                         .expect("Transaction exists");
 
-                    sw_sender
-                        .send(SailfishMessage::Transaction{
+
+                    // Send tx to Exec Worker, pausing if channel is full
+                    while let Err(_) = sw_sender
+                        .try_send(SailfishMessage::Transaction{
                             tx: tx.clone(),
                             digest: tx_digest.clone(),
                             checkpoint_seq,
-                        })
-                        .await
-                        .expect("Sending doesn't work");
+                        }) 
+                    {
+                        // Channel full, sleep
+                        println!("sw channel full!");
+                        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+                        tokio::task::yield_now().await;
+                    }
 
                     if let TransactionKind::ChangeEpoch(_) = tx.data().transaction_data().kind() {
                         // wait for epoch end message from execution worker

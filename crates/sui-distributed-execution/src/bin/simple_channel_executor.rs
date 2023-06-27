@@ -24,6 +24,9 @@ const GIT_REVISION: &str = {
 };
 const VERSION: &str = const_str::concat!(env!("CARGO_PKG_VERSION"), "-", GIT_REVISION);
 
+const DEFAULT_CHANNEL_SIZE:usize = 32;
+
+
 #[derive(Parser)]
 #[clap(rename_all = "kebab-case")]
 #[clap(name = env!("CARGO_BIN_NAME"))]
@@ -55,9 +58,9 @@ async fn main() {
     ew_state.init_store(&genesis);
 
     // Channel from sw to ew
-    let (sw_sender, sw_receiver) = mpsc::channel(32);
+    let (sw_sender, sw_receiver) = mpsc::channel(DEFAULT_CHANNEL_SIZE);
     // Channel from ew to sw
-    let (ew_sender, ew_receiver) = mpsc::channel(32);
+    let (ew_sender, ew_receiver) = mpsc::channel(DEFAULT_CHANNEL_SIZE);
 
     // Run Sequence Worker asynchronously
     let sw_handler = tokio::spawn(async move {
