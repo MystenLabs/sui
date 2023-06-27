@@ -237,7 +237,7 @@ fn to_internal(external_units: GasUnits) -> InternalGas {
 
 impl SuiGasStatus {
     fn new(
-        move_gas_status_mut: GasStatus,
+        move_gas_status: GasStatus,
         gas_budget: u64,
         charge: bool,
         computation_gas_unit_price: GasPrice,
@@ -245,7 +245,7 @@ impl SuiGasStatus {
         cost_table: SuiCostTable,
     ) -> SuiGasStatus {
         SuiGasStatus {
-            gas_status: move_gas_status_mut,
+            gas_status: move_gas_status,
             init_budget: GasUnits::new(gas_budget),
             charge,
             computation_gas_unit_price: ComputeGasPricePerUnit::new(
