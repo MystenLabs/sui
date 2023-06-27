@@ -1616,14 +1616,7 @@ async fn construct_move_call_transaction(
     client
         .transaction_builder()
         .move_call(
-            sender,
-            package,
-            module,
-            function,
-            type_args,
-            args,
-            gas,
-            gas_budget,
+            sender, package, module, function, type_args, args, gas, gas_budget,
         )
         .await
 }

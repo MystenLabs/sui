@@ -18,6 +18,7 @@ reqwest = { version = "0.11.13", default_features= false, features = ["blocking"
 serde = { version = "1.0.144", features = ["derive", "rc"] }
 serde_json = { version = "1.0.1"}
 jsonpath_lib = "0.3.0"
+chrono.workspace = true
 serde_with = "2.1.0"
 tap.workspace = true
 bcs.workspace = true

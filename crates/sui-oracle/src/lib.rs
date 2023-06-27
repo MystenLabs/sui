@@ -1,38 +1,45 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use sui_types::transaction::Argument;
 use config::{DownloadFeedConfigs, UploadFeedConfig, UploadParameters};
 use metrics::OracleMetrics;
 use move_core_types::language_storage::TypeTag;
-use sui_sdk::apis::ReadApi;
-use sui_types::Identifier;
-use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
-use sui_types::object::{Object, Owner};
 use mysten_metrics::monitored_scope;
-use sui_json_rpc_types::SuiTransactionBlockResponse;
 use prometheus::Registry;
-use tap::tap::TapFallible;
-use sui_types::transaction::{ObjectArg, Command};
 use std::ops::Add;
-use std::{collections::HashMap, time::Instant};
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, SystemTime};
+use std::{collections::HashMap, time::Instant};
+use sui_json_rpc_types::SuiTransactionBlockResponse;
+use chrono::{DateTime, Utc};
 use sui_json_rpc_types::{
     SuiObjectDataOptions, SuiTransactionBlockEffects, SuiTransactionBlockEffectsAPI,
     SuiTransactionBlockResponseOptions,
 };
+use sui_sdk::apis::ReadApi;
 use sui_sdk::rpc_types::SuiObjectResponse;
 use sui_sdk::SuiClient;
-use sui_types::{base_types::SuiAddress, transaction::{TransactionData, CallArg}};
+use sui_types::error::UserInputError;
+use sui_types::object::{Object, Owner};
+use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
+use sui_types::transaction::{Argument, VerifiedTransaction};
+use sui_types::transaction::{Command, ObjectArg};
+use sui_types::Identifier;
+use sui_types::{
+    base_types::SuiAddress,
+    transaction::{CallArg, TransactionData},
+};
+use tap::tap::TapFallible;
 
 use sui_sdk::wallet_context::WalletContext;
 use sui_types::base_types::{ObjectID, ObjectRef};
-use tracing::{error, info, warn, debug};
+use tracing::{debug, error, info, warn};
 pub mod config;
 mod metrics;
 
-const METRICS_MULTIPLIER: f64 = 1_000_000.0;
+// TODO: allow more flexible decimals
+const DECIMAL: u8 = 6;
+const METRICS_MULTIPLIER: f64 = 10u64.pow(DECIMAL as u32) as f64;
 
 pub struct OracleNode {
     upload_feeds: HashMap<String, HashMap<String, UploadFeedConfig>>,
@@ -64,7 +71,6 @@ impl OracleNode {
         let signer_address = self.wallet_ctx.active_address()?;
         let client = Arc::new(self.wallet_ctx.get_client().await?);
 
-        // TODO sanity check, such as objects are good, etc
         let wallet_ctx = Arc::new(self.wallet_ctx);
         DataProviderRunner::new(
             self.upload_feeds,
@@ -129,7 +135,10 @@ impl DataProviderRunner {
                     make_onchain_feed_name(&feed_name, &source_name),
                     data_feed.submission_interval.clone(),
                 );
-                let oracle_obj_id = data_feed.upload_parameters.write_data_provider_object_id.clone();
+                let oracle_obj_id = data_feed
+                    .upload_parameters
+                    .write_data_provider_object_id
+                    .clone();
                 let data_provider = DataProvider {
                     feed_name: feed_name.clone(),
                     source_name: source_name.clone(),
@@ -138,25 +147,21 @@ impl DataProviderRunner {
                     metrics: metrics.clone(),
                 };
                 providers.push(Arc::new(data_provider));
-                
+
                 if !oracle_object_args.contains_key(&oracle_obj_id) {
                     oracle_object_args.insert(
                         oracle_obj_id.clone(),
-                        get_object_arg(client.read_api(), oracle_obj_id, true).await.unwrap()
+                        get_object_arg(client.read_api(), oracle_obj_id, true)
+                            .await
+                            .unwrap(),
                     );
                 }
             }
         }
         info!("Staleness tolerance: {:?}", staleness_tolerance);
 
-        let gas_obj = client.read_api().get_object_with_options(gas_coin_id, SuiObjectDataOptions::default().with_owner()).await.unwrap().data.unwrap();
-        assert_eq!(
-            gas_obj.owner, Some(Owner::AddressOwner(signer_address)),
-            "Provided gas obj {:?} does not belong to {}", gas_obj, signer_address
-        );
-        let gas_obj_ref = gas_obj.object_ref();
+        let gas_obj_ref = get_gas_obj_ref(client.read_api(), gas_coin_id, signer_address).await;
         info!("Gas object: {:?}", gas_obj_ref);
-
 
         let uploader = OnChainDataUploader {
             wallet_ctx: wallet_ctx.clone(),
@@ -168,7 +173,10 @@ impl DataProviderRunner {
             oracle_object_args,
             metrics: metrics.clone(),
         };
-        Self { providers, uploader }
+        Self {
+            providers,
+            uploader,
+        }
     }
 
     pub fn spawn(mut self) {
@@ -180,6 +188,35 @@ impl DataProviderRunner {
         tokio::spawn(async move {
             self.uploader.run().await;
         });
+    }
+}
+
+async fn get_gas_obj_ref(
+    read_api: &ReadApi,
+    gas_obj_id: ObjectID,
+    owner_address: SuiAddress,
+) -> ObjectRef {
+    loop {
+        match read_api
+            .get_object_with_options(gas_obj_id, SuiObjectDataOptions::default().with_owner())
+            .await
+            .map(|resp| resp.data)
+        {
+            Ok(Some(gas_obj)) => {
+                assert_eq!(
+                    gas_obj.owner,
+                    Some(Owner::AddressOwner(owner_address)),
+                    "Provided gas obj {:?} does not belong to {}",
+                    gas_obj,
+                    owner_address
+                );
+                return gas_obj.object_ref();
+            }
+            other => {
+                warn!("Can't get gas object: {:?}: {:?}", gas_obj_id, other);
+                tokio::time::sleep(Duration::from_secs(5)).await;
+            }
+        }
     }
 }
 
@@ -273,24 +310,31 @@ impl DataProvider {
                 data[0],
                 json_blob
             ),
-
         }
     }
 
     async fn send_to_uploader(&self, value: u64) {
-        let _ = self.sender.send(DataPoint {
-            feed_name: make_onchain_feed_name(&self.feed_name, &self.source_name),
-            upload_parameters: self.upload_feed.upload_parameters.clone(),
-            value,
-            retrieval_timestamp: Instant::now(),
-        }).await.tap_err(|err| error!("Failed to send data point to uploader: {:?}", err));
+        let _ = self
+            .sender
+            .send(DataPoint {
+                feed_name: make_onchain_feed_name(&self.feed_name, &self.source_name),
+                upload_parameters: self.upload_feed.upload_parameters.clone(),
+                value,
+                retrieval_timestamp: SystemTime::now(),
+                retrieval_instant: Instant::now(),
+            })
+            .await
+            .tap_err(|err| error!("Failed to send data point to uploader: {:?}", err));
     }
 }
 
 fn make_onchain_feed_name(feed_name: &str, source_name: &str) -> String {
-    format!("{}-{}", feed_name.to_ascii_lowercase(), source_name.to_ascii_lowercase())
+    format!(
+        "{}-{}",
+        feed_name.to_ascii_lowercase(),
+        source_name.to_ascii_lowercase()
+    )
 }
-
 
 struct OnChainDataUploader {
     wallet_ctx: Arc<WalletContext>,
@@ -313,8 +357,10 @@ impl OnChainDataUploader {
             read_interval.tick().await;
             let data_points = self.collect().await;
             if !data_points.is_empty() {
-                // TODO: handle error properly
-                let _ = self.upload(data_points).await.tap_err(|err| error!("Failed to submit tx: {err}"));
+                let _ = self
+                    .upload(data_points)
+                    .await
+                    .tap_err(|err| error!("Failed to submit tx: {err}"));
             }
         }
     }
@@ -322,15 +368,20 @@ impl OnChainDataUploader {
     async fn collect(&mut self) -> Vec<DataPoint> {
         let start = Instant::now();
         let mut data_points = vec![];
-        while let Ok(Some(data_point)) = tokio::time::timeout(Duration::from_millis(100), self.receiver.recv()).await {
+        while let Ok(Some(data_point)) =
+            tokio::time::timeout(Duration::from_millis(100), self.receiver.recv()).await
+        {
             let feed_name = &data_point.feed_name;
             debug!(
                 feed_name = data_point.feed_name,
                 value = data_point.value,
                 "Received data from data provider."
             );
-            let staleness_tolerance = self.staleness_tolerance.get(feed_name).unwrap_or_else(|| panic!("Bug, missing staleness tolerance for feed: {}", feed_name));
-            let duration_since = data_point.retrieval_timestamp.elapsed();
+            let staleness_tolerance =
+                self.staleness_tolerance.get(feed_name).unwrap_or_else(|| {
+                    panic!("Bug, missing staleness tolerance for feed: {}", feed_name)
+                });
+            let duration_since = data_point.retrieval_instant.elapsed();
             if duration_since > staleness_tolerance.add(Duration::from_secs(1)) {
                 warn!(
                     ?data_point,
@@ -347,7 +398,8 @@ impl OnChainDataUploader {
             }
 
             // One run only waits for 1 second
-            if start.elapsed() >= Duration::from_millis(500) {
+            // But if we don't have any valid data points, then we wait.
+            if data_points.is_empty() && start.elapsed() >= Duration::from_millis(500) {
                 break;
             }
         }
@@ -355,41 +407,46 @@ impl OnChainDataUploader {
         data_points
     }
 
-
-    async fn upload(&mut self, data_points: Vec<DataPoint>) -> anyhow::Result<SuiTransactionBlockEffects> {
+    async fn upload(
+        &mut self,
+        data_points: Vec<DataPoint>,
+    ) -> anyhow::Result<SuiTransactionBlockEffects> {
         let _scope = monitored_scope("Oracle::OnChainDataUploader::upload");
-        // TODO add error handling & polling perhaps
+        // TODO add more error handling & polling perhaps
         let mut builder = ProgrammableTransactionBuilder::new();
         let mut is_first = true;
         for data_point in &data_points {
             let feed_name = &data_point.feed_name;
-            let oracle_obj_arg= self.oracle_object_args.get(&data_point.upload_parameters.write_data_provider_object_id)
-                .unwrap_or_else(|| panic!("Bug, missing oracle object arg for feed: {}", feed_name)).clone();
-
+            let oracle_obj_arg = self
+                .oracle_object_args
+                .get(&data_point.upload_parameters.write_data_provider_object_id)
+                .unwrap_or_else(|| panic!("Bug, missing oracle object arg for feed: {}", feed_name))
+                .clone();
+            let duration_since_start = data_point.retrieval_instant.elapsed();
+            let data_point_ts: DateTime<Utc> = DateTime::from(data_point.retrieval_timestamp + duration_since_start);
+        
             let mut arguments = if is_first {
                 vec![
                     builder.input(CallArg::Object(oracle_obj_arg)).unwrap(),
                     builder.input(CallArg::CLOCK_IMM).unwrap(),
                 ]
             } else {
-                vec![
-                    Argument::Input(0),
-                    Argument::Input(1),
-                ]
+                vec![Argument::Input(0), Argument::Input(1)]
             };
-            arguments.extend_from_slice(
-                &vec![
-                    builder
-                        .input(CallArg::Pure(bcs::to_bytes(&feed_name)?))
-                        .unwrap(),
-                    builder
-                        .input(CallArg::Pure(bcs::to_bytes(&data_point.value)?))
-                        .unwrap(),
-                    // TODO use retrieval timestamp
-                    builder
-                        .input(CallArg::Pure(bcs::to_bytes("tests")?))
-                        .unwrap(),
-                ]);
+            arguments.extend_from_slice(&vec![
+                builder
+                    .input(CallArg::Pure(bcs::to_bytes(&feed_name)?))
+                    .unwrap(),
+                builder
+                    .input(CallArg::Pure(bcs::to_bytes(&data_point.value)?))
+                    .unwrap(),
+                builder
+                    .input(CallArg::Pure(bcs::to_bytes(&DECIMAL)?))
+                    .unwrap(),
+                builder
+                    .input(CallArg::Pure(bcs::to_bytes(&format!("{}", data_point_ts))?))
+                    .unwrap(),
+            ]);
 
             builder.command(Command::move_call(
                 data_point.upload_parameters.write_package_id,
@@ -402,59 +459,28 @@ impl OnChainDataUploader {
             is_first = false;
         }
         let pt = builder.finish();
-        let rgp = self.client.governance_api().get_reference_gas_price().await?;
+        let rgp = self
+            .client
+            .governance_api()
+            .get_reference_gas_price()
+            .await?;
         let tx = TransactionData::new_programmable(
             self.signer_address,
             vec![self.gas_obj_ref.clone()],
             pt,
-            // FIXME
-           500_000_000,
-           rgp,
+            // 15_000_000 is a herustic number
+            15_000_000 * data_points.len() as u64,
+            rgp,
         );
 
-        // let arguments = vec![
-        //     builder.input(CallArg::SUI_SYSTEM_MUT).unwrap(),
-        //     builder.make_obj_vec(obj_vec)?,
-        //     builder
-        //         .input(CallArg::Pure(bcs::to_bytes(&amount)?))
-        //         .unwrap(),
-        //     builder
-        //         .input(CallArg::Pure(bcs::to_bytes(&validator)?))
-        //         .unwrap(),
-        // ];
-        // let tx = self
-        //     .client
-        //     .transaction_builder()
-        //     .move_call(
-        //         self.signer_address,
-        //         self.upload_feed.write_package_id,
-        //         &self.upload_feed.write_module_name,
-        //         &self.upload_feed.write_function_name,
-        //         vec![SuiTypeTag::try_from(TypeTag::U64).unwrap()],
-        //         vec![
-        //             SuiJsonValue::new(json!(self.upload_feed.write_data_provider_object_id)).unwrap(),
-        //             SuiJsonValue::new(json!(ObjectID::from_hex_literal("0x06").unwrap())).unwrap(),
-        //             SuiJsonValue::new(json!(feed_name)).unwrap(),
-        //             SuiJsonValue::new(json!(value.to_string())).unwrap(),
-        //             // SuiJsonValue::new(convert_number_to_string(value.to_json_value())))
-        //             SuiJsonValue::new(json!("tests")).unwrap(),
-        //         ],
-        //         None,
-        //         100_000_000,
-        //     )
-        //     .await?;
         let signed_tx = self.wallet_ctx.sign_transaction(&tx);
         let tx_digest = *signed_tx.digest();
-        let response: SuiTransactionBlockResponse = self
-            .client
-            .quorum_driver_api()
-            .execute_transaction_block(
-                signed_tx,
-                SuiTransactionBlockResponseOptions::new().with_effects(),
-                Some(sui_types::quorum_driver_types::ExecuteTransactionRequestType::WaitForEffectsCert),
-            )
-            .await?;
-        // We asked for effects above.
+
+        let timer_start = Instant::now();
+        let response = self.execute(signed_tx).await?;
+        let time_spend_sec = timer_start.elapsed().as_secs_f32();
+
+        // We asked for effects.
         // But is there a better way to handle this instead of panic?
         let effects = response.effects.expect("Expect to see effects in response");
 
@@ -466,13 +492,19 @@ impl OnChainDataUploader {
         // Update metrics
         for data_point in &data_points {
             if success {
-                self.metrics.upload_successes.with_label_values(&[&data_point.feed_name]).inc();
+                self.metrics
+                    .upload_successes
+                    .with_label_values(&[&data_point.feed_name])
+                    .inc();
                 self.metrics
                     .uploaded_values
                     .with_label_values(&[&data_point.feed_name])
                     .observe((data_point.value) as u64);
             } else {
-                self.metrics.upload_data_errors.with_label_values(&[&data_point.feed_name]).inc();
+                self.metrics
+                    .upload_data_errors
+                    .with_label_values(&[&data_point.feed_name])
+                    .inc();
             }
         }
 
@@ -481,10 +513,13 @@ impl OnChainDataUploader {
         self.metrics.total_gas_used.inc_by(gas_usage);
 
         if success {
-            self.metrics.total_data_points_uploaded.inc_by(data_points.len() as u64);
+            self.metrics
+                .total_data_points_uploaded
+                .inc_by(data_points.len() as u64);
             info!(
                 ?tx_digest,
                 gas_usage,
+                time_spend_sec,
                 "Upload succeeded with {} data points",
                 data_points.len(),
             );
@@ -497,13 +532,51 @@ impl OnChainDataUploader {
                 data_points.len(),
                 effects.status(),
             );
-            anyhow::bail!(
-                "Failed to submit data on chain: {:?}",
-                effects.status()
-            );
+            anyhow::bail!("Failed to submit data on chain: {:?}", effects.status());
         }
     }
 
+    async fn execute(
+        &mut self,
+        tx: VerifiedTransaction,
+    ) -> anyhow::Result<SuiTransactionBlockResponse> {
+        let tx_digest = tx.digest();
+        let mut retry_attempts = 3;
+        loop {
+            match self
+                .client
+                .quorum_driver_api()
+                .execute_transaction_block(
+                    tx.clone(),
+                    SuiTransactionBlockResponseOptions::new().with_effects(),
+                    // Some(sui_types::quorum_driver_types::ExecuteTransactionRequestType::WaitForEffectsCert),
+                    Some(sui_types::quorum_driver_types::ExecuteTransactionRequestType::WaitForLocalExecution),
+                )
+                .await {
+                Ok(response) => return Ok(response),
+                Err(sui_sdk::error::Error::RpcError(err)) => {
+                    debug!(?tx_digest, "Failed to submit tx, with rpc error: {:?}. Remaining retry times: {}", err, retry_attempts);
+                    retry_attempts -= 1;
+                    if retry_attempts <= 0 {
+                        anyhow::bail!("Too many RPC errors: {}. tx_digest={:?}", err, tx_digest);
+                    }
+                }
+                // If gas object is stale for whatever reason, update it.
+                Err(sui_sdk::error::Error::UserInputError(UserInputError::ObjectVersionUnavailableForConsumption { provided_obj_ref, current_version: _ })) => {
+                    error!(?tx_digest, "It looks like gas object is stale: {:?}", provided_obj_ref);
+                    let new_ref = get_gas_obj_ref(self.client.read_api(), self.gas_obj_ref.0, self.signer_address).await;
+                    self.gas_obj_ref = new_ref;
+                    info!("Gas object updated: {:?}", new_ref);
+                    anyhow::bail!("Gas object is stale, now updated to {:?}. tx_digest={:?}", new_ref, tx_digest);
+                }
+                // All other errors are non-actionable
+                Err(err) => {
+                    error!(?tx_digest, "Failed to submit tx, with error: {:?}", err);
+                    anyhow::bail!("Likely non-retryable error {:?}. tx_digest={:?}", err, tx_digest);
+                }
+            }
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -511,7 +584,8 @@ struct DataPoint {
     feed_name: String,
     upload_parameters: UploadParameters,
     value: u64,
-    retrieval_timestamp: Instant,
+    retrieval_timestamp: SystemTime,
+    retrieval_instant: Instant,
 }
 
 struct OnChainDataReader {
@@ -571,7 +645,6 @@ impl OnChainDataReader {
         }
     }
 }
-
 
 async fn get_object_arg(
     read_api: &ReadApi,
