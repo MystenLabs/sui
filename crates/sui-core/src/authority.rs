@@ -1614,7 +1614,7 @@ impl AuthorityState {
                     let new_object = written.get(id).unwrap_or_else(
                         || panic!("tx_digest={:?}, error processing object owner index, written does not contain object {:?}", tx_digest, id)
                     );
-                    assert_eq!(new_object.0.1, oref.1, "tx_digest={:?} error processing object owner index, object {:?} from written has mismatched verison. Actual: {}, expected: {}", tx_digest, id, new_object.0.1, oref.1);
+                    assert_eq!(new_object.0.1, oref.1, "tx_digest={:?} error processing object owner index, object {:?} from written has mismatched version. Actual: {}, expected: {}", tx_digest, id, new_object.0.1, oref.1);
 
                     let type_ = new_object
                         .1
@@ -1638,9 +1638,10 @@ impl AuthorityState {
                     let new_object = written.get(id).unwrap_or_else(
                         || panic!("tx_digest={:?}, error processing object owner index, written does not contain object {:?}", tx_digest, id)
                     );
-                    assert_eq!(new_object.0.1, oref.1, "tx_digest={:?} error processing object owner index, object {:?} from written has mismatched verison. Actual: {}, expected: {}", tx_digest, id, new_object.0.1, oref.1);
+                    assert_eq!(new_object.0.1, oref.1, "tx_digest={:?} error processing object owner index, object {:?} from written has mismatched version. Actual: {}, expected: {}", tx_digest, id, new_object.0.1, oref.1);
 
-                    let Some(df_info) = self.try_create_dynamic_field_info(&new_object.1, written, module_resolver)? else{
+                    let Some(df_info) = self.try_create_dynamic_field_info(&new_object.1, written, module_resolver)
+                        .expect("try_create_dynamic_field_info should not fail.") else {
                         // Skip indexing for non dynamic field objects.
                         continue;
                     };
@@ -1777,38 +1778,38 @@ impl AuthorityState {
                 )
                 .await
                 .tap_ok(|_| self.metrics.post_processing_total_tx_indexed.inc())
-                .tap_err(|e| error!(?tx_digest, "Post processing - Couldn't index tx: {e}"));
+                .tap_err(|e| error!(?tx_digest, "Post processing - Couldn't index tx: {e}"))
+                .expect("Indexing tx should not fail");
+
             let effects: SuiTransactionBlockEffects = effects.clone().try_into()?;
             // Emit events
-            if res.is_ok() {
-                self.subscription_handler
-                    .process_tx(
-                        certificate.data().transaction_data(),
-                        &effects,
-                        &SuiTransactionBlockEvents::try_from(
-                            events.clone(),
-                            *tx_digest,
-                            Some(timestamp_ms),
-                            &module_resolver,
-                        )?,
+            self.subscription_handler
+                .process_tx(
+                    certificate.data().transaction_data(),
+                    &effects,
+                    &SuiTransactionBlockEvents::try_from(
+                        events.clone(),
+                        *tx_digest,
+                        Some(timestamp_ms),
+                        &module_resolver,
+                    )?,
+                )
+                .await
+                .tap_ok(|_| {
+                    self.metrics
+                        .post_processing_total_tx_had_event_processed
+                        .inc()
+                })
+                .tap_err(|e| {
+                    warn!(
+                        ?tx_digest,
+                        "Post processing - Couldn't process events for tx: {}", e
                     )
-                    .await
-                    .tap_ok(|_| {
-                        self.metrics
-                            .post_processing_total_tx_had_event_processed
-                            .inc()
-                    })
-                    .tap_err(|e| {
-                        warn!(
-                            ?tx_digest,
-                            "Post processing - Couldn't process events for tx: {}", e
-                        )
-                    })?;
+                })?;
 
-                self.metrics
-                    .post_processing_total_events_emitted
-                    .inc_by(events.data.len() as u64);
-            }
+            self.metrics
+                .post_processing_total_events_emitted
+                .inc_by(events.data.len() as u64);
         };
         Ok(())
     }
