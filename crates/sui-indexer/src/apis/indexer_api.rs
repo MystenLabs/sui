@@ -18,8 +18,8 @@ use sui_json_rpc::indexer_api::spawn_subscription;
 use sui_json_rpc::SuiRpcModule;
 use sui_json_rpc_types::{
     DynamicFieldPage, EventFilter, EventPage, ObjectsPage, Page, SuiObjectDataFilter,
-    SuiObjectResponse, SuiObjectResponseQuery, SuiTransactionBlockResponseQuery,
-    TransactionBlocksPage, TransactionFilter,
+    SuiObjectResponse, SuiObjectResponseQuery, SuiTransactionBlockResponseOptions,
+    SuiTransactionBlockResponseQuery, TransactionBlocksPage, TransactionFilter,
 };
 use sui_open_rpc::Module;
 use sui_types::base_types::{ObjectID, SuiAddress};
@@ -351,30 +351,79 @@ where
     }
     async fn query_transaction_blocks(
         &self,
-        query: SuiTransactionBlockResponseQuery,
+        input_query: SuiTransactionBlockResponseQuery,
         cursor: Option<TransactionDigest>,
         limit: Option<usize>,
         descending_order: Option<bool>,
     ) -> RpcResult<TransactionBlocksPage> {
-        if !self
-            .migrated_methods
-            .contains(&"query_transaction_blocks".to_string())
-        {
-            let query_tx_guard = self
-                .state
-                .indexer_metrics()
-                .query_transaction_blocks_latency
-                .start_timer();
-            let query_tx_resp = self
-                .fullnode
-                .query_transaction_blocks(query, cursor, limit, descending_order)
-                .await;
-            query_tx_guard.stop_and_record();
-            return query_tx_resp;
+        let query = SuiTransactionBlockResponseQuery {
+            filter: input_query.filter,
+            options: Some(SuiTransactionBlockResponseOptions {
+                show_input: true,
+                show_raw_input: false,
+                show_effects: true,
+                show_events: false,
+                show_object_changes: false,
+                show_balance_changes: false,
+            }),
+        };
+        let fn_query_tx_guard = self
+            .state
+            .indexer_metrics()
+            .fn_query_transaction_blocks_latency
+            .start_timer();
+        let fn_query_tx_resp = self
+            .fullnode
+            .query_transaction_blocks(query.clone(), cursor, limit, descending_order)
+            .await;
+        fn_query_tx_guard.stop_and_record();
+
+        let idx_query_tx_guard = self
+            .state
+            .indexer_metrics()
+            .idx_query_transaction_blocks_latency
+            .start_timer();
+        let idx_query_tx_resp = self
+            .query_transaction_blocks_internal(query.clone(), cursor, limit, descending_order)
+            .await;
+        idx_query_tx_guard.stop_and_record();
+        match (&fn_query_tx_resp, &idx_query_tx_resp) {
+            (Ok(fn_query_tx_resp), Ok(idx_query_tx_resp))
+                if fn_query_tx_resp == idx_query_tx_resp =>
+            {
+                self.state.indexer_metrics().tx_query_match_count.inc();
+                tracing::info!(
+                    "tx query results match for query {:?}, cursor: {:?}, limit {:?}, desc {:?}",
+                    query,
+                    cursor,
+                    limit,
+                    descending_order,
+                );
+            }
+            (Err(_), Err(_)) => {
+                self.state.indexer_metrics().tx_query_match_count.inc();
+                tracing::info!(
+                    "tx query results match for query {:?}, cursor: {:?}, limit {:?}, desc {:?}",
+                    query,
+                    cursor,
+                    limit,
+                    descending_order,
+                );
+            }
+            _ => {
+                self.state.indexer_metrics().tx_query_mismatch_count.inc();
+                tracing::error!(
+                    "tx query results mismatch for query {:?}, cursor: {:?}, limit {:?}, desc {:?}",
+                    query,
+                    cursor,
+                    limit,
+                    descending_order,
+                );
+                // tracing::info!("fn_query_tx_resp: {:?}", fn_query_tx_resp);
+                // tracing::info!("idx_query_tx_resp: {:?}", idx_query_tx_resp);
+            }
         }
-        Ok(self
-            .query_transaction_blocks_internal(query, cursor, limit, descending_order)
-            .await?)
+        fn_query_tx_resp
     }
 
     async fn query_events(

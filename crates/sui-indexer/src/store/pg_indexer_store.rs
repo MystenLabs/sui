@@ -1103,11 +1103,13 @@ impl IndexerStore for PgIndexerStore {
             if is_descending { "DESC" } else { "ASC" },
             limit
         );
+        info!("sql_query: {}", sql_query);
         let tx_digests: Vec<String> = read_only_blocking!(&self.blocking_cp, |conn| diesel::sql_query(sql_query).load(conn))
                 .context(&format!("Failed reading transaction digests by recipient address {to} with start_sequence {start_sequence:?} and limit {limit}"))?
                 .into_iter()
                 .map(|table: TempDigestTable| table.digest_name)
                 .collect();
+        tracing::info!("{:?} transaction digests", tx_digests);
         self.multi_get_transactions_by_digests(&tx_digests).await
     }
 
