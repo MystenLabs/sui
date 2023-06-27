@@ -485,7 +485,7 @@ mod tests {
     use sui_types::gas_coin::GAS;
     use sui_types::id::UID;
     use sui_types::object::Object;
-    use sui_types::parse_sui_struct_tag;
+    use sui_types::{parse_sui_struct_tag, TypeTag};
 
     fn get_test_owner() -> SuiAddress {
         SuiAddress::random_for_testing_only()
@@ -497,6 +497,10 @@ mod tests {
 
     fn get_test_coin_type(package_id: ObjectID) -> String {
         format!("{}::test_coin::TEST_COIN", package_id)
+    }
+
+    fn get_test_coin_type_tag(coin_type: String) -> TypeTag {
+        TypeTag::Struct(Box::new(parse_sui_struct_tag(&coin_type).unwrap()))
     }
 
     enum CoinType {
@@ -998,6 +1002,117 @@ mod tests {
         use super::*;
         use jsonrpsee::types::ErrorObjectOwned;
 
+        // Success scenarios
+        #[tokio::test]
+        async fn test_gas_coin() {
+            let owner = get_test_owner();
+            let gas_coin = get_test_coin(None, CoinType::Gas);
+            let gas_coin_clone = gas_coin.clone();
+            let mut mock_state = MockState::new();
+            mock_state
+                .expect_get_balance()
+                .with(
+                    predicate::eq(owner),
+                    predicate::eq(get_test_coin_type_tag(gas_coin_clone.coin_type)),
+                )
+                .return_once(move |_, _| {
+                    Ok(TotalBalance {
+                        balance: 7,
+                        num_coins: 9,
+                    })
+                });
+            let internal = CoinReadInternalImpl {
+                state: Arc::new(mock_state),
+                metrics: Arc::new(JsonRpcMetrics::new_for_tests()),
+            };
+
+            let coin_read_api = CoinReadApi {
+                internal: Box::new(internal),
+            };
+
+            let response = coin_read_api.get_balance(owner, None).await;
+
+            assert!(response.is_ok());
+            let result = response.unwrap();
+            assert_eq!(
+                result,
+                Balance {
+                    coin_type: gas_coin.coin_type,
+                    coin_object_count: 9,
+                    total_balance: 7,
+                    locked_balance: Default::default()
+                }
+            );
+        }
+
+        #[tokio::test]
+        async fn test_with_coin_type() {
+            let owner = get_test_owner();
+            let coin = get_test_coin(None, CoinType::Usdc);
+            let coin_clone = coin.clone();
+            let mut mock_state = MockState::new();
+            mock_state
+                .expect_get_balance()
+                .with(
+                    predicate::eq(owner),
+                    predicate::eq(get_test_coin_type_tag(coin_clone.coin_type)),
+                )
+                .return_once(move |_, _| {
+                    Ok(TotalBalance {
+                        balance: 10,
+                        num_coins: 11,
+                    })
+                });
+            let internal = CoinReadInternalImpl {
+                state: Arc::new(mock_state),
+                metrics: Arc::new(JsonRpcMetrics::new_for_tests()),
+            };
+
+            let coin_read_api = CoinReadApi {
+                internal: Box::new(internal),
+            };
+
+            let response = coin_read_api
+                .get_balance(owner, Some(coin.coin_type.clone()))
+                .await;
+
+            assert!(response.is_ok());
+            let result = response.unwrap();
+            assert_eq!(
+                result,
+                Balance {
+                    coin_type: coin.coin_type,
+                    coin_object_count: 11,
+                    total_balance: 10,
+                    locked_balance: Default::default()
+                }
+            );
+        }
+
+        // Expected error scenarios
+        #[tokio::test]
+        async fn test_invalid_coin_type() {
+            let owner = get_test_owner();
+            let coin_type = "0x2::invalid::struct::tag";
+            let mock_internal = MockCoinReadInternal::new();
+            let coin_read_api = CoinReadApi {
+                internal: Box::new(mock_internal),
+            };
+
+            let response = coin_read_api
+                .get_balance(owner, Some(coin_type.to_string()))
+                .await;
+
+            assert!(response.is_err());
+            let error_result = response.unwrap_err();
+            let error_object: ErrorObjectOwned = error_result.into();
+            let expected = expect!["-32602"];
+            expected.assert_eq(&error_object.code().to_string());
+            let expected = expect!["Invalid struct type: 0x2::invalid::struct::tag. Got error: Expected end of token stream. Got: ::"];
+            expected.assert_eq(error_object.message());
+        }
+
+        // Unexpected error scenarios
         #[tokio::test]
         async fn test_get_balance_index_store_not_available() {
             let owner = get_test_owner();
