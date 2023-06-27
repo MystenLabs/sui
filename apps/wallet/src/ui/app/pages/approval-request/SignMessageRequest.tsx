@@ -45,6 +45,7 @@ export function SignMessageRequest({ request }: SignMessageRequestProps) {
 			}}
 			address={request.tx.accountAddress}
 			scrollable
+			blended
 		>
 			<PageMainLayoutTitle title="Sign Message" />
 			<Heading variant="heading6" color="gray-90" weight="semibold" centered>
