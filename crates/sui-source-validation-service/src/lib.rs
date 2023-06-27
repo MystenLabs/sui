@@ -140,11 +140,11 @@ impl CloneCommand {
             })?;
             if !result.status.success() {
                 bail!(
-                    "Nonzero exit status when cloning {} with command `git {:#?}`.\
-		     Stderr: {:?}",
+                    "Nonzero exit status when cloning {} with command `git {:#?}`. \
+		     Stderr: {}",
                     self.repo_url,
                     args,
-                    result.stderr
+                    String::from_utf8_lossy(&result.stderr)
                 )
             }
         }
