@@ -11,6 +11,8 @@ use sui_types::quorum_driver_types::QuorumDriverError;
 use thiserror::Error;
 use tokio::task::JoinError;
 
+pub type RpcInterimResult<T = ()> = Result<T, Error>;
+
 #[derive(Debug, Error)]
 pub enum Error {
     #[error(transparent)]
@@ -112,4 +114,7 @@ pub enum SuiRpcInputError {
 
     #[error("Unable to serialize: {0}")]
     CannotSerialize(#[from] bcs::Error),
+
+    #[error("{0}")]
+    CannotParseSuiStructTag(String),
 }

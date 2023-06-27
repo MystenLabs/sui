@@ -19,7 +19,7 @@ use serde_with::Bytes;
 
 use crate::balance::Balance;
 use crate::base_types::{MoveObjectType, ObjectIDParseError};
-use crate::coin::Coin;
+use crate::coin::{Coin, CoinMetadata, TreasuryCap};
 use crate::crypto::{default_hash, deterministic_random_account_key};
 use crate::error::{ExecutionError, ExecutionErrorKind, UserInputError, UserInputResult};
 use crate::error::{SuiError, SuiResult};
@@ -937,6 +937,36 @@ impl Object {
         });
         Self {
             owner: Owner::AddressOwner(owner),
+            data,
+            previous_transaction: TransactionDigest::genesis(),
+            storage_rebate: 0,
+        }
+    }
+
+    pub fn treasury_cap_for_testing(struct_tag: StructTag, treasury_cap: TreasuryCap) -> Self {
+        let data = Data::Move(MoveObject {
+            type_: TreasuryCap::type_(struct_tag).into(),
+            has_public_transfer: true,
+            version: OBJECT_START_VERSION,
+            contents: bcs::to_bytes(&treasury_cap).expect("Failed to serialize"),
+        });
+        Self {
+            owner: Owner::Immutable,
+            data,
+            previous_transaction: TransactionDigest::genesis(),
+            storage_rebate: 0,
+        }
+    }
+
+    pub fn coin_metadata_for_testing(struct_tag: StructTag, metadata: CoinMetadata) -> Self {
+        let data = Data::Move(MoveObject {
+            type_: CoinMetadata::type_(struct_tag).into(),
+            has_public_transfer: true,
+            version: OBJECT_START_VERSION,
+            contents: bcs::to_bytes(&metadata).expect("Failed to serialize"),
+        });
+        Self {
+            owner: Owner::Immutable,
             data,
             previous_transaction: TransactionDigest::genesis(),
             storage_rebate: 0,
