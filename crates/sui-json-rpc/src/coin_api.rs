@@ -995,8 +995,6 @@ mod tests {
             let expected = expect!["cursor not found"];
             expected.assert_eq(error_object.message());
         }
-
-        // Unexpected error scenarios
     }
 
     mod get_balance_tests {
