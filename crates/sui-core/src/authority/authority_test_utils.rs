@@ -80,6 +80,9 @@ pub async fn send_and_confirm_transaction_with_execution_error(
 
     if with_shared {
         send_consensus(authority, &certificate).await;
+        if let Some(fullnode) = fullnode {
+            send_consensus(fullnode, &certificate).await;
+        }
     }
 
     // Submit the confirmation. *Now* execution actually happens, and it should fail when we try to look up our dummy module.
