@@ -21,7 +21,6 @@
 	display: flex;
 	flex-flow: column;
 	gap: 15px;
-	background-color: colors.$sui-alice-blue;
 	padding: 24px;
 
 	&.scrollable {
@@ -118,14 +117,16 @@
 
 .actions {
 	padding: 20px;
-	background-color: colors.$sui-alice-blue;
+	background: colors.$white;
 	border-radius: 20px 20px 0 0;
 	display: flex;
 	align-items: center;
 	gap: 10px;
 	position: relative;
 	z-index: 1;
+}
 
+.blur {
 	// Styling for the blurred top border on the actions
 	&::before {
 		content: '';
@@ -200,4 +201,8 @@
 			font-weight: 300;
 		}
 	}
+}
+
+.blended {
+	background-color: colors.$sui-alice-blue;
 }

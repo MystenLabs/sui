@@ -88,6 +88,7 @@ function SiteConnectPage() {
 						onSubmit={handleHideWarning}
 						isWarning
 						address={activeAddress}
+						blended
 					>
 						<PageMainLayoutTitle title="Insecure Website" />
 						<div className={st.warningWrapper}>
@@ -110,6 +111,7 @@ function SiteConnectPage() {
 						rejectTitle="Reject"
 						onSubmit={handleOnSubmit}
 						approveDisabled={!accountsToConnect.length}
+						blended
 					>
 						<PageMainLayoutTitle title="Approve Connection" />
 						<SummaryCard
@@ -121,6 +123,7 @@ function SiteConnectPage() {
 							title="Connect Accounts"
 							values={accountsToConnect}
 							onChange={setAccountsToConnect}
+							boxShadow
 						/>
 					</UserApproveContainer>
 				))}
