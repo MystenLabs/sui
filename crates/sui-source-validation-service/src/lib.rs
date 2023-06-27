@@ -65,10 +65,10 @@ pub fn parse_config(config_path: impl AsRef<Path>) -> anyhow::Result<Config> {
 
 pub fn repo_name_from_url(url: &str) -> anyhow::Result<String> {
     let repo_url = Url::parse(url)?;
-    let Some(components) = repo_url.path_segments().map(|c| c.collect::<Vec<_>>()) else {
+    let Some(mut components) = repo_url.path_segments() else {
 	    bail!("Could not discover repository path in url {url}")
 	};
-    let Some(repo_name) = components.last() else {
+    let Some(repo_name) = components.next_back() else {
 	    bail!("Could not discover repository name in url {url}")
     };
 
