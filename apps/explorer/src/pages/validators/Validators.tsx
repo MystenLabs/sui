@@ -191,11 +191,19 @@ export function validatorsTableData(
 				accessorKey: 'atRisk',
 				cell: (props: any) => {
 					const atRisk = props.getValue();
+					const label = 'At Risk';
 					return atRisk !== null ? (
-						<Tooltip tip="Staked SUI is below the minimum SUI stake threshold to remain a validator.">
+						<Tooltip
+							tip="Staked SUI is below the minimum SUI stake threshold to remain a validator."
+							onOpen={() =>
+								ampli.activatedTooltip({
+									tooltipLabel: label,
+								})
+							}
+						>
 							<div className="flex cursor-pointer flex-nowrap items-center">
 								<Text color="issue" variant="bodySmall/medium">
-									At Risk
+									{label}
 								</Text>
 								&nbsp;
 								<Text uppercase variant="bodySmall/medium" color="steel-dark">

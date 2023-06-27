@@ -28,7 +28,7 @@ const TOOLTIP_DELAY = 150;
 interface TooltipProps {
 	tip: ReactNode;
 	children: ReactNode;
-	onOpen: () => void;
+	onOpen?: () => void;
 	placement?: Placement;
 }
 
@@ -48,11 +48,11 @@ export function Tooltip({ tip, children, onOpen, placement = 'top' }: TooltipPro
 	} = useFloating({
 		placement,
 		open,
-		onOpenChange: (open) => {
-			if (open) {
+		onOpenChange: (updatedIsOpen) => {
+			if (open !== updatedIsOpen && updatedIsOpen && onOpen) {
 				onOpen();
 			}
-			setOpen(open);
+			setOpen(updatedIsOpen);
 		},
 		whileElementsMounted: autoUpdate,
 		middleware: [offset(5), flip(), shift(), arrow({ element: arrowRef, padding: 6 })],

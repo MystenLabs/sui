@@ -86,6 +86,10 @@ export interface IdentifyProperties {
 	pageUrl: string;
 }
 
+export interface ActivatedTooltipProperties {
+	tooltipLabel: string;
+}
+
 export interface ClickedCurrentEpochCardProperties {
 	/**
 	 * An epoch or period of time.
@@ -121,10 +125,6 @@ export interface CompletedSearchProperties {
 	searchQuery: string;
 }
 
-export interface HoveredOnTooltipProperties {
-	tooltipLabel: string;
-}
-
 export interface SwitchedNetworkProperties {
 	toNetwork: string;
 }
@@ -133,6 +133,14 @@ export class Identify implements BaseEvent {
 	event_type = amplitude.Types.SpecialEventType.IDENTIFY;
 
 	constructor(public event_properties: IdentifyProperties) {
+		this.event_properties = event_properties;
+	}
+}
+
+export class ActivatedTooltip implements BaseEvent {
+	event_type = 'activated tooltip';
+
+	constructor(public event_properties: ActivatedTooltipProperties) {
 		this.event_properties = event_properties;
 	}
 }
@@ -165,14 +173,6 @@ export class CompletedSearch implements BaseEvent {
 	event_type = 'completed search';
 
 	constructor(public event_properties: CompletedSearchProperties) {
-		this.event_properties = event_properties;
-	}
-}
-
-export class HoveredOnTooltip implements BaseEvent {
-	event_type = 'hovered on tooltip';
-
-	constructor(public event_properties: HoveredOnTooltipProperties) {
 		this.event_properties = event_properties;
 	}
 }
@@ -296,6 +296,25 @@ export class Ampli {
   }
 
   /**
+   * activated tooltip
+   *
+   * [View in Tracking Plan](https://data.amplitude.com/mystenlabs/Sui%20Explorer/events/main/latest/activated%20tooltip)
+   *
+   * When users activate or open a tooltip in the application.
+   *
+   * Owner: William Robertson
+   *
+   * @param properties The event's properties (e.g. tooltipLabel)
+   * @param options Amplitude event options.
+   */
+  activatedTooltip(
+    properties: ActivatedTooltipProperties,
+    options?: EventOptions,
+  ) {
+    return this.track(new ActivatedTooltip(properties), options);
+  }
+
+  /**
    * clicked current epoch card
    *
    * [View in Tracking Plan](https://data.amplitude.com/mystenlabs/Sui%20Explorer/events/main/latest/clicked%20current%20epoch%20card)
@@ -369,25 +388,6 @@ export class Ampli {
     options?: EventOptions,
   ) {
     return this.track(new CompletedSearch(properties), options);
-  }
-
-  /**
-   * hovered on tooltip
-   *
-   * [View in Tracking Plan](https://data.amplitude.com/mystenlabs/Sui%20Explorer/events/main/latest/hovered%20on%20tooltip)
-   *
-   * When users hover over a tooltip in the application.
-   *
-   * Owner: William Robertson
-   *
-   * @param properties The event's properties (e.g. tooltipLabel)
-   * @param options Amplitude event options.
-   */
-  hoveredOnTooltip(
-    properties: HoveredOnTooltipProperties,
-    options?: EventOptions,
-  ) {
-    return this.track(new HoveredOnTooltip(properties), options);
   }
 
   /**
