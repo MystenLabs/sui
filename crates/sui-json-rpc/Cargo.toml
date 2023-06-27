@@ -62,3 +62,4 @@ sui-macros.workspace = true
 sui-simulator.workspace = true
 reqwest.workspace = true
 mockall.workspace = true
+expect-test.workspace = true
