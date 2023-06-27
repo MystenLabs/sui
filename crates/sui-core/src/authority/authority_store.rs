@@ -977,6 +977,8 @@ impl AuthorityStore {
         // test crashing before notifying
         fail_point_async!("crash");
 
+        self.executed_effects_digests_notify_read
+            .notify(transaction_digest, &effects_digest);
         self.executed_effects_notify_read
             .notify(transaction_digest, effects);
 
