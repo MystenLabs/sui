@@ -12,6 +12,7 @@ use fastcrypto::hash::MultisetHash;
 use futures::stream::FuturesUnordered;
 use itertools::Itertools;
 use move_binary_format::CompiledModule;
+use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::language_storage::ModuleId;
 use move_core_types::value::MoveStructLayout;
 use mysten_metrics::{TX_TYPE_SHARED_OBJ_TX, TX_TYPE_SINGLE_WRITER_TX};
@@ -1509,13 +1510,13 @@ impl AuthorityState {
         effects: &TransactionEffects,
         events: &TransactionEvents,
         timestamp_ms: u64,
-        epoch_store: &Arc<AuthorityPerEpochStore>,
         tx_coins: Option<TxCoins>,
         written: &WrittenObjects,
+        module_resolver: &impl GetModule,
         loaded_child_objects: &BTreeMap<ObjectID, SequenceNumber>,
     ) -> SuiResult<u64> {
         let changes = self
-            .process_object_index(effects, epoch_store, written)
+            .process_object_index(effects, written, module_resolver)
             .tap_err(|e| warn!(tx_digest=?digest, "Failed to process object index, index_tx is skipped: {e}"))?;
 
         indexes
@@ -1552,8 +1553,8 @@ impl AuthorityState {
     fn process_object_index(
         &self,
         effects: &TransactionEffects,
-        epoch_store: &Arc<AuthorityPerEpochStore>,
         written: &WrittenObjects,
+        module_resolver: &impl GetModule,
     ) -> SuiResult<ObjectIndexChanges> {
         let modified_at_version = effects
             .modified_at_versions()
@@ -1639,7 +1640,7 @@ impl AuthorityState {
                     );
                     assert_eq!(new_object.0.1, oref.1, "tx_digest={:?} error processing object owner index, object {:?} from written has mismatched verison. Actual: {}, expected: {}", tx_digest, id, new_object.0.1, oref.1);
 
-                    let Some(df_info) = self.try_create_dynamic_field_info(&new_object.1, epoch_store)? else{
+                    let Some(df_info) = self.try_create_dynamic_field_info(&new_object.1, module_resolver)? else{
                         // Skip indexing for non dynamic field objects.
                         continue;
                     };
@@ -1660,7 +1661,7 @@ impl AuthorityState {
     fn try_create_dynamic_field_info(
         &self,
         o: &Object,
-        epoch_store: &Arc<AuthorityPerEpochStore>,
+        resolver: &impl GetModule,
     ) -> SuiResult<Option<DynamicFieldInfo>> {
         // Skip if not a move object
         let Some(move_object) = o.data.try_as_move().cloned() else {
@@ -1670,10 +1671,8 @@ impl AuthorityState {
         if !move_object.type_().is_dynamic_field() {
             return Ok(None);
         }
-        let move_struct = move_object.to_move_struct_with_resolver(
-            ObjectFormatOptions::default(),
-            epoch_store.module_cache().as_ref(),
-        )?;
+        let move_struct =
+            move_object.to_move_struct_with_resolver(ObjectFormatOptions::default(), resolver)?;
 
         let (name_value, type_, object_id) =
             DynamicFieldInfo::parse_move_object(&move_struct).tap_err(|e| warn!("{e}"))?;
@@ -1742,6 +1741,8 @@ impl AuthorityState {
         let timestamp_ms = Self::unixtime_now_ms();
         let events = &inner_temporary_store.events;
         let written = &inner_temporary_store.written;
+        let module_resolver =
+            TemporaryModuleResolver::new(inner_temporary_store, epoch_store.module_cache().clone());
 
         let tx_coins =
             self.fullnode_only_get_tx_coins_for_indexing(inner_temporary_store, epoch_store);
@@ -1756,9 +1757,9 @@ impl AuthorityState {
                     effects,
                     events,
                     timestamp_ms,
-                    epoch_store,
                     tx_coins,
                     written,
+                    &module_resolver,
                     &inner_temporary_store.loaded_child_objects,
                 )
                 .await
@@ -2093,7 +2094,7 @@ impl AuthorityState {
                 )),
                 Owner::ObjectOwner(object_id) => {
                     let id = o.id();
-                    let Some(info) = self.try_create_dynamic_field_info(o, epoch_store)? else{
+                    let Some(info) = self.try_create_dynamic_field_info(o, epoch_store.module_cache())? else{
                         continue;
                     };
                     new_dynamic_fields.push(((ObjectID::from(object_id), id), info));
