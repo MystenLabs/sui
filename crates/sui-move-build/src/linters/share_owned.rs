@@ -84,7 +84,7 @@ impl SimpleAbsIntConstructor for ShareOwnedVerifier {
         let Some(_) = &context.module else {
             return None
         };
-        Some(ShareOwnedVerifierAI {})
+        Some(ShareOwnedVerifierAI)
     }
 }
 
@@ -139,15 +139,15 @@ impl SimpleAbsInt for ShareOwnedVerifierAI {
             .any(|(addr, module, fun)| f.is(addr, module, fun))
             && args[0] != Value::FreshObj
         {
-            let msg = "You may be trying to share an owned object.";
-            let uid_msg = "This argument should in most cases come from an object created within the same function.";
+            let msg = "Potential abort from a (potentially) owned object created by a different transaction.";
+            let uid_msg = "Creating a fresh object and sharing it within the same function will ensure this does not abort.";
             let mut d = diag!(
                 SHARE_OWNED_DIAG,
                 (*loc, msg),
                 (f.arguments.exp.loc, uid_msg)
             );
             if let Value::NotFreshObj(l) = args[0] {
-                d.add_secondary_label((l, "A potentially shared object coming from here"))
+                d.add_secondary_label((l, "A potentially owned object coming from here"))
             }
             context.add_diag(d)
         }
@@ -191,9 +191,9 @@ impl SimpleAbsInt for ShareOwnedVerifierAI {
         if let L::Unpack(_, _, fields) = l_ {
             for (f, l) in fields {
                 let v = if is_obj(l) {
-                    <Self::State as SimpleDomain>::Value::NotFreshObj(f.loc())
+                    Value::NotFreshObj(f.loc())
                 } else {
-                    <Self::State as SimpleDomain>::Value::default()
+                    Value::default()
                 };
                 self.lvalue(context, state, l, v)
             }

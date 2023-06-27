@@ -81,6 +81,8 @@ pub struct BuildConfig {
     pub run_bytecode_verifier: bool,
     /// If true, print build diagnostics to stderr--no printing if false
     pub print_diags_to_stderr: bool,
+    /// If true, run linters
+    pub lint: bool,
 }
 
 impl BuildConfig {
@@ -157,10 +159,7 @@ impl BuildConfig {
     /// Given a `path` and a `build_config`, build the package in that path, including its dependencies.
     /// If we are building the Sui framework, we skip the check that the addresses should be 0
     pub fn build(self, path: PathBuf) -> SuiResult<CompiledPackage> {
-        self.build_and_lint(path, false)
-    }
-
-    pub fn build_and_lint(self, path: PathBuf, lint: bool) -> SuiResult<CompiledPackage> {
+        let lint = self.lint;
         let print_diags_to_stderr = self.print_diags_to_stderr;
         let run_bytecode_verifier = self.run_bytecode_verifier;
         let resolution_graph = self.resolution_graph(&path)?;
@@ -560,6 +559,7 @@ impl Default for BuildConfig {
             config: MoveBuildConfig::default(),
             run_bytecode_verifier: true,
             print_diags_to_stderr: false,
+            lint: false,
         }
     }
 }

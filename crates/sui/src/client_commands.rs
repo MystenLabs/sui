@@ -1245,6 +1245,7 @@ impl SuiClientCommands {
                     config: build_config,
                     run_bytecode_verifier: true,
                     print_diags_to_stderr: true,
+                    lint: false,
                 }
                 .build(package_path)?;
 
@@ -1284,6 +1285,7 @@ fn compile_package_simple(
         config: resolve_lock_file_path(build_config, Some(package_path.clone()))?,
         run_bytecode_verifier: false,
         print_diags_to_stderr: false,
+        lint: false,
     };
     let resolution_graph = config.resolution_graph(&package_path)?;
 
@@ -1319,6 +1321,7 @@ async fn compile_package(
         config,
         run_bytecode_verifier,
         print_diags_to_stderr,
+        lint,
     };
     let resolution_graph = config.resolution_graph(&package_path)?;
     let (package_id, dependencies) = gather_published_ids(&resolution_graph);

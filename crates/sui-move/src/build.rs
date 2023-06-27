@@ -69,8 +69,9 @@ impl Build {
             config,
             run_bytecode_verifier: true,
             print_diags_to_stderr: true,
+            lint,
         }
-        .build_and_lint(rerooted_path, lint)?;
+        .build(rerooted_path)?;
         if dump_bytecode_as_base64 {
             check_invalid_dependencies(&pkg.dependency_ids.invalid)?;
             if !with_unpublished_deps {
