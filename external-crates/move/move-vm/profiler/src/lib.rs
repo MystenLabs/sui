@@ -284,7 +284,6 @@ macro_rules! profile_close_instr {
     };
 }
 
-
 #[macro_export]
 macro_rules! profile_dump_file {
     ($profiler:expr) => {
