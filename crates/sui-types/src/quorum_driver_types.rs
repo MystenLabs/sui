@@ -24,6 +24,9 @@ pub type QuorumDriverResult = Result<QuorumDriverResponse, QuorumDriverError>;
 pub type QuorumDriverEffectsQueueResult =
     Result<(VerifiedTransaction, QuorumDriverResponse), (TransactionDigest, QuorumDriverError)>;
 
+pub const NON_RECOVERABLE_ERROR_MSG: &str =
+    "Transaction has non recoverable errors from at least 1/3 of validators";
+
 /// Client facing errors regarding transaction submission via Quorum Driver.
 /// Every invariant needs detailed documents to instruct client handling.
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, Error, Hash, AsRefStr)]
@@ -47,7 +50,7 @@ pub enum QuorumDriverError {
     TimeoutBeforeFinality,
     #[error("Transaction failed to reach finality with transient error after {total_attempts} attempts.")]
     FailedWithTransientErrorAfterMaximumAttempts { total_attempts: u8 },
-    #[error("Transaction has non recoverable errors from at least 1/3 of validators: {errors:?}.")]
+    #[error("{NON_RECOVERABLE_ERROR_MSG}: {errors:?}.")]
     NonRecoverableTransactionError { errors: GroupedErrors },
     #[error("Transaction is not processed because {overloaded_stake} of validators by stake are overloaded with certificates pending execution.")]
     SystemOverload {
