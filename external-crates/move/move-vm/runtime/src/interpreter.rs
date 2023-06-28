@@ -1274,12 +1274,9 @@ impl Frame {
             Bytecode::Nop => {
                 gas_meter.charge_simple_instr(S::Nop)?;
             }
-            Bytecode::Pop => {
-                // post-execution
-                gas_meter.charge_pop(popped_val)?;
-            }
+            // Pre, needs context
             Bytecode::LdConst(idx) => {
-                // mid- and post-execution
+                // mid- and post-execution. we could split this up?
                 let constant = resolver.constant_at(*idx);
                 gas_meter.charge_ld_const(NumBytes::new(constant.data.len() as u64))?;
                 let val = Value::deserialize_constant(constant).ok_or_else(|| {
@@ -1295,6 +1292,10 @@ impl Frame {
                 // maybe value_impl.value_view()
                 let local = locals.copy_loc(*idx as usize)?;
                 gas_meter.charge_copy_loc(&local)?;
+            }
+            Bytecode::Pop => {
+                // post-execution
+                gas_meter.charge_pop(popped_val)?;
             }
             Bytecode::MoveLoc(idx) => {
                 // post-execution
