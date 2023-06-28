@@ -4,13 +4,12 @@
 import clsx from 'clsx';
 
 import { ReactComponent as InfoSvg } from './icons/info_10x10.svg';
-
-import type { ReactNode } from 'react';
-
 import { Heading } from '~/ui/Heading';
 import { Text } from '~/ui/Text';
 import { Tooltip } from '~/ui/Tooltip';
 import { ampli } from '~/utils/analytics/ampli';
+
+import type { ReactNode } from 'react';
 
 export type StatsProps = {
 	size?: 'sm' | 'md';

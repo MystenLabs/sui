@@ -3,6 +3,8 @@
 
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 
+import { ImportedAccount } from './ImportedAccount';
+import { EPHEMERAL_PASSWORD_KEY, EPHEMERAL_VAULT_KEY, VaultStorage } from './VaultStorage';
 import {
 	getFromLocalStorage,
 	getFromSessionStorage,
@@ -10,8 +12,6 @@ import {
 	setToSessionStorage,
 	isSessionStorageSupported,
 } from '../storage-utils';
-import { ImportedAccount } from './ImportedAccount';
-import { EPHEMERAL_PASSWORD_KEY, EPHEMERAL_VAULT_KEY, VaultStorage } from './VaultStorage';
 import {
 	testEd25519Serialized,
 	testDataVault1,

@@ -11,7 +11,6 @@ import { useState } from 'react';
 import { FieldItem } from './FieldItem';
 import { ScrollToViewCard } from './ScrollToViewCard';
 import { getFieldTypeValue } from './utils';
-
 import { Banner } from '~/ui/Banner';
 import { DisclosureBox } from '~/ui/DisclosureBox';
 import { LoadingSpinner } from '~/ui/LoadingSpinner';

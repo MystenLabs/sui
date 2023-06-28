@@ -5,9 +5,9 @@ import { useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import Browser from 'webextension-polyfill';
 
-import { AppType } from '../redux/slices/app/AppType';
 import { useActiveAccount } from './useActiveAccount';
 import useAppSelector from './useAppSelector';
+import { AppType } from '../redux/slices/app/AppType';
 import { ampli } from '_src/shared/analytics/ampli';
 
 export function useInitialPageView() {

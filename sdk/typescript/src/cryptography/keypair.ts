@@ -1,8 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { PublicKey } from './publickey.js';
-import { SignatureScheme } from './signature.js';
+import type { PublicKey } from './publickey.js';
+import type { SignatureScheme } from './signature.js';
 
 export const PRIVATE_KEY_SIZE = 32;
 export const LEGACY_PRIVATE_KEY_SIZE = 64;

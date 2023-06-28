@@ -1,5 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+/* eslint-disable eqeqeq */
 
 /**
  * Implements a `kiosk-cli`. To view available commands, run:
@@ -51,7 +52,7 @@ import {
   mainnetEnvironment,
   testnetEnvironment,
   getOwnedKiosks,
-  KIOSK_LISTING
+  KIOSK_LISTING,
 } from '@mysten/kiosk';
 
 /**
@@ -303,7 +304,7 @@ async function showKioskContents({ id, address }) {
       isLocked: item.isLocked,
       listed: !!item.listing,
       isPublic: (item.listing && !item.listing.isExclusive) || false,
-      ['price (SUI)']: item.listing ? formatAmount(item.listing.price) : 'N/A',
+      'price (SUI)': item.listing ? formatAmount(item.listing.price) : 'N/A',
     }))
     .sort((a, b) => a.listed - b.listed);
 
@@ -592,7 +593,7 @@ async function purchaseItem(itemId, opts) {
     itemInfo.data.objectId,
     policies[0],
     envOption,
-    { ownedKiosk, ownedKioskCap }
+    { ownedKiosk, ownedKioskCap },
   );
 
   // For the locking policy scenario when an item needs to be locked;

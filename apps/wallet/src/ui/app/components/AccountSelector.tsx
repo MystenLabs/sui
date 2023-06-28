@@ -6,13 +6,13 @@ import { useResolveSuiNSName } from '@mysten/core';
 import { ChevronDown12, Copy12 } from '@mysten/icons';
 import { formatAddress } from '@mysten/sui.js';
 
+import { AccountList } from './AccountList';
 import { useAccounts } from '../hooks/useAccounts';
 import { useActiveAddress } from '../hooks/useActiveAddress';
 import { useBackgroundClient } from '../hooks/useBackgroundClient';
 import { useCopyToClipboard } from '../hooks/useCopyToClipboard';
 import { ButtonConnectedTo } from '../shared/ButtonConnectedTo';
 import { Text } from '../shared/text';
-import { AccountList } from './AccountList';
 import { ampli } from '_src/shared/analytics/ampli';
 
 export function AccountSelector() {

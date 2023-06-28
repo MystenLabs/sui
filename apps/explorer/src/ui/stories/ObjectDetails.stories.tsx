@@ -7,7 +7,6 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
 
 import { ObjectDetails, type ObjectDetailsProps } from '../ObjectDetails';
-
 import { DefaultRpcClient, Network } from '~/utils/api/DefaultRpcClient';
 
 export default {

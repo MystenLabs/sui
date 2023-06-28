@@ -1,14 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { LedgerSigner } from '../LedgerSigner';
-import { QredoSigner } from '../QredoSigner';
-import { type WalletSigner } from '../WalletSigner';
-import { useSuiLedgerClient } from '../components/ledger/SuiLedgerClientProvider';
 import { useAccounts } from './useAccounts';
 import { useActiveAccount } from './useActiveAccount';
 import useAppSelector from './useAppSelector';
 import { useQredoAPI } from './useQredoAPI';
+import { LedgerSigner } from '../LedgerSigner';
+import { QredoSigner } from '../QredoSigner';
+import { type WalletSigner } from '../WalletSigner';
+import { useSuiLedgerClient } from '../components/ledger/SuiLedgerClientProvider';
 import { thunkExtras } from '_redux/store/thunk-extras';
 import { AccountType } from '_src/background/keyring/Account';
 

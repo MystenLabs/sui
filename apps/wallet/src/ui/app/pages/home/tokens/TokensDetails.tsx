@@ -14,12 +14,12 @@ import { SUI_TYPE_ARG, Coin, type CoinBalance as CoinBalanceType } from '@mysten
 import { useQuery } from '@tanstack/react-query';
 import { useMemo } from 'react';
 
-import { useOnrampProviders } from '../onramp/useOnrampProviders';
 import { CoinActivitiesCard } from './CoinActivityCard';
 import { TokenIconLink } from './TokenIconLink';
 import { TokenLink } from './TokenLink';
 import { TokenList } from './TokenList';
 import CoinBalance from './coin-balance';
+import { useOnrampProviders } from '../onramp/useOnrampProviders';
 import { useActiveAddress } from '_app/hooks/useActiveAddress';
 import { LargeButton } from '_app/shared/LargeButton';
 import { Text } from '_app/shared/text';

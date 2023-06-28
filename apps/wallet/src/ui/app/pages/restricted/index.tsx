@@ -1,9 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import SadCapy from './SadCapy.svg';
 import { useInitializedGuard } from '../../hooks';
 import { Text } from '../../shared/text';
-import SadCapy from './SadCapy.svg';
 
 export function RestrictedPage() {
 	useInitializedGuard(true);

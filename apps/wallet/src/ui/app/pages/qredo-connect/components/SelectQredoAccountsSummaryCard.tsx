@@ -1,8 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useFetchQredoAccounts } from '../hooks';
 import { QredoAccountsSelector } from './QredoAccountsSelector';
+import { useFetchQredoAccounts } from '../hooks';
 import { SummaryCard } from '_components/SummaryCard';
 import Alert from '_components/alert';
 import Loading from '_components/loading';

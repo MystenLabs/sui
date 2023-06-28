@@ -3,8 +3,8 @@
 
 import { useSearchParams, useNavigate } from 'react-router-dom';
 
-import { SelectValidatorCard } from '../validators/SelectValidatorCard';
 import StakingCard from './StakingCard';
+import { SelectValidatorCard } from '../validators/SelectValidatorCard';
 import Overlay from '_components/overlay';
 
 function StakePage() {

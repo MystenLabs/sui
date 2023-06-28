@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { SubscriptionId } from '../types/index.js';
+import type { SubscriptionId } from '../types/index.js';
 import { RequestManager, Client, WebSocketTransport } from '@open-rpc/client-js';
 
 export const getWebsocketUrl = (httpUrl: string, port?: number): string => {

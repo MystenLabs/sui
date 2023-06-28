@@ -17,7 +17,6 @@ import { useState, useEffect } from 'react';
 
 import { trimStdLibPrefix, genFileTypeMsg } from '../../../utils/stringUtils';
 import { LinkOrTextDescriptionItem } from '../LinkOrTextDescriptionItem';
-
 import { DynamicFieldsCard } from '~/components/Object/DynamicFieldsCard';
 import { ObjectFieldsCard } from '~/components/Object/ObjectFieldsCard';
 import TransactionBlocksForAddress from '~/components/TransactionBlocksForAddress/TransactionBlocksForAddress';

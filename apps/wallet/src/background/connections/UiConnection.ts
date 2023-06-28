@@ -3,6 +3,7 @@
 
 import { BehaviorSubject, filter, switchMap, takeUntil } from 'rxjs';
 
+import { Connection } from './Connection';
 import NetworkEnv from '../NetworkEnv';
 import {
 	acceptQredoConnection,
@@ -10,7 +11,6 @@ import {
 	getUIQredoPendingRequest,
 	rejectQredoConnection,
 } from '../qredo';
-import { Connection } from './Connection';
 import { createMessage } from '_messages';
 import { type ErrorPayload, isBasePayload } from '_payloads';
 import { isSetNetworkPayload, type SetNetworkPayload } from '_payloads/network';

@@ -1,8 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { array, boolean, Infer, integer, object, string, union } from 'superstruct';
-import { normalizeSuiAddress, ObjectId, SharedObjectRef, SuiObjectRef } from '../types/index.js';
+import type { Infer } from 'superstruct';
+import { array, boolean, integer, object, string, union } from 'superstruct';
+import type { ObjectId, SharedObjectRef } from '../types/index.js';
+import { normalizeSuiAddress, SuiObjectRef } from '../types/index.js';
 import { builder } from './bcs.js';
 
 const ObjectArg = union([

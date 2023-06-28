@@ -7,7 +7,6 @@ import clsx from 'clsx';
 
 import { type EpochGasInfo, type UnitsType } from './types';
 import { useGasPriceFormat } from './utils';
-
 import { Text } from '~/ui/Text';
 
 export type GraphTooltipContentProps = {

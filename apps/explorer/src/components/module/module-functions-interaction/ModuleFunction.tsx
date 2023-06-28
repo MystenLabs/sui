@@ -18,14 +18,13 @@ import { z } from 'zod';
 import { FunctionExecutionResult } from './FunctionExecutionResult';
 import { useFunctionParamsDetails } from './useFunctionParamsDetails';
 import { useFunctionTypeArguments } from './useFunctionTypeArguments';
-
-import type { SuiMoveNormalizedFunction, ObjectId } from '@mysten/sui.js';
-import type { TypeOf } from 'zod';
-
 import { useZodForm } from '~/hooks/useZodForm';
 import { Button } from '~/ui/Button';
 import { DisclosureBox } from '~/ui/DisclosureBox';
 import { Input } from '~/ui/Input';
+
+import type { SuiMoveNormalizedFunction, ObjectId } from '@mysten/sui.js';
+import type { TypeOf } from 'zod';
 
 const argsSchema = z.object({
 	params: z.optional(z.array(z.string().trim().min(1))),
