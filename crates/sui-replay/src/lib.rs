@@ -169,11 +169,11 @@ pub async fn execute_replay_command(
             )
             .await?;
 
-            if show_effects {
-                println!("{:#?}", sandbox_state.local_exec_effects);
-            }
             if diag {
                 println!("{:#?}", sandbox_state.pre_exec_diag);
+            }
+            if show_effects {
+                println!("{:#?}", sandbox_state.local_exec_effects);
             }
 
             sandbox_state.check_effects()?;
