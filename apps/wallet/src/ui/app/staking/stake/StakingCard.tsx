@@ -154,8 +154,6 @@ function StakingCard() {
 				throw new Error('Failed, missing required field.');
 			}
 
-			trackEvent('Unstake');
-
 			const sentryTransaction = Sentry.startTransaction({
 				name: 'stake',
 			});
