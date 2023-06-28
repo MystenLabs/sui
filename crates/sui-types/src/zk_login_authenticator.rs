@@ -99,36 +99,36 @@ impl AuthenticatorTrait for ZkLoginAuthenticator {
         if author != self.into() {
             return Err(SuiError::InvalidAddress);
         }
-        let aux_inputs = &self.aux_inputs;
+        // let aux_inputs: &AuxInputs = &self.aux_inputs;
 
-        // Verify the max epoch in aux inputs is <= the current epoch of authority.
-        if aux_inputs.get_max_epoch() <= aux_verify_data.epoch.unwrap_or(0) {
-            return Err(SuiError::InvalidSignature {
-                error: "Invalid max epoch".to_string(),
-            });
-        }
+        // // Verify the max epoch in aux inputs is <= the current epoch of authority.
+        // if aux_inputs.get_max_epoch() <= aux_verify_data.epoch.unwrap_or(0) {
+        //     return Err(SuiError::InvalidSignature {
+        //         error: "Invalid max epoch".to_string(),
+        //     });
+        // }
 
-        if !is_claim_supported(aux_inputs.get_claim_name()) {
-            return Err(SuiError::InvalidSignature {
-                error: "Unsupported claim".to_string(),
-            });
-        }
+        // if !is_claim_supported(aux_inputs.get_claim_name()) {
+        //     return Err(SuiError::InvalidSignature {
+        //         error: "Unsupported claim".to_string(),
+        //     });
+        // }
 
-        // Calculates the hash of all inputs equals to the one in public inputs.
-        if aux_inputs
-            .calculate_all_inputs_hash()
-            .map_err(|_| SuiError::InvalidSignature {
-                error: "Fail to caculate hash".to_string(),
-            })?
-            != self.public_inputs.get_all_inputs_hash()
-        {
-            return Err(SuiError::InvalidSignature {
-                error: "Invalid all inputs hash".to_string(),
-            });
-        }
+        // // Calculates the hash of all inputs equals to the one in public inputs.
+        // if aux_inputs
+        //     .calculate_all_inputs_hash()
+        //     .map_err(|_| SuiError::InvalidSignature {
+        //         error: "Fail to caculate hash".to_string(),
+        //     })?
+        //     != self.public_inputs.get_all_inputs_hash()
+        // {
+        //     return Err(SuiError::InvalidSignature {
+        //         error: "Invalid all inputs hash".to_string(),
+        //     });
+        // }
 
         // Parse JWT signature from aux inputs.
-        let sig = RSASignature::from_bytes(&aux_inputs.get_jwt_signature().map_err(|_| {
+        let sig = RSASignature::from_bytes(&self.aux_inputs.get_jwt_signature().map_err(|_| {
             SuiError::InvalidSignature {
                 error: "Invalid base64url".to_string(),
             }
@@ -139,22 +139,22 @@ impl AuthenticatorTrait for ZkLoginAuthenticator {
 
         // Parse the JWK content for the given provider from the bytes.
         let selected = find_jwk_by_kid(
-            aux_inputs.get_kid(),
+            self.aux_inputs.get_kid(),
             &aux_verify_data.google_jwk_as_bytes.unwrap_or_default(),
         )?;
 
-        // Verify the JWT signature against one of OAuth provider public keys in the bulletin.
-        // Since more than one JWKs are available in the bulletin, iterate and find the one with
-        // matching kid, iss and verify the signature against it.
-        if !DEFAULT_WHITELIST
-            .get(aux_inputs.get_iss())
-            .unwrap()
-            .contains(&aux_inputs.get_client_id())
-        {
-            return Err(SuiError::InvalidSignature {
-                error: "Client id not in whitelist".to_string(),
-            });
-        }
+        // // Verify the JWT signature against one of OAuth provider public keys in the bulletin.
+        // // Since more than one JWKs are available in the bulletin, iterate and find the one with
+        // // matching kid, iss and verify the signature against it.
+        // if !DEFAULT_WHITELIST
+        //     .get(aux_inputs.get_iss())
+        //     .unwrap()
+        //     .contains(&aux_inputs.get_client_id())
+        // {
+        //     return Err(SuiError::InvalidSignature {
+        //         error: "Client id not in whitelist".to_string(),
+        //     });
+        // }
 
         // TODO(joyqvq): cache RSAPublicKey and avoid parsing every time.
         let pk = RSAPublicKey::from_raw_components(
@@ -173,19 +173,19 @@ impl AuthenticatorTrait for ZkLoginAuthenticator {
             error: "Invalid RSA raw components".to_string(),
         })?;
 
-        pk.verify_prehash(&self.aux_inputs.get_jwt_hash(), &sig)
-            .map_err(|_| SuiError::InvalidSignature {
-                error: "JWT signature verify failed".to_string(),
-            })?;
-
-        // Ensure the ephemeral public key in the aux inputs matches the one in the
-        // user signature.
-        // TODO(joyqvq): possibly remove eph_pub_key from aux_inputs.
-        if self.aux_inputs.get_eph_pub_key() != self.user_signature.public_key_bytes() {
-            return Err(SuiError::InvalidSignature {
-                error: "Invalid ephemeral public_key".to_string(),
-            });
-        }
+        // pk.verify_prehash(&self.aux_inputs.get_jwt_hash(), &sig)
+        //     .map_err(|_| SuiError::InvalidSignature {
+        //         error: "JWT signature verify failed".to_string(),
+        //     })?;
+            verify_zk_login_inptus_with_param(self.)
+        // // Ensure the ephemeral public key in the aux inputs matches the one in the
+        // // user signature.
+        // // TODO(joyqvq): possibly remove eph_pub_key from aux_inputs.
+        // if self.aux_inputs.get_eph_pub_key() != self.user_signature.public_key_bytes() {
+        //     return Err(SuiError::InvalidSignature {
+        //         error: "Invalid ephemeral public_key".to_string(),
+        //     });
+        // }
 
         // Verify the user signature over the intent message of the transaction data.
         if self
@@ -198,14 +198,14 @@ impl AuthenticatorTrait for ZkLoginAuthenticator {
             });
         }
 
-        // Finally, verify the Groth16 proof against public inputs and proof points.
-        // Verifying key is pinned in fastcrypto.
-        match verify_zk_login_proof_with_fixed_vk(&self.proof, &self.public_inputs) {
-            Ok(true) => Ok(()),
-            Ok(false) | Err(_) => Err(SuiError::InvalidSignature {
-                error: "Groth16 proof verify failed".to_string(),
-            }),
-        }
+        // // Finally, verify the Groth16 proof against public inputs and proof points.
+        // // Verifying key is pinned in fastcrypto.
+        // match verify_zk_login_proof_with_fixed_vk(&self.proof, &self.public_inputs) {
+        //     Ok(true) => Ok(()),
+        //     Ok(false) | Err(_) => Err(SuiError::InvalidSignature {
+        //         error: "Groth16 proof verify failed".to_string(),
+        //     }),
+        // }
     }
 }
 
