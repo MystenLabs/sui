@@ -20,7 +20,7 @@ use sui_types::{
     gas::GasCostSummary,
     transaction::{CallArg, ObjectArg},
 };
-use test_utils::network::{TestCluster, TestClusterBuilder};
+use test_cluster::{TestCluster, TestClusterBuilder};
 
 #[derive(
     Debug, Eq, PartialEq, Hash, Serialize, Deserialize, Ord, PartialOrd, Clone, Display, EnumString,

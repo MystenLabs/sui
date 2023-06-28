@@ -29,7 +29,7 @@ use sui_types::digests::ObjectDigest;
 use sui_types::gas_coin::GAS;
 use sui_types::quorum_driver_types::ExecuteTransactionRequestType;
 use sui_types::{parse_sui_struct_tag, SUI_FRAMEWORK_ADDRESS};
-use test_utils::network::TestClusterBuilder;
+use test_cluster::TestClusterBuilder;
 use tokio::time::sleep;
 
 #[sim_test]

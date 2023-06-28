@@ -6,7 +6,7 @@ use sui_core::authority_client::AuthorityAPI;
 use sui_macros::sim_test;
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::utils::make_zklogin_tx;
-use test_utils::network::TestClusterBuilder;
+use test_cluster::TestClusterBuilder;
 
 async fn do_zklogin_test() -> SuiResult {
     let test_cluster = TestClusterBuilder::new().build().await;

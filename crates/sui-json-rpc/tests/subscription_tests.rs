@@ -11,7 +11,7 @@ use sui_core::test_utils::wait_for_tx;
 use sui_json_rpc_types::{
     SuiTransactionBlockEffects, SuiTransactionBlockEffectsAPI, TransactionFilter,
 };
-use test_utils::network::TestClusterBuilder;
+use test_cluster::TestClusterBuilder;
 
 #[tokio::test]
 async fn test_subscribe_transaction() -> Result<(), anyhow::Error> {
