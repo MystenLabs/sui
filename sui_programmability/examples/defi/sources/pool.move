@@ -85,6 +85,7 @@ module defi::pool {
         fee_percent: u64
     }
 
+    #[allow(unused_function)]
     /// Module initializer is empty - to publish a new Pool one has
     /// to create a type which will mark LSPs.
     fun init(_: &mut TxContext) {}

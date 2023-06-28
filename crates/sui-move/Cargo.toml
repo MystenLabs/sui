@@ -7,16 +7,16 @@ publish = false
 edition = "2021"
 
 [dependencies]
-anyhow = { version = "1.0.64", features = ["backtrace"] }
-clap = { version = "3.2.17", features = ["derive"] }
-colored = "2.0.0"
-once_cell = { version = "1.16", optional = true }
-serde_json = "1.0.88"
-serde_yaml = "0.8.26"
-tracing = "0.1.36"
-prometheus = "0.13.3"
-git-version = "0.3.5"
-const-str = "0.5.3"
+anyhow.workspace = true
+clap.workspace = true
+colored.workspace = true
+once_cell = { workspace = true, optional = true }
+serde_json.workspace = true
+serde_yaml.workspace = true
+tracing.workspace = true
+prometheus.workspace = true
+git-version.workspace = true
+const-str.workspace = true
 
 fastcrypto.workspace = true
 move-binary-format.workspace = true
@@ -34,29 +34,29 @@ tokio = { workspace = true, features = ["full"] }
 move-vm-runtime = { path = "../../external-crates/move/move-vm/runtime" }
 sui-move-natives = { path = "../../sui-execution/latest/sui-move-natives", package = "sui-move-natives-latest" }
 
-sui-core = { path = "../sui-core", optional = true }
-sui-cost-tables = { path = "../sui-cost-tables" }
-sui-move-build = { path = "../sui-move-build" }
-sui-protocol-config = { path = "../sui-protocol-config" }
-sui-types = { path = "../sui-types" }
+sui-core = { workspace = true, optional = true }
+sui-cost-tables.workspace = true
+sui-move-build.workspace = true
+sui-protocol-config.workspace = true
+sui-types.workspace = true
 
 [target.'cfg(not(target_env = "msvc"))'.dependencies]
-jemalloc-ctl = "^0.5"
+jemalloc-ctl.workspace = true
 
 [dev-dependencies]
-assert_cmd = "2.0.6"
-futures = "0.3.23"
-jsonrpsee = { git="https://github.com/wlmyng/jsonrpsee.git", rev= "b1b300784795f6a64d0fcdf8f03081a9bc38bde8", features = ["jsonrpsee-core"] }
-rand = "0.8.5"
-tempfile = "3.3.0"
+assert_cmd.workspace = true
+futures.workspace = true
+jsonrpsee.workspace = true
+rand.workspace = true
+tempfile.workspace = true
 
 move-package.workspace = true
 
-mysten-metrics = { path = "../mysten-metrics" }
-sui-core = { path = "../sui-core" }
-sui-macros = { path = "../sui-macros" }
-sui-node = { path = "../sui-node" }
-sui-simulator = { path = "../sui-simulator" }
+mysten-metrics.workspace = true
+sui-core.workspace = true
+sui-macros.workspace = true
+sui-node.workspace = true
+sui-simulator.workspace = true
 
 [package.metadata.cargo-udeps.ignore]
 normal = ["jemalloc-ctl"]

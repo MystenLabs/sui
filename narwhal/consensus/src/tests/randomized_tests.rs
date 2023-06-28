@@ -500,6 +500,7 @@ fn generate_and_run_execution_plans(
         let mut bullshark = Bullshark::new(
             committee.clone(),
             store.clone(),
+            latest_protocol_version(),
             metrics.clone(),
             NUM_SUB_DAGS_PER_SCHEDULE,
         );

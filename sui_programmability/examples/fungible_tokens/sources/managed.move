@@ -14,6 +14,7 @@ module fungible_tokens::managed {
     /// and has no fields. The full type of the coin defined by this module will be `COIN<MANAGED>`.
     struct MANAGED has drop {}
 
+    #[allow(unused_function)]
     /// Register the managed currency to acquire its `TreasuryCap`. Because
     /// this is a module initializer, it ensures the currency only gets
     /// registered once.

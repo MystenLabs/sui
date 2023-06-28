@@ -16,6 +16,7 @@ use move_vm_runtime::{
     move_vm::MoveVM, native_extensions::NativeContextExtensions,
     native_functions::NativeFunctionTable,
 };
+use sui_move_natives::object_runtime;
 use sui_types::metrics::BytecodeVerifierMetrics;
 use sui_verifier::check_for_verifier_timeout;
 use tracing::instrument;
@@ -27,7 +28,6 @@ use sui_types::{
     error::ExecutionError,
     error::{ExecutionErrorKind, SuiError},
     metrics::LimitsMetrics,
-    object::Owner,
     storage::ChildObjectResolver,
 };
 use sui_verifier::verifier::sui_verify_module_metered_check_timeout_only;
@@ -100,6 +100,9 @@ pub fn new_move_vm(
                 .disable_invariant_violation_check_in_swap_loc(),
             check_no_extraneous_bytes_during_deserialization: protocol_config
                 .no_extraneous_module_bytes(),
+            #[cfg(debug_assertions)] profiler_config: std::default::Default::default(),
+            // Don't augment errors with execution state on-chain
+            error_execution_state: false,
         },
     )
     .map_err(|_| SuiError::ExecutionInvariantViolation)
@@ -107,7 +110,7 @@ pub fn new_move_vm(
 
 pub fn new_native_extensions<'r>(
     child_resolver: &'r dyn ChildObjectResolver,
-    input_objects: BTreeMap<ObjectID, Owner>,
+    input_objects: BTreeMap<ObjectID, object_runtime::InputObject>,
     is_metered: bool,
     protocol_config: &ProtocolConfig,
     metrics: Arc<LimitsMetrics>,

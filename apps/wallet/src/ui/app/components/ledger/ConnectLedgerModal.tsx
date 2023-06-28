@@ -4,6 +4,7 @@
 import { useState } from 'react';
 
 import { Link } from '../../shared/Link';
+import { ampli } from '_src/shared/analytics/ampli';
 import { useSuiLedgerClient } from '_src/ui/app/components/ledger/SuiLedgerClientProvider';
 import { Button } from '_src/ui/app/shared/ButtonUI';
 import { ModalDialog } from '_src/ui/app/shared/ModalDialog';
@@ -54,6 +55,7 @@ export function ConnectLedgerModal({ onClose, onConfirm, onError }: ConnectLedge
 								<Link
 									underline="hover"
 									href="https://support.ledger.com/hc/articles/10136570195101"
+									onClick={() => ampli.viewedLedgerTutorial()}
 									text="View tutorial."
 									color="heroDark"
 								/>

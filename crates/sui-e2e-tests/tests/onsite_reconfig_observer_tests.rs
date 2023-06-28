@@ -6,7 +6,7 @@ use sui_core::authority_aggregator::AuthAggMetrics;
 use sui_core::quorum_driver::reconfig_observer::OnsiteReconfigObserver;
 use sui_core::quorum_driver::reconfig_observer::ReconfigObserver;
 use sui_core::safe_client::SafeClientMetricsBase;
-use test_utils::network::TestClusterBuilder;
+use test_cluster::TestClusterBuilder;
 use tracing::info;
 
 use sui_macros::sim_test;
@@ -17,8 +17,7 @@ async fn test_onsite_reconfig_observer_basic() {
     let test_cluster = TestClusterBuilder::new()
         .with_epoch_duration_ms(10000)
         .build()
-        .await
-        .unwrap();
+        .await;
 
     let fullnode = &test_cluster.fullnode_handle.sui_node;
 

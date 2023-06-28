@@ -43,7 +43,7 @@ use sui_types::crypto::{
 };
 use sui_types::error::SuiObjectResponseError;
 use sui_types::{base_types::ObjectID, crypto::get_key_pair, gas_coin::GasCoin};
-use test_utils::network::TestClusterBuilder;
+use test_cluster::TestClusterBuilder;
 
 const TEST_DATA_DIR: &str = "tests/data/";
 
@@ -179,7 +179,7 @@ async fn test_genesis_for_benchmarks() -> Result<(), anyhow::Error> {
 
 #[tokio::test]
 async fn test_addresses_command() -> Result<(), anyhow::Error> {
-    let test_cluster = TestClusterBuilder::new().build().await?;
+    let test_cluster = TestClusterBuilder::new().build().await;
     let mut context = test_cluster.wallet;
 
     // Add 3 accounts
@@ -202,7 +202,7 @@ async fn test_addresses_command() -> Result<(), anyhow::Error> {
 
 #[sim_test]
 async fn test_objects_command() -> Result<(), anyhow::Error> {
-    let mut test_cluster = TestClusterBuilder::new().build().await?;
+    let mut test_cluster = TestClusterBuilder::new().build().await;
     let address = test_cluster.get_address_0();
     let context = &mut test_cluster.wallet;
 
@@ -235,7 +235,7 @@ async fn test_objects_command() -> Result<(), anyhow::Error> {
 // fixing issue https://github.com/MystenLabs/sui/issues/6546
 #[tokio::test]
 async fn test_regression_6546() -> Result<(), anyhow::Error> {
-    let mut test_cluster = TestClusterBuilder::new().build().await?;
+    let mut test_cluster = TestClusterBuilder::new().build().await;
     let address = test_cluster.get_address_0();
     let context = &mut test_cluster.wallet;
 
@@ -282,7 +282,7 @@ async fn test_custom_genesis() -> Result<(), anyhow::Error> {
     let mut cluster = TestClusterBuilder::new()
         .set_genesis_config(config)
         .build()
-        .await?;
+        .await;
     let address = cluster.get_address_0();
     let context = cluster.wallet_mut();
 
@@ -301,7 +301,7 @@ async fn test_custom_genesis() -> Result<(), anyhow::Error> {
 
 #[sim_test]
 async fn test_object_info_get_command() -> Result<(), anyhow::Error> {
-    let mut test_cluster = TestClusterBuilder::new().build().await?;
+    let mut test_cluster = TestClusterBuilder::new().build().await;
 
     let address = test_cluster.get_address_0();
     let context = &mut test_cluster.wallet;
@@ -344,7 +344,7 @@ async fn test_object_info_get_command() -> Result<(), anyhow::Error> {
 
 #[sim_test]
 async fn test_gas_command() -> Result<(), anyhow::Error> {
-    let mut test_cluster = TestClusterBuilder::new().build().await?;
+    let mut test_cluster = TestClusterBuilder::new().build().await;
     let rgp = test_cluster.get_reference_gas_price().await;
     let address = test_cluster.get_address_0();
     let context = &mut test_cluster.wallet;
@@ -405,7 +405,7 @@ async fn test_gas_command() -> Result<(), anyhow::Error> {
 
 #[sim_test]
 async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
-    let mut test_cluster = TestClusterBuilder::new().build().await?;
+    let mut test_cluster = TestClusterBuilder::new().build().await;
     let rgp = test_cluster.get_reference_gas_price().await;
     let address1 = test_cluster.get_address_0();
     let context = &mut test_cluster.wallet;
@@ -439,6 +439,7 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
         with_unpublished_dependencies: false,
         serialize_unsigned_transaction: false,
         serialize_signed_transaction: false,
+        lint: false,
     }
     .execute(context)
     .await?;
@@ -622,7 +623,7 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
 
 #[sim_test]
 async fn test_package_publish_command() -> Result<(), anyhow::Error> {
-    let mut test_cluster = TestClusterBuilder::new().build().await?;
+    let mut test_cluster = TestClusterBuilder::new().build().await;
     let rgp = test_cluster.get_reference_gas_price().await;
     let address = test_cluster.get_address_0();
     let context = &mut test_cluster.wallet;
@@ -660,6 +661,7 @@ async fn test_package_publish_command() -> Result<(), anyhow::Error> {
         with_unpublished_dependencies: false,
         serialize_unsigned_transaction: false,
         serialize_signed_transaction: false,
+        lint: false,
     }
     .execute(context)
     .await?;
@@ -693,7 +695,7 @@ async fn test_package_publish_command_with_unpublished_dependency_succeeds(
 ) -> Result<(), anyhow::Error> {
     let with_unpublished_dependencies = true; // Value under test, results in successful response.
 
-    let mut test_cluster = TestClusterBuilder::new().build().await?;
+    let mut test_cluster = TestClusterBuilder::new().build().await;
     let rgp = test_cluster.get_reference_gas_price().await;
     let address = test_cluster.get_address_0();
     let context = &mut test_cluster.wallet;
@@ -729,6 +731,7 @@ async fn test_package_publish_command_with_unpublished_dependency_succeeds(
         with_unpublished_dependencies,
         serialize_unsigned_transaction: false,
         serialize_signed_transaction: false,
+        lint: false,
     }
     .execute(context)
     .await?;
@@ -762,7 +765,7 @@ async fn test_package_publish_command_with_unpublished_dependency_fails(
 ) -> Result<(), anyhow::Error> {
     let with_unpublished_dependencies = false; // Value under test, results in error response.
 
-    let mut test_cluster = TestClusterBuilder::new().build().await?;
+    let mut test_cluster = TestClusterBuilder::new().build().await;
     let rgp = test_cluster.get_reference_gas_price().await;
     let address = test_cluster.get_address_0();
     let context = &mut test_cluster.wallet;
@@ -797,6 +800,7 @@ async fn test_package_publish_command_with_unpublished_dependency_fails(
         with_unpublished_dependencies,
         serialize_unsigned_transaction: false,
         serialize_signed_transaction: false,
+        lint: false,
     }
     .execute(context)
     .await;
@@ -817,7 +821,7 @@ async fn test_package_publish_command_non_zero_unpublished_dep_fails() -> Result
 {
     let with_unpublished_dependencies = true; // Value under test, incompatible with dependencies that specify non-zero address.
 
-    let mut test_cluster = TestClusterBuilder::new().build().await?;
+    let mut test_cluster = TestClusterBuilder::new().build().await;
     let rgp = test_cluster.get_reference_gas_price().await;
     let address = test_cluster.get_address_0();
     let context = &mut test_cluster.wallet;
@@ -843,6 +847,7 @@ async fn test_package_publish_command_non_zero_unpublished_dep_fails() -> Result
         with_unpublished_dependencies,
         serialize_unsigned_transaction: false,
         serialize_signed_transaction: false,
+        lint: false,
     }
     .execute(context)
     .await;
@@ -862,7 +867,7 @@ async fn test_package_publish_command_non_zero_unpublished_dep_fails() -> Result
 async fn test_package_publish_command_failure_invalid() -> Result<(), anyhow::Error> {
     let with_unpublished_dependencies = true; // Invalid packages should fail to publish, even if we allow unpublished dependencies.
 
-    let mut test_cluster = TestClusterBuilder::new().build().await?;
+    let mut test_cluster = TestClusterBuilder::new().build().await;
     let rgp = test_cluster.get_reference_gas_price().await;
     let address = test_cluster.get_address_0();
     let context = &mut test_cluster.wallet;
@@ -898,6 +903,7 @@ async fn test_package_publish_command_failure_invalid() -> Result<(), anyhow::Er
         with_unpublished_dependencies,
         serialize_unsigned_transaction: false,
         serialize_signed_transaction: false,
+        lint: false,
     }
     .execute(context)
     .await;
@@ -915,7 +921,7 @@ async fn test_package_publish_command_failure_invalid() -> Result<(), anyhow::Er
 
 #[sim_test]
 async fn test_package_publish_nonexistent_dependency() -> Result<(), anyhow::Error> {
-    let mut test_cluster = TestClusterBuilder::new().build().await?;
+    let mut test_cluster = TestClusterBuilder::new().build().await;
     let rgp = test_cluster.get_reference_gas_price().await;
     let address = test_cluster.get_address_0();
     let context = &mut test_cluster.wallet;
@@ -940,6 +946,7 @@ async fn test_package_publish_nonexistent_dependency() -> Result<(), anyhow::Err
         with_unpublished_dependencies: false,
         serialize_unsigned_transaction: false,
         serialize_signed_transaction: false,
+        lint: false,
     }
     .execute(context)
     .await;
@@ -959,7 +966,7 @@ async fn test_package_publish_nonexistent_dependency() -> Result<(), anyhow::Err
 #[ignore]
 async fn test_package_upgrade_command() -> Result<(), anyhow::Error> {
     move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks));
-    let mut test_cluster = TestClusterBuilder::new().build().await?;
+    let mut test_cluster = TestClusterBuilder::new().build().await;
     let rgp = test_cluster.get_reference_gas_price().await;
     let address = test_cluster.get_address_0();
     let context = &mut test_cluster.wallet;
@@ -996,6 +1003,7 @@ async fn test_package_upgrade_command() -> Result<(), anyhow::Error> {
         with_unpublished_dependencies: false,
         serialize_unsigned_transaction: false,
         serialize_signed_transaction: false,
+        lint: false,
     }
     .execute(context)
     .await?;
@@ -1069,6 +1077,7 @@ async fn test_package_upgrade_command() -> Result<(), anyhow::Error> {
         legacy_digest: false,
         serialize_unsigned_transaction: false,
         serialize_signed_transaction: false,
+        lint: false,
     }
     .execute(context)
     .await?;
@@ -1098,7 +1107,7 @@ async fn test_package_upgrade_command() -> Result<(), anyhow::Error> {
 
 #[sim_test]
 async fn test_native_transfer() -> Result<(), anyhow::Error> {
-    let mut test_cluster = TestClusterBuilder::new().build().await?;
+    let mut test_cluster = TestClusterBuilder::new().build().await;
     let rgp = test_cluster.get_reference_gas_price().await;
     let address = test_cluster.get_address_0();
     let context = &mut test_cluster.wallet;
@@ -1288,7 +1297,7 @@ fn test_bug_1078() {
 
 #[sim_test]
 async fn test_switch_command() -> Result<(), anyhow::Error> {
-    let mut cluster = TestClusterBuilder::new().build().await?;
+    let mut cluster = TestClusterBuilder::new().build().await;
     let addr2 = cluster.get_address_1();
     let context = cluster.wallet_mut();
 
@@ -1386,7 +1395,7 @@ async fn test_switch_command() -> Result<(), anyhow::Error> {
 
 #[sim_test]
 async fn test_new_address_command_by_flag() -> Result<(), anyhow::Error> {
-    let mut cluster = TestClusterBuilder::new().build().await?;
+    let mut cluster = TestClusterBuilder::new().build().await;
     let context = cluster.wallet_mut();
 
     // keypairs loaded from config are Ed25519
@@ -1426,7 +1435,7 @@ async fn test_new_address_command_by_flag() -> Result<(), anyhow::Error> {
 
 #[sim_test]
 async fn test_active_address_command() -> Result<(), anyhow::Error> {
-    let mut cluster = TestClusterBuilder::new().build().await?;
+    let mut cluster = TestClusterBuilder::new().build().await;
     let context = cluster.wallet_mut();
 
     // Get the active address
@@ -1487,7 +1496,7 @@ async fn get_parsed_object_assert_existence(
 
 #[sim_test]
 async fn test_merge_coin() -> Result<(), anyhow::Error> {
-    let mut test_cluster = TestClusterBuilder::new().build().await?;
+    let mut test_cluster = TestClusterBuilder::new().build().await;
     let rgp = test_cluster.get_reference_gas_price().await;
     let address = test_cluster.get_address_0();
     let context = &mut test_cluster.wallet;
@@ -1611,7 +1620,7 @@ async fn test_merge_coin() -> Result<(), anyhow::Error> {
 
 #[sim_test]
 async fn test_split_coin() -> Result<(), anyhow::Error> {
-    let mut test_cluster = TestClusterBuilder::new().build().await?;
+    let mut test_cluster = TestClusterBuilder::new().build().await;
     let rgp = test_cluster.get_reference_gas_price().await;
     let address = test_cluster.get_address_0();
     let context = &mut test_cluster.wallet;
@@ -1842,7 +1851,7 @@ async fn test_signature_flag() -> Result<(), anyhow::Error> {
 
 #[sim_test]
 async fn test_execute_signed_tx() -> Result<(), anyhow::Error> {
-    let mut test_cluster = TestClusterBuilder::new().build().await?;
+    let mut test_cluster = TestClusterBuilder::new().build().await;
     let context = &mut test_cluster.wallet;
     let mut txns = context.batch_make_transfer_transactions(1).await;
     let txn = txns.swap_remove(0);
@@ -1859,7 +1868,7 @@ async fn test_execute_signed_tx() -> Result<(), anyhow::Error> {
 
 #[sim_test]
 async fn test_serialize_tx() -> Result<(), anyhow::Error> {
-    let mut test_cluster = TestClusterBuilder::new().build().await?;
+    let mut test_cluster = TestClusterBuilder::new().build().await;
     let rgp = test_cluster.get_reference_gas_price().await;
     let address = test_cluster.get_address_0();
     let address1 = test_cluster.get_address_1();
@@ -1908,7 +1917,7 @@ async fn test_serialize_tx() -> Result<(), anyhow::Error> {
 
 #[tokio::test]
 async fn test_stake_with_none_amount() -> Result<(), anyhow::Error> {
-    let mut test_cluster = TestClusterBuilder::new().build().await?;
+    let mut test_cluster = TestClusterBuilder::new().build().await;
     let address = test_cluster.get_address_0();
     let context = &mut test_cluster.wallet;
 
@@ -1960,7 +1969,7 @@ async fn test_stake_with_none_amount() -> Result<(), anyhow::Error> {
 
 #[tokio::test]
 async fn test_stake_with_u64_amount() -> Result<(), anyhow::Error> {
-    let mut test_cluster = TestClusterBuilder::new().build().await?;
+    let mut test_cluster = TestClusterBuilder::new().build().await;
     let address = test_cluster.get_address_0();
     let context = &mut test_cluster.wallet;
 
@@ -2025,7 +2034,7 @@ async fn test_with_sui_binary(args: &[&str]) -> Result<(), anyhow::Error> {
 #[sim_test]
 async fn test_get_owned_objects_owned_by_address_and_check_pagination() -> Result<(), anyhow::Error>
 {
-    let mut test_cluster = TestClusterBuilder::new().build().await?;
+    let mut test_cluster = TestClusterBuilder::new().build().await;
     let address = test_cluster.get_address_0();
     let context = &mut test_cluster.wallet;
 

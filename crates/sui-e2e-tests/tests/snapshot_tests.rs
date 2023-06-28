@@ -6,7 +6,7 @@ use insta::assert_json_snapshot;
 use sui::sui_commands::SuiCommand;
 use sui_macros::sim_test;
 use sui_sdk::wallet_context::WalletContext;
-use test_utils::network::TestClusterBuilder;
+use test_cluster::TestClusterBuilder;
 
 // special constants for substitution in commands
 const ME: &str = "{ME}";
@@ -55,7 +55,7 @@ async fn run_one(
 #[ignore]
 #[sim_test]
 async fn basic_read_cmd_snapshot_tests() -> Result<(), anyhow::Error> {
-    let mut test_cluster = TestClusterBuilder::new().build().await?;
+    let mut test_cluster = TestClusterBuilder::new().build().await;
     let context = &mut test_cluster.wallet;
 
     let cmds = vec![
@@ -68,7 +68,7 @@ async fn basic_read_cmd_snapshot_tests() -> Result<(), anyhow::Error> {
         // "sui client object 0x3b5121a0603ef7ab4cb57827fceca17db3338ef2cd76126cc1523b681df27cee", // valid object
         // "sui client object 0x3b5121a0603ef7ab4cb57827fceca17db3338ef2cd76126cc1523b681df27cee --bcs", // valid object BCS
         "sui client object 0x0000000000000000000000000000000000000000000000000000000000000000", // non-existent object
-        "sui client tx-block Duwr9uSk9ZvNdEa8oDHunx345i6oyrp3e78MYHVAbYdv", // valid tx digest
+        "sui client tx-block Duwr9uSk9ZvAndEa8oDHunx345i6oyrp3e78MYHVAbYdv", // valid tx digest
         "sui client tx-block EgMTHQygMi6SRsBqrPHAEKZCNrpShXurCp9rcb9qbSg8", // non-existent tx digest
     ];
     assert_json_snapshot!(run_one(cmds, context).await?);

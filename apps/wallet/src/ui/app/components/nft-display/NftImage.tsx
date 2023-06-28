@@ -25,7 +25,7 @@ const nftImageStyles = cva('overflow-hidden bg-gray-40 relative', {
 			xs: 'w-10 h-10',
 			sm: 'w-12 h-12',
 			md: 'w-36 h-36',
-			lg: 'w-44 h-44',
+			lg: 'w-50 h-50',
 		},
 	},
 	compoundVariants: [

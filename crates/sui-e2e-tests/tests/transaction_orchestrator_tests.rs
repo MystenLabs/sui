@@ -3,6 +3,7 @@
 
 use prometheus::Registry;
 use std::time::Duration;
+use sui_core::authority::EffectsNotifyRead;
 use sui_core::authority_client::NetworkAuthorityClient;
 use sui_core::transaction_orchestrator::TransactiondOrchestrator;
 use sui_macros::sim_test;
@@ -11,14 +12,13 @@ use sui_types::quorum_driver_types::{
     FinalizedEffects, QuorumDriverError,
 };
 use sui_types::transaction::VerifiedTransaction;
-use test_utils::network::TestClusterBuilder;
-use test_utils::transaction::wait_for_tx;
+use test_cluster::TestClusterBuilder;
 use tokio::time::timeout;
 use tracing::info;
 
 #[sim_test]
 async fn test_blocking_execution() -> Result<(), anyhow::Error> {
-    let mut test_cluster = TestClusterBuilder::new().build().await?;
+    let mut test_cluster = TestClusterBuilder::new().build().await;
     let context = &mut test_cluster.wallet;
     let handle = &test_cluster.fullnode_handle.sui_node;
 
@@ -54,7 +54,12 @@ async fn test_blocking_execution() -> Result<(), anyhow::Error> {
         .await?;
 
     // Wait for data sync to catch up
-    wait_for_tx(digest, handle.state().clone()).await;
+    handle
+        .state()
+        .db()
+        .notify_read_executed_effects(vec![digest])
+        .await
+        .unwrap();
 
     // Transaction Orchestrator proactivcely executes txn locally
     let txn = txns.swap_remove(0);
@@ -87,7 +92,7 @@ async fn test_fullnode_wal_log() -> Result<(), anyhow::Error> {
     let mut test_cluster = TestClusterBuilder::new()
         .with_epoch_duration_ms(600000)
         .build()
-        .await?;
+        .await;
 
     let handle = &test_cluster.fullnode_handle.sui_node;
 
@@ -172,7 +177,7 @@ async fn test_fullnode_wal_log() -> Result<(), anyhow::Error> {
 #[sim_test]
 async fn test_transaction_orchestrator_reconfig() {
     telemetry_subscribers::init_for_testing();
-    let test_cluster = TestClusterBuilder::new().build().await.unwrap();
+    let test_cluster = TestClusterBuilder::new().build().await;
     let epoch = test_cluster.fullnode_handle.sui_node.with(|node| {
         node.transaction_orchestrator()
             .unwrap()
@@ -219,7 +224,7 @@ async fn test_tx_across_epoch_boundaries() {
     let total_tx_cnt = 1;
     let (result_tx, mut result_rx) = tokio::sync::mpsc::channel::<FinalizedEffects>(total_tx_cnt);
 
-    let test_cluster = TestClusterBuilder::new().build().await.unwrap();
+    let test_cluster = TestClusterBuilder::new().build().await;
     let tx = test_cluster
         .wallet
         .make_transfer_sui_transaction(None, None)

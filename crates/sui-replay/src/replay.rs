@@ -74,6 +74,8 @@ pub struct ExecutionSandboxState {
     pub local_exec_effects: SuiTransactionBlockEffects,
     /// Status from executing this locally in `execute_transaction_to_effects`
     pub local_exec_status: Result<(), ExecutionError>,
+    /// Pre exec diag info
+    pub pre_exec_diag: DiagInfo,
 }
 
 impl ExecutionSandboxState {
@@ -217,6 +219,7 @@ pub struct LocalExec {
     // Used for fetching data from the network or remote store
     pub fetcher: Fetchers,
 
+    pub diag: DiagInfo,
     // Retry policies due to RPC errors
     pub num_retries_for_timeout: u32,
     pub sleep_period_for_timeout: std::time::Duration,
@@ -394,17 +397,33 @@ impl LocalExec {
             // TODO: make these configurable
             num_retries_for_timeout: RPC_TIMEOUT_ERR_NUM_RETRIES,
             sleep_period_for_timeout: RPC_TIMEOUT_ERR_SLEEP_RETRY_PERIOD,
+            diag: Default::default(),
         })
     }
 
-    pub async fn new_for_state_dump(path: &str) -> Result<Self, ReplayEngineError> {
+    pub async fn new_for_state_dump(
+        path: &str,
+        backup_rpc_url: Option<String>,
+    ) -> Result<Self, ReplayEngineError> {
         // Use a throwaway metrics registry for local execution.
         let registry = prometheus::Registry::new();
         let metrics = Arc::new(LimitsMetrics::new(&registry));
 
         let state = NodeStateDump::read_from_file(&PathBuf::from(path))?;
         let current_protocol_version = state.protocol_version;
-        let fetcher = NodeStateDumpFetcher::from(state);
+        let fetcher = match backup_rpc_url {
+            Some(url) => NodeStateDumpFetcher::new(
+                state,
+                Some(RemoteFetcher::new(
+                    SuiClientBuilder::default()
+                        .request_timeout(RPC_TIMEOUT_ERR_SLEEP_RETRY_PERIOD)
+                        .max_concurrent_requests(MAX_CONCURRENT_REQUESTS)
+                        .build(url)
+                        .await?,
+                )),
+            ),
+            None => NodeStateDumpFetcher::new(state, None),
+        };
 
         Ok(Self {
             client: None,
@@ -418,6 +437,7 @@ impl LocalExec {
             // TODO: make these configurable
             num_retries_for_timeout: RPC_TIMEOUT_ERR_NUM_RETRIES,
             sleep_period_for_timeout: RPC_TIMEOUT_ERR_SLEEP_RETRY_PERIOD,
+            diag: Default::default(),
         })
     }
 
@@ -647,6 +667,7 @@ impl LocalExec {
                 local_exec_temporary_store: None,
                 local_exec_effects: effects,
                 local_exec_status: Ok(()),
+                pre_exec_diag: self.diag.clone(),
             });
         }
         // Initialize the state necessary for execution
@@ -705,6 +726,7 @@ impl LocalExec {
             local_exec_temporary_store: Some(res.0),
             local_exec_effects: effects,
             local_exec_status: res.2,
+            pre_exec_diag: self.diag.clone(),
         })
     }
 
@@ -855,6 +877,7 @@ impl LocalExec {
             local_exec_temporary_store: None, // We dont capture it for cert exec run
             local_exec_effects: effects,
             local_exec_status: exec_res,
+            pre_exec_diag: self.diag.clone(),
         })
     }
 
@@ -1522,7 +1545,7 @@ impl LocalExec {
         Ok(resolved_input_objs)
     }
 
-    /// Given the TxInfo, download and store the input objects, and other info necessary
+    /// Given the OnChainTransactionInfo, download and store the input objects, and other info necessary
     /// for execution
     async fn initialize_execution_env_state(
         &mut self,
@@ -1553,6 +1576,7 @@ impl LocalExec {
         // Prep the object runtime for dynamic fields
         // Download the child objects accessed at the version right before the execution of this TX
         let loaded_child_refs = self.fetch_loaded_child_refs(&tx_info.tx_digest).await?;
+        self.diag.loaded_child_objects = loaded_child_refs.clone();
         self.multi_download_and_store(&loaded_child_refs).await?;
 
         Ok(input_objs)
@@ -1587,16 +1611,29 @@ impl BackingPackageStore for LocalExec {
 impl ChildObjectResolver for LocalExec {
     /// This uses `get_object`, which does not download from the network
     /// Hence all objects must be in store already
-    fn read_child_object(&self, parent: &ObjectID, child: &ObjectID) -> SuiResult<Option<Object>> {
+    fn read_child_object(
+        &self,
+        parent: &ObjectID,
+        child: &ObjectID,
+        child_version_upper_bound: SequenceNumber,
+    ) -> SuiResult<Option<Object>> {
         fn inner(
             self_: &LocalExec,
             parent: &ObjectID,
             child: &ObjectID,
+            child_version_upper_bound: SequenceNumber,
         ) -> SuiResult<Option<Object>> {
             let child_object = match self_.get_object(child)? {
                 None => return Ok(None),
                 Some(o) => o,
             };
+            let child_version = child_object.version();
+            if child_object.version() > child_version_upper_bound {
+                return Err(SuiError::Unknown(format!(
+                    "Invariant Violation. Replay loaded child_object {child} at version \
+                    {child_version} but expected the version to be <= {child_version_upper_bound}"
+                )));
+            }
             let parent = *parent;
             if child_object.owner != Owner::ObjectOwner(parent.into()) {
                 return Err(SuiError::InvalidChildObjectAccess {
@@ -1608,7 +1645,7 @@ impl ChildObjectResolver for LocalExec {
             Ok(Some(child_object))
         }
 
-        let res = inner(self, parent, child);
+        let res = inner(self, parent, child, child_version_upper_bound);
         self.exec_store_events
             .lock()
             .expect("Unable to lock events list")

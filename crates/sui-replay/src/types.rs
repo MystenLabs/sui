@@ -52,6 +52,11 @@ pub struct OnChainTransactionInfo {
     pub reference_gas_price: u64,
 }
 
+#[derive(Clone, Debug, Default)]
+pub struct DiagInfo {
+    pub loaded_child_objects: Vec<(ObjectID, VersionNumber)>,
+}
+
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug, Error, Clone)]
 pub enum ReplayEngineError {

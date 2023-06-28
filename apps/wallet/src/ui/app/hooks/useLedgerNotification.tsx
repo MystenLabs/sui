@@ -8,11 +8,11 @@ import toast from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 import Browser from 'webextension-polyfill';
 
-import { trackEvent } from '../../../shared/plausible';
 import { useMenuIsOpen, useNextMenuUrl } from '../components/menu/hooks';
 import { AppType } from '../redux/slices/app/AppType';
 import { ButtonOrLink } from '../shared/utils/ButtonOrLink';
 import useAppSelector from './useAppSelector';
+import { ampli } from '_src/shared/analytics/ampli';
 
 const HAS_ACKNOWLEDGED_LEDGER_NOTIFICATION_KEY = 'has-acknowledged-ledger-notification';
 const HAS_ACKNOWLEDGED_LEDGER_NOTIFICATION_VALUE = 'true';
@@ -47,12 +47,13 @@ export function useLedgerNotification() {
 							<ButtonOrLink
 								className="font-medium appearance-none border-0 cursor-pointer p-0 bg-transparent text-inherit"
 								onClick={async () => {
-									trackEvent('LedgerNotification');
 									localStorage.setItem(
 										HAS_ACKNOWLEDGED_LEDGER_NOTIFICATION_KEY,
 										HAS_ACKNOWLEDGED_LEDGER_NOTIFICATION_VALUE,
 									);
 									toast.remove(LEDGER_NOTIFICATION_TOAST_ID);
+
+									ampli.openedConnectLedgerFlow({ sourceFlow: 'Ledger notification' });
 
 									if (appType === AppType.popup) {
 										const { origin, pathname } = window.location;

@@ -14,11 +14,11 @@ use sui_types::{
     crypto::Signature,
     transaction::{Transaction, VerifiedTransaction},
 };
-use test_utils::network::TestClusterBuilder;
+use test_cluster::TestClusterBuilder;
 
 #[tokio::test]
 async fn test_print_raw_rgp_txn() -> Result<(), anyhow::Error> {
-    let test_cluster = TestClusterBuilder::new().build().await?;
+    let test_cluster = TestClusterBuilder::new().build().await;
     let keypair: &SuiKeyPair = test_cluster
         .swarm
         .config()

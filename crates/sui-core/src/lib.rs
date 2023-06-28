@@ -27,11 +27,12 @@ mod stake_aggregator;
 pub mod state_accumulator;
 pub mod storage;
 pub mod streamer;
-#[cfg(feature = "test-utils")]
+#[cfg(any(test, feature = "test-utils"))]
 pub mod test_utils;
 pub mod transaction_input_checker;
 mod transaction_manager;
 pub mod transaction_orchestrator;
+pub mod verify_indexes;
 
 #[cfg(test)]
 #[path = "unit_tests/move_package_publish_tests.rs"]

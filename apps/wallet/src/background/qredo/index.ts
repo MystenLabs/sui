@@ -18,7 +18,11 @@ import {
 	storeQredoConnectionAccessToken,
 	updatePendingRequest,
 } from './storage';
-import { type UIQredoInfo, type QredoConnectPendingRequest } from './types';
+import {
+	type UIQredoInfo,
+	type QredoConnectPendingRequest,
+	type QredoConnectIdentity,
+} from './types';
 import { qredoConnectPageUrl, toUIQredoPendingRequest, validateInputOrThrow } from './utils';
 import { type QredoConnectInput } from '_src/dapp-interface/WalletStandardInterface';
 import { type Message } from '_src/shared/messaging/messages';
@@ -150,22 +154,23 @@ async function renewAccessToken(
 // This function returns the connection info for the UI and creates an access token when it doesn't exist or if is forced to be created.
 // Because pending and existing connections never have the same ID this function fetches data for either of them based on the id.
 export async function getUIQredoInfo(
-	requestID: string,
+	filter: { qredoID: string } | { identity: QredoConnectIdentity },
 	forceRenewAccessToken: boolean,
 ): Promise<UIQredoInfo | null> {
-	const pendingRequest = await getPendingRequest(requestID);
-	const existingConnection = await getQredoConnection(requestID);
+	const filterAdj = 'qredoID' in filter ? filter.qredoID : filter.identity;
+	const pendingRequest = await getPendingRequest(filterAdj);
+	const existingConnection = await getQredoConnection(filterAdj);
 	if (!pendingRequest && !existingConnection) {
 		return null;
 	}
 	const { id, service, apiUrl } = (pendingRequest || existingConnection)!;
-	const refreshToken = pendingRequest?.token || (await keyring.getQredoRefreshToken(requestID));
+	const refreshToken = pendingRequest?.token || (await keyring.getQredoRefreshToken(id));
 	let accessToken = pendingRequest?.accessToken || existingConnection?.accessToken || null;
 	if (forceRenewAccessToken || !accessToken) {
 		if (!refreshToken) {
 			return null;
 		}
-		accessToken = await renewAccessToken(requestID, apiUrl, refreshToken, !!pendingRequest);
+		accessToken = await renewAccessToken(id, apiUrl, refreshToken, !!pendingRequest);
 	}
 	return {
 		id,

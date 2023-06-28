@@ -18,7 +18,7 @@ import { Banner } from '~/ui/Banner';
 import { LoadingSpinner } from '~/ui/LoadingSpinner';
 import { Stats, type StatsProps } from '~/ui/Stats';
 import { TableCard } from '~/ui/TableCard';
-import { Tab, TabGroup, TabList, TabPanel, TabPanels } from '~/ui/Tabs';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '~/ui/Tabs';
 import { getEpochStorageFundFlow } from '~/utils/getStorageFundFlow';
 
 function SuiStats({
@@ -116,26 +116,24 @@ export default function EpochDetail() {
 				{isCurrentEpoch ? <ValidatorStatus /> : null}
 			</div>
 
-			<TabGroup size="lg">
-				<TabList>
-					<Tab>Checkpoints</Tab>
-					<Tab>Participating Validators</Tab>
-				</TabList>
-				<TabPanels className="mt-4">
-					<TabPanel>
-						<CheckpointsTable
-							initialCursor={initialCursorPlusOne}
-							maxCursor={epochData.firstCheckpointId}
-							initialLimit={20}
-						/>
-					</TabPanel>
-					<TabPanel>
-						{validatorsTable ? (
-							<TableCard data={validatorsTable.data} columns={validatorsTable.columns} sortTable />
-						) : null}
-					</TabPanel>
-				</TabPanels>
-			</TabGroup>
+			<Tabs size="lg" defaultValue="checkpoints">
+				<TabsList>
+					<TabsTrigger value="checkpoints">Checkpoints</TabsTrigger>
+					<TabsTrigger value="validators">Participating Validators</TabsTrigger>
+				</TabsList>
+				<TabsContent value="checkpoints">
+					<CheckpointsTable
+						initialCursor={initialCursorPlusOne}
+						maxCursor={epochData.firstCheckpointId}
+						initialLimit={20}
+					/>
+				</TabsContent>
+				<TabsContent value="validators">
+					{validatorsTable ? (
+						<TableCard data={validatorsTable.data} columns={validatorsTable.columns} sortTable />
+					) : null}
+				</TabsContent>
+			</Tabs>
 		</div>
 	);
 }

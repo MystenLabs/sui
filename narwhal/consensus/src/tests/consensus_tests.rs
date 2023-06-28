@@ -3,9 +3,11 @@
 
 #![allow(clippy::mutable_key_type)]
 
+use config::AuthorityIdentifier;
 use fastcrypto::hash::Hash;
 use prometheus::Registry;
 use std::collections::BTreeSet;
+use std::num::NonZeroUsize;
 use std::sync::Arc;
 use storage::NodeStorage;
 use telemetry_subscribers::TelemetryGuards;
@@ -14,13 +16,13 @@ use test_utils::{temp_dir, CommitteeFixture};
 use tokio::sync::watch;
 
 use crate::bullshark::Bullshark;
-use crate::consensus::ConsensusRound;
+use crate::consensus::{ConsensusRound, LeaderSwapTable};
 use crate::consensus_utils::NUM_SUB_DAGS_PER_SCHEDULE;
 use crate::metrics::ConsensusMetrics;
 use crate::Consensus;
 use crate::NUM_SHUTDOWN_RECEIVERS;
 use types::{
-    Certificate, CertificateAPI, HeaderAPI, PreSubscribedBroadcastSender, ReputationScores,
+    Certificate, CertificateAPI, HeaderAPI, PreSubscribedBroadcastSender, ReputationScores, Round,
 };
 
 /// This test is trying to compare the output of the Consensus algorithm when:
@@ -75,6 +77,7 @@ async fn test_consensus_recovery_with_bullshark() {
     let bullshark = Bullshark::new(
         committee.clone(),
         consensus_store.clone(),
+        latest_protocol_version(),
         metrics.clone(),
         NUM_SUB_DAGS_PER_SCHEDULE,
     );
@@ -170,6 +173,7 @@ async fn test_consensus_recovery_with_bullshark() {
     let bullshark = Bullshark::new(
         committee.clone(),
         consensus_store.clone(),
+        latest_protocol_version(),
         metrics.clone(),
         NUM_SUB_DAGS_PER_SCHEDULE,
     );
@@ -239,6 +243,7 @@ async fn test_consensus_recovery_with_bullshark() {
     let bullshark = Bullshark::new(
         committee.clone(),
         consensus_store.clone(),
+        latest_protocol_version(),
         metrics.clone(),
         NUM_SUB_DAGS_PER_SCHEDULE,
     );
@@ -308,6 +313,77 @@ async fn test_consensus_recovery_with_bullshark() {
             .count(),
         4
     );
+}
+
+#[tokio::test]
+async fn test_leader_swap_table() {
+    // GIVEN
+    let fixture = CommitteeFixture::builder().build();
+    let committee = fixture.committee();
+
+    // the authority ids
+    let authority_ids: Vec<AuthorityIdentifier> = fixture.authorities().map(|a| a.id()).collect();
+
+    // Adding some scores
+    let mut scores = ReputationScores::new(&committee);
+    scores.final_of_schedule = true;
+    for (score, id) in authority_ids.iter().enumerate() {
+        scores.add_score(*id, score as u64);
+    }
+
+    let table = LeaderSwapTable::new(&committee, 2, scores);
+
+    // Only one bad authority should be calculated since all have equal stake
+    assert_eq!(table.bad_nodes.len(), 1);
+
+    // now first three should be swapped, whereas the others should not return anything
+    for (index, id) in authority_ids.iter().enumerate() {
+        if index < 1 {
+            let s = table.swap(id, index as Round).unwrap();
+
+            // make sure that the returned node is amongst the good nodes
+            assert!(table.good_nodes.iter().any(|n| *n == s));
+        } else {
+            assert!(table.swap(id, index as Round).is_none());
+        }
+    }
+
+    // Now we create a larger committee with more score variation - still all the authorities have
+    // equal stake.
+    let fixture = CommitteeFixture::builder()
+        .committee_size(NonZeroUsize::new(10).unwrap())
+        .build();
+    let committee = fixture.committee();
+
+    // the authority ids
+    let authority_ids: Vec<AuthorityIdentifier> = fixture.authorities().map(|a| a.id()).collect();
+
+    // Adding some scores
+    let mut scores = ReputationScores::new(&committee);
+    scores.final_of_schedule = true;
+    for (score, id) in authority_ids.iter().enumerate() {
+        scores.add_score(*id, score as u64);
+    }
+
+    // We expect the first 3 authorities (f) to be amongst the bad nodes
+    let table = LeaderSwapTable::new(&committee, 2, scores);
+
+    assert_eq!(table.bad_nodes.len(), 3);
+    assert!(table.bad_nodes.contains(&authority_ids[0]));
+    assert!(table.bad_nodes.contains(&authority_ids[1]));
+    assert!(table.bad_nodes.contains(&authority_ids[2]));
+
+    // now first three should be swapped, whereas the others should not return anything
+    for (index, id) in authority_ids.iter().enumerate() {
+        if index < 3 {
+            let s = table.swap(id, index as Round).unwrap();
+
+            // make sure that the returned node is amongst the good nodes
+            assert!(table.good_nodes.iter().any(|n| *n == s));
+        } else {
+            assert!(table.swap(id, index as Round).is_none());
+        }
+    }
 }
 
 fn setup_tracing() -> TelemetryGuards {

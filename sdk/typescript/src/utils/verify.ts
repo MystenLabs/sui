@@ -3,11 +3,12 @@
 
 import { fromB64 } from '@mysten/bcs';
 import nacl from 'tweetnacl';
-import { IntentScope, messageWithIntent } from './intent';
+import { IntentScope, messageWithIntent } from './intent.js';
 import { secp256k1 } from '@noble/curves/secp256k1';
 import { sha256 } from '@noble/hashes/sha256';
-import { fromSerializedSignature, SerializedSignature } from '../cryptography/signature';
+import { SerializedSignature } from '../cryptography/signature.js';
 import { blake2b } from '@noble/hashes/blake2b';
+import { toSingleSignaturePubkeyPair } from '../cryptography/utils.js';
 
 // TODO: This might actually make sense to eventually move to the `Keypair` instances themselves, as
 // it could allow the Sui.js to be tree-shaken a little better, possibly allowing keypairs that are
@@ -19,7 +20,7 @@ export async function verifyMessage(
 	serializedSignature: SerializedSignature,
 	scope: IntentScope,
 ) {
-	const signature = fromSerializedSignature(serializedSignature);
+	const signature = toSingleSignaturePubkeyPair(serializedSignature);
 	const messageBytes = messageWithIntent(
 		scope,
 		typeof message === 'string' ? fromB64(message) : message,

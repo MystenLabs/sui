@@ -41,6 +41,8 @@ pub enum ReplayToolCommand {
         tx_digest: String,
         #[clap(long, short)]
         show_effects: bool,
+        #[clap(long, short)]
+        diag: bool,
     },
 
     /// Replay a transaction from a node state dump
@@ -131,11 +133,10 @@ pub async fn execute_replay_command(
             None
         }
         ReplayToolCommand::ReplayDump { path, show_effects } => {
-            let mut lx = LocalExec::new_for_state_dump(&path).await?;
+            let mut lx = LocalExec::new_for_state_dump(&path, rpc_url).await?;
             let (sandbox_state, node_dump_state) = lx.execute_state_dump(safety).await?;
-            let effects = sandbox_state.local_exec_effects.clone();
             if show_effects {
-                println!("{:#?}", effects)
+                println!("{:#?}", sandbox_state.local_exec_effects);
             }
 
             sandbox_state.check_effects()?;
@@ -155,6 +156,7 @@ pub async fn execute_replay_command(
         ReplayToolCommand::ReplayTransaction {
             tx_digest,
             show_effects,
+            diag,
         } => {
             let tx_digest = TransactionDigest::from_str(&tx_digest)?;
             info!("Executing tx: {}", tx_digest);
@@ -167,9 +169,11 @@ pub async fn execute_replay_command(
             )
             .await?;
 
-            let effects = sandbox_state.local_exec_effects.clone();
+            if diag {
+                println!("{:#?}", sandbox_state.pre_exec_diag);
+            }
             if show_effects {
-                println!("{:#?}", effects)
+                println!("{:#?}", sandbox_state.local_exec_effects);
             }
 
             sandbox_state.check_effects()?;

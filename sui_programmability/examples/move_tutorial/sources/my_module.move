@@ -19,6 +19,7 @@ module my_first_package::my_module {
         swords_created: u64,
     }
 
+    #[allow(unused_function)]
     // Part 3: module initializer to be executed when this module is published
     fun init(ctx: &mut TxContext) {
         let admin = Forge {

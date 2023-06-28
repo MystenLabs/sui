@@ -10,13 +10,13 @@ use sui_json_rpc_types::{
 use sui_macros::sim_test;
 use sui_types::quorum_driver_types::ExecuteTransactionRequestType;
 use sui_types::transaction::SenderSignedData;
-use test_utils::network::TestClusterBuilder;
+use test_cluster::TestClusterBuilder;
 
 use crate::api::{IndexerApiClient, TransactionBuilderClient, WriteApiClient};
 
 #[sim_test]
 async fn test_get_transaction_block() -> Result<(), anyhow::Error> {
-    let cluster = TestClusterBuilder::new().build().await?;
+    let cluster = TestClusterBuilder::new().build().await;
     let http_client = cluster.rpc_client();
     let address = cluster.get_address_0();
 
@@ -102,7 +102,7 @@ async fn test_get_transaction_block() -> Result<(), anyhow::Error> {
 
 #[sim_test]
 async fn test_get_raw_transaction() -> Result<(), anyhow::Error> {
-    let cluster = TestClusterBuilder::new().build().await?;
+    let cluster = TestClusterBuilder::new().build().await;
     let http_client = cluster.rpc_client();
     let address = cluster.get_address_0();
 
@@ -150,7 +150,7 @@ async fn test_get_raw_transaction() -> Result<(), anyhow::Error> {
 
 #[sim_test]
 async fn test_get_fullnode_transaction() -> Result<(), anyhow::Error> {
-    let cluster = TestClusterBuilder::new().build().await.unwrap();
+    let cluster = TestClusterBuilder::new().build().await;
 
     let context = &cluster.wallet;
 

@@ -7,13 +7,14 @@ import { useMemo } from 'react';
 
 export function useOwnedNFT(nftObjectId: string | null, address: SuiAddress | null) {
 	const data = useGetObject(nftObjectId);
-	const { data: kioskContents } = useGetKioskContents(address);
-	const { data: objectData } = data;
+	const { data: kioskData, isFetching: areKioskContentsLoading } = useGetKioskContents(address);
+	const { data: objectData, isLoading } = data;
+
 	const objectDetails = useMemo(() => {
 		if (!objectData || !is(objectData.data, SuiObjectData) || !address) return null;
-		const ownedKioskObjectIds = kioskContents?.map(({ data }) => data?.objectId) || [];
+		const ownedKioskObjectIds = kioskData?.list.map(({ data }) => data?.objectId) || [];
 		const objectOwner = getObjectOwner(objectData);
-		const isOwner =
+		const data =
 			ownedKioskObjectIds.includes(objectData.data.objectId) ||
 			(objectOwner &&
 				objectOwner !== 'Immutable' &&
@@ -21,7 +22,8 @@ export function useOwnedNFT(nftObjectId: string | null, address: SuiAddress | nu
 				objectOwner.AddressOwner === address)
 				? objectData.data
 				: null;
-		return isOwner;
-	}, [address, objectData, kioskContents]);
-	return { ...data, data: objectDetails };
+		return data;
+	}, [address, objectData, kioskData]);
+
+	return { ...data, isLoading: isLoading || areKioskContentsLoading, data: objectDetails };
 }

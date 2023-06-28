@@ -17,7 +17,7 @@ export const router = createBrowserRouter([
 				element: <Home />,
 			},
 			{
-				path: '/kiosk/:kioskId',
+				path: '/kiosk/:id',
 				element: <SingleKiosk />,
 			},
 		],

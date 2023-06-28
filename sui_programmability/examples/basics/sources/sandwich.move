@@ -44,6 +44,7 @@ module basics::sandwich {
     /// Nothing to withdraw
     const ENoProfits: u64 = 1;
 
+    #[allow(unused_function)]
     /// On module init, create a grocery
     fun init(ctx: &mut TxContext) {
         transfer::share_object(Grocery {

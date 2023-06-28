@@ -43,6 +43,7 @@ pub struct Compiler<'a> {
     compiled_module_named_address_mapping: BTreeMap<CompiledModuleId, String>,
     flags: Flags,
     visitors: Vec<Visitor>,
+    warning_filter: Option<WarningFilters>,
 }
 
 pub struct SteppedCompiler<'a, const P: Pass> {
@@ -136,6 +137,7 @@ impl<'a> Compiler<'a> {
             compiled_module_named_address_mapping: BTreeMap::new(),
             flags: Flags::empty(),
             visitors: vec![],
+            warning_filter: None,
         }
     }
 
@@ -209,6 +211,11 @@ impl<'a> Compiler<'a> {
         self
     }
 
+    pub fn set_warning_filter(mut self, filter: Option<WarningFilters>) -> Self {
+        self.warning_filter = filter;
+        self
+    }
+
     pub fn run<const TARGET: Pass>(
         self,
     ) -> anyhow::Result<(
@@ -224,6 +231,7 @@ impl<'a> Compiler<'a> {
             compiled_module_named_address_mapping,
             flags,
             visitors,
+            warning_filter,
         } = self;
         generate_interface_files_for_deps(
             &mut deps,
@@ -231,6 +239,9 @@ impl<'a> Compiler<'a> {
             &compiled_module_named_address_mapping,
         )?;
         let mut compilation_env = CompilationEnv::new(flags, visitors);
+        if let Some(filter) = warning_filter {
+            compilation_env.add_warning_filter_scope(filter);
+        }
         let (source_text, pprog_and_comments_res) =
             parse_program(&mut compilation_env, maps, targets, deps)?;
         let res: Result<_, Diagnostics> = pprog_and_comments_res.and_then(|(pprog, comments)| {
@@ -730,6 +741,36 @@ fn has_compiled_module_magic_number(path: &str) -> bool {
         Ok(n) => n,
     };
     num_bytes_read == BinaryConstants::MOVE_MAGIC_SIZE && magic == BinaryConstants::MOVE_MAGIC
+}
+
+pub fn move_check_for_errors(
+    comments_and_compiler_res: Result<(CommentMap, SteppedCompiler<'_, PASS_PARSER>), Diagnostics>,
+) -> Diagnostics {
+    fn try_impl(
+        comments_and_compiler_res: Result<
+            (CommentMap, SteppedCompiler<'_, PASS_PARSER>),
+            Diagnostics,
+        >,
+    ) -> Result<(Vec<AnnotatedCompiledUnit>, Diagnostics), Diagnostics> {
+        let (_, compiler) = comments_and_compiler_res?;
+
+        let (mut compiler, cfgir) = compiler.run::<PASS_CFGIR>()?.into_ast();
+        let compilation_env = compiler.compilation_env();
+        if compilation_env.flags().is_testing() {
+            unit_test::plan_builder::construct_test_plan(compilation_env, None, &cfgir);
+        }
+
+        let (units, diags) = compiler.at_cfgir(cfgir).build()?;
+        Ok((units, diags))
+    }
+
+    let (units, inner_diags) = match try_impl(comments_and_compiler_res) {
+        Ok((units, inner_diags)) => (units, inner_diags),
+        Err(inner_diags) => return inner_diags,
+    };
+    let mut diags = compiled_unit::verify_units(&units);
+    diags.extend(inner_diags);
+    diags
 }
 
 //**************************************************************************************************

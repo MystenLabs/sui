@@ -8,13 +8,13 @@ license = "Apache-2.0"
 publish = false
 
 [dev-dependencies]
-prometheus = "0.13.3"
+prometheus.workspace = true
 
-sui-framework = { path = "../sui-framework" }
-sui-move = { path = "../sui-move", features = ["unit_test"] }
-sui-move-build = { path = "../sui-move-build" }
-sui-protocol-config = { path = "../sui-protocol-config" }
-sui-types = { path = "../sui-types" }
+sui-framework.workspace = true
+sui-move = { workspace = true, features = ["unit_test"] }
+sui-move-build.workspace = true
+sui-protocol-config.workspace = true
+sui-types.workspace = true
 
 move-bytecode-verifier = { path = "../../external-crates/move/move-bytecode-verifier" }
 sui-adapter = { path = "../../sui-execution/latest/sui-adapter", package = "sui-adapter-latest" }

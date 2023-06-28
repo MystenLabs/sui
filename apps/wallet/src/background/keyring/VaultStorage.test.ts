@@ -17,8 +17,8 @@ import {
 	testDataVault1,
 	testDataVault2,
 	testEntropySerialized,
-	testMnemonic,
 	testEd25519,
+	testMnemonicSeedHex,
 } from '_src/test-utils/vault';
 
 vi.mock('../storage-utils');
@@ -56,7 +56,7 @@ describe('VaultStorage', () => {
 			const storedStore = vi.mocked(setToLocalStorage).mock.calls[0][1];
 			vi.mocked(getFromLocalStorage).mockResolvedValue(storedStore);
 			await VaultStorage.unlock('12345');
-			expect(await VaultStorage.getMnemonic()).toBe(testMnemonic);
+			expect(await VaultStorage.getMnemonicSeedHex()).toBe(testMnemonicSeedHex);
 		});
 	});
 
@@ -72,7 +72,7 @@ describe('VaultStorage', () => {
 
 		it('unlocks and locks updating vault session storage', async () => {
 			await VaultStorage.unlock(testDataVault1.password);
-			expect(VaultStorage.getMnemonic()).toBe(testDataVault1.mnemonic);
+			expect(VaultStorage.getMnemonicSeedHex()).toBe(testDataVault1.testMnemonicSeedHex);
 			expect(setToSessionStorage).toBeCalledTimes(2);
 			expect(setToSessionStorage).toHaveBeenNthCalledWith(
 				1,
@@ -85,7 +85,7 @@ describe('VaultStorage', () => {
 			});
 			vi.mocked(setToSessionStorage).mockClear();
 			await VaultStorage.lock();
-			expect(VaultStorage.getMnemonic()).toBe(null);
+			expect(VaultStorage.getMnemonicSeedHex()).toBe(null);
 			expect(setToSessionStorage).toBeCalledTimes(2);
 			expect(setToSessionStorage).toHaveBeenNthCalledWith(1, EPHEMERAL_PASSWORD_KEY, null);
 			expect(setToSessionStorage).toHaveBeenNthCalledWith(2, EPHEMERAL_VAULT_KEY, null);
@@ -100,13 +100,13 @@ describe('VaultStorage', () => {
 			);
 			const isUnlocked = await VaultStorage.revive();
 			expect(isUnlocked).toBe(true);
-			expect(VaultStorage.getMnemonic()).toBe(testDataVault1.mnemonic);
+			expect(VaultStorage.getMnemonicSeedHex()).toBe(testDataVault1.testMnemonicSeedHex);
 		});
 
 		it('keeps vault locked when encrypted vault is not found in session storage', async () => {
 			vi.mocked(getFromSessionStorage).mockResolvedValue(null);
 			await expect(VaultStorage.revive()).resolves.toBe(false);
-			expect(VaultStorage.getMnemonic()).toBe(null);
+			expect(VaultStorage.getMnemonicSeedHex()).toBe(null);
 		});
 	});
 
@@ -202,13 +202,13 @@ describe('VaultStorage no session storage', () => {
 
 	it('unlocks & locks vault', async () => {
 		await VaultStorage.unlock(testDataVault1.password);
-		expect(VaultStorage.getMnemonic()).toBe(testDataVault1.mnemonic);
+		expect(VaultStorage.getMnemonicSeedHex()).toBe(testDataVault1.testMnemonicSeedHex);
 		await VaultStorage.lock();
-		expect(VaultStorage.getMnemonic()).toBe(null);
+		expect(VaultStorage.getMnemonicSeedHex()).toBe(null);
 	});
 
 	it('keeps vault locked when session storage in not defined', async () => {
 		await expect(VaultStorage.revive()).resolves.toBe(false);
-		expect(VaultStorage.getMnemonic()).toBe(null);
+		expect(VaultStorage.getMnemonicSeedHex()).toBe(null);
 	});
 });

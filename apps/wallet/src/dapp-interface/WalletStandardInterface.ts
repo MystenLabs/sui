@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { type SuiAddress, toB64, TransactionBlock } from '@mysten/sui.js';
+import { toB64, TransactionBlock, fromB64 } from '@mysten/sui.js';
 import {
 	SUI_CHAINS,
 	ReadonlyWalletAccount,
@@ -154,13 +154,12 @@ export class SuiWallet implements Wallet {
 		return this.#accounts;
 	}
 
-	#setAccounts(addresses: SuiAddress[]) {
-		this.#accounts = addresses.map(
-			(address) =>
+	#setAccounts(accounts: GetAccountResponse['accounts']) {
+		this.#accounts = accounts.map(
+			({ address, publicKey }) =>
 				new ReadonlyWalletAccount({
 					address,
-					// TODO: Expose public key instead of address:
-					publicKey: new Uint8Array(),
+					publicKey: publicKey ? fromB64(publicKey) : new Uint8Array(),
 					chains: this.#activeChain ? [this.#activeChain] : [],
 					features: ['sui:signAndExecuteTransaction'],
 				}),

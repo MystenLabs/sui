@@ -17,7 +17,7 @@ use sui_sdk::rpc_types::{SuiExecutionStatus, SuiTransactionBlockEffectsAPI};
 use sui_swarm_config::genesis_config::{DEFAULT_GAS_AMOUNT, DEFAULT_NUMBER_OF_OBJECT_PER_ACCOUNT};
 use sui_types::quorum_driver_types::ExecuteTransactionRequestType;
 use sui_types::utils::to_sender_signed_transaction;
-use test_utils::network::TestClusterBuilder;
+use test_cluster::TestClusterBuilder;
 
 use crate::rosetta_client::RosettaEndpoint;
 
@@ -25,7 +25,7 @@ mod rosetta_client;
 
 #[tokio::test]
 async fn test_get_staked_sui() {
-    let test_cluster = TestClusterBuilder::new().build().await.unwrap();
+    let test_cluster = TestClusterBuilder::new().build().await;
     let address = test_cluster.get_address_0();
     let client = test_cluster.wallet.get_client().await.unwrap();
     let keystore = &test_cluster.wallet.config.keystore;
@@ -126,7 +126,7 @@ async fn test_get_staked_sui() {
 
 #[tokio::test]
 async fn test_stake() {
-    let test_cluster = TestClusterBuilder::new().build().await.unwrap();
+    let test_cluster = TestClusterBuilder::new().build().await;
     let sender = test_cluster.get_address_0();
     let client = test_cluster.wallet.get_client().await.unwrap();
     let keystore = &test_cluster.wallet.config.keystore;
@@ -187,7 +187,7 @@ async fn test_stake() {
 
 #[tokio::test]
 async fn test_stake_all() {
-    let test_cluster = TestClusterBuilder::new().build().await.unwrap();
+    let test_cluster = TestClusterBuilder::new().build().await;
     let sender = test_cluster.get_address_0();
     let client = test_cluster.wallet.get_client().await.unwrap();
     let keystore = &test_cluster.wallet.config.keystore;
@@ -250,8 +250,7 @@ async fn test_withdraw_stake() {
     let test_cluster = TestClusterBuilder::new()
         .with_epoch_duration_ms(10000)
         .build()
-        .await
-        .unwrap();
+        .await;
     let sender = test_cluster.get_address_0();
     let client = test_cluster.wallet.get_client().await.unwrap();
     let keystore = &test_cluster.wallet.config.keystore;
@@ -374,7 +373,7 @@ async fn test_withdraw_stake() {
 
 #[tokio::test]
 async fn test_pay_sui() {
-    let test_cluster = TestClusterBuilder::new().build().await.unwrap();
+    let test_cluster = TestClusterBuilder::new().build().await;
     let sender = test_cluster.get_address_0();
     let recipient = test_cluster.get_address_1();
     let client = test_cluster.wallet.get_client().await.unwrap();
@@ -432,8 +431,7 @@ async fn test_pay_sui_multiple_times() {
     let test_cluster = TestClusterBuilder::new()
         .with_epoch_duration_ms(36000000)
         .build()
-        .await
-        .unwrap();
+        .await;
     let sender = test_cluster.get_address_0();
     let recipient = test_cluster.get_address_1();
     let client = test_cluster.wallet.get_client().await.unwrap();

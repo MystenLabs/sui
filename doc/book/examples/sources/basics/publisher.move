@@ -15,6 +15,7 @@ module examples::owner {
     /// Some other type to use in a dummy check
     struct ThisType {}
 
+    #[allow(unused_function)]
     /// After the module is published, the sender will receive
     /// a `Publisher` object. Which can be used to set Display
     /// or manage the transfer policies in the `Kiosk` system.

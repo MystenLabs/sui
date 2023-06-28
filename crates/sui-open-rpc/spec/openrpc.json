@@ -12,7 +12,7 @@
       "name": "Apache-2.0",
       "url": "https://raw.githubusercontent.com/MystenLabs/sui/main/LICENSE"
     },
-    "version": "1.4.0"
+    "version": "1.5.0"
   },
   "methods": [
     {
@@ -502,7 +502,7 @@
           "name": "Read API"
         }
       ],
-      "description": "Return the chain's identifier",
+      "description": "Return the first four bytes of the chain's genesis checkpoint digest.",
       "params": [],
       "result": {
         "name": "String",
@@ -1347,7 +1347,7 @@
             "name": "Result",
             "value": {
               "minSupportedProtocolVersion": "1",
-              "maxSupportedProtocolVersion": "15",
+              "maxSupportedProtocolVersion": "17",
               "protocolVersion": "6",
               "featureFlags": {
                 "advance_epoch_start_time_in_safe_mode": true,
@@ -1365,6 +1365,7 @@
                 "package_digest_hash_module": false,
                 "package_upgrades": true,
                 "scoring_decision_with_validity_cutoff": true,
+                "simplified_unwrap_then_delete": false,
                 "zklogin_auth": false
               },
               "attributes": {
@@ -1566,6 +1567,7 @@
                 "event_emit_value_size_derivation_cost_per_byte": {
                   "u64": "2"
                 },
+                "execution_version": null,
                 "gas_model_version": {
                   "u64": "5"
                 },

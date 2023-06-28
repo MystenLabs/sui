@@ -4,7 +4,9 @@ title: Gas in Sui
 
 A Sui transaction must pay for both the computational cost of execution and the long-term cost of storing the objects a transaction creates or mutates. Specifically, [Sui’s Gas Pricing Mechanism](gas-pricing.md) is such that any transaction pays the following gas fees:
 
-`total_gas_fees = computation_units * reference_gas_price + storage_units * storage_price`
+`total_gas_fees = computation_units * gas_price + storage_units * storage_price`
+
+where `gas_price` is the amount provided by the transaction signer and `gas_price >= reference_gas_price`.
 
 While computation and storage fees are separate, they are conceptually similar in that they each translate computation or storage into SUI terms by multiplying computation or storage units by the relevant price. 
 
@@ -27,23 +29,13 @@ The [Reference Gas Price](https://docs.sui.io/learn/tokenomics/gas-pricing#compu
 
 Different Sui transactions require varying amounts of computational time in order to be processed and executed. Sui translates these varying operational loads into transaction fees by measuring each transaction in terms of Computation Units. All else equals, more complex transactions will require more Computation Units.
 
-Importantly, though, Sui’s computation gas schedule is built coarsely with a bucketing approach. Two relatively similar transactions will translate into the exact same amount of Computation Units if they are in the same bucket, whereas two relatively different transactions will translate into different amounts of Computation Units if they fall in separate buckets. The smallest bucket maps into 1,000 Computation Units, meaning that all transactions that fall into the smallest bucket will cost 1,000 Computation Units. The largest bucket maps into 5,000,000 Computation Units; if a transaction were to require more Computation Units it would simply abort.
+Importantly, though, Sui’s computation gas schedule is built with a bucketing/step approach. Two reasonably similar transactions will translate into the exact same amount of Computation Units if they are in the same bucket, whereas two relatively different transactions will translate into different amounts of Computation Units if they fall in separate buckets. The smallest bucket maps into 1,000 Computation Units, meaning that all transactions that fall into the smallest bucket will cost 1,000 Computation Units. The largest bucket maps into 5,000,000 Computation Units; if a transaction were to require more Computation Units it would simply abort. Buckets move by a 1000 computation unit steps.
 
-Using coarse bucketing accomplishes two important goals:
+Using bucketing accomplishes two important goals:
 * Frees developers from optimizing their smart contracts to deliver marginal gains in gas costs via "gas golfing" — instead, can focus on step-function improvements in their products and services.
 * Gives Sui protocol devs the freedom to adjust per-instruction gas costs and experiment with new gas metering schemes without creating significant disruption for builders. This can happen frequently, so it's important that builders do *not* rely on per-instruction gas costs remaining stable over time.
 
-| Bucket Lower Threshold | Bucket Upper Threshold | Computation Units |
-| --- | --- | --- |
-| 0 | 1,000 | 1,000 |
-| 1,001 | 5,000 | 5,000 |
-| 5,001 | 10,000 | 10,000 |
-| 10,001 | 20,000 | 20,000 |
-| 20,001 | 50,000 | 50,000 |
-| 50,001 | 200,000 | 200,000 |
-| 200,001 | 1,000,000 | 1,000,000 |
-| 1,000,001 | 5,000,000 | 5,000,000 |
-| 5,000,001 | Infinity | transaction will abort |
+Buckets start at 1000 units and increment with step of 1000 units (effectively rounding to the nearest 1000) up to 5,000,000 units which is the max amount of computation allowed at this time.
 
 **Storage Units**
 
@@ -63,7 +55,7 @@ If the Gas Budget does not fulfill this condition then the transaction will fail
 
 Ultimately, a successful transaction will require the end user to pay the transaction's `total_gas_fees`. However, since it is challenging to perfectly forecast computation time before the transaction is processed, the `gas_budget` condition also requires the `gas_budget` to be at least as large as the transaction's `computation_fees` in case the transaction aborts. In some cases -- especially in the presence of high storage rebates, and, thus negative net storage fees -- the Gas Budget may be higher than the total gas fees paid by the end user.
 
-Importantly, the minimum Gas Budget is 2,000 MIST. This ensures validators can be compensated with at least 2,000 MIST even if the Gas Budget is incorrectly specified and the transaction aborts. Additionally, this protects the Sui Network from being spammed with a large number of transactions with minimal gas budgets. The maximum Gas Budget is 50 billion MIST or 50 SUI. This protects the network against overflow of internal multiplications and gas limits for denial of service attack.
+The minimum Gas Budget is 2,000 MIST. The maximum Gas Budget is 50 billion MIST or 50 SUI. This protects the network against overflow of internal multiplications and gas limits for denial of service attack.
 
 As mentioned above, the Storage Rebate currently equals 99% of the originally paid Storage Fees. Since the Gas Budget applies to the totality of Gas Fees, it will often be the case that a transaction will only go through if the Gas Budget is considerably higher than the Net Gas Fees that a user ultimately pays.
 

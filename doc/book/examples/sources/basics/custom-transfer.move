@@ -30,6 +30,7 @@ module examples::restricted_transfer {
         fee: u64
     }
 
+    #[allow(unused_function)]
     /// Create a `LandRegistry` on module init.
     fun init(ctx: &mut TxContext) {
         transfer::transfer(GovernmentCapability {

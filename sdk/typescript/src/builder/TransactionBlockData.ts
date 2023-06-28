@@ -16,12 +16,12 @@ import {
 	string,
 	union,
 } from 'superstruct';
-import { hashTypedData } from '../cryptography/hash';
-import { normalizeSuiAddress, SuiObjectRef } from '../types';
-import { builder } from './bcs';
-import { TransactionType, TransactionBlockInput } from './Transactions';
-import { BuilderCallArg, PureCallArg } from './Inputs';
-import { create } from './utils';
+import { hashTypedData } from '../cryptography/hash.js';
+import { normalizeSuiAddress, SuiObjectRef } from '../types/index.js';
+import { builder } from './bcs.js';
+import { TransactionType, TransactionBlockInput } from './Transactions.js';
+import { BuilderCallArg, PureCallArg } from './Inputs.js';
+import { create } from './utils.js';
 
 export const TransactionExpiration = optional(
 	nullable(

@@ -18,6 +18,7 @@ use colored::*;
 use move_binary_format::{errors::VMResult, file_format::CompiledModule};
 use move_bytecode_utils::Modules;
 use move_compiler::{
+    diagnostics::WarningFilters,
     shared::{Flags, NumericalAddress, PackagePaths},
     unit_test::{ExpectedFailure, ModuleTestPlan, TestCase, TestPlan},
 };
@@ -38,11 +39,15 @@ use move_stackless_bytecode_interpreter::{
     shared::bridge::{adapt_move_vm_change_set, adapt_move_vm_result},
     StacklessBytecodeInterpreter,
 };
+#[cfg(debug_assertions)]
+use move_vm_profiler::GasProfiler;
 use move_vm_runtime::{move_vm::MoveVM, native_functions::NativeFunctionTable};
 use move_vm_test_utils::{
     gas_schedule::{unit_cost_schedule, CostTable, Gas, GasStatus},
     InMemoryStorage,
 };
+#[cfg(debug_assertions)]
+use move_vm_types::gas::GasMeter;
 use rayon::prelude::*;
 use std::{collections::BTreeMap, io::Write, marker::Send, sync::Mutex, time::Instant};
 
@@ -263,6 +268,12 @@ impl SharedTestingConfig {
         let mut session =
             move_vm.new_session_with_extensions(&self.starting_storage_state, extensions);
         let mut gas_meter = GasStatus::new(&self.cost_table, Gas::new(self.execution_bound));
+        #[cfg(debug_assertions)]
+        gas_meter.set_profiler(GasProfiler::init_default_cfg(
+            function_name.to_owned(),
+            self.execution_bound,
+        ));
+
         // TODO: collect VM logs if the verbose flag (i.e, `self.verbose`) is set
 
         let now = Instant::now();
@@ -374,6 +385,7 @@ impl SharedTestingConfig {
                 vec![],
                 ModelBuilderOptions::default(),
                 Flags::testing(),
+                Some(WarningFilters::unused_function_warnings_filter()),
             )
             .unwrap_or_else(|e| panic!("Unable to build stackless bytecode: {}", e));
 

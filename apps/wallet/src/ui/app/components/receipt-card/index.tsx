@@ -21,6 +21,9 @@ function TransactionStatus({ success, timestamp }: { success: boolean; timestamp
 	return (
 		<div className="flex flex-col gap-3 items-center justify-center mb-4">
 			<StatusIcon status={success} />
+			<span data-testid="transaction-status" className="sr-only">
+				{success ? 'Transaction Success' : 'Transaction Failed'}
+			</span>
 			{timestamp && <DateCard timestamp={Number(timestamp)} size="md" />}
 		</div>
 	);

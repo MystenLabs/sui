@@ -7,14 +7,20 @@ import {
 	SerializedSignature,
 	SignaturePubkeyPair,
 	SignatureScheme,
-	fromSerializedSignature,
-} from './signature';
-import { PublicKey } from './publickey';
+} from './signature.js';
+import { toSingleSignaturePubkeyPair } from './utils.js';
+import { PublicKey } from './publickey.js';
 import { blake2b } from '@noble/hashes/blake2b';
 import { bytesToHex } from '@noble/hashes/utils';
 
-import { normalizeSuiAddress } from '../types';
-import { Ed25519PublicKey, Secp256k1PublicKey, Secp256r1PublicKey, builder, fromB64 } from '..';
+import { normalizeSuiAddress } from '../types/index.js';
+import {
+	Ed25519PublicKey,
+	Secp256k1PublicKey,
+	Secp256r1PublicKey,
+	builder,
+	fromB64,
+} from '../index.js';
 
 export type PubkeyWeightPair = {
 	pubKey: PublicKey;
@@ -90,7 +96,7 @@ export function combinePartialSigs(
 	let bitmap = 0;
 	let compressed_sigs: CompressedSignature[] = new Array(sigs.length);
 	for (let i = 0; i < sigs.length; i++) {
-		let parsed = fromSerializedSignature(sigs[i]);
+		let parsed = toSingleSignaturePubkeyPair(sigs[i]);
 		let bytes = Array.from(parsed.signature.map((x) => Number(x)));
 		if (parsed.signatureScheme === 'ED25519') {
 			compressed_sigs[i] = { ED25519: bytes };
@@ -119,6 +125,7 @@ export function combinePartialSigs(
 	return toB64(tmp);
 }
 
+/// Decode a multisig signature into a list of signatures, public keys and flags.
 export function decodeMultiSig(signature: string): SignaturePubkeyPair[] {
 	const parsed = fromB64(signature);
 	if (parsed.length < 1 || parsed[0] !== SIGNATURE_SCHEME_TO_FLAG['MultiSig']) {

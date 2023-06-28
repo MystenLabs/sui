@@ -9,11 +9,16 @@ mod args;
 mod path;
 mod plan;
 
-fn main() {
+fn main() -> anyhow::Result<()> {
     let args = Args::parse();
-    println!("Cutting directories: {:#?}\n", args.directories);
-    println!("Including packages: {:#?}\n", args.packages);
+    let dry_run = args.dry_run;
+    let plan = CutPlan::discover(args)?;
 
-    let plan = CutPlan::discover(args);
-    println!("Plan: {:#?}\n", plan);
+    if dry_run {
+        println!("{plan}");
+    } else {
+        plan.execute()?;
+    }
+
+    Ok(())
 }

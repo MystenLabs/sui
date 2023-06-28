@@ -67,7 +67,7 @@ auto_ops = { version = "0.3", default-features = false }
 axum = { version = "0.6", default-features = false, features = ["form", "headers", "http1", "http2", "json", "matched-path", "original-uri", "query", "tokio"] }
 axum-core = { version = "0.3", default-features = false }
 axum-extra = { version = "0.4" }
-axum-server = { version = "0.4", features = ["tls-rustls"] }
+axum-server = { version = "0.4", default-features = false, features = ["tls-rustls"] }
 backoff = { version = "0.4", features = ["tokio"] }
 backtrace = { version = "0.3" }
 base-x = { version = "0.2", default-features = false }
@@ -106,7 +106,6 @@ bytecode-interpreter-crypto = { path = "../../external-crates/move/move-prover/i
 bytemuck = { version = "1", default-features = false }
 byteorder = { version = "1", features = ["i128"] }
 bytes = { version = "1", features = ["serde"] }
-bzip2-sys = { version = "0.1", default-features = false, features = ["static"] }
 cached = { version = "0.43" }
 cached_proc_macro_types = { version = "0.1", default-features = false }
 camino = { version = "1", default-features = false, features = ["serde1"] }
@@ -319,7 +318,7 @@ leb128 = { version = "0.2", default-features = false }
 lexical-core = { version = "0.7" }
 libc = { version = "0.2" }
 libm = { version = "0.2" }
-librocksdb-sys = { version = "0.11", features = ["bzip2", "lz4", "snappy", "zlib", "zstd"] }
+librocksdb-sys = { version = "0.11", features = ["lz4", "snappy", "zlib", "zstd"] }
 libtest-mimic = { version = "0.5", default-features = false }
 libz-sys = { version = "1", default-features = false, features = ["static"] }
 linked-hash-map = { version = "0.5", default-features = false }
@@ -344,11 +343,13 @@ mio-c38e5c1d305a1b54 = { package = "mio", version = "0.8", features = ["net", "o
 mockall = { version = "0.11", default-features = false }
 more-asserts = { version = "0.3", default-features = false }
 move-abigen = { path = "../../external-crates/move/move-prover/move-abigen", default-features = false }
+move-abstract-stack = { path = "../../external-crates/move/move-abstract-stack", default-features = false }
 move-binary-format = { path = "../../external-crates/move/move-binary-format" }
 move-borrow-graph = { path = "../../external-crates/move/move-borrow-graph", default-features = false }
 move-bytecode-source-map = { path = "../../external-crates/move/move-ir-compiler/move-bytecode-source-map" }
 move-bytecode-utils = { path = "../../external-crates/move/tools/move-bytecode-utils", default-features = false }
 move-bytecode-verifier = { path = "../../external-crates/move/move-bytecode-verifier" }
+move-bytecode-verifier-v0 = { path = "../../external-crates/move-execution/v0/move-bytecode-verifier" }
 move-bytecode-viewer = { path = "../../external-crates/move/tools/move-bytecode-viewer" }
 move-cli = { path = "../../external-crates/move/tools/move-cli", default-features = false }
 move-command-line-common = { path = "../../external-crates/move/move-command-line-common", default-features = false }
@@ -371,11 +372,14 @@ move-resource-viewer = { path = "../../external-crates/move/tools/move-resource-
 move-stackless-bytecode = { path = "../../external-crates/move/move-prover/bytecode", default-features = false }
 move-stackless-bytecode-interpreter = { path = "../../external-crates/move/move-prover/interpreter", default-features = false }
 move-stdlib = { path = "../../external-crates/move/move-stdlib", default-features = false, features = ["testing"] }
+move-stdlib-v0 = { path = "../../external-crates/move-execution/v0/move-stdlib", default-features = false }
 move-symbol-pool = { path = "../../external-crates/move/move-symbol-pool" }
 move-transactional-test-runner = { path = "../../external-crates/move/testing-infra/transactional-test-runner", default-features = false }
 move-unit-test = { path = "../../external-crates/move/tools/move-unit-test", default-features = false }
 move-vm-config = { path = "../../external-crates/move/move-vm/config", default-features = false }
+move-vm-profiler = { path = "../../external-crates/move/move-vm/profiler", default-features = false }
 move-vm-runtime = { path = "../../external-crates/move/move-vm/runtime", features = ["debugging", "testing"] }
+move-vm-runtime-v0 = { path = "../../external-crates/move-execution/v0/move-vm/runtime" }
 move-vm-test-utils = { path = "../../external-crates/move/move-vm/test-utils", features = ["tiered-gas"] }
 move-vm-types = { path = "../../external-crates/move/move-vm/types" }
 multiaddr = { version = "0.17" }
@@ -499,7 +503,7 @@ rfc6979-9fbad63c4bcf4a8f = { package = "rfc6979", version = "0.4", default-featu
 ring = { version = "0.16" }
 ripemd = { version = "0.1", default-features = false }
 roaring = { version = "0.10", default-features = false }
-rocksdb = { version = "0.21", features = ["multi-threaded-cf"] }
+rocksdb = { version = "0.21", default-features = false, features = ["lz4", "multi-threaded-cf", "snappy", "zlib", "zstd"] }
 ron = { version = "0.8" }
 rsa = { version = "0.8", features = ["sha2"] }
 rstest = { version = "0.16" }
@@ -628,8 +632,7 @@ toml_edit-cdcf2f9584511fe6 = { package = "toml_edit", version = "0.19", features
 tonic = { version = "0.8", features = ["tls"] }
 tonic-health = { version = "0.8" }
 tower = { version = "0.4", features = ["full"] }
-tower-http-468e82937335b1c9 = { package = "tower-http", version = "0.3", features = ["full"] }
-tower-http-9fbad63c4bcf4a8f = { package = "tower-http", version = "0.4", features = ["trace"] }
+tower-http = { version = "0.3", features = ["full"] }
 tower-layer = { version = "0.3", default-features = false }
 tower-service = { version = "0.3", default-features = false }
 tracing = { version = "0.1", features = ["log"] }
@@ -758,7 +761,7 @@ autocfg = { version = "1", default-features = false }
 axum = { version = "0.6", default-features = false, features = ["form", "headers", "http1", "http2", "json", "matched-path", "original-uri", "query", "tokio"] }
 axum-core = { version = "0.3", default-features = false }
 axum-extra = { version = "0.4" }
-axum-server = { version = "0.4", features = ["tls-rustls"] }
+axum-server = { version = "0.4", default-features = false, features = ["tls-rustls"] }
 backoff = { version = "0.4", features = ["tokio"] }
 backtrace = { version = "0.3" }
 base-x = { version = "0.2", default-features = false }
@@ -800,7 +803,6 @@ bytecode-interpreter-crypto = { path = "../../external-crates/move/move-prover/i
 bytemuck = { version = "1", default-features = false }
 byteorder = { version = "1", features = ["i128"] }
 bytes = { version = "1", features = ["serde"] }
-bzip2-sys = { version = "0.1", default-features = false, features = ["static"] }
 cached = { version = "0.43" }
 cached_proc_macro = { version = "0.16", default-features = false }
 cached_proc_macro_types = { version = "0.1", default-features = false }
@@ -1050,7 +1052,7 @@ lexical-core = { version = "0.7" }
 libc = { version = "0.2" }
 libloading = { version = "0.7", default-features = false }
 libm = { version = "0.2" }
-librocksdb-sys = { version = "0.11", features = ["bzip2", "lz4", "snappy", "zlib", "zstd"] }
+librocksdb-sys = { version = "0.11", features = ["lz4", "snappy", "zlib", "zstd"] }
 libtest-mimic = { version = "0.5", default-features = false }
 libz-sys = { version = "1", default-features = false, features = ["static"] }
 linked-hash-map = { version = "0.5", default-features = false }
@@ -1077,11 +1079,13 @@ mockall = { version = "0.11", default-features = false }
 mockall_derive = { version = "0.11", default-features = false }
 more-asserts = { version = "0.3", default-features = false }
 move-abigen = { path = "../../external-crates/move/move-prover/move-abigen", default-features = false }
+move-abstract-stack = { path = "../../external-crates/move/move-abstract-stack", default-features = false }
 move-binary-format = { path = "../../external-crates/move/move-binary-format" }
 move-borrow-graph = { path = "../../external-crates/move/move-borrow-graph", default-features = false }
 move-bytecode-source-map = { path = "../../external-crates/move/move-ir-compiler/move-bytecode-source-map" }
 move-bytecode-utils = { path = "../../external-crates/move/tools/move-bytecode-utils", default-features = false }
 move-bytecode-verifier = { path = "../../external-crates/move/move-bytecode-verifier" }
+move-bytecode-verifier-v0 = { path = "../../external-crates/move-execution/v0/move-bytecode-verifier" }
 move-bytecode-viewer = { path = "../../external-crates/move/tools/move-bytecode-viewer" }
 move-cli = { path = "../../external-crates/move/tools/move-cli", default-features = false }
 move-command-line-common = { path = "../../external-crates/move/move-command-line-common", default-features = false }
@@ -1105,11 +1109,14 @@ move-resource-viewer = { path = "../../external-crates/move/tools/move-resource-
 move-stackless-bytecode = { path = "../../external-crates/move/move-prover/bytecode", default-features = false }
 move-stackless-bytecode-interpreter = { path = "../../external-crates/move/move-prover/interpreter", default-features = false }
 move-stdlib = { path = "../../external-crates/move/move-stdlib", default-features = false, features = ["testing"] }
+move-stdlib-v0 = { path = "../../external-crates/move-execution/v0/move-stdlib", default-features = false }
 move-symbol-pool = { path = "../../external-crates/move/move-symbol-pool" }
 move-transactional-test-runner = { path = "../../external-crates/move/testing-infra/transactional-test-runner", default-features = false }
 move-unit-test = { path = "../../external-crates/move/tools/move-unit-test", default-features = false }
 move-vm-config = { path = "../../external-crates/move/move-vm/config", default-features = false }
+move-vm-profiler = { path = "../../external-crates/move/move-vm/profiler", default-features = false }
 move-vm-runtime = { path = "../../external-crates/move/move-vm/runtime", features = ["debugging", "testing"] }
+move-vm-runtime-v0 = { path = "../../external-crates/move-execution/v0/move-vm/runtime" }
 move-vm-test-utils = { path = "../../external-crates/move/move-vm/test-utils", features = ["tiered-gas"] }
 move-vm-types = { path = "../../external-crates/move/move-vm/types" }
 multiaddr = { version = "0.17" }
@@ -1264,7 +1271,7 @@ rfc6979-9fbad63c4bcf4a8f = { package = "rfc6979", version = "0.4", default-featu
 ring = { version = "0.16" }
 ripemd = { version = "0.1", default-features = false }
 roaring = { version = "0.10", default-features = false }
-rocksdb = { version = "0.21", features = ["multi-threaded-cf"] }
+rocksdb = { version = "0.21", default-features = false, features = ["lz4", "multi-threaded-cf", "snappy", "zlib", "zstd"] }
 ron = { version = "0.8" }
 rsa = { version = "0.8", features = ["sha2"] }
 rstest = { version = "0.16" }
@@ -1416,8 +1423,7 @@ tonic-build = { version = "0.8" }
 tonic-health = { version = "0.8" }
 toolchain_find = { version = "0.2", default-features = false }
 tower = { version = "0.4", features = ["full"] }
-tower-http-468e82937335b1c9 = { package = "tower-http", version = "0.3", features = ["full"] }
-tower-http-9fbad63c4bcf4a8f = { package = "tower-http", version = "0.4", features = ["trace"] }
+tower-http = { version = "0.3", features = ["full"] }
 tower-layer = { version = "0.3", default-features = false }
 tower-service = { version = "0.3", default-features = false }
 tracing = { version = "0.1", features = ["log"] }

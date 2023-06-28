@@ -142,6 +142,7 @@ fn run_benchmark(
             named_address_map: addrs,
         }],
         options.model_builder.clone(),
+        None,
     )?;
     let mut error_writer = StandardStream::stderr(ColorChoice::Auto);
 

@@ -39,7 +39,7 @@ export function ValidatorMeta({ validatorData }: ValidatorMetaProps) {
 							rel="noreferrer noopener"
 							className="mt-2.5 inline-flex items-center gap-1.5 text-body font-medium text-sui-dark no-underline"
 						>
-							{projectUrl}
+							{projectUrl.replace(/\/$/, '')}
 							<ArrowUpRight12 className="text-steel" />
 						</a>
 					)}

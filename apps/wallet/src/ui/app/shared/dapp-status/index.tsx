@@ -19,6 +19,7 @@ import { appDisconnect } from './actions';
 import Loading from '_components/loading';
 import { useAppDispatch, useAppSelector } from '_hooks';
 import { createDappStatusSelector } from '_redux/slices/permissions';
+import { ampli } from '_src/shared/analytics/ampli';
 import { trackEvent } from '_src/shared/plausible';
 
 import st from './DappStatus.module.scss';
@@ -56,7 +57,7 @@ function DappStatus() {
 		y,
 		context,
 		reference,
-		floating,
+		refs,
 		middlewareData: { arrow: arrowData },
 	} = useFloating({
 		open: visible,
@@ -84,6 +85,11 @@ function DappStatus() {
 						accounts: [activeAddress],
 					}),
 				).unwrap();
+				ampli.disconnectedApplication({
+					applicationUrl: activeOriginUrl,
+					disconnectedAccounts: 1,
+					sourceFlow: 'Header',
+				});
 				setVisible(false);
 			} catch (e) {
 				// Do nothing
@@ -98,6 +104,7 @@ function DappStatus() {
 	return (
 		<>
 			<ButtonConnectedTo
+				truncate
 				iconBefore={<Dot12 className="text-success" />}
 				text={activeOrigin || ''}
 				iconAfter={<ChevronDown12 />}
@@ -121,7 +128,7 @@ function DappStatus() {
 						className={st.popup}
 						style={{ top: y || 0, left: x || 0 }}
 						{...getFloatingProps()}
-						ref={floating}
+						ref={refs.setFloating}
 					>
 						<div className={st.popupContent}>
 							<div className={st.originContainer}>

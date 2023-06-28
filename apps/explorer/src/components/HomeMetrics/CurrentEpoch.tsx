@@ -12,6 +12,7 @@ import { Heading } from '~/ui/Heading';
 import { ProgressBar } from '~/ui/ProgressBar';
 import { Text } from '~/ui/Text';
 import { LinkWithQuery } from '~/ui/utils/LinkWithQuery';
+import { ampli } from '~/utils/analytics/ampli';
 
 export function CurrentEpoch() {
 	const { epoch, progress, label, end, start } = useEpochProgress();
@@ -35,7 +36,10 @@ export function CurrentEpoch() {
 	}, [start]);
 
 	return (
-		<LinkWithQuery to={`/epoch/${epoch}`}>
+		<LinkWithQuery
+			to={`/epoch/${epoch}`}
+			onClick={() => ampli.clickedCurrentEpochCard({ epoch: Number(epoch) })}
+		>
 			<Card bg="highlight" height="full" spacing="lg">
 				<div className="flex flex-col gap-10">
 					<div className="flex w-full flex-col gap-4">

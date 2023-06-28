@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::schema::{input_objects, move_calls, recipients};
+use crate::schema::{changed_objects, input_objects, move_calls, recipients};
 use diesel::prelude::*;
 
 #[derive(Queryable, Insertable, Debug, Clone, Default)]
@@ -37,4 +37,17 @@ pub struct Recipient {
     pub epoch: i64,
     pub sender: String,
     pub recipient: String,
+}
+
+#[derive(Queryable, Insertable, Debug, Clone, Default)]
+#[diesel(table_name = changed_objects)]
+pub struct ChangedObject {
+    pub id: Option<i64>,
+    pub transaction_digest: String,
+    pub checkpoint_sequence_number: i64,
+    pub epoch: i64,
+    pub object_id: String,
+    // object_change_type could be `mutated`, `created` or `unwrapped`.
+    pub object_change_type: String,
+    pub object_version: i64,
 }

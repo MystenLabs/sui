@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { cva, type VariantProps, cx } from 'class-variance-authority';
+import clsx from 'classnames';
 import { type ComponentProps, forwardRef, type ReactNode } from 'react';
 
 const styles = cva(
@@ -33,14 +34,15 @@ export interface ButtonConnectedToProps
 	iconBefore?: ReactNode;
 	text?: ReactNode;
 	iconAfter?: ReactNode;
+	truncate?: boolean;
 }
 
 export const ButtonConnectedTo = forwardRef<HTMLButtonElement, ButtonConnectedToProps>(
-	({ bgOnHover, iconBefore, iconAfter, text, ...rest }, ref) => {
+	({ bgOnHover, iconBefore, iconAfter, text, truncate, ...rest }, ref) => {
 		return (
 			<button {...rest} ref={ref} className={styles({ bgOnHover })}>
 				<div className="flex">{iconBefore}</div>
-				<div className="overflow-hidden">{text}</div>
+				<div className={clsx('overflow-hidden', truncate && 'truncate')}>{text}</div>
 				<div
 					className={cx(
 						'flex',

@@ -11,7 +11,7 @@ import Alarm from '_src/background/Alarms';
 import {
 	testEd25519,
 	testEd25519Serialized,
-	testMnemonic,
+	testMnemonicSeedHex,
 	testSecp256k1,
 	testSecp256k1Address,
 	testSecp256k1Serialized,
@@ -46,7 +46,7 @@ describe('Keyring', () => {
 
 		beforeEach(async () => {
 			vaultStorageMock.revive.mockResolvedValue(true);
-			vaultStorageMock.getMnemonic.mockReturnValue(testMnemonic);
+			vaultStorageMock.getMnemonicSeedHex.mockReturnValue(testMnemonicSeedHex);
 			vaultStorageMock.getImportedKeys.mockReturnValue([testSecp256k1]);
 			k = new Keyring();
 			await k.reviveDone;

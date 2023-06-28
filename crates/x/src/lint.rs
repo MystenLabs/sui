@@ -8,8 +8,8 @@ use nexlint_lints::{
     content::*,
     package::*,
     project::{
-        BannedDepConfig, BannedDepType, BannedDeps, BannedDepsConfig,
-        DirectDuplicateGitDependencies,
+        BannedDepConfig, BannedDepType, BannedDeps, BannedDepsConfig, DirectDepDups,
+        DirectDepDupsConfig, DirectDuplicateGitDependencies,
     },
 };
 static IGNORE_DIR: &str = "external-crates/";
@@ -46,12 +46,38 @@ pub fn run(args: Args) -> crate::Result<()> {
                     type_: BannedDepType::Always,
                 },
             ),
+            (
+                "actix-web".to_owned(),
+                BannedDepConfig {
+                    message: "use axum for a webframework instead".to_owned(),
+                    type_: BannedDepType::Always,
+                },
+            ),
+            (
+                "warp".to_owned(),
+                BannedDepConfig {
+                    message: "use axum for a webframework instead".to_owned(),
+                    type_: BannedDepType::Always,
+                },
+            ),
         ]
         .into_iter()
         .collect(),
     );
+
+    let direct_dep_dups_config = DirectDepDupsConfig {
+        allow: vec![
+            // TODO spend the time to de-dup these direct dependencies
+            "base64".to_owned(),
+            "clap".to_owned(),
+            "serde_yaml".to_owned(),
+            "syn".to_owned(),
+        ],
+    };
+
     let project_linters: &[&dyn ProjectLinter] = &[
         &BannedDeps::new(&banned_deps_config),
+        &DirectDepDups::new(&direct_dep_dups_config),
         &DirectDuplicateGitDependencies,
     ];
 

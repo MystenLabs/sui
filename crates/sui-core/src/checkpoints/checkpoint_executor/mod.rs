@@ -270,6 +270,9 @@ impl CheckpointExecutor {
             .unwrap();
         self.metrics.last_executed_checkpoint.set(seq as i64);
 
+        self.metrics
+            .last_executed_checkpoint_timestamp_ms
+            .set(checkpoint.timestamp_ms as i64);
         checkpoint.report_checkpoint_age_ms(&self.metrics.last_executed_checkpoint_age_ms);
     }
 
