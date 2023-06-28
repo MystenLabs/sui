@@ -6,7 +6,7 @@ use sui_move_build::{BuildConfig, SuiPackageHooks};
 use sui_sdk::SuiClient;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::transaction::{TransactionData, TransactionKind};
-use test_utils::network::TestClusterBuilder;
+use test_cluster::TestClusterBuilder;
 
 #[tokio::test]
 async fn test_dry_run_publish_with_mocked_coin() -> Result<(), anyhow::Error> {

@@ -27,7 +27,7 @@ use sui_types::{
     transaction::{Argument, Command, ObjectArg, ProgrammableTransaction},
     SUI_SYSTEM_PACKAGE_ID,
 };
-use test_utils::network::{TestCluster, TestClusterBuilder};
+use test_cluster::{TestCluster, TestClusterBuilder};
 use tracing::info;
 
 const MAX_DELEGATION_AMOUNT: u64 = 10_000_000_000;

@@ -1,5 +1,5 @@
 [package]
-name = "test-utils"
+name = "test-cluster"
 authors = ["Mysten Labs <build@mystenlabs.com>"]
 version = "0.1.0"
 license = "Apache-2.0"

@@ -5,13 +5,12 @@ use move_binary_format::access::ModuleAccess;
 use sui_framework::BuiltInFramework;
 use sui_json_rpc::api::ReadApiClient;
 use sui_json_rpc_types::SuiObjectResponse;
+use sui_macros::sim_test;
 use sui_types::{
     base_types::ObjectID, digests::TransactionDigest, object::Object, MOVE_STDLIB_PACKAGE_ID,
     SUI_FRAMEWORK_PACKAGE_ID, SUI_SYSTEM_ADDRESS, SUI_SYSTEM_PACKAGE_ID,
 };
-use test_utils::network::TestClusterBuilder;
-
-use sui_macros::sim_test;
+use test_cluster::TestClusterBuilder;
 
 #[sim_test]
 async fn test_additional_objects() {

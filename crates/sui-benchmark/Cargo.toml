@@ -49,7 +49,7 @@ move-package.workspace = true
 mysten-metrics.workspace = true
 narwhal-node.workspace = true
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
-test-utils.workspace = true
+test-cluster.workspace = true
 sysinfo.workspace = true
 
 [target.'cfg(msim)'.dependencies]

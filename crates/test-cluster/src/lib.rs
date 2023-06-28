@@ -815,26 +815,3 @@ impl Default for TestClusterBuilder {
         Self::new()
     }
 }
-
-// TODO: Merge the following functions with the ones inside TestCluster.
-pub async fn wait_for_node_transition_to_epoch(node: &SuiNodeHandle, expected_epoch: EpochId) {
-    node.with_async(|node| async move {
-        let mut rx = node.subscribe_to_epoch_change();
-        let epoch = node.current_epoch_for_testing();
-        if epoch != expected_epoch {
-            let system_state = rx.recv().await.unwrap();
-            assert_eq!(system_state.epoch(), expected_epoch);
-        }
-    })
-    .await
-}
-
-pub async fn wait_for_nodes_transition_to_epoch<'a>(
-    nodes: impl Iterator<Item = &'a SuiNodeHandle>,
-    expected_epoch: EpochId,
-) {
-    let handles: Vec<_> = nodes
-        .map(|handle| wait_for_node_transition_to_epoch(handle, expected_epoch))
-        .collect();
-    join_all(handles).await;
-}

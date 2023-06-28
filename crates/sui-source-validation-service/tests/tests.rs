@@ -1,17 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::path::PathBuf;
-
 use expect_test::expect;
 use reqwest::Client;
 use serde::Deserialize;
-
+use std::path::PathBuf;
 use sui_source_validation_service::{
     initialize, serve, verify_packages, CloneCommand, Config, Packages,
 };
-
-use test_utils::network::TestClusterBuilder;
+use test_cluster::TestClusterBuilder;
 
 const TEST_FIXTURES_DIR: &str = "tests/fixture";
 

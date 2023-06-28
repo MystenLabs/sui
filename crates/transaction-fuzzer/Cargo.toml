@@ -19,7 +19,7 @@ tracing.workspace = true
 
 sui-adapter = { path = "../../sui-execution/latest/sui-adapter", package = "sui-adapter-latest" }
 
-test-utils.workspace = true
+test-cluster.workspace = true
 once_cell.workspace = true
 sui-core.workspace = true
 sui-protocol-config.workspace = true

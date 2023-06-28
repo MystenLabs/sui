@@ -18,7 +18,7 @@ use sui_types::base_types::SuiAddress;
 use sui_types::crypto::{deterministic_random_account_key, AccountKeyPair};
 use sui_types::gas_coin::TOTAL_SUPPLY_MIST;
 use sui_types::object::Owner;
-use test_utils::network::TestClusterBuilder;
+use test_cluster::TestClusterBuilder;
 use tokio::runtime::Builder;
 use tokio::sync::{oneshot, Barrier};
 use tokio::time::sleep;
