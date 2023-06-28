@@ -4357,6 +4357,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "jsonpath_lib"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "eaa63191d68230cccb81c5aa23abd53ed64d83337cacbb25a7b8c7979523774f"
+dependencies = [
+ "log",
+ "serde 1.0.152",
+ "serde_json",
+]
+
+[[package]]
 name = "jsonrpsee"
 version = "0.16.2"
 source = "git+https://github.com/wlmyng/jsonrpsee.git?rev=b1b300784795f6a64d0fcdf8f03081a9bc38bde8#b1b300784795f6a64d0fcdf8f03081a9bc38bde8"
@@ -10264,6 +10275,38 @@ dependencies = [
  "quote 1.0.26",
  "syn 1.0.107",
  "unescape",
+ "workspace-hack",
+]
+
+[[package]]
+name = "sui-oracle"
+version = "1.5.0"
+dependencies = [
+ "anyhow",
+ "axum",
+ "bcs",
+ "chrono",
+ "clap 3.2.23",
+ "futures",
+ "jsonpath_lib",
+ "move-core-types",
+ "mysten-metrics",
+ "once_cell",
+ "prometheus",
+ "reqwest",
+ "serde 1.0.152",
+ "serde_json",
+ "serde_with",
+ "sui-config",
+ "sui-json",
+ "sui-json-rpc",
+ "sui-json-rpc-types",
+ "sui-sdk",
+ "sui-types",
+ "tap",
+ "telemetry-subscribers",
+ "tokio",
+ "tracing",
  "workspace-hack",
 ]
 
