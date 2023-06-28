@@ -401,14 +401,29 @@ impl LocalExec {
         })
     }
 
-    pub async fn new_for_state_dump(path: &str) -> Result<Self, ReplayEngineError> {
+    pub async fn new_for_state_dump(
+        path: &str,
+        backup_rpc_url: Option<String>,
+    ) -> Result<Self, ReplayEngineError> {
         // Use a throwaway metrics registry for local execution.
         let registry = prometheus::Registry::new();
         let metrics = Arc::new(LimitsMetrics::new(&registry));
 
         let state = NodeStateDump::read_from_file(&PathBuf::from(path))?;
         let current_protocol_version = state.protocol_version;
-        let fetcher = NodeStateDumpFetcher::from(state);
+        let fetcher = match backup_rpc_url {
+            Some(url) => NodeStateDumpFetcher::new(
+                state,
+                Some(RemoteFetcher::new(
+                    SuiClientBuilder::default()
+                        .request_timeout(RPC_TIMEOUT_ERR_SLEEP_RETRY_PERIOD)
+                        .max_concurrent_requests(MAX_CONCURRENT_REQUESTS)
+                        .build(url)
+                        .await?,
+                )),
+            ),
+            None => NodeStateDumpFetcher::new(state, None),
+        };
 
         Ok(Self {
             client: None,
