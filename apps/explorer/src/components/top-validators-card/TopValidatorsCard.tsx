@@ -16,6 +16,7 @@ import { Link } from '~/ui/Link';
 import { PlaceholderTable } from '~/ui/PlaceholderTable';
 import { TableCard } from '~/ui/TableCard';
 import { Text } from '~/ui/Text';
+import { ampli } from '~/utils/analytics/ampli';
 
 const NUMBER_OF_VALIDATORS = 10;
 
@@ -46,7 +47,17 @@ const validatorsTable = (
 					<div className="flex items-center gap-2.5">
 						{showIcon && <ImageIcon src={logo} size="sm" fallback={name} label={name} circle />}
 
-						<ValidatorLink address={address} label={name} />
+						<ValidatorLink
+							address={address}
+							label={name}
+							onClick={() =>
+								ampli.clickedValidatorRow({
+									sourceFlow: 'Top validators - validator name',
+									validatorAddress: address,
+									validatorName: name,
+								})
+							}
+						/>
 					</div>
 				</HighlightedTableCol>
 			),
@@ -58,7 +69,17 @@ const validatorsTable = (
 			),
 			address: (
 				<HighlightedTableCol>
-					<AddressLink address={address} noTruncate={!limit} />
+					<AddressLink
+						address={address}
+						noTruncate={!limit}
+						onClick={() =>
+							ampli.clickedValidatorRow({
+								sourceFlow: 'Top validators - validator address',
+								validatorAddress: address,
+								validatorName: name,
+							})
+						}
+					/>
 				</HighlightedTableCol>
 			),
 		})),

@@ -8,6 +8,7 @@ import { NetworkContext } from '../../context';
 import { Network } from '../../utils/api/DefaultRpcClient';
 
 import { NetworkSelect, type NetworkOption } from '~/ui/header/NetworkSelect';
+import { ampli } from '~/utils/analytics/ampli';
 
 export default function WrappedNetworkSelect() {
 	const [network, setNetwork] = useContext(NetworkContext);
@@ -24,7 +25,10 @@ export default function WrappedNetworkSelect() {
 	return (
 		<NetworkSelect
 			value={network}
-			onChange={setNetwork}
+			onChange={(networkId) => {
+				ampli.switchedNetwork({ toNetwork: networkId });
+				setNetwork(networkId);
+			}}
 			networks={networks}
 			version={data?.protocolVersion}
 			binaryVersion={binaryVersion}

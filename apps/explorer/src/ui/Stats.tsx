@@ -10,6 +10,7 @@ import type { ReactNode } from 'react';
 import { Heading } from '~/ui/Heading';
 import { Text } from '~/ui/Text';
 import { Tooltip } from '~/ui/Tooltip';
+import { ampli } from '~/utils/analytics/ampli';
 
 export type StatsProps = {
 	size?: 'sm' | 'md';
@@ -44,7 +45,12 @@ export function Stats({
 					</Text>
 				</div>
 				{tooltip && (
-					<Tooltip tip={unavailable ? 'Coming soon' : tooltip}>
+					<Tooltip
+						tip={unavailable ? 'Coming soon' : tooltip}
+						onOpen={() => {
+							ampli.activatedTooltip({ tooltipLabel: label });
+						}}
+					>
 						<InfoSvg />
 					</Tooltip>
 				)}
