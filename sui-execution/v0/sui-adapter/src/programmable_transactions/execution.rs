@@ -9,9 +9,10 @@ use std::{
 
 use move_binary_format::{
     access::ModuleAccess,
+    compatibility::{Compatibility, InclusionCheck},
     errors::{Location, PartialVMResult, VMResult},
     file_format::{AbilitySet, CodeOffset, FunctionDefinitionIndex, LocalIndex, Visibility},
-    CompiledModule,
+    normalized, CompiledModule,
 };
 use move_core_types::{
     account_address::AccountAddress,
@@ -707,29 +708,61 @@ fn check_compatibility<'a>(
 
     let mut new_normalized = normalize_deserialized_modules(upgrading_modules.into_iter());
     for (name, cur_module) in current_normalized {
-        let msg = format!("Existing module {name} not found in next version of package");
         let Some(new_module) = new_normalized.remove(&name) else {
             return Err(ExecutionError::new_with_source(
                 ExecutionErrorKind::PackageUpgradeError {
                     upgrade_error: PackageUpgradeError::IncompatibleUpgrade,
                 },
-                msg,
+                format!("Existing module {name} not found in next version of package"),
             ));
         };
 
-        if let Err(e) =
-            policy.check_compatibility(&cur_module, &new_module, context.protocol_config)
-        {
-            return Err(ExecutionError::new_with_source(
-                ExecutionErrorKind::PackageUpgradeError {
-                    upgrade_error: PackageUpgradeError::IncompatibleUpgrade,
-                },
-                e,
-            ));
-        }
+        check_module_compatibility(
+            &policy,
+            context.protocol_config,
+            &cur_module,
+            &new_module,
+        )?;
     }
 
     Ok(())
+}
+
+fn check_module_compatibility(
+    policy: &UpgradePolicy,
+    protocol_config: &ProtocolConfig,
+    cur_module: &normalized::Module,
+    new_module: &normalized::Module,
+) -> Result<(), ExecutionError> {
+    match policy {
+        UpgradePolicy::Additive => InclusionCheck::Subset.check(cur_module, new_module),
+        UpgradePolicy::DepOnly => InclusionCheck::Equal.check(cur_module, new_module),
+        UpgradePolicy::Compatible => {
+            let disallowed_new_abilities = if protocol_config.disallow_adding_abilities_on_upgrade() {
+                AbilitySet::ALL
+            } else {
+                AbilitySet::EMPTY
+            };
+
+            let compatibility = Compatibility {
+                check_struct_and_pub_function_linking: true,
+                check_struct_layout: true,
+                check_friend_linking: false,
+                check_private_entry_linking: false,
+                disallowed_new_abilities,
+                disallow_change_struct_type_params: protocol_config
+                    .disallow_change_struct_type_params_on_upgrade(),
+            };
+
+            compatibility.check(cur_module, new_module)
+        }
+    }
+    .map_err(|e| ExecutionError::new_with_source(
+        ExecutionErrorKind::PackageUpgradeError {
+            upgrade_error: PackageUpgradeError::IncompatibleUpgrade,
+        },
+        e,
+    ))
 }
 
 fn fetch_package(
