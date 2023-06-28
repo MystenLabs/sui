@@ -30,7 +30,7 @@ export function DAppInfoCard({ name, url, iconUrl, connectedAddress }: DAppInfoC
 			showDivider
 			body={
 				<>
-					<div className="flex flex-row flex-nowrap items-center gap-3.75 pb-3">
+					<div className="flex flex-row flex-nowrap items-center gap-3.75 py-3">
 						<div className="flex items-stretch h-15 w-15 rounded-full overflow-hidden bg-steel/20 shrink-0 grow-0">
 							{iconUrl ? <img className="flex-1" src={iconUrl} alt={name} /> : null}
 						</div>

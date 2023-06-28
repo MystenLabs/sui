@@ -45,15 +45,14 @@ export function SignMessageRequest({ request }: SignMessageRequestProps) {
 			}}
 			address={request.tx.accountAddress}
 			scrollable
+			blended
 		>
 			<PageMainLayoutTitle title="Sign Message" />
-			<div className="flex flex-col flex-nowrap items-stretch border border-solid border-gray-50 rounded-15 overflow-y-auto overflow-x-hidden">
-				<div className="sticky top-0 bg-white p-5 pb-2.5">
-					<Heading variant="heading6" color="gray-90" weight="semibold" truncate>
-						Message You Are Signing
-					</Heading>
-				</div>
-				<div className="px-5 pb-5 break-words">
+			<Heading variant="heading6" color="gray-90" weight="semibold" centered>
+				Message You Are Signing
+			</Heading>
+			<div className="flex flex-col flex-nowrap items-stretch border border-solid border-gray-50 rounded-15 overflow-y-auto overflow-x-hidden bg-white shadow-summary-card">
+				<div className="p-5 break-words">
 					<Text variant="pBodySmall" weight="medium" color="steel-darker" mono={type === 'base64'}>
 						{message}
 					</Text>

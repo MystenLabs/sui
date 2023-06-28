@@ -83,7 +83,6 @@ function SiteConnectPage() {
 	useEffect(() => {
 		setDisplayWarning(!isSecure);
 	}, [isSecure]);
-
 	return (
 		<Loading loading={loading}>
 			{permissionRequest &&
@@ -96,6 +95,7 @@ function SiteConnectPage() {
 						onSubmit={handleHideWarning}
 						isWarning
 						addressHidden
+						blended
 					>
 						<PageMainLayoutTitle title="Insecure Website" />
 						<div className={st.warningWrapper}>
@@ -103,8 +103,8 @@ function SiteConnectPage() {
 						</div>
 
 						<div className={st.warningMessage}>
-							This site requesting this wallet connection is not secure, and attackers might be
-							trying to steal your information.
+							If you connect your wallet to this site your data could be exposed to attackers. Click
+							**Reject** if you don't trust this site.
 							<br />
 							<br />
 							Continue at your own risk.
@@ -117,18 +117,20 @@ function SiteConnectPage() {
 						approveTitle="Connect"
 						rejectTitle="Reject"
 						onSubmit={handleOnSubmit}
-						addressHidden
 						approveDisabled={!accountsToConnect.length}
+						blended
 					>
 						<PageMainLayoutTitle title="Approve Connection" />
 						<SummaryCard
 							header="Permissions requested"
 							body={<DAppPermissionsList permissions={permissionRequest.permissions} />}
+							boxShadow
 						/>
 						<WalletListSelect
 							title="Connect Accounts"
 							values={accountsToConnect}
 							onChange={setAccountsToConnect}
+							boxShadow
 						/>
 					</UserApproveContainer>
 				))}
