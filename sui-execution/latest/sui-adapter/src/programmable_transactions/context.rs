@@ -54,7 +54,7 @@ use sui_types::{
     execution_status::CommandArgumentError,
 };
 
-use super::linkage_view::{LinkageInfo, LinkageView, SavedLinkage};
+use super::linkage_view::{LinkageView, SavedLinkage};
 
 sui_macros::checked_arithmetic! {
 
@@ -120,7 +120,7 @@ impl<'vm, 'state, 'a> ExecutionContext<'vm, 'state, 'a> {
     ) -> Result<Self, ExecutionError> {
         // we need a new session just for loading types, which is sad
         // TODO remove this
-        let linkage = LinkageView::new(Box::new(state_view.as_sui_resolver()), LinkageInfo::Unset);
+        let linkage = LinkageView::new(Box::new(state_view.as_sui_resolver()));
         let mut tmp_session = new_session(
             vm,
             linkage,
