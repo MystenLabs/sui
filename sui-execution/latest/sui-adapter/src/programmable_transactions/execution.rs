@@ -801,7 +801,7 @@ fn vm_move_call(
     // script visibility checked manually for entry points
     let mut result = context
         .session
-        .execute_function_bypass_visibility_gas_profiling(
+        .execute_function_bypass_visibility(
             module_id,
             function,
             type_arguments,

@@ -102,7 +102,7 @@ pub fn new_move_vm(
                 .no_extraneous_module_bytes(),
             // Don't augment errors with execution state on-chain
             error_execution_state: false,
-            profiler_config: Default::default(),
+            #[cfg(debug_assertions)] profiler_config: Default::default(),
         },
     )
     .map_err(|_| SuiError::ExecutionInvariantViolation)

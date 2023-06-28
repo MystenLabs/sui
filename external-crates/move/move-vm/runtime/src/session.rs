@@ -105,25 +105,7 @@ impl<'r, 'l, S: MoveResolver> Session<'r, 'l, S> {
             function_name.to_string(),
             gas_meter.remaining_gas().into(),
         ));
-        self.execute_function_bypass_visibility_gas_profiling(
-            module,
-            function_name,
-            ty_args,
-            args,
-            gas_meter,
-        )
-    }
 
-    /// Similar to execute_function_bypass_visibility, but it supports
-    /// gas profiling
-    pub fn execute_function_bypass_visibility_gas_profiling<'q>(
-        &mut self,
-        module: &ModuleId,
-        function_name: &IdentStr,
-        ty_args: Vec<Type>,
-        args: Vec<impl Borrow<[u8]>>,
-        gas_meter: &mut impl GasMeter,
-    ) -> VMResult<SerializedReturnValues> {
         let bypass_declared_entry_check = true;
         self.runtime.execute_function(
             module,
