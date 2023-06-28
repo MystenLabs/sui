@@ -24,7 +24,7 @@ const GIT_REVISION: &str = {
 };
 const VERSION: &str = const_str::concat!(env!("CARGO_PKG_VERSION"), "-", GIT_REVISION);
 
-const DEFAULT_CHANNEL_SIZE:usize = 32;
+const DEFAULT_CHANNEL_SIZE:usize = 512;
 
 
 #[derive(Parser)]

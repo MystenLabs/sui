@@ -187,6 +187,12 @@ impl SequenceWorkerState {
         let epoch_start_config = self.epoch_store.epoch_start_config();
         let reference_gas_price = self.epoch_store.reference_gas_price();
 
+        // Download txs
+        if let Some(watermark) = download {
+            println!("Downloading up to {}", watermark);
+            self.handle_download(watermark, &config).await;
+        }
+
         // Epoch Start
         sw_sender
             .send(SailfishMessage::EpochStart{
@@ -196,10 +202,6 @@ impl SequenceWorkerState {
             })
             .await
             .expect("Sending doesn't work");
-
-        if let Some(watermark) = download {
-            self.handle_download(watermark, &config).await;
-        }
         
 
         if let Some(watermark) = exeucte {
@@ -237,19 +239,13 @@ impl SequenceWorkerState {
                         .expect("Transaction exists");
 
 
-                    // Send tx to Exec Worker, pausing if channel is full
-                    while let Err(_) = sw_sender
-                        .try_send(SailfishMessage::Transaction{
+                    // Send tx to Exec Worker
+                    sw_sender
+                        .send(SailfishMessage::Transaction{
                             tx: tx.clone(),
                             digest: tx_digest.clone(),
                             checkpoint_seq,
-                        }) 
-                    {
-                        // Channel full, sleep
-                        println!("sw channel full!");
-                        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-                        tokio::task::yield_now().await;
-                    }
+                        }).await.expect("sending failed");
 
                     if let TransactionKind::ChangeEpoch(_) = tx.data().transaction_data().kind() {
                         // wait for epoch end message from execution worker

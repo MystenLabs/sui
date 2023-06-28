@@ -28,7 +28,7 @@ use tokio::time::Instant;
 use super::types::*;
 
 
-const MANAGER_CHANNEL_SIZE:usize = 32;
+const MANAGER_CHANNEL_SIZE:usize = 64;
 
 // TODO: Returns the read set of a transction
 fn get_read_set(_tx: &VerifiedTransaction) -> Vec<ObjectID> {
@@ -62,18 +62,6 @@ impl QueuesManager {
             obj_queues: HashMap::new(),
             wait_table: HashMap::new(),
             ready: manager_sender}
-    }
-    
-    /// Helper method that repeatedly tries sending over the self.ready channel
-    async fn try_send(&mut self, tx: Transaction) {
-        while let Err(_) =
-            self.ready.try_send(tx.clone())
-        {
-            // Channel full, sleep
-            println!("manager channel full!");
-            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-            tokio::task::yield_now().await;
-        }
     }
 
     /// Enqueues a transaction on the manager
@@ -110,8 +98,7 @@ impl QueuesManager {
         // Check if ready
         if self.wait_table.get_mut(&txid).unwrap().is_empty() {
 			self.wait_table.remove(&txid);
-            println!("manager sending {}", full_tx.checkpoint_seq);
-            self.try_send(full_tx).await;
+            self.ready.send(full_tx).await.expect("send failed");
 		}
 	}
 
@@ -137,7 +124,7 @@ impl QueuesManager {
                 if self.wait_table.get_mut(next_txid).unwrap().is_empty() {
                     self.wait_table.remove(next_txid);
                     let next_tx = self.tx_store.get(next_txid).unwrap();
-                    self.try_send(next_tx.clone()).await;
+                    self.ready.send(next_tx.clone()).await.expect("send failed");
                 }
             }
 		}
@@ -354,15 +341,9 @@ impl ExecutionWorkerState {
         // Main loop
         loop {
             tokio::select! {
-                Some(msg) = sw_receiver.recv() => {
-                    // New tx from sequencer; enqueue to manager
-                    if let SailfishMessage::Transaction{tx, digest: exec_digest, checkpoint_seq} = msg {
-                        let full_tx = Transaction{tx, exec_digest, checkpoint_seq};
-                        manager.queue_tx(full_tx).await;
-                    } else {
-                        panic!("unexpected message");
-                    }
-                },
+                biased;
+
+                // Must poll from manager_receiver before sw_receiver, to avoid deadlock
                 Some(full_tx) = manager_receiver.recv() => {
                     // Transaction is ready to execute
                     let Transaction{tx, exec_digest, checkpoint_seq} = full_tx;
@@ -381,7 +362,7 @@ impl ExecutionWorkerState {
                     if checkpoint_seq % 10000 == 0 {
                         println!("Executed {}", checkpoint_seq);
                     }
-                    println!("Executed {}", checkpoint_seq);
+                    // println!("Executed {}", checkpoint_seq);
                     // manager.clean_up(&tx).await;
 
                     if let TransactionKind::ChangeEpoch(_) = tx.data().transaction_data().kind() {
@@ -394,6 +375,15 @@ impl ExecutionWorkerState {
                     // Stop executing when I hit the watermark
                     if checkpoint_seq == exec_watermark-1 {
                         break;
+                    }
+                },
+                Some(msg) = sw_receiver.recv() => {
+                    // New tx from sequencer; enqueue to manager
+                    if let SailfishMessage::Transaction{tx, digest: exec_digest, checkpoint_seq} = msg {
+                        let full_tx = Transaction{tx, exec_digest, checkpoint_seq};
+                        manager.queue_tx(full_tx).await;
+                    } else {
+                        panic!("unexpected message");
                     }
                 },
                 Some(_tx) = tasks.next() => {
