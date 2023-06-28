@@ -29,7 +29,7 @@ use sui_types::{
 };
 use tokio::sync::oneshot::{self, Sender};
 use tokio::time::Instant;
-use tracing::log::{debug, error, info};
+use tracing::{debug, error, info};
 use typed_store::{Map, TypedStoreError};
 
 use super::authority_store_tables::AuthorityPerpetualTables;
@@ -42,6 +42,7 @@ pub struct AuthorityStorePruningMetrics {
     pub last_pruned_checkpoint: IntGauge,
     pub num_pruned_objects: IntCounter,
     pub last_pruned_effects_checkpoint: IntGauge,
+    pub last_migration_checkpoint: IntGauge,
 }
 
 impl AuthorityStorePruningMetrics {
@@ -62,6 +63,12 @@ impl AuthorityStorePruningMetrics {
             last_pruned_effects_checkpoint: register_int_gauge_with_registry!(
                 "last_pruned_effects_checkpoint",
                 "Last pruned effects checkpoint",
+                registry
+            )
+            .unwrap(),
+            last_migration_checkpoint: register_int_gauge_with_registry!(
+                "last_migration_checkpoint",
+                "Last migration effects checkpoint",
                 registry
             )
             .unwrap(),
@@ -301,6 +308,57 @@ impl AuthorityStorePruner {
         .await
     }
 
+    pub async fn run_blob_migration(
+        perpetual_db: &Arc<AuthorityPerpetualTables>,
+        checkpoint_store: &Arc<CheckpointStore>,
+        config: AuthorityStorePruningConfig,
+        metrics: Arc<AuthorityStorePruningMetrics>,
+    ) -> anyhow::Result<()> {
+        info!("started blob migration");
+        let mut checkpoint_number = 0;
+        // let mut checkpoints_to_prune = vec![];
+        let mut effects_to_prune = vec![];
+        let max_eligible_checkpoint = checkpoint_store
+            .get_highest_executed_checkpoint()?
+            .map(|c| *c.sequence_number())
+            .unwrap_or_default();
+
+        loop {
+            let Some(ckpt) = checkpoint_store.certified_checkpoints.get(&(checkpoint_number + 1))? else {break;};
+            let checkpoint = ckpt.into_inner();
+            if *checkpoint.sequence_number() > max_eligible_checkpoint {
+                break;
+            }
+            checkpoint_number = *checkpoint.sequence_number();
+
+            let content = checkpoint_store
+                .get_checkpoint_contents(&checkpoint.content_digest)?
+                .ok_or_else(|| anyhow::anyhow!("checkpoint content data is missing"))?;
+            let effects = perpetual_db
+                .effects
+                .multi_get(content.iter().map(|tx| tx.effects))?;
+
+            effects_to_prune.extend(effects.into_iter().flatten());
+
+            if effects_to_prune.len() >= config.max_transactions_in_batch {
+                info!("processed checkpoint {:?}", checkpoint_number);
+                let mut batch = perpetual_db.effects.batch();
+                batch.insert_batch(
+                    &perpetual_db.effects,
+                    effects_to_prune
+                        .into_iter()
+                        .map(|effects| (effects.digest(), effects)),
+                )?;
+                batch.write()?;
+                effects_to_prune = vec![];
+                metrics
+                    .last_migration_checkpoint
+                    .set(checkpoint_number as i64);
+            }
+        }
+        Ok(())
+    }
+
     /// Prunes old object versions based on effects from all checkpoints from epochs eligible for pruning
     pub async fn prune_for_eligible_epochs(
         perpetual_db: &Arc<AuthorityPerpetualTables>,
@@ -492,6 +550,18 @@ impl AuthorityStorePruner {
         }
 
         tokio::task::spawn(async move {
+            if let Some(true) = config.run_blob_migration {
+                if let Err(err) = Self::run_blob_migration(
+                    &perpetual_db,
+                    &checkpoint_store,
+                    config,
+                    metrics.clone(),
+                )
+                .await
+                {
+                    error!("Failed to run blob migration: {:?}", err);
+                }
+            }
             loop {
                 tokio::select! {
                     _ = objects_prune_interval.tick(), if config.num_epochs_to_retain != u64::MAX => {

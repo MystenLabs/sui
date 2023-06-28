@@ -451,6 +451,9 @@ pub struct AuthorityStorePruningConfig {
     /// number of epochs to keep the latest version of transactions and effects for
     #[serde(skip_serializing_if = "Option::is_none")]
     pub num_epochs_to_retain_for_checkpoints: Option<u64>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub run_blob_migration: Option<bool>,
 }
 
 impl Default for AuthorityStorePruningConfig {
@@ -467,6 +470,7 @@ impl Default for AuthorityStorePruningConfig {
             max_transactions_in_batch: 1000,
             periodic_compaction_threshold_days: None,
             num_epochs_to_retain_for_checkpoints: None,
+            run_blob_migration: None,
         }
     }
 }
@@ -486,6 +490,7 @@ impl AuthorityStorePruningConfig {
             max_transactions_in_batch: 1000,
             periodic_compaction_threshold_days: None,
             num_epochs_to_retain_for_checkpoints,
+            run_blob_migration: None,
         }
     }
     pub fn fullnode_config() -> Self {
@@ -502,6 +507,7 @@ impl AuthorityStorePruningConfig {
             max_transactions_in_batch: 1000,
             periodic_compaction_threshold_days: None,
             num_epochs_to_retain_for_checkpoints,
+            run_blob_migration: None,
         }
     }
 }
