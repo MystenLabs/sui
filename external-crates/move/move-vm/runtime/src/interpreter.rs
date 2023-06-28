@@ -2514,13 +2514,7 @@ impl Frame {
 
                 profile_open_instr!(gas_meter, format!("{:?}", instruction));
 
-                let r = Self::execute_instruction(
-                    resolver,
-                    interpreter,
-                    data_store,
-                    gas_meter,
-                    instruction,
-                )?;
+                let r = self.execute_instruction(resolver, interpreter, data_store, instruction)?;
 
                 profile_close_instr!(gas_meter, format!("{:?}", instruction));
 
