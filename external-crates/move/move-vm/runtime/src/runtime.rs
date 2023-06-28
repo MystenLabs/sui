@@ -316,7 +316,6 @@ impl VMRuntime {
         data_store: &mut impl DataStore,
         gas_meter: &mut impl GasMeter,
         extensions: &mut NativeContextExtensions,
-        #[cfg(debug_assertions)] profiler: &'a mut GasProfiler,
     ) -> VMResult<SerializedReturnValues> {
         let arg_types = param_types
             .into_iter()
@@ -348,8 +347,6 @@ impl VMRuntime {
             gas_meter,
             extensions,
             &self.loader,
-            #[cfg(debug_assertions)]
-            profiler,
         )?;
 
         let serialized_return_values = self
@@ -390,7 +387,6 @@ impl VMRuntime {
         gas_meter: &mut impl GasMeter,
         extensions: &mut NativeContextExtensions,
         bypass_declared_entry_check: bool,
-        #[cfg(debug_assertions)] profiler: &'a mut GasProfiler,
     ) -> VMResult<SerializedReturnValues> {
         use move_binary_format::{binary_views::BinaryIndexedView, file_format::SignatureIndex};
         fn check_is_entry(
@@ -442,8 +438,6 @@ impl VMRuntime {
             data_store,
             gas_meter,
             extensions,
-            #[cfg(debug_assertions)]
-            profiler,
         )
     }
 
@@ -468,10 +462,13 @@ impl VMRuntime {
             .loader
             .load_script(script.borrow(), &type_arguments, data_store)?;
         #[cfg(debug_assertions)]
-        let mut prof = GasProfiler::init_default_cfg(
-            func.pretty_string().to_owned(),
-            gas_meter.remaining_gas().into(),
-        );
+        {
+            let rem = gas_meter.remaining_gas().into();
+            gas_meter.set_profiler(GasProfiler::init_default_cfg(
+                func.pretty_string().to_owned(),
+                rem,
+            ));
+        }
         // execute the function
         self.execute_function_impl(
             func,
@@ -482,8 +479,6 @@ impl VMRuntime {
             data_store,
             gas_meter,
             extensions,
-            #[cfg(debug_assertions)]
-            &mut prof,
         )
     }
 

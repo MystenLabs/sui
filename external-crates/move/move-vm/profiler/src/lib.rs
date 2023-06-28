@@ -95,7 +95,7 @@ impl GasProfiler {
             start_gas,
             config: config.clone(),
         };
-        profile_open_frame_impl!(prof, "root".to_string(), start_gas);
+        profile_open_frame_impl!(Some(&mut prof), "root".to_string(), start_gas);
         prof
     }
 
@@ -187,12 +187,10 @@ impl GasProfiler {
 #[cfg(debug_assertions)]
 impl Drop for GasProfiler {
     fn drop(&mut self) {
-        profile_close_frame_impl!(
-            self,
-            "root".to_string(),
-            self.start_gas() - self.profiles[0].end_value
-        );
-        profile_dump_file!(self);
+        let end_gas = self.start_gas() - self.profiles[0].end_value;
+        let mut q = Some(self);
+        profile_close_frame_impl!(&mut q, "root".to_string(), end_gas);
+        profile_dump_file!(q.unwrap());
         let GasProfiler {
             exporter: _,
             name: _,
@@ -208,10 +206,15 @@ impl Drop for GasProfiler {
 
 #[macro_export]
 macro_rules! profile_open_frame {
-    ($interpreter:expr, $frame_name:expr, $gas_rem:expr) => {
+    ($gas_meter:expr, $frame_name:expr) => {
         #[cfg(debug_assertions)]
         {
-            move_vm_profiler::profile_open_frame_impl!($interpreter.profiler, $frame_name, $gas_rem)
+            let gas_rem = $gas_meter.remaining_gas().into();
+            move_vm_profiler::profile_open_frame_impl!(
+                $gas_meter.get_profiler_mut(),
+                $frame_name,
+                gas_rem
+            )
         }
     };
 }
@@ -221,25 +224,28 @@ macro_rules! profile_open_frame_impl {
     ($profiler:expr, $frame_name:expr, $gas_rem:expr) => {
         #[cfg(debug_assertions)]
         {
-            let name = if !$profiler.config.use_long_function_name {
-                GasProfiler::short_name(&$frame_name)
-            } else {
-                $frame_name
-            };
-            $profiler.open_frame(name, $gas_rem)
+            if let Some(profiler) = $profiler {
+                let name = if !profiler.config.use_long_function_name {
+                    GasProfiler::short_name(&$frame_name)
+                } else {
+                    $frame_name
+                };
+                profiler.open_frame(name, $gas_rem)
+            }
         }
     };
 }
 
 #[macro_export]
 macro_rules! profile_close_frame {
-    ($interpreter:expr, $frame_name:expr, $gas_rem:expr) => {
+    ($gas_meter:expr, $frame_name:expr) => {
         #[cfg(debug_assertions)]
         {
+            let gas_rem = $gas_meter.remaining_gas().into();
             move_vm_profiler::profile_close_frame_impl!(
-                $interpreter.profiler,
+                $gas_meter.get_profiler_mut(),
                 $frame_name,
-                $gas_rem
+                gas_rem
             )
         }
     };
@@ -250,23 +256,28 @@ macro_rules! profile_close_frame_impl {
     ($profiler:expr, $frame_name:expr, $gas_rem:expr) => {
         #[cfg(debug_assertions)]
         {
-            let name = if !$profiler.config.use_long_function_name {
-                GasProfiler::short_name(&$frame_name)
-            } else {
-                $frame_name
-            };
-            $profiler.close_frame(name, $gas_rem)
+            if let Some(profiler) = $profiler {
+                let name = if !profiler.config.use_long_function_name {
+                    GasProfiler::short_name(&$frame_name)
+                } else {
+                    $frame_name
+                };
+                profiler.close_frame(name, $gas_rem)
+            }
         }
     };
 }
 
 #[macro_export]
 macro_rules! profile_open_instr {
-    ($interpreter:expr, $frame_name:expr, $gas_rem:expr) => {
+    ($gas_meter:expr, $frame_name:expr) => {
         #[cfg(debug_assertions)]
         {
-            if $interpreter.profiler.config.track_bytecode_instructions {
-                $interpreter.profiler.open_frame($frame_name, $gas_rem)
+            let gas_rem = $gas_meter.remaining_gas().into();
+            if let Some(profiler) = $gas_meter.get_profiler_mut() {
+                if profiler.config.track_bytecode_instructions {
+                    profiler.open_frame($frame_name, gas_rem)
+                }
             }
         }
     };
@@ -274,11 +285,14 @@ macro_rules! profile_open_instr {
 
 #[macro_export]
 macro_rules! profile_close_instr {
-    ($interpreter:expr, $frame_name:expr, $gas_rem:expr) => {
+    ($gas_meter:expr, $frame_name:expr) => {
         #[cfg(debug_assertions)]
         {
-            if $interpreter.profiler.config.track_bytecode_instructions {
-                $interpreter.profiler.close_frame($frame_name, $gas_rem)
+            let gas_rem = $gas_meter.remaining_gas().into();
+            if let Some(profiler) = $gas_meter.get_profiler_mut() {
+                if profiler.config.track_bytecode_instructions {
+                    profiler.close_frame($frame_name, gas_rem)
+                }
             }
         }
     };

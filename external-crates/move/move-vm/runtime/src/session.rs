@@ -77,7 +77,6 @@ impl<'r, 'l, S: MoveResolver> Session<'r, 'l, S> {
         ty_args: Vec<Type>,
         args: Vec<impl Borrow<[u8]>>,
         gas_meter: &mut impl GasMeter,
-        #[cfg(debug_assertions)] profiler: &'q mut GasProfiler,
     ) -> VMResult<SerializedReturnValues> {
         let bypass_declared_entry_check = false;
         self.runtime.execute_function(
@@ -89,8 +88,6 @@ impl<'r, 'l, S: MoveResolver> Session<'r, 'l, S> {
             gas_meter,
             &mut self.native_extensions,
             bypass_declared_entry_check,
-            #[cfg(debug_assertions)]
-            profiler,
         )
     }
 
@@ -104,18 +101,16 @@ impl<'r, 'l, S: MoveResolver> Session<'r, 'l, S> {
         gas_meter: &mut impl GasMeter,
     ) -> VMResult<SerializedReturnValues> {
         #[cfg(debug_assertions)]
-        let mut prof = GasProfiler::init_default_cfg(
+        gas_meter.set_profiler(GasProfiler::init_default_cfg(
             function_name.to_string(),
             gas_meter.remaining_gas().into(),
-        );
+        ));
         self.execute_function_bypass_visibility_gas_profiling(
             module,
             function_name,
             ty_args,
             args,
             gas_meter,
-            #[cfg(debug_assertions)]
-            &mut prof,
         )
     }
 
@@ -128,7 +123,6 @@ impl<'r, 'l, S: MoveResolver> Session<'r, 'l, S> {
         ty_args: Vec<Type>,
         args: Vec<impl Borrow<[u8]>>,
         gas_meter: &mut impl GasMeter,
-        #[cfg(debug_assertions)] profiler: &'q mut GasProfiler,
     ) -> VMResult<SerializedReturnValues> {
         let bypass_declared_entry_check = true;
         self.runtime.execute_function(
@@ -140,8 +134,6 @@ impl<'r, 'l, S: MoveResolver> Session<'r, 'l, S> {
             gas_meter,
             &mut self.native_extensions,
             bypass_declared_entry_check,
-            #[cfg(debug_assertions)]
-            profiler,
         )
     }
 

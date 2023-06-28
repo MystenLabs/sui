@@ -37,7 +37,7 @@ use move_vm_types::{
 use smallvec::SmallVec;
 
 use crate::native_extensions::NativeContextExtensions;
-use std::{cmp::min, collections::VecDeque, fmt::Write, marker::PhantomData, sync::Arc};
+use std::{cmp::min, collections::VecDeque, fmt::Write, sync::Arc};
 use tracing::error;
 
 macro_rules! debug_write {
@@ -75,7 +75,7 @@ enum InstrRet {
 ///
 /// An `Interpreter` instance is a stand alone execution context for a function.
 /// It mimics execution on a single thread, with an call stack and an operand stack.
-pub(crate) struct Interpreter<'a> {
+pub(crate) struct Interpreter {
     /// Operand stack, where Move `Value`s are stored for stack operations.
     operand_stack: Stack,
     /// The stack of active functions.
@@ -84,12 +84,6 @@ pub(crate) struct Interpreter<'a> {
     paranoid_type_checks: bool,
     /// Limits imposed at runtime
     runtime_limits_config: VMRuntimeLimitsConfig,
-
-    /// Gas profiler conditionally compiled
-    #[cfg(debug_assertions)]
-    profiler: &'a mut GasProfiler,
-    // Phantom to keep lifetime happy
-    phantom: PhantomData<&'a ()>,
 }
 
 struct TypeWithLoader<'a, 'b> {
@@ -103,7 +97,7 @@ impl<'a, 'b> TypeView for TypeWithLoader<'a, 'b> {
     }
 }
 
-impl<'a> Interpreter<'a> {
+impl Interpreter {
     /// Limits imposed at runtime
     pub fn runtime_limits_config(&self) -> &VMRuntimeLimitsConfig {
         &self.runtime_limits_config
@@ -118,23 +112,15 @@ impl<'a> Interpreter<'a> {
         gas_meter: &mut impl GasMeter,
         extensions: &mut NativeContextExtensions,
         loader: &Loader,
-        #[cfg(debug_assertions)] profiler: &'a mut GasProfiler,
     ) -> VMResult<Vec<Value>> {
         let mut interpreter = Interpreter {
             operand_stack: Stack::new(),
             call_stack: CallStack::new(),
             paranoid_type_checks: loader.vm_config().paranoid_type_checks,
             runtime_limits_config: loader.vm_config().runtime_limits_config.clone(),
-            #[cfg(debug_assertions)]
-            profiler,
-            phantom: PhantomData,
         };
 
-        profile_open_frame!(
-            interpreter,
-            function.pretty_string(),
-            gas_meter.remaining_gas().into()
-        );
+        profile_open_frame!(gas_meter, function.pretty_string());
 
         let ret = if function.is_native() {
             for arg in args {
@@ -182,11 +168,7 @@ impl<'a> Interpreter<'a> {
                         .finish(Location::Undefined),
                 })?;
 
-            profile_close_frame!(
-                interpreter,
-                function.pretty_string(),
-                gas_meter.remaining_gas().into()
-            );
+            profile_close_frame!(gas_meter, function.pretty_string());
 
             Ok(return_values.into_iter().collect())
         } else {
@@ -249,11 +231,7 @@ impl<'a> Interpreter<'a> {
                         .charge_drop_frame(non_ref_vals.into_iter())
                         .map_err(|e| self.set_location(e))?;
 
-                    profile_close_frame!(
-                        self,
-                        current_frame.function.pretty_string(),
-                        gas_meter.remaining_gas().into()
-                    );
+                    profile_close_frame!(gas_meter, current_frame.function.pretty_string());
                     if let Some(frame) = self.call_stack.pop() {
                         // Note: the caller will find the callee's return values at the top of the shared operand stack
                         current_frame = frame;
@@ -267,7 +245,7 @@ impl<'a> Interpreter<'a> {
                     let func = resolver.function_from_handle(fh_idx);
                     // Compiled out in release mode
                     let _func_name = func.pretty_string();
-                    profile_open_frame!(self, _func_name.clone(), gas_meter.remaining_gas().into());
+                    profile_open_frame!(gas_meter, _func_name.clone());
 
                     if self.paranoid_type_checks {
                         self.check_friend_or_private_call(&current_frame.function, &func)?;
@@ -303,7 +281,7 @@ impl<'a> Interpreter<'a> {
                         )?;
                         current_frame.pc += 1; // advance past the Call instruction in the caller
 
-                        profile_close_frame!(self, _func_name, gas_meter.remaining_gas().into());
+                        profile_close_frame!(gas_meter, _func_name);
                         continue;
                     }
 
@@ -328,7 +306,7 @@ impl<'a> Interpreter<'a> {
                     // Compiled out in release mode
                     let _func_name = func.pretty_string();
 
-                    profile_open_frame!(self, _func_name.clone(), gas_meter.remaining_gas().into());
+                    profile_open_frame!(gas_meter, _func_name.clone());
 
                     if self.paranoid_type_checks {
                         self.check_friend_or_private_call(&current_frame.function, &func)?;
@@ -360,7 +338,7 @@ impl<'a> Interpreter<'a> {
                         )?;
                         current_frame.pc += 1; // advance past the Call instruction in the caller
 
-                        profile_close_frame!(self, _func_name, gas_meter.remaining_gas().into());
+                        profile_close_frame!(gas_meter, _func_name);
 
                         continue;
                     }
@@ -2386,11 +2364,7 @@ impl Frame {
                     )?;
                 }
 
-                profile_open_instr!(
-                    interpreter,
-                    format!("{:?}", instruction),
-                    gas_meter.remaining_gas().into()
-                );
+                profile_open_instr!(gas_meter, format!("{:?}", instruction));
 
                 let r = Self::execute_instruction(
                     &mut self.pc,
@@ -2404,11 +2378,7 @@ impl Frame {
                     instruction,
                 )?;
 
-                profile_close_instr!(
-                    interpreter,
-                    format!("{:?}", instruction),
-                    gas_meter.remaining_gas().into()
-                );
+                profile_close_instr!(gas_meter, format!("{:?}", instruction));
 
                 match r {
                     InstrRet::Ok => (),

@@ -807,7 +807,6 @@ fn vm_move_call(
             type_arguments,
             serialized_arguments,
             context.gas_status.move_gas_status_mut(),
-            #[cfg(debug_assertions)] &mut context.gas_profiler
         )
         .map_err(|e| context.convert_vm_error(e))?;
 

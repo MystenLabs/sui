@@ -19,6 +19,8 @@ use move_core_types::{
 #[cfg(debug_assertions)]
 use move_vm_profiler::GasProfiler;
 use move_vm_runtime::{move_vm::MoveVM, session::Session};
+#[cfg(debug_assertions)]
+use move_vm_types::gas::GasMeter;
 use move_vm_types::loaded_data::runtime_types::Type;
 use sui_move_natives::object_runtime::{max_event_error, ObjectRuntime, RuntimeResults};
 use sui_protocol_config::ProtocolConfig;
@@ -88,11 +90,6 @@ pub struct ExecutionContext<'vm, 'state, 'a> {
     /// Map of arguments that are currently borrowed in this command, true if the borrow is mutable
     /// This gets cleared out when new results are pushed, i.e. the end of a command
     borrowed: HashMap<Argument, /* mut */ bool>,
-
-    /// Profiler for gas usage.
-    /// TODO: make pnly active in debug mode and with flags set
-    #[cfg(debug_assertions)]
-    pub gas_profiler: GasProfiler,
 }
 
 /// A write for an object that was generated outside of the Move ObjectRuntime
@@ -201,9 +198,15 @@ impl<'vm, 'state, 'a> ExecutionContext<'vm, 'state, 'a> {
             protocol_config,
             metrics.clone(),
         );
-        // Compiled out in release mode
-        let _tx_digest = tx_context.digest();
-        let _remaining_gas: u64 =  move_vm_types::gas::GasMeter::remaining_gas(gas_status.move_gas_status()).into();
+
+        // Set the profiler if in debug mode
+        #[cfg(debug_assertions)]
+        {
+            let tx_digest = tx_context.digest();
+            let remaining_gas: u64 =  move_vm_types::gas::GasMeter::remaining_gas(gas_status.move_gas_status()).into();
+            gas_status.move_gas_status_mut().set_profiler(GasProfiler::init(&vm.config().profiler_config, format!("{}", tx_digest), remaining_gas));
+        }
+
         Ok(Self {
             protocol_config,
             metrics,
@@ -219,7 +222,6 @@ impl<'vm, 'state, 'a> ExecutionContext<'vm, 'state, 'a> {
             new_packages: vec![],
             user_events: vec![],
             borrowed: HashMap::new(),
-            #[cfg(debug_assertions)] gas_profiler: GasProfiler::init(&vm.config().profiler_config, format!("{}", _tx_digest), _remaining_gas),
         })
     }
 
