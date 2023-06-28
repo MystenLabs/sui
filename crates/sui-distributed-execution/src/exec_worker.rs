@@ -30,14 +30,36 @@ use super::types::*;
 
 const MANAGER_CHANNEL_SIZE:usize = 64;
 
-// TODO: Returns the read set of a transction
-fn get_read_set(_tx: &VerifiedTransaction) -> Vec<ObjectID> {
-    Vec::new()
+/// Returns the read set of a transction
+fn get_read_set(tx: &VerifiedTransaction) -> HashSet<ObjectID> {
+    let tx_data = tx.data().transaction_data();
+    let input_object_kinds = tx_data
+        .input_objects()
+        .expect("Cannot get input object kinds");
+
+    let mut read_set = HashSet::new();
+    for kind in &input_object_kinds {
+        match kind {
+            InputObjectKind::MovePackage(id)
+            | InputObjectKind::SharedMoveObject { id, .. }
+            | InputObjectKind::ImmOrOwnedMoveObject((id, _, _)) => {
+                read_set.insert(*id)
+            }
+        };
+    }
+    return read_set;
 }
 
-// TODO: Returns the write set of a transction
-fn get_write_set(_tx: &VerifiedTransaction) -> Vec<ObjectID> {
-    Vec::new()
+/// TODO: Returns the write set of a transction
+fn get_write_set(_tx: &VerifiedTransaction) -> HashSet<ObjectID> {
+    HashSet::new()
+}
+
+fn get_read_write_set(tx: &VerifiedTransaction) -> HashSet<ObjectID> {
+    get_read_set(&tx)
+            .union(&mut get_write_set(&tx))
+            .copied()
+            .collect()
 }
 
 #[derive(Debug, Clone)]
@@ -72,8 +94,7 @@ impl QueuesManager {
 		self.tx_store.insert(txid, full_tx.clone());
 
         // Get RW set
-        let mut rw_set = get_read_set(&full_tx.tx);
-        rw_set.append(&mut get_write_set(&full_tx.tx));
+        let rw_set = get_read_write_set(&full_tx.tx);
         
         // Add tx to object queues
         for obj in rw_set.iter() {
@@ -107,8 +128,7 @@ impl QueuesManager {
 
         // Get digest and RW set
         let txid = *completed_tx.digest();
-        let mut rw_set = get_read_set(&completed_tx);
-        rw_set.append(&mut get_write_set(&completed_tx));
+        let rw_set = get_read_write_set(&completed_tx);
 		
 		// Remove tx from obj_queues
 		for obj in rw_set.iter() {
@@ -363,7 +383,7 @@ impl ExecutionWorkerState {
                         println!("Executed {}", checkpoint_seq);
                     }
                     // println!("Executed {}", checkpoint_seq);
-                    // manager.clean_up(&tx).await;
+                    manager.clean_up(&tx).await;
 
                     if let TransactionKind::ChangeEpoch(_) = tx.data().transaction_data().kind() {
                         // Change epoch
@@ -405,7 +425,24 @@ impl ExecutionWorkerState {
             "Execution worker TPS: {}",
             1000.0 * num_tx as f64 / elapsed.as_millis() as f64
         );
+
+        self.sanity_check(manager);
+
         println!("Execution worker finished");
+    }
+
+    fn sanity_check(&self, qm: QueuesManager) {
+        println!("Running sanity check...");
+
+        // obj_queues should be empty
+        for (obj, queue) in qm.obj_queues {
+            assert!(queue.is_empty(), "Queue for {} isn't empty", obj);
+        }
+
+        // wait_table should be empty
+        assert!(qm.wait_table.is_empty(), "Wait table isn't empty");
+        
+        println!("Done!");
     }
 }
 
