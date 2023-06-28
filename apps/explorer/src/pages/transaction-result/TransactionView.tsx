@@ -20,6 +20,7 @@ import { Signatures } from './Signatures';
 
 import styles from './TransactionResult.module.css';
 
+import { ErrorBoundary } from '~/components/error-boundary/ErrorBoundary';
 import { useBreakpoint } from '~/hooks/useBreakpoint';
 import { Events } from '~/pages/transaction-result/Events';
 import { TransactionData } from '~/pages/transaction-result/TransactionData';
@@ -63,7 +64,9 @@ export function TransactionView({ transaction }: { transaction: SuiTransactionBl
 					)}
 					<TabsContent value="signatures">
 						<div className="mt-10">
-							<Signatures transaction={transaction} />
+							<ErrorBoundary>
+								<Signatures transaction={transaction} />
+							</ErrorBoundary>
 						</div>
 					</TabsContent>
 				</Tabs>
