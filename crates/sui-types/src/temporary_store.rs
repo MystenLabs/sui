@@ -1543,14 +1543,20 @@ impl<'backing> TemporaryStore<'backing> {
 }
 
 impl<'backing> ChildObjectResolver for TemporaryStore<'backing> {
-    fn read_child_object(&self, parent: &ObjectID, child: &ObjectID) -> SuiResult<Option<Object>> {
+    fn read_child_object(
+        &self,
+        parent: &ObjectID,
+        child: &ObjectID,
+        child_version_upper_bound: SequenceNumber,
+    ) -> SuiResult<Option<Object>> {
         // there should be no read after delete
         debug_assert!(self.deleted.get(child).is_none());
         let obj_opt = self.written.get(child).map(|(obj, _kind)| obj);
         if obj_opt.is_some() {
             Ok(obj_opt.cloned())
         } else {
-            self.store.read_child_object(parent, child)
+            self.store
+                .read_child_object(parent, child, child_version_upper_bound)
         }
     }
 }
