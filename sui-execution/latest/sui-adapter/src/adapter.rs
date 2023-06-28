@@ -100,6 +100,7 @@ pub fn new_move_vm(
                 .disable_invariant_violation_check_in_swap_loc(),
             check_no_extraneous_bytes_during_deserialization: protocol_config
                 .no_extraneous_module_bytes(),
+            #[cfg(debug_assertions)] profiler_config: std::default::Default::default(),
             // Don't augment errors with execution state on-chain
             error_execution_state: false,
         },

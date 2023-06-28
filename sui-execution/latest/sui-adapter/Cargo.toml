@@ -23,6 +23,7 @@ move-vm-types.workspace = true
 
 move-bytecode-verifier = { path = "../../../external-crates/move/move-bytecode-verifier" }
 move-vm-runtime = { path = "../../../external-crates/move/move-vm/runtime" }
+move-vm-profiler = { path = "../../../external-crates/move/move-vm/profiler" }
 sui-move-natives = { path = "../sui-move-natives", package = "sui-move-natives-latest" }
 sui-verifier = { path = "../sui-verifier", package = "sui-verifier-latest" }
 

@@ -6,6 +6,7 @@ use std::{
     sync::Arc,
 };
 
+use crate::adapter::{missing_unwrapped_msg, new_native_extensions};
 use move_binary_format::{
     errors::{Location, VMError, VMResult},
     file_format::{CodeOffset, FunctionDefinitionIndex, TypeParameterIndex},
@@ -15,7 +16,11 @@ use move_core_types::{
     account_address::AccountAddress,
     language_storage::{ModuleId, StructTag, TypeTag},
 };
+#[cfg(debug_assertions)]
+use move_vm_profiler::GasProfiler;
 use move_vm_runtime::{move_vm::MoveVM, session::Session};
+#[cfg(debug_assertions)]
+use move_vm_types::gas::GasMeter;
 use move_vm_types::loaded_data::runtime_types::Type;
 use sui_move_natives::object_runtime::{max_event_error, ObjectRuntime, RuntimeResults};
 use sui_protocol_config::ProtocolConfig;
@@ -45,8 +50,6 @@ use sui_types::{
     execution_mode::ExecutionMode,
     execution_status::CommandArgumentError,
 };
-
-use crate::adapter::{missing_unwrapped_msg, new_native_extensions};
 
 use super::linkage_view::{LinkageInfo, LinkageView, SavedLinkage};
 
@@ -195,6 +198,15 @@ impl<'vm, 'state, 'a> ExecutionContext<'vm, 'state, 'a> {
             protocol_config,
             metrics.clone(),
         );
+
+        // Set the profiler if in debug mode
+        #[cfg(debug_assertions)]
+        {
+            let tx_digest = tx_context.digest();
+            let remaining_gas: u64 =  move_vm_types::gas::GasMeter::remaining_gas(gas_status.move_gas_status()).into();
+            gas_status.move_gas_status_mut().set_profiler(GasProfiler::init(&vm.config().profiler_config, format!("{}", tx_digest), remaining_gas));
+        }
+
         Ok(Self {
             protocol_config,
             metrics,

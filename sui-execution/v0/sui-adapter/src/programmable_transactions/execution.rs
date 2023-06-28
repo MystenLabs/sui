@@ -806,7 +806,7 @@ fn vm_move_call(
             function,
             type_arguments,
             serialized_arguments,
-            context.gas_status.move_gas_status(),
+            context.gas_status.move_gas_status_mut(),
         )
         .map_err(|e| context.convert_vm_error(e))?;
 
@@ -880,7 +880,7 @@ fn publish_and_verify_modules(
             AccountAddress::from(package_id),
             // TODO: publish_module_bundle() currently doesn't charge gas.
             // Do we want to charge there?
-            context.gas_status.move_gas_status(),
+            context.gas_status.move_gas_status_mut(),
         )
         .map_err(|e| context.convert_vm_error(e))?;
 

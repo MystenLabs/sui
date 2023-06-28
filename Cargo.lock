@@ -5045,6 +5045,7 @@ dependencies = [
  "move-stdlib",
  "move-symbol-pool",
  "move-unit-test",
+ "move-vm-profiler",
  "move-vm-runtime",
  "move-vm-test-utils",
  "move-vm-types",
@@ -5561,6 +5562,7 @@ dependencies = [
  "move-stackless-bytecode-interpreter",
  "move-stdlib",
  "move-symbol-pool",
+ "move-vm-profiler",
  "move-vm-runtime",
  "move-vm-test-utils",
  "move-vm-types",
@@ -5577,6 +5579,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "move-vm-profiler"
+version = "0.1.0"
+dependencies = [
+ "move-vm-config",
+ "once_cell",
+ "serde 1.0.152",
+ "serde_json",
+ "serde_with",
+]
+
+[[package]]
 name = "move-vm-runtime"
 version = "0.1.0"
 dependencies = [
@@ -5586,6 +5599,7 @@ dependencies = [
  "move-bytecode-verifier",
  "move-core-types",
  "move-vm-config",
+ "move-vm-profiler",
  "move-vm-types",
  "once_cell",
  "parking_lot 0.11.2",
@@ -5619,6 +5633,7 @@ dependencies = [
  "anyhow",
  "move-binary-format",
  "move-core-types",
+ "move-vm-profiler",
  "move-vm-types",
  "once_cell",
  "serde 1.0.152",
@@ -5631,6 +5646,7 @@ dependencies = [
  "bcs",
  "move-binary-format",
  "move-core-types",
+ "move-vm-profiler",
  "once_cell",
  "serde 1.0.152",
  "smallvec",
@@ -9264,6 +9280,7 @@ dependencies = [
  "move-core-types",
  "move-package",
  "move-vm-config",
+ "move-vm-profiler",
  "move-vm-runtime",
  "move-vm-types",
  "mysten-metrics",
@@ -9597,6 +9614,7 @@ dependencies = [
  "anyhow",
  "move-binary-format",
  "move-core-types",
+ "move-vm-profiler",
  "move-vm-test-utils",
  "move-vm-types",
  "once_cell",
@@ -10955,6 +10973,7 @@ dependencies = [
  "move-core-types",
  "move-disassembler",
  "move-ir-types",
+ "move-vm-profiler",
  "move-vm-types",
  "mysten-metrics",
  "mysten-network",
@@ -13171,6 +13190,7 @@ dependencies = [
  "move-transactional-test-runner",
  "move-unit-test",
  "move-vm-config",
+ "move-vm-profiler",
  "move-vm-runtime",
  "move-vm-runtime-v0",
  "move-vm-test-utils",
