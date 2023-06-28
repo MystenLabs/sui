@@ -20,6 +20,7 @@ use sui_types::temporary_store::TemporaryStore;
 use sui_types::sui_system_state::get_sui_system_state;
 use sui_types::sui_system_state::SuiSystemStateTrait;
 use sui_types::digests::TransactionDigest;
+use sui_types::effects::TransactionEffects;
 use sui_adapter::adapter;
 use sui_move_natives;
 use tokio::sync::mpsc;
@@ -31,6 +32,9 @@ use super::types::*;
 const MANAGER_CHANNEL_SIZE:usize = 64;
 
 /// Returns the read set of a transction
+/// Specifically, this is the set of input objects to the transaction. It excludes 
+/// child objects that are determined at runtime, but includes all owned objects inputs
+/// that must have their version numbers bumped.
 fn get_read_set(tx: &VerifiedTransaction) -> HashSet<ObjectID> {
     let tx_data = tx.data().transaction_data();
     let input_object_kinds = tx_data
@@ -50,14 +54,54 @@ fn get_read_set(tx: &VerifiedTransaction) -> HashSet<ObjectID> {
     return read_set;
 }
 
-/// TODO: Returns the write set of a transction
-fn get_write_set(_tx: &VerifiedTransaction) -> HashSet<ObjectID> {
-    HashSet::new()
+/// TODO: This makes use of tx_effects, which is illegal; it is not something that is 
+/// known a-priori before execution
+/// Returns the write set of a transction
+fn get_write_set(_tx: &VerifiedTransaction, tx_effects: &TransactionEffects) -> HashSet<ObjectID> {
+
+    let mut write_set: HashSet<ObjectID> = HashSet::new();
+
+    let TransactionEffects::V1(tx_effects) = tx_effects;
+
+    let created: Vec<ObjectID> = tx_effects.created.clone()
+        .into_iter()
+        .map(|(object_ref, _)| object_ref.0)
+        .collect();
+    let mutated: Vec<ObjectID> = tx_effects.mutated.clone()
+        .into_iter()
+        .map(|(object_ref, _)| object_ref.0)
+        .collect();
+    let unwrapped: Vec<ObjectID> = tx_effects.unwrapped.clone()
+        .into_iter()
+        .map(|(object_ref, _)| object_ref.0)
+        .collect();
+    let deleted: Vec<ObjectID> = tx_effects.deleted.clone()
+        .into_iter()
+        .map(|object_ref| object_ref.0)
+        .collect();
+    let unwrapped_then_deleted: Vec<ObjectID> = tx_effects.unwrapped_then_deleted.clone()
+        .into_iter()
+        .map(|object_ref| object_ref.0)
+        .collect();
+    let wrapped: Vec<ObjectID> = tx_effects.wrapped.clone()
+        .into_iter()
+        .map(|object_ref| object_ref.0)
+        .collect();
+
+    write_set.extend(created);
+    write_set.extend(mutated);
+    write_set.extend(unwrapped);
+    write_set.extend(deleted);
+    write_set.extend(unwrapped_then_deleted);
+    write_set.extend(wrapped);
+    return write_set;
 }
 
-fn get_read_write_set(tx: &VerifiedTransaction) -> HashSet<ObjectID> {
-    get_read_set(&tx)
-            .union(&mut get_write_set(&tx))
+
+/// Returns the read-write set of the transaction
+fn get_read_write_set(tx: &VerifiedTransaction, tx_effects: &TransactionEffects) -> HashSet<ObjectID> {
+    get_read_set(tx)
+            .union(&mut get_write_set(tx, tx_effects))
             .copied()
             .collect()
 }
@@ -66,6 +110,7 @@ fn get_read_write_set(tx: &VerifiedTransaction) -> HashSet<ObjectID> {
 pub struct Transaction {
     tx: VerifiedTransaction,
     exec_digest: ExecutionDigests,
+    tx_effects: TransactionEffects,  // full effects of tx, as ground truth exec result
     checkpoint_seq: u64,
 }
 
@@ -94,7 +139,7 @@ impl QueuesManager {
 		self.tx_store.insert(txid, full_tx.clone());
 
         // Get RW set
-        let rw_set = get_read_write_set(&full_tx.tx);
+        let rw_set = get_read_write_set(&full_tx.tx, &full_tx.tx_effects);
         
         // Add tx to object queues
         for obj in rw_set.iter() {
@@ -124,11 +169,11 @@ impl QueuesManager {
 	}
 
     /// Cleans up after a completed transaction
-	async fn clean_up(&mut self, completed_tx: &VerifiedTransaction) {
+	async fn clean_up(&mut self, completed_tx: Transaction) {
 
         // Get digest and RW set
-        let txid = *completed_tx.digest();
-        let rw_set = get_read_write_set(&completed_tx);
+        let txid = *completed_tx.tx.digest();
+        let rw_set = get_read_write_set(&completed_tx.tx, &completed_tx.tx_effects);
 		
 		// Remove tx from obj_queues
 		for obj in rw_set.iter() {
@@ -365,12 +410,14 @@ impl ExecutionWorkerState {
 
                 // Must poll from manager_receiver before sw_receiver, to avoid deadlock
                 Some(full_tx) = manager_receiver.recv() => {
-                    // Transaction is ready to execute
-                    let Transaction{tx, exec_digest, checkpoint_seq} = full_tx;
+                    
+                    let tx = &full_tx.tx.clone();
+                    let checkpoint_seq = &full_tx.checkpoint_seq.clone();
+
                     self.execute_tx(
                         &tx,
-                        &exec_digest,
-                        checkpoint_seq,
+                        &full_tx.exec_digest,
+                        *checkpoint_seq,
                         &protocol_config,
                         &move_vm,
                         &epoch_data,
@@ -382,8 +429,7 @@ impl ExecutionWorkerState {
                     if checkpoint_seq % 10000 == 0 {
                         println!("Executed {}", checkpoint_seq);
                     }
-                    // println!("Executed {}", checkpoint_seq);
-                    manager.clean_up(&tx).await;
+                    manager.clean_up(full_tx).await;
 
                     if let TransactionKind::ChangeEpoch(_) = tx.data().transaction_data().kind() {
                         // Change epoch
@@ -393,14 +439,19 @@ impl ExecutionWorkerState {
                     }
 
                     // Stop executing when I hit the watermark
-                    if checkpoint_seq == exec_watermark-1 {
+                    if *checkpoint_seq == exec_watermark-1 {
                         break;
                     }
                 },
                 Some(msg) = sw_receiver.recv() => {
                     // New tx from sequencer; enqueue to manager
-                    if let SailfishMessage::Transaction{tx, digest: exec_digest, checkpoint_seq} = msg {
-                        let full_tx = Transaction{tx, exec_digest, checkpoint_seq};
+                    if let SailfishMessage::Transaction{
+                        tx, 
+                        exec_digest,
+                        tx_effects, 
+                        checkpoint_seq,
+                    } = msg {
+                        let full_tx = Transaction{tx, exec_digest, tx_effects, checkpoint_seq};
                         manager.queue_tx(full_tx).await;
                     } else {
                         panic!("unexpected message");
@@ -408,7 +459,9 @@ impl ExecutionWorkerState {
                 },
                 Some(_tx) = tasks.next() => {
                     // TODO: to be used when using execute_tx_async            
-                    // // Transation finished executing; run manager clean up
+                    panic!("unexpected branch");
+
+                    // Transation finished executing; run manager clean up
                     // manager.clean_up(tx).await;
                     // num_tx += 1;
                 },

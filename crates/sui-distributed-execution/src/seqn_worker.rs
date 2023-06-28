@@ -238,12 +238,19 @@ impl SequenceWorkerState {
                         .expect("Transaction exists")
                         .expect("Transaction exists");
 
+                    let tx_effects = self
+                        .store
+                        .get_effects(&tx_digest.effects)
+                        .expect("Transaction effects exist")
+                        .expect("Transaction effects exist");
+
 
                     // Send tx to Exec Worker
                     sw_sender
                         .send(SailfishMessage::Transaction{
                             tx: tx.clone(),
-                            digest: tx_digest.clone(),
+                            exec_digest: *tx_digest,
+                            tx_effects,
                             checkpoint_seq,
                         }).await.expect("sending failed");
 
