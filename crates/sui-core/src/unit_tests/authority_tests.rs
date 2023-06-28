@@ -1029,7 +1029,8 @@ async fn test_dry_run_on_validator() {
     assert!(response.is_err());
 }
 
-// Tests using a dynamic field that a is newer than the parent in dev inspect/dry run
+// Tests using a dynamic field that is newer than the parent in dev inspect/dry run results
+// in not being able to access the dynamic field object
 #[tokio::test]
 async fn test_dry_run_dev_inspect_dynamic_field_too_new() {
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
@@ -1105,13 +1106,12 @@ async fn test_dry_run_dev_inspect_dynamic_field_too_new() {
     .unwrap();
     assert_eq!(effects.status(), &ExecutionStatus::Success);
     assert_eq!(effects.created().len(), 1);
-    let field = effects.created()[0].0;
 
     // make sure the parent was updated
     let new_parent = fullnode.get_object(&parent.0).await.unwrap().unwrap();
     assert!(parent.1 < new_parent.version());
 
-    // delete the child, but using the old version of the parent
+    // no child to delete since we are using the old version of the parent
     let pt = ProgrammableTransaction {
         inputs: vec![CallArg::Object(ObjectArg::ImmOrOwnedObject(parent))],
         commands: vec![Command::MoveCall(Box::new(ProgrammableMoveCall {
@@ -1129,11 +1129,9 @@ async fn test_dry_run_dev_inspect_dynamic_field_too_new() {
         .dev_inspect_transaction_block(sender, kind, Some(rgp))
         .await
         .unwrap();
-    assert_eq!(effects.deleted().len(), 1);
-    let deleted = &effects.deleted()[0];
-    assert_eq!(field.0, deleted.object_id);
-    assert_eq!(deleted.version, SequenceNumber::MAX);
+    assert_eq!(effects.deleted().len(), 0);
     // dry run
+    let rgp = fullnode.reference_gas_price_for_testing().unwrap();
     let data = TransactionData::new_programmable(
         sender,
         vec![gas_object_ref],
@@ -1145,10 +1143,7 @@ async fn test_dry_run_dev_inspect_dynamic_field_too_new() {
     let digest = *transaction.digest();
     let DryRunTransactionBlockResponse { effects, .. } =
         fullnode.dry_exec_transaction(data, digest).await.unwrap().0;
-    assert_eq!(effects.deleted().len(), 1);
-    let deleted = &effects.deleted()[0];
-    assert_eq!(field.0, deleted.object_id);
-    assert_eq!(deleted.version, SequenceNumber::MAX);
+    assert_eq!(effects.deleted().len(), 0);
 }
 
 // tests using a gas coin with version MAX - 1

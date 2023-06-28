@@ -1611,16 +1611,29 @@ impl BackingPackageStore for LocalExec {
 impl ChildObjectResolver for LocalExec {
     /// This uses `get_object`, which does not download from the network
     /// Hence all objects must be in store already
-    fn read_child_object(&self, parent: &ObjectID, child: &ObjectID) -> SuiResult<Option<Object>> {
+    fn read_child_object(
+        &self,
+        parent: &ObjectID,
+        child: &ObjectID,
+        child_version_upper_bound: SequenceNumber,
+    ) -> SuiResult<Option<Object>> {
         fn inner(
             self_: &LocalExec,
             parent: &ObjectID,
             child: &ObjectID,
+            child_version_upper_bound: SequenceNumber,
         ) -> SuiResult<Option<Object>> {
             let child_object = match self_.get_object(child)? {
                 None => return Ok(None),
                 Some(o) => o,
             };
+            let child_version = child_object.version();
+            if child_object.version() > child_version_upper_bound {
+                return Err(SuiError::Unknown(format!(
+                    "Invariant Violation. Replay loaded child_object {child} at version \
+                    {child_version} but expected the version to be <= {child_version_upper_bound}"
+                )));
+            }
             let parent = *parent;
             if child_object.owner != Owner::ObjectOwner(parent.into()) {
                 return Err(SuiError::InvalidChildObjectAccess {
@@ -1632,7 +1645,7 @@ impl ChildObjectResolver for LocalExec {
             Ok(Some(child_object))
         }
 
-        let res = inner(self, parent, child);
+        let res = inner(self, parent, child, child_version_upper_bound);
         self.exec_store_events
             .lock()
             .expect("Unable to lock events list")

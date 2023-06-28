@@ -7,6 +7,7 @@ use std::{
 };
 
 use crate::adapter::{missing_unwrapped_msg, new_native_extensions};
+use crate::error::convert_vm_error;
 use move_binary_format::{
     errors::{Location, VMError, VMResult},
     file_format::{CodeOffset, FunctionDefinitionIndex, TypeParameterIndex},
@@ -22,7 +23,9 @@ use move_vm_runtime::{move_vm::MoveVM, session::Session};
 #[cfg(debug_assertions)]
 use move_vm_types::gas::GasMeter;
 use move_vm_types::loaded_data::runtime_types::Type;
-use sui_move_natives::object_runtime::{max_event_error, ObjectRuntime, RuntimeResults};
+use sui_move_natives::object_runtime::{
+    self, get_all_uids, max_event_error, ObjectRuntime, RuntimeResults,
+};
 use sui_protocol_config::ProtocolConfig;
 use sui_types::{
     balance::Balance,
@@ -133,7 +136,7 @@ impl<'vm, 'state, 'a> ExecutionContext<'vm, 'state, 'a> {
             protocol_config,
             metrics.clone(),
         );
-        let mut object_owner_map = BTreeMap::new();
+        let mut input_object_map = BTreeMap::new();
         let inputs = inputs
             .into_iter()
             .map(|call_arg| {
@@ -141,7 +144,7 @@ impl<'vm, 'state, 'a> ExecutionContext<'vm, 'state, 'a> {
                     vm,
                     state_view,
                     &mut tmp_session,
-                    &mut object_owner_map,
+                    &mut input_object_map,
                     call_arg,
                 )
             })
@@ -151,7 +154,7 @@ impl<'vm, 'state, 'a> ExecutionContext<'vm, 'state, 'a> {
                 vm,
                 state_view,
                 &mut tmp_session,
-                &mut object_owner_map,
+                &mut input_object_map,
                 /* imm override */ false,
                 gas_coin,
             )?;
@@ -193,7 +196,7 @@ impl<'vm, 'state, 'a> ExecutionContext<'vm, 'state, 'a> {
             vm,
             linkage,
             state_view.as_child_resolver(),
-            object_owner_map,
+            input_object_map,
             !gas_status.is_unmetered(),
             protocol_config,
             metrics.clone(),
@@ -538,7 +541,6 @@ impl<'vm, 'state, 'a> ExecutionContext<'vm, 'state, 'a> {
 
     /// Determine the object changes and collect all user events
     pub fn finish<Mode: ExecutionMode>(self) -> Result<ExecutionResults, ExecutionError> {
-        use crate::error::convert_vm_error;
         let Self {
             protocol_config,
             metrics,
@@ -919,7 +921,7 @@ pub(crate) fn new_session<'state, 'vm>(
     vm: &'vm MoveVM,
     linkage: LinkageView<'state>,
     child_resolver: &'state dyn ChildObjectResolver,
-    input_objects: BTreeMap<ObjectID, Owner>,
+    input_objects: BTreeMap<ObjectID, object_runtime::InputObject>,
     is_metered: bool,
     protocol_config: &ProtocolConfig,
     metrics: Arc<LimitsMetrics>,
@@ -1119,7 +1121,7 @@ fn load_object<'vm, 'state>(
     vm: &'vm MoveVM,
     state_view: &'state dyn ExecutionState,
     session: &mut Session<'state, 'vm, LinkageView<'state>>,
-    object_owner_map: &mut BTreeMap<ObjectID, Owner>,
+    input_object_map: &mut BTreeMap<ObjectID, object_runtime::InputObject>,
     override_as_immutable: bool,
     id: ObjectID,
 ) -> Result<InputValue, ExecutionError> {
@@ -1141,16 +1143,36 @@ fn load_object<'vm, 'state>(
             invariant_violation!("ObjectOwner objects cannot be input")
         }
     };
+    let owner = obj.owner;
+    let version = obj.version();
     let object_metadata = InputObjectMetadata {
         id,
         is_mutable_input,
-        owner: obj.owner,
-        version: obj.version(),
+        owner,
+        version,
     };
-    let prev = object_owner_map.insert(id, obj.owner);
+    let obj_value = value_from_object(vm, session, obj)?;
+    let contained_uids = {
+        let fully_annotated_layout = session
+            .type_to_fully_annotated_layout(&obj_value.type_)
+            .map_err(|e| convert_vm_error(e, vm, session.get_resolver()))?;
+        let mut bytes = vec![];
+        obj_value.write_bcs_bytes(&mut bytes);
+        match get_all_uids(&fully_annotated_layout, &bytes) {
+            Err(e) => invariant_violation!(
+                "Unable to retrieve UIDs for object. Got error: {e}"
+            ),
+            Ok(uids) => uids,
+        }
+    };
+    let runtime_input = object_runtime::InputObject {
+        contained_uids,
+        owner,
+        version,
+    };
+    let prev = input_object_map.insert(id, runtime_input);
     // protected by transaction input checker
     assert_invariant!(prev.is_none(), "Duplicate input object {}", id);
-    let obj_value = value_from_object(vm, session, obj)?;
     Ok(InputValue::new_object(object_metadata, obj_value))
 }
 
@@ -1159,13 +1181,13 @@ fn load_call_arg<'vm, 'state>(
     vm: &'vm MoveVM,
     state_view: &'state dyn ExecutionState,
     session: &mut Session<'state, 'vm, LinkageView<'state>>,
-    object_owner_map: &mut BTreeMap<ObjectID, Owner>,
+    input_object_map: &mut BTreeMap<ObjectID, object_runtime::InputObject>,
     call_arg: CallArg,
 ) -> Result<InputValue, ExecutionError> {
     Ok(match call_arg {
         CallArg::Pure(bytes) => InputValue::new_raw(RawValueType::Any, bytes),
         CallArg::Object(obj_arg) => {
-            load_object_arg(vm, state_view, session, object_owner_map, obj_arg)?
+            load_object_arg(vm, state_view, session, input_object_map, obj_arg)?
         }
     })
 }
@@ -1175,7 +1197,7 @@ fn load_object_arg<'vm, 'state>(
     vm: &'vm MoveVM,
     state_view: &'state dyn ExecutionState,
     session: &mut Session<'state, 'vm, LinkageView<'state>>,
-    object_owner_map: &mut BTreeMap<ObjectID, Owner>,
+    input_object_map: &mut BTreeMap<ObjectID, object_runtime::InputObject>,
     obj_arg: ObjectArg,
 ) -> Result<InputValue, ExecutionError> {
     match obj_arg {
@@ -1183,7 +1205,7 @@ fn load_object_arg<'vm, 'state>(
             vm,
             state_view,
             session,
-            object_owner_map,
+            input_object_map,
             /* imm override */ false,
             id,
         ),
@@ -1191,7 +1213,7 @@ fn load_object_arg<'vm, 'state>(
             vm,
             state_view,
             session,
-            object_owner_map,
+            input_object_map,
             /* imm override */ !mutable,
             id,
         ),
