@@ -26,6 +26,7 @@ use move_core_types::{
     vm_status::StatusCode,
 };
 use move_vm_config::runtime::VMConfig;
+#[cfg(debug_assertions)]
 use move_vm_profiler::GasProfiler;
 use move_vm_types::{
     data_store::DataStore,
@@ -305,7 +306,7 @@ impl VMRuntime {
             .collect()
     }
 
-    fn execute_function_impl(
+    fn execute_function_impl<'a>(
         &self,
         func: Arc<Function>,
         ty_args: Vec<Type>,
@@ -315,7 +316,7 @@ impl VMRuntime {
         data_store: &mut impl DataStore,
         gas_meter: &mut impl GasMeter,
         extensions: &mut NativeContextExtensions,
-        profiler: &mut GasProfiler,
+        #[cfg(debug_assertions)] profiler: &'a mut GasProfiler,
     ) -> VMResult<SerializedReturnValues> {
         let arg_types = param_types
             .into_iter()
@@ -347,6 +348,7 @@ impl VMRuntime {
             gas_meter,
             extensions,
             &self.loader,
+            #[cfg(debug_assertions)]
             profiler,
         )?;
 
@@ -378,7 +380,7 @@ impl VMRuntime {
         })
     }
 
-    pub(crate) fn execute_function(
+    pub(crate) fn execute_function<'a>(
         &self,
         module: &ModuleId,
         function_name: &IdentStr,
@@ -388,7 +390,7 @@ impl VMRuntime {
         gas_meter: &mut impl GasMeter,
         extensions: &mut NativeContextExtensions,
         bypass_declared_entry_check: bool,
-        profiler: &mut GasProfiler,
+        #[cfg(debug_assertions)] profiler: &'a mut GasProfiler,
     ) -> VMResult<SerializedReturnValues> {
         use move_binary_format::{binary_views::BinaryIndexedView, file_format::SignatureIndex};
         fn check_is_entry(
@@ -440,6 +442,7 @@ impl VMRuntime {
             data_store,
             gas_meter,
             extensions,
+            #[cfg(debug_assertions)]
             profiler,
         )
     }
@@ -464,8 +467,11 @@ impl VMRuntime {
         ) = self
             .loader
             .load_script(script.borrow(), &type_arguments, data_store)?;
-        let func_name = func.pretty_string().to_owned();
-        let gas_rem = gas_meter.remaining_gas().into();
+        #[cfg(debug_assertions)]
+        let mut prof = GasProfiler::init_default_cfg(
+            func.pretty_string().to_owned(),
+            gas_meter.remaining_gas().into(),
+        );
         // execute the function
         self.execute_function_impl(
             func,
@@ -476,7 +482,8 @@ impl VMRuntime {
             data_store,
             gas_meter,
             extensions,
-            &mut GasProfiler::init_default_cfg(func_name, gas_rem),
+            #[cfg(debug_assertions)]
+            &mut prof,
         )
     }
 

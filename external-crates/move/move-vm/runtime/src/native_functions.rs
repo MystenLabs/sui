@@ -92,8 +92,8 @@ impl NativeFunctions {
     }
 }
 
-pub struct NativeContext<'a, 'b> {
-    interpreter: &'a mut Interpreter,
+pub struct NativeContext<'a, 'b, 'c> {
+    interpreter: &'a mut Interpreter<'c>,
     data_store: &'a mut dyn DataStore,
     resolver: &'a Resolver<'a>,
     extensions: &'a mut NativeContextExtensions<'b>,
@@ -101,9 +101,9 @@ pub struct NativeContext<'a, 'b> {
     gas_budget: InternalGas,
 }
 
-impl<'a, 'b> NativeContext<'a, 'b> {
+impl<'a, 'b, 'c> NativeContext<'a, 'b, 'c> {
     pub(crate) fn new(
-        interpreter: &'a mut Interpreter,
+        interpreter: &'a mut Interpreter<'c>,
         data_store: &'a mut dyn DataStore,
         resolver: &'a Resolver<'a>,
         extensions: &'a mut NativeContextExtensions<'b>,
@@ -125,7 +125,7 @@ impl<'a, 'b> NativeContext<'a, 'b> {
     }
 }
 
-impl<'a, 'b> NativeContext<'a, 'b> {
+impl<'a, 'b, 'c> NativeContext<'a, 'b, 'c> {
     pub fn print_stack_trace<B: Write>(&self, buf: &mut B) -> PartialVMResult<()> {
         self.interpreter
             .debug_print_stack_trace(buf, self.resolver.loader())

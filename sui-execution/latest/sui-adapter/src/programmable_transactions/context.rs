@@ -16,6 +16,7 @@ use move_core_types::{
     account_address::AccountAddress,
     language_storage::{ModuleId, StructTag, TypeTag},
 };
+#[cfg(debug_assertions)]
 use move_vm_profiler::GasProfiler;
 use move_vm_runtime::{move_vm::MoveVM, session::Session};
 use move_vm_types::loaded_data::runtime_types::Type;
@@ -90,6 +91,7 @@ pub struct ExecutionContext<'vm, 'state, 'a> {
 
     /// Profiler for gas usage.
     /// TODO: make pnly active in debug mode and with flags set
+    #[cfg(debug_assertions)]
     pub gas_profiler: GasProfiler,
 }
 
@@ -199,7 +201,8 @@ impl<'vm, 'state, 'a> ExecutionContext<'vm, 'state, 'a> {
             protocol_config,
             metrics.clone(),
         );
-        let tx_digest = tx_context.digest();
+        let _tx_digest = tx_context.digest();
+        #[cfg(debug_assertions)]
         let remaining_gas =  move_vm_types::gas::GasMeter::remaining_gas(gas_status.move_gas_status()).into();
         Ok(Self {
             protocol_config,
@@ -216,7 +219,7 @@ impl<'vm, 'state, 'a> ExecutionContext<'vm, 'state, 'a> {
             new_packages: vec![],
             user_events: vec![],
             borrowed: HashMap::new(),
-            gas_profiler: GasProfiler::init(&vm.config().profiler_config, format!("{}", tx_digest), remaining_gas),
+            #[cfg(debug_assertions)] gas_profiler: GasProfiler::init(&vm.config().profiler_config, format!("{}", _tx_digest), remaining_gas),
         })
     }
 

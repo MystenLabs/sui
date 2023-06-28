@@ -1,9 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+#[cfg(debug_assertions)]
 use move_vm_config::runtime::VMProfilerConfig;
+#[cfg(debug_assertions)]
 use once_cell::sync::Lazy;
+#[cfg(debug_assertions)]
 use serde::Serialize;
+#[cfg(debug_assertions)]
 use std::collections::BTreeMap;
 
 #[cfg(debug_assertions)]
@@ -13,10 +17,13 @@ const MOVE_VM_PROFILER_ENV_VAR_NAME: &str = "MOVE_VM_PROFILE";
 static PROFILER_ENABLED: Lazy<bool> =
     Lazy::new(|| std::env::var(MOVE_VM_PROFILER_ENV_VAR_NAME).is_ok());
 
+#[cfg(debug_assertions)]
 #[derive(Debug, Clone, Serialize)]
 pub struct FrameName {
     name: String,
 }
+
+#[cfg(debug_assertions)]
 #[derive(Debug, Clone, Serialize)]
 pub struct Shared {
     frames: Vec<FrameName>,
@@ -25,6 +32,7 @@ pub struct Shared {
     frame_table: BTreeMap<String, usize>,
 }
 
+#[cfg(debug_assertions)]
 #[derive(Debug, Clone, Serialize)]
 pub struct Event {
     #[serde(rename(serialize = "type"))]
@@ -33,6 +41,7 @@ pub struct Event {
     at: u64,
 }
 
+#[cfg(debug_assertions)]
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Profile {
@@ -45,6 +54,7 @@ pub struct Profile {
     events: Vec<Event>,
 }
 
+#[cfg(debug_assertions)]
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GasProfiler {
@@ -62,6 +72,7 @@ pub struct GasProfiler {
     pub config: VMProfilerConfig,
 }
 
+#[cfg(debug_assertions)]
 impl GasProfiler {
     pub fn init(config: &VMProfilerConfig, name: String, start_gas: u64) -> Self {
         let mut prof = GasProfiler {
@@ -84,8 +95,7 @@ impl GasProfiler {
             start_gas,
             config: config.clone(),
         };
-
-        profile_open_frame!(prof, "root".to_string(), start_gas);
+        profile_open_frame_impl!(prof, "root".to_string(), start_gas);
         prof
     }
 
@@ -121,6 +131,7 @@ impl GasProfiler {
             }) as u64
     }
 
+    #[cfg(debug_assertions)]
     pub fn open_frame(&mut self, frame_name: String, gas_start: u64) {
         if !*PROFILER_ENABLED || self.start_gas == 0 {
             return;
@@ -136,6 +147,7 @@ impl GasProfiler {
         });
     }
 
+    #[cfg(debug_assertions)]
     pub fn close_frame(&mut self, frame_name: String, gas_end: u64) {
         if !*PROFILER_ENABLED || self.start_gas == 0 {
             return;
@@ -172,19 +184,40 @@ impl GasProfiler {
     }
 }
 
+#[cfg(debug_assertions)]
 impl Drop for GasProfiler {
     fn drop(&mut self) {
-        profile_close_frame!(
+        profile_close_frame_impl!(
             self,
             "root".to_string(),
             self.start_gas() - self.profiles[0].end_value
         );
         profile_dump_file!(self);
+        let GasProfiler {
+            exporter: _,
+            name: _,
+            active_profile_index: _,
+            schema: _,
+            shared: _,
+            profiles: _,
+            start_gas: _,
+            config: _,
+        } = self;
     }
 }
 
 #[macro_export]
 macro_rules! profile_open_frame {
+    ($interpreter:expr, $frame_name:expr, $gas_rem:expr) => {
+        #[cfg(debug_assertions)]
+        {
+            move_vm_profiler::profile_open_frame_impl!($interpreter.profiler, $frame_name, $gas_rem)
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! profile_open_frame_impl {
     ($profiler:expr, $frame_name:expr, $gas_rem:expr) => {
         #[cfg(debug_assertions)]
         {
@@ -200,6 +233,20 @@ macro_rules! profile_open_frame {
 
 #[macro_export]
 macro_rules! profile_close_frame {
+    ($interpreter:expr, $frame_name:expr, $gas_rem:expr) => {
+        #[cfg(debug_assertions)]
+        {
+            move_vm_profiler::profile_close_frame_impl!(
+                $interpreter.profiler,
+                $frame_name,
+                $gas_rem
+            )
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! profile_close_frame_impl {
     ($profiler:expr, $frame_name:expr, $gas_rem:expr) => {
         #[cfg(debug_assertions)]
         {
@@ -215,11 +262,11 @@ macro_rules! profile_close_frame {
 
 #[macro_export]
 macro_rules! profile_open_instr {
-    ($profiler:expr, $frame_name:expr, $gas_rem:expr) => {
+    ($interpreter:expr, $frame_name:expr, $gas_rem:expr) => {
         #[cfg(debug_assertions)]
         {
-            if $profiler.config.track_bytecode_instructions {
-                $profiler.open_frame($frame_name, $gas_rem)
+            if $interpreter.profiler.config.track_bytecode_instructions {
+                $interpreter.profiler.open_frame($frame_name, $gas_rem)
             }
         }
     };
@@ -227,15 +274,16 @@ macro_rules! profile_open_instr {
 
 #[macro_export]
 macro_rules! profile_close_instr {
-    ($profiler:expr, $frame_name:expr, $gas_rem:expr) => {
+    ($interpreter:expr, $frame_name:expr, $gas_rem:expr) => {
         #[cfg(debug_assertions)]
         {
-            if $profiler.config.track_bytecode_instructions {
-                $profiler.close_frame($frame_name, $gas_rem)
+            if $interpreter.profiler.config.track_bytecode_instructions {
+                $interpreter.profiler.close_frame($frame_name, $gas_rem)
             }
         }
     };
 }
+
 
 #[macro_export]
 macro_rules! profile_dump_file {
