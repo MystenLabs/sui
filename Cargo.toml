@@ -40,6 +40,7 @@ exclude = [
     "external-crates/move/move-vm/config",
     "external-crates/move/move-vm/integration-tests",
     "external-crates/move/move-vm/paranoid-tests",
+    "external-crates/move/move-vm/profiler",
     "external-crates/move/move-vm/runtime",
     "external-crates/move/move-vm/test-utils",
     "external-crates/move/move-vm/transactional-tests",
@@ -392,6 +393,7 @@ move-unit-test = { path = "external-crates/move/tools/move-unit-test" }
 move-vm-config = { path = "external-crates/move/move-vm/config" }
 move-vm-test-utils = { path = "external-crates/move/move-vm/test-utils" }
 move-vm-types = { path = "external-crates/move/move-vm/types" }
+move-vm-profiler = { path = "external-crates/move/move-vm/profiler" }
 move-command-line-common = { path = "external-crates/move/move-command-line-common" }
 move-transactional-test-runner = { path = "external-crates/move/testing-infra/transactional-test-runner" }
 move-ir-types = { path = "external-crates/move/move-ir/types" }

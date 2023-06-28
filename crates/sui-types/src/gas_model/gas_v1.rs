@@ -361,8 +361,12 @@ impl SuiGasStatusAPI for SuiGasStatus {
         !self.charge
     }
 
-    fn move_gas_status(&mut self) -> &mut GasStatus {
+    fn move_gas_status_mut(&mut self) -> &mut GasStatus {
         &mut self.gas_status
+    }
+
+    fn move_gas_status(&self) -> &GasStatus {
+        &self.gas_status
     }
 
     fn bucketize_computation(&mut self) -> Result<(), ExecutionError> {

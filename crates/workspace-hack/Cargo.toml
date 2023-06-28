@@ -377,6 +377,7 @@ move-symbol-pool = { path = "../../external-crates/move/move-symbol-pool" }
 move-transactional-test-runner = { path = "../../external-crates/move/testing-infra/transactional-test-runner", default-features = false }
 move-unit-test = { path = "../../external-crates/move/tools/move-unit-test", default-features = false }
 move-vm-config = { path = "../../external-crates/move/move-vm/config", default-features = false }
+move-vm-profiler = { path = "../../external-crates/move/move-vm/profiler", default-features = false }
 move-vm-runtime = { path = "../../external-crates/move/move-vm/runtime", features = ["debugging", "testing"] }
 move-vm-runtime-v0 = { path = "../../external-crates/move-execution/v0/move-vm/runtime" }
 move-vm-test-utils = { path = "../../external-crates/move/move-vm/test-utils", features = ["tiered-gas"] }
@@ -1113,6 +1114,7 @@ move-symbol-pool = { path = "../../external-crates/move/move-symbol-pool" }
 move-transactional-test-runner = { path = "../../external-crates/move/testing-infra/transactional-test-runner", default-features = false }
 move-unit-test = { path = "../../external-crates/move/tools/move-unit-test", default-features = false }
 move-vm-config = { path = "../../external-crates/move/move-vm/config", default-features = false }
+move-vm-profiler = { path = "../../external-crates/move/move-vm/profiler", default-features = false }
 move-vm-runtime = { path = "../../external-crates/move/move-vm/runtime", features = ["debugging", "testing"] }
 move-vm-runtime-v0 = { path = "../../external-crates/move-execution/v0/move-vm/runtime" }
 move-vm-test-utils = { path = "../../external-crates/move/move-vm/test-utils", features = ["tiered-gas"] }

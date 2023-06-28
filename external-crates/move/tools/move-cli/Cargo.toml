@@ -40,6 +40,7 @@ move-stdlib = { path = "../../move-stdlib", features = ["testing"] }
 move-symbol-pool = { path = "../../move-symbol-pool" }
 move-vm-types = { path = "../../move-vm/types" }
 move-vm-runtime = { path = "../../move-vm/runtime", features = ["debugging"] }
+move-vm-profiler = { path = "../../move-vm/profiler"}
 move-vm-test-utils = { path = "../../move-vm/test-utils" }
 read-write-set = { path = "../read-write-set" }
 read-write-set-dynamic = { path = "../read-write-set/dynamic" }

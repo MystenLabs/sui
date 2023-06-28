@@ -24,6 +24,8 @@ use move_binary_format::{
     },
     file_format_common::instruction_key,
 };
+#[cfg(debug_assertions)]
+use move_vm_profiler::GasProfiler;
 
 /// VM flat fee
 pub const VM_FLAT_FEE: Gas = Gas::new(8_000);
@@ -53,6 +55,8 @@ pub struct GasStatus {
     cost_table: CostTable,
     gas_left: InternalGas,
     charge: bool,
+    #[cfg(debug_assertions)]
+    profiler: Option<GasProfiler>,
 }
 
 impl GasStatus {
@@ -65,6 +69,8 @@ impl GasStatus {
             gas_left: gas_left.to_unit(),
             cost_table,
             charge: true,
+            #[cfg(debug_assertions)]
+            profiler: None,
         }
     }
 
@@ -479,6 +485,16 @@ impl GasMeter for GasStatus {
             return InternalGas::new(u64::MAX);
         }
         self.gas_left
+    }
+
+    #[cfg(debug_assertions)]
+    fn get_profiler_mut(&mut self) -> Option<&mut GasProfiler> {
+        self.profiler.as_mut()
+    }
+
+    #[cfg(debug_assertions)]
+    fn set_profiler(&mut self, profiler: GasProfiler) {
+        self.profiler = Some(profiler);
     }
 }
 
