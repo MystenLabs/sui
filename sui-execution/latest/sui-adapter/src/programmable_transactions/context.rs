@@ -539,6 +539,12 @@ impl<'vm, 'state, 'a> ExecutionContext<'vm, 'state, 'a> {
     /// Determine the object changes and collect all user events
     pub fn finish<Mode: ExecutionMode>(self) -> Result<ExecutionResults, ExecutionError> {
         use crate::error::convert_vm_error;
+        // #[cfg(debug_assertions)]
+        // {
+        //     println!("Dropping exec");
+        //     if let Some(q) = self.gas_status.move_gas_status_mut().get_profiler_mut() { q.finish() }
+
+        // }
         let Self {
             protocol_config,
             metrics,

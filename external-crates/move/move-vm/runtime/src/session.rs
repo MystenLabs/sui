@@ -101,10 +101,14 @@ impl<'r, 'l, S: MoveResolver> Session<'r, 'l, S> {
         gas_meter: &mut impl GasMeter,
     ) -> VMResult<SerializedReturnValues> {
         #[cfg(debug_assertions)]
-        gas_meter.set_profiler(GasProfiler::init_default_cfg(
-            function_name.to_string(),
-            gas_meter.remaining_gas().into(),
-        ));
+        {
+            if gas_meter.get_profiler_mut().is_none() {
+                gas_meter.set_profiler(GasProfiler::init_default_cfg(
+                    function_name.to_string(),
+                    gas_meter.remaining_gas().into(),
+                ));
+            }
+        }
 
         let bypass_declared_entry_check = true;
         self.runtime.execute_function(
