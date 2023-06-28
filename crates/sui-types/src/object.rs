@@ -24,7 +24,6 @@ use crate::crypto::{default_hash, deterministic_random_account_key};
 use crate::error::{ExecutionError, ExecutionErrorKind, UserInputError, UserInputResult};
 use crate::error::{SuiError, SuiResult};
 use crate::gas_coin::GAS;
-use crate::gas_coin::TOTAL_SUPPLY_MIST;
 use crate::is_system_package;
 use crate::move_package::MovePackage;
 use crate::type_resolver::LayoutResolver;
@@ -1048,41 +1047,6 @@ pub fn generate_test_gas_objects() -> Vec<Object> {
     }
 
     GAS_OBJECTS.with(|v| v.clone())
-}
-
-/// Make a few test gas objects (all with the same owner).
-pub fn generate_test_gas_objects_with_owner(count: usize, owner: SuiAddress) -> Vec<Object> {
-    (0..count)
-        .map(|_i| {
-            let gas_object_id = ObjectID::random();
-            Object::with_id_owner_gas_for_testing(gas_object_id, owner, GAS_VALUE_FOR_TESTING)
-        })
-        .collect()
-}
-
-/// Make a few test gas objects (all with the same owner).
-pub fn generate_test_gas_objects_with_owner_and_value(
-    count: usize,
-    owner: SuiAddress,
-    value: u64,
-) -> Vec<Object> {
-    (0..count)
-        .map(|_i| {
-            let gas_object_id = ObjectID::random();
-            Object::with_id_owner_gas_for_testing(gas_object_id, owner, value)
-        })
-        .collect()
-}
-
-/// Make a few test gas objects (all with the same owner) with TOTAL_SUPPLY_MIST / count balance
-pub fn generate_max_test_gas_objects_with_owner(count: u64, owner: SuiAddress) -> Vec<Object> {
-    let coin_size = TOTAL_SUPPLY_MIST / count;
-    (0..count)
-        .map(|_i| {
-            let gas_object_id = ObjectID::random();
-            Object::with_id_owner_gas_for_testing(gas_object_id, owner, coin_size)
-        })
-        .collect()
 }
 
 #[allow(clippy::large_enum_variant)]
