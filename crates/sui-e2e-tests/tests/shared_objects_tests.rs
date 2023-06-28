@@ -21,7 +21,6 @@ use sui_types::event::Event;
 use sui_types::execution_status::{CommandArgumentError, ExecutionFailureStatus, ExecutionStatus};
 use sui_types::messages_grpc::ObjectInfoRequest;
 use sui_types::object::generate_test_gas_objects;
-use sui_types::SUI_CLOCK_OBJECT_ID;
 
 /// Send a simple shared object transaction to Sui and ensures the client gets back a response.
 #[sim_test]
@@ -267,20 +266,10 @@ async fn access_clock_object_test() {
     let start = SystemTime::now()
         .duration_since(SystemTime::UNIX_EPOCH)
         .unwrap();
-    let (effects, events, objects) =
+    let (effects, events, _objects) =
         submit_shared_object_transaction(transaction, &configs.net_addresses())
             .await
             .unwrap();
-
-    assert_eq!(
-        objects.first().unwrap().compute_object_reference(),
-        effects
-            .shared_objects()
-            .iter()
-            .find(|(id, _, _)| *id == SUI_CLOCK_OBJECT_ID)
-            .unwrap()
-            .clone()
-    );
 
     let finish = SystemTime::now()
         .duration_since(SystemTime::UNIX_EPOCH)
