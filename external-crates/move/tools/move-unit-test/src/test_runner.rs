@@ -14,6 +14,7 @@ use codespan_reporting::{
     term::termcolor::{ColorChoice, StandardStream},
 };
 use colored::*;
+
 use move_binary_format::{errors::VMResult, file_format::CompiledModule};
 use move_bytecode_utils::Modules;
 use move_compiler::{

@@ -306,7 +306,7 @@ impl VMRuntime {
             .collect()
     }
 
-    fn execute_function_impl<'a>(
+    fn execute_function_impl(
         &self,
         func: Arc<Function>,
         ty_args: Vec<Type>,
@@ -377,7 +377,7 @@ impl VMRuntime {
         })
     }
 
-    pub(crate) fn execute_function<'a>(
+    pub(crate) fn execute_function(
         &self,
         module: &ModuleId,
         function_name: &IdentStr,

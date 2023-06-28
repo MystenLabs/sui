@@ -284,7 +284,6 @@ impl Interpreter {
                         profile_close_frame!(gas_meter, _func_name);
                         continue;
                     }
-
                     let frame = self
                         .make_call_frame(link_context, loader, func, vec![])
                         .map_err(|e| self.set_location(e))
@@ -305,7 +304,6 @@ impl Interpreter {
                     let func = resolver.function_from_instantiation(idx);
                     // Compiled out in release mode
                     let _func_name = func.pretty_string();
-
                     profile_open_frame!(gas_meter, _func_name.clone());
 
                     if self.paranoid_type_checks {

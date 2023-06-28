@@ -70,7 +70,7 @@ impl<'r, 'l, S: MoveResolver> Session<'r, 'l, S> {
     ///
     /// In case an invariant violation occurs, the whole Session should be considered corrupted and
     /// one shall not proceed with effect generation.
-    pub fn execute_entry_function<'q>(
+    pub fn execute_entry_function(
         &mut self,
         module: &ModuleId,
         function_name: &IdentStr,

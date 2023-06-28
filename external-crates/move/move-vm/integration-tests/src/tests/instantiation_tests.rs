@@ -623,14 +623,14 @@ fn run_with_module(
         &session.vm_config().profiler_config,
         entry_name.to_string(),
         gas.remaining_gas().into(),
-    ))
+    ));
     let res = type_args.and_then(|type_args| {
         session.execute_entry_function(
             &module_id,
             entry_name.as_ref(),
             type_args,
             Vec::<Vec<u8>>::new(),
-            gas
+            gas,
         )
     });
 
