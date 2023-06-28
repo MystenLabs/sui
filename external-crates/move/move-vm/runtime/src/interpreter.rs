@@ -1125,21 +1125,13 @@ impl Frame {
             })
     }
 
-    fn charge_gas(
+    fn pre_charge_gas(
         gas_meter: &mut impl GasMeter,
         instruction: Bytecode,
         loader: &Loader,
-    ) -> PartialVMResult<InstrRet> {
-        macro_rules! make_ty {
-            ($ty: expr) => {
-                TypeWithLoader { ty: $ty, loader }
-            };
-        }
-
+    ) -> PartialVMResult<()> {
         use SimpleInstruction as S;
-
         match instruction {
-            // pre-execution
             Bytecode::Ret => {
                 gas_meter.charge_simple_instr(S::Ret)?;
             }
@@ -1274,7 +1266,22 @@ impl Frame {
             Bytecode::Nop => {
                 gas_meter.charge_simple_instr(S::Nop)?;
             }
-            // Pre, needs context
+            _ => (),
+        }
+        Ok(())
+    }
+
+    fn post_charge_gas(
+        gas_meter: &mut impl GasMeter,
+        instruction: Bytecode,
+        loader: &Loader,
+    ) -> PartialVMResult<InstrRet> {
+        macro_rules! make_ty {
+            ($ty: expr) => {
+                TypeWithLoader { ty: $ty, loader }
+            };
+        }
+        match instruction {
             Bytecode::LdConst(idx) => {
                 // mid- and post-execution. we could split this up?
                 let constant = resolver.constant_at(*idx);
@@ -1351,10 +1358,7 @@ impl Frame {
                 )?;
             }
             Bytecode::VecLen(si) => {
-                gas_meter.charge_vec_len(TypeWithLoader {
-                    ty,
-                    loader: resolver.loader(),
-                })?;
+                gas_meter.charge_vec_len(make_ty!(&ty))?;
             }
             Bytecode::VecImmBorrow(si) => {
                 // post-execution
@@ -1382,96 +1386,88 @@ impl Frame {
             // to be put into vm-extension
             Bytecode::MutBorrowGlobal(sd_idx) | Bytecode::ImmBorrowGlobal(sd_idx) => {
                 // post-execution
-                gas_meter.charge_borrow_global(
-                    is_mut,
-                    is_generic,
-                    TypeWithLoader { ty, loader },
-                    res.is_ok(),
-                );
+                gas_meter.charge_borrow_global(is_mut, is_generic, make_ty!(&ty), res.is_ok());
             }
             Bytecode::MutBorrowGlobalGeneric(si_idx) | Bytecode::ImmBorrowGlobalGeneric(si_idx) => {
                 // post-execution
-                gas_meter.charge_borrow_global(
-                    is_mut,
-                    is_generic,
-                    TypeWithLoader { ty, loader },
-                    res.is_ok(),
-                );
+                gas_meter.charge_borrow_global(is_mut, is_generic, make_ty!(&ty), res.is_ok());
             }
             Bytecode::Exists(sd_idx) => {
                 // post-execution
-                gas_meter.charge_exists(is_generic, TypeWithLoader { ty, loader }, exists)?;
+                gas_meter.charge_exists(is_generic, make_ty!(&ty), exists)?;
             }
             Bytecode::ExistsGeneric(si_idx) => {
                 // post-execution
-                gas_meter.charge_exists(is_generic, TypeWithLoader { ty, loader }, exists)?;
+                gas_meter.charge_exists(is_generic, make_ty!(&ty), exists)?;
             }
             Bytecode::MoveFrom(sd_idx) => {
                 // post-execution
                 match resource {
                     Ok(resource) => {
-                        gas_meter.charge_move_from(
-                            is_generic,
-                            TypeWithLoader { ty, loader },
-                            Some(&resource),
-                        )?;
+                        gas_meter.charge_move_from(is_generic, make_ty!(&ty), Some(&resource))?;
                         resource
                     }
                     Err(err) => {
                         let val: Option<&Value> = None;
-                        gas_meter.charge_move_from(
-                            is_generic,
-                            TypeWithLoader { ty, loader },
-                            val,
-                        )?;
+                        gas_meter.charge_move_from(is_generic, make_ty!(&ty), val)?;
                         return Err(err);
                     }
                 };
             }
             Bytecode::MoveFromGeneric(si_idx) => {
-                let addr = interpreter.operand_stack.pop_as::<AccountAddress>()?;
-                let ty = resolver.instantiate_generic_type(*si_idx, ty_args)?;
-                interpreter.move_from(true, resolver.loader(), gas_meter, data_store, addr, &ty)?;
+                match resource {
+                    Ok(resource) => {
+                        gas_meter.charge_move_from(is_generic, make_ty!(&ty), Some(&resource))?;
+                        resource
+                    }
+                    Err(err) => {
+                        let val: Option<&Value> = None;
+                        gas_meter.charge_move_from(is_generic, make_ty!(&ty), val)?;
+                        return Err(err);
+                    }
+                };
             }
-            Bytecode::MoveTo(sd_idx) => {
-                let resource = interpreter.operand_stack.pop()?;
-                let signer_reference = interpreter.operand_stack.pop_as::<StructRef>()?;
-                let addr = signer_reference
-                    .borrow_field(0)?
-                    .value_as::<Reference>()?
-                    .read_ref()?
-                    .value_as::<AccountAddress>()?;
-                let ty = resolver.get_struct_type(*sd_idx);
-                // REVIEW: Can we simplify Interpreter::move_to?
-                interpreter.move_to(
-                    false,
-                    resolver.loader(),
-                    gas_meter,
-                    data_store,
-                    addr,
-                    &ty,
-                    resource,
-                )?;
-            }
-            Bytecode::MoveToGeneric(si_idx) => {
-                let resource = interpreter.operand_stack.pop()?;
-                let signer_reference = interpreter.operand_stack.pop_as::<StructRef>()?;
-                let addr = signer_reference
-                    .borrow_field(0)?
-                    .value_as::<Reference>()?
-                    .read_ref()?
-                    .value_as::<AccountAddress>()?;
-                let ty = resolver.instantiate_generic_type(*si_idx, ty_args)?;
-                interpreter.move_to(
-                    true,
-                    resolver.loader(),
-                    gas_meter,
-                    data_store,
-                    addr,
-                    &ty,
-                    resource,
-                )?;
-            }
+            Bytecode::MoveTo(sd_idx) => match gv.move_to(resource) {
+                Ok(()) => {
+                    gas_meter.charge_move_to(
+                        is_generic,
+                        TypeWithLoader { ty, loader },
+                        gv.view().unwrap(),
+                        true,
+                    )?;
+                    Ok(())
+                }
+                Err((err, resource)) => {
+                    gas_meter.charge_move_to(
+                        is_generic,
+                        TypeWithLoader { ty, loader },
+                        &resource,
+                        false,
+                    )?;
+                    Err(err)
+                }
+            },
+            Bytecode::MoveToGeneric(si_idx) => match gv.move_to(resource) {
+                Ok(()) => {
+                    gas_meter.charge_move_to(
+                        is_generic,
+                        TypeWithLoader { ty, loader },
+                        gv.view().unwrap(),
+                        true,
+                    )?;
+                    Ok(())
+                }
+                Err((err, resource)) => {
+                    gas_meter.charge_move_to(
+                        is_generic,
+                        TypeWithLoader { ty, loader },
+                        &resource,
+                        false,
+                    )?;
+                    Err(err)
+                }
+            },
+            _ => (),
         }
         Ok(InstrRet::Ok)
     }
@@ -2089,8 +2085,6 @@ impl Frame {
         let ty_args = &self.ty_args;
         let function = &self.function;
 
-        use SimpleInstruction as S;
-
         match instruction {
             Bytecode::Pop => {
                 let popped_val = interpreter.operand_stack.pop()?;
@@ -2178,29 +2172,17 @@ impl Frame {
                 return Ok(InstrRet::ExitCode(ExitCode::CallGeneric(*idx)));
             }
             Bytecode::MutBorrowLoc(idx) | Bytecode::ImmBorrowLoc(idx) => {
-                let instr = match instruction {
-                    Bytecode::MutBorrowLoc(_) => S::MutBorrowLoc,
-                    _ => S::ImmBorrowLoc,
-                };
                 interpreter
                     .operand_stack
                     .push(locals.borrow_loc(*idx as usize)?)?;
             }
             Bytecode::ImmBorrowField(fh_idx) | Bytecode::MutBorrowField(fh_idx) => {
-                let instr = match instruction {
-                    Bytecode::MutBorrowField(_) => S::MutBorrowField,
-                    _ => S::ImmBorrowField,
-                };
                 let reference = interpreter.operand_stack.pop_as::<StructRef>()?;
                 let offset = resolver.field_offset(*fh_idx);
                 let field_ref = reference.borrow_field(offset)?;
                 interpreter.operand_stack.push(field_ref)?;
             }
             Bytecode::ImmBorrowFieldGeneric(fi_idx) | Bytecode::MutBorrowFieldGeneric(fi_idx) => {
-                let instr = match instruction {
-                    Bytecode::MutBorrowField(_) => S::MutBorrowFieldGeneric,
-                    _ => S::ImmBorrowFieldGeneric,
-                };
                 let reference = interpreter.operand_stack.pop_as::<StructRef>()?;
                 let offset = resolver.field_instantiation_offset(*fi_idx);
                 let field_ref = reference.borrow_field(offset)?;
@@ -2514,8 +2496,10 @@ impl Frame {
 
                 profile_open_instr!(gas_meter, format!("{:?}", instruction));
 
+                // pre_charge_gas
                 let r = self.execute_instruction(resolver, interpreter, data_store, instruction)?;
 
+                // post_charge_gas
                 profile_close_instr!(gas_meter, format!("{:?}", instruction));
 
                 match r {
