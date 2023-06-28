@@ -497,33 +497,18 @@ fn execute_move_publish<Mode: ExecutionMode>(
 
     // For newly published packages, runtime ID matches storage ID.
     let storage_id = runtime_id;
+    let dependencies = fetch_packages(context, &dep_ids)?;
+    let package_obj = context.new_package(&modules, &dependencies)?;
 
-    // Preserve the old order of operations when package upgrades are not supported, because it
-    // affects the order in which error cases are checked.
-    let package_obj = if context.protocol_config.package_upgrades_supported() {
-        let dependencies = fetch_packages(context, &dep_ids)?;
-        let package_obj = context.new_package(&modules, &dependencies)?;
-
-        let Some(package) = package_obj.data.try_as_package() else {
-            invariant_violation!("Newly created package object is not a package");
-        };
-
-        context.set_linkage(package)?;
-        let res = publish_and_verify_modules(context, runtime_id, &modules)
-            .and_then(|_| init_modules::<Mode>(context, argument_updates, &modules));
-        context.reset_linkage();
-        res?;
-
-        package_obj
-    } else {
-        // FOR THE LOVE OF ALL THAT IS GOOD DO NOT RE-ORDER THIS.  It looks redundant, but is
-        // required to maintain backwards compatibility.
-        publish_and_verify_modules(context, runtime_id, &modules)?;
-        let dependencies = fetch_packages(context, &dep_ids)?;
-        let package = context.new_package(&modules, &dependencies)?;
-        init_modules::<Mode>(context, argument_updates, &modules)?;
-        package
+    let Some(package) = package_obj.data.try_as_package() else {
+        invariant_violation!("Newly created package object is not a package");
     };
+
+    context.set_linkage(package)?;
+    let res = publish_and_verify_modules(context, runtime_id, &modules)
+        .and_then(|_| init_modules::<Mode>(context, argument_updates, &modules));
+    context.reset_linkage();
+    res?;
 
     context.write_package(package_obj)?;
     let values = if Mode::packages_are_predefined() {
@@ -552,12 +537,6 @@ fn execute_move_upgrade<Mode: ExecutionMode>(
     upgrade_ticket_arg: Argument,
 ) -> Result<Vec<Value>, ExecutionError>
 {
-    // Check that package upgrades are supported.
-    context
-        .protocol_config
-        .check_package_upgrades_supported()
-        .map_err(|_| ExecutionError::from_kind(ExecutionErrorKind::FeatureNotYetSupported))?;
-
     assert_invariant!(
         !module_bytes.is_empty(),
         "empty package is checked in transaction input checker"
