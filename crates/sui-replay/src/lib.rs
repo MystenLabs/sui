@@ -41,6 +41,8 @@ pub enum ReplayToolCommand {
         tx_digest: String,
         #[clap(long, short)]
         show_effects: bool,
+        #[clap(long, short)]
+        diag: bool,
     },
 
     /// Replay a transaction from a node state dump
@@ -154,6 +156,7 @@ pub async fn execute_replay_command(
         ReplayToolCommand::ReplayTransaction {
             tx_digest,
             show_effects,
+            diag,
         } => {
             let tx_digest = TransactionDigest::from_str(&tx_digest)?;
             info!("Executing tx: {}", tx_digest);
@@ -166,6 +169,9 @@ pub async fn execute_replay_command(
             )
             .await?;
 
+            if diag {
+                println!("{:#?}", sandbox_state.pre_exec_diag);
+            }
             if show_effects {
                 println!("{:#?}", sandbox_state.local_exec_effects);
             }

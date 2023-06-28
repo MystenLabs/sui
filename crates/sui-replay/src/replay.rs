@@ -74,6 +74,8 @@ pub struct ExecutionSandboxState {
     pub local_exec_effects: SuiTransactionBlockEffects,
     /// Status from executing this locally in `execute_transaction_to_effects`
     pub local_exec_status: Result<(), ExecutionError>,
+    /// Pre exec diag info
+    pub pre_exec_diag: DiagInfo,
 }
 
 impl ExecutionSandboxState {
@@ -217,6 +219,7 @@ pub struct LocalExec {
     // Used for fetching data from the network or remote store
     pub fetcher: Fetchers,
 
+    pub diag: DiagInfo,
     // Retry policies due to RPC errors
     pub num_retries_for_timeout: u32,
     pub sleep_period_for_timeout: std::time::Duration,
@@ -394,6 +397,7 @@ impl LocalExec {
             // TODO: make these configurable
             num_retries_for_timeout: RPC_TIMEOUT_ERR_NUM_RETRIES,
             sleep_period_for_timeout: RPC_TIMEOUT_ERR_SLEEP_RETRY_PERIOD,
+            diag: Default::default(),
         })
     }
 
@@ -418,6 +422,7 @@ impl LocalExec {
             // TODO: make these configurable
             num_retries_for_timeout: RPC_TIMEOUT_ERR_NUM_RETRIES,
             sleep_period_for_timeout: RPC_TIMEOUT_ERR_SLEEP_RETRY_PERIOD,
+            diag: Default::default(),
         })
     }
 
@@ -647,6 +652,7 @@ impl LocalExec {
                 local_exec_temporary_store: None,
                 local_exec_effects: effects,
                 local_exec_status: Ok(()),
+                pre_exec_diag: self.diag.clone(),
             });
         }
         // Initialize the state necessary for execution
@@ -705,6 +711,7 @@ impl LocalExec {
             local_exec_temporary_store: Some(res.0),
             local_exec_effects: effects,
             local_exec_status: res.2,
+            pre_exec_diag: self.diag.clone(),
         })
     }
 
@@ -855,6 +862,7 @@ impl LocalExec {
             local_exec_temporary_store: None, // We dont capture it for cert exec run
             local_exec_effects: effects,
             local_exec_status: exec_res,
+            pre_exec_diag: self.diag.clone(),
         })
     }
 
@@ -1522,7 +1530,7 @@ impl LocalExec {
         Ok(resolved_input_objs)
     }
 
-    /// Given the TxInfo, download and store the input objects, and other info necessary
+    /// Given the OnChainTransactionInfo, download and store the input objects, and other info necessary
     /// for execution
     async fn initialize_execution_env_state(
         &mut self,
@@ -1553,6 +1561,7 @@ impl LocalExec {
         // Prep the object runtime for dynamic fields
         // Download the child objects accessed at the version right before the execution of this TX
         let loaded_child_refs = self.fetch_loaded_child_refs(&tx_info.tx_digest).await?;
+        self.diag.loaded_child_objects = loaded_child_refs.clone();
         self.multi_download_and_store(&loaded_child_refs).await?;
 
         Ok(input_objs)
