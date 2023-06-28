@@ -118,15 +118,9 @@ impl<'vm, 'state, 'a> ExecutionContext<'vm, 'state, 'a> {
         gas_coin_opt: Option<ObjectID>,
         inputs: Vec<CallArg>,
     ) -> Result<Self, ExecutionError> {
-        let init_linkage = if protocol_config.package_upgrades_supported() {
-            LinkageInfo::Unset
-        } else {
-            LinkageInfo::Universal
-        };
-
         // we need a new session just for loading types, which is sad
         // TODO remove this
-        let linkage = LinkageView::new(Box::new(state_view.as_sui_resolver()), init_linkage);
+        let linkage = LinkageView::new(Box::new(state_view.as_sui_resolver()), LinkageInfo::Unset);
         let mut tmp_session = new_session(
             vm,
             linkage,
