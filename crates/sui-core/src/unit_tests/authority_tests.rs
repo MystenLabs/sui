@@ -1029,7 +1029,7 @@ async fn test_dry_run_on_validator() {
     assert!(response.is_err());
 }
 
-// Tests using a dynamic field that a is newer than the parent in dev inspect/dry run results
+// Tests using a dynamic field that is newer than the parent in dev inspect/dry run results
 // in not being able to access the dynamic field object
 #[tokio::test]
 async fn test_dry_run_dev_inspect_dynamic_field_too_new() {

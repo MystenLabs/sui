@@ -41,7 +41,7 @@ pub(crate) struct ChildObjectEffect {
 struct Inner<'a> {
     // used for loading child objects
     resolver: &'a dyn ChildObjectResolver,
-    // Map to from UID to the object that contained it at the beginning of the transaction.
+    // Map from UID to the object that contained it at the beginning of the transaction.
     // If it is a wrapped object, it points to the object that contained it.
     // Otherwise, it points to itself.
     effective_owner_map: BTreeMap<ObjectID, ObjectID>,
