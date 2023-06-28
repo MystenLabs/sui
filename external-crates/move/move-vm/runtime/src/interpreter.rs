@@ -244,8 +244,9 @@ impl Interpreter {
                 ExitCode::Call(fh_idx) => {
                     let func = resolver.function_from_handle(fh_idx);
                     // Compiled out in release mode
-                    let _func_name = func.pretty_string();
-                    profile_open_frame!(gas_meter, _func_name.clone());
+                    #[cfg(debug_assertions)]
+                    let func_name = func.pretty_string();
+                    profile_open_frame!(gas_meter, func_name.clone());
 
                     if self.paranoid_type_checks {
                         self.check_friend_or_private_call(&current_frame.function, &func)?;
@@ -281,7 +282,7 @@ impl Interpreter {
                         )?;
                         current_frame.pc += 1; // advance past the Call instruction in the caller
 
-                        profile_close_frame!(gas_meter, _func_name);
+                        profile_close_frame!(gas_meter, func_name);
                         continue;
                     }
                     let frame = self
@@ -303,8 +304,9 @@ impl Interpreter {
                         .map_err(|e| set_err_info!(current_frame, e))?;
                     let func = resolver.function_from_instantiation(idx);
                     // Compiled out in release mode
-                    let _func_name = func.pretty_string();
-                    profile_open_frame!(gas_meter, _func_name.clone());
+                    #[cfg(debug_assertions)]
+                    let func_name = func.pretty_string();
+                    profile_open_frame!(gas_meter, func_name.clone());
 
                     if self.paranoid_type_checks {
                         self.check_friend_or_private_call(&current_frame.function, &func)?;
@@ -336,7 +338,7 @@ impl Interpreter {
                         )?;
                         current_frame.pc += 1; // advance past the Call instruction in the caller
 
-                        profile_close_frame!(gas_meter, _func_name);
+                        profile_close_frame!(gas_meter, func_name);
 
                         continue;
                     }

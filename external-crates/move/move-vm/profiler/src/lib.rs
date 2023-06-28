@@ -131,7 +131,6 @@ impl GasProfiler {
             }) as u64
     }
 
-    #[cfg(debug_assertions)]
     pub fn open_frame(&mut self, frame_name: String, gas_start: u64) {
         if !*PROFILER_ENABLED || self.start_gas == 0 {
             return;
@@ -147,7 +146,6 @@ impl GasProfiler {
         });
     }
 
-    #[cfg(debug_assertions)]
     pub fn close_frame(&mut self, frame_name: String, gas_end: u64) {
         if !*PROFILER_ENABLED || self.start_gas == 0 {
             return;

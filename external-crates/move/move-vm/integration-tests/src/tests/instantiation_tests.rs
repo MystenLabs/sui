@@ -33,6 +33,8 @@ use move_vm_test_utils::{
     gas_schedule::{Gas, GasStatus, INITIAL_COST_SCHEDULE},
     InMemoryStorage,
 };
+#[cfg(debug_assertions)]
+use move_vm_types::gas::GasMeter;
 use std::time::Instant;
 
 const MODULE_NAME: &str = "Mod";

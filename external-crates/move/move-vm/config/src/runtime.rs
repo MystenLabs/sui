@@ -36,7 +36,8 @@ impl Default for VMConfig {
             runtime_limits_config: VMRuntimeLimitsConfig::default(),
             enable_invariant_violation_check_in_swap_loc: true,
             check_no_extraneous_bytes_during_deserialization: false,
-            #[cfg(debug_assertions)] profiler_config: VMProfilerConfig::default(),
+            #[cfg(debug_assertions)]
+            profiler_config: VMProfilerConfig::default(),
             error_execution_state: true,
         }
     }
