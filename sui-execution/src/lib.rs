@@ -15,8 +15,8 @@ pub mod verifier;
 mod latest;
 mod v0;
 
-pub const MIN_EXECUTION_VERSION: u64 = 0;
-pub const LATEST_EXECUTION_VERSION: u64 = 1;
+pub const MIN_EXECUTOR_VERSION: u64 = 0;
+pub const LATEST_EXECUTOR_VERSION: u64 = 1;
 
 pub fn executor(
     protocol_config: &ProtocolConfig,
@@ -35,7 +35,7 @@ fn executor_impl(
     let version = executor_version_override.unwrap_or(
         protocol_config
             .execution_version_as_option()
-            .unwrap_or(MIN_EXECUTION_VERSION),
+            .unwrap_or(MIN_EXECUTOR_VERSION),
     );
 
     Ok(match version {
@@ -45,7 +45,7 @@ fn executor_impl(
             silent,
         )?),
 
-        LATEST_EXECUTION_VERSION => Arc::new(latest::Executor::new(
+        LATEST_EXECUTOR_VERSION => Arc::new(latest::Executor::new(
             protocol_config,
             paranoid_type_checks,
             silent,
@@ -62,10 +62,10 @@ pub fn verifier<'m>(
 ) -> Box<dyn Verifier + 'm> {
     let version = protocol_config
         .execution_version_as_option()
-        .unwrap_or(MIN_EXECUTION_VERSION);
+        .unwrap_or(MIN_EXECUTOR_VERSION);
     match version {
         0 => Box::new(v0::Verifier::new(protocol_config, is_metered, metrics)),
-        LATEST_EXECUTION_VERSION => {
+        LATEST_EXECUTOR_VERSION => {
             Box::new(latest::Verifier::new(protocol_config, is_metered, metrics))
         }
         v => panic!("Unsupported execution version {v}"),
