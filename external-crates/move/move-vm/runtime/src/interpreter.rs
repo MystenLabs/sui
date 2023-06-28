@@ -265,6 +265,7 @@ impl<'a> Interpreter<'a> {
                 }
                 ExitCode::Call(fh_idx) => {
                     let func = resolver.function_from_handle(fh_idx);
+                    // Compiled out in release mode
                     let _func_name = func.pretty_string();
                     profile_open_frame!(self, _func_name.clone(), gas_meter.remaining_gas().into());
 
@@ -324,6 +325,7 @@ impl<'a> Interpreter<'a> {
                         .instantiate_generic_function(idx, current_frame.ty_args())
                         .map_err(|e| set_err_info!(current_frame, e))?;
                     let func = resolver.function_from_instantiation(idx);
+                    // Compiled out in release mode
                     let _func_name = func.pretty_string();
 
                     profile_open_frame!(self, _func_name.clone(), gas_meter.remaining_gas().into());

@@ -201,9 +201,9 @@ impl<'vm, 'state, 'a> ExecutionContext<'vm, 'state, 'a> {
             protocol_config,
             metrics.clone(),
         );
+        // Compiled out in release mode
         let _tx_digest = tx_context.digest();
-        #[cfg(debug_assertions)]
-        let remaining_gas =  move_vm_types::gas::GasMeter::remaining_gas(gas_status.move_gas_status()).into();
+        let _remaining_gas: u64 =  move_vm_types::gas::GasMeter::remaining_gas(gas_status.move_gas_status()).into();
         Ok(Self {
             protocol_config,
             metrics,
@@ -219,7 +219,7 @@ impl<'vm, 'state, 'a> ExecutionContext<'vm, 'state, 'a> {
             new_packages: vec![],
             user_events: vec![],
             borrowed: HashMap::new(),
-            #[cfg(debug_assertions)] gas_profiler: GasProfiler::init(&vm.config().profiler_config, format!("{}", _tx_digest), remaining_gas),
+            #[cfg(debug_assertions)] gas_profiler: GasProfiler::init(&vm.config().profiler_config, format!("{}", _tx_digest), _remaining_gas),
         })
     }
 

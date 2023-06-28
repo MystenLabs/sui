@@ -103,8 +103,8 @@ move run` must be applied to a module inside `storage/`",
             // script fun. parse module, extract script ID to pass to VM
             let module = CompiledModule::deserialize_with_defaults(&bytecode)
                 .map_err(|e| anyhow!("Error deserializing module: {:?}", e))?;
-            #[cfg(debug_assertions)]
-            let gas_rem = gas_status.remaining_gas().into();
+            // Compiled out in release mode
+            let _gas_rem: u64 = gas_status.remaining_gas().into();
             session.execute_entry_function(
                 &module.self_id(),
                 IdentStr::new(script_name)?,
@@ -112,11 +112,10 @@ move run` must be applied to a module inside `storage/`",
                 vm_args,
                 &mut gas_status,
                 #[cfg(debug_assertions)]
-                #[cfg(debug_assertions)]
                 &mut GasProfiler::init(
                     &session.vm_config().profiler_config,
                     script_name.clone(),
-                    gas_rem,
+                    _gas_rem,
                 ),
             )
         }
