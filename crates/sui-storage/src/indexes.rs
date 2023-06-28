@@ -155,6 +155,9 @@ pub struct IndexStoreTables {
     /// **milliseconds** since epoch 1/1/1970). A transaction digest is subjectively time stamped
     /// on a node according to the local machine time, so it varies across nodes.
     /// The timestamping happens when the node sees a txn certificate for the first time.
+    ///
+    /// DEPRECATED. DO NOT USE
+    #[allow(dead_code)]
     #[default_options_override_fn = "timestamps_table_default_config"]
     timestamps: DBMap<TransactionDigest, u64>,
 
@@ -431,7 +434,7 @@ impl IndexStore {
         digest: &TransactionDigest,
         timestamp_ms: u64,
         tx_coins: Option<TxCoins>,
-        loaded_child_objects: BTreeMap<ObjectID, SequenceNumber>,
+        loaded_child_objects: &BTreeMap<ObjectID, SequenceNumber>,
     ) -> SuiResult<u64> {
         let sequence = self.next_sequence_number.fetch_add(1, Ordering::SeqCst);
         let mut batch = self.tables.transactions_from_addr.batch();
@@ -481,11 +484,6 @@ impl IndexStore {
                     .ok()
                     .map(|addr| ((addr, sequence), digest))
             }),
-        )?;
-
-        batch.insert_batch(
-            &self.tables.timestamps,
-            std::iter::once((*digest, timestamp_ms)),
         )?;
 
         // Coin Index
@@ -580,7 +578,7 @@ impl IndexStore {
         )?;
 
         // Loaded child objects table
-        let loaded_child_objects: Vec<_> = loaded_child_objects.into_iter().collect();
+        let loaded_child_objects: Vec<_> = loaded_child_objects.clone().into_iter().collect();
         batch.insert_batch(
             &self.tables.loaded_child_object_versions,
             std::iter::once((*digest, loaded_child_objects)),
@@ -702,15 +700,6 @@ impl IndexStore {
             .loaded_child_object_versions
             .get(transaction_digest)
             .map_err(|err| err.into())
-    }
-
-    /// Returns unix timestamp for a transaction if it exists
-    pub fn get_timestamp_ms(
-        &self,
-        transaction_digest: &TransactionDigest,
-    ) -> SuiResult<Option<u64>> {
-        let ts = self.tables.timestamps.get(transaction_digest)?;
-        Ok(ts)
     }
 
     fn get_transactions_from_index<KeyT: Clone + Serialize + DeserializeOwned + PartialEq>(
@@ -1632,7 +1621,7 @@ mod tests {
                 &TransactionDigest::random(),
                 1234,
                 Some(tx_coins),
-                BTreeMap::new(),
+                &BTreeMap::new(),
             )
             .await?;
 
@@ -1684,7 +1673,7 @@ mod tests {
                 &TransactionDigest::random(),
                 1234,
                 Some(tx_coins),
-                BTreeMap::new(),
+                &BTreeMap::new(),
             )
             .await?;
         let balance_from_db = IndexStore::get_balance_from_db(

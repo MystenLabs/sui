@@ -76,10 +76,6 @@ async fn test_full_node_follows_txes() -> Result<(), anyhow::Error> {
 
     assert_eq!(object.owner.get_owner_address().unwrap(), receiver);
 
-    // timestamp is recorded
-    let ts = fullnode.state().get_timestamp_ms(&digest).await?;
-    assert!(ts.is_some());
-
     Ok(())
 }
 
@@ -304,10 +300,6 @@ async fn test_full_node_indexes() -> Result<(), anyhow::Error> {
         false,
     )?;
     assert_eq!(txes.len(), 0);
-
-    // timestamp is recorded
-    let ts = node.state().get_timestamp_ms(&digest).await?;
-    assert!(ts.is_some());
 
     // This is a poor substitute for the post processing taking some time
     // Unfortunately event store writes seem to add some latency so this wait is needed
@@ -697,10 +689,6 @@ async fn test_full_node_event_read_api_ok() {
         assert_eq!(txes.len(), 1);
         assert_eq!(txes[0], digest);
     }
-
-    // timestamp is recorded
-    let ts = node.state().get_timestamp_ms(&digest).await.unwrap();
-    assert!(ts.is_some());
 
     // This is a poor substitute for the post processing taking some time
     sleep(Duration::from_millis(1000)).await;
