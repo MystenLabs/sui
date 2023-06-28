@@ -1001,7 +1001,7 @@ mod tests {
     use sui::client_commands::{SuiClientCommandResult, SuiClientCommands};
     use sui_json_rpc_types::SuiExecutionStatus;
     use sui_sdk::wallet_context::WalletContext;
-    use test_utils::network::TestClusterBuilder;
+    use test_cluster::TestClusterBuilder;
 
     use super::*;
 

@@ -30,7 +30,7 @@ mod test {
     use sui_simulator::{configs::*, SimConfig};
     use sui_types::base_types::{ObjectRef, SuiAddress};
     use sui_types::messages_checkpoint::VerifiedCheckpoint;
-    use test_utils::network::{TestCluster, TestClusterBuilder};
+    use test_cluster::{TestCluster, TestClusterBuilder};
     use tracing::{error, info};
     use typed_store::traits::Map;
 

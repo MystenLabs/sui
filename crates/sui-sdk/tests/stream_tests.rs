@@ -5,7 +5,7 @@ use futures::StreamExt;
 use std::future;
 use sui_sdk::{SuiClientBuilder, SUI_COIN_TYPE};
 use sui_swarm_config::genesis_config::{DEFAULT_GAS_AMOUNT, DEFAULT_NUMBER_OF_OBJECT_PER_ACCOUNT};
-use test_utils::network::TestClusterBuilder;
+use test_cluster::TestClusterBuilder;
 
 // TODO: rewrite the tests after the removal of DevNet NFT
 // #[tokio::test]

@@ -15,7 +15,7 @@ sui-move-build.workspace = true
 sui-protocol-config.workspace = true
 sui-swarm.workspace = true
 sui-types.workspace = true
-test-utils.workspace = true
+test-cluster.workspace = true
 
 async-trait.workspace = true
 bcs.workspace = true

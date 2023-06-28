@@ -24,8 +24,7 @@ use sui_types::sui_system_state::{
     SuiSystemStateTrait,
 };
 use sui_types::transaction::{TransactionDataAPI, TransactionExpiration};
-use test_utils::network::TestCluster;
-use test_utils::network::TestClusterBuilder;
+use test_cluster::{TestCluster, TestClusterBuilder};
 use tokio::time::sleep;
 
 #[sim_test]

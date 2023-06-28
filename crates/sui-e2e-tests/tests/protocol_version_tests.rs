@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use sui_protocol_config::{ProtocolConfig, ProtocolVersion, SupportedProtocolVersions};
-use test_utils::network::TestClusterBuilder;
+use test_cluster::TestClusterBuilder;
 
 #[tokio::test]
 #[should_panic]
@@ -82,7 +82,7 @@ mod sim_only_tests {
         transaction::TransactionKind, MOVE_STDLIB_PACKAGE_ID, SUI_FRAMEWORK_PACKAGE_ID,
         SUI_SYSTEM_PACKAGE_ID,
     };
-    use test_utils::network::{TestCluster, TestClusterBuilder};
+    use test_cluster::TestCluster;
     use tokio::time::{sleep, Duration};
     use tracing::info;
 

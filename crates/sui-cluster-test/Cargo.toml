@@ -41,6 +41,6 @@ sui-config.workspace = true
 sui-test-transaction-builder.workspace = true
 telemetry-subscribers.workspace = true
 
-test-utils.workspace = true
+test-cluster.workspace = true
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 move-core-types.workspace = true
