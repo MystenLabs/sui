@@ -122,7 +122,7 @@ impl Interpreter {
 
         profile_open_frame!(gas_meter, function.pretty_string());
 
-        let ret = if function.is_native() {
+        if function.is_native() {
             for arg in args {
                 interpreter
                     .operand_stack
@@ -175,9 +175,7 @@ impl Interpreter {
             interpreter.execute_main(
                 loader, data_store, gas_meter, extensions, function, ty_args, args,
             )
-        };
-
-        ret
+        }
     }
 
     /// Main loop for the execution of a function.

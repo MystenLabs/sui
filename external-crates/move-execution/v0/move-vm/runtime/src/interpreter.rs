@@ -2,6 +2,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::native_extensions::NativeContextExtensions;
 use crate::{
     loader::{Function, Loader, Resolver},
     native_functions::NativeContext,
@@ -19,6 +20,11 @@ use move_core_types::{
     vm_status::{StatusCode, StatusType},
 };
 use move_vm_config::runtime::VMRuntimeLimitsConfig;
+#[cfg(debug_assertions)]
+use move_vm_profiler::GasProfiler;
+use move_vm_profiler::{
+    profile_close_frame, profile_close_instr, profile_open_frame, profile_open_instr,
+};
 use move_vm_types::{
     data_store::DataStore,
     gas::{GasMeter, SimpleInstruction},
@@ -30,8 +36,6 @@ use move_vm_types::{
     views::TypeView,
 };
 use smallvec::SmallVec;
-
-use crate::native_extensions::NativeContextExtensions;
 use std::{cmp::min, collections::VecDeque, fmt::Write, sync::Arc};
 use tracing::error;
 
@@ -114,6 +118,9 @@ impl Interpreter {
             paranoid_type_checks: loader.vm_config().paranoid_type_checks,
             runtime_limits_config: loader.vm_config().runtime_limits_config.clone(),
         };
+
+        profile_open_frame!(gas_meter, function.pretty_string());
+
         if function.is_native() {
             for arg in args {
                 interpreter
@@ -159,6 +166,9 @@ impl Interpreter {
                         )
                         .finish(Location::Undefined),
                 })?;
+
+            profile_close_frame!(gas_meter, function.pretty_string());
+
             Ok(return_values.into_iter().collect())
         } else {
             interpreter.execute_main(
@@ -217,6 +227,7 @@ impl Interpreter {
                     gas_meter
                         .charge_drop_frame(non_ref_vals.into_iter())
                         .map_err(|e| self.set_location(e))?;
+                    profile_close_frame!(gas_meter, current_frame.function.pretty_string());
 
                     if let Some(frame) = self.call_stack.pop() {
                         // Note: the caller will find the callee's return values at the top of the shared operand stack
@@ -229,6 +240,10 @@ impl Interpreter {
                 }
                 ExitCode::Call(fh_idx) => {
                     let func = resolver.function_from_handle(fh_idx);
+                    // Compiled out in release mode
+                    #[cfg(debug_assertions)]
+                    let func_name = func.pretty_string();
+                    profile_open_frame!(gas_meter, func_name.clone());
 
                     if self.paranoid_type_checks {
                         self.check_friend_or_private_call(&current_frame.function, &func)?;
@@ -263,6 +278,8 @@ impl Interpreter {
                             vec![],
                         )?;
                         current_frame.pc += 1; // advance past the Call instruction in the caller
+                        profile_close_frame!(gas_meter, func_name);
+
                         continue;
                     }
                     let frame = self
@@ -283,7 +300,10 @@ impl Interpreter {
                         .instantiate_generic_function(idx, current_frame.ty_args())
                         .map_err(|e| set_err_info!(current_frame, e))?;
                     let func = resolver.function_from_instantiation(idx);
-
+                    // Compiled out in release mode
+                    #[cfg(debug_assertions)]
+                    let func_name = func.pretty_string();
+                    profile_open_frame!(gas_meter, func_name.clone());
                     if self.paranoid_type_checks {
                         self.check_friend_or_private_call(&current_frame.function, &func)?;
                     }
@@ -313,6 +333,7 @@ impl Interpreter {
                             &resolver, data_store, gas_meter, extensions, func, ty_args,
                         )?;
                         current_frame.pc += 1; // advance past the Call instruction in the caller
+                        profile_close_frame!(gas_meter, func_name);
                         continue;
                     }
                     let frame = self
@@ -2337,7 +2358,8 @@ impl Frame {
                     )?;
                 }
 
-                match Self::execute_instruction(
+                profile_open_instr!(gas_meter, format!("{:?}", instruction));
+                let r = Self::execute_instruction(
                     &mut self.pc,
                     &mut self.locals,
                     &self.ty_args,
@@ -2347,7 +2369,10 @@ impl Frame {
                     data_store,
                     gas_meter,
                     instruction,
-                )? {
+                )?;
+                profile_close_instr!(gas_meter, format!("{:?}", instruction));
+
+                match r {
                     InstrRet::Ok => (),
                     InstrRet::ExitCode(exit_code) => {
                         return Ok(exit_code);
