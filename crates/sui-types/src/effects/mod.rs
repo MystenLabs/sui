@@ -1,8 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeMap;
-
 use crate::base_types::{random_object_ref, ExecutionDigests, ObjectID, ObjectRef, SequenceNumber};
 use crate::committee::EpochId;
 use crate::crypto::{
@@ -26,9 +24,11 @@ use enum_dispatch::enum_dispatch;
 pub use object_change::EffectsObjectChange;
 use serde::{Deserialize, Serialize};
 use shared_crypto::intent::IntentScope;
+use std::collections::BTreeMap;
 use sui_protocol_config::{ProtocolConfig, ProtocolVersion, SupportedProtocolVersions};
 
 mod effects_v1;
+mod effects_v2;
 mod object_change;
 
 // Since `std::mem::size_of` may not be stable across platforms, we use rough constants
@@ -381,7 +381,7 @@ pub trait TransactionEffectsAPI {
         obj_ref: ObjectRef,
         kind: InputSharedObjectKind,
     );
-    fn unsafe_add_deleted_object_for_testing(&mut self, object: ObjectRef);
+    fn unsafe_add_deleted_object_for_testing(&mut self, obj_ref: ObjectRef);
 }
 
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, Default)]

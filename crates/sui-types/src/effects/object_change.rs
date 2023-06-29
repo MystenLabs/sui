@@ -13,14 +13,14 @@ pub struct EffectsObjectChange {
     // input_state and output_state are the core fields that's required by
     // the protocol as it tells how an object changes on-chain.
     /// State of the object in the store prior to this transaction.
-    input_state: ObjectIn,
+    pub(crate) input_state: ObjectIn,
     /// State of the object in the store after this transaction.
-    output_state: ObjectOut,
+    pub(crate) output_state: ObjectOut,
 
     /// Whether this object ID is created or deleted in this transaction.
     /// This information isn't required by the protocol but is useful for providing more detailed
     /// semantics on object changes.
-    id_operation: IDOperation,
+    pub(crate) id_operation: IDOperation,
 }
 
 impl EffectsObjectChange {
@@ -117,7 +117,7 @@ impl EffectsObjectChange {
 }
 
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
-enum IDOperation {
+pub(crate) enum IDOperation {
     None,
     Created,
     Deleted,
@@ -127,7 +127,7 @@ enum IDOperation {
 /// it should be Exist, otherwise it's NonExist, e.g. wrapped objects should be
 /// NonExist.
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
-enum ObjectIn {
+pub(crate) enum ObjectIn {
     NotExist,
     /// The old version, digest and owner.
     Exist((VersionDigest, Owner)),
@@ -143,7 +143,7 @@ impl ObjectIn {
 }
 
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
-enum ObjectOut {
+pub(crate) enum ObjectOut {
     /// Same definition as in ObjectIn.
     NotExist,
     /// Any written object, including all of mutated, created, unwrapped today.
