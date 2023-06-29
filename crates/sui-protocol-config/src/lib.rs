@@ -1268,6 +1268,8 @@ impl ProtocolConfig {
                 // Following flags are implied by this execution version.  Once support for earlier
                 // protocol versions is dropped, these flags can be removed:
                 // cfg.feature_flags.package_upgrades = true;
+                // cfg.feature_flags.disallow_adding_abilities_on_upgrade = true;
+                // cfg.feature_flags.disallow_change_struct_type_params_on_upgrade = true;
                 cfg
             }
             // Use this template when making changes:
