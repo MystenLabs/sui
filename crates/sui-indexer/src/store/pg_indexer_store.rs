@@ -882,37 +882,43 @@ impl IndexerStore for PgIndexerStore {
         }).context(&format!("Failed reading transaction digests with checkpoint_sequence_number {checkpoint_sequence_number:?} and start_sequence {start_sequence:?} and limit {limit}"))
     }
 
-    async fn get_transaction_page_by_transaction_kind(
+    async fn get_transaction_page_by_transaction_kinds(
         &self,
-        kind: String,
+        kind_names: Vec<String>,
         start_sequence: Option<i64>,
         limit: usize,
         is_descending: bool,
     ) -> Result<Vec<Transaction>, IndexerError> {
-        read_only_blocking!(&self.blocking_cp, |conn| {
-            let mut boxed_query = transactions::dsl::transactions
-                .filter(transactions::dsl::transaction_kind.eq(kind.clone()))
-                .into_boxed();
+        if kind_names.is_empty() {
+            return Err(IndexerError::InvalidArgumentError(
+                "kind_names cannot be empty".to_string(),
+            ));
+        }
+
+        let kind_sub_query = kind_names
+            .iter()
+            .map(|kind_name| format!("transaction_kind = '{}'", kind_name))
+            .collect::<Vec<_>>()
+            .join(" OR ");
+        let sql_query = format!(
+            "SELECT * FROM transactions
+             WHERE ({}) {}
+             ORDER BY id {} LIMIT {}",
+            kind_sub_query,
             if let Some(start_sequence) = start_sequence {
                 if is_descending {
-                    boxed_query = boxed_query.filter(transactions::dsl::id.lt(start_sequence));
+                    format!("AND id < {}", start_sequence)
                 } else {
-                    boxed_query = boxed_query.filter(transactions::dsl::id.gt(start_sequence));
+                    format!("AND id > {}", start_sequence)
                 }
-            }
-
-            if is_descending {
-                boxed_query
-                    .order(transactions::dsl::id.desc())
-                    .limit((limit) as i64)
-                    .load::<Transaction>(conn)
             } else {
-               boxed_query
-                    .order(transactions::dsl::id.asc())
-                    .limit((limit) as i64)
-                    .load::<Transaction>(conn)
-            }
-        }).context(&format!("Failed reading transaction digests with kind {kind} and start_sequence {start_sequence:?} and limit {limit}"))
+                "".to_string()
+            },
+            if is_descending { "DESC" } else { "ASC" },
+            limit
+        );
+        read_only_blocking!(&self.blocking_cp, |conn| diesel::sql_query(sql_query).load::<Transaction>(conn))
+            .context(&format!("Failed reading transactions with kinds {kind_names:?} and start_sequence {start_sequence:?} and limit {limit}"))
     }
 
     async fn get_transaction_page_by_sender_address(
