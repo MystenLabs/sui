@@ -8,10 +8,12 @@ import { ErrorBoundary } from '../../components/error-boundary/ErrorBoundary';
 
 import { OwnedCoins } from '~/components/OwnedCoins';
 import { OwnedObjects } from '~/components/OwnedObjects';
+import TransactionBlocksForAddress, {
+	FILTER_VALUES,
+} from '~/components/TransactionBlocksForAddress/TransactionBlocksForAddress';
 import { Heading } from '~/ui/Heading';
 import { LoadingSpinner } from '~/ui/LoadingSpinner';
 import { PageHeader } from '~/ui/PageHeader';
-import TransactionBlocksForAddress, { FILTER_VALUES } from '~/components/TransactionBlocksForAddress/TransactionBlocksForAddress';
 
 function AddressResult({ address }: { address: string }) {
 	const { data: domainName } = useResolveSuiNSName(address);
@@ -38,18 +40,15 @@ function AddressResult({ address }: { address: string }) {
 				</ErrorBoundary>
 			</div>
 
-            <div>
-                <ErrorBoundary>
-                    <div className="mt-2">
-                        <TransactionBlocksForAddress
-                            address={address}
-                            filter={FILTER_VALUES.FROMORTO}
-                        />
-                    </div>
-                </ErrorBoundary>
-            </div>
-        </div>
-    );
+			<div>
+				<ErrorBoundary>
+					<div className="mt-2">
+						<TransactionBlocksForAddress address={address} filter={FILTER_VALUES.FROMORTO} />
+					</div>
+				</ErrorBoundary>
+			</div>
+		</div>
+	);
 }
 
 function SuiNSAddressResult({ name }: { name: string }) {
