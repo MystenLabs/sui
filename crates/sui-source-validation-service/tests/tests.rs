@@ -25,6 +25,7 @@ async fn test_verify_packages() -> anyhow::Result<()> {
     let config = Config {
         packages: vec![Packages {
             repository: "https://github.com/mystenlabs/sui".into(),
+            branch: "main".into(),
             paths: vec!["move-stdlib".into()],
         }],
     };
@@ -83,6 +84,7 @@ fn test_parse_package_config() -> anyhow::Result<()> {
     let config = r#"
     [[packages]]
     repository = "https://github.com/mystenlabs/sui"
+    branch = "main"
     paths = [
         "crates/sui-framework/packages/deepbook",
         "crates/sui-framework/packages/move-stdlib",
@@ -97,6 +99,7 @@ fn test_parse_package_config() -> anyhow::Result<()> {
     packages: [
         Packages {
             repository: "https://github.com/mystenlabs/sui",
+            branch: "main",
             paths: [
                 "crates/sui-framework/packages/deepbook",
                 "crates/sui-framework/packages/move-stdlib",
@@ -115,6 +118,7 @@ fn test_parse_package_config() -> anyhow::Result<()> {
 fn test_clone_command() -> anyhow::Result<()> {
     let packages = Packages {
         repository: "https://github.com/user/repo".into(),
+        branch: "main".into(),
         paths: vec!["a".into(), "b".into()],
     };
 
@@ -124,9 +128,10 @@ fn test_clone_command() -> anyhow::Result<()> {
     args: [
         [
             "clone",
-            "-n",
+            "--no-checkout",
             "--depth=1",
             "--filter=tree:0",
+            "--branch=main",
             "https://github.com/user/repo",
             "/tmp/repo",
         ],
