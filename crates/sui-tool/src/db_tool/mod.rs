@@ -4,15 +4,16 @@
 use self::db_dump::{dump_table, duplicate_objects_summary, list_tables, table_summary, StoreName};
 use self::index_search::{search_index, SearchRange};
 use crate::db_tool::db_dump::{compact, print_table_metadata, prune_checkpoints, prune_objects};
-use anyhow::bail;
+use anyhow::{anyhow, bail};
 use clap::Parser;
 use std::path::{Path, PathBuf};
 use sui_core::authority::authority_per_epoch_store::AuthorityEpochTables;
 use sui_core::authority::authority_store_tables::AuthorityPerpetualTables;
 use sui_core::checkpoints::CheckpointStore;
 use sui_types::base_types::{EpochId, ObjectID, SequenceNumber};
-use sui_types::digests::TransactionDigest;
+use sui_types::digests::{CheckpointContentsDigest, TransactionDigest};
 use sui_types::effects::TransactionEffectsAPI;
+use sui_types::messages_checkpoint::CheckpointDigest;
 use sui_types::storage::ObjectKey;
 use sui_types::sui_system_state::{get_sui_system_state, SuiSystemStateTrait};
 use typed_store::rocks::MetricConf;
@@ -30,6 +31,8 @@ pub enum DbToolCommand {
     DuplicatesSummary,
     ListDBMetadata(Options),
     PrintTransaction(PrintTransactionOptions),
+    PrintCheckpoint(PrintCheckpointOptions),
+    PrintCheckpointContent(PrintCheckpointContentOptions),
     RemoveObjectLock(RemoveObjectLockOptions),
     RemoveTransaction(RemoveTransactionOptions),
     ResetDB,
@@ -94,6 +97,23 @@ pub struct PrintTransactionOptions {
 
 #[derive(Parser)]
 #[clap(rename_all = "kebab-case")]
+pub struct PrintCheckpointOptions {
+    #[clap(long, help = "The checkpoint digest to print")]
+    digest: CheckpointDigest,
+}
+
+#[derive(Parser)]
+#[clap(rename_all = "kebab-case")]
+pub struct PrintCheckpointContentOptions {
+    #[clap(
+        long,
+        help = "The checkpoint content digest (NOT the checkpoint digest)"
+    )]
+    digest: CheckpointContentsDigest,
+}
+
+#[derive(Parser)]
+#[clap(rename_all = "kebab-case")]
 pub struct RemoveTransactionOptions {
     #[clap(long, help = "The transaction digest to remove")]
     digest: TransactionDigest,
@@ -149,6 +169,8 @@ pub async fn execute_db_tool_command(db_path: PathBuf, cmd: DbToolCommand) -> an
             print_table_metadata(d.store_name, d.epoch, db_path, &d.table_name)
         }
         DbToolCommand::PrintTransaction(d) => print_transaction(&db_path, d),
+        DbToolCommand::PrintCheckpoint(d) => print_checkpoint(&db_path, d),
+        DbToolCommand::PrintCheckpointContent(d) => print_checkpoint_content(&db_path, d),
         DbToolCommand::ResetDB => reset_db_to_genesis(&db_path),
         DbToolCommand::RemoveObjectLock(d) => remove_object_lock(&db_path, d),
         DbToolCommand::RemoveTransaction(d) => remove_transaction(&db_path, d),
@@ -217,6 +239,39 @@ pub fn print_transaction(path: &Path, opt: PrintTransactionOptions) -> anyhow::R
             effects.dependencies(),
         );
     };
+    Ok(())
+}
+
+pub fn print_checkpoint(path: &Path, opt: PrintCheckpointOptions) -> anyhow::Result<()> {
+    let checkpoint_store = CheckpointStore::new(&path.join("checkpoints"));
+    let checkpoint = checkpoint_store
+        .get_checkpoint_by_digest(&opt.digest)?
+        .ok_or(anyhow!(
+            "Checkpoint digest {:?} not found in checkpoint store",
+            opt.digest
+        ))?;
+    println!("Checkpoint: {:?}", checkpoint);
+    drop(checkpoint_store);
+    print_checkpoint_content(
+        path,
+        PrintCheckpointContentOptions {
+            digest: checkpoint.content_digest,
+        },
+    )
+}
+
+pub fn print_checkpoint_content(
+    path: &Path,
+    opt: PrintCheckpointContentOptions,
+) -> anyhow::Result<()> {
+    let checkpoint_store = CheckpointStore::new(&path.join("checkpoints"));
+    let contents = checkpoint_store
+        .get_checkpoint_contents(&opt.digest)?
+        .ok_or(anyhow!(
+            "Checkpoint content digest {:?} not found in checkpoint store",
+            opt.digest
+        ))?;
+    println!("Checkpoint content: {:?}", contents);
     Ok(())
 }
 
