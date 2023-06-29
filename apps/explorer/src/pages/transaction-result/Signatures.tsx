@@ -46,6 +46,14 @@ function getSignatureFromAddress(signatures: SignaturePubkeyPair[], suiAddress: 
 	);
 }
 
+function getSignaturesExcludingAddress(
+	signatures: SignaturePubkeyPair[],
+	suiAddress: SuiAddress,
+): SignaturePubkeyPair[] {
+	return signatures.filter(
+		(signature) => signature.pubKey.toSuiAddress() !== normalizeSuiAddress(suiAddress),
+	);
+}
 interface Props {
 	transaction: SuiTransactionBlockResponse;
 }
@@ -62,16 +70,25 @@ export function Signatures({ transaction }: Props) {
 	const deserializedTransactionSignatures = transactionSignatures
 		.map((signature) => toParsedSignaturePubkeyPair(signature))
 		.flat();
-
-	const userSignature = getSignatureFromAddress(deserializedTransactionSignatures, sender!);
-
+	const userSignatures = getSignaturesExcludingAddress(
+		deserializedTransactionSignatures,
+		gasData!.owner,
+	);
 	const sponsorSignature = isSponsoredTransaction
 		? getSignatureFromAddress(deserializedTransactionSignatures, gasData!.owner)
 		: null;
-
 	return (
 		<div className="flex flex-col gap-8">
-			{userSignature && <SignaturePanel title="User Signature" signature={userSignature} />}
+			{userSignatures.length > 0 && (
+				<div className="flex flex-col gap-8">
+					{userSignatures.map((signature, index) => (
+						<div key={index}>
+							<SignaturePanel title="User Signature" signature={signature} />
+						</div>
+					))}
+				</div>
+			)}
+
 			{sponsorSignature && (
 				<SignaturePanel title="Sponsor Signature" signature={sponsorSignature} />
 			)}
