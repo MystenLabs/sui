@@ -1271,6 +1271,7 @@ impl ProtocolConfig {
                 // cfg.feature_flags.disallow_adding_abilities_on_upgrade = true;
                 // cfg.feature_flags.disallow_change_struct_type_params_on_upgrade = true;
                 // cfg.feature_flags.loaded_child_objects_fixed = true;
+                // cfg.feature_flags.ban_entry_init = true;
                 cfg
             }
             // Use this template when making changes:
