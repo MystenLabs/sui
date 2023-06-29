@@ -17,7 +17,7 @@ use move_binary_format::{
 use move_core_types::{
     account_address::AccountAddress,
     identifier::IdentStr,
-    language_storage::{ModuleId, StructTag, TypeTag},
+    language_storage::{ModuleId, TypeTag},
     u256::U256,
 };
 use move_vm_runtime::{
@@ -44,12 +44,12 @@ use sui_types::{
     id::{RESOLVED_SUI_ID, UID},
     metrics::LimitsMetrics,
     move_package::{
-        normalize_deserialized_modules, MovePackage, TypeOrigin, UpgradeCap, UpgradePolicy,
-        UpgradeReceipt, UpgradeTicket,
+        normalize_deserialized_modules, MovePackage, UpgradeCap, UpgradePolicy, UpgradeReceipt,
+        UpgradeTicket,
     },
     storage::get_packages,
     transaction::{Argument, Command, ProgrammableMoveCall, ProgrammableTransaction},
-    Identifier, SUI_FRAMEWORK_ADDRESS,
+    SUI_FRAMEWORK_ADDRESS,
 };
 use sui_types::{
     execution_mode::ExecutionMode,
@@ -611,38 +611,6 @@ fn execute_move_upgrade<Mode: ExecutionMode>(
         invariant_violation!("Newly created package object is not a package");
     };
 
-    // Populate loader with all previous types.
-    if !context
-        .protocol_config
-        .disallow_adding_abilities_on_upgrade()
-    {
-        for TypeOrigin {
-            module_name,
-            struct_name,
-            package: origin,
-        } in package.type_origin_table()
-        {
-            if package.id() == *origin {
-                continue;
-            }
-
-            let Ok(module) = Identifier::new(module_name.as_str()) else {
-                continue;
-            };
-
-            let Ok(name) = Identifier::new(struct_name.as_str()) else {
-                continue;
-            };
-
-            let _ = context.load_type(&TypeTag::Struct(Box::new(StructTag {
-                address: (*origin).into(),
-                module,
-                name,
-                type_params: vec![],
-            })));
-        }
-    }
-
     context.set_linkage(package)?;
     let res = publish_and_verify_modules(context, runtime_id, &modules);
     context.reset_linkage();
@@ -698,7 +666,6 @@ fn check_compatibility<'a>(
 
         check_module_compatibility(
             &policy,
-            context.protocol_config,
             &cur_module,
             &new_module,
         )?;
@@ -709,7 +676,6 @@ fn check_compatibility<'a>(
 
 fn check_module_compatibility(
     policy: &UpgradePolicy,
-    protocol_config: &ProtocolConfig,
     cur_module: &normalized::Module,
     new_module: &normalized::Module,
 ) -> Result<(), ExecutionError> {
@@ -717,20 +683,13 @@ fn check_module_compatibility(
         UpgradePolicy::Additive => InclusionCheck::Subset.check(cur_module, new_module),
         UpgradePolicy::DepOnly => InclusionCheck::Equal.check(cur_module, new_module),
         UpgradePolicy::Compatible => {
-            let disallowed_new_abilities = if protocol_config.disallow_adding_abilities_on_upgrade() {
-                AbilitySet::ALL
-            } else {
-                AbilitySet::EMPTY
-            };
-
             let compatibility = Compatibility {
                 check_struct_and_pub_function_linking: true,
                 check_struct_layout: true,
                 check_friend_linking: false,
                 check_private_entry_linking: false,
-                disallowed_new_abilities,
-                disallow_change_struct_type_params: protocol_config
-                    .disallow_change_struct_type_params_on_upgrade(),
+                disallowed_new_abilities: AbilitySet::ALL,
+                disallow_change_struct_type_params: true,
             };
 
             compatibility.check(cur_module, new_module)
