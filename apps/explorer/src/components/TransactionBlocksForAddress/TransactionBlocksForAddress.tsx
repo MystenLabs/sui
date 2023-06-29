@@ -19,6 +19,8 @@ export enum FILTER_VALUES {
 	INPUT = 'InputObject',
 	CHANGED = 'ChangedObject',
 	FROMORTO = 'FromOrToAddress',
+	TO = 'ToAddress',
+	FROM = 'FromAddress',
 }
 
 type TransactionBlocksForAddressProps = {
@@ -42,11 +44,19 @@ type PageStateByFilterMap = {
 	InputObject: number;
 	ChangedObject: number;
 	FromOrToAddress: number;
+	ToAddress: number;
+	FromAddress: number;
 };
 
 const OBJECT_FILTER_OPTIONS = [
 	{ label: 'Input Objects', value: 'InputObject' },
 	{ label: 'Updated Objects', value: 'ChangedObject' },
+];
+
+const ADDRESS_FILTER_OPTIONS = [
+	{ label: 'From or To Address', value: 'FromOrToAddress' },
+	{ label: 'To Address', value: 'ToAddress' },
+	{ label: 'From Address', value: 'FromAddress' },
 ];
 
 const reducer = (state: PageStateByFilterMap, action: TransactionBlocksForAddressActionType) => {
@@ -90,36 +100,35 @@ function TransactionBlocksForAddress({
 		InputObject: 0,
 		ChangedObject: 0,
 		FromOrToAddress: 0,
+		FromAddress: 0,
+		ToAddress: 0,
 	});
 
 	const { data, isLoading, isFetching, isFetchingNextPage, fetchNextPage, hasNextPage } =
 		useGetTransactionBlocks(generateTransactionFilter(filterValue, address));
 
 	const currentPage = currentPageState[filterValue];
+
 	const cardData =
 		data && data.pages[currentPage]
 			? genTableDataFromTxData(data.pages[currentPage].data)
 			: undefined;
-
 	return (
 		<div data-testid="tx">
 			<div className="flex items-center justify-between border-b border-gray-45 pb-5">
 				<Heading color="gray-90" variant="heading4/semibold">
 					Transaction Blocks
 				</Heading>
-
-				{isObject && (
-					<RadioGroup
-						className="flex"
-						ariaLabel="transaction filter"
-						value={filterValue}
-						onChange={setFilterValue}
-					>
-						{OBJECT_FILTER_OPTIONS.map((filter) => (
-							<RadioOption key={filter.value} value={filter.value} label={filter.label} />
-						))}
-					</RadioGroup>
-				)}
+				<RadioGroup
+					className="flex"
+					ariaLabel="transaction filter"
+					value={filterValue}
+					onChange={setFilterValue}
+				>
+					{(isObject ? OBJECT_FILTER_OPTIONS : ADDRESS_FILTER_OPTIONS).map((filter) => (
+						<RadioOption key={filter.value} value={filter.value} label={filter.label} />
+					))}
+				</RadioGroup>
 			</div>
 
 			<div className="flex flex-col space-y-5 pt-5 text-left xl:pr-10">
