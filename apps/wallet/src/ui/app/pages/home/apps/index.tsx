@@ -2,16 +2,20 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useFeature } from '@growthbook/growthbook-react';
-import { Route, Routes } from 'react-router-dom';
+import { useEffect } from 'react';
+import { Route, Routes, useNavigate } from 'react-router-dom';
 
 import { Content } from '_app/shared/bottom-menu-layout';
 import FiltersPortal from '_components/filters-tags';
 import AppsPlayGround, { ConnectedAppsCard } from '_components/sui-apps';
+import { getFromSessionStorage, setToSessionStorage } from '_src/background/storage-utils';
 import { FEATURES } from '_src/shared/experimentation/features';
 
 import type { DAppEntry } from '_src/ui/app/components/sui-apps/SuiApp';
 
 import st from './AppsPage.module.scss';
+
+const APPS_PAGE_NAVIGATION = 'APPS_PAGE_NAVIGATION';
 
 type FilterTag = {
 	name: string;
@@ -19,6 +23,8 @@ type FilterTag = {
 };
 
 function AppsPage() {
+	const navigate = useNavigate();
+
 	const defaultFilterTags: FilterTag[] = [
 		{
 			name: 'Connections',
@@ -42,11 +48,23 @@ function AppsPage() {
 
 	const allFilterTags = [...defaultFilterTags, ...uniqueAppTags];
 
+	useEffect(() => {
+		getFromSessionStorage<string>(APPS_PAGE_NAVIGATION).then((activeTagLink) => {
+			if (activeTagLink) {
+				navigate(`/${activeTagLink}`);
+			}
+		});
+	}, [navigate]);
+
+	const handleFiltersPortalClick = async (tag: FilterTag) => {
+		await setToSessionStorage<string>(APPS_PAGE_NAVIGATION, tag.link);
+	};
+
 	return (
 		<div className={st.container}>
 			<Content>
 				<section>
-					<FiltersPortal tags={allFilterTags} />
+					<FiltersPortal tags={allFilterTags} callback={handleFiltersPortalClick} />
 					<Routes>
 						<Route path="/connected" element={<ConnectedAppsCard />} />
 						<Route path="/:tagName?" element={<AppsPlayGround />} />
