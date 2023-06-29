@@ -2,11 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { ArrowLeft16 } from '@mysten/icons';
+import { type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { Button } from './ButtonUI';
 import { Heading } from './heading';
-import { ReactNode } from 'react';
 
 export type PageTitleProps = {
 	title?: string;

@@ -1,23 +1,21 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useOnScreen } from '@mysten/core';
-import { Check12, EyeClose16, Ooo24 } from '@mysten/icons';
+import { useMultiGetObjects } from '@mysten/core';
+import { Check12, EyeClose16 } from '@mysten/icons';
 import { get, set } from 'idb-keyval';
-import { useRef, useEffect, useCallback, useState } from 'react';
+import { useEffect, useCallback, useState } from 'react';
 import toast from 'react-hot-toast';
 import { Link } from 'react-router-dom';
 
 import { Link as InlineLink } from '../../../shared/Link';
 import { Text } from '../../../shared/text';
-import { useActiveAddress } from '_app/hooks/useActiveAddress';
 import Alert from '_components/alert';
 import { ErrorBoundary } from '_components/error-boundary';
 import Loading from '_components/loading';
 import LoadingSpinner from '_components/loading/LoadingIndicator';
 import { NFTDisplayCard } from '_components/nft-display';
 import { ampli } from '_src/shared/analytics/ampli';
-import { useGetNFTs } from '_src/ui/app/hooks/useGetNFTs';
 import PageTitle from '_src/ui/app/shared/PageTitle';
 
 const HIDDEN_ASSET_IDS = 'hidden-asset-ids';
@@ -25,27 +23,15 @@ const TOAST_DURATION_MS = 1005;
 
 function NftsPage() {
 	const [internalHiddenAssetIds, internalSetHiddenAssetIds] = useState<string[]>([]);
-	const [isHidingDisabled, setIsHidingDisabled] = useState(false);
-	const accountAddress = useActiveAddress();
-	const {
-		data: nfts,
-		hasNextPage,
-		isInitialLoading,
-		isFetchingNextPage,
-		error,
-		isLoading,
-		fetchNextPage,
-		isError,
-	} = useGetNFTs(accountAddress);
-	const observerElem = useRef<HTMLDivElement | null>(null);
-	const { isIntersecting } = useOnScreen(observerElem);
-	const isSpinnerVisible = isFetchingNextPage && hasNextPage;
+	const [isShowingDisabled, setIsShowingDisabled] = useState(false);
 
-	useEffect(() => {
-		if (isIntersecting && hasNextPage && !isFetchingNextPage) {
-			fetchNextPage();
-		}
-	}, [nfts.length, isIntersecting, fetchNextPage, hasNextPage, isFetchingNextPage]);
+	const { data, isInitialLoading, isLoading, isError, error } = useMultiGetObjects(
+		// Prevents dupes
+		Array.from(new Set(internalHiddenAssetIds))!,
+		{ showContent: true },
+	);
+
+	const hiddenNfts = data?.flatMap((data) => data.data) || [];
 
 	useEffect(() => {
 		(async () => {
@@ -56,32 +42,30 @@ function NftsPage() {
 		})();
 	}, []);
 
-	const hideAssetId = useCallback(
+	const showAssetId = useCallback(
 		async (newAssetId: string) => {
-			if (internalHiddenAssetIds.includes(newAssetId)) return;
+			if (!internalHiddenAssetIds.includes(newAssetId)) return;
 
-			const newHiddenAssetIds = [...internalHiddenAssetIds, newAssetId];
-			internalSetHiddenAssetIds(newHiddenAssetIds);
-			await set(HIDDEN_ASSET_IDS, newHiddenAssetIds);
+			try {
+				const updatedHiddenAssetIds = internalHiddenAssetIds.filter((id) => id !== newAssetId);
+				internalSetHiddenAssetIds(updatedHiddenAssetIds);
+				await set(HIDDEN_ASSET_IDS, updatedHiddenAssetIds);
+			} catch (error) {
+				// Handle any error that occurred during the unhide process
+				toast.error('Failed to show asset.');
+				// Restore the asset ID back to the hidden asset IDs list
+				internalSetHiddenAssetIds([...internalHiddenAssetIds, newAssetId]);
+				await set(HIDDEN_ASSET_IDS, internalHiddenAssetIds);
+			}
 
-			const undoHideAsset = async (assetId: string) => {
-				try {
-					const updatedHiddenAssetIds = internalHiddenAssetIds.filter((id) => id !== assetId);
-					internalSetHiddenAssetIds(updatedHiddenAssetIds);
-					await set(HIDDEN_ASSET_IDS, updatedHiddenAssetIds);
-				} catch (error) {
-					// Handle any error that occurred during the unhide process
-					toast.error('Failed to unhide asset.');
-					// Restore the asset ID back to the hidden asset IDs list
-					internalSetHiddenAssetIds([...internalHiddenAssetIds, assetId]);
-					await set(HIDDEN_ASSET_IDS, internalHiddenAssetIds);
-				} finally {
-					setIsHidingDisabled(false);
-				}
+			const undoShowAsset = async (assetId: string) => {
+				const newHiddenAssetIds = [...internalHiddenAssetIds, assetId];
+				internalSetHiddenAssetIds(newHiddenAssetIds);
+				await set(HIDDEN_ASSET_IDS, newHiddenAssetIds);
 			};
 
-			const showAssetHiddenToast = async (objectId: string) => {
-				setTimeout(() => setIsHidingDisabled(false), TOAST_DURATION_MS);
+			const assetShownToast = async (objectId: string) => {
+				setTimeout(() => setIsShowingDisabled(false), TOAST_DURATION_MS);
 				toast(
 					(t) => (
 						<div className="flex items-center justify-between gap-2">
@@ -89,7 +73,7 @@ function NftsPage() {
 								<Check12 className="text-gray-90" />
 								<div>
 									<InlineLink
-										to="/hidden-assets"
+										to="/nfts"
 										color="suiDark"
 										weight="semibold"
 										before={
@@ -97,7 +81,7 @@ function NftsPage() {
 												Moved to
 											</Text>
 										}
-										text="Hidden Assets"
+										text="Visual Assets"
 									/>
 								</div>
 							</div>
@@ -106,7 +90,7 @@ function NftsPage() {
 								<InlineLink
 									size="bodySmall"
 									onClick={() => {
-										undoHideAsset(objectId);
+										undoShowAsset(objectId);
 										toast.dismiss(t.id);
 									}}
 									color="suiDark"
@@ -122,20 +106,18 @@ function NftsPage() {
 				);
 			};
 
-			showAssetHiddenToast(newAssetId);
+			assetShownToast(newAssetId);
 		},
 		[internalHiddenAssetIds],
 	);
 
-	const hideAsset = (objectId: string, event: React.MouseEvent<HTMLDivElement>) => {
-		event.stopPropagation();
-		event.preventDefault();
-		if (isHidingDisabled) {
+	const showAsset = (objectId: string) => {
+		if (isShowingDisabled) {
 			toast.error('Please wait to try again.');
 			return;
 		}
-		setIsHidingDisabled(true);
-		hideAssetId(objectId);
+		setIsShowingDisabled(true);
+		showAssetId(objectId);
 	};
 
 	if (isInitialLoading) {
@@ -158,49 +140,45 @@ function NftsPage() {
 						<small>{(error as Error).message}</small>
 					</Alert>
 				) : null}
-				{nfts?.length ? (
-					<div className="grid w-full grid-cols-2 gap-x-3.5 gap-y-4">
-						{nfts
-							.filter((nft) => internalHiddenAssetIds.includes(nft.objectId))
-							.map(({ objectId, type }) => (
-								<div>replace this {objectId}</div>
-								// <Link
-								// 	to={`/nft-details?${new URLSearchParams({
-								// 		objectId,
-								// 	}).toString()}`}
-								// 	onClick={() => {
-								// 		ampli.clickedCollectibleCard({
-								// 			objectId,
-								// 			collectibleType: type!,
-								// 		});
-								// 	}}
-								// 	key={objectId}
-								// 	className="no-underline relative"
-								// >
-								// 	<div
-								// 		className="flex items-center justify-center z-10 absolute top-2 right-3 pointer-events-auto w-4 h-4 hover:bg-gray-35 hover:bg-opacity-75 text-gray-60 transition-colors duration-200 rounded-md hover:text-sui-dark"
-								// 		onClick={(event) => hideAsset(objectId, event)}
-								// 	>
-								// 		<EyeClose16 />
-								// 	</div>
-								// 	<ErrorBoundary>
-								// 		<NFTDisplayCard
-								// 			objectId={objectId}
-								// 			size="md"
-								// 			showLabel
-								// 			animateHover
-								// 			borderRadius="xl"
-								// 		/>
-								// 	</ErrorBoundary>
-								// </Link>
-							))}
-						<div ref={observerElem}>
-							{isSpinnerVisible ? (
-								<div className="mt-1 flex w-full justify-center">
-									<LoadingSpinner />
-								</div>
-							) : null}
-						</div>
+				{hiddenNfts?.length ? (
+					<div className="flex flex-col gap-3 w-full">
+						{hiddenNfts
+							.filter((nft) => nft && internalHiddenAssetIds.includes(nft.objectId))
+							.map((nft) => {
+								if (nft) {
+									const { objectId, type } = nft;
+									return (
+										<div className="flex justify-between items-center" key={objectId}>
+											<Link
+												to={`/nft-details?${new URLSearchParams({
+													objectId: objectId,
+												}).toString()}`}
+												onClick={() => {
+													ampli.clickedCollectibleCard({
+														objectId,
+														collectibleType: type!,
+													});
+												}}
+												className="no-underline relative"
+											>
+												<ErrorBoundary>
+													<NFTDisplayCard objectId={objectId} size="xs" showLabel listView />
+												</ErrorBoundary>
+											</Link>
+											<button
+												className="appearance-none bg-transparent border-none"
+												onClick={() => {
+													showAsset(objectId);
+												}}
+											>
+												<div className="flex items-center justify-around hover:bg-gray-70 hover:bg-opacity-50 h-4 w-4 text-gray-60 transition-colors duration-200 rounded-md hover:text-sui-dark hover:cursor-pointer">
+													<EyeClose16 />
+												</div>
+											</button>
+										</div>
+									);
+								}
+							})}
 					</div>
 				) : (
 					<div className="flex flex-1 items-center self-center text-caption font-semibold text-steel-darker">

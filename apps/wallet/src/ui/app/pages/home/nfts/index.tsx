@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useOnScreen } from '@mysten/core';
-import { Check12, EyeClose16, Ooo16, Ooo24 } from '@mysten/icons';
+import { Check12, EyeClose16, Ooo24 } from '@mysten/icons';
 import { get, set } from 'idb-keyval';
 import { useRef, useEffect, useCallback, useState } from 'react';
 import toast from 'react-hot-toast';
@@ -75,8 +75,6 @@ function NftsPage() {
 					// Restore the asset ID back to the hidden asset IDs list
 					internalSetHiddenAssetIds([...internalHiddenAssetIds, assetId]);
 					await set(HIDDEN_ASSET_IDS, internalHiddenAssetIds);
-				} finally {
-					setIsHidingDisabled(false);
 				}
 			};
 
@@ -127,7 +125,7 @@ function NftsPage() {
 		[internalHiddenAssetIds],
 	);
 
-	const hideAsset = (objectId: string, event: React.MouseEvent<HTMLDivElement>) => {
+	const hideAsset = (objectId: string, event: React.MouseEvent<HTMLButtonElement>) => {
 		event.stopPropagation();
 		event.preventDefault();
 		if (isHidingDisabled) {
@@ -176,12 +174,14 @@ function NftsPage() {
 									key={objectId}
 									className="no-underline relative"
 								>
-									<div
-										className="flex items-center justify-center z-10 absolute top-2 right-3 pointer-events-auto w-4 h-4 hover:bg-gray-35 hover:bg-opacity-75 text-gray-60 transition-colors duration-200 rounded-md hover:text-sui-dark"
+									<button
+										className="appearance-none bg-transparent border-none flex items-center justify-center z-10 absolute top-2 right-3 pointer-events-auto hover:bg-gray-35 hover:bg-opacity-75 text-gray-60 transition-colors duration-200 rounded-md hover:text-sui-dark p-0"
 										onClick={(event) => hideAsset(objectId, event)}
 									>
-										<EyeClose16 />
-									</div>
+										<div className="w-4 h-4 flex items-center justify-around">
+											<EyeClose16 />
+										</div>
+									</button>
 									<ErrorBoundary>
 										<NFTDisplayCard
 											objectId={objectId}
