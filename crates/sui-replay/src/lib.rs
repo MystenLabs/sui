@@ -43,6 +43,8 @@ pub enum ReplayToolCommand {
         show_effects: bool,
         #[clap(long, short)]
         diag: bool,
+        #[clap(long, short, allow_hyphen_values = true)]
+        executor_version_override: Option<i64>,
     },
 
     /// Replay a transaction from a node state dump
@@ -157,6 +159,7 @@ pub async fn execute_replay_command(
             tx_digest,
             show_effects,
             diag,
+            executor_version_override,
         } => {
             let tx_digest = TransactionDigest::from_str(&tx_digest)?;
             info!("Executing tx: {}", tx_digest);
@@ -166,6 +169,7 @@ pub async fn execute_replay_command(
                 tx_digest,
                 safety,
                 use_authority,
+                executor_version_override,
             )
             .await?;
 
