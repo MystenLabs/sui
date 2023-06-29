@@ -73,7 +73,12 @@ impl<T> ConsensusHandler<T> {
         committee: Committee,
         metrics: Arc<AuthorityMetrics>,
     ) -> Self {
-        let last_seen = Mutex::new(Default::default());
+        // last_consensus_index is zero at the beginning of epoch, including for hash.
+        // It needs to be recovered on restart to ensure consistent consensus hash.
+        let last_consensus_index = epoch_store
+            .get_last_consensus_index()
+            .expect("Should be able to read last consensus index");
+        let last_seen = Mutex::new(last_consensus_index);
         let transaction_scheduler =
             AsyncTransactionScheduler::start(transaction_manager, epoch_store.clone());
         Self {
