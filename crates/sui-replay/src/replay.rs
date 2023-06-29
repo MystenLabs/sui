@@ -1887,7 +1887,7 @@ pub fn get_executor(
     let protocol_config = executor_version_override
         .map(|q| {
             let ver = if q < 0 {
-                sui_execution::LATEST_EXECUTOR_VERSION
+                ProtocolConfig::get_for_max_version().execution_version()
             } else {
                 q as u64
             };
