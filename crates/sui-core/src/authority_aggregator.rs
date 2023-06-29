@@ -7,7 +7,6 @@ use crate::authority_client::{
     AuthorityAPI, NetworkAuthorityClient,
 };
 use crate::safe_client::{SafeClient, SafeClientMetrics, SafeClientMetricsBase};
-use fastcrypto::encoding::Encoding;
 use fastcrypto::traits::ToFromBytes;
 use futures::Future;
 use futures::{future::BoxFuture, stream::FuturesUnordered, StreamExt};
@@ -1559,15 +1558,7 @@ where
             quorum_threshold = threshold,
             validity_threshold = validity,
             ?timeout_after_quorum,
-            ?cert_ref,
             "Broadcasting certificate to authorities"
-        );
-        // TODO: We show the below messages for debugging purposes re. incident #267. When this is fixed, we should remove them again.
-        let cert_bytes = fastcrypto::encoding::Base64::encode(bcs::to_bytes(&cert_ref).unwrap());
-        info!(
-            ?tx_digest,
-            ?cert_bytes,
-            "Broadcasting certificate (serialized) to authorities"
         );
         let committee: Arc<Committee> = self.committee.clone();
         let authority_clients = self.authority_clients.clone();
@@ -1582,7 +1573,7 @@ where
                 Box::pin(async move {
                     let _guard = GaugeGuard::acquire(&metrics_clone.inflight_certificate_requests);
                     client
-                        .handle_certificate_v2(cert_ref.clone())
+                        .handle_certificate_v2(cert_ref)
                         .instrument(
                             tracing::trace_span!("handle_certificate", authority =? name.concise()),
                         )
