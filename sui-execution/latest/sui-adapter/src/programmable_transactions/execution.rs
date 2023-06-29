@@ -860,7 +860,6 @@ fn publish_and_verify_modules(
         // Run Sui bytecode verifier, which runs some additional checks that assume the Move
         // bytecode verifier has passed.
         sui_verifier::verifier::sui_verify_module_unmetered(
-            context.protocol_config,
             module,
             &BTreeMap::new(),
         )?;

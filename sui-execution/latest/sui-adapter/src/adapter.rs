@@ -177,7 +177,6 @@ pub fn missing_unwrapped_msg(id: &ObjectID) -> String {
 #[instrument(level = "trace", skip_all)]
 pub fn run_metered_move_bytecode_verifier(
     modules: &[CompiledModule],
-    protocol_config: &ProtocolConfig,
     verifier_config: &VerifierConfig,
     meter: &mut impl Meter,
     metrics: &Arc<BytecodeVerifierMetrics>,
@@ -207,7 +206,6 @@ pub fn run_metered_move_bytecode_verifier(
                 });
             };
         } else if let Err(err) = sui_verify_module_metered_check_timeout_only(
-            protocol_config,
             module,
             &BTreeMap::new(),
             meter,
