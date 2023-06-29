@@ -34,6 +34,9 @@
             "semver@<7.5.2": ">=7.5.2"
         }
     },
+    "engines": {
+        "pnpm": ">=8.6.5"
+    },
     "manypkg": {
         "ignoredRules": [
             "INTERNAL_MISMATCH",
