@@ -157,6 +157,7 @@ export default {
 			},
 			width: {
 				31.5: '7.5rem',
+				walletLogo: '4.813rem',
 			},
 			minWidth: {
 				transactionColumn: '31.875rem',
