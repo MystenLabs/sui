@@ -16,7 +16,7 @@ use sui_types::epoch_data::EpochData;
 use sui_types::message_envelope::Message;
 use sui_types::messages::{InputObjectKind, InputObjects, TransactionDataAPI, VerifiedTransaction, TransactionKind};
 use sui_types::metrics::LimitsMetrics;
-use sui_types::temporary_store::TemporaryStore;
+use sui_types::temporary_store::{TemporaryStore, InnerTemporaryStore};
 use sui_types::sui_system_state::get_sui_system_state;
 use sui_types::sui_system_state::SuiSystemStateTrait;
 use sui_types::digests::TransactionDigest;
@@ -262,7 +262,7 @@ impl ExecutionWorkerState {
             input_objects.clone()
             .into_objects()
             .into_iter()
-            .map(|(kind, object)| object)
+            .map(|(_kind, object)| object)
             .collect::<Vec<_>>();
 
         get_gas_status_no_epoch_store_experimental(
@@ -274,6 +274,21 @@ impl ExecutionWorkerState {
         )
         .await
         .expect("Could not get gas")
+    }
+
+    // Helper: Writes changes from inner_temp_store to memory store
+    fn write_updates_to_store(
+        &mut self,
+        inner_temp_store: InnerTemporaryStore,
+    ) {
+        // And now we mutate the store.
+        // First delete:
+        for obj_del in &inner_temp_store.deleted {
+            self.memory_store.objects.remove(obj_del.0);
+        }
+        for (obj_add_id, (oref, obj, _)) in inner_temp_store.written {
+            self.memory_store.objects.insert(obj_add_id, (oref, obj));
+        }
     }
 
     /// Executes a transaction, used for sequential, in-order execution
@@ -334,13 +349,7 @@ impl ExecutionWorkerState {
         );
 
         // And now we mutate the store.
-        // First delete:
-        for obj_del in &inner_temp_store.deleted {
-            self.memory_store.objects.remove(obj_del.0);
-        }
-        for (obj_add_id, (oref, obj, _)) in inner_temp_store.written {
-            self.memory_store.objects.insert(obj_add_id, (oref, obj));
-        }
+        self.write_updates_to_store(inner_temp_store);
     }
 
 
