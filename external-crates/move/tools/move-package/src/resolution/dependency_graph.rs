@@ -659,7 +659,8 @@ impl DependencyGraph {
         // (not present in package table)
         for (dep_name, (g, _)) in &dep_graphs {
             if let Some(dep) = dependencies.get(dep_name) {
-                self.insert_direct_dep(dep, root_package, *dep_name, g, mode, parent)?;
+                let internally_resolved =
+                    self.insert_direct_dep(dep, root_package, *dep_name, g, mode, parent)?;
                 // make sure that dependencies of the directly dependent package do not differ from
                 // the dependencies of the same package in other sub-graphs (if any)
                 for (other_dep_name, (other_g, _)) in &dep_graphs {
@@ -678,15 +679,21 @@ impl DependencyGraph {
                         }
                     }
                 }
-                // insert edges from the directly dependent package to its neighbors
-                for to_pkg_name in g
-                    .package_graph
-                    .neighbors_directed(*dep_name, Direction::Outgoing)
-                {
-                    // unwrap is safe as all edges have a Dependency weight
-                    let sub_dep = g.package_graph.edge_weight(*dep_name, to_pkg_name).unwrap();
-                    self.package_graph
-                        .add_edge(*dep_name, to_pkg_name, sub_dep.clone());
+
+                if internally_resolved {
+                    // insert edges from the directly dependent package to its neighbors for
+                    // internally resolved sub-graphs - due to how external graphs are constructed,
+                    // edges between directly dependent packages and their neighbors are already in
+                    // the sub-graph and would have been inserted in the first loop in this function
+                    for to_pkg_name in g
+                        .package_graph
+                        .neighbors_directed(*dep_name, Direction::Outgoing)
+                    {
+                        // unwrap is safe as all edges have a Dependency weight
+                        let sub_dep = g.package_graph.edge_weight(*dep_name, to_pkg_name).unwrap();
+                        self.package_graph
+                            .add_edge(*dep_name, to_pkg_name, sub_dep.clone());
+                    }
                 }
             } else {
                 bail!(
@@ -1143,6 +1150,8 @@ impl DependencyGraph {
         .with_context(|| {
             format!("Parsing response from '{resolver}' for dependency '{to}' of package '{from}'")
         })?;
+
+        eprintln!("EXTERNAL: {:#?}", sub_graph);
 
         Ok(sub_graph)
     }
