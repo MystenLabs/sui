@@ -690,9 +690,6 @@ importers:
       onchange:
         specifier: ^7.1.0
         version: 7.1.0
-      plausible-tracker:
-        specifier: ^0.3.8
-        version: 0.3.8
       playwright:
         specifier: ^1.32.3
         version: 1.32.3
@@ -17920,11 +17917,6 @@ packages:
     engines: {node: '>=8'}
     dependencies:
       find-up: 3.0.0
-    dev: true
-
-  /plausible-tracker@0.3.8:
-    resolution: {integrity: sha512-lmOWYQ7s9KOUJ1R+YTOR3HrjdbxIS2Z4de0P/Jx2dQPteznJl2eX3tXxKClpvbfyGP59B5bbhW8ftN59HbbFSg==}
-    engines: {node: '>=10'}
     dev: true
 
   /playwright-core@1.32.3:

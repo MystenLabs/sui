@@ -18,7 +18,6 @@ import Overlay from '_components/overlay';
 import { useAppSelector } from '_hooks';
 import { permissionsSelectors } from '_redux/slices/permissions';
 import { ampli } from '_src/shared/analytics/ampli';
-import { trackEvent } from '_src/shared/plausible';
 
 export interface DisconnectAppProps extends Omit<DAppEntry, 'description' | 'tags'> {
 	permissionID: string;
@@ -52,9 +51,7 @@ function DisconnectApp({
 			if (!origin) {
 				throw new Error('Failed, origin not found');
 			}
-			trackEvent('AppDisconnect', {
-				props: { source: 'AppPage' },
-			});
+
 			await backgroundClient.disconnectApp(origin, accountsToDisconnect);
 			await backgroundClient.sendGetPermissionRequests();
 			ampli.disconnectedApplication({
