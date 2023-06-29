@@ -27,6 +27,7 @@ pub struct Config {
 #[derive(Clone, Deserialize, Debug)]
 pub struct Packages {
     pub repository: String,
+    pub branch: String,
     pub paths: Vec<String>,
 }
 
@@ -100,9 +101,10 @@ impl CloneCommand {
         // Args to clone empty repository
         let cmd_args: Vec<OsString> = vec![
             ostr!("clone"),
-            ostr!("-n"),
-            ostr!("--depth=1"),
+            ostr!("--no-checkout"),
+            ostr!("--depth=1"), // implies --single-branch
             ostr!("--filter=tree:0"),
+            ostr!(format!("--branch={}", p.branch)),
             ostr!(&p.repository),
             dest.clone(),
         ];
