@@ -8,6 +8,7 @@ use prometheus::Registry;
 use tracing::{error, info, warn};
 
 use crate::processors::address_processor::AddressProcessor;
+use crate::processors::object_balance_processor::ObjectBalanceProcessor;
 use crate::processors::object_processor::ObjectProcessor;
 use crate::store::IndexerStore;
 
@@ -31,6 +32,7 @@ where
         info!("Processor orchestrator started...");
         let object_processor = ObjectProcessor::new(self.store.clone(), &self.prometheus_registry);
         let address_stats_processor = AddressProcessor::new(self.store.clone());
+        let object_balance_processor = ObjectBalanceProcessor::new(self.store.clone());
 
         // TODOggao: clean up object processor
         let obj_handle = tokio::task::spawn(async move {
@@ -75,7 +77,27 @@ where
                 );
             }
         });
-        try_join_all(vec![obj_handle, addr_handle])
+
+        let obj_balance_handle = tokio::task::spawn(async move {
+            let obj_result = retry(ExponentialBackoff::default(), || async {
+                let obj_processor_exec_res = object_balance_processor.start().await;
+                if let Err(e) = &obj_processor_exec_res {
+                    warn!(
+                        "Indexer object balance processor failed with error: {:?}, retrying...",
+                        e
+                    );
+                }
+                Ok(obj_processor_exec_res?)
+            })
+            .await;
+            if let Err(e) = obj_result {
+                error!(
+                    "Indexer object processor failed after retrials with error {:?}",
+                    e
+                );
+            }
+        });
+        try_join_all(vec![obj_handle, addr_handle, obj_balance_handle])
             .await
             .expect("Processor orchestrator should not run into errors.");
     }

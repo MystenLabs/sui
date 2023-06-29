@@ -390,6 +390,28 @@ impl MoveObject {
         Ok(balances)
     }
 
+    /// Get the total balances for all `Coin<T>` embedded in `self`.
+    pub fn get_coin_balances2(
+        &self,
+        layout_resolver: &impl GetModule,
+    ) -> Result<BTreeMap<TypeTag, u64>, SuiError> {
+        let mut balances = BTreeMap::default();
+
+        // Fast path without deserialization.
+        if let Some(type_tag) = self.type_.coin_type_maybe() {
+            let balance = self.get_coin_value_unsafe();
+            if balance > 0 {
+                *balances.entry(type_tag).or_insert(0) += balance;
+            }
+        } else {
+            let move_struct = self
+                .to_move_struct_with_resolver(ObjectFormatOptions::with_types(), layout_resolver)?;
+            Self::get_coin_balances_in_struct(&move_struct, &mut balances, 0)?;
+        }
+
+        Ok(balances)
+    }
+
     /// Get the total balances for all `Coin<T>` embedded in `s`, eitehr directly or in its
     /// (transitive fields).
     fn get_coin_balances_in_struct(

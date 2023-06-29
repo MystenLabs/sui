@@ -49,6 +49,7 @@ use crate::models::checkpoints::Checkpoint;
 use crate::models::epoch::DBEpochInfo;
 use crate::models::events::Event;
 use crate::models::network_metrics::{DBMoveCallMetrics, DBNetworkMetrics};
+use crate::models::object_balances::ObjectBalance;
 use crate::models::objects::{
     compose_object_bulk_insert_update_query, group_and_sort_objects, Object,
 };
@@ -56,10 +57,11 @@ use crate::models::packages::Package;
 use crate::models::system_state::DBValidatorSummary;
 use crate::models::transaction_index::{ChangedObject, InputObject, MoveCall, Recipient};
 use crate::models::transactions::Transaction;
+use crate::models::watermarks::Watermark;
 use crate::schema::{
     active_addresses, address_stats, addresses, changed_objects, checkpoints, epochs, events,
-    input_objects, move_calls, objects, objects_history, packages, recipients, system_states,
-    transactions, validators,
+    input_objects, move_calls, object_balances, objects, objects_history, packages, recipients,
+    system_states, transactions, validators, watermarks,
 };
 use crate::store::diesel_marco::{read_only_blocking, transactional_blocking};
 use crate::store::module_resolver::IndexerModuleResolver;
@@ -113,7 +115,7 @@ impl PgIndexerStore {
         }
     }
 
-    pub async fn get_sui_types_object(
+    pub fn get_sui_types_object(
         &self,
         object_id: &ObjectID,
         version: &SequenceNumber,
@@ -637,6 +639,14 @@ impl IndexerStore for PgIndexerStore {
             None => Ok(ObjectRead::NotExists(object_id)),
             Some(o) => o.try_into_object_read(&self.module_cache),
         }
+    }
+
+    fn get_sui_types_object(
+        &self,
+        object_id: &ObjectID,
+        version: &SequenceNumber,
+    ) -> Result<sui_types::object::Object, IndexerError> {
+        self.get_sui_types_object(object_id, version)
     }
 
     async fn query_objects_history(
@@ -1248,6 +1258,42 @@ impl IndexerStore for PgIndexerStore {
         })
     }
 
+    async fn persist_object_balances(
+        &self,
+        checkpoint: i64,
+        object_balances: &[ObjectBalance],
+    ) -> Result<(), IndexerError> {
+        transactional_blocking!(&self.blocking_cp, |conn| {
+            // Commit indexed transactions
+            for object_balance_chunk in object_balances.chunks(PG_COMMIT_CHUNK_SIZE) {
+                diesel::insert_into(object_balances::table)
+                    .values(object_balance_chunk)
+                    .on_conflict_do_nothing()
+                    .execute(conn)
+                    .map_err(IndexerError::from)
+                    .context("Failed writing object balances to PostgresDB")?;
+            }
+
+            let watermark = Watermark {
+                name: crate::processors::object_balance_processor::OBJECT_BALANCES_WATERMARK
+                    .to_owned(),
+                checkpoint: Some(checkpoint),
+                epoch: None,
+            };
+
+            diesel::insert_into(watermarks::table)
+                .values(&watermark)
+                .on_conflict(watermarks::name)
+                .do_update()
+                .set(&watermark)
+                .execute(conn)
+                .map_err(IndexerError::from)
+                .context("Failed writing transactions to PostgresDB")?;
+
+            Ok::<(), IndexerError>(())
+        })
+    }
+
     async fn persist_object_changes(
         &self,
         tx_object_changes: &[TransactionObjectChanges],
@@ -1692,6 +1738,16 @@ impl IndexerStore for PgIndexerStore {
             .into_iter()
             .map(|db_addr_stats| db_addr_stats.into())
             .collect())
+    }
+
+    async fn get_watermark(&self, watermark_name: &str) -> Result<Option<Watermark>, IndexerError> {
+        read_only_blocking!(&self.blocking_cp, |conn| {
+            watermarks::dsl::watermarks
+                .filter(watermarks::name.eq(watermark_name))
+                .limit(1)
+                .first(conn)
+                .optional()
+        })
     }
 }
 

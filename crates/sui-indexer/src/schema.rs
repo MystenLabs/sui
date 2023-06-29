@@ -155,6 +155,15 @@ diesel::table! {
 }
 
 diesel::table! {
+    object_balances (id, version, coin_type) {
+        id -> Varchar,
+        version -> Int8,
+        coin_type -> Varchar,
+        balance -> Int8,
+    }
+}
+
+diesel::table! {
     use diesel::sql_types::*;
     use super::sql_types::OwnerType;
     use super::sql_types::ObjectStatus;
@@ -333,6 +342,14 @@ diesel::table! {
     }
 }
 
+diesel::table! {
+    watermarks (name) {
+        name -> Varchar,
+        checkpoint -> Nullable<Int8>,
+        epoch -> Nullable<Int8>,
+    }
+}
+
 diesel::allow_tables_to_appear_in_same_query!(
     active_addresses,
     address_stats,
@@ -344,6 +361,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     events,
     input_objects,
     move_calls,
+    object_balances,
     objects,
     objects_history,
     packages,
@@ -351,4 +369,5 @@ diesel::allow_tables_to_appear_in_same_query!(
     system_states,
     transactions,
     validators,
+    watermarks,
 );

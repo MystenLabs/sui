@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use async_trait::async_trait;
+use move_bytecode_utils::module_cache::GetModule;
 use prometheus::Histogram;
 
 use move_core_types::identifier::Identifier;
@@ -24,16 +25,18 @@ use crate::models::addresses::{ActiveAddress, Address, AddressStats};
 use crate::models::checkpoints::Checkpoint;
 use crate::models::epoch::DBEpochInfo;
 use crate::models::events::Event;
+use crate::models::object_balances::ObjectBalance;
 use crate::models::objects::{DeletedObject, Object, ObjectStatus};
 use crate::models::packages::Package;
 use crate::models::system_state::{DBSystemStateSummary, DBValidatorSummary};
 use crate::models::transaction_index::{ChangedObject, InputObject, MoveCall, Recipient};
 use crate::models::transactions::Transaction;
+use crate::models::watermarks::Watermark;
 use crate::types::CheckpointTransactionBlockResponse;
 
 #[async_trait]
 pub trait IndexerStore {
-    type ModuleCache;
+    type ModuleCache: GetModule;
 
     async fn get_latest_checkpoint_sequence_number(&self) -> Result<i64, IndexerError>;
     async fn get_checkpoint(&self, id: CheckpointId) -> Result<RpcCheckpoint, IndexerError>;
@@ -61,6 +64,12 @@ pub trait IndexerStore {
         object_id: ObjectID,
         version: Option<SequenceNumber>,
     ) -> Result<ObjectRead, IndexerError>;
+
+    fn get_sui_types_object(
+        &self,
+        object_id: &ObjectID,
+        version: &SequenceNumber,
+    ) -> Result<sui_types::object::Object, IndexerError>;
 
     async fn query_objects_history(
         &self,
@@ -213,6 +222,13 @@ pub trait IndexerStore {
         checkpoint: &Checkpoint,
         transactions: &[Transaction],
     ) -> Result<usize, IndexerError>;
+
+    async fn persist_object_balances(
+        &self,
+        checkpoint: i64,
+        object_balances: &[ObjectBalance],
+    ) -> Result<(), IndexerError>;
+
     async fn persist_object_changes(
         &self,
         tx_object_changes: &[TransactionObjectChanges],
@@ -267,6 +283,9 @@ pub trait IndexerStore {
         &self,
         descending_order: Option<bool>,
     ) -> Result<Vec<AddressStats>, IndexerError>;
+
+    /// watermarks
+    async fn get_watermark(&self, watermark_name: &str) -> Result<Option<Watermark>, IndexerError>;
 }
 
 #[derive(Clone, Debug)]
