@@ -41,10 +41,6 @@ pub(crate) struct ChildObjectEffect {
 struct Inner<'a> {
     // used for loading child objects
     resolver: &'a dyn ChildObjectResolver,
-    // Map from UID to the object that contained it at the beginning of the transaction.
-    // If it is a wrapped object, it points to the object that contained it.
-    // Otherwise, it points to itself.
-    effective_owner_map: BTreeMap<ObjectID, ObjectID>,
     // The version of the root object in ownership at the beginning of the transaction.
     // If it was a child object, it resolves to the root parent's sequence number.
     // Otherwise, it is just the sequence number at the beginning of the transaction.
@@ -216,11 +212,8 @@ impl<'a> Inner<'a> {
             })?;
         let parents_root_version = self.root_version.get(&parent).copied();
         if let Some(v) = parents_root_version {
-            self.root_version.insert(child, v);
-        }
-        for id in contained_uids {
-            self.effective_owner_map.insert(id, child);
-            if let Some(v) = parents_root_version {
+            debug_assert!(contained_uids.contains(&child));
+            for id in contained_uids {
                 self.root_version.insert(id, v);
             }
         }
@@ -235,7 +228,6 @@ impl<'a> Inner<'a> {
 impl<'a> ObjectStore<'a> {
     pub(super) fn new(
         resolver: &'a dyn ChildObjectResolver,
-        effective_owner_map: BTreeMap<ObjectID, ObjectID>,
         root_version: BTreeMap<ObjectID, SequenceNumber>,
         is_metered: bool,
         constants: LocalProtocolConfig,
@@ -244,7 +236,6 @@ impl<'a> ObjectStore<'a> {
         Self {
             inner: Inner {
                 resolver,
-                effective_owner_map,
                 root_version,
                 cached_objects: BTreeMap::new(),
                 is_metered,
