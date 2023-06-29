@@ -72,7 +72,6 @@ pub fn end_transaction(
         BTreeSet::new(),
         BTreeMap::new(),
         BTreeMap::new(),
-        false,
     );
     let RuntimeResults {
         writes,
