@@ -24,6 +24,7 @@ use shared_crypto::intent::IntentScope;
 use sui_protocol_config::{ProtocolConfig, ProtocolVersion, SupportedProtocolVersions};
 
 mod effects_v1;
+mod effects_v2;
 
 // Since `std::mem::size_of` may not be stable across platforms, we use rough constants
 // We need these for estimating effects sizes
