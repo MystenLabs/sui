@@ -1296,86 +1296,88 @@ impl Frame {
                 gas_meter.charge_ld_const_after_deserialization(&val)?;
             }
             Bytecode::CopyLoc(idx) => {
-                // TODO(Gas): We should charge gas before copying the value.
-                // how? move_loc charges post-execution, maybe this can continue being post-
-                // maybe value_impl.value_view()
+                // can be pre- with operand_stack.last_n
                 let local = locals.copy_loc(*idx as usize)?;
                 gas_meter.charge_copy_loc(&local)?;
             }
             Bytecode::Pop => {
-                // post-execution
+                // can be pre- with operand_stack.last_n
                 gas_meter.charge_pop(popped_val)?;
             }
             Bytecode::MoveLoc(idx) => {
-                // post-execution
                 gas_meter.charge_move_loc(&local)?;
             }
             Bytecode::StLoc(idx) => {
-                // post-execution
+                // can be pre- with operand_stack.last_n
                 gas_meter.charge_store_loc(&value_to_store)?;
             }
             Bytecode::Pack(sd_idx) => {
-                // post-execution
+                // pre: need info on size to pack. can we derive from operand_stack.last_n in post?
                 gas_meter.charge_pack(
                     false,
                     interpreter.operand_stack.last_n(field_count as usize)?,
                 )?;
             }
             Bytecode::PackGeneric(si_idx) => {
-                // post-execution
+                // pre: need info on size to pack. can we derive from operand_stack.last_n in post?
                 gas_meter.charge_pack(
                     true,
                     interpreter.operand_stack.last_n(field_count as usize)?,
                 )?;
             }
             Bytecode::Unpack(_sd_idx) => {
-                // mid-execution
+                // pre- easier from operand_stack
                 gas_meter.charge_unpack(false, struct_.field_views())?;
             }
             Bytecode::UnpackGeneric(_si_idx) => {
-                // mid-execution
+                // pre- easier from operand_stack
                 gas_meter.charge_unpack(true, struct_.field_views())?;
             }
             Bytecode::ReadRef => {
-                // post-execution
+                // pre- easier from operand_stack
                 gas_meter.charge_read_ref(reference.value_view())?;
             }
             Bytecode::WriteRef => {
-                // post-execution
+                // pre- easier from operand_stack
                 gas_meter.charge_write_ref(&value, reference.value_view())?;
             }
             Bytecode::Eq => {
-                // post-execution
+                // pre- easier from operand_stack
                 gas_meter.charge_eq(&lhs, &rhs)?;
             }
             Bytecode::Neq => {
-                // post-execution
+                // pre- easier from operand_stack
                 gas_meter.charge_neq(&lhs, &rhs)?;
             }
             Bytecode::VecPack(si, num) => {
-                // post-execution
+                // pre: need info on size to pack. can we derive from operand_stack.last_n in post?
                 gas_meter.charge_vec_pack(
                     make_ty!(&ty),
                     interpreter.operand_stack.last_n(*num as usize)?,
                 )?;
             }
             Bytecode::VecLen(si) => {
+                // pre
                 gas_meter.charge_vec_len(make_ty!(&ty))?;
             }
             Bytecode::VecImmBorrow(si) => {
-                // post-execution
+                //post- need res
                 gas_meter.charge_vec_borrow(false, make_ty!(&ty), res.is_ok())?;
             }
             Bytecode::VecMutBorrow(si) => {
+                //post- need res
                 gas_meter.charge_vec_borrow(true, make_ty!(ty), res.is_ok())?;
             }
             Bytecode::VecPushBack(si) => {
+                //post- need elem; pre- peek elem
                 gas_meter.charge_vec_push_back(make_ty!(ty), &elem)?;
             }
             Bytecode::VecPopBack(si) => {
+                // post- need res
                 gas_meter.charge_vec_pop_back(make_ty!(ty), res.as_ref().ok())?;
             }
             Bytecode::VecUnpack(si, num) => {
+                // pre- easier from operand_stack?
                 gas_meter.charge_vec_unpack(
                     make_ty!(ty),
                     NumArgs::new(*num),
@@ -1383,6 +1385,7 @@ impl Frame {
                 )?;
             }
             Bytecode::VecSwap(si) => {
+                // pre
                 gas_meter.charge_vec_swap(make_ty!(ty))?;
             }
             // to be put into vm-extension
@@ -1395,11 +1398,11 @@ impl Frame {
                 gas_meter.charge_borrow_global(is_mut, is_generic, make_ty!(&ty), res.is_ok());
             }
             Bytecode::Exists(sd_idx) => {
-                // post-execution
+                // post-execution; pre could work, load from global
                 gas_meter.charge_exists(is_generic, make_ty!(&ty), exists)?;
             }
             Bytecode::ExistsGeneric(si_idx) => {
-                // post-execution
+                // post-execution; pre could work, load from global
                 gas_meter.charge_exists(is_generic, make_ty!(&ty), exists)?;
             }
             Bytecode::MoveFrom(sd_idx) => {
