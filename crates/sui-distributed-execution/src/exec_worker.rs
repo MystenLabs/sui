@@ -21,6 +21,7 @@ use sui_types::sui_system_state::get_sui_system_state;
 use sui_types::sui_system_state::SuiSystemStateTrait;
 use sui_types::digests::TransactionDigest;
 use sui_types::effects::TransactionEffects;
+use sui_types::gas::SuiGasStatus;
 use sui_adapter::adapter;
 use sui_move_natives;
 use tokio::sync::mpsc;
@@ -217,21 +218,11 @@ impl ExecutionWorkerState {
         }
     }
 
-    /// Executes a transaction
-    pub async fn execute_tx(
-        &mut self,
-        tx: &VerifiedTransaction,
-        tx_digest: &ExecutionDigests,
-        checkpoint_seq: u64,
-        protocol_config: &ProtocolConfig,
-        move_vm: &Arc<MoveVM>,
-        epoch_data: &EpochData,
-        reference_gas_price: u64,
-        metrics: Arc<LimitsMetrics>,
-    ) -> VerifiedTransaction 
-    {
+    // Helper: Returns Input objects by reading from the memory_store
+    async fn read_input_objects_from_store(&mut self, 
+        tx: &VerifiedTransaction
+    ) -> InputObjects {
         let tx_data = tx.data().transaction_data();
-        let (kind, signer, gas) = tx_data.execution_parts();
         let input_object_kinds = tx_data
             .input_objects()
             .expect("Cannot get input object kinds");
@@ -248,7 +239,33 @@ impl ExecutionWorkerState {
             input_object_data.push(obj.1.clone());
         }
 
-        let gas_status = get_gas_status_no_epoch_store_experimental(
+        InputObjects::new(
+            input_object_kinds
+                .into_iter()
+                .zip(input_object_data.into_iter())
+                .collect(),
+        )
+    }
+
+    // Helper: Returns gas status  
+    async fn get_gas_status(
+        &mut self,
+        tx: &VerifiedTransaction,
+        input_objects: &InputObjects,
+        protocol_config: &ProtocolConfig,
+        reference_gas_price: u64,
+    ) -> SuiGasStatus
+    {
+        let tx_data = tx.data().transaction_data();
+
+        let input_object_data = 
+            input_objects.clone()
+            .into_objects()
+            .into_iter()
+            .map(|(kind, object)| object)
+            .collect::<Vec<_>>();
+
+        get_gas_status_no_epoch_store_experimental(
             &input_object_data,
             tx_data.gas(),
             protocol_config,
@@ -256,14 +273,26 @@ impl ExecutionWorkerState {
             &tx_data,
         )
         .await
-        .expect("Could not get gas");
+        .expect("Could not get gas")
+    }
 
-        let input_objects = InputObjects::new(
-            input_object_kinds
-                .into_iter()
-                .zip(input_object_data.into_iter())
-                .collect(),
-        );
+    /// Executes a transaction, used for sequential, in-order execution
+    pub async fn execute_tx(
+        &mut self,
+        tx: &VerifiedTransaction,
+        tx_digest: &ExecutionDigests,
+        checkpoint_seq: u64,
+        protocol_config: &ProtocolConfig,
+        move_vm: &Arc<MoveVM>,
+        epoch_data: &EpochData,
+        reference_gas_price: u64,
+        metrics: Arc<LimitsMetrics>,
+    ) {
+
+        let tx_data = tx.data().transaction_data();
+        let (kind, signer, gas) = tx_data.execution_parts();
+        let input_objects = self.read_input_objects_from_store(tx).await;
+        let gas_status = self.get_gas_status(tx, &input_objects, protocol_config, reference_gas_price).await;
         let shared_object_refs = input_objects.filter_shared_objects();
         let transaction_dependencies = input_objects.transaction_dependencies();
 
@@ -312,31 +341,25 @@ impl ExecutionWorkerState {
         for (obj_add_id, (oref, obj, _)) in inner_temp_store.written {
             self.memory_store.objects.insert(obj_add_id, (oref, obj));
         }
-
-        return tx.clone();
     }
 
 
     /// TODO: Dispatch a transaction to the execution queue
     pub fn execute_tx_async(
         &mut self,
-        tx: &VerifiedTransaction,
-        // tx_digest: &ExecutionDigests,
-        // checkpoint_seq: u64,
-        // protocol_config: &ProtocolConfig,
-        // move_vm: &Arc<MoveVM>,
-        // epoch_data: &EpochData,
-        // reference_gas_price: u64,
-        // metrics: Arc<LimitsMetrics>,
-        _tasks_queue: &mut FuturesUnordered::<Pin<Box<dyn Future<Output = VerifiedTransaction>>>>,
-    ) -> VerifiedTransaction 
+        tx: &Transaction,
+        protocol_config: &ProtocolConfig,
+        move_vm: &Arc<MoveVM>,
+        epoch_data: &EpochData,
+        reference_gas_price: u64,
+        metrics: Arc<LimitsMetrics>,
+        tasks_queue: &mut FuturesUnordered::<Pin<Box<dyn Future<Output = Transaction>>>>,
+    ) 
     {
-        // TODO: dispatch execution to tasks_queue
-        return tx.clone();
     }
 
 
-    /// Helper function to receive and process an EpochStart message.
+    /// Helper: Receive and process an EpochStart message.
     /// Returns new (move_vm, protocol_config, epoch_data, reference_gas_price)
     async fn process_epoch_start(&mut self,
         sw_receiver: &mut mpsc::Receiver<SailfishMessage>,
@@ -360,7 +383,7 @@ impl ExecutionWorkerState {
         return (move_vm, protocol_config, epoch_data, reference_gas_price)
     }
 
-    /// Helper function to process an epoch change
+    /// Helper: Process an epoch change
     async fn process_epoch_change(&mut self,
         ew_sender: &mpsc::Sender<SailfishMessage>,
         sw_receiver: &mut mpsc::Receiver<SailfishMessage>,
@@ -401,7 +424,7 @@ impl ExecutionWorkerState {
         // Initialize channels
         let (manager_sender, mut manager_receiver) = mpsc::channel(MANAGER_CHANNEL_SIZE);
         let mut manager = QueuesManager::new(manager_sender);
-        let mut tasks = FuturesUnordered::<Pin<Box<dyn Future<Output = VerifiedTransaction>>>>::new();
+        let mut tasks = FuturesUnordered::<Pin<Box<dyn Future<Output = Transaction>>>>::new();
 
         // Main loop
         loop {
