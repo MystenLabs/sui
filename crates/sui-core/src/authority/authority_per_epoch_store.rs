@@ -383,6 +383,10 @@ impl AuthorityEpochTables {
         self.executed_transactions_to_checkpoint.remove(digest)?;
         Ok(())
     }
+
+    pub fn get_last_consensus_index(&self) -> SuiResult<Option<ExecutionIndicesWithHash>> {
+        Ok(self.last_consensus_index.get(&LAST_CONSENSUS_INDEX_ADDR)?)
+    }
 }
 
 pub(crate) const MUTEX_TABLE_SIZE: usize = 1024;
@@ -669,8 +673,7 @@ impl AuthorityPerEpochStore {
 
     pub fn get_last_consensus_index(&self) -> SuiResult<ExecutionIndicesWithHash> {
         self.tables
-            .last_consensus_index
-            .get(&LAST_CONSENSUS_INDEX_ADDR)
+            .get_last_consensus_index()
             .map(|x| x.unwrap_or_default())
             .map_err(SuiError::from)
     }
