@@ -6,6 +6,7 @@ use self::index_search::{search_index, SearchRange};
 use crate::db_tool::db_dump::{compact, print_table_metadata, prune_checkpoints, prune_objects};
 use anyhow::{anyhow, bail};
 use clap::Parser;
+use narwhal_storage::NodeStorage;
 use std::path::{Path, PathBuf};
 use sui_core::authority::authority_per_epoch_store::AuthorityEpochTables;
 use sui_core::authority::authority_store_tables::AuthorityPerpetualTables;
@@ -30,6 +31,8 @@ pub enum DbToolCommand {
     TableSummary(Options),
     DuplicatesSummary,
     ListDBMetadata(Options),
+    PrintLastConsensusIndex,
+    PrintConsensusCommit(PrintConsensusCommitOptions),
     PrintTransaction(PrintTransactionOptions),
     PrintCheckpoint(PrintCheckpointOptions),
     PrintCheckpointContent(PrintCheckpointContentOptions),
@@ -86,6 +89,13 @@ pub struct Options {
     /// The epoch to use when loading AuthorityEpochTables.
     #[clap(long = "epoch", short = 'e')]
     epoch: Option<EpochId>,
+}
+
+#[derive(Parser)]
+#[clap(rename_all = "kebab-case")]
+pub struct PrintConsensusCommitOptions {
+    #[clap(long, help = "Sequence number of the consensus commit")]
+    seqnum: u64,
 }
 
 #[derive(Parser)]
@@ -168,6 +178,8 @@ pub async fn execute_db_tool_command(db_path: PathBuf, cmd: DbToolCommand) -> an
         DbToolCommand::ListDBMetadata(d) => {
             print_table_metadata(d.store_name, d.epoch, db_path, &d.table_name)
         }
+        DbToolCommand::PrintLastConsensusIndex => print_last_consensus_index(&db_path),
+        DbToolCommand::PrintConsensusCommit(d) => print_consensus_commit(&db_path, d),
         DbToolCommand::PrintTransaction(d) => print_transaction(&db_path, d),
         DbToolCommand::PrintCheckpoint(d) => print_checkpoint(&db_path, d),
         DbToolCommand::PrintCheckpointContent(d) => print_checkpoint_content(&db_path, d),
@@ -219,6 +231,30 @@ pub fn print_db_duplicates_summary(db_path: PathBuf) -> anyhow::Result<()> {
         "Total objects = {}, duplicated objects = {}, total bytes = {}, duplicated bytes = {}",
         total_count, duplicate_count, total_bytes, duplicated_bytes
     );
+    Ok(())
+}
+
+pub fn print_last_consensus_index(path: &Path) -> anyhow::Result<()> {
+    let epoch_tables = AuthorityEpochTables::open_tables_read_write(
+        path.to_path_buf(),
+        MetricConf::default(),
+        None,
+        None,
+    );
+    let last_index = epoch_tables.get_last_consensus_index()?;
+    println!("Last consensus index is {:?}", last_index);
+    Ok(())
+}
+
+pub fn print_consensus_commit(path: &Path, opt: PrintConsensusCommitOptions) -> anyhow::Result<()> {
+    let consensus_db = NodeStorage::reopen(path, None);
+    let consensus_commit = consensus_db
+        .consensus_store
+        .read_consensus_commit(&opt.seqnum)?;
+    match consensus_commit {
+        Some(commit) => println!("Consensus commit at {} is {:?}", opt.seqnum, commit),
+        None => println!("Consensus commit at {} is not found!", opt.seqnum),
+    }
     Ok(())
 }
 
