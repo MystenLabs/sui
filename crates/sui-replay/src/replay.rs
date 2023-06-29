@@ -220,6 +220,9 @@ pub struct LocalExec {
     pub fetcher: Fetchers,
 
     pub diag: DiagInfo,
+    // One can optionally override the executor version
+    // -1 implies use latest version
+    pub executor_version_override: Option<i64>,
     // Retry policies due to RPC errors
     pub num_retries_for_timeout: u32,
     pub sleep_period_for_timeout: std::time::Duration,
@@ -301,18 +304,25 @@ impl LocalExec {
         tx_digest: TransactionDigest,
         expensive_safety_check_config: ExpensiveSafetyCheckConfig,
         use_authority: bool,
+        executor_version_override: Option<i64>,
     ) -> Result<ExecutionSandboxState, ReplayEngineError> {
         async fn inner_exec(
             rpc_url: String,
             tx_digest: TransactionDigest,
             expensive_safety_check_config: ExpensiveSafetyCheckConfig,
             use_authority: bool,
+            executor_version_override: Option<i64>,
         ) -> Result<ExecutionSandboxState, ReplayEngineError> {
             LocalExec::new_from_fn_url(&rpc_url)
                 .await?
                 .init_for_execution()
                 .await?
-                .execute_transaction(&tx_digest, expensive_safety_check_config, use_authority)
+                .execute_transaction(
+                    &tx_digest,
+                    expensive_safety_check_config,
+                    use_authority,
+                    executor_version_override,
+                )
                 .await
         }
 
@@ -323,6 +333,7 @@ impl LocalExec {
                 tx_digest,
                 expensive_safety_check_config.clone(),
                 use_authority,
+                executor_version_override,
             )
             .await
             {
@@ -342,6 +353,7 @@ impl LocalExec {
                 tx_digest,
                 expensive_safety_check_config.clone(),
                 use_authority,
+                executor_version_override,
             )
             .await
             {
@@ -398,6 +410,7 @@ impl LocalExec {
             num_retries_for_timeout: RPC_TIMEOUT_ERR_NUM_RETRIES,
             sleep_period_for_timeout: RPC_TIMEOUT_ERR_SLEEP_RETRY_PERIOD,
             diag: Default::default(),
+            executor_version_override: None,
         })
     }
 
@@ -438,6 +451,7 @@ impl LocalExec {
             num_retries_for_timeout: RPC_TIMEOUT_ERR_NUM_RETRIES,
             sleep_period_for_timeout: RPC_TIMEOUT_ERR_SLEEP_RETRY_PERIOD,
             diag: Default::default(),
+            executor_version_override: None,
         })
     }
 
@@ -625,7 +639,12 @@ impl LocalExec {
         let mut succeeded = 0;
         for tx in txs {
             match self
-                .execute_transaction(&tx, expensive_safety_check_config.clone(), use_authority)
+                .execute_transaction(
+                    &tx,
+                    expensive_safety_check_config.clone(),
+                    use_authority,
+                    None,
+                )
                 .await
                 .map(|q| q.check_effects())
             {
@@ -689,12 +708,14 @@ impl LocalExec {
         let gas_status =
             SuiGasStatus::new_with_budget(tx_info.gas_budget, tx_info.gas_price, protocol_config);
 
+        let ov = self.executor_version_override;
+
         // Temp store for data
         let temporary_store =
             self.to_temporary_store(tx_digest, InputObjects::new(input_objects), protocol_config);
 
         // We could probably cache the executor per protocol config
-        let executor = get_executor(protocol_config, expensive_safety_check_config);
+        let executor = get_executor(ov, protocol_config, expensive_safety_check_config);
 
         // All prep done
         let expensive_checks = true;
@@ -933,7 +954,9 @@ impl LocalExec {
         tx_digest: &TransactionDigest,
         expensive_safety_check_config: ExpensiveSafetyCheckConfig,
         use_authority: bool,
+        executor_version_override: Option<i64>,
     ) -> Result<ExecutionSandboxState, ReplayEngineError> {
+        self.executor_version_override = executor_version_override;
         if use_authority {
             self.certificate_execute(tx_digest, expensive_safety_check_config.clone())
                 .await
@@ -1857,12 +1880,27 @@ impl GetModule for LocalExec {
 // <--------------------- Util functions ----------------------->
 
 pub fn get_executor(
+    executor_version_override: Option<i64>,
     protocol_config: &ProtocolConfig,
     expensive_safety_check_config: ExpensiveSafetyCheckConfig,
 ) -> Arc<dyn Executor + Send + Sync> {
+    let protocol_config = executor_version_override
+        .map(|q| {
+            let ver = if q < 0 {
+                sui_execution::LATEST_EXECUTOR_VERSION
+            } else {
+                q as u64
+            };
+
+            let mut c = protocol_config.clone();
+            c.set_execution_version_for_testing(ver);
+            c
+        })
+        .unwrap_or(protocol_config.clone());
+
     let silent = true;
     sui_execution::executor(
-        protocol_config,
+        &protocol_config,
         expensive_safety_check_config.enable_move_vm_paranoid_checks(),
         silent,
     )

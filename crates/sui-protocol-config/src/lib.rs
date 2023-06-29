@@ -1324,6 +1324,10 @@ impl ProtocolConfig {
     pub fn set_max_tx_gas_for_testing(&mut self, max_tx_gas: u64) {
         self.max_tx_gas = Some(max_tx_gas)
     }
+    pub fn set_execution_version_for_testing(&mut self, version: u64) {
+        self.execution_version = Some(version)
+    }
+
     #[cfg(msim)]
     pub fn set_simplified_unwrap_then_delete(&mut self, val: bool) {
         self.feature_flags.simplified_unwrap_then_delete = val

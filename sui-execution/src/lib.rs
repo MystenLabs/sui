@@ -15,6 +15,8 @@ pub mod verifier;
 mod latest;
 mod v0;
 
+pub const LATEST_EXECUTOR_VERSION: u64 = 1;
+
 pub fn executor(
     protocol_config: &ProtocolConfig,
     paranoid_type_checks: bool,

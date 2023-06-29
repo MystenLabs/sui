@@ -21,6 +21,7 @@ static PROFILER_ENABLED: Lazy<bool> =
 #[derive(Debug, Clone, Serialize)]
 pub struct FrameName {
     name: String,
+    file: String,
 }
 
 #[cfg(debug_assertions)]
@@ -70,6 +71,8 @@ pub struct GasProfiler {
     pub start_gas: u64,
     #[serde(skip)]
     pub config: VMProfilerConfig,
+    #[serde(skip)]
+    finished: bool,
 }
 
 #[cfg(debug_assertions)]
@@ -94,6 +97,7 @@ impl GasProfiler {
             }],
             start_gas,
             config: config.clone(),
+            finished: false,
         };
         profile_open_frame_impl!(Some(&mut prof), "root".to_string(), start_gas);
         prof
@@ -119,24 +123,27 @@ impl GasProfiler {
         self.start_gas
     }
 
-    fn add_frame(&mut self, frame_name: String) -> u64 {
+    fn add_frame(&mut self, frame_name: String, metadata: String) -> u64 {
         *self
             .shared
             .frame_table
             .entry(frame_name.clone())
             .or_insert({
                 let val = self.shared.frames.len() as u64;
-                self.shared.frames.push(FrameName { name: frame_name });
+                self.shared.frames.push(FrameName {
+                    name: frame_name,
+                    file: metadata,
+                });
                 val as usize
             }) as u64
     }
 
-    pub fn open_frame(&mut self, frame_name: String, gas_start: u64) {
+    pub fn open_frame(&mut self, frame_name: String, metadata: String, gas_start: u64) {
         if !*PROFILER_ENABLED || self.start_gas == 0 {
             return;
         }
 
-        let frame_idx = self.add_frame(frame_name.clone());
+        let frame_idx = self.add_frame(frame_name.clone(), metadata);
         let start = self.start_gas();
 
         self.profiles[0].events.push(Event {
@@ -146,11 +153,11 @@ impl GasProfiler {
         });
     }
 
-    pub fn close_frame(&mut self, frame_name: String, gas_end: u64) {
+    pub fn close_frame(&mut self, frame_name: String, metadata: String, gas_end: u64) {
         if !*PROFILER_ENABLED || self.start_gas == 0 {
             return;
         }
-        let frame_idx = self.add_frame(frame_name);
+        let frame_idx = self.add_frame(frame_name, metadata);
         let start = self.start_gas();
 
         self.profiles[0].events.push(Event {
@@ -180,15 +187,23 @@ impl GasProfiler {
         std::io::Write::write_all(&mut file, json.as_bytes()).expect("Unable to write to file");
         println!("Gas profile written to file: {}", path_str);
     }
+
+    pub fn finish(&mut self) {
+        if self.finished {
+            return;
+        }
+        self.finished = true;
+        let end_gas = self.start_gas() - self.profiles[0].end_value;
+        let mut q = Some(self);
+        profile_close_frame_impl!(&mut q, "root".to_string(), end_gas);
+        profile_dump_file!(q.unwrap());
+    }
 }
 
 #[cfg(debug_assertions)]
 impl Drop for GasProfiler {
     fn drop(&mut self) {
-        let end_gas = self.start_gas() - self.profiles[0].end_value;
-        let mut q = Some(self);
-        profile_close_frame_impl!(&mut q, "root".to_string(), end_gas);
-        profile_dump_file!(q.unwrap());
+        self.finish();
         let GasProfiler {
             exporter: _,
             name: _,
@@ -198,6 +213,7 @@ impl Drop for GasProfiler {
             profiles: _,
             start_gas: _,
             config: _,
+            finished: _,
         } = self;
     }
 }
@@ -228,7 +244,7 @@ macro_rules! profile_open_frame_impl {
                 } else {
                     $frame_name
                 };
-                profiler.open_frame(name, $gas_rem)
+                profiler.open_frame(name, $frame_name, $gas_rem)
             }
         }
     };
@@ -258,9 +274,9 @@ macro_rules! profile_close_frame_impl {
                 let name = if !profiler.config.use_long_function_name {
                     GasProfiler::short_name(&$frame_name)
                 } else {
-                    $frame_name
+                    $frame_name.clone()
                 };
-                profiler.close_frame(name, $gas_rem)
+                profiler.close_frame(name, $frame_name, $gas_rem)
             }
         }
     };
@@ -274,7 +290,7 @@ macro_rules! profile_open_instr {
             let gas_rem = $gas_meter.remaining_gas().into();
             if let Some(profiler) = $gas_meter.get_profiler_mut() {
                 if profiler.config.track_bytecode_instructions {
-                    profiler.open_frame($frame_name, gas_rem)
+                    profiler.open_frame($frame_name.clone(), $frame_name, gas_rem)
                 }
             }
         }
@@ -289,7 +305,7 @@ macro_rules! profile_close_instr {
             let gas_rem = $gas_meter.remaining_gas().into();
             if let Some(profiler) = $gas_meter.get_profiler_mut() {
                 if profiler.config.track_bytecode_instructions {
-                    profiler.close_frame($frame_name, gas_rem)
+                    profiler.close_frame($frame_name.clone(), $frame_name, gas_rem)
                 }
             }
         }
