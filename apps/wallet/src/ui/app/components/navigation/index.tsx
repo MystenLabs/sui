@@ -39,7 +39,7 @@ function Navigation({ className }: NavigationProps) {
 				</NavLink>
 				<NavLink to="./nfts" className={makeLinkCls} title="NFTs">
 					<Nft132 className="w-8 h-8" />
-					<span className={st.title}>NFTs</span>
+					<span className={st.title}>Assets</span>
 				</NavLink>
 				<NavLink to="./apps" className={makeLinkCls} title="Apps">
 					<Apps32 className="w-8 h-8" />
