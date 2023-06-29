@@ -10,7 +10,7 @@ use sui_json_rpc_types::{
 use sui_macros::sim_test;
 use sui_types::quorum_driver_types::ExecuteTransactionRequestType;
 use sui_types::transaction::SenderSignedData;
-use test_utils::network::TestClusterBuilder;
+use test_cluster::TestClusterBuilder;
 
 use crate::api::{IndexerApiClient, TransactionBuilderClient, WriteApiClient};
 

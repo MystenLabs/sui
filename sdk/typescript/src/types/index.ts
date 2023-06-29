@@ -1,19 +1,19 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-export * from './common';
-export * from './objects';
-export * from './events';
-export * from './transactions';
-export * from '../framework/framework';
-export * from './sui-bcs';
-export * from './faucet';
-export * from './normalized';
-export * from './validator';
-export * from './coin';
-export * from './epochs';
-export * from './transactions';
-export * from './subscriptions';
-export * from './name-service';
-export * from './dynamic_fields';
-export { GasCostSummary, CheckpointDigest, Checkpoint } from './checkpoints';
+export * from './common.js';
+export * from './objects.js';
+export * from './events.js';
+export * from './transactions.js';
+export * from '../framework/framework.js';
+export * from './sui-bcs.js';
+export * from './faucet.js';
+export * from './normalized.js';
+export * from './validator.js';
+export * from './coin.js';
+export * from './epochs.js';
+export * from './transactions.js';
+export * from './subscriptions.js';
+export * from './name-service.js';
+export * from './dynamic_fields.js';
+export { GasCostSummary, CheckpointDigest, Checkpoint } from './checkpoints.js';

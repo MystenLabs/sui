@@ -6,10 +6,12 @@ import { formatAddress } from '@mysten/sui.js';
 import { Text } from '../../text';
 import ExplorerLink from '_src/ui/app/components/explorer-link';
 import { ExplorerLinkType } from '_src/ui/app/components/explorer-link/ExplorerLinkType';
+import { useActiveAddress } from '_src/ui/app/hooks';
 import { GAS_TYPE_ARG } from '_src/ui/app/redux/slices/sui-objects/Coin';
 
 export function GasSummary({ gasSummary }: { gasSummary?: GasSummaryType }) {
 	const [gas, symbol] = useFormatCoin(gasSummary?.totalGas, GAS_TYPE_ARG);
+	const address = useActiveAddress();
 
 	if (!gasSummary) return null;
 
@@ -20,11 +22,15 @@ export function GasSummary({ gasSummary }: { gasSummary?: GasSummaryType }) {
 					Gas Fees
 				</Text>
 			</div>
-			<div className="flex flex-col items-center gap-1 w-full px-4 py-3">
-				<div className="flex w-full items-center justify-between">
-					<Text color="steel-dark" variant="pBody" weight="medium">
-						You Paid
-					</Text>
+			<div className="flex flex-col items-center gap-2 w-full px-4 py-3">
+				<div className="flex w-full items-center justify-start">
+					{address === gasSummary?.owner && (
+						<div className="mr-auto">
+							<Text color="steel-dark" variant="pBody" weight="medium">
+								You Paid
+							</Text>
+						</div>
+					)}
 					<Text color="steel-darker" variant="pBody" weight="medium">
 						{gasSummary?.isSponsored ? '0' : gas} {symbol}
 					</Text>
@@ -32,7 +38,7 @@ export function GasSummary({ gasSummary }: { gasSummary?: GasSummaryType }) {
 				{gasSummary?.isSponsored && gasSummary.owner && (
 					<>
 						<div className="flex w-full justify-between">
-							<Text color="steel-dark" variant="bodySmall">
+							<Text color="steel-dark" variant="pBody" weight="medium">
 								Paid by Sponsor
 							</Text>
 							<Text color="steel-darker" variant="pBody" weight="medium">
@@ -40,7 +46,7 @@ export function GasSummary({ gasSummary }: { gasSummary?: GasSummaryType }) {
 							</Text>
 						</div>
 						<div className="flex w-full justify-between">
-							<Text color="steel-dark" variant="bodySmall">
+							<Text color="steel-dark" variant="pBody" weight="medium">
 								Sponsor
 							</Text>
 							<ExplorerLink

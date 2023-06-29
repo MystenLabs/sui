@@ -10,7 +10,7 @@ use sui_types::execution_status::{ExecutionFailureStatus, ExecutionStatus};
 use sui_types::object::{Object, Owner, OBJECT_START_VERSION};
 use sui_types::transaction::{CallArg, ObjectArg};
 use sui_types::SUI_FRAMEWORK_ADDRESS;
-use test_utils::network::{TestCluster, TestClusterBuilder};
+use test_cluster::{TestCluster, TestClusterBuilder};
 
 #[sim_test]
 async fn fresh_shared_object_initial_version_matches_current() {

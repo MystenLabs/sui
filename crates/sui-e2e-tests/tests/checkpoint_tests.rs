@@ -3,7 +3,7 @@
 
 use std::time::Duration;
 use sui_macros::sim_test;
-use test_utils::network::TestClusterBuilder;
+use test_cluster::TestClusterBuilder;
 
 #[sim_test]
 async fn basic_checkpoints_integration_test() {

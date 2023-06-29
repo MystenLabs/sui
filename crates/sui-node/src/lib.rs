@@ -476,6 +476,16 @@ impl SuiNode {
                 .unwrap();
         }
 
+        if config
+            .expensive_safety_check_config
+            .enable_secondary_index_checks()
+        {
+            if let Some(indexes) = state.indexes.clone() {
+                sui_core::verify_indexes::verify_indexes(state.database.clone(), indexes)
+                    .expect("secondary indexes are inconsistent");
+            }
+        }
+
         let (end_of_epoch_channel, end_of_epoch_receiver) =
             broadcast::channel(config.end_of_epoch_broadcast_channel_capacity);
 

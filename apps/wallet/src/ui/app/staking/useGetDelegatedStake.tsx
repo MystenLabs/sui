@@ -12,5 +12,6 @@ export function useGetDelegatedStake(address: string): UseQueryResult<DelegatedS
 		queryKey: ['validator', address],
 		queryFn: () => rpc.getStakes({ owner: address }),
 		staleTime: 10 * 1000,
+		refetchInterval: 30 * 1000,
 	});
 }

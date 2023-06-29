@@ -34,7 +34,7 @@ use sui_types::transaction::{
     TEST_ONLY_GAS_UNIT_FOR_SPLIT_COIN, TEST_ONLY_GAS_UNIT_FOR_STAKING,
     TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
 };
-use test_utils::network::TestClusterBuilder;
+use test_cluster::TestClusterBuilder;
 
 #[tokio::test]
 async fn test_transfer_sui() {

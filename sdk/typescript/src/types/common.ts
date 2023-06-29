@@ -13,7 +13,7 @@ import {
 	string,
 	union,
 } from 'superstruct';
-import { CallArg } from './sui-bcs';
+import { CallArg } from './sui-bcs.js';
 import { fromB58, splitGenericParameters } from '@mysten/bcs';
 
 export const TransactionDigest = string();

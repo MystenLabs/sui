@@ -35,4 +35,4 @@ tokio = { workspace = true, features = ["macros", "test-util"] }
 tracing.workspace = true
 
 sui.workspace = true
-test-utils.workspace = true
+test-cluster.workspace = true

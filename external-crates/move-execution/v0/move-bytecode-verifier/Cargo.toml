@@ -1,0 +1,28 @@
+[package]
+name = "move-bytecode-verifier-v0"
+version = "0.1.0"
+authors = ["Diem Association <opensource@diem.com>"]
+description = "Move bytecode verifier"
+repository = "https://github.com/diem/diem"
+homepage = "https://diem.com"
+license = "Apache-2.0"
+publish = false
+edition = "2021"
+
+[dependencies]
+anyhow = "1.0.52"
+petgraph = "0.5.1"
+fail = "0.4.0"
+
+move-borrow-graph = { path = "../../../move/move-borrow-graph" }
+move-binary-format = { path = "../../../move/move-binary-format" }
+move-core-types = { path = "../../../move/move-core/types" }
+move-vm-config = { path = "../../../move/move-vm/config" }
+move-abstract-stack = { path = "../../../move/move-abstract-stack" }
+
+[dev-dependencies]
+hex-literal = "0.3.4"
+invalid-mutations = { path = "../../../move/move-bytecode-verifier/invalid-mutations" }
+
+[features]
+default = []

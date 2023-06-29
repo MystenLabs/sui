@@ -9,7 +9,7 @@ import { Fragment, useMemo } from 'react';
 import { resolveValue, Toaster, type ToastType } from 'react-hot-toast';
 import { Outlet, ScrollRestoration } from 'react-router-dom';
 
-import { usePageView } from '../../hooks/usePageView';
+import { useInitialPageView } from '../../hooks/useInitialPageView';
 import Footer from '../footer/Footer';
 import Header from '../header/Header';
 
@@ -47,7 +47,7 @@ export function Layout() {
 		},
 	});
 
-	usePageView();
+	useInitialPageView(network);
 
 	return (
 		// NOTE: We set a top-level key here to force the entire react tree to be re-created when the network changes:

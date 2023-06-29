@@ -3,6 +3,7 @@
 
 use prometheus::Registry;
 use std::time::Duration;
+use sui_core::authority::EffectsNotifyRead;
 use sui_core::authority_client::NetworkAuthorityClient;
 use sui_core::transaction_orchestrator::TransactiondOrchestrator;
 use sui_macros::sim_test;
@@ -11,8 +12,7 @@ use sui_types::quorum_driver_types::{
     FinalizedEffects, QuorumDriverError,
 };
 use sui_types::transaction::VerifiedTransaction;
-use test_utils::network::TestClusterBuilder;
-use test_utils::transaction::wait_for_tx;
+use test_cluster::TestClusterBuilder;
 use tokio::time::timeout;
 use tracing::info;
 
@@ -54,7 +54,12 @@ async fn test_blocking_execution() -> Result<(), anyhow::Error> {
         .await?;
 
     // Wait for data sync to catch up
-    wait_for_tx(digest, handle.state().clone()).await;
+    handle
+        .state()
+        .db()
+        .notify_read_executed_effects(vec![digest])
+        .await
+        .unwrap();
 
     // Transaction Orchestrator proactivcely executes txn locally
     let txn = txns.swap_remove(0);

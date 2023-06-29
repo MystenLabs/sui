@@ -10,7 +10,7 @@ import {
 	SuiJsonValue,
 	SuiMoveNormalizedType,
 	SUI_FRAMEWORK_ADDRESS,
-} from '../types';
+} from '../types/index.js';
 
 const STD_ASCII_MODULE_NAME = 'ascii';
 const STD_ASCII_STRUCT_NAME = 'String';

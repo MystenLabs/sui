@@ -12,7 +12,9 @@ updates:
   - package-ecosystem: "npm"
     directory: "/"
     schedule:
-      interval: "daily"
+      interval: "weekly"
+    # Disable version updates for npm dependencies
+    open-pull-requests-limit: 0
 
   - package-ecosystem: "github-actions"
     directory: "/"

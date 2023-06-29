@@ -373,6 +373,9 @@ pub struct ExpensiveSafetyCheckConfig {
     /// against some (but not all) potential bugs in the bytecode verifier
     #[serde(default)]
     enable_move_vm_paranoid_checks: bool,
+
+    #[serde(default)]
+    enable_secondary_index_checks: bool,
     // TODO: Add more expensive checks here
 }
 
@@ -385,6 +388,7 @@ impl ExpensiveSafetyCheckConfig {
             enable_state_consistency_check: true,
             force_disable_state_consistency_check: false,
             enable_move_vm_paranoid_checks: true,
+            enable_secondary_index_checks: false, // Disable by default for now
         }
     }
 
@@ -396,6 +400,7 @@ impl ExpensiveSafetyCheckConfig {
             enable_state_consistency_check: false,
             force_disable_state_consistency_check: true,
             enable_move_vm_paranoid_checks: false,
+            enable_secondary_index_checks: false,
         }
     }
 
@@ -427,6 +432,10 @@ impl ExpensiveSafetyCheckConfig {
 
     pub fn enable_deep_per_tx_sui_conservation_check(&self) -> bool {
         self.enable_deep_per_tx_sui_conservation_check || cfg!(debug_assertions)
+    }
+
+    pub fn enable_secondary_index_checks(&self) -> bool {
+        self.enable_secondary_index_checks
     }
 }
 
@@ -473,7 +482,7 @@ pub struct AuthorityStorePruningConfig {
     pub periodic_compaction_threshold_days: Option<usize>,
     /// number of epochs to keep the latest version of transactions and effects for
     #[serde(skip_serializing_if = "Option::is_none")]
-    num_epochs_to_retain_for_checkpoints: Option<u64>,
+    pub num_epochs_to_retain_for_checkpoints: Option<u64>,
 }
 
 impl Default for AuthorityStorePruningConfig {

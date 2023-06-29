@@ -55,7 +55,7 @@ export function PageHeader({ title, subtitle, type, status }: PageHeaderProps) {
 				</Heading>
 			</div>
 			<div className="flex flex-col gap-2 lg:flex-row">
-				<div className="flex min-w-0 items-start gap-2">
+				<div className="flex min-w-0 items-center gap-2">
 					<div className="min-w-0 break-words">
 						<Heading as="h2" variant="heading2/semibold" color="gray-90" mono>
 							{title}

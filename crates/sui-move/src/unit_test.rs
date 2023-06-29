@@ -28,6 +28,9 @@ const MAX_UNIT_TEST_INSTRUCTIONS: u64 = 1_000_000;
 pub struct Test {
     #[clap(flatten)]
     pub test: test::Test,
+    /// If `true`, enable linters
+    #[clap(long, global = true)]
+    pub lint: bool,
 }
 
 impl Test {
@@ -54,6 +57,7 @@ impl Test {
             legacy_digest,
             dump_bytecode_as_base64,
             generate_struct_layouts,
+            self.lint,
         )?;
         run_move_unit_tests(
             rerooted_path,

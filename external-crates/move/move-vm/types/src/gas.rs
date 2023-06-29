@@ -7,6 +7,8 @@ use move_core_types::{
     gas_algebra::{InternalGas, NumArgs, NumBytes},
     language_storage::ModuleId,
 };
+#[cfg(debug_assertions)]
+use move_vm_profiler::GasProfiler;
 
 /// Enum of instructions that do not need extra information for gas metering.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -233,6 +235,12 @@ pub trait GasMeter {
 
     /// Returns the gas left
     fn remaining_gas(&self) -> InternalGas;
+
+    #[cfg(debug_assertions)]
+    fn get_profiler_mut(&mut self) -> Option<&mut GasProfiler>;
+
+    #[cfg(debug_assertions)]
+    fn set_profiler(&mut self, profiler: GasProfiler);
 }
 
 /// A dummy gas meter that does not meter anything.
@@ -449,4 +457,12 @@ impl GasMeter for UnmeteredGasMeter {
     fn remaining_gas(&self) -> InternalGas {
         InternalGas::new(u64::MAX)
     }
+
+    #[cfg(debug_assertions)]
+    fn get_profiler_mut(&mut self) -> Option<&mut GasProfiler> {
+        None
+    }
+
+    #[cfg(debug_assertions)]
+    fn set_profiler(&mut self, _profiler: GasProfiler) {}
 }
