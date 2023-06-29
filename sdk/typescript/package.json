@@ -112,6 +112,7 @@
 		"@scure/bip32": "^1.3.0",
 		"@scure/bip39": "^1.2.0",
 		"@suchipi/femver": "^1.0.0",
+		"events": "^3.3.0",
 		"superstruct": "^1.0.3",
 		"tweetnacl": "^1.0.3"
 	}
