@@ -70,13 +70,15 @@ export function Signatures({ transaction }: Props) {
 	const deserializedTransactionSignatures = transactionSignatures
 		.map((signature) => toParsedSignaturePubkeyPair(signature))
 		.flat();
-	const userSignatures = getSignaturesExcludingAddress(
-		deserializedTransactionSignatures,
-		gasData!.owner,
-	);
+
+	const userSignatures = isSponsoredTransaction
+		? getSignaturesExcludingAddress(deserializedTransactionSignatures, gasData!.owner)
+		: deserializedTransactionSignatures;
+
 	const sponsorSignature = isSponsoredTransaction
 		? getSignatureFromAddress(deserializedTransactionSignatures, gasData!.owner)
 		: null;
+
 	return (
 		<div className="flex flex-col gap-8">
 			{userSignatures.length > 0 && (
