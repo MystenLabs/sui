@@ -2,10 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 export enum API_ENV {
-	local = 'local',
+	mainnet = 'mainnet',
 	devNet = 'devNet',
 	testNet = 'testNet',
-	mainnet = 'mainnet',
+	local = 'local',
 	customRPC = 'customRPC',
 }
 
