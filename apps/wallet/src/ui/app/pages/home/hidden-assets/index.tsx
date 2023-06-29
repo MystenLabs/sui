@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useOnScreen } from '@mysten/core';
-import { Check12, EyeClose16, Ooo16, Ooo24 } from '@mysten/icons';
+import { Check12, EyeClose16, Ooo24 } from '@mysten/icons';
 import { get, set } from 'idb-keyval';
 import { useRef, useEffect, useCallback, useState } from 'react';
 import toast from 'react-hot-toast';
@@ -148,7 +148,7 @@ function NftsPage() {
 
 	return (
 		<div className="flex flex-1 flex-col flex-nowrap items-center gap-4">
-			<PageTitle title="Assets" after={<Ooo24 />} />
+			<PageTitle title="Hidden Assets" back="/nfts" />
 			<Loading loading={isLoading}>
 				{isError ? (
 					<Alert>
@@ -161,37 +161,38 @@ function NftsPage() {
 				{nfts?.length ? (
 					<div className="grid w-full grid-cols-2 gap-x-3.5 gap-y-4">
 						{nfts
-							.filter((nft) => !internalHiddenAssetIds.includes(nft.objectId))
+							.filter((nft) => internalHiddenAssetIds.includes(nft.objectId))
 							.map(({ objectId, type }) => (
-								<Link
-									to={`/nft-details?${new URLSearchParams({
-										objectId,
-									}).toString()}`}
-									onClick={() => {
-										ampli.clickedCollectibleCard({
-											objectId,
-											collectibleType: type!,
-										});
-									}}
-									key={objectId}
-									className="no-underline relative"
-								>
-									<div
-										className="flex items-center justify-center z-10 absolute top-2 right-3 pointer-events-auto w-4 h-4 hover:bg-gray-35 hover:bg-opacity-75 text-gray-60 transition-colors duration-200 rounded-md hover:text-sui-dark"
-										onClick={(event) => hideAsset(objectId, event)}
-									>
-										<EyeClose16 />
-									</div>
-									<ErrorBoundary>
-										<NFTDisplayCard
-											objectId={objectId}
-											size="md"
-											showLabel
-											animateHover
-											borderRadius="xl"
-										/>
-									</ErrorBoundary>
-								</Link>
+								<div>replace this {objectId}</div>
+								// <Link
+								// 	to={`/nft-details?${new URLSearchParams({
+								// 		objectId,
+								// 	}).toString()}`}
+								// 	onClick={() => {
+								// 		ampli.clickedCollectibleCard({
+								// 			objectId,
+								// 			collectibleType: type!,
+								// 		});
+								// 	}}
+								// 	key={objectId}
+								// 	className="no-underline relative"
+								// >
+								// 	<div
+								// 		className="flex items-center justify-center z-10 absolute top-2 right-3 pointer-events-auto w-4 h-4 hover:bg-gray-35 hover:bg-opacity-75 text-gray-60 transition-colors duration-200 rounded-md hover:text-sui-dark"
+								// 		onClick={(event) => hideAsset(objectId, event)}
+								// 	>
+								// 		<EyeClose16 />
+								// 	</div>
+								// 	<ErrorBoundary>
+								// 		<NFTDisplayCard
+								// 			objectId={objectId}
+								// 			size="md"
+								// 			showLabel
+								// 			animateHover
+								// 			borderRadius="xl"
+								// 		/>
+								// 	</ErrorBoundary>
+								// </Link>
 							))}
 						<div ref={observerElem}>
 							{isSpinnerVisible ? (

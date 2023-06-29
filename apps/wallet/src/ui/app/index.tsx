@@ -25,6 +25,7 @@ import HomePage, {
 	AppsPage,
 	NftTransferPage,
 	OnrampPage,
+	HiddenAssetsPage,
 } from '_pages/home';
 import InitializePage from '_pages/initialize';
 import BackupPage from '_pages/initialize/backup';
@@ -63,6 +64,7 @@ const App = () => {
 			<Route path="/*" element={<HomePage />}>
 				<Route path="tokens/*" element={<TokensPage />} />
 				<Route path="nfts" element={<NftsPage />} />
+				<Route path="hidden-assets" element={<HiddenAssetsPage />} />
 				<Route path="apps/*" element={<AppsPage />} />
 				<Route path="nft-details" element={<NFTDetailsPage />} />
 				<Route path="nft-transfer/:nftId" element={<NftTransferPage />} />
