@@ -13,9 +13,9 @@ import { ChevronDown12, Dot12 } from '@mysten/icons';
 import { motion, AnimatePresence } from 'framer-motion';
 import { memo, useCallback, useMemo, useRef, useState } from 'react';
 
+import { appDisconnect } from './actions';
 import { useActiveAddress } from '../../hooks/useActiveAddress';
 import { ButtonConnectedTo } from '../ButtonConnectedTo';
-import { appDisconnect } from './actions';
 import Loading from '_components/loading';
 import { useAppDispatch, useAppSelector } from '_hooks';
 import { createDappStatusSelector } from '_redux/slices/permissions';

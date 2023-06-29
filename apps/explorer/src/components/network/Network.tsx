@@ -6,7 +6,6 @@ import { useContext } from 'react';
 
 import { NetworkContext } from '../../context';
 import { Network } from '../../utils/api/DefaultRpcClient';
-
 import { NetworkSelect, type NetworkOption } from '~/ui/header/NetworkSelect';
 import { ampli } from '~/utils/analytics/ampli';
 

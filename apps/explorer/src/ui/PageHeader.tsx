@@ -7,7 +7,6 @@ import { Badge } from './Badge';
 import { Heading } from './Heading';
 import { ReactComponent as SenderIcon } from './icons/sender.svg';
 import { ReactComponent as CallIcon } from './icons/transactions/call.svg';
-
 import { CopyToClipboard } from '~/ui/CopyToClipboard';
 
 export type PageHeaderType = 'Transaction' | 'Checkpoint' | 'Address' | 'Object' | 'Package';

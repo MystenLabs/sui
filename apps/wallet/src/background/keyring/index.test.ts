@@ -4,9 +4,9 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 
 import { Keyring } from '.';
-import { getFromLocalStorage, setToLocalStorage } from '../storage-utils';
 import { type DerivedAccount } from './DerivedAccount';
 import { VaultStorage } from './VaultStorage';
+import { getFromLocalStorage, setToLocalStorage } from '../storage-utils';
 import Alarm from '_src/background/Alarms';
 import {
 	testEd25519,

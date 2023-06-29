@@ -185,4 +185,5 @@ class Transactions {
 	}
 }
 
-export default new Transactions();
+const transactions = new Transactions();
+export default transactions;

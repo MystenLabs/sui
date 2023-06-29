@@ -3,7 +3,6 @@
 
 import { Activity } from '../../components/Activity';
 import { ErrorBoundary } from '../../components/error-boundary/ErrorBoundary';
-
 import { useSearchParamsMerged } from '~/ui/utils/LinkWithQuery';
 
 const TRANSACTIONS_LIMIT = 20;

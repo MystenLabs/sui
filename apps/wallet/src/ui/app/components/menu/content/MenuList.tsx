@@ -14,9 +14,9 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Browser from 'webextension-polyfill';
 
-import LoadingIndicator from '../../loading/LoadingIndicator';
 import { MenuLayout } from './MenuLayout';
 import MenuListItem from './MenuListItem';
+import LoadingIndicator from '../../loading/LoadingIndicator';
 import { API_ENV_TO_INFO } from '_app/ApiProvider';
 import { Button } from '_app/shared/ButtonUI';
 import { lockWallet } from '_app/wallet/actions';

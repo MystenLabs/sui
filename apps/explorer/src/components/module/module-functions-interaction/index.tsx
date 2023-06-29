@@ -4,12 +4,11 @@
 import { useMemo } from 'react';
 
 import { ModuleFunction } from './ModuleFunction';
-
-import type { ObjectId } from '@mysten/sui.js';
-
 import { useNormalizedMoveModule } from '~/hooks/useNormalizedMoveModule';
 import { Banner } from '~/ui/Banner';
 import { LoadingSpinner } from '~/ui/LoadingSpinner';
+
+import type { ObjectId } from '@mysten/sui.js';
 
 export type ModuleFunctionsInteractionProps = {
 	packageId: ObjectId;

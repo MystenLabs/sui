@@ -5,7 +5,6 @@ import { lazy, Suspense } from 'react';
 
 import { ErrorBoundary } from '../../components/error-boundary/ErrorBoundary';
 import { TopValidatorsCard } from '../../components/top-validators-card/TopValidatorsCard';
-
 import { Activity } from '~/components/Activity';
 import { GasPriceCard } from '~/components/GasPriceCard';
 import { CurrentEpoch, NetworkTPS, OnTheNetwork } from '~/components/HomeMetrics';

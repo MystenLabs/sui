@@ -9,7 +9,6 @@ import clsx from 'clsx';
 import { useState } from 'react';
 
 import CoinsPanel from './OwnedCoinsPanel';
-
 import { Text } from '~/ui/Text';
 
 type OwnedCoinViewProps = {

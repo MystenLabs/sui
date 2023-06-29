@@ -3,9 +3,9 @@
 
 import { Toaster } from 'react-hot-toast';
 
-import type { Meta, StoryObj } from '@storybook/react';
-
 import { CopyToClipboard, type CopyToClipboardProps } from '~/ui/CopyToClipboard';
+
+import type { Meta, StoryObj } from '@storybook/react';
 
 export default {
 	component: CopyToClipboard,

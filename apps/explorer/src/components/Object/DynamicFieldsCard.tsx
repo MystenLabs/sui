@@ -5,7 +5,6 @@ import { useGetDynamicFields, useOnScreen } from '@mysten/core';
 import { useRef, useEffect } from 'react';
 
 import { UnderlyingObjectCard } from './UnderlyingObjectCard';
-
 import { DisclosureBox } from '~/ui/DisclosureBox';
 import { ObjectLink } from '~/ui/InternalLink';
 import { LoadingSpinner } from '~/ui/LoadingSpinner';

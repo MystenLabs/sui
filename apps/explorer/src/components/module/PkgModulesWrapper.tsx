@@ -9,7 +9,6 @@ import { type Direction } from 'react-resizable-panels';
 
 import ModuleView from './ModuleView';
 import { ModuleFunctionsInteraction } from './module-functions-interaction';
-
 import { useBreakpoint } from '~/hooks/useBreakpoint';
 import { SplitPanes } from '~/ui/SplitPanes';
 import { TabHeader } from '~/ui/Tabs';

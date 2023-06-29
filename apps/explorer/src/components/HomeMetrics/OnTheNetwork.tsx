@@ -4,7 +4,6 @@
 import { useGetTotalTransactionBlocks } from '@mysten/core';
 
 import { FormattedStatsAmount } from './FormattedStatsAmount';
-
 import { useGetAddressMetrics } from '~/hooks/useGetAddressMetrics';
 import { useGetNetworkMetrics } from '~/hooks/useGetNetworkMetrics';
 import { Card } from '~/ui/Card';

@@ -15,15 +15,14 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { useEffect, useState } from 'react';
 import { z } from 'zod';
 
+import { NavItem } from './NavItem';
 import { Text } from '../Text';
 import { ReactComponent as CheckIcon } from '../icons/check_16x16.svg';
 import { ReactComponent as ChevronDownIcon } from '../icons/chevron_down.svg';
 import { ReactComponent as MenuIcon } from '../icons/menu.svg';
-import { NavItem } from './NavItem';
+import { useZodForm } from '~/hooks/useZodForm';
 
 import type { ComponentProps, ReactNode } from 'react';
-
-import { useZodForm } from '~/hooks/useZodForm';
 
 export interface NetworkOption {
 	id: string;

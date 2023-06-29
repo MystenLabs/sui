@@ -3,13 +3,8 @@
 
 import { toB58 } from '@mysten/bcs';
 import { it, expect } from 'vitest';
-import {
-	builder,
-	PROGRAMMABLE_CALL,
-	MoveCallTransaction,
-	TRANSACTION,
-	TransferObjectsTransaction,
-} from '..';
+import type { MoveCallTransaction, TransferObjectsTransaction } from '../index.js';
+import { builder, PROGRAMMABLE_CALL, TRANSACTION } from '../index.js';
 import { normalizeSuiAddress } from '../../types/index.js';
 
 // Oooh-weeee we nailed it!

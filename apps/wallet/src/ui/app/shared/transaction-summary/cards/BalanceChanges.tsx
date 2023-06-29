@@ -7,9 +7,9 @@ import {
 	type BalanceChange,
 } from '@mysten/core';
 
+import { CoinsStack } from './CoinStack';
 import { Card } from '../Card';
 import { OwnerFooter } from '../OwnerFooter';
-import { CoinsStack } from './CoinStack';
 import { Text } from '_src/ui/app/shared/text';
 
 interface BalanceChangesProps {

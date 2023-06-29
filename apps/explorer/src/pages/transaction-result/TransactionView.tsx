@@ -17,9 +17,6 @@ import clsx from 'clsx';
 // } from '../../components/events/eventDisplay';
 
 import { Signatures } from './Signatures';
-
-import styles from './TransactionResult.module.css';
-
 import { ErrorBoundary } from '~/components/error-boundary/ErrorBoundary';
 import { useBreakpoint } from '~/hooks/useBreakpoint';
 import { Events } from '~/pages/transaction-result/Events';
@@ -29,6 +26,8 @@ import { Banner } from '~/ui/Banner';
 import { PageHeader } from '~/ui/PageHeader';
 import { SplitPanes } from '~/ui/SplitPanes';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '~/ui/Tabs';
+
+import styles from './TransactionResult.module.css';
 
 export function TransactionView({ transaction }: { transaction: SuiTransactionBlockResponse }) {
 	const isMediumOrAbove = useBreakpoint('md');
