@@ -5,10 +5,6 @@ ResolvedGraph {
         package_graph: {
             "Root": [
                 (
-                    "C",
-                    Outgoing,
-                ),
-                (
                     "A",
                     Outgoing,
                 ),
@@ -16,12 +12,12 @@ ResolvedGraph {
                     "B",
                     Outgoing,
                 ),
-            ],
-            "C": [
                 (
-                    "Root",
-                    Incoming,
+                    "C",
+                    Outgoing,
                 ),
+            ],
+            "D": [
                 (
                     "E",
                     Outgoing,
@@ -30,14 +26,10 @@ ResolvedGraph {
                     "A",
                     Incoming,
                 ),
-                (
-                    "B",
-                    Incoming,
-                ),
             ],
             "E": [
                 (
-                    "C",
+                    "D",
                     Incoming,
                 ),
                 (
@@ -45,7 +37,7 @@ ResolvedGraph {
                     Incoming,
                 ),
                 (
-                    "D",
+                    "C",
                     Incoming,
                 ),
             ],
@@ -55,10 +47,6 @@ ResolvedGraph {
                     Incoming,
                 ),
                 (
-                    "E",
-                    Outgoing,
-                ),
-                (
                     "C",
                     Outgoing,
                 ),
@@ -66,10 +54,22 @@ ResolvedGraph {
                     "D",
                     Outgoing,
                 ),
+                (
+                    "E",
+                    Outgoing,
+                ),
             ],
-            "D": [
+            "C": [
                 (
                     "A",
+                    Incoming,
+                ),
+                (
+                    "B",
+                    Incoming,
+                ),
+                (
+                    "Root",
                     Incoming,
                 ),
                 (

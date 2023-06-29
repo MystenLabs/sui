@@ -5,10 +5,6 @@ ResolvedGraph {
         package_graph: {
             "Root": [
                 (
-                    "E",
-                    Outgoing,
-                ),
-                (
                     "A",
                     Outgoing,
                 ),
@@ -16,16 +12,22 @@ ResolvedGraph {
                     "B",
                     Outgoing,
                 ),
-            ],
-            "E": [
                 (
-                    "Root",
-                    Incoming,
+                    "E",
+                    Outgoing,
+                ),
+            ],
+            "C": [
+                (
+                    "E",
+                    Outgoing,
                 ),
                 (
                     "A",
                     Incoming,
                 ),
+            ],
+            "E": [
                 (
                     "C",
                     Incoming,
@@ -35,7 +37,25 @@ ResolvedGraph {
                     Incoming,
                 ),
                 (
+                    "A",
+                    Incoming,
+                ),
+                (
                     "B",
+                    Incoming,
+                ),
+                (
+                    "Root",
+                    Incoming,
+                ),
+            ],
+            "D": [
+                (
+                    "E",
+                    Outgoing,
+                ),
+                (
+                    "A",
                     Incoming,
                 ),
             ],
@@ -45,32 +65,12 @@ ResolvedGraph {
                     Incoming,
                 ),
                 (
-                    "E",
-                    Outgoing,
-                ),
-                (
                     "C",
                     Outgoing,
                 ),
                 (
                     "D",
                     Outgoing,
-                ),
-            ],
-            "C": [
-                (
-                    "A",
-                    Incoming,
-                ),
-                (
-                    "E",
-                    Outgoing,
-                ),
-            ],
-            "D": [
-                (
-                    "A",
-                    Incoming,
                 ),
                 (
                     "E",

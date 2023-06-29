@@ -1,6 +1,6 @@
 When resolving dependencies for package Root, conflicting dependencies found for 'C':
 
-Not found:
+in A
 	dependency { name = "D" } for package { local = "deps_only/D", version = "2.0.0" }
-New:
+in B
 	dependency { name = "D" } for package { local = "deps_only/D", version = "1.0.0" }

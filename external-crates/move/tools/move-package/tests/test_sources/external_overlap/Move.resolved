@@ -5,32 +5,32 @@ ResolvedGraph {
         package_graph: {
             "Root": [
                 (
+                    "A",
+                    Outgoing,
+                ),
+                (
                     "ADep",
                     Outgoing,
-                ),
-                (
-                    "A",
-                    Outgoing,
-                ),
-            ],
-            "ADep": [
-                (
-                    "Root",
-                    Incoming,
-                ),
-                (
-                    "A",
-                    Incoming,
                 ),
             ],
             "A": [
                 (
+                    "ADep",
+                    Outgoing,
+                ),
+                (
                     "Root",
                     Incoming,
                 ),
+            ],
+            "ADep": [
                 (
-                    "ADep",
-                    Outgoing,
+                    "A",
+                    Incoming,
+                ),
+                (
+                    "Root",
+                    Incoming,
                 ),
             ],
         },
@@ -49,7 +49,9 @@ ResolvedGraph {
                     "deps_only/ADep",
                 ),
                 version: None,
-                resolver: None,
+                resolver: Some(
+                    "../resolvers/successful.sh",
+                ),
             },
         },
         always_deps: {

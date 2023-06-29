@@ -5,30 +5,16 @@ ResolvedGraph {
         package_graph: {
             "Root": [
                 (
+                    "A",
+                    Outgoing,
+                ),
+                (
+                    "B",
+                    Outgoing,
+                ),
+                (
                     "C",
                     Outgoing,
-                ),
-                (
-                    "A",
-                    Outgoing,
-                ),
-                (
-                    "B",
-                    Outgoing,
-                ),
-            ],
-            "C": [
-                (
-                    "Root",
-                    Incoming,
-                ),
-                (
-                    "A",
-                    Incoming,
-                ),
-                (
-                    "B",
-                    Incoming,
                 ),
             ],
             "A": [
@@ -39,6 +25,20 @@ ResolvedGraph {
                 (
                     "C",
                     Outgoing,
+                ),
+            ],
+            "C": [
+                (
+                    "A",
+                    Incoming,
+                ),
+                (
+                    "B",
+                    Incoming,
+                ),
+                (
+                    "Root",
+                    Incoming,
                 ),
             ],
             "B": [

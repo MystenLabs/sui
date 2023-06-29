@@ -1,6 +1,6 @@
-When resolving external dependencies for package Root, conflicting dependencies found for 'ADep' during resolution by '../resolvers/successful_dep.sh':
+When resolving dependencies for package Root, conflicting dependencies found for 'ADep':
 
-Not found:
+in A
+	dependency { name = "ADepOther" } for package { local = "deps_only/ADepOther" } # Resolved by ../resolvers/successful_dep.sh
+in ADep
 	dependency { name = "ADepDep" } for package { local = "deps_only/ADepDep" }
-New:
-	dependency { name = "ADepOther" } for package { local = "deps_only/ADepOther" }

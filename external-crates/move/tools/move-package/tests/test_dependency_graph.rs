@@ -14,7 +14,8 @@ use move_package::{
         lock_file::LockFile,
     },
     source_package::{
-        manifest_parser::parse_move_manifest_from_file, parsed_manifest::DependencyKind,
+        manifest_parser::parse_move_manifest_from_file,
+        parsed_manifest::{Dependency, DependencyKind, InternalDependency},
     },
 };
 use move_symbol_pool::Symbol;
@@ -207,17 +208,26 @@ fn merge_simple() {
     )
     .expect("Reading inner");
 
+    let dep_graphs = BTreeMap::from([(Symbol::from("A"), (inner, false))]);
+    let dependencies = &BTreeMap::from([(
+        Symbol::from("A"),
+        Dependency::Internal(InternalDependency {
+            kind: DependencyKind::default(),
+            subst: None,
+            version: None,
+            digest: None,
+            dep_override: false,
+        }),
+    )]);
     assert!(outer
-        .merge_pkg(
-            &inner,
-            Symbol::from("A"),
+        .merge(
+            dep_graphs,
             DependencyMode::Always,
-            &BTreeMap::new(),
-            &BTreeMap::new(),
             Symbol::from("Root"),
+            &DependencyKind::default(),
+            dependencies,
         )
-        .is_ok());
-
+        .is_ok(),);
     assert_eq!(
         outer.topological_order(),
         vec![Symbol::from("Root"), Symbol::from("A")],
@@ -247,14 +257,24 @@ fn merge_into_root() {
     )
     .expect("Reading inner");
 
+    let dep_graphs = BTreeMap::from([(Symbol::from("A"), (inner, false))]);
+    let dependencies = &BTreeMap::from([(
+        Symbol::from("A"),
+        Dependency::Internal(InternalDependency {
+            kind: DependencyKind::default(),
+            subst: None,
+            version: None,
+            digest: None,
+            dep_override: false,
+        }),
+    )]);
     assert!(outer
-        .merge_pkg(
-            &inner,
-            Symbol::from("Root"),
+        .merge(
+            dep_graphs,
             DependencyMode::Always,
-            &BTreeMap::new(),
-            &BTreeMap::new(),
             Symbol::from("Root"),
+            &DependencyKind::default(),
+            dependencies,
         )
         .is_ok());
 
@@ -288,11 +308,9 @@ fn merge_detached() {
     .expect("Reading inner");
 
     let dep_graphs = BTreeMap::from([(Symbol::from("OtherDep"), (inner, false))]);
-    let Err(err) = outer.merge_all(
+    let Err(err) = outer.merge(
         dep_graphs,
         DependencyMode::Always,
-        &BTreeMap::new(),
-        &BTreeMap::new(),
         Symbol::from("Root"),
         &DependencyKind::default(),
         &BTreeMap::new(),
@@ -323,11 +341,9 @@ fn merge_after_calculating_always_deps() {
     .expect("Reading inner");
 
     let dep_graphs = BTreeMap::from([(Symbol::from("A"), (inner, false))]);
-    let Err(err) = outer.merge_all(
+    let Err(err) = outer.merge(
         dep_graphs,
         DependencyMode::Always,
-        &BTreeMap::new(),
-        &BTreeMap::new(),
         Symbol::from("Root"),
         &DependencyKind::default(),
         &BTreeMap::new(),
@@ -361,14 +377,24 @@ fn merge_overlapping() {
     )
     .expect("Reading inner");
 
+    let dep_graphs = BTreeMap::from([(Symbol::from("B"), (inner, false))]);
+    let dependencies = &BTreeMap::from([(
+        Symbol::from("B"),
+        Dependency::Internal(InternalDependency {
+            kind: DependencyKind::default(),
+            subst: None,
+            version: None,
+            digest: None,
+            dep_override: false,
+        }),
+    )]);
     assert!(outer
-        .merge_pkg(
-            &inner,
-            Symbol::from("B"),
+        .merge(
+            dep_graphs,
             DependencyMode::Always,
-            &BTreeMap::new(),
-            &BTreeMap::new(),
             Symbol::from("Root"),
+            &DependencyKind::default(),
+            dependencies,
         )
         .is_ok());
 }
@@ -376,74 +402,60 @@ fn merge_overlapping() {
 #[test]
 fn merge_overlapping_different_deps() {
     let tmp = tempfile::tempdir().unwrap();
+
     let mut outer = DependencyGraph::read_from_lock(
         tmp.path().to_path_buf(),
         Symbol::from("Root"),
-        &mut A_DEP_B_LOCK.as_bytes(),
+        &mut EMPTY_LOCK.as_bytes(),
         None,
     )
     .expect("Reading outer");
+
+    let inner1 = DependencyGraph::read_from_lock(
+        tmp.path().to_path_buf(),
+        Symbol::from("C"),
+        &mut A_DEP_B_LOCK.as_bytes(),
+        None,
+    )
+    .expect("Reading inner1");
 
     // Test only -- clear always deps because usually `merge` is used while the graph is being
     // built, not after it has been entirely read.
     outer.always_deps.clear();
 
-    let inner = DependencyGraph::read_from_lock(
+    let inner2 = DependencyGraph::read_from_lock(
         tmp.path().to_path_buf(),
         Symbol::from("B"),
         &mut A_LOCK.as_bytes(),
         None,
     )
-    .expect("Reading inner");
+    .expect("Reading inner2");
 
-    let Err(err) = outer.merge_pkg(
-        &inner,
+    let dep_graphs = BTreeMap::from([
+        (Symbol::from("C"), (inner1, false)),
+        (Symbol::from("B"), (inner2, false)),
+    ]);
+    let dependencies = &BTreeMap::from([(
         Symbol::from("B"),
+        Dependency::Internal(InternalDependency {
+            kind: DependencyKind::default(),
+            subst: None,
+            version: None,
+            digest: None,
+            dep_override: false,
+        }),
+    )]);
+    let Err(err) = outer.merge(
+        dep_graphs,
         DependencyMode::Always,
-        &BTreeMap::new(),
-        &BTreeMap::new(),
-        Symbol::from("Root")
+        Symbol::from("Root"),
+        &DependencyKind::default(),
+        dependencies,
     ) else {
         panic!("Outer and inner mention package A which has different dependencies in both.");
     };
 
     assert_error_contains!(err, "conflicting dependencies found");
-}
-
-#[test]
-fn merge_cyclic() {
-    let tmp = tempfile::tempdir().unwrap();
-    let mut outer = DependencyGraph::read_from_lock(
-        tmp.path().to_path_buf(),
-        Symbol::from("Root"),
-        &mut AB_LOCK.as_bytes(),
-        None,
-    )
-    .expect("Reading outer");
-
-    // Test only -- clear always deps because usually `merge` is used while the graph is being
-    // built, not after it has been entirely read.
-    outer.always_deps.clear();
-
-    let inner = DependencyGraph::read_from_lock(
-        tmp.path().to_path_buf(),
-        Symbol::from("B"),
-        &mut ROOT_LOCK.as_bytes(),
-        None,
-    )
-    .expect("Reading inner");
-
-    let Err(err) = outer.merge_pkg(
-        &inner,
-        Symbol::from("B"),
-        DependencyMode::Always,
-        &BTreeMap::new(),
-        &BTreeMap::new(),
-        Symbol::from("Root")) else {
-        panic!("Inner refers back to outer's root");
-    };
-
-    assert_error_contains!(err, "Conflicting dependencies found");
 }
 
 #[test]
@@ -510,18 +522,6 @@ fn dev_dep_test_package() -> PathBuf {
 const EMPTY_LOCK: &str = r#"
 [move]
 version = 0
-"#;
-
-const ROOT_LOCK: &str = r#"
-[move]
-version = 0
-dependencies = [
-    { name = "Root" },
-]
-
-[[move.package]]
-name = "Root"
-source = { local = "." }
 "#;
 
 const A_LOCK: &str = r#"
