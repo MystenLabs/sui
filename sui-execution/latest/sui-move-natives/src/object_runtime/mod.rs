@@ -168,7 +168,6 @@ impl<'a> ObjectRuntime<'a> {
         metrics: Arc<LimitsMetrics>,
     ) -> Self {
         let mut input_object_owners = BTreeMap::new();
-        let mut effective_owner_map = BTreeMap::new();
         let mut root_version = BTreeMap::new();
         for (id, input_object) in input_objects {
             let InputObject {
@@ -177,17 +176,14 @@ impl<'a> ObjectRuntime<'a> {
                 owner,
             } = input_object;
             input_object_owners.insert(id, owner);
-            effective_owner_map.insert(id, id);
-            root_version.insert(id, version);
+            debug_assert!(contained_uids.contains(&id));
             for contained_uid in contained_uids {
-                effective_owner_map.insert(contained_uid, id);
                 root_version.insert(contained_uid, version);
             }
         }
         Self {
             object_store: ObjectStore::new(
                 object_resolver,
-                effective_owner_map,
                 root_version,
                 is_metered,
                 LocalProtocolConfig::new(protocol_config),
@@ -606,6 +602,11 @@ fn update_owner_map(
 }
 
 // TODO use a custom DeserializerSeed and improve this performance
+/// WARNING! This function assumes that the bcs bytes have already been validated,
+/// and it will give an invariant violation otherwise.
+/// In short, we are relying on the invariant that the bytes are valid for objects
+/// in storage.  We do not need this invariant for dev-inspect, as the programmable
+/// transaction execution will validate the bytes before we get to this point.
 pub fn get_all_uids(
     fully_annotated_layout: &MoveTypeLayout,
     bcs_bytes: &[u8],
