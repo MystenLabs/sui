@@ -659,7 +659,7 @@ impl DependencyGraph {
         // (not present in package table)
         for (dep_name, (g, _)) in &dep_graphs {
             if let Some(dep) = dependencies.get(dep_name) {
-                self.insert_direct_dep(dep, *dep_name, mode, root_package, parent)?;
+                self.insert_direct_dep(dep, root_package, *dep_name, g, mode, parent)?;
                 // make sure that dependencies of the directly dependent package do not differ from
                 // the dependencies of the same package in other sub-graphs (if any)
                 for (other_dep_name, (other_g, _)) in &dep_graphs {
@@ -705,9 +705,10 @@ impl DependencyGraph {
     fn insert_direct_dep(
         &mut self,
         dep: &PM::Dependency,
-        dep_pkg_name: PM::PackageName,
-        mode: DependencyMode,
         root_package: PM::PackageName,
+        dep_pkg_name: PM::PackageName,
+        sub_graph: &DependencyGraph,
+        mode: DependencyMode,
         parent: &PM::DependencyKind,
     ) -> Result<bool> {
         match dep {
@@ -745,16 +746,15 @@ impl DependencyGraph {
                 Ok(true)
             }
             PM::Dependency::External(_) => {
-                self.package_graph.add_edge(
-                    root_package,
-                    dep_pkg_name,
-                    Dependency {
-                        mode,
-                        subst: None,
-                        digest: None,
-                        dep_override: false,
-                    },
-                );
+                // the way that external graphs are constructed, edges between the (root) package of
+                // the outer graph and dependencies in the sub-graph are already present in the
+                // sub-graph
+                let d = sub_graph
+                    .package_graph
+                    .edge_weight(root_package, dep_pkg_name)
+                    .unwrap();
+                self.package_graph
+                    .add_edge(root_package, dep_pkg_name, d.clone());
                 Ok(false)
             }
         }
