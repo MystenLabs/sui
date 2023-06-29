@@ -3,10 +3,10 @@
 
 import { useQuery } from '@tanstack/react-query';
 
-import { API_ENV_TO_QREDO_NETWORK } from '../QredoSigner';
 import { useActiveAddress } from './useActiveAddress';
 import useAppSelector from './useAppSelector';
 import { useQredoAPI } from './useQredoAPI';
+import { API_ENV_TO_QREDO_NETWORK } from '../QredoSigner';
 import { type TransactionStatus } from '_src/shared/qredo-api';
 
 export function useGetQredoTransactions({

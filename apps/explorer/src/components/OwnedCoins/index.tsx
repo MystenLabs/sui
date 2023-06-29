@@ -5,7 +5,6 @@ import { useGetAllBalances } from '@mysten/core';
 import { useState } from 'react';
 
 import OwnedCoinView from './OwnedCoinView';
-
 import { Heading } from '~/ui/Heading';
 import { LoadingSpinner } from '~/ui/LoadingSpinner';
 import { Pagination } from '~/ui/Pagination';

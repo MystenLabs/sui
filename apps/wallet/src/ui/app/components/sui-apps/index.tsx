@@ -5,9 +5,9 @@ import { useFeature } from '@growthbook/growthbook-react';
 import { useMemo } from 'react';
 import { useParams } from 'react-router-dom';
 
-import { permissionsSelectors } from '../../redux/slices/permissions';
 import { SuiApp, type DAppEntry } from './SuiApp';
 import { SuiAppEmpty } from './SuiAppEmpty';
+import { permissionsSelectors } from '../../redux/slices/permissions';
 import { Heading } from '_app/shared/heading';
 import { Text } from '_app/shared/text';
 import { useAppSelector } from '_hooks';

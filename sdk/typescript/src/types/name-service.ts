@@ -1,7 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { Infer, array, boolean, nullable, object, string } from 'superstruct';
+import type { Infer } from 'superstruct';
+import { array, boolean, nullable, object, string } from 'superstruct';
 import { ObjectId } from './common.js';
 
 export const ResolvedNameServiceNames = object({

@@ -29,4 +29,5 @@ class Alarms {
 	}
 }
 
-export default new Alarms();
+const alarms = new Alarms();
+export default alarms;

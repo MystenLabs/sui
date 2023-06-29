@@ -2,14 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { TransactionBlock } from '../builder/index.js';
-import { JsonRpcProvider } from '../providers/json-rpc-provider.js';
-import {
-	getObjectReference,
-	normalizeSuiObjectId,
-	ObjectId,
-	SuiAddress,
-	SUI_SYSTEM_ADDRESS,
-} from '../types/index.js';
+import type { JsonRpcProvider } from '../providers/json-rpc-provider.js';
+import type { ObjectId, SuiAddress } from '../types/index.js';
+import { getObjectReference, normalizeSuiObjectId, SUI_SYSTEM_ADDRESS } from '../types/index.js';
 
 /**
  * Address of the Sui System object.

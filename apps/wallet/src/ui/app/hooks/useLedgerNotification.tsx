@@ -8,10 +8,10 @@ import toast from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 import Browser from 'webextension-polyfill';
 
+import useAppSelector from './useAppSelector';
 import { useMenuIsOpen, useNextMenuUrl } from '../components/menu/hooks';
 import { AppType } from '../redux/slices/app/AppType';
 import { ButtonOrLink } from '../shared/utils/ButtonOrLink';
-import useAppSelector from './useAppSelector';
 import { ampli } from '_src/shared/analytics/ampli';
 
 const HAS_ACKNOWLEDGED_LEDGER_NOTIFICATION_KEY = 'has-acknowledged-ledger-notification';

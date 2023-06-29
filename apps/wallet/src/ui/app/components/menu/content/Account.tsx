@@ -7,8 +7,8 @@ import { ChevronDown16, Copy16 } from '@mysten/icons';
 import { formatAddress } from '@mysten/sui.js';
 import { cx } from 'class-variance-authority';
 
-import { AccountBadge } from '../../AccountBadge';
 import { AccountActions } from './AccountActions';
+import { AccountBadge } from '../../AccountBadge';
 import { type SerializedAccount } from '_src/background/keyring/Account';
 import { useCopyToClipboard } from '_src/ui/app/hooks/useCopyToClipboard';
 import { Text } from '_src/ui/app/shared/text';

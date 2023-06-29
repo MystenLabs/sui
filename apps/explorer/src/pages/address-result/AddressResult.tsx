@@ -5,7 +5,6 @@ import { isSuiNSName, useResolveSuiNSAddress, useResolveSuiNSName } from '@myste
 import { useParams } from 'react-router-dom';
 
 import { ErrorBoundary } from '../../components/error-boundary/ErrorBoundary';
-
 import { OwnedCoins } from '~/components/OwnedCoins';
 import { OwnedObjects } from '~/components/OwnedObjects';
 import TransactionBlocksForAddress, {

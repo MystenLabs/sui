@@ -5,7 +5,6 @@ import { useGetKioskContents, useGetOwnedObjects } from '@mysten/core';
 import { useMemo, useState } from 'react';
 
 import OwnedObject from './OwnedObject';
-
 import { LoadingSpinner } from '~/ui/LoadingSpinner';
 import { Pagination, useCursorPagination } from '~/ui/Pagination';
 import { RadioGroup, RadioOption } from '~/ui/Radio';

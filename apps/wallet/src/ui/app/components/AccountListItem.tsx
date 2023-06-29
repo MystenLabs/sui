@@ -5,10 +5,10 @@ import { useResolveSuiNSName } from '@mysten/core';
 import { Check12, Copy12 } from '@mysten/icons';
 import { formatAddress } from '@mysten/sui.js';
 
+import { AccountBadge } from './AccountBadge';
 import { useActiveAddress } from '../hooks/useActiveAddress';
 import { useCopyToClipboard } from '../hooks/useCopyToClipboard';
 import { Text } from '../shared/text';
-import { AccountBadge } from './AccountBadge';
 import { type SerializedAccount } from '_src/background/keyring/Account';
 
 export type AccountItemProps = {

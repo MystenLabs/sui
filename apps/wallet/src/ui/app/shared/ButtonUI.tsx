@@ -5,11 +5,9 @@
 // TODO: rename this to Button when the existing Button component is removed
 
 import { cva, type VariantProps } from 'class-variance-authority';
-import { forwardRef, type Ref } from 'react';
+import { forwardRef, type Ref, type ReactNode } from 'react';
 
 import { ButtonOrLink, type ButtonOrLinkProps } from './utils/ButtonOrLink';
-
-import type { ReactNode } from 'react';
 
 const styles = cva(
 	[

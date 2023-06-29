@@ -3,10 +3,11 @@
 
 import { fromB64 } from '@mysten/bcs';
 import nacl from 'tweetnacl';
-import { IntentScope, messageWithIntent } from './intent.js';
+import type { IntentScope } from './intent.js';
+import { messageWithIntent } from './intent.js';
 import { secp256k1 } from '@noble/curves/secp256k1';
 import { sha256 } from '@noble/hashes/sha256';
-import { SerializedSignature } from '../cryptography/signature.js';
+import type { SerializedSignature } from '../cryptography/signature.js';
 import { blake2b } from '@noble/hashes/blake2b';
 import { toSingleSignaturePubkeyPair } from '../cryptography/utils.js';
 

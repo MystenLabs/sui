@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { SerializedSignature } from '../cryptography/signature.js';
+import type { SerializedSignature } from '../cryptography/signature.js';
 
 export type SignedTransaction = {
 	transactionBlockBytes: string;

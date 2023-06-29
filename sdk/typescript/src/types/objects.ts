@@ -1,12 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import type { Infer } from 'superstruct';
 import {
 	any,
 	array,
 	assign,
 	boolean,
-	Infer,
 	literal,
 	number,
 	object,
@@ -19,7 +19,7 @@ import {
 	tuple,
 } from 'superstruct';
 import { ObjectId, ObjectOwner, SequenceNumber, TransactionDigest } from './common.js';
-import { OwnedObjectRef } from './transactions.js';
+import type { OwnedObjectRef } from './transactions.js';
 
 export const ObjectType = union([string(), literal('package')]);
 export type ObjectType = Infer<typeof ObjectType>;

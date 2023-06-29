@@ -5,7 +5,6 @@ import { useGetDynamicFieldObject, useGetNormalizedMoveStruct } from '@mysten/co
 import { getObjectFields, getObjectType } from '@mysten/sui.js';
 
 import { FieldItem } from './FieldItem';
-
 import { Banner } from '~/ui/Banner';
 import { LoadingSpinner } from '~/ui/LoadingSpinner';
 

@@ -2,10 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { blake2b } from '@noble/hashes/blake2b';
-import { Keypair } from '../cryptography/keypair.js';
-import { SerializedSignature } from '../cryptography/signature.js';
-import { JsonRpcProvider } from '../providers/json-rpc-provider.js';
-import { SuiAddress } from '../types/index.js';
+import type { Keypair } from '../cryptography/keypair.js';
+import type { SerializedSignature } from '../cryptography/signature.js';
+import type { JsonRpcProvider } from '../providers/json-rpc-provider.js';
+import type { SuiAddress } from '../types/index.js';
 import { SignerWithProvider } from './signer-with-provider.js';
 import { toSerializedSignature } from '../cryptography/utils.js';
 

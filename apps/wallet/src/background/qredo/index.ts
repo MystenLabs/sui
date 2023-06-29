@@ -3,10 +3,6 @@
 
 import mitt from 'mitt';
 
-import Tabs from '../Tabs';
-import { Window } from '../Window';
-import { type ContentScriptConnection } from '../connections/ContentScriptConnection';
-import keyring from '../keyring';
 import {
 	createPendingRequest,
 	deletePendingRequest,
@@ -24,6 +20,10 @@ import {
 	type QredoConnectIdentity,
 } from './types';
 import { qredoConnectPageUrl, toUIQredoPendingRequest, validateInputOrThrow } from './utils';
+import Tabs from '../Tabs';
+import { Window } from '../Window';
+import { type ContentScriptConnection } from '../connections/ContentScriptConnection';
+import keyring from '../keyring';
 import { type QredoConnectInput } from '_src/dapp-interface/WalletStandardInterface';
 import { type Message } from '_src/shared/messaging/messages';
 import { type QredoConnectPayload } from '_src/shared/messaging/messages/payloads/QredoConnect';

@@ -5,10 +5,10 @@ import { useCoinMetadata, useFormatCoin, useGetTimeBeforeEpochNumber } from '@my
 import { Field, Form, useFormikContext } from 'formik';
 import { memo, useCallback, useMemo } from 'react';
 
-import { parseAmount } from '../../helpers';
-import { useTransactionGasBudget, useActiveAddress } from '../../hooks';
 import { type FormValues } from './StakingCard';
 import { createStakeTransaction } from './utils/transaction';
+import { parseAmount } from '../../helpers';
+import { useTransactionGasBudget, useActiveAddress } from '../../hooks';
 import { Card } from '_app/shared/card';
 import { Text } from '_app/shared/text';
 import NumberInput from '_components/number-input';

@@ -11,10 +11,10 @@ import { toast } from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 import { object, string as yupString } from 'yup';
 
-import Alert from '../../alert';
-import { useNextMenuUrl } from '../hooks';
 import { MenuLayout } from './MenuLayout';
 import { PasswordInputDialog } from './PasswordInputDialog';
+import Alert from '../../alert';
+import { useNextMenuUrl } from '../hooks';
 import { ampli } from '_src/shared/analytics/ampli';
 import { useBackgroundClient } from '_src/ui/app/hooks/useBackgroundClient';
 import { Button } from '_src/ui/app/shared/ButtonUI';
