@@ -63,18 +63,19 @@ function MenuList() {
 							title={'Accounts'}
 							subtitle={domainName ?? (address ? formatAddress(address) : '')}
 						/>
-
-						<Button
-							variant="secondary"
-							size="narrow"
-							href={explorerAddress || ''}
-							text={
-								<Text variant="bodySmall" weight="medium" color="steel-darker">
-									View account on Sui Explorer
-								</Text>
-							}
-							after={<ArrowUpRight16 className="text-steel w-4 h-4" />}
-						/>
+						{explorerAddress && (
+							<Button
+								variant="secondary"
+								size="narrow"
+								href={explorerAddress || ''}
+								text={
+									<Text variant="bodySmall" weight="medium" color="steel-darker">
+										View account on Sui Explorer
+									</Text>
+								}
+								after={<ArrowUpRight16 className="text-steel w-4 h-4" />}
+							/>
+						)}
 					</div>
 					<MenuListItem
 						to={networkUrl}
