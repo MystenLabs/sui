@@ -133,9 +133,6 @@ pub struct ObjectRuntime<'a> {
     pub(crate) state: ObjectRuntimeState,
     // whether or not this TX is gas metered
     is_metered: bool,
-    // FIXED BEHAVIOR if true, correctly take the loaded object versions from the object store
-    // LEGACY if false, recalculate the loaded child object versions from child object changes
-    loaded_child_objects_fixed: bool,
 
     pub(crate) constants: LocalProtocolConfig,
     pub(crate) metrics: Arc<LimitsMetrics>,
@@ -198,7 +195,6 @@ impl<'a> ObjectRuntime<'a> {
                 events: vec![],
             },
             is_metered,
-            loaded_child_objects_fixed: protocol_config.loaded_child_objects_fixed(),
             constants: LocalProtocolConfig::new(protocol_config),
             metrics,
         }
@@ -389,7 +385,6 @@ impl<'a> ObjectRuntime<'a> {
             external_transfers,
             loaded_child_objects,
             child_effects,
-            self.loaded_child_objects_fixed,
         )
     }
 
@@ -430,19 +425,10 @@ impl ObjectRuntimeState {
         mut self,
         by_value_inputs: BTreeSet<ObjectID>,
         external_transfers: BTreeSet<ObjectID>,
-        mut loaded_child_objects: BTreeMap<ObjectID, SequenceNumber>,
+        loaded_child_objects: BTreeMap<ObjectID, SequenceNumber>,
         child_object_effects: BTreeMap<ObjectID, ChildObjectEffect>,
-        loaded_child_objects_fixed: bool,
     ) -> Result<RuntimeResults, ExecutionError> {
         let mut wrapped_children = BTreeSet::new();
-        if !loaded_child_objects_fixed {
-            loaded_child_objects = BTreeMap::new();
-            for (child, child_object_effect) in &child_object_effects {
-                if let Some(version) = child_object_effect.loaded_version {
-                    loaded_child_objects.insert(*child, version);
-                }
-            }
-        }
         for (child, child_object_effect) in child_object_effects {
             let ChildObjectEffect {
                 owner: parent,
