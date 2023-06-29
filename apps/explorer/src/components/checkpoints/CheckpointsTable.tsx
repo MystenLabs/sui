@@ -7,7 +7,6 @@ import { useQuery } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
 
 import { genTableDataFromCheckpointsData } from './utils';
-
 import { useGetCheckpoints } from '~/hooks/useGetCheckpoints';
 import { Link } from '~/ui/Link';
 import { Pagination, useCursorPagination } from '~/ui/Pagination';

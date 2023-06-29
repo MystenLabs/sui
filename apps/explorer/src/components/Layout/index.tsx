@@ -12,7 +12,6 @@ import { Outlet, ScrollRestoration } from 'react-router-dom';
 import { useInitialPageView } from '../../hooks/useInitialPageView';
 import Footer from '../footer/Footer';
 import Header from '../header/Header';
-
 import { NetworkContext, useNetwork } from '~/context';
 import { Banner, type BannerProps } from '~/ui/Banner';
 import { persistableStorage } from '~/utils/analytics/amplitude';

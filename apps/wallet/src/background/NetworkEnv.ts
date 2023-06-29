@@ -41,4 +41,5 @@ class NetworkEnv {
 	off = this.#events.off;
 }
 
-export default new NetworkEnv();
+const networkEnv = new NetworkEnv();
+export default networkEnv;

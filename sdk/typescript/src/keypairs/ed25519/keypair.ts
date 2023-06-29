@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import nacl from 'tweetnacl';
-import { ExportedKeypair, Keypair } from '../../cryptography/keypair.js';
+import type { ExportedKeypair, Keypair } from '../../cryptography/keypair.js';
 import { Ed25519PublicKey } from './publickey.js';
 import { isValidHardenedPath, mnemonicToSeedHex } from '../../cryptography/mnemonics.js';
 import { derivePath } from '../../utils/ed25519-hd-key.js';

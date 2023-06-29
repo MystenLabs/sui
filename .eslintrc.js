@@ -2,18 +2,25 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module.exports = {
-	plugins: ['@tanstack/query', 'unused-imports', 'prettier', 'header'],
+	plugins: ['@tanstack/query', 'unused-imports', 'prettier', 'header', 'require-extensions'],
 	extends: [
 		'eslint:recommended',
 		'react-app',
 		'plugin:@tanstack/eslint-plugin-query/recommended',
 		'prettier',
 		'plugin:prettier/recommended',
+		'plugin:import/typescript',
 	],
 	settings: {
 		react: {
 			version: '18',
 		},
+		'import/resolver': {
+			typescript: true,
+		},
+	},
+	env: {
+		es2020: true,
 	},
 	root: true,
 	ignorePatterns: [
@@ -66,7 +73,11 @@ module.exports = {
 		{
 			files: ['sdk/typescript/src/**/*'],
 			rules: {
-				'import/extensions': ['error', 'ignorePackages'],
+				'require-extensions/require-extensions': 'error',
+				'require-extensions/require-index': 'error',
+				'@typescript-eslint/consistent-type-imports': ['error'],
+				'import/consistent-type-specifier-style': ['error', 'prefer-top-level'],
+				'import/no-cycle': ['error'],
 			},
 		},
 		{
@@ -81,6 +92,10 @@ module.exports = {
 								pattern: '{.,..}/**/*.css',
 								group: 'type',
 								position: 'after',
+							},
+							{
+								pattern: '~/**',
+								group: 'internal',
 							},
 						],
 						'newlines-between': 'always',
@@ -223,7 +238,6 @@ module.exports = {
 							},
 						],
 						pathGroupsExcludedImportTypes: ['builtin', 'object', 'type'],
-						'newlines-between': 'always',
 						alphabetize: { order: 'asc' },
 						warnOnUnassignedImports: true,
 					},

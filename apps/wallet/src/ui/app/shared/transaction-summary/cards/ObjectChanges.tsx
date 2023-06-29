@@ -17,10 +17,10 @@ import {
 } from '@mysten/sui.js';
 import cx from 'classnames';
 
+import { ObjectChangeDisplay } from './objectSummary/ObjectChangeDisplay';
 import { ExpandableList } from '../../ExpandableList';
 import { Card } from '../Card';
 import { OwnerFooter } from '../OwnerFooter';
-import { ObjectChangeDisplay } from './objectSummary/ObjectChangeDisplay';
 import ExplorerLink from '_src/ui/app/components/explorer-link';
 import { ExplorerLinkType } from '_src/ui/app/components/explorer-link/ExplorerLinkType';
 import { Text } from '_src/ui/app/shared/text';

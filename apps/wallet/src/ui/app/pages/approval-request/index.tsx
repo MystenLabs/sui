@@ -4,12 +4,12 @@
 import { useEffect, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
 
+import { SignMessageRequest } from './SignMessageRequest';
+import { TransactionRequest } from './transaction-request';
 import Loading from '../../components/loading';
 import { useAppSelector } from '../../hooks';
 import { type RootState } from '../../redux/RootReducer';
 import { txRequestsSelectors } from '../../redux/slices/transaction-requests';
-import { SignMessageRequest } from './SignMessageRequest';
-import { TransactionRequest } from './transaction-request';
 import {
 	isSignMessageApprovalRequest,
 	isTransactionApprovalRequest,

@@ -6,6 +6,7 @@ import { useMutation } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'react-hot-toast';
 
+import { type DAppEntry } from './SuiApp';
 import { useBackgroundClient } from '../../hooks/useBackgroundClient';
 import { Button } from '../../shared/ButtonUI';
 import { Text } from '../../shared/text';
@@ -13,7 +14,6 @@ import { DAppInfoCard } from '../DAppInfoCard';
 import { DAppPermissionsList } from '../DAppPermissionsList';
 import { SummaryCard } from '../SummaryCard';
 import { WalletListSelect } from '../WalletListSelect';
-import { type DAppEntry } from './SuiApp';
 import Overlay from '_components/overlay';
 import { useAppSelector } from '_hooks';
 import { permissionsSelectors } from '_redux/slices/permissions';

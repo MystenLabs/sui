@@ -7,6 +7,8 @@ import {
 	type SignedTransaction,
 	type ExportedKeypair,
 	type SignedMessage,
+	type SuiAddress,
+	type SuiTransactionBlockResponse,
 } from '@mysten/sui.js';
 import { lastValueFrom, map, take } from 'rxjs';
 
@@ -32,7 +34,6 @@ import {
 	type QredoConnectPayload,
 } from '_src/shared/messaging/messages/payloads/QredoConnect';
 
-import type { SuiAddress, SuiTransactionBlockResponse } from '@mysten/sui.js';
 import type { Message } from '_messages';
 import type { KeyringPayload } from '_payloads/keyring';
 import type { GetPermissionRequests, PermissionResponse } from '_payloads/permissions';

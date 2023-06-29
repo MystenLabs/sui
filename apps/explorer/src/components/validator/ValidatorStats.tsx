@@ -4,7 +4,6 @@
 import { type SuiValidatorSummary } from '@mysten/sui.js';
 
 import { DelegationAmount } from './DelegationAmount';
-
 import { Card } from '~/ui/Card';
 import { Heading } from '~/ui/Heading';
 import { Stats } from '~/ui/Stats';

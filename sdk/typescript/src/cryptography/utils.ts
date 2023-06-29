@@ -1,22 +1,19 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+/* eslint-disable import/no-cycle */
 
 import { fromB64, toB64 } from '@mysten/bcs';
-import {
-	SIGNATURE_FLAG_TO_SCHEME,
-	SIGNATURE_SCHEME_TO_FLAG,
-	SerializedSignature,
-	SignaturePubkeyPair,
-	SignatureScheme,
-} from './signature.js';
+import type { SerializedSignature, SignaturePubkeyPair, SignatureScheme } from './signature.js';
+import { SIGNATURE_FLAG_TO_SCHEME, SIGNATURE_SCHEME_TO_FLAG } from './signature.js';
 import { Secp256r1PublicKey } from '../keypairs/secp256r1/publickey.js';
 import { Secp256k1PublicKey } from '../keypairs/secp256k1/publickey.js';
 import { Ed25519PublicKey } from '../keypairs/ed25519/publickey.js';
 import { decodeMultiSig } from './multisig.js';
-import { PublicKey } from './publickey.js';
+import type { PublicKey } from './publickey.js';
 import { Ed25519Keypair } from '../keypairs/ed25519/keypair.js';
 import { Secp256k1Keypair } from '../keypairs/secp256k1/keypair.js';
-import { ExportedKeypair, Keypair, LEGACY_PRIVATE_KEY_SIZE, PRIVATE_KEY_SIZE } from './keypair.js';
+import type { ExportedKeypair, Keypair } from './keypair.js';
+import { LEGACY_PRIVATE_KEY_SIZE, PRIVATE_KEY_SIZE } from './keypair.js';
 
 export function toSerializedSignature({
 	signature,

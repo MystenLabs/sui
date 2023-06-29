@@ -3,10 +3,10 @@
 
 import { useNavigate } from 'react-router-dom';
 
-import { useActiveAddress } from '../../hooks/useActiveAddress';
-import { useGetDelegatedStake } from '../useGetDelegatedStake';
 import { SelectValidatorCard } from './SelectValidatorCard';
 import { ValidatorsCard } from './ValidatorsCard';
+import { useActiveAddress } from '../../hooks/useActiveAddress';
+import { useGetDelegatedStake } from '../useGetDelegatedStake';
 import Alert from '_components/alert';
 import Loading from '_components/loading';
 import Overlay from '_components/overlay';

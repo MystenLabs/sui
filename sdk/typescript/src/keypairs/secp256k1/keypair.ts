@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import type { ExportedKeypair, Keypair } from '../../cryptography/keypair.js';
-import { PublicKey } from '../../cryptography/publickey.js';
+import type { PublicKey } from '../../cryptography/publickey.js';
 import { sha256 } from '@noble/hashes/sha256';
 import { Secp256k1PublicKey } from './publickey.js';
 import { secp256k1 } from '@noble/curves/secp256k1';

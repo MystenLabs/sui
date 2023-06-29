@@ -4,7 +4,6 @@
 import { type CheckpointPage } from '@mysten/sui.js/src/types/checkpoints';
 
 import { TxTimeType } from '../tx-time/TxTimeType';
-
 import { HighlightedTableCol } from '~/components/Table/HighlightedTableCol';
 import { CheckpointLink, CheckpointSequenceLink } from '~/ui/InternalLink';
 import { Text } from '~/ui/Text';

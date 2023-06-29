@@ -7,7 +7,6 @@ import clsx from 'clsx';
 import { useEffect, useState } from 'react';
 
 import { LoadingSpinner } from '../LoadingSpinner';
-
 import useImage from '~/hooks/useImage';
 import { VISIBILITY } from '~/hooks/useImageMod';
 

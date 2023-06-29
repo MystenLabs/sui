@@ -7,7 +7,6 @@ import { type SuiValidatorSummary } from '@mysten/sui.js';
 import { useMemo } from 'react';
 
 import { StakeColumn } from './StakeColumn';
-
 import { HighlightedTableCol } from '~/components/Table/HighlightedTableCol';
 import { Banner } from '~/ui/Banner';
 import { ImageIcon } from '~/ui/ImageIcon';

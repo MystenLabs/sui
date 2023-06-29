@@ -3,6 +3,7 @@
 
 import { v4 as uuid } from 'uuid';
 
+import { isSameQredoConnection } from './utils';
 import {
 	setToSessionStorage,
 	getFromSessionStorage,
@@ -10,7 +11,6 @@ import {
 	getFromLocalStorage,
 	setToLocalStorage,
 } from '../storage-utils';
-import { isSameQredoConnection } from './utils';
 
 import type { QredoConnectPendingRequest, QredoConnectIdentity, QredoConnection } from './types';
 

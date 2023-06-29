@@ -5,7 +5,8 @@ import { fromB64, toB64 } from '@mysten/bcs';
 import { blake2b } from '@noble/hashes/blake2b';
 import { bytesToHex } from '@noble/hashes/utils';
 import { normalizeSuiAddress, SUI_ADDRESS_LENGTH } from '../../types/index.js';
-import { bytesEqual, PublicKey, PublicKeyInitData } from '../../cryptography/publickey.js';
+import type { PublicKey, PublicKeyInitData } from '../../cryptography/publickey.js';
+import { bytesEqual } from '../../cryptography/publickey.js';
 import { SIGNATURE_SCHEME_TO_FLAG } from '../../cryptography/signature.js';
 
 const SECP256R1_PUBLIC_KEY_SIZE = 33;

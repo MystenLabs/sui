@@ -7,7 +7,6 @@ import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 
 import { genTableDataFromTxData } from '../transactions/TxCardUtils';
-
 import { useGetTransactionBlocks } from '~/hooks/useGetTransactionBlocks';
 import { Link } from '~/ui/Link';
 import { Pagination, useCursorPagination } from '~/ui/Pagination';

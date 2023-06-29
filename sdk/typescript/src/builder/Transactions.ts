@@ -2,11 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { BCS, fromB64 } from '@mysten/bcs';
+import type { Infer, Struct } from 'superstruct';
 import {
 	is,
 	any,
 	array,
-	Infer,
 	integer,
 	literal,
 	object,
@@ -14,13 +14,13 @@ import {
 	string,
 	union,
 	assert,
-	Struct,
 	define,
 	unknown,
 	record,
 } from 'superstruct';
 import { ObjectId, normalizeSuiObjectId } from '../types/common.js';
-import { TRANSACTION_TYPE, WellKnownEncoding, create } from './utils.js';
+import type { WellKnownEncoding } from './utils.js';
+import { TRANSACTION_TYPE, create } from './utils.js';
 import { TypeTagSerializer } from '../signers/txn-data-serializers/type-tag-serializer.js';
 
 const option = <T extends Struct<any, any>>(some: T) =>
