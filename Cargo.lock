@@ -10868,6 +10868,7 @@ dependencies = [
  "move-bytecode-utils",
  "move-core-types",
  "move-package",
+ "narwhal-storage",
  "narwhal-types",
  "prometheus",
  "rocksdb",
