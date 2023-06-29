@@ -121,7 +121,7 @@ export function TransferNFTForm({
 						<Content>
 							<div className="flex gap-2.5 flex-col">
 								<div className="px-2.5 tracking-wider">
-									<Text variant="caption" color="steel-dark" weight="semibold">
+									<Text variant="caption" color="steel" weight="semibold">
 										Enter Recipient Address
 									</Text>
 								</div>
