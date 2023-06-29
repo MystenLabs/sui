@@ -134,11 +134,7 @@ impl Plugin for ParanoidTypeChecker {
         } else {
             self.non_native_function(&function, ty_args, &resolver)
                 .map_err(|e| interpreter.set_location(e))
-                .map_err(|err| interpreter.maybe_core_dump(err, current_frame.get_frame()))?;
         }
-        Ok(())
-    }
-
     fn post_fn(&mut self, _function: &Arc<Function>) -> VMResult<()> {
         Ok(())
     }
