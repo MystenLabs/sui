@@ -18,8 +18,8 @@ const alertStyles = cva(
 				loading: 'bg-steel text-white border-warning-dark/20',
 				issue: 'border-solid border bg-issue-light border-issue-dark/20 text-issue-dark',
 			},
-			border: {
-				false: '!border-transparent',
+			noBorder: {
+				true: '!border-transparent',
 			},
 			rounded: {
 				lg: 'rounded-lg',
@@ -30,7 +30,6 @@ const alertStyles = cva(
 		defaultVariants: {
 			mode: 'issue',
 			rounded: '2xl',
-			border: true,
 		},
 	},
 );
@@ -46,9 +45,9 @@ const modeToIcon = {
 	loading: <LoadingIndicator color="inherit" />,
 };
 
-export default function Alert({ children, border, rounded, mode = 'issue' }: AlertProps) {
+export default function Alert({ children, noBorder, rounded, mode = 'issue' }: AlertProps) {
 	return (
-		<div className={alertStyles({ border, rounded, mode })}>
+		<div className={alertStyles({ noBorder, rounded, mode })}>
 			{(mode && modeToIcon[mode]) || null}
 			<div className="break-words flex-1 text-left">{children}</div>
 		</div>

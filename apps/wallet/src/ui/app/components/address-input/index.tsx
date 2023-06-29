@@ -135,7 +135,7 @@ export function AddressInput({
 
 			{meta.touched ? (
 				<div className="mt-2.5 w-full">
-					<Alert border={false} rounded="lg" mode={meta.error || warningData ? 'issue' : 'success'}>
+					<Alert noBorder rounded="lg" mode={meta.error || warningData ? 'issue' : 'success'}>
 						{warningData === RecipientWarningType.OBJECT ? (
 							<>
 								<Text variant="pBody" weight="semibold">
@@ -156,7 +156,7 @@ export function AddressInput({
 								</Text>
 							</>
 						) : (
-							<Text variant="bodySmall" weight="medium">
+							<Text variant="pBodySmall" weight="medium">
 								{meta.error || 'Valid address'}
 							</Text>
 						)}
