@@ -577,10 +577,11 @@ fn execute_move_upgrade<Mode: ExecutionMode>(
     }
 
     // Check digest.
+    let hash_modules = true;
     let computed_digest = MovePackage::compute_digest_for_modules_and_deps(
         &module_bytes,
         &dep_ids,
-        context.protocol_config.package_digest_hash_module(),
+        hash_modules,
     )
     .to_vec();
     if computed_digest != upgrade_ticket.digest {
