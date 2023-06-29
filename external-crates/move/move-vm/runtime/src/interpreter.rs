@@ -1127,8 +1127,7 @@ impl Frame {
 
     fn pre_charge_gas(
         gas_meter: &mut impl GasMeter,
-        instruction: Bytecode,
-        loader: &Loader,
+        instruction: &Bytecode,
     ) -> PartialVMResult<()> {
         use SimpleInstruction as S;
         match instruction {
@@ -1273,12 +1272,15 @@ impl Frame {
 
     fn post_charge_gas(
         gas_meter: &mut impl GasMeter,
-        instruction: Bytecode,
-        loader: &Loader,
+        instruction: &Bytecode,
+        resolver: &Resolver,
     ) -> PartialVMResult<InstrRet> {
         macro_rules! make_ty {
             ($ty: expr) => {
-                TypeWithLoader { ty: $ty, loader }
+                TypeWithLoader {
+                    ty: $ty,
+                    loader: resolver.loader(),
+                }
             };
         }
         match instruction {
@@ -2495,8 +2497,8 @@ impl Frame {
                 }
 
                 profile_open_instr!(gas_meter, format!("{:?}", instruction));
-
                 // pre_charge_gas
+
                 let r = self.execute_instruction(resolver, interpreter, data_store, instruction)?;
 
                 // post_charge_gas
