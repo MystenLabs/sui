@@ -264,17 +264,17 @@ export type SuiTransactionBlockResponseQuery = {
 };
 
 export type TransactionFilter =
-	| { FromOrToAddress: { addr: string }}
+	| { FromOrToAddress: { addr: string } }
 	| { Checkpoint: string }
 	| { FromAndToAddress: { from: string; to: string } }
 	| { TransactionKind: string }
 	| {
-			MoveFunction: {
-				package: ObjectId;
-				module: string | null;
-				function: string | null;
-			};
-	  }
+		MoveFunction: {
+			package: ObjectId;
+			module: string | null;
+			function: string | null;
+		};
+	}
 	| { InputObject: ObjectId }
 	| { ChangedObject: ObjectId }
 	| { FromAddress: SuiAddress }
@@ -513,8 +513,8 @@ export function getTotalGasUsed(
 	const gasSummary = getExecutionStatusGasSummary(data);
 	return gasSummary
 		? BigInt(gasSummary.computationCost) +
-				BigInt(gasSummary.storageCost) -
-				BigInt(gasSummary.storageRebate)
+		BigInt(gasSummary.storageCost) -
+		BigInt(gasSummary.storageRebate)
 		: undefined;
 }
 
