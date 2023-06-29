@@ -20,7 +20,6 @@ import Loading from '_components/loading';
 import { useAppDispatch, useAppSelector } from '_hooks';
 import { createDappStatusSelector } from '_redux/slices/permissions';
 import { ampli } from '_src/shared/analytics/ampli';
-import { trackEvent } from '_src/shared/plausible';
 
 import st from './DappStatus.module.scss';
 
@@ -74,9 +73,6 @@ function DappStatus() {
 	]);
 	const onHandleDisconnect = useCallback(async () => {
 		if (!disconnecting && isConnected && activeOriginUrl && activeAddress) {
-			trackEvent('AppDisconnect', {
-				props: { source: 'Header' },
-			});
 			setDisconnecting(true);
 			try {
 				await dispatch(
