@@ -67,7 +67,7 @@ function MenuList() {
 							<Button
 								variant="secondary"
 								size="narrow"
-								href={explorerAddress || ''}
+								href={explorerAddress}
 								text={
 									<Text variant="bodySmall" weight="medium" color="steel-darker">
 										View account on Sui Explorer
