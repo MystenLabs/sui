@@ -1553,7 +1553,7 @@ where
         let threshold = self.committee.quorum_threshold();
         let validity = self.committee.validity_threshold();
 
-        info!(
+        debug!(
             ?tx_digest,
             quorum_threshold = threshold,
             validity_threshold = validity,
