@@ -789,7 +789,6 @@ impl SuiClientCommands {
                 println!("Running bytecode verifier for {} modules", modules.len());
                 run_metered_move_bytecode_verifier(
                     &modules,
-                    &protocol_config,
                     &metered_verifier_config,
                     &mut meter,
                     &bytecode_verifier_metrics,

@@ -188,15 +188,9 @@ impl executor::Executor for Executor {
 impl<'m> verifier::Verifier for Verifier<'m> {
     fn meter_compiled_modules(
         &mut self,
-        protocol_config: &ProtocolConfig,
+        _protocol_config: &ProtocolConfig,
         modules: &[CompiledModule],
     ) -> SuiResult<()> {
-        run_metered_move_bytecode_verifier(
-            modules,
-            protocol_config,
-            &self.config,
-            &mut self.meter,
-            self.metrics,
-        )
+        run_metered_move_bytecode_verifier(modules, &self.config, &mut self.meter, self.metrics)
     }
 }
