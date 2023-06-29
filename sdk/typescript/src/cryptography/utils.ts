@@ -40,7 +40,12 @@ export function toParsedSignaturePubkeyPair(
 		SIGNATURE_FLAG_TO_SCHEME[bytes[0] as keyof typeof SIGNATURE_FLAG_TO_SCHEME];
 
 	if (signatureScheme === 'MultiSig') {
-		return decodeMultiSig(serializedSignature);
+		try {
+			return decodeMultiSig(serializedSignature);
+		} catch (e) {
+			// Legacy format multisig do not render.
+			throw new Error('legacy multisig viewing unsupported');
+		}
 	}
 
 	const SIGNATURE_SCHEME_TO_PUBLIC_KEY = {
