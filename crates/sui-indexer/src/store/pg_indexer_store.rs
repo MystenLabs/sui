@@ -1119,13 +1119,9 @@ impl IndexerStore for PgIndexerStore {
         is_descending: bool,
     ) -> Result<Vec<Transaction>, IndexerError> {
         let sql_query = format!(
-            "SELECT transaction_digest as digest_name FROM (
-                SELECT transaction_digest, max(id) AS max_id
-                FROM recipients
-                WHERE recipient = '{}' OR sender = '{}'
-                {} GROUP BY transaction_digest
-                ORDER BY max_id {} LIMIT {}
-            ) AS t",
+            "SELECT transaction_digest as digest_name FROM recipients
+             WHERE recipient = '{}' OR sender = '{}' {}
+             ORDER BY id {} LIMIT {};",
             address,
             address,
             if let Some(start_sequence) = start_sequence {
