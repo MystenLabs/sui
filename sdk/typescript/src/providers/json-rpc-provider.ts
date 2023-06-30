@@ -840,27 +840,33 @@ export class JsonRpcProvider {
 		/** The amount of time to wait between checks for the transaction block. Defaults to 2 seconds. */
 		pollInterval?: number;
 	} & Parameters<JsonRpcProvider['getTransactionBlock']>[0]): Promise<SuiTransactionBlockResponse> {
+		let blockRetrieved = false;
 		const timeoutSignal = AbortSignal.timeout(timeout);
 		const timeoutPromise = new Promise((_, reject) => {
-			timeoutSignal.addEventListener('abort', () => reject(timeoutSignal.reason));
+		  timeoutSignal.addEventListener("abort", () => {
+			if (!blockRetrieved) reject(timeoutSignal.reason);
+		  });
 		});
-
-		while (!timeoutSignal.aborted) {
-			signal?.throwIfAborted();
-			try {
-				return await this.getTransactionBlock(input);
-			} catch (e) {
-				// Wait for either the next poll interval, or the timeout.
-				await Promise.race([
-					new Promise((resolve) => setTimeout(resolve, pollInterval)),
-					timeoutPromise,
-				]);
-			}
+	
+		while (!timeoutSignal.aborted && !blockRetrieved) {
+		  signal?.throwIfAborted();
+		  try {
+			let sync = await this.getTransactionBlock(input);
+			if (sync.effects?.status.status === "success") blockRetrieved = true;
+			return sync;
+		  } catch (e) {
+			console.error("Error", e);
+			// Wait for either the next poll interval, or the timeout.
+			await Promise.race([
+			  new Promise((resolve) => setTimeout(resolve, pollInterval)),
+			  timeoutPromise,
+			]);
+		  }
 		}
-
+	
 		timeoutSignal.throwIfAborted();
-
+	
 		// This should never happen, because the above case should always throw, but just adding it in the event that something goes horribly wrong.
-		throw new Error('Unexpected error while waiting for transaction block.');
+		throw new Error("Unexpected error while waiting for transaction block.");
 	}
 }
