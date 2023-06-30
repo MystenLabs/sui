@@ -1,6 +1,6 @@
 {
 	"name": "@mysten/bcs",
-	"version": "0.7.2",
+	"version": "0.7.3",
 	"description": "BCS - Canonical Binary Serialization implementation for JavaScript",
 	"license": "Apache-2.0",
 	"author": "Mysten Labs <build@mystenlabs.com>",
