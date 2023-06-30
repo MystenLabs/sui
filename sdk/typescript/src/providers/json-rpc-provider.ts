@@ -845,6 +845,10 @@ export class JsonRpcProvider {
 			timeoutSignal.addEventListener('abort', () => reject(timeoutSignal.reason));
 		});
 
+		timeoutPromise.catch(() => {
+			// Swallow unhandled rejections that might be thrown after early return
+		});
+
 		while (!timeoutSignal.aborted) {
 			signal?.throwIfAborted();
 			try {
