@@ -29,7 +29,7 @@ function Navigation({ className }: NavigationProps) {
 		>
 			<div
 				id="sui-apps-filters"
-				className="flex overflow-x-scroll whitespace-nowrap w-full justify-center"
+				className="flex overflow-x:hidden whitespace-nowrap w-full justify-center"
 			></div>
 
 			<div className={st.navMenu}>
