@@ -114,10 +114,7 @@ function PkgView({ data }: { data: DataType }) {
 
 				<div className={styles.txsection}>
 					<ErrorBoundary>
-						<TransactionBlocksForObject
-							address={viewedData.id}
-							filter={FILTER_VALUES.INPUT}
-						/>
+						<TransactionBlocksForObject address={viewedData.id} filter={FILTER_VALUES.INPUT} />
 					</ErrorBoundary>
 				</div>
 			</div>
