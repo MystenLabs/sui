@@ -9,7 +9,7 @@ use sui_types::{base_types::ObjectInfo, object::Owner};
 use tracing::info;
 use typed_store::traits::Map;
 
-use crate::authority::AuthorityStore;
+use crate::authority::{authority_store_tables::LiveObject, AuthorityStore};
 
 /// This is a very expensive function that verifies some of the secondary indexes. This is done by
 /// iterating through the live object set and recalculating these secodary indexes.
@@ -19,13 +19,16 @@ pub fn verify_indexes(database: Arc<AuthorityStore>, indexes: Arc<IndexStore>) -
     let mut owner_index = BTreeMap::new();
     let mut coin_index = BTreeMap::new();
 
-    for object in database
-        .perpetual_tables
-        .objects
-        .unbounded_iter()
-        .flat_map(|(key, object)| database.perpetual_tables.object(&key, object).ok())
-        .flatten()
+    for object in database.iter_live_object_set()
+    // .perpetual_tables
+    // .objects
+    // .unbounded_iter()
+    // .flat_map(|(key, object)| database.perpetual_tables.object(&key, object).ok())
+    // .flatten()
     {
+        let LiveObject::Normal(object) = object else {
+            continue;
+        };
         let Owner::AddressOwner(owner) = object.owner else {
             continue;
         };
@@ -49,6 +52,10 @@ pub fn verify_indexes(database: Arc<AuthorityStore>, indexes: Arc<IndexStore>) -
     // Verify Owner Index
     for (key, info) in indexes.tables().owner_index().unbounded_iter() {
         let calculated_info = owner_index.remove(&key).ok_or_else(|| {
+            tracing::error!(
+                "owner_index: found extra, unexpected entry {:?}",
+                (&key, &info)
+            );
             anyhow!(
                 "owner_index: found extra, unexpected entry {:?}",
                 (&key, &info)
@@ -56,17 +63,26 @@ pub fn verify_indexes(database: Arc<AuthorityStore>, indexes: Arc<IndexStore>) -
         })?;
 
         if calculated_info != info {
+            tracing::error!("owner_index: entry {key:?} is different: expected {calculated_info:?} found {info:?}");
             bail!("owner_index: entry {key:?} is different: expected {calculated_info:?} found {info:?}");
         }
     }
 
     if !owner_index.is_empty() {
+        tracing::error!("owner_index: is missing {} entries.", owner_index.len());
+        tracing::error!("owner_index: is missing entries: {owner_index:?}");
         bail!("owner_index: is missing entries: {owner_index:?}");
     }
+
+    tracing::info!("owner index is good");
 
     // Verify Coin Index
     for (key, info) in indexes.tables().coin_index().unbounded_iter() {
         let calculated_info = coin_index.remove(&key).ok_or_else(|| {
+            tracing::error!(
+                "coin_index: found extra, unexpected entry {:?}",
+                (&key, &info)
+            );
             anyhow!(
                 "coin_index: found extra, unexpected entry {:?}",
                 (&key, &info)
@@ -74,15 +90,19 @@ pub fn verify_indexes(database: Arc<AuthorityStore>, indexes: Arc<IndexStore>) -
         })?;
 
         if calculated_info != info {
+            tracing::error!("coin_index: entry {key:?} is different: expected {calculated_info:?} found {info:?}");
             bail!("coin_index: entry {key:?} is different: expected {calculated_info:?} found {info:?}");
         }
     }
 
     if !coin_index.is_empty() {
+        tracing::error!("coin_index: is missing {} entries.", coin_index.len());
+        tracing::error!("coin_index: is missing entries: {coin_index:?}");
         bail!("coin_index: is missing entries: {coin_index:?}");
     }
 
-    info!("Finisedh running index verification checks");
+    tracing::info!("coin index is good");
+    info!("Finished running index verification checks");
 
     Ok(())
 }

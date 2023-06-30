@@ -2,7 +2,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::authority::authority_store_types::{StoreObject, StoreObjectWrapper};
 use crate::verify_indexes::verify_indexes;
 use anyhow::anyhow;
 use arc_swap::{ArcSwap, Guard};
