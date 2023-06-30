@@ -26,7 +26,8 @@ const styles = cva(
 					'disabled:bg-hero-darkest disabled:text-white disabled:opacity-40',
 				],
 				secondary: [
-					'bg-gray-45 text-steel-darker border-none',
+					'bg-gray-40 text-steel-darker border-none',
+					'hover:bg-gray-45 focus:bg-gray-45',
 					'visited:text-steel-darker',
 					'active:text-steel-dark/70',
 					'disabled:bg-gray-40 disabled:text-steel/50',
