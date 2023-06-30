@@ -44,7 +44,7 @@
         ]
     },
     "devDependencies": {
-        "@changesets/cli": "^2.26.1",
+        "@changesets/cli": "^2.26.2",
         "@manypkg/cli": "^0.21.0",
         "@tanstack/eslint-plugin-query": "^4.29.9",
         "@typescript-eslint/eslint-plugin": "^5.60.1",
@@ -61,7 +61,7 @@
         "eslint-plugin-unused-imports": "^2.0.0",
         "prettier": "^2.8.7",
         "prettier-plugin-tailwindcss": "^0.2.7",
-        "turbo": "^1.9.1",
+        "turbo": "^1.10.6",
         "typescript": "^5.0.4"
     }
 }

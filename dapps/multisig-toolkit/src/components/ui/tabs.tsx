@@ -1,6 +1,5 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-
 import * as React from 'react';
 import * as TabsPrimitive from '@radix-ui/react-tabs';
 
