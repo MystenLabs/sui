@@ -801,10 +801,13 @@ impl IndexerStore for PgIndexerStore {
                     .filter(recipients::dsl::transaction_digest.eq(digest))
                     .select(recipients::dsl::id)
                     .into_boxed();
+                // NOTE: if the query is ORDER BY id ASC, we want to skip the LAST
+                // recipient of the cursor transaction, thus we should order by id DESC;
+                // Same thing for the other way around.
                 if is_descending {
-                    boxed_query = boxed_query.order(recipients::dsl::id.desc());
-                } else {
                     boxed_query = boxed_query.order(recipients::dsl::id.asc());
+                } else {
+                    boxed_query = boxed_query.order(recipients::dsl::id.desc());
                 }
                 Some(boxed_query.first::<i64>(conn))
             } else {
@@ -1119,9 +1122,13 @@ impl IndexerStore for PgIndexerStore {
         is_descending: bool,
     ) -> Result<Vec<Transaction>, IndexerError> {
         let sql_query = format!(
-            "SELECT transaction_digest as digest_name FROM recipients
-             WHERE recipient = '{}' OR sender = '{}' {}
-             ORDER BY id {} LIMIT {};",
+            "SELECT transaction_digest as digest_name FROM (
+                SELECT transaction_digest, max(id) AS max_id
+                FROM recipients
+                WHERE recipient = '{}' OR sender = '{}'
+                {} GROUP BY transaction_digest
+                ORDER BY max_id {} LIMIT {}
+            ) AS t",
             address,
             address,
             if let Some(start_sequence) = start_sequence {
