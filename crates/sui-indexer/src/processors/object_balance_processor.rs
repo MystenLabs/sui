@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use sui_json_rpc_types::{CheckpointId, SuiTransactionBlockEffects, SuiTransactionBlockEffectsAPI};
-use tracing::info;
+use tracing::{debug, info};
 
 use crate::errors::IndexerError;
 use crate::models::object_balances::ObjectBalance;
@@ -25,27 +25,29 @@ where
     pub async fn start(&self) -> Result<(), IndexerError> {
         info!("Indexer ObjectBalance async processor started...");
         let watermark = self.store.get_watermark(OBJECT_BALANCES_WATERMARK).await?;
-        let mut cursor = watermark
-            .map(|w| w.checkpoint.map(|c| c.saturating_add(1)).unwrap_or(0))
-            .unwrap_or(0);
+        // Cursor for last processed checkpoint
+        let mut cursor = watermark.and_then(|w| w.checkpoint);
         loop {
             let latest_checkpoint = self.store.get_latest_checkpoint_sequence_number().await?;
 
-            if latest_checkpoint < cursor {
+            if latest_checkpoint <= cursor.unwrap_or(0) {
                 tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
                 continue;
             }
 
-            let checkpoints = self
-                .store
-                .get_checkpoints(Some(CheckpointId::SequenceNumber(cursor as u64)), 1)
-                .await?;
-            let transactions = checkpoints
-                .iter()
-                .flat_map(|c| c.transactions.iter())
-                .collect::<Vec<_>>();
+            debug!("latest_checkpoint: {latest_checkpoint} cursor: {cursor:?}");
 
-            let tx_digest_strs = transactions
+            let checkpoint = self
+                .store
+                .get_checkpoints(cursor.map(|i| CheckpointId::SequenceNumber(i as u64)), 1)
+                .await?
+                .remove(0);
+
+            debug!("checkpoint: {:#?}", checkpoint);
+            let next_cursor = Some(checkpoint.sequence_number as i64);
+
+            let tx_digest_strs = checkpoint
+                .transactions
                 .iter()
                 .map(|tx| tx.to_string())
                 .collect::<Vec<String>>();
@@ -69,6 +71,7 @@ where
                         .map(|(object_ref, _)| (object_ref.object_id(), object_ref.version()))
                 })
                 .collect::<Vec<_>>();
+            debug!("num objects: {}", changed_objects.len());
             let changed_objects = changed_objects
                 .iter()
                 .map(|(id, version)| self.store.get_sui_types_object(id, version))
@@ -93,12 +96,17 @@ where
                 }
             }
 
+            debug!("balance updates: {:#?}", balances);
+
             self.store
-                .persist_object_balances(cursor, &balances)
+                .persist_object_balances(checkpoint.sequence_number as i64, &balances)
                 .await?;
 
-            info!("Processed object balances for checkpoints: {}", cursor);
-            cursor += 1;
+            info!(
+                "Processed object balances for checkpoints: {:?}",
+                next_cursor
+            );
+            cursor = next_cursor;
         }
     }
 }
