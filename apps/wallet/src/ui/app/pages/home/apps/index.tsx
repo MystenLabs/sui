@@ -52,6 +52,12 @@ function AppsPage() {
 		getFromSessionStorage<string>(APPS_PAGE_NAVIGATION).then((activeTagLink) => {
 			if (activeTagLink) {
 				navigate(`/${activeTagLink}`);
+
+				const element = document.getElementById(activeTagLink);
+
+				if (element) {
+					element.scrollIntoView();
+				}
 			}
 		});
 	}, [navigate]);
