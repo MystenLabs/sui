@@ -748,6 +748,12 @@ impl CheckpointBuilder {
             }
         }
         let last_checkpoint_seq = last_checkpoint.as_ref().map(|(seq, _)| *seq);
+        info!(
+            next_checkpoint_seq = last_checkpoint_seq.unwrap_or_default() + 1,
+            checkpoint_timestamp = details.timestamp_ms,
+            "Creating checkpoint(s) for {} transactions",
+            all_effects.len(),
+        );
 
         let all_digests: Vec<_> = all_effects
             .iter()
@@ -1205,9 +1211,12 @@ impl CheckpointSignatureAggregator {
             if let InsertResult::QuorumReached(data) =
                 self.failures.insert_generic(author, signature)
             {
-                panic!("Checkpoint fork detected - f+1 validators submitted checkpoint digest at seq {} different from our digest {}. Validators with different digests: {:?}",
+                panic!(
+                    "Checkpoint fork detected - f+1 validators submitted checkpoint digest at seq {} different from our digest {}. \
+                     Our checkpoint summary: {:?}. Validators with different digests: {:?}",
                     self.summary.sequence_number,
                     self.digest,
+                    self.summary,
                     data.keys()
                 );
             }

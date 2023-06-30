@@ -112,7 +112,7 @@ fn update_hash(
     let hash = hasher.finish();
     // Log hash every 1000th transaction of the subdag
     if index.transaction_index % 1000 == 0 {
-        debug!(
+        info!(
             "Integrity hash for consensus output at subdag {} transaction {} is {:016x}",
             index.sub_dag_index, index.transaction_index, hash
         );
@@ -153,12 +153,16 @@ impl<T: ParentSync + Send + Sync> ExecutionState for ConsensusHandler<T> {
         let timestamp = if timestamp < epoch_start {
             error!(
                 "Unexpected commit timestamp {timestamp} less then epoch start time {epoch_start}, author {leader_author}, round {round}",
-
             );
             epoch_start
         } else {
             timestamp
         };
+
+        info!(
+            "Received consensus output at leader round {} subdag {} timestamp {}",
+            round, consensus_output.sub_dag.sub_dag_index, timestamp,
+        );
 
         let prologue_transaction = self.consensus_commit_prologue_transaction(round, timestamp);
         transactions.push((
