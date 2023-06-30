@@ -22,6 +22,7 @@ pub struct CheckpointMetrics {
     pub last_sent_checkpoint_signature: IntGauge,
     pub highest_accumulated_epoch: IntGauge,
     pub checkpoint_creation_latency_ms: Histogram,
+    pub remote_checkpoint_forks: IntCounter,
     pub last_created_checkpoint_age_ms: Histogram,
     pub last_certified_checkpoint_age_ms: Histogram,
 }
@@ -112,6 +113,12 @@ impl CheckpointMetrics {
                 "Latency from consensus commit timstamp to local checkpoint creation in milliseconds",
                 registry,
             ),
+            remote_checkpoint_forks: register_int_counter_with_registry!(
+                "remote_checkpoint_forks",
+                "Number of remote checkpoints that forked from local checkpoints",
+                registry
+            )
+            .unwrap(),
         };
         Arc::new(this)
     }
