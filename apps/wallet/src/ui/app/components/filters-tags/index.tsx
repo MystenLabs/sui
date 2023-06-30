@@ -22,9 +22,10 @@ export interface Props {
 
 type Tags = {
 	tags: Props[];
+	callback?: (tag: Props) => void;
 };
 
-function FiltersPortal({ tags }: Tags) {
+function FiltersPortal({ tags, callback }: Tags) {
 	const [element, setElement] = useState<HTMLElement | null>(null);
 
 	useEffect(() => {
@@ -45,6 +46,7 @@ function FiltersPortal({ tags }: Tags) {
 										end
 										className={activeTagsFilter}
 										title={tag.name}
+										onClick={callback ? () => callback(tag) : undefined}
 									>
 										<span className={st.title}>{tag.name}</span>
 									</NavLink>
