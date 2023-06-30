@@ -38,7 +38,7 @@ function TransactionBlocksForAddress({
 		} as TransactionFilter,
 		limit,
 	);
-	const { data, isFetching, pagination, isLoading, isError } = useCursorPagination(transactions);
+	const { data, isFetching, pagination, isLoading } = useCursorPagination(transactions);
 
 	const cardData = data ? genTableDataFromTxData(data.data) : undefined;
 
