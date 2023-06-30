@@ -53,6 +53,7 @@ import {
 	ObjectRead,
 	ResolvedNameServiceNames,
 	ProtocolConfig,
+	getExecutionStatus,
 } from '../types/index.js';
 import type { DynamicFieldName } from '../types/dynamic_fields.js';
 import { DynamicFieldPage } from '../types/dynamic_fields.js';
@@ -852,7 +853,7 @@ export class JsonRpcProvider {
 		  signal?.throwIfAborted();
 		  try {
 			let sync = await this.getTransactionBlock(input);
-			if (sync.effects?.status.status === "success") blockRetrieved = true;
+			if (getExecutionStatus(sync)?.status === "success") blockRetrieved = true;
 			return sync;
 		  } catch (e) {
 			console.error("Error", e);
