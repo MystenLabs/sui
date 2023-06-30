@@ -53,7 +53,6 @@ import {
 	ObjectRead,
 	ResolvedNameServiceNames,
 	ProtocolConfig,
-	getExecutionStatus,
 } from '../types/index.js';
 import type { DynamicFieldName } from '../types/dynamic_fields.js';
 import { DynamicFieldPage } from '../types/dynamic_fields.js';
@@ -841,33 +840,31 @@ export class JsonRpcProvider {
 		/** The amount of time to wait between checks for the transaction block. Defaults to 2 seconds. */
 		pollInterval?: number;
 	} & Parameters<JsonRpcProvider['getTransactionBlock']>[0]): Promise<SuiTransactionBlockResponse> {
-		let blockRetrieved = false;
 		const timeoutSignal = AbortSignal.timeout(timeout);
 		const timeoutPromise = new Promise((_, reject) => {
-		  timeoutSignal.addEventListener("abort", () => {
-			if (!blockRetrieved) reject(timeoutSignal.reason);
-		  });
+			timeoutSignal.addEventListener('abort', () => reject(timeoutSignal.reason));
 		});
-	
-		while (!timeoutSignal.aborted && !blockRetrieved) {
-		  signal?.throwIfAborted();
-		  try {
-			let sync = await this.getTransactionBlock(input);
-			if (getExecutionStatus(sync)?.status === "success") blockRetrieved = true;
-			return sync;
-		  } catch (e) {
-			console.error("Error", e);
-			// Wait for either the next poll interval, or the timeout.
-			await Promise.race([
-			  new Promise((resolve) => setTimeout(resolve, pollInterval)),
-			  timeoutPromise,
-			]);
-		  }
+
+		timeoutPromise.catch(() => {
+			// Swallow unhandled rejections that might be thrown after early return
+		});
+
+		while (!timeoutSignal.aborted) {
+			signal?.throwIfAborted();
+			try {
+				return await this.getTransactionBlock(input);
+			} catch (e) {
+				// Wait for either the next poll interval, or the timeout.
+				await Promise.race([
+					new Promise((resolve) => setTimeout(resolve, pollInterval)),
+					timeoutPromise,
+				]);
+			}
 		}
-	
+
 		timeoutSignal.throwIfAborted();
-	
+
 		// This should never happen, because the above case should always throw, but just adding it in the event that something goes horribly wrong.
-		throw new Error("Unexpected error while waiting for transaction block.");
+		throw new Error('Unexpected error while waiting for transaction block.');
 	}
 }
