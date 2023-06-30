@@ -9,7 +9,7 @@ use sui_types::{base_types::ObjectInfo, object::Owner};
 use tracing::info;
 use typed_store::traits::Map;
 
-use crate::authority::AuthorityStore;
+use crate::authority::{authority_store_tables::LiveObject, AuthorityStore};
 
 /// This is a very expensive function that verifies some of the secondary indexes. This is done by
 /// iterating through the live object set and recalculating these secodary indexes.
@@ -19,13 +19,11 @@ pub fn verify_indexes(database: Arc<AuthorityStore>, indexes: Arc<IndexStore>) -
     let mut owner_index = BTreeMap::new();
     let mut coin_index = BTreeMap::new();
 
-    for object in database
-        .perpetual_tables
-        .objects
-        .unbounded_iter()
-        .flat_map(|(key, object)| database.perpetual_tables.object(&key, object).ok())
-        .flatten()
-    {
+    tracing::info!("Reading live objects set");
+    for object in database.iter_live_object_set(false) {
+        let LiveObject::Normal(object) = object else {
+            continue;
+        };
         let Owner::AddressOwner(owner) = object.owner else {
             continue;
         };
@@ -46,6 +44,8 @@ pub fn verify_indexes(database: Arc<AuthorityStore>, indexes: Arc<IndexStore>) -
         }
     }
 
+    tracing::info!("Live objects set is prepared, about to verify indexes");
+
     // Verify Owner Index
     for (key, info) in indexes.tables().owner_index().unbounded_iter() {
         let calculated_info = owner_index.remove(&key).ok_or_else(|| {
@@ -63,6 +63,7 @@ pub fn verify_indexes(database: Arc<AuthorityStore>, indexes: Arc<IndexStore>) -
     if !owner_index.is_empty() {
         bail!("owner_index: is missing entries: {owner_index:?}");
     }
+    tracing::info!("Owner index is good");
 
     // Verify Coin Index
     for (key, info) in indexes.tables().coin_index().unbounded_iter() {
@@ -77,12 +78,13 @@ pub fn verify_indexes(database: Arc<AuthorityStore>, indexes: Arc<IndexStore>) -
             bail!("coin_index: entry {key:?} is different: expected {calculated_info:?} found {info:?}");
         }
     }
+    tracing::info!("Coin index is good");
 
     if !coin_index.is_empty() {
         bail!("coin_index: is missing entries: {coin_index:?}");
     }
 
-    info!("Finisedh running index verification checks");
+    info!("Finished running index verification checks");
 
     Ok(())
 }
