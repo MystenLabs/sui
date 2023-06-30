@@ -19,7 +19,7 @@ import { trimStdLibPrefix, genFileTypeMsg } from '../../../utils/stringUtils';
 import { LinkOrTextDescriptionItem } from '../LinkOrTextDescriptionItem';
 import { DynamicFieldsCard } from '~/components/Object/DynamicFieldsCard';
 import { ObjectFieldsCard } from '~/components/Object/ObjectFieldsCard';
-import TransactionBlocksForAddress from '~/components/TransactionBlocksForAddress/TransactionBlocksForAddress';
+import TransactionBlocksForObject from '~/components/TransactionBlocksForObject/TransactionBlocksForObject';
 import { useResolveVideo } from '~/hooks/useResolveVideo';
 import { DescriptionList, DescriptionItem } from '~/ui/DescriptionList';
 import { AddressLink, ObjectLink, TransactionLink } from '~/ui/InternalLink';
@@ -147,7 +147,7 @@ export function TokenView({ data }: { data: SuiObjectResponse }) {
 			</TabHeader>
 			<ObjectFieldsCard id={objectId} />
 			<DynamicFieldsCard id={objectId} />
-			<TransactionBlocksForAddress address={objectId} isObject />
+			<TransactionBlocksForObject address={objectId} />
 		</div>
 	);
 }
