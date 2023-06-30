@@ -1,0 +1,3 @@
+deb [trusted=yes] http://snapshot.debian.org/archive/debian/20230623T000000Z bookworm main
+deb [trusted=yes] http://snapshot.debian.org/archive/debian-security/20230623T000000Z bookworm-security main
+deb [trusted=yes] http://snapshot.debian.org/archive/debian/20230623T000000Z bookworm-updates main

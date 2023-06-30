@@ -35,9 +35,9 @@ $(CACHE_DIR)/lib/librocksdb.a: $(CACHE_DIR)/rocksdb/Makefile
 			static_lib \
 	')
 
-$(CACHE_DIR)/bin/rustup: $(CACHE_DIR)/bin/rustup-init
+$(CACHE_DIR)/bin/rustup: $(FETCH_DIR)/rustup-init
 	$(call toolchain,' \
-    	./$(CACHE_DIR)/bin/rustup-init \
+    	./$(FETCH_DIR)/rustup-init \
 			-y \
 			--no-modify-path \
 			--profile minimal \
@@ -50,9 +50,9 @@ $(OUT_DIR)/sui-node: $(CACHE_DIR)/bin/rustup
 		source "/home/build/cache/x86_64/cargo/env" \
 		&& export RUSTFLAGS="-C target-feature=+crt-static" \
 		&& cargo build \
-			--target x86_64-unknown-linux-gnu \
+			--target x86_64-unknown-linux-musl \
 			--locked \
 			--release \
 			--bin sui-node \
-		&& cp target/x86_64-unknown-linux-gnu/release/sui-node /home/build/$@ \
+		&& cp target/x86_64-unknown-linux-musl/release/sui-node /home/build/$@ \
 	')
