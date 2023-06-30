@@ -13,7 +13,6 @@ import { Heading } from '~/ui/Heading';
 import { Pagination, useCursorPagination } from '~/ui/Pagination';
 import { PlaceholderTable } from '~/ui/PlaceholderTable';
 import { TableCard } from '~/ui/TableCard';
-import { TabHeader } from '~/ui/Tabs';
 
 export enum ADDRESS_FILTER_VALUES {
 	TO = 'ToAddress',
@@ -46,8 +45,10 @@ function TransactionBlocksForAddress({
 	return (
 		<div data-testid="tx" className="w-full">
 			<div className="flex flex-col space-y-5 pt-5 text-left xl:pr-10">
-				<div className="flex items-center justify-between border-b border-gray-45">
-					<TabHeader title={filter === ADDRESS_FILTER_VALUES.TO ? 'Received' : 'Sent'} />
+				<div className="flex items-center justify-between border-b border-gray-45 pb-2 ">
+					<Heading color="gray-90" variant="heading6/semibold">
+						{filter === ADDRESS_FILTER_VALUES.TO ? 'Received' : 'Sent'}
+					</Heading>
 				</div>
 				{isLoading || isFetching || !cardData ? (
 					<PlaceholderTable
