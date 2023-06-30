@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useFeatureValue } from '@growthbook/growthbook-react';
 import { useGetKioskContents } from '@mysten/core';
 import { ArrowUpRight12, ArrowRight16 } from '@mysten/icons';
 import { hasPublicTransfer, formatAddress } from '@mysten/sui.js';
@@ -31,10 +30,6 @@ function NFTDetailsPage() {
 	const address = useActiveAddress();
 	const { data } = useGetKioskContents(address);
 	const isContainedInSuiKiosk = data?.kiosks.sui.some((k) => k.data?.objectId === nftId);
-	const marketplaceLinks = useFeatureValue('kiosk-marketplace-links', [
-		{ href: 'https://docs.sui.io/build/sui-kiosk', text: 'Learn more about Kiosks' },
-		{ href: 'https://sui.directory/?_project_type=marketplace', text: 'Explore Sui Marketplaces' },
-	]);
 
 	// Extract either the attributes, or use the top-level NFT fields:
 	const metaFields =
@@ -164,15 +159,18 @@ function NFTDetailsPage() {
 
 							{isContainedInSuiKiosk ? (
 								<div className="flex flex-col gap-2 mb-3">
-									{marketplaceLinks.map(({ href, text }) => (
-										<Button
-											key={href}
-											after={<ArrowUpRight12 />}
-											variant="outline"
-											href={href}
-											text={text}
-										/>
-									))}
+									<Button
+										after={<ArrowUpRight12 />}
+										variant="outline"
+										href="https://docs.sui.io/build/sui-kiosk"
+										text="Learn more about Kiosks"
+									/>
+									<Button
+										after={<ArrowUpRight12 />}
+										variant="outline"
+										href={`https://sui.hyperspace.xyz/wallet/sui/${accountAddress}?tokenAddress=${nftId}`}
+										text="Marketplace"
+									/>
 								</div>
 							) : (
 								<div className="mb-3 flex flex-1 items-end">
