@@ -1,5 +1,11 @@
 # @mysten/sui.js
 
+## 0.37.1
+
+### Patch Changes
+
+- 34cc7d610: Fix unhandled rejections thrown by waitForTransaction
+
 ## 0.37.0
 
 ### Minor Changes
