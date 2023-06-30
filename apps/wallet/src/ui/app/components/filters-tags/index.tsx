@@ -41,6 +41,7 @@ function FiltersPortal({ tags, callback }: Tags) {
 							{tags.map((tag) => {
 								return (
 									<NavLink
+										id={tag.link}
 										key={tag.link}
 										to={`/${tag.link}`}
 										end
