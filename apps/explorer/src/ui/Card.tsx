@@ -25,6 +25,7 @@ const cardStyles = cva('overflow-hidden', {
 			sm: 'px-5 py-4',
 			md: 'p-5',
 			lg: 'p-6 sm:p-8',
+			lgGraph: 'p-6 pb-4',
 		},
 		border: {
 			gray45: 'border border-gray-45',
