@@ -9,7 +9,6 @@ import type {
 	SuiEventFilter,
 	TransactionDigest,
 	SuiTransactionBlockResponseQuery,
-	FaucetResponse,
 	Order,
 	CoinMetadata,
 	CheckpointDigest,
@@ -58,7 +57,6 @@ import type { DynamicFieldName } from '../types/dynamic_fields.js';
 import { DynamicFieldPage } from '../types/dynamic_fields.js';
 import type { WebsocketClientOptions } from '../rpc/websocket-client.js';
 import { DEFAULT_CLIENT_OPTIONS, WebsocketClient } from '../rpc/websocket-client.js';
-import { requestSuiFromFaucet } from '../rpc/faucet-client.js';
 import { any, array, string, nullable } from 'superstruct';
 import { fromB58, toB64, toHEX } from '@mysten/bcs';
 import type { SerializedSignature } from '../cryptography/signature.js';
@@ -68,6 +66,7 @@ import { TransactionBlock } from '../builder/index.js';
 import { CheckpointPage } from '../types/checkpoints.js';
 import { NetworkMetrics, AddressMetrics } from '../types/metrics.js';
 import { EpochInfo, EpochPage } from '../types/epochs.js';
+import { requestSuiFromFaucetV0 } from '../faucet/index.js';
 
 export interface PaginationArguments<Cursor> {
 	/** Optional paging cursor */
@@ -153,14 +152,13 @@ export class JsonRpcProvider {
 		return undefined;
 	}
 
-	async requestSuiFromFaucet(
-		recipient: SuiAddress,
-		httpHeaders?: HttpHeaders,
-	): Promise<FaucetResponse> {
+	/** @deprecated Use `@mysten/sui.js/faucet` instead. */
+	async requestSuiFromFaucet(recipient: SuiAddress, headers?: HttpHeaders) {
 		if (!this.connection.faucet) {
 			throw new Error('Faucet URL is not specified');
 		}
-		return requestSuiFromFaucet(this.connection.faucet, recipient, httpHeaders);
+
+		return requestSuiFromFaucetV0({ host: this.connection.faucet, recipient, headers });
 	}
 
 	/**

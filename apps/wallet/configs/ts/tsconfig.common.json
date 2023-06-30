@@ -44,6 +44,7 @@
 			"_utils": ["./src/ui/styles/utils"],
 			"_utils/*": ["./src/ui/styles/utils/*"],
 			"@mysten/sui.js": ["../../sdk/typescript/src/"],
+			"@mysten/sui.js/faucet": ["../../sdk/typescript/src/faucet/"],
 			"@mysten/kiosk": ["../../sdk/kiosk/src/index.ts"],
 			"@mysten/bcs": ["../../sdk/bcs/src/"],
 			"@mysten/ledgerjs-hw-app-sui": ["../../sdk/ledgerjs-hw-app-sui/src/Sui.ts"],
