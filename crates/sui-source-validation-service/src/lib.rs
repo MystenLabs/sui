@@ -1,9 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::sync::Arc;
 use std::{ffi::OsString, fs, path::Path, process::Command};
 
 use anyhow::{anyhow, bail};
+use axum::extract::State;
+use axum::response::IntoResponse;
 use axum::routing::{get, IntoMakeService};
 use axum::{Router, Server};
 use hyper::server::conn::AddrIncoming;
@@ -13,9 +16,10 @@ use sui_sdk::SuiClient;
 use tracing::info;
 use url::Url;
 
+use move_compiler::compiled_unit::CompiledUnitEnum;
 use move_package::BuildConfig as MoveBuildConfig;
 use sui_move::build::resolve_lock_file_path;
-use sui_move_build::{BuildConfig, SuiPackageHooks};
+use sui_move_build::{BuildConfig, CompiledPackage, SuiPackageHooks};
 use sui_sdk::wallet_context::WalletContext;
 use sui_source_validation::{BytecodeSourceVerifier, SourceMode};
 
@@ -34,7 +38,7 @@ pub struct Packages {
 pub async fn verify_package(
     client: &SuiClient,
     package_path: impl AsRef<Path>,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<CompiledPackage> {
     move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks));
     let config = resolve_lock_file_path(
         MoveBuildConfig::default(),
@@ -55,8 +59,8 @@ pub async fn verify_package(
             /* verify_deps */ false,
             SourceMode::Verify,
         )
-        .await
-        .map_err(anyhow::Error::from)
+        .await?;
+    Ok(compiled_package)
 }
 
 pub fn parse_config(config_path: impl AsRef<Path>) -> anyhow::Result<Config> {
@@ -174,9 +178,10 @@ pub async fn initialize(
     context: &WalletContext,
     config: &Config,
     dir: &Path,
+    compiled_packages: &mut Vec<CompiledPackage>,
 ) -> anyhow::Result<()> {
     clone_repositories(config, dir).await?;
-    verify_packages(context, config, dir).await?;
+    verify_packages(context, config, dir, compiled_packages).await?;
     Ok(())
 }
 
@@ -184,6 +189,7 @@ pub async fn verify_packages(
     context: &WalletContext,
     config: &Config,
     dir: &Path,
+    compiled_packages: &mut Vec<CompiledPackage>,
 ) -> anyhow::Result<()> {
     let mut tasks = vec![];
     for p in &config.packages {
@@ -199,17 +205,38 @@ pub async fn verify_packages(
     }
 
     for t in tasks {
-        t.await.unwrap()?;
+        let package = t.await.unwrap()?;
+        compiled_packages.push(package);
     }
     Ok(())
 }
 
-pub fn serve() -> anyhow::Result<Server<AddrIncoming, IntoMakeService<Router>>> {
-    let app = Router::new().route("/api", get(api_route));
+struct AppState {
+    packages: Vec<CompiledPackage>,
+}
+
+pub fn serve(
+    packages: Vec<CompiledPackage>,
+) -> anyhow::Result<Server<AddrIncoming, IntoMakeService<Router>>> {
+    // Take api?address=0x0&network=mainne
+    let app_state = AppState { packages };
+    let app = Router::new()
+        .route("/api", get(api_route))
+        .with_state(Arc::new(app_state));
     let listener = TcpListener::bind("0.0.0.0:8000")?;
     Ok(Server::from_tcp(listener)?.serve(app.into_make_service()))
 }
 
-async fn api_route() -> &'static str {
-    "{\"source\": \"code\"}"
+async fn api_route(State(app_state): State<Arc<AppState>>) -> impl IntoResponse {
+    // HACK for debugging
+    let first_compiled_unit = &app_state.packages[0].package.root_compiled_units[0];
+    let CompiledUnitEnum::Module(ref m) = first_compiled_unit.unit else { return String::from("not a module")};
+    info!(
+        "nice package name {:#?} and module name: {:#?}",
+        m.package_name, m.name
+    );
+    format!(
+        "{{\"source_path\": \"{}\"}}",
+        first_compiled_unit.source_path.display()
+    )
 }
