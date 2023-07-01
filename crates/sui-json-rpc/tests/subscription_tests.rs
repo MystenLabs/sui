@@ -5,6 +5,7 @@ use std::time::Duration;
 
 use jsonrpsee::core::client::{Subscription, SubscriptionClientT};
 use jsonrpsee::rpc_params;
+use sui_test_transaction_builder::{create_devnet_nft, publish_nfts_package};
 use tokio::time::timeout;
 
 use sui_core::test_utils::wait_for_tx;
@@ -22,7 +23,7 @@ async fn test_subscribe_transaction() -> Result<(), anyhow::Error> {
 
     let ws_client = cluster.fullnode_handle.ws_client;
 
-    let package_id = wallet.publish_nfts_package().await.0;
+    let package_id = publish_nfts_package(&wallet).await.0;
 
     let mut sub: Subscription<SuiTransactionBlockEffects> = ws_client
         .subscribe(
@@ -33,7 +34,7 @@ async fn test_subscribe_transaction() -> Result<(), anyhow::Error> {
         .await
         .unwrap();
 
-    let (_, _, digest) = wallet.create_devnet_nft(package_id).await;
+    let (_, _, digest) = create_devnet_nft(&wallet, package_id).await;
     wait_for_tx(digest, cluster.fullnode_handle.sui_node.state()).await;
 
     // Wait for streaming

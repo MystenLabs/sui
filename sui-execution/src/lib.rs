@@ -15,6 +15,9 @@ pub mod verifier;
 mod latest;
 mod v0;
 
+#[cfg(test)]
+mod tests;
+
 pub fn executor(
     protocol_config: &ProtocolConfig,
     paranoid_type_checks: bool,

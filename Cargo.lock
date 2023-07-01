@@ -1593,9 +1593,9 @@ dependencies = [
 
 [[package]]
 name = "cargo_metadata"
-version = "0.15.2"
+version = "0.15.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "982a0cf6a99c350d7246035613882e376d58cebe571785abc5da4f648d53ac0a"
+checksum = "eee4243f1f26fc7a42710e7439c149e2b10b05472f88090acce52632f231a73a"
 dependencies = [
  "camino",
  "cargo-platform",
@@ -9268,6 +9268,7 @@ dependencies = [
  "sui-source-validation",
  "sui-swarm",
  "sui-swarm-config",
+ "sui-test-transaction-builder",
  "sui-types",
  "sui-verifier-latest",
  "tap",
@@ -9685,12 +9686,14 @@ dependencies = [
 name = "sui-execution"
 version = "0.1.0"
 dependencies = [
+ "cargo_metadata",
  "move-binary-format",
  "move-bytecode-utils",
  "move-core-types",
  "move-vm-config",
  "move-vm-runtime",
  "move-vm-runtime-v0",
+ "petgraph 0.5.1",
  "sui-adapter-latest",
  "sui-adapter-v0",
  "sui-move-natives-latest",
@@ -9883,6 +9886,7 @@ dependencies = [
  "sui-node",
  "sui-open-rpc",
  "sui-sdk",
+ "sui-test-transaction-builder",
  "sui-types",
  "telemetry-subscribers",
  "test-cluster",
@@ -9961,6 +9965,7 @@ dependencies = [
  "sui-simulator",
  "sui-storage",
  "sui-swarm-config",
+ "sui-test-transaction-builder",
  "sui-transaction-builder",
  "sui-types",
  "tap",
@@ -10556,7 +10561,6 @@ dependencies = [
  "sui-json-rpc-types",
  "sui-keys",
  "sui-swarm-config",
- "sui-test-transaction-builder",
  "sui-transaction-builder",
  "sui-types",
  "tempfile",
@@ -10636,6 +10640,7 @@ dependencies = [
  "sui-json-rpc-types",
  "sui-move-build",
  "sui-sdk",
+ "sui-test-transaction-builder",
  "sui-types",
  "tempfile",
  "test-cluster",
@@ -10690,6 +10695,7 @@ dependencies = [
  "clap 4.3.3",
  "criterion",
  "eyre",
+ "fastcrypto",
  "futures",
  "integer-encoding",
  "itertools",
@@ -10709,7 +10715,6 @@ dependencies = [
  "serde 1.0.152",
  "sui-json-rpc-types",
  "sui-protocol-config",
- "sui-simulator",
  "sui-types",
  "tap",
  "tempfile",
@@ -10836,6 +10841,7 @@ dependencies = [
  "shared-crypto",
  "sui-genesis-builder",
  "sui-move-build",
+ "sui-sdk",
  "sui-types",
  "workspace-hack",
 ]

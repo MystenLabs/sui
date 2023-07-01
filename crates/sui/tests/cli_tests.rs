@@ -7,6 +7,7 @@ use std::{fmt::Write, fs::read_dir, path::PathBuf, str, thread, time::Duration};
 
 use expect_test::expect;
 use serde_json::json;
+use sui_test_transaction_builder::batch_make_transfer_transactions;
 use sui_types::object::Owner;
 use sui_types::transaction::{
     TEST_ONLY_GAS_UNIT_FOR_GENERIC, TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS,
@@ -1856,7 +1857,7 @@ async fn test_signature_flag() -> Result<(), anyhow::Error> {
 async fn test_execute_signed_tx() -> Result<(), anyhow::Error> {
     let mut test_cluster = TestClusterBuilder::new().build().await;
     let context = &mut test_cluster.wallet;
-    let mut txns = context.batch_make_transfer_transactions(1).await;
+    let mut txns = batch_make_transfer_transactions(context, 1).await;
     let txn = txns.swap_remove(0);
 
     let (tx_data, signatures) = txn.to_tx_bytes_and_signatures();

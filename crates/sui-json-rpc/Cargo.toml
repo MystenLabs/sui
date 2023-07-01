@@ -55,6 +55,7 @@ cached.workspace = true
 sui-config.workspace = true
 sui-keys.workspace = true
 sui-move-build.workspace = true
+sui-test-transaction-builder.workspace = true
 test-cluster.workspace = true
 sui-sdk.workspace = true
 rand.workspace = true
