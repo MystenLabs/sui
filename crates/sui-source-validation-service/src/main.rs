@@ -24,6 +24,7 @@ pub async fn main() -> anyhow::Result<()> {
     let sui_config = sui_config_dir()?.join(SUI_CLIENT_CONFIG);
     let context = WalletContext::new(&sui_config, None, None).await?;
     let tmp_dir = tempfile::tempdir()?;
-    initialize(&context, &package_config, tmp_dir.path()).await?;
-    serve()?.await.map_err(anyhow::Error::from)
+    let mut packages = vec![];
+    initialize(&context, &package_config, tmp_dir.path(), &mut packages).await?;
+    serve(packages)?.await.map_err(anyhow::Error::from)
 }
