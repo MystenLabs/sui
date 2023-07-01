@@ -8,6 +8,7 @@ use strum_macros::Display;
 use strum_macros::EnumString;
 use sui_json_rpc_types::SuiTransactionBlockEffectsAPI;
 use sui_swarm_config::genesis_config::{AccountConfig, DEFAULT_GAS_AMOUNT};
+use sui_test_transaction_builder::publish_basics_package_and_make_counter;
 use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::base_types::{ObjectRef, SuiAddress};
 use sui_types::coin::PAY_JOIN_FUNC_NAME;
@@ -96,10 +97,8 @@ async fn create_txes(
 ) -> BTreeMap<CommonTransactionCosts, TransactionData> {
     // Initial preparations to create a shared counter. This needs to be done first to not interfere
     // with the use of gas objects in the rest of this function.
-    let (counter_package, counter) = test_cluster
-        .wallet
-        .publish_basics_package_and_make_counter()
-        .await;
+    let (counter_package, counter) =
+        publish_basics_package_and_make_counter(&test_cluster.wallet).await;
     let counter_package_id = counter_package.0;
     let (counter_id, counter_initial_shared_version) = (counter.0, counter.1);
 
