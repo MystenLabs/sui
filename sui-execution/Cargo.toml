@@ -25,4 +25,9 @@ sui-verifier-v0 = { path = "v0/sui-verifier" }
 
 move-vm-runtime-latest = { path = "../external-crates/move/move-vm/runtime", package = "move-vm-runtime" }
 move-vm-runtime-v0 = { path = "../external-crates/move-execution/v0/move-vm/runtime" }
+
 workspace-hack = { version = "0.1", path = "../crates/workspace-hack" }
+
+[dev-dependencies]
+cargo_metadata = "0.15.4"
+petgraph = "0.5.1"

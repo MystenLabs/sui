@@ -28,7 +28,7 @@ The specific versions of crates in the execution layer are found in:
 
 All access to these features from authority (validator and fullnode)
 code must be via `sui-execution`, and not by directly depending a
-consituent crate.
+constituent crate.
 
 Code that is exclusively used in other tools (such as the CLI, or
 internal tools) are free to depend on a specific version of the
@@ -44,6 +44,8 @@ execution layer dictated by the protocol config, and other parts
 perform execution according to a version of the execution layer that
 is hardcoded in their binary (and may change from release-to-release).
 
+`sui-execution tests::test_encapsulation` is a test that detects
+potential breaches of this property.
 
 ## Kinds of Cut
 
@@ -234,13 +236,11 @@ updated:
 
 - **version cuts** replace the mapping from version `X` to `latest`
   with a mapping from `X` to the cut, `vX`.  `latest` gets a new
-  mapping, from `X + 1`.  The `LATEST_EXECUTOR_VERSION` constant must
-  also be incremented.
+  mapping, from `X + 1`.
 
 - **feature cuts** introduce a new mapping from a "feature" execution
   version (a high version number, counting down from `u64::MAX`) to
-  the feature cut. `latest` and `LATEST_EXECUTOR_VERSION` are
-  untouched.
+  the feature cut. `latest` is untouched.
 
 Suppose the `verifier` function starts off like this:
 
@@ -251,7 +251,6 @@ mod v0;
 mod foo;
 mod bar;
 
-pub const LATEST_EXECUTOR_VERSION: u64 = 1;
 pub const FEATURE_FOO: u64 = u64::MAX - 0;
 pub const FEATURE_BAR: u64 = u64::MAX - 1;
 
@@ -282,7 +281,6 @@ mod v1;
 mod foo;
 mod bar;
 
-pub const LATEST_EXECUTOR_VERSION: u64 = 1;
 pub const FEATURE_FOO: u64 = u64::MAX - 0;
 pub const FEATURE_BAR: u64 = u64::MAX - 1;
 
@@ -315,7 +313,6 @@ mod foo;
 mod bar;
 mod baz
 
-pub const LATEST_EXECUTOR_VERSION: u64 = 1;
 pub const FEATURE_FOO: u64 = u64::MAX - 0;
 pub const FEATURE_BAR: u64 = u64::MAX - 1;
 pub const FEATURE_BAZ: u64 = u64::MAX - 2;
