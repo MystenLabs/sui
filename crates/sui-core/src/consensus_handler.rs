@@ -14,6 +14,7 @@ use crate::scoring_decision::update_low_scoring_authorities;
 use crate::transaction_manager::TransactionManager;
 use arc_swap::ArcSwap;
 use async_trait::async_trait;
+use fastcrypto::hash::Hash as _Hash;
 use fastcrypto::traits::ToFromBytes;
 use lru::LruCache;
 use mysten_metrics::{monitored_scope, spawn_monitored_task};
@@ -207,12 +208,11 @@ impl<T: ParentSync + Send + Sync> ExecutionState for ConsensusHandler<T> {
                     ) {
                         Ok(transaction) => transaction,
                         Err(err) => {
-                            // This should be prevented by batch verification, hence `error` log level
-                            error!(
-                                    "Ignoring unexpected malformed transaction (failed to deserialize) from {}: {}",
-                                    author, err
-                                );
-                            continue;
+                            // This should have been prevented by Narwhal batch verification.
+                            panic!(
+                                "Unexpected malformed transaction (failed to deserialize): {}\nCertificate={:?} BatchDigest={:?} Transaction={:?}",
+                                err, output_cert, batch.digest(), serialized_transaction
+                            );
                         }
                     };
                     self.metrics
