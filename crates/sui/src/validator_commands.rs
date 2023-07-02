@@ -163,6 +163,12 @@ pub enum SuiValidatorCommand {
         #[clap(name = "gas-budget", long)]
         gas_budget: Option<u64>,
     },
+    /// Get the amount of pending stake for the candidate validator.
+    GetCandidatePendingStakeAmount {
+        /// The address of the candidate validator
+        #[clap(name = "account-address", long)]
+        address: SuiAddress,
+    },
 }
 
 #[derive(Serialize)]
@@ -181,6 +187,7 @@ pub enum SuiValidatorCommandResponse {
         data: TransactionData,
         serialized_data: String,
     },
+    GetCandidatePendingStakeAmount(String),
 }
 
 fn make_key_files(
@@ -454,6 +461,10 @@ impl SuiValidatorCommand {
                     serialized_data,
                 }
             }
+
+            SuiValidatorCommand::GetCandidatePendingStakeAmount { address } => {
+                SuiValidatorCommandResponse::GetCandidatePendingStakeAmount("".parse()?)
+            }
         });
         ret
     }
@@ -689,6 +700,9 @@ impl Display for SuiValidatorCommandResponse {
                     "Transaction: {:?}, \nSerialized transaction: {:?}",
                     data, serialized_data
                 )?;
+            }
+            SuiValidatorCommandResponse::GetCandidatePendingStakeAmount(response) => {
+                write!(writer, "Pending stake: {:?}", response)?;
             }
         }
         write!(f, "{}", writer.trim_end_matches('\n'))
