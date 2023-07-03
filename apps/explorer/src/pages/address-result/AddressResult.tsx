@@ -5,11 +5,9 @@ import { isSuiNSName, useResolveSuiNSAddress, useResolveSuiNSName } from '@myste
 import { useParams } from 'react-router-dom';
 
 import { ErrorBoundary } from '../../components/error-boundary/ErrorBoundary';
+import { TransactionsForAddress } from '../../components/transactions/TransactionsForAddress';
 import { OwnedCoins } from '~/components/OwnedCoins';
 import { OwnedObjects } from '~/components/OwnedObjects';
-import TransactionBlocksForAddress, {
-	ADDRESS_FILTER_VALUES,
-} from '~/components/TransactionBlocksForAddress/TransactionBlocksForAddress';
 import { Heading } from '~/ui/Heading';
 import { LoadingSpinner } from '~/ui/LoadingSpinner';
 import { PageHeader } from '~/ui/PageHeader';
@@ -41,18 +39,8 @@ function AddressResult({ address }: { address: string }) {
 
 			<div>
 				<ErrorBoundary>
-					<div className="flex items-center justify-between border-b border-gray-45 pb-5">
-						<Heading color="gray-90" variant="heading4/semibold">
-							Transaction Blocks
-						</Heading>
-					</div>
-					<div className="flex w-full flex-col md:flex-row">
-						<div className="flex w-full border-gray-45 md:border-r">
-							<TransactionBlocksForAddress address={address} filter={ADDRESS_FILTER_VALUES.FROM} />
-						</div>
-						<div className="flex w-full md:ml-5">
-							<TransactionBlocksForAddress address={address} filter={ADDRESS_FILTER_VALUES.TO} />
-						</div>
+					<div className="mt-2">
+						<TransactionsForAddress address={address} type="address" />
 					</div>
 				</ErrorBoundary>
 			</div>
