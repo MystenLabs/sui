@@ -1151,8 +1151,6 @@ impl DependencyGraph {
             format!("Parsing response from '{resolver}' for dependency '{to}' of package '{from}'")
         })?;
 
-        eprintln!("EXTERNAL: {:#?}", sub_graph);
-
         Ok(sub_graph)
     }
 
