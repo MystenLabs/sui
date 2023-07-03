@@ -46,11 +46,11 @@ function AddressResult({ address }: { address: string }) {
 							Transaction Blocks
 						</Heading>
 					</div>
-					<div className="flex w-full">
-						<div className="flex w-full border-r border-gray-45">
+					<div className="flex w-full flex-col md:flex-row">
+						<div className="flex w-full border-gray-45 md:border-r">
 							<TransactionBlocksForAddress address={address} filter={ADDRESS_FILTER_VALUES.FROM} />
 						</div>
-						<div className="ml-5 flex w-full">
+						<div className="flex w-full md:ml-5">
 							<TransactionBlocksForAddress address={address} filter={ADDRESS_FILTER_VALUES.TO} />
 						</div>
 					</div>

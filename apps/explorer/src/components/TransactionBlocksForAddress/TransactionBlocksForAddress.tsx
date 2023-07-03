@@ -44,7 +44,7 @@ function TransactionBlocksForAddress({
 
 	return (
 		<div data-testid="tx" className="w-full">
-			<div className="flex flex-col space-y-5 pt-5 text-left xl:pr-10">
+			<div className="flex flex-col space-y-5 pt-5 text-left md:pr-10">
 				<div className="flex items-center justify-between border-b border-gray-45 pb-2 ">
 					<Heading color="gray-90" variant="heading6/semibold">
 						{filter === ADDRESS_FILTER_VALUES.TO ? 'Received' : 'Sent'}
