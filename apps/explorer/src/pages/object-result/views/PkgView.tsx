@@ -11,9 +11,9 @@ import { useGetTransaction } from '../../../hooks/useGetTransaction';
 import { getOwnerStr } from '../../../utils/objectUtils';
 import { trimStdLibPrefix } from '../../../utils/stringUtils';
 import { type DataType } from '../ObjectResultType';
-import TransactionBlocksForObject, {
+import TransactionBlocksForAddress, {
 	FILTER_VALUES,
-} from '~/components/TransactionBlocksForObject/TransactionBlocksForObject';
+} from '~/components/TransactionBlocksForAddress/TransactionBlocksForAddress';
 import { AddressLink, ObjectLink } from '~/ui/InternalLink';
 import { LoadingSpinner } from '~/ui/LoadingSpinner';
 import { RadioGroup, RadioOption } from '~/ui/Radio';
@@ -114,7 +114,11 @@ function PkgView({ data }: { data: DataType }) {
 
 				<div className={styles.txsection}>
 					<ErrorBoundary>
-						<TransactionBlocksForObject address={viewedData.id} filter={FILTER_VALUES.INPUT} />
+						<TransactionBlocksForAddress
+							address={viewedData.id}
+							filter={FILTER_VALUES.INPUT}
+							isObject
+						/>
 					</ErrorBoundary>
 				</div>
 			</div>
