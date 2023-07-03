@@ -7,7 +7,8 @@ use sui_adapter::{execution_engine, execution_mode};
 use sui_config::genesis::Genesis;
 use sui_core::transaction_input_checker::get_gas_status_no_epoch_store_experimental;
 use sui_protocol_config::ProtocolConfig;
-use sui_types::base_types::ExecutionDigests;
+use sui_types::digests::ObjectDigest;
+use sui_types::effects::TransactionEffects;
 use sui_types::epoch_data::EpochData;
 use sui_types::message_envelope::Message;
 use sui_types::messages::{InputObjectKind, InputObjects, TransactionDataAPI, VerifiedTransaction, TransactionKind};
@@ -45,7 +46,7 @@ impl ExecutionWorkerState {
     pub async fn execute_tx(
         &mut self,
         tx: &VerifiedTransaction,
-        tx_digest: &ExecutionDigests,
+        tx_effects: &TransactionEffects,
         checkpoint_seq: u64,
         protocol_config: &ProtocolConfig,
         move_vm: &Arc<MoveVM>,
@@ -116,21 +117,33 @@ impl ExecutionWorkerState {
             );
 
         // Critical check: are the effects the same?
-        if effects.digest() != tx_digest.effects {
+        if effects.digest() != tx_effects.digest() {
             println!("Effects mismatch at checkpoint {}", checkpoint_seq);
-            let old_effects = tx_digest.effects;
+            let old_effects = tx_effects;
             println!("Past effects: {:?}", old_effects);
             println!("New effects: {:?}", effects);
         }
         assert!(
-            effects.digest() == tx_digest.effects,
+            effects.digest() == tx_effects.digest(),
             "Effects digest mismatch"
         );
 
         // And now we mutate the store.
         // First delete:
-        for obj_del in &inner_temp_store.deleted {
-            self.memory_store.objects.remove(obj_del.0);
+        for obj_del in inner_temp_store.deleted {
+            match obj_del.1 .1 {
+                sui_types::storage::DeleteKind::Wrap => {
+                    let wrap_tombstone =
+                        (obj_del.0, obj_del.1 .0, ObjectDigest::OBJECT_DIGEST_WRAPPED);
+                    let old_object = self.memory_store.objects.get(&obj_del.0).unwrap().1.clone();
+                    self.memory_store
+                        .objects
+                        .insert(obj_del.0, (wrap_tombstone, old_object)); // insert the old object with a wrapped tombstone
+                }
+                _ => {
+                    self.memory_store.objects.remove(&obj_del.0);
+                }
+            }
         }
         for (obj_add_id, (oref, obj, _)) in inner_temp_store.written {
             self.memory_store.objects.insert(obj_add_id, (oref, obj));
@@ -167,10 +180,10 @@ impl ExecutionWorkerState {
 
         // Receive txs
         while let Some(msg) = sw_receiver.recv().await {
-            if let SailfishMessage::Transaction{tx, digest, checkpoint_seq} = msg {
+            if let SailfishMessage::Transaction{tx, tx_effects, checkpoint_seq} = msg {
                 self.execute_tx(
                     &tx,
-                    &digest,
+                    &tx_effects,
                     checkpoint_seq,
                     &protocol_config,
                     &move_vm,

@@ -83,7 +83,7 @@ async fn main() {
                 .expect("Cannot get checkpoint")
                 .expect("Checkpoint is None");
 
-            if checkpoint_seq % 1000 == 0 {
+            if checkpoint_seq % 10000 == 0 {
                 println!("{}", checkpoint_seq);
             }
 
@@ -101,10 +101,16 @@ async fn main() {
                     .expect("Transaction exists")
                     .expect("Transaction exists");
 
+                let tx_effects = sw_state
+                    .store
+                    .get_effects(&tx_digest.effects)
+                    .expect("Transaction effects exist")
+                    .expect("Transaction effects exist");
+
                 ew_state
                     .execute_tx(
                         &tx,
-                        tx_digest,
+                        &tx_effects,
                         checkpoint_seq,
                         &protocol_config,
                         &move_vm,
