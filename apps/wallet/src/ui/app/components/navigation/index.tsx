@@ -23,7 +23,7 @@ function Navigation({ className }: NavigationProps) {
 	const isVisible = useAppSelector(getNavIsVisible);
 	return (
 		<nav
-			className={cl('border-b-0', st.container, className, {
+			className={cl('border-b-0 rounded-tl-md rounded-tr-md pt-2 pb-0', st.container, className, {
 				[st.hidden]: !isVisible,
 			})}
 		>
