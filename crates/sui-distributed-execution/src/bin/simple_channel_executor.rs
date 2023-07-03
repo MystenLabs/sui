@@ -128,10 +128,16 @@ async fn main() {
                     .expect("Transaction exists")
                     .expect("Transaction exists");
 
+                let tx_effects = sw_state
+                    .store
+                    .get_effects(&tx_digest.effects)
+                    .expect("Transaction effects exist")
+                    .expect("Transaction effects exist");
+
                 tx_sender
                     .send(sui_distributed_execution::TransactionMessage(
                         tx.clone(),
-                        tx_digest.clone(),
+                        tx_effects.clone(),
                         checkpoint_seq,
                     ))
                     .await
@@ -218,14 +224,14 @@ async fn main() {
         // receive txs
         while let Some(sui_distributed_execution::TransactionMessage(
             tx,
-            tx_digest,
+            tx_effects,
             checkpoint_seq,
         )) = tx_receiver.recv().await
         {
             ew_state
                 .execute_tx(
                     &tx,
-                    &tx_digest,
+                    &tx_effects,
                     checkpoint_seq,
                     &protocol_config,
                     &move_vm,

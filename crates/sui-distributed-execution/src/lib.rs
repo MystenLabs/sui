@@ -4,7 +4,8 @@ use sui_config::genesis::Genesis;
 use sui_config::NodeConfig;
 use sui_core::transaction_input_checker::get_gas_status_no_epoch_store_experimental;
 use sui_protocol_config::ProtocolConfig;
-use sui_types::base_types::ExecutionDigests;
+use sui_types::digests::ObjectDigest;
+use sui_types::effects::TransactionEffects;
 use sui_types::epoch_data::EpochData;
 use sui_types::message_envelope::Message;
 use sui_types::messages::{InputObjectKind, InputObjects, TransactionDataAPI, VerifiedTransaction};
@@ -46,7 +47,7 @@ pub struct EpochStartMessage(pub ProtocolConfig, pub EpochData, pub u64);
 #[derive(Debug)]
 pub struct EpochEndMessage(pub EpochStartSystemState);
 #[derive(Debug)]
-pub struct TransactionMessage(pub VerifiedTransaction, pub ExecutionDigests, pub u64);
+pub struct TransactionMessage(pub VerifiedTransaction, pub TransactionEffects, pub u64);
 
 pub struct SequenceWorkerState {
     // config: NodeConfig,
@@ -168,13 +169,19 @@ impl SequenceWorkerState {
                 )
                 .expect("could not create p2p network");
 
+            let mut old_highest = highest_synced_checkpoint_seq;
             while watermark > highest_synced_checkpoint_seq {
                 tokio::time::sleep(Duration::from_secs(1)).await;
-                highest_synced_checkpoint_seq = self
+                let new_highest = self
                     .checkpoint_store
                     .get_highest_synced_checkpoint_seq_number()
                     .expect("Could not get highest checkpoint")
                     .expect("Could not get highest checkpoint");
+                if (new_highest - old_highest) > 10000 {
+                    println!("Downloaded up to checkpoint {}", new_highest);
+                    old_highest = new_highest;
+                }
+                highest_synced_checkpoint_seq = new_highest;
             }
             println!("Done downloading");
         }
@@ -224,7 +231,7 @@ impl ExecutionWorkerState {
     pub async fn execute_tx(
         &mut self,
         tx: &VerifiedTransaction,
-        tx_digest: &ExecutionDigests,
+        tx_effects: &TransactionEffects,
         checkpoint_seq: u64,
         protocol_config: &ProtocolConfig,
         move_vm: &Arc<MoveVM>,
@@ -295,21 +302,33 @@ impl ExecutionWorkerState {
             );
 
         // Critical check: are the effects the same?
-        if effects.digest() != tx_digest.effects {
+        if effects.digest() != tx_effects.digest() {
             println!("Effects mismatch at checkpoint {}", checkpoint_seq);
-            let old_effects = tx_digest.effects;
+            let old_effects = tx_effects;
             println!("Past effects: {:?}", old_effects);
             println!("New effects: {:?}", effects);
         }
         assert!(
-            effects.digest() == tx_digest.effects,
+            effects.digest() == tx_effects.digest(),
             "Effects digest mismatch"
         );
 
         // And now we mutate the store.
         // First delete:
-        for obj_del in &inner_temp_store.deleted {
-            self.memory_store.objects.remove(obj_del.0);
+        for obj_del in inner_temp_store.deleted {
+            match obj_del.1 .1 {
+                sui_types::storage::DeleteKind::Wrap => {
+                    let wrap_tombstone =
+                        (obj_del.0, obj_del.1 .0, ObjectDigest::OBJECT_DIGEST_WRAPPED);
+                    let old_object = self.memory_store.objects.get(&obj_del.0).unwrap().1.clone();
+                    self.memory_store
+                        .objects
+                        .insert(obj_del.0, (wrap_tombstone, old_object)); // insert the old object with a wrapped tombstone
+                }
+                _ => {
+                    self.memory_store.objects.remove(&obj_del.0);
+                }
+            }
         }
         for (obj_add_id, (oref, obj, _)) in inner_temp_store.written {
             self.memory_store.objects.insert(obj_add_id, (oref, obj));
