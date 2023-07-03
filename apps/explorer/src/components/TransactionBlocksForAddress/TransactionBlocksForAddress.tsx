@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { type TransactionFilter } from '@mysten/sui.js';
-import { useReducer, useState } from 'react';
+import { useState } from 'react';
 
 import { genTableDataFromTxData } from '../transactions/TxCardUtils';
 import {
@@ -10,110 +10,47 @@ import {
 	useGetTransactionBlocks,
 } from '~/hooks/useGetTransactionBlocks';
 import { Heading } from '~/ui/Heading';
-import { Pagination } from '~/ui/Pagination';
+import { Pagination, useCursorPagination } from '~/ui/Pagination';
 import { PlaceholderTable } from '~/ui/PlaceholderTable';
-import { RadioGroup, RadioOption } from '~/ui/Radio';
 import { TableCard } from '~/ui/TableCard';
 
-export enum FILTER_VALUES {
-	INPUT = 'InputObject',
-	CHANGED = 'ChangedObject',
+export enum ADDRESS_FILTER_VALUES {
+	TO = 'ToAddress',
+	FROM = 'FromAddress',
 }
 
 type TransactionBlocksForAddressProps = {
 	address: string;
-	filter?: FILTER_VALUES;
-	isObject?: boolean;
-};
-
-enum PAGE_ACTIONS {
-	NEXT,
-	PREV,
-	FIRST,
-}
-
-type TransactionBlocksForAddressActionType = {
-	type: PAGE_ACTIONS;
-	filterValue: FILTER_VALUES;
-};
-
-type PageStateByFilterMap = {
-	InputObject: number;
-	ChangedObject: number;
-};
-
-const FILTER_OPTIONS = [
-	{ label: 'Input Objects', value: 'InputObject' },
-	{ label: 'Updated Objects', value: 'ChangedObject' },
-];
-
-const reducer = (state: PageStateByFilterMap, action: TransactionBlocksForAddressActionType) => {
-	switch (action.type) {
-		case PAGE_ACTIONS.NEXT:
-			return {
-				...state,
-				[action.filterValue]: state[action.filterValue] + 1,
-			};
-		case PAGE_ACTIONS.PREV:
-			return {
-				...state,
-				[action.filterValue]: state[action.filterValue] - 1,
-			};
-		case PAGE_ACTIONS.FIRST:
-			return {
-				...state,
-				[action.filterValue]: 0,
-			};
-		default:
-			return { ...state };
-	}
+	filter?: ADDRESS_FILTER_VALUES;
+	initialLimit?: number;
 };
 
 function TransactionBlocksForAddress({
 	address,
-	filter = FILTER_VALUES.CHANGED,
-	isObject = false,
+	filter = ADDRESS_FILTER_VALUES.TO,
+	initialLimit = DEFAULT_TRANSACTIONS_LIMIT,
 }: TransactionBlocksForAddressProps) {
-	const [filterValue, setFilterValue] = useState(filter);
-	const [currentPageState, dispatch] = useReducer(reducer, {
-		InputObject: 0,
-		ChangedObject: 0,
-	});
+	const [limit, setLimit] = useState(initialLimit);
 
-	const { data, isLoading, isFetching, isFetchingNextPage, fetchNextPage, hasNextPage } =
-		useGetTransactionBlocks({
-			[filterValue]: address,
-		} as TransactionFilter);
+	const transactions = useGetTransactionBlocks(
+		{
+			[filter]: address,
+		} as TransactionFilter,
+		limit,
+	);
+	const { data, isFetching, pagination, isLoading } = useCursorPagination(transactions);
 
-	const currentPage = currentPageState[filterValue];
-	const cardData =
-		data && data.pages[currentPage]
-			? genTableDataFromTxData(data.pages[currentPage].data)
-			: undefined;
+	const cardData = data ? genTableDataFromTxData(data.data) : undefined;
 
 	return (
-		<div data-testid="tx">
-			<div className="flex items-center justify-between border-b border-gray-45 pb-5">
-				<Heading color="gray-90" variant="heading4/semibold">
-					Transaction Blocks
-				</Heading>
-
-				{isObject && (
-					<RadioGroup
-						className="flex"
-						ariaLabel="transaction filter"
-						value={filterValue}
-						onChange={setFilterValue}
-					>
-						{FILTER_OPTIONS.map((filter) => (
-							<RadioOption key={filter.value} value={filter.value} label={filter.label} />
-						))}
-					</RadioGroup>
-				)}
-			</div>
-
-			<div className="flex flex-col space-y-5 pt-5 text-left xl:pr-10">
-				{isLoading || isFetching || isFetchingNextPage || !cardData ? (
+		<div data-testid="tx" className="w-full">
+			<div className="flex flex-col space-y-5 pt-5 text-left md:pr-10">
+				<div className="flex items-center justify-between border-b border-gray-45 pb-2 ">
+					<Heading color="gray-90" variant="heading6/semibold">
+						{filter === ADDRESS_FILTER_VALUES.TO ? 'Received' : 'Sent'}
+					</Heading>
+				</div>
+				{isLoading || isFetching || !cardData ? (
 					<PlaceholderTable
 						rowCount={DEFAULT_TRANSACTIONS_LIMIT}
 						rowHeight="16px"
@@ -125,46 +62,23 @@ function TransactionBlocksForAddress({
 						<TableCard data={cardData.data} columns={cardData.columns} />
 					</div>
 				)}
-
-				{(hasNextPage || (data && data?.pages.length > 1)) && (
-					<Pagination
-						onNext={() => {
-							if (isLoading || isFetching) {
-								return;
-							}
-
-							// Make sure we are at the end before fetching another page
-							if (
-								data &&
-								currentPageState[filterValue] === data?.pages.length - 1 &&
-								!isLoading &&
-								!isFetching
-							) {
-								fetchNextPage();
-							}
-							dispatch({
-								type: PAGE_ACTIONS.NEXT,
-
-								filterValue,
-							});
-						}}
-						hasNext={Boolean(hasNextPage) && Boolean(data?.pages[currentPage])}
-						hasPrev={currentPageState[filterValue] !== 0}
-						onPrev={() =>
-							dispatch({
-								type: PAGE_ACTIONS.PREV,
-
-								filterValue,
-							})
-						}
-						onFirst={() =>
-							dispatch({
-								type: PAGE_ACTIONS.FIRST,
-								filterValue,
-							})
-						}
-					/>
-				)}
+				<div className="flex justify-between">
+					<Pagination {...pagination} />
+					<div className="flex items-center space-x-3">
+						<select
+							className="form-select rounded-md border border-gray-45 px-3 py-2 pr-8 text-bodySmall font-medium leading-[1.2] text-steel-dark shadow-button"
+							value={limit}
+							onChange={(e) => {
+								setLimit(Number(e.target.value));
+								pagination.onFirst();
+							}}
+						>
+							<option value={20}>20 Per Page</option>
+							<option value={40}>40 Per Page</option>
+							<option value={60}>60 Per Page</option>
+						</select>
+					</div>
+				</div>
 			</div>
 		</div>
 	);
