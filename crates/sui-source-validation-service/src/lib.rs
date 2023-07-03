@@ -7,7 +7,7 @@ use std::sync::Arc;
 use std::{ffi::OsString, fs, path::Path, process::Command};
 
 use anyhow::{anyhow, bail};
-use axum::extract::State;
+use axum::extract::{Query, State};
 use axum::response::IntoResponse;
 use axum::routing::{get, IntoMakeService};
 use axum::{Router, Server};
@@ -240,6 +240,18 @@ pub fn serve(app_state: AppState) -> anyhow::Result<Server<AddrIncoming, IntoMak
     Ok(Server::from_tcp(listener)?.serve(app.into_make_service()))
 }
 
-async fn api_route(State(_app_state): State<Arc<AppState>>) -> impl IntoResponse {
-    "{\"source\": \"code\"}"
+#[derive(Deserialize)]
+pub struct Request {
+    address: String,
+    module: String,
+}
+
+async fn api_route(
+    State(app_state): State<Arc<AppState>>,
+    Query(Request { address, module }): Query<Request>,
+) -> impl IntoResponse {
+    let symbol = Symbol::from(module);
+    let address = AccountAddress::from_hex_literal(&address).unwrap();
+    let path = app_state.sources.get(&(address, symbol)).unwrap();
+    format!("{{\"source\": \"{}\"}}", path.display())
 }

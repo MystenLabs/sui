@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::path::PathBuf;
+use tracing::info;
 
 use clap::Parser;
 
@@ -25,6 +26,7 @@ pub async fn main() -> anyhow::Result<()> {
     let context = WalletContext::new(&sui_config, None, None).await?;
     let tmp_dir = tempfile::tempdir()?;
     let sources = initialize(&context, &package_config, tmp_dir.path()).await?;
+    info!("verification complete, serving...");
     serve(AppState { sources })?
         .await
         .map_err(anyhow::Error::from)
