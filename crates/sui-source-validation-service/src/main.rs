@@ -9,7 +9,7 @@ use sui_config::{sui_config_dir, SUI_CLIENT_CONFIG};
 use sui_sdk::wallet_context::WalletContext;
 use telemetry_subscribers::TelemetryConfig;
 
-use sui_source_validation_service::{initialize, parse_config, serve};
+use sui_source_validation_service::{initialize, parse_config, serve, AppState};
 
 #[derive(Parser, Debug)]
 struct Args {
@@ -24,6 +24,8 @@ pub async fn main() -> anyhow::Result<()> {
     let sui_config = sui_config_dir()?.join(SUI_CLIENT_CONFIG);
     let context = WalletContext::new(&sui_config, None, None).await?;
     let tmp_dir = tempfile::tempdir()?;
-    initialize(&context, &package_config, tmp_dir.path()).await?;
-    serve()?.await.map_err(anyhow::Error::from)
+    let packages = initialize(&context, &package_config, tmp_dir.path()).await?;
+    serve(AppState { packages })?
+        .await
+        .map_err(anyhow::Error::from)
 }

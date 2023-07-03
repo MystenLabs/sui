@@ -1,6 +1,6 @@
 [[packages]]
 repository = "https://github.com/mystenlabs/sui"
-branch = "mainnet-v1.3.1"
+branch = "testnet-v1.4.1"
 paths = [
     "crates/sui-framework/packages/deepbook",
     "crates/sui-framework/packages/move-stdlib",
