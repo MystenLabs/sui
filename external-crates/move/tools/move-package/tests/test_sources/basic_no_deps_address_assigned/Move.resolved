@@ -12,9 +12,7 @@ ResolvedGraph {
         manifest_digest: Some(
             "D9285F6EBE68E6BE673226856663965F2F1BBB3A371070418A89355F1CCC7EEE",
         ),
-        deps_digest: Some(
-            "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855",
-        ),
+        deps_digest: None,
     },
     build_options: BuildConfig {
         dev_mode: true,

@@ -161,6 +161,7 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
         // compute digests eagerly as even if we can't reuse existing lock file, they need to become
         // part of the newly computed dependency graph
         let new_manifest_digest = digest_str(manifest_string.into_bytes().as_slice());
+
         let new_deps_digest_opt = self.dependency_digest(root_path.clone(), &manifest)?;
         if let Some(lock_contents) = lock_string {
             let schema::Header {
@@ -408,7 +409,7 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
     }
 
     /// Computes dependency hashes but may return None if information about some dependencies is not
-    /// available.
+    /// available or if there are no dependencies.
     fn dependency_hashes(
         &mut self,
         root_path: PathBuf,
@@ -435,12 +436,16 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
             let pkg_path = root_path.join(local_path(&internal_dep.kind));
 
             let Ok(lock_contents) = std::fs::read_to_string(pkg_path.join(SourcePackageLayout::Lock.path())) else {
-            return Ok(None);
-        };
+                return Ok(None);
+            };
             hashed_lock_files.push(digest_str(lock_contents.as_bytes()));
         }
 
-        Ok(Some(hashed_lock_files))
+        Ok(if hashed_lock_files.is_empty() {
+            None
+        } else {
+            Some(hashed_lock_files)
+        })
     }
 
     /// Computes a digest of all dependencies in a manifest file but may return None if information
@@ -450,22 +455,22 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
         root_path: PathBuf,
         manifest: &PM::SourceManifest,
     ) -> Result<Option<String>> {
-        let Some(mut dep_hashes) = self.dependency_hashes(
-            root_path.clone(),
-            &manifest.dependencies,
-        )? else {
-            return Ok(None);
-        };
+        let mut dep_hashes = self
+            .dependency_hashes(root_path.clone(), &manifest.dependencies)?
+            .or(Some(vec![]))
+            .unwrap();
 
-        let Some(dev_dep_hashes) = self.dependency_hashes(
-            root_path,
-            &manifest.dev_dependencies,
-        )? else {
-            return Ok(None);
-        };
+        let dev_dep_hashes = self
+            .dependency_hashes(root_path.clone(), &manifest.dev_dependencies)?
+            .or(Some(vec![]))
+            .unwrap();
 
-        dep_hashes.extend(dev_dep_hashes);
-        Ok(Some(hashed_files_digest(dep_hashes)))
+        if dep_hashes.is_empty() {
+            Ok(None)
+        } else {
+            dep_hashes.extend(dev_dep_hashes);
+            Ok(Some(hashed_files_digest(dep_hashes)))
+        }
     }
 }
 
