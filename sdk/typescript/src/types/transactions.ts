@@ -264,6 +264,7 @@ export type SuiTransactionBlockResponseQuery = {
 };
 
 export type TransactionFilter =
+	| { FromOrToAddress: { addr: string } }
 	| { Checkpoint: string }
 	| { FromAndToAddress: { from: string; to: string } }
 	| { TransactionKind: string }
