@@ -41,7 +41,8 @@ export function InputsCard({ inputs }: InputsCardProps) {
 					) {
 						renderValue = <AddressLink address={stringValue} />;
 					} else if (REGEX_NUMBER.test(stringValue)) {
-						renderValue = Number(value).toLocaleString();
+						const bigNumber = BigInt(stringValue);
+						renderValue = bigNumber.toLocaleString();
 					} else {
 						renderValue = stringValue;
 					}
