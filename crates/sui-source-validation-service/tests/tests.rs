@@ -4,9 +4,9 @@
 use expect_test::expect;
 use reqwest::Client;
 use serde::Deserialize;
-use std::path::PathBuf;
+use std::{collections::BTreeMap, path::PathBuf};
 use sui_source_validation_service::{
-    initialize, serve, verify_packages, CloneCommand, Config, Packages,
+    initialize, serve, verify_packages, AppState, CloneCommand, Config, Packages,
 };
 use test_cluster::TestClusterBuilder;
 
@@ -63,7 +63,8 @@ async fn test_api_route() -> anyhow::Result<()> {
     let tmp_dir = tempfile::tempdir()?;
 
     initialize(context, &config, tmp_dir.path()).await?;
-    tokio::spawn(serve().expect("Cannot start service."));
+    let sources = BTreeMap::new();
+    tokio::spawn(serve(AppState { sources }).expect("Cannot start service."));
 
     let client = Client::new();
     let json = client

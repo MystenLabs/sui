@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeMap;
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::{ffi::OsString, fs, path::Path, process::Command};
 
@@ -16,9 +18,12 @@ use sui_sdk::SuiClient;
 use tracing::info;
 use url::Url;
 
+use move_compiler::compiled_unit::CompiledUnitEnum;
+use move_core_types::account_address::AccountAddress;
 use move_package::BuildConfig as MoveBuildConfig;
+use move_symbol_pool::Symbol;
 use sui_move::build::resolve_lock_file_path;
-use sui_move_build::{BuildConfig, CompiledPackage, SuiPackageHooks};
+use sui_move_build::{BuildConfig, SuiPackageHooks};
 use sui_sdk::wallet_context::WalletContext;
 use sui_source_validation::{BytecodeSourceVerifier, SourceMode};
 
@@ -34,10 +39,13 @@ pub struct Packages {
     pub paths: Vec<String>,
 }
 
+/// Map (package address, module name) tuples to verified source paths.
+type SourceLookup = BTreeMap<(AccountAddress, Symbol), PathBuf>;
+
 pub async fn verify_package(
     client: &SuiClient,
     package_path: impl AsRef<Path>,
-) -> anyhow::Result<CompiledPackage> {
+) -> anyhow::Result<SourceLookup> {
     move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks));
     let config = resolve_lock_file_path(
         MoveBuildConfig::default(),
@@ -58,7 +66,22 @@ pub async fn verify_package(
             SourceMode::Verify,
         )
         .await?;
-    Ok(compiled_package)
+
+    let mut map = SourceLookup::new();
+    let Ok(address) = compiled_package.published_at.as_ref().map(|id| **id) else { bail!("could not resolve published_at ref")};
+    for v in &compiled_package.package.root_compiled_units {
+        match v.unit {
+            CompiledUnitEnum::Module(ref m) => {
+                map.insert((address, m.name), v.source_path.to_path_buf());
+                ()
+            }
+            CompiledUnitEnum::Script(ref m) => {
+                map.insert((address, m.name), v.source_path.to_path_buf());
+                ()
+            }
+        }
+    }
+    Ok(map)
 }
 
 pub fn parse_config(config_path: impl AsRef<Path>) -> anyhow::Result<Config> {
@@ -176,17 +199,16 @@ pub async fn initialize(
     context: &WalletContext,
     config: &Config,
     dir: &Path,
-) -> anyhow::Result<Vec<CompiledPackage>> {
+) -> anyhow::Result<SourceLookup> {
     clone_repositories(config, dir).await?;
-    let packages = verify_packages(context, config, dir).await?;
-    Ok(packages)
+    Ok(verify_packages(context, config, dir).await?)
 }
 
 pub async fn verify_packages(
     context: &WalletContext,
     config: &Config,
     dir: &Path,
-) -> anyhow::Result<Vec<CompiledPackage>> {
+) -> anyhow::Result<SourceLookup> {
     let mut tasks = vec![];
     for p in &config.packages {
         let repo_name = repo_name_from_url(&p.repository)?;
@@ -200,16 +222,16 @@ pub async fn verify_packages(
         }
     }
 
-    let mut packages = vec![];
+    let mut lookup = BTreeMap::new();
     for t in tasks {
-        let package = t.await.unwrap()?;
-        packages.push(package);
+        let new_lookup = t.await.unwrap()?;
+        lookup.extend(new_lookup);
     }
-    Ok(packages)
+    Ok(lookup)
 }
 
 pub struct AppState {
-    pub packages: Vec<CompiledPackage>,
+    pub sources: SourceLookup,
 }
 
 pub fn serve(app_state: AppState) -> anyhow::Result<Server<AddrIncoming, IntoMakeService<Router>>> {
@@ -218,6 +240,6 @@ pub fn serve(app_state: AppState) -> anyhow::Result<Server<AddrIncoming, IntoMak
     Ok(Server::from_tcp(listener)?.serve(app.into_make_service()))
 }
 
-async fn api_route(State(app_state): State<Arc<AppState>>) -> impl IntoResponse {
+async fn api_route(State(_app_state): State<Arc<AppState>>) -> impl IntoResponse {
     "{\"source\": \"code\"}"
 }
