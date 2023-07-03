@@ -394,7 +394,8 @@ pub fn compose_object_bulk_insert_query(objects: &[Object]) -> String {
         .iter()
         .map(|row| {
             let (epoch, checkpoint, object_id, version, object_digest, owner_type, owner_address, initial_shared_version, previous_transaction, object_type, object_status, has_public_transfer, storage_rebate, bcs_rows, object_json) = row;
-
+            // NOTE: replace ' with '' to escape single quote in PostgresQL
+            let object_json = object_json.replace("'", "''");
             let bcs_rows_query = bcs_rows
                 .iter()
                 .map(|bcs_row| {
