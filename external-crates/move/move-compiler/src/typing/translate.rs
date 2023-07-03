@@ -2301,7 +2301,11 @@ fn gen_unused_warnings(context: &mut Context, mdef: &T::ModuleDefinition) {
                 // functions with #[test] attribute are implicitly used
                 continue;
             }
-
+            if name.as_str() == "init" {
+                // a Sui-specific hack (until we can implement this properly on the Sui side) to
+                // avoid signaling that the init function is unused (not called by the runtime
+                continue;
+            }
             context
                 .env
                 .add_warning_filter_scope(fun.warning_filter.clone());
