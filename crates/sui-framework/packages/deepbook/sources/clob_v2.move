@@ -295,9 +295,31 @@ module deepbook::clob_v2 {
         ctx: &mut TxContext,
     ) {
         assert!(coin::value(&creation_fee) == FEE_AMOUNT_FOR_CREATE_POOL, EInvalidFee);
-        create_pool_<BaseAsset, QuoteAsset>(
+        create_customized_pool<BaseAsset, QuoteAsset>(
+            tick_size,
+            lot_size,
             REFERENCE_TAKER_FEE_RATE,
             REFERENCE_MAKER_REBATE_RATE,
+            creation_fee,
+            ctx,
+        );
+    }
+
+    // Function for creating pool with customized taker fee rate and maker rebate rate.
+    // The taker_fee_rate should be greater than or equal to the maker_rebate_rate, and both should have a scaling of 10^9.
+    // Taker_fee_rate of 0.25% should be 2_500_000 for example
+    public fun create_customized_pool<BaseAsset, QuoteAsset>(
+        tick_size: u64,
+        lot_size: u64,
+        taker_fee_rate: u64,
+        maker_rebate_rate: u64,
+        creation_fee: Coin<SUI>,
+        ctx: &mut TxContext,
+    ) {
+        assert!(coin::value(&creation_fee) == FEE_AMOUNT_FOR_CREATE_POOL, EInvalidFee);
+        create_pool_<BaseAsset, QuoteAsset>(
+            taker_fee_rate,
+            maker_rebate_rate,
             tick_size,
             lot_size,
             coin::into_balance(creation_fee),
