@@ -310,6 +310,15 @@ impl ValidatorService {
             .into());
         }
 
+        if !epoch_store.protocol_config().supports_upgraded_multisig()
+            && transaction.has_upgraded_multisig()
+        {
+            return Err(SuiError::UnsupportedFeatureError {
+                error: "upgraded multisig format not enabled on this network".to_string(),
+            }
+            .into());
+        }
+
         // Enforce overall transaction size limit.
         let tx_size = bcs::serialized_size(&transaction).map_err(|e| {
             SuiError::TransactionSerializationError {
