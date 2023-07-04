@@ -425,7 +425,7 @@ async fn test_leader_schedule() {
     // The returned leader should not be the one of position 0
     assert_ne!(leader_2.id(), original_leader);
 
-    // The returned leader should be the one returned by the swap table when using the
+    // The returned leader should be the one returned by the swap table when using the updated leader scores.
     let swapped_leader = table.swap(&original_leader, 2).unwrap().id();
     assert_eq!(leader_2.id(), table.swap(&original_leader, 2).unwrap().id());
 
