@@ -26,7 +26,7 @@ pub enum SailfishMessage {
     Transaction{tx: VerifiedTransaction, tx_effects: TransactionEffects, checkpoint_seq: u64}
 }
 
-
+#[derive(Debug, Clone)]
 pub struct MemoryBackedStore {
     pub objects: HashMap<ObjectID, (ObjectRef, Object)>,
 }
@@ -36,6 +36,38 @@ impl MemoryBackedStore {
         MemoryBackedStore {
             objects: HashMap::new(),
         }
+    }
+
+    pub fn insert(&mut self, k: ObjectID, v: (ObjectRef, Object)) {
+        self.objects.insert(k, v);
+    }
+
+    pub fn remove(&mut self, k: ObjectID) -> Option<(ObjectRef, Object)> {
+        self.objects.remove(&k)
+    }
+}
+
+impl ObjectStore for MemoryBackedStore {
+    fn get_object(&self, object_id: &ObjectID) -> Result<Option<Object>, SuiError> {
+        Ok(self.objects.get(object_id).map(|v| v.1.clone()))
+    }
+
+    fn get_object_by_key(
+        &self,
+        object_id: &ObjectID,
+        version: VersionNumber,
+    ) -> Result<Option<Object>, SuiError> {
+        Ok(self
+            .objects
+            .get(object_id)
+            .and_then(|obj| {
+                if obj.1.version() == version {
+                    Some(obj.1.clone())
+                } else {
+                    None
+                }
+            })
+            .clone())
     }
 }
 
