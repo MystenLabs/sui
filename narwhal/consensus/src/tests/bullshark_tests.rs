@@ -10,9 +10,11 @@ use crate::consensus_utils::NUM_SUB_DAGS_PER_SCHEDULE;
 use crate::consensus_utils::*;
 use crate::{metrics::ConsensusMetrics, Consensus, NUM_SHUTDOWN_RECEIVERS};
 use config::AuthorityIdentifier;
+use dag::node_dag::Affiliated;
 #[allow(unused_imports)]
 use fastcrypto::traits::KeyPair;
 use prometheus::Registry;
+use std::collections::HashMap;
 #[cfg(test)]
 use std::collections::{BTreeSet, VecDeque};
 use test_utils::{latest_protocol_version, CommitteeFixture};
@@ -172,6 +174,162 @@ async fn commit_one_with_leader_schedule_change() {
 
         assert!(test_case.expected_leaders.is_empty());
     }
+}
+
+/// We test the scenario where a leader is recursively committed and that changes the schedule because
+/// of new reputation scores. More specifically, the leaders of rounds 6, 8 & 10 either do not receive
+/// enough support or they do not get referenced at all by the next round, essentially postponing the
+/// commit that changes the schedule. Once finally a commit happens for round 13 that recursively commits
+/// the leader of round 6, the schedule gets updated and the new leaders are committed correctly.
+#[tokio::test]
+async fn not_enough_support_with_leader_schedule_change() {
+    // GIVEN
+    let fixture = CommitteeFixture::builder().build();
+    let committee = fixture.committee();
+
+    let ids: Vec<_> = fixture.authorities().map(|a| a.id()).collect();
+    let genesis = Certificate::genesis(&committee)
+        .iter()
+        .map(|x| x.digest())
+        .collect::<BTreeSet<_>>();
+
+    let mut certificates: VecDeque<Certificate> = VecDeque::new();
+    let mut leader_configs = HashMap::new();
+
+    // The leader of round 6 should receive weak support from the certificates of round 7 so we don't commit
+    // this leader immediately. That will basically postpone the update of the leader schedule. We expect
+    // this leader to get committed through its connection with a later leader.
+    leader_configs.insert(
+        6,
+        test_utils::TestLeaderConfiguration {
+            round: 6,
+            authority: AuthorityIdentifier(2),
+            should_omit: false,
+            support: Some(test_utils::TestLeaderSupport::Weak),
+        },
+    );
+
+    // The leader of round 8 (with the old schedule) is receiving no support at all from any
+    // of the children of round 9. So again, the leader schedule update will get postponed. As no certificate
+    // of round 9 refers to this leader, we don't expect to get committed at all.
+    leader_configs.insert(
+        8,
+        test_utils::TestLeaderConfiguration {
+            round: 8,
+            authority: AuthorityIdentifier(3),
+            should_omit: false,
+            support: Some(test_utils::TestLeaderSupport::NoSupport),
+        },
+    );
+
+    // We expect the leader of round 10 to be the authority with id 0 (reminder: a round robin schedule
+    // is used for testing) with the "old" schedule. We construct the DAG with weak support for this leader
+    // so we don't allow it to get committed immediately from the trigger round 11. However, once the schedule
+    // gets updated, the authority with id 0 is expected to be flagged as low score and will be replaced by
+    // the authority with id 3. Now, since a recursive commit will take place the leader for round 10 will be
+    // the authority with id 3, for which we will have a certificate present, thus we should observe the leader
+    // get committed.
+    leader_configs.insert(
+        10,
+        test_utils::TestLeaderConfiguration {
+            round: 10,
+            authority: AuthorityIdentifier(0),
+            should_omit: false,
+            support: Some(test_utils::TestLeaderSupport::Weak),
+        },
+    );
+
+    let (out, _parents) = test_utils::make_certificates_with_leader_configuration(
+        &committee,
+        &latest_protocol_version(),
+        1..=15,
+        &genesis,
+        &ids,
+        leader_configs,
+    );
+    certificates.extend(out);
+
+    for certificate in &certificates {
+        println!("[{}] {}", certificate.round(), certificate.digest());
+        for parent in certificate.parents() {
+            println!("\t->{}", parent);
+        }
+    }
+
+    let mut config: ProtocolConfig = latest_protocol_version();
+    config.set_narwhal_new_leader_election_schedule(true);
+
+    let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
+    let gc_depth = 50;
+    let sub_dags_per_schedule = 4;
+    let mut state = ConsensusState::new(metrics.clone(), gc_depth);
+    let store = make_consensus_store(&test_utils::temp_dir());
+    let schedule = LeaderSchedule::new(committee.clone(), LeaderSwapTable::default());
+    let mut bullshark = Bullshark::new(
+        committee,
+        store,
+        config,
+        metrics,
+        sub_dags_per_schedule,
+        schedule,
+    );
+
+    let mut total_13_certs = 0;
+    let mut total_15_certs = 0;
+    for certificate in certificates {
+        let (outcome, committed) = bullshark
+            .process_certificate(&mut state, certificate.clone())
+            .unwrap();
+
+        // on the round 7, 9 or 11 we should not commit the leader of previous round as there is not enough support
+        if certificate.round() == 7 || certificate.round() == 9 || certificate.round() == 11 {
+            assert_eq!(outcome, Outcome::NotEnoughSupportForLeader);
+        }
+
+        // on round 13 we should commit the leader of round 6 and round 10.
+        // Leader 8 should not exist amongst the committed ones.
+        if certificate.round() == 13 {
+            total_13_certs += 1;
+
+            if total_13_certs == 2 {
+                assert_eq!(committed.len(), 3);
+
+                let committed_dag_6 = &committed[0];
+                let committed_dag_10 = &committed[1];
+                let committed_dag_12 = &committed[2];
+
+                assert_eq!(committed_dag_6.leader_round(), 6);
+                assert_eq!(committed_dag_10.leader_round(), 10);
+                assert_eq!(committed_dag_12.leader_round(), 12);
+
+                // Originally, as we do round robin the leaders in testing, we would expect the
+                // leader of round 10 to be the Authority 0. However, since a reputation scores update
+                // happened the leader schedule changed and now the Authority 0 is flagged as low
+                // score and it will be swapped with Authority 3.
+                assert_eq!(committed_dag_10.leader.origin(), AuthorityIdentifier(3));
+
+                assert_eq!(outcome, Outcome::Commit);
+            }
+        }
+
+        // on round 15 we should commit the leader of round 14
+        if certificate.round() == 15 {
+            total_15_certs += 1;
+
+            if total_15_certs == 2 {
+                assert_eq!(committed.len(), 1);
+
+                let committed_dag_14 = &committed[0];
+
+                assert_eq!(committed_dag_14.leader_round(), 14);
+
+                assert_eq!(committed_dag_14.leader.origin(), AuthorityIdentifier(2));
+            }
+        }
+    }
+
+    assert_eq!(total_13_certs, 4);
+    assert_eq!(total_15_certs, 4);
 }
 
 // Run for 4 dag rounds in ideal conditions (all nodes reference all other nodes). We should commit
