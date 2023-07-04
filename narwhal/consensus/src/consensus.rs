@@ -279,9 +279,6 @@ pub struct ConsensusState {
     pub last_committed: HashMap<AuthorityIdentifier, Round>,
     /// The last committed sub dag. If value is None, it means that we haven't committed any sub dag yet.
     pub last_committed_sub_dag: Option<CommittedSubDag>,
-    /// Holds the set of good and bad nodes - as per the last calculated reputation scores - and
-    /// performs a necessary swap to ensure that only good leaders will be elected
-    pub leader_swap_table: LeaderSwapTable,
     /// Keeps the latest committed certificate (and its parents) for every authority. Anything older
     /// must be regularly cleaned up through the function `update`.
     pub dag: Dag,
@@ -295,7 +292,6 @@ impl ConsensusState {
             last_round: ConsensusRound::default(),
             gc_depth,
             last_committed: Default::default(),
-            leader_swap_table: Default::default(),
             dag: Default::default(),
             last_committed_sub_dag: None,
             metrics,
@@ -351,7 +347,6 @@ impl ConsensusState {
             last_round,
             last_committed: recovered_last_committed,
             last_committed_sub_dag,
-            leader_swap_table: Default::default(),
             dag,
             metrics,
         }
