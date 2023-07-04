@@ -1,8 +1,6 @@
 use std::collections::HashMap;
 
 use sui_protocol_config::ProtocolConfig;
-use sui_types::base_types::ExecutionDigests;
-use sui_types::effects::TransactionEffects;
 use sui_types::epoch_data::EpochData;
 use sui_types::messages::VerifiedTransaction;
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemState;
@@ -12,6 +10,7 @@ use sui_types::{
     error::{SuiError, SuiResult},
     object::Object,
     storage::{BackingPackageStore, ChildObjectResolver, ObjectStore, ParentSync},
+    effects::{TransactionEffects}
 };
 
 use anyhow::Result;
@@ -24,12 +23,7 @@ use move_core_types::{language_storage::ModuleId, resolver::ModuleResolver};
 pub enum SailfishMessage {
     EpochStart{conf: ProtocolConfig, data: EpochData, ref_gas_price: u64},
     EpochEnd{new_epoch_start_state: EpochStartSystemState},
-    Transaction{
-        tx: VerifiedTransaction, 
-        exec_digest: ExecutionDigests, 
-        tx_effects: TransactionEffects,
-        checkpoint_seq: u64,
-    }
+    Transaction{tx: VerifiedTransaction, tx_effects: TransactionEffects, checkpoint_seq: u64}
 }
 
 

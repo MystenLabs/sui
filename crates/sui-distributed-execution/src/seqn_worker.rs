@@ -14,8 +14,8 @@ use sui_core::signature_verifier::SignatureVerifierMetrics;
 use sui_core::storage::RocksDbStore;
 use sui_node::metrics;
 use sui_types::metrics::LimitsMetrics;
-use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
 use sui_types::sui_system_state::SuiSystemStateTrait;
+use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
 use sui_types::messages::{TransactionDataAPI, TransactionKind};
 use tokio::sync::{watch, mpsc};
 use tokio::time::Duration;
@@ -137,13 +137,19 @@ impl SequenceWorkerState {
                 )
                 .expect("could not create p2p network");
 
+            let mut old_highest = highest_synced_checkpoint_seq;
             while watermark > highest_synced_checkpoint_seq {
                 tokio::time::sleep(Duration::from_secs(1)).await;
-                highest_synced_checkpoint_seq = self
+                let new_highest = self
                     .checkpoint_store
                     .get_highest_synced_checkpoint_seq_number()
                     .expect("Could not get highest checkpoint")
                     .expect("Could not get highest checkpoint");
+                if (new_highest - old_highest) > 10000 {
+                    println!("Downloaded up to checkpoint {}", new_highest);
+                    old_highest = new_highest;
+                }
+                highest_synced_checkpoint_seq = new_highest;
             }
             println!("Done downloading");
         }
@@ -182,6 +188,10 @@ impl SequenceWorkerState {
         let (highest_synced_seq, highest_executed_seq) = self.get_watermarks();
         println!("Highest synced {}", highest_synced_seq);
         println!("Highest executed {}", highest_executed_seq);
+        
+        if let Some(watermark) = download {
+            self.handle_download(watermark, &config).await;
+        }
 
         let protocol_config = self.epoch_store.protocol_config();
         let epoch_start_config = self.epoch_store.epoch_start_config();
@@ -223,13 +233,13 @@ impl SequenceWorkerState {
                     .expect("Contents must exist")
                     .expect("Contents must exist");
 
-                if contents.size() > 1 {
-                    println!(
-                        "Checkpoint {} has {} transactions",
-                        checkpoint_seq,
-                        contents.size()
-                    );
-                }
+                // if contents.size() > 1 {
+                //     println!(
+                //         "Checkpoint {} has {} transactions",
+                //         checkpoint_seq,
+                //         contents.size()
+                //     );
+                // }
 
                 for tx_digest in contents.iter() {
                     let tx = self
@@ -244,13 +254,10 @@ impl SequenceWorkerState {
                         .expect("Transaction effects exist")
                         .expect("Transaction effects exist");
 
-
-                    // Send tx to Exec Worker
                     sw_sender
                         .send(SailfishMessage::Transaction{
                             tx: tx.clone(),
-                            exec_digest: *tx_digest,
-                            tx_effects,
+                            tx_effects: tx_effects.clone(),
                             checkpoint_seq,
                         }).await.expect("sending failed");
 

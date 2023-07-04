@@ -11,7 +11,8 @@ use sui_adapter::{execution_engine, execution_mode};
 use sui_config::genesis::Genesis;
 use sui_core::transaction_input_checker::get_gas_status_no_epoch_store_experimental;
 use sui_protocol_config::ProtocolConfig;
-use sui_types::base_types::{ObjectID, ExecutionDigests};
+use sui_types::digests::ObjectDigest;
+use sui_types::base_types::ObjectID;
 use sui_types::epoch_data::EpochData;
 use sui_types::message_envelope::Message;
 use sui_types::messages::{InputObjectKind, InputObjects, TransactionDataAPI, VerifiedTransaction, TransactionKind};
@@ -109,10 +110,9 @@ fn get_read_write_set(tx: &VerifiedTransaction, tx_effects: &TransactionEffects)
 
 #[derive(Debug, Clone)]
 pub struct Transaction {
-    tx: VerifiedTransaction,
-    exec_digest: ExecutionDigests,
-    tx_effects: TransactionEffects,  // full effects of tx, as ground truth exec result
-    checkpoint_seq: u64,
+    pub tx: VerifiedTransaction,
+    pub tx_effects: TransactionEffects,  // full effects of tx, as ground truth exec result
+    pub checkpoint_seq: u64,
 }
 
 pub struct TransactionWithResults {
@@ -292,8 +292,20 @@ impl ExecutionWorkerState {
     ) {
         // And now we mutate the store.
         // First delete:
-        for obj_del in &inner_temp_store.deleted {
-            self.memory_store.objects.remove(obj_del.0);
+        for obj_del in inner_temp_store.deleted {
+            match obj_del.1 .1 {
+                sui_types::storage::DeleteKind::Wrap => {
+                    let wrap_tombstone =
+                        (obj_del.0, obj_del.1 .0, ObjectDigest::OBJECT_DIGEST_WRAPPED);
+                    let old_object = self.memory_store.objects.get(&obj_del.0).unwrap().1.clone();
+                    self.memory_store
+                        .objects
+                        .insert(obj_del.0, (wrap_tombstone, old_object)); // insert the old object with a wrapped tombstone
+                }
+                _ => {
+                    self.memory_store.objects.remove(&obj_del.0);
+                }
+            }
         }
         for (obj_add_id, (oref, obj, _)) in inner_temp_store.written {
             self.memory_store.objects.insert(obj_add_id, (oref, obj));
@@ -303,15 +315,16 @@ impl ExecutionWorkerState {
     /// Executes a transaction, used for sequential, in-order execution
     pub async fn execute_tx(
         &mut self,
-        tx: &VerifiedTransaction,
-        tx_digest: &ExecutionDigests,
-        checkpoint_seq: u64,
+        full_tx: &Transaction,
         protocol_config: &ProtocolConfig,
         move_vm: &Arc<MoveVM>,
         epoch_data: &EpochData,
         reference_gas_price: u64,
         metrics: Arc<LimitsMetrics>,
     ) {
+        let tx = &full_tx.tx;
+        let checkpoint_seq = full_tx.checkpoint_seq;
+        let tx_effects = full_tx.tx_effects.clone();
         let tx_data = tx.data().transaction_data();
         let (kind, signer, gas) = tx_data.execution_parts();
         let input_objects = self.read_input_objects_from_store(tx).await;
@@ -345,14 +358,14 @@ impl ExecutionWorkerState {
             );
 
         // Critical check: are the effects the same?
-        if effects.digest() != tx_digest.effects {
+        if effects.digest() != tx_effects.digest() {
             println!("Effects mismatch at checkpoint {}", checkpoint_seq);
-            let old_effects = tx_digest.effects;
+            let old_effects = tx_effects.clone();
             println!("Past effects: {:?}", old_effects);
             println!("New effects: {:?}", effects);
         }
         assert!(
-            effects.digest() == tx_digest.effects,
+            effects.digest() == tx_effects.digest(),
             "Effects digest mismatch"
         );
 
@@ -361,90 +374,90 @@ impl ExecutionWorkerState {
     }
 
 
-    async fn async_exec(
-        full_tx: Transaction,
-        input_objects: InputObjects,
-        temporary_store: TemporaryStore<&MemoryBackedStore>,
-        move_vm: Arc<MoveVM>,
-        gas_status: SuiGasStatus,
-        epoch_data: EpochData,
-        protocol_config: ProtocolConfig,
-        metrics: Arc<LimitsMetrics>,
-    ) -> TransactionWithResults
-    {
-        let tx = &full_tx.tx;
-        let tx_data = tx.data().transaction_data();
-        let (kind, signer, gas) = tx_data.execution_parts();
-        let shared_object_refs = input_objects.filter_shared_objects();
-        let transaction_dependencies = input_objects.transaction_dependencies();
+    // async fn async_exec(
+    //     full_tx: Transaction,
+    //     input_objects: InputObjects,
+    //     temporary_store: TemporaryStore<&MemoryBackedStore>,
+    //     move_vm: Arc<MoveVM>,
+    //     gas_status: SuiGasStatus,
+    //     epoch_data: EpochData,
+    //     protocol_config: ProtocolConfig,
+    //     metrics: Arc<LimitsMetrics>,
+    // ) -> TransactionWithResults
+    // {
+    //     let tx = &full_tx.tx;
+    //     let tx_data = tx.data().transaction_data();
+    //     let (kind, signer, gas) = tx_data.execution_parts();
+    //     let shared_object_refs = input_objects.filter_shared_objects();
+    //     let transaction_dependencies = input_objects.transaction_dependencies();
     
-        let (inner_temp_store, effects, _execution_error) =
-            execution_engine::execute_transaction_to_effects::<execution_mode::Normal, _>(
-                shared_object_refs,
-                temporary_store,
-                kind,
-                signer,
-                &gas,
-                *tx.digest(),
-                transaction_dependencies,
-                &move_vm,
-                gas_status,
-                &epoch_data,
-                &protocol_config,
-                metrics.clone(),
-                false,
-                &HashSet::new(),
-            );
+    //     let (inner_temp_store, effects, _execution_error) =
+    //         execution_engine::execute_transaction_to_effects::<execution_mode::Normal, _>(
+    //             shared_object_refs,
+    //             temporary_store,
+    //             kind,
+    //             signer,
+    //             &gas,
+    //             *tx.digest(),
+    //             transaction_dependencies,
+    //             &move_vm,
+    //             gas_status,
+    //             &epoch_data,
+    //             &protocol_config,
+    //             metrics.clone(),
+    //             false,
+    //             &HashSet::new(),
+    //         );
         
-        return TransactionWithResults {
-            full_tx,
-            inner_temp_store,
-            effects,
-        }
-    }
+    //     return TransactionWithResults {
+    //         full_tx,
+    //         inner_temp_store,
+    //         effects,
+    //     }
+    // }
 
     /// TODO: Dispatch a transaction to the execution queue
-    pub async fn execute_tx_async(
-        &mut self,
-        full_tx: Transaction,
-        protocol_config: &ProtocolConfig,
-        move_vm: &Arc<MoveVM>,
-        epoch_data: &EpochData,
-        reference_gas_price: u64,
-        metrics: Arc<LimitsMetrics>,
-        tasks_queue: &mut TasksFuturesUnordered,
-    ) 
-    {
-        let tx = full_tx.tx.clone();
-        let tx_data = tx.data().transaction_data();
-        let (kind, signer, gas) = tx_data.execution_parts();
-        let input_objects = self.read_input_objects_from_store(&tx).await;
-        let gas_status = self.get_gas_status(&tx, &input_objects, protocol_config, reference_gas_price).await;
-        let shared_object_refs = input_objects.filter_shared_objects();
-        let transaction_dependencies = input_objects.transaction_dependencies();
+    // pub async fn execute_tx_async(
+    //     &mut self,
+    //     full_tx: Transaction,
+    //     protocol_config: &ProtocolConfig,
+    //     move_vm: &Arc<MoveVM>,
+    //     epoch_data: &EpochData,
+    //     reference_gas_price: u64,
+    //     metrics: Arc<LimitsMetrics>,
+    //     tasks_queue: &mut TasksFuturesUnordered,
+    // ) 
+    // {
+    //     let tx = full_tx.tx.clone();
+    //     let tx_data = tx.data().transaction_data();
+    //     let (kind, signer, gas) = tx_data.execution_parts();
+    //     let input_objects = self.read_input_objects_from_store(&tx).await;
+    //     let gas_status = self.get_gas_status(&tx, &input_objects, protocol_config, reference_gas_price).await;
+    //     let shared_object_refs = input_objects.filter_shared_objects();
+    //     let transaction_dependencies = input_objects.transaction_dependencies();
 
 
-        // TODO Why does temp store has reference to memory store?
-        let temporary_store = TemporaryStore::new(
-            &self.memory_store,
-            input_objects.clone(),
-            *tx.digest(),
-            protocol_config,
-        );
+    //     // TODO Why does temp store has reference to memory store?
+    //     let temporary_store = TemporaryStore::new(
+    //         &self.memory_store,
+    //         input_objects.clone(),
+    //         *tx.digest(),
+    //         protocol_config,
+    //     );
 
-        tasks_queue.push(Box::pin(
-            Self::async_exec(
-                full_tx,
-                input_objects,
-                temporary_store,
-                move_vm.clone(),
-                gas_status,
-                epoch_data.clone(),
-                protocol_config.clone(),
-                metrics.clone(),
-            ))
-        );
-    }
+    //     tasks_queue.push(Box::pin(
+    //         Self::async_exec(
+    //             full_tx,
+    //             input_objects,
+    //             temporary_store,
+    //             move_vm.clone(),
+    //             gas_status,
+    //             epoch_data.clone(),
+    //             protocol_config.clone(),
+    //             metrics.clone(),
+    //         ))
+    //     );
+    // }
 
 
     /// Helper: Receive and process an EpochStart message.
@@ -525,14 +538,13 @@ impl ExecutionWorkerState {
                     let tx = &full_tx.tx.clone();
                     let checkpoint_seq = &full_tx.checkpoint_seq.clone();
 
-                    self.execute_tx_async(
-                        full_tx.clone(),
+                    self.execute_tx(
+                        &full_tx,
                         &protocol_config,
                         &move_vm,
                         &epoch_data,
                         reference_gas_price,
                         metrics.clone(),
-                        &mut tasks_queue,
                     ).await;
                     
                     num_tx += 1;
@@ -557,11 +569,10 @@ impl ExecutionWorkerState {
                     // New tx from sequencer; enqueue to manager
                     if let SailfishMessage::Transaction{
                         tx, 
-                        exec_digest,
                         tx_effects, 
                         checkpoint_seq,
                     } = msg {
-                        let full_tx = Transaction{tx, exec_digest, tx_effects, checkpoint_seq};
+                        let full_tx = Transaction{tx, tx_effects, checkpoint_seq};
                         manager.queue_tx(full_tx).await;
                     } else {
                         panic!("unexpected message");
