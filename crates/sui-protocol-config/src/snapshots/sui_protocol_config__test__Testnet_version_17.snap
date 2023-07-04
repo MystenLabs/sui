@@ -21,6 +21,7 @@ feature_flags:
   narwhal_versioned_metadata: true
   consensus_transaction_ordering: ByGasPrice
   simplified_unwrap_then_delete: true
+  upgraded_multisig_supported: true
 max_tx_size_bytes: 131072
 max_input_objects: 2048
 max_size_written_objects: 5000000
@@ -182,5 +183,4 @@ hmac_hmac_sha3_256_input_cost_per_byte: 2
 hmac_hmac_sha3_256_input_cost_per_block: 2
 scoring_decision_mad_divisor: 2.3
 scoring_decision_cutoff_value: 2.5
-execution_version: 1
 

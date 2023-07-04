@@ -10,7 +10,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 17;
+const MAX_PROTOCOL_VERSION: u64 = 18;
 
 // Record history of protocol version allocations here:
 //
@@ -231,6 +231,10 @@ struct FeatureFlags {
     // regardless of their previous state in the store.
     #[serde(skip_serializing_if = "is_false")]
     simplified_unwrap_then_delete: bool,
+
+    // Enable upgraded multisig support
+    #[serde(skip_serializing_if = "is_false")]
+    upgraded_multisig_supported: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -798,6 +802,10 @@ impl ProtocolConfig {
     pub fn simplified_unwrap_then_delete(&self) -> bool {
         self.feature_flags.simplified_unwrap_then_delete
     }
+
+    pub fn supports_upgraded_multisig(&self) -> bool {
+        self.feature_flags.upgraded_multisig_supported
+    }
 }
 
 #[cfg(not(msim))]
@@ -1268,8 +1276,10 @@ impl ProtocolConfig {
             }
             17 => {
                 let mut cfg = Self::get_for_version_impl(version - 1, chain);
-                cfg.execution_version = Some(1);
-
+                cfg.feature_flags.upgraded_multisig_supported = true;
+                cfg
+            }
+            18 => {
                 // Following flags are implied by this execution version.  Once support for earlier
                 // protocol versions is dropped, these flags can be removed:
                 // cfg.feature_flags.package_upgrades = true;
@@ -1278,6 +1288,8 @@ impl ProtocolConfig {
                 // cfg.feature_flags.loaded_child_objects_fixed = true;
                 // cfg.feature_flags.ban_entry_init = true;
                 // cfg.feature_flags.pack_digest_hash_modules = true;
+                let mut cfg = Self::get_for_version_impl(version - 1, chain);
+                cfg.execution_version = Some(1);
                 cfg
             }
             // Use this template when making changes:
@@ -1342,6 +1354,9 @@ impl ProtocolConfig {
         self.execution_version = Some(version)
     }
 
+    pub fn set_upgraded_multisig_for_testing(&mut self, val: bool) {
+        self.feature_flags.upgraded_multisig_supported = val
+    }
     #[cfg(msim)]
     pub fn set_simplified_unwrap_then_delete(&mut self, val: bool) {
         self.feature_flags.simplified_unwrap_then_delete = val
