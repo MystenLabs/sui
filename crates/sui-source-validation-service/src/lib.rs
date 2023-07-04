@@ -1,19 +1,28 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeMap;
+use std::path::PathBuf;
+use std::sync::Arc;
 use std::{ffi::OsString, fs, path::Path, process::Command};
 
 use anyhow::{anyhow, bail};
+use axum::extract::{Query, State};
+use axum::response::IntoResponse;
 use axum::routing::{get, IntoMakeService};
-use axum::{Router, Server};
+use axum::{Json, Router, Server};
 use hyper::server::conn::AddrIncoming;
-use serde::Deserialize;
+use hyper::StatusCode;
+use serde::{Deserialize, Serialize};
 use std::net::TcpListener;
 use sui_sdk::SuiClient;
 use tracing::info;
 use url::Url;
 
+use move_compiler::compiled_unit::CompiledUnitEnum;
+use move_core_types::account_address::AccountAddress;
 use move_package::BuildConfig as MoveBuildConfig;
+use move_symbol_pool::Symbol;
 use sui_move::build::resolve_lock_file_path;
 use sui_move_build::{BuildConfig, SuiPackageHooks};
 use sui_sdk::wallet_context::WalletContext;
@@ -31,10 +40,13 @@ pub struct Packages {
     pub paths: Vec<String>,
 }
 
+/// Map (package address, module name) tuples to verified source paths.
+type SourceLookup = BTreeMap<(AccountAddress, Symbol), PathBuf>;
+
 pub async fn verify_package(
     client: &SuiClient,
     package_path: impl AsRef<Path>,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<SourceLookup> {
     move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks));
     let config = resolve_lock_file_path(
         MoveBuildConfig::default(),
@@ -54,8 +66,21 @@ pub async fn verify_package(
             /* verify_deps */ false,
             SourceMode::Verify,
         )
-        .await
-        .map_err(anyhow::Error::from)
+        .await?;
+
+    let mut map = SourceLookup::new();
+    let Ok(address) = compiled_package.published_at.as_ref().map(|id| **id) else { bail!("could not resolve published-at field in package manifest")};
+    for v in &compiled_package.package.root_compiled_units {
+        match v.unit {
+            CompiledUnitEnum::Module(ref m) => {
+                map.insert((address, m.name), v.source_path.to_path_buf())
+            }
+            CompiledUnitEnum::Script(ref m) => {
+                map.insert((address, m.name), v.source_path.to_path_buf())
+            }
+        };
+    }
+    Ok(map)
 }
 
 pub fn parse_config(config_path: impl AsRef<Path>) -> anyhow::Result<Config> {
@@ -173,17 +198,16 @@ pub async fn initialize(
     context: &WalletContext,
     config: &Config,
     dir: &Path,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<SourceLookup> {
     clone_repositories(config, dir).await?;
-    verify_packages(context, config, dir).await?;
-    Ok(())
+    verify_packages(context, config, dir).await
 }
 
 pub async fn verify_packages(
     context: &WalletContext,
     config: &Config,
     dir: &Path,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<SourceLookup> {
     let mut tasks = vec![];
     for p in &config.packages {
         let repo_name = repo_name_from_url(&p.repository)?;
@@ -197,18 +221,59 @@ pub async fn verify_packages(
         }
     }
 
+    let mut lookup = BTreeMap::new();
     for t in tasks {
-        t.await.unwrap()?;
+        let new_lookup = t.await.unwrap()?;
+        lookup.extend(new_lookup);
     }
-    Ok(())
+    Ok(lookup)
 }
 
-pub fn serve() -> anyhow::Result<Server<AddrIncoming, IntoMakeService<Router>>> {
-    let app = Router::new().route("/api", get(api_route));
+pub struct AppState {
+    pub sources: SourceLookup,
+}
+
+pub fn serve(app_state: AppState) -> anyhow::Result<Server<AddrIncoming, IntoMakeService<Router>>> {
+    let app = Router::new().route("/api", get(api_route).with_state(Arc::new(app_state)));
     let listener = TcpListener::bind("0.0.0.0:8000")?;
     Ok(Server::from_tcp(listener)?.serve(app.into_make_service()))
 }
 
-async fn api_route() -> &'static str {
-    "{\"source\": \"code\"}"
+#[derive(Deserialize)]
+pub struct Request {
+    address: String,
+    module: String,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct SourceResponse {
+    pub source: String,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct ErrorResponse {
+    pub error: String,
+}
+
+async fn api_route(
+    State(app_state): State<Arc<AppState>>,
+    Query(Request { address, module }): Query<Request>,
+) -> impl IntoResponse {
+    let symbol = Symbol::from(module);
+    let Ok(address) = AccountAddress::from_hex_literal(&address) else {
+	let error = format!("Invalid hex address {address}");
+	return (StatusCode::BAD_REQUEST, Json(ErrorResponse { error }).into_response())
+    };
+    let Some(path) = app_state.sources.get(&(address, symbol)) else {
+	let error = format!("No source found for {symbol} at address {address}" );
+	return (StatusCode::BAD_REQUEST, Json(ErrorResponse { error }).into_response())
+    };
+    let Ok(source) = fs::read_to_string(path) else {
+	let error = "Error reading source from disk".to_string();
+	return (StatusCode::INTERNAL_SERVER_ERROR, Json(ErrorResponse { error }).into_response())
+    };
+    (
+        StatusCode::OK,
+        Json(SourceResponse { source }).into_response(),
+    )
 }
