@@ -566,6 +566,124 @@ pub fn make_certificates_with_slow_nodes(
     (certificates, next_parents)
 }
 
+#[derive(Debug, Clone, Copy)]
+pub enum TestLeaderSupport {
+    // There will be support for the leader, but less than f+1
+    Weak,
+    // There will be strong support for the leader, meaning >= f+1
+    Strong,
+    // Leader will be completely ommitted by the voters
+    NoSupport,
+}
+
+pub struct TestLeaderConfiguration {
+    // The round of the leader
+    pub round: Round,
+    // The leader id. That allow us to explicitly dictate which we consider the leader to be
+    pub authority: AuthorityIdentifier,
+    // If true then the leader for that round will not be created at all
+    pub should_omit: bool,
+    // The support that this leader should receive from the voters of next round
+    pub support: Option<TestLeaderSupport>,
+}
+
+/// Creates fully connected DAG for the dictated rounds but with specific conditions for the leaders.
+/// By providing the `leader_configuration` we can dictate the setup for specific leaders of specific rounds.
+/// For a leader the following can be configured:
+/// * whether a leader will exist or not for a round
+/// * whether a leader will receive enough support from the next round
+pub fn make_certificates_with_leader_configuration(
+    committee: &Committee,
+    protocol_config: &ProtocolConfig,
+    range: RangeInclusive<Round>,
+    initial_parents: &BTreeSet<CertificateDigest>,
+    names: &[AuthorityIdentifier],
+    leader_configurations: HashMap<Round, TestLeaderConfiguration>,
+) -> (VecDeque<Certificate>, BTreeSet<CertificateDigest>) {
+    for round in leader_configurations.keys() {
+        assert_eq!(round % 2, 0, "Leaders are elected only on even rounds");
+    }
+
+    let mut certificates: VecDeque<Certificate> = VecDeque::new();
+    let mut parents = initial_parents.iter().cloned().collect::<BTreeSet<_>>();
+    let mut next_parents = BTreeSet::new();
+
+    for round in range {
+        next_parents.clear();
+
+        for name in names {
+            // should we produce the leader of that round?
+            if let Some(leader_config) = leader_configurations.get(&round) {
+                if leader_config.should_omit && leader_config.authority == *name {
+                    // just skip and don't create the certificate for this authority
+                    continue;
+                }
+            }
+
+            // we now check for the leader of previous round. If should not be omitted we need to check
+            // on the support we are supposed to provide
+            let cert_parents = if round > 0 {
+                if let Some(leader_config) = leader_configurations.get(&(round - 1)) {
+                    match leader_config.support {
+                        Some(TestLeaderSupport::Weak) => {
+                            // find the leader from the previous round
+                            let leader_certificate = certificates
+                                .iter()
+                                .find(|c| {
+                                    c.round() == round - 1 && c.origin() == leader_config.authority
+                                })
+                                .unwrap();
+
+                            // check whether anyone from the current round already included it
+                            // if yes, then we should remove it and not vote again.
+                            if certificates.iter().any(|c| {
+                                c.round() == round
+                                    && c.header().parents().contains(&leader_certificate.digest())
+                            }) {
+                                let mut p = parents.clone();
+                                p.remove(&leader_certificate.digest());
+                                p
+                            } else {
+                                // otherwise return all the parents
+                                parents.clone()
+                            }
+                        }
+                        Some(TestLeaderSupport::Strong) => {
+                            // just return the whole parent set so we can vote for it
+                            parents.clone()
+                        }
+                        Some(TestLeaderSupport::NoSupport) => {
+                            // remove the leader from the set of parents
+                            let c = certificates
+                                .iter()
+                                .find(|c| {
+                                    c.round() == round - 1 && c.origin() == leader_config.authority
+                                })
+                                .unwrap();
+                            let mut p = parents.clone();
+                            p.remove(&c.digest());
+                            p
+                        }
+                        None => parents.clone(),
+                    }
+                } else {
+                    parents.clone()
+                }
+            } else {
+                parents.clone()
+            };
+
+            // Create the certificates
+            let (_, certificate) =
+                mock_certificate(committee, protocol_config, *name, round, cert_parents);
+            certificates.push_back(certificate.clone());
+            next_parents.insert(certificate.digest());
+        }
+        parents = next_parents.clone();
+    }
+    (certificates, next_parents)
+}
+
 // Returns the parents that should be used as part of a newly created certificate.
 // The `slow_nodes` parameter is used to dictate which parents to exclude and not use. The slow
 // node will not be used under some probability which is provided as part of the tuple.
