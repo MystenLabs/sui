@@ -650,7 +650,7 @@ export class TransactionBlock {
 				.map(([id, _]) => id);
 			if (invalidObjects.length) {
 				throw new Error(
-					`The following input objects are not invalid: ${invalidObjects.join(', ')}`,
+					`The following input objects are invalid: ${invalidObjects.join(', ')}`,
 				);
 			}
 
