@@ -210,7 +210,7 @@ pub async fn metadata(
     env.check_network_identifier(&request.network_identifier)?;
     let option = request.options.ok_or(Error::MissingMetadata)?;
     let sender = option.internal_operation.sender();
-    let gas_price = context
+    let mut gas_price = context
         .client
         .governance_api()
         .get_reference_gas_price()
