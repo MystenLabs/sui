@@ -10,9 +10,10 @@ use anyhow::{anyhow, bail};
 use axum::extract::{Query, State};
 use axum::response::IntoResponse;
 use axum::routing::{get, IntoMakeService};
-use axum::{Router, Server};
+use axum::{Json, Router, Server};
 use hyper::server::conn::AddrIncoming;
-use serde::Deserialize;
+use hyper::StatusCode;
+use serde::{Deserialize, Serialize};
 use std::net::TcpListener;
 use sui_sdk::SuiClient;
 use tracing::info;
@@ -72,14 +73,12 @@ pub async fn verify_package(
     for v in &compiled_package.package.root_compiled_units {
         match v.unit {
             CompiledUnitEnum::Module(ref m) => {
-                map.insert((address, m.name), v.source_path.to_path_buf());
-                ()
+                map.insert((address, m.name), v.source_path.to_path_buf())
             }
             CompiledUnitEnum::Script(ref m) => {
-                map.insert((address, m.name), v.source_path.to_path_buf());
-                ()
+                map.insert((address, m.name), v.source_path.to_path_buf())
             }
-        }
+        };
     }
     Ok(map)
 }
@@ -201,7 +200,7 @@ pub async fn initialize(
     dir: &Path,
 ) -> anyhow::Result<SourceLookup> {
     clone_repositories(config, dir).await?;
-    Ok(verify_packages(context, config, dir).await?)
+    verify_packages(context, config, dir).await
 }
 
 pub async fn verify_packages(
@@ -246,12 +245,35 @@ pub struct Request {
     module: String,
 }
 
+#[derive(Serialize, Deserialize)]
+pub struct SourceResponse {
+    pub source: String,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct ErrorResponse {
+    pub error: String,
+}
+
 async fn api_route(
     State(app_state): State<Arc<AppState>>,
     Query(Request { address, module }): Query<Request>,
 ) -> impl IntoResponse {
     let symbol = Symbol::from(module);
-    let address = AccountAddress::from_hex_literal(&address).unwrap();
-    let path = app_state.sources.get(&(address, symbol)).unwrap();
-    format!("{{\"source\": \"{}\"}}", path.display())
+    let Ok(address) = AccountAddress::from_hex_literal(&address) else {
+	let error = format!("Invalid hex address {address}");
+	return (StatusCode::BAD_REQUEST, Json(ErrorResponse { error }).into_response())
+    };
+    let Some(path) = app_state.sources.get(&(address, symbol)) else {
+	let error = format!("No source found for {symbol} at address {address}" );
+	return (StatusCode::BAD_REQUEST, Json(ErrorResponse { error }).into_response())
+    };
+    let Ok(source) = fs::read_to_string(path) else {
+	let error = "Error reading source from disk".to_string();
+	return (StatusCode::INTERNAL_SERVER_ERROR, Json(ErrorResponse { error }).into_response())
+    };
+    (
+        StatusCode::OK,
+        Json(SourceResponse { source }).into_response(),
+    )
 }
