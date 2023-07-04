@@ -1038,7 +1038,7 @@ impl TransactionData {
             gas_data: GasData {
                 price: GAS_PRICE_FOR_SYSTEM_TX,
                 owner: sender,
-                payment: vec![(ObjectID::ZERO, SequenceNumber::default(), ObjectDigest::MIN)],
+                payment: vec![],
                 budget: 0,
             },
             expiration: TransactionExpiration::None,

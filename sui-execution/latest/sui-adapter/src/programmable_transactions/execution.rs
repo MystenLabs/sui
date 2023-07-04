@@ -40,7 +40,7 @@ use sui_types::{
         CommandKind, ExecutionResults, ExecutionState, ObjectContents, ObjectValue, RawValueType,
         Value,
     },
-    gas::{SuiGasStatus, SuiGasStatusAPI},
+    gas::GasCharger,
     id::{RESOLVED_SUI_ID, UID},
     metrics::LimitsMetrics,
     move_package::{
@@ -71,8 +71,7 @@ pub fn execute<Mode: ExecutionMode>(
     vm: &MoveVM,
     state_view: &mut dyn ExecutionState,
     tx_context: &mut TxContext,
-    gas_status: &mut SuiGasStatus,
-    gas_coin: Option<ObjectID>,
+    gas_charger: &mut GasCharger,
     pt: ProgrammableTransaction,
 ) -> Result<Mode::ExecutionResults, ExecutionError> {
     let ProgrammableTransaction { inputs, commands } = pt;
@@ -82,8 +81,7 @@ pub fn execute<Mode: ExecutionMode>(
         vm,
         state_view,
         tx_context,
-        gas_status,
-        gas_coin,
+        gas_charger,
         inputs,
     )?;
     // execute commands
@@ -131,8 +129,7 @@ fn execute_command<Mode: ExecutionMode>(
     context: &mut ExecutionContext<'_, '_, '_>,
     mode_results: &mut Mode::ExecutionResults,
     command: Command,
-) -> Result<(), ExecutionError>
-{
+) -> Result<(), ExecutionError> {
     let mut argument_updates = Mode::empty_arguments();
     let results = match command {
         Command::MakeMoveVec(tag_opt, args) if args.is_empty() => {
@@ -344,8 +341,7 @@ fn execute_move_call<Mode: ExecutionMode>(
     type_arguments: Vec<Type>,
     arguments: Vec<Argument>,
     is_init: bool,
-) -> Result<Vec<Value>, ExecutionError>
-{
+) -> Result<Vec<Value>, ExecutionError> {
     // check that the function is either an entry function or a valid public function
     let LoadedFunctionInfo {
         kind,
@@ -414,8 +410,7 @@ fn write_back_results<Mode: ExecutionMode>(
     mut_ref_kinds: impl IntoIterator<Item = (u8, ValueKind)>,
     return_values: impl IntoIterator<Item = Vec<u8>>,
     return_value_kinds: impl IntoIterator<Item = ValueKind>,
-) -> Result<Vec<Value>, ExecutionError>
-{
+) -> Result<Vec<Value>, ExecutionError> {
     for ((i, bytes), (j, kind)) in mut_ref_values.into_iter().zip(mut_ref_kinds) {
         assert_invariant!(i == j, "lost mutable input");
         let arg_idx = i as usize;
@@ -440,8 +435,7 @@ fn make_value(
     value_info: ValueKind,
     bytes: Vec<u8>,
     used_in_non_entry_move_call: bool,
-) -> Result<Value, ExecutionError>
-{
+) -> Result<Value, ExecutionError> {
     Ok(match value_info {
         ValueKind::Object {
             type_,
@@ -472,14 +466,13 @@ fn execute_move_publish<Mode: ExecutionMode>(
     argument_updates: &mut Mode::ArgumentUpdates,
     module_bytes: Vec<Vec<u8>>,
     dep_ids: Vec<ObjectID>,
-) -> Result<Vec<Value>, ExecutionError>
-{
+) -> Result<Vec<Value>, ExecutionError> {
     assert_invariant!(
         !module_bytes.is_empty(),
         "empty package is checked in transaction input checker"
     );
     context
-        .gas_status
+        .gas_charger
         .charge_publish_package(module_bytes.iter().map(|v| v.len()).sum())?;
 
     let mut modules = deserialize_modules::<Mode>(context, &module_bytes)?;
@@ -707,8 +700,7 @@ fn check_module_compatibility(
 fn fetch_package(
     context: &ExecutionContext<'_, '_, '_>,
     package_id: &ObjectID,
-) -> Result<MovePackage, ExecutionError>
-{
+) -> Result<MovePackage, ExecutionError> {
     let mut fetched_packages = fetch_packages(context, vec![package_id])?;
     assert_invariant!(
         fetched_packages.len() == 1,
@@ -725,8 +717,7 @@ fn fetch_package(
 fn fetch_packages<'ctx, 'vm, 'state, 'a>(
     context: &'ctx ExecutionContext<'vm, 'state, 'a>,
     package_ids: impl IntoIterator<Item = &'ctx ObjectID>,
-) -> Result<Vec<MovePackage>, ExecutionError>
-{
+) -> Result<Vec<MovePackage>, ExecutionError> {
     let package_ids: BTreeSet<_> = package_ids.into_iter().collect();
     match get_packages(&context.state_view, package_ids) {
         Err(e) => Err(ExecutionError::new_with_source(
@@ -762,8 +753,7 @@ fn vm_move_call(
     type_arguments: Vec<Type>,
     tx_context_kind: TxContextKind,
     mut serialized_arguments: Vec<Vec<u8>>,
-) -> Result<SerializedReturnValues, ExecutionError>
-{
+) -> Result<SerializedReturnValues, ExecutionError> {
     match tx_context_kind {
         TxContextKind::None => (),
         TxContextKind::Mutable | TxContextKind::Immutable => {
@@ -778,7 +768,7 @@ fn vm_move_call(
             function,
             type_arguments,
             serialized_arguments,
-            context.gas_status.move_gas_status_mut(),
+            context.gas_charger.move_gas_status_mut(),
         )
         .map_err(|e| context.convert_vm_error(e))?;
 
@@ -807,8 +797,7 @@ fn vm_move_call(
 fn deserialize_modules<Mode: ExecutionMode>(
     context: &mut ExecutionContext<'_, '_, '_>,
     module_bytes: &[Vec<u8>],
-) -> Result<Vec<CompiledModule>, ExecutionError>
-{
+) -> Result<Vec<CompiledModule>, ExecutionError> {
     let modules = module_bytes
         .iter()
         .map(|b| {
@@ -834,8 +823,7 @@ fn publish_and_verify_modules(
     context: &mut ExecutionContext<'_, '_, '_>,
     package_id: ObjectID,
     modules: &[CompiledModule],
-) -> Result<(), ExecutionError>
-{
+) -> Result<(), ExecutionError> {
     // TODO(https://github.com/MystenLabs/sui/issues/69): avoid this redundant serialization by exposing VM API that allows us to run the linker directly on `Vec<CompiledModule>`
     let new_module_bytes: Vec<_> = modules
         .iter()
@@ -852,7 +840,7 @@ fn publish_and_verify_modules(
             AccountAddress::from(package_id),
             // TODO: publish_module_bundle() currently doesn't charge gas.
             // Do we want to charge there?
-            context.gas_status.move_gas_status_mut(),
+            context.gas_charger.move_gas_status_mut(),
         )
         .map_err(|e| context.convert_vm_error(e))?;
 
@@ -873,8 +861,7 @@ fn init_modules<Mode: ExecutionMode>(
     context: &mut ExecutionContext<'_, '_, '_>,
     argument_updates: &mut Mode::ArgumentUpdates,
     modules: &[CompiledModule],
-) -> Result<(), ExecutionError>
-{
+) -> Result<(), ExecutionError> {
     let modules_to_init = modules.iter().filter_map(|module| {
         for fdef in &module.function_defs {
             let fhandle = module.function_handle_at(fdef.function);
@@ -951,8 +938,7 @@ fn check_visibility_and_signature<Mode: ExecutionMode>(
     function: &IdentStr,
     type_arguments: &[Type],
     from_init: bool,
-) -> Result<LoadedFunctionInfo, ExecutionError>
-{
+) -> Result<LoadedFunctionInfo, ExecutionError> {
     if from_init {
         // the session is weird and does not load the module on publishing. This is a temporary
         // work around, since loading the function through the session will cause the module
@@ -1077,8 +1063,7 @@ fn check_non_entry_signature<Mode: ExecutionMode>(
     _module_id: &ModuleId,
     _function: &IdentStr,
     signature: &LoadedFunctionInstantiation,
-) -> Result<Vec<ValueKind>, ExecutionError>
-{
+) -> Result<Vec<ValueKind>, ExecutionError> {
     signature
         .return_
         .iter()
@@ -1183,8 +1168,7 @@ fn build_move_args<Mode: ExecutionMode>(
     function_kind: FunctionKind,
     signature: &LoadedFunctionInstantiation,
     args: &[Argument],
-) -> Result<ArgInfo, ExecutionError>
-{
+) -> Result<ArgInfo, ExecutionError> {
     // check the arity
     let parameters = &signature.parameters;
     let tx_ctx_kind = match parameters.last() {
@@ -1292,8 +1276,7 @@ fn check_param_type<Mode: ExecutionMode>(
     idx: usize,
     value: &Value,
     param_ty: &Type,
-) -> Result<(), ExecutionError>
-{
+) -> Result<(), ExecutionError> {
     let ty = match value {
         // For dev-spect, allow any BCS bytes. This does mean internal invariants for types can
         // be violated (like for string or Option)
@@ -1354,8 +1337,7 @@ fn get_struct_ident(s: &StructType) -> (&AccountAddress, &IdentStr, &IdentStr) {
 pub fn is_tx_context(
     context: &mut ExecutionContext<'_, '_, '_>,
     t: &Type,
-) -> Result<TxContextKind, ExecutionError>
-{
+) -> Result<TxContextKind, ExecutionError> {
     let (is_mut, inner) = match t {
         Type::MutableReference(inner) => (true, inner),
         Type::Reference(inner) => (false, inner),
@@ -1384,8 +1366,7 @@ pub fn is_tx_context(
 fn primitive_serialization_layout(
     context: &mut ExecutionContext<'_, '_, '_>,
     param_ty: &Type,
-) -> Result<Option<PrimitiveArgumentLayout>, ExecutionError>
-{
+) -> Result<Option<PrimitiveArgumentLayout>, ExecutionError> {
     Ok(match param_ty {
         Type::Signer => return Ok(None),
         Type::Reference(_) | Type::MutableReference(_) | Type::TyParam(_) => {

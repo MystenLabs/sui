@@ -8,6 +8,7 @@ use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_core_types::gas_algebra::{AbstractMemorySize, InternalGas, NumArgs, NumBytes};
 use move_core_types::language_storage::ModuleId;
 
+use crate::gas_model::gas_predicates::charge_input_as_memory;
 use move_core_types::vm_status::StatusCode;
 #[cfg(debug_assertions)]
 use move_vm_profiler::GasProfiler;
@@ -16,7 +17,7 @@ use move_vm_types::loaded_data::runtime_types::Type;
 use move_vm_types::views::{TypeView, ValueView};
 use once_cell::sync::Lazy;
 
-use crate::tier_based::units_types::{CostTable, Gas, GasCost};
+use crate::gas_model::units_types::{CostTable, Gas, GasCost};
 
 /// VM flat fee
 pub const VM_FLAT_FEE: Gas = Gas::new(8_000);
@@ -83,12 +84,7 @@ impl GasStatus {
     /// Charge for every operation and fail when there is no more gas to pay for operations.
     /// This is the instantiation that must be used when executing a user script.
 
-    pub fn new_v2(
-        cost_table: CostTable,
-        budget: u64,
-        gas_price: u64,
-        gas_model_version: u64,
-    ) -> Self {
+    pub fn new(cost_table: CostTable, budget: u64, gas_price: u64, gas_model_version: u64) -> Self {
         assert!(gas_price > 0, "gas price cannot be 0");
         let budget_in_unit = budget / gas_price;
         let gas_left = Self::to_internal_units(budget_in_unit);
@@ -103,36 +99,6 @@ impl GasStatus {
             gas_left,
             gas_price,
             initial_budget: gas_left,
-            cost_table,
-            charge: true,
-            stack_height_high_water_mark: 0,
-            stack_height_current: 0,
-            stack_size_high_water_mark: 0,
-            stack_size_current: 0,
-            instructions_executed: 0,
-            stack_height_current_tier_mult,
-            stack_size_current_tier_mult,
-            instructions_current_tier_mult,
-            stack_height_next_tier_start,
-            stack_size_next_tier_start,
-            instructions_next_tier_start,
-            #[cfg(debug_assertions)]
-            profiler: None,
-        }
-    }
-
-    pub fn new(cost_table: CostTable, gas_left: Gas) -> Self {
-        let (stack_height_current_tier_mult, stack_height_next_tier_start) =
-            cost_table.stack_height_tier(0);
-        let (stack_size_current_tier_mult, stack_size_next_tier_start) =
-            cost_table.stack_size_tier(0);
-        let (instructions_current_tier_mult, instructions_next_tier_start) =
-            cost_table.instruction_tier(0);
-        Self {
-            gas_model_version: 1,
-            gas_left: gas_left.to_unit(),
-            gas_price: 1,
-            initial_budget: InternalGas::new(0),
             cost_table,
             charge: true,
             stack_height_high_water_mark: 0,
@@ -353,7 +319,7 @@ impl GasStatus {
     // Charge the number of bytes with the cost per byte value
     // As more bytes are read throughout the computation the cost per bytes is increased.
     pub fn charge_bytes(&mut self, size: usize, cost_per_byte: u64) -> PartialVMResult<()> {
-        let computation_cost = if self.gas_model_version == 4 {
+        let computation_cost = if charge_input_as_memory(self.gas_model_version) {
             self.increase_stack_size(size as u64)?;
             self.stack_size_current_tier_mult * size as u64 * cost_per_byte
         } else {

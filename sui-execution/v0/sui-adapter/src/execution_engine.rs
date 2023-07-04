@@ -12,7 +12,6 @@ use sui_types::balance::{
     BALANCE_CREATE_REWARDS_FUNCTION_NAME, BALANCE_DESTROY_REBATES_FUNCTION_NAME,
     BALANCE_MODULE_NAME,
 };
-use sui_types::base_types::ObjectID;
 use sui_types::execution_mode::{self, ExecutionMode};
 use sui_types::gas_coin::GAS;
 use sui_types::metrics::LimitsMetrics;
@@ -30,7 +29,7 @@ use sui_types::committee::EpochId;
 use sui_types::effects::TransactionEffects;
 use sui_types::error::{ExecutionError, ExecutionErrorKind};
 use sui_types::execution_status::ExecutionStatus;
-use sui_types::gas::{GasCostSummary, SuiGasStatusAPI};
+use sui_types::gas::{GasCharger, GasCostSummary};
 use sui_types::messages_consensus::ConsensusCommitPrologue;
 use sui_types::storage::WriteKind;
 #[cfg(msim)]
@@ -44,12 +43,11 @@ use sui_types::transaction::{
 };
 use sui_types::{
     base_types::{ObjectRef, SuiAddress, TransactionDigest, TxContext},
-    gas::SuiGasStatus,
     object::Object,
     sui_system_state::{ADVANCE_EPOCH_FUNCTION_NAME, SUI_SYSTEM_MODULE_NAME},
     SUI_FRAMEWORK_ADDRESS,
 };
-use sui_types::{is_system_package, SUI_FRAMEWORK_PACKAGE_ID, SUI_SYSTEM_PACKAGE_ID};
+use sui_types::{SUI_FRAMEWORK_PACKAGE_ID, SUI_SYSTEM_PACKAGE_ID};
 
 /// If a transaction digest shows up in this list, when executing such transaction,
 /// we will always return `ExecutionError::CertificateDenied` without executing it (but still do
@@ -89,11 +87,10 @@ pub fn execute_transaction_to_effects<Mode: ExecutionMode>(
     mut temporary_store: TemporaryStore<'_>,
     transaction_kind: TransactionKind,
     transaction_signer: SuiAddress,
-    gas: &[ObjectRef],
+    gas_charger: &mut GasCharger,
     transaction_digest: TransactionDigest,
     mut transaction_dependencies: BTreeSet<TransactionDigest>,
     move_vm: &Arc<MoveVM>,
-    gas_status: SuiGasStatus,
     epoch_id: &EpochId,
     epoch_timestamp_ms: u64,
     protocol_config: &ProtocolConfig,
@@ -118,10 +115,9 @@ pub fn execute_transaction_to_effects<Mode: ExecutionMode>(
     let (gas_cost_summary, execution_result) = execute_transaction::<Mode>(
         &mut temporary_store,
         transaction_kind,
-        gas,
+        gas_charger,
         &mut tx_ctx,
         move_vm,
-        gas_status,
         protocol_config,
         metrics,
         enable_expensive_checks,
@@ -186,7 +182,7 @@ pub fn execute_transaction_to_effects<Mode: ExecutionMode>(
 
     if enable_expensive_checks && !Mode::allow_arbitrary_function_calls() {
         temporary_store
-            .check_ownership_invariants(&transaction_signer, gas, is_epoch_change)
+            .check_ownership_invariants(&transaction_signer, gas_charger, is_epoch_change)
             .unwrap()
     } // else, in dev inspect mode and anything goes--don't check
 
@@ -196,35 +192,19 @@ pub fn execute_transaction_to_effects<Mode: ExecutionMode>(
         transaction_dependencies.into_iter().collect(),
         gas_cost_summary,
         status,
-        gas,
+        gas_charger,
         *epoch_id,
     );
     (inner, effects, execution_result)
-}
-
-fn charge_gas_for_object_read(
-    temporary_store: &TemporaryStore<'_>,
-    gas_status: &mut SuiGasStatus,
-) -> Result<(), ExecutionError> {
-    // Charge gas for reading all objects from the DB.
-    let total_size = temporary_store
-        .objects()
-        .iter()
-        // don't charge for loading Sui Framework or Move stdlib
-        .filter(|(id, _)| !is_system_package(**id))
-        .map(|(_, obj)| obj.object_size_for_gas_metering())
-        .sum();
-    gas_status.charge_storage_read(total_size)
 }
 
 #[instrument(name = "tx_execute", level = "debug", skip_all)]
 fn execute_transaction<Mode: ExecutionMode>(
     temporary_store: &mut TemporaryStore<'_>,
     transaction_kind: TransactionKind,
-    gas: &[ObjectRef],
+    gas_charger: &mut GasCharger,
     tx_ctx: &mut TxContext,
     move_vm: &Arc<MoveVM>,
-    mut gas_status: SuiGasStatus,
     protocol_config: &ProtocolConfig,
     metrics: Arc<LimitsMetrics>,
     enable_expensive_checks: bool,
@@ -233,16 +213,11 @@ fn execute_transaction<Mode: ExecutionMode>(
     GasCostSummary,
     Result<Mode::ExecutionResults, ExecutionError>,
 ) {
-    // First smash gas into the first coin if more than 1 was provided
-    let gas_object_ref = match temporary_store.smash_gas(gas) {
-        Ok(obj_ref) => obj_ref,
-        Err(_) => gas[0], // this cannot fail, but we use gas[0] anyway
-    };
-    // At this point no charge has been applied yet
+    gas_charger.smash_gas(temporary_store);
+
+    // At this point no charges have been applied yet
     debug_assert!(
-        gas_status.gas_used() == 0
-            && gas_status.storage_rebate() == 0
-            && gas_status.storage_gas_units() == 0,
+        gas_charger.no_charges(),
         "No gas charges must be applied yet"
     );
     let is_genesis_tx = matches!(transaction_kind, TransactionKind::Genesis(_));
@@ -250,7 +225,7 @@ fn execute_transaction<Mode: ExecutionMode>(
 
     // We must charge object read here during transaction execution, because if this fails
     // we must still ensure an effect is committed and all objects versions incremented
-    let result = charge_gas_for_object_read(temporary_store, &mut gas_status);
+    let result = gas_charger.charge_input_objects(temporary_store);
     let mut result = result.and_then(|()| {
         let mut execution_result = if deny_cert {
             Err(ExecutionError::new(
@@ -261,10 +236,9 @@ fn execute_transaction<Mode: ExecutionMode>(
             execution_loop::<Mode>(
                 temporary_store,
                 transaction_kind,
-                gas_object_ref.0,
                 tx_ctx,
                 move_vm,
-                &mut gas_status,
+                gas_charger,
                 protocol_config,
                 metrics.clone(),
             )
@@ -276,7 +250,7 @@ fn execute_transaction<Mode: ExecutionMode>(
         // For metered transactions, there is not soft limit.
         // For system transactions, we allow a soft limit with alerting, and a hard limit where we terminate
         match check_limit_by_meter!(
-            !gas_status.is_unmetered(),
+            !gas_charger.is_unmetered(),
             effects_estimated_size,
             protocol_config.max_serialized_tx_effects_size_bytes(),
             protocol_config.max_serialized_tx_effects_size_bytes_system_tx(),
@@ -309,7 +283,7 @@ fn execute_transaction<Mode: ExecutionMode>(
                 let written_objects_size = temporary_store.written_objects_size();
 
                 match check_limit_by_meter!(
-                    !gas_status.is_unmetered(),
+                    !gas_charger.is_unmetered(),
                     written_objects_size,
                     normal_lim,
                     system_lim,
@@ -339,73 +313,64 @@ fn execute_transaction<Mode: ExecutionMode>(
         execution_result
     });
 
-    if protocol_config.gas_model_version() > 1 {
-        // We always go through the gas charging process, but for system transaction, we don't pass
-        // the gas object ID since it's not a valid object.
-        // TODO: Ideally we should make gas object ref None in the first place.
-        let gas_object_id = if gas_status.is_unmetered() {
-            None
-        } else {
-            Some(gas_object_ref.0)
+    let cost_summary = gas_charger.charge_gas(temporary_store, &mut result);
+    // === begin SUI conservation checks ===
+    // For advance epoch transaction, we need to provide epoch rewards and rebates as extra
+    // information provided to check_sui_conserved, because we mint rewards, and burn
+    // the rebates. We also need to pass in the unmetered_storage_rebate because storage
+    // rebate is not reflected in the storage_rebate of gas summary. This is a bit confusing.
+    // We could probably clean up the code a bit.
+    // Put all the storage rebate accumulated in the system transaction
+    // to the 0x5 object so that it's not lost.
+    temporary_store.conserve_unmetered_storage_rebate(gas_charger.unmetered_storage_rebate());
+    if !is_genesis_tx && !Mode::allow_arbitrary_values() {
+        // ensure that this transaction did not create or destroy SUI, try to recover if the check fails
+        let conservation_result = {
+            let mut layout_resolver = TypeLayoutResolver::new(move_vm, Box::new(&*temporary_store));
+            temporary_store.check_sui_conserved(
+                &cost_summary,
+                advance_epoch_gas_summary,
+                &mut layout_resolver,
+                enable_expensive_checks,
+            )
         };
-        let cost_summary =
-            temporary_store.charge_gas(gas_object_id, &mut gas_status, &mut result, gas);
-        // === begin SUI conservation checks ===
-        // For advance epoch transaction, we need to provide epoch rewards and rebates as extra
-        // information provided to check_sui_conserved, because we mint rewards, and burn
-        // the rebates. We also need to pass in the unmetered_storage_rebate because storage
-        // rebate is not reflected in the storage_rebate of gas summary. This is a bit confusing.
-        // We could probably clean up the code a bit.
-        // Put all the storage rebate accumulated in the system transaction
-        // to the 0x5 object so that it's not lost.
-        temporary_store.conserve_unmetered_storage_rebate(gas_status.unmetered_storage_rebate());
-        if !is_genesis_tx && !Mode::allow_arbitrary_values() {
-            // ensure that this transaction did not create or destroy SUI, try to recover if the check fails
-            let conservation_result = {
-                let mut layout_resolver = TypeLayoutResolver::new(move_vm, Box::new(&*temporary_store));
-                temporary_store.check_sui_conserved(advance_epoch_gas_summary, &mut layout_resolver, enable_expensive_checks)
-            };
-            if let Err(conservation_err) = conservation_result {
-                // conservation violated. try to avoid panic by dumping all writes, charging for gas, re-checking
-                // conservation, and surfacing an aborted transaction with an invariant violation if all of that works
-                result = Err(conservation_err);
-                temporary_store.reset(gas, &mut gas_status);
-                temporary_store.charge_gas(gas_object_id, &mut gas_status, &mut result, gas);
-                // check conservation once more more
-                let mut layout_resolver = TypeLayoutResolver::new(move_vm, Box::new(&*temporary_store));
-                if let Err(recovery_err) = temporary_store.check_sui_conserved(advance_epoch_gas_summary, &mut layout_resolver, enable_expensive_checks) {
-                    // if we still fail, it's a problem with gas
-                    // charging that happens even in the "aborted" case--no other option but panic.
-                    // we will create or destroy SUI otherwise
-                    panic!(
-                        "SUI conservation fail in tx block {}: {}\nGas status is {}\nTx was ",
-                        tx_ctx.digest(),
-                        recovery_err,
-                        gas_status.summary()
-                    )
-                }
+        if let Err(conservation_err) = conservation_result {
+            // conservation violated. try to avoid panic by dumping all writes, charging for gas, re-checking
+            // conservation, and surfacing an aborted transaction with an invariant violation if all of that works
+            result = Err(conservation_err);
+            gas_charger.reset(temporary_store);
+            gas_charger.charge_gas(temporary_store, &mut result);
+            // check conservation once more more
+            let mut layout_resolver = TypeLayoutResolver::new(move_vm, Box::new(&*temporary_store));
+            if let Err(recovery_err) = temporary_store.check_sui_conserved(
+                &cost_summary,
+                advance_epoch_gas_summary,
+                &mut layout_resolver,
+                enable_expensive_checks,
+            ) {
+                // if we still fail, it's a problem with gas
+                // charging that happens even in the "aborted" case--no other option but panic.
+                // we will create or destroy SUI otherwise
+                panic!(
+                    "SUI conservation fail in tx block {}: {}\nGas status is {}\nTx was ",
+                    tx_ctx.digest(),
+                    recovery_err,
+                    gas_charger.summary()
+                )
             }
-        } // else, we're in the genesis transaction which mints the SUI supply, and hence does not satisfy SUI conservation, or
-          // we're in the non-production dev inspect mode which allows us to violate conservation
-          // === end SUI conservation checks ===
-        (cost_summary, result)
-    } else {
-        // legacy code before gas v2, leave it alone
-        if !gas_status.is_unmetered() {
-            temporary_store.charge_gas_legacy(gas_object_ref.0, &mut gas_status, &mut result, gas);
         }
-        let cost_summary = gas_status.summary();
-        (cost_summary, result)
-    }
+    } // else, we're in the genesis transaction which mints the SUI supply, and hence does not satisfy SUI conservation, or
+      // we're in the non-production dev inspect mode which allows us to violate conservation
+      // === end SUI conservation checks ===
+    (cost_summary, result)
 }
 
 fn execution_loop<Mode: ExecutionMode>(
     temporary_store: &mut TemporaryStore<'_>,
     transaction_kind: TransactionKind,
-    gas_object_id: ObjectID,
     tx_ctx: &mut TxContext,
     move_vm: &Arc<MoveVM>,
-    gas_status: &mut SuiGasStatus,
+    gas_charger: &mut GasCharger,
     protocol_config: &ProtocolConfig,
     metrics: Arc<LimitsMetrics>,
 ) -> Result<Mode::ExecutionResults, ExecutionError> {
@@ -416,7 +381,7 @@ fn execution_loop<Mode: ExecutionMode>(
                 temporary_store,
                 tx_ctx,
                 move_vm,
-                gas_status,
+                gas_charger,
                 protocol_config,
                 metrics,
             )?;
@@ -448,7 +413,7 @@ fn execution_loop<Mode: ExecutionMode>(
                 temporary_store,
                 tx_ctx,
                 move_vm,
-                gas_status,
+                gas_charger,
                 protocol_config,
                 metrics,
             )
@@ -462,8 +427,7 @@ fn execution_loop<Mode: ExecutionMode>(
                 move_vm,
                 temporary_store,
                 tx_ctx,
-                gas_status,
-                Some(gas_object_id),
+                gas_charger,
                 pt,
             )
         }
@@ -610,7 +574,7 @@ fn advance_epoch(
     temporary_store: &mut TemporaryStore<'_>,
     tx_ctx: &mut TxContext,
     move_vm: &Arc<MoveVM>,
-    gas_status: &mut SuiGasStatus,
+    gas_charger: &mut GasCharger,
     protocol_config: &ProtocolConfig,
     metrics: Arc<LimitsMetrics>,
 ) -> Result<(), ExecutionError> {
@@ -632,8 +596,7 @@ fn advance_epoch(
         move_vm,
         temporary_store,
         tx_ctx,
-        gas_status,
-        None,
+        gas_charger,
         advance_epoch_pt,
     );
 
@@ -649,7 +612,7 @@ fn advance_epoch(
         );
         temporary_store.drop_writes();
         // Must reset the storage rebate since we are re-executing.
-        gas_status.reset_storage_cost_and_rebate();
+        gas_charger.reset_storage_cost_and_rebate();
 
         if protocol_config.get_advance_epoch_start_time_in_safe_mode() {
             temporary_store.advance_epoch_safe_mode(&params, protocol_config);
@@ -662,8 +625,7 @@ fn advance_epoch(
                 move_vm,
                 temporary_store,
                 tx_ctx,
-                gas_status,
-                None,
+                gas_charger,
                 advance_epoch_safe_mode_pt,
             )
             .expect("Advance epoch with safe mode must succeed");
@@ -700,8 +662,7 @@ fn advance_epoch(
                 move_vm,
                 temporary_store,
                 tx_ctx,
-                gas_status,
-                None,
+                gas_charger,
                 publish_pt,
             )
             .expect("System Package Publish must succeed");
@@ -743,7 +704,7 @@ fn setup_consensus_commit(
     temporary_store: &mut TemporaryStore<'_>,
     tx_ctx: &mut TxContext,
     move_vm: &Arc<MoveVM>,
-    gas_status: &mut SuiGasStatus,
+    gas_charger: &mut GasCharger,
     protocol_config: &ProtocolConfig,
     metrics: Arc<LimitsMetrics>,
 ) -> Result<(), ExecutionError> {
@@ -771,8 +732,7 @@ fn setup_consensus_commit(
         move_vm,
         temporary_store,
         tx_ctx,
-        gas_status,
-        None,
+        gas_charger,
         pt,
     )
 }

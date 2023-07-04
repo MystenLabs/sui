@@ -82,7 +82,7 @@ use sui_types::effects::{
 use sui_types::error::{ExecutionError, UserInputError};
 use sui_types::event::{Event, EventID};
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
-use sui_types::gas::{GasCostSummary, SuiGasStatus};
+use sui_types::gas::{GasCharger, GasCostSummary, SuiGasStatus};
 use sui_types::message_envelope::Message;
 use sui_types::messages_checkpoint::{
     CheckpointCommitment, CheckpointContents, CheckpointContentsDigest, CheckpointDigest,
@@ -1166,20 +1166,22 @@ impl AuthorityState {
 
         let owned_object_refs = input_objects.filter_owned_objects();
         self.check_owned_locks(&owned_object_refs).await?;
-
+        let tx_digest = *certificate.digest();
+        let protocol_config = epoch_store.protocol_config();
         let shared_object_refs = input_objects.filter_shared_objects();
         let transaction_dependencies = input_objects.transaction_dependencies();
         let temporary_store = TemporaryStore::new(
             self.database.clone(),
             input_objects,
-            *certificate.digest(),
-            epoch_store.protocol_config(),
+            tx_digest,
+            protocol_config,
         );
         let transaction_data = &certificate.data().intent_message().value;
         let (kind, signer, gas) = transaction_data.execution_parts();
+        let mut gas_charger = GasCharger::new(tx_digest, gas, gas_status, protocol_config);
         let (inner_temp_store, effects, execution_error_opt) =
             epoch_store.executor().execute_transaction_to_effects(
-                epoch_store.protocol_config(),
+                protocol_config,
                 self.metrics.limits_metrics.clone(),
                 // TODO: would be nice to pass the whole NodeConfig here, but it creates a
                 // cyclic dependency w/ sui-adapter
@@ -1193,11 +1195,10 @@ impl AuthorityState {
                     .epoch_start_timestamp(),
                 temporary_store,
                 shared_object_refs,
-                gas_status,
-                &gas,
+                &mut gas_charger,
                 kind,
                 signer,
-                *certificate.digest(),
+                tx_digest,
                 transaction_dependencies,
             );
 
@@ -1274,29 +1275,27 @@ impl AuthorityState {
 
         let shared_object_refs = input_objects.filter_shared_objects();
 
+        let protocol_config = epoch_store.protocol_config();
         let transaction_dependencies = input_objects.transaction_dependencies();
         let temporary_store = TemporaryStore::new_for_mock_transaction(
             self.database.clone(),
             input_objects,
             transaction_digest,
-            epoch_store.protocol_config(),
+            protocol_config,
         );
         let (kind, signer, _) = transaction.execution_parts();
 
         let silent = true;
         // don't bother with paranoid checks in dry run
         let enable_move_vm_paranoid_checks = false;
-        let executor = sui_execution::executor(
-            epoch_store.protocol_config(),
-            enable_move_vm_paranoid_checks,
-            silent,
-        )
-        .expect("Creating an executor should not fail here");
+        let executor =
+            sui_execution::executor(protocol_config, enable_move_vm_paranoid_checks, silent)
+                .expect("Creating an executor should not fail here");
 
         let expensive_checks = false;
         let (inner_temp_store, effects, _execution_error) = executor
             .execute_transaction_to_effects(
-                epoch_store.protocol_config(),
+                protocol_config,
                 self.metrics.limits_metrics.clone(),
                 expensive_checks,
                 self.certificate_deny_config.certificate_deny_set(),
@@ -1307,8 +1306,12 @@ impl AuthorityState {
                     .epoch_start_timestamp(),
                 temporary_store,
                 shared_object_refs,
-                gas_status,
-                &gas_object_refs,
+                &mut GasCharger::new(
+                    transaction_digest,
+                    gas_object_refs,
+                    gas_status,
+                    protocol_config,
+                ),
                 kind,
                 signer,
                 transaction_digest,
@@ -1364,35 +1367,23 @@ impl AuthorityState {
             });
         }
 
-        transaction_kind.check_version_supported(epoch_store.protocol_config())?;
-
-        let reference_gas_price = epoch_store.reference_gas_price();
         let protocol_config = epoch_store.protocol_config();
+        transaction_kind.check_version_supported(protocol_config)?;
+
+        let max_tx_gas = protocol_config.max_tx_gas();
+        let reference_gas_price = epoch_store.reference_gas_price();
         let gas_price = match gas_price {
             None => reference_gas_price,
             Some(gas) => {
                 if gas == 0 {
-                    epoch_store.reference_gas_price()
+                    reference_gas_price
                 } else {
                     gas
                 }
             }
         };
-        if gas_price < reference_gas_price {
-            return Err(UserInputError::GasPriceUnderRGP {
-                gas_price,
-                reference_gas_price,
-            }
-            .into());
-        }
-        if protocol_config.gas_model_version() >= 4 && gas_price >= protocol_config.max_gas_price()
-        {
-            return Err(UserInputError::GasPriceTooHigh {
-                max_gas_price: protocol_config.max_gas_price(),
-            }
-            .into());
-        }
-        let max_tx_gas = protocol_config.max_tx_gas();
+        let gas_status =
+            SuiGasStatus::new(max_tx_gas, gas_price, reference_gas_price, protocol_config)?;
 
         let gas_object_id = ObjectID::random();
         // give the gas object 2x the max gas to have coin balance to play with during execution
@@ -1427,10 +1418,9 @@ impl AuthorityState {
             transaction_digest,
             protocol_config,
         );
-        let gas_status = SuiGasStatus::new_with_budget(max_tx_gas, gas_price, protocol_config);
         let silent = true;
         let executor = sui_execution::executor(
-            epoch_store.protocol_config(),
+            protocol_config,
             self.expensive_safety_check_config
                 .enable_move_vm_paranoid_checks(),
             silent,
@@ -1449,8 +1439,12 @@ impl AuthorityState {
                 .epoch_start_timestamp(),
             temporary_store,
             shared_object_refs,
-            gas_status,
-            &[gas_object_ref],
+            &mut GasCharger::new(
+                transaction_digest,
+                vec![gas_object_ref],
+                gas_status,
+                protocol_config,
+            ),
             transaction_kind,
             sender,
             transaction_digest,
