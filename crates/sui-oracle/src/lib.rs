@@ -4,11 +4,11 @@
 use chrono::{DateTime, Utc};
 use config::{DownloadFeedConfigs, UploadFeedConfig, UploadParameters};
 use metrics::OracleMetrics;
-use move_core_types::language_storage::TypeTag;
 use mysten_metrics::monitored_scope;
 use once_cell::sync::OnceCell;
 use prometheus::Registry;
 use std::ops::Add;
+use std::str::FromStr;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 use std::{collections::HashMap, time::Instant};
@@ -22,6 +22,7 @@ use sui_sdk::rpc_types::SuiObjectResponse;
 use sui_sdk::SuiClient;
 use sui_types::error::UserInputError;
 use sui_types::object::{Object, Owner};
+use sui_types::parse_sui_type_tag;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::quorum_driver_types::NON_RECOVERABLE_ERROR_MSG;
 use sui_types::transaction::{Argument, VerifiedTransaction};
@@ -418,6 +419,7 @@ impl OnChainDataUploader {
         let mut builder = ProgrammableTransactionBuilder::new();
         let mut is_first = true;
         for data_point in &data_points {
+            let package_id = data_point.upload_parameters.write_package_id;
             let feed_name = &data_point.feed_name;
             let oracle_obj_arg = *self
                 .oracle_object_args
@@ -437,27 +439,39 @@ impl OnChainDataUploader {
             } else {
                 vec![Argument::Input(0), Argument::Input(1)]
             };
+
+            let decimal = builder
+                .input(CallArg::Pure(bcs::to_bytes(&DECIMAL).unwrap()))
+                .unwrap();
+            let value = builder
+                .input(CallArg::Pure(bcs::to_bytes(&data_point.value).unwrap()))
+                .unwrap();
+
             arguments.extend_from_slice(&[
                 builder
                     .input(CallArg::Pure(bcs::to_bytes(&feed_name)?))
                     .unwrap(),
-                builder
-                    .input(CallArg::Pure(bcs::to_bytes(&data_point.value)?))
-                    .unwrap(),
-                builder
-                    .input(CallArg::Pure(bcs::to_bytes(&DECIMAL)?))
-                    .unwrap(),
+                builder.programmable_move_call(
+                    package_id,
+                    Identifier::from_str("decimal_value").unwrap(),
+                    Identifier::from_str("new").unwrap(),
+                    vec![],
+                    vec![value, decimal],
+                ),
                 builder
                     .input(CallArg::Pure(bcs::to_bytes(&format!("{}", data_point_ts))?))
                     .unwrap(),
             ]);
 
             builder.command(Command::move_call(
-                data_point.upload_parameters.write_package_id,
+                package_id,
                 Identifier::new(data_point.upload_parameters.write_module_name.clone()).unwrap(),
                 Identifier::new(data_point.upload_parameters.write_function_name.clone()).unwrap(),
                 // TODO: allow more generic data types
-                vec![TypeTag::U64],
+                vec![
+                    parse_sui_type_tag(&format!("{package_id}::decimal_value::DecimalValue"))
+                        .unwrap(),
+                ],
                 arguments,
             ));
             is_first = false;
