@@ -46,9 +46,7 @@ pub async fn verify_package(
         print_diags_to_stderr: false,
         lint: false,
     };
-    let compiled_package = build_config
-        .build(package_path.as_ref().to_path_buf())
-        .unwrap();
+    let compiled_package = build_config.build(package_path.as_ref().to_path_buf())?;
 
     BytecodeSourceVerifier::new(client.read_api())
         .verify_package(
