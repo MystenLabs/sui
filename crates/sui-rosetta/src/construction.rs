@@ -215,7 +215,9 @@ pub async fn metadata(
         .governance_api()
         .get_reference_gas_price()
         .await?;
-    gas_price += 100; // to make sure it works over epoch changes
+    // make sure it works over epoch changes
+    gas_price += 100;
+
     // Get amount, objects, for the operation
     let (total_required_amount, objects) = match &option.internal_operation {
         InternalOperation::PaySui { amounts, .. } => {
