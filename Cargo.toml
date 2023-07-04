@@ -81,7 +81,6 @@ members = [
     "crates/sui-config",
     "crates/sui-core",
     "crates/sui-cost",
-    "crates/sui-cost-tables",
     "crates/sui-e2e-tests",
     "crates/sui-enum-compat-util",
     "crates/sui-faucet",
@@ -391,7 +390,7 @@ move-disassembler = { path = "external-crates/move/tools/move-disassembler" }
 move-package = { path = "external-crates/move/tools/move-package" }
 move-unit-test = { path = "external-crates/move/tools/move-unit-test" }
 move-vm-config = { path = "external-crates/move/move-vm/config" }
-move-vm-test-utils = { path = "external-crates/move/move-vm/test-utils" }
+move-vm-test-utils = { path = "external-crates/move/move-vm/test-utils", features = ["tiered-gas"] }
 move-vm-types = { path = "external-crates/move/move-vm/types" }
 move-vm-profiler = { path = "external-crates/move/move-vm/profiler" }
 move-command-line-common = { path = "external-crates/move/move-command-line-common" }
@@ -429,7 +428,6 @@ sui-cluster-test = { path = "crates/sui-cluster-test" }
 sui-config = { path = "crates/sui-config" }
 sui-core = { path = "crates/sui-core" }
 sui-cost = { path = "crates/sui-cost" }
-sui-cost-tables = { path = "crates/sui-cost-tables" }
 sui-e2e-tests = { path = "crates/sui-e2e-tests" }
 sui-enum-compat-util = { path = "crates/sui-enum-compat-util" }
 sui-faucet = { path = "crates/sui-faucet" }

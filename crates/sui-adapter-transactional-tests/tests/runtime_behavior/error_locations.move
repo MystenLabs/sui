@@ -31,7 +31,7 @@ module test::m {
 
 //# run test::m::abort_
 
-//# run test::m::loop_ --gas-budget 100000
+//# run test::m::loop_ --gas-budget 1000000
 
 //# run test::m::math
 

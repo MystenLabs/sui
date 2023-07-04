@@ -9610,21 +9610,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "sui-cost-tables"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "move-binary-format",
- "move-core-types",
- "move-vm-profiler",
- "move-vm-test-utils",
- "move-vm-types",
- "once_cell",
- "serde 1.0.152",
- "workspace-hack",
-]
-
-[[package]]
 name = "sui-e2e-tests"
 version = "0.1.0"
 dependencies = [
@@ -10085,7 +10070,6 @@ dependencies = [
  "serde_json",
  "serde_yaml 0.8.26",
  "sui-core",
- "sui-cost-tables",
  "sui-macros",
  "sui-move-build",
  "sui-move-natives-latest",
@@ -10977,6 +10961,7 @@ dependencies = [
  "move-disassembler",
  "move-ir-types",
  "move-vm-profiler",
+ "move-vm-test-utils",
  "move-vm-types",
  "mysten-metrics",
  "mysten-network",
@@ -11000,7 +10985,6 @@ dependencies = [
  "static_assertions",
  "strum",
  "strum_macros",
- "sui-cost-tables",
  "sui-enum-compat-util",
  "sui-macros",
  "sui-protocol-config",
