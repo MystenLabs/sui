@@ -223,26 +223,26 @@ impl LeaderSchedule {
 
         // TODO: split the leader election logic for testing from the production code.
         cfg_if::cfg_if! {
-        if #[cfg(test)] {
-            // We apply round robin in leader election. Since we expect round to be an even number,
-            // 2, 4, 6, 8... it can't work well for leader election as we'll omit leaders. Thus
-            // we can always divide by 2 to get a monotonically incremented sequence,
-            // 2/2 = 1, 4/2 = 2, 6/2 = 3, 8/2 = 4  etc, and then do minus 1 so we can always
-            // start with base zero 0.
-            let next_leader = (round/2 - 1) as usize % self.committee.size();
-            let authorities = self.committee.authorities().collect::<Vec<_>>();
+            if #[cfg(test)] {
+                // We apply round robin in leader election. Since we expect round to be an even number,
+                // 2, 4, 6, 8... it can't work well for leader election as we'll omit leaders. Thus
+                // we can always divide by 2 to get a monotonically incremented sequence,
+                // 2/2 = 1, 4/2 = 2, 6/2 = 3, 8/2 = 4  etc, and then do minus 1 so we can always
+                // start with base zero 0.
+                let next_leader = (round/2 - 1) as usize % self.committee.size();
+                let authorities = self.committee.authorities().collect::<Vec<_>>();
 
-            let leader: Authority = (*authorities.get(next_leader).unwrap()).clone();
-            let table = self.leader_swap_table.read();
+                let leader: Authority = (*authorities.get(next_leader).unwrap()).clone();
+                let table = self.leader_swap_table.read();
 
-            table.swap(&leader.id(), round).unwrap_or(leader)
-        } else {
-            // Elect the leader in a stake-weighted choice seeded by the round
-            let leader = self.committee.leader(round);
+                table.swap(&leader.id(), round).unwrap_or(leader)
+            } else {
+                // Elect the leader in a stake-weighted choice seeded by the round
+                let leader = self.committee.leader(round);
 
-            let table = self.leader_swap_table.read();
-            table.swap(&leader.id(), round).unwrap_or(leader)
-        }
+                let table = self.leader_swap_table.read();
+                table.swap(&leader.id(), round).unwrap_or(leader)
+            }
         }
     }
 
