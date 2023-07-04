@@ -33,6 +33,9 @@ sui-source-validation = { path = "../sui-source-validation" }
 
 axum.workspace = true
 move-package.workspace = true
+move-compiler.workspace = true
+move-core-types.workspace = true
+move-symbol-pool.workspace = true
 telemetry-subscribers.workspace = true
 workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
 

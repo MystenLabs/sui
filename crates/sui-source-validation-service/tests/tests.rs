@@ -3,19 +3,16 @@
 
 use expect_test::expect;
 use reqwest::Client;
-use serde::Deserialize;
-use std::path::PathBuf;
+use std::{collections::BTreeMap, path::PathBuf};
+
+use move_core_types::account_address::AccountAddress;
+use move_symbol_pool::Symbol;
 use sui_source_validation_service::{
-    initialize, serve, verify_packages, CloneCommand, Config, Packages,
+    initialize, serve, verify_packages, AppState, CloneCommand, Config, Packages, SourceResponse,
 };
 use test_cluster::TestClusterBuilder;
 
 const TEST_FIXTURES_DIR: &str = "tests/fixture";
-
-#[derive(Deserialize)]
-struct Response {
-    source: String,
-}
 
 #[tokio::test]
 async fn test_verify_packages() -> anyhow::Result<()> {
@@ -61,20 +58,53 @@ async fn test_api_route() -> anyhow::Result<()> {
     let context = &mut cluster.wallet;
     let config = Config { packages: vec![] };
     let tmp_dir = tempfile::tempdir()?;
-
     initialize(context, &config, tmp_dir.path()).await?;
-    tokio::spawn(serve().expect("Cannot start service."));
 
+    // set up sample lookup to serve
+    let fixtures = tempfile::tempdir()?;
+    fs_extra::dir::copy(
+        PathBuf::from(TEST_FIXTURES_DIR).join("sui"),
+        fixtures.path(),
+        &fs_extra::dir::CopyOptions::default(),
+    )?;
+
+    let address = "0x2";
+    let module = "address";
+    let source_path = fixtures
+        .into_path()
+        .join("sui/move-stdlib/sources/address.move");
+
+    let mut sources = BTreeMap::new();
+    sources.insert(
+        (
+            AccountAddress::from_hex_literal(address).unwrap(),
+            Symbol::from(module),
+        ),
+        source_path,
+    );
+    tokio::spawn(serve(AppState { sources }).expect("Cannot start service."));
+
+    // check that serve returns expected sample code
     let client = Client::new();
     let json = client
-        .get("http://0.0.0.0:8000/api")
+        .get(format!(
+            "http://0.0.0.0:8000/api?address={address}&module={module}"
+        ))
         .send()
         .await
         .expect("Request failed.")
-        .json::<Response>()
+        .json::<SourceResponse>()
         .await?;
 
-    let expected = expect!["code"];
+    let expected = expect![
+        r#"
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+/// Dummy module for testing
+module std::address {}
+"#
+    ];
     expected.assert_eq(&json.source);
     Ok(())
 }
