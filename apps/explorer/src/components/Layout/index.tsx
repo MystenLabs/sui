@@ -5,10 +5,12 @@ import { RpcClientContext, useAppsBackend, useCookieConsentBanner } from '@myste
 import { WalletKitProvider } from '@mysten/wallet-kit';
 import { useQuery } from '@tanstack/react-query';
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
-import { Fragment, useMemo } from 'react';
+import clsx from 'clsx';
+import { Fragment, useMemo, useState } from 'react';
 import { resolveValue, Toaster, type ToastType } from 'react-hot-toast';
 import { Outlet, ScrollRestoration } from 'react-router-dom';
 
+import { GradientContainerContext } from './GradientContainer';
 import { useInitialPageView } from '../../hooks/useInitialPageView';
 import Footer from '../footer/Footer';
 import Header from '../header/Header';
@@ -37,6 +39,7 @@ export function Layout() {
 		retry: false,
 		enabled: network === Network.MAINNET,
 	});
+	const [isGradientVisible, setIsGradientVisible] = useState(false);
 
 	useCookieConsentBanner(persistableStorage, {
 		cookie_name: 'sui_explorer_cookie_consent',
@@ -58,21 +61,29 @@ export function Layout() {
 			>
 				<RpcClientContext.Provider value={jsonRpcProvider}>
 					<NetworkContext.Provider value={[network, setNetwork]}>
-						<div className="w-full">
+						<div className={clsx('w-full', isGradientVisible && 'bg-[#D2EBFA]')}>
 							<Header />
-							<main className="relative z-10 min-h-screen bg-offwhite">
-								<section className="mx-auto max-w-[1440px] px-5 py-10 lg:px-10 2xl:px-0">
-									{network === Network.MAINNET && data?.degraded && (
-										<div className="pb-2.5">
-											<Banner variant="warning" border fullWidth>
-												We&rsquo;re sorry that the explorer is running slower than usual.
-												We&rsquo;re working to fix the issue and appreciate your patience.
-											</Banner>
-										</div>
-									)}
-									<Outlet />
-								</section>
-							</main>
+							<GradientContainerContext.Provider value={{ setVisible: setIsGradientVisible }}>
+								<main className="relative z-10 min-h-screen bg-offwhite">
+									<section className={clsx('bg-main', isGradientVisible ? 'block' : 'hidden')}>
+										<div
+											className="mx-auto max-w-[1440px] px-5 py-10 lg:px-10 2xl:px-0"
+											id="gradient-content-container"
+										/>
+									</section>
+									<section className="mx-auto max-w-[1440px] px-5 py-10 lg:px-10 2xl:px-0">
+										{network === Network.MAINNET && data?.degraded && (
+											<div className="pb-2.5">
+												<Banner variant="warning" border fullWidth>
+													We&rsquo;re sorry that the explorer is running slower than usual.
+													We&rsquo;re working to fix the issue and appreciate your patience.
+												</Banner>
+											</div>
+										)}
+										<Outlet />
+									</section>
+								</main>
+							</GradientContainerContext.Provider>
 							<Footer />
 						</div>
 

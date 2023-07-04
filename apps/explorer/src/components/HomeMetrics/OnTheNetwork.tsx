@@ -1,85 +1,94 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useGetTotalTransactionBlocks } from '@mysten/core';
+import { useGetReferenceGasPrice } from '@mysten/core';
+import { Sui } from '@mysten/icons';
 
-import { FormattedStatsAmount } from './FormattedStatsAmount';
-import { useGetAddressMetrics } from '~/hooks/useGetAddressMetrics';
+import { FormattedStatsAmount, StatsWrapper } from './FormattedStatsAmount';
+import { useGasPriceFormat } from '../GasPriceCard/utils';
+import { useNetwork } from '~/context';
 import { useGetNetworkMetrics } from '~/hooks/useGetNetworkMetrics';
+import { useSuiCoinData } from '~/hooks/useSuiCoinData';
 import { Card } from '~/ui/Card';
+import { Heading } from '~/ui/Heading';
 import { Text } from '~/ui/Text';
+import { Network } from '~/utils/api/DefaultRpcClient';
 
 export function OnTheNetwork() {
 	const { data: networkMetrics } = useGetNetworkMetrics();
-	const { data: transactionCount } = useGetTotalTransactionBlocks();
-	const { data: addressMetrics } = useGetAddressMetrics();
+	const { data: referenceGasPrice } = useGetReferenceGasPrice();
+	const gasPriceFormatted = useGasPriceFormat(referenceGasPrice || null, 'MIST');
+	const { data: tokenData } = useSuiCoinData();
+	const { currentPrice } = tokenData || {};
+	const formattedPrice = currentPrice
+		? currentPrice.toLocaleString('en', {
+				style: 'currency',
+				currency: 'USD',
+		  })
+		: '--';
+	const [network] = useNetwork();
+	const isSuiTokenCardEnabled = network === Network.MAINNET;
 
 	return (
-		<Card bg="lightBlue" spacing="lg" height="full">
-			<div className="flex flex-col gap-5 md:flex-row">
-				<div className="flex flex-1 flex-col gap-5">
-					<div className="flex items-center gap-2">
-						<Text color="steel-darker" variant="caption/semibold">
-							On the Network
-						</Text>
-						<hr className="flex-1 border-gray-45" />
-					</div>
-					<div className="flex flex-shrink-0 flex-col gap-2">
-						<FormattedStatsAmount
-							orientation="horizontal"
-							label="Txn Blocks"
-							tooltip="Total transaction blocks counter"
-							amount={transactionCount}
-							size="sm"
-						/>
-						<FormattedStatsAmount
-							orientation="horizontal"
-							label="Objects"
-							tooltip="Total objects counter"
-							amount={networkMetrics?.totalObjects}
-							size="sm"
-						/>
-						<FormattedStatsAmount
-							orientation="horizontal"
-							label="Packages"
-							tooltip="Total packages counter"
-							amount={networkMetrics?.totalPackages}
-							size="sm"
-						/>
-					</div>
+		<Card bg="white" spacing="lg" height="full">
+			<div className="flex flex-col gap-5">
+				<Heading variant="heading4/semibold" color="steel-darker">
+					Network Activity
+				</Heading>
+				<div className="flex gap-2">
+					<FormattedStatsAmount label="TPS now" amount={networkMetrics?.currentTps} size="sm" />
+					<FormattedStatsAmount
+						label="Peak 30d TPS"
+						tooltip="Peak TPS in the past 30 days excluding this epoch"
+						amount={networkMetrics?.tps30Days ? Math.floor(networkMetrics?.tps30Days) : undefined}
+						size="sm"
+					/>
 				</div>
-
-				<div className="flex flex-1 flex-col gap-5">
-					<div className="flex items-center gap-2">
-						<Text color="steel-darker" variant="caption/semibold">
-							Accounts
-						</Text>
-						<hr className="flex-1 border-gray-45" />
-					</div>
-					<div className="flex flex-shrink-0 flex-col gap-2">
-						<FormattedStatsAmount
-							orientation="horizontal"
-							label="Daily Active"
-							tooltip="Total daily active addresses"
-							amount={addressMetrics?.dailyActiveAddresses}
-							size="sm"
-						/>
-						<FormattedStatsAmount
-							orientation="horizontal"
-							label="Total Active"
-							tooltip="Total active addresses"
-							amount={addressMetrics?.cumulativeActiveAddresses}
-							size="sm"
-						/>
-						<FormattedStatsAmount
-							orientation="horizontal"
-							label="Total"
-							tooltip="Addresses that have participated in at least one transaction since network genesis"
-							amount={addressMetrics?.cumulativeAddresses}
-							size="sm"
-						/>
-					</div>
+				<hr className="flex-1 border-hero/10" />
+				<div className="flex flex-1 flex-col gap-2">
+					<StatsWrapper
+						orientation="horizontal"
+						label="Reference Gas Price"
+						tooltip="The reference gas price of the current epoch"
+						postfix="MIST"
+						color="hero-dark"
+						size="sm"
+					>
+						{gasPriceFormatted}
+					</StatsWrapper>
+					<FormattedStatsAmount
+						orientation="horizontal"
+						label="Total Packages"
+						tooltip="Total packages counter"
+						amount={networkMetrics?.totalPackages}
+						size="sm"
+					/>
+					<FormattedStatsAmount
+						orientation="horizontal"
+						label="Objects"
+						tooltip="Total objects counter"
+						amount={networkMetrics?.totalObjects}
+						size="sm"
+					/>
 				</div>
+				{isSuiTokenCardEnabled ? (
+					<>
+						<hr className="flex-1 border-hero/10" />
+						<div className="flex gap-2">
+							<div className="h-5 w-5 rounded-full bg-sui p-1">
+								<Sui className="h-full w-full text-white" />
+							</div>
+							<div className="flex w-full flex-col gap-0.5">
+								<Heading variant="heading4/semibold" color="steel-darker">
+									1 SUI = {formattedPrice}
+								</Heading>
+								<Text variant="subtitleSmallExtra/medium" color="steel">
+									via CoinGecko
+								</Text>
+							</div>
+						</div>
+					</>
+				) : null}
 			</div>
 		</Card>
 	);

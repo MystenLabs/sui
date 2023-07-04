@@ -40,44 +40,24 @@ export function CurrentEpoch() {
 			to={`/epoch/${epoch}`}
 			onClick={() => ampli.clickedCurrentEpochCard({ epoch: Number(epoch) })}
 		>
-			<Card bg="highlight" height="full" spacing="lg">
-				<div className="flex flex-col gap-10">
-					<div className="flex w-full flex-col gap-4">
-						<div className="space-y-4">
-							<div className="flex flex-col gap-2">
-								<Heading color="success-dark" variant="heading4/semibold">
-									Current Epoch
-								</Heading>
-								<Heading color="success-dark" variant="heading3/semibold">
-									{formatAmountParts(epoch)}
-								</Heading>
-							</div>
-
-							{!progress && end ? (
-								<div>
-									<Text variant="pSubtitleSmall/normal" uppercase color="steel-darker">
-										End
-									</Text>
-									<Text variant="pSubtitle/semibold" color="steel-darker">
-										{formatDate(end)}
-									</Text>
-								</div>
-							) : null}
-						</div>
+			<Card bg="white" height="full" spacing="lg">
+				<div className="flex flex-col gap-6">
+					<div className="flex w-full flex-col gap-2">
+						<Heading color="success-dark" variant="heading4/semibold">
+							Epoch {formatAmountParts(epoch)}
+						</Heading>
+						<Text variant="pSubtitle/semibold" color="steel-dark">
+							{!progress && end
+								? `End ${formatDate(end)}`
+								: formattedDateString
+								? `Started ${formattedDateString}`
+								: '--'}
+						</Text>
 						<div className="space-y-1.5">
 							<Heading variant="heading6/medium" color="steel-darker">
 								{label ?? '--'}
 							</Heading>
 							<ProgressBar animate progress={progress || 0} />
-						</div>
-						<div>
-							<Text variant="pSubtitleSmall/semibold" uppercase color="steel-dark">
-								{formattedDateString ? 'Started' : '--'}
-							</Text>
-
-							<Text variant="pSubtitle/semibold" color="steel-dark">
-								{formattedDateString || '--'}
-							</Text>
 						</div>
 					</div>
 					<Checkpoint />
