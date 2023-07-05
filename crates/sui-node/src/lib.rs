@@ -93,6 +93,7 @@ use sui_network::discovery;
 use sui_network::discovery::TrustedPeerChangeEvent;
 use sui_network::state_sync;
 use sui_protocol_config::{ProtocolConfig, SupportedProtocolVersions};
+use sui_snapshot::uploader::StateSnapshotUploader;
 use sui_storage::object_store::{ObjectStoreConfig, ObjectStoreType};
 use sui_storage::{FileCompression, IndexStore, StorageFormat};
 use sui_types::base_types::{AuthorityName, EpochId};
@@ -159,6 +160,8 @@ pub struct SuiNode {
     sim_state: SimState,
 
     _state_archive_handle: Option<broadcast::Sender<()>>,
+
+    _state_snapshot_uploader_handle: Option<oneshot::Sender<()>>,
 }
 
 impl fmt::Debug for SuiNode {
@@ -384,58 +387,20 @@ impl SuiNode {
             epoch_store.epoch_start_state(),
         )
         .expect("Initial trusted peers must be set");
-        let state_archive_handle = if let Some(remote_store_config) =
-            &config.state_archive_write_config.object_store_config
-        {
-            let local_store_config = ObjectStoreConfig {
-                object_store: Some(ObjectStoreType::File),
-                directory: Some(config.archive_path()),
-                ..Default::default()
-            };
-            let archive_writer = ArchiveWriter::new(
-                local_store_config,
-                remote_store_config.clone(),
-                FileCompression::Zstd,
-                StorageFormat::Blob,
-                Duration::from_secs(600),
-                256 * 1024 * 1024,
-                &prometheus_registry,
-            )
-            .await?;
-            Some(archive_writer.start(state_sync_store).await?)
-        } else {
-            None
-        };
-        let db_checkpoint_config = if config.db_checkpoint_config.checkpoint_path.is_none() {
-            DBCheckpointConfig {
-                checkpoint_path: Some(config.db_checkpoint_path()),
-                ..config.db_checkpoint_config.clone()
-            }
-        } else {
-            config.db_checkpoint_config.clone()
-        };
 
-        let db_checkpoint_handle = match db_checkpoint_config
-            .checkpoint_path
-            .as_ref()
-            .zip(db_checkpoint_config.object_store_config.as_ref())
-        {
-            Some((path, object_store_config)) => {
-                let handler = DBCheckpointHandler::new(
-                    path,
-                    object_store_config,
-                    60,
-                    db_checkpoint_config
-                        .prune_and_compact_before_upload
-                        .unwrap_or(true),
-                    config.indirect_objects_threshold,
-                    config.authority_store_pruning_config,
-                    &prometheus_registry,
-                )?;
-                Some(handler.start())
-            }
-            None => None,
-        };
+        // Start archiving local state to remote store
+        let state_archive_handle =
+            Self::start_state_archival(&config, &prometheus_registry, state_sync_store).await?;
+
+        // Start uploading state snapshot to remote store
+        let state_snapshot_handle = Self::start_state_snapshot(&config, &prometheus_registry)?;
+
+        // Start uploading db checkpoints to remote store
+        let (db_checkpoint_config, db_checkpoint_handle) = Self::start_db_checkpoint(
+            &config,
+            &prometheus_registry,
+            state_snapshot_handle.is_some(),
+        )?;
 
         let state = AuthorityState::new(
             config.protocol_public_key(),
@@ -589,6 +554,7 @@ impl SuiNode {
             },
 
             _state_archive_handle: state_archive_handle,
+            _state_snapshot_uploader_handle: state_snapshot_handle,
         };
 
         info!("SuiNode started!");
@@ -654,6 +620,89 @@ impl SuiNode {
     pub async fn close_epoch_for_testing(&self) -> SuiResult {
         let epoch_store = self.state.epoch_store_for_testing();
         self.close_epoch(&epoch_store).await
+    }
+
+    async fn start_state_archival(
+        config: &NodeConfig,
+        prometheus_registry: &Registry,
+        state_sync_store: RocksDbStore,
+    ) -> Result<Option<tokio::sync::broadcast::Sender<()>>> {
+        if let Some(remote_store_config) = &config.state_archive_write_config.object_store_config {
+            let local_store_config = ObjectStoreConfig {
+                object_store: Some(ObjectStoreType::File),
+                directory: Some(config.archive_path()),
+                ..Default::default()
+            };
+            let archive_writer = ArchiveWriter::new(
+                local_store_config,
+                remote_store_config.clone(),
+                FileCompression::Zstd,
+                StorageFormat::Blob,
+                Duration::from_secs(600),
+                256 * 1024 * 1024,
+                prometheus_registry,
+            )
+            .await?;
+            Ok(Some(archive_writer.start(state_sync_store).await?))
+        } else {
+            Ok(None)
+        }
+    }
+
+    fn start_state_snapshot(
+        config: &NodeConfig,
+        prometheus_registry: &Registry,
+    ) -> Result<Option<oneshot::Sender<()>>> {
+        if let Some(remote_store_config) = &config.state_snapshot_write_config.object_store_config {
+            let snapshot_uploader = StateSnapshotUploader::new(
+                &config.db_checkpoint_path(),
+                &config.snapshot_path(),
+                remote_store_config.clone(),
+                60,
+                prometheus_registry,
+            )?;
+            Ok(Some(snapshot_uploader.start()))
+        } else {
+            Ok(None)
+        }
+    }
+
+    fn start_db_checkpoint(
+        config: &NodeConfig,
+        prometheus_registry: &Registry,
+        state_snapshot_enabled: bool,
+    ) -> Result<(DBCheckpointConfig, Option<oneshot::Sender<()>>)> {
+        let db_checkpoint_config = if config.db_checkpoint_config.checkpoint_path.is_none() {
+            DBCheckpointConfig {
+                checkpoint_path: Some(config.db_checkpoint_path()),
+                ..config.db_checkpoint_config.clone()
+            }
+        } else {
+            config.db_checkpoint_config.clone()
+        };
+
+        match db_checkpoint_config
+            .checkpoint_path
+            .as_ref()
+            .zip(db_checkpoint_config.object_store_config.as_ref())
+        {
+            Some((path, object_store_config)) => {
+                let handler = DBCheckpointHandler::new(
+                    path,
+                    object_store_config,
+                    60,
+                    db_checkpoint_config
+                        .prune_and_compact_before_upload
+                        .unwrap_or(true),
+                    config.indirect_objects_threshold,
+                    config.authority_store_pruning_config,
+                    prometheus_registry,
+                    state_snapshot_enabled,
+                )?;
+                Ok((db_checkpoint_config, Some(handler.start())))
+            }
+            None => Ok((db_checkpoint_config, None)),
+        }
     }
 
     fn create_p2p_network(
