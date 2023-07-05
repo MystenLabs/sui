@@ -184,9 +184,9 @@ impl Cluster for LocalNewCluster {
 
         // Check if we already have a config directory that is passed
         if let Some(config_dir) = options.config_dir.clone() {
+            assert!(options.epoch_duration_ms.is_none());
             // Load the config of the Sui authority.
             let network_config_path = config_dir.join(SUI_NETWORK_CONFIG);
-
             let network_config: NetworkConfig = PersistedConfig::read(&network_config_path)
                 .map_err(|err| {
                     err.context(format!(

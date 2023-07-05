@@ -81,6 +81,13 @@ async fn main() -> Result<()> {
         use_indexer_experimental_methods,
     } = args;
 
+    // We don't pass epoch duration if we have a genesis config.
+    let epoch_duration_ms = if config_dir.is_some() {
+        None
+    } else {
+        Some(epoch_duration_ms)
+    };
+
     let cluster = LocalNewCluster::start(&ClusterTestOpt {
         env: Env::NewLocal,
         fullnode_address: Some(format!("127.0.0.1:{}", fullnode_rpc_port)),
@@ -89,7 +96,7 @@ async fn main() -> Result<()> {
             "postgres://postgres@{pg_host}:{pg_port}/sui_indexer"
         )),
         faucet_address: None,
-        epoch_duration_ms: Some(epoch_duration_ms),
+        epoch_duration_ms,
         use_indexer_experimental_methods,
         config_dir,
     })
