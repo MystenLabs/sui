@@ -199,7 +199,7 @@ impl SequenceWorkerState {
 
         // Download txs
         if let Some(watermark) = download {
-            println!("Downloading up to {}", watermark);
+            println!("SW downloading up to {}", watermark);
             self.handle_download(watermark, &config).await;
         }
 
@@ -223,7 +223,7 @@ impl SequenceWorkerState {
                     .expect("Checkpoint is None");
 
                 if checkpoint_seq % 10000 == 0 {
-                    println!("Sending checkpoint {}", checkpoint_seq);
+                    println!("SW sending checkpoint {}", checkpoint_seq);
                 }
 
                 let (_seq, summary) = checkpoint_summary.into_summary_and_sequence();
@@ -264,7 +264,7 @@ impl SequenceWorkerState {
                     if let TransactionKind::ChangeEpoch(_) = tx.data().transaction_data().kind() {
                         // wait for epoch end message from execution worker
                         println!(
-                            "Waiting for epoch end message. Checkpoint_seq: {}",
+                            "SW waiting for epoch end message. Checkpoint_seq: {}",
                             checkpoint_seq
                         );
 
@@ -283,7 +283,7 @@ impl SequenceWorkerState {
                             .expect("Error loading last checkpoint for current epoch")
                             .expect("Could not load last checkpoint for current epoch");
                         println!(
-                            "Last checkpoint sequence number: {}",
+                            "SW last checkpoint sequence number: {}",
                             last_checkpoint.sequence_number(),
                         );
                         let epoch_start_configuration = EpochStartConfiguration::new(
@@ -298,7 +298,7 @@ impl SequenceWorkerState {
                             self.store.clone(),
                             &config.expensive_safety_check_config,
                         );
-                        println!("New epoch store has epoch {}", self.epoch_store.epoch());
+                        println!("SW new epoch store has epoch {}", self.epoch_store.epoch());
                         let protocol_config = self.epoch_store.protocol_config();
                         let epoch_start_config = self.epoch_store.epoch_start_config();
                         let reference_gas_price = self.epoch_store.reference_gas_price();

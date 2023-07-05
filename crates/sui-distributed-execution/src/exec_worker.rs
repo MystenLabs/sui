@@ -116,6 +116,15 @@ pub struct Transaction {
     pub checkpoint_seq: u64,
 }
 
+impl Transaction {
+    pub fn is_epoch_change(&self) -> bool {
+        if let TransactionKind::ChangeEpoch(_) = self.tx.data().transaction_data().kind() {
+            return true;
+        }
+        return false;
+    }
+}
+
 pub struct TransactionWithResults {
     full_tx: Transaction,
     inner_temp_store: InnerTemporaryStore,  // determined after execution
@@ -316,6 +325,21 @@ impl ExecutionWorkerState {
         }
     }
 
+    fn check_effects_match(full_tx: &Transaction, effects: &TransactionEffects) -> bool {
+        let ground_truth_effects = &full_tx.ground_truth_effects;
+        if effects.digest() != ground_truth_effects.digest() {
+            println!("EW effects mismatch at checkpoint {}", full_tx.checkpoint_seq);
+            let old_effects = ground_truth_effects.clone();
+            println!("Past effects: {:?}", old_effects);
+            println!("New effects: {:?}", effects);
+        }
+        assert!(
+            effects.digest() == ground_truth_effects.digest(),
+            "Effects digest mismatch"
+        );
+        return true;
+    }
+
     /// Executes a transaction, used for sequential, in-order execution
     pub async fn execute_tx(
         &mut self,
@@ -327,8 +351,6 @@ impl ExecutionWorkerState {
         metrics: Arc<LimitsMetrics>,
     ) {
         let tx = &full_tx.tx;
-        let checkpoint_seq = full_tx.checkpoint_seq;
-        let tx_effects = full_tx.ground_truth_effects.clone();
         let tx_data = tx.data().transaction_data();
         let (kind, signer, gas) = tx_data.execution_parts();
         let input_objects = self.read_input_objects_from_store(tx).await;
@@ -362,16 +384,7 @@ impl ExecutionWorkerState {
             );
 
         // Critical check: are the effects the same?
-        if effects.digest() != tx_effects.digest() {
-            println!("Effects mismatch at checkpoint {}", checkpoint_seq);
-            let old_effects = tx_effects.clone();
-            println!("Past effects: {:?}", old_effects);
-            println!("New effects: {:?}", effects);
-        }
-        assert!(
-            effects.digest() == tx_effects.digest(),
-            "Effects digest mismatch"
-        );
+        Self::check_effects_match(&full_tx, &effects);
 
         // And now we mutate the store.
         self.write_updates_to_store(inner_temp_store);
@@ -435,7 +448,7 @@ impl ExecutionWorkerState {
         else {
             panic!("unexpected message");
         };
-        println!("Got epoch start message");
+        println!("EW got epoch start message");
 
         let native_functions = sui_move_natives::all_natives(/* silent */ true);
         let move_vm = Arc::new(
@@ -488,6 +501,16 @@ impl ExecutionWorkerState {
         let mut manager = QueuesManager::new(manager_sender);
         let mut tasks_queue = FuturesUnordered::<Pin<Box<dyn Future<Output = TransactionWithResults>>>>::new();
 
+        /* Semaphore to keep track of un-executed transactions in the current epoch, used
+        * to schedule epoch change:
+            1. epoch_txs_semaphore increments receive from sw; decrements when finish executing some tx.
+            2. epoch_change_tx = Some(tx) when receive an epoch change tx from sw
+            3. Do epoch change when epoch_change_tx is Some, and epoch_txs_semaphore is 0
+            4. Reset semaphore after epoch change
+        */
+        let mut epoch_txs_semaphore = 0;
+        let mut epoch_change_tx: Option<Transaction> = None;
+
         // Main loop
         loop {
             tokio::select! {
@@ -530,66 +553,90 @@ impl ExecutionWorkerState {
                         checkpoint_seq,
                     } = msg {
                         let full_tx = Transaction{tx, ground_truth_effects: tx_effects, checkpoint_seq};
-                        manager.queue_tx(full_tx).await;
+                        if full_tx.is_epoch_change() {
+                            // don't queue to manager, but store to epoch_change_tx
+                            epoch_change_tx = Some(full_tx);
+                        } else {
+                            manager.queue_tx(full_tx).await;
+                            epoch_txs_semaphore += 1;
+                        }
                     } else {
                         panic!("unexpected message");
                     }
                 },
                 Some(tx_with_results) = tasks_queue.next() => {
                     num_tx += 1;
+                    epoch_txs_semaphore -= 1;
+                    assert!(epoch_txs_semaphore >= 0);
+
+                    let full_tx = &tx_with_results.full_tx;
+                    if full_tx.checkpoint_seq % 10000 == 0 {
+                        println!("EW executed {}", full_tx.checkpoint_seq);
+                    }
 
                     // 1. Critical check: are the effects the same?
-                    let full_tx = &tx_with_results.full_tx;
-                    let ground_truth_effects = &full_tx.ground_truth_effects;
                     let tx_effects = &tx_with_results.tx_effects;
-                    if ground_truth_effects.digest() != tx_effects.digest() {
-                        println!("Effects mismatch at checkpoint {}", full_tx.checkpoint_seq);
-                        println!("Past effects: {:?}", ground_truth_effects);
-                        println!("New effects: {:?}", tx_effects);
-                    }
-                    assert!(
-                        ground_truth_effects.digest() == tx_effects.digest(),
-                        "Effects digest mismatch"
-                    );
+                    Self::check_effects_match(full_tx, tx_effects);
 
                     // 2. Update the store
                     self.write_updates_to_store(tx_with_results.inner_temp_store);
 
                     // 3. Update object queues
-                    let rw_set = get_read_write_set(&full_tx.tx, &tx_with_results.tx_effects);
+                    let rw_set = get_read_write_set(&full_tx.tx, tx_effects);
                     manager.clean_up(&full_tx, &rw_set).await;
 
-
-                    // 1. Check for effects match (done)
-                    // 2. Update memory store
-                    // 3. manager.clean_up()
-                    // 4. deal with end-of-epoch
-
-
-                    // Transation finished executing; run manager clean up
-                    // manager.clean_up(tx).await;
+                    // Stop executing when I hit the watermark
+                    // Note that this is the high watermark; there may be lower txns not 
+                    // completed still left in the tasks_queue
+                    if full_tx.checkpoint_seq == exec_watermark-1 {
+                        break;
+                    }
                 },
                 else => {
-                    println!("Error, abort");
+                    println!("EW error, abort");
                     break
                 }
+            }
+
+            // Maybe do epoch change, if every other tx has completed in this epoch
+            if epoch_change_tx.is_some() && epoch_txs_semaphore == 0 {
+                let full_tx = epoch_change_tx.unwrap();
+                self.execute_tx(
+                    &full_tx,
+                    &protocol_config,
+                    &move_vm,
+                    &epoch_data,
+                    reference_gas_price,
+                    metrics.clone(),
+                ).await;
+
+                num_tx += 1;
+                if full_tx.checkpoint_seq % 10000 == 0 {
+                    println!("EW executed {}", full_tx.checkpoint_seq);
+                }
+
+                println!("EW END OF EPOCH at checkpoint {}", full_tx.checkpoint_seq);
+                (move_vm, protocol_config, epoch_data, reference_gas_price) = 
+                    self.process_epoch_change(&ew_sender, &mut sw_receiver).await;
+
+                epoch_change_tx = None;  // reset for next epoch
             }
         }
 
         // Print TPS
+        println!("Execution worker finished");
+        self.sanity_check(manager);   
         let elapsed = now.elapsed();
+        println!(
+            "Execution worker num executed: {}", num_tx);
         println!(
             "Execution worker TPS: {}",
             1000.0 * num_tx as f64 / elapsed.as_millis() as f64
         );
-
-        self.sanity_check(manager);
-
-        println!("Execution worker finished");
     }
 
     fn sanity_check(&self, qm: QueuesManager) {
-        println!("Running sanity check...");
+        println!("EW running sanity check...");
 
         // obj_queues should be empty
         for (obj, queue) in qm.obj_queues {
@@ -599,7 +646,7 @@ impl ExecutionWorkerState {
         // wait_table should be empty
         assert!(qm.wait_table.is_empty(), "Wait table isn't empty");
         
-        println!("Done!");
+        println!("Passed!");
     }
 }
 
