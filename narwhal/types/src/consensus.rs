@@ -21,7 +21,8 @@ pub type SequenceNumber = u64;
 /// It is sent to the the ExecutionState handle_consensus_transactions
 pub struct ConsensusOutput {
     pub sub_dag: Arc<CommittedSubDag>,
-    pub batches: Vec<(Certificate, Vec<Batch>)>,
+    /// Order of each Vec<Batch> item matches the order of certificates in the CommittedSubDag.
+    pub batches: Vec<Vec<Batch>>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
