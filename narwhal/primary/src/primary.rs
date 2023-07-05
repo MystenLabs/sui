@@ -319,7 +319,6 @@ impl Primary {
             // Enable keep alives every 5s
             quic_config.keep_alive_interval_ms = Some(5_000);
             let mut config = anemo::Config::default();
-            config.quic = Some(quic_config);
             // Set the max_frame_size to be 1 GB to work around the issue of there being too many
             // delegation events in the epoch change txn.
             config.max_frame_size = Some(1 << 30);
