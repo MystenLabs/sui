@@ -41,16 +41,20 @@ struct Args {
     #[arg(short, long)]
     port: u16,
 
+    /// If true, uses TLS transport instead of QUIC.
+    #[arg(long)]
+    tls: bool,
+
     /// Frequency for printing statistics.
     #[arg(short, long, default_value_t = 10)]
     tick_secs: u64,
 
     /// UDP socket send buffer size.
-    #[arg(short, long)]
+    #[arg(long)]
     socket_send_buffer_size: Option<usize>,
 
     /// UDP socket receive buffer size.
-    #[arg(short, long)]
+    #[arg(long)]
     socket_receive_buffer_size: Option<usize>,
 }
 
@@ -131,18 +135,28 @@ async fn download_from_peer(
 #[tokio::main]
 #[allow(clippy::disallowed_methods)] // unbounded_channel is ok for benchmark reporting
 async fn main() {
-    let args: Args = Args::parse();
     let _guard = telemetry_subscribers::TelemetryConfig::new()
         .with_env()
         .init();
 
+    let args: Args = Args::parse();
     let mut config = anemo::Config::default();
-    let mut quic_config = anemo::QuicConfig::default();
-    quic_config.socket_send_buffer_size = args.socket_send_buffer_size;
-    quic_config.socket_receive_buffer_size = args.socket_receive_buffer_size;
-    config.quic = Some(quic_config);
+    if args.tls {
+        let mut tls_config = anemo::TlsConfig::default();
+        tls_config.socket_send_buffer_size = args.socket_send_buffer_size;
+        tls_config.socket_receive_buffer_size = args.socket_receive_buffer_size;
+        config.transport = Some(anemo::TransportConfig::Tls(tls_config))
+    } else {
+        let mut quic_config = anemo::QuicConfig::default();
+        quic_config.socket_send_buffer_size = args.socket_send_buffer_size;
+        quic_config.socket_receive_buffer_size = args.socket_receive_buffer_size;
+        config.transport = Some(anemo::TransportConfig::Quic(quic_config));
+    }
 
-    let (_network, peers) = start_server(config, args.port, args.addrs.clone()).await;
+    let (network, peers) = start_server(config, args.port, args.addrs.clone()).await;
+    println!("network started");
+    println!("socket recieve buffer size: {:?}", network.socket_receive_buf_size());
+    println!("socket send buffer size: {:?}", network.socket_send_buf_size());
 
     let rng = rand::thread_rng();
     let send_bytes: Vec<_> = rng

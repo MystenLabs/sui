@@ -803,15 +803,18 @@ impl SuiNode {
 
             // Set a higher default value for socket send/receive buffers if not already
             // configured.
-            let mut quic_config = anemo_config.quic.unwrap_or_default();
-            if quic_config.socket_send_buffer_size.is_none() {
-                quic_config.socket_send_buffer_size = Some(20 << 20);
+            if let anemo::TransportConfig::Quic(mut quic_config) =
+                anemo_config.transport.to_owned().unwrap_or_default()
+            {
+                if quic_config.socket_send_buffer_size.is_none() {
+                    quic_config.socket_send_buffer_size = Some(20 << 20);
+                }
+                if quic_config.socket_receive_buffer_size.is_none() {
+                    quic_config.socket_receive_buffer_size = Some(20 << 20);
+                }
+                quic_config.allow_failed_socket_buffer_size_setting = true;
+                anemo_config.transport = Some(anemo::TransportConfig::Quic(quic_config));
             }
-            if quic_config.socket_receive_buffer_size.is_none() {
-                quic_config.socket_receive_buffer_size = Some(20 << 20);
-            }
-            quic_config.allow_failed_socket_buffer_size_setting = true;
-            anemo_config.quic = Some(quic_config);
 
             let server_name = format!("sui-{}", chain_identifier);
             let network = Network::bind(config.p2p_config.listen_address)
