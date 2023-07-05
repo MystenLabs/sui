@@ -69,6 +69,7 @@ async fn test_genesis() -> Result<(), anyhow::Error> {
         from_config: None,
         epoch_duration_ms: None,
         benchmark_ips: None,
+        with_faucet: false,
     }
     .execute()
     .await?;
@@ -107,6 +108,7 @@ async fn test_genesis() -> Result<(), anyhow::Error> {
         from_config: None,
         epoch_duration_ms: None,
         benchmark_ips: None,
+        with_faucet: false,
     }
     .execute()
     .await;
@@ -139,6 +141,7 @@ async fn test_genesis_for_benchmarks() -> Result<(), anyhow::Error> {
         from_config: None,
         epoch_duration_ms: None,
         benchmark_ips: Some(benchmark_ips.clone()),
+        with_faucet: false,
     }
     .execute()
     .await?;
