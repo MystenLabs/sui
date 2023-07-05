@@ -48,7 +48,7 @@ struct Args {
     listen_address: Option<Multiaddr>,
 }
 
-#[tokio::main]
+#[tokio::main(flavor = "current_thread")]
 async fn main() {
     let args = Args::parse();
     let config = NodeConfig::load(&args.config_path).unwrap();

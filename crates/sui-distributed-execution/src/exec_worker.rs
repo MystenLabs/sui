@@ -127,7 +127,6 @@ impl Transaction {
 
 pub struct TransactionWithResults {
     full_tx: Transaction,
-    inner_temp_store: InnerTemporaryStore,  // determined after execution
     tx_effects: TransactionEffects,            // determined after execution
 }
 
@@ -300,7 +299,7 @@ impl ExecutionWorkerState {
 
     // Helper: Writes changes from inner_temp_store to memory store
     fn write_updates_to_store(
-        &mut self,
+        memory_store: Arc<MemoryBackedStore>,
         inner_temp_store: InnerTemporaryStore,
     ) {
         // And now we mutate the store.
@@ -310,18 +309,18 @@ impl ExecutionWorkerState {
                 sui_types::storage::DeleteKind::Wrap => {
                     let wrap_tombstone =
                         (obj_del.0, obj_del.1 .0, ObjectDigest::OBJECT_DIGEST_WRAPPED);
-                    let old_object = self.memory_store
+                    let old_object = memory_store
                             .get_object(&obj_del.0)
                             .unwrap().unwrap();
-                        self.memory_store.insert(obj_del.0, (wrap_tombstone, old_object)); // insert the old object with a wrapped tombstone
+                        memory_store.insert(obj_del.0, (wrap_tombstone, old_object)); // insert the old object with a wrapped tombstone
                 }
                 _ => {
-                    self.memory_store.remove(obj_del.0);
+                    memory_store.remove(obj_del.0);
                 }
             }
         }
         for (obj_add_id, (oref, obj, _)) in inner_temp_store.written {
-            self.memory_store.insert(obj_add_id, (oref, obj));
+            memory_store.insert(obj_add_id, (oref, obj));
         }
     }
 
@@ -387,12 +386,13 @@ impl ExecutionWorkerState {
         Self::check_effects_match(&full_tx, &effects);
 
         // And now we mutate the store.
-        self.write_updates_to_store(inner_temp_store);
+        Self::write_updates_to_store(self.memory_store.clone(), inner_temp_store);
     }
 
 
     async fn async_exec(
         full_tx: Transaction,
+        memory_store: Arc<MemoryBackedStore>,
         input_objects: InputObjects,
         temporary_store: TemporaryStore<Arc<MemoryBackedStore>>,
         move_vm: Arc<MoveVM>,
@@ -425,10 +425,11 @@ impl ExecutionWorkerState {
                 false,
                 &HashSet::new(),
             );
+
+        Self::write_updates_to_store(memory_store, inner_temp_store.clone());
         
         return TransactionWithResults {
             full_tx,
-            inner_temp_store,
             tx_effects,
         }
     }
@@ -523,7 +524,6 @@ impl ExecutionWorkerState {
                     let input_objects = self.read_input_objects_from_store(&tx).await;
                     let gas_status = self.get_gas_status(&tx, &input_objects, &protocol_config, reference_gas_price).await;
 
-                    // TODO Why does temp store has reference to memory store?
                     let temporary_store = TemporaryStore::new(
                         self.memory_store.clone(),
                         input_objects.clone(),
@@ -535,6 +535,7 @@ impl ExecutionWorkerState {
                     tasks_queue.push(Box::pin(
                         Self::async_exec(
                             full_tx,
+                            self.memory_store.clone(),
                             input_objects,
                             temporary_store,
                             move_vm.clone(),
@@ -578,10 +579,7 @@ impl ExecutionWorkerState {
                     let tx_effects = &tx_with_results.tx_effects;
                     Self::check_effects_match(full_tx, tx_effects);
 
-                    // 2. Update the store
-                    self.write_updates_to_store(tx_with_results.inner_temp_store);
-
-                    // 3. Update object queues
+                    // 2. Update object queues
                     let rw_set = get_read_write_set(&full_tx.tx, tx_effects);
                     manager.clean_up(&full_tx, &rw_set).await;
 
