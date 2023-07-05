@@ -49,9 +49,9 @@ use sui_types::effects::{
     VerifiedCertifiedTransactionEffects,
 };
 use sui_types::messages_grpc::{
-    HandleCertificateResponseV2, ObjectInfoRequest, PlainTransactionInfoResponse,
-    TransactionInfoRequest,
+    HandleCertificateResponseV2, ObjectInfoRequest, TransactionInfoRequest,
 };
+use sui_types::messages_safe_client::PlainTransactionInfoResponse;
 use tap::TapFallible;
 use tokio::time::{sleep, timeout};
 

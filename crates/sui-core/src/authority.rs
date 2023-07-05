@@ -4052,6 +4052,8 @@ impl AuthorityState {
         Ok(new_epoch_store)
     }
 
+    // TODO: when we add stateful authenticators, we may need to take care that this function is
+    // reconfig safe (i.e. cannot be called concurrently with reconfiguration).
     pub fn verify_transaction(&self, tx: Transaction) -> SuiResult<VerifiedTransaction> {
         self.load_epoch_store_one_call_per_task()
             .signature_verifier

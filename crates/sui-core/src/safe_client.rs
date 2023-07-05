@@ -20,9 +20,9 @@ use sui_types::messages_checkpoint::{
 };
 use sui_types::messages_grpc::{
     HandleCertificateResponse, HandleCertificateResponseV2, ObjectInfoRequest, ObjectInfoResponse,
-    PlainTransactionInfoResponse, SystemStateRequest, TransactionInfoRequest, TransactionStatus,
-    VerifiedObjectInfoResponse,
+    SystemStateRequest, TransactionInfoRequest, TransactionStatus, VerifiedObjectInfoResponse,
 };
+use sui_types::messages_safe_client::PlainTransactionInfoResponse;
 use sui_types::sui_system_state::SuiSystemState;
 use sui_types::{base_types::*, committee::*, fp_ensure};
 use sui_types::{
