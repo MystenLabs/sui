@@ -40,8 +40,15 @@ pub struct Packages {
     pub paths: Vec<String>,
 }
 
-/// Map (package address, module name) tuples to verified source paths.
-type SourceLookup = BTreeMap<(AccountAddress, Symbol), PathBuf>;
+#[derive(Debug)]
+pub struct SourceInfo {
+    pub path: PathBuf,
+    // Is Some when content is hydrated from disk.
+    pub source: Option<String>,
+}
+
+/// Map (package address, module name) tuples to verified source info.
+type SourceLookup = BTreeMap<(AccountAddress, Symbol), SourceInfo>;
 
 pub async fn verify_package(
     client: &SuiClient,
@@ -73,10 +80,14 @@ pub async fn verify_package(
     for v in &compiled_package.package.root_compiled_units {
         match v.unit {
             CompiledUnitEnum::Module(ref m) => {
-                map.insert((address, m.name), v.source_path.to_path_buf())
+                let path = v.source_path.to_path_buf();
+                let source = Some(fs::read_to_string(path.as_path())?);
+                map.insert((address, m.name), SourceInfo { path, source })
             }
             CompiledUnitEnum::Script(ref m) => {
-                map.insert((address, m.name), v.source_path.to_path_buf())
+                let path = v.source_path.to_path_buf();
+                let source = Some(fs::read_to_string(path.as_path())?);
+                map.insert((address, m.name), SourceInfo { path, source })
             }
         };
     }
@@ -264,16 +275,15 @@ async fn api_route(
 	let error = format!("Invalid hex address {address}");
 	return (StatusCode::BAD_REQUEST, Json(ErrorResponse { error }).into_response())
     };
-    let Some(path) = app_state.sources.get(&(address, symbol)) else {
+    let Some(SourceInfo {source : Some(source), ..}) = app_state.sources.get(&(address, symbol)) else {
 	let error = format!("No source found for {symbol} at address {address}" );
-	return (StatusCode::BAD_REQUEST, Json(ErrorResponse { error }).into_response())
-    };
-    let Ok(source) = fs::read_to_string(path) else {
-	let error = "Error reading source from disk".to_string();
-	return (StatusCode::INTERNAL_SERVER_ERROR, Json(ErrorResponse { error }).into_response())
+	return (StatusCode::NOT_FOUND, Json(ErrorResponse { error }).into_response())
     };
     (
         StatusCode::OK,
-        Json(SourceResponse { source }).into_response(),
+        Json(SourceResponse {
+            source: source.to_owned(),
+        })
+        .into_response(),
     )
 }

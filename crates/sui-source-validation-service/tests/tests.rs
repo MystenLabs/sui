@@ -8,7 +8,8 @@ use std::{collections::BTreeMap, path::PathBuf};
 use move_core_types::account_address::AccountAddress;
 use move_symbol_pool::Symbol;
 use sui_source_validation_service::{
-    initialize, serve, verify_packages, AppState, CloneCommand, Config, Packages, SourceResponse,
+    initialize, serve, verify_packages, AppState, CloneCommand, Config, Packages, SourceInfo,
+    SourceResponse,
 };
 use test_cluster::TestClusterBuilder;
 
@@ -80,7 +81,10 @@ async fn test_api_route() -> anyhow::Result<()> {
             AccountAddress::from_hex_literal(address).unwrap(),
             Symbol::from(module),
         ),
-        source_path,
+        SourceInfo {
+            path: source_path,
+            source: Some("module address {...}".to_owned()),
+        },
     );
     tokio::spawn(serve(AppState { sources }).expect("Cannot start service."));
 
@@ -96,15 +100,7 @@ async fn test_api_route() -> anyhow::Result<()> {
         .json::<SourceResponse>()
         .await?;
 
-    let expected = expect![
-        r#"
-// Copyright (c) Mysten Labs, Inc.
-// SPDX-License-Identifier: Apache-2.0
-
-/// Dummy module for testing
-module std::address {}
-"#
-    ];
+    let expected = expect!["module address {...}"];
     expected.assert_eq(&json.source);
     Ok(())
 }
