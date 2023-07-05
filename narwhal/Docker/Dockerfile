@@ -70,7 +70,7 @@ RUN cargo build --${BUILD_MODE} --features ${FEATURES} --bin narwhal-node --bin 
 # Stage 3 : Production image
 #################################################################
 
-# Creat another layer so we can re-use caching
+# Create another layer so we can re-use caching
 FROM debian:bullseye-slim
 ARG BUILD_MODE
 
