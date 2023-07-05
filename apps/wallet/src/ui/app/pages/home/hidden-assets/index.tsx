@@ -131,7 +131,7 @@ function NftsPage() {
 	return (
 		<div className="flex flex-1 flex-col flex-nowrap items-center gap-4">
 			<PageTitle title="Hidden Assets" back="/nfts" />
-			<Loading loading={isLoading}>
+			<Loading loading={isLoading && Boolean(internalHiddenAssetIds.length)}>
 				{isError ? (
 					<Alert>
 						<div>
