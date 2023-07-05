@@ -19,6 +19,7 @@
 -  [Function `create_account`](#0xdee9_clob_v2_create_account)
 -  [Function `create_pool_`](#0xdee9_clob_v2_create_pool_)
 -  [Function `create_pool`](#0xdee9_clob_v2_create_pool)
+-  [Function `create_customized_pool`](#0xdee9_clob_v2_create_customized_pool)
 -  [Function `deposit_base`](#0xdee9_clob_v2_deposit_base)
 -  [Function `deposit_quote`](#0xdee9_clob_v2_deposit_quote)
 -  [Function `withdraw_base`](#0xdee9_clob_v2_withdraw_base)
@@ -1156,9 +1157,48 @@ Emitted when user withdraw asset from custodian
     ctx: &<b>mut</b> TxContext,
 ) {
     <b>assert</b>!(<a href="../../../.././build/Sui/docs/coin.md#0x2_coin_value">coin::value</a>(&creation_fee) == <a href="clob_v2.md#0xdee9_clob_v2_FEE_AMOUNT_FOR_CREATE_POOL">FEE_AMOUNT_FOR_CREATE_POOL</a>, <a href="clob_v2.md#0xdee9_clob_v2_EInvalidFee">EInvalidFee</a>);
-    <a href="clob_v2.md#0xdee9_clob_v2_create_pool_">create_pool_</a>&lt;BaseAsset, QuoteAsset&gt;(
+    <a href="clob_v2.md#0xdee9_clob_v2_create_customized_pool">create_customized_pool</a>&lt;BaseAsset, QuoteAsset&gt;(
+        tick_size,
+        lot_size,
         <a href="clob_v2.md#0xdee9_clob_v2_REFERENCE_TAKER_FEE_RATE">REFERENCE_TAKER_FEE_RATE</a>,
         <a href="clob_v2.md#0xdee9_clob_v2_REFERENCE_MAKER_REBATE_RATE">REFERENCE_MAKER_REBATE_RATE</a>,
+        creation_fee,
+        ctx,
+    );
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0xdee9_clob_v2_create_customized_pool"></a>
+
+## Function `create_customized_pool`
+
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_create_customized_pool">create_customized_pool</a>&lt;BaseAsset, QuoteAsset&gt;(tick_size: u64, lot_size: u64, taker_fee_rate: u64, maker_rebate_rate: u64, creation_fee: <a href="../../../.././build/Sui/docs/coin.md#0x2_coin_Coin">coin::Coin</a>&lt;<a href="../../../.././build/Sui/docs/sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, ctx: &<b>mut</b> <a href="../../../.././build/Sui/docs/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_create_customized_pool">create_customized_pool</a>&lt;BaseAsset, QuoteAsset&gt;(
+    tick_size: u64,
+    lot_size: u64,
+    taker_fee_rate: u64,
+    maker_rebate_rate: u64,
+    creation_fee: Coin&lt;SUI&gt;,
+    ctx: &<b>mut</b> TxContext,
+) {
+    <b>assert</b>!(<a href="../../../.././build/Sui/docs/coin.md#0x2_coin_value">coin::value</a>(&creation_fee) == <a href="clob_v2.md#0xdee9_clob_v2_FEE_AMOUNT_FOR_CREATE_POOL">FEE_AMOUNT_FOR_CREATE_POOL</a>, <a href="clob_v2.md#0xdee9_clob_v2_EInvalidFee">EInvalidFee</a>);
+    <a href="clob_v2.md#0xdee9_clob_v2_create_pool_">create_pool_</a>&lt;BaseAsset, QuoteAsset&gt;(
+        taker_fee_rate,
+        maker_rebate_rate,
         tick_size,
         lot_size,
         <a href="../../../.././build/Sui/docs/coin.md#0x2_coin_into_balance">coin::into_balance</a>(creation_fee),
