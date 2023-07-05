@@ -1,1 +1,3 @@
-Conflicting "regular" and "dev" overrides of C in Root
+Conflicting "regular" and "dev" overrides found in Root:
+C = { local = "deps_only/C", version = "1.0.0" }
+C = { local = "deps_only/C", version = "2.0.0" }

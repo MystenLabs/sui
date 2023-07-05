@@ -41,9 +41,9 @@ use super::{
 /// It can be built by recursively exploring a package's dependencies, fetching their sources if
 /// necessary, or by reading its serialized contents from a lock file (provided either alongside its
 /// manifest file in storage or by the external resolver).  Both these processes will fail if any of
-/// the criteria above cannot be met (e.g. if the graph contains a cycle, the same package is
-/// fetched multiple times from different sources, or information about a package's source is not
-/// available).
+/// the criteria above cannot be met (e.g. if the graph contains a cycle, or information about a
+/// package's source is not available). The same package can be fetched from multiple sources as
+/// long as both fetches produce a matching output.
 ///
 /// In order to be `BuildConfig` agnostic, it contains `dev-dependencies` as well as `dependencies`
 /// and labels edges in the graph accordingly, as `DevOnly`, or `Always` dependencies.
@@ -160,7 +160,7 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
 
         // compute digests eagerly as even if we can't reuse existing lock file, they need to become
         // part of the newly computed dependency graph
-        let new_manifest_digest = digest_str(manifest_string.into_bytes().as_slice());
+        let new_manifest_digest_opt = Some(digest_str(manifest_string.into_bytes().as_slice()));
 
         let new_deps_digest_opt = self.dependency_digest(root_path.clone(), &manifest)?;
         if let Some(lock_contents) = lock_string {
@@ -172,7 +172,7 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
 
             // check if manifest file and dependencies haven't changed and we can use existing lock
             // file to create the dependency graph
-            if Some(new_manifest_digest.clone()) == manifest_digest_opt {
+            if new_manifest_digest_opt.clone() == manifest_digest_opt {
                 // manifest file hasn't changed
                 if let Some(deps_digest) = deps_digest_opt {
                     // dependencies digest exists in the lock file
@@ -197,7 +197,7 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
                 parent,
                 &manifest,
                 root_path.to_path_buf(),
-                Some(new_manifest_digest),
+                new_manifest_digest_opt,
                 new_deps_digest_opt,
             )?,
             true,
@@ -247,14 +247,8 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
             .add_node(combined_graph.root_package);
 
         // get overrides
-        let overrides = DependencyGraphBuilder::<Progress>::collect_overrides(
-            parent,
-            &root_manifest.dependencies,
-        )?;
-        let dev_overrides = DependencyGraphBuilder::<Progress>::collect_overrides(
-            parent,
-            &root_manifest.dev_dependencies,
-        )?;
+        let overrides = collect_overrides(parent, &root_manifest.dependencies)?;
+        let dev_overrides = collect_overrides(parent, &root_manifest.dev_dependencies)?;
 
         for (_, (g, is_override)) in dep_graphs.iter_mut() {
             if !*is_override {
@@ -300,31 +294,8 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
         Ok(combined_graph)
     }
 
-    /// Collects overridden dependencies.
-    fn collect_overrides(
-        parent: &PM::DependencyKind,
-        dependencies: &PM::Dependencies,
-    ) -> Result<BTreeMap<Symbol, Package>> {
-        let mut overrides = BTreeMap::new();
-        for (dep_pkg_name, dep) in dependencies {
-            if let PM::Dependency::Internal(internal) = dep {
-                if internal.dep_override {
-                    let mut dep_pkg = Package {
-                        kind: internal.kind.clone(),
-                        version: internal.version,
-                        resolver: None,
-                    };
-                    dep_pkg.kind.reroot(parent)?;
-                    overrides.insert(*dep_pkg_name, dep_pkg);
-                }
-            }
-        }
-        Ok(overrides)
-    }
-
     /// Given all dependencies from the parent manifest file, collects all the sub-graphs
-    /// representing these dependencies - returns internally resolved sub-graphs (first return
-    /// value) and externally resolved sub-graphs (second retrun value) separately.
+    /// representing these dependencies (both internally and externally resolved).
     pub fn collect_graphs(
         &mut self,
         parent: &PM::DependencyKind,
@@ -367,11 +338,7 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
     ) -> Result<(DependencyGraph, bool)> {
         let (pkg_graph, is_override) = match dep {
             PM::Dependency::Internal(d) => {
-                DependencyGraph::check_for_dep_cycles(
-                    d.clone(),
-                    dep_pkg_name,
-                    &mut self.visited_dependencies,
-                )?;
+                check_for_dep_cycles(d.clone(), dep_pkg_name, &mut self.visited_dependencies)?;
                 self.dependency_cache
                     .download_and_update_if_remote(dep_pkg_name, &d.kind, &mut self.progress_output)
                     .with_context(|| format!("Fetching '{}'", dep_pkg_name))?;
@@ -479,7 +446,7 @@ impl DependencyGraph {
     /// the outer graph. A package should be pruned if it's dominated by an overridden package.
     fn find_pruned_pkgs(
         &self,
-        pruned_pkgs: &mut BTreeMap<PM::PackageName, BTreeSet<PM::PackageName>>,
+        pruned_pkgs: &mut BTreeSet<PM::PackageName>,
         reachable_pkgs: &mut BTreeSet<PM::PackageName>,
         root_pkg_name: PM::PackageName,
         from_pkg_name: PM::PackageName,
@@ -491,14 +458,8 @@ impl DependencyGraph {
         if overridden_path {
             // we are on a path originating at the overridden package
             if !reachable_pkgs.contains(&from_pkg_name) {
-                // not (yet) reached via regular (non-overridden) path - include in the list of
-                // packages to be pruned but need to include a list of neighbors to correctly remove
-                // edges going to the pruned package
-                let neighbors = BTreeSet::from_iter(
-                    self.package_graph
-                        .neighbors_directed(from_pkg_name, Direction::Incoming),
-                );
-                pruned_pkgs.insert(from_pkg_name, neighbors);
+                // not (yet) reached via regular (non-overridden) path
+                pruned_pkgs.insert(from_pkg_name);
             }
         } else {
             // we are on a regular path, not involving an override - if there was a package
@@ -520,9 +481,8 @@ impl DependencyGraph {
             .is_some();
 
             if override_found {
-                // we also prune overridden package but only its outgoing edges and not the incoming
-                // ones (hence empty neighbors set)
-                pruned_pkgs.insert(from_pkg_name, /* neighbors */ BTreeSet::new());
+                // we also prune overridden package
+                pruned_pkgs.insert(from_pkg_name);
             }
         }
 
@@ -553,7 +513,7 @@ impl DependencyGraph {
         overrides: &BTreeMap<PM::PackageName, Package>,
         dev_overrides: &BTreeMap<PM::PackageName, Package>,
     ) -> Result<()> {
-        let mut pruned_pkgs = BTreeMap::new();
+        let mut pruned_pkgs = BTreeSet::new();
         let mut reachable_pkgs = BTreeSet::new();
         self.find_pruned_pkgs(
             &mut pruned_pkgs,
@@ -566,11 +526,7 @@ impl DependencyGraph {
             false,
         )?;
 
-        for (pkg, neighbors) in pruned_pkgs {
-            // simply removing a node does not remove edges coming from its neighbors to this node
-            for n in neighbors {
-                self.package_graph.remove_edge(n, pkg);
-            }
+        for pkg in pruned_pkgs {
             self.package_graph.remove_node(pkg);
             self.package_table.remove(&pkg);
         }
@@ -593,15 +549,15 @@ impl DependencyGraph {
         }
 
         // collect all package names in all graphs in package table
-        let mut all_packges: BTreeSet<PM::PackageName> = BTreeSet::new();
+        let mut all_packages: BTreeSet<PM::PackageName> = BTreeSet::new();
         for (g, _) in (&dep_graphs).values() {
-            all_packges.extend(g.package_table.keys());
+            all_packages.extend(g.package_table.keys());
         }
 
         // analyze all packages in all package tables of all sub-graphs to determine if any of these
         // packages represent a conflicting dependency; insert the packages and their respective
         // edges into the combined graph along the way
-        for pkg_name in all_packges {
+        for pkg_name in all_packages {
             let mut existing_pkg_info: Option<(Symbol, &DependencyGraph, &Package)> = None;
             for (dep_name, (g, _)) in &dep_graphs {
                 if let Some(pkg) = g.package_table.get(&pkg_name) {
@@ -648,12 +604,7 @@ impl DependencyGraph {
             if let Some((_, g, existing_pkg)) = existing_pkg_info {
                 // update combined graph with the new package and its dependencies
                 self.package_table.insert(pkg_name, existing_pkg.clone());
-                for to_pkg_name in g
-                    .package_graph
-                    .neighbors_directed(pkg_name, Direction::Outgoing)
-                {
-                    // unwrap is safe as all edges have a Dependency weight
-                    let sub_dep = g.package_graph.edge_weight(pkg_name, to_pkg_name).unwrap();
+                for (_, to_pkg_name, sub_dep) in g.package_graph.edges(pkg_name) {
                     self.package_graph
                         .add_edge(pkg_name, to_pkg_name, sub_dep.clone());
                 }
@@ -785,11 +736,13 @@ impl DependencyGraph {
         // but for "dev" dependencies override can come from "regular" or "dev" dependencies section
         if let Some(pkg) = overrides.get(&pkg_name) {
             // "regular" dependencies section case
-            if dev_overrides.get(&pkg_name).is_some() {
+            if let Some(dev_pkg) = dev_overrides.get(&pkg_name) {
                 bail!(
-                    "Conflicting \"regular\" and \"dev\" overrides of {} in {}",
+                    "Conflicting \"regular\" and \"dev\" overrides found in {0}:\n{1} = {2}\n{1} = {3}",
+                    root_pkg_name,
                     pkg_name,
-                    root_pkg_name
+                    PackageWithResolverTOML(pkg),
+                    PackageWithResolverTOML(dev_pkg),
                 );
             }
             return Ok(Some(pkg));
@@ -798,31 +751,6 @@ impl DependencyGraph {
             return Ok(dev_only.then_some(dev_pkg));
         }
         Ok(None)
-    }
-
-    /// Cycle detection to avoid infinite recursion due to the way we construct internally resolved
-    /// sub-graphs, expecting to end recursion at leaf packages that have no dependencies.
-    fn check_for_dep_cycles(
-        dep: PM::InternalDependency,
-        dep_pkg_name: PM::PackageName,
-        internal_dependencies: &mut VecDeque<(PM::PackageName, PM::InternalDependency)>,
-    ) -> Result<()> {
-        if internal_dependencies.contains(&(dep_pkg_name, dep.clone())) {
-            let (mut processed_name, mut processed_dep) = internal_dependencies.pop_back().unwrap();
-            while processed_name != dep_pkg_name || processed_dep != dep {
-                (processed_name, processed_dep) = internal_dependencies.pop_back().unwrap();
-            }
-            // now the queue contains all intermediate dependencies
-            let mut msg = "Found cycle between packages: ".to_string();
-            msg.push_str(format!("{} -> ", dep_pkg_name).as_str());
-            while !internal_dependencies.is_empty() {
-                let (p, _) = internal_dependencies.pop_back().unwrap();
-                msg.push_str(format!("{} -> ", p).as_str());
-            }
-            msg.push_str(format!("{}", dep_pkg_name).as_str());
-            bail!(msg);
-        }
-        Ok(())
     }
 
     /// Creates a dependency graph by reading a lock file.
@@ -1434,4 +1362,51 @@ fn deps_equal<'a>(
         .symmetric_difference(&sub_pkg_edges)
         .partition(|dep| combined_edges.contains(dep));
     (combined_pkgs, sub_pkgs)
+}
+
+/// Collects overridden dependencies.
+fn collect_overrides(
+    parent: &PM::DependencyKind,
+    dependencies: &PM::Dependencies,
+) -> Result<BTreeMap<Symbol, Package>> {
+    let mut overrides = BTreeMap::new();
+    for (dep_pkg_name, dep) in dependencies {
+        if let PM::Dependency::Internal(internal) = dep {
+            if internal.dep_override {
+                let mut dep_pkg = Package {
+                    kind: internal.kind.clone(),
+                    version: internal.version,
+                    resolver: None,
+                };
+                dep_pkg.kind.reroot(parent)?;
+                overrides.insert(*dep_pkg_name, dep_pkg);
+            }
+        }
+    }
+    Ok(overrides)
+}
+
+/// Cycle detection to avoid infinite recursion due to the way we construct internally resolved
+/// sub-graphs, expecting to end recursion at leaf packages that have no dependencies.
+fn check_for_dep_cycles(
+    dep: PM::InternalDependency,
+    dep_pkg_name: PM::PackageName,
+    internal_dependencies: &mut VecDeque<(PM::PackageName, PM::InternalDependency)>,
+) -> Result<()> {
+    if internal_dependencies.contains(&(dep_pkg_name, dep.clone())) {
+        let (mut processed_name, mut processed_dep) = internal_dependencies.pop_back().unwrap();
+        while processed_name != dep_pkg_name || processed_dep != dep {
+            (processed_name, processed_dep) = internal_dependencies.pop_back().unwrap();
+        }
+        // now the queue contains all intermediate dependencies
+        let mut msg = "Found cycle between packages: ".to_string();
+        msg.push_str(format!("{} -> ", dep_pkg_name).as_str());
+        while !internal_dependencies.is_empty() {
+            let (p, _) = internal_dependencies.pop_back().unwrap();
+            msg.push_str(format!("{} -> ", p).as_str());
+        }
+        msg.push_str(format!("{}", dep_pkg_name).as_str());
+        bail!(msg);
+    }
+    Ok(())
 }

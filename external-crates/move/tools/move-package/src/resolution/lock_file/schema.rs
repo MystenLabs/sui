@@ -63,9 +63,12 @@ pub struct Dependency {
 #[derive(Serialize, Deserialize)]
 pub struct Header {
     pub version: u64,
-    /// A hash of the manifest file content this lock file was generated from, if any.
+    /// A hash of the manifest file content this lock file was generated from (if any) computed
+    /// using SHA-256 hashing algorithm.
     pub manifest_digest: Option<String>,
-    /// A hash of all the dependencies (their lock file content) this lock file depends on, if any.
+    /// A hash of all the dependencies (their lock file content) this lock file depends on (if any),
+    /// computed by first hashing all lock files using SHA-256 hashing algorithm and then combining
+    /// them into a single digest using SHA-256 hasher (similarly to the package digest is computed)
     pub deps_digest: Option<String>,
 }
 
