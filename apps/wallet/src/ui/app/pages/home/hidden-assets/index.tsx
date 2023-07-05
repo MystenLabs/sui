@@ -23,7 +23,6 @@ const TOAST_DURATION_MS = 1005;
 
 function NftsPage() {
 	const [internalHiddenAssetIds, internalSetHiddenAssetIds] = useState<string[]>([]);
-	const [isShowingDisabled, setIsShowingDisabled] = useState(false);
 
 	const { data, isInitialLoading, isLoading, isError, error } = useMultiGetObjects(
 		// Prevents dupes
@@ -65,7 +64,6 @@ function NftsPage() {
 			};
 
 			const assetShownToast = async (objectId: string) => {
-				setTimeout(() => setIsShowingDisabled(false), TOAST_DURATION_MS);
 				toast(
 					(t) => (
 						<div className="flex items-center justify-between gap-2">
@@ -112,11 +110,6 @@ function NftsPage() {
 	);
 
 	const showAsset = (objectId: string) => {
-		if (isShowingDisabled) {
-			toast.error('Please wait to try again.');
-			return;
-		}
-		setIsShowingDisabled(true);
 		showAssetId(objectId);
 	};
 

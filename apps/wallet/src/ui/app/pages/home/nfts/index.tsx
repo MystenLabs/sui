@@ -22,11 +22,9 @@ import { useGetNFTs } from '_src/ui/app/hooks/useGetNFTs';
 import PageTitle from '_src/ui/app/shared/PageTitle';
 
 const HIDDEN_ASSET_IDS = 'hidden-asset-ids';
-const TOAST_DURATION_MS = 1005;
 
 function NftsPage() {
 	const [internalHiddenAssetIds, internalSetHiddenAssetIds] = useState<string[]>([]);
-	const [isHidingDisabled, setIsHidingDisabled] = useState(false);
 	const accountAddress = useActiveAddress();
 	const {
 		data: nfts,
@@ -80,45 +78,39 @@ function NftsPage() {
 			};
 
 			const showAssetHiddenToast = async (objectId: string) => {
-				setTimeout(() => setIsHidingDisabled(false), TOAST_DURATION_MS);
-				toast(
-					(t) => (
-						<div className="flex items-center justify-between gap-2">
-							<div className="flex gap-1 items-center">
-								<Check12 className="text-gray-90" />
-								<div>
-									<InlineLink
-										to="/hidden-assets"
-										color="suiDark"
-										weight="semibold"
-										before={
-											<Text variant="body" color="gray-80">
-												Moved to
-											</Text>
-										}
-										text="Hidden Assets"
-									/>
-								</div>
-							</div>
-
-							<div className="w-auto">
+				toast((t) => (
+					<div className="flex items-center justify-between gap-2">
+						<div className="flex gap-1 items-center">
+							<Check12 className="text-gray-90" />
+							<div>
 								<InlineLink
-									size="bodySmall"
-									onClick={() => {
-										undoHideAsset(objectId);
-										toast.dismiss(t.id);
-									}}
+									to="/hidden-assets"
 									color="suiDark"
 									weight="semibold"
-									text="UNDO"
+									before={
+										<Text variant="body" color="gray-80">
+											Moved to
+										</Text>
+									}
+									text="Hidden Assets"
 								/>
 							</div>
 						</div>
-					),
-					{
-						duration: TOAST_DURATION_MS,
-					},
-				);
+
+						<div className="w-auto">
+							<InlineLink
+								size="bodySmall"
+								onClick={() => {
+									undoHideAsset(objectId);
+									toast.dismiss(t.id);
+								}}
+								color="suiDark"
+								weight="semibold"
+								text="UNDO"
+							/>
+						</div>
+					</div>
+				));
 			};
 
 			showAssetHiddenToast(newAssetId);
@@ -129,11 +121,6 @@ function NftsPage() {
 	const hideAsset = (objectId: string, event: React.MouseEvent<HTMLButtonElement>) => {
 		event.stopPropagation();
 		event.preventDefault();
-		if (isHidingDisabled) {
-			toast.error('Please wait to try again.');
-			return;
-		}
-		setIsHidingDisabled(true);
 		hideAssetId(objectId);
 	};
 
