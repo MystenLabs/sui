@@ -7,6 +7,7 @@ license = "Apache-2.0"
 authors = ["Mysten Labs <build@mystenlabs.com>"]
 
 [dependencies]
+indicatif.workspace = true
 integer-encoding.workspace = true
 anyhow.workspace = true
 serde.workspace = true
@@ -24,6 +25,7 @@ prometheus.workspace = true
 zstd.workspace = true
 typed-store.workspace = true
 typed-store-derive.workspace = true
+sui-config.workspace = true
 sui-types.workspace = true
 sui-storage.workspace = true
 sui-protocol-config.workspace = true

@@ -28,7 +28,9 @@ use anyhow::anyhow;
 use eyre::ContextCompat;
 use indicatif::{ProgressBar, ProgressStyle};
 use prometheus::Registry;
-use sui_archival::reader::{ArchiveReader, ArchiveReaderConfig};
+use sui_archival::reader::ArchiveReader;
+use sui_archival::verify_archive_with_genesis_config;
+use sui_config::node::ArchiveReaderConfig;
 use sui_core::authority::authority_store_tables::AuthorityPerpetualTables;
 use sui_core::authority::AuthorityStore;
 use sui_core::checkpoints::CheckpointStore;
@@ -630,6 +632,15 @@ pub async fn restore_from_db_checkpoint(
 ) -> Result<(), anyhow::Error> {
     copy_dir_all(db_checkpoint_path, config.db_path(), vec![])?;
     Ok(())
+}
+
+pub async fn verify_archive(
+    genesis: &Path,
+    remote_store_config: ObjectStoreConfig,
+    concurrency: usize,
+    interactive: bool,
+) -> Result<()> {
+    verify_archive_with_genesis_config(genesis, remote_store_config, concurrency, interactive).await
 }
 
 pub async fn state_sync_from_archive(

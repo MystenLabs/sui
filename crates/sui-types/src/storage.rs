@@ -994,3 +994,139 @@ impl Display for DeleteKind {
         }
     }
 }
+
+// This store only keeps last checkpoint in memory which is all we need
+// for archive verification.
+#[derive(Clone, Debug, Default)]
+pub struct SingleCheckpointSharedInMemoryStore(SharedInMemoryStore);
+
+impl SingleCheckpointSharedInMemoryStore {
+    pub fn insert_genesis_state(
+        &mut self,
+        checkpoint: VerifiedCheckpoint,
+        contents: VerifiedCheckpointContents,
+        committee: Committee,
+    ) {
+        let mut locked = self.0 .0.write().unwrap();
+        locked.insert_genesis_state(checkpoint, contents, committee);
+    }
+}
+
+impl ReadStore for SingleCheckpointSharedInMemoryStore {
+    type Error = Infallible;
+
+    fn get_checkpoint_by_digest(
+        &self,
+        digest: &CheckpointDigest,
+    ) -> Result<Option<VerifiedCheckpoint>, Self::Error> {
+        self.0.get_checkpoint_by_digest(digest)
+    }
+
+    fn get_checkpoint_by_sequence_number(
+        &self,
+        sequence_number: CheckpointSequenceNumber,
+    ) -> Result<Option<VerifiedCheckpoint>, Self::Error> {
+        self.0.get_checkpoint_by_sequence_number(sequence_number)
+    }
+
+    fn get_highest_verified_checkpoint(&self) -> Result<VerifiedCheckpoint, Self::Error> {
+        self.0.get_highest_verified_checkpoint()
+    }
+
+    fn get_highest_synced_checkpoint(&self) -> Result<VerifiedCheckpoint, Self::Error> {
+        self.0.get_highest_synced_checkpoint()
+    }
+
+    fn get_lowest_available_checkpoint(&self) -> Result<CheckpointSequenceNumber, Self::Error> {
+        self.0.get_lowest_available_checkpoint()
+    }
+
+    fn get_full_checkpoint_contents_by_sequence_number(
+        &self,
+        sequence_number: CheckpointSequenceNumber,
+    ) -> Result<Option<FullCheckpointContents>, Self::Error> {
+        self.0
+            .get_full_checkpoint_contents_by_sequence_number(sequence_number)
+    }
+
+    fn get_full_checkpoint_contents(
+        &self,
+        digest: &CheckpointContentsDigest,
+    ) -> Result<Option<FullCheckpointContents>, Self::Error> {
+        self.0.get_full_checkpoint_contents(digest)
+    }
+
+    fn get_committee(&self, epoch: EpochId) -> Result<Option<Arc<Committee>>, Self::Error> {
+        self.0.get_committee(epoch)
+    }
+
+    fn get_transaction_block(
+        &self,
+        digest: &TransactionDigest,
+    ) -> Result<Option<VerifiedTransaction>, Self::Error> {
+        self.0.get_transaction_block(digest)
+    }
+
+    fn get_transaction_effects(
+        &self,
+        digest: &TransactionEffectsDigest,
+    ) -> Result<Option<TransactionEffects>, Self::Error> {
+        self.0.get_transaction_effects(digest)
+    }
+
+    fn get_transaction_events(
+        &self,
+        digest: &TransactionEventsDigest,
+    ) -> Result<Option<TransactionEvents>, Self::Error> {
+        self.0.get_transaction_events(digest)
+    }
+}
+
+impl WriteStore for SingleCheckpointSharedInMemoryStore {
+    fn insert_checkpoint(&self, checkpoint: &VerifiedCheckpoint) -> Result<(), Self::Error> {
+        {
+            let mut locked = self.0 .0.write().unwrap();
+            locked.checkpoints.clear();
+            locked.sequence_number_to_digest.clear();
+        }
+        self.0.insert_checkpoint(checkpoint)?;
+        Ok(())
+    }
+
+    fn update_highest_synced_checkpoint(
+        &self,
+        checkpoint: &VerifiedCheckpoint,
+    ) -> Result<(), Self::Error> {
+        self.0.update_highest_synced_checkpoint(checkpoint)?;
+        Ok(())
+    }
+
+    fn update_highest_verified_checkpoint(
+        &self,
+        checkpoint: &VerifiedCheckpoint,
+    ) -> Result<(), Self::Error> {
+        self.0.update_highest_verified_checkpoint(checkpoint)?;
+        Ok(())
+    }
+
+    fn insert_checkpoint_contents(
+        &self,
+        checkpoint: &VerifiedCheckpoint,
+        contents: VerifiedCheckpointContents,
+    ) -> Result<(), Self::Error> {
+        {
+            let mut locked = self.0 .0.write().unwrap();
+            locked.transactions.clear();
+            locked.effects.clear();
+            locked.contents_digest_to_sequence_number.clear();
+            locked.full_checkpoint_contents.clear();
+            locked.checkpoint_contents.clear();
+        }
+        self.0.insert_checkpoint_contents(checkpoint, contents)?;
+        Ok(())
+    }
+
+    fn insert_committee(&self, new_committee: Committee) -> Result<(), Self::Error> {
+        self.0.insert_committee(new_committee)
+    }
+}
