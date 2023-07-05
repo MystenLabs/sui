@@ -6,7 +6,7 @@ import { Check12, EyeClose16, Ooo24 } from '@mysten/icons';
 import { get, set } from 'idb-keyval';
 import { useRef, useEffect, useCallback, useState } from 'react';
 import toast from 'react-hot-toast';
-import { Link, NavLink } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 
 import { Link as InlineLink } from '../../../shared/Link';
 import { Text } from '../../../shared/text';
@@ -19,37 +19,10 @@ import { NFTDisplayCard } from '_components/nft-display';
 import { ampli } from '_src/shared/analytics/ampli';
 import { useGetNFTs } from '_src/ui/app/hooks/useGetNFTs';
 import PageTitle from '_src/ui/app/shared/PageTitle';
-import { Menu } from '@headlessui/react';
+import AssetsOptionsMenu from './AssetsOptionsMenu';
 
 const HIDDEN_ASSET_IDS = 'hidden-asset-ids';
 const TOAST_DURATION_MS = 1005;
-
-const AssetsOptionsMenu = () => {
-	return (
-		<Menu>
-			<Menu.Button
-				className="cursor-pointer appearance-none border"
-				style={{ border: 'none', background: 'none' }}
-			>
-				<Ooo24 />
-			</Menu.Button>
-			<Menu.Items className="absolute top-3 right-0 mt-2 w-40 bg-white border border-gray-90 divide-y divide-gray-200 rounded shadow-lg z-50">
-				<Menu.Item>
-					{({ active }) => (
-						<div className="py-2 hover:bg-sui-light">
-							<InlineLink
-								to="/hidden-assets"
-								color="suiDark"
-								weight="semibold"
-								text="View Hidden Assets"
-							/>
-						</div>
-					)}
-				</Menu.Item>
-			</Menu.Items>
-		</Menu>
-	);
-};
 
 function NftsPage() {
 	const [internalHiddenAssetIds, internalSetHiddenAssetIds] = useState<string[]>([]);
