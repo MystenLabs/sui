@@ -77,6 +77,12 @@ pub struct GasProfiler {
 
 #[cfg(debug_assertions)]
 impl GasProfiler {
+    // Used by profiler viz tool
+    const OPEN_FRAME_IDENT: &str = "O";
+    const CLOSE_FRAME_IDENT: &str = "C";
+
+    const TOP_LEVEL_FRAME_NAME: &str = "root";
+
     pub fn init(config: &VMProfilerConfig, name: String, start_gas: u64) -> Self {
         let mut prof = GasProfiler {
             exporter: "speedscope@1.15.2".to_string(),
@@ -99,7 +105,11 @@ impl GasProfiler {
             config: config.clone(),
             finished: false,
         };
-        profile_open_frame_impl!(Some(&mut prof), "root".to_string(), start_gas);
+        profile_open_frame_impl!(
+            Some(&mut prof),
+            Self::TOP_LEVEL_FRAME_NAME.to_string(),
+            start_gas
+        );
         prof
     }
 
@@ -123,7 +133,12 @@ impl GasProfiler {
         self.start_gas
     }
 
-    fn add_frame(&mut self, frame_name: String, metadata: String) -> u64 {
+    fn add_frame(
+        &mut self,
+        frame_name: String,
+        frame_display_name: String,
+        metadata: String,
+    ) -> u64 {
         *self
             .shared
             .frame_table
@@ -131,7 +146,7 @@ impl GasProfiler {
             .or_insert({
                 let val = self.shared.frames.len() as u64;
                 self.shared.frames.push(FrameName {
-                    name: frame_name,
+                    name: frame_display_name,
                     file: metadata,
                 });
                 val as usize
@@ -143,11 +158,11 @@ impl GasProfiler {
             return;
         }
 
-        let frame_idx = self.add_frame(frame_name.clone(), metadata);
+        let frame_idx = self.add_frame(metadata.clone(), frame_name.clone(), metadata);
         let start = self.start_gas();
 
         self.profiles[0].events.push(Event {
-            ty: "O".to_string(),
+            ty: Self::OPEN_FRAME_IDENT.to_string(),
             frame: frame_idx,
             at: start - gas_start,
         });
@@ -157,11 +172,11 @@ impl GasProfiler {
         if !*PROFILER_ENABLED || self.start_gas == 0 {
             return;
         }
-        let frame_idx = self.add_frame(frame_name, metadata);
+        let frame_idx = self.add_frame(metadata.clone(), frame_name, metadata);
         let start = self.start_gas();
 
         self.profiles[0].events.push(Event {
-            ty: "C".to_string(),
+            ty: Self::CLOSE_FRAME_IDENT.to_string(),
             frame: frame_idx,
             at: start - gas_end,
         });
@@ -195,7 +210,7 @@ impl GasProfiler {
         self.finished = true;
         let end_gas = self.start_gas() - self.profiles[0].end_value;
         let mut q = Some(self);
-        profile_close_frame_impl!(&mut q, "root".to_string(), end_gas);
+        profile_close_frame_impl!(&mut q, Self::TOP_LEVEL_FRAME_NAME.to_string(), end_gas);
         profile_dump_file!(q.unwrap());
     }
 }
@@ -204,17 +219,6 @@ impl GasProfiler {
 impl Drop for GasProfiler {
     fn drop(&mut self) {
         self.finish();
-        let GasProfiler {
-            exporter: _,
-            name: _,
-            active_profile_index: _,
-            schema: _,
-            shared: _,
-            profiles: _,
-            start_gas: _,
-            config: _,
-            finished: _,
-        } = self;
     }
 }
 
