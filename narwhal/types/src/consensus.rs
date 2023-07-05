@@ -5,7 +5,7 @@
 use crate::{Batch, Certificate, CertificateAPI, CertificateDigest, HeaderAPI, Round, TimestampMs};
 use config::{AuthorityIdentifier, Committee};
 use enum_dispatch::enum_dispatch;
-use fastcrypto::hash::Hash;
+use fastcrypto::hash::{Digest, Hash, HashFunction};
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
 use std::collections::HashMap;
@@ -21,8 +21,21 @@ pub type SequenceNumber = u64;
 /// It is sent to the the ExecutionState handle_consensus_transactions
 pub struct ConsensusOutput {
     pub sub_dag: Arc<CommittedSubDag>,
-    /// Order of each Vec<Batch> item matches the order of certificates in the CommittedSubDag.
+    /// Matches certificates in the `sub_dag` one-to-one.
     pub batches: Vec<Vec<Batch>>,
+}
+
+impl Hash<{ crypto::DIGEST_LENGTH }> for ConsensusOutput {
+    type TypedDigest = ConsensusOutputDigest;
+
+    fn digest(&self) -> ConsensusOutputDigest {
+        let mut hasher = crypto::DefaultHashFunction::new();
+        hasher.update(self.sub_dag.digest());
+        self.batches.iter().flatten().for_each(|b| {
+            hasher.update(b.digest());
+        });
+        ConsensusOutputDigest(hasher.finalize().into())
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
@@ -119,6 +132,35 @@ impl CommittedSubDag {
             return *self.leader.header().created_at();
         }
         self.commit_timestamp
+    }
+}
+
+impl Hash<{ crypto::DIGEST_LENGTH }> for CommittedSubDag {
+    type TypedDigest = ConsensusOutputDigest;
+
+    fn digest(&self) -> ConsensusOutputDigest {
+        let mut hasher = crypto::DefaultHashFunction::new();
+        // Instead of hashing serialized CommittedSubDag, hash the certificate digests instead.
+        // Signatures in the certificates are not part of the commitment.
+        for cert in &self.certificates {
+            hasher.update(cert.digest());
+        }
+        hasher.update(self.leader.digest());
+        hasher.update(
+            bcs::to_bytes(&self.sub_dag_index).unwrap_or_else(|_| {
+                panic!("Serialization of {} should not fail", self.sub_dag_index)
+            }),
+        );
+        hasher.update(bcs::to_bytes(&self.reputation_score).unwrap_or_else(|_| {
+            panic!(
+                "Serialization of {:?} should not fail",
+                self.reputation_score
+            )
+        }));
+        hasher.update(bcs::to_bytes(&self.commit_timestamp).unwrap_or_else(|_| {
+            panic!("Serialization of {} should not fail", self.commit_timestamp)
+        }));
+        ConsensusOutputDigest(hasher.finalize().into())
     }
 }
 
@@ -359,6 +401,22 @@ impl CommittedSubDagShell {
 
 /// Shutdown token dropped when a task is properly shut down.
 pub type ShutdownToken = mpsc::Sender<()>;
+
+// Digest of ConsususOutput and CommittedSubDag
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct ConsensusOutputDigest([u8; crypto::DIGEST_LENGTH]);
+
+impl AsRef<[u8]> for ConsensusOutputDigest {
+    fn as_ref(&self) -> &[u8] {
+        &self.0
+    }
+}
+
+impl From<ConsensusOutputDigest> for Digest<{ crypto::DIGEST_LENGTH }> {
+    fn from(d: ConsensusOutputDigest) -> Self {
+        Digest::new(d.0)
+    }
+}
 
 #[cfg(test)]
 mod tests {
