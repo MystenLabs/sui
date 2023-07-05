@@ -1,0 +1,58 @@
+processed 12 tasks
+
+init:
+P1: object(0,0), P2: object(0,1)
+
+task 1 'publish'. lines 8-55:
+created: object(1,0)
+mutated: object(0,2)
+gas summary: computation_cost: 1000000, storage_cost: 7432800,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2 'programmable'. lines 57-59:
+created: object(2,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2196400,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3 'view-object'. lines 62-65:
+Owner: Account Address ( P1 )
+Version: 2
+Contents: test::m::A {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,0)}}}
+
+task 4 'programmable'. lines 67-69:
+created: object(4,0), object(4,1)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 3663200,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 5 'view-object'. lines 71-71:
+Owner: Object ID: ( fake(4,1) )
+Version: 2
+Contents: sui::dynamic_field::Field<u64, u64> {id: sui::object::UID {id: sui::object::ID {bytes: fake(4,0)}}, name: 0u64, value: 0u64}
+
+task 6 'programmable'. lines 73-74:
+mutated: object(0,1), object(4,0), object(4,1)
+gas summary: computation_cost: 1000000, storage_cost: 3663200,  storage_rebate: 3626568, non_refundable_storage_fee: 36632
+
+task 7 'view-object'. lines 76-79:
+Owner: Object ID: ( fake(4,1) )
+Version: 3
+Contents: sui::dynamic_field::Field<u64, u64> {id: sui::object::UID {id: sui::object::ID {bytes: fake(4,0)}}, name: 0u64, value: 1u64}
+
+task 8 'programmable'. lines 81-86:
+created: object(8,0)
+mutated: object(_), object(2,0)
+wrapped: object(4,1)
+gas summary: computation_cost: 500000, storage_cost: 4126800,  storage_rebate: 2392632, non_refundable_storage_fee: 24168
+
+task 9 'programmable'. lines 88-92:
+created: object(8,0)
+mutated: object(_), object(2,0)
+wrapped: object(4,1)
+gas summary: computation_cost: 500000, storage_cost: 4126800,  storage_rebate: 2392632, non_refundable_storage_fee: 24168
+
+task 10 'programmable'. lines 94-98:
+Error: Transaction Effects Status: MoveAbort(MoveLocation { module: ModuleId { address: test, name: Identifier("m") }, function: 4, instruction: 13, function_name: Some("check") }, 0) in command 1
+Execution Error: MoveAbort(MoveLocation { module: ModuleId { address: test, name: Identifier("m") }, function: 4, instruction: 13, function_name: Some("check") }, 0) in command 1
+
+task 11 'programmable'. lines 100-102:
+Error: Transaction Effects Status: MoveAbort(MoveLocation { module: ModuleId { address: test, name: Identifier("m") }, function: 4, instruction: 13, function_name: Some("check") }, 0) in command 1
+Execution Error: MoveAbort(MoveLocation { module: ModuleId { address: test, name: Identifier("m") }, function: 4, instruction: 13, function_name: Some("check") }, 0) in command 1

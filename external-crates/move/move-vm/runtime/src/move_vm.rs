@@ -39,6 +39,10 @@ impl MoveVM {
         })
     }
 
+    pub fn config(&self) -> &VMConfig {
+        self.runtime.loader().vm_config()
+    }
+
     /// Create a new Session backed by the given storage.
     ///
     /// Right now it is the caller's responsibility to ensure cache coherence of the Move VM Loader

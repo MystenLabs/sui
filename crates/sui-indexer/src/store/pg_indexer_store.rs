@@ -801,10 +801,13 @@ impl IndexerStore for PgIndexerStore {
                     .filter(recipients::dsl::transaction_digest.eq(digest))
                     .select(recipients::dsl::id)
                     .into_boxed();
+                // NOTE: if the query is ORDER BY id ASC, we want to skip the LAST
+                // recipient of the cursor transaction, thus we should order by id DESC;
+                // Same thing for the other way around.
                 if is_descending {
-                    boxed_query = boxed_query.order(recipients::dsl::id.desc());
-                } else {
                     boxed_query = boxed_query.order(recipients::dsl::id.asc());
+                } else {
+                    boxed_query = boxed_query.order(recipients::dsl::id.desc());
                 }
                 Some(boxed_query.first::<i64>(conn))
             } else {

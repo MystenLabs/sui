@@ -17,7 +17,6 @@ import {
 	type ModalProps,
 } from '../Modal';
 import { ObjectModal, type ObjectModalProps } from '../Modal/ObjectModal';
-
 import { DefaultRpcClient, Network } from '~/utils/api/DefaultRpcClient';
 
 export default {

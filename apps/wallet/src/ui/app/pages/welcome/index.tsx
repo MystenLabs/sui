@@ -30,7 +30,7 @@ const WelcomePage = () => {
 					<div className="rounded-20 bg-sui-lightest shadow-wallet-content flex flex-col flex-nowrap items-center justify-center w-popup-width h-popup-height">
 						<BottomMenuLayout>
 							<Content className="flex flex-col flex-nowrap items-center p-7.5 pb-0">
-								<div className="mt-7.5 text-hero">
+								<div className="mt-7.5">
 									<Logo />
 								</div>
 

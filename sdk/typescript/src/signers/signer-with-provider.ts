@@ -4,22 +4,22 @@
 import { fromB64, toB64 } from '@mysten/bcs';
 import { TransactionBlock } from '../builder/index.js';
 import { TransactionBlockDataBuilder } from '../builder/TransactionBlockData.js';
-import { SerializedSignature } from '../cryptography/signature.js';
-import { JsonRpcProvider } from '../providers/json-rpc-provider.js';
-import { HttpHeaders } from '../rpc/client.js';
-import {
+import type { SerializedSignature } from '../cryptography/signature.js';
+import type { JsonRpcProvider } from '../providers/json-rpc-provider.js';
+import type { HttpHeaders } from '../rpc/client.js';
+import type {
 	ExecuteTransactionRequestType,
 	FaucetResponse,
-	getTotalGasUsedUpperBound,
 	SuiAddress,
 	DevInspectResults,
 	DryRunTransactionBlockResponse,
 	SuiTransactionBlockResponse,
 	SuiTransactionBlockResponseOptions,
 } from '../types/index.js';
+import { getTotalGasUsedUpperBound } from '../types/index.js';
 import { IntentScope, messageWithIntent } from '../utils/intent.js';
-import { Signer } from './signer.js';
-import { SignedTransaction, SignedMessage } from './types.js';
+import type { Signer } from './signer.js';
+import type { SignedTransaction, SignedMessage } from './types.js';
 
 ///////////////////////////////
 // Exported Abstracts

@@ -8,11 +8,11 @@ import {
 } from '@mysten/sui.js';
 import Browser from 'webextension-polyfill';
 
+import { Connection } from './Connection';
 import NetworkEnv from '../NetworkEnv';
 import { Window } from '../Window';
 import { getStoredAccountsPublicInfo } from '../keyring/accounts';
 import { requestUserApproval } from '../qredo';
-import { Connection } from './Connection';
 import { createMessage } from '_messages';
 import { type ErrorPayload, isBasePayload } from '_payloads';
 import { isGetAccount } from '_payloads/account/GetAccount';
@@ -20,12 +20,16 @@ import {
 	isAcquirePermissionsRequest,
 	isHasPermissionRequest,
 	type PermissionType,
+	type HasPermissionsResponse,
+	type AcquirePermissionsResponse,
+	type Permission,
 } from '_payloads/permissions';
 import {
 	isExecuteTransactionRequest,
 	isSignTransactionRequest,
 	isStakeRequest,
 	type SignTransactionResponse,
+	type ExecuteTransactionResponse,
 } from '_payloads/transactions';
 import Permissions from '_src/background/Permissions';
 import Transactions from '_src/background/Transactions';
@@ -40,12 +44,6 @@ import type { Message } from '_messages';
 import type { PortChannelName } from '_messaging/PortChannelName';
 import type { GetAccountResponse } from '_payloads/account/GetAccountResponse';
 import type { SetNetworkPayload } from '_payloads/network';
-import type {
-	HasPermissionsResponse,
-	AcquirePermissionsResponse,
-	Permission,
-} from '_payloads/permissions';
-import type { ExecuteTransactionResponse } from '_payloads/transactions';
 import type { Runtime } from 'webextension-polyfill';
 
 export class ContentScriptConnection extends Connection {

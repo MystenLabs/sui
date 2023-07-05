@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useTransactionSummary } from '@mysten/core';
+import { useTransactionSummary, getLabel } from '@mysten/core';
 import {
 	getExecutionStatusError,
 	getExecutionStatusType,
@@ -73,7 +73,7 @@ export function TransactionCard({
 					<TxnIcon
 						txnFailed={executionStatus !== 'success' || !!error}
 						// TODO: Support programmable transactions variable icons here:
-						variant="Send"
+						variant={getLabel(txn, address)}
 					/>
 				</div>
 				<div className="flex flex-col w-full gap-1.5">

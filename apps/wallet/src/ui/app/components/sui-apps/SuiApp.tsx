@@ -7,7 +7,6 @@ import DisconnectApp from './DisconnectApp';
 import { ImageIcon } from '_app/shared/image-icon';
 import ExternalLink from '_components/external-link';
 import { ampli } from '_src/shared/analytics/ampli';
-import { trackEvent } from '_src/shared/plausible';
 import { getDAppUrl } from '_src/shared/utils';
 import { Text } from '_src/ui/app/shared/text';
 
@@ -64,11 +63,11 @@ function ListView({ name, icon, description, tags }: ListViewProp) {
 				<Text variant="body" weight="semibold" color="sui-dark">
 					{name}
 				</Text>
-				<Text variant="subtitle" weight="normal" color="steel-darker">
+				<Text variant="pSubtitle" weight="normal" color="steel-darker">
 					{description}
 				</Text>
 				{tags?.length && (
-					<div className="flex flex-wrap gap-1">
+					<div className="flex flex-wrap gap-1 mt-0.5">
 						{tags?.map((tag) => (
 							<div
 								className="flex item-center justify-center px-1.5 py-0.5 border border-solid border-steel rounded"
@@ -148,9 +147,6 @@ export function SuiApp({
 			className="no-underline"
 			onClick={() => {
 				ampli.openedApplication({ applicationName: name });
-				trackEvent('AppOpen', {
-					props: { name, source: 'AppPage' },
-				});
 			}}
 		>
 			{AppDetails}

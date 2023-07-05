@@ -18,6 +18,8 @@ use move_core_types::{
     resolver::MoveResolver,
     value::MoveTypeLayout,
 };
+#[cfg(debug_assertions)]
+use move_vm_profiler::GasProfiler;
 use move_vm_types::{
     data_store::DataStore,
     gas::GasMeter,
@@ -98,6 +100,16 @@ impl<'r, 'l, S: MoveResolver> Session<'r, 'l, S> {
         args: Vec<impl Borrow<[u8]>>,
         gas_meter: &mut impl GasMeter,
     ) -> VMResult<SerializedReturnValues> {
+        #[cfg(debug_assertions)]
+        {
+            if gas_meter.get_profiler_mut().is_none() {
+                gas_meter.set_profiler(GasProfiler::init_default_cfg(
+                    function_name.to_string(),
+                    gas_meter.remaining_gas().into(),
+                ));
+            }
+        }
+
         let bypass_declared_entry_check = true;
         self.runtime.execute_function(
             module,
@@ -198,6 +210,10 @@ impl<'r, 'l, S: MoveResolver> Session<'r, 'l, S> {
     pub fn finish(self) -> (VMResult<(ChangeSet, Vec<Event>)>, S) {
         let (res, remote) = self.data_cache.into_effects();
         (res.map_err(|e| e.finish(Location::Undefined)), remote)
+    }
+
+    pub fn vm_config(&self) -> &move_vm_config::runtime::VMConfig {
+        &self.runtime.loader().vm_config()
     }
 
     /// Same like `finish`, but also extracts the native context extensions from the session.

@@ -6,11 +6,10 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
 
 import { Image, type ImageProps } from '../image/Image';
-
-import type { Meta, StoryObj } from '@storybook/react';
-
 import { VISIBILITY } from '~/hooks/useImageMod';
 import { DefaultRpcClient, Network } from '~/utils/api/DefaultRpcClient';
+
+import type { Meta, StoryObj } from '@storybook/react';
 
 export default {
 	component: Image,

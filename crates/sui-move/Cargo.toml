@@ -35,7 +35,6 @@ move-vm-runtime = { path = "../../external-crates/move/move-vm/runtime" }
 sui-move-natives = { path = "../../sui-execution/latest/sui-move-natives", package = "sui-move-natives-latest" }
 
 sui-core = { workspace = true, optional = true }
-sui-cost-tables.workspace = true
 sui-move-build.workspace = true
 sui-protocol-config.workspace = true
 sui-types.workspace = true

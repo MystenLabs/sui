@@ -2,13 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import nacl from 'tweetnacl';
-import { ExportedKeypair, Keypair } from '../../cryptography/keypair.js';
+import type { ExportedKeypair } from '../../cryptography/keypair.js';
 import { Ed25519PublicKey } from './publickey.js';
 import { isValidHardenedPath, mnemonicToSeedHex } from '../../cryptography/mnemonics.js';
 import { derivePath } from '../../utils/ed25519-hd-key.js';
 import { toB64 } from '@mysten/bcs';
 import type { SignatureScheme } from '../../cryptography/signature.js';
-import { PRIVATE_KEY_SIZE } from '../../cryptography/keypair.js';
+import { PRIVATE_KEY_SIZE, Keypair } from '../../cryptography/keypair.js';
 
 export const DEFAULT_ED25519_DERIVATION_PATH = "m/44'/784'/0'/0'/0'";
 
@@ -25,7 +25,7 @@ export interface Ed25519KeypairData {
 /**
  * An Ed25519 Keypair used for signing transactions.
  */
-export class Ed25519Keypair implements Keypair {
+export class Ed25519Keypair extends Keypair {
 	private keypair: Ed25519KeypairData;
 
 	/**
@@ -35,6 +35,7 @@ export class Ed25519Keypair implements Keypair {
 	 * @param keypair Ed25519 keypair
 	 */
 	constructor(keypair?: Ed25519KeypairData) {
+		super();
 		if (keypair) {
 			this.keypair = keypair;
 		} else {
@@ -105,6 +106,10 @@ export class Ed25519Keypair implements Keypair {
 	 */
 	getPublicKey(): Ed25519PublicKey {
 		return new Ed25519PublicKey(this.keypair.publicKey);
+	}
+
+	async sign(data: Uint8Array) {
+		return this.signData(data);
 	}
 
 	/**

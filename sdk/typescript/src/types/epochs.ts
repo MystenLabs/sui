@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-import { array, boolean, Infer, nullable, number, object, string } from 'superstruct';
+import type { Infer } from 'superstruct';
+import { array, boolean, nullable, number, object, string } from 'superstruct';
 import { SuiValidatorSummary } from './validator.js';
 
 export const EndOfEpochInfo = object({

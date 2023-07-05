@@ -1038,7 +1038,7 @@ impl TransactionData {
             gas_data: GasData {
                 price: GAS_PRICE_FOR_SYSTEM_TX,
                 owner: sender,
-                payment: vec![(ObjectID::ZERO, SequenceNumber::default(), ObjectDigest::MIN)],
+                payment: vec![],
                 budget: 0,
             },
             expiration: TransactionExpiration::None,
@@ -1689,6 +1689,12 @@ impl SenderSignedData {
         self.tx_signatures().iter().any(|sig| sig.is_zklogin())
     }
 
+    pub fn has_upgraded_multisig(&self) -> bool {
+        self.tx_signatures()
+            .iter()
+            .any(|sig| sig.is_upgraded_multisig())
+    }
+
     #[cfg(test)]
     pub fn intent_message_mut_for_testing(&mut self) -> &mut IntentMessage<TransactionData> {
         &mut self.inner_mut().intent_message
@@ -1724,8 +1730,14 @@ impl VersionedProtocolMessage for SenderSignedData {
         // SuiError::WrongMessageVersion
         for sig in &self.inner().tx_signatures {
             match sig {
-                GenericSignature::MultiSig(_)
-                | GenericSignature::Signature(_)
+                GenericSignature::MultiSig(_) => {
+                    if !protocol_config.supports_upgraded_multisig() {
+                        return Err(SuiError::UnsupportedFeatureError {
+                            error: "multisig format not enabled on this network".to_string(),
+                        });
+                    }
+                }
+                GenericSignature::Signature(_)
                 | GenericSignature::MultiSigLegacy(_)
                 | GenericSignature::ZkLoginAuthenticator(_) => (),
             }

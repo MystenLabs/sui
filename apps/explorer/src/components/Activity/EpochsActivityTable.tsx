@@ -7,7 +7,6 @@ import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 
 import { genTableDataFromEpochsData } from './utils';
-
 import { useGetEpochs } from '~/hooks/useGetEpochs';
 import { Link } from '~/ui/Link';
 import { Pagination, useCursorPagination } from '~/ui/Pagination';

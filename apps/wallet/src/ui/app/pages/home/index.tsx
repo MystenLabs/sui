@@ -8,7 +8,7 @@ import { useLockedGuard } from '_app/wallet/hooks';
 import Loading from '_components/loading';
 import { useInitializedGuard } from '_hooks';
 import PageLayout from '_pages/layout';
-import { usePageView } from '_shared/utils';
+import { useSetGrowthbookAttributes } from '_shared/utils';
 
 interface Props {
 	disableNavigation?: boolean;
@@ -19,7 +19,7 @@ const HomePage = ({ disableNavigation }: Props) => {
 	const lockedChecking = useLockedGuard(false);
 	const guardChecking = initChecking || lockedChecking;
 
-	usePageView();
+	useSetGrowthbookAttributes();
 	return (
 		<PageLayout>
 			<Loading loading={guardChecking}>

@@ -4,15 +4,17 @@
 use self::db_dump::{dump_table, duplicate_objects_summary, list_tables, table_summary, StoreName};
 use self::index_search::{search_index, SearchRange};
 use crate::db_tool::db_dump::{compact, print_table_metadata, prune_checkpoints, prune_objects};
-use anyhow::bail;
+use anyhow::{anyhow, bail};
 use clap::Parser;
+use narwhal_storage::NodeStorage;
 use std::path::{Path, PathBuf};
 use sui_core::authority::authority_per_epoch_store::AuthorityEpochTables;
 use sui_core::authority::authority_store_tables::AuthorityPerpetualTables;
 use sui_core::checkpoints::CheckpointStore;
 use sui_types::base_types::{EpochId, ObjectID, SequenceNumber};
-use sui_types::digests::TransactionDigest;
+use sui_types::digests::{CheckpointContentsDigest, TransactionDigest};
 use sui_types::effects::TransactionEffectsAPI;
+use sui_types::messages_checkpoint::CheckpointDigest;
 use sui_types::storage::ObjectKey;
 use sui_types::sui_system_state::{get_sui_system_state, SuiSystemStateTrait};
 use typed_store::rocks::MetricConf;
@@ -29,7 +31,11 @@ pub enum DbToolCommand {
     TableSummary(Options),
     DuplicatesSummary,
     ListDBMetadata(Options),
+    PrintLastConsensusIndex,
+    PrintConsensusCommit(PrintConsensusCommitOptions),
     PrintTransaction(PrintTransactionOptions),
+    PrintCheckpoint(PrintCheckpointOptions),
+    PrintCheckpointContent(PrintCheckpointContentOptions),
     RemoveObjectLock(RemoveObjectLockOptions),
     RemoveTransaction(RemoveTransactionOptions),
     ResetDB,
@@ -87,9 +93,33 @@ pub struct Options {
 
 #[derive(Parser)]
 #[clap(rename_all = "kebab-case")]
+pub struct PrintConsensusCommitOptions {
+    #[clap(long, help = "Sequence number of the consensus commit")]
+    seqnum: u64,
+}
+
+#[derive(Parser)]
+#[clap(rename_all = "kebab-case")]
 pub struct PrintTransactionOptions {
     #[clap(long, help = "The transaction digest to print")]
     digest: TransactionDigest,
+}
+
+#[derive(Parser)]
+#[clap(rename_all = "kebab-case")]
+pub struct PrintCheckpointOptions {
+    #[clap(long, help = "The checkpoint digest to print")]
+    digest: CheckpointDigest,
+}
+
+#[derive(Parser)]
+#[clap(rename_all = "kebab-case")]
+pub struct PrintCheckpointContentOptions {
+    #[clap(
+        long,
+        help = "The checkpoint content digest (NOT the checkpoint digest)"
+    )]
+    digest: CheckpointContentsDigest,
 }
 
 #[derive(Parser)]
@@ -148,7 +178,11 @@ pub async fn execute_db_tool_command(db_path: PathBuf, cmd: DbToolCommand) -> an
         DbToolCommand::ListDBMetadata(d) => {
             print_table_metadata(d.store_name, d.epoch, db_path, &d.table_name)
         }
+        DbToolCommand::PrintLastConsensusIndex => print_last_consensus_index(&db_path),
+        DbToolCommand::PrintConsensusCommit(d) => print_consensus_commit(&db_path, d),
         DbToolCommand::PrintTransaction(d) => print_transaction(&db_path, d),
+        DbToolCommand::PrintCheckpoint(d) => print_checkpoint(&db_path, d),
+        DbToolCommand::PrintCheckpointContent(d) => print_checkpoint_content(&db_path, d),
         DbToolCommand::ResetDB => reset_db_to_genesis(&db_path),
         DbToolCommand::RemoveObjectLock(d) => remove_object_lock(&db_path, d),
         DbToolCommand::RemoveTransaction(d) => remove_transaction(&db_path, d),
@@ -200,6 +234,30 @@ pub fn print_db_duplicates_summary(db_path: PathBuf) -> anyhow::Result<()> {
     Ok(())
 }
 
+pub fn print_last_consensus_index(path: &Path) -> anyhow::Result<()> {
+    let epoch_tables = AuthorityEpochTables::open_tables_read_write(
+        path.to_path_buf(),
+        MetricConf::default(),
+        None,
+        None,
+    );
+    let last_index = epoch_tables.get_last_consensus_index()?;
+    println!("Last consensus index is {:?}", last_index);
+    Ok(())
+}
+
+pub fn print_consensus_commit(path: &Path, opt: PrintConsensusCommitOptions) -> anyhow::Result<()> {
+    let consensus_db = NodeStorage::reopen(path, None);
+    let consensus_commit = consensus_db
+        .consensus_store
+        .read_consensus_commit(&opt.seqnum)?;
+    match consensus_commit {
+        Some(commit) => println!("Consensus commit at {} is {:?}", opt.seqnum, commit),
+        None => println!("Consensus commit at {} is not found!", opt.seqnum),
+    }
+    Ok(())
+}
+
 pub fn print_transaction(path: &Path, opt: PrintTransactionOptions) -> anyhow::Result<()> {
     let perpetual_db = AuthorityPerpetualTables::open(&path.join("store"), None);
     if let Some((epoch, checkpoint_seq_num)) =
@@ -217,6 +275,39 @@ pub fn print_transaction(path: &Path, opt: PrintTransactionOptions) -> anyhow::R
             effects.dependencies(),
         );
     };
+    Ok(())
+}
+
+pub fn print_checkpoint(path: &Path, opt: PrintCheckpointOptions) -> anyhow::Result<()> {
+    let checkpoint_store = CheckpointStore::new(&path.join("checkpoints"));
+    let checkpoint = checkpoint_store
+        .get_checkpoint_by_digest(&opt.digest)?
+        .ok_or(anyhow!(
+            "Checkpoint digest {:?} not found in checkpoint store",
+            opt.digest
+        ))?;
+    println!("Checkpoint: {:?}", checkpoint);
+    drop(checkpoint_store);
+    print_checkpoint_content(
+        path,
+        PrintCheckpointContentOptions {
+            digest: checkpoint.content_digest,
+        },
+    )
+}
+
+pub fn print_checkpoint_content(
+    path: &Path,
+    opt: PrintCheckpointContentOptions,
+) -> anyhow::Result<()> {
+    let checkpoint_store = CheckpointStore::new(&path.join("checkpoints"));
+    let contents = checkpoint_store
+        .get_checkpoint_contents(&opt.digest)?
+        .ok_or(anyhow!(
+            "Checkpoint content digest {:?} not found in checkpoint store",
+            opt.digest
+        ))?;
+    println!("Checkpoint content: {:?}", contents);
     Ok(())
 }
 

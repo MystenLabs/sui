@@ -5,13 +5,14 @@ use crate::authority::authority_store_types::{ObjectContentDigest, StoreData, St
 use crate::checkpoints::{CheckpointStore, CheckpointWatermark};
 use anyhow::anyhow;
 use mysten_metrics::{monitored_scope, spawn_monitored_task};
+use once_cell::sync::Lazy;
 use prometheus::{
     register_int_counter_with_registry, register_int_gauge_with_registry, IntCounter, IntGauge,
     Registry,
 };
 use rocksdb::LiveFile;
 use std::cmp::{max, min};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::time::SystemTime;
 use std::{sync::Arc, time::Duration};
 use sui_archival::reader::ArchiveReaderBalancer;
@@ -35,6 +36,19 @@ use typed_store::{Map, TypedStoreError};
 
 use super::authority_store_tables::AuthorityPerpetualTables;
 
+static PERIODIC_PRUNING_TABLES: Lazy<HashSet<String>> = Lazy::new(|| {
+    [
+        "objects",
+        "effects",
+        "transactions",
+        "events",
+        "executed_effects",
+        "executed_transactions_to_checkpoint",
+    ]
+    .into_iter()
+    .map(|cf| cf.to_string())
+    .collect()
+});
 pub struct AuthorityStorePruner {
     _objects_pruner_cancel_handle: oneshot::Sender<()>,
 }
@@ -427,7 +441,7 @@ impl AuthorityStorePruner {
     fn compact_next_sst_file(
         perpetual_db: Arc<AuthorityPerpetualTables>,
         delay_days: usize,
-    ) -> anyhow::Result<()> {
+    ) -> anyhow::Result<Option<LiveFile>> {
         let db_path = perpetual_db.objects.rocksdb.path();
         let mut sst_file_for_compaction: Option<LiveFile> = None;
         let time_threshold =
@@ -435,8 +449,8 @@ impl AuthorityStorePruner {
         for sst_file in perpetual_db.objects.rocksdb.live_files()? {
             let file_path = db_path.join(sst_file.name.clone().trim_matches('/'));
             let last_modified = std::fs::metadata(file_path)?.modified()?;
-            if sst_file.column_family_name != "objects"
-                || sst_file.level < 2
+            if !PERIODIC_PRUNING_TABLES.contains(&sst_file.column_family_name)
+                || sst_file.level < 1
                 || sst_file.start_key.is_none()
                 || sst_file.end_key.is_none()
                 || last_modified > time_threshold
@@ -450,16 +464,17 @@ impl AuthorityStorePruner {
             }
             sst_file_for_compaction = Some(sst_file);
         }
-        if let Some(sst_file) = sst_file_for_compaction {
-            info!(
-                "Manual compaction of sst file {:?}. Size: {:?}, level: {:?}",
-                sst_file.name, sst_file.size, sst_file.level
-            );
-            let start_key: ObjectKey = bcs::from_bytes(sst_file.start_key.as_ref().unwrap())?;
-            let end_key: ObjectKey = bcs::from_bytes(sst_file.end_key.as_ref().unwrap())?;
-            perpetual_db.objects.compact_range(&start_key, &end_key)?;
-        }
-        Ok(())
+        let Some(sst_file) = sst_file_for_compaction else {return Ok(None);};
+        info!(
+            "Manual compaction of sst file {:?}. Size: {:?}, level: {:?}",
+            sst_file.name, sst_file.size, sst_file.level
+        );
+        perpetual_db.objects.compact_range_raw(
+            &sst_file.column_family_name,
+            sst_file.start_key.clone().unwrap(),
+            sst_file.end_key.clone().unwrap(),
+        )?;
+        Ok(Some(sst_file))
     }
 
     fn setup_pruning(
@@ -503,10 +518,16 @@ impl AuthorityStorePruner {
                         Self::compact_next_sst_file(db, delay_days)
                     })
                     .await;
-                    if let Err(err) = result {
-                        error!("Failed to compact sst file: {:?}", err);
+                    let mut sleep_interval_secs = 1;
+                    match result {
+                        Err(err) => error!("Failed to compact sst file: {:?}", err),
+                        Ok(Err(err)) => error!("Failed to compact sst file: {:?}", err),
+                        Ok(Ok(None)) => {
+                            sleep_interval_secs = 3600;
+                        }
+                        _ => {}
                     }
-                    tokio::time::sleep(Duration::from_secs(1)).await;
+                    tokio::time::sleep(Duration::from_secs(sleep_interval_secs)).await;
                 }
             });
         }

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useCopyToClipboard } from '@mysten/core';
-import { Copy12, Copy16, CopyNew24 } from '@mysten/icons';
+import { Copy12, Copy16, Copy18 } from '@mysten/icons';
 import { cva, type VariantProps } from 'class-variance-authority';
 import { toast } from 'react-hot-toast';
 
@@ -36,7 +36,7 @@ export interface CopyToClipboardProps extends IconStylesProps {
 const ICON_SIZES = {
 	sm: Copy12,
 	md: Copy16,
-	lg: CopyNew24,
+	lg: Copy18,
 };
 
 export function CopyToClipboard({

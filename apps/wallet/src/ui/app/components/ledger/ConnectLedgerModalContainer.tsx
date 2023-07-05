@@ -4,9 +4,9 @@
 import toast from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 
+import { ConnectLedgerModal } from './ConnectLedgerModal';
 import { getLedgerConnectionErrorMessage } from '../../helpers/errorMessages';
 import { useNextMenuUrl } from '../menu/hooks';
-import { ConnectLedgerModal } from './ConnectLedgerModal';
 import { ampli } from '_src/shared/analytics/ampli';
 
 export function ConnectLedgerModalContainer() {

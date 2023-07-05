@@ -103,7 +103,7 @@ export function AddressInput({
 					hasWarningOrError ? 'border-issue' : 'border-gray-45',
 				)}
 			>
-				<div className="min-h-[42px] w-full flex items-center pl-3 py-1">
+				<div className="min-h-[42px] w-full flex items-center pl-3 py-2">
 					<TextareaAutosize
 						data-testid="address-input"
 						maxRows={3}
@@ -123,7 +123,7 @@ export function AddressInput({
 
 				<div
 					onClick={clearAddress}
-					className="flex bg-gray-40 items-center justify-center w-12 p-0.5 mr-0 right-0 max-w-[20%] mx-3.5 cursor-pointer"
+					className="flex bg-gray-40 items-center justify-center w-11 right-0 max-w-[20%] ml-4 cursor-pointer"
 				>
 					{meta.touched && field.value ? (
 						<X12 className="h-3 w-3 text-steel-darker" />
@@ -134,8 +134,8 @@ export function AddressInput({
 			</div>
 
 			{meta.touched ? (
-				<div className="mt-3 w-full">
-					<Alert mode={meta.error || warningData ? 'issue' : 'success'}>
+				<div className="mt-2.5 w-full">
+					<Alert noBorder rounded="lg" mode={meta.error || warningData ? 'issue' : 'success'}>
 						{warningData === RecipientWarningType.OBJECT ? (
 							<>
 								<Text variant="pBody" weight="semibold">
@@ -156,7 +156,7 @@ export function AddressInput({
 								</Text>
 							</>
 						) : (
-							<Text variant="bodySmall" weight="medium">
+							<Text variant="pBodySmall" weight="medium">
 								{meta.error || 'Valid address'}
 							</Text>
 						)}

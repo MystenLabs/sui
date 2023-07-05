@@ -728,18 +728,14 @@ impl SuiNode {
             anemo_config.quic = Some(quic_config);
 
             let server_name = format!("sui-{}", chain_identifier);
-            let alt_server_name = "sui";
             let network = Network::bind(config.p2p_config.listen_address)
                 .server_name(&server_name)
-                // TODO remove alternate_server_name once transition stabilizes
-                .alternate_server_name(alt_server_name)
                 .private_key(config.network_key_pair().copy().private().0.to_bytes())
                 .config(anemo_config)
                 .outbound_request_layer(outbound_layer)
                 .start(service)?;
             info!(
                 server_name = server_name,
-                alt_server_name = alt_server_name,
                 "P2p network started on {}",
                 network.local_addr()
             );

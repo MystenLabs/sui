@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import * as amplitude from '@amplitude/analytics-browser';
-import { type UserSession } from '@amplitude/analytics-types';
+import { LogLevel, TransportType, type UserSession } from '@amplitude/analytics-types';
 import { PersistableStorage } from '@mysten/core';
 
 import { ampli } from './ampli';
@@ -19,8 +19,13 @@ export async function initAmplitude() {
 		client: {
 			configuration: {
 				cookieStorage: persistableStorage,
-				logLevel: IS_PROD_ENV ? amplitude.Types.LogLevel.Warn : amplitude.Types.LogLevel.Debug,
+				logLevel: IS_PROD_ENV ? LogLevel.Warn : amplitude.Types.LogLevel.Debug,
 			},
 		},
+	});
+
+	window.addEventListener('pagehide', () => {
+		amplitude.setTransport(TransportType.SendBeacon);
+		amplitude.flush();
 	});
 }

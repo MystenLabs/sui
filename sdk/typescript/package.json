@@ -2,7 +2,7 @@
 	"name": "@mysten/sui.js",
 	"author": "Mysten Labs <build@mystenlabs.com>",
 	"description": "Sui TypeScript API(Work in Progress)",
-	"version": "0.36.0",
+	"version": "0.37.1",
 	"license": "Apache-2.0",
 	"files": [
 		"builder",
@@ -112,6 +112,7 @@
 		"@scure/bip32": "^1.3.0",
 		"@scure/bip39": "^1.2.0",
 		"@suchipi/femver": "^1.0.0",
+		"events": "^3.3.0",
 		"superstruct": "^1.0.3",
 		"tweetnacl": "^1.0.3"
 	}

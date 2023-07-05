@@ -9,14 +9,15 @@ use std::{
 
 use move_binary_format::{
     access::ModuleAccess,
+    compatibility::{Compatibility, InclusionCheck},
     errors::{Location, PartialVMResult, VMResult},
     file_format::{AbilitySet, CodeOffset, FunctionDefinitionIndex, LocalIndex, Visibility},
-    CompiledModule,
+    normalized, CompiledModule,
 };
 use move_core_types::{
     account_address::AccountAddress,
     identifier::IdentStr,
-    language_storage::{ModuleId, StructTag, TypeTag},
+    language_storage::{ModuleId, TypeTag},
     u256::U256,
 };
 use move_vm_runtime::{
@@ -39,16 +40,16 @@ use sui_types::{
         CommandKind, ExecutionResults, ExecutionState, ObjectContents, ObjectValue, RawValueType,
         Value,
     },
-    gas::{SuiGasStatus, SuiGasStatusAPI},
+    gas::GasCharger,
     id::{RESOLVED_SUI_ID, UID},
     metrics::LimitsMetrics,
     move_package::{
-        normalize_deserialized_modules, MovePackage, TypeOrigin, UpgradeCap, UpgradePolicy,
-        UpgradeReceipt, UpgradeTicket,
+        normalize_deserialized_modules, MovePackage, UpgradeCap, UpgradePolicy, UpgradeReceipt,
+        UpgradeTicket,
     },
     storage::get_packages,
     transaction::{Argument, Command, ProgrammableMoveCall, ProgrammableTransaction},
-    Identifier, SUI_FRAMEWORK_ADDRESS,
+    SUI_FRAMEWORK_ADDRESS,
 };
 use sui_types::{
     execution_mode::ExecutionMode,
@@ -70,8 +71,7 @@ pub fn execute<Mode: ExecutionMode>(
     vm: &MoveVM,
     state_view: &mut dyn ExecutionState,
     tx_context: &mut TxContext,
-    gas_status: &mut SuiGasStatus,
-    gas_coin: Option<ObjectID>,
+    gas_charger: &mut GasCharger,
     pt: ProgrammableTransaction,
 ) -> Result<Mode::ExecutionResults, ExecutionError> {
     let ProgrammableTransaction { inputs, commands } = pt;
@@ -81,8 +81,7 @@ pub fn execute<Mode: ExecutionMode>(
         vm,
         state_view,
         tx_context,
-        gas_status,
-        gas_coin,
+        gas_charger,
         inputs,
     )?;
     // execute commands
@@ -130,8 +129,7 @@ fn execute_command<Mode: ExecutionMode>(
     context: &mut ExecutionContext<'_, '_, '_>,
     mode_results: &mut Mode::ExecutionResults,
     command: Command,
-) -> Result<(), ExecutionError>
-{
+) -> Result<(), ExecutionError> {
     let mut argument_updates = Mode::empty_arguments();
     let results = match command {
         Command::MakeMoveVec(tag_opt, args) if args.is_empty() => {
@@ -343,8 +341,7 @@ fn execute_move_call<Mode: ExecutionMode>(
     type_arguments: Vec<Type>,
     arguments: Vec<Argument>,
     is_init: bool,
-) -> Result<Vec<Value>, ExecutionError>
-{
+) -> Result<Vec<Value>, ExecutionError> {
     // check that the function is either an entry function or a valid public function
     let LoadedFunctionInfo {
         kind,
@@ -413,8 +410,7 @@ fn write_back_results<Mode: ExecutionMode>(
     mut_ref_kinds: impl IntoIterator<Item = (u8, ValueKind)>,
     return_values: impl IntoIterator<Item = Vec<u8>>,
     return_value_kinds: impl IntoIterator<Item = ValueKind>,
-) -> Result<Vec<Value>, ExecutionError>
-{
+) -> Result<Vec<Value>, ExecutionError> {
     for ((i, bytes), (j, kind)) in mut_ref_values.into_iter().zip(mut_ref_kinds) {
         assert_invariant!(i == j, "lost mutable input");
         let arg_idx = i as usize;
@@ -439,8 +435,7 @@ fn make_value(
     value_info: ValueKind,
     bytes: Vec<u8>,
     used_in_non_entry_move_call: bool,
-) -> Result<Value, ExecutionError>
-{
+) -> Result<Value, ExecutionError> {
     Ok(match value_info {
         ValueKind::Object {
             type_,
@@ -471,14 +466,13 @@ fn execute_move_publish<Mode: ExecutionMode>(
     argument_updates: &mut Mode::ArgumentUpdates,
     module_bytes: Vec<Vec<u8>>,
     dep_ids: Vec<ObjectID>,
-) -> Result<Vec<Value>, ExecutionError>
-{
+) -> Result<Vec<Value>, ExecutionError> {
     assert_invariant!(
         !module_bytes.is_empty(),
         "empty package is checked in transaction input checker"
     );
     context
-        .gas_status
+        .gas_charger
         .charge_publish_package(module_bytes.iter().map(|v| v.len()).sum())?;
 
     let mut modules = deserialize_modules::<Mode>(context, &module_bytes)?;
@@ -497,33 +491,18 @@ fn execute_move_publish<Mode: ExecutionMode>(
 
     // For newly published packages, runtime ID matches storage ID.
     let storage_id = runtime_id;
+    let dependencies = fetch_packages(context, &dep_ids)?;
+    let package_obj = context.new_package(&modules, &dependencies)?;
 
-    // Preserve the old order of operations when package upgrades are not supported, because it
-    // affects the order in which error cases are checked.
-    let package_obj = if context.protocol_config.package_upgrades_supported() {
-        let dependencies = fetch_packages(context, &dep_ids)?;
-        let package_obj = context.new_package(&modules, &dependencies)?;
-
-        let Some(package) = package_obj.data.try_as_package() else {
-            invariant_violation!("Newly created package object is not a package");
-        };
-
-        context.set_linkage(package)?;
-        let res = publish_and_verify_modules(context, runtime_id, &modules)
-            .and_then(|_| init_modules::<Mode>(context, argument_updates, &modules));
-        context.reset_linkage();
-        res?;
-
-        package_obj
-    } else {
-        // FOR THE LOVE OF ALL THAT IS GOOD DO NOT RE-ORDER THIS.  It looks redundant, but is
-        // required to maintain backwards compatibility.
-        publish_and_verify_modules(context, runtime_id, &modules)?;
-        let dependencies = fetch_packages(context, &dep_ids)?;
-        let package = context.new_package(&modules, &dependencies)?;
-        init_modules::<Mode>(context, argument_updates, &modules)?;
-        package
+    let Some(package) = package_obj.data.try_as_package() else {
+        invariant_violation!("Newly created package object is not a package");
     };
+
+    context.set_linkage(package)?;
+    let res = publish_and_verify_modules(context, runtime_id, &modules)
+        .and_then(|_| init_modules::<Mode>(context, argument_updates, &modules));
+    context.reset_linkage();
+    res?;
 
     context.write_package(package_obj)?;
     let values = if Mode::packages_are_predefined() {
@@ -552,12 +531,6 @@ fn execute_move_upgrade<Mode: ExecutionMode>(
     upgrade_ticket_arg: Argument,
 ) -> Result<Vec<Value>, ExecutionError>
 {
-    // Check that package upgrades are supported.
-    context
-        .protocol_config
-        .check_package_upgrades_supported()
-        .map_err(|_| ExecutionError::from_kind(ExecutionErrorKind::FeatureNotYetSupported))?;
-
     assert_invariant!(
         !module_bytes.is_empty(),
         "empty package is checked in transaction input checker"
@@ -597,10 +570,11 @@ fn execute_move_upgrade<Mode: ExecutionMode>(
     }
 
     // Check digest.
+    let hash_modules = true;
     let computed_digest = MovePackage::compute_digest_for_modules_and_deps(
         &module_bytes,
         &dep_ids,
-        context.protocol_config.package_digest_hash_module(),
+        hash_modules,
     )
     .to_vec();
     if computed_digest != upgrade_ticket.digest {
@@ -630,38 +604,6 @@ fn execute_move_upgrade<Mode: ExecutionMode>(
     let Some(package) = package_obj.data.try_as_package() else {
         invariant_violation!("Newly created package object is not a package");
     };
-
-    // Populate loader with all previous types.
-    if !context
-        .protocol_config
-        .disallow_adding_abilities_on_upgrade()
-    {
-        for TypeOrigin {
-            module_name,
-            struct_name,
-            package: origin,
-        } in package.type_origin_table()
-        {
-            if package.id() == *origin {
-                continue;
-            }
-
-            let Ok(module) = Identifier::new(module_name.as_str()) else {
-                continue;
-            };
-
-            let Ok(name) = Identifier::new(struct_name.as_str()) else {
-                continue;
-            };
-
-            let _ = context.load_type(&TypeTag::Struct(Box::new(StructTag {
-                address: (*origin).into(),
-                module,
-                name,
-                type_params: vec![],
-            })));
-        }
-    }
 
     context.set_linkage(package)?;
     let res = publish_and_verify_modules(context, runtime_id, &modules);
@@ -707,36 +649,58 @@ fn check_compatibility<'a>(
 
     let mut new_normalized = normalize_deserialized_modules(upgrading_modules.into_iter());
     for (name, cur_module) in current_normalized {
-        let msg = format!("Existing module {name} not found in next version of package");
         let Some(new_module) = new_normalized.remove(&name) else {
             return Err(ExecutionError::new_with_source(
                 ExecutionErrorKind::PackageUpgradeError {
                     upgrade_error: PackageUpgradeError::IncompatibleUpgrade,
                 },
-                msg,
+                format!("Existing module {name} not found in next version of package"),
             ));
         };
 
-        if let Err(e) =
-            policy.check_compatibility(&cur_module, &new_module, context.protocol_config)
-        {
-            return Err(ExecutionError::new_with_source(
-                ExecutionErrorKind::PackageUpgradeError {
-                    upgrade_error: PackageUpgradeError::IncompatibleUpgrade,
-                },
-                e,
-            ));
-        }
+        check_module_compatibility(
+            &policy,
+            &cur_module,
+            &new_module,
+        )?;
     }
 
     Ok(())
 }
 
+fn check_module_compatibility(
+    policy: &UpgradePolicy,
+    cur_module: &normalized::Module,
+    new_module: &normalized::Module,
+) -> Result<(), ExecutionError> {
+    match policy {
+        UpgradePolicy::Additive => InclusionCheck::Subset.check(cur_module, new_module),
+        UpgradePolicy::DepOnly => InclusionCheck::Equal.check(cur_module, new_module),
+        UpgradePolicy::Compatible => {
+            let compatibility = Compatibility {
+                check_struct_and_pub_function_linking: true,
+                check_struct_layout: true,
+                check_friend_linking: false,
+                check_private_entry_linking: false,
+                disallowed_new_abilities: AbilitySet::ALL,
+                disallow_change_struct_type_params: true,
+            };
+
+            compatibility.check(cur_module, new_module)
+        }
+    }
+    .map_err(|e| ExecutionError::new_with_source(
+        ExecutionErrorKind::PackageUpgradeError {
+            upgrade_error: PackageUpgradeError::IncompatibleUpgrade,
+        },
+        e,
+    ))
+}
+
 fn fetch_package(
     context: &ExecutionContext<'_, '_, '_>,
     package_id: &ObjectID,
-) -> Result<MovePackage, ExecutionError>
-{
+) -> Result<MovePackage, ExecutionError> {
     let mut fetched_packages = fetch_packages(context, vec![package_id])?;
     assert_invariant!(
         fetched_packages.len() == 1,
@@ -753,8 +717,7 @@ fn fetch_package(
 fn fetch_packages<'ctx, 'vm, 'state, 'a>(
     context: &'ctx ExecutionContext<'vm, 'state, 'a>,
     package_ids: impl IntoIterator<Item = &'ctx ObjectID>,
-) -> Result<Vec<MovePackage>, ExecutionError>
-{
+) -> Result<Vec<MovePackage>, ExecutionError> {
     let package_ids: BTreeSet<_> = package_ids.into_iter().collect();
     match get_packages(&context.state_view, package_ids) {
         Err(e) => Err(ExecutionError::new_with_source(
@@ -790,8 +753,7 @@ fn vm_move_call(
     type_arguments: Vec<Type>,
     tx_context_kind: TxContextKind,
     mut serialized_arguments: Vec<Vec<u8>>,
-) -> Result<SerializedReturnValues, ExecutionError>
-{
+) -> Result<SerializedReturnValues, ExecutionError> {
     match tx_context_kind {
         TxContextKind::None => (),
         TxContextKind::Mutable | TxContextKind::Immutable => {
@@ -806,7 +768,7 @@ fn vm_move_call(
             function,
             type_arguments,
             serialized_arguments,
-            context.gas_status.move_gas_status(),
+            context.gas_charger.move_gas_status_mut(),
         )
         .map_err(|e| context.convert_vm_error(e))?;
 
@@ -835,8 +797,7 @@ fn vm_move_call(
 fn deserialize_modules<Mode: ExecutionMode>(
     context: &mut ExecutionContext<'_, '_, '_>,
     module_bytes: &[Vec<u8>],
-) -> Result<Vec<CompiledModule>, ExecutionError>
-{
+) -> Result<Vec<CompiledModule>, ExecutionError> {
     let modules = module_bytes
         .iter()
         .map(|b| {
@@ -862,8 +823,7 @@ fn publish_and_verify_modules(
     context: &mut ExecutionContext<'_, '_, '_>,
     package_id: ObjectID,
     modules: &[CompiledModule],
-) -> Result<(), ExecutionError>
-{
+) -> Result<(), ExecutionError> {
     // TODO(https://github.com/MystenLabs/sui/issues/69): avoid this redundant serialization by exposing VM API that allows us to run the linker directly on `Vec<CompiledModule>`
     let new_module_bytes: Vec<_> = modules
         .iter()
@@ -880,7 +840,7 @@ fn publish_and_verify_modules(
             AccountAddress::from(package_id),
             // TODO: publish_module_bundle() currently doesn't charge gas.
             // Do we want to charge there?
-            context.gas_status.move_gas_status(),
+            context.gas_charger.move_gas_status_mut(),
         )
         .map_err(|e| context.convert_vm_error(e))?;
 
@@ -889,7 +849,6 @@ fn publish_and_verify_modules(
         // Run Sui bytecode verifier, which runs some additional checks that assume the Move
         // bytecode verifier has passed.
         sui_verifier::verifier::sui_verify_module_unmetered(
-            context.protocol_config,
             module,
             &BTreeMap::new(),
         )?;
@@ -902,8 +861,7 @@ fn init_modules<Mode: ExecutionMode>(
     context: &mut ExecutionContext<'_, '_, '_>,
     argument_updates: &mut Mode::ArgumentUpdates,
     modules: &[CompiledModule],
-) -> Result<(), ExecutionError>
-{
+) -> Result<(), ExecutionError> {
     let modules_to_init = modules.iter().filter_map(|module| {
         for fdef in &module.function_defs {
             let fhandle = module.function_handle_at(fdef.function);
@@ -980,8 +938,7 @@ fn check_visibility_and_signature<Mode: ExecutionMode>(
     function: &IdentStr,
     type_arguments: &[Type],
     from_init: bool,
-) -> Result<LoadedFunctionInfo, ExecutionError>
-{
+) -> Result<LoadedFunctionInfo, ExecutionError> {
     if from_init {
         // the session is weird and does not load the module on publishing. This is a temporary
         // work around, since loading the function through the session will cause the module
@@ -1106,8 +1063,7 @@ fn check_non_entry_signature<Mode: ExecutionMode>(
     _module_id: &ModuleId,
     _function: &IdentStr,
     signature: &LoadedFunctionInstantiation,
-) -> Result<Vec<ValueKind>, ExecutionError>
-{
+) -> Result<Vec<ValueKind>, ExecutionError> {
     signature
         .return_
         .iter()
@@ -1212,8 +1168,7 @@ fn build_move_args<Mode: ExecutionMode>(
     function_kind: FunctionKind,
     signature: &LoadedFunctionInstantiation,
     args: &[Argument],
-) -> Result<ArgInfo, ExecutionError>
-{
+) -> Result<ArgInfo, ExecutionError> {
     // check the arity
     let parameters = &signature.parameters;
     let tx_ctx_kind = match parameters.last() {
@@ -1321,8 +1276,7 @@ fn check_param_type<Mode: ExecutionMode>(
     idx: usize,
     value: &Value,
     param_ty: &Type,
-) -> Result<(), ExecutionError>
-{
+) -> Result<(), ExecutionError> {
     let ty = match value {
         // For dev-spect, allow any BCS bytes. This does mean internal invariants for types can
         // be violated (like for string or Option)
@@ -1383,8 +1337,7 @@ fn get_struct_ident(s: &StructType) -> (&AccountAddress, &IdentStr, &IdentStr) {
 pub fn is_tx_context(
     context: &mut ExecutionContext<'_, '_, '_>,
     t: &Type,
-) -> Result<TxContextKind, ExecutionError>
-{
+) -> Result<TxContextKind, ExecutionError> {
     let (is_mut, inner) = match t {
         Type::MutableReference(inner) => (true, inner),
         Type::Reference(inner) => (false, inner),
@@ -1413,8 +1366,7 @@ pub fn is_tx_context(
 fn primitive_serialization_layout(
     context: &mut ExecutionContext<'_, '_, '_>,
     param_ty: &Type,
-) -> Result<Option<PrimitiveArgumentLayout>, ExecutionError>
-{
+) -> Result<Option<PrimitiveArgumentLayout>, ExecutionError> {
     Ok(match param_ty {
         Type::Signer => return Ok(None),
         Type::Reference(_) | Type::MutableReference(_) | Type::TyParam(_) => {

@@ -36,7 +36,6 @@ use sui_types::effects::TransactionEffects;
 use sui_types::epoch_data::EpochData;
 use sui_types::error::UserInputError;
 use sui_types::execution_status::{ExecutionFailureStatus, ExecutionStatus};
-use sui_types::gas::SuiCostTable;
 use sui_types::gas_coin::GasCoin;
 use sui_types::messages_consensus::ConsensusCommitPrologue;
 use sui_types::object::Data;
@@ -1029,7 +1028,8 @@ async fn test_dry_run_on_validator() {
     assert!(response.is_err());
 }
 
-// Tests using a dynamic field that a is newer than the parent in dev inspect/dry run
+// Tests using a dynamic field that is newer than the parent in dev inspect/dry run results
+// in not being able to access the dynamic field object
 #[tokio::test]
 async fn test_dry_run_dev_inspect_dynamic_field_too_new() {
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
@@ -1105,13 +1105,12 @@ async fn test_dry_run_dev_inspect_dynamic_field_too_new() {
     .unwrap();
     assert_eq!(effects.status(), &ExecutionStatus::Success);
     assert_eq!(effects.created().len(), 1);
-    let field = effects.created()[0].0;
 
     // make sure the parent was updated
     let new_parent = fullnode.get_object(&parent.0).await.unwrap().unwrap();
     assert!(parent.1 < new_parent.version());
 
-    // delete the child, but using the old version of the parent
+    // no child to delete since we are using the old version of the parent
     let pt = ProgrammableTransaction {
         inputs: vec![CallArg::Object(ObjectArg::ImmOrOwnedObject(parent))],
         commands: vec![Command::MoveCall(Box::new(ProgrammableMoveCall {
@@ -1129,11 +1128,9 @@ async fn test_dry_run_dev_inspect_dynamic_field_too_new() {
         .dev_inspect_transaction_block(sender, kind, Some(rgp))
         .await
         .unwrap();
-    assert_eq!(effects.deleted().len(), 1);
-    let deleted = &effects.deleted()[0];
-    assert_eq!(field.0, deleted.object_id);
-    assert_eq!(deleted.version, SequenceNumber::MAX);
+    assert_eq!(effects.deleted().len(), 0);
     // dry run
+    let rgp = fullnode.reference_gas_price_for_testing().unwrap();
     let data = TransactionData::new_programmable(
         sender,
         vec![gas_object_ref],
@@ -1145,10 +1142,7 @@ async fn test_dry_run_dev_inspect_dynamic_field_too_new() {
     let digest = *transaction.digest();
     let DryRunTransactionBlockResponse { effects, .. } =
         fullnode.dry_exec_transaction(data, digest).await.unwrap().0;
-    assert_eq!(effects.deleted().len(), 1);
-    let deleted = &effects.deleted()[0];
-    assert_eq!(field.0, deleted.object_id);
-    assert_eq!(deleted.version, SequenceNumber::MAX);
+    assert_eq!(effects.deleted().len(), 0);
 }
 
 // tests using a gas coin with version MAX - 1
@@ -1811,14 +1805,19 @@ async fn test_publish_dependent_module_ok() {
 #[tokio::test]
 async fn test_publish_module_no_dependencies_ok() {
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
+    let authority = init_state_with_objects(vec![]).await;
+    let rgp = authority.reference_gas_price_for_testing().unwrap();
     let gas_payment_object_id = ObjectID::random();
     // Use the max budget to avoid running out of gas.
-    let gas_balance = SuiCostTable::new_for_testing().max_gas_budget();
+    let gas_balance = {
+        let epoch_store = authority.epoch_store_for_testing();
+        let protocol_config = epoch_store.protocol_config();
+        protocol_config.max_tx_gas()
+    };
     let gas_payment_object =
         Object::with_id_owner_gas_for_testing(gas_payment_object_id, sender, gas_balance);
     let gas_payment_object_ref = gas_payment_object.compute_object_reference();
-    let authority = init_state_with_objects(vec![gas_payment_object]).await;
-    let rgp = authority.reference_gas_price_for_testing().unwrap();
+    authority.insert_genesis_object(gas_payment_object).await;
 
     let module = file_format::empty_module();
     let mut module_bytes = Vec::new();

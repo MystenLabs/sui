@@ -4,31 +4,15 @@
 
 use crate::error::{UserInputError, UserInputResult};
 use crate::gas::{self, GasCostSummary, SuiGasStatusAPI};
+use crate::gas_model::gas_predicates::{cost_table_for_version, txn_base_cost_as_multiplier};
+use crate::gas_model::units_types::CostTable;
 use crate::{
     error::{ExecutionError, ExecutionErrorKind},
+    gas_model::tables::{GasStatus, ZERO_COST_SCHEDULE},
     object::{Object, Owner},
 };
 use move_core_types::vm_status::StatusCode;
-use std::iter;
-use sui_cost_tables::bytecode_tables::{
-    initial_cost_schedule_v1, initial_cost_schedule_v2, initial_cost_schedule_v3,
-    initial_cost_schedule_v4, GasStatus, ZERO_COST_SCHEDULE,
-};
-use sui_cost_tables::units_types::CostTable;
 use sui_protocol_config::*;
-
-macro_rules! ok_or_gas_balance_error {
-    ($balance:expr, $required:expr) => {
-        if $balance < $required {
-            Err(UserInputError::GasBalanceTooLow {
-                gas_balance: $balance,
-                needed_gas_amount: $required,
-            })
-        } else {
-            Ok(())
-        }
-    };
-}
 
 sui_macros::checked_arithmetic! {
 
@@ -124,14 +108,21 @@ impl std::fmt::Debug for SuiCostTable {
 }
 
 impl SuiCostTable {
-    pub(crate) fn new(c: &ProtocolConfig) -> Self {
+    pub(crate) fn new(c: &ProtocolConfig, gas_price: u64) -> Self {
+        // gas_price here is the Reference Gas Price, however we may decide
+        // to change it to be the price passed in the transaction
+        let min_transaction_cost = if txn_base_cost_as_multiplier(c) {
+            c.base_tx_cost_fixed() * gas_price
+        } else {
+            c.base_tx_cost_fixed()
+        };
         Self {
-            min_transaction_cost: c.base_tx_cost_fixed(),
+            min_transaction_cost,
             max_gas_budget: c.max_tx_gas(),
             package_publish_per_byte_cost: c.package_publish_cost_per_byte(),
             object_read_per_byte_cost: c.obj_access_cost_read_per_byte(),
             storage_per_byte_cost: c.obj_data_cost_refundable(),
-            execution_cost_table: cost_table_for_version(c),
+            execution_cost_table: cost_table_for_version(c.gas_model_version()),
             computation_bucket: computation_bucket(c.max_gas_computation_bucket()),
         }
     }
@@ -150,19 +141,7 @@ impl SuiCostTable {
     }
 }
 
-fn cost_table_for_version(config: &ProtocolConfig) -> CostTable {
-    let gas_model = config.gas_model_version();
-    if gas_model <= 3 {
-        initial_cost_schedule_v1()
-    } else if gas_model == 4 {
-        initial_cost_schedule_v2()
-    } else if gas_model == 5 {
-        initial_cost_schedule_v3()
-    } else {
-        initial_cost_schedule_v4()
-    }
-}
-
+#[allow(dead_code)]
 #[derive(Debug)]
 pub struct SuiGasStatus {
     // GasStatus as used by the VM, that is all the VM sees
@@ -184,6 +163,8 @@ pub struct SuiGasStatus {
     // and then conceptually
     // `final_computation_cost = total_computation_cost * gas_price / reference_gas_price`
     gas_price: u64,
+    // RGP as defined in the protocol config.
+    reference_gas_price: u64,
     // Gas price for storage. This is a multiplier on the final charge
     // as related to the storage gas price defined in the system
     // (`ProtocolConfig::storage_gas_price`).
@@ -218,6 +199,7 @@ impl SuiGasStatus {
         gas_budget: u64,
         charge: bool,
         gas_price: u64,
+        reference_gas_price: u64,
         storage_gas_price: u64,
         rebate_rate: u64,
         gas_rounding_step: Option<u64>,
@@ -230,6 +212,7 @@ impl SuiGasStatus {
             charge,
             computation_cost: 0,
             gas_price,
+            reference_gas_price,
             storage_gas_price,
             storage_cost: 0,
             storage_rebate: 0,
@@ -243,6 +226,7 @@ impl SuiGasStatus {
     pub(crate) fn new_with_budget(
         gas_budget: u64,
         gas_price: u64,
+        reference_gas_price: u64,
         config: &ProtocolConfig,
     ) -> SuiGasStatus {
         let storage_gas_price = config.storage_gas_price();
@@ -252,10 +236,10 @@ impl SuiGasStatus {
         } else {
             gas_budget
         };
-        let sui_cost_table = SuiCostTable::new(config);
+        let sui_cost_table = SuiCostTable::new(config, gas_price);
         let gas_rounding_step = config.gas_rounding_step_as_option();
         Self::new(
-            GasStatus::new_v2(
+            GasStatus::new(
                 sui_cost_table.execution_cost_table.clone(),
                 computation_budget,
                 gas_price,
@@ -264,42 +248,11 @@ impl SuiGasStatus {
             gas_budget,
             true,
             gas_price,
+            reference_gas_price,
             storage_gas_price,
             config.storage_rebate_rate(),
             gas_rounding_step,
             sui_cost_table,
-        )
-    }
-
-    pub(crate) fn new_for_testing(
-        gas_budget: u64,
-        gas_price: u64,
-        storage_gas_price: u64,
-        gas_rounding_step: Option<u64>,
-        cost_table: SuiCostTable,
-    ) -> SuiGasStatus {
-        let protocol_config = ProtocolConfig::get_for_max_version();
-        let rebate_rate = protocol_config.storage_rebate_rate();
-        let max_computation_budget = 5_000_000; // fixed number for now
-        let computation_budget = if gas_budget > max_computation_budget {
-            max_computation_budget
-        } else {
-            gas_budget
-        };
-        Self::new(
-            GasStatus::new_v2(
-                cost_table.execution_cost_table.clone(),
-                computation_budget,
-                gas_price,
-                protocol_config.gas_model_version(),
-            ),
-            gas_budget,
-            true,
-            gas_price,
-            storage_gas_price,
-            rebate_rate,
-            gas_rounding_step,
-            cost_table,
         )
     }
 
@@ -311,9 +264,57 @@ impl SuiGasStatus {
             0,
             0,
             0,
+            0,
             None,
             SuiCostTable::unmetered(),
         )
+    }
+
+    // Check whether gas arguments are legit:
+    // 1. Gas object has an address owner.
+    // 2. Gas budget is between min and max budget allowed
+    // 3. Gas balance (all gas coins together) is bigger or equal to budget
+    pub(crate) fn check_gas_balance(
+        &self,
+        gas_objs: &[&Object],
+        gas_budget: u64,
+    ) -> UserInputResult {
+        // 1. All gas objects have an address owner
+        for gas_object in gas_objs {
+            if !(matches!(gas_object.owner, Owner::AddressOwner(_))) {
+                return Err(UserInputError::GasObjectNotOwnedObject {
+                    owner: gas_object.owner,
+                });
+            }
+        }
+
+        // 2. Gas budget is between min and max budget allowed
+        if gas_budget > self.cost_table.max_gas_budget {
+            return Err(UserInputError::GasBudgetTooHigh {
+                gas_budget,
+                max_budget: self.cost_table.max_gas_budget,
+            });
+        }
+        if gas_budget < self.cost_table.min_transaction_cost {
+            return Err(UserInputError::GasBudgetTooLow {
+                gas_budget,
+                min_budget: self.cost_table.min_transaction_cost,
+            });
+        }
+
+        // 3. Gas balance (all gas coins together) is bigger or equal to budget
+        let mut gas_balance = 0u128;
+        for gas_obj in gas_objs {
+            gas_balance += gas::get_gas_balance(gas_obj)? as u128;
+        }
+        if gas_balance < gas_budget as u128 {
+            Err(UserInputError::GasBalanceTooLow {
+                gas_balance,
+                needed_gas_amount: gas_budget as u128,
+            })
+        } else {
+            Ok(())
+        }
     }
 }
 
@@ -322,7 +323,11 @@ impl SuiGasStatusAPI for SuiGasStatus {
         !self.charge
     }
 
-    fn move_gas_status(&mut self) -> &mut GasStatus {
+    fn move_gas_status(&self) -> &GasStatus {
+        &self.gas_status
+    }
+
+    fn move_gas_status_mut(&mut self) -> &mut GasStatus {
         &mut self.gas_status
     }
 
@@ -400,16 +405,6 @@ impl SuiGasStatusAPI for SuiGasStatus {
             })
     }
 
-    fn charge_storage_mutation(
-        &mut self,
-        _new_size: usize,
-        _storage_rebate: u64,
-    ) -> Result<u64, ExecutionError> {
-        Err(ExecutionError::invariant_violation(
-            "charge_storage_mutation should not be called in v2 gas model",
-        ))
-    }
-
     fn charge_publish_package(&mut self, size: usize) -> Result<(), ExecutionError> {
         self.gas_status
             .charge_bytes(size, self.cost_table.package_publish_per_byte_cost)
@@ -465,63 +460,6 @@ impl SuiGasStatusAPI for SuiGasStatus {
         self.storage_cost = 0;
         self.computation_cost = self.gas_budget;
     }
-}
-
-// Check whether gas arguments are legit:
-// 1. Gas object has an address owner.
-// 2. Gas budget is between min and max budget allowed
-// 3. Gas balance (all gas coins together) is bigger or equal to budget
-pub(crate) fn check_gas_balance(
-    gas_object: &Object,
-    more_gas_objs: Vec<&Object>,
-    gas_budget: u64,
-    cost_table: &SuiCostTable,
-) -> UserInputResult {
-    // 1. All gas objects have an address owner
-    for gas_object in more_gas_objs.iter().chain(iter::once(&gas_object)) {
-        if !(matches!(gas_object.owner, Owner::AddressOwner(_))) {
-            return Err(UserInputError::GasObjectNotOwnedObject {
-                owner: gas_object.owner,
-            });
-        }
-    }
-
-    // 2. Gas budget is between min and max budget allowed
-    if gas_budget > cost_table.max_gas_budget {
-        return Err(UserInputError::GasBudgetTooHigh {
-            gas_budget,
-            max_budget: cost_table.max_gas_budget,
-        });
-    }
-    if gas_budget < cost_table.min_transaction_cost {
-        return Err(UserInputError::GasBudgetTooLow {
-            gas_budget,
-            min_budget: cost_table.min_transaction_cost,
-        });
-    }
-
-    // 3. Gas balance (all gas coins together) is bigger or equal to budget
-    let mut gas_balance = gas::get_gas_balance(gas_object)? as u128;
-    for extra_obj in more_gas_objs {
-        gas_balance += gas::get_gas_balance(extra_obj)? as u128;
-    }
-    ok_or_gas_balance_error!(gas_balance, gas_budget as u128)
-}
-
-/// Subtract the gas balance of \p gas_object by \p amount.
-/// This function should never fail, since we checked that the budget is always
-/// less than balance, and the amount is capped at the budget.
-pub fn deduct_gas(gas_object: &mut Object, charge_or_rebate: i64) {
-    // The object must be a gas coin as we have checked in transaction handle phase.
-    let gas_coin = gas_object.data.try_as_move_mut().unwrap();
-    let balance = gas_coin.get_coin_value_unsafe();
-    let new_balance = if charge_or_rebate < 0 {
-        balance + (-charge_or_rebate as u64)
-    } else {
-        assert!(balance >= charge_or_rebate as u64);
-        balance - charge_or_rebate as u64
-    };
-    gas_coin.set_coin_value_unsafe(new_balance)
 }
 
 }

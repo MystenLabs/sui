@@ -1,8 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import type { ExportedKeypair, Keypair } from '../../cryptography/keypair.js';
-import { PublicKey } from '../../cryptography/publickey.js';
+import type { ExportedKeypair } from '../../cryptography/keypair.js';
+import { Keypair } from '../../cryptography/keypair.js';
+import type { PublicKey } from '../../cryptography/publickey.js';
 import { sha256 } from '@noble/hashes/sha256';
 import { Secp256r1PublicKey } from './publickey.js';
 import { secp256r1 } from '@noble/curves/p256';
@@ -26,7 +27,7 @@ export interface Secp256r1KeypairData {
 /**
  * An Secp256r1 Keypair used for signing transactions.
  */
-export class Secp256r1Keypair implements Keypair {
+export class Secp256r1Keypair extends Keypair {
 	private keypair: Secp256r1KeypairData;
 
 	/**
@@ -36,6 +37,7 @@ export class Secp256r1Keypair implements Keypair {
 	 * @param keypair Secp256r1 keypair
 	 */
 	constructor(keypair?: Secp256r1KeypairData) {
+		super();
 		if (keypair) {
 			this.keypair = keypair;
 		} else {
@@ -105,6 +107,10 @@ export class Secp256r1Keypair implements Keypair {
 	 */
 	getPublicKey(): PublicKey {
 		return new Secp256r1PublicKey(this.keypair.publicKey);
+	}
+
+	async sign(data: Uint8Array) {
+		return this.signData(data);
 	}
 
 	/**

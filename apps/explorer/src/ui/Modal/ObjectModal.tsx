@@ -3,11 +3,11 @@
 
 import { X12 } from '@mysten/icons';
 
+import { Modal, type ModalProps } from './index';
 import { Heading } from '../Heading';
 import { IconButton } from '../IconButton';
 import { Text } from '../Text';
 import { Image } from '../image/Image';
-import { Modal, type ModalProps } from './index';
 
 export interface ObjectModalProps extends Omit<ModalProps, 'children'> {
 	title: string;

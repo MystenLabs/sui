@@ -20,10 +20,10 @@ type EnvInfo = {
 
 export const API_ENV_TO_INFO: Record<API_ENV, EnvInfo> = {
 	[API_ENV.local]: { name: 'Local', env: API_ENV.local },
-	[API_ENV.devNet]: { name: 'Sui Devnet', env: API_ENV.devNet },
-	[API_ENV.customRPC]: { name: 'Custom RPC URL', env: API_ENV.customRPC },
-	[API_ENV.testNet]: { name: 'Sui Testnet', env: API_ENV.testNet },
-	[API_ENV.mainnet]: { name: 'Sui Mainnet', env: API_ENV.mainnet },
+	[API_ENV.devNet]: { name: 'Devnet', env: API_ENV.devNet },
+	[API_ENV.customRPC]: { name: 'Custom RPC', env: API_ENV.customRPC },
+	[API_ENV.testNet]: { name: 'Testnet', env: API_ENV.testNet },
+	[API_ENV.mainnet]: { name: 'Mainnet', env: API_ENV.mainnet },
 };
 
 export const ENV_TO_API: Record<API_ENV, Connection | null> = {

@@ -43,7 +43,7 @@ use sui_types::crypto::{
 };
 use sui_types::error::SuiObjectResponseError;
 use sui_types::{base_types::ObjectID, crypto::get_key_pair, gas_coin::GasCoin};
-use test_utils::network::TestClusterBuilder;
+use test_cluster::TestClusterBuilder;
 
 const TEST_DATA_DIR: &str = "tests/data/";
 

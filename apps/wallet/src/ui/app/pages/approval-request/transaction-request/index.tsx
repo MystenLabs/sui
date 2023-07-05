@@ -6,9 +6,9 @@ import { useTransactionSummary } from '@mysten/core';
 import { TransactionBlock } from '@mysten/sui.js';
 import { useMemo, useState } from 'react';
 
-import { ConfirmationModal } from '../../../shared/ConfirmationModal';
 import { GasFees } from './GasFees';
 import { TransactionDetails } from './TransactionDetails';
+import { ConfirmationModal } from '../../../shared/ConfirmationModal';
 import { UserApproveContainer } from '_components/user-approve-container';
 import { useAppDispatch, useSigner, useTransactionData, useTransactionDryRun } from '_hooks';
 import { type TransactionApprovalRequest } from '_payloads/transactions/ApprovalRequest';

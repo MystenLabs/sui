@@ -1,5 +1,28 @@
 # @mysten/sui.js
 
+## 0.37.1
+
+### Patch Changes
+
+- 34cc7d610: Fix unhandled rejections thrown by waitForTransaction
+
+## 0.37.0
+
+### Minor Changes
+
+- 93794f9f2: Update build to avoid bundling for better modularity
+- a17d3678a: Add keypair exports to allow modular imports for various keypair types
+
+### Patch Changes
+
+- 36f2edff3: Use splitGenericParamaters util from bcs
+- 75d1a190d: Fix bug that prevented deserializing transaction blocks with a set expiration
+- c3a4ec57c: Add explicit dependency on events package
+- 2f37537d5: Update `SuiEventFilter` structure for `TimeRange` query.
+- 00484bcc3: add method to create Ed25519Keypair from a mnemonic seed
+- Updated dependencies [36f2edff3]
+  - @mysten/bcs@0.7.3
+
 ## 0.36.0
 
 ### Minor Changes

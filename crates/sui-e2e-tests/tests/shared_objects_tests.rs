@@ -13,7 +13,7 @@ use sui_types::execution_status::{CommandArgumentError, ExecutionFailureStatus, 
 use sui_types::messages_grpc::ObjectInfoRequest;
 use sui_types::transaction::{CallArg, ObjectArg};
 use sui_types::SUI_CLOCK_OBJECT_ID;
-use test_utils::network::TestClusterBuilder;
+use test_cluster::TestClusterBuilder;
 
 /// Send a simple shared object transaction to Sui and ensures the client gets back a response.
 #[sim_test]

@@ -1,18 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import {
-	any,
-	array,
-	boolean,
-	Infer,
-	literal,
-	nullable,
-	number,
-	object,
-	string,
-	union,
-} from 'superstruct';
+import type { Infer } from 'superstruct';
+import { any, array, boolean, literal, nullable, number, object, string, union } from 'superstruct';
 import { ObjectId } from './common.js';
 
 export const DynamicFieldType = union([literal('DynamicField'), literal('DynamicObject')]);

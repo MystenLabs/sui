@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::sync::Arc;
+use std::time::Duration;
 
 use async_trait::async_trait;
 use fastcrypto::encoding::Base64;
@@ -216,7 +217,7 @@ impl WriteApiServer for TransactionExecutionApi {
         opts: Option<SuiTransactionBlockResponseOptions>,
         request_type: Option<ExecuteTransactionRequestType>,
     ) -> RpcResult<SuiTransactionBlockResponse> {
-        with_tracing!(async move {
+        with_tracing!(Duration::from_secs(10), async move {
             Ok(self
                 .execute_transaction_block(tx_bytes, signatures, opts, request_type)
                 .await?)

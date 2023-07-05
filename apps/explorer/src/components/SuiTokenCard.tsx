@@ -5,7 +5,6 @@ import { formatAmount } from '@mysten/core';
 import { Sui } from '@mysten/icons';
 
 import { StatsWrapper } from './HomeMetrics/FormattedStatsAmount';
-
 import { useSuiCoinData } from '~/hooks/useSuiCoinData';
 import { Card } from '~/ui/Card';
 import { Heading } from '~/ui/Heading';

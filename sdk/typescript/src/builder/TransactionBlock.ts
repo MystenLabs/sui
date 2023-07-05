@@ -3,38 +3,32 @@
 
 import { fromB64 } from '@mysten/bcs';
 import { is, mask } from 'superstruct';
-import { JsonRpcProvider } from '../providers/json-rpc-provider.js';
+import type { JsonRpcProvider } from '../providers/json-rpc-provider.js';
+import type { ObjectId, SuiMoveNormalizedType, ProtocolConfig } from '../types/index.js';
 import {
 	extractMutableReference,
 	extractStructTag,
 	getObjectReference,
 	getSharedObjectInitialVersion,
 	normalizeSuiObjectId,
-	ObjectId,
-	SuiMoveNormalizedType,
 	SuiObjectRef,
 	SUI_TYPE_ARG,
-	ProtocolConfig,
 } from '../types/index.js';
-import {
-	Transactions,
-	TransactionArgument,
-	TransactionType,
-	TransactionBlockInput,
-	getTransactionType,
-	MoveCallTransaction,
-} from './Transactions.js';
+import type { TransactionArgument, TransactionType, MoveCallTransaction } from './Transactions.js';
+import { Transactions, TransactionBlockInput, getTransactionType } from './Transactions.js';
+import type { ObjectCallArg } from './Inputs.js';
 import {
 	BuilderCallArg,
 	getIdFromCallArg,
 	Inputs,
 	isMutableSharedObjectInput,
-	ObjectCallArg,
 	PureCallArg,
 } from './Inputs.js';
 import { getPureSerializationType, isTxContext } from './serializer.js';
-import { TransactionBlockDataBuilder, TransactionExpiration } from './TransactionBlockData.js';
-import { TRANSACTION_TYPE, create, WellKnownEncoding } from './utils.js';
+import type { TransactionExpiration } from './TransactionBlockData.js';
+import { TransactionBlockDataBuilder } from './TransactionBlockData.js';
+import type { WellKnownEncoding } from './utils.js';
+import { TRANSACTION_TYPE, create } from './utils.js';
 
 type TransactionResult = TransactionArgument & TransactionArgument[];
 

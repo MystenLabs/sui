@@ -41,6 +41,10 @@ pub enum ReplayToolCommand {
         tx_digest: String,
         #[clap(long, short)]
         show_effects: bool,
+        #[clap(long, short)]
+        diag: bool,
+        #[clap(long, short, allow_hyphen_values = true)]
+        executor_version_override: Option<i64>,
     },
 
     /// Replay a transaction from a node state dump
@@ -131,7 +135,7 @@ pub async fn execute_replay_command(
             None
         }
         ReplayToolCommand::ReplayDump { path, show_effects } => {
-            let mut lx = LocalExec::new_for_state_dump(&path).await?;
+            let mut lx = LocalExec::new_for_state_dump(&path, rpc_url).await?;
             let (sandbox_state, node_dump_state) = lx.execute_state_dump(safety).await?;
             if show_effects {
                 println!("{:#?}", sandbox_state.local_exec_effects);
@@ -154,6 +158,8 @@ pub async fn execute_replay_command(
         ReplayToolCommand::ReplayTransaction {
             tx_digest,
             show_effects,
+            diag,
+            executor_version_override,
         } => {
             let tx_digest = TransactionDigest::from_str(&tx_digest)?;
             info!("Executing tx: {}", tx_digest);
@@ -163,9 +169,13 @@ pub async fn execute_replay_command(
                 tx_digest,
                 safety,
                 use_authority,
+                executor_version_override,
             )
             .await?;
 
+            if diag {
+                println!("{:#?}", sandbox_state.pre_exec_diag);
+            }
             if show_effects {
                 println!("{:#?}", sandbox_state.local_exec_effects);
             }

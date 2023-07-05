@@ -5,8 +5,6 @@ import { Ed25519Keypair, fromB64 } from '@mysten/sui.js';
 import mitt from 'mitt';
 import { throttle } from 'throttle-debounce';
 
-import { getAllQredoConnections } from '../qredo/storage';
-import { getFromLocalStorage, setToLocalStorage } from '../storage-utils';
 import {
 	type Account,
 	isImportedOrDerivedAccount,
@@ -23,6 +21,8 @@ import {
 	getStoredAccountsPublicInfo,
 	updateAccountsPublicInfo,
 } from './accounts';
+import { getAllQredoConnections } from '../qredo/storage';
+import { getFromLocalStorage, setToLocalStorage } from '../storage-utils';
 import { createMessage } from '_messages';
 import { isKeyringPayload } from '_payloads/keyring';
 import { entropyToSerialized } from '_shared/utils/bip39';
@@ -597,4 +597,5 @@ export class Keyring {
 	}
 }
 
-export default new Keyring();
+const keyring = new Keyring();
+export default keyring;

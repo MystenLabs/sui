@@ -6,7 +6,6 @@ import { useParams } from 'react-router-dom';
 
 import { ErrorBoundary } from '../../components/error-boundary/ErrorBoundary';
 import { TransactionsForAddress } from '../../components/transactions/TransactionsForAddress';
-
 import { OwnedCoins } from '~/components/OwnedCoins';
 import { OwnedObjects } from '~/components/OwnedObjects';
 import { Heading } from '~/ui/Heading';

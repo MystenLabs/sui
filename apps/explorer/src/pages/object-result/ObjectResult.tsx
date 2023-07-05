@@ -4,11 +4,10 @@
 import { useGetObject } from '@mysten/core';
 import { useParams } from 'react-router-dom';
 
-import { ErrorBoundary } from '../../components/error-boundary/ErrorBoundary';
 import { translate, type DataType } from './ObjectResultType';
 import PkgView from './views/PkgView';
 import { TokenView } from './views/TokenView';
-
+import { ErrorBoundary } from '../../components/error-boundary/ErrorBoundary';
 import { Banner } from '~/ui/Banner';
 import { LoadingSpinner } from '~/ui/LoadingSpinner';
 import { PageHeader } from '~/ui/PageHeader';

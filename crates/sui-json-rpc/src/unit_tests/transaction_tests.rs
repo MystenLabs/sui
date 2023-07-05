@@ -10,7 +10,7 @@ use sui_json_rpc_types::{
 use sui_macros::sim_test;
 use sui_types::quorum_driver_types::ExecuteTransactionRequestType;
 use sui_types::transaction::SenderSignedData;
-use test_utils::network::TestClusterBuilder;
+use test_cluster::TestClusterBuilder;
 
 use crate::api::{IndexerApiClient, TransactionBuilderClient, WriteApiClient};
 
@@ -45,7 +45,7 @@ async fn test_get_transaction_block() -> Result<(), anyhow::Error> {
                 address,
                 oref.object_id,
                 Some(gas_id),
-                100_000.into(),
+                1_000_000.into(),
                 address,
             )
             .await?;
@@ -121,7 +121,7 @@ async fn test_get_raw_transaction() -> Result<(), anyhow::Error> {
 
     // Make a transfer transactions
     let transaction_bytes: TransactionBlockBytes = http_client
-        .transfer_object(address, object_to_transfer, None, 10_000.into(), address)
+        .transfer_object(address, object_to_transfer, None, 1_000_000.into(), address)
         .await?;
     let tx = cluster
         .wallet
@@ -181,7 +181,7 @@ async fn test_get_fullnode_transaction() -> Result<(), anyhow::Error> {
             let oref = obj.object().unwrap();
             let data = client
                 .transaction_builder()
-                .transfer_object(address, oref.object_id, Some(gas_id), 100_000, address)
+                .transfer_object(address, oref.object_id, Some(gas_id), 1_000_000, address)
                 .await?;
             let tx = cluster.wallet.sign_transaction(&data);
 

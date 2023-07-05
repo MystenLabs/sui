@@ -20,7 +20,6 @@ import clsx from 'clsx';
 import { useState, type ReactNode } from 'react';
 
 import { ObjectDisplay } from './ObjectDisplay';
-
 import { ExpandableList, ExpandableListControl, ExpandableListItems } from '~/ui/ExpandableList';
 import { AddressLink, ObjectLink } from '~/ui/InternalLink';
 import { Text } from '~/ui/Text';

@@ -18,7 +18,7 @@ use sui_types::object::{Object, Owner};
 use sui_types::storage::WriteKind;
 use sui_types::transaction::{CallArg, ObjectArg, TransactionData, TEST_ONLY_GAS_UNIT_FOR_PUBLISH};
 use sui_types::{Identifier, SUI_FRAMEWORK_ADDRESS};
-use test_utils::network::TestCluster;
+use test_cluster::TestCluster;
 use tokio::sync::RwLock;
 use tracing::{debug, error, info};
 

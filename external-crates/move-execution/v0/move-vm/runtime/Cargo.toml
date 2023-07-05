@@ -23,6 +23,7 @@ smallvec = "1.6.1"
 move-bytecode-verifier = { path = "../../move-bytecode-verifier", package = "move-bytecode-verifier-v0" }
 move-core-types = { path = "../../../../move/move-core/types" }
 move-vm-config = { path = "../../../../move/move-vm/config" }
+move-vm-profiler = { path = "../../../../move/move-vm/profiler" }
 move-vm-types = { path = "../../../../move/move-vm/types" }
 move-binary-format = { path = "../../../../move/move-binary-format" }
 
