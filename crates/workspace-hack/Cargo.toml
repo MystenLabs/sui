@@ -27,9 +27,9 @@ aho-corasick-dff4ba8e3ae991db = { package = "aho-corasick", version = "1" }
 aliasable = { version = "0.1" }
 alloc-no-stdlib = { version = "2", default-features = false }
 alloc-stdlib = { version = "0.2", default-features = false }
-anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "0f0ae8d8f222820a20b586088ea7a2941478a159", default-features = false }
-anemo-cli = { git = "https://github.com/mystenlabs/anemo.git", rev = "0f0ae8d8f222820a20b586088ea7a2941478a159", default-features = false }
-anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "0f0ae8d8f222820a20b586088ea7a2941478a159", default-features = false }
+anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "ab5ce17a092db03cc1b87923b69d6afb72fd1b64" }
+anemo-cli = { git = "https://github.com/mystenlabs/anemo.git", rev = "ab5ce17a092db03cc1b87923b69d6afb72fd1b64"}
+anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "ab5ce17a092db03cc1b87923b69d6afb72fd1b64"}
 anes = { version = "0.1" }
 ansi_term = { version = "0.12", default-features = false }
 anstream = { version = "0.3" }
@@ -700,10 +700,10 @@ aho-corasick-dff4ba8e3ae991db = { package = "aho-corasick", version = "1" }
 aliasable = { version = "0.1" }
 alloc-no-stdlib = { version = "2", default-features = false }
 alloc-stdlib = { version = "0.2", default-features = false }
-anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "0f0ae8d8f222820a20b586088ea7a2941478a159", default-features = false }
-anemo-build = { git = "https://github.com/mystenlabs/anemo.git", rev = "0f0ae8d8f222820a20b586088ea7a2941478a159", default-features = false }
-anemo-cli = { git = "https://github.com/mystenlabs/anemo.git", rev = "0f0ae8d8f222820a20b586088ea7a2941478a159", default-features = false }
-anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "0f0ae8d8f222820a20b586088ea7a2941478a159", default-features = false }
+anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "ab5ce17a092db03cc1b87923b69d6afb72fd1b64" }
+anemo-build = { git = "https://github.com/mystenlabs/anemo.git", rev = "ab5ce17a092db03cc1b87923b69d6afb72fd1b64" }
+anemo-cli = { git = "https://github.com/mystenlabs/anemo.git", rev = "ab5ce17a092db03cc1b87923b69d6afb72fd1b64"}
+anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "ab5ce17a092db03cc1b87923b69d6afb72fd1b64"}
 anes = { version = "0.1" }
 ansi_term = { version = "0.12", default-features = false }
 anstream = { version = "0.3" }
@@ -1386,7 +1386,6 @@ tokio = { version = "1", features = ["full", "test-util", "tracing"] }
 tokio-io-timeout = { version = "1", default-features = false }
 tokio-macros = { version = "2", default-features = false }
 tokio-retry = { version = "0.3", default-features = false }
-tokio-rustls-2b5c6dc72f624058 = { package = "tokio-rustls", version = "0.23" }
 tokio-stream = { version = "0.1", features = ["net", "sync"] }
 tokio-util = { version = "0.7", features = ["codec", "compat", "io"] }
 toml-ca01ad9e24f5d932 = { package = "toml", version = "0.7", features = ["preserve_order"] }
