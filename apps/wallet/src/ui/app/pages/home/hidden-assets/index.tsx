@@ -150,7 +150,12 @@ function NftsPage() {
 											className="no-underline relative"
 										>
 											<ErrorBoundary>
-												<NFTDisplayCard objectId={objectId} size="xs" showLabel listView />
+												<NFTDisplayCard
+													objectId={objectId}
+													size="xs"
+													showLabel
+													orientation="horizontal"
+												/>
 											</ErrorBoundary>
 										</Link>
 										<button

@@ -18,18 +18,18 @@ const nftDisplayCardStyles = cva('flex flex-nowrap items-center h-full', {
 		animateHover: {
 			true: 'group',
 		},
-		listView: {
-			true: '',
-			false: 'flex-col',
-		},
 		wideView: {
 			true: 'bg-gray-40 p-2.5 rounded-lg gap-2.5 flex-row-reverse justify-between',
 			false: '',
 		},
+		orientation: {
+			horizontal: 'flex',
+			vertical: 'flex-col',
+		},
 	},
 	defaultVariants: {
 		wideView: false,
-		listView: false,
+		orientation: 'vertical',
 	},
 });
 
@@ -49,7 +49,7 @@ export function NFTDisplayCard({
 	animateHover,
 	borderRadius = 'md',
 	playable,
-	listView,
+	orientation,
 }: NFTsProps) {
 	const { data: objectData } = useGetObject(objectId);
 	const { data: nftMeta, isLoading } = useGetNFTMeta(objectId);
@@ -59,7 +59,7 @@ export function NFTDisplayCard({
 	const fileExtensionType = useFileExtensionType(nftImageUrl);
 
 	return (
-		<div className={nftDisplayCardStyles({ animateHover, wideView, listView })}>
+		<div className={nftDisplayCardStyles({ animateHover, wideView, orientation })}>
 			<Loading loading={isLoading}>
 				{video && playable ? (
 					<video controls className="h-full w-full rounded-md overflow-hidden" src={video} />
@@ -69,7 +69,7 @@ export function NFTDisplayCard({
 						src={nftImageUrl}
 						title={nftMeta?.description || ''}
 						animateHover={true}
-						showLabel={!wideView || !listView}
+						showLabel={!wideView}
 						borderRadius={borderRadius}
 						size={size}
 						video={video}
@@ -94,7 +94,7 @@ export function NFTDisplayCard({
 						className={cx(
 							'flex-1 text-steel-dark truncate overflow-hidden max-w-full',
 							animateHover ? 'group-hover:text-black duration-200 ease-ease-in-out-cubic' : '',
-							listView ? 'ml-2' : 'mt-2',
+							orientation === 'horizontal' ? 'ml-2' : 'mt-2',
 						)}
 					>
 						{nftName}
