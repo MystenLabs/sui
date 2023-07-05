@@ -1,3 +1,6 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 import { Menu } from '@headlessui/react';
 import { Ooo24 } from '@mysten/icons';
 import { Link } from '_src/ui/app/shared/Link';

@@ -2,12 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useOnScreen } from '@mysten/core';
-import { Check12, EyeClose16, Ooo24 } from '@mysten/icons';
+import { Check12, EyeClose16 } from '@mysten/icons';
 import { get, set } from 'idb-keyval';
 import { useRef, useEffect, useCallback, useState } from 'react';
 import toast from 'react-hot-toast';
 import { Link } from 'react-router-dom';
 
+import AssetsOptionsMenu from './AssetsOptionsMenu';
 import { Link as InlineLink } from '../../../shared/Link';
 import { Text } from '../../../shared/text';
 import { useActiveAddress } from '_app/hooks/useActiveAddress';
@@ -19,7 +20,6 @@ import { NFTDisplayCard } from '_components/nft-display';
 import { ampli } from '_src/shared/analytics/ampli';
 import { useGetNFTs } from '_src/ui/app/hooks/useGetNFTs';
 import PageTitle from '_src/ui/app/shared/PageTitle';
-import AssetsOptionsMenu from './AssetsOptionsMenu';
 
 const HIDDEN_ASSET_IDS = 'hidden-asset-ids';
 const TOAST_DURATION_MS = 1005;
