@@ -364,8 +364,9 @@ impl PrimaryNodeInner {
 
         // TODO: restore the LeaderSchedule when recovering from storage to ensure that the correct one
         // will be used
-        // Using a LeaderSwapTable::default() will make the leader schedule algorithm work as originally -
-        // no swaps will happen if we don't update them.
+        // Using a LeaderSwapTable::default() will just adhere to the original schedule without any swaps.
+        // That means, whatever authority is elected for a round from the Committee::leader method, that's the
+        // one that will be used.
         let leader_schedule = LeaderSchedule::new(committee.clone(), LeaderSwapTable::default());
 
         // Spawn the consensus core who only sequences transactions.

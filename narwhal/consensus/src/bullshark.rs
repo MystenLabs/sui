@@ -377,7 +377,7 @@ impl Bullshark {
         {
             let previous_leader_round = certificate_round - 2;
 
-            // This metric will not be accurate anymore on the border when we do change schedules,
+            // The metric's authority label can not be considered fully accurate when we do change schedules,
             // as we'll try to calculate the previous leader round by using the updated scores and
             // consequently swap table. For now not a huge issue as it will be affect either:
             // * only the round where we switch schedules
