@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-
+use std::sync::Mutex;
 use sui_protocol_config::ProtocolConfig;
 use sui_types::epoch_data::EpochData;
 use sui_types::messages::VerifiedTransaction;
@@ -26,30 +26,39 @@ pub enum SailfishMessage {
     Transaction{tx: VerifiedTransaction, tx_effects: TransactionEffects, checkpoint_seq: u64}
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct MemoryBackedStore {
-    pub objects: HashMap<ObjectID, (ObjectRef, Object)>,
+    pub objects: Mutex<HashMap<ObjectID, (ObjectRef, Object)>>,
 }
 
 impl MemoryBackedStore {
     pub fn new() -> MemoryBackedStore {
         MemoryBackedStore {
-            objects: HashMap::new(),
+            objects: Mutex::new(HashMap::new()),
         }
     }
 
-    pub fn insert(&mut self, k: ObjectID, v: (ObjectRef, Object)) {
-        self.objects.insert(k, v);
+    pub fn insert(&self, k: ObjectID, v: (ObjectRef, Object)) {
+        self.objects
+            .lock()
+            .unwrap()
+            .insert(k, v);
     }
 
-    pub fn remove(&mut self, k: ObjectID) -> Option<(ObjectRef, Object)> {
-        self.objects.remove(&k)
+    pub fn remove(&self, k: ObjectID) -> Option<(ObjectRef, Object)> {
+        self.objects
+            .lock()
+            .unwrap()
+            .remove(&k)
     }
 }
 
 impl ObjectStore for MemoryBackedStore {
     fn get_object(&self, object_id: &ObjectID) -> Result<Option<Object>, SuiError> {
-        Ok(self.objects.get(object_id).map(|v| v.1.clone()))
+        Ok(self.objects
+            .lock()
+            .unwrap()
+            .get(object_id).map(|v| v.1.clone()))
     }
 
     fn get_object_by_key(
@@ -57,8 +66,9 @@ impl ObjectStore for MemoryBackedStore {
         object_id: &ObjectID,
         version: VersionNumber,
     ) -> Result<Option<Object>, SuiError> {
-        Ok(self
-            .objects
+        Ok(self.objects
+            .lock()
+            .unwrap()
             .get(object_id)
             .and_then(|obj| {
                 if obj.1.version() == version {
@@ -74,26 +84,38 @@ impl ObjectStore for MemoryBackedStore {
 impl ParentSync for MemoryBackedStore {
     fn get_latest_parent_entry_ref(&self, object_id: ObjectID) -> SuiResult<Option<ObjectRef>> {
         // println!("Parent: {:?}", object_id);
-        Ok(self.objects.get(&object_id).map(|v| v.0))
+        Ok(self.objects
+            .lock()
+            .unwrap()
+            .get(&object_id).map(|v| v.0))
     }
 }
 
 impl BackingPackageStore for MemoryBackedStore {
     fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<Object>> {
         // println!("Package: {:?}", package_id);
-        Ok(self.objects.get(package_id).map(|v| v.1.clone()))
+        Ok(self.objects
+            .lock()
+            .unwrap()
+            .get(package_id).map(|v| v.1.clone()))
     }
 }
 
 impl ChildObjectResolver for MemoryBackedStore {
     fn read_child_object(&self, _parent: &ObjectID, child: &ObjectID) -> SuiResult<Option<Object>> {
-        Ok(self.objects.get(child).map(|v| v.1.clone()))
+        Ok(self.objects
+            .lock()
+            .unwrap()
+            .get(child).map(|v| v.1.clone()))
     }
 }
 
 impl ObjectStore for &MemoryBackedStore {
     fn get_object(&self, object_id: &ObjectID) -> Result<Option<Object>, SuiError> {
-        Ok(self.objects.get(object_id).map(|v| v.1.clone()))
+        Ok(self.objects
+            .lock()
+            .unwrap()
+            .get(object_id).map(|v| v.1.clone()))
     }
 
     fn get_object_by_key(
@@ -103,6 +125,8 @@ impl ObjectStore for &MemoryBackedStore {
     ) -> Result<Option<Object>, SuiError> {
         Ok(self
             .objects
+            .lock()
+            .unwrap()
             .get(object_id)
             .and_then(|obj| {
                 if obj.1.version() == version {

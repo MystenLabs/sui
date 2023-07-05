@@ -1,6 +1,6 @@
 use core::panic;
 use std::collections::{HashSet, HashMap, VecDeque};
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::pin::Pin;
 use std::future::Future;
 use futures::StreamExt;
@@ -177,12 +177,10 @@ impl QueuesManager {
 	}
 
     /// Cleans up after a completed transaction
-	async fn clean_up(&mut self, completed_tx: TransactionWithResults) {
+	async fn clean_up(&mut self, completed_tx: &Transaction, rw_set: &HashSet<ObjectID>) {
 
         // Get digest and RW set
-        let tx = completed_tx.full_tx.tx;
-        let txid = tx.digest();
-        let rw_set = get_read_write_set(&tx, &completed_tx.tx_effects);
+        let txid = completed_tx.tx.digest();
 		
 		// Remove tx from obj_queues
 		for obj in rw_set.iter() {
@@ -212,23 +210,20 @@ impl QueuesManager {
  *****************************************************************************************/
 
 pub struct ExecutionWorkerState {
-    pub memory_store: Arc<Mutex<MemoryBackedStore>>,
+    pub memory_store: Arc<MemoryBackedStore>,
 }
 
 impl ExecutionWorkerState {
     pub fn new(// protocol_config: &'a ProtocolConfig,
     ) -> Self {
         Self {
-            memory_store: Arc::new(Mutex::new(MemoryBackedStore::new())),
+            memory_store: Arc::new(MemoryBackedStore::new()),
         }
     }
 
     pub fn init_store(&mut self, genesis: &Genesis) {
         for obj in genesis.objects() {
             self.memory_store
-                .lock()
-                .unwrap()
-                .objects
                 .insert(obj.id(), (obj.compute_object_reference(), obj.clone()));
         }
     }
@@ -249,8 +244,6 @@ impl ExecutionWorkerState {
                 | InputObjectKind::SharedMoveObject {id, .. }
                 | InputObjectKind::ImmOrOwnedMoveObject((id, _, _)) => {
                     self.memory_store
-                        .lock()
-                        .unwrap()
                         .get_object(&id)
                         .unwrap()
                         .unwrap()
@@ -303,24 +296,23 @@ impl ExecutionWorkerState {
     ) {
         // And now we mutate the store.
         // First delete:
-        let mut store = self.memory_store.lock().unwrap();
         for obj_del in inner_temp_store.deleted {
             match obj_del.1 .1 {
                 sui_types::storage::DeleteKind::Wrap => {
                     let wrap_tombstone =
                         (obj_del.0, obj_del.1 .0, ObjectDigest::OBJECT_DIGEST_WRAPPED);
-                    let old_object = store
+                    let old_object = self.memory_store
                             .get_object(&obj_del.0)
                             .unwrap().unwrap();
-                    store.insert(obj_del.0, (wrap_tombstone, old_object)); // insert the old object with a wrapped tombstone
+                        self.memory_store.insert(obj_del.0, (wrap_tombstone, old_object)); // insert the old object with a wrapped tombstone
                 }
                 _ => {
-                    store.remove(obj_del.0);
+                    self.memory_store.remove(obj_del.0);
                 }
             }
         }
         for (obj_add_id, (oref, obj, _)) in inner_temp_store.written {
-            store.insert(obj_add_id, (oref, obj));
+            self.memory_store.insert(obj_add_id, (oref, obj));
         }
     }
 
@@ -345,7 +337,7 @@ impl ExecutionWorkerState {
         let transaction_dependencies = input_objects.transaction_dependencies();
 
         let temporary_store = TemporaryStore::new(
-            self.memory_store.lock().unwrap().clone(),
+            self.memory_store.clone(),
             input_objects,
             *tx.digest(),
             protocol_config,
@@ -389,7 +381,7 @@ impl ExecutionWorkerState {
     async fn async_exec(
         full_tx: Transaction,
         input_objects: InputObjects,
-        temporary_store: TemporaryStore<Arc<Mutex<MemoryBackedStore>>>,
+        temporary_store: TemporaryStore<Arc<MemoryBackedStore>>,
         move_vm: Arc<MoveVM>,
         gas_status: SuiGasStatus,
         epoch_data: EpochData,
@@ -460,8 +452,7 @@ impl ExecutionWorkerState {
     ) -> (Arc<MoveVM>, ProtocolConfig, EpochData, u64)
     {
         // First send end of epoch message to sequence worker
-        let store =& *self.memory_store.lock().unwrap();
-        let latest_state = get_sui_system_state(store)
+        let latest_state = get_sui_system_state(&self.memory_store.clone())
             .expect("Read Sui System State object cannot fail");
         let new_epoch_start_state = latest_state.into_epoch_start_state();
         ew_sender
@@ -547,10 +538,10 @@ impl ExecutionWorkerState {
                 Some(tx_with_results) = tasks_queue.next() => {
                     num_tx += 1;
 
-                    // Critical check: are the effects the same?
-                    let full_tx = tx_with_results.full_tx;
-                    let ground_truth_effects = full_tx.ground_truth_effects;
-                    let tx_effects = tx_with_results.tx_effects;
+                    // 1. Critical check: are the effects the same?
+                    let full_tx = &tx_with_results.full_tx;
+                    let ground_truth_effects = &full_tx.ground_truth_effects;
+                    let tx_effects = &tx_with_results.tx_effects;
                     if ground_truth_effects.digest() != tx_effects.digest() {
                         println!("Effects mismatch at checkpoint {}", full_tx.checkpoint_seq);
                         println!("Past effects: {:?}", ground_truth_effects);
@@ -561,33 +552,22 @@ impl ExecutionWorkerState {
                         "Effects digest mismatch"
                     );
 
-                    // Update the store
+                    // 2. Update the store
                     self.write_updates_to_store(tx_with_results.inner_temp_store);
 
+                    // 3. Update object queues
+                    let rw_set = get_read_write_set(&full_tx.tx, &tx_with_results.tx_effects);
+                    manager.clean_up(&full_tx, &rw_set).await;
 
 
-
-         
                     // 1. Check for effects match (done)
                     // 2. Update memory store
                     // 3. manager.clean_up()
                     // 4. deal with end-of-epoch
 
-                    // Critical check: are the effects the same?
-                    // if effects.digest() != tx_digest.effects {
-                    //     println!("Effects mismatch at checkpoint {}", checkpoint_seq);
-                    //     let old_effects = tx_digest.effects;
-                    //     println!("Past effects: {:?}", old_effects);
-                    //     println!("New effects: {:?}", effects);
-                    // }
-                    // assert!(
-                    //     effects.digest() == tx_digest.effects,
-                    //     "Effects digest mismatch"
-                    // );
 
                     // Transation finished executing; run manager clean up
                     // manager.clean_up(tx).await;
-                    // num_tx += 1;
                 },
                 else => {
                     println!("Error, abort");
