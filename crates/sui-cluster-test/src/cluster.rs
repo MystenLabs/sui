@@ -198,6 +198,7 @@ impl Cluster for LocalNewCluster {
             cluster_builder = cluster_builder.set_network_config(network_config);
             cluster_builder = cluster_builder.with_config_dir(config_dir);
         } else {
+            // Custom genesis should be build here where we add the extra accounts
             cluster_builder = cluster_builder.set_genesis_config(genesis_config);
 
             if let Some(epoch_duration_ms) = options.epoch_duration_ms {
