@@ -10,7 +10,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 16;
+const MAX_PROTOCOL_VERSION: u64 = 17;
 
 // Record history of protocol version allocations here:
 //
@@ -230,6 +230,10 @@ struct FeatureFlags {
     // regardless of their previous state in the store.
     #[serde(skip_serializing_if = "is_false")]
     simplified_unwrap_then_delete: bool,
+
+    // Enable upgraded multisig support
+    #[serde(skip_serializing_if = "is_false")]
+    upgraded_multisig_supported: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -789,6 +793,10 @@ impl ProtocolConfig {
     pub fn simplified_unwrap_then_delete(&self) -> bool {
         self.feature_flags.simplified_unwrap_then_delete
     }
+
+    pub fn supports_upgraded_multisig(&self) -> bool {
+        self.feature_flags.upgraded_multisig_supported
+    }
 }
 
 #[cfg(not(msim))]
@@ -1255,6 +1263,11 @@ impl ProtocolConfig {
                 cfg.feature_flags.simplified_unwrap_then_delete = true;
                 cfg
             }
+            17 => {
+                let mut cfg = Self::get_for_version_impl(version - 1, chain);
+                cfg.feature_flags.upgraded_multisig_supported = true;
+                cfg
+            }
             // Use this template when making changes:
             //
             //     // modify an existing constant.
@@ -1312,6 +1325,9 @@ impl ProtocolConfig {
     }
     pub fn set_max_tx_gas_for_testing(&mut self, max_tx_gas: u64) {
         self.max_tx_gas = Some(max_tx_gas)
+    }
+    pub fn set_upgraded_multisig_for_testing(&mut self, val: bool) {
+        self.feature_flags.upgraded_multisig_supported = val
     }
     #[cfg(msim)]
     pub fn set_simplified_unwrap_then_delete(&mut self, val: bool) {
