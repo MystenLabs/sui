@@ -10,7 +10,6 @@ import {
 	extractStructTag,
 	getObjectReference,
 	getSharedObjectInitialVersion,
-	normalizeSuiObjectId,
 	SuiObjectRef,
 	SUI_TYPE_ARG,
 } from '../types/index.js';
@@ -29,6 +28,8 @@ import type { TransactionExpiration } from './TransactionBlockData.js';
 import { TransactionBlockDataBuilder } from './TransactionBlockData.js';
 import type { WellKnownEncoding } from './utils.js';
 import { TRANSACTION_TYPE, create } from './utils.js';
+import type { SuiAPIClient } from '../api/client.js';
+import { normalizeSuiObjectId } from '../utils/sui-types.js';
 
 type TransactionResult = TransactionArgument & TransactionArgument[];
 
@@ -85,7 +86,7 @@ function createTransactionResult(index: number): TransactionResult {
 	}) as TransactionResult;
 }
 
-function expectProvider(options: BuildOptions): JsonRpcProvider {
+function expectProvider(options: BuildOptions): JsonRpcProvider | SuiAPIClient {
 	if (!options.provider) {
 		throw new Error(
 			`No provider passed to Transaction#build, but transaction data was not sufficient to build offline.`,
@@ -122,7 +123,7 @@ const chunk = <T>(arr: T[], size: number): T[][] =>
 	);
 
 interface BuildOptions {
-	provider?: JsonRpcProvider;
+	provider?: JsonRpcProvider | SuiAPIClient;
 	onlyTransactionKind?: boolean;
 	/** Define a protocol config to build against, instead of having it fetched from the provider at build time. */
 	protocolConfig?: ProtocolConfig;

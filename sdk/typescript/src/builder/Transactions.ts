@@ -18,10 +18,11 @@ import {
 	unknown,
 	record,
 } from 'superstruct';
-import { ObjectId, normalizeSuiObjectId } from '../types/common.js';
+import { ObjectId } from '../types/common.js';
 import type { WellKnownEncoding } from './utils.js';
 import { TRANSACTION_TYPE, create } from './utils.js';
 import { TypeTagSerializer } from '../signers/txn-data-serializers/type-tag-serializer.js';
+import { normalizeSuiObjectId } from '../utils/sui-types.js';
 
 const option = <T extends Struct<any, any>>(some: T) =>
 	union([object({ None: union([literal(true), literal(null)]) }), object({ Some: some })]);

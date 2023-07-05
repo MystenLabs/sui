@@ -3,7 +3,7 @@
 
 import { splitGenericParameters } from '@mysten/bcs';
 import type { TypeTag } from '../../types/index.js';
-import { normalizeSuiAddress } from '../../types/index.js';
+import { normalizeSuiAddress } from '../../utils/sui-types.js';
 
 const VECTOR_REGEX = /^vector<(.+)>$/;
 const STRUCT_REGEX = /^([^:]+)::([^:]+)::([^<]+)(<(.+)>)?/;

@@ -18,7 +18,7 @@ type NotificationMessageParams = {
 	result: object;
 };
 
-type SubscriptionRequest<T = any> = {
+export type SubscriptionRequest<T = any> = {
 	id?: number;
 	method: string;
 	unsubscribe: string;
