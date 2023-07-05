@@ -65,8 +65,11 @@ function NftsPage() {
 
 			const undoHideAsset = async (assetId: string) => {
 				try {
-					const updatedHiddenAssetIds = internalHiddenAssetIds.filter((id) => id !== assetId);
-					internalSetHiddenAssetIds(updatedHiddenAssetIds);
+					let updatedHiddenAssetIds;
+					internalSetHiddenAssetIds((prevIds) => {
+						updatedHiddenAssetIds = prevIds.filter((id) => id !== assetId);
+						return updatedHiddenAssetIds;
+					});
 					await set(HIDDEN_ASSET_IDS, updatedHiddenAssetIds);
 				} catch (error) {
 					// Handle any error that occurred during the unhide process

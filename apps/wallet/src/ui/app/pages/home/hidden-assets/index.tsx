@@ -19,7 +19,6 @@ import { ampli } from '_src/shared/analytics/ampli';
 import PageTitle from '_src/ui/app/shared/PageTitle';
 
 const HIDDEN_ASSET_IDS = 'hidden-asset-ids';
-const TOAST_DURATION_MS = 1005;
 
 function NftsPage() {
 	const [internalHiddenAssetIds, internalSetHiddenAssetIds] = useState<string[]>([]);
@@ -58,50 +57,47 @@ function NftsPage() {
 			}
 
 			const undoShowAsset = async (assetId: string) => {
-				const newHiddenAssetIds = [...internalHiddenAssetIds, assetId];
-				internalSetHiddenAssetIds(newHiddenAssetIds);
+				let newHiddenAssetIds;
+				internalSetHiddenAssetIds((prevIds) => {
+					return (newHiddenAssetIds = [...prevIds, assetId]);
+				});
 				await set(HIDDEN_ASSET_IDS, newHiddenAssetIds);
 			};
 
 			const assetShownToast = async (objectId: string) => {
-				toast(
-					(t) => (
-						<div className="flex items-center justify-between gap-2">
-							<div className="flex gap-1 items-center">
-								<Check12 className="text-gray-90" />
-								<div>
-									<InlineLink
-										to="/nfts"
-										color="suiDark"
-										weight="semibold"
-										before={
-											<Text variant="body" color="gray-80">
-												Moved to
-											</Text>
-										}
-										text="Visual Assets"
-									/>
-								</div>
-							</div>
-
-							<div className="w-auto">
+				toast((t) => (
+					<div className="flex items-center justify-between gap-2">
+						<div className="flex gap-1 items-center">
+							<Check12 className="text-gray-90" />
+							<div>
 								<InlineLink
-									size="bodySmall"
-									onClick={() => {
-										undoShowAsset(objectId);
-										toast.dismiss(t.id);
-									}}
+									to="/nfts"
 									color="suiDark"
 									weight="semibold"
-									text="UNDO"
+									before={
+										<Text variant="body" color="gray-80">
+											Moved to
+										</Text>
+									}
+									text="Visual Assets"
 								/>
 							</div>
 						</div>
-					),
-					{
-						duration: TOAST_DURATION_MS,
-					},
-				);
+
+						<div className="w-auto">
+							<InlineLink
+								size="bodySmall"
+								onClick={() => {
+									undoShowAsset(objectId);
+									toast.dismiss(t.id);
+								}}
+								color="suiDark"
+								weight="semibold"
+								text="UNDO"
+							/>
+						</div>
+					</div>
+				));
 			};
 
 			assetShownToast(newAssetId);
