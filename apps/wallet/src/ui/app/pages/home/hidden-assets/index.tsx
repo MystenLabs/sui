@@ -147,7 +147,7 @@ function NftsPage() {
 													collectibleType: type!,
 												});
 											}}
-											className="no-underline relative"
+											className="no-underline relative truncate"
 										>
 											<ErrorBoundary>
 												<NFTDisplayCard

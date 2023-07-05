@@ -23,7 +23,7 @@ const nftDisplayCardStyles = cva('flex flex-nowrap items-center h-full', {
 			false: '',
 		},
 		orientation: {
-			horizontal: 'flex',
+			horizontal: 'flex truncate',
 			vertical: 'flex-col',
 		},
 	},
