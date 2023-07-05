@@ -29,7 +29,6 @@ shared-crypto.workspace = true
 sui-keys.workspace = true
 sui-protocol-config.workspace = true
 sui-storage.workspace = true
-sui-archival.workspace = true
 sui-types.workspace = true
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 

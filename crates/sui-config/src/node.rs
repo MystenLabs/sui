@@ -18,7 +18,6 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 use std::usize;
-use sui_archival::reader::ArchiveReaderConfig;
 use sui_keys::keypair_file::{read_authority_keypair_from_file, read_keypair_from_file};
 use sui_protocol_config::SupportedProtocolVersions;
 use sui_storage::object_store::ObjectStoreConfig;
@@ -577,6 +576,13 @@ pub struct DBCheckpointConfig {
     pub perform_index_db_checkpoints_at_epoch_end: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub prune_and_compact_before_upload: Option<bool>,
+}
+
+#[derive(Debug, Clone)]
+pub struct ArchiveReaderConfig {
+    pub remote_store_config: ObjectStoreConfig,
+    pub download_concurrency: NonZeroUsize,
+    pub use_for_pruning_watermark: bool,
 }
 
 #[derive(Default, Debug, Clone, Deserialize, Serialize)]
