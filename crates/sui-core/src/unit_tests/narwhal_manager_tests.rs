@@ -29,7 +29,7 @@ struct NoOpExecutionState {
 #[async_trait::async_trait]
 impl ExecutionState for NoOpExecutionState {
     async fn handle_consensus_output(&self, consensus_output: ConsensusOutput) {
-        for (_, batches) in consensus_output.batches {
+        for batches in consensus_output.batches {
             for batch in batches {
                 for transaction in batch.transactions().iter() {
                     assert_eq!(
