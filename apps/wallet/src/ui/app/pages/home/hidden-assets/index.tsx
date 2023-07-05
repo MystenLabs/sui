@@ -145,39 +145,37 @@ function NftsPage() {
 						{hiddenNfts
 							.filter((nft) => nft && internalHiddenAssetIds.includes(nft.objectId))
 							.map((nft) => {
-								if (nft) {
-									const { objectId, type } = nft;
-									return (
-										<div className="flex justify-between items-center" key={objectId}>
-											<Link
-												to={`/nft-details?${new URLSearchParams({
-													objectId: objectId,
-												}).toString()}`}
-												onClick={() => {
-													ampli.clickedCollectibleCard({
-														objectId,
-														collectibleType: type!,
-													});
-												}}
-												className="no-underline relative"
-											>
-												<ErrorBoundary>
-													<NFTDisplayCard objectId={objectId} size="xs" showLabel listView />
-												</ErrorBoundary>
-											</Link>
-											<button
-												className="appearance-none bg-transparent border-none"
-												onClick={() => {
-													showAsset(objectId);
-												}}
-											>
-												<div className="flex items-center justify-around hover:bg-gray-70 hover:bg-opacity-50 h-4 w-4 text-gray-60 transition-colors duration-200 rounded-md hover:text-sui-dark hover:cursor-pointer">
-													<EyeClose16 />
-												</div>
-											</button>
-										</div>
-									);
-								}
+								const { objectId, type } = nft!;
+								return (
+									<div className="flex justify-between items-center" key={objectId}>
+										<Link
+											to={`/nft-details?${new URLSearchParams({
+												objectId: objectId,
+											}).toString()}`}
+											onClick={() => {
+												ampli.clickedCollectibleCard({
+													objectId,
+													collectibleType: type!,
+												});
+											}}
+											className="no-underline relative"
+										>
+											<ErrorBoundary>
+												<NFTDisplayCard objectId={objectId} size="xs" showLabel listView />
+											</ErrorBoundary>
+										</Link>
+										<button
+											className="appearance-none bg-transparent border-none"
+											onClick={() => {
+												showAsset(objectId);
+											}}
+										>
+											<div className="flex items-center justify-around hover:bg-gray-70 hover:bg-opacity-50 h-4 w-4 text-gray-60 transition-colors duration-200 rounded-md hover:text-sui-dark hover:cursor-pointer">
+												<EyeClose16 />
+											</div>
+										</button>
+									</div>
+								);
 							})}
 					</div>
 				) : (
