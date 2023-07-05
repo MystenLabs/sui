@@ -274,7 +274,6 @@ impl Subscriber {
         // consensus output
         for cert in &sub_dag.certificates {
             let mut output_batches = Vec::with_capacity(cert.header().payload().len());
-            let output_cert = cert.clone();
 
             inner
                 .metrics
@@ -298,9 +297,7 @@ impl Subscriber {
                 );
                 output_batches.push(batch.clone());
             }
-            subscriber_output
-                .batches
-                .push((output_cert, output_batches));
+            subscriber_output.batches.push(output_batches);
         }
         subscriber_output
     }
