@@ -50,8 +50,10 @@ const HIDDEN_MENU_PATHS = [
 
 const App = () => {
 	const [internalInterstitialDismissed, setInternalInterstitialDismissed] = useState(false);
-	const BullsharkInterstitialEnabled =
-		useFeatureValue(FEATURES.BULLSHARK_QUESTS_INTERSTITIAL, false) || true;
+	const BullsharkInterstitialEnabled = useFeatureValue(
+		FEATURES.BULLSHARK_QUESTS_INTERSTITIAL,
+		false,
+	);
 
 	const dispatch = useAppDispatch();
 	const isPopup = useAppSelector((state) => state.app.appType === AppType.popup);
