@@ -103,10 +103,10 @@ impl ReadApi {
         Ok(match id {
             CheckpointId::SequenceNumber(seq) => {
                 let verified_summary =
-                    self.state.get_verified_checkpoint_by_sequence_number(seq)?;
+                    self.state.get_verified_checkpoint_by_sequence_number(seq)?; // todo(wlmyng): handle explicitly
                 let content = self
                     .state
-                    .get_checkpoint_contents(verified_summary.content_digest)?;
+                    .get_checkpoint_contents(verified_summary.content_digest)?; // todo(wlmyng): handle explicitly
                 let signature = verified_summary.auth_sig().signature.clone();
                 (
                     verified_summary.into_inner().into_data(),
@@ -118,10 +118,10 @@ impl ReadApi {
             CheckpointId::Digest(digest) => {
                 let verified_summary = self
                     .state
-                    .get_verified_checkpoint_summary_by_digest(digest)?;
+                    .get_verified_checkpoint_summary_by_digest(digest)?; // todo(wlmyng): handle explicitly
                 let content = self
                     .state
-                    .get_checkpoint_contents(verified_summary.content_digest)?;
+                    .get_checkpoint_contents(verified_summary.content_digest)?; // todo(wlmyng): handle explicitly
                 let signature = verified_summary.auth_sig().signature.clone();
                 (
                     verified_summary.into_inner().into_data(),
@@ -329,7 +329,7 @@ impl ReadApi {
                     &object_cache,
                     resp.effects.as_ref().ok_or_else(|| {
                         Error::SuiRpcInputError(SuiRpcInputError::GenericNotFound(
-                            "unable to derive balance changes because effect is empty".to_string(),
+                            "unable to derive balance changes because effect is empty".to_string(), // for these, we want param, value, and error
                         ))
                     })?,
                     input_objects,
@@ -435,7 +435,7 @@ impl ReadApiServer for ReadApi {
                             Ok(rendered_fields) => display_fields = Some(rendered_fields),
                             Err(e) => {
                                 return Ok(SuiObjectResponse::new(
-                                    Some((object_ref, o, layout, options, None).try_into()?),
+                                    Some((object_ref, o, layout, options, None).try_into()?), // seems like this should be a server issue
                                     Some(SuiObjectResponseError::DisplayError {
                                         error: e.to_string(),
                                     }),
@@ -534,7 +534,7 @@ impl ReadApiServer for ReadApi {
                         None
                     };
                     Ok(SuiPastObjectResponse::VersionFound(
-                        (object_ref, o, layout, options, display_fields).try_into()?,
+                        (object_ref, o, layout, options, display_fields).try_into()?, // these seem like server errors
                     ))
                 }
                 PastObjectRead::ObjectDeleted(oref) => {
@@ -659,7 +659,7 @@ impl ReadApiServer for ReadApi {
             if let Some((_, seq)) = spawn_monitored_task!(async move {
                 // TODO: this is reading from a deprecated DB. The replacement DB however
                 // is in the epoch store, and thus we risk breaking the read API for txes
-                // from old epochs. Should be migrated once we have indexer support, or 
+                // from old epochs. Should be migrated once we have indexer support, or
                 // when we can tolerate returning None for old txes.
                 state.database.deprecated_get_transaction_checkpoint(&digest)
                     .map_err(|e| {
@@ -701,6 +701,7 @@ impl ReadApiServer for ReadApi {
                             Error::from(e)
                         })}).await.map_err(Error::from)??;
                     match to_sui_transaction_events(self, digest, events) {
+                        // TODO(wlmyng): seems like server error
                         Ok(e) => temp_response.events = Some(e),
                         Err(e) => temp_response.errors.push(e.to_string()),
                     };
