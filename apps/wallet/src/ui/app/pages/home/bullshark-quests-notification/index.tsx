@@ -3,8 +3,6 @@
 
 import { X32 } from '@mysten/icons';
 
-import { useNavigate } from 'react-router-dom';
-
 import { Portal } from '../../../shared/Portal';
 
 const InterstitialHeading = ({ text }: { text: string }) => {
@@ -22,8 +20,6 @@ const InterstitialBanner = ({ lines }: { lines: string[] }) => {
 };
 
 function BullsharkQuestsNotification({ onClose }: { onClose: () => void }) {
-	const navigate = useNavigate();
-
 	const setInterstitialDismissed = () => {
 		localStorage.setItem('bullshark-interstitial-dismissed', 'true');
 	};
