@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::api::MoveUtilsServer;
-use crate::error::{ClientError, Error, SuiRpcInputError};
+use crate::error::{ClientError, Error};
 use crate::read_api::{get_move_module, get_move_modules_by_package};
 use crate::{with_tracing, SuiRpcModule};
 use async_trait::async_trait;
@@ -153,9 +153,10 @@ impl MoveUtilsServer for MoveUtils {
                 })?;
             Ok(match structs.get(&identifier) {
                 Some(struct_) => Ok(struct_.clone().into()),
-                None => Err(Error::SuiRpcInputError(SuiRpcInputError::GenericNotFound(
-                    format!("No struct was found with struct name {}", struct_name),
-                ))),
+                None => Err(ClientError::NotFound {
+                    entity: "Struct".to_string(),
+                    id: struct_name.clone(),
+                }),
             }?)
         })
     }
@@ -177,9 +178,10 @@ impl MoveUtilsServer for MoveUtils {
                 })?;
             Ok(match functions.get(&identifier) {
                 Some(function) => Ok(function.clone().into()),
-                None => Err(Error::SuiRpcInputError(SuiRpcInputError::GenericNotFound(
-                    format!("No function was found with function name {}", function_name),
-                ))),
+                None => Err(ClientError::NotFound {
+                    entity: "Function".to_string(),
+                    id: function_name.clone(),
+                }),
             }?)
         })
     }
@@ -212,9 +214,11 @@ impl MoveUtilsServer for MoveUtils {
                     }
                     .into()),
                 },
-                _ => Err(Error::SuiRpcInputError(SuiRpcInputError::GenericNotFound(
-                    format!("Package object does not exist with ID {}", package),
-                ))),
+                _ => Err(ClientError::NotFound {
+                    entity: "Package".to_string(),
+                    id: package.to_string(),
+                }
+                .into()),
             }?;
 
             let identifier =
@@ -245,8 +249,9 @@ impl MoveUtilsServer for MoveUtils {
                         _ => MoveFunctionArgType::Pure,
                     })
                     .collect::<Vec<MoveFunctionArgType>>()),
-                None => Err(Error::SuiRpcInputError(SuiRpcInputError::GenericNotFound(
-                    format!("No parameters found for function {}", function),
+                None => Err(ClientError::NotFoundCustom(format!(
+                    "No parameters found for function {}",
+                    function
                 ))),
             }?)
         })

@@ -319,7 +319,7 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
                 })?;
             let name_bcs_value = sui_json_value
                 .to_bcs_bytes(&layout)
-                .map_err(|e| ClientError::Serde(e.to_string()))?;
+                .map_err(|e| ClientError::SerdeWithLayout(e.to_string()))?;
 
             let id = self
                 .state
@@ -362,11 +362,9 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
                 type_params: vec![],
             }));
             let domain = Domain::from_str(&name).map_err(ClientError::Domain)?;
-            let domain_bcs_value = bcs::to_bytes(&domain).map_err(|e| {
-                ClientError::Serde(format!(
-                    "Unable to serialize name: {:?} with error: {:?}",
-                    domain, e
-                ))
+            let domain_bcs_value = bcs::to_bytes(&domain).map_err(|e| ClientError::Serde {
+                param: "name".to_string(),
+                reason: e.to_string(),
             })?;
             let record_object_id_option = self
                 .state
@@ -445,11 +443,9 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
             };
 
             let name_type_tag = TypeTag::Address;
-            let addr_bcs_value = bcs::to_bytes(&address).map_err(|e| {
-                ClientError::Serde(format!(
-                    "Unable to serialize address: {:?} with error: {:?}",
-                    address, e
-                ))
+            let addr_bcs_value = bcs::to_bytes(&address).map_err(|e| ClientError::Serde {
+                param: "address".to_string(),
+                reason: e.to_string(),
             })?;
 
             let addr_object_id_opt = self

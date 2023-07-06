@@ -31,19 +31,20 @@ use sui_types::object::{Object, ObjectRead};
 use sui_types::parse_sui_struct_tag;
 
 use crate::api::{cap_page_limit, CoinReadApiServer, JsonRpcMetrics};
-use crate::error::{Error, RpcInterimResult, ServerError, SuiRpcInputError};
+use crate::error::{ClientError, Error, RpcInterimResult, ServerError};
 use crate::{with_tracing, SuiRpcModule};
 
 #[cfg(test)]
 use mockall::automock;
 
-fn parse_to_struct_tag(coin_type: &str) -> Result<StructTag, Error> {
-    parse_sui_struct_tag(coin_type).map_err(|e| {
-        Error::SuiRpcInputError(SuiRpcInputError::CannotParseSuiStructTag(format!("{e}")))
+fn parse_to_struct_tag(coin_type: &str) -> Result<StructTag, ClientError> {
+    parse_sui_struct_tag(coin_type).map_err(|e| ClientError::InvalidParam {
+        param: "coin_type".to_string(),
+        reason: e.to_string(),
     })
 }
 
-fn parse_to_type_tag(coin_type: Option<String>) -> Result<TypeTag, Error> {
+fn parse_to_type_tag(coin_type: Option<String>) -> Result<TypeTag, ClientError> {
     Ok(TypeTag::Struct(Box::new(match coin_type {
         Some(c) => parse_to_struct_tag(&c)?,
         None => GAS::type_(),
@@ -120,16 +121,18 @@ impl CoinReadApiServer for CoinReadApi {
                         Some(obj) => {
                             let coin_type = obj.coin_type_maybe();
                             if coin_type.is_none() {
-                                Err(Error::SuiRpcInputError(SuiRpcInputError::GenericInvalid(
-                                    "cursor is not a coin".to_string(),
-                                )))
+                                Err(ClientError::InvalidParam {
+                                    param: "cursor".to_string(),
+                                    reason: "is not a coin".to_string(),
+                                })
                             } else {
                                 Ok((coin_type.unwrap().to_string(), object_id))
                             }
                         }
-                        None => Err(Error::SuiRpcInputError(SuiRpcInputError::GenericInvalid(
-                            "cursor not found".to_string(),
-                        ))),
+                        None => Err(ClientError::InvalidParam {
+                            param: "cursor".to_string(),
+                            reason: "not found".to_string(),
+                        }),
                     }
                 }
                 None => {
@@ -349,9 +352,8 @@ async fn find_package_object_id(
                 }
             }
         }
-        Err(SuiRpcInputError::GenericNotFound(format!(
-            "Cannot find object [{}] from [{}] package event.",
-            object_struct_tag, package_id,
+        Err(ClientError::NotFoundCustom(format!(
+            "Cannot find object [{object_struct_tag}] from [{package_id}] package event."
         ))
         .into())
     })

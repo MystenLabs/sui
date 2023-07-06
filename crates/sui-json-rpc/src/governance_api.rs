@@ -20,7 +20,6 @@ use sui_open_rpc::Module;
 use sui_types::base_types::{MoveObjectType, ObjectID, SuiAddress};
 use sui_types::committee::EpochId;
 use sui_types::dynamic_field::get_dynamic_field_from_store;
-use sui_types::error::UserInputError;
 use sui_types::governance::StakedSui;
 use sui_types::id::ID;
 use sui_types::object::ObjectRead;
@@ -31,7 +30,7 @@ use sui_types::sui_system_state::SuiSystemStateTrait;
 use sui_types::sui_system_state::{get_validator_from_table, SuiSystemState};
 
 use crate::api::{GovernanceReadApiServer, JsonRpcMetrics};
-use crate::error::{Error, RpcInterimResult, ServerError, SuiRpcInputError};
+use crate::error::{ClientError, Error, RpcInterimResult, ServerError};
 use crate::{with_tracing, ObjectProvider, SuiRpcModule};
 
 #[derive(Clone)]
@@ -98,18 +97,21 @@ impl GovernanceReadApi {
                             false,
                         )),
                         None => {
-                            return Err(Error::UserInputError(UserInputError::ObjectNotFound {
-                                object_id: oref.0,
-                                version: None,
-                            }));
+                            return Err(ClientError::NotFound {
+                                // TODO(wlmyng): not sure if this is actually a client error
+                                entity: "StakedSui".to_string(),
+                                id: oref.0.to_string(),
+                            }
+                            .into());
                         }
                     }
                 }
                 ObjectRead::NotExists(id) => {
-                    return Err(Error::UserInputError(UserInputError::ObjectNotFound {
-                        object_id: id,
-                        version: None,
-                    }));
+                    return Err(ClientError::NotFound {
+                        entity: "StakedSui".to_string(),
+                        id: id.to_string(),
+                    }
+                    .into());
                 }
             }
         }
@@ -163,7 +165,7 @@ impl GovernanceReadApi {
         for (pool_id, stakes) in pools {
             // Rate table and rate can be null when the pool is not active
             let rate_table = rates.get(&pool_id).ok_or_else(|| {
-                SuiRpcInputError::GenericNotFound(
+                ClientError::NotFoundCustom(
                     "Cannot find rates for staking pool {pool_id}".to_string(),
                 )
             })?;
