@@ -33,7 +33,7 @@ jobs:
       if: ${{ env.old_commit_hash != '' }}
       working-directory: ./
       run: |
-        export list_of_prs=($(git log --grep "\[x\]" --pretty=oneline --abbrev-commit d8de3b747ba275542825d3d7dfe78067e3c88df...8c0c8780447e519db3eb3644492343d0bbf179ef -- crates dashboards doc docker external-crates kiosk narwhal nre sui-execution | grep -o '#[0-9]\+' | grep -o '[0-9]\+'))
+        export list_of_prs=$(git log --grep "\[x\]" --pretty=oneline --abbrev-commit d8de3b747ba275542825d3d7dfe78067e3c88df...8c0c8780447e519db3eb3644492343d0bbf179ef -- crates dashboards doc docker external-crates kiosk narwhal nre sui-execution | grep -o '#[0-9]\+' | grep -o '[0-9]\+')
         echo "::set-output name=matrix::${list_of_prs}"
   
   process-prs:
