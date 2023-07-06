@@ -3486,6 +3486,7 @@ impl AuthorityState {
                 inner_temporary_store,
                 &certificate.clone().into_unsigned(),
                 effects,
+                epoch_store.epoch(),
             )
             .await
             .tap_ok(|_| {

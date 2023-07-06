@@ -53,6 +53,16 @@ pub enum DeleteKind {
     Wrap,
 }
 
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Serialize, Deserialize)]
+pub enum MarkerKind {
+    /// An object was received at the given version in the transaction and is no longer able
+    /// to be received at that version in subequent transactions.
+    Received,
+    /// A shared object was deleted by the transaction and is no longer able to be accessed or
+    /// used in subsequent transactions.
+    SharedObjectDeleted,
+}
+
 /// DeleteKind together with the old sequence number prior to the deletion, if available.
 /// For normal deletion and wrap, we always will consult the object store to obtain the old sequence number.
 /// For UnwrapThenDelete however, in the old protocol where simplified_unwrap_then_delete is false,
