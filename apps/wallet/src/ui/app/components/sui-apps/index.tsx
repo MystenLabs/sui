@@ -47,14 +47,14 @@ function AppsPlayGround() {
 				</Heading>
 			</div>
 
-			<div className="flex flex-col w-full border-4 border-black border-solid bg-sui p-2 rounded-lg items-center">
+			<div className="font-frankfurter flex flex-col w-full border-2 border-black border-solid bg-[#99DBFB] p-3 rounded-lg items-center text-white gap-1 [-webkit-text-stroke:1px_black]">
+				<div className="text-heading4">Join bullsharks quests!</div>
+				<div className="text-heading3">5 million sui prize pool!</div>
 				<a
-					className="appearance-none no-underline text-white"
+					className="appearance-none no-underline text-white bg-[#EA3389] rounded-lg p-2"
 					href="https://tech.mystenlabs.com/introducing-bullsharks-quests/"
 				>
-					<div>Join bullsharks quests!</div>
-					<div>5 million sui prize pool!</div>
-					<div className="bg-[#EA3389] rounded-full p-2">read more on the blog</div>
+					read more on the blog
 				</a>
 			</div>
 			{filteredEcosystemApps?.length ? (

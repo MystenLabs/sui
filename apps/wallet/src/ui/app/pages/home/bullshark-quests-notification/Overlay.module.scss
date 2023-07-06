@@ -4,7 +4,7 @@
 @use '_utils';
 
 .container {
-	background: colors.$sui-blue;
+	background: #99dbfb;
 	display: flex;
 	flex-flow: column nowrap;
 	align-items: center;
@@ -25,7 +25,7 @@
 	justify-content: center;
 	width: 100%;
 	overflow: auto;
-	background: colors.$sui-blue;
+	background: #99dbfb;
 	position: relative;
 	height: 100%;
 }

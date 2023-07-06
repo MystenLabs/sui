@@ -10,6 +10,20 @@ import { Portal } from '../../../shared/Portal';
 
 import st from './Overlay.module.scss';
 
+const InterstitialHeading = ({ text }: { text: string }) => {
+	return <div className="[-webkit-text-stroke:2px_black] text-heading1">{text}</div>;
+};
+
+const InterstitialBanner = ({ lines }: { lines: string[] }) => {
+	return (
+		<div className="text-heading4 flex flex-col border-solid border-2 border-gray-90 text-black bg-white py-1 px-3 rounded-md">
+			{lines.map((line, key) => {
+				return <div key={key}>{line}</div>;
+			})}
+		</div>
+	);
+};
+
 function BullsharkQuestsNotification() {
 	const navigate = useNavigate();
 
@@ -21,31 +35,35 @@ function BullsharkQuestsNotification() {
 		<Portal containerId="overlay-portal-container">
 			<div className={cl(st.container)}>
 				<div className={st.content}>
-					<div className="flex flex-col font-frankfurter w-full h-full items-center p-4">
-						<div className="flex flex-col p-2 border-4 border-black border-solid w-full rounded-md justify-between h-full items-center">
+					<div className="flex flex-col font-frankfurter w-full h-full items-center p-4 text-white text-center">
+						<div className="flex flex-col py-6 px-7 border-4 border-black border-solid w-full rounded-md h-full items-center">
 							<div className="flex flex-col items-center">
-								<div className="font-frankfurter">Join Bullshark Quests!</div>
-								<div className="bg-[url('https://quests.mystenlabs.com/_next/static/media/logo.81b4eb8f.svg')] h-50 w-50 bg-cover" />
-								<div>5 Million SUI prize pool!</div>
-								<div>2.5M SUI Top 10,000 players!</div>
-								<div>2.5M SUI Top all eligible players!</div>
+								<InterstitialHeading text="Join Bullshark Quests!" />
+								<div className="bg-[url('https://quests.mystenlabs.com/_next/static/media/logo.81b4eb8f.svg')] h-40 w-40 bg-cover" />
+								<InterstitialHeading text="5 Million SUI prize pool!" />
+								<div className="flex flex-col items-center gap-2 mt-2">
+									<InterstitialBanner lines={['2.5M SUI', 'Top 10,000 players!']} />
+									<InterstitialBanner lines={['2.5M SUI', 'all eligible players!']} />
+								</div>
 							</div>
 
-							<a
-								href="https://tech.mystenlabs.com/introducing-bullsharks-quests/"
-								className="appearance-none no-underline text-white bg-[#EA3389] rounded-full p-4"
-							>
-								Read more on the blog
-							</a>
-							<button
-								className="appearance-none bg-transparent border-none cursor-pointer"
-								onClick={() => {
-									setInterstitialDismissed();
-									navigate('/tokens');
-								}}
-							>
-								<X32 className="text-sui-dark h-8 w-8" />
-							</button>
+							<div className="flex flex-col items-center gap-4 [-webkit-text-stroke:1px_black] w-full mt-5">
+								<a
+									href="https://tech.mystenlabs.com/introducing-bullsharks-quests/"
+									className="appearance-none no-underline text-white bg-[#EA3389] rounded-lg py-2 w-60"
+								>
+									Read more on the blog
+								</a>
+								<button
+									className="appearance-none bg-transparent border-none cursor-pointer mt-1"
+									onClick={() => {
+										setInterstitialDismissed();
+										navigate('/tokens');
+									}}
+								>
+									<X32 className="text-sui-dark h-8 w-8" />
+								</button>
+							</div>
 						</div>
 					</div>
 				</div>

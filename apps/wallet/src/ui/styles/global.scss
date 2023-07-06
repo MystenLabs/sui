@@ -105,3 +105,11 @@ textarea {
 ::-ms-reveal {
 	display: none;
 }
+
+@font-face {
+	font-family: 'Frankfurter Normal';
+	src: url('../assets/images/FrankfurterNormal.woff2') format('woff2'),
+		url('../assets/images/FrankfurterNormal.woff') format('woff');
+}
+
+// url('_assets/images/receipt_bottom.svg')
