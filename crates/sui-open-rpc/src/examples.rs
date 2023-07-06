@@ -700,11 +700,10 @@ impl RpcExampleProvider {
         let data2 = data.clone();
 
         let tx = to_sender_signed_transaction(data, &kp);
-        let tx1 = tx.clone();
-        let signatures = tx.into_inner().tx_signatures().to_vec();
-        let raw_transaction = bcs::to_bytes(tx1.data()).unwrap();
+        let signatures = tx.data().tx_signatures().to_vec();
+        let raw_transaction = bcs::to_bytes(tx.data()).unwrap();
 
-        let tx_digest = tx1.digest();
+        let tx_digest = tx.digest();
         let object_change = ObjectChange::Transferred {
             sender: signer,
             recipient: Owner::AddressOwner(recipient),

@@ -11,7 +11,7 @@ use sui_types::quorum_driver_types::{
     ExecuteTransactionRequest, ExecuteTransactionRequestType, ExecuteTransactionResponse,
     FinalizedEffects, QuorumDriverError,
 };
-use sui_types::transaction::VerifiedTransaction;
+use sui_types::transaction::Transaction;
 use test_cluster::TestClusterBuilder;
 use tokio::time::timeout;
 use tracing::info;
@@ -149,7 +149,11 @@ async fn test_fullnode_wal_log() -> Result<(), anyhow::Error> {
     .unwrap_err();
 
     // Because the tx did not go through, we expect to see it in the WAL log
-    let pending_txes = orchestrator.load_all_pending_transactions();
+    let pending_txes: Vec<_> = orchestrator
+        .load_all_pending_transactions()
+        .into_iter()
+        .map(|t| t.into_inner())
+        .collect();
     assert_eq!(pending_txes, vec![txn.clone()]);
 
     // Bring up 1 validator, we obtain quorum again and tx should succeed
@@ -248,7 +252,6 @@ async fn test_tx_across_epoch_boundaries() {
 
     let tx_digest = *tx.digest();
     info!(?tx_digest, "Submitting tx");
-    let tx = tx.into_inner();
     tokio::task::spawn(async move {
         match to
             .execute_transaction_block(ExecuteTransactionRequest {
@@ -291,12 +294,12 @@ async fn test_tx_across_epoch_boundaries() {
 
 async fn execute_with_orchestrator(
     orchestrator: &TransactiondOrchestrator<NetworkAuthorityClient>,
-    txn: VerifiedTransaction,
+    txn: Transaction,
     request_type: ExecuteTransactionRequestType,
 ) -> Result<ExecuteTransactionResponse, QuorumDriverError> {
     orchestrator
         .execute_transaction_block(ExecuteTransactionRequest {
-            transaction: txn.into(),
+            transaction: txn,
             request_type,
         })
         .await

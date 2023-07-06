@@ -3,7 +3,7 @@
 
 use crate::ExecutionEffects;
 use std::fmt::Display;
-use sui_types::transaction::VerifiedTransaction;
+use sui_types::transaction::Transaction;
 
 /// A Payload is a transaction wrapper of a particular type (transfer object, shared counter, etc).
 /// Calling `make_transaction()` on a payload produces the transaction it is wrapping. Once that
@@ -11,5 +11,5 @@ use sui_types::transaction::VerifiedTransaction;
 /// effect by invoking `make_new_payload(effects)`
 pub trait Payload: Send + Sync + std::fmt::Debug + Display {
     fn make_new_payload(&mut self, effects: &ExecutionEffects);
-    fn make_transaction(&mut self) -> VerifiedTransaction;
+    fn make_transaction(&mut self) -> Transaction;
 }

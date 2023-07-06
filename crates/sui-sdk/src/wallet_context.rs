@@ -22,8 +22,7 @@ use sui_types::crypto::{get_key_pair, AccountKeyPair};
 use sui_types::gas_coin::GasCoin;
 use sui_types::object::Owner;
 use sui_types::transaction::{
-    Transaction, TransactionData, TransactionDataAPI, VerifiedTransaction,
-    TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
+    Transaction, TransactionData, TransactionDataAPI, TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
 };
 use tokio::sync::RwLock;
 use tracing::warn;
@@ -289,25 +288,21 @@ impl WalletContext {
     }
 
     /// Sign a transaction with a key currently managed by the WalletContext
-    pub fn sign_transaction(&self, data: &TransactionData) -> VerifiedTransaction {
+    pub fn sign_transaction(&self, data: &TransactionData) -> Transaction {
         let sig = self
             .config
             .keystore
             .sign_secure(&data.sender(), data, Intent::sui_transaction())
             .unwrap();
         // TODO: To support sponsored transaction, we should also look at the gas owner.
-        VerifiedTransaction::new_unchecked(Transaction::from_data(
-            data.clone(),
-            Intent::sui_transaction(),
-            vec![sig],
-        ))
+        Transaction::from_data(data.clone(), Intent::sui_transaction(), vec![sig])
     }
 
     /// Execute a transaction and wait for it to be locally executed on the fullnode.
     /// Also expects the effects status to be ExecutionStatus::Success.
     pub async fn execute_transaction_must_succeed(
         &self,
-        tx: VerifiedTransaction,
+        tx: Transaction,
     ) -> SuiTransactionBlockResponse {
         let response = self.execute_transaction_may_fail(tx).await.unwrap();
         assert!(response.status_ok().unwrap());
@@ -319,7 +314,7 @@ impl WalletContext {
     /// needed in non-test environment or the caller is explicitly testing some failure behavior.
     pub async fn execute_transaction_may_fail(
         &self,
-        tx: VerifiedTransaction,
+        tx: Transaction,
     ) -> anyhow::Result<SuiTransactionBlockResponse> {
         let client = self.get_client().await?;
         Ok(client
@@ -347,10 +342,7 @@ impl WalletContext {
     /// same amount of Transactions, for example when there are not enough gas objects
     /// controlled by the WalletContext. Caller should rely on the return value to
     /// check the count.
-    pub async fn batch_make_transfer_transactions(
-        &self,
-        max_txn_num: usize,
-    ) -> Vec<VerifiedTransaction> {
+    pub async fn batch_make_transfer_transactions(&self, max_txn_num: usize) -> Vec<Transaction> {
         let recipient = get_key_pair::<AccountKeyPair>().0;
         let accounts_and_objs = self.get_all_accounts_and_gas_objects().await.unwrap();
         let mut res = Vec::with_capacity(max_txn_num);
@@ -380,7 +372,7 @@ impl WalletContext {
         &self,
         recipient: Option<SuiAddress>,
         amount: Option<u64>,
-    ) -> VerifiedTransaction {
+    ) -> Transaction {
         let (sender, gas_object) = self.get_one_gas_object().await.unwrap().unwrap();
         let gas_price = self.get_reference_gas_price().await.unwrap();
         self.sign_transaction(
@@ -390,10 +382,7 @@ impl WalletContext {
         )
     }
 
-    pub async fn make_staking_transaction(
-        &self,
-        validator_address: SuiAddress,
-    ) -> VerifiedTransaction {
+    pub async fn make_staking_transaction(&self, validator_address: SuiAddress) -> Transaction {
         let accounts_and_objs = self.get_all_accounts_and_gas_objects().await.unwrap();
         let sender = accounts_and_objs[0].0;
         let gas_object = accounts_and_objs[0].1[0];
@@ -406,7 +395,7 @@ impl WalletContext {
         )
     }
 
-    pub async fn make_publish_transaction(&self, path: PathBuf) -> VerifiedTransaction {
+    pub async fn make_publish_transaction(&self, path: PathBuf) -> Transaction {
         let (sender, gas_object) = self.get_one_gas_object().await.unwrap().unwrap();
         let gas_price = self.get_reference_gas_price().await.unwrap();
         self.sign_transaction(
@@ -416,7 +405,7 @@ impl WalletContext {
         )
     }
 
-    pub async fn make_publish_transaction_with_deps(&self, path: PathBuf) -> VerifiedTransaction {
+    pub async fn make_publish_transaction_with_deps(&self, path: PathBuf) -> Transaction {
         let (sender, gas_object) = self.get_one_gas_object().await.unwrap().unwrap();
         let gas_price = self.get_reference_gas_price().await.unwrap();
         self.sign_transaction(

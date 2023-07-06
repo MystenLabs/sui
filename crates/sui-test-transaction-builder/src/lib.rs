@@ -10,7 +10,7 @@ use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress};
 use sui_types::crypto::{Signature, Signer};
 use sui_types::sui_system_state::SUI_SYSTEM_MODULE_NAME;
 use sui_types::transaction::{
-    CallArg, ObjectArg, ProgrammableTransaction, Transaction, TransactionData, VerifiedTransaction,
+    CallArg, ObjectArg, ProgrammableTransaction, Transaction, TransactionData,
     DEFAULT_VALIDATOR_GAS_PRICE, TEST_ONLY_GAS_UNIT_FOR_GENERIC, TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
 };
 use sui_types::{TypeTag, SUI_SYSTEM_PACKAGE_ID};
@@ -269,12 +269,8 @@ impl TestTransactionBuilder {
         }
     }
 
-    pub fn build_and_sign(self, signer: &dyn Signer<Signature>) -> VerifiedTransaction {
-        VerifiedTransaction::new_unchecked(Transaction::from_data_and_signer(
-            self.build(),
-            Intent::sui_transaction(),
-            vec![signer],
-        ))
+    pub fn build_and_sign(self, signer: &dyn Signer<Signature>) -> Transaction {
+        Transaction::from_data_and_signer(self.build(), Intent::sui_transaction(), vec![signer])
     }
 }
 

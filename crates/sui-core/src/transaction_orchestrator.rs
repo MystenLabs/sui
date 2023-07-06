@@ -162,9 +162,9 @@ where
         // Note: since EffectsCert is not stored today, we need to gather that from validators
         // (and maybe store it for caching purposes)
 
-        let transaction = request
-            .transaction
-            .verify()
+        let transaction = self
+            .validator_state
+            .verify_transaction(request.transaction)
             .map_err(QuorumDriverError::InvalidUserSignature)?;
         let (_in_flight_metrics_guards, good_response_metrics) = self.update_metrics(&transaction);
         let tx_digest = *transaction.digest();
@@ -302,7 +302,7 @@ where
         {
             debug!(?tx_digest, "no pending request in flight, submitting.");
             self.quorum_driver()
-                .submit_transaction_no_ticket(transaction.clone())
+                .submit_transaction_no_ticket(transaction.clone().into())
                 .await?;
         }
         // It's possible that the transaction effects is already stored in DB at this point.
@@ -322,7 +322,7 @@ where
                         ?tx_digest,
                         "Effects are available in DB, use quorum driver to get a certificate"
                     );
-                    qd.submit_transaction_no_ticket(transaction).await?;
+                    qd.submit_transaction_no_ticket(transaction.into()).await?;
                     Ok(unfinished_quorum_driver_task.await)
                 }
             }
@@ -422,6 +422,22 @@ where
                         // cause forks until MVCC is merged.
                         continue;
                     }
+
+                    // This is a redundant verification, but SignatureVerifier will cache the
+                    // previous result.
+                    let transaction = match validator_state.verify_transaction(transaction) {
+                        Ok(transaction) => transaction,
+                        Err(err) => {
+                            // This should be impossible, since we verified the transaction
+                            // before sending it to quorum driver.
+                            error!(
+                                    ?err,
+                                    "Transaction signature failed to verify after quorum driver execution."
+                                );
+                            continue;
+                        }
+                    };
+
                     let executable_tx = VerifiedExecutableTransaction::new_from_quorum_execution(
                         transaction,
                         effects_cert.executed_epoch(),
@@ -509,6 +525,9 @@ where
     ) {
         let pending_txes = pending_tx_log.load_all_pending_transactions();
         for tx in pending_txes {
+            // TODO: ideally pending_tx_log would not contain VerifiedTransaction, but that
+            // requires a migration.
+            let tx = tx.into_inner();
             let tx_digest = *tx.digest();
             // It's not impossible we fail to enqueue a task but that's not the end of world.
             if let Err(err) = quorum_driver.submit_transaction_no_ticket(tx).await {
