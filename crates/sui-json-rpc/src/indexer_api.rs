@@ -38,7 +38,7 @@ use crate::api::{
     cap_page_limit, validate_limit, IndexerApiServer, JsonRpcMetrics, ReadApiServer,
     QUERY_MAX_RESULT_LIMIT,
 };
-use crate::error::{Error, SuiRpcInputError};
+use crate::error::{ClientError, Error, SuiRpcInputError};
 use crate::name_service::Domain;
 use crate::with_tracing;
 use crate::SuiRpcModule;
@@ -307,9 +307,9 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
                 type_: name_type,
                 value,
             } = name.clone();
-            let layout = TypeLayoutBuilder::build_with_types(&name_type, &self.state.database)?;
-            let sui_json_value = SuiJsonValue::new(value)?;
-            let name_bcs_value = sui_json_value.to_bcs_bytes(&layout)?;
+            let layout = TypeLayoutBuilder::build_with_types(&name_type, &self.state.database)?; // todo: client
+            let sui_json_value = SuiJsonValue::new(value)?; // todo: client
+            let name_bcs_value = sui_json_value.to_bcs_bytes(&layout)?; // todo client
             let id = self
                 .state
                 .get_dynamic_field_object_id(parent_object_id, name_type, &name_bcs_value)
@@ -350,12 +350,7 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
                 name: NAME_SERVICE_DOMAIN_STRUCT.to_owned(),
                 type_params: vec![],
             }));
-            let domain = Domain::from_str(&name).map_err(|e| {
-                Error::UnexpectedError(format!(
-                    "Failed to parse NameService Domain with error: {:?}",
-                    e
-                ))
-            })?;
+            let domain = Domain::from_str(&name).map_err(ClientError::Domain)?;
             let domain_bcs_value = bcs::to_bytes(&domain).map_err(|e| {
                 Error::SuiRpcInputError(SuiRpcInputError::GenericInvalid(format!(
                     "Unable to serialize name: {:?} with error: {:?}",

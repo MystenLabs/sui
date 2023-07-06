@@ -11,6 +11,8 @@ use sui_types::quorum_driver_types::QuorumDriverError;
 use thiserror::Error;
 use tokio::task::JoinError;
 
+use crate::name_service::DomainParseError;
+
 pub type RpcInterimResult<T = ()> = Result<T, Error>;
 
 #[derive(Debug, Error)]
@@ -144,6 +146,9 @@ fn to_internal_error(err: impl ToString) -> RpcError {
 pub enum ClientError {
     #[error("Serde error")]
     Serde,
+
+    #[error(transparent)]
+    Domain(#[from] DomainParseError),
 }
 
 impl From<ClientError> for RpcError {

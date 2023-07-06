@@ -8,6 +8,7 @@ use std::str::FromStr;
 use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::collection_types::VecMap;
 use sui_types::id::ID;
+use thiserror::Error;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Registry {
@@ -36,8 +37,20 @@ pub struct Domain {
     labels: Vec<String>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
-pub struct DomainParseError;
+#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, Error)]
+pub enum DomainParseError {
+    #[error("Domain is too long")]
+    TooLong,
+
+    #[error("Domain labels are empty")]
+    LabelEmpty,
+
+    #[error("Label length is not valid")]
+    InvalidLabelLength,
+
+    #[error("Label contains invalid characters")]
+    InvalidLabelCharacters,
+}
 
 impl FromStr for Domain {
     type Err = DomainParseError;
@@ -47,7 +60,7 @@ impl FromStr for Domain {
         const MAX_DOMAIN_LENGTH: usize = 200;
 
         if s.len() > MAX_DOMAIN_LENGTH {
-            return Err(DomainParseError);
+            return Err(DomainParseError::TooLong);
         }
 
         let labels = s
@@ -57,7 +70,7 @@ impl FromStr for Domain {
             .collect::<Result<Vec<_>, Self::Err>>()?;
 
         if labels.is_empty() {
-            return Err(DomainParseError);
+            return Err(DomainParseError::LabelEmpty);
         }
 
         let labels = labels.into_iter().map(ToOwned::to_owned).collect();
@@ -73,7 +86,7 @@ fn validate_label(label: &str) -> Result<&str, DomainParseError> {
     let len = bytes.len();
 
     if !(MIN_LABEL_LENGTH..=MAX_LABEL_LENGTH).contains(&len) {
-        return Err(DomainParseError);
+        return Err(DomainParseError::InvalidLabelLength);
     }
 
     for (i, character) in bytes.iter().enumerate() {
@@ -85,7 +98,7 @@ fn validate_label(label: &str) -> Result<&str, DomainParseError> {
         };
 
         if !is_valid_character {
-            return Err(DomainParseError);
+            return Err(DomainParseError::InvalidLabelCharacters);
         };
     }
     Ok(label)
@@ -110,7 +123,7 @@ impl fmt::Display for Domain {
 struct NameRecord {
     /// The ID of the `RegistrationNFT` assigned to this record.
     ///
-    /// The owner of the corrisponding `RegistrationNFT` has the rights to
+    /// The owner of the corresponding `RegistrationNFT` has the rights to
     /// be able to change and adjust the `target_address` of this domain.
     ///
     /// It is possible that the ID changes if the record expires and is
