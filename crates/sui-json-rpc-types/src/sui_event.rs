@@ -103,7 +103,9 @@ impl SuiEvent {
         let bcs = contents.to_vec();
 
         let move_struct = Event::move_event_to_move_struct(&type_, &contents, resolver)?;
-        let (type_, field) = type_and_fields_from_move_struct(&type_, move_struct);
+        // We do not use the output `type_` because it may suffer from the identity crisis
+        // from package upgrades. Instead, we use `type_` stored in the Event itself.
+        let (_type_, field) = type_and_fields_from_move_struct(&type_, move_struct);
 
         Ok(SuiEvent {
             id: EventID {
