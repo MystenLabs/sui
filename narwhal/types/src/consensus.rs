@@ -550,17 +550,22 @@ mod tests {
         scores.add_score(ids[8], 40);
         scores.add_score(ids[9], 40);
 
+        // the expected authorities
+        let expected_authorities = vec![
+            (ids[9], 40),
+            (ids[8], 40),
+            (ids[7], 30),
+            (ids[6], 30),
+            (ids[5], 20),
+            (ids[4], 10),
+            (ids[3], 10),
+            (ids[2], 10),
+            (ids[1], 10),
+            (ids[0], 0),
+        ];
+
         // sorting the authorities
         let sorted_authorities = scores.authorities_by_score_desc();
-        assert_eq!(sorted_authorities[0], (ids[9], 40));
-        assert_eq!(sorted_authorities[1], (ids[8], 40));
-        assert_eq!(sorted_authorities[2], (ids[7], 30));
-        assert_eq!(sorted_authorities[3], (ids[6], 30));
-        assert_eq!(sorted_authorities[4], (ids[5], 20));
-        assert_eq!(sorted_authorities[5], (ids[4], 10));
-        assert_eq!(sorted_authorities[6], (ids[3], 10));
-        assert_eq!(sorted_authorities[7], (ids[2], 10));
-        assert_eq!(sorted_authorities[8], (ids[1], 10));
-        assert_eq!(sorted_authorities[9], (ids[0], 0));
+        assert_eq!(sorted_authorities, expected_authorities);
     }
 }

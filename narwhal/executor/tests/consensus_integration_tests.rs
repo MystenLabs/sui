@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 use bytes::Bytes;
 use consensus::bullshark::Bullshark;
-use consensus::consensus::ConsensusRound;
+use consensus::consensus::{ConsensusRound, LeaderSchedule, LeaderSwapTable};
 use consensus::metrics::ConsensusMetrics;
 use consensus::Consensus;
 use fastcrypto::hash::Hash;
@@ -82,6 +82,7 @@ async fn test_recovery() {
         latest_protocol_version(),
         metrics.clone(),
         NUM_SUB_DAGS_PER_SCHEDULE,
+        LeaderSchedule::new(committee.clone(), LeaderSwapTable::default()),
     );
 
     let _consensus_handle = Consensus::spawn(

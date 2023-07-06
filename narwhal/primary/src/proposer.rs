@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::metrics::PrimaryMetrics;
 use config::{AuthorityIdentifier, Committee, Epoch, WorkerId};
+use consensus::consensus::LeaderSchedule;
 use fastcrypto::hash::Hash as _;
 use mysten_metrics::metered_channel::{Receiver, Sender};
 use mysten_metrics::spawn_logged_monitored_task;
@@ -94,6 +95,9 @@ pub struct Proposer {
 
     /// Metrics handler
     metrics: Arc<PrimaryMetrics>,
+    /// The consensus leader schedule to be used in order to resolve the leader needed for the
+    /// protocol advancement.
+    leader_schedule: LeaderSchedule,
 }
 
 impl Proposer {
@@ -115,6 +119,7 @@ impl Proposer {
         tx_narwhal_round_updates: watch::Sender<Round>,
         rx_committed_own_headers: Receiver<(Round, Vec<Round>)>,
         metrics: Arc<PrimaryMetrics>,
+        leader_schedule: LeaderSchedule,
     ) -> JoinHandle<()> {
         let genesis = Certificate::genesis(&committee);
         spawn_logged_monitored_task!(
@@ -142,6 +147,7 @@ impl Proposer {
                     proposed_headers: BTreeMap::new(),
                     rx_committed_own_headers,
                     metrics,
+                    leader_schedule,
                 }
                 .run()
                 .await;
@@ -331,7 +337,7 @@ impl Proposer {
 
     /// Update the last leader certificate.
     fn update_leader(&mut self) -> bool {
-        let leader = self.committee.leader(self.round);
+        let leader = self.leader_schedule.leader(self.round);
         self.last_leader = self
             .last_parents
             .iter()
@@ -352,7 +358,7 @@ impl Proposer {
     /// (i) f+1 votes for the leader, (ii) 2f+1 nodes not voting for the leader,
     /// (iii) there is no leader to vote for.
     fn enough_votes(&self) -> bool {
-        if self.committee.leader(self.round + 1).id() == self.authority_id {
+        if self.leader_schedule.leader(self.round + 1).id() == self.authority_id {
             return true;
         }
 

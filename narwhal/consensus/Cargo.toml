@@ -14,6 +14,7 @@ rand = { workspace = true, optional = true }
 thiserror.workspace = true
 tokio = { workspace = true, features = ["sync"] }
 tracing.workspace = true
+parking_lot = "0.12.1"
 
 config = { path = "../config", package = "narwhal-config" }
 fastcrypto.workspace = true
