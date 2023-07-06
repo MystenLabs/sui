@@ -27,8 +27,8 @@ const InterstitialBanner = ({ lines }: { lines: string[] }) => {
 function BullsharkQuestsNotification() {
 	const navigate = useNavigate();
 
-	const setInterstitialDismissed = async () => {
-		await set('bullshark-interstitial-dismissed', true);
+	const setInterstitialDismissed = () => {
+		localStorage.setItem('bullshark-interstitial-dismissed', 'true');
 	};
 
 	return (

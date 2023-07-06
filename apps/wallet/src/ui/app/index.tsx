@@ -1,13 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useFeatureValue } from '@growthbook/growthbook-react';
-import { get } from 'idb-keyval';
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 
 import { useInitialPageView } from './hooks/useInitialPageView';
-import BullsharkQuestsNotification from './pages/home/bullshark-quests-notification';
 import { QredoConnectInfoPage } from './pages/qredo-connect/QredoConnectInfoPage';
 import { SelectQredoAccountsPage } from './pages/qredo-connect/SelectQredoAccountsPage';
 import { RestrictedPage } from './pages/restricted';
@@ -37,7 +34,6 @@ import SelectPage from '_pages/initialize/select';
 import SiteConnectPage from '_pages/site-connect';
 import WelcomePage from '_pages/welcome';
 import { setNavVisibility } from '_redux/slices/app';
-import { FEATURES } from '_src/shared/experimentation/features';
 
 const HIDDEN_MENU_PATHS = [
 	'/nft-details',
@@ -49,12 +45,6 @@ const HIDDEN_MENU_PATHS = [
 ];
 
 const App = () => {
-	const [internalInterstitialDismissed, setInternalInterstitialDismissed] = useState(false);
-	const BullsharkInterstitialEnabled = useFeatureValue(
-		FEATURES.BULLSHARK_QUESTS_INTERSTITIAL,
-		false,
-	);
-
 	const dispatch = useAppDispatch();
 	const isPopup = useAppSelector((state) => state.app.appType === AppType.popup);
 	useEffect(() => {
@@ -67,28 +57,10 @@ const App = () => {
 	}, [location, dispatch]);
 
 	useInitialPageView();
-	useEffect(() => {
-		(async () => {
-			const interstitialDismissed = await get<boolean>('bullshark-interstitial-dismissed');
-			if (interstitialDismissed) {
-				setInternalInterstitialDismissed(interstitialDismissed);
-			}
-		})();
-	}, []);
 
 	return (
 		<Routes>
 			<Route path="/*" element={<HomePage />}>
-				<Route
-					path="bullshark-quests"
-					element={
-						BullsharkInterstitialEnabled ? (
-							<BullsharkQuestsNotification />
-						) : (
-							<Navigate to="/tokens" replace={true} />
-						)
-					}
-				/>
 				<Route path="tokens/*" element={<TokensPage />} />
 				<Route path="nfts" element={<NftsPage />} />
 				<Route path="apps/*" element={<AppsPage />} />
@@ -100,19 +72,7 @@ const App = () => {
 				<Route path="stake/*" element={<Staking />} />
 				<Route path="receipt" element={<ReceiptPage />} />
 				<Route path="onramp" element={<OnrampPage />} />
-				<Route
-					path="*"
-					element={
-						<Navigate
-							to={
-								!BullsharkInterstitialEnabled || internalInterstitialDismissed
-									? '/tokens'
-									: '/bullshark-quests'
-							}
-							replace={true}
-						/>
-					}
-				/>
+				<Route path="*" element={<Navigate to="/tokens" replace={true} />} />
 			</Route>
 
 			<Route path="/dapp/*" element={<HomePage disableNavigation />}>

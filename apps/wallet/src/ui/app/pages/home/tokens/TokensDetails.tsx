@@ -35,6 +35,9 @@ import { usePinnedCoinTypes } from '_src/ui/app/hooks/usePinnedCoinTypes';
 import { useRecognizedPackages } from '_src/ui/app/hooks/useRecognizedPackages';
 import PageTitle from '_src/ui/app/shared/PageTitle';
 import FaucetRequestButton from '_src/ui/app/shared/faucet/FaucetRequestButton';
+import BullsharkQuestsNotification from '../bullshark-quests-notification';
+import { useFeature } from '@growthbook/growthbook-react';
+import { FEATURES } from '_src/shared/experimentation/features';
 
 type TokenDetailsProps = {
 	coinType?: string;
@@ -189,6 +192,9 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
 		retry: false,
 		enabled: apiEnv === API_ENV.mainnet,
 	});
+	const BullsharkInterstitialEnabled = useFeature<boolean>(
+		FEATURES.BULLSHARK_QUESTS_INTERSTITIAL,
+	).value;
 
 	useLedgerNotification();
 
@@ -199,6 +205,12 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
 	const coinSymbol = useMemo(() => Coin.getCoinSymbol(activeCoinType), [activeCoinType]);
 	// Avoid perpetual loading state when fetching and retry keeps failing add isFetched check
 	const isFirstTimeLoading = isLoading && !isFetched;
+
+	const displayBullsharkInterstitial = localStorage.getItem('bullshark-interstitial-dismissed');
+
+	if (BullsharkInterstitialEnabled && !displayBullsharkInterstitial) {
+		return <BullsharkQuestsNotification />;
+	}
 
 	return (
 		<>
