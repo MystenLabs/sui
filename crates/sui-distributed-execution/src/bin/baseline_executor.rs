@@ -11,6 +11,8 @@ use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemS
 use sui_types::sui_system_state::get_sui_system_state;
 use sui_types::sui_system_state::SuiSystemStateTrait;
 
+use sui_distributed_execution::types::*;
+
 const GIT_REVISION: &str = {
     if let Some(revision) = option_env!("GIT_REVISION") {
         revision
@@ -107,7 +109,7 @@ async fn main() {
                     .expect("Transaction effects exist")
                     .expect("Transaction effects exist");
 
-                let full_tx = exec_worker::Transaction{tx, ground_truth_effects, checkpoint_seq};
+                let full_tx = Transaction{tx, ground_truth_effects, checkpoint_seq};
                 ew_state
                     .execute_tx(
                         &full_tx,

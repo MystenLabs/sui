@@ -1,22 +1,12 @@
-use std::collections::HashMap;
-use std::sync::Mutex;
+use std::collections::HashSet;
 use sui_protocol_config::ProtocolConfig;
-use sui_types::epoch_data::EpochData;
-use sui_types::messages::VerifiedTransaction;
-use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemState;
-use sui_types::storage::get_module_by_id;
 use sui_types::{
-    base_types::{ObjectID, ObjectRef, VersionNumber},
-    error::{SuiError, SuiResult},
-    object::Object,
-    storage::{BackingPackageStore, ChildObjectResolver, ObjectStore, ParentSync},
-    effects::{TransactionEffects}
+    base_types::ObjectID,
+    epoch_data::EpochData,
+    messages::{InputObjectKind, VerifiedTransaction, TransactionKind, TransactionDataAPI},
+    sui_system_state::epoch_start_sui_system_state::EpochStartSystemState,
+    effects::{TransactionEffects},
 };
-
-use anyhow::Result;
-use move_binary_format::CompiledModule;
-use move_bytecode_utils::module_cache::GetModule;
-use move_core_types::{language_storage::ModuleId, resolver::ModuleResolver};
 
 
 #[derive(Debug)]
@@ -26,139 +16,98 @@ pub enum SailfishMessage {
     Transaction{tx: VerifiedTransaction, tx_effects: TransactionEffects, checkpoint_seq: u64}
 }
 
-#[derive(Debug)]
-pub struct MemoryBackedStore {
-    pub objects: Mutex<HashMap<ObjectID, (ObjectRef, Object)>>,
+
+#[derive(Debug, Clone)]
+pub struct Transaction {
+    pub tx: VerifiedTransaction,
+    pub ground_truth_effects: TransactionEffects,  // full effects of tx, as ground truth exec result
+    pub checkpoint_seq: u64,
 }
 
-impl MemoryBackedStore {
-    pub fn new() -> MemoryBackedStore {
-        MemoryBackedStore {
-            objects: Mutex::new(HashMap::new()),
+impl Transaction {
+    pub fn is_epoch_change(&self) -> bool {
+        if let TransactionKind::ChangeEpoch(_) = self.tx.data().transaction_data().kind() {
+            return true;
         }
+        return false;
     }
 
-    pub fn insert(&self, k: ObjectID, v: (ObjectRef, Object)) {
-        self.objects
-            .lock()
-            .unwrap()
-            .insert(k, v);
-    }
-
-    pub fn remove(&self, k: ObjectID) -> Option<(ObjectRef, Object)> {
-        self.objects
-            .lock()
-            .unwrap()
-            .remove(&k)
-    }
-}
-
-impl ObjectStore for MemoryBackedStore {
-    fn get_object(&self, object_id: &ObjectID) -> Result<Option<Object>, SuiError> {
-        Ok(self.objects
-            .lock()
-            .unwrap()
-            .get(object_id).map(|v| v.1.clone()))
-    }
-
-    fn get_object_by_key(
-        &self,
-        object_id: &ObjectID,
-        version: VersionNumber,
-    ) -> Result<Option<Object>, SuiError> {
-        Ok(self.objects
-            .lock()
-            .unwrap()
-            .get(object_id)
-            .and_then(|obj| {
-                if obj.1.version() == version {
-                    Some(obj.1.clone())
-                } else {
-                    None
+    /// Returns the read set of a transction
+    /// Specifically, this is the set of input objects to the transaction. It excludes 
+    /// child objects that are determined at runtime, but includes all owned objects inputs
+    /// that must have their version numbers bumped.
+    fn get_read_set(&self) -> HashSet<ObjectID> {
+        let tx_data = self.tx.data().transaction_data();
+        let input_object_kinds = tx_data
+            .input_objects()
+            .expect("Cannot get input object kinds");
+    
+        let mut read_set = HashSet::new();
+        for kind in &input_object_kinds {
+            match kind {
+                InputObjectKind::MovePackage(id)
+                | InputObjectKind::SharedMoveObject { id, .. }
+                | InputObjectKind::ImmOrOwnedMoveObject((id, _, _)) => {
+                    read_set.insert(*id)
                 }
-            })
-            .clone())
+            };
+        }
+        return read_set;
+    }
+
+    /// TODO: This makes use of ground_truth_effects, which is illegal; it is not something that is 
+    /// known a-priori before execution
+    /// Returns the write set of a transction
+    fn get_write_set(&self) -> HashSet<ObjectID> {
+
+        let mut write_set: HashSet<ObjectID> = HashSet::new();
+
+        let TransactionEffects::V1(tx_effects) = &self.ground_truth_effects;
+
+        let created: Vec<ObjectID> = tx_effects.created.clone()
+            .into_iter()
+            .map(|(object_ref, _)| object_ref.0)
+            .collect();
+        let mutated: Vec<ObjectID> = tx_effects.mutated.clone()
+            .into_iter()
+            .map(|(object_ref, _)| object_ref.0)
+            .collect();
+        let unwrapped: Vec<ObjectID> = tx_effects.unwrapped.clone()
+            .into_iter()
+            .map(|(object_ref, _)| object_ref.0)
+            .collect();
+        let deleted: Vec<ObjectID> = tx_effects.deleted.clone()
+            .into_iter()
+            .map(|object_ref| object_ref.0)
+            .collect();
+        let unwrapped_then_deleted: Vec<ObjectID> = tx_effects.unwrapped_then_deleted.clone()
+            .into_iter()
+            .map(|object_ref| object_ref.0)
+            .collect();
+        let wrapped: Vec<ObjectID> = tx_effects.wrapped.clone()
+            .into_iter()
+            .map(|object_ref| object_ref.0)
+            .collect();
+
+        write_set.extend(created);
+        write_set.extend(mutated);
+        write_set.extend(unwrapped);
+        write_set.extend(deleted);
+        write_set.extend(unwrapped_then_deleted);
+        write_set.extend(wrapped);
+        return write_set;
+    }
+
+    /// Returns the read-write set of the transaction
+    pub fn get_read_write_set(&self) -> HashSet<ObjectID> {
+        self.get_read_set()
+            .union(&self.get_write_set())
+            .copied()
+            .collect()
     }
 }
 
-impl ParentSync for MemoryBackedStore {
-    fn get_latest_parent_entry_ref(&self, object_id: ObjectID) -> SuiResult<Option<ObjectRef>> {
-        // println!("Parent: {:?}", object_id);
-        Ok(self.objects
-            .lock()
-            .unwrap()
-            .get(&object_id).map(|v| v.0))
-    }
-}
-
-impl BackingPackageStore for MemoryBackedStore {
-    fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<Object>> {
-        // println!("Package: {:?}", package_id);
-        Ok(self.objects
-            .lock()
-            .unwrap()
-            .get(package_id).map(|v| v.1.clone()))
-    }
-}
-
-impl ChildObjectResolver for MemoryBackedStore {
-    fn read_child_object(&self, _parent: &ObjectID, child: &ObjectID) -> SuiResult<Option<Object>> {
-        Ok(self.objects
-            .lock()
-            .unwrap()
-            .get(child).map(|v| v.1.clone()))
-    }
-}
-
-impl ObjectStore for &MemoryBackedStore {
-    fn get_object(&self, object_id: &ObjectID) -> Result<Option<Object>, SuiError> {
-        Ok(self.objects
-            .lock()
-            .unwrap()
-            .get(object_id).map(|v| v.1.clone()))
-    }
-
-    fn get_object_by_key(
-        &self,
-        object_id: &ObjectID,
-        version: VersionNumber,
-    ) -> Result<Option<Object>, SuiError> {
-        Ok(self
-            .objects
-            .lock()
-            .unwrap()
-            .get(object_id)
-            .and_then(|obj| {
-                if obj.1.version() == version {
-                    Some(obj.1.clone())
-                } else {
-                    None
-                }
-            })
-            .clone())
-    }
-}
-
-impl ModuleResolver for MemoryBackedStore {
-    type Error = SuiError;
-
-    fn get_module(&self, module_id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
-        Ok(self
-            .get_package(&ObjectID::from(*module_id.address()))?
-            .and_then(|package| {
-                package
-                    .serialized_module_map()
-                    .get(module_id.name().as_str())
-                    .cloned()
-            }))
-    }
-}
-
-impl GetModule for MemoryBackedStore {
-    type Error = SuiError;
-    type Item = CompiledModule;
-
-    fn get_module_by_id(&self, id: &ModuleId) -> anyhow::Result<Option<Self::Item>, Self::Error> {
-        get_module_by_id(self, id)
-    }
+pub struct TransactionWithResults {
+    pub full_tx: Transaction,
+    pub tx_effects: TransactionEffects,            // determined after execution
 }

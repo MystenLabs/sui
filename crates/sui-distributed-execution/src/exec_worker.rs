@@ -16,7 +16,7 @@ use sui_types::digests::ObjectDigest;
 use sui_types::base_types::ObjectID;
 use sui_types::epoch_data::EpochData;
 use sui_types::message_envelope::Message;
-use sui_types::messages::{InputObjectKind, InputObjects, TransactionDataAPI, VerifiedTransaction, TransactionKind};
+use sui_types::messages::{InputObjectKind, InputObjects, TransactionDataAPI, VerifiedTransaction};
 use sui_types::metrics::LimitsMetrics;
 use sui_types::temporary_store::{TemporaryStore, InnerTemporaryStore};
 use sui_types::sui_system_state::get_sui_system_state;
@@ -30,106 +30,10 @@ use tokio::sync::mpsc;
 use tokio::time::Instant;
 
 use super::types::*;
+use super::mutex_store::*;
 
 
 const MANAGER_CHANNEL_SIZE:usize = 64;
-
-/// Returns the read set of a transction
-/// Specifically, this is the set of input objects to the transaction. It excludes 
-/// child objects that are determined at runtime, but includes all owned objects inputs
-/// that must have their version numbers bumped.
-fn get_read_set(tx: &VerifiedTransaction) -> HashSet<ObjectID> {
-    let tx_data = tx.data().transaction_data();
-    let input_object_kinds = tx_data
-        .input_objects()
-        .expect("Cannot get input object kinds");
-
-    let mut read_set = HashSet::new();
-    for kind in &input_object_kinds {
-        match kind {
-            InputObjectKind::MovePackage(id)
-            | InputObjectKind::SharedMoveObject { id, .. }
-            | InputObjectKind::ImmOrOwnedMoveObject((id, _, _)) => {
-                read_set.insert(*id)
-            }
-        };
-    }
-    return read_set;
-}
-
-/// TODO: This makes use of ground_truth_effects, which is illegal; it is not something that is 
-/// known a-priori before execution
-/// Returns the write set of a transction
-fn get_write_set(_tx: &VerifiedTransaction, ground_truth_effects: &TransactionEffects) -> HashSet<ObjectID> {
-
-    let mut write_set: HashSet<ObjectID> = HashSet::new();
-
-    let TransactionEffects::V1(tx_effects) = ground_truth_effects;
-
-    let created: Vec<ObjectID> = tx_effects.created.clone()
-        .into_iter()
-        .map(|(object_ref, _)| object_ref.0)
-        .collect();
-    let mutated: Vec<ObjectID> = tx_effects.mutated.clone()
-        .into_iter()
-        .map(|(object_ref, _)| object_ref.0)
-        .collect();
-    let unwrapped: Vec<ObjectID> = tx_effects.unwrapped.clone()
-        .into_iter()
-        .map(|(object_ref, _)| object_ref.0)
-        .collect();
-    let deleted: Vec<ObjectID> = tx_effects.deleted.clone()
-        .into_iter()
-        .map(|object_ref| object_ref.0)
-        .collect();
-    let unwrapped_then_deleted: Vec<ObjectID> = tx_effects.unwrapped_then_deleted.clone()
-        .into_iter()
-        .map(|object_ref| object_ref.0)
-        .collect();
-    let wrapped: Vec<ObjectID> = tx_effects.wrapped.clone()
-        .into_iter()
-        .map(|object_ref| object_ref.0)
-        .collect();
-
-    write_set.extend(created);
-    write_set.extend(mutated);
-    write_set.extend(unwrapped);
-    write_set.extend(deleted);
-    write_set.extend(unwrapped_then_deleted);
-    write_set.extend(wrapped);
-    return write_set;
-}
-
-
-/// Returns the read-write set of the transaction
-fn get_read_write_set(tx: &VerifiedTransaction, tx_effects: &TransactionEffects) -> HashSet<ObjectID> {
-    get_read_set(tx)
-            .union(&mut get_write_set(tx, tx_effects))
-            .copied()
-            .collect()
-}
-
-#[derive(Debug, Clone)]
-pub struct Transaction {
-    pub tx: VerifiedTransaction,
-    pub ground_truth_effects: TransactionEffects,  // full effects of tx, as ground truth exec result
-    pub checkpoint_seq: u64,
-}
-
-impl Transaction {
-    pub fn is_epoch_change(&self) -> bool {
-        if let TransactionKind::ChangeEpoch(_) = self.tx.data().transaction_data().kind() {
-            return true;
-        }
-        return false;
-    }
-}
-
-pub struct TransactionWithResults {
-    full_tx: Transaction,
-    tx_effects: TransactionEffects,            // determined after execution
-}
-
 
 pub struct QueuesManager {
     tx_store: HashMap<TransactionDigest, Transaction>,
@@ -155,7 +59,7 @@ impl QueuesManager {
 		self.tx_store.insert(txid, full_tx.clone());
 
         // Get RW set
-        let rw_set = get_read_write_set(&full_tx.tx, &full_tx.ground_truth_effects);
+        let rw_set = full_tx.get_read_write_set();
         
         // Add tx to object queues
         for obj in rw_set.iter() {
@@ -185,13 +89,13 @@ impl QueuesManager {
 	}
 
     /// Cleans up after a completed transaction
-	async fn clean_up(&mut self, completed_tx: &Transaction, rw_set: &HashSet<ObjectID>) {
+	async fn clean_up(&mut self, completed_tx: &Transaction) {
 
         // Get digest and RW set
         let txid = completed_tx.tx.digest();
 		
 		// Remove tx from obj_queues
-		for obj in rw_set.iter() {
+		for obj in completed_tx.get_read_write_set().iter() {
             let queue = self.obj_queues.get_mut(obj).unwrap();
             assert!(*queue.front().unwrap() == *txid);  // sanity check
             queue.pop_front();
@@ -218,14 +122,14 @@ impl QueuesManager {
  *****************************************************************************************/
 
 pub struct ExecutionWorkerState {
-    pub memory_store: Arc<MemoryBackedStore>,
+    pub memory_store: Arc<MutexedMemoryBackedStore>,
 }
 
 impl ExecutionWorkerState {
     pub fn new(// protocol_config: &'a ProtocolConfig,
     ) -> Self {
         Self {
-            memory_store: Arc::new(MemoryBackedStore::new()),
+            memory_store: Arc::new(MutexedMemoryBackedStore::new()),
         }
     }
 
@@ -238,7 +142,7 @@ impl ExecutionWorkerState {
 
     // Helper: Returns Input objects by reading from the memory_store
     async fn read_input_objects_from_store(
-        memory_store: Arc<MemoryBackedStore>, 
+        memory_store: Arc<MutexedMemoryBackedStore>, 
         tx: &VerifiedTransaction
     ) -> InputObjects {
         let tx_data = tx.data().transaction_data();
@@ -299,7 +203,7 @@ impl ExecutionWorkerState {
 
     // Helper: Writes changes from inner_temp_store to memory store
     fn write_updates_to_store(
-        memory_store: Arc<MemoryBackedStore>,
+        memory_store: Arc<MutexedMemoryBackedStore>,
         inner_temp_store: InnerTemporaryStore,
     ) {
         // And now we mutate the store.
@@ -392,7 +296,7 @@ impl ExecutionWorkerState {
 
     async fn async_exec(
         full_tx: Transaction,
-        memory_store: Arc<MemoryBackedStore>,
+        memory_store: Arc<MutexedMemoryBackedStore>,
         move_vm: Arc<MoveVM>,
         reference_gas_price: u64,
         epoch_data: EpochData,
@@ -573,8 +477,7 @@ impl ExecutionWorkerState {
                     Self::check_effects_match(full_tx, tx_effects);
 
                     // 2. Update object queues
-                    let rw_set = get_read_write_set(&full_tx.tx, tx_effects);
-                    manager.clean_up(&full_tx, &rw_set).await;
+                    manager.clean_up(&full_tx).await;
 
                     // Stop executing when I hit the watermark
                     // Note that this is the high watermark; there may be lower txns not 
