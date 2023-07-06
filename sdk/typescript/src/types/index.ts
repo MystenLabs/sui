@@ -7,7 +7,6 @@ export * from './events.js';
 export * from './transactions.js';
 export * from '../framework/framework.js';
 export * from './sui-bcs.js';
-export * from './faucet.js';
 export * from './normalized.js';
 export * from './validator.js';
 export * from './coin.js';

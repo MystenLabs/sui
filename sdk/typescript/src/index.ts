@@ -13,7 +13,6 @@ export * from './cryptography/utils.js';
 export * from './providers/json-rpc-provider.js';
 
 export * from './rpc/client.js';
-export * from './rpc/faucet-client.js';
 export * from './rpc/websocket-client.js';
 export * from './rpc/connection.js';
 
