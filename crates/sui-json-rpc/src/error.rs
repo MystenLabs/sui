@@ -127,6 +127,7 @@ pub enum SuiRpcInputError {
 
 #[derive(Debug, Error)]
 pub enum ServerError {
+    // do we really need these variants for server-side errors?
     #[error("Serde error")]
     Serde,
 
@@ -155,6 +156,7 @@ pub enum ClientError {
 
     #[error("Invalid {param}: {reason}")]
     InvalidParam { param: String, reason: String },
+    // maybe InvalidParamMulti or something. param, value, reason
 }
 
 impl From<ClientError> for RpcError {
