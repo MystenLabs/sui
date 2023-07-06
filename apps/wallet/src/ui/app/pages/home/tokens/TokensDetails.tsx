@@ -209,7 +209,7 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
 
 	useEffect(() => {
 		const dismissed = localStorage.getItem('bullshark-interstitial-dismissed');
-		setInterstitialDismissed(Boolean(dismissed));
+		setInterstitialDismissed(dismissed === 'true');
 	}, []);
 
 	if (BullsharkInterstitialEnabled && !interstitialDismissed) {
