@@ -622,9 +622,9 @@ impl ExecutionWorkerState {
         }
 
         // Print TPS
+        let elapsed = now.elapsed();
         println!("Execution worker finished");
         self.sanity_check(manager);   
-        let elapsed = now.elapsed();
         println!(
             "Execution worker num executed: {}", num_tx);
         println!(
