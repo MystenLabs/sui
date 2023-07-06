@@ -173,7 +173,6 @@ let recipient = @0x2;
 test_scenario::next_tx(scenario, owner);
 {
     let object = test_scenario::take_from_sender<ColorObject>(scenario);
-    transfer(object, recipient);
     color_object::transfer(object, recipient);
 };
 ```
