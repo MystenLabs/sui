@@ -10281,7 +10281,7 @@ dependencies = [
 
 [[package]]
 name = "sui-oracle"
-version = "1.6.0"
+version = "1.5.0"
 dependencies = [
  "anyhow",
  "axum",
@@ -13138,6 +13138,7 @@ dependencies = [
  "jemalloc-sys",
  "jobserver",
  "js-sys",
+ "jsonpath_lib",
  "jsonrpsee",
  "jsonrpsee-client-transport",
  "jsonrpsee-core",

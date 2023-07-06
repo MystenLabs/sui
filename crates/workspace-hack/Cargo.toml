@@ -302,6 +302,7 @@ is-terminal = { version = "0.4", default-features = false }
 itertools = { version = "0.10" }
 itoa = { version = "1", default-features = false }
 js-sys = { version = "0.3", default-features = false }
+jsonpath_lib = { version = "0.3", default-features = false }
 jsonrpsee = { git = "https://github.com/wlmyng/jsonrpsee.git", rev = "b1b300784795f6a64d0fcdf8f03081a9bc38bde8", default-features = false, features = ["full"] }
 jsonrpsee-client-transport = { git = "https://github.com/wlmyng/jsonrpsee.git", rev = "b1b300784795f6a64d0fcdf8f03081a9bc38bde8", default-features = false, features = ["tls", "web", "ws"] }
 jsonrpsee-core = { git = "https://github.com/wlmyng/jsonrpsee.git", rev = "b1b300784795f6a64d0fcdf8f03081a9bc38bde8", features = ["async-client", "async-wasm-client", "http-helpers", "server", "soketto"] }
@@ -1033,6 +1034,7 @@ itertools = { version = "0.10" }
 itoa = { version = "1", default-features = false }
 jobserver = { version = "0.1", default-features = false }
 js-sys = { version = "0.3", default-features = false }
+jsonpath_lib = { version = "0.3", default-features = false }
 jsonrpsee = { git = "https://github.com/wlmyng/jsonrpsee.git", rev = "b1b300784795f6a64d0fcdf8f03081a9bc38bde8", default-features = false, features = ["full"] }
 jsonrpsee-client-transport = { git = "https://github.com/wlmyng/jsonrpsee.git", rev = "b1b300784795f6a64d0fcdf8f03081a9bc38bde8", default-features = false, features = ["tls", "web", "ws"] }
 jsonrpsee-core = { git = "https://github.com/wlmyng/jsonrpsee.git", rev = "b1b300784795f6a64d0fcdf8f03081a9bc38bde8", features = ["async-client", "async-wasm-client", "http-helpers", "server", "soketto"] }
