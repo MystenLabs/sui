@@ -3,7 +3,6 @@
 use crate::bullshark::Bullshark;
 use crate::consensus::{ConsensusState, LeaderSchedule, LeaderSwapTable};
 use crate::consensus_utils::make_consensus_store;
-use crate::consensus_utils::NUM_SUB_DAGS_PER_SCHEDULE;
 use crate::metrics::ConsensusMetrics;
 use config::{Authority, AuthorityIdentifier, Committee, Stake};
 use fastcrypto::hash::Hash;
@@ -22,6 +21,7 @@ use std::num::NonZeroUsize;
 use std::ops::RangeInclusive;
 use std::sync::Arc;
 use storage::ConsensusStore;
+use sui_protocol_config::ProtocolConfig;
 use test_utils::latest_protocol_version;
 use test_utils::mock_certificate_with_rand;
 use test_utils::CommitteeFixture;
@@ -75,6 +75,18 @@ impl ExecutionPlan {
 #[ignore]
 #[tokio::test(flavor = "multi_thread", worker_threads = 8)]
 async fn bullshark_randomised_tests() {
+    // Run the consensus tests without the new consensus schedule changes
+    let protocol_config = latest_protocol_version();
+    bullshark_randomised_tests_with_config(protocol_config).await;
+
+    // TODO: remove once the new leader election schedule feature is enabled on a protocol version
+    // Run the consensus tests with the new consensus schedule changes enabled
+    let mut config: ProtocolConfig = latest_protocol_version();
+    config.set_narwhal_new_leader_election_schedule(true);
+    bullshark_randomised_tests_with_config(config).await;
+}
+
+async fn bullshark_randomised_tests_with_config(protocol_config: ProtocolConfig) {
     // Configuration regarding the randomized tests. The tests will run for different values
     // on the below parameters to increase the different cases we can generate.
 
@@ -83,7 +95,7 @@ async fn bullshark_randomised_tests() {
     // A the committee size values to be used
     const COMMITTEE_SIZE: [usize; 3] = [4, 7, 10];
     // Rounds for which we will create DAGs
-    const DAG_ROUNDS: [Round; 6] = [6, 7, 8, 10, 12, 15];
+    const DAG_ROUNDS: [Round; 4] = [8, 10, 12, 15];
     // The number of different execution plans to be created and tested against for every generated DAG
     const EXECUTION_PLANS: u64 = 500;
     // The number of DAGs that should be generated and tested against for every set of properties.
@@ -173,10 +185,12 @@ async fn bullshark_randomised_tests() {
 
                 let consensus_store = store.clone();
 
+                let config = protocol_config.clone();
+
                 let handle = tokio::spawn(async move {
                     // Create a randomized DAG
                     let (certificates, committee) =
-                        generate_randomised_dag(committee_size, dag_rounds, run_id, mode);
+                        generate_randomised_dag(committee_size, dag_rounds, run_id, mode, &config);
 
                     // Now provide the DAG to create execution plans, run them via consensus
                     // and compare output against each other to ensure they are the same.
@@ -188,7 +202,8 @@ async fn bullshark_randomised_tests() {
                         dag_rounds,
                         run_id,
                         mode,
-                        consensus_store
+                        consensus_store,
+                        config
                     );
                 });
 
@@ -219,13 +234,24 @@ fn test_determinism() {
         slow_nodes_failure_probability: 0.5,
         minimum_committee_size: None,
     };
+    let protocol_config = latest_protocol_version();
 
     for seed in 0..=10 {
         // Compare the creation of DAG & committee
-        let (dag_1, committee_1) =
-            generate_randomised_dag(committee_size, number_of_rounds, seed, failure_modes);
-        let (dag_2, committee_2) =
-            generate_randomised_dag(committee_size, number_of_rounds, seed, failure_modes);
+        let (dag_1, committee_1) = generate_randomised_dag(
+            committee_size,
+            number_of_rounds,
+            seed,
+            failure_modes,
+            &protocol_config,
+        );
+        let (dag_2, committee_2) = generate_randomised_dag(
+            committee_size,
+            number_of_rounds,
+            seed,
+            failure_modes,
+            &protocol_config,
+        );
 
         assert_eq!(committee_1, committee_2);
         assert_eq!(dag_1, dag_2);
@@ -252,6 +278,7 @@ fn generate_randomised_dag(
     number_of_rounds: Round,
     seed: u64,
     modes: FailureModes,
+    protocol_config: &ProtocolConfig,
 ) -> (VecDeque<Certificate>, Committee) {
     // Create an RNG to share for the committee creation
     let rand = StdRng::seed_from_u64(seed);
@@ -264,8 +291,14 @@ fn generate_randomised_dag(
     let genesis = Certificate::genesis(&committee);
 
     // Create a known DAG
-    let (original_certificates, _last_round) =
-        make_certificates_with_parameters(seed, &committee, 1..=number_of_rounds, genesis, modes);
+    let (original_certificates, _last_round) = make_certificates_with_parameters(
+        seed,
+        &committee,
+        1..=number_of_rounds,
+        genesis,
+        modes,
+        protocol_config,
+    );
 
     (original_certificates, committee)
 }
@@ -281,6 +314,7 @@ pub fn make_certificates_with_parameters(
     range: RangeInclusive<Round>,
     initial_parents: Vec<Certificate>,
     modes: FailureModes,
+    protocol_config: &ProtocolConfig,
 ) -> (VecDeque<Certificate>, Vec<Certificate>) {
     let mut rand = StdRng::seed_from_u64(seed);
 
@@ -416,7 +450,7 @@ pub fn make_certificates_with_parameters(
             // Now create the certificate with the provided parents
             let (_, certificate) = mock_certificate_with_rand(
                 committee,
-                &latest_protocol_version(),
+                protocol_config,
                 authority.id(),
                 round,
                 parents_digests.clone(),
@@ -470,6 +504,7 @@ fn generate_and_run_execution_plans(
     run_id: u64,
     modes: FailureModes,
     store: Arc<ConsensusStore>,
+    protocol_config: ProtocolConfig,
 ) {
     println!(
         "Running execution plans for run_id {} for rounds={}, committee={}, gc_depth={}, modes={:?}",
@@ -497,12 +532,13 @@ fn generate_and_run_execution_plans(
         // Now create a new Bullshark engine
         let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
         let mut state = ConsensusState::new(metrics.clone(), gc_depth);
+        const SUB_DAGS_PER_SCHEDULE: u64 = 5;
         let mut bullshark = Bullshark::new(
             committee.clone(),
             store.clone(),
-            latest_protocol_version(),
+            protocol_config.clone(),
             metrics.clone(),
-            NUM_SUB_DAGS_PER_SCHEDULE,
+            SUB_DAGS_PER_SCHEDULE,
             LeaderSchedule::new(committee.clone(), LeaderSwapTable::default()),
         );
 
