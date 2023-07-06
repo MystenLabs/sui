@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::bullshark::Bullshark;
-use crate::consensus::ConsensusState;
+use crate::consensus::{ConsensusState, LeaderSchedule, LeaderSwapTable};
 use crate::consensus_utils::make_consensus_store;
 use crate::consensus_utils::NUM_SUB_DAGS_PER_SCHEDULE;
 use crate::metrics::ConsensusMetrics;
@@ -503,6 +503,7 @@ fn generate_and_run_execution_plans(
             latest_protocol_version(),
             metrics.clone(),
             NUM_SUB_DAGS_PER_SCHEDULE,
+            LeaderSchedule::new(committee.clone(), LeaderSwapTable::default()),
         );
 
         let mut inserted_certificates = HashSet::new();

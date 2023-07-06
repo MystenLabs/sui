@@ -241,6 +241,10 @@ struct FeatureFlags {
     // If true minimum txn charge is a multiplier of the gas price
     #[serde(skip_serializing_if = "is_false")]
     txn_base_cost_as_multiplier: bool,
+
+    // If true, then the new algorithm for the leader election schedule will be used
+    #[serde(skip_serializing_if = "is_false")]
+    narwhal_new_leader_election_schedule: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -814,6 +818,10 @@ impl ProtocolConfig {
 
     pub fn txn_base_cost_as_multiplier(&self) -> bool {
         self.feature_flags.txn_base_cost_as_multiplier
+    }
+
+    pub fn narwhal_new_leader_election_schedule(&self) -> bool {
+        self.feature_flags.narwhal_new_leader_election_schedule
     }
 }
 

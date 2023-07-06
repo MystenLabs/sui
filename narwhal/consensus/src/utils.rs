@@ -1,88 +1,10 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::consensus::{ConsensusState, Dag};
-use crate::metrics::ConsensusMetrics;
-use config::{Authority, Committee};
+use crate::consensus::ConsensusState;
 use std::collections::HashSet;
-use std::sync::Arc;
 use tracing::debug;
 use types::{Certificate, CertificateAPI, HeaderAPI, Round};
-
-/// Order the past leaders that we didn't already commit.
-pub fn order_leaders<'a, LeaderElector>(
-    committee: &Committee,
-    leader: &Certificate,
-    state: &'a ConsensusState,
-    get_leader: LeaderElector,
-    metrics: Arc<ConsensusMetrics>,
-) -> Vec<Certificate>
-where
-    LeaderElector: Fn(&Committee, Round, &'a Dag) -> (Authority, Option<&'a Certificate>),
-{
-    let mut to_commit = vec![leader.clone()];
-    let mut leader = leader;
-    assert_eq!(leader.round() % 2, 0);
-    for r in (state.last_round.committed_round + 2..=leader.round() - 2)
-        .rev()
-        .step_by(2)
-    {
-        // Get the certificate proposed by the previous leader.
-        let (prev_leader, authority) = match get_leader(committee, r, &state.dag) {
-            (authority, Some(x)) => (x, authority),
-            (authority, None) => {
-                metrics
-                    .leader_election
-                    .with_label_values(&["not_found", authority.hostname()])
-                    .inc();
-
-                continue;
-            }
-        };
-
-        // Check whether there is a path between the last two leaders.
-        if linked(leader, prev_leader, &state.dag) {
-            to_commit.push(prev_leader.clone());
-            leader = prev_leader;
-        } else {
-            metrics
-                .leader_election
-                .with_label_values(&["no_path", authority.hostname()])
-                .inc();
-        }
-    }
-
-    // Now just report all the found leaders
-    to_commit.iter().for_each(|certificate| {
-        let authority = committee.authority(&certificate.origin()).unwrap();
-
-        metrics
-            .leader_election
-            .with_label_values(&["committed", authority.hostname()])
-            .inc();
-    });
-
-    to_commit
-}
-
-/// Checks if there is a path between two leaders.
-fn linked(leader: &Certificate, prev_leader: &Certificate, dag: &Dag) -> bool {
-    let mut parents = vec![leader];
-    for r in (prev_leader.round()..leader.round()).rev() {
-        parents = dag
-            .get(&r)
-            .expect("We should have the whole history by now")
-            .values()
-            .filter(|(digest, _)| {
-                parents
-                    .iter()
-                    .any(|x| x.header().parents().contains(digest))
-            })
-            .map(|(_, certificate)| certificate)
-            .collect();
-    }
-    parents.contains(&prev_leader)
-}
 
 /// Flatten the dag referenced by the input certificate. This is a classic depth-first search (pre-order):
 /// <https://en.wikipedia.org/wiki/Tree_traversal#Pre-order>

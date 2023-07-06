@@ -3,7 +3,7 @@
 
 use bytes::Bytes;
 use config::{AuthorityIdentifier, CommitteeBuilder, Epoch, Parameters};
-use consensus::consensus::ConsensusRound;
+use consensus::consensus::{ConsensusRound, LeaderSchedule, LeaderSwapTable};
 use consensus::{dag::Dag, metrics::ConsensusMetrics};
 use crypto::KeyPair;
 use fastcrypto::{
@@ -139,6 +139,7 @@ async fn test_rounds_errors() {
         &mut tx_shutdown,
         tx_feedback,
         &Registry::new(),
+        LeaderSchedule::new(committee.clone(), LeaderSwapTable::default()),
     );
 
     // AND Wait for tasks to start
@@ -233,6 +234,7 @@ async fn test_rounds_return_successful_response() {
         &mut tx_shutdown,
         tx_feedback,
         &Registry::new(),
+        LeaderSchedule::new(committee.clone(), LeaderSwapTable::default()),
     );
 
     // AND Wait for tasks to start
@@ -403,6 +405,7 @@ async fn test_node_read_causal_signed_certificates() {
         &mut tx_shutdown,
         tx_feedback,
         &Registry::new(),
+        LeaderSchedule::new(committee.clone(), LeaderSwapTable::default()),
     );
 
     let (tx_new_certificates_2, rx_new_certificates_2) =
@@ -451,6 +454,7 @@ async fn test_node_read_causal_signed_certificates() {
         &mut tx_shutdown_2,
         tx_feedback_2,
         &Registry::new(),
+        LeaderSchedule::new(committee, LeaderSwapTable::default()),
     );
 
     // Wait for tasks to start
