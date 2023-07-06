@@ -239,9 +239,20 @@ module sui_system::sui_system {
         validator_address: address,
         ctx: &mut TxContext,
     ) {
+        let staked_sui = request_add_stake_non_entry(wrapper, stake, validator_address, ctx);
+        transfer::public_transfer(staked_sui, tx_context::sender(ctx));
+    }
+
+    /// The non-entry version of `request_add_stake`, which returns the staked SUI instead of transferring it to the sender.
+    public fun request_add_stake_non_entry(
+        wrapper: &mut SuiSystemState,
+        stake: Coin<SUI>,
+        validator_address: address,
+        ctx: &mut TxContext,
+    ): StakedSui {
         let self = load_system_state_mut(wrapper);
         sui_system_state_inner::request_add_stake(self, stake, validator_address, ctx)
-    }
+}
 
     /// Add stake to a validator's staking pool using multiple coins.
     public entry fun request_add_stake_mul_coin(
@@ -252,10 +263,11 @@ module sui_system::sui_system {
         ctx: &mut TxContext,
     ) {
         let self = load_system_state_mut(wrapper);
-        sui_system_state_inner::request_add_stake_mul_coin(self, stakes, stake_amount, validator_address, ctx)
+        let staked_sui = sui_system_state_inner::request_add_stake_mul_coin(self, stakes, stake_amount, validator_address, ctx);
+        transfer::public_transfer(staked_sui, tx_context::sender(ctx));
     }
 
-    /// Withdraw some portion of a stake from a validator's staking pool.
+    /// Withdraw stake from a validator's staking pool.
     public entry fun request_withdraw_stake(
         wrapper: &mut SuiSystemState,
         staked_sui: StakedSui,
