@@ -42,7 +42,7 @@ pub(crate) const MAX_TM_QUEUE_LENGTH: usize = 100_000;
 
 // Reject a transaction if the number of pending transactions depending on the object
 // is above the threshold.
-pub(crate) const MAX_PER_OBJECT_QUEUE_LENGTH: usize = 1000;
+pub(crate) const MAX_PER_OBJECT_QUEUE_LENGTH: usize = 200;
 
 #[cfg(test)]
 #[path = "unit_tests/server_tests.rs"]
