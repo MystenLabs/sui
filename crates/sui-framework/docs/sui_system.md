@@ -53,6 +53,7 @@ the SuiSystemStateInner version, or vice versa.
 -  [Function `request_set_commission_rate`](#0x3_sui_system_request_set_commission_rate)
 -  [Function `set_candidate_validator_commission_rate`](#0x3_sui_system_set_candidate_validator_commission_rate)
 -  [Function `request_add_stake`](#0x3_sui_system_request_add_stake)
+-  [Function `request_add_stake_non_entry`](#0x3_sui_system_request_add_stake_non_entry)
 -  [Function `request_add_stake_mul_coin`](#0x3_sui_system_request_add_stake_mul_coin)
 -  [Function `request_withdraw_stake`](#0x3_sui_system_request_withdraw_stake)
 -  [Function `request_withdraw_stake_non_entry`](#0x3_sui_system_request_withdraw_stake_non_entry)
@@ -510,6 +511,37 @@ Add stake to a validator's staking pool.
     validator_address: <b>address</b>,
     ctx: &<b>mut</b> TxContext,
 ) {
+    <b>let</b> staked_sui = <a href="sui_system.md#0x3_sui_system_request_add_stake_non_entry">request_add_stake_non_entry</a>(wrapper, stake, validator_address, ctx);
+    <a href="../../../.././build/Sui/docs/transfer.md#0x2_transfer_public_transfer">transfer::public_transfer</a>(staked_sui, <a href="../../../.././build/Sui/docs/tx_context.md#0x2_tx_context_sender">tx_context::sender</a>(ctx));
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x3_sui_system_request_add_stake_non_entry"></a>
+
+## Function `request_add_stake_non_entry`
+
+The non-entry version of <code>request_add_stake</code>, which returns the staked SUI instead of transferring it to the sender.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="sui_system.md#0x3_sui_system_request_add_stake_non_entry">request_add_stake_non_entry</a>(wrapper: &<b>mut</b> <a href="sui_system.md#0x3_sui_system_SuiSystemState">sui_system::SuiSystemState</a>, stake: <a href="../../../.././build/Sui/docs/coin.md#0x2_coin_Coin">coin::Coin</a>&lt;<a href="../../../.././build/Sui/docs/sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, validator_address: <b>address</b>, ctx: &<b>mut</b> <a href="../../../.././build/Sui/docs/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="staking_pool.md#0x3_staking_pool_StakedSui">staking_pool::StakedSui</a>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="sui_system.md#0x3_sui_system_request_add_stake_non_entry">request_add_stake_non_entry</a>(
+    wrapper: &<b>mut</b> <a href="sui_system.md#0x3_sui_system_SuiSystemState">SuiSystemState</a>,
+    stake: Coin&lt;SUI&gt;,
+    validator_address: <b>address</b>,
+    ctx: &<b>mut</b> TxContext,
+): StakedSui {
     <b>let</b> self = <a href="sui_system.md#0x3_sui_system_load_system_state_mut">load_system_state_mut</a>(wrapper);
     <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_request_add_stake">sui_system_state_inner::request_add_stake</a>(self, stake, validator_address, ctx)
 }
@@ -543,7 +575,8 @@ Add stake to a validator's staking pool using multiple coins.
     ctx: &<b>mut</b> TxContext,
 ) {
     <b>let</b> self = <a href="sui_system.md#0x3_sui_system_load_system_state_mut">load_system_state_mut</a>(wrapper);
-    <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_request_add_stake_mul_coin">sui_system_state_inner::request_add_stake_mul_coin</a>(self, stakes, stake_amount, validator_address, ctx)
+    <b>let</b> staked_sui = <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_request_add_stake_mul_coin">sui_system_state_inner::request_add_stake_mul_coin</a>(self, stakes, stake_amount, validator_address, ctx);
+    <a href="../../../.././build/Sui/docs/transfer.md#0x2_transfer_public_transfer">transfer::public_transfer</a>(staked_sui, <a href="../../../.././build/Sui/docs/tx_context.md#0x2_tx_context_sender">tx_context::sender</a>(ctx));
 }
 </code></pre>
 
@@ -555,7 +588,7 @@ Add stake to a validator's staking pool using multiple coins.
 
 ## Function `request_withdraw_stake`
 
-Withdraw some portion of a stake from a validator's staking pool.
+Withdraw stake from a validator's staking pool.
 
 
 <pre><code><b>public</b> entry <b>fun</b> <a href="sui_system.md#0x3_sui_system_request_withdraw_stake">request_withdraw_stake</a>(wrapper: &<b>mut</b> <a href="sui_system.md#0x3_sui_system_SuiSystemState">sui_system::SuiSystemState</a>, staked_sui: <a href="staking_pool.md#0x3_staking_pool_StakedSui">staking_pool::StakedSui</a>, ctx: &<b>mut</b> <a href="../../../.././build/Sui/docs/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)

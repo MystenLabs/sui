@@ -18,6 +18,7 @@ module sui_system::validator_set {
     use sui::table::{Self, Table};
     use sui::event;
     use sui::table_vec::{Self, TableVec};
+    use sui::transfer;
     use sui_system::voting_power;
     use sui_system::validator_wrapper::ValidatorWrapper;
     use sui_system::validator_wrapper;
@@ -291,11 +292,11 @@ module sui_system::validator_set {
         validator_address: address,
         stake: Balance<SUI>,
         ctx: &mut TxContext,
-    ) {
+    ) : StakedSui {
         let sui_amount = balance::value(&stake);
         assert!(sui_amount >= MIN_STAKING_THRESHOLD, EStakingBelowThreshold);
         let validator = get_candidate_or_active_validator_mut(self, validator_address);
-        validator::request_add_stake(validator, stake, tx_context::sender(ctx), ctx);
+        validator::request_add_stake(validator, stake, tx_context::sender(ctx), ctx)
     }
 
     /// Called by `sui_system`, to withdraw some share of a stake from the validator. The share to withdraw
@@ -1154,7 +1155,8 @@ module sui_system::validator_set {
             // Add rewards to the validator. Don't try and distribute rewards though if the payout is zero.
             if (balance::value(&validator_reward) > 0) {
                 let validator_address = validator::sui_address(validator);
-                validator::request_add_stake(validator, validator_reward, validator_address, ctx);
+                let rewards_stake = validator::request_add_stake(validator, validator_reward, validator_address, ctx);
+                transfer::public_transfer(rewards_stake, validator_address);
             } else {
                 balance::destroy_zero(validator_reward);
             };

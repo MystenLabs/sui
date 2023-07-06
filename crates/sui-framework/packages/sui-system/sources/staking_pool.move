@@ -77,7 +77,7 @@ module sui_system::staking_pool {
     }
 
     /// A self-custodial object holding the staked SUI tokens.
-    struct StakedSui has key {
+    struct StakedSui has key, store {
         id: UID,
         /// ID of the staking pool we are staking with.
         pool_id: ID,
@@ -113,10 +113,9 @@ module sui_system::staking_pool {
     public(friend) fun request_add_stake(
         pool: &mut StakingPool,
         stake: Balance<SUI>,
-        staker: address,
         stake_activation_epoch: u64,
         ctx: &mut TxContext
-    ) {
+    ) : StakedSui {
         let sui_amount = balance::value(&stake);
         assert!(!is_inactive(pool), EDelegationToInactivePool);
         assert!(sui_amount > 0, EDelegationOfZeroSui);
@@ -127,11 +126,11 @@ module sui_system::staking_pool {
             principal: stake,
         };
         pool.pending_stake = pool.pending_stake + sui_amount;
-        transfer::transfer(staked_sui, staker);
+        staked_sui
     }
 
     /// Request to withdraw the given stake plus rewards from a staking pool.
-    /// Both the principal and corresponding rewards in SUI are withdrawn and transferred to the staker.
+    /// Both the principal and corresponding rewards in SUI are withdrawn.
     /// A proportional amount of pool token withdraw is recorded and processed at epoch change time.
     public(friend) fun request_withdraw_stake(
         pool: &mut StakingPool,

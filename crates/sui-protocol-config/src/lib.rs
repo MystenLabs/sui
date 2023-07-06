@@ -10,7 +10,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 18;
+const MAX_PROTOCOL_VERSION: u64 = 19;
 
 // Record history of protocol version allocations here:
 //
@@ -58,6 +58,7 @@ const MAX_PROTOCOL_VERSION: u64 = 18;
 //             such that the minimum transaction cost is the same as the minimum computation
 //             bucket.
 //             Add a feature flag to indicate the changes semantics of `base_tx_cost_fixed`.
+// Version 19: Changes to sui-system package to enable liquid staking.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -1324,6 +1325,7 @@ impl ProtocolConfig {
                 cfg.base_tx_cost_fixed = Some(1_000);
                 cfg
             }
+            19 => Self::get_for_version_impl(version - 1, chain),
             // Use this template when making changes:
             //
             //     // modify an existing constant.
