@@ -60,7 +60,9 @@ import { fromB58, toB64, toHEX } from '@mysten/bcs';
 import type { SerializedSignature } from '../cryptography/signature.js';
 import { TransactionBlock } from '../builder/index.js';
 import { SuiHTTPTransport } from './http-transport.js';
-import type { SuiNetwork, SuiTransport } from './http-transport.js';
+import type { SuiTransport } from './http-transport.js';
+
+export * from './http-transport.js';
 
 export interface PaginationArguments<Cursor> {
 	/** Optional paging cursor */
@@ -74,66 +76,39 @@ export interface OrderArguments {
 }
 
 /**
- * Configuration options for the JsonRpcProvider. If the value of a field is not provided,
- * value in `DEFAULT_OPTIONS` for that field will be used
+ * Configuration options for the SuiClient
+ * You must provide either a `url` or a `transport`
  */
-export type SuiApiClientOptions = NetworkOrTransport & {
-	/**
-	 * Cache timeout in seconds for the RPC API Version
-	 */
-	versionCacheTimeoutInSeconds?: number;
-};
+export type SuiClientOptions = NetworkOrTransport;
 
 export type NetworkOrTransport =
 	| {
-			network: SuiNetwork;
+			url: string;
 			transport?: never;
 	  }
 	| {
 			transport: SuiTransport;
-			network?: never;
+			url?: never;
 	  };
 
-const DEFAULT_OPTIONS = {
-	versionCacheTimeoutInSeconds: 600,
-} satisfies Partial<SuiApiClientOptions>;
-
-export class SuiAPIClient {
+export class SuiClient {
 	protected transport: SuiTransport;
-	private rpcApiVersion: string | undefined;
-	private cacheExpiry: number | undefined;
-	private versionCacheTimeoutInSeconds;
 	/**
 	 * Establish a connection to a Sui RPC endpoint
 	 *
 	 * @param options configuration options for the API Client
 	 */
-	constructor(options: SuiApiClientOptions) {
-		const opts = { ...DEFAULT_OPTIONS, ...options };
-		this.versionCacheTimeoutInSeconds = opts.versionCacheTimeoutInSeconds;
-		this.transport = opts.transport ?? new SuiHTTPTransport({ network: opts.network });
+	constructor(options: SuiClientOptions) {
+		this.transport = options.transport ?? new SuiHTTPTransport({ url: options.url });
 	}
 
 	async getRpcApiVersion(): Promise<string | undefined> {
-		if (this.rpcApiVersion && this.cacheExpiry && this.cacheExpiry <= Date.now()) {
-			return this.rpcApiVersion;
-		}
+		const resp = await this.transport.request<{ info: { version: string } }>({
+			method: 'rpc.discover',
+			params: [],
+		});
 
-		try {
-			const resp = await this.transport.request<{ info: { version: string } }>({
-				method: 'rpc.discover',
-				params: [],
-			});
-			this.rpcApiVersion = resp.info.version;
-			this.cacheExpiry =
-				// Date.now() is in milliseconds, but the timeout is in seconds
-				Date.now() + (this.versionCacheTimeoutInSeconds ?? 0) * 1000;
-			return this.rpcApiVersion;
-		} catch (err) {
-			console.warn('Error fetching version number of the RPC API', err);
-		}
-
-		return undefined;
+		return resp.info.version;
 	}
 
 	/**
@@ -783,7 +758,7 @@ export class SuiAPIClient {
 		timeout?: number;
 		/** The amount of time to wait between checks for the transaction block. Defaults to 2 seconds. */
 		pollInterval?: number;
-	} & Parameters<SuiAPIClient['getTransactionBlock']>[0]): Promise<SuiTransactionBlockResponse> {
+	} & Parameters<SuiClient['getTransactionBlock']>[0]): Promise<SuiTransactionBlockResponse> {
 		const timeoutSignal = AbortSignal.timeout(timeout);
 		const timeoutPromise = new Promise((_, reject) => {
 			timeoutSignal.addEventListener('abort', () => reject(timeoutSignal.reason));

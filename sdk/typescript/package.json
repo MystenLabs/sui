@@ -51,10 +51,10 @@
 			"import": "./dist/esm/faucet/index.js",
 			"require": "./dist/cjs/faucet/index.js"
 		},
-		"./api": {
-			"source": "./src/api/index.ts",
-			"import": "./dist/esm/api/index.js",
-			"require": "./dist/cjs/api/index.js"
+		"./client": {
+			"source": "./src/client/index.ts",
+			"import": "./dist/esm/client/index.js",
+			"require": "./dist/cjs/client/index.js"
 		}
 	},
 	"scripts": {

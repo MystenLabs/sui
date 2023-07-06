@@ -12,7 +12,7 @@ import { WebsocketClient } from '../rpc/websocket-client.js';
 export type HttpHeaders = { [header: string]: string };
 
 interface SuiHTTPTransportOptions {
-	network: SuiNetwork;
+	url: string;
 	rpc?: {
 		headers?: HttpHeaders;
 		url?: string;
@@ -28,19 +28,6 @@ export interface SuiTransportRequestOptions {
 }
 
 // eslint-disable-next-line @typescript-eslint/ban-types
-export type SuiNetwork =
-	| 'mainnet'
-	| 'testnet'
-	| 'devnet'
-	| 'localnet'
-	| `http${'s' | ''}://${string}`;
-
-const networkToEndpoint: Record<SuiNetwork, string> = {
-	mainnet: 'https://fullnode.mainnet.sui.io:443',
-	testnet: 'https://fullnode.testnet.sui.io:443',
-	devnet: 'https://fullnode.devnet.sui.io:443',
-	localnet: 'http://127.0.0.1:9000',
-};
 
 export interface SuiTransportSubscribeOptions<T> {
 	method: string;
@@ -59,11 +46,10 @@ export class SuiHTTPTransport implements SuiTransport {
 	private websocketClient: WebsocketClient;
 
 	constructor({
-		network,
+		url,
 		websocket: { url: websocketUrl, ...websocketOptions } = {} as WebsocketClientOptions,
 		rpc,
 	}: SuiHTTPTransportOptions) {
-		const url = networkToEndpoint[network] ?? network;
 		const transport = new HTTPTransport(rpc?.url ?? url, {
 			headers: {
 				'Content-Type': 'application/json',
