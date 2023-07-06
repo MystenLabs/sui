@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use clap::*;
@@ -33,6 +35,8 @@ pub struct ClusterTestOpt {
     /// TODO(gegao): remove this after indexer migration is complete.
     #[clap(long)]
     pub use_indexer_experimental_methods: bool,
+    #[clap(long)]
+    pub config_dir: Option<PathBuf>,
 }
 
 impl ClusterTestOpt {
@@ -45,6 +49,7 @@ impl ClusterTestOpt {
             indexer_address: None,
             pg_address: None,
             use_indexer_experimental_methods: false,
+            config_dir: None,
         }
     }
 }

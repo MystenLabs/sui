@@ -241,6 +241,10 @@ struct FeatureFlags {
     // If true minimum txn charge is a multiplier of the gas price
     #[serde(skip_serializing_if = "is_false")]
     txn_base_cost_as_multiplier: bool,
+
+    // If true, then the new algorithm for the leader election schedule will be used
+    #[serde(skip_serializing_if = "is_false")]
+    narwhal_new_leader_election_schedule: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -815,6 +819,10 @@ impl ProtocolConfig {
     pub fn txn_base_cost_as_multiplier(&self) -> bool {
         self.feature_flags.txn_base_cost_as_multiplier
     }
+
+    pub fn narwhal_new_leader_election_schedule(&self) -> bool {
+        self.feature_flags.narwhal_new_leader_election_schedule
+    }
 }
 
 #[cfg(not(msim))]
@@ -1288,8 +1296,12 @@ impl ProtocolConfig {
             }
             17 => {
                 let mut cfg = Self::get_for_version_impl(version - 1, chain);
+                cfg.feature_flags.upgraded_multisig_supported = true;
+                cfg
+            }
+            18 => {
+                let mut cfg = Self::get_for_version_impl(version - 1, chain);
                 cfg.execution_version = Some(1);
-
                 // Following flags are implied by this execution version.  Once support for earlier
                 // protocol versions is dropped, these flags can be removed:
                 // cfg.feature_flags.package_upgrades = true;
@@ -1298,11 +1310,6 @@ impl ProtocolConfig {
                 // cfg.feature_flags.loaded_child_objects_fixed = true;
                 // cfg.feature_flags.ban_entry_init = true;
                 // cfg.feature_flags.pack_digest_hash_modules = true;
-                cfg
-            }
-            18 => {
-                let mut cfg = Self::get_for_version_impl(version - 1, chain);
-                cfg.feature_flags.upgraded_multisig_supported = true;
                 cfg.feature_flags.txn_base_cost_as_multiplier = true;
                 // this is a multiplier of the gas price
                 cfg.base_tx_cost_fixed = Some(1_000);

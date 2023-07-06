@@ -63,10 +63,11 @@ mod sim_only_tests {
     use sui_core::authority::framework_injection;
     use sui_framework::BuiltInFramework;
     use sui_json_rpc::api::WriteApiClient;
+    use sui_json_rpc_types::SuiTransactionBlockEffectsAPI;
     use sui_macros::*;
     use sui_move_build::{BuildConfig, CompiledPackage};
     use sui_protocol_config::SupportedProtocolVersions;
-    use sui_types::base_types::ObjectID;
+    use sui_types::base_types::{ObjectID, ObjectRef};
     use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
     use sui_types::id::ID;
     use sui_types::object::Owner;
@@ -75,7 +76,10 @@ mod sim_only_tests {
         SuiSystemState, SuiSystemStateTrait, SUI_SYSTEM_STATE_SIM_TEST_DEEP_V2,
         SUI_SYSTEM_STATE_SIM_TEST_SHALLOW_V2, SUI_SYSTEM_STATE_SIM_TEST_V1,
     };
-    use sui_types::transaction::{Command, ProgrammableMoveCall};
+    use sui_types::transaction::{
+        CallArg, Command, ObjectArg, ProgrammableMoveCall, ProgrammableTransaction,
+        TransactionData, TEST_ONLY_GAS_UNIT_FOR_GENERIC,
+    };
     use sui_types::{
         base_types::SequenceNumber, digests::TransactionDigest, object::Object,
         programmable_transaction_builder::ProgrammableTransactionBuilder, storage::ObjectStore,
@@ -319,8 +323,28 @@ mod sim_only_tests {
 
     #[sim_test]
     async fn test_framework_add_struct_ability() {
-        // Upgrade attempts to add an ability to a struct
+        // Upgrade adds an ability to a struct (allowed, except for `key`).
         let cluster = run_framework_upgrade("base", "add_struct_ability").await;
+
+        assert_eq!(call_canary(&cluster).await, 42);
+        let obj0 = create_obj(&cluster).await;
+
+        expect_upgrade_succeeded(&cluster).await;
+
+        // The upgrade happened
+        assert_eq!(call_canary(&cluster).await, 43);
+        let obj1 = create_obj(&cluster).await;
+
+        // Instances of the type that existed before and new instances are able to take advantage of
+        // the newly introduced ability
+        wrap_obj(&cluster, obj0).await;
+        wrap_obj(&cluster, obj1).await;
+    }
+
+    #[sim_test]
+    async fn test_framework_add_key_ability() {
+        // Upgrade adds the key ability to a struct (not allowed)
+        let cluster = run_framework_upgrade("base", "add_key_ability").await;
         assert_eq!(call_canary(&cluster).await, 42);
         expect_upgrade_failed(&cluster).await;
         assert_eq!(call_canary(&cluster).await, 42);
@@ -445,6 +469,46 @@ mod sim_only_tests {
         .await
     }
 
+    async fn create_obj(cluster: &TestCluster) -> ObjectRef {
+        execute_creating(cluster, {
+            let mut builder = ProgrammableTransactionBuilder::new();
+            builder
+                .move_call(
+                    SUI_SYSTEM_PACKAGE_ID,
+                    ident_str!("msim_extra_1").to_owned(),
+                    ident_str!("mint").to_owned(),
+                    /* type_arguments */ vec![],
+                    /* call_args */ vec![],
+                )
+                .unwrap();
+            builder.finish()
+        })
+        .await
+        .first()
+        .unwrap()
+        .clone()
+    }
+
+    async fn wrap_obj(cluster: &TestCluster, obj: ObjectRef) -> ObjectRef {
+        execute_creating(cluster, {
+            let mut builder = ProgrammableTransactionBuilder::new();
+            builder
+                .move_call(
+                    SUI_SYSTEM_PACKAGE_ID,
+                    ident_str!("msim_extra_1").to_owned(),
+                    ident_str!("wrap").to_owned(),
+                    /* type_arguments */ vec![],
+                    vec![CallArg::Object(ObjectArg::ImmOrOwnedObject(obj))],
+                )
+                .unwrap();
+            builder.finish()
+        })
+        .await
+        .first()
+        .unwrap()
+        .clone()
+    }
+
     async fn dev_inspect_call(cluster: &TestCluster, call: ProgrammableMoveCall) -> u64 {
         let client = cluster.rpc_client();
         let sender = cluster.get_address_0();
@@ -470,6 +534,33 @@ mod sim_only_tests {
         let return_ = &results.first().unwrap().return_values.first().unwrap().0;
 
         bcs::from_bytes(&return_).unwrap()
+    }
+
+    async fn execute_creating(
+        cluster: &TestCluster,
+        ptb: ProgrammableTransaction,
+    ) -> Vec<ObjectRef> {
+        let context = &cluster.wallet;
+        let (sender, gas_object) = context.get_one_gas_object().await.unwrap().unwrap();
+
+        let rgp = context.get_reference_gas_price().await.unwrap();
+        let txn = context.sign_transaction(&TransactionData::new_programmable(
+            sender,
+            vec![gas_object],
+            ptb,
+            rgp * TEST_ONLY_GAS_UNIT_FOR_GENERIC,
+            rgp,
+        ));
+
+        context
+            .execute_transaction_must_succeed(txn)
+            .await
+            .effects
+            .unwrap()
+            .created()
+            .iter()
+            .map(|oref| oref.reference.to_object_ref())
+            .collect()
     }
 
     async fn expect_upgrade_failed(cluster: &TestCluster) {

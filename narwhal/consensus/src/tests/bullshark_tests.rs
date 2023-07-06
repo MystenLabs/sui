@@ -79,6 +79,7 @@ async fn commit_one() {
         latest_protocol_version(),
         metrics.clone(),
         NUM_SUB_DAGS_PER_SCHEDULE,
+        LeaderSchedule::new(committee.clone(), LeaderSwapTable::default()),
     );
 
     let _consensus_handle = Consensus::spawn(
@@ -165,6 +166,7 @@ async fn dead_node() {
         latest_protocol_version(),
         metrics.clone(),
         NUM_SUB_DAGS_PER_SCHEDULE,
+        LeaderSchedule::new(committee.clone(), LeaderSwapTable::default()),
     );
 
     let _consensus_handle = Consensus::spawn(
@@ -364,6 +366,7 @@ async fn not_enough_support() {
         latest_protocol_version(),
         metrics.clone(),
         NUM_SUB_DAGS_PER_SCHEDULE,
+        LeaderSchedule::new(committee.clone(), LeaderSwapTable::default()),
     );
 
     let _consensus_handle = Consensus::spawn(
@@ -502,6 +505,7 @@ async fn missing_leader() {
         latest_protocol_version(),
         metrics.clone(),
         NUM_SUB_DAGS_PER_SCHEDULE,
+        LeaderSchedule::new(committee.clone(), LeaderSwapTable::default()),
     );
 
     let _consensus_handle = Consensus::spawn(
@@ -590,6 +594,7 @@ async fn committed_round_after_restart() {
             latest_protocol_version(),
             metrics.clone(),
             NUM_SUB_DAGS_PER_SCHEDULE,
+            LeaderSchedule::new(committee.clone(), LeaderSwapTable::default()),
         );
 
         let handle = Consensus::spawn(
@@ -679,11 +684,12 @@ async fn delayed_certificates_are_rejected() {
     let store = make_consensus_store(&test_utils::temp_dir());
     let mut state = ConsensusState::new(metrics.clone(), gc_depth);
     let mut bullshark = Bullshark::new(
-        committee,
+        committee.clone(),
         store,
         latest_protocol_version(),
         metrics,
         NUM_SUB_DAGS_PER_SCHEDULE,
+        LeaderSchedule::new(committee, LeaderSwapTable::default()),
     );
 
     // Populate DAG with the rounds up to round 5 so we trigger commits
@@ -742,6 +748,7 @@ async fn submitting_equivocating_certificate_should_error() {
         latest_protocol_version(),
         metrics,
         NUM_SUB_DAGS_PER_SCHEDULE,
+        LeaderSchedule::new(committee.clone(), LeaderSwapTable::default()),
     );
 
     // Populate DAG with all the certificates
@@ -812,11 +819,12 @@ async fn reset_consensus_scores_on_every_schedule_change() {
     let store = make_consensus_store(&test_utils::temp_dir());
     let mut state = ConsensusState::new(metrics.clone(), gc_depth);
     let mut bullshark = Bullshark::new(
-        committee,
+        committee.clone(),
         store,
         latest_protocol_version(),
         metrics,
         NUM_SUB_DAGS_PER_SCHEDULE,
+        LeaderSchedule::new(committee, LeaderSwapTable::default()),
     );
 
     // Populate DAG with the rounds up to round 50 so we trigger commits
@@ -889,6 +897,7 @@ async fn restart_with_new_committee() {
             latest_protocol_version(),
             metrics.clone(),
             NUM_SUB_DAGS_PER_SCHEDULE,
+            LeaderSchedule::new(committee.clone(), LeaderSwapTable::default()),
         );
 
         let handle = Consensus::spawn(
@@ -1010,11 +1019,12 @@ async fn garbage_collection_basic() {
     let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
     let mut state = ConsensusState::new(metrics.clone(), GC_DEPTH);
     let mut bullshark = Bullshark::new(
-        committee,
+        committee.clone(),
         store,
         latest_protocol_version(),
         metrics,
         NUM_SUB_DAGS_PER_SCHEDULE,
+        LeaderSchedule::new(committee, LeaderSwapTable::default()),
     );
 
     // Now start feeding the certificates per round
@@ -1122,6 +1132,7 @@ async fn slow_node() {
         latest_protocol_version(),
         metrics,
         NUM_SUB_DAGS_PER_SCHEDULE,
+        LeaderSchedule::new(committee.clone(), LeaderSwapTable::default()),
     );
 
     // Now start feeding the certificates per round up to 8. We expect to have
@@ -1311,11 +1322,12 @@ async fn not_enough_support_and_missing_leaders_and_gc() {
     let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
     let mut state = ConsensusState::new(metrics.clone(), GC_DEPTH);
     let mut bullshark = Bullshark::new(
-        committee,
+        committee.clone(),
         store,
         latest_protocol_version(),
         metrics,
         NUM_SUB_DAGS_PER_SCHEDULE,
+        LeaderSchedule::new(committee, LeaderSwapTable::default()),
     );
 
     let mut committed = false;

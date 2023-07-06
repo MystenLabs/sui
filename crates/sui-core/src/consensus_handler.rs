@@ -166,8 +166,11 @@ impl<T: ParentSync + Send + Sync> ExecutionState for ConsensusHandler<T> {
         };
 
         info!(
-            "Received consensus output at leader round {} subdag {} timestamp {}",
-            round, consensus_output.sub_dag.sub_dag_index, timestamp,
+            "Received consensus output {:?} at leader round {}, subdag index {}, timestamp {} ",
+            consensus_output.digest(),
+            round,
+            consensus_output.sub_dag.sub_dag_index,
+            timestamp,
         );
 
         let prologue_transaction = self.consensus_commit_prologue_transaction(round, timestamp);
@@ -191,14 +194,21 @@ impl<T: ParentSync + Send + Sync> ExecutionState for ConsensusHandler<T> {
             .consensus_committed_subdags
             .with_label_values(&[&leader_author.to_string()])
             .inc();
-        for (cert, batches) in consensus_output.batches {
+        for (cert, batches) in consensus_output
+            .sub_dag
+            .certificates
+            .iter()
+            .zip(consensus_output.batches.iter())
+        {
+            assert_eq!(cert.header().payload().len(), batches.len());
             let author = cert.header().author();
             self.metrics
                 .consensus_committed_certificates
                 .with_label_values(&[&author.to_string()])
                 .inc();
-            let output_cert = Arc::new(cert);
+            let output_cert = Arc::new(cert.clone());
             for batch in batches {
+                assert!(output_cert.header().payload().contains_key(&batch.digest()));
                 self.metrics.consensus_handler_processed_batches.inc();
                 for serialized_transaction in batch.transactions() {
                     bytes += serialized_transaction.len();
