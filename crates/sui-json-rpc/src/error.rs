@@ -144,15 +144,19 @@ fn to_internal_error(err: impl ToString) -> RpcError {
 
 #[derive(Debug, Error)]
 pub enum ClientError {
-    #[error("{0}")]
+    #[error("{0}. Please check your input and try again")]
     Serde(String),
 
     #[error(transparent)]
     Domain(#[from] DomainParseError),
+
+    #[error("{param}: {reason}")]
+    InvalidParam { param: String, reason: String },
 }
 
 impl From<ClientError> for RpcError {
     fn from(e: ClientError) -> Self {
+        // TODO(wlmyng): Please check your input and try again text
         RpcError::Call(CallError::InvalidParams(e.into()))
     }
 }
