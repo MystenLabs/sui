@@ -21,9 +21,6 @@ pub enum Error {
     #[error(transparent)]
     InternalError(#[from] anyhow::Error),
 
-    #[error("Deserialization error: {0}")]
-    BcsError(#[from] bcs::Error),
-
     #[error("Unexpected error: {0}")]
     UnexpectedError(String),
 
@@ -53,6 +50,9 @@ pub enum Error {
 
     #[error(transparent)]
     SuiRpcInputError(#[from] SuiRpcInputError),
+
+    #[error(transparent)]
+    ServerError(#[from] ServerError),
 }
 
 impl From<Error> for RpcError {
@@ -84,6 +84,7 @@ impl Error {
                 }
                 _ => RpcError::Call(CallError::Failed(err.into())),
             },
+            Error::ServerError(err) => err.into(),
             _ => RpcError::Call(CallError::Failed(self.into())),
         }
     }
@@ -114,4 +115,36 @@ pub enum SuiRpcInputError {
 
     #[error("{0}")]
     CannotParseSuiStructTag(String),
+}
+
+#[derive(Debug, Error)]
+pub enum ServerError {
+    #[error("Serde error")]
+    Serde,
+
+    #[error("Unexpected error")]
+    Unexpected,
+}
+
+impl From<ServerError> for RpcError {
+    fn from(e: ServerError) -> Self {
+        to_internal_error("Internal server error, please try again later")
+    }
+}
+
+fn to_internal_error(err: impl ToString) -> RpcError {
+    let error_object = ErrorObject::owned(-32603, err.to_string(), None::<String>);
+    RpcError::Call(CallError::Custom(error_object))
+}
+
+#[derive(Debug, Error)]
+pub enum ClientError {
+    #[error("Serde error")]
+    Serde,
+}
+
+impl From<ClientError> for RpcError {
+    fn from(e: ClientError) -> Self {
+        RpcError::Call(CallError::InvalidParams(e.into()))
+    }
 }
