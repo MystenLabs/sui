@@ -31,7 +31,12 @@ function BullsharkQuestsNotification() {
 								<div>2.5M SUI Top all eligible players!</div>
 							</div>
 
-							<div>Read more on the blog</div>
+							<a
+								href="https://tech.mystenlabs.com/introducing-bullsharks-quests/"
+								className="appearance-none no-underline text-white bg-[#EA3389] rounded-full p-4"
+							>
+								Read more on the blog
+							</a>
 							<button
 								className="appearance-none bg-transparent border-none cursor-pointer"
 								onClick={() => {
