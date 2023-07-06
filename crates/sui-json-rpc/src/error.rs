@@ -112,9 +112,6 @@ pub enum SuiRpcInputError {
     #[error("{0}")]
     GenericInvalid(String),
 
-    #[error("request_type` must set to `None` or `WaitForLocalExecution` if effects is required in the response")]
-    InvalidExecuteTransactionRequestType,
-
     #[error("Unsupported protocol version requested. Min supported: {0}, max supported: {1}")]
     ProtocolVersionUnsupported(u64, u64),
 
@@ -148,8 +145,9 @@ fn to_internal_error(err: impl ToString) -> RpcError {
 
 #[derive(Debug, Error)]
 pub enum ClientError {
-    #[error("{0}. Please check your input and try again")]
-    Serde(String),
+    // Any kind of serialization or deserialization error
+    #[error("Invalid {param}: {reason}")]
+    Serde { param: String, reason: String },
 
     #[error(transparent)]
     Domain(#[from] DomainParseError),
@@ -157,6 +155,8 @@ pub enum ClientError {
     #[error("Invalid {param}: {reason}")]
     InvalidParam { param: String, reason: String },
     // maybe InvalidParamMulti or something. param, value, reason
+    #[error("`request_type` must set to `None` or `WaitForLocalExecution` if effects is required in the response")]
+    InvalidExecuteTransactionRequestType,
 }
 
 impl From<ClientError> for RpcError {
