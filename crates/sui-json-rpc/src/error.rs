@@ -146,17 +146,27 @@ fn to_internal_error(err: impl ToString) -> RpcError {
 #[derive(Debug, Error)]
 pub enum ClientError {
     // Any kind of serialization or deserialization error
-    #[error("Invalid {param}: {reason}")]
+    #[error("Serialization error on '{param}': {reason}")]
     Serde { param: String, reason: String },
+
+    #[error("Invalid combination of type and value: {0}")]
+    SerdeWithLayout(String),
 
     #[error(transparent)]
     Domain(#[from] DomainParseError),
 
-    #[error("Invalid {param}: {reason}")]
+    #[error("Invalid '{param}': {reason}")]
     InvalidParam { param: String, reason: String },
     // maybe InvalidParamMulti or something. param, value, reason
     #[error("`request_type` must set to `None` or `WaitForLocalExecution` if effects is required in the response")]
     InvalidExecuteTransactionRequestType,
+
+    #[error("{entity} '{id}' not found")]
+    NotFound { entity: String, id: String },
+
+    // For error scenarios that don't fit cleanly into NotFound
+    #[error("{0}")]
+    NotFoundCustom(String),
 }
 
 impl From<ClientError> for RpcError {
