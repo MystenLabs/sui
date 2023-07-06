@@ -6,32 +6,29 @@ use std::future::Future;
 use futures::StreamExt;
 use futures::stream::FuturesUnordered;
 
-use sui_adapter::adapter::MoveVM;
-use sui_adapter::{execution_engine, execution_mode};
+use sui_adapter::{adapter, execution_engine, execution_mode, adapter::MoveVM};
 use sui_config::genesis::Genesis;
 use sui_core::transaction_input_checker::get_gas_status_no_epoch_store_experimental;
 use sui_protocol_config::ProtocolConfig;
-use sui_types::storage::ObjectStore;
-use sui_types::digests::ObjectDigest;
+use sui_types::storage::{BackingPackageStore, ParentSync, ChildObjectResolver, ObjectStore};
 use sui_types::base_types::ObjectID;
 use sui_types::epoch_data::EpochData;
 use sui_types::message_envelope::Message;
 use sui_types::messages::{InputObjectKind, InputObjects, TransactionDataAPI, VerifiedTransaction};
 use sui_types::metrics::LimitsMetrics;
 use sui_types::temporary_store::{TemporaryStore, InnerTemporaryStore};
-use sui_types::sui_system_state::get_sui_system_state;
-use sui_types::sui_system_state::SuiSystemStateTrait;
-use sui_types::digests::TransactionDigest;
+use sui_types::sui_system_state::{get_sui_system_state, SuiSystemStateTrait};
+use sui_types::digests::{ObjectDigest, TransactionDigest};
 use sui_types::effects::TransactionEffects;
 use sui_types::gas::SuiGasStatus;
-use sui_adapter::adapter;
 use sui_move_natives;
+use move_bytecode_utils::module_cache::GetModule;
 use tokio::sync::mpsc;
 use tokio::time::Instant;
 
-use super::types::*;
-use super::mutex_store::*;
+use crate::storage::WritableObjectStore;
 
+use super::types::*;
 
 const MANAGER_CHANNEL_SIZE:usize = 64;
 
@@ -121,15 +118,22 @@ impl QueuesManager {
  *                                    Execution Worker                                   *
  *****************************************************************************************/
 
-pub struct ExecutionWorkerState {
-    pub memory_store: Arc<MutexedMemoryBackedStore>,
+pub struct ExecutionWorkerState
+    <S: ObjectStore 
+        + WritableObjectStore 
+        + BackingPackageStore 
+        + ParentSync 
+        + ChildObjectResolver 
+        + GetModule> 
+{
+    pub memory_store: Arc<S>,
 }
 
-impl ExecutionWorkerState {
-    pub fn new(// protocol_config: &'a ProtocolConfig,
-    ) -> Self {
+impl<S: ObjectStore + WritableObjectStore + BackingPackageStore + ParentSync + ChildObjectResolver + GetModule> 
+    ExecutionWorkerState<S> {
+    pub fn new(new_store: S) -> Self {
         Self {
-            memory_store: Arc::new(MutexedMemoryBackedStore::new()),
+            memory_store: Arc::new(new_store)
         }
     }
 
@@ -142,7 +146,7 @@ impl ExecutionWorkerState {
 
     // Helper: Returns Input objects by reading from the memory_store
     async fn read_input_objects_from_store(
-        memory_store: Arc<MutexedMemoryBackedStore>, 
+        memory_store: Arc<S>, 
         tx: &VerifiedTransaction
     ) -> InputObjects {
         let tx_data = tx.data().transaction_data();
@@ -203,7 +207,7 @@ impl ExecutionWorkerState {
 
     // Helper: Writes changes from inner_temp_store to memory store
     fn write_updates_to_store(
-        memory_store: Arc<MutexedMemoryBackedStore>,
+        memory_store: Arc<S>,
         inner_temp_store: InnerTemporaryStore,
     ) {
         // And now we mutate the store.
@@ -296,7 +300,7 @@ impl ExecutionWorkerState {
 
     async fn async_exec(
         full_tx: Transaction,
-        memory_store: Arc<MutexedMemoryBackedStore>,
+        memory_store: Arc<S>,
         move_vm: Arc<MoveVM>,
         reference_gas_price: u64,
         epoch_data: EpochData,
@@ -400,14 +404,6 @@ impl ExecutionWorkerState {
         mut sw_receiver: mpsc::Receiver<SailfishMessage>,
         ew_sender: mpsc::Sender<SailfishMessage>,
     ){
-        // Start the initial epoch
-        let (mut move_vm, mut protocol_config, mut epoch_data, mut reference_gas_price)
-            = self.process_epoch_start(&mut sw_receiver).await;
-
-        // Start timer for TPS computation
-        let now = Instant::now();
-        let mut num_tx: usize = 0;
-
         // Initialize channels
         let (manager_sender, mut manager_receiver) = mpsc::channel(MANAGER_CHANNEL_SIZE);
         let mut manager = QueuesManager::new(manager_sender);
@@ -422,6 +418,14 @@ impl ExecutionWorkerState {
         */
         let mut epoch_txs_semaphore = 0;
         let mut epoch_change_tx: Option<Transaction> = None;
+
+        // Start timer for TPS computation
+        let now = Instant::now();
+        let mut num_tx: usize = 0;
+
+        // Start the initial epoch
+        let (mut move_vm, mut protocol_config, mut epoch_data, mut reference_gas_price)
+            = self.process_epoch_start(&mut sw_receiver).await;
 
         // Main loop
         loop {

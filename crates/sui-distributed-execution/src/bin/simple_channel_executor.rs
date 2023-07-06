@@ -2,8 +2,11 @@ use clap::*;
 use std::path::PathBuf;
 use std::sync::Arc;
 use sui_config::{Config, NodeConfig};
-use sui_distributed_execution::seqn_worker;
-use sui_distributed_execution::exec_worker;
+use sui_distributed_execution::{
+    seqn_worker,
+    exec_worker,
+    mutex_store::MutexedMemoryBackedStore,
+};
 use sui_types::multiaddr::Multiaddr;
 use tokio::sync::mpsc;
 
@@ -47,14 +50,15 @@ struct Args {
     listen_address: Option<Multiaddr>,
 }
 
-#[tokio::main(flavor = "multi_thread", worker_threads = 4)]
+#[tokio::main(flavor = "multi_thread", worker_threads = 3)]
 async fn main() {
     let args = Args::parse();
     let config = NodeConfig::load(&args.config_path).unwrap();
     let genesis = Arc::new(config.genesis().expect("Could not load genesis"));
     let mut sw_state = seqn_worker::SequenceWorkerState::new(&config).await;
     let metrics = sw_state.metrics.clone();
-    let mut ew_state = exec_worker::ExecutionWorkerState::new();
+    let store = MutexedMemoryBackedStore::new(); // use the mutexed store for concurrency control
+    let mut ew_state = exec_worker::ExecutionWorkerState::new(store);
     ew_state.init_store(&genesis);
 
     // Channel from sw to ew

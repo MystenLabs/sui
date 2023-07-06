@@ -4,12 +4,17 @@ use std::time::Instant;
 use std::cmp;
 use sui_config::{Config, NodeConfig};
 use sui_core::authority::epoch_start_configuration::EpochStartConfiguration;
-use sui_distributed_execution::seqn_worker;
-use sui_distributed_execution::exec_worker;
+use sui_distributed_execution::{
+    seqn_worker,
+    exec_worker,
+    simple_store::MemoryBackedStore,
+};
 use sui_types::multiaddr::Multiaddr;
-use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
-use sui_types::sui_system_state::get_sui_system_state;
-use sui_types::sui_system_state::SuiSystemStateTrait;
+use sui_types::sui_system_state::{
+    epoch_start_sui_system_state::EpochStartSystemStateTrait,
+    get_sui_system_state,
+    SuiSystemStateTrait,
+};
 
 use sui_distributed_execution::types::*;
 
@@ -62,7 +67,8 @@ async fn main() {
     }
 
     if let Some(watermark) = args.execute {
-        let mut ew_state = exec_worker::ExecutionWorkerState::new();
+        let store = MemoryBackedStore::new();  // use the simple store
+        let mut ew_state = exec_worker::ExecutionWorkerState::new(store);
         ew_state.init_store(genesis);
 
         let mut protocol_config = sw_state.epoch_store.protocol_config();
@@ -76,8 +82,8 @@ async fn main() {
         println!("Highest synced {}", highest_synced_seq);
         println!("Highest executed {}", highest_executed_seq);
 
-        let now = Instant::now();
         let mut num_tx: usize = 0;
+        let now = Instant::now();
         for checkpoint_seq in genesis_seq..cmp::min(watermark, highest_synced_seq) {
             let checkpoint_summary = sw_state
                 .checkpoint_store
