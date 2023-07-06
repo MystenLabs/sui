@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 pub mod addresses;
+pub mod checkpoint_metrics;
 pub mod checkpoints;
 pub mod epoch;
 pub mod events;

@@ -132,7 +132,7 @@ pub trait ReadApi {
         transaction_digest: TransactionDigest,
     ) -> RpcResult<Vec<SuiEvent>>;
 
-    /// Return the total number of transactions known to the server.
+    /// Return the total number of transaction blocks known to the server.
     #[method(name = "getTotalTransactionBlocks")]
     async fn get_total_transaction_blocks(&self) -> RpcResult<BigInt<u64>>;
 

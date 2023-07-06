@@ -45,6 +45,7 @@ use sui_types::object::ObjectRead;
 use crate::errors::{Context, IndexerError};
 use crate::metrics::IndexerMetrics;
 use crate::models::addresses::{ActiveAddress, Address, AddressStats, DBAddressStats};
+use crate::models::checkpoint_metrics::{CheckpointMetrics, Tps};
 use crate::models::checkpoints::Checkpoint;
 use crate::models::epoch::DBEpochInfo;
 use crate::models::events::Event;
@@ -57,9 +58,9 @@ use crate::models::system_state::DBValidatorSummary;
 use crate::models::transaction_index::{ChangedObject, InputObject, MoveCall, Recipient};
 use crate::models::transactions::Transaction;
 use crate::schema::{
-    active_addresses, address_stats, addresses, changed_objects, checkpoints, epochs, events,
-    input_objects, move_calls, objects, objects_history, packages, recipients, system_states,
-    transactions, validators,
+    active_addresses, address_stats, addresses, changed_objects, checkpoint_metrics, checkpoints,
+    epochs, events, input_objects, move_calls, objects, objects_history, packages, recipients,
+    system_states, transactions, validators,
 };
 use crate::store::diesel_marco::{read_only_blocking, transactional_blocking};
 use crate::store::module_resolver::IndexerModuleResolver;
@@ -284,6 +285,16 @@ impl IndexerStore for PgIndexerStore {
         .context(format!("Failed reading checkpoint {:?} from PostgresDB", id).as_str())
     }
 
+    async fn get_indexer_checkpoint(&self) -> Result<Checkpoint, IndexerError> {
+        read_only_blocking!(&self.blocking_cp, |conn| {
+            checkpoints::dsl::checkpoints
+                .order_by(checkpoints::sequence_number.desc())
+                .limit(1)
+                .first(conn)
+        })
+        .context("Failed reading indexer checkpoint from PostgresDB")
+    }
+
     async fn get_checkpoints(
         &self,
         cursor: Option<CheckpointId>,
@@ -313,6 +324,27 @@ impl IndexerStore for PgIndexerStore {
         .context(
             format!(
                 "Failed reading checkpoints with cursor: {:?} and limit: {} from PostgresDB",
+                cursor, limit
+            )
+            .as_str(),
+        )
+    }
+
+    async fn get_indexer_checkpoints(
+        &self,
+        cursor: i64,
+        limit: usize,
+    ) -> Result<Vec<Checkpoint>, IndexerError> {
+        read_only_blocking!(&self.blocking_cp, |conn| {
+            checkpoints::dsl::checkpoints
+                .filter(checkpoints::sequence_number.gt(cursor))
+                .order_by(checkpoints::sequence_number)
+                .limit(limit as i64)
+                .load::<Checkpoint>(conn)
+        })
+        .context(
+            format!(
+                "Failed reading checkpoints with cursor: {} and limit: {} from PostgresDB",
                 cursor, limit
             )
             .as_str(),
@@ -1695,6 +1727,170 @@ impl IndexerStore for PgIndexerStore {
             .into_iter()
             .map(|db_addr_stats| db_addr_stats.into())
             .collect())
+    }
+
+    /// checkpoint metrics methods
+    async fn get_latest_checkpoint_metrics(&self) -> Result<CheckpointMetrics, IndexerError> {
+        read_only_blocking!(&self.blocking_cp, |conn| {
+            checkpoint_metrics::dsl::checkpoint_metrics
+                .order_by(checkpoint_metrics::checkpoint.desc())
+                .first(conn)
+        })
+        .context("Failed reading latest checkpoint metrics from PostgresDB")
+    }
+    async fn calculate_checkpoint_metrics(
+        &self,
+        current_checkpoint: i64,
+        last_checkpoint_metrics: &CheckpointMetrics,
+        cps: &[Checkpoint],
+    ) -> Result<CheckpointMetrics, IndexerError> {
+        let last_cp = cps.last().ok_or(IndexerError::PostgresReadError(
+            "Failed to get last checkpoint while calculating checkpoint metrics".to_string(),
+        ))?;
+        let last_cp_timestamp_ms = last_cp.timestamp_ms;
+        let peak_tps_30d = self
+            .calculate_peak_tps_30d(current_checkpoint, last_cp_timestamp_ms)
+            .await?;
+        let real_time_tps = self.calculate_real_time_tps(current_checkpoint).await?;
+
+        let (
+            rolling_tx_delta,
+            rolling_tx_blocks_delta,
+            rolling_successful_tx_delta,
+            rolling_successful_tx_blocks_delta,
+        ) = cps.iter().fold(
+            (0, 0, 0, 0),
+            |(tx_delta, tx_blocks_delta, successful_tx_delta, successful_tx_blocks_delta), cp| {
+                (
+                    tx_delta + cp.total_transactions,
+                    tx_blocks_delta + cp.total_transaction_blocks,
+                    successful_tx_delta + cp.total_successful_transactions,
+                    successful_tx_blocks_delta + cp.total_successful_transaction_blocks,
+                )
+            },
+        );
+
+        Ok(CheckpointMetrics {
+            checkpoint: current_checkpoint,
+            epoch: last_cp.epoch,
+            real_time_tps,
+            peak_tps_30d,
+            rolling_total_transactions: last_checkpoint_metrics.rolling_total_transactions
+                + rolling_tx_delta,
+            rolling_total_transaction_blocks: last_checkpoint_metrics
+                .rolling_total_transaction_blocks
+                + rolling_tx_blocks_delta,
+            rolling_total_successful_transactions: last_checkpoint_metrics
+                .rolling_total_successful_transactions
+                + rolling_successful_tx_delta,
+            rolling_total_successful_transaction_blocks: last_checkpoint_metrics
+                .rolling_total_successful_transaction_blocks
+                + rolling_successful_tx_blocks_delta,
+        })
+    }
+
+    async fn persist_checkpoint_metrics(
+        &self,
+        checkpoint_metrics: &CheckpointMetrics,
+    ) -> Result<(), IndexerError> {
+        transactional_blocking!(&self.blocking_cp, |conn| {
+            diesel::insert_into(checkpoint_metrics::dsl::checkpoint_metrics)
+                .values(checkpoint_metrics)
+                .execute(conn)
+        })
+        .context("Failed persisting checkpoint metrics to PostgresDB")?;
+        Ok(())
+    }
+
+    /// TPS related methods
+    async fn calculate_real_time_tps(&self, current_checkpoint: i64) -> Result<f64, IndexerError> {
+        let real_time_tps_query = format!(
+            "WITH recent_checkpoints AS (
+                SELECT
+                  sequence_number,
+                  total_successful_transactions,
+                  timestamp_ms
+                FROM
+                  checkpoints
+                WHERE 
+                  sequence_number <= {}
+                ORDER BY
+                  timestamp_ms DESC
+                LIMIT 100
+              ),
+              diff_checkpoints AS (
+                SELECT
+                  MAX(sequence_number) as sequence_number,
+                  SUM(total_successful_transactions) as total_successful_transactions,
+                  LAG(timestamp_ms) OVER (ORDER BY timestamp_ms DESC) - timestamp_ms AS time_diff
+                FROM
+                  recent_checkpoints
+                GROUP BY
+                  timestamp_ms
+              )
+              SELECT
+                (total_successful_transactions * 1000.0 / time_diff)::float8 as tps
+              FROM
+                diff_checkpoints
+              WHERE 
+                time_diff IS NOT NULL
+              ORDER BY sequence_number DESC LIMIT 1;
+            ",
+            current_checkpoint
+        );
+
+        let real_time_tps: Tps =
+            read_only_blocking!(&self.blocking_cp, |conn| diesel::RunQueryDsl::get_result(
+                diesel::sql_query(real_time_tps_query),
+                conn
+            ))
+            .context("Failed calculating peak TPS in 30 days from PostgresDB")?;
+        Ok(real_time_tps.tps)
+    }
+
+    async fn calculate_peak_tps_30d(
+        &self,
+        current_checkpoint: i64,
+        current_timestamp_ms: i64,
+    ) -> Result<f64, IndexerError> {
+        let peak_tps_30d_query = format!(
+            "WITH checkpoints_30d AS (
+                SELECT
+                  MAX(sequence_number) AS sequence_number,
+                  SUM(total_successful_transactions) AS total_successful_transactions,
+                  timestamp_ms
+                FROM
+                  checkpoints
+                WHERE
+                  sequence_number <= {} AND
+                  timestamp_ms > ({} - 30::bigint * 24 * 60 * 60 * 1000)
+                GROUP BY
+                  timestamp_ms
+              ),
+              tps_data AS (
+                SELECT
+                  sequence_number,
+                  total_successful_transactions,
+                  timestamp_ms - LAG(timestamp_ms) OVER (ORDER BY sequence_number) AS time_diff
+                FROM 
+                  checkpoints_30d
+              )
+              SELECT 
+                MAX(total_successful_transactions * 1000.0 / time_diff)::float8 as tps
+              FROM 
+                tps_data
+              WHERE 
+                time_diff IS NOT NULL;
+            ",
+            current_checkpoint, current_timestamp_ms
+        );
+        let peak_tps_30d: Tps =
+            read_only_blocking!(&self.blocking_cp, |conn| diesel::RunQueryDsl::get_result(
+                diesel::sql_query(peak_tps_30d_query),
+                conn
+            ))
+            .context("Failed calculating peak TPS in 30 days from PostgresDB")?;
+        Ok(peak_tps_30d.tps)
     }
 }
 
