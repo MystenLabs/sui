@@ -19,6 +19,7 @@ import LoadingSpinner from '_components/loading/LoadingIndicator';
 import { NFTDisplayCard } from '_components/nft-display';
 import { ampli } from '_src/shared/analytics/ampli';
 import { useGetNFTs } from '_src/ui/app/hooks/useGetNFTs';
+import { Button } from '_src/ui/app/shared/ButtonUI';
 import PageTitle from '_src/ui/app/shared/PageTitle';
 
 const HIDDEN_ASSET_IDS = 'hidden-asset-ids';
@@ -165,14 +166,17 @@ function NftsPage() {
 									key={objectId}
 									className="no-underline relative"
 								>
-									<button
-										className="appearance-none bg-transparent border-none flex items-center justify-center z-10 absolute top-2 right-3 pointer-events-auto hover:bg-gray-35 hover:bg-opacity-75 text-gray-60 transition-colors duration-200 rounded-md hover:text-sui-dark p-0"
-										onClick={(event) => hideAsset(objectId, event)}
-									>
-										<div className="w-4 h-4 flex items-center justify-around">
-											<EyeClose16 />
+									<div className="w-full h-full justify-center z-10 absolute pointer-events-auto text-gray-60 transition-colors duration-200 p-0 opacity-0 hover:opacity-100">
+										<div className="absolute top-2 right-2 hover:bg-gray-35 hover:bg-opacity-75 hover:text-sui-dark rounded-md">
+											<Button
+												variant="plain"
+												size="tiny"
+												onClick={(event: any) => hideAsset(objectId, event)}
+												after={<EyeClose16 />}
+											/>
 										</div>
-									</button>
+									</div>
+
 									<ErrorBoundary>
 										<NFTDisplayCard
 											objectId={objectId}
