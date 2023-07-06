@@ -307,8 +307,17 @@ impl CheckpointStore {
     }
 
     fn prune_local_summaries(&self) -> SuiResult {
-        self.locally_computed_checkpoints.clear()?;
-        info!("Pruned all local checkpoint summaries at end of epoch");
+        if let Some((last_local_summary, _)) = self
+            .locally_computed_checkpoints
+            .unbounded_iter()
+            .skip_to_last()
+            .next()
+        {
+            let mut batch = self.locally_computed_checkpoints.batch();
+            batch.delete_range(&self.locally_computed_checkpoints, &0, &last_local_summary)?;
+            batch.write()?;
+            info!("Pruned local summaries up to {:?}", last_local_summary);
+        }
         Ok(())
     }
 
