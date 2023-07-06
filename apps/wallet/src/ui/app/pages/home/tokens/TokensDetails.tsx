@@ -13,7 +13,7 @@ import {
 } from '@mysten/icons';
 import { SUI_TYPE_ARG, Coin, type CoinBalance as CoinBalanceType } from '@mysten/sui.js';
 import { useQuery } from '@tanstack/react-query';
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 import { CoinActivitiesCard } from './CoinActivityCard';
 import { TokenIconLink } from './TokenIconLink';
@@ -170,6 +170,7 @@ function MyTokens() {
 }
 
 function TokenDetails({ coinType }: TokenDetailsProps) {
+	const [interstitialDismissed, setInterstitialDismissed] = useState<boolean>(false);
 	const activeCoinType = coinType || SUI_TYPE_ARG;
 	const accountAddress = useActiveAddress();
 	const { staleTime, refetchInterval } = useCoinsReFetchingConfig();
@@ -206,10 +207,19 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
 	// Avoid perpetual loading state when fetching and retry keeps failing add isFetched check
 	const isFirstTimeLoading = isLoading && !isFetched;
 
-	const displayBullsharkInterstitial = localStorage.getItem('bullshark-interstitial-dismissed');
+	useEffect(() => {
+		const dismissed = localStorage.getItem('bullshark-interstitial-dismissed');
+		setInterstitialDismissed(Boolean(dismissed));
+	}, []);
 
-	if (BullsharkInterstitialEnabled && !displayBullsharkInterstitial) {
-		return <BullsharkQuestsNotification />;
+	if (BullsharkInterstitialEnabled && !interstitialDismissed) {
+		return (
+			<BullsharkQuestsNotification
+				onClose={() => {
+					setInterstitialDismissed(true);
+				}}
+			/>
+		);
 	}
 
 	return (

@@ -21,7 +21,7 @@ const InterstitialBanner = ({ lines }: { lines: string[] }) => {
 	);
 };
 
-function BullsharkQuestsNotification() {
+function BullsharkQuestsNotification({ onClose }: { onClose: () => void }) {
 	const navigate = useNavigate();
 
 	const setInterstitialDismissed = () => {
@@ -55,7 +55,7 @@ function BullsharkQuestsNotification() {
 									className="appearance-none bg-transparent border-none cursor-pointer mt-1"
 									onClick={() => {
 										setInterstitialDismissed();
-										navigate('/tokens');
+										onClose();
 									}}
 								>
 									<X32 className="text-sui-dark h-8 w-8" />
