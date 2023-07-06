@@ -79,7 +79,16 @@ const App = () => {
 	return (
 		<Routes>
 			<Route path="/*" element={<HomePage />}>
-				<Route path="bullshark-quests" element={<BullsharkQuestsNotification />} />
+				<Route
+					path="bullshark-quests"
+					element={
+						BullsharkInterstitialEnabled ? (
+							<BullsharkQuestsNotification />
+						) : (
+							<Navigate to="/tokens" replace={true} />
+						)
+					}
+				/>
 				<Route path="tokens/*" element={<TokensPage />} />
 				<Route path="nfts" element={<NftsPage />} />
 				<Route path="apps/*" element={<AppsPage />} />
