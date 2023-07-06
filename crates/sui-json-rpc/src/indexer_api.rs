@@ -307,9 +307,20 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
                 type_: name_type,
                 value,
             } = name.clone();
-            let layout = TypeLayoutBuilder::build_with_types(&name_type, &self.state.database)?; // todo: client
-            let sui_json_value = SuiJsonValue::new(value)?; // todo: client
-            let name_bcs_value = sui_json_value.to_bcs_bytes(&layout)?; // todo client
+            let layout = TypeLayoutBuilder::build_with_types(&name_type, &self.state.database)
+                .map_err(|e| ClientError::InvalidParam {
+                    param: "Field 'type' of 'name'".to_string(),
+                    reason: e.to_string(),
+                })?;
+            let sui_json_value =
+                SuiJsonValue::new(value).map_err(|e| ClientError::InvalidParam {
+                    param: "Field 'value' of 'name'".to_string(),
+                    reason: e.to_string(),
+                })?;
+            let name_bcs_value = sui_json_value
+                .to_bcs_bytes(&layout)
+                .map_err(|e| ClientError::Serde(e.to_string()))?;
+
             let id = self
                 .state
                 .get_dynamic_field_object_id(parent_object_id, name_type, &name_bcs_value)
@@ -435,10 +446,10 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
 
             let name_type_tag = TypeTag::Address;
             let addr_bcs_value = bcs::to_bytes(&address).map_err(|e| {
-                Error::SuiRpcInputError(SuiRpcInputError::GenericInvalid(format!(
+                ClientError::Serde(format!(
                     "Unable to serialize address: {:?} with error: {:?}",
                     address, e
-                )))
+                ))
             })?;
 
             let addr_object_id_opt = self
