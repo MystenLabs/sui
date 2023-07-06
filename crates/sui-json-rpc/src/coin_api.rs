@@ -31,7 +31,7 @@ use sui_types::object::{Object, ObjectRead};
 use sui_types::parse_sui_struct_tag;
 
 use crate::api::{cap_page_limit, CoinReadApiServer, JsonRpcMetrics};
-use crate::error::{Error, RpcInterimResult, SuiRpcInputError};
+use crate::error::{Error, RpcInterimResult, ServerError, SuiRpcInputError};
 use crate::{with_tracing, SuiRpcModule};
 
 #[cfg(test)]
@@ -228,7 +228,7 @@ impl CoinReadApiServer for CoinReadApi {
                 let treasury_cap = TreasuryCap::from_bcs_bytes(
                     treasury_cap_object.data.try_as_move().unwrap().contents(),
                 )
-                .map_err(Error::from)?;
+                .map_err(|_| ServerError::Serde)?;
                 treasury_cap.total_supply
             })
         })
