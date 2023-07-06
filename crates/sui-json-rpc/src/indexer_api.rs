@@ -309,12 +309,12 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
             } = name.clone();
             let layout = TypeLayoutBuilder::build_with_types(&name_type, &self.state.database)
                 .map_err(|e| ClientError::InvalidParam {
-                    param: "Field 'type' of 'name'".to_string(),
+                    param: "field 'type' of 'name'".to_string(),
                     reason: e.to_string(),
                 })?;
             let sui_json_value =
                 SuiJsonValue::new(value).map_err(|e| ClientError::InvalidParam {
-                    param: "Field 'value' of 'name'".to_string(),
+                    param: "field 'value' of 'name'".to_string(),
                     reason: e.to_string(),
                 })?;
             let name_bcs_value = sui_json_value

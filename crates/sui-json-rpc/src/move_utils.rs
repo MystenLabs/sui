@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::api::MoveUtilsServer;
-use crate::error::{Error, SuiRpcInputError};
+use crate::error::{ClientError, Error, SuiRpcInputError};
 use crate::read_api::{get_move_module, get_move_modules_by_package};
 use crate::{with_tracing, SuiRpcModule};
 use async_trait::async_trait;
@@ -146,9 +146,11 @@ impl MoveUtilsServer for MoveUtils {
         with_tracing!(async move {
             let module = self.internal.get_move_module(package, module_name).await?;
             let structs = module.structs;
-            let identifier = Identifier::new(struct_name.as_str()).map_err(|e| {
-                Error::SuiRpcInputError(SuiRpcInputError::GenericInvalid(format!("{e}")))
-            })?;
+            let identifier =
+                Identifier::new(struct_name.as_str()).map_err(|e| ClientError::InvalidParam {
+                    param: "struct_name".to_string(),
+                    reason: format!("{e}"),
+                })?;
             Ok(match structs.get(&identifier) {
                 Some(struct_) => Ok(struct_.clone().into()),
                 None => Err(Error::SuiRpcInputError(SuiRpcInputError::GenericNotFound(
@@ -168,9 +170,11 @@ impl MoveUtilsServer for MoveUtils {
         with_tracing!(async move {
             let module = self.internal.get_move_module(package, module_name).await?;
             let functions = module.functions;
-            let identifier = Identifier::new(function_name.as_str()).map_err(|e| {
-                Error::SuiRpcInputError(SuiRpcInputError::GenericInvalid(format!("{e}")))
-            })?;
+            let identifier =
+                Identifier::new(function_name.as_str()).map_err(|e| ClientError::InvalidParam {
+                    param: "function_name".to_string(),
+                    reason: format!("{e}"),
+                })?;
             Ok(match functions.get(&identifier) {
                 Some(function) => Ok(function.clone().into()),
                 None => Err(Error::SuiRpcInputError(SuiRpcInputError::GenericNotFound(
@@ -202,18 +206,22 @@ impl MoveUtilsServer for MoveUtils {
                         )
                         .map_err(Error::from)
                     }
-                    _ => Err(Error::SuiRpcInputError(SuiRpcInputError::GenericInvalid(
-                        format!("Object is not a package with ID {}", package),
-                    ))),
+                    _ => Err(ClientError::InvalidParam {
+                        param: "package".to_string(),
+                        reason: format!("Object with ID {package} is not a package"),
+                    }
+                    .into()),
                 },
                 _ => Err(Error::SuiRpcInputError(SuiRpcInputError::GenericNotFound(
                     format!("Package object does not exist with ID {}", package),
                 ))),
             }?;
 
-            let identifier = Identifier::new(function.as_str()).map_err(|e| {
-                Error::SuiRpcInputError(SuiRpcInputError::GenericInvalid(format!("{e}")))
-            })?;
+            let identifier =
+                Identifier::new(function.as_str()).map_err(|e| ClientError::InvalidParam {
+                    param: "function".to_string(),
+                    reason: format!("{e}"),
+                })?;
             let parameters = normalized
                 .get(&module)
                 .and_then(|m| m.functions.get(&identifier).map(|f| f.parameters.clone()));
