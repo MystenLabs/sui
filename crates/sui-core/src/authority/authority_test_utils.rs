@@ -211,6 +211,7 @@ pub async fn init_state_with_ids_and_expensive_checks<
 }
 
 pub fn init_transfer_transaction(
+    authority_state: &AuthorityState,
     sender: SuiAddress,
     secret: &AccountKeyPair,
     recipient: SuiAddress,
@@ -218,7 +219,7 @@ pub fn init_transfer_transaction(
     gas_object_ref: ObjectRef,
     gas_budget: u64,
     gas_price: u64,
-) -> Transaction {
+) -> VerifiedTransaction {
     let data = TransactionData::new_transfer(
         recipient,
         object_ref,
@@ -227,7 +228,8 @@ pub fn init_transfer_transaction(
         gas_budget,
         gas_price,
     );
-    to_sender_signed_transaction(data, secret)
+    let tx = to_sender_signed_transaction(data, secret);
+    authority_state.verify_transaction(tx).unwrap()
 }
 
 pub fn init_certified_transfer_transaction(
@@ -240,6 +242,7 @@ pub fn init_certified_transfer_transaction(
 ) -> VerifiedCertificate {
     let rgp = authority_state.reference_gas_price_for_testing().unwrap();
     let transfer_transaction = init_transfer_transaction(
+        authority_state,
         sender,
         secret,
         recipient,
@@ -248,7 +251,7 @@ pub fn init_certified_transfer_transaction(
         rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
         rgp,
     );
-    init_certified_transaction(transfer_transaction, authority_state)
+    init_certified_transaction(transfer_transaction.into(), authority_state)
 }
 
 pub fn init_certified_transaction(

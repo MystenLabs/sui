@@ -1218,6 +1218,7 @@ async fn test_handle_transfer_transaction_bad_signature() {
         .unwrap()
         .unwrap();
     let transfer_transaction = init_transfer_transaction(
+        &authority_state,
         sender,
         &sender_key,
         recipient,
@@ -1243,7 +1244,7 @@ async fn test_handle_transfer_transaction_bad_signature() {
         .unwrap();
 
     let (_unknown_address, unknown_key): (_, AccountKeyPair) = get_key_pair();
-    let mut bad_signature_transfer_transaction = transfer_transaction.clone();
+    let mut bad_signature_transfer_transaction = transfer_transaction.clone().into_inner();
     *bad_signature_transfer_transaction
         .data_mut_for_testing()
         .tx_signatures_mut_for_testing() =
@@ -1307,6 +1308,7 @@ async fn test_handle_transfer_transaction_with_max_sequence_number() {
         .unwrap()
         .unwrap();
     let transfer_transaction = init_transfer_transaction(
+        &authority_state,
         sender,
         &sender_key,
         recipient,
@@ -1315,9 +1317,6 @@ async fn test_handle_transfer_transaction_with_max_sequence_number() {
         rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
         rgp,
     );
-    let transfer_transaction = authority_state
-        .verify_transaction(transfer_transaction)
-        .unwrap();
     let res = authority_state
         .handle_transaction(&epoch_store, transfer_transaction)
         .await;
@@ -1367,6 +1366,7 @@ async fn test_handle_transfer_transaction_unknown_sender() {
         .unwrap();
 
     let unknown_sender_transfer_transaction = init_transfer_transaction(
+        &authority_state,
         unknown_address,
         &unknown_key,
         recipient,
@@ -1375,10 +1375,6 @@ async fn test_handle_transfer_transaction_unknown_sender() {
         rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
         rgp,
     );
-
-    let unknown_sender_transfer_transaction = authority_state
-        .verify_transaction(unknown_sender_transfer_transaction)
-        .unwrap();
 
     assert!(authority_state
         .handle_transaction(&epoch_store, unknown_sender_transfer_transaction)
@@ -1439,6 +1435,7 @@ async fn test_handle_transfer_transaction_ok() {
     assert!(before_object_version < after_object_version);
 
     let transfer_transaction = init_transfer_transaction(
+        &authority_state,
         sender,
         &sender_key,
         recipient,
@@ -1464,10 +1461,6 @@ async fn test_handle_transfer_transaction_ok() {
         )
         .await
         .is_err());
-
-    let transfer_transaction = authority_state
-        .verify_transaction(transfer_transaction)
-        .unwrap();
 
     let account_info = authority_state
         .handle_transaction(&epoch_store, transfer_transaction.clone())
@@ -1565,7 +1558,7 @@ async fn test_handle_sponsored_transaction() {
         },
     );
     let dual_signed_tx = to_sender_signed_transaction_with_multi_signers(data, vec![&sender_key]);
-    let dual_signed_tx = authority_state.verify_transaction(dual_signed_tx).unwrap();
+    let dual_signed_tx = VerifiedTransaction::new_unchecked(dual_signed_tx);
 
     let error = authority_state
         .handle_transaction(&epoch_store, dual_signed_tx.clone())
@@ -1659,6 +1652,7 @@ async fn test_transfer_package() {
         .unwrap();
     // We are trying to transfer the genesis package object, which is immutable.
     let transfer_transaction = init_transfer_transaction(
+        &authority_state,
         sender,
         &sender_key,
         recipient,
@@ -1667,9 +1661,6 @@ async fn test_transfer_package() {
         rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
         rgp,
     );
-    let transfer_transaction = authority_state
-        .verify_transaction(transfer_transaction)
-        .unwrap();
     authority_state
         .handle_transaction(&epoch_store, transfer_transaction.clone())
         .await
@@ -1698,6 +1689,7 @@ async fn test_immutable_gas() {
         .unwrap()
         .unwrap();
     let transfer_transaction = init_transfer_transaction(
+        &authority_state,
         sender,
         &sender_key,
         recipient,
@@ -1706,9 +1698,6 @@ async fn test_immutable_gas() {
         rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
         rgp,
     );
-    let transfer_transaction = authority_state
-        .verify_transaction(transfer_transaction)
-        .unwrap();
     let result = authority_state
         .handle_transaction(&epoch_store, transfer_transaction.clone())
         .await;
@@ -2033,6 +2022,7 @@ async fn test_conflicting_transactions() {
         .unwrap();
 
     let tx1 = init_transfer_transaction(
+        &authority_state,
         sender,
         &sender_key,
         recipient1,
@@ -2041,9 +2031,9 @@ async fn test_conflicting_transactions() {
         rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
         rgp,
     );
-    let tx1 = authority_state.verify_transaction(tx1).unwrap();
 
     let tx2 = init_transfer_transaction(
+        &authority_state,
         sender,
         &sender_key,
         recipient2,
@@ -2052,8 +2042,6 @@ async fn test_conflicting_transactions() {
         rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
         rgp,
     );
-
-    let tx2 = authority_state.verify_transaction(tx2).unwrap();
 
     // repeatedly attempt to submit conflicting transactions at the same time, and verify that
     // exactly one succeeds in every case.
@@ -2144,6 +2132,7 @@ async fn test_handle_transfer_transaction_double_spend() {
         .unwrap()
         .unwrap();
     let transfer_transaction = init_transfer_transaction(
+        &authority_state,
         sender,
         &sender_key,
         recipient,
@@ -2153,9 +2142,6 @@ async fn test_handle_transfer_transaction_double_spend() {
         rgp,
     );
 
-    let transfer_transaction = authority_state
-        .verify_transaction(transfer_transaction)
-        .unwrap();
     let signed_transaction = authority_state
         .handle_transaction(&epoch_store, transfer_transaction.clone())
         .await
