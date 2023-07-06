@@ -4,6 +4,7 @@
 import { X32 } from '@mysten/icons';
 
 import { Portal } from '../../../shared/Portal';
+import ExternalLink from '_src/ui/app/components/external-link';
 
 const InterstitialHeading = ({ text }: { text: string }) => {
 	return <div className="[-webkit-text-stroke:2px_black] text-heading1">{text}</div>;
@@ -40,12 +41,12 @@ function BullsharkQuestsNotification({ onClose }: { onClose: () => void }) {
 						</div>
 
 						<div className="flex flex-col items-center gap-4 [-webkit-text-stroke:1px_black] w-full mt-5">
-							<a
+							<ExternalLink
 								href="https://tech.mystenlabs.com/introducing-bullsharks-quests/"
-								className="appearance-none no-underline text-white bg-[#EA3389] rounded-lg py-2 w-60"
+								className="appearance-none no-underline text-white bg-[#EA3389] rounded-lg py-2 w-60 [-webkit-text-stroke:1px_black]"
 							>
 								Read more on the blog
-							</a>
+							</ExternalLink>
 							<button
 								className="appearance-none bg-transparent border-none cursor-pointer mt-1"
 								onClick={() => {
