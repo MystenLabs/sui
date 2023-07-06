@@ -377,11 +377,16 @@ impl Bullshark {
         {
             let previous_leader_round = certificate_round - 2;
 
-            // The metric's authority label can not be considered fully accurate when we do change schedules,
-            // as we'll try to calculate the previous leader round by using the updated scores and
-            // consequently swap table. For now not a huge issue as it will be affect either:
+            // This metric reports the leader election success for the last leader election round.
+            // Our goal is to identify the rate of missed/failed leader elections which are a source
+            // of tx latency. The metric's authority label can not be considered fully accurate when
+            // we do change schedule as we'll try to calculate the previous leader round by using the
+            // updated scores and consequently the new swap table. If the leader for that position has
+            // changed, then a different hostname will be erroneously reported. For now not a huge
+            // issue as it will be affect either:
             // * only the round where we switch schedules
             // * on long periods of asynchrony where we end up changing schedules late
+            // and we don't really expect it to happen frequently.
             let authority = self.leader_schedule.leader(previous_leader_round);
 
             if state.last_round.committed_round < previous_leader_round {
