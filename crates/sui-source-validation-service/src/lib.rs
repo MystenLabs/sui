@@ -77,16 +77,19 @@ pub async fn verify_package(
 
     let mut map = SourceLookup::new();
     let Ok(address) = compiled_package.published_at.as_ref().map(|id| **id) else { bail!("could not resolve published-at field in package manifest")};
+    let package_name = compiled_package.package.compiled_package_info.package_name;
     for v in &compiled_package.package.root_compiled_units {
+        let mut path = PathBuf::from(compiled_package.path.as_path());
+        let Some(file_name) = v.source_path.file_name().and_then(|x| x.to_str()) else {
+	    bail!("No file name found in path {}", v.source_path.display())
+	};
+        path.extend(["build", &package_name, "sources", file_name]);
+        let source = Some(fs::read_to_string(path.as_path())?);
         match v.unit {
             CompiledUnitEnum::Module(ref m) => {
-                let path = v.source_path.to_path_buf();
-                let source = Some(fs::read_to_string(path.as_path())?);
                 map.insert((address, m.name), SourceInfo { path, source })
             }
             CompiledUnitEnum::Script(ref m) => {
-                let path = v.source_path.to_path_buf();
-                let source = Some(fs::read_to_string(path.as_path())?);
                 map.insert((address, m.name), SourceInfo { path, source })
             }
         };
