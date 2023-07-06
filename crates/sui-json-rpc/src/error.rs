@@ -54,6 +54,9 @@ pub enum Error {
     SuiRpcInputError(#[from] SuiRpcInputError),
 
     #[error(transparent)]
+    ClientError(#[from] ClientError),
+
+    #[error(transparent)]
     ServerError(#[from] ServerError),
 }
 
@@ -144,8 +147,8 @@ fn to_internal_error(err: impl ToString) -> RpcError {
 
 #[derive(Debug, Error)]
 pub enum ClientError {
-    #[error("Serde error")]
-    Serde,
+    #[error("{0}")]
+    Serde(String),
 
     #[error(transparent)]
     Domain(#[from] DomainParseError),
