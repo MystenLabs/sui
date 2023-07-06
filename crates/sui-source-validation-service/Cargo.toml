@@ -37,6 +37,8 @@ move-compiler.workspace = true
 move-core-types.workspace = true
 move-symbol-pool.workspace = true
 telemetry-subscribers.workspace = true
+tower-http.workspace = true
+tower.workspace = true
 workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
 
 [dev-dependencies]

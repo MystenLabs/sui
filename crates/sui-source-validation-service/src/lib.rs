@@ -11,11 +11,13 @@ use axum::extract::{Query, State};
 use axum::response::IntoResponse;
 use axum::routing::{get, IntoMakeService};
 use axum::{Json, Router, Server};
+use hyper::http::Method;
 use hyper::server::conn::AddrIncoming;
 use hyper::StatusCode;
 use serde::{Deserialize, Serialize};
 use std::net::TcpListener;
 use sui_sdk::SuiClient;
+use tower::ServiceBuilder;
 use tracing::info;
 use url::Url;
 
@@ -245,7 +247,15 @@ pub struct AppState {
 }
 
 pub fn serve(app_state: AppState) -> anyhow::Result<Server<AddrIncoming, IntoMakeService<Router>>> {
-    let app = Router::new().route("/api", get(api_route).with_state(Arc::new(app_state)));
+    let app = Router::new()
+        .route("/api", get(api_route).with_state(Arc::new(app_state)))
+        .layer(
+            ServiceBuilder::new().layer(
+                tower_http::cors::CorsLayer::new()
+                    .allow_methods([Method::GET])
+                    .allow_origin(tower_http::cors::Any),
+            ),
+        );
     let listener = TcpListener::bind("0.0.0.0:8000")?;
     Ok(Server::from_tcp(listener)?.serve(app.into_make_service()))
 }
