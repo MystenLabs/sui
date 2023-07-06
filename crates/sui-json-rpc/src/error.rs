@@ -150,7 +150,7 @@ pub enum ClientError {
     #[error(transparent)]
     Domain(#[from] DomainParseError),
 
-    #[error("{param}: {reason}")]
+    #[error("Invalid {param}: {reason}")]
     InvalidParam { param: String, reason: String },
 }
 
