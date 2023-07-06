@@ -452,7 +452,9 @@ impl DependencyGraph {
     ) -> Result<()> {
         if is_override {
             // when pruning an overridden dependency, we must not prune the package actually
-            // specified by this dependency so we remove it from the set of overrides
+            // specified by this dependency so we remove it from the set of overrides (see the
+            // diamond_problem_dual_override test for an example of what should be pruned and what
+            // should not)
             let mut o = overrides.clone();
             let mut dev_o = dev_overrides.clone();
             DependencyGraph::remove_dep_override(
