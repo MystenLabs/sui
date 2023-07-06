@@ -30,37 +30,35 @@ function BullsharkQuestsNotification({ onClose }: { onClose: () => void }) {
 
 	return (
 		<Portal containerId="overlay-portal-container">
-			<div className="flex flex-col flex-nowrap items-center bg-[#99dbfb] border-solid border-4 border-black rounded-lg z-50 overflow-hidden absolute top-0 bottom-0 left-0 right-0 backdrop-blur-sm">
-				<div className="flex justify-center w-full h-full">
-					<div className="flex flex-col font-frankfurter w-full h-full items-center p-4 text-white text-center">
-						<div className="flex flex-col py-6 px-7 border-4 border-black border-solid w-full rounded-md h-full items-center">
-							<div className="flex flex-col items-center">
-								<InterstitialHeading text="Join Bullshark Quests!" />
-								<div className="bg-[url('https://quests.mystenlabs.com/_next/static/media/logo.81b4eb8f.svg')] h-40 w-40 bg-cover" />
-								<InterstitialHeading text="5 Million SUI prize pool!" />
-								<div className="flex flex-col items-center gap-2 mt-2">
-									<InterstitialBanner lines={['2.5M SUI', 'Top 10,000 players!']} />
-									<InterstitialBanner lines={['2.5M SUI', 'all eligible players!']} />
-								</div>
+			<div className="flex flex-col justify-center flex-nowrap items-center bg-[#99dbfb] border-solid border-4 border-black rounded-lg z-50 overflow-hidden absolute top-0 bottom-0 left-0 right-0 backdrop-blur-sm">
+				<div className="flex flex-col font-frankfurter w-full h-full items-center p-4 text-white text-center">
+					<div className="flex flex-col py-6 px-7 border-4 border-black border-solid w-full rounded-md h-full items-center">
+						<div className="flex flex-col items-center">
+							<InterstitialHeading text="Join Bullshark Quests!" />
+							<div className="bg-[url('https://quests.mystenlabs.com/_next/static/media/logo.81b4eb8f.svg')] h-40 w-40 bg-cover" />
+							<InterstitialHeading text="5 Million SUI prize pool!" />
+							<div className="flex flex-col items-center gap-2 mt-2">
+								<InterstitialBanner lines={['2.5M SUI', 'Top 10,000 players!']} />
+								<InterstitialBanner lines={['2.5M SUI', 'all eligible players!']} />
 							</div>
+						</div>
 
-							<div className="flex flex-col items-center gap-4 [-webkit-text-stroke:1px_black] w-full mt-5">
-								<a
-									href="https://tech.mystenlabs.com/introducing-bullsharks-quests/"
-									className="appearance-none no-underline text-white bg-[#EA3389] rounded-lg py-2 w-60"
-								>
-									Read more on the blog
-								</a>
-								<button
-									className="appearance-none bg-transparent border-none cursor-pointer mt-1"
-									onClick={() => {
-										setInterstitialDismissed();
-										onClose();
-									}}
-								>
-									<X32 className="text-sui-dark h-8 w-8" />
-								</button>
-							</div>
+						<div className="flex flex-col items-center gap-4 [-webkit-text-stroke:1px_black] w-full mt-5">
+							<a
+								href="https://tech.mystenlabs.com/introducing-bullsharks-quests/"
+								className="appearance-none no-underline text-white bg-[#EA3389] rounded-lg py-2 w-60"
+							>
+								Read more on the blog
+							</a>
+							<button
+								className="appearance-none bg-transparent border-none cursor-pointer mt-1"
+								onClick={() => {
+									setInterstitialDismissed();
+									onClose();
+								}}
+							>
+								<X32 className="text-sui-dark h-8 w-8" />
+							</button>
 						</div>
 					</div>
 				</div>
