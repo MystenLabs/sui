@@ -9,11 +9,7 @@ use fastcrypto::encoding::{Base64, Encoding};
 use shared_crypto::intent::{Intent, IntentMessage};
 use sui_types::crypto::SuiKeyPair;
 use sui_types::transaction::TransactionData;
-use sui_types::{
-    base_types::SuiAddress,
-    crypto::Signature,
-    transaction::{Transaction, VerifiedTransaction},
-};
+use sui_types::{base_types::SuiAddress, crypto::Signature, transaction::Transaction};
 use test_cluster::TestClusterBuilder;
 
 #[tokio::test]
@@ -55,12 +51,8 @@ async fn test_print_raw_rgp_txn() -> Result<(), anyhow::Error> {
         &IntentMessage::new(Intent::sui_transaction(), deserialized_data),
         keypair,
     );
-    let signed_txn = VerifiedTransaction::new_unchecked(Transaction::from_data(
-        data,
-        Intent::sui_transaction(),
-        vec![signature],
-    ));
-    context.execute_transaction_must_succeed(signed_txn).await;
+    let txn = Transaction::from_data(data, Intent::sui_transaction(), vec![signature]);
+    context.execute_transaction_must_succeed(txn).await;
     let (_, summary) = get_validator_summary(&sui_client, validator_address)
         .await?
         .unwrap();

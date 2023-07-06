@@ -22,7 +22,7 @@ use thiserror::Error;
 pub type QuorumDriverResult = Result<QuorumDriverResponse, QuorumDriverError>;
 
 pub type QuorumDriverEffectsQueueResult =
-    Result<(VerifiedTransaction, QuorumDriverResponse), (TransactionDigest, QuorumDriverError)>;
+    Result<(Transaction, QuorumDriverResponse), (TransactionDigest, QuorumDriverError)>;
 
 pub const NON_RECOVERABLE_ERROR_MSG: &str =
     "Transaction has non recoverable errors from at least 1/3 of validators";

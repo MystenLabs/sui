@@ -417,7 +417,7 @@ impl ToolCommand {
                     &fastcrypto::encoding::Base64::decode(sender_signed_data.as_str()).unwrap(),
                 )
                 .unwrap();
-                let transaction = Transaction::new(sender_signed_data).verify().unwrap();
+                let transaction = Transaction::new(sender_signed_data);
                 let (agg, _) = AuthorityAggregatorBuilder::from_genesis(&genesis)
                     .build()
                     .unwrap();

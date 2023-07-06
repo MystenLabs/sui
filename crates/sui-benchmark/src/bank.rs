@@ -110,7 +110,7 @@ impl BenchmarkBank {
             amounts[0],
         );
 
-        let verified_tx = make_pay_sui_transaction(
+        let tx = make_pay_sui_transaction(
             init_coin.0,
             vec![],
             recipient_addresses,
@@ -121,10 +121,7 @@ impl BenchmarkBank {
             MAX_BUDGET,
         );
 
-        let effects = self
-            .proxy
-            .execute_transaction_block(verified_tx.into())
-            .await?;
+        let effects = self.proxy.execute_transaction_block(tx).await?;
 
         if !effects.is_ok() {
             effects.print_gas_summary();
@@ -166,7 +163,7 @@ impl BenchmarkBank {
     async fn create_init_coin(&mut self, amount: u64, gas_price: u64) -> Result<Gas> {
         info!("Creating initilization coin of value {amount}...");
 
-        let verified_tx = make_transfer_sui_transaction(
+        let tx = make_transfer_sui_transaction(
             self.primary_coin.0,
             self.primary_coin.1,
             Some(amount),
@@ -175,10 +172,7 @@ impl BenchmarkBank {
             gas_price,
         );
 
-        let effects = self
-            .proxy
-            .execute_transaction_block(verified_tx.into())
-            .await?;
+        let effects = self.proxy.execute_transaction_block(tx).await?;
 
         if !effects.is_ok() {
             effects.print_gas_summary();

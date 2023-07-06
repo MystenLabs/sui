@@ -31,7 +31,7 @@ use sui_types::quorum_driver_types::ExecuteTransactionRequestType;
 use sui_types::{
     base_types::{ObjectID, SuiAddress, TransactionDigest},
     gas_coin::GasCoin,
-    transaction::{Transaction, TransactionData, VerifiedTransaction},
+    transaction::{Transaction, TransactionData},
 };
 use tokio::sync::{
     mpsc::{self, Receiver, Sender},
@@ -350,9 +350,7 @@ impl SimpleFaucet {
             .keystore
             .sign_secure(&self.active_address, &tx_data, Intent::sui_transaction())
             .map_err(FaucetError::internal)?;
-        let tx = Transaction::from_data(tx_data, Intent::sui_transaction(), vec![signature])
-            .verify()
-            .unwrap();
+        let tx = Transaction::from_data(tx_data, Intent::sui_transaction(), vec![signature]);
         let tx_digest = *tx.digest();
         info!(
             ?tx_digest,
@@ -487,7 +485,7 @@ impl SimpleFaucet {
 
     async fn execute_pay_sui_txn_with_retries(
         &self,
-        tx: &VerifiedTransaction,
+        tx: &Transaction,
         coin_id: ObjectID,
         recipient: SuiAddress,
         uuid: Uuid,
@@ -517,7 +515,7 @@ impl SimpleFaucet {
 
     async fn execute_pay_sui_txn(
         &self,
-        tx: &VerifiedTransaction,
+        tx: &Transaction,
         coin_id: ObjectID,
         recipient: SuiAddress,
         uuid: Uuid,

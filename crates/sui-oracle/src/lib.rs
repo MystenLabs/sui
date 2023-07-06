@@ -25,7 +25,7 @@ use sui_types::object::{Object, Owner};
 use sui_types::parse_sui_type_tag;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::quorum_driver_types::NON_RECOVERABLE_ERROR_MSG;
-use sui_types::transaction::{Argument, VerifiedTransaction};
+use sui_types::transaction::{Argument, Transaction};
 use sui_types::transaction::{Command, ObjectArg};
 use sui_types::Identifier;
 use sui_types::{
@@ -558,10 +558,7 @@ impl OnChainDataUploader {
         }
     }
 
-    async fn execute(
-        &mut self,
-        tx: VerifiedTransaction,
-    ) -> anyhow::Result<SuiTransactionBlockResponse> {
+    async fn execute(&mut self, tx: Transaction) -> anyhow::Result<SuiTransactionBlockResponse> {
         let tx_digest = tx.digest();
         let mut retry_attempts = 3;
         loop {
