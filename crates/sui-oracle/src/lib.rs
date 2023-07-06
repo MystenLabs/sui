@@ -351,7 +351,7 @@ struct OnChainDataUploader {
 impl OnChainDataUploader {
     async fn run(&mut self) {
         info!("Starting OnChainDataUploader");
-        // The minimal latency is 1 second so we collect dataevery 1 second
+        // The minimal latency is 1 second so we collect data every 1 second
         let mut read_interval = tokio::time::interval(Duration::from_millis(500));
         read_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
         loop {
@@ -401,7 +401,7 @@ impl OnChainDataUploader {
             }
 
             // One run only waits for 1 second
-            // But if we don't have any valid data points, then we wait.
+            // But if we don't have any valid data points, we wait until we do.
             if data_points.is_empty() && start.elapsed() >= Duration::from_millis(500) {
                 break;
             }
@@ -486,7 +486,7 @@ impl OnChainDataUploader {
             self.signer_address,
             vec![self.gas_obj_ref],
             pt,
-            // 15_000_000 is a herustic number
+            // 15_000_000 is a heuristic number
             15_000_000 * data_points.len() as u64,
             rgp,
         );
@@ -571,6 +571,7 @@ impl OnChainDataUploader {
                 .execute_transaction_block(
                     tx.clone(),
                     SuiTransactionBlockResponseOptions::new().with_effects(),
+                    // TODO: after 1.4.0, we can simply use `WaitForEffectsCert` which is faster.
                     // Some(sui_types::quorum_driver_types::ExecuteTransactionRequestType::WaitForEffectsCert),
                     Some(sui_types::quorum_driver_types::ExecuteTransactionRequestType::WaitForLocalExecution),
                 )
@@ -648,7 +649,7 @@ impl OnChainDataReader {
                     Ok(SuiObjectResponse {
                         data: Some(_data), ..
                     }) => {
-                        // FIXME parse value based on returned BCS
+                        // TODO parse value based on returned BCS
                         let value = 5_f64;
                         let _ = sender.send((feed_name.clone(), *object_id, value)).await;
                         self.metrics

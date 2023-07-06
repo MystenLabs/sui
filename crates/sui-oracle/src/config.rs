@@ -2,14 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use serde::{Deserialize, Serialize};
-use serde_with::serde_as;
 use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::time::Duration;
 use sui_config::Config;
 use sui_types::base_types::ObjectID;
 
-#[serde_as]
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct DataSourceConfig {
@@ -17,7 +15,6 @@ pub struct DataSourceConfig {
     pub json_path: String,
 }
 
-#[serde_as]
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct UploadFeedConfig {
@@ -26,7 +23,6 @@ pub struct UploadFeedConfig {
     pub upload_parameters: UploadParameters,
 }
 
-#[serde_as]
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct UploadParameters {
@@ -36,7 +32,6 @@ pub struct UploadParameters {
     pub write_data_provider_object_id: ObjectID,
 }
 
-#[serde_as]
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct DownloadFeedConfigs {
@@ -44,7 +39,6 @@ pub struct DownloadFeedConfigs {
     pub read_feeds: HashMap<String, ObjectID>,
 }
 
-#[serde_as]
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct OracleNodeConfig {

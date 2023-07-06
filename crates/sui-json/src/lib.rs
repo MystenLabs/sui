@@ -676,8 +676,7 @@ pub fn primitive_type(
                 .get(*idx as usize)
                 .map(is_primitive_type_tag)
                 .unwrap_or(false),
-            // None,
-            Some(MoveTypeLayout::U64),
+            None,
         ),
 
         SignatureToken::Signer

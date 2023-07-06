@@ -62,7 +62,7 @@ async fn main() -> anyhow::Result<()> {
     let wallet_ctx = WalletContext::new(
         &args.client_config_path,
         // TODO make this configurable
-        Some(Duration::from_secs(10)),
+        Some(Duration::from_secs(10)), // request times out after 10 secs
         None,
     )
     .await?;
