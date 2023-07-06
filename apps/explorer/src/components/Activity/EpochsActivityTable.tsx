@@ -25,6 +25,7 @@ interface Props {
 
 export function EpochsActivityTable({
 	disablePagination,
+	refetchInterval,
 	initialLimit = DEFAULT_EPOCHS_LIMIT,
 }: Props) {
 	const [limit, setLimit] = useState(initialLimit);
@@ -36,7 +37,7 @@ export function EpochsActivityTable({
 		select: (epoch) => Number(epoch.epoch) + 1,
 	});
 
-	const epochs = useGetEpochs(limit);
+	const epochs = useGetEpochs(limit, refetchInterval);
 	const { data, isFetching, pagination, isLoading, isError } = useCursorPagination(epochs);
 
 	const cardData = data ? genTableDataFromEpochsData(data) : undefined;

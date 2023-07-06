@@ -7,7 +7,11 @@ import { useInfiniteQuery } from '@tanstack/react-query';
 export const DEFAULT_CHECKPOINTS_LIMIT = 20;
 
 // Fetch transaction blocks
-export function useGetCheckpoints(cursor?: string, limit = DEFAULT_CHECKPOINTS_LIMIT) {
+export function useGetCheckpoints(
+	cursor?: string,
+	limit = DEFAULT_CHECKPOINTS_LIMIT,
+	refetchInterval?: number,
+) {
 	const rpc = useRpcClient();
 
 	return useInfiniteQuery(
@@ -24,6 +28,7 @@ export function useGetCheckpoints(cursor?: string, limit = DEFAULT_CHECKPOINTS_L
 			cacheTime: 24 * 60 * 60 * 1000,
 			retry: false,
 			keepPreviousData: true,
+			refetchInterval: refetchInterval,
 		},
 	);
 }

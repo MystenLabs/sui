@@ -7,7 +7,7 @@ import { useInfiniteQuery } from '@tanstack/react-query';
 export const DEFAULT_EPOCHS_LIMIT = 20;
 
 // Fetch paginated epochs
-export function useGetEpochs(limit = DEFAULT_EPOCHS_LIMIT) {
+export function useGetEpochs(limit = DEFAULT_EPOCHS_LIMIT, refetchInterval?: number) {
 	const rpc = useRpcClient();
 
 	return useInfiniteQuery(
@@ -24,6 +24,7 @@ export function useGetEpochs(limit = DEFAULT_EPOCHS_LIMIT) {
 			cacheTime: 24 * 60 * 60 * 1000,
 			retry: false,
 			keepPreviousData: true,
+			refetchInterval: refetchInterval,
 		},
 	);
 }

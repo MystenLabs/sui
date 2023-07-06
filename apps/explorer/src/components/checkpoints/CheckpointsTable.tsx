@@ -28,6 +28,7 @@ interface Props {
 export function CheckpointsTable({
 	disablePagination,
 	initialLimit = DEFAULT_CHECKPOINTS_LIMIT,
+	refetchInterval,
 	initialCursor,
 	maxCursor,
 }: Props) {
@@ -39,7 +40,7 @@ export function CheckpointsTable({
 		queryFn: () => rpc.getLatestCheckpointSequenceNumber(),
 	});
 
-	const checkpoints = useGetCheckpoints(initialCursor, limit);
+	const checkpoints = useGetCheckpoints(initialCursor, limit, refetchInterval);
 
 	const { data, isFetching, pagination, isLoading, isError } = useCursorPagination(checkpoints);
 
