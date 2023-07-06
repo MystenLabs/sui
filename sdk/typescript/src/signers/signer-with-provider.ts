@@ -9,7 +9,6 @@ import type { JsonRpcProvider } from '../providers/json-rpc-provider.js';
 import type { HttpHeaders } from '../rpc/client.js';
 import type {
 	ExecuteTransactionRequestType,
-	FaucetResponse,
 	SuiAddress,
 	DevInspectResults,
 	DryRunTransactionBlockResponse,
@@ -48,8 +47,9 @@ export abstract class SignerWithProvider implements Signer {
 	 * Request gas tokens from a faucet server and send to the signer
 	 * address
 	 * @param httpHeaders optional request headers
+	 * @deprecated Use `@mysten/sui.js/faucet` instead.
 	 */
-	async requestSuiFromFaucet(httpHeaders?: HttpHeaders): Promise<FaucetResponse> {
+	async requestSuiFromFaucet(httpHeaders?: HttpHeaders) {
 		return this.provider.requestSuiFromFaucet(await this.getAddress(), httpHeaders);
 	}
 

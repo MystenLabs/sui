@@ -32,5 +32,3 @@ export class RPCValidationError extends Error {
 		return str;
 	}
 }
-
-export class FaucetRateLimitError extends Error {}

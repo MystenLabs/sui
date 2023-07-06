@@ -6,6 +6,8 @@
 	"license": "Apache-2.0",
 	"files": [
 		"builder",
+		"keypairs",
+		"faucet",
 		"dist",
 		"src",
 		"CHANGELOG.md"
@@ -42,6 +44,11 @@
 			"source": "./src/keypairs/secp256r1/index.ts",
 			"import": "./dist/esm/keypairs/secp256r1/index.js",
 			"require": "./dist/cjs/keypairs/secp256r1/index.js"
+		},
+		"./faucet": {
+			"source": "./src/faucet/index.ts",
+			"import": "./dist/esm/faucet/index.js",
+			"require": "./dist/cjs/faucet/index.js"
 		}
 	},
 	"scripts": {
