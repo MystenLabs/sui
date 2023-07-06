@@ -25,6 +25,7 @@ export enum FEATURES {
 	WALLET_ACTIVITY_REFETCH_INTERVAL = 'wallet-activity-refetch-interval',
 	WALLET_EFFECTS_ONLY_SHARED_TRANSACTION = 'wallet-effects-only-shared-transaction',
 	WALLET_QREDO = 'wallet-qredo',
+	BULLSHARK_QUESTS_INTERSTITIAL = 'wallet-bullshark-interstitial',
 }
 
 export function setAttributes(network?: { apiEnv: API_ENV; customRPC?: string | null }) {
