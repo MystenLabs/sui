@@ -496,12 +496,12 @@ impl DependencyGraph {
                 pruned_pkgs.insert(from_pkg_name);
             }
         } else {
-            // we are on a regular path, not involving an override - if there was a package
-            // candidate for pruning, it should be removed from the list as it can be reached via a
-            // regular path
+            // we are on a regular path, not involving an override
+            reachable_pkgs.insert(from_pkg_name);
+            // if there was a package candidate for pruning, it should be removed from the list as
+            // it can be reached via a regular path
             pruned_pkgs.remove(&from_pkg_name);
         }
-
         let mut override_found = overridden_path;
 
         if !override_found {
