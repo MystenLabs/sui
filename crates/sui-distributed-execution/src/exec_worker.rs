@@ -237,7 +237,8 @@ impl ExecutionWorkerState {
     }
 
     // Helper: Returns Input objects by reading from the memory_store
-    async fn read_input_objects_from_store(&self, 
+    async fn read_input_objects_from_store(
+        memory_store: Arc<MemoryBackedStore>, 
         tx: &VerifiedTransaction
     ) -> InputObjects {
         let tx_data = tx.data().transaction_data();
@@ -251,7 +252,7 @@ impl ExecutionWorkerState {
                 InputObjectKind::MovePackage(id)
                 | InputObjectKind::SharedMoveObject {id, .. }
                 | InputObjectKind::ImmOrOwnedMoveObject((id, _, _)) => {
-                    self.memory_store
+                    memory_store
                         .get_object(&id)
                         .unwrap()
                         .unwrap()
@@ -270,7 +271,6 @@ impl ExecutionWorkerState {
 
     // Helper: Returns gas status  
     async fn get_gas_status(
-        &self,
         tx: &VerifiedTransaction,
         input_objects: &InputObjects,
         protocol_config: &ProtocolConfig,
@@ -352,8 +352,8 @@ impl ExecutionWorkerState {
         let tx = &full_tx.tx;
         let tx_data = tx.data().transaction_data();
         let (kind, signer, gas) = tx_data.execution_parts();
-        let input_objects = self.read_input_objects_from_store(tx).await;
-        let gas_status = self.get_gas_status(tx, &input_objects, protocol_config, reference_gas_price).await;
+        let input_objects = Self::read_input_objects_from_store(self.memory_store.clone(), tx).await;
+        let gas_status = Self::get_gas_status(tx, &input_objects, protocol_config, reference_gas_price).await;
         let shared_object_refs = input_objects.filter_shared_objects();
         let transaction_dependencies = input_objects.transaction_dependencies();
 
@@ -393,10 +393,8 @@ impl ExecutionWorkerState {
     async fn async_exec(
         full_tx: Transaction,
         memory_store: Arc<MemoryBackedStore>,
-        input_objects: InputObjects,
-        temporary_store: TemporaryStore<Arc<MemoryBackedStore>>,
         move_vm: Arc<MoveVM>,
-        gas_status: SuiGasStatus,
+        reference_gas_price: u64,
         epoch_data: EpochData,
         protocol_config: ProtocolConfig,
         metrics: Arc<LimitsMetrics>,
@@ -405,8 +403,17 @@ impl ExecutionWorkerState {
         let tx = &full_tx.tx;
         let tx_data = tx.data().transaction_data();
         let (kind, signer, gas) = tx_data.execution_parts();
+        let input_objects = Self::read_input_objects_from_store(memory_store.clone(), &tx).await;
+        let gas_status = Self::get_gas_status(&tx, &input_objects, &protocol_config, reference_gas_price).await;
         let shared_object_refs = input_objects.filter_shared_objects();
         let transaction_dependencies = input_objects.transaction_dependencies();
+
+        let temporary_store = TemporaryStore::new(
+            memory_store.clone(),
+            input_objects.clone(),
+            *tx.digest(),
+            &protocol_config,
+        );
     
         let (inner_temp_store, tx_effects, _execution_error) =
             execution_engine::execute_transaction_to_effects::<execution_mode::Normal, _>(
@@ -519,27 +526,13 @@ impl ExecutionWorkerState {
 
                 // Must poll from manager_receiver before sw_receiver, to avoid deadlock
                 Some(full_tx) = manager_receiver.recv() => {
-                    
-                    let tx = full_tx.tx.clone();
-                    let input_objects = self.read_input_objects_from_store(&tx).await;
-                    let gas_status = self.get_gas_status(&tx, &input_objects, &protocol_config, reference_gas_price).await;
-
-                    let temporary_store = TemporaryStore::new(
-                        self.memory_store.clone(),
-                        input_objects.clone(),
-                        *tx.digest(),
-                        &protocol_config,
-                    );
-
-                    // Push to FuturesUnordered queue
+                    // Push execution task to futures queue
                     tasks_queue.push(Box::pin(
                         Self::async_exec(
                             full_tx,
                             self.memory_store.clone(),
-                            input_objects,
-                            temporary_store,
                             move_vm.clone(),
-                            gas_status,
+                            reference_gas_price,
                             epoch_data.clone(),
                             protocol_config.clone(),
                             metrics.clone(),
