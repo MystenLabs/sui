@@ -250,27 +250,25 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
         let overrides = collect_overrides(parent, &root_manifest.dependencies)?;
         let dev_overrides = collect_overrides(parent, &root_manifest.dev_dependencies)?;
 
-        for (_, (g, is_override)) in dep_graphs.iter_mut() {
-            if !*is_override {
-                g.prune_overriden_pkgs(
-                    root_manifest.package.name,
-                    g.root_package,
-                    DependencyMode::Always,
-                    &overrides,
-                    &dev_overrides,
-                )?;
-            }
+        for (dep_name, (g, is_override)) in dep_graphs.iter_mut() {
+            g.prune_subgraph(
+                root_manifest.package.name,
+                *dep_name,
+                *is_override,
+                DependencyMode::Always,
+                &overrides,
+                &dev_overrides,
+            )?;
         }
-        for (_, (g, is_override)) in dev_dep_graphs.iter_mut() {
-            if !*is_override {
-                g.prune_overriden_pkgs(
-                    root_manifest.package.name,
-                    g.root_package,
-                    DependencyMode::DevOnly,
-                    &overrides,
-                    &dev_overrides,
-                )?;
-            }
+        for (dep_name, (g, is_override)) in dev_dep_graphs.iter_mut() {
+            g.prune_subgraph(
+                root_manifest.package.name,
+                *dep_name,
+                *is_override,
+                DependencyMode::DevOnly,
+                &overrides,
+                &dev_overrides,
+            )?;
         }
 
         combined_graph.merge(
@@ -442,6 +440,40 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
 }
 
 impl DependencyGraph {
+    /// Main driver from sub-graph pruning based on information about overrides.
+    fn prune_subgraph(
+        &mut self,
+        root_package: PM::PackageName,
+        dep_name: PM::PackageName,
+        is_override: bool,
+        mode: DependencyMode,
+        overrides: &BTreeMap<PM::PackageName, Package>,
+        dev_overrides: &BTreeMap<PM::PackageName, Package>,
+    ) -> Result<()> {
+        if is_override {
+            // when pruning an overridden dependency, we must not prune the package actually
+            // specified by this dependency so we remove it from the set of overrides
+            let mut o = overrides.clone();
+            let mut dev_o = dev_overrides.clone();
+            DependencyGraph::remove_dep_override(
+                root_package,
+                dep_name,
+                &mut o,
+                &mut dev_o,
+                mode == DependencyMode::DevOnly,
+            )?;
+            self.prune_overriden_pkgs(root_package, DependencyMode::Always, &o, &dev_o)?;
+        } else {
+            self.prune_overriden_pkgs(
+                root_package,
+                DependencyMode::Always,
+                overrides,
+                dev_overrides,
+            )?;
+        }
+        Ok(())
+    }
+
     /// Finds packages in a sub-graph that should be pruned as a result of applying an override from
     /// the outer graph. A package should be pruned if it's dominated by an overridden package.
     fn find_pruned_pkgs(
@@ -508,11 +540,11 @@ impl DependencyGraph {
     fn prune_overriden_pkgs(
         &mut self,
         root_pkg_name: PM::PackageName,
-        from_pkg_name: PM::PackageName,
         mode: DependencyMode,
         overrides: &BTreeMap<PM::PackageName, Package>,
         dev_overrides: &BTreeMap<PM::PackageName, Package>,
     ) -> Result<()> {
+        let from_pkg_name = self.root_package;
         let mut pruned_pkgs = BTreeSet::new();
         let mut reachable_pkgs = BTreeSet::new();
         self.find_pruned_pkgs(
@@ -751,6 +783,35 @@ impl DependencyGraph {
             return Ok(dev_only.then_some(dev_pkg));
         }
         Ok(None)
+    }
+
+    /// Helper function to remove an override for a package with a given name for "regular"
+    /// dependencies (`dev_only` is false) or "dev" dependencies (`dev_only` is true).
+    fn remove_dep_override<'a>(
+        root_pkg_name: PM::PackageName,
+        pkg_name: PM::PackageName,
+        overrides: &mut BTreeMap<Symbol, Package>,
+        dev_overrides: &mut BTreeMap<Symbol, Package>,
+        dev_only: bool,
+    ) -> Result<()> {
+        // for "regular" dependencies override can come only from "regular" dependencies section,
+        // but for "dev" dependencies override can come from "regular" or "dev" dependencies section
+        if let Some(pkg) = overrides.remove(&pkg_name) {
+            // "regular" dependencies section case
+            if let Some(dev_pkg) = dev_overrides.get(&pkg_name) {
+                bail!(
+                    "Conflicting \"regular\" and \"dev\" overrides found in {0}:\n{1} = {2}\n{1} = {3}",
+                    root_pkg_name,
+                    pkg_name,
+                    PackageWithResolverTOML(&pkg),
+                    PackageWithResolverTOML(dev_pkg),
+                );
+            }
+        } else if dev_only {
+            // "dev" dependencies section case
+            dev_overrides.remove(&pkg_name);
+        }
+        Ok(())
     }
 
     /// Creates a dependency graph by reading a lock file.
