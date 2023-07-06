@@ -32,7 +32,7 @@ use tracing::instrument;
 
 use crate::api::JsonRpcMetrics;
 use crate::api::WriteApiServer;
-use crate::error::{Error, SuiRpcInputError};
+use crate::error::{ClientError, Error};
 use crate::read_api::get_transaction_data_and_digest;
 use crate::{
     get_balance_changes_from_effect, get_object_changes, with_tracing, ObjectProviderCache,
@@ -69,24 +69,42 @@ impl TransactionExecutionApi {
 
         let request_type = match (request_type, opts.require_local_execution()) {
             (Some(ExecuteTransactionRequestType::WaitForEffectsCert), true) => {
-                return Err(Error::SuiRpcInputError(
-                    SuiRpcInputError::InvalidExecuteTransactionRequestType,
-                ));
+                return Err(ClientError::InvalidExecuteTransactionRequestType.into());
             }
             (t, _) => t.unwrap_or_else(|| opts.default_execution_request_type()),
         };
-        let tx_data: TransactionData = bcs::from_bytes(&tx_bytes.to_vec()?)?;
+        let tx_data: TransactionData =
+            bcs::from_bytes(&tx_bytes.to_vec().map_err(|e| ClientError::Serde {
+                param: "tx_bytes".to_string(),
+                reason: e.to_string(),
+            })?)
+            .map_err(|e| ClientError::Serde {
+                param: "tx_bytes".to_string(),
+                reason: e.to_string(),
+            })?;
         let sender = tx_data.sender();
         let input_objs = tx_data.input_objects().unwrap_or_default();
 
         let mut sigs = Vec::new();
         for sig in signatures {
-            sigs.push(GenericSignature::from_bytes(&sig.to_vec()?)?);
+            sigs.push(
+                GenericSignature::from_bytes(&sig.to_vec().map_err(|e| ClientError::Serde {
+                    param: "signatures".to_string(),
+                    reason: e.to_string(),
+                })?)
+                .map_err(|e| ClientError::Serde {
+                    param: "signatures".to_string(),
+                    reason: e.to_string(),
+                })?,
+            );
         }
         let txn = Transaction::from_generic_sig_data(tx_data, Intent::sui_transaction(), sigs);
         let digest = *txn.digest();
         let raw_transaction = if opts.show_raw_input {
-            bcs::to_bytes(txn.data())?
+            bcs::to_bytes(txn.data()).map_err(|e| ClientError::Serde {
+                param: "tx_bytes".to_string(),
+                reason: e.to_string(),
+            })?
         } else {
             vec![]
         };
@@ -173,8 +191,8 @@ impl TransactionExecutionApi {
         &self,
         tx_bytes: Base64,
     ) -> Result<DryRunTransactionBlockResponse, Error> {
-        let (txn_data, txn_digest) = get_transaction_data_and_digest(tx_bytes)?;
-        let input_objs = txn_data.input_objects()?;
+        let (txn_data, txn_digest) = get_transaction_data_and_digest(tx_bytes)?; // on client
+        let input_objs = txn_data.input_objects()?; // on client
         let sender = txn_data.sender();
         let (resp, written_objects, transaction_effects, mock_gas) = self
             .state
@@ -234,7 +252,14 @@ impl WriteApiServer for TransactionExecutionApi {
     ) -> RpcResult<DevInspectResults> {
         with_tracing!(async move {
             let tx_kind: TransactionKind =
-                bcs::from_bytes(&tx_bytes.to_vec().map_err(Error::from)?).map_err(Error::from)?;
+                bcs::from_bytes(&tx_bytes.to_vec().map_err(|e| ClientError::Serde {
+                    param: "tx_bytes".to_string(),
+                    reason: e.to_string(),
+                })?)
+                .map_err(|e| ClientError::Serde {
+                    param: "tx_bytes".to_string(),
+                    reason: e.to_string(),
+                })?;
             Ok(self
                 .state
                 .dev_inspect_transaction_block(sender_address, tx_kind, gas_price.map(|i| *i))
