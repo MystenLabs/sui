@@ -352,10 +352,10 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
             }));
             let domain = Domain::from_str(&name).map_err(ClientError::Domain)?;
             let domain_bcs_value = bcs::to_bytes(&domain).map_err(|e| {
-                Error::SuiRpcInputError(SuiRpcInputError::GenericInvalid(format!(
+                ClientError::Serde(format!(
                     "Unable to serialize name: {:?} with error: {:?}",
                     domain, e
-                )))
+                ))
             })?;
             let record_object_id_option = self
                 .state
