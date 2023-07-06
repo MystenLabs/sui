@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { useFeature } from '@growthbook/growthbook-react';
 import { useAppsBackend, useGetCoinBalance, useGetAllBalances } from '@mysten/core';
 import {
 	Info12,
@@ -19,6 +20,7 @@ import { TokenIconLink } from './TokenIconLink';
 import { TokenLink } from './TokenLink';
 import { TokenList } from './TokenList';
 import CoinBalance from './coin-balance';
+import BullsharkQuestsNotification from '../bullshark-quests-notification';
 import { useOnrampProviders } from '../onramp/useOnrampProviders';
 import { useActiveAddress } from '_app/hooks/useActiveAddress';
 import { LargeButton } from '_app/shared/LargeButton';
@@ -29,15 +31,13 @@ import { filterAndSortTokenBalances } from '_helpers';
 import { useAppSelector, useCoinsReFetchingConfig } from '_hooks';
 import { ampli } from '_src/shared/analytics/ampli';
 import { API_ENV } from '_src/shared/api-env';
+import { FEATURES } from '_src/shared/experimentation/features';
 import { AccountSelector } from '_src/ui/app/components/AccountSelector';
 import { useLedgerNotification } from '_src/ui/app/hooks/useLedgerNotification';
 import { usePinnedCoinTypes } from '_src/ui/app/hooks/usePinnedCoinTypes';
 import { useRecognizedPackages } from '_src/ui/app/hooks/useRecognizedPackages';
 import PageTitle from '_src/ui/app/shared/PageTitle';
 import FaucetRequestButton from '_src/ui/app/shared/faucet/FaucetRequestButton';
-import BullsharkQuestsNotification from '../bullshark-quests-notification';
-import { useFeature } from '@growthbook/growthbook-react';
-import { FEATURES } from '_src/shared/experimentation/features';
 
 type TokenDetailsProps = {
 	coinType?: string;

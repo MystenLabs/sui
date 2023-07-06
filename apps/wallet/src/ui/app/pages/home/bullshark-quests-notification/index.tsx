@@ -2,13 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { X32 } from '@mysten/icons';
-import cl from 'classnames';
-import { set } from 'idb-keyval';
+
 import { useNavigate } from 'react-router-dom';
 
 import { Portal } from '../../../shared/Portal';
-
-import st from './Overlay.module.scss';
 
 const InterstitialHeading = ({ text }: { text: string }) => {
 	return <div className="[-webkit-text-stroke:2px_black] text-heading1">{text}</div>;
@@ -33,8 +30,8 @@ function BullsharkQuestsNotification() {
 
 	return (
 		<Portal containerId="overlay-portal-container">
-			<div className={cl(st.container)}>
-				<div className={st.content}>
+			<div className="flex flex-col flex-nowrap items-center bg-[#99dbfb] border-solid border-4 border-black rounded-lg z-50 overflow-hidden absolute top-0 bottom-0 left-0 right-0 backdrop-blur-sm">
+				<div className="flex justify-center w-full h-full">
 					<div className="flex flex-col font-frankfurter w-full h-full items-center p-4 text-white text-center">
 						<div className="flex flex-col py-6 px-7 border-4 border-black border-solid w-full rounded-md h-full items-center">
 							<div className="flex flex-col items-center">
