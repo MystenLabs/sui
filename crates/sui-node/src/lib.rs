@@ -398,7 +398,7 @@ impl SuiNode {
                 FileCompression::Zstd,
                 StorageFormat::Blob,
                 Duration::from_secs(600),
-                1024 * 1024 * 1024,
+                256 * 1024 * 1024,
                 &prometheus_registry,
             )
             .await?;
