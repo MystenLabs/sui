@@ -66,39 +66,44 @@ function NftsPage() {
 			};
 
 			const assetShownToast = async (objectId: string) => {
-				toast.custom((t) => (
-					<div className="flex items-center justify-between gap-2 bg-white w-full shadow-summary-card border-solid border-gray-45 rounded-full px-3 py-1">
-						<div className="flex gap-1 items-center">
-							<Check12 className="text-gray-90" />
-							<div>
+				toast.custom(
+					(t) => (
+						<div className="flex items-center justify-between gap-2 bg-white w-full shadow-summary-card border-solid border-gray-45 rounded-full px-3 py-1">
+							<div className="flex gap-1 items-center">
+								<Check12 className="text-gray-90" />
+								<div>
+									<InlineLink
+										to="/nfts"
+										color="hero"
+										weight="medium"
+										before={
+											<Text variant="body" color="gray-80">
+												Moved to
+											</Text>
+										}
+										text="Visual Assets"
+									/>
+								</div>
+							</div>
+
+							<div className="w-auto">
 								<InlineLink
-									to="/nfts"
+									size="bodySmall"
+									onClick={() => {
+										undoShowAsset(objectId);
+										toast.dismiss(t.id);
+									}}
 									color="hero"
 									weight="medium"
-									before={
-										<Text variant="body" color="gray-80">
-											Moved to
-										</Text>
-									}
-									text="Visual Assets"
+									text="UNDO"
 								/>
 							</div>
 						</div>
-
-						<div className="w-auto">
-							<InlineLink
-								size="bodySmall"
-								onClick={() => {
-									undoShowAsset(objectId);
-									toast.dismiss(t.id);
-								}}
-								color="hero"
-								weight="medium"
-								text="UNDO"
-							/>
-						</div>
-					</div>
-				));
+					),
+					{
+						duration: 4000,
+					},
+				);
 			};
 
 			assetShownToast(newAssetId);
