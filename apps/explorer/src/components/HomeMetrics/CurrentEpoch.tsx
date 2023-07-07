@@ -42,7 +42,7 @@ export function CurrentEpoch() {
 		>
 			<Card bg="white" height="full" spacing="lg">
 				<div className="flex flex-col gap-6">
-					<div className="flex w-full flex-col gap-2">
+					<div className="flex w-full flex-col gap-2 sm:max-xl:gap-5">
 						<Heading color="success-dark" variant="heading4/semibold">
 							Epoch {formatAmountParts(epoch)}
 						</Heading>
