@@ -1086,13 +1086,13 @@ pub async fn get_move_module(
     module_name: String,
 ) -> Result<NormalizedModule, Error> {
     let normalized = get_move_modules_by_package(state, package).await?;
-    Ok(match normalized.get(&module_name) {
+    match normalized.get(&module_name) {
         Some(module) => Ok(module.clone()),
         None => Err(Error::ClientError(ClientError::NotFound {
             entity: "Module".to_string(),
             id: module_name,
         })),
-    }?)
+    }
 }
 
 pub async fn get_move_modules_by_package(
