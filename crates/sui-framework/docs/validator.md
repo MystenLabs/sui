@@ -85,6 +85,7 @@
 -  [Function `effectuate_staged_metadata`](#0x3_validator_effectuate_staged_metadata)
 -  [Function `validate_metadata`](#0x3_validator_validate_metadata)
 -  [Function `validate_metadata_bcs`](#0x3_validator_validate_metadata_bcs)
+-  [Function `get_staking_pool_ref`](#0x3_validator_get_staking_pool_ref)
 -  [Function `new_from_metadata`](#0x3_validator_new_from_metadata)
 
 
@@ -2856,6 +2857,30 @@ Aborts if validator metadata is valid
 
 <pre><code><b>pragma</b> opaque;
 <b>aborts_if</b> [abstract] <b>true</b>;
+</code></pre>
+
+
+
+</details>
+
+<a name="0x3_validator_get_staking_pool_ref"></a>
+
+## Function `get_staking_pool_ref`
+
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x3_validator_get_staking_pool_ref">get_staking_pool_ref</a>(self: &<a href="validator.md#0x3_validator_Validator">validator::Validator</a>): &<a href="staking_pool.md#0x3_staking_pool_StakingPool">staking_pool::StakingPool</a>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x3_validator_get_staking_pool_ref">get_staking_pool_ref</a>(self: &<a href="validator.md#0x3_validator_Validator">Validator</a>) : &StakingPool {
+    &self.<a href="staking_pool.md#0x3_staking_pool">staking_pool</a>
+}
 </code></pre>
 
 

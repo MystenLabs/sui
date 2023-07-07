@@ -60,6 +60,7 @@
 -  [Function `get_reporters_of`](#0x3_sui_system_state_inner_get_reporters_of)
 -  [Function `get_storage_fund_total_balance`](#0x3_sui_system_state_inner_get_storage_fund_total_balance)
 -  [Function `get_storage_fund_object_rebates`](#0x3_sui_system_state_inner_get_storage_fund_object_rebates)
+-  [Function `pool_exchange_rates`](#0x3_sui_system_state_inner_pool_exchange_rates)
 -  [Function `extract_coin_balance`](#0x3_sui_system_state_inner_extract_coin_balance)
 -  [Module Specification](#@Module_Specification_1)
 
@@ -2504,6 +2505,34 @@ Returns all the validators who are currently reporting <code>addr</code>
 
 <pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_get_storage_fund_object_rebates">get_storage_fund_object_rebates</a>(self: &<a href="sui_system_state_inner.md#0x3_sui_system_state_inner_SuiSystemStateInnerV2">SuiSystemStateInnerV2</a>): u64 {
     <a href="storage_fund.md#0x3_storage_fund_total_object_storage_rebates">storage_fund::total_object_storage_rebates</a>(&self.<a href="storage_fund.md#0x3_storage_fund">storage_fund</a>)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x3_sui_system_state_inner_pool_exchange_rates"></a>
+
+## Function `pool_exchange_rates`
+
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_pool_exchange_rates">pool_exchange_rates</a>(self: &<b>mut</b> <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_SuiSystemStateInnerV2">sui_system_state_inner::SuiSystemStateInnerV2</a>, pool_id: &<a href="../../../.././build/Sui/docs/object.md#0x2_object_ID">object::ID</a>): &<a href="../../../.././build/Sui/docs/table.md#0x2_table_Table">table::Table</a>&lt;u64, <a href="staking_pool.md#0x3_staking_pool_PoolTokenExchangeRate">staking_pool::PoolTokenExchangeRate</a>&gt;
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_pool_exchange_rates">pool_exchange_rates</a>(
+    self: &<b>mut</b> <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_SuiSystemStateInnerV2">SuiSystemStateInnerV2</a>,
+    pool_id: &ID
+): &Table&lt;u64, PoolTokenExchangeRate&gt;  {
+    <b>let</b> validators = &<b>mut</b> self.validators;
+    <a href="validator_set.md#0x3_validator_set_pool_exchange_rates">validator_set::pool_exchange_rates</a>(validators, pool_id)
 }
 </code></pre>
 

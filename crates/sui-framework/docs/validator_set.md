@@ -29,6 +29,7 @@
 -  [Function `validator_stake_amount`](#0x3_validator_set_validator_stake_amount)
 -  [Function `validator_staking_pool_id`](#0x3_validator_set_validator_staking_pool_id)
 -  [Function `staking_pool_mappings`](#0x3_validator_set_staking_pool_mappings)
+-  [Function `pool_exchange_rates`](#0x3_validator_set_pool_exchange_rates)
 -  [Function `next_epoch_validator_count`](#0x3_validator_set_next_epoch_validator_count)
 -  [Function `is_active_validator_by_sui_address`](#0x3_validator_set_is_active_validator_by_sui_address)
 -  [Function `is_duplicate_with_active_validator`](#0x3_validator_set_is_duplicate_with_active_validator)
@@ -1371,6 +1372,41 @@ gas price, weighted by stake.
 
 <pre><code><b>public</b> <b>fun</b> <a href="validator_set.md#0x3_validator_set_staking_pool_mappings">staking_pool_mappings</a>(self: &<a href="validator_set.md#0x3_validator_set_ValidatorSet">ValidatorSet</a>): &Table&lt;ID, <b>address</b>&gt; {
     &self.staking_pool_mappings
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x3_validator_set_pool_exchange_rates"></a>
+
+## Function `pool_exchange_rates`
+
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_set.md#0x3_validator_set_pool_exchange_rates">pool_exchange_rates</a>(self: &<b>mut</b> <a href="validator_set.md#0x3_validator_set_ValidatorSet">validator_set::ValidatorSet</a>, pool_id: &<a href="../../../.././build/Sui/docs/object.md#0x2_object_ID">object::ID</a>): &<a href="../../../.././build/Sui/docs/table.md#0x2_table_Table">table::Table</a>&lt;u64, <a href="staking_pool.md#0x3_staking_pool_PoolTokenExchangeRate">staking_pool::PoolTokenExchangeRate</a>&gt;
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_set.md#0x3_validator_set_pool_exchange_rates">pool_exchange_rates</a>(
+    self: &<b>mut</b> <a href="validator_set.md#0x3_validator_set_ValidatorSet">ValidatorSet</a>, pool_id: &ID
+) : &Table&lt;u64, PoolTokenExchangeRate&gt; {
+    <b>let</b> <a href="validator.md#0x3_validator">validator</a> =
+        // If the pool id is recorded in the mapping, then it must be either candidate or active.
+        <b>if</b> (<a href="../../../.././build/Sui/docs/table.md#0x2_table_contains">table::contains</a>(&self.staking_pool_mappings, *pool_id)) {
+            <b>let</b> validator_address = *<a href="../../../.././build/Sui/docs/table.md#0x2_table_borrow">table::borrow</a>(&self.staking_pool_mappings, *pool_id);
+            <a href="validator_set.md#0x3_validator_set_get_active_or_pending_or_candidate_validator_ref">get_active_or_pending_or_candidate_validator_ref</a>(self, validator_address, <a href="validator_set.md#0x3_validator_set_ANY_VALIDATOR">ANY_VALIDATOR</a>)
+        } <b>else</b> { // otherwise it's inactive
+            <b>let</b> wrapper = <a href="../../../.././build/Sui/docs/table.md#0x2_table_borrow_mut">table::borrow_mut</a>(&<b>mut</b> self.inactive_validators, *pool_id);
+            <a href="validator_wrapper.md#0x3_validator_wrapper_load_validator_maybe_upgrade">validator_wrapper::load_validator_maybe_upgrade</a>(wrapper)
+        };
+    <a href="staking_pool.md#0x3_staking_pool_exchange_rates">staking_pool::exchange_rates</a>(<a href="validator.md#0x3_validator_get_staking_pool_ref">validator::get_staking_pool_ref</a>(<a href="validator.md#0x3_validator">validator</a>))
 }
 </code></pre>
 

@@ -47,16 +47,17 @@ module sui_system::sui_system {
     use sui::sui::SUI;
     use sui::transfer;
     use sui::tx_context::{Self, TxContext};
+    use sui::object::ID;
+    use sui::table::Table;
     use sui_system::validator::Validator;
     use sui_system::validator_cap::UnverifiedValidatorOperationCap;
     use sui_system::sui_system_state_inner::{Self, SystemParameters, SuiSystemStateInnerV2};
     use sui_system::stake_subsidy::StakeSubsidy;
+    use sui_system::staking_pool::PoolTokenExchangeRate;
     use std::option;
     use sui::dynamic_field;
 
     #[test_only] use sui::balance;
-    #[test_only] use sui::object::ID;
-    #[test_only] use sui::table::Table;
     #[test_only] use sui_system::validator_set::ValidatorSet;
     #[test_only] use sui_system::validator_set;
     #[test_only] use sui::vec_set::VecSet;
@@ -515,6 +516,15 @@ module sui_system::sui_system {
     ) {
         let self = load_system_state_mut(self);
         sui_system_state_inner::update_candidate_validator_network_pubkey(self, network_pubkey, ctx)
+    }
+
+    /// Getter of the pool token exchange rate of a staking pool. Works for both active and inactive pools.
+    public fun pool_exchange_rates(
+        wrapper: &mut SuiSystemState,
+        pool_id: &ID
+    ): &Table<u64, PoolTokenExchangeRate>  {
+        let self = load_system_state_mut(wrapper);
+        sui_system_state_inner::pool_exchange_rates(self, pool_id)
     }
 
     /// This function should be called at the end of an epoch, and advances the system to the next epoch.
