@@ -27,7 +27,10 @@ function BullsharkQuestsNotification({ onClose }: { onClose: () => void }) {
 	const navigate = useNavigate();
 
 	useEffect(() => {
-		const t = setTimeout(() => localStorage.setItem('bullshark-interstitial-dismissed', 'true'), 1000);
+		const t = setTimeout(
+			() => localStorage.setItem('bullshark-interstitial-dismissed', 'true'),
+			1000,
+		);
 		return () => clearTimeout(t);
 	}, []);
 
