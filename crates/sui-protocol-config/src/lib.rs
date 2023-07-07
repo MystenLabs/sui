@@ -717,6 +717,10 @@ pub struct ProtocolConfig {
 
     /// === Execution Version ===
     execution_version: Option<u64>,
+
+    // Dictates the threshold (percentage of stake) that is used to calculate the "bad" nodes to be
+    // swapped when creating the consensus schedule.
+    consensus_bad_nodes_stake_threshold: Option<f64>,
 }
 
 // feature flags
@@ -1192,6 +1196,7 @@ impl ProtocolConfig {
                 execution_version: None,
 
                 max_event_emit_size_total: None,
+                consensus_bad_nodes_stake_threshold: None
                 // When adding a new constant, set it to None in the earliest version, like this:
                 // new_constant: None,
             },
@@ -1328,7 +1333,6 @@ impl ProtocolConfig {
                 // cfg.feature_flags.ban_entry_init = true;
                 // cfg.feature_flags.pack_digest_hash_modules = true;
                 cfg.feature_flags.txn_base_cost_as_multiplier = true;
-                cfg.feature_flags.narwhal_new_leader_election_schedule = true;
                 // this is a multiplier of the gas price
                 cfg.base_tx_cost_fixed = Some(1_000);
                 cfg
@@ -1346,6 +1350,7 @@ impl ProtocolConfig {
             20 => {
                 let mut cfg = Self::get_for_version_impl(version - 1, chain);
                 cfg.feature_flags.commit_root_state_digest = true;
+                cfg.feature_flags.narwhal_new_leader_election_schedule = true;
                 cfg
             }
 
@@ -1421,6 +1426,10 @@ impl ProtocolConfig {
     }
     pub fn set_narwhal_new_leader_election_schedule(&mut self, val: bool) {
         self.feature_flags.narwhal_new_leader_election_schedule = val;
+    }
+
+    pub fn set_consensus_bad_nodes_stake_threshold(&mut self, val: f64) {
+        self.consensus_bad_nodes_stake_threshold = Some(val);
     }
 }
 
