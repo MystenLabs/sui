@@ -5,6 +5,7 @@ import { X32 } from '@mysten/icons';
 
 import { Portal } from '../../../shared/Portal';
 import ExternalLink from '_src/ui/app/components/external-link';
+import { useNavigate } from 'react-router-dom';
 
 const InterstitialHeading = ({ text }: { text: string }) => {
 	return <div className="[-webkit-text-stroke:2px_black] text-heading1">{text}</div>;
@@ -21,6 +22,7 @@ const InterstitialBanner = ({ lines }: { lines: string[] }) => {
 };
 
 function BullsharkQuestsNotification({ onClose }: { onClose: () => void }) {
+	const navigate = useNavigate();
 	const setInterstitialDismissed = () => {
 		localStorage.setItem('bullshark-interstitial-dismissed', 'true');
 	};
@@ -52,6 +54,7 @@ function BullsharkQuestsNotification({ onClose }: { onClose: () => void }) {
 								onClick={() => {
 									setInterstitialDismissed();
 									onClose();
+									navigate('/apps');
 								}}
 							>
 								<X32 className="text-sui-dark h-8 w-8" />
