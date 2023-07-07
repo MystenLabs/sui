@@ -417,6 +417,13 @@ where
                         ..
                     },
                 ))) => {
+                    let tx_digest = transaction.digest();
+                    if let Err(err) = pending_transaction_log.finish_transaction(tx_digest) {
+                        panic!(
+                            "Failed to finish transaction {tx_digest} in pending transaction log: {err}"
+                        );
+                    }
+
                     if transaction.contains_shared_object() {
                         // Do not locally execute transactions with shared objects, as this can
                         // cause forks until MVCC is merged.
@@ -442,13 +449,7 @@ where
                         transaction,
                         effects_cert.executed_epoch(),
                     );
-                    let tx_digest = executable_tx.digest();
-                    if let Err(err) = pending_transaction_log.finish_transaction(tx_digest) {
-                        error!(
-                            ?tx_digest,
-                            "Failed to finish transaction in pending transaction log: {err}"
-                        );
-                    }
+
                     let _ = Self::execute_finalized_tx_locally_with_timeout(
                         &validator_state,
                         &executable_tx,
