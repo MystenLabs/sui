@@ -435,7 +435,11 @@ impl<S: ObjectStore + WritableObjectStore + BackingPackageStore + ParentSync + C
                     num_tx += 1;
                     epoch_txs_semaphore -= 1;
                     assert!(epoch_txs_semaphore >= 0);
-
+ 
+                    if tasks_queue.len() > 0 {
+                        println!("{}", tasks_queue.len());
+                    }
+                    
                     let full_tx = &tx_with_results.full_tx;
                     if full_tx.checkpoint_seq % 10_000 == 0 {
                         println!("EW executed {}", full_tx.checkpoint_seq);

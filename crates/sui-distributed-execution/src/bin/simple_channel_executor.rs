@@ -50,7 +50,7 @@ struct Args {
     listen_address: Option<Multiaddr>,
 }
 
-#[tokio::main(flavor = "multi_thread", worker_threads = 4)]
+#[tokio::main(flavor = "multi_thread", worker_threads = 10)]
 async fn main() {
     let args = Args::parse();
     let config = NodeConfig::load(&args.config_path).unwrap();

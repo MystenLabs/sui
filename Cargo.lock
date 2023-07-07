@@ -9920,6 +9920,7 @@ dependencies = [
  "anyhow",
  "clap 3.2.25",
  "const-str",
+ "dashmap",
  "futures",
  "git-version",
  "move-binary-format",
