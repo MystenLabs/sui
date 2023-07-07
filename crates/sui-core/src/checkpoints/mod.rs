@@ -1313,7 +1313,8 @@ impl CheckpointSignatureAggregator {
         let their_digest = *data.summary.digest();
         let (_, signature) = data.summary.into_data_and_sig();
         let author = signature.authority;
-        // consensus ensures that authority == narwhal_cert.author
+        // It is not guaranteed that signature.authority == narwhal_cert.author, but we do verify
+        // the signature so we know that the author signed the message at some point.
         if their_digest != self.digest {
             self.metrics.remote_checkpoint_forks.inc();
             warn!(
