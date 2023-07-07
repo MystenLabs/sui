@@ -760,7 +760,6 @@ where
     ) {
         let limit = Arc::new(Semaphore::new(TASK_QUEUE_SIZE));
         while let Some(task) = task_receiver.recv().await {
-            let limit = limit.clone();
             // hold semaphore permit until task completes. unwrap ok because we never close
             // the semaphore in this context.
             let limit = limit.clone();
