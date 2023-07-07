@@ -30,13 +30,25 @@ use sui_source_validation::{BytecodeSourceVerifier, SourceMode};
 
 #[derive(Deserialize, Debug)]
 pub struct Config {
-    pub packages: Vec<Packages>,
+    pub packages: Vec<PackageSources>,
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(tag = "source", content = "values")]
+pub enum PackageSources {
+    Repository(RepositorySource),
+    Directory(DirectorySource),
 }
 
 #[derive(Clone, Deserialize, Debug)]
-pub struct Packages {
+pub struct RepositorySource {
     pub repository: String,
     pub branch: String,
+    pub paths: Vec<String>,
+}
+
+#[derive(Clone, Deserialize, Debug)]
+pub struct DirectorySource {
     pub paths: Vec<String>,
 }
 
@@ -121,7 +133,7 @@ pub struct CloneCommand {
 }
 
 impl CloneCommand {
-    pub fn new(p: &Packages, dest: &Path) -> anyhow::Result<CloneCommand> {
+    pub fn new(p: &RepositorySource, dest: &Path) -> anyhow::Result<CloneCommand> {
         let repo_name = repo_name_from_url(&p.repository)?;
         let dest = dest.join(repo_name).into_os_string();
 
@@ -190,9 +202,9 @@ impl CloneCommand {
 }
 
 /// Clones repositories and checks out packages as per `config` at the directory `dir`.
-pub async fn clone_repositories(config: &Config, dir: &Path) -> anyhow::Result<()> {
+pub async fn clone_repositories(repos: Vec<&RepositorySource>, dir: &Path) -> anyhow::Result<()> {
     let mut tasks = vec![];
-    for p in &config.packages {
+    for p in &repos {
         let command = CloneCommand::new(p, dir)?;
         info!("cloning {} to {}", &p.repository, dir.display());
         let t = tokio::spawn(async move { command.run().await });
@@ -210,7 +222,14 @@ pub async fn initialize(
     config: &Config,
     dir: &Path,
 ) -> anyhow::Result<SourceLookup> {
-    clone_repositories(config, dir).await?;
+    let mut repos = vec![];
+    for s in &config.packages {
+        match s {
+            PackageSources::Repository(r) => repos.push(r),
+            PackageSources::Directory(_) => (), /* skip cloning */
+        }
+    }
+    clone_repositories(repos, dir).await?;
     verify_packages(context, config, dir).await
 }
 
@@ -221,14 +240,29 @@ pub async fn verify_packages(
 ) -> anyhow::Result<SourceLookup> {
     let mut tasks = vec![];
     for p in &config.packages {
-        let repo_name = repo_name_from_url(&p.repository)?;
-        let packages_dir = dir.join(repo_name);
-        for p in &p.paths {
-            let package_path = packages_dir.join(p).clone();
-            let client = context.get_client().await?;
-            info!("verifying {p}");
-            let t = tokio::spawn(async move { verify_package(&client, package_path).await });
-            tasks.push(t)
+        match p {
+            PackageSources::Repository(p) => {
+                let repo_name = repo_name_from_url(&p.repository)?;
+                let packages_dir = dir.join(repo_name);
+                for p in &p.paths {
+                    let package_path = packages_dir.join(p).clone();
+                    let client = context.get_client().await?;
+                    info!("verifying {p}");
+                    let t =
+                        tokio::spawn(async move { verify_package(&client, package_path).await });
+                    tasks.push(t)
+                }
+            }
+            PackageSources::Directory(packages_dir) => {
+                for p in &packages_dir.paths {
+                    let package_path = PathBuf::from(p);
+                    let client = context.get_client().await?;
+                    info!("verifying {p}");
+                    let t =
+                        tokio::spawn(async move { verify_package(&client, package_path).await });
+                    tasks.push(t)
+                }
+            }
         }
     }
 
