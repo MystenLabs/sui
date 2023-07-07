@@ -50,7 +50,8 @@ use crate::models::epoch::DBEpochInfo;
 use crate::models::events::Event;
 use crate::models::network_metrics::{DBMoveCallMetrics, DBNetworkMetrics};
 use crate::models::objects::{
-    compose_object_bulk_insert_update_query, group_and_sort_objects, Object,
+    compose_object_bulk_insert_update_query, dedup_objects_with_highest_version,
+    group_and_sort_objects, Object,
 };
 use crate::models::packages::Package;
 use crate::models::system_state::DBValidatorSummary;
@@ -1712,50 +1713,30 @@ fn persist_transaction_object_changes(
     // MUSTFIX(gegaowp): clean up the metrics codes after experiment
     if let Some(object_mutation_latency) = object_mutation_latency {
         let object_mutation_guard = object_mutation_latency.start_timer();
-        let mut mutated_object_groups = group_and_sort_objects(mutated_objects);
-        loop {
-            let mutated_object_group = mutated_object_groups
-                .iter_mut()
-                .filter_map(|group| group.pop())
-                .collect::<Vec<_>>();
-            if mutated_object_group.is_empty() {
-                break;
-            }
-            // bulk insert/update via UNNEST trick
-            let insert_update_query =
-                compose_object_bulk_insert_update_query(&mutated_object_group);
-            diesel::sql_query(insert_update_query)
-                .execute(conn)
-                .map_err(|e| {
-                    IndexerError::PostgresWriteError(format!(
-                        "Failed writing mutated objects to PostgresDB with error: {:?}",
-                        e
-                    ))
-                })?;
-        }
+
+        let deduped_mutated_objects = dedup_objects_with_highest_version(mutated_objects);
+        let insert_update_query = compose_object_bulk_insert_update_query(&deduped_mutated_objects);
+        diesel::sql_query(insert_update_query)
+            .execute(conn)
+            .map_err(|e| {
+                IndexerError::PostgresWriteError(format!(
+                    "Failed writing mutated objects to PostgresDB with error: {:?}",
+                    e
+                ))
+            })?;
+
         object_mutation_guard.stop_and_record();
     } else {
-        let mut mutated_object_groups = group_and_sort_objects(mutated_objects);
-        loop {
-            let mutated_object_group = mutated_object_groups
-                .iter_mut()
-                .filter_map(|group| group.pop())
-                .collect::<Vec<_>>();
-            if mutated_object_group.is_empty() {
-                break;
-            }
-            // bulk insert/update via UNNEST trick
-            let insert_update_query =
-                compose_object_bulk_insert_update_query(&mutated_object_group);
-            diesel::sql_query(insert_update_query)
-                .execute(conn)
-                .map_err(|e| {
-                    IndexerError::PostgresWriteError(format!(
-                        "Failed writing mutated objects to PostgresDB with error: {:?}",
-                        e
-                    ))
-                })?;
-        }
+        let deduped_mutated_objects = dedup_objects_with_highest_version(mutated_objects);
+        let insert_update_query = compose_object_bulk_insert_update_query(&deduped_mutated_objects);
+        diesel::sql_query(insert_update_query)
+            .execute(conn)
+            .map_err(|e| {
+                IndexerError::PostgresWriteError(format!(
+                    "Failed writing mutated objects to PostgresDB with error: {:?}",
+                    e
+                ))
+            })?;
     }
 
     // MUSTFIX(gegaowp): clean up the metrics codes after experiment

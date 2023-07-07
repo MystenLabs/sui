@@ -470,3 +470,17 @@ pub fn group_and_sort_objects(objects: Vec<Object>) -> Vec<Vec<Object>> {
     }
     groups
 }
+
+pub fn dedup_objects_with_highest_version(objects: Vec<Object>) -> Vec<Object> {
+    let mut map = BTreeMap::new();
+    for object in objects {
+        map.entry(object.object_id.clone())
+            .and_modify(|e: &mut Object| {
+                if e.version < object.version {
+                    *e = object.clone();
+                }
+            })
+            .or_insert(object);
+    }
+    map.into_iter().map(|(_, v)| v).collect()
+}
