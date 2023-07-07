@@ -48,7 +48,7 @@ use sui_json_rpc::api::QUERY_MAX_RESULT_LIMIT;
 use sui_json_rpc_types::{
     DevInspectResults, EventFilter, SuiExecutionStatus, SuiTransactionBlockEffectsAPI,
 };
-use sui_protocol_config::{Chain, ProtocolConfig};
+use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
 use sui_types::transaction::Command;
 use sui_types::transaction::ProgrammableTransaction;
 use sui_types::DEEPBOOK_PACKAGE_ID;
@@ -156,12 +156,19 @@ pub fn clone_genesis_compiled_modules() -> Vec<Vec<CompiledModule>> {
     GENESIS.modules.clone()
 }
 
-pub fn clone_genesis_packages() -> Vec<Object> {
-    GENESIS.packages.clone()
-}
-
 pub fn clone_genesis_objects() -> Vec<Object> {
     GENESIS.objects.clone()
+}
+
+fn genesis_module_objects_for_protocol_version(protocol_version: ProtocolVersion) -> Vec<Object> {
+    if protocol_version == ProtocolVersion::max() {
+        return GENESIS.packages.clone();
+    }
+    sui_framework_snapshot::load_bytecode_snapshot(protocol_version.as_u64())
+        .expect("Unable to load bytecode snapshot")
+        .into_iter()
+        .map(|pkg| pkg.genesis_object())
+        .collect()
 }
 
 /// Create and return objects wrapping the genesis modules for sui
@@ -270,7 +277,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
 
         let mut named_address_mapping = NAMED_ADDRESSES.clone();
 
-        let mut objects = clone_genesis_packages();
+        let mut objects = genesis_module_objects_for_protocol_version(protocol_config.version);
         objects.extend(clone_genesis_objects());
         let mut account_objects = BTreeMap::new();
         let mut accounts = BTreeMap::new();
