@@ -3,9 +3,9 @@
 
 import { X32 } from '@mysten/icons';
 
+import { useNavigate } from 'react-router-dom';
 import { Portal } from '../../../shared/Portal';
 import ExternalLink from '_src/ui/app/components/external-link';
-import { useNavigate } from 'react-router-dom';
 
 const InterstitialHeading = ({ text }: { text: string }) => {
 	return <div className="[-webkit-text-stroke:2px_black] text-heading1">{text}</div>;
