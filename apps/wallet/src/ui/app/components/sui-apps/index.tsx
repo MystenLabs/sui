@@ -12,6 +12,7 @@ import ExternalLink from '../external-link';
 import { Heading } from '_app/shared/heading';
 import { Text } from '_app/shared/text';
 import { useAppSelector } from '_hooks';
+import { ampli } from '_src/shared/analytics/ampli';
 import { FEATURES } from '_src/shared/experimentation/features';
 import { prepareLinkToCompare } from '_src/shared/utils';
 
@@ -58,6 +59,7 @@ function AppsPlayGround() {
 					<ExternalLink
 						className="appearance-none no-underline text-white bg-[#EA3389] rounded-lg p-2 [-webkit-text-stroke:1px_black]"
 						href="https://tech.mystenlabs.com/introducing-bullsharks-quests/"
+						onClick={() => ampli.clickedBullsharkQuestsCta({ sourceFlow: 'Banner - Apps tab' })}
 					>
 						read more on the blog
 					</ExternalLink>

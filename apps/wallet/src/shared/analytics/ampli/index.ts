@@ -121,6 +121,13 @@ export interface AddedAccountsProperties {
 	numberOfAccounts: number;
 }
 
+export interface ClickedBullsharkQuestsCtaProperties {
+	/**
+	 * The flow the user came from.
+	 */
+	sourceFlow: string;
+}
+
 export interface ClickedCollectibleCardProperties {
 	/**
 	 * The object type of a collectible.
@@ -354,6 +361,14 @@ export class AddedAccounts implements BaseEvent {
 	event_type = 'added accounts';
 
 	constructor(public event_properties: AddedAccountsProperties) {
+		this.event_properties = event_properties;
+	}
+}
+
+export class ClickedBullsharkQuestsCta implements BaseEvent {
+	event_type = 'clicked bullshark quests cta';
+
+	constructor(public event_properties: ClickedBullsharkQuestsCtaProperties) {
 		this.event_properties = event_properties;
 	}
 }
@@ -673,6 +688,23 @@ export class Ampli {
     options?: EventOptions,
   ) {
     return this.track(new AddedAccounts(properties), options);
+  }
+
+  /**
+   * clicked bullshark quests cta
+   *
+   * [View in Tracking Plan](https://data.amplitude.com/mystenlabs/Sui%20Wallet/events/main/latest/clicked%20bullshark%20quests%20cta)
+   *
+   * When users click the call-to-action for the Bullshark Quests interstitial/banner.
+   *
+   * @param properties The event's properties (e.g. sourceFlow)
+   * @param options Amplitude event options.
+   */
+  clickedBullsharkQuestsCta(
+    properties: ClickedBullsharkQuestsCtaProperties,
+    options?: EventOptions,
+  ) {
+    return this.track(new ClickedBullsharkQuestsCta(properties), options);
   }
 
   /**
