@@ -26,7 +26,7 @@ async fn test_blocking_execution() -> Result<(), anyhow::Error> {
     let registry = Registry::new();
     // Start orchestrator inside container so that it will be properly shutdown.
     let orchestrator = handle
-        .with_async(|node| {
+        .with(|node| {
             TransactiondOrchestrator::new_with_network_clients(
                 node.state(),
                 node.subscribe_to_epoch_change(),
@@ -34,7 +34,6 @@ async fn test_blocking_execution() -> Result<(), anyhow::Error> {
                 &registry,
             )
         })
-        .await
         .unwrap();
 
     let txn_count = 4;
@@ -96,7 +95,7 @@ async fn test_fullnode_wal_log() -> Result<(), anyhow::Error> {
     let registry = Registry::new();
     // Start orchestrator inside container so that it will be properly shutdown.
     let orchestrator = handle
-        .with_async(|node| {
+        .with(|node| {
             TransactiondOrchestrator::new_with_network_clients(
                 node.state(),
                 node.subscribe_to_epoch_change(),
@@ -104,7 +103,6 @@ async fn test_fullnode_wal_log() -> Result<(), anyhow::Error> {
                 &registry,
             )
         })
-        .await
         .unwrap();
 
     let txn_count = 2;
