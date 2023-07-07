@@ -68,6 +68,11 @@ export function Activity({ initialTab, initialLimit, disablePagination }: Props)
 						<TabsTrigger value="epochs">Epochs</TabsTrigger>
 						<TabsTrigger value="checkpoints">Checkpoints</TabsTrigger>
 					</TabsList>
+					<div className="absolute inset-y-0 -top-1 right-0 text-2xl">
+						<PlayPause
+							paused={paused}
+							onChange={handlePauseChange}
+						/>
 					<div className="absolute inset-y-0 -top-1 right-0 flex items-center gap-3 text-2xl">
 						{activeTab === 'transactions' && isTransactionKindFilterEnabled ? (
 							<DropdownMenu
