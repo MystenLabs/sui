@@ -34,6 +34,9 @@
 -  [Function `pool_token_exchange_rate_at_epoch`](#0x3_staking_pool_pool_token_exchange_rate_at_epoch)
 -  [Function `pending_stake_amount`](#0x3_staking_pool_pending_stake_amount)
 -  [Function `pending_stake_withdraw_amount`](#0x3_staking_pool_pending_stake_withdraw_amount)
+-  [Function `exchange_rates`](#0x3_staking_pool_exchange_rates)
+-  [Function `sui_amount`](#0x3_staking_pool_sui_amount)
+-  [Function `pool_token_amount`](#0x3_staking_pool_pool_token_amount)
 -  [Function `is_preactive_at_epoch`](#0x3_staking_pool_is_preactive_at_epoch)
 -  [Function `get_sui_amount`](#0x3_staking_pool_get_sui_amount)
 -  [Function `get_token_amount`](#0x3_staking_pool_get_token_amount)
@@ -1187,6 +1190,78 @@ Returns the total withdrawal from the staking pool this epoch.
 
 <pre><code><b>public</b> <b>fun</b> <a href="staking_pool.md#0x3_staking_pool_pending_stake_withdraw_amount">pending_stake_withdraw_amount</a>(<a href="staking_pool.md#0x3_staking_pool">staking_pool</a>: &<a href="staking_pool.md#0x3_staking_pool_StakingPool">StakingPool</a>): u64 {
     <a href="staking_pool.md#0x3_staking_pool">staking_pool</a>.pending_total_sui_withdraw
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x3_staking_pool_exchange_rates"></a>
+
+## Function `exchange_rates`
+
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="staking_pool.md#0x3_staking_pool_exchange_rates">exchange_rates</a>(pool: &<a href="staking_pool.md#0x3_staking_pool_StakingPool">staking_pool::StakingPool</a>): &<a href="../../../.././build/Sui/docs/table.md#0x2_table_Table">table::Table</a>&lt;u64, <a href="staking_pool.md#0x3_staking_pool_PoolTokenExchangeRate">staking_pool::PoolTokenExchangeRate</a>&gt;
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="staking_pool.md#0x3_staking_pool_exchange_rates">exchange_rates</a>(pool: &<a href="staking_pool.md#0x3_staking_pool_StakingPool">StakingPool</a>): &Table&lt;u64, <a href="staking_pool.md#0x3_staking_pool_PoolTokenExchangeRate">PoolTokenExchangeRate</a>&gt; {
+    &pool.exchange_rates
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x3_staking_pool_sui_amount"></a>
+
+## Function `sui_amount`
+
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="staking_pool.md#0x3_staking_pool_sui_amount">sui_amount</a>(exchange_rate: &<a href="staking_pool.md#0x3_staking_pool_PoolTokenExchangeRate">staking_pool::PoolTokenExchangeRate</a>): u64
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="staking_pool.md#0x3_staking_pool_sui_amount">sui_amount</a>(exchange_rate: &<a href="staking_pool.md#0x3_staking_pool_PoolTokenExchangeRate">PoolTokenExchangeRate</a>): u64 {
+    exchange_rate.sui_amount
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x3_staking_pool_pool_token_amount"></a>
+
+## Function `pool_token_amount`
+
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="staking_pool.md#0x3_staking_pool_pool_token_amount">pool_token_amount</a>(exchange_rate: &<a href="staking_pool.md#0x3_staking_pool_PoolTokenExchangeRate">staking_pool::PoolTokenExchangeRate</a>): u64
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="staking_pool.md#0x3_staking_pool_pool_token_amount">pool_token_amount</a>(exchange_rate: &<a href="staking_pool.md#0x3_staking_pool_PoolTokenExchangeRate">PoolTokenExchangeRate</a>): u64 {
+    exchange_rate.pool_token_amount
 }
 </code></pre>
 

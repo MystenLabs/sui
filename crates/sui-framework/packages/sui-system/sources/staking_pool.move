@@ -380,6 +380,18 @@ module sui_system::staking_pool {
         staking_pool.pending_total_sui_withdraw
     }
 
+    public(friend) fun exchange_rates(pool: &StakingPool): &Table<u64, PoolTokenExchangeRate> {
+        &pool.exchange_rates
+    }
+
+    public fun sui_amount(exchange_rate: &PoolTokenExchangeRate): u64 {
+        exchange_rate.sui_amount
+    }
+
+    public fun pool_token_amount(exchange_rate: &PoolTokenExchangeRate): u64 {
+        exchange_rate.pool_token_amount
+    }
+
     /// Returns true if the provided staking pool is preactive at the provided epoch.
     fun is_preactive_at_epoch(pool: &StakingPool, epoch: u64): bool{
         // Either the pool is currently preactive or the pool's starting epoch is later than the provided epoch.

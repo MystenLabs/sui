@@ -10,7 +10,7 @@ module sui_system::validator_set {
     use sui::tx_context::{Self, TxContext};
     use sui_system::validator::{Self, Validator, staking_pool_id, sui_address};
     use sui_system::validator_cap::{Self, UnverifiedValidatorOperationCap, ValidatorOperationCap};
-    use sui_system::staking_pool::{PoolTokenExchangeRate, StakedSui, pool_id};
+    use sui_system::staking_pool::{Self, PoolTokenExchangeRate, StakedSui, pool_id};
     use sui::object::{Self, ID};
     use sui::priority_queue as pq;
     use sui::vec_map::{Self, VecMap};
@@ -555,6 +555,21 @@ module sui_system::validator_set {
 
     public fun staking_pool_mappings(self: &ValidatorSet): &Table<ID, address> {
         &self.staking_pool_mappings
+    }
+
+    public(friend) fun pool_exchange_rates(
+        self: &mut ValidatorSet, pool_id: &ID
+    ) : &Table<u64, PoolTokenExchangeRate> {
+        let validator =
+            // If the pool id is recorded in the mapping, then it must be either candidate or active.
+            if (table::contains(&self.staking_pool_mappings, *pool_id)) {
+                let validator_address = *table::borrow(&self.staking_pool_mappings, *pool_id);
+                get_active_or_pending_or_candidate_validator_ref(self, validator_address, ANY_VALIDATOR)
+            } else { // otherwise it's inactive
+                let wrapper = table::borrow_mut(&mut self.inactive_validators, *pool_id);
+                validator_wrapper::load_validator_maybe_upgrade(wrapper)
+            };
+        staking_pool::exchange_rates(validator::get_staking_pool_ref(validator))
     }
 
     /// Get the total number of validators in the next epoch.

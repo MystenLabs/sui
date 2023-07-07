@@ -878,8 +878,7 @@ module sui_system::validator {
         // TODO: specify actual function behavior
      }
 
-    #[test_only]
-    public fun get_staking_pool_ref(self: &Validator) : &StakingPool {
+    public(friend) fun get_staking_pool_ref(self: &Validator) : &StakingPool {
         &self.staking_pool
     }
 
