@@ -17,6 +17,7 @@ use diesel::{OptionalExtension, QueryableByName};
 use diesel::{QueryDsl, RunQueryDsl};
 use fastcrypto::hash::Digest;
 use fastcrypto::traits::ToFromBytes;
+use futures::future::try_join_all;
 use move_bytecode_utils::module_cache::SyncModuleCache;
 use move_core_types::identifier::Identifier;
 use prometheus::Histogram;
@@ -61,7 +62,7 @@ use crate::schema::{
     input_objects, move_calls, objects, objects_history, packages, recipients, system_states,
     transactions, validators,
 };
-use crate::store::diesel_marco::{read_only_blocking, transactional_blocking};
+use crate::store::diesel_marco::{read_only_blocking, read_write_blocking, transactional_blocking};
 use crate::store::module_resolver::IndexerModuleResolver;
 use crate::store::query::DBFilter;
 use crate::store::TransactionObjectChanges;
@@ -1257,28 +1258,63 @@ impl IndexerStore for PgIndexerStore {
         object_mutation_latency: Histogram,
         object_deletion_latency: Histogram,
     ) -> Result<(), IndexerError> {
-        transactional_blocking!(&self.blocking_cp, |conn| {
-            let mutated_objects: Vec<Object> = tx_object_changes
-                .iter()
-                .flat_map(|changes| changes.changed_objects.iter().cloned())
-                .collect();
-            let deleted_changes = tx_object_changes
-                .iter()
-                .flat_map(|changes| changes.deleted_objects.iter().cloned())
+        let mutated_objects: Vec<Object> = tx_object_changes
+            .iter()
+            .flat_map(|changes| changes.changed_objects.iter().cloned())
+            .collect();
+        let deleted_changes = tx_object_changes
+            .iter()
+            .flat_map(|changes| changes.deleted_objects.iter().cloned())
+            .collect::<Vec<_>>();
+        let deleted_objects: Vec<Object> = deleted_changes
+            .iter()
+            .map(|deleted_object| deleted_object.clone().into())
+            .collect();
+
+        let mut mutated_object_groups = group_and_sort_objects(mutated_objects);
+        let object_mutation_guard = object_mutation_latency.start_timer();
+        let mut handles = vec![];
+        loop {
+            let mutated_object_group = mutated_object_groups
+                .iter_mut()
+                .filter_map(|group| group.pop())
                 .collect::<Vec<_>>();
-            let deleted_objects: Vec<Object> = deleted_changes
-                .iter()
-                .map(|deleted_object| deleted_object.clone().into())
-                .collect();
-            persist_transaction_object_changes(
-                conn,
-                mutated_objects,
-                deleted_objects,
-                Some(object_mutation_latency),
-                Some(object_deletion_latency),
-            )?;
-            Ok::<(), IndexerError>(())
-        })?;
+            if mutated_object_group.is_empty() {
+                break;
+            }
+            let mutation_group = mutated_object_group.iter().cloned().collect::<Vec<_>>();
+            let group_cp = self.blocking_cp.clone();
+
+            let handle = tokio::task::spawn(async move {
+                read_write_blocking!(&group_cp, |conn| {
+                    persist_object_mutations(conn, &mutation_group)?;
+                    Ok::<(), IndexerError>(())
+                })
+            });
+            handles.push(handle);
+        }
+        try_join_all(handles)
+            .await
+            .expect("Object commit should not run into errors.");
+        object_mutation_guard.stop_and_record();
+
+        let object_deletion_guard = object_deletion_latency.start_timer();
+        let mut deletion_handles = vec![];
+        for deleted_object_trunk in deleted_objects.chunks(PG_COMMIT_CHUNK_SIZE) {
+            let deletion_chunk: Vec<_> = deleted_object_trunk.iter().cloned().collect();
+            let chunk_cp = self.blocking_cp.clone();
+            let handle = tokio::task::spawn(async move {
+                read_write_blocking!(&chunk_cp, |conn| {
+                    persist_object_deletions(conn, &deletion_chunk)?;
+                    Ok::<(), IndexerError>(())
+                })
+            });
+            deletion_handles.push(handle);
+        }
+        try_join_all(deletion_handles)
+            .await
+            .expect("Object deletion should not run into errors.");
+        object_deletion_guard.stop_and_record();
         Ok(())
     }
 
@@ -1696,6 +1732,46 @@ impl IndexerStore for PgIndexerStore {
             .map(|db_addr_stats| db_addr_stats.into())
             .collect())
     }
+}
+
+fn persist_object_mutations(
+    conn: &mut PgConnection,
+    mutated_objects: &[Object],
+) -> Result<usize, IndexerError> {
+    // bulk insert/update via UNNEST trick
+    let insert_update_query = compose_object_bulk_insert_update_query(mutated_objects);
+    diesel::sql_query(insert_update_query)
+        .execute(conn)
+        .map_err(|e| {
+            IndexerError::PostgresWriteError(format!(
+                "Failed writing mutated objects to PostgresDB with error: {:?}",
+                e
+            ))
+        })
+}
+
+fn persist_object_deletions(
+    conn: &mut PgConnection,
+    deleted_objects: &[Object],
+) -> Result<usize, IndexerError> {
+    diesel::insert_into(objects::table)
+        .values(deleted_objects)
+        .on_conflict(objects::object_id)
+        .do_update()
+        .set((
+            objects::epoch.eq(excluded(objects::epoch)),
+            objects::checkpoint.eq(excluded(objects::checkpoint)),
+            objects::version.eq(excluded(objects::version)),
+            objects::previous_transaction.eq(excluded(objects::previous_transaction)),
+            objects::object_status.eq(excluded(objects::object_status)),
+        ))
+        .execute(conn)
+        .map_err(|e| {
+            IndexerError::PostgresWriteError(format!(
+                "Failed writing deleted objects to PostgresDB with error: {:?}",
+                e
+            ))
+        })
 }
 
 fn persist_transaction_object_changes(
