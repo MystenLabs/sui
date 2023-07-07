@@ -158,7 +158,7 @@ function NftsPage() {
 					</Alert>
 				) : null}
 				{nfts?.length ? (
-					<div className="grid w-full grid-cols-2 gap-x-3.5 gap-y-4">
+					<div className="grid w-full grid-cols-2 gap-x-3.5 gap-y-4 mb-5">
 						{nfts
 							.filter((nft) => !internalHiddenAssetIds.includes(nft.objectId))
 							.map(({ objectId, type }) => (

@@ -140,7 +140,7 @@ function NftsPage() {
 					</Alert>
 				) : null}
 				{hiddenNfts?.length ? (
-					<div className="flex flex-col w-full divide-y divide-solid divide-gray-40 divide-x-0 gap-2">
+					<div className="flex flex-col w-full divide-y divide-solid divide-gray-40 divide-x-0 gap-2 mb-5">
 						{hiddenNfts
 							.filter((nft) => nft && internalHiddenAssetIds.includes(nft.objectId))
 							.map((nft, index) => {
