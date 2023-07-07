@@ -51,10 +51,12 @@ function useEpochTransactions() {
 				...(
 					await rpc.getEpochs({
 						descendingOrder: true,
-						limit: 30,
+						limit: 31,
 					})
 				).data,
-			].reverse(),
+			]
+				.reverse()
+				.slice(0, -1),
 		select: (data) =>
 			data.map(({ epoch, epochTotalTransactions, epochStartTimestamp }) => ({
 				epoch: Number(epoch),
