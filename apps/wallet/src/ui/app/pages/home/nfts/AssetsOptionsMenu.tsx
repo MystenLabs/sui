@@ -21,8 +21,8 @@ const AssetsOptionsMenu = () => {
 							<div className="py-2 hover:bg-sui-light rounded-md">
 								<Link
 									to="/hidden-assets"
-									color="suiDark"
-									weight="semibold"
+									color="steelDarker"
+									weight="medium"
 									text="View Hidden Assets"
 								/>
 							</div>

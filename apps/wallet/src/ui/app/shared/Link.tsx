@@ -24,6 +24,9 @@ const styles = cva(
 				steelDark: [
 					'text-steel-dark hover:text-steel-darker focus:text-steel-darker disabled:text-steel-dark',
 				],
+				steelDarker: [
+					'text-steel-darker hover:text-steel-darker focus:text-steel-darker disabled:text-steel-darker',
+				],
 				heroDark: [
 					'text-hero-dark hover:text-hero-darkest focus:text-hero-darkest disabled:text-hero-dark',
 				],
@@ -53,6 +56,9 @@ const iconStyles = cva(['transition flex'], {
 		color: {
 			steelDark: [
 				'text-steel group-hover:text-steel-darker group-focus:text-steel-darker group-disabled:text-steel-dark',
+			],
+			steelDarker: [
+				'text-steel-darker group-hover:text-steel-darker group-focus:text-steel-darker group-disabled:text-steel-darker',
 			],
 			heroDark: [
 				'text-hero group-hover:text-hero-darkest group-focus:text-hero-darkest group-disabled:text-hero-dark',
