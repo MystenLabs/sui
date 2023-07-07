@@ -45,6 +45,7 @@ pub struct Compiler<'a> {
     visitors: Vec<Visitor>,
     warning_filter: Option<WarningFilters>,
     package_configs: BTreeMap<Symbol, PackageConfig>,
+    default_config: Option<PackageConfig>,
 }
 
 pub struct SteppedCompiler<'a, const P: Pass> {
@@ -149,6 +150,7 @@ impl<'a> Compiler<'a> {
             visitors: vec![],
             warning_filter: None,
             package_configs,
+            default_config: None,
         })
     }
 
@@ -227,6 +229,13 @@ impl<'a> Compiler<'a> {
         self
     }
 
+    /// Sets the PackageConfig for files without a specified package
+    pub fn set_default_config(mut self, config: PackageConfig) -> Self {
+        assert!(self.default_config.is_none());
+        self.default_config = Some(config);
+        self
+    }
+
     pub fn run<const TARGET: Pass>(
         self,
     ) -> anyhow::Result<(
@@ -244,13 +253,15 @@ impl<'a> Compiler<'a> {
             visitors,
             warning_filter,
             package_configs,
+            default_config,
         } = self;
         generate_interface_files_for_deps(
             &mut deps,
             interface_files_dir_opt,
             &compiled_module_named_address_mapping,
         )?;
-        let mut compilation_env = CompilationEnv::new(flags, visitors, package_configs);
+        let mut compilation_env =
+            CompilationEnv::new(flags, visitors, package_configs, default_config);
         if let Some(filter) = warning_filter {
             compilation_env.add_warning_filter_scope(filter);
         }

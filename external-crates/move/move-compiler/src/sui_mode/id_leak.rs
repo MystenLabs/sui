@@ -14,10 +14,11 @@ use crate::{
     },
     diag,
     diagnostics::{Diagnostic, Diagnostics},
+    editions::Flavor,
     expansion::ast::AbilitySet,
     hlir::ast::{Command, Exp, LValue, Label, ModuleCall, SingleType, Type, Type_, Var},
     parser::ast::{Ability_, StructName},
-    shared::{unique_map::UniqueMap, Identifier},
+    shared::{unique_map::UniqueMap, CompilationEnv, Identifier},
     sui_mode::{OBJECT_NEW, TEST_SCENARIO_MODULE_NAME, TS_NEW_OBJECT},
 };
 use std::collections::BTreeMap;
@@ -60,17 +61,23 @@ impl SimpleAbsIntConstructor for IDLeakVerifier {
     type AI<'a> = IDLeakVerifierAI<'a>;
 
     fn new<'a>(
-        _program: &'a cfgir::ast::Program,
+        env: &CompilationEnv,
+        program: &'a cfgir::ast::Program,
         context: &'a CFGContext<'a>,
         _init_state: &mut <Self::AI<'a> as SimpleAbsInt>::State,
     ) -> Option<Self::AI<'a>> {
         let Some(module) = &context.module else {
             return None
         };
+        let package_name = program.modules.get(module).unwrap().package_name;
+        let config = env.package_config(package_name);
+        if config.flavor != Flavor::Sui {
+            return None;
+        }
         if let MemberName::Function(n) = &context.member {
-            let should_skip = FUNCTIONS_TO_SKIP.iter().any(|to_skip| {
-                module.value.is(to_skip.0, to_skip.1) && n.value.as_str() == to_skip.2
-            });
+            let should_skip = FUNCTIONS_TO_SKIP
+                .iter()
+                .any(|to_skip| module.value.is(to_skip.0, to_skip.1) && n.value == to_skip.2);
             if should_skip {
                 return None;
             }

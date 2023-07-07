@@ -11,6 +11,7 @@ use crate::{
     },
     editions::{Edition, Flavor},
     naming::ast::ModuleDefinition,
+    sui_mode,
 };
 use clap::*;
 use move_ir_types::location::*;
@@ -183,6 +184,8 @@ pub struct CompilationEnv {
     diags: Diagnostics,
     visitors: Visitors,
     package_configs: BTreeMap<Symbol, PackageConfig>,
+    /// Config for any package not found in `package_configs`, or for inputs without a package.
+    default_config: PackageConfig,
     // TODO(tzakian): Remove the global counter and use this counter instead
     // pub counter: u64,
 }
@@ -190,15 +193,18 @@ pub struct CompilationEnv {
 impl CompilationEnv {
     pub fn new(
         flags: Flags,
-        visitors: Vec<cli::compiler::Visitor>,
+        mut visitors: Vec<cli::compiler::Visitor>,
         package_configs: BTreeMap<Symbol, PackageConfig>,
+        default_config: Option<PackageConfig>,
     ) -> Self {
+        visitors.extend([sui_mode::id_leak::IDLeakVerifier.into()]);
         Self {
             flags,
             warning_filter: vec![],
             diags: Diagnostics::new(),
             visitors: Visitors::new(visitors),
             package_configs,
+            default_config: default_config.unwrap_or_default(),
         }
     }
 
@@ -303,8 +309,10 @@ impl CompilationEnv {
         &self.visitors
     }
 
-    pub fn package_config(&self, package: Option<Symbol>) -> Option<&PackageConfig> {
-        self.package_configs.get(package.as_ref()?)
+    pub fn package_config(&self, package: Option<Symbol>) -> &PackageConfig {
+        package
+            .and_then(|p| self.package_configs.get(&p))
+            .unwrap_or(&self.default_config)
     }
 }
 
