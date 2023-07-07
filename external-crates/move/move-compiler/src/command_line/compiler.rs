@@ -703,7 +703,7 @@ pub fn generate_interface_files(
         let addr_dir = dir_path!(all_addr_dir.clone(), format!("{}", id.address()));
         let file_path = file_path!(addr_dir.clone(), format!("{}", id.name()), MOVE_EXTENSION);
         result.push(IndexedPackagePath {
-            path: Symbol::from(file_path.clone().into_os_string().into_string().unwrap()),
+            path: symbol!(file_path.clone().into_os_string().into_string().unwrap()),
             package,
             named_address_map,
         });

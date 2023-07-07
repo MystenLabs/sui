@@ -12,7 +12,6 @@ use crate::{
     typing::ast as T,
 };
 use move_ir_types::location::*;
-use move_symbol_pool::Symbol;
 use petgraph::{
     algo::{astar as petgraph_astar, tarjan_scc as petgraph_scc},
     graphmap::DiGraphMap,
@@ -339,7 +338,7 @@ fn cycle_error(
             let prev_tparam = cycle_nodes[prev(0)];
             let init_state = &context.tparam_type_arguments[prev_tparam][ftparam];
             let ftparam_ty = {
-                let qualified_ = Symbol::from(format!(
+                let qualified_ = symbol!(format!(
                     "{}::{}",
                     &init_state.name, &ftparam.user_specified_name
                 ));

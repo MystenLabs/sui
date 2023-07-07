@@ -49,7 +49,7 @@ pub(crate) fn parse_program(
                     .into_iter()
                     .map(|s| IndexedPackagePath {
                         package,
-                        path: Symbol::from(s),
+                        path: symbol!(s),
                         named_address_map: named_address_mapping,
                     }),
             );

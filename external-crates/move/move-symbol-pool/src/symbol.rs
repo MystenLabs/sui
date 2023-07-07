@@ -340,6 +340,7 @@ macro_rules! static_symbols_with_idx {
         #[macro_export]
         macro_rules! symbol {
             $(($str) => { $crate::symbol::Symbol::pack_static($idx) };)*
+            ($non_static:expr) => { $crate::symbol::Symbol::from($non_static) };
         }
 
         pub const STATIC_SYMBOLS: &[&str] = &[$($str,)*];
