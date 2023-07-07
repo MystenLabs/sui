@@ -10,9 +10,9 @@ const AssetsOptionsMenu = () => {
 		<Menu>
 			<Menu.Button
 				className="cursor-pointer appearance-none border"
-				style={{ border: 'none', background: 'none' }}
+				style={{ border: 'none', background: 'none', height: '32px', width: '32px' }}
 			>
-				<Ooo24 />
+				<Ooo24 className="text-gray-90 w-full h-full" />
 			</Menu.Button>
 			<Menu.Items className="absolute top-3 right-0 mt-2 w-50 bg-white divide-y divide-gray-200 rounded-md z-50">
 				<div className="rounded-md w-full h-full p-4 shadow-summary-card">

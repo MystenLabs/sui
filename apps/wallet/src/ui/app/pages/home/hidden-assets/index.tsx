@@ -68,7 +68,7 @@ function NftsPage() {
 			const assetShownToast = async (objectId: string) => {
 				toast.custom(
 					(t) => (
-						<div className="flex items-center justify-between gap-2 bg-white w-full shadow-summary-card border-solid border-gray-45 rounded-full px-3 py-1">
+						<div className="flex items-center justify-between gap-2 bg-white w-full shadow-md border-solid border-gray-45 rounded-full px-3 py-2">
 							<div className="flex gap-1 items-center">
 								<Check12 className="text-gray-90" />
 								<div
@@ -146,7 +146,7 @@ function NftsPage() {
 							.map((nft, index) => {
 								const { objectId, type } = nft!;
 								return (
-									<div className="flex justify-between items-center pt-2" key={objectId}>
+									<div className="flex justify-between items-center pt-2 pr-1" key={objectId}>
 										<Link
 											to={`/nft-details?${new URLSearchParams({
 												objectId: objectId,
@@ -168,7 +168,7 @@ function NftsPage() {
 												/>
 											</ErrorBoundary>
 										</Link>
-										<div>
+										<div className="h-8 w-8">
 											<Button
 												variant="secondarySui"
 												size="icon"
