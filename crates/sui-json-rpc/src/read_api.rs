@@ -706,7 +706,7 @@ impl ReadApiServer for ReadApi {
                     let event_digest = *event_digest;
                     let events = spawn_monitored_task!(async move{
                     state
-                    .get_transaction_events(&event_digest) // match on SuiError::TransactionEventsNotFound
+                    .get_transaction_events(&event_digest)
                     .map_err(|e|
                         {
                             error!("Failed to call get transaction events for events digest: {event_digest:?} with error {e:?}");
@@ -855,7 +855,7 @@ impl ReadApiServer for ReadApi {
                         id: id.to_string(),
                     }
                     .into(),
-                    _ => Error::SuiError(e), // We only expect TypedStoreError
+                    _ => Error::SuiError(e),
                 })?)
         })
     }

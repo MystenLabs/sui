@@ -2929,7 +2929,7 @@ impl AuthorityState {
         self.get_checkpoint_store()
             .get_highest_executed_checkpoint_seq_number()?
             .ok_or(SuiError::UserInputError {
-                // TODO(wlmyng):
+                // TODO(wlmyng): not a user error
                 error: UserInputError::LatestCheckpointSequenceNumberNotFound,
             })
     }
