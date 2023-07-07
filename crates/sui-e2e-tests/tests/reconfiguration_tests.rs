@@ -99,7 +99,9 @@ async fn test_transaction_expiration() {
     let result = authority
         .with_async(|node| async {
             let epoch_store = node.state().epoch_store_for_testing();
-            node.state()
+            let state = node.state();
+            let expired_transaction = state.verify_transaction(expired_transaction).unwrap();
+            state
                 .handle_transaction(&epoch_store, expired_transaction)
                 .await
         })
@@ -112,9 +114,9 @@ async fn test_transaction_expiration() {
     authority
         .with_async(|node| async {
             let epoch_store = node.state().epoch_store_for_testing();
-            node.state()
-                .handle_transaction(&epoch_store, transaction)
-                .await
+            let state = node.state();
+            let transaction = state.verify_transaction(transaction).unwrap();
+            state.handle_transaction(&epoch_store, transaction).await
         })
         .await
         .unwrap();

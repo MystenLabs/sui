@@ -8,7 +8,7 @@ use crate::executor::{ExecutionResult, Executor};
 use once_cell::sync::Lazy;
 use proptest::{prelude::*, strategy::Union};
 use std::{fmt, sync::Arc};
-use sui_types::{storage::ObjectStore, transaction::VerifiedTransaction};
+use sui_types::{storage::ObjectStore, transaction::Transaction};
 
 mod account;
 mod helpers;
@@ -54,7 +54,7 @@ pub trait AUTransactionGen: fmt::Debug {
         &self,
         universe: &mut AccountUniverse,
         exec: &mut Executor,
-    ) -> (VerifiedTransaction, ExecutionResult);
+    ) -> (Transaction, ExecutionResult);
 
     /// Creates an arced version of this transaction, suitable for dynamic dispatch.
     fn arced(self) -> Arc<dyn AUTransactionGen>
@@ -70,7 +70,7 @@ impl AUTransactionGen for Arc<dyn AUTransactionGen> {
         &self,
         universe: &mut AccountUniverse,
         exec: &mut Executor,
-    ) -> (VerifiedTransaction, ExecutionResult) {
+    ) -> (Transaction, ExecutionResult) {
         (**self).apply(universe, exec)
     }
 }

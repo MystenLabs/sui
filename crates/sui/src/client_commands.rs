@@ -83,7 +83,7 @@ macro_rules! serialize_or_execute {
             if $serialize_signed {
                 SuiClientCommandResult::SerializedSignedTransaction(sender_signed_data)
             } else {
-                let transaction = Transaction::new(sender_signed_data).verify()?;
+                let transaction = Transaction::new(sender_signed_data);
                 let response = $context.execute_transaction_may_fail(transaction).await?;
                 let effects = response.effects.as_ref().ok_or_else(|| {
                     anyhow!("Effects from SuiTransactionBlockResult should not be empty")
@@ -1197,11 +1197,10 @@ impl SuiClientCommands {
                         .map_err(|e| anyhow!(e))?,
                     );
                 }
-                let verified =
-                    Transaction::from_generic_sig_data(data, Intent::sui_transaction(), sigs)
-                        .verify()?;
+                let transaction =
+                    Transaction::from_generic_sig_data(data, Intent::sui_transaction(), sigs);
 
-                let response = context.execute_transaction_may_fail(verified).await?;
+                let response = context.execute_transaction_may_fail(transaction).await?;
                 SuiClientCommandResult::ExecuteSignedTx(response)
             }
             SuiClientCommands::NewEnv { alias, rpc, ws } => {
@@ -1622,6 +1621,10 @@ async fn construct_move_call_transaction(
         .map(|value| SuiJsonValue::new(convert_number_to_string(value.to_json_value())))
         .collect::<Result<_, _>>()?;
 
+    let type_args = type_args
+        .into_iter()
+        .map(|arg| arg.try_into())
+        .collect::<Result<Vec<_>, _>>()?;
     let gas_owner = context.try_get_object_owner(&gas).await?;
     let sender = gas_owner.unwrap_or(context.active_address()?);
 
@@ -1629,17 +1632,7 @@ async fn construct_move_call_transaction(
     client
         .transaction_builder()
         .move_call(
-            sender,
-            package,
-            module,
-            function,
-            type_args
-                .into_iter()
-                .map(|arg| arg.try_into())
-                .collect::<Result<Vec<_>, _>>()?,
-            args,
-            gas,
-            gas_budget,
+            sender, package, module, function, type_args, args, gas, gas_budget,
         )
         .await
 }

@@ -42,7 +42,7 @@ pub(crate) const MAX_TM_QUEUE_LENGTH: usize = 100_000;
 
 // Reject a transaction if the number of pending transactions depending on the object
 // is above the threshold.
-pub(crate) const MAX_PER_OBJECT_QUEUE_LENGTH: usize = 1000;
+pub(crate) const MAX_PER_OBJECT_QUEUE_LENGTH: usize = 200;
 
 #[cfg(test)]
 #[path = "unit_tests/server_tests.rs"]
@@ -346,13 +346,9 @@ impl ValidatorService {
         let _handle_tx_metrics_guard = metrics.handle_transaction_latency.start_timer();
 
         let tx_verif_metrics_guard = metrics.tx_verification_latency.start_timer();
-        let transaction = epoch_store
-            .signature_verifier
-            .verify_tx(transaction.data())
-            .map(|_| VerifiedTransaction::new_from_verified(transaction))
-            .tap_err(|_| {
-                metrics.signature_errors.inc();
-            })?;
+        let transaction = state.verify_transaction(transaction).tap_err(|_| {
+            metrics.signature_errors.inc();
+        })?;
         drop(tx_verif_metrics_guard);
 
         let tx_digest = transaction.digest();

@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { useFeature } from '@growthbook/growthbook-react';
 import { useAppsBackend, useGetCoinBalance, useGetAllBalances } from '@mysten/core';
 import {
 	Info12,
@@ -12,13 +13,14 @@ import {
 } from '@mysten/icons';
 import { SUI_TYPE_ARG, Coin, type CoinBalance as CoinBalanceType } from '@mysten/sui.js';
 import { useQuery } from '@tanstack/react-query';
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 import { CoinActivitiesCard } from './CoinActivityCard';
 import { TokenIconLink } from './TokenIconLink';
 import { TokenLink } from './TokenLink';
 import { TokenList } from './TokenList';
 import CoinBalance from './coin-balance';
+import BullsharkQuestsNotification from '../bullshark-quests-notification';
 import { useOnrampProviders } from '../onramp/useOnrampProviders';
 import { useActiveAddress } from '_app/hooks/useActiveAddress';
 import { LargeButton } from '_app/shared/LargeButton';
@@ -29,6 +31,7 @@ import { filterAndSortTokenBalances } from '_helpers';
 import { useAppSelector, useCoinsReFetchingConfig } from '_hooks';
 import { ampli } from '_src/shared/analytics/ampli';
 import { API_ENV } from '_src/shared/api-env';
+import { FEATURES } from '_src/shared/experimentation/features';
 import { AccountSelector } from '_src/ui/app/components/AccountSelector';
 import { useLedgerNotification } from '_src/ui/app/hooks/useLedgerNotification';
 import { usePinnedCoinTypes } from '_src/ui/app/hooks/usePinnedCoinTypes';
@@ -167,6 +170,7 @@ function MyTokens() {
 }
 
 function TokenDetails({ coinType }: TokenDetailsProps) {
+	const [interstitialDismissed, setInterstitialDismissed] = useState<boolean>(false);
 	const activeCoinType = coinType || SUI_TYPE_ARG;
 	const accountAddress = useActiveAddress();
 	const { staleTime, refetchInterval } = useCoinsReFetchingConfig();
@@ -189,6 +193,9 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
 		retry: false,
 		enabled: apiEnv === API_ENV.mainnet,
 	});
+	const BullsharkInterstitialEnabled = useFeature<boolean>(
+		FEATURES.BULLSHARK_QUESTS_INTERSTITIAL,
+	).value;
 
 	useLedgerNotification();
 
@@ -199,6 +206,21 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
 	const coinSymbol = useMemo(() => Coin.getCoinSymbol(activeCoinType), [activeCoinType]);
 	// Avoid perpetual loading state when fetching and retry keeps failing add isFetched check
 	const isFirstTimeLoading = isLoading && !isFetched;
+
+	useEffect(() => {
+		const dismissed = localStorage.getItem('bullshark-interstitial-dismissed');
+		setInterstitialDismissed(dismissed === 'true');
+	}, []);
+
+	if (BullsharkInterstitialEnabled && !interstitialDismissed) {
+		return (
+			<BullsharkQuestsNotification
+				onClose={() => {
+					setInterstitialDismissed(true);
+				}}
+			/>
+		);
+	}
 
 	return (
 		<>

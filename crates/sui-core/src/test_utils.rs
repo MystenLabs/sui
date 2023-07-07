@@ -33,8 +33,7 @@ use sui_types::error::SuiError;
 use sui_types::transaction::ObjectArg;
 use sui_types::transaction::TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS;
 use sui_types::transaction::{
-    CallArg, SignedTransaction, TransactionData, VerifiedTransaction,
-    TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
+    CallArg, SignedTransaction, Transaction, TransactionData, TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
 };
 use sui_types::utils::create_fake_transaction;
 use sui_types::utils::to_sender_signed_transaction;
@@ -44,7 +43,7 @@ use sui_types::{
     crypto::{AuthoritySignInfo, AuthoritySignature},
     message_envelope::Message,
     object::Object,
-    transaction::{CertifiedTransaction, Transaction},
+    transaction::CertifiedTransaction,
 };
 use tokio::time::timeout;
 use tracing::{info, warn};
@@ -54,10 +53,11 @@ const WAIT_FOR_TX_TIMEOUT: Duration = Duration::from_secs(15);
 pub async fn send_and_confirm_transaction(
     authority: &AuthorityState,
     fullnode: Option<&AuthorityState>,
-    transaction: VerifiedTransaction,
+    transaction: Transaction,
 ) -> Result<(CertifiedTransaction, SignedTransactionEffects), SuiError> {
     // Make the initial request
     let epoch_store = authority.load_epoch_store_one_call_per_task();
+    let transaction = authority.verify_transaction(transaction)?;
     let response = authority
         .handle_transaction(&epoch_store, transaction.clone())
         .await?;
@@ -314,7 +314,7 @@ pub fn make_transfer_sui_transaction(
     sender: SuiAddress,
     keypair: &AccountKeyPair,
     gas_price: u64,
-) -> VerifiedTransaction {
+) -> Transaction {
     let data = TransactionData::new_transfer_sui(
         recipient,
         sender,
@@ -335,7 +335,7 @@ pub fn make_pay_sui_transaction(
     keypair: &AccountKeyPair,
     gas_price: u64,
     gas_budget: u64,
-) -> VerifiedTransaction {
+) -> Transaction {
     let data = TransactionData::new_pay_sui(
         sender, coins, recipients, amounts, gas_object, gas_budget, gas_price,
     )
@@ -350,7 +350,7 @@ pub fn make_transfer_object_transaction(
     keypair: &AccountKeyPair,
     recipient: SuiAddress,
     gas_price: u64,
-) -> VerifiedTransaction {
+) -> Transaction {
     let data = TransactionData::new_transfer(
         recipient,
         object_ref,
@@ -370,7 +370,7 @@ pub fn make_transfer_object_move_transaction(
     framework_obj_id: ObjectID,
     gas_object_ref: ObjectRef,
     gas_price: u64,
-) -> VerifiedTransaction {
+) -> Transaction {
     let args = vec![
         CallArg::Object(ObjectArg::ImmOrOwnedObject(object_ref)),
         CallArg::Pure(bcs::to_bytes(&AccountAddress::from(dest)).unwrap()),
@@ -398,7 +398,7 @@ pub fn make_dummy_tx(
     receiver: SuiAddress,
     sender: SuiAddress,
     sender_sec: &AccountKeyPair,
-) -> VerifiedTransaction {
+) -> Transaction {
     Transaction::from_data_and_signer(
         TransactionData::new_transfer(
             receiver,
@@ -411,15 +411,13 @@ pub fn make_dummy_tx(
         Intent::sui_transaction(),
         vec![sender_sec],
     )
-    .verify()
-    .unwrap()
 }
 
 /// Make a cert using an arbitrarily large committee.
 pub fn make_cert_with_large_committee(
     committee: &Committee,
     key_pairs: &[AuthorityKeyPair],
-    transaction: &VerifiedTransaction,
+    transaction: &Transaction,
 ) -> CertifiedTransaction {
     // assumes equal weighting.
     let len = committee.voting_rights.len();
@@ -432,7 +430,7 @@ pub fn make_cert_with_large_committee(
         .map(|key_pair| {
             SignedTransaction::new(
                 committee.epoch(),
-                transaction.clone().into_message(),
+                transaction.clone().into_data(),
                 key_pair,
                 AuthorityPublicKeyBytes::from(key_pair.public()),
             )
@@ -441,8 +439,7 @@ pub fn make_cert_with_large_committee(
         })
         .collect();
 
-    let cert =
-        CertifiedTransaction::new(transaction.clone().into_message(), sigs, committee).unwrap();
+    let cert = CertifiedTransaction::new(transaction.clone().into_data(), sigs, committee).unwrap();
     cert.verify_signature(committee).unwrap();
     cert
 }
